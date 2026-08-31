@@ -63,7 +63,7 @@ implementation does not describe DPoP as confidential-client authentication.
 | End-to-end DPoP | Implemented | ES256/384/512, RS256, and EdDSA public proofs are validated for signature, `typ`, method, target URI, freshness, unique `jti`, optional/required `ath`, and registered/token key equality. Redis replay protection fails closed. |
 | Bearer downgrade prevention | Implemented | `/oauth/resource` rejects bearer presentation of a DPoP-bound token and requires the DPoP scheme plus proof. |
 | RFC 8693 attenuation | Implemented | Token Exchange accepts only a standard active subject token from the same `client_id`, key, and resource; scope must be an exact subset; actor tokens are rejected; output preserves principal, audience, sender constraint, existing `act`, and structured authorization details. |
-| Refresh rotation and sender binding | Implemented | Rotation is atomic, preserves resource/scope/key/grant lifetime and structured authorization details, checks the currently registered key, and returns a new family member. Reuse revokes the active grant and family. |
+| Refresh rotation and sender binding | Implemented | Rotation is atomic, preserves resource/scope/key/grant lifetime and structured authorization details, checks the currently registered key, and returns a new family member. A non-conformance 300-second lost-response extension binds the old token, client, DPoP key, and recovery key; it returns the exact committed token values with a recalculated remaining lifetime, stores the access token in an AES-256-GCM envelope, and erases expired state. Any mismatched reuse revokes the active grant and family. |
 | RFC 7009 revocation | Implemented | `POST /oauth/revoke` authenticates the public client with its DPoP key, hides token validity, revokes access-token status, and invalidates an entire refresh family. |
 | Key isolation and rotation | Implemented | A partial unique database index prevents two Agent Client Instances at this issuer from sharing an Agent Key. New issuance and refresh require the current registered key. Existing access tokens retain their original `cnf.jkt` and remain verifiable until expiry or revocation. |
 | Resource-server authorization | Implemented | The protected route checks protocol origin, token status, audience, DPoP binding, and the exact `grantex.resource.read` scope before returning an authorized result. |
@@ -77,7 +77,7 @@ standard profile:
 |:------------------|:------------|:---------|
 | JSON authorization | `POST /v1/authorize` | Cannot issue a standard-profile code. |
 | JSON token exchange | `POST /v1/token` | Cannot consume a standard-profile code. |
-| Proprietary refresh recovery | `POST /v1/token/refresh` | Cannot rotate a standard-profile refresh family. The 300-second `Idempotency-Key` recovery behavior is not DAAP conformance. |
+| Product-profile refresh | `POST /v1/token/refresh` | Cannot rotate a standard-profile refresh family. Its 300-second `Idempotency-Key` recovery uses the same encrypted response cache as `/oauth/token`, but neither recovery mechanism is DAAP conformance or an interoperable extension. |
 | Cross-agent delegation | `POST /v1/grants/delegate` | Cannot use a standard-profile grant as its parent. Cross-instance delegation remains outside core `-03`. |
 | Product token verification | `POST /v1/tokens/verify` | Grantex API, not RFC 7662. |
 | Product grant revocation | `DELETE /v1/grants/{id}` | Authenticated administrative grant control in addition to RFC 7009. |
@@ -110,11 +110,12 @@ wire-protocol E2E:
 Verified on 2026-08-30:
 
 ```text
-Auth service: 164 test files passed, 1 skipped; 2,097 tests passed, 2 skipped
-TypeScript SDK: 30 test files passed; 444 tests passed; build and typecheck passed
-Docker E2E: 21 files; 253 tests passed; 0 failed
+Auth service: 167 test files passed, 1 skipped; 2,138 tests passed, 2 skipped
+TypeScript SDK: 31 test files passed; 456 tests passed; build and typecheck passed
+Docker E2E: 23 files; 255 tests passed; 0 failed
 OAuth Docker flow: all protocol stages, negative cases, key uniqueness, and cleanup passed
-Fresh Docker database: all 90 migrations applied; Postgres and Redis healthy
+Refresh restart proof: encrypted recovery state survived an auth-service container restart
+Fresh Docker database: all 93 migrations applied; Postgres and Redis healthy
 IETF Author Tools: 0 errors, 0 flaws, 1 Unicode warning, 1 heuristic comment
 ```
 

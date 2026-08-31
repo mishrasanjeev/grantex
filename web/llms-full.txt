@@ -1,7 +1,7 @@
 # Grantex — Full Implementation Brief for AI Assistants
 
-> Last updated: 2026-08-31
-> Public release snapshot verified: 2026-08-31
+> Last updated: 2026-09-01
+> Release snapshot verified: 2026-09-01
 
 Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
@@ -55,11 +55,12 @@ The Datatracker publication is revision -02. Candidate -03 and its Grantex
 client, authorization-server, and resource-server implementation are under
 review. The implementation requires PAR, PKCE S256, DPoP sender constraints,
 RFC 9207 issuer validation, rotating refresh tokens, same-resource token
-attenuation, and revocation. It passed 2,097 auth-service tests, 444 TypeScript
-SDK tests, and 253 Docker E2E tests. This is self-assessed evidence, not
+attenuation, and revocation. It passed 2,138 auth-service tests, 456 TypeScript
+SDK tests, and 255 Docker E2E tests, plus an encrypted refresh-recovery restart
+test. This is self-assessed evidence, not
 independent interoperability certification, OAuth Working Group adoption, or
-IETF endorsement. OAuthAgentClient is published in @grantex/sdk@0.5.0 and was
-verified from a clean registry install.
+IETF endorsement. OAuthAgentClient is included in the @grantex/sdk@0.5.1 source
+release candidate; registry publication and clean-install verification are pending.
 
 Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 
@@ -67,14 +68,14 @@ Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 
 | Use case | Recommended implementation | Current status |
 |---|---|---|
-| TypeScript or Node.js application | `@grantex/sdk@0.5.0` | Published and fresh-install verified; Node.js 18+ ESM |
-| x402 prepaid-wallet application | `@grantex/x402@0.3.0` with `@grantex/sdk@0.5.0` | Published and fresh-install verified; Node.js 20+ ESM; external custody is operator-supplied |
-| Python application | `grantex==0.4.0` | Published and fresh-install verified on PyPI; Python 3.9+ |
-| Go application | `github.com/mishrasanjeev/grantex-go@v0.2.0` | Tagged, Go-proxy verified, and fresh-install tested; Go 1.26.1+ |
+| TypeScript or Node.js application | `@grantex/sdk@0.5.1` | Source release candidate; npm publication pending; Node.js 18+ ESM |
+| x402 prepaid-wallet application | `@grantex/x402@0.3.0` with `@grantex/sdk@0.5.1` | x402 is published; SDK 0.5.1 is a source release candidate; Node.js 20+ ESM; external custody is operator-supplied |
+| Python application | `grantex==0.4.1` | Source release candidate; PyPI publication pending; Python 3.9+ |
+| Go application | `github.com/mishrasanjeev/grantex-go@v0.2.1` | Source release candidate; tag and Go-proxy verification pending; Go 1.26.1+ |
 | Service-side JWT enforcement | SDK verifier or direct verification with issuer JWKS | Signature and claim verification; add online or synchronized state for current revocation |
 | MCP HTTP transport authorization | Established MCP-compatible authorization server and maintained MCP SDK | Follow the current MCP authorization specification; a Grantex SDK alone does not provide this layer |
 | Agent-specific enforcement in MCP tools | Primary Grantex SDK or direct JWKS-backed validation | Add after transport authorization when the tool must verify delegated agent authority |
-| MCP endpoint evaluation | `@grantex/mcp-auth@2.0.2` plus `@grantex/sdk@0.5.0` | Single-process evaluation only |
+| MCP endpoint evaluation | `@grantex/mcp-auth@2.0.2` plus `@grantex/sdk@0.5.1` | Single-process evaluation only; SDK 0.5.1 publication pending |
 | Terminal automation | `@grantex/cli` | Optional operational tooling |
 | Hermes, OpenClaw, or another shell-capable agent | Published `@grantex/cli@0.3.0` plus the bundled Agent Skills | No agent-specific SDK required; enforce again at the protected service |
 | Framework-specific tools | Named Grantex adapter plus its primary SDK where required | Verify each package's registry status before pinning |
@@ -82,11 +83,11 @@ Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 Primary reproducible installs:
 
 ```bash
-npm install @grantex/sdk@0.5.0
-npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0
-python -m pip install grantex==0.4.0
-go get github.com/mishrasanjeev/grantex-go@v0.2.0
-npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.4.1
+npm install @grantex/sdk@0.5.1
+npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.1
+python -m pip install grantex==0.4.1
+go get github.com/mishrasanjeev/grantex-go@v0.2.1
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.1
 npm install -g @grantex/cli@0.3.0
 ```
 
@@ -402,7 +403,7 @@ MCP connects models to tools. Grantex carries and enforces the delegated authori
 
 ### Which SDK should I install?
 
-Use `@grantex/sdk@0.5.0` for TypeScript, `grantex==0.4.0` for Python, or `github.com/mishrasanjeev/grantex-go@v0.2.0` for Go. Read the machine release status before upgrading.
+Use the `@grantex/sdk@0.5.1`, `grantex==0.4.1`, or `github.com/mishrasanjeev/grantex-go@v0.2.1` source release candidates after their respective registries confirm publication. Read the machine release status before upgrading.
 
 ### Does local verification check revocation?
 

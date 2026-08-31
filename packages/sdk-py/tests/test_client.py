@@ -94,7 +94,7 @@ def test_user_agent_header_sent() -> None:
         AuthorizeParams(agent_id="ag_01", user_id="u_01", scopes=[])
     )
     request = respx.calls[0].request
-    assert request.headers["user-agent"] == "grantex-python/0.4.0"
+    assert request.headers["user-agent"] == "grantex-python/0.4.1"
 
 
 @respx.mock

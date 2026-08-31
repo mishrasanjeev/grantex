@@ -60,6 +60,15 @@ def test_parse_rate_limit_partial_headers_returns_none() -> None:
     assert rl is None
 
 
+def test_retry_after_uses_server_window_with_bounded_ceiling() -> None:
+    client = HttpClient("https://api.grantex.dev", "test-key")
+    client._pending_retry_after = 42.0
+    assert client._retry_delay(0) == 42.0
+    client._pending_retry_after = 600.0
+    assert client._retry_delay(0) == 120.0
+    client.close()
+
+
 # ── Error extraction helpers ───────────────────────────────────────────────
 
 def test_extract_error_code_from_dict() -> None:

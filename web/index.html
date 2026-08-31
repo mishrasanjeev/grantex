@@ -131,7 +131,7 @@
           "height": 630,
           "caption": "Grantex AI agent authorization"
         },
-        "dateModified": "2026-08-30",
+        "dateModified": "2026-09-01",
         "inLanguage": "en"
       },
       {
@@ -245,7 +245,7 @@
             "name": "Which Grantex SDK should I install?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Use @grantex/sdk@0.5.0 for TypeScript, grantex==0.4.0 for Python, and github.com/mishrasanjeev/grantex-go@v0.2.0 for Go. Review release status before upgrading because packages are independently versioned."
+              "text": "Use the registry-verified @grantex/sdk@0.5.0 for TypeScript, grantex==0.4.0 for Python, and github.com/mishrasanjeev/grantex-go@v0.2.0 for Go. Newer source candidates are listed in release status and should not be installed until their registry verification is complete."
             }
           },
           {
@@ -927,7 +927,7 @@
       text-transform: uppercase;
       color: var(--accent);
       flex-shrink: 0;
-      width: 32px;
+      width: 50px;
     }
     .install-cmd code {
       font-family: var(--mono);
@@ -1630,11 +1630,15 @@
     <div class="release-header">
       <div>
         <div class="section-label">Release state</div>
-        <h2 class="section-title">Published primary SDKs</h2>
+        <h2 class="section-title">Primary SDK release state</h2>
         <p class="release-intro">
-          Release snapshot verified on 31 August 2026. TypeScript 0.5.0, x402
-          0.3.0, Python 0.4.0, and Go v0.2.0 are published and
-          registry-verified. External custody remains operator-supplied.
+          Release snapshot verified on 1 September 2026. TypeScript 0.5.0,
+          Python 0.4.0, Go v0.2.0, and x402 0.3.0 are registry-verified.
+          Patch release candidates <code>@grantex/sdk@0.5.1</code>,
+          <code>grantex==0.4.1</code>, and
+          <code>github.com/mishrasanjeev/grantex-go@v0.2.1</code> remain
+          source-only until publication checks finish. External custody remains
+          operator-supplied.
         </p>
       </div>
       <div class="release-links" aria-label="Release resources">
@@ -1656,7 +1660,7 @@
         <span class="release-language">TypeScript SDK</span>
         <span class="release-name">@grantex/sdk</span>
         <strong class="release-version">0.5.0</strong>
-        <span class="release-meta">npm &middot; published and fresh-install verified</span>
+        <span class="release-meta">npm &middot; current published release</span>
       </a>
       <a class="release-card" href="https://www.npmjs.com/package/@grantex/x402/v/0.3.0">
         <span class="release-language">x402 Payment Protocol</span>
@@ -1668,13 +1672,13 @@
         <span class="release-language">Python SDK</span>
         <span class="release-name">grantex</span>
         <strong class="release-version">0.4.0</strong>
-        <span class="release-meta">PyPI &middot; published and fresh-install verified</span>
+        <span class="release-meta">PyPI &middot; current published release</span>
       </a>
       <a class="release-card" href="https://pkg.go.dev/github.com/mishrasanjeev/grantex-go@v0.2.0">
         <span class="release-language">Go SDK</span>
         <span class="release-name">github.com/mishrasanjeev/grantex-go</span>
         <strong class="release-version">v0.2.0</strong>
-        <span class="release-meta">Go module &middot; tagged and proxy-verified</span>
+        <span class="release-meta">Go module &middot; current proxy-verified release</span>
       </a>
       <a class="release-card" href="https://www.npmjs.com/package/@grantex/mcp-auth/v/2.0.2">
         <span class="release-language">MCP Auth</span>
@@ -1786,7 +1790,7 @@
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Which Grantex SDK should I install?</summary>
-        <p>Use <code>@grantex/sdk@0.5.0</code> for TypeScript, <code>grantex==0.4.0</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.2.0</code> for Go. Review <a href="https://docs.grantex.dev/release-status">release status</a> before upgrading because packages are independently versioned.</p>
+        <p>Use the registry-verified <code>@grantex/sdk@0.5.0</code> for TypeScript, <code>grantex==0.4.0</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.2.0</code> for Go. Newer source candidates are listed in <a href="https://docs.grantex.dev/release-status">release status</a> and should not be installed until their registry verification is complete.</p>
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Does local Grantex token verification check current revocation?</summary>
@@ -3440,6 +3444,13 @@ grantex agent install --dir /path/to/skills</pre>
             <div>
               <h4><a href="https://docs.grantex.dev/guides/security-hardening" style="color:inherit;text-decoration:none;">Security Hardening</a></h4>
               <p>Fastify per-IP defaults or route overrides, plus additional standard-auth plan budgets (with JWKS exempt), HTTP security headers, HMAC-signed SSO state, timing-safe auth, scope validation, bounded refresh-token recovery, and 1MB body limits.</p>
+            </div>
+          </div>
+          <div class="enterprise-feature">
+            <span class="check">&#x2713;</span>
+            <div>
+              <h4><a href="https://docs.grantex.dev/guides/supply-chain-security" style="color:inherit;text-decoration:none;">Supply Chain Controls</a></h4>
+              <p>All npm lockfiles, Python install surfaces, and Go modules are audited; GitHub Actions and container images are pinned, Dependabot coverage is enforced, and reviewed third-party license notices ship with the source.</p>
             </div>
           </div>
           <div class="enterprise-feature">

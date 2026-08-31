@@ -62,8 +62,8 @@ async function main(): Promise<void> {
   // ── 3. Parent delegates to child with subset of scopes ────────────
   console.log('\nDelegating calendar scopes to child agent...');
   const delegatedToken = await grantex.grants.delegate({
-    grantToken: parentToken.grantToken,
-    agentId: childAgent.id,
+    parentGrantToken: parentToken.grantToken,
+    subAgentId: childAgent.id,
     scopes: ['calendar:read'],  // Only a subset of parent's scopes
   });
   console.log('Child grant token:');

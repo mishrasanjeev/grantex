@@ -12,6 +12,7 @@ function mockFetch(status: number, body: unknown, headers: Record<string, string
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -75,5 +76,37 @@ describe('Rate limit headers', () => {
     await client.agents.list();
 
     expect(client.lastRateLimit).toBeUndefined();
+  });
+
+  it('honors Retry-After beyond the exponential-backoff ceiling', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: new Headers({
+          'x-ratelimit-limit': '20',
+          'x-ratelimit-remaining': '0',
+          'x-ratelimit-reset': '42',
+          'retry-after': '42',
+        }),
+        json: () => Promise.resolve({ message: 'Rate limit exceeded' }),
+        text: () => Promise.resolve('Rate limit exceeded'),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        json: () => Promise.resolve({ agents: [], total: 0, page: 1, pageSize: 20 }),
+      } as unknown as Response);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const client = new Grantex({ apiKey: 'test-key', maxRetries: 1 });
+    const request = client.agents.list();
+    await vi.advanceTimersByTimeAsync(41_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(request).resolves.toMatchObject({ agents: [] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

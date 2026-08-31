@@ -12,9 +12,10 @@ wallet immediately. The x402 adapter uses the official x402 v2
 `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` headers.
 
 <Note>
-The prepaid-wallet API and SDK shown here are implemented in
+The prepaid-wallet API and SDK shown here are available in the published
 `@grantex/sdk@0.5.0`, `@grantex/x402@0.3.0`, Python `grantex==0.4.0`, and Go
-`v0.2.0`. All four versions are published and registry-verified.
+`v0.2.0`. Source candidates `0.5.1`, `0.4.1`, and `v0.2.1` add bounded refresh
+recovery and retry hardening but remain source-only until registry verification.
 `sandbox_ledger` is a complete local ledger mode.
 `external` wallet records fail closed until a custody/provider adapter verifies
 funding and settlement.

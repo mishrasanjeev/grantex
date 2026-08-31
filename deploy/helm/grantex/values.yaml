@@ -131,7 +131,7 @@ opentelemetry:
   endpoint: ""
   collector:
     enabled: false
-    image: otel/opentelemetry-collector-contrib:0.96.0
+    image: otel/opentelemetry-collector-contrib:0.96.0@sha256:7ef2a2ff46b9e432321fdd63df104bfeedaf7b4e276950f42c634d0f23521fc4
     resources:
       requests:
         cpu: 50m

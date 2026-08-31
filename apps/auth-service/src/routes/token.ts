@@ -12,6 +12,12 @@ import { issueAgentGrantVC } from '../lib/vc.js';
 import { issueSDJWT } from '../lib/sd-jwt.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import {
+  clearExpiredRefreshReplayState,
+  clearRefreshReplayState,
+  openRefreshReplayToken,
+  sealRefreshReplayToken,
+} from '../lib/refresh-replay.js';
 
 interface TokenBody {
   code: string;
@@ -64,6 +70,22 @@ function isRouteError(err: unknown): err is RouteError {
 }
 
 export async function tokenRoutes(app: FastifyInstance): Promise<void> {
+  let replaySweep: ReturnType<typeof setInterval> | undefined;
+  if (process.env['NODE_ENV'] !== 'test') {
+    app.addHook('onReady', async () => {
+      await clearExpiredRefreshReplayState(getSql());
+      replaySweep = setInterval(() => {
+        clearExpiredRefreshReplayState(getSql()).catch((error: unknown) => {
+          app.log.error({ err: error }, 'refresh replay-state sweep failed');
+        });
+      }, 60_000);
+      replaySweep.unref();
+    });
+    app.addHook('onClose', async () => {
+      if (replaySweep) clearInterval(replaySweep);
+    });
+  }
+
   // POST /v1/token — stricter rate limit: 20/min
   app.post<{ Body: TokenBody }>('/v1/token', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const endTimer = tokenExchangeDuration.startTimer();
@@ -373,6 +395,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     let issuedAt = Math.floor(Date.now() / 1000);
     let responseRefreshToken!: string;
     let refreshReplay = false;
+    let refreshReplayRejected = false;
 
     try {
       await sql.begin(async (_tx) => {
@@ -486,15 +509,19 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             || Number.isNaN(replayExpiresAt.getTime())
             || replayExpiresAt <= now
           ) {
-            routeError(400, REFRESH_TOKEN_ALREADY_USED);
+            await clearRefreshReplayState(tx, row['refresh_id'] as string);
+            refreshReplayRejected = true;
+            return;
           }
           const replayIssuedAt = Number(row['replay_issued_at']);
+          const replayGrantToken = openRefreshReplayToken(row['replay_grant_token']);
           if (!replayHashMatches(row['replay_request_hash'], replayRequestHash)
               || typeof row['replay_jti'] !== 'string'
-              || typeof row['replay_grant_token'] !== 'string'
-              || row['replay_grant_token'].length === 0
+              || replayGrantToken === null
               || !Number.isSafeInteger(replayIssuedAt)) {
-            routeError(400, REFRESH_TOKEN_ALREADY_USED);
+            await clearRefreshReplayState(tx, row['refresh_id'] as string);
+            refreshReplayRejected = true;
+            return;
           }
 
           const rotatedRows = await tx`
@@ -510,7 +537,9 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             || rotated['is_used']
             || new Date(rotated['expires_at'] as string) <= now
           ) {
-            routeError(400, REFRESH_TOKEN_ALREADY_USED);
+            await clearRefreshReplayState(tx, row['refresh_id'] as string);
+            refreshReplayRejected = true;
+            return;
           }
 
           // The previous response may have been lost after commit. The same
@@ -520,7 +549,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           refreshReplay = true;
           jti = row['replay_jti'];
           issuedAt = replayIssuedAt;
-          jwt = row['replay_grant_token'];
+          jwt = replayGrantToken;
           return;
         }
 
@@ -534,6 +563,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         // Sign before rotating the single-use refresh token. A signer failure
         // rolls the transaction back and leaves the caller able to retry.
         jwt = await signRefreshedGrantToken();
+        const encryptedReplayToken = sealRefreshReplayToken(jwt);
 
         await tx`
           INSERT INTO refresh_tokens (id, grant_id, expires_at)
@@ -548,7 +578,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
               replay_request_hash = ${replayRequestHash},
               replay_jti = ${jti},
               replay_issued_at = ${issuedAt},
-              replay_grant_token = ${jwt},
+              replay_grant_token = ${encryptedReplayToken},
               replay_expires_at = LEAST(
                 NOW() + (${REFRESH_TOKEN_REPLAY_WINDOW_SECONDS} * INTERVAL '1 second'),
                 ${refreshExpiresAt}
@@ -566,6 +596,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           VALUES (${jti}, ${grantId}, ${grantExpiresAt})
         `;
       });
+      if (refreshReplayRejected) routeError(400, REFRESH_TOKEN_ALREADY_USED);
     } catch (err) {
       if (isRouteError(err)) {
         return reply.status(err.statusCode).send({

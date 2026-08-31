@@ -9,11 +9,12 @@ import httpx
 from ._errors import GrantexApiError, GrantexAuthError, GrantexNetworkError
 from ._types import RateLimit
 
-_SDK_VERSION = "0.4.0"
+_SDK_VERSION = "0.4.1"
 _DEFAULT_TIMEOUT = 30.0
 _DEFAULT_MAX_RETRIES = 3
 _RETRY_BASE_DELAY = 0.5  # seconds
 _RETRY_MAX_DELAY = 10.0  # seconds
+_RETRY_AFTER_MAX_DELAY = 120.0  # seconds
 _RETRYABLE_STATUS_CODES = frozenset({429, 502, 503, 504})
 
 
@@ -160,7 +161,7 @@ class HttpClient:
         if self._pending_retry_after is not None:
             delay = self._pending_retry_after
             self._pending_retry_after = None
-            return min(delay, _RETRY_MAX_DELAY)
+            return min(max(0.0, delay), _RETRY_AFTER_MAX_DELAY)
         # Exponential backoff with jitter
         exponential = _RETRY_BASE_DELAY * (2 ** attempt)
         jitter = random.random() * _RETRY_BASE_DELAY

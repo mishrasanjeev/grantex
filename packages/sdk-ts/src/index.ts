@@ -17,6 +17,7 @@ export {
   type OAuthAuthorizationServerMetadata,
   type OAuthAgentClientOptions,
   type OAuthAgentKeyPair,
+  type OAuthAgentRefreshOptions,
   type BeginAgentAuthorizationOptions,
   type PendingAgentAuthorization,
   type OAuthAgentTokenResponse,

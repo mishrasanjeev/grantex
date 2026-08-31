@@ -99,6 +99,36 @@ describe('TokensClient', () => {
     expect(body).not.toHaveProperty('idempotencyKey');
   });
 
+  it('reuses an automatic refresh key after a lost response', async () => {
+    const success = {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: () => Promise.resolve({
+        grantToken: 'eyJ.new...',
+        expiresAt: '2026-03-01T00:00:00Z',
+        scopes: ['calendar:read'],
+        refreshToken: 'rt_new',
+        grantId: 'grnt_01',
+      }),
+      text: () => Promise.resolve(''),
+    };
+    const mockFetch = vi.fn()
+      .mockRejectedValueOnce(new Error('connection closed after commit'))
+      .mockResolvedValueOnce(success);
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key', maxRetries: 0 });
+    const params = { refreshToken: 'rt_old', agentId: 'ag_01' };
+    await expect(grantex.tokens.refresh(params)).rejects.toThrow();
+    await expect(grantex.tokens.refresh(params)).resolves.toMatchObject({ refreshToken: 'rt_new' });
+
+    const firstHeaders = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    const secondHeaders = mockFetch.mock.calls[1]?.[1]?.headers as Record<string, string>;
+    expect(firstHeaders['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(secondHeaders['Idempotency-Key']).toBe(firstHeaders['Idempotency-Key']);
+  });
+
   it('revoke() POSTs to /v1/tokens/revoke', async () => {
     const mockFetch = makeFetch(204, null);
     vi.stubGlobal('fetch', mockFetch);

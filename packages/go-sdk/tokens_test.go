@@ -108,6 +108,45 @@ func TestTokensRefresh(t *testing.T) {
 	}
 }
 
+func TestTokensRefreshReusesAutomaticKeyAfterLostResponse(t *testing.T) {
+	var calls int
+	var firstKey string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		key := r.Header.Get("Idempotency-Key")
+		if len(key) < 16 {
+			t.Errorf("expected generated idempotency key, got %q", key)
+		}
+		if calls == 1 {
+			firstKey = key
+			w.WriteHeader(http.StatusServiceUnavailable)
+			json.NewEncoder(w).Encode(map[string]string{"message": "response lost"})
+			return
+		}
+		if key != firstKey {
+			t.Errorf("retry key changed: first %q, second %q", firstKey, key)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ExchangeTokenResponse{
+			GrantToken: "new-jwt", RefreshToken: "new-refresh", GrantID: "grant-1",
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithMaxRetries(0))
+	params := RefreshTokenParams{RefreshToken: "old-refresh", AgentID: "agent-1"}
+	if _, err := client.Tokens.Refresh(context.Background(), params); err == nil {
+		t.Fatal("expected the first response to fail")
+	}
+	result, err := client.Tokens.Refresh(context.Background(), params)
+	if err != nil {
+		t.Fatalf("unexpected retry error: %v", err)
+	}
+	if result.RefreshToken != "new-refresh" {
+		t.Fatalf("expected recovered refresh token, got %q", result.RefreshToken)
+	}
+}
+
 func TestTokensVerify(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/tokens/verify" || r.Method != http.MethodPost {

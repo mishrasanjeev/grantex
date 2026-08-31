@@ -63,7 +63,7 @@ try {
         VALUES (
           ${id}, ${'ag_01'}, ${'did:grantex:ag_01'}, ${'grnt_01'}, ${'user_01'},
           ${'dev_TEST'}, ${'tool.run'}, ${param}, ${'deadbeef'},
-          ${null}, ${'2026-01-01T00:00:00.000Z'}, ${'success'}
+          ${'previous_hash_probe'}, ${'2026-01-01T00:00:00.000Z'}, ${'success'}
         )`;
       const [row] = await tx`
         SELECT jsonb_typeof(metadata) AS jtype, metadata, metadata::text AS raw

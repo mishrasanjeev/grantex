@@ -12,7 +12,9 @@ npm install @grantex/vercel-ai @grantex/sdk ai zod
 
 ## Scope-Enforced Tools
 
-Create Vercel AI SDK tools with Grantex authorization. Scope is checked **at construction time** — if the token is missing the required scope, `createGrantexTool` throws immediately:
+Create Vercel AI SDK tools with Grantex authorization. The token signature and
+claims are verified and the required scope is checked **at execution time**,
+immediately before the application callback runs:
 
 ```typescript
 import { createGrantexTool } from '@grantex/vercel-ai';
@@ -25,7 +27,7 @@ const readCalendar = createGrantexTool({
     date: z.string().describe('Date in YYYY-MM-DD format'),
   }),
   grantToken,                     // JWT from Grantex token exchange
-  requiredScope: 'calendar:read', // checked at construction time
+  requiredScope: 'calendar:read', // checked after JWKS verification at execution
   execute: async (args) => {
     return await getCalendarEvents(args.date);
   },
@@ -81,10 +83,11 @@ const audited = withAuditLogging(readCalendar, client, {
 | `description` | `string` | Tool description |
 | `parameters` | `z.ZodTypeAny` | Zod schema for tool arguments |
 | `grantToken` | `string` | Grantex JWT from token exchange |
-| `requiredScope` | `string` | Scope required — checked at construction time |
+| `requiredScope` | `string` | Scope required after JWKS verification at execution time |
 | `execute` | `(args, options) => Promise<Result>` | Tool implementation |
 
-Throws `GrantexScopeError` if scope is missing.
+Execution throws `GrantexScopeError` if the verified scope is missing and does
+not call the application implementation.
 
 ### `getGrantScopes(grantToken)`
 

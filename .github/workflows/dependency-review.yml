@@ -15,14 +15,14 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
       - name: Dependency Review
-        uses: actions/dependency-review-action@v5
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
-          fail-on-severity: high
+          fail-on-severity: moderate
           license-check: true
           allow-licenses: >-
             Apache-2.0,
@@ -36,5 +36,9 @@ jobs:
             Unlicense,
             LicenseRef-scancode-unicode,
             LicenseRef-scancode-google-patent-license-golang,
-            LGPL-3.0-or-later
+            LGPL-3.0-or-later,
+            AFL-2.1,
+            CC0-1.0,
+            CC-BY-4.0,
+            MIT-0
           comment-summary-in-pr: always

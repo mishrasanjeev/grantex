@@ -1,6 +1,11 @@
 {
   "name": "grantex",
   "private": true,
+  "scripts": {
+    "audit:supply-chain": "node scripts/check-supply-chain.mjs --audit-npm",
+    "audit:python": "python scripts/audit-python-dependencies.py",
+    "test:e2e:refresh-restart": "node scripts/verify-oauth-refresh-restart.mjs"
+  },
   "devDependencies": {
     "@grantex/sdk": "file:packages/sdk-ts",
     "vitest": "^4.0.18",

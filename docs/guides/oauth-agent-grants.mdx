@@ -41,7 +41,11 @@ requirement, and RFC 9207 issuer-response support before starting a flow.
   protected-resource requests to the registered Agent Key.
 - Access tokens expire after five minutes and carry standard `client_id`,
   `scope`, `aud`, and `cnf.jkt` claims.
-- Refresh tokens rotate on every use. Reuse revokes the complete token family.
+- Refresh tokens rotate on every use. A caller can recover the exact committed
+  token values with a recalculated remaining lifetime for 300 seconds by
+  repeating the old token with a fresh DPoP proof
+  and the same idempotency key. Any mismatched reuse revokes the complete token
+  family.
 - RFC 8693 token exchange only permits exact-scope attenuation for the same
   client instance, sender key, and resource.
 - RFC 7009 revocation does not reveal whether the presented token existed.
@@ -67,13 +71,14 @@ requirement, and RFC 9207 issuer-response support before starting a flow.
 
 ## TypeScript client
 
-`@grantex/sdk@0.5.0` includes `OAuthAgentClient`, which handles discovery, PAR,
+`@grantex/sdk@0.5.1` includes `OAuthAgentClient`, which handles discovery, PAR,
 state and issuer validation, PKCE, DPoP proofs, refresh, attenuation,
 revocation, and protected-resource requests.
 
 <Note>
-Use published `@grantex/sdk@0.5.0` for this profile and check [Release
-Status](/release-status) before upgrading.
+`@grantex/sdk@0.5.1` is the source release candidate for this profile. Continue
+using published `0.5.0` until [Release Status](/release-status) records clean
+registry verification.
 </Note>
 
 ```typescript
@@ -98,11 +103,28 @@ const response = await client.fetch(
   'https://grantex.dev/oauth/resource',
   tokens.access_token,
 );
+
+// Persist this key with the old refresh token if recovery must survive a
+// caller restart. The client retains an automatic key for five minutes while
+// the current instance remains alive.
+const refreshAttempt = crypto.randomUUID();
+const rotated = await client.refresh(tokens.refresh_token!, {
+  idempotencyKey: refreshAttempt,
+});
 ```
 
 Keep the Agent Key in an OS keychain, HSM, KMS, or equivalent non-exportable
 credential store. Never persist it in browser storage, source control, logs, or
 analytics payloads.
+
+If the token endpoint commits rotation but the response is lost, retry with the
+same old refresh token and `idempotencyKey`, but create a fresh DPoP proof. The
+server returns the same access-token identity and child refresh token without
+extending either lifetime. Recovery metadata is durable in PostgreSQL and the
+cached access token is encrypted with the deployment's `VAULT_ENCRYPTION_KEY`,
+so an authorization-server process restart does not destroy it. A periodic
+sweep erases response material at expiry. After 300 seconds, or when the retry
+key/client/DPoP key differs, reuse is treated as a replay and revokes the family.
 
 ## Live deployment requirements
 
@@ -118,9 +140,10 @@ analytics payloads.
 
 ## Evidence and limits
 
-The implementation was verified with 2,097 auth-service tests, 444 TypeScript
-SDK tests, and 253 tests across 21 sequential Docker E2E files. The fresh
-Docker run applied all 90 migrations and finished with no E2E residue or
+The implementation was verified with 2,138 auth-service tests, 456 TypeScript
+SDK tests, and 255 tests across 23 sequential Docker E2E files. The fresh
+Docker run applied all 93 migrations, and a separate restart test recovered an
+encrypted committed refresh response after restarting the auth-service container. It finished with no E2E residue or
 error-level server logs. Production dependency audits for the auth service and
 SDK reported zero vulnerabilities at the time of review.
 

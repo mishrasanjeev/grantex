@@ -32,6 +32,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Commerce, SCIM Bearer data-plane, admin, and other custom-auth routes remain outside these plan buckets.
 
 ### Changed
+- TypeScript, Python, and Go HTTP clients now honor an explicit server
+  `Retry-After` window beyond the ten-second exponential-backoff ceiling, with
+  a two-minute defensive cap.
+- Prepared `@grantex/sdk@0.5.1`, Python `grantex==0.4.1`, and Go SDK
+  `v0.2.1` with five-minute in-process refresh retry-key retention and an
+  explicit durable idempotency-key option for retries that cross restarts.
 - Published `@grantex/sdk@0.5.0` and `@grantex/x402@0.3.0` to npm on
   2026-08-31; verified registry integrity and installed both exact versions in
   a clean project, including the layered-wallet and x402 approval exports.
@@ -43,6 +49,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Published TypeScript SDK 0.3.13, Python SDK 0.3.14, and Go SDK v0.1.10 on 2026-07-11; synchronized the public release snapshot across the landing page, README, compatibility matrix, and SDK documentation.
 
 ### Fixed
+- Made migration `093_encrypt_refresh_replay_state.sql` clear legacy plaintext
+  replay state exactly once. A durable migration sentinel prevents subsequent
+  auth-service restarts from erasing valid encrypted recovery responses.
+- Encrypted refresh lost-response replay tokens at rest with AES-256-GCM,
+  removed legacy plaintext replay state during migration, and added a bounded
+  cleanup sweep that erases expired response material.
+- Added 300-second lost-response recovery to standards-based OAuth refresh
+  rotation. Recovery requires the same old refresh token, client, DPoP key,
+  and idempotency key; mismatched reuse still revokes the token family.
+- Closed npm and Go dependency advisories, pinned every GitHub Action to an
+  immutable commit, added complete Dependabot manifest coverage, and added
+  npm, Python, Go, and license-policy gates to the security workflow.
+- Enabled generic SLSA provenance generation for tagged source releases using
+  the verified upstream `v2.1.0` builder workflow.
 - Preserved structured `PrepaidPaymentApprovalRequiredError` details across the
   official x402 fetch wrapper so an approved retry can reuse the exact wallet,
   approval request, and idempotency key.
@@ -50,7 +70,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   advisory lock and fixed PostgreSQL array type inference in policy filters.
 - Corrected the TypeScript SDK `User-Agent` version and tied its regression test to `package.json` so future package bumps cannot publish a stale runtime identifier.
 - Hardened live authorization so policy decisions cannot replace authenticated Principal consent; bound redirects, resources, scopes, and registered agent keys through issuance and delegation.
-- Made refresh rotation recoverable for 300 seconds only when the authenticated caller repeats the same old token and idempotency key; recovery returns the exact committed token response and survives a server restart without extending any lifetime.
+- Made refresh rotation recoverable for 300 seconds only when the authenticated caller repeats the same old token and idempotency key; recovery returns the exact committed token values with a recalculated remaining lifetime and survives a server restart without extending expiry.
 - Corrected the Go SDK source contract across Agent and Audit reads/writes: `agentId` mapping, optional registration fields, status updates, explicit scope clearing, required audit-write fields, `developerId` reads, and list envelopes.
   Removed unsupported audit filters and URL-encoded query values, with API-shaped regression tests.
   These fixes are not part of the currently published `v0.1.10` module.

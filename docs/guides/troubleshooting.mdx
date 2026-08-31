@@ -119,7 +119,7 @@ If `POST /v1/token/refresh` returns 400:
 
 | Error message | Cause | Fix |
 |---------------|-------|-----|
-| "Refresh token already used" | Token was already used and is outside the five-minute replay-recovery window, its rotated child token was already used, or the grant has expired | Use the newest refresh token you stored, or re-authorize if the response containing it was lost and recovery has expired |
+| "Refresh token already used" | Token was already used and the idempotency key changed or was lost, the five-minute window expired, its child was used, or the grant expired | Retry only with the same old token and persisted idempotency key; otherwise use the newest stored token or re-authorize |
 | "Refresh token expired" | The refresh token's own expiry elapsed; refresh tokens last up to 30 days and are capped by grant expiration | Re-authorize to get a fresh token pair |
 | "Grant has been revoked" | The underlying grant was revoked | Re-authorize the agent |
 | "Agent mismatch" | `agentId` doesn't match the grant's agent | Use the correct agent ID |

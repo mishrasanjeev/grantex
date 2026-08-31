@@ -10,3 +10,6 @@ The Grantex protocol specification, source code, SDKs, examples, and
 documentation are made available under the Apache License 2.0 unless a file
 states otherwise. The open-source license does not remove or transfer the
 product ownership notice above.
+
+Third-party dependencies retain their own licenses. See
+THIRD_PARTY_NOTICES.md for reviewed distribution notices and obligations.

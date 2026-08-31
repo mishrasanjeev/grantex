@@ -1,32 +1,45 @@
-# x402 Agent Demo
+# Managed Prepaid-Wallet x402 Agent
 
-AI agent that uses a Grantex Delegation Token (GDT) + x402 to fetch weather data.
+This example uses the official x402 v2 flow backed by an assigned Grantex
+prepaid wallet. It does not fabricate payment proofs or use the legacy GDT-only
+payment path.
 
 ## Prerequisites
 
-Start the weather API server first:
+1. Start the Grantex Docker stack and the `x402-weather-api` example.
+2. Create and assign a funded `sandbox_ledger` wallet to an agent.
+3. Complete the OAuth Agent Grants flow for resource
+   `http://localhost:3001/v1/prepaid-wallets` with `wallet:read`,
+   `wallet:spend`, and `weather:read` scopes.
+4. Persist the agent's ES256 private JWK with the resulting DPoP-bound access
+   token. Do not log or commit either value.
+
+Set these environment variables before running:
+
+```text
+GRANTEX_OAUTH_CLIENT_ID
+GRANTEX_OAUTH_REDIRECT_URI
+GRANTEX_OAUTH_PRIVATE_JWK
+GRANTEX_ACCESS_TOKEN
+```
+
+Optional variables are `GRANTEX_ISSUER` (defaults to
+`http://localhost:3001`), `GRANTEX_WALLET_ID`, and `WEATHER_API_URL`.
 
 ```bash
-cd ../x402-weather-api
-npm install
+npm ci
+npm run typecheck
 npm start
 ```
 
-## Run
-
-```bash
-npm install
-npm start
-```
-
-## What it does
-
-1. Generates Ed25519 key pairs for principal and agent
-2. Issues a GDT with `weather:read` scope, $10 USDC/24h spend limit
-3. Decodes and inspects the GDT claims
-4. Verifies the GDT standalone
-5. Fetches weather data via x402 (automatic 402 → pay → retry)
+The example lists the agent's assigned wallets, receives the merchant's
+official `PAYMENT-REQUIRED` challenge, obtains a DPoP-authenticated Grantex
+reservation, retries with `PAYMENT-SIGNATURE`, and verifies the HTTP result.
+The same durable idempotency key is sent to Grantex and the merchant. An exact
+principal-approval request is reported without weakening wallet policy.
 
 ## Ownership
 
-Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev
+Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in)
+or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

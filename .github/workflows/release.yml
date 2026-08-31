@@ -25,8 +25,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 20
 
@@ -72,6 +72,9 @@ jobs:
         # promoted to a real check that fails CI on regressions.
         run: node scripts/check-live-mode-guard.mjs
 
+      - name: Supply-chain manifest, pin, and license policy
+        run: node scripts/check-supply-chain.mjs
+
   # ─── Build release artifact + checksum ────────────────────────────────
   release:
     name: Create GitHub Release
@@ -88,7 +91,7 @@ jobs:
       artifact-sha256: ${{ steps.archive.outputs.artifact-sha256 }}
       slsa-subjects: ${{ steps.archive.outputs.slsa-subjects }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           # SLSA provenance needs the full history for repro-checks.
           fetch-depth: 0
@@ -114,7 +117,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact for provenance job
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-artifacts
           path: dist/
@@ -122,7 +125,7 @@ jobs:
           retention-days: 7
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3
         with:
           generate_release_notes: true
           files: |
@@ -136,21 +139,17 @@ jobs:
   # Release. The `base64-subjects` input is the base64-encoded line from
   # `sha256sum` over the release archive (already produced above).
   #
-  # NOTE — VERSION PIN REQUIRED BEFORE FIRST USE:
-  #   Confirm the latest stable tag of slsa-framework/slsa-github-generator
-  #   at https://github.com/slsa-framework/slsa-github-generator/releases
-  #   and replace `vX.Y.Z` below with that pinned tag (NOT a moving ref
-  #   like `@main` — pinning is a SLSA L3 requirement). Until then this
-  #   job is intentionally disabled so that the release workflow does not
-  #   reference an unverified third-party version.
-  #
-  # provenance:
-  #   needs: [release]
-  #   permissions:
-  #     actions: read
-  #     id-token: write
-  #     contents: write
-  #   uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@vX.Y.Z
-  #   with:
-  #     base64-subjects: ${{ needs.release.outputs.slsa-subjects }}
-  #     upload-assets: true
+  # SLSA's verifier requires a canonical release tag in the builder identity,
+  # so this reusable workflow is the documented exception to commit-SHA action
+  # pins. v2.1.0 resolves to f7dd8c54c2067bafc12ca7a55595d5ee9b75204a.
+  provenance:
+    needs: [release]
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: ${{ needs.release.outputs.slsa-subjects }}
+      upload-assets: true
+      compile-generator: true

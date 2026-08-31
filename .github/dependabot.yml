@@ -19,6 +19,18 @@ updates:
       - dependencies
       - github-actions
 
+  - package-ecosystem: docker
+    directory: /apps/auth-service
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, docker, auth-service]
+
+  - package-ecosystem: docker
+    directory: /packages/gateway
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, docker, gateway]
+
   # ─── npm — root + every app + every Node package + the TS example ───
   - package-ecosystem: npm
     directory: /
@@ -197,7 +209,85 @@ updates:
     open-pull-requests-limit: 3
     labels: [dependencies, npm, examples, x402]
 
+  - package-ecosystem: npm
+    directory: /packages/strands
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, strands]
+
+  - package-ecosystem: npm
+    directory: /examples/adapter-google-calendar
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples]
+
+  - package-ecosystem: npm
+    directory: /examples/anthropic-tool-use
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples]
+
+  - package-ecosystem: npm
+    directory: /examples/audit-dashboard
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples]
+
+  - package-ecosystem: npm
+    directory: /examples/gateway-proxy
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples]
+
+  - package-ecosystem: npm
+    directory: /examples/langchain-agent
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples]
+
+  - package-ecosystem: npm
+    directory: /examples/multi-agent-delegation
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples]
+
+  - package-ecosystem: npm
+    directory: /examples/multi-agent-email-flow
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples]
+
+  - package-ecosystem: npm
+    directory: /examples/nextjs-starter
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples]
+
+  - package-ecosystem: npm
+    directory: /examples/token-expiry-refresh
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples]
+
+  - package-ecosystem: npm
+    directory: /examples/vercel-ai-chatbot
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples]
+
+  - package-ecosystem: npm
+    directory: /examples/x402-agent-demo
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, examples, x402]
+
   # ─── pip — every Python package directory with pyproject.toml ───────
+  - package-ecosystem: pip
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, python]
+
   - package-ecosystem: pip
     directory: /packages/sdk-py
     schedule:
@@ -253,6 +343,36 @@ updates:
       interval: weekly
     open-pull-requests-limit: 3
     labels: [dependencies, python, strands-py]
+
+  - package-ecosystem: pip
+    directory: /examples/crewai-agent
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, examples]
+
+  - package-ecosystem: pip
+    directory: /examples/gemma-raspberry-pi
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, examples]
+
+  - package-ecosystem: pip
+    directory: /examples/google-adk
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, examples]
+
+  - package-ecosystem: pip
+    directory: /examples/openai-agents
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, examples]
+
+  - package-ecosystem: pip
+    directory: /examples/quickstart-py
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, examples]
 
   # ─── gomod — Go SDK, Terraform provider, Go quickstart example ──────
   - package-ecosystem: gomod

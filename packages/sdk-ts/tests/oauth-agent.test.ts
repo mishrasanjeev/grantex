@@ -142,6 +142,58 @@ describe('OAuthAgentClient', () => {
     expect(claims.ath).toBeTypeOf('string');
   });
 
+  it('reuses a stable refresh idempotency key and creates a fresh DPoP proof', async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce(json(metadata))
+      .mockResolvedValueOnce(json({
+        access_token: 'access-token', token_type: 'DPoP', expires_in: 300,
+        refresh_token: 'rotated-token', scope: 'read',
+      }))
+      .mockResolvedValueOnce(json({
+        access_token: 'access-token', token_type: 'DPoP', expires_in: 250,
+        refresh_token: 'rotated-token', scope: 'read', refresh_replay: true,
+      }));
+    vi.stubGlobal('fetch', mockFetch);
+    const client = await OAuthAgentClient.create({
+      issuer,
+      clientId: 'ag_test',
+      redirectUri: 'https://client.example/callback',
+      resource: 'https://resource.example/api',
+    });
+
+    await client.refresh('old-refresh-token');
+    const replay = await client.refresh('old-refresh-token');
+
+    const firstHeaders = new Headers((mockFetch.mock.calls[1]?.[1] as RequestInit).headers);
+    const retryHeaders = new Headers((mockFetch.mock.calls[2]?.[1] as RequestInit).headers);
+    expect(firstHeaders.get('idempotency-key')).toHaveLength(36);
+    expect(retryHeaders.get('idempotency-key')).toBe(firstHeaders.get('idempotency-key'));
+    expect(retryHeaders.get('dpop')).not.toBe(firstHeaders.get('dpop'));
+    expect(replay.refresh_replay).toBe(true);
+  });
+
+  it('accepts a caller-persisted OAuth refresh recovery key and rejects weak keys', async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce(json(metadata))
+      .mockResolvedValueOnce(json({
+        access_token: 'access-token', token_type: 'DPoP', expires_in: 300,
+        refresh_token: 'rotated-token', scope: 'read',
+      }));
+    vi.stubGlobal('fetch', mockFetch);
+    const client = await OAuthAgentClient.create({
+      issuer,
+      clientId: 'ag_test',
+      redirectUri: 'https://client.example/callback',
+      resource: 'https://resource.example/api',
+    });
+
+    await client.refresh('old-refresh-token', { idempotencyKey: 'persisted-refresh-attempt-0001' });
+    const headers = new Headers((mockFetch.mock.calls[1]?.[1] as RequestInit).headers);
+    expect(headers.get('idempotency-key')).toBe('persisted-refresh-attempt-0001');
+    expect(() => client.refresh('old-refresh-token', { idempotencyKey: 'short' }))
+      .toThrow('16 to 256');
+  });
+
   it('rejects callbacks delivered to a different redirect URI', async () => {
     const mockFetch = vi.fn()
       .mockResolvedValueOnce(json(metadata))

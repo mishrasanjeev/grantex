@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { getSql, type TxSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
 import { config } from '../config.js';
@@ -16,6 +17,7 @@ import {
 import { isValidPkceChallenge, isValidPkceVerifier, verifyPkceChallenge } from '../lib/pkce.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 import { getPolicyBackend } from '../lib/policy-backend.js';
+import { openRefreshReplayToken, sealRefreshReplayToken } from '../lib/refresh-replay.js';
 
 const OAUTH_PROTOCOL = 'oauth-agent-grants-03';
 const PAR_LIFETIME_SECONDS = 90;
@@ -25,6 +27,7 @@ const GRANT_LIFETIME_SECONDS = 86_400;
 const RESOURCE_SCOPE = 'grantex.resource.read';
 const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 const TOKEN_EXCHANGE_GRANT = 'urn:ietf:params:oauth:grant-type:token-exchange';
+const REFRESH_REPLAY_WINDOW_SECONDS = 300;
 
 type OAuthBody = Record<string, unknown>;
 
@@ -83,6 +86,34 @@ function parseScopes(value: string): string[] {
 function dpopHeader(headers: Record<string, unknown>): string | undefined {
   const value = headers['dpop'];
   return typeof value === 'string' ? value : undefined;
+}
+
+function idempotencyKeyHeader(headers: Record<string, unknown>): string | undefined {
+  const value = headers['idempotency-key'];
+  if (Array.isArray(value)) oauthFailure(400, 'invalid_request', 'Idempotency-Key must occur exactly once');
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.length < 16 || value.length > 256) {
+    oauthFailure(400, 'invalid_request', 'Idempotency-Key must contain 16 to 256 characters');
+  }
+  return value;
+}
+
+function refreshReplayRequestHash(
+  clientId: string,
+  refreshToken: string,
+  keyThumbprint: string,
+  idempotencyKey: string,
+): string {
+  return createHash('sha256')
+    .update(`grantex-oauth-refresh-replay:v1\0${clientId}\0${refreshToken}\0${keyThumbprint}\0${idempotencyKey}`)
+    .digest('hex');
+}
+
+function replayHashMatches(stored: unknown, candidate: string | null): boolean {
+  if (typeof stored !== 'string' || stored.length !== 64 || candidate === null || candidate.length !== 64) {
+    return false;
+  }
+  return timingSafeEqual(Buffer.from(stored, 'hex'), Buffer.from(candidate, 'hex'));
 }
 
 function endpoint(path: string): string {
@@ -644,18 +675,26 @@ async function refreshToken(body: OAuthBody, headers: Record<string, unknown>, r
   const refreshId = required(body, 'refresh_token');
   const clientId = required(body, 'client_id');
   const proof = await verifyDpopProof(dpopHeader(headers), { method: 'POST', targetUri: endpoint('/oauth/token') });
+  const idempotencyKey = idempotencyKeyHeader(headers);
+  const replayRequestHash = idempotencyKey
+    ? refreshReplayRequestHash(clientId, refreshId, proof.thumbprint, idempotencyKey)
+    : null;
   const sql = getSql();
-  const newRefreshId = newOAuthRefreshTokenId();
+  let responseRefreshId = newOAuthRefreshTokenId();
   const jti = newTokenId();
   let jwt = '';
   let scopes: string[] = [];
   let expiresIn = 0;
   let replayDetected = false;
+  let refreshReplay = false;
 
   await sql.begin(async (_tx) => {
     const tx = _tx as unknown as TxSql;
     const rows = await tx`
       SELECT rt.id, rt.is_used, rt.expires_at AS refresh_expires_at,
+             rt.used_at, rt.rotated_to_token_id, rt.replay_expires_at,
+             rt.replay_request_hash, rt.replay_jti, rt.replay_issued_at,
+             rt.replay_grant_token,
              COALESCE(rt.family_id, rt.id) AS family_id,
              g.id AS grant_id, g.agent_id, g.principal_id, g.developer_id,
              g.scopes, g.status, g.expires_at AS grant_expires_at, g.audience,
@@ -677,10 +716,58 @@ async function refreshToken(body: OAuthBody, headers: Record<string, unknown>, r
       oauthFailure(400, 'invalid_dpop_proof', 'The refresh proof key does not match the token family');
     }
     if (row['is_used']) {
+      const now = new Date();
+      const replayExpiresAt = row['replay_expires_at'] !== null && row['replay_expires_at'] !== undefined
+        ? new Date(row['replay_expires_at'] as string)
+        : null;
+      const rotatedToTokenId = row['rotated_to_token_id'];
+      const replayIssuedAt = Number(row['replay_issued_at']);
+      const replayGrantToken = openRefreshReplayToken(row['replay_grant_token']);
+      if (
+        typeof rotatedToTokenId === 'string'
+        && rotatedToTokenId.length > 0
+        && replayExpiresAt !== null
+        && !Number.isNaN(replayExpiresAt.getTime())
+        && replayExpiresAt > now
+        && replayHashMatches(row['replay_request_hash'], replayRequestHash)
+        && typeof row['replay_jti'] === 'string'
+        && replayGrantToken !== null
+        && Number.isSafeInteger(replayIssuedAt)
+      ) {
+        const rotatedRows = await tx`
+          SELECT id, grant_id, is_used, expires_at
+          FROM refresh_tokens
+          WHERE id = ${rotatedToTokenId}
+          FOR UPDATE
+        `;
+        const rotated = rotatedRows[0];
+        if (rotated
+            && rotated['grant_id'] === row['grant_id']
+            && !rotated['is_used']
+            && new Date(rotated['expires_at'] as string) > now) {
+          const originalAccessExpiry = Math.min(
+            replayIssuedAt + ACCESS_TOKEN_LIFETIME_SECONDS,
+            Math.floor(new Date(row['grant_expires_at'] as string).getTime() / 1000),
+          );
+          expiresIn = Math.max(1, originalAccessExpiry - Math.floor(now.getTime() / 1000));
+          scopes = row['scopes'] as string[];
+          responseRefreshId = rotatedToTokenId;
+          jwt = replayGrantToken;
+          refreshReplay = true;
+          return;
+        }
+      }
+
       replayDetected = true;
       await tx`
         UPDATE refresh_tokens
-        SET is_used = TRUE, used_at = COALESCE(used_at, NOW())
+        SET is_used = TRUE,
+            used_at = COALESCE(used_at, NOW()),
+            replay_expires_at = NULL,
+            replay_request_hash = NULL,
+            replay_jti = NULL,
+            replay_issued_at = NULL,
+            replay_grant_token = NULL
         WHERE COALESCE(family_id, id) = ${row['family_id'] as string}
       `;
       await tx`
@@ -690,6 +777,7 @@ async function refreshToken(body: OAuthBody, headers: Record<string, unknown>, r
       return;
     }
     const now = new Date();
+    const issuedAt = Math.floor(now.getTime() / 1000);
     const grantExpiresAt = new Date(row['grant_expires_at'] as string);
     if (row['status'] !== 'active' || row['agent_status'] !== 'active'
         || new Date(row['refresh_expires_at'] as string) <= now || grantExpiresAt <= now) {
@@ -705,21 +793,33 @@ async function refreshToken(body: OAuthBody, headers: Record<string, unknown>, r
       jti,
       aud: row['audience'] as string,
       cnf: { jkt: proof.thumbprint },
+      iat: issuedAt,
       ...(Array.isArray(row['authorization_details'])
         ? { authorizationDetails: row['authorization_details'] as Array<Record<string, unknown>> }
         : {}),
       exp: Math.floor(accessExpiresAt.getTime() / 1000),
     });
+    const encryptedReplayToken = sealRefreshReplayToken(jwt);
     await tx`
       INSERT INTO refresh_tokens (id, grant_id, expires_at, family_id, parent_token_id)
       VALUES (
-        ${newRefreshId}, ${row['grant_id'] as string}, ${grantExpiresAt},
+        ${responseRefreshId}, ${row['grant_id'] as string}, ${grantExpiresAt},
         ${row['family_id'] as string}, ${refreshId}
       )
     `;
     const rotated = await tx`
       UPDATE refresh_tokens
-      SET is_used = TRUE, used_at = NOW(), rotated_to_token_id = ${newRefreshId}
+      SET is_used = TRUE,
+          used_at = NOW(),
+          rotated_to_token_id = ${responseRefreshId},
+          replay_request_hash = ${replayRequestHash},
+          replay_jti = ${jti},
+          replay_issued_at = ${issuedAt},
+          replay_grant_token = ${encryptedReplayToken},
+          replay_expires_at = LEAST(
+            NOW() + (${REFRESH_REPLAY_WINDOW_SECONDS} * INTERVAL '1 second'),
+            ${grantExpiresAt}
+          )
       WHERE id = ${refreshId} AND is_used = FALSE
       RETURNING id
     `;
@@ -735,8 +835,9 @@ async function refreshToken(body: OAuthBody, headers: Record<string, unknown>, r
     access_token: jwt,
     token_type: 'DPoP',
     expires_in: expiresIn,
-    refresh_token: newRefreshId,
+    refresh_token: responseRefreshId,
     scope: scopes.join(' '),
+    ...(refreshReplay ? { refresh_replay: true } : {}),
   });
 }
 
