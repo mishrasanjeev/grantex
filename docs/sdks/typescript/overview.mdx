@@ -6,10 +6,12 @@ description: "Install, configure, and get started with the @grantex/sdk TypeScri
 
 ## Installation
 
-Current published release: **`@grantex/sdk@0.4.1`** (verified August 30, 2026).
+Prepared release candidate: **`@grantex/sdk@0.5.0`** (source verified August 31,
+2026). The current published release remains `0.4.1` until the candidate is
+registry-verified.
 
 ```bash
-npm install @grantex/sdk@0.4.1
+npm install @grantex/sdk@0.5.0
 ```
 
 The unpinned `npm install @grantex/sdk` command follows npm's current `latest`
@@ -17,10 +19,13 @@ tag. Keep the exact version above in reproducible builds. See
 [Release Status](/release-status) before upgrading.
 
 <Note>
-SDK `0.4.1` includes `PrepaidWalletAgentClient` and
-`PrincipalPrepaidWalletClient`. External custody remains fail-closed until a
+SDK `0.5.0` includes `PrepaidWalletAgentClient`,
+`PrincipalPrepaidWalletClient`, and `DeveloperPrepaidWalletPolicyClient` with
+safe assignment defaults, layered policy, exact approval, semantic context, and
+reload governance. External custody remains fail-closed until a
 self-hosting operator supplies and verifies a provider adapter. See [x402
-Prepaid Wallets](/integrations/x402).
+Prepaid Wallets](/integrations/x402) and [Agent Wallet
+Governance](/guides/agent-wallet-governance).
 </Note>
 
 ## Requirements

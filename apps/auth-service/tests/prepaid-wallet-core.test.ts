@@ -77,7 +77,13 @@ describe('wallet authorization JWT', () => {
       expiresAt: Math.floor(Date.now() / 1000) + 300,
     };
     const token = await signWalletAuthorizationToken(payload);
-    await expect(verifyWalletAuthorizationToken(token)).resolves.toEqual(payload);
+    await expect(verifyWalletAuthorizationToken(token)).resolves.toEqual({
+      ...payload,
+      merchantId: null,
+      purpose: null,
+      projectId: null,
+      costCenter: null,
+    });
     const [header, body, signature] = token.split('.');
     const decoded = JSON.parse(Buffer.from(body!, 'base64url').toString()) as Record<string, unknown>;
     decoded['amount'] = '1';
@@ -88,6 +94,7 @@ describe('wallet authorization JWT', () => {
 
 describe('prepaid wallet migration invariants', () => {
   const migration = readFileSync(join(process.cwd(), 'src', 'db', 'migrations', '091_agent_prepaid_wallets.sql'), 'utf8');
+  const layered = readFileSync(join(process.cwd(), 'src', 'db', 'migrations', '092_layered_wallet_spend_controls.sql'), 'utf8');
 
   it('uses integer atomic balances and database-enforced non-negative invariants', () => {
     expect(migration).toContain('NUMERIC(78,0)');
@@ -107,5 +114,29 @@ describe('prepaid wallet migration invariants', () => {
     expect(migration).toContain('REVOKE DELETE, TRUNCATE ON prepaid_wallets');
     expect(migration).toContain('trg_wallet_ledger_no_update_delete');
     expect(migration).toContain('trg_wallet_ledger_no_truncate');
+  });
+
+  it('makes policy decisions append-only and approval requests exact-bound', () => {
+    expect(layered).toContain('CREATE TABLE IF NOT EXISTS wallet_policy_decisions');
+    expect(layered).toContain('trg_wallet_policy_decisions_append_only');
+    expect(layered).toContain('REVOKE UPDATE, DELETE, TRUNCATE ON wallet_policy_decisions');
+    expect(layered).toContain('CREATE TABLE IF NOT EXISTS wallet_payment_approval_requests');
+    expect(layered).toContain('ADD COLUMN IF NOT EXISTS resource_origin TEXT');
+    expect(layered).toContain("lower(substring(resource FROM '(?i)^https?://[^/?#]+'))");
+    expect(layered).toContain("regexp_replace(lower(substring(resource FROM '(?i)^https?://[^/?#]+')), ':443$', '')");
+    expect(layered).toContain('request_hash          TEXT NOT NULL');
+    expect(layered).toContain("status IN ('pending','approved','rejected','consumed','expired')");
+  });
+
+  it('defines every layered scope, exact spend window, and reload velocity control', () => {
+    for (const scope of ['assignment', 'wallet', 'agent', 'group', 'principal', 'developer']) {
+      expect(layered).toContain(`'${scope}'`);
+    }
+    for (const window of ['per_authorization', 'rolling', 'calendar_day', 'calendar_week', 'calendar_month', 'lifetime']) {
+      expect(layered).toContain(`'${window}'`);
+    }
+    for (const control of ['max_balance', 'max_reload_amount', 'reload_cumulative_limit', 'reload_period_seconds', 'reload_count_limit']) {
+      expect(layered).toContain(control);
+    }
   });
 });

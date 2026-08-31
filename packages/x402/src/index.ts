@@ -24,10 +24,13 @@ export {
   HEADERS,
   GRANTEX_PREPAID_NETWORK,
   GRANTEX_PREPAID_SCHEME,
+  PrepaidPaymentApprovalRequiredError,
 } from './agent.js';
 export type {
   PrepaidAuthorizationRequest,
   PrepaidAuthorizationResponse,
+  PrepaidAuthorization,
+  PrepaidApprovalRequired,
 } from './agent.js';
 
 // Middleware

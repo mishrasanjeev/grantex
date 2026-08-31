@@ -1,0 +1,192 @@
+name: Publish primary SDKs
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type RELEASE_PRIMARY_SDKS to authorize irreversible publication'
+        required: true
+        type: string
+      publish_npm:
+        description: 'Publish @grantex/sdk and @grantex/x402 through npm trusted publishing'
+        required: true
+        default: false
+        type: boolean
+      publish_pypi:
+        description: 'Publish grantex through PyPI trusted publishing'
+        required: true
+        default: false
+        type: boolean
+      publish_go:
+        description: 'Sync packages/go-sdk to mishrasanjeev/grantex-go and tag v0.2.0'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: primary-sdk-release
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Confirm release authorization
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: test "$CONFIRMATION" = 'RELEASE_PRIMARY_SDKS'
+
+  verify:
+    name: Verify all primary SDKs
+    needs: authorize
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.1'
+
+      - name: Verify TypeScript SDK 0.5.0
+        working-directory: packages/sdk-ts
+        run: |
+          test "$(node -p "require('./package.json').version")" = "0.5.0"
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+          mkdir -p ../../release-artifacts/npm
+          npm pack --pack-destination ../../release-artifacts/npm
+
+      - name: Verify x402 SDK 0.3.0
+        working-directory: packages/x402
+        run: |
+          test "$(node -p "require('./package.json').version")" = "0.3.0"
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+          npm pack --pack-destination ../../release-artifacts/npm
+
+      - name: Verify Python SDK 0.4.0
+        working-directory: packages/sdk-py
+        run: |
+          python -m pip install --upgrade pip build 'twine>=7,<8'
+          python -m pip install -e '.[dev]'
+          test "$(python -c 'import grantex; print(grantex.__version__)')" = "0.4.0"
+          python -m ruff check src tests
+          python -m mypy src/grantex
+          python -m pytest
+          python -m build --outdir ../../release-artifacts/pypi
+          python -m twine check ../../release-artifacts/pypi/*
+
+      - name: Verify Go SDK v0.2.0
+        working-directory: packages/go-sdk
+        run: |
+          test "$(grep -Eo 'sdkVersion = "[^"]+"' http.go | cut -d'"' -f2)" = "0.2.0"
+          go test ./...
+
+      - name: Upload immutable release candidates
+        uses: actions/upload-artifact@v7
+        with:
+          name: primary-sdk-distributions
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  npm:
+    name: Publish npm SDKs
+    needs: verify
+    if: ${{ inputs.publish_npm }}
+    runs-on: ubuntu-latest
+    environment: sdk-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: primary-sdk-distributions
+          path: release-artifacts
+      - name: Require a trusted-publishing-capable npm CLI
+        run: |
+          npm install --global npm@11.19.1
+          node -e "const [major, minor] = process.versions.node.split('.').map(Number); if (major < 22 || (major === 22 && minor < 14)) process.exit(1)"
+          node -e "const { execFileSync } = require('node:child_process'); const [major, minor, patch] = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim().split('.').map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) process.exit(1)"
+      - name: Publish TypeScript and x402 SDKs
+        run: |
+          npm publish release-artifacts/npm/grantex-sdk-0.5.0.tgz --access public
+          npm publish release-artifacts/npm/grantex-x402-0.3.0.tgz --access public
+
+  pypi:
+    name: Publish Python SDK
+    needs: verify
+    if: ${{ inputs.publish_pypi }}
+    runs-on: ubuntu-latest
+    environment: sdk-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: primary-sdk-distributions
+          path: release-artifacts
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: release-artifacts/pypi/
+
+  go:
+    name: Publish Go module
+    needs: verify
+    if: ${{ inputs.publish_go }}
+    runs-on: ubuntu-latest
+    environment: sdk-release
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: grantex
+      - uses: actions/checkout@v7
+        with:
+          repository: mishrasanjeev/grantex-go
+          token: ${{ secrets.GRANTEX_GO_RELEASE_TOKEN }}
+          path: grantex-go
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.26.1'
+      - name: Sync, test, commit, and tag v0.2.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git -C grantex-go ls-remote --exit-code --tags origin refs/tags/v0.2.0; then
+            echo 'v0.2.0 already exists' >&2
+            exit 1
+          fi
+          rsync -a --delete --exclude='.git' grantex/packages/go-sdk/ grantex-go/
+          go -C grantex-go test ./...
+          git -C grantex-go config user.name 'grantex-release-bot'
+          git -C grantex-go config user.email 'mishra.sanjeev@gmail.com'
+          git -C grantex-go add -A
+          git -C grantex-go diff --cached --quiet && {
+            echo 'No Go SDK source change to publish' >&2
+            exit 1
+          }
+          git -C grantex-go commit -m 'release: v0.2.0'
+          git -C grantex-go tag -a v0.2.0 -m 'Grantex Go SDK v0.2.0'
+          git -C grantex-go push --atomic origin HEAD:main v0.2.0

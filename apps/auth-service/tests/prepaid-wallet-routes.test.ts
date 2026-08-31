@@ -22,11 +22,26 @@ describe('prepaid wallet route trust boundaries', () => {
     ['POST', '/v1/principal/prepaid-wallets'],
     ['GET', '/v1/principal/prepaid-wallets'],
     ['PUT', '/v1/principal/prepaid-wallet-agents/agt_1/block'],
+    ['POST', '/v1/principal/prepaid-wallet-spend-policies'],
+    ['GET', '/v1/principal/prepaid-wallet-spend-policies'],
+    ['GET', '/v1/principal/prepaid-wallet-payment-approvals'],
   ])('requires a principal session for %s %s', async (method, url) => {
     const response = await app.inject({
       method: method as 'POST' | 'GET' | 'PUT',
       url,
       payload: {},
+    });
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  it.each([
+    ['POST', '/v1/prepaid-wallet-spend-policies'],
+    ['GET', '/v1/prepaid-wallet-spend-policies'],
+    ['PATCH', '/v1/prepaid-wallet-spend-policies/wspol_1/status'],
+  ])('requires a developer API key for %s %s', async (method, url) => {
+    const response = await app.inject({
+      method: method as 'POST' | 'GET' | 'PATCH', url, payload: {},
     });
     expect(response.statusCode).toBe(401);
     expect(response.json()).toMatchObject({ code: 'UNAUTHORIZED' });

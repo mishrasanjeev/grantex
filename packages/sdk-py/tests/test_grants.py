@@ -8,7 +8,7 @@ import httpx
 
 from grantex import Grantex, GrantexTokenError
 from grantex._types import ListGrantsParams
-from tests.conftest import MOCK_GRANT, MOCK_JWT_PAYLOAD
+from tests.conftest import MOCK_GRANT
 
 
 @pytest.fixture
@@ -100,7 +100,6 @@ def test_verify_returns_verified_grant(client: Grantex) -> None:
 
 @respx.mock
 def test_verify_raises_when_inactive(client: Grantex) -> None:
-    from grantex import GrantexTokenError
 
     respx.post("https://api.grantex.dev/v1/grants/verify").mock(
         return_value=httpx.Response(200, json={"active": False, "reason": "revoked"})

@@ -72,6 +72,7 @@ function authorizationRequest(
 }
 
 function x402Envelope(authorization: PrepaidAuthorizationResponse, request: PrepaidAuthorizationRequest) {
+  if ('status' in authorization) throw new Error('Expected an authorization, not an approval challenge');
   const requirements = {
     scheme: 'exact',
     network: NETWORK,
@@ -79,7 +80,15 @@ function x402Envelope(authorization: PrepaidAuthorizationResponse, request: Prep
     asset: ASSET,
     payTo: request.recipient,
     maxTimeoutSeconds: request.maxTimeoutSeconds,
-    extra: { grantexScope: request.scope },
+    extra: {
+      grantexScope: request.scope,
+      grantexContext: {
+        ...(request.merchantId ? { merchantId: request.merchantId } : {}),
+        ...(request.purpose ? { purpose: request.purpose } : {}),
+        ...(request.projectId ? { projectId: request.projectId } : {}),
+        ...(request.costCenter ? { costCenter: request.costCenter } : {}),
+      },
+    },
   };
   return {
     x402Version: 2,
@@ -199,6 +208,7 @@ describe('agent prepaid wallets and x402 v2 E2E', () => {
         cumulativePeriodSeconds: 3600,
         allowedRecipients: [RECIPIENT],
         allowedScopes: [SCOPE],
+        allowedResourceOrigins: ['https://merchant.example'],
         ...policy,
       });
       return { wallet, assignment };
@@ -474,6 +484,9 @@ describe('agent prepaid wallets and x402 v2 E2E', () => {
       perTransactionLimit: '1000',
       cumulativeLimit: '5000',
       cumulativePeriodSeconds: 3600,
+      allowAnyRecipient: true,
+      allowAnyScope: true,
+      allowAnyResource: true,
     }), 409, 'ASSIGNMENT_REVOKED');
     await expectApiError(principal.setAssignmentStatus(terminal.assignment.assignmentId, 'active'), 409, 'ASSIGNMENT_REVOKED');
 
@@ -495,6 +508,7 @@ describe('agent prepaid wallets and x402 v2 E2E', () => {
       cumulativePeriodSeconds: 3600,
       allowedRecipients: [RECIPIENT],
       allowedScopes: [SCOPE],
+      allowedResourceOrigins: ['https://merchant.example'],
     });
     expect((await principal.activity(policyUpdate.wallet.walletId)).reservations).toEqual([
       expect.objectContaining({ status: 'released', release_reason: 'assignment_policy_updated' }),
@@ -623,6 +637,7 @@ describe('agent prepaid wallets and x402 v2 E2E', () => {
       cumulativePeriodSeconds: 3600,
       allowedRecipients: [RECIPIENT],
       allowedScopes: [SCOPE],
+      allowedResourceOrigins: ['https://merchant.example'],
     });
     await expectApiError(principal.reload(external.walletId, '1000', randomUUID(), 'provider-credit-1'), 503, 'CUSTODY_ADAPTER_UNAVAILABLE');
     await expectApiError(agent.authorizePayment(authorizationRequest({ walletId: external.walletId })), 503, 'CUSTODY_ADAPTER_UNAVAILABLE');

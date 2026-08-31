@@ -5,9 +5,9 @@ description: "Choose the current Grantex CLI, TypeScript, Python, Go, or MCP pac
 keywords: ["Grantex CLI version", "Grantex SDK versions", "AI agent authorization SDK", "MCP authorization package", "release status"]
 ---
 
-## Current published releases
+## Current releases and prepared candidates
 
-Last verified: **August 30, 2026**
+Last verified: **August 31, 2026**
 
 Grantex packages are versioned independently. There is no single version number
 that represents every SDK, integration, service, and protocol artifact in this
@@ -16,16 +16,16 @@ repository.
 | Surface | Current release | Status | Runtime requirement |
 |---|---:|---|---|
 | CLI | `@grantex/cli@0.3.0` | Published to npm with bundled Agent Skills | Node.js 18+; ESM |
-| TypeScript SDK | `@grantex/sdk@0.4.1` | Published to npm | Node.js 18+; ESM |
-| x402 Payment Protocol | `@grantex/x402@0.2.0` | Published to npm; external custody remains operator-supplied | Node.js 20+; ESM |
-| Python SDK | `grantex==0.3.14` | Published to PyPI | Python 3.9+ |
-| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.1.10` | Published with known limitations | Go 1.26.1+ |
+| TypeScript SDK | `@grantex/sdk@0.5.0` | Release candidate; current published release is `0.4.1` | Node.js 18+; ESM |
+| x402 Payment Protocol | `@grantex/x402@0.3.0` | Release candidate; current published release is `0.2.0`; external custody remains operator-supplied | Node.js 20+; ESM |
+| Python SDK | `grantex==0.4.0` | Release candidate; current published release is `0.3.14` | Python 3.9+ |
+| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.2.0` | Release candidate; current published release is `v0.1.10` | Go 1.26.1+ |
 | MCP Auth server | `@grantex/mcp-auth@2.0.2` | Published with known limitations | Node.js 18+; ESM |
-| OpenAPI contract | `0.4.0` | Unreleased repository contract with prepaid wallets | Independent of public SDK versions |
+| OpenAPI contract | `0.5.0` | Repository contract with layered prepaid-wallet governance | Independent of public SDK versions |
 
 <Note>
-`@grantex/sdk@0.4.1` and `@grantex/x402@0.2.0` were registry-verified after
-publication on August 30, 2026. Installing them does not provision external
+The four primary wallet SDK candidates must be independently registry-verified
+after publication. Installing them does not provision external
 custody, principal notification delivery, or merchant idempotency storage; see
 [Prepaid Wallet Production Readiness](/guides/prepaid-wallet-production).
 </Note>
@@ -41,41 +41,23 @@ custody, principal notification delivery, or merchant idempotency storage; see
 <Info>
   As of August 10, 2026, published `@grantex/cli@0.3.0` includes the Hermes,
   OpenClaw, and portable Agent Skills installer. Repository source on `main`
-  also corrects the documented Go
-  Agent/Audit read/write contracts, removes unsupported audit filters and list
-  metadata, and URL-encodes query values. No corrected Go module tag is published.
-  Standard developer API-key plan throughput is also source-only; custom-auth quotas and managed rollout remain separate.
+  includes corrected Go Agent/Audit read/write contracts and layered prepaid
+  wallet clients across TypeScript, Python, and Go. Standard developer API-key
+  plan throughput and custom-auth quotas remain separate from SDK publication.
 </Info>
 
 ## Which Grantex package should I use?
 
 - **Hermes, OpenClaw, or another shell-capable agent:** use published `@grantex/cli@0.3.0`; install its bundled skills with `grantex agent install`. No agent-specific SDK is required.
-- **TypeScript application:** use `@grantex/sdk@0.4.1`.
-- **x402 prepaid-wallet application:** use `@grantex/x402@0.2.0` with `@grantex/sdk@0.4.1`; keep external custody disabled until an operator adapter passes review.
-- **Python application:** use `grantex==0.3.14`.
-- **Go application:** use `github.com/mishrasanjeev/grantex-go@v0.1.10` with the [published-version workarounds](/sdks/go/overview#known-v0110-limitations), including the [REST/CLI audit-write workaround](/sdks/go/audit#log).
+- **TypeScript application:** use published `@grantex/sdk@0.4.1` until candidate `0.5.0` is registry-verified.
+- **x402 prepaid-wallet application:** use published `@grantex/x402@0.2.0` with `@grantex/sdk@0.4.1` until candidates `0.3.0` and `0.5.0` are registry-verified; keep external custody disabled until an operator adapter passes review.
+- **Python application:** use published `grantex==0.3.14` until candidate `0.4.0` is registry-verified.
+- **Go application:** use published `github.com/mishrasanjeev/grantex-go@v0.1.10` until candidate `v0.2.0` is proxy-verified.
 - **MCP HTTP transport authorization:** use an established MCP-compatible authorization server and maintained MCP SDK that implement the current MCP authorization specification.
 - **Agent-specific MCP tool enforcement:** after transport authorization, use a primary Grantex SDK or direct JWKS validation at each tool boundary. Treat `@grantex/mcp-auth@2.0.2` as single-process evaluation software.
 - **Current revocation:** local JWT verification is insufficient by itself; perform an online state check or synchronize revocation data.
 
 ## Known limitations in the current published artifacts
-
-<Warning>
-  **Go SDK `v0.1.10`:** registration responses use `agentId`, but `Agent.ID`
-  expects `id`; derive the ID from `did:grantex:<agentId>`. Registration also
-  sends optional zero values, while updates cannot set `status` or clear scopes;
-  provide registration fields and use REST for those updates.
-
-  `LogAuditParams` lacks required `agentDid` and `principalId`; use REST or CLI
-  for audit writes. `AuditEntry` omits `DeveloperID`, and `Since`, `Until`,
-  `Page`, and `PageSize` list filters are ignored by the API; use the four
-  supported filters and raw REST responses when `developerId` is required.
-
-  Agent and audit list metadata is not returned; use slice lengths. List helpers
-  also fail to URL-encode reserved filter characters; avoid those values or issue
-  a `net/url`-encoded REST request. These workarounds remain required until a
-  corrected module release is published.
-</Warning>
 
 <Warning>
   **MCP Auth `2.0.2`:** use a single process for evaluation only. Authorization
@@ -95,19 +77,19 @@ Pin exact versions in applications, examples, CI, and deployment manifests:
 npm install -g @grantex/cli@0.3.0
 ```
 
-```bash TypeScript
+```bash TypeScript (current published)
 npm install @grantex/sdk@0.4.1
 ```
 
-```bash x402
+```bash x402 (current published)
 npm install @grantex/x402@0.2.0 @grantex/sdk@0.4.1
 ```
 
-```bash Python
+```bash Python (current published)
 python -m pip install grantex==0.3.14
 ```
 
-```bash Go
+```bash Go (current published)
 go get github.com/mishrasanjeev/grantex-go@v0.1.10
 ```
 

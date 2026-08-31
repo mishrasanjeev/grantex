@@ -47,12 +47,14 @@ Grantex complements OAuth 2.0 and MCP: OAuth handles application and user author
 
 ## Agent Prepaid Wallets and x402 v2
 
-Repository source now includes principal-controlled prepaid wallets for AI
-agents. A principal can assign one or multiple wallets, set atomic-unit
-per-transaction and rolling cumulative limits, restrict recipients and action
-scopes, approve agent reload requests, and block one assignment, one wallet, or
-all wallets available to an agent. Authorizations reserve value atomically in
-PostgreSQL and are bound to the agent's DPoP OAuth identity.
+Repository source includes principal-controlled prepaid wallets for AI agents.
+A principal can assign one or multiple wallets, apply assignment, wallet,
+agent, shared budget-group, principal, and developer controls, constrain
+recipients, resource origins, actions, merchants, purposes, projects, and cost
+centers, require an exact human approval, govern reload velocity, and block one
+assignment, one wallet, or all wallets available to an agent. Authorizations
+reserve value atomically in PostgreSQL and are bound to the agent's DPoP OAuth
+identity and the policy-evaluated semantic context.
 
 `@grantex/x402` uses official x402 v2 `PAYMENT-REQUIRED`,
 `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` messages. The old simulated
@@ -87,8 +89,25 @@ The OAuth grant must include `wallet:spend` and the exact merchant action scope
 advertised as `extra.grantexScope`; wallet assignment policy can restrict that
 human-approved authority but cannot add to it.
 
-The managed clients are published as `@grantex/sdk@0.4.1` and
-`@grantex/x402@0.2.0`. See the [x402 integration guide](docs/integrations/x402.mdx),
+### Where Grantex fits
+
+Grantex owns delegated agent identity, semantic spend policy, cross-wallet
+budgets, exact approvals, atomic reservations, stop controls, and audit. An
+AgenticOrg deployment or another agent runtime owns orchestration and the human
+interaction. The wallet issuer or custodian remains responsible for KYC/KYB,
+AML and sanctions controls, custody, network authorization, MCC/geography/card
+controls, settlement, FX, refunds, disputes, fraud, and reconciliation. The
+merchant remains responsible for server-trusted price/payee data, order
+idempotency, settlement gating, and delivery of the paid result.
+
+See [Agent Wallet Governance](docs/guides/agent-wallet-governance.mdx) for the
+complete responsibility matrix, policy composition, exact approval protocol,
+and honest residual gap list.
+
+The managed clients are implemented in the `@grantex/sdk@0.5.0`,
+`@grantex/x402@0.3.0`, Python `grantex==0.4.0`, and Go `v0.2.0` release
+candidates. Use the prior published versions until the exact candidate is
+registry-verified. See the [x402 integration guide](docs/integrations/x402.mdx),
 [wallet lifecycle](docs/features/prepaid-wallets.mdx), and
 [production-readiness guide](docs/guides/prepaid-wallet-production.mdx).
 
@@ -97,8 +116,9 @@ The managed clients are published as `@grantex/sdk@0.4.1` and
 Running the auth-service does not provision every dependency needed for a
 real-money product. Self-hosting operators must explicitly provide and test:
 
-- PostgreSQL migration `091_agent_prepaid_wallets.sql`, backups, restore, and
-  reconciliation for the append-only wallet ledger;
+- PostgreSQL migrations `091_agent_prepaid_wallets.sql` and
+  `092_layered_wallet_spend_controls.sql`, backups, restore, and reconciliation
+  for the append-only wallet ledger and policy decisions;
 - HTTPS ingress for the exact OAuth audience, including
   `/v1/prepaid-wallets` and `/v1/prepaid-wallets/**` (a static-host `404` breaks
   agent wallet access even while the origin service is healthy);
@@ -114,8 +134,8 @@ real-money product. Self-hosting operators must explicitly provide and test:
   applicable legal/regulatory review.
 
 The server deployment and npm release are separate. Registry consumers should
-pin the registry-verified `@grantex/sdk@0.4.1` and `@grantex/x402@0.2.0`
-releases rather than inferring availability from repository manifests. The
+verify the candidate versions in the registry before installing them rather
+than inferring availability from repository manifests. The
 [production-readiness guide](docs/guides/prepaid-wallet-production.mdx) contains
 the full hosting checklist and a maintainer-only PowerShell publication runbook.
 
@@ -138,7 +158,8 @@ Verification completed with 2,097 auth-service tests, 444 SDK tests, and 253
 tests across 21 sequential Docker E2E files. This is self-assessed evidence for
 the tested Grantex configuration, not independent interoperability
 certification, OAuth Working Group adoption, or IETF endorsement. The
-`OAuthAgentClient` is published in `@grantex/sdk@0.4.1`.
+`OAuthAgentClient` is part of the `@grantex/sdk@0.5.0` release candidate; the
+current registry release remains `0.4.1` until publication is verified.
 
 Revision `-02` remains the current Datatracker publication. Candidate `-03`
 must not be uploaded before 2026-09-09 and requires a fresh explicit approval
@@ -174,30 +195,26 @@ Start with the [OACP runtime launch closure PRD](docs/guides/oacp/runtime-launch
 
 Grantex components are independently versioned. The protocol specification remains **v1.0 Final**; SDK, MCP package, and roadmap milestone versions are separate release lines and do not represent a monorepo-wide version.
 
-Current public releases, verified 2026-08-30:
+Current public releases, verified 2026-08-31:
 
 | Component | Public version | Reproducible install |
 | --- | ---: | --- |
-| TypeScript SDK | `@grantex/sdk` `0.4.1` | `npm install @grantex/sdk@0.4.1` |
-| x402 Payment Protocol | `@grantex/x402` `0.2.0` | `npm install @grantex/x402@0.2.0 @grantex/sdk@0.4.1` |
-| Python SDK | `grantex` `0.3.14` | `python -m pip install grantex==0.3.14` |
-| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.1.10` (Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.1.10` |
-| MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.4.1` |
+| TypeScript SDK | `@grantex/sdk` `0.5.0` | `npm install @grantex/sdk@0.5.0` |
+| x402 Payment Protocol | `@grantex/x402` `0.3.0` | `npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0` |
+| Python SDK | `grantex` `0.4.0` | `python -m pip install grantex==0.4.0` |
+| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.2.0` (Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.2.0` |
+| MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.0` |
 
-> **Known published-package limits:** Go SDK `v0.1.10` has documented Agent/Audit
-> read, write, filter, query-encoding, and list-metadata limitations. MCP Auth
-> `2.0.2` keeps authorization codes in process memory, does not render consent,
+> **Known published-package limits:** MCP Auth `2.0.2` keeps authorization codes
+> in process memory, does not render consent,
 > and has an incomplete Grantex code handoff. See the [release-status guide](https://docs.grantex.dev/release-status)
 > for exact workarounds and deployment boundaries.
 
-> **Repository development status (unreleased, July 14, 2026):** source on
-> `main` corrects all documented Go Agent/Audit contract gaps, removes no-op
-> audit filters and phantom list metadata, and URL-encodes query values. The auth
-> service also enforces Redis-backed Free/Pro/Enterprise developer budgets of
+> **Repository development status:** the auth service enforces Redis-backed
+> Free/Pro/Enterprise developer budgets of
 > 100/500/2,000 requests per minute on API-key routes handled by the standard
-> auth plugin. Custom-auth quota policy remains open. No corrected Go tag or
-> managed-service rollout is claimed; the public versions and workarounds
-> above remain authoritative.
+> auth plugin. Custom-auth quota policy remains open and the managed-service
+> rollout remains independent of SDK publication.
 
 Omit a version pin to install the registry's current latest release. See the [release-status documentation](https://docs.grantex.dev/release-status), [COMPATIBILITY.md](COMPATIBILITY.md) for the full package matrix, and [CHANGELOG.md](CHANGELOG.md) for release notes.
 
@@ -215,7 +232,7 @@ Omit a version pin to install the registry's current latest release. See the [re
 ## SDK quickstart
 
 ```bash
-npm install @grantex/sdk@0.4.1
+npm install @grantex/sdk@0.5.0
 ```
 
 ```typescript
@@ -251,9 +268,9 @@ if (!auth.code) {
 ```
 
 ```bash
-python -m pip install grantex==0.3.14               # Python SDK
-go get github.com/mishrasanjeev/grantex-go@v0.1.10 # Go SDK (Go 1.26.1+)
-npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.4.1 # MCP endpoint evaluation
+python -m pip install grantex==0.4.0               # Python SDK
+go get github.com/mishrasanjeev/grantex-go@v0.2.0 # Go SDK (Go 1.26.1+)
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.0 # MCP endpoint evaluation
 npm install -g @grantex/cli@0.3.0                   # Optional CLI tooling
 ```
 
@@ -1519,7 +1536,11 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 ## Integrations
 
-The primary SDK versions below are registry-verified as of 2026-08-30. For integration packages, “Published package” identifies a public package surface; check its registry page and compatibility notes before choosing a version.
+This table is a source-and-registry status snapshot as of 2026-08-31. A
+release-candidate row is not a publication claim; use its explicitly named
+current published version until the candidate is verified in the registry. For
+integration packages, "Published package" identifies a public package surface;
+check its registry page and compatibility notes before choosing a version.
 
 | Framework | Package | Install | Status |
 |-----------|---------|---------|--------|
@@ -1541,9 +1562,9 @@ The primary SDK versions below are registry-verified as of 2026-08-30. For integ
 | **Strands Agents SDK (Python)** | `grantex-strands` | `pip install grantex-strands` | Published package |
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | Published package |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | Published package |
-| **TypeScript SDK** | `@grantex/sdk` (`0.4.1`) | `npm install @grantex/sdk@0.4.1` | Registry-verified primary release |
-| **Python SDK** | `grantex` (`0.3.14`) | `python -m pip install grantex==0.3.14` | Registry-verified primary release |
-| **Go SDK** | `grantex-go` (`v0.1.10`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.1.10` | Published with workarounds; source correction awaits a new tag |
+| **TypeScript SDK** | `@grantex/sdk` (`0.5.0`) | Install after registry verification | Layered-wallet release candidate; current published version is `0.4.1` |
+| **Python SDK** | `grantex` (`0.4.0`) | Install after registry verification | Wallet-governance release candidate; current published version is `0.3.14` |
+| **Go SDK** | `grantex-go` (`v0.2.0`, Go 1.26.1+) | Install after proxy verification | Wallet-governance release candidate; current published version is `v0.1.10` |
 | **CLI** | `@grantex/cli` (`0.3.0`) | `npm install -g @grantex/cli@0.3.0` | Registry-verified published package |
 | **Hermes Agent** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target hermes` | Published in 0.3.0; no dedicated SDK needed |
 | **OpenClaw** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target openclaw` | Published in 0.3.0; no dedicated SDK needed |
@@ -1553,7 +1574,14 @@ The primary SDK versions below are registry-verified as of 2026-08-30. For integ
 | **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | Published package |
 | **Event Destinations** | `@grantex/destinations` | `npm install @grantex/destinations` | Published package |
 | **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | Source present; verify registry before pinning |
-| **x402 Payment Protocol** | `@grantex/x402` (`0.2.0`) | `npm install @grantex/x402@0.2.0 @grantex/sdk@0.4.1` | Registry-verified official x402 v2 prepaid-wallet release; external custody remains operator-supplied |
+| **x402 Payment Protocol** | `@grantex/x402` (`0.3.0`) | Install after registry verification | Layered x402 v2 release candidate; current published version is `0.2.0`; external custody remains operator-supplied |
+
+The guarded `publish-primary-sdks.yml` workflow builds and tests each candidate
+once, then publishes those immutable artifacts. Before it can publish, a
+maintainer must configure the protected `sdk-release` GitHub environment, npm
+trusted-publisher records for both npm packages, a PyPI trusted publisher for
+`grantex`, and a narrowly scoped Go-repository release token. A manifest version
+bump by itself is not a release.
 
 ### Community x402 services
 

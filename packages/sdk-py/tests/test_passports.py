@@ -116,7 +116,7 @@ def test_get_passport(client: Grantex) -> None:
 
 @respx.mock
 def test_revoke_passport(client: Grantex) -> None:
-    route = respx.post(
+    respx.post(
         "https://api.grantex.dev/v1/passport/urn%3Agrantex%3Apassport%3A01HXYZ/revoke"
     ).mock(return_value=httpx.Response(200, json=MOCK_REVOKE_RESPONSE))
 

@@ -121,13 +121,16 @@ of the draft family is published as an active individual Internet-Draft;
 revision `-03` is the working candidate implemented here. Neither is an
 IETF-endorsed or independently certified standard.
 
-## Agent prepaid wallets (SDK 0.4+)
+## Agent prepaid wallets (SDK 0.5+)
 
 `PrepaidWalletAgentClient` uses an `OAuthAgentClient` and DPoP access token to
 list assigned wallets, reserve payments, and request threshold reloads.
 `PrincipalPrepaidWalletClient` uses a short-lived principal-session token to
-create and fund wallets, assign policy, approve reloads, inspect activity, and
+create and fund wallets, assign safe-default policy, manage layered spend
+policies and exact payment approvals, approve reloads, inspect activity, and
 block an assignment, wallet, or all wallets for one agent.
+`DeveloperPrepaidWalletPolicyClient` manages tenant-level policy with the
+developer API key.
 
 The access token must include `wallet:spend` and each action scope used in a
 payment (for example `weather:read`). Agent wallet listings intentionally omit
@@ -149,6 +152,17 @@ const principalWallets = new PrincipalPrepaidWalletClient({
   sessionToken,
 });
 
+await principalWallets.createSpendPolicy({
+  name: 'Shared research budget',
+  scopeType: 'group',
+  scopeId: 'research-agents',
+  effect: 'limit',
+  maxAmount: '1000000',
+  windowType: 'month',
+  onExceed: 'require_approval',
+  purposes: ['research'],
+});
+
 const authorization = await agentWallets.authorizePayment({
   amount: '1000',
   asset: 'USDC',
@@ -156,16 +170,25 @@ const authorization = await agentWallets.authorizePayment({
   recipient: 'merchant:weather-api',
   resource: 'https://merchant.example/weather',
   scope: 'weather:read',
+  merchantId: 'merchant:weather-api',
+  purpose: 'research',
+  projectId: 'climate-2026',
+  costCenter: 'engineering',
   maxTimeoutSeconds: 120,
   idempotencyKey: crypto.randomUUID(),
 });
 ```
 
-Amounts are atomic-unit integer strings. Managed prepaid-wallet APIs are
-available in `@grantex/sdk` 0.4.0 and later.
+`authorizePayment` returns either a signed reservation or an
+`approval_required` response. After the principal approves that exact request,
+retry with its `approvalRequestId`, the same wallet, idempotency key, and all
+original payment fields. Approval is short-lived and single-use.
+
+Amounts are atomic-unit integer strings. Layered policy and exact approval are
+available in `@grantex/sdk` 0.5.0 and later.
 
 Self-hosted wallet deployments must also provide correct public resource
-routing, migration `091`, durable notification delivery, merchant-side
+routing, migrations `091` and `092`, durable notification delivery, merchant-side
 idempotency, and any external custody/provider integration. See [Prepaid Wallet
 Production
 Readiness](https://docs.grantex.dev/guides/prepaid-wallet-production);

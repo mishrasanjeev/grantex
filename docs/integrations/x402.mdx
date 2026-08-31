@@ -5,14 +5,17 @@ description: "Assign one or more prepaid wallets to an AI agent and enforce prin
 ---
 
 Grantex connects delegated agent authority to prepaid value. A human principal
-can assign one or more wallets to an agent, set per-transaction and rolling
-cumulative limits, restrict recipients and scopes, approve reloads, and stop one
-wallet or every wallet immediately. The x402 adapter uses the official x402 v2
+can assign one or more wallets to an agent, apply assignment, wallet, agent,
+budget-group, principal, and developer controls, restrict semantic payment
+context, approve exact exceptions or reloads, and stop one wallet or every
+wallet immediately. The x402 adapter uses the official x402 v2
 `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` headers.
 
 <Note>
-The prepaid-wallet API and SDK shown here are published in
-`@grantex/sdk@0.4.1` and `@grantex/x402@0.2.0`. `sandbox_ledger` is a complete
+The prepaid-wallet API and SDK shown here are implemented in the
+`@grantex/sdk@0.5.0`, `@grantex/x402@0.3.0`, Python `grantex==0.4.0`, and Go
+`v0.2.0` release candidates. Keep using the prior published versions until the
+exact candidate is registry-verified. `sandbox_ledger` is a complete
 local ledger mode.
 `external` wallet records fail closed until a custody/provider adapter verifies
 funding and settlement.
@@ -36,8 +39,10 @@ and make merchant side effects idempotent under the HTTP `Idempotency-Key`.
 | Wallet ownership | Principal-session JWT and developer/principal tenant partition |
 | Per-transaction limit | Atomic authorization transaction in PostgreSQL |
 | Rolling cumulative limit | Sum of reserved and settled amounts in the configured rolling window |
+| Cross-wallet and cross-agent budgets | Layered policy lock plus reservation-aware amount and count windows |
 | Balance | Available value moves to reserved before an authorization is issued |
-| Merchant and action | Exact recipient, resource URL, scope, asset, and network binding |
+| Merchant and action | Exact recipient, resource URL, scope, asset, network, merchant, purpose, project, and cost-center binding |
+| Exceptional payment | Short-lived principal approval bound to the exact request and consumed once |
 | Replay | Agent/principal-wide idempotency key plus a one-time reservation and authorization JTI |
 | Stop control | Assignment block, wallet block, or all-wallet agent block; active reservations are released |
 | Reload | Agent may request only at or below the principal's low-balance threshold; principal approves and funds separately |
@@ -106,11 +111,24 @@ const travel = await principal.create({
 await principal.reload(travel.walletId, '100000000', crypto.randomUUID());
 const assignment = await principal.assign(travel.walletId, {
   agentId,
+  budgetGroup: 'travel-2026',
   perTransactionLimit: '5000000',
   cumulativeLimit: '25000000',
   cumulativePeriodSeconds: 86400,
   allowedRecipients: ['merchant:travel-api'],
   allowedScopes: ['travel:book'],
+  allowedResourceOrigins: ['https://merchant.example'],
+});
+
+await principal.createSpendPolicy({
+  name: 'Travel group monthly budget',
+  scopeType: 'group',
+  scopeId: 'travel-2026',
+  effect: 'limit',
+  maxAmount: '100000000',
+  windowType: 'month',
+  onExceed: 'require_approval',
+  purposes: ['business-travel'],
 });
 ```
 
@@ -155,14 +173,27 @@ The merchant's x402 v2 requirement must use:
   "asset": "USDC",
   "payTo": "merchant:travel-api",
   "maxTimeoutSeconds": 120,
-  "extra": { "grantexScope": "travel:book" }
+  "extra": {
+    "grantexScope": "travel:book",
+    "grantexContext": {
+      "merchantId": "merchant:travel-api",
+      "purpose": "business-travel",
+      "projectId": "conference-2026",
+      "costCenter": "sales"
+    }
+  }
 }
 ```
 
 `maxTimeoutSeconds` may be 1 through 300. The signed authorization binds the
 wallet, assignment, agent, principal, grant, amount, asset, network, recipient,
-resource URL, scope, and canonical request hash. Changing any requirement makes
-verification fail.
+resource URL, scope, merchant ID, purpose, project ID, cost center, and canonical
+request hash. Changing any requirement makes verification fail.
+
+The merchant controls this x402 requirement. Grantex does not trust a caller to
+lower price, change the payee, or invent semantic context after the 402 response.
+Issuer-side KYC, sanctions, fraud, card, MCC, geography, settlement, and dispute
+controls remain separate and must also approve the transaction.
 
 Remote resource URLs must use HTTPS. Plain HTTP is accepted only for loopback
 development hosts such as `localhost`, `127.0.0.1`, and `[::1]`.
@@ -171,7 +202,34 @@ The DPoP access token must contain both `wallet:spend` and the exact
 `extra.grantexScope` value. Assignment policy is an additional restriction; it
 cannot elevate a scope omitted from the human-approved OAuth grant.
 
-## 4. Reload workflow
+## 4. Handle exact payment approval
+
+```ts
+import { PrepaidPaymentApprovalRequiredError } from '@grantex/x402';
+
+try {
+  await x402.fetch('https://merchant.example/travel/quote', {
+    idempotencyKey: logicalPaymentId,
+  });
+} catch (error) {
+  if (!(error instanceof PrepaidPaymentApprovalRequiredError)) throw error;
+
+  // Notify the principal and wait for an approve or reject decision.
+  await waitForPrincipal(error.approval.approvalRequestId);
+
+  await x402.fetch('https://merchant.example/travel/quote', {
+    walletId: error.approval.walletId,
+    idempotencyKey: error.idempotencyKey,
+    approvalRequestId: error.approval.approvalRequestId,
+  });
+}
+```
+
+The retry is accepted only after approval and only for the exact original terms.
+Approval cannot be transferred to another wallet, recipient, amount, resource,
+or semantic context.
+
+## 5. Reload workflow
 
 The agent can request value but cannot approve or fund its own request:
 
@@ -194,7 +252,7 @@ The exact request is returned even if the principal already approved, rejected,
 or funded it. Changed terms conflict, and a different key cannot create a second
 pending request for the same agent and wallet.
 
-## 5. Principal stop controls
+## 6. Principal stop controls
 
 ```ts
 // Stop only this agent/wallet relationship.
@@ -253,6 +311,8 @@ for that guarantee.
 | Insufficient balance | `402 INSUFFICIENT_WALLET_FUNDS` |
 | Transaction cap exceeded | `402 PER_TRANSACTION_LIMIT_EXCEEDED` |
 | Rolling cap exceeded | `402 CUMULATIVE_LIMIT_EXCEEDED` |
+| Layered policy deny or limit | `403 LAYERED_SPEND_POLICY_DENIED` |
+| Principal approval needed | `202 PAYMENT_APPROVAL_REQUIRED` with an exact approval request |
 | Recipient/scope mismatch | `403 RECIPIENT_NOT_ALLOWED` / `SCOPE_NOT_ALLOWED` |
 | Scope absent from OAuth grant | `403 PAYMENT_SCOPE_NOT_GRANTED` |
 | Principal block | `403 WALLET_BLOCKED`; affected reservations released |
@@ -272,4 +332,5 @@ merchant response lost after settlement.
 
 See [x402 Architecture](/features/x402-architecture) for the trust boundaries
 and [Agent Prepaid Wallets](/features/prepaid-wallets) for the complete API
-lifecycle.
+lifecycle. [Agent Wallet Governance](/guides/agent-wallet-governance) assigns
+responsibility across Grantex, the runtime, issuer, principal, and merchant.

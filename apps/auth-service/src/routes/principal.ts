@@ -256,6 +256,12 @@ function permissionsPageHtml(): string {
     .btn-stop { border-color: #fca5a5; color: #b91c1c; }
     .btn-approve { border-color: #86efac; color: #047857; }
     .reload-row { background: #f9fafb; border-radius: 6px; padding: 9px; margin-top: 10px; font-size: 11px; color: #4b5563; }
+    .control-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; margin-bottom: 40px; }
+    .control-card { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; min-width: 0; }
+    .control-title { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; font-weight: 650; color: #111827; }
+    .control-meta { display: grid; grid-template-columns: minmax(90px, auto) minmax(0, 1fr); gap: 6px 12px; margin-top: 12px; font-size: 12px; color: #6b7280; }
+    .control-meta span:nth-child(even) { color: #111827; overflow-wrap: anywhere; }
+    .policy-ids { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; color: #6b7280; margin-top: 10px; overflow-wrap: anywhere; }
 
     .audit-wrap { background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -304,6 +310,14 @@ function permissionsPageHtml(): string {
     <div class="section-sub">Review atomic-unit balances, reload requests, and the policy assigned to each agent. Stop controls release outstanding reservations in the affected boundary.</div>
     <div id="wallet-list" class="wallet-list"></div>
 
+    <div class="section-title">Payment approvals</div>
+    <div class="section-sub">Approve only the exact agent, wallet, amount, recipient, resource, and policy context shown. Approvals expire and cannot authorize a different payment.</div>
+    <div id="approval-list" class="control-list"></div>
+
+    <div class="section-title">Layered spend policies</div>
+    <div class="section-sub">Principal policies combine with developer, agent, group, wallet, and assignment controls. The most restrictive applicable decision wins.</div>
+    <div id="policy-list" class="control-list"></div>
+
     <div class="section-title">Recent activity</div>
     <div class="section-sub" style="margin-bottom:12px">Actions taken by agents on your behalf.</div>
     <div class="audit-wrap">
@@ -348,6 +362,8 @@ function permissionsPageHtml(): string {
       apiFetch('/v1/principal/grants'),
       apiFetch('/v1/principal/audit'),
       apiFetch('/v1/principal/prepaid-wallets'),
+      apiFetch('/v1/principal/prepaid-wallet-payment-approvals'),
+      apiFetch('/v1/principal/prepaid-wallet-spend-policies'),
     ]).then(function(results) {
       var wallets = results[2].wallets || [];
       return Promise.all(wallets.map(function(wallet) {
@@ -358,6 +374,8 @@ function permissionsPageHtml(): string {
       document.getElementById('main').style.display = '';
       renderGrants(data.results[0].grants || []);
       renderWallets(data.wallets, data.activity);
+      renderApprovals(data.results[3].approvals || []);
+      renderPolicies(data.results[4].policies || []);
       renderAudit(data.results[1].entries || []);
     }).catch(function(e) {
       document.getElementById('loading').style.display = 'none';
@@ -420,6 +438,65 @@ function permissionsPageHtml(): string {
         + '<div class="wallet-unit">atomic units available &middot; ' + esc(wallet.reservedAmount) + ' reserved</div>'
         + '<div class="wallet-actions">' + walletControl + '</div>'
         + assignmentHtml + reloadHtml + '</div>';
+    }).join('');
+  }
+
+  function renderApprovals(approvals) {
+    var el = document.getElementById('approval-list');
+    var actionable = approvals.filter(function(item) {
+      return item.status === 'pending' || item.status === 'approved';
+    });
+    if (!actionable.length) {
+      el.innerHTML = '<div class="empty">No pending or recently approved payments.</div>';
+      return;
+    }
+    el.innerHTML = actionable.map(function(item) {
+      var actions = item.status === 'pending'
+        ? '<div class="wallet-actions">'
+          + '<button class="btn-control btn-approve" onclick="decidePayment(' + jsString(item.approvalRequestId) + ',\'approved\')">Approve exact payment</button>'
+          + '<button class="btn-control btn-stop" onclick="decidePayment(' + jsString(item.approvalRequestId) + ',\'rejected\')">Reject</button></div>'
+        : '';
+      var context = [item.merchantId, item.purpose, item.projectId, item.costCenter]
+        .filter(Boolean).map(esc).join(' &middot; ') || 'none supplied';
+      return '<div class="control-card">'
+        + '<div class="control-title"><span>' + esc(item.amount) + ' ' + esc(item.asset) + '</span>'
+        + '<span class="badge b-' + (item.status === 'pending' ? 'expired' : 'active') + '">' + esc(item.status) + '</span></div>'
+        + '<div class="control-meta"><span>Agent</span><span class="mono">' + esc(item.agentId) + '</span>'
+        + '<span>Wallet</span><span class="mono">' + esc(item.walletId) + '</span>'
+        + '<span>Recipient</span><span>' + esc(item.recipient) + '</span>'
+        + '<span>Resource</span><span>' + esc(item.resource) + '</span>'
+        + '<span>Action scope</span><span class="mono">' + esc(item.scope) + '</span>'
+        + '<span>Context</span><span>' + context + '</span>'
+        + '<span>Expires</span><span>' + fmtTime(item.expiresAt) + '</span></div>'
+        + '<div class="policy-ids">Policies: ' + esc((item.policyIds || []).join(', ')) + '</div>'
+        + actions + '</div>';
+    }).join('');
+  }
+
+  function renderPolicies(policies) {
+    var el = document.getElementById('policy-list');
+    if (!policies.length) {
+      el.innerHTML = '<div class="empty">No principal-owned layered policies. Assignment limits still apply.</div>';
+      return;
+    }
+    el.innerHTML = policies.map(function(item) {
+      var limit = item.maxAmount !== null ? item.maxAmount : 'unbounded amount';
+      if (item.maxCount !== null) limit += ' / ' + item.maxCount + ' authorizations';
+      var statusAction = item.status === 'revoked'
+        ? ''
+        : '<div class="wallet-actions"><button class="btn-control ' + (item.status === 'active' ? 'btn-stop' : '')
+          + '" onclick="setPolicyStatus(' + jsString(item.policyId) + ','
+          + jsString(item.status === 'active' ? 'disabled' : 'active') + ')">'
+          + (item.status === 'active' ? 'Disable policy' : 'Enable policy') + '</button></div>';
+      return '<div class="control-card"><div class="control-title"><span>' + esc(item.name) + '</span>'
+        + '<span class="badge b-' + (item.status === 'active' ? 'active' : 'blocked') + '">' + esc(item.status) + '</span></div>'
+        + '<div class="control-meta"><span>Scope</span><span>' + esc(item.scopeType) + (item.scopeId ? ': ' + esc(item.scopeId) : '') + '</span>'
+        + '<span>Decision</span><span>' + esc(item.effect) + (item.effect === 'limit' ? ' / exceed: ' + esc(item.onExceed) : '') + '</span>'
+        + '<span>Limit</span><span class="mono">' + esc(limit) + '</span>'
+        + '<span>Window</span><span>' + esc(item.windowType) + (item.windowSeconds ? ' / ' + esc(item.windowSeconds) + 's' : '') + '</span>'
+        + '<span>Priority</span><span>' + esc(item.priority) + '</span></div>'
+        + '<div class="policy-ids">Policy: ' + esc(item.policyId) + ' &middot; version ' + esc(item.version) + '</div>'
+        + statusAction + '</div>';
     }).join('');
   }
 
@@ -542,6 +619,21 @@ function permissionsPageHtml(): string {
 
   function fundReload(requestId) {
     return walletMutation('/v1/principal/prepaid-wallet-reload-requests/' + encodeURIComponent(requestId) + '/fund', 'POST', {});
+  }
+
+  function decidePayment(approvalRequestId, decision) {
+    var verb = decision === 'approved' ? 'Approve' : 'Reject';
+    if (!confirm(verb + ' this exact payment request?')) return;
+    return walletMutation('/v1/principal/prepaid-wallet-payment-approvals/' + encodeURIComponent(approvalRequestId) + '/decision', 'POST', {
+      decision: decision,
+      reason: 'Principal dashboard decision',
+    });
+  }
+
+  function setPolicyStatus(policyId, status) {
+    return walletMutation('/v1/principal/prepaid-wallet-spend-policies/' + encodeURIComponent(policyId) + '/status', 'PATCH', {
+      status: status,
+    });
   }
 
   function fmtTime(ts) {

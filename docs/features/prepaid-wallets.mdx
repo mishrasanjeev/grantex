@@ -5,8 +5,8 @@ description: "Principal-controlled prepaid balances, multi-wallet assignment, sp
 
 Agent prepaid wallets give a human principal a durable value and policy boundary
 for autonomous spending. A wallet can be assigned to multiple agents, and an
-agent can hold multiple wallet assignments. Each assignment has its own limits
-and allowlists.
+agent can hold multiple wallet assignments. Assignment safeguards combine with
+layered wallet, agent, budget-group, principal, and developer policy.
 
 ## Lifecycle
 
@@ -16,11 +16,13 @@ and allowlists.
 2. The principal authorizes those scopes through OAuth Agent Grants.
 3. The application creates a short-lived principal session.
 4. The principal creates and funds one or more wallets.
-5. The principal assigns wallets with transaction, rolling, recipient, scope,
-   and validity policy.
+5. The principal assigns wallets with transaction, rolling, recipient, resource,
+   scope, validity, and optional shared budget-group policy.
 6. The DPoP-authenticated agent reserves value before presenting a payment.
-7. The resource server verifies and settles the one-time authorization.
-8. The principal reviews activity, approves reloads, or blocks spending.
+7. A layered policy may deny, allow, or require an exact principal approval.
+8. The resource server verifies and settles the one-time authorization.
+9. The principal reviews decisions, approves payments or reloads, or blocks
+   spending.
 
 ## Wallet states
 
@@ -49,7 +51,7 @@ Every transition and the resulting balance is recorded in the wallet ledger.
 The application role receives no update or delete permission on ledger rows.
 The database checks that available and reserved values never become negative.
 
-## Policy evaluation
+## Assignment and layered policy evaluation
 
 An authorization succeeds only if all of these remain true while the wallet row
 is locked:
@@ -58,16 +60,43 @@ is locked:
 - the agent is not globally blocked by the principal;
 - assignment validity dates include the current time;
 - asset and network match the wallet;
-- recipient and scope are allowed;
+- recipient, HTTPS resource origin, and scope are explicitly allowed or the
+  corresponding allow-any choice was made;
 - the payment scope is present in the human-approved OAuth grant;
 - amount does not exceed the per-transaction cap;
 - reserved plus settled value in the rolling window, plus the new amount, does
   not exceed the cumulative cap;
 - enough available value exists.
 
+After the assignment checks, every matching policy is evaluated. Policies can
+scope to an assignment, wallet, agent, shared `budgetGroup`, principal, or
+developer. They can deny, always require approval, or enforce amount and count
+limits over per-authorization, rolling, day, week, month, or lifetime windows.
+Filters cover recipient, resource origin, action scope, asset, network,
+merchant ID, purpose, project ID, cost center, and verified merchant state.
+
+All matching layers compose; a narrow policy cannot override a broader deny or
+increase a stricter limit. Reserved and settled amounts both count toward
+usage. Cross-wallet and cross-agent policy evaluation uses a shared advisory
+lock, while balance movement uses the wallet row lock.
+
 Concurrent requests serialize on the wallet row. The database update also
 requires `available_amount >= amount`, so a race cannot overdraw the wallet even
 if callers arrive together.
+
+## Exact payment approval
+
+A policy can return `approval_required` instead of creating a reservation. The
+approval is durable, short-lived, and bound to the exact agent, wallet,
+assignment, amount, asset, network, recipient, resource, scope, merchant,
+purpose, project, cost center, matched policies, and idempotency key. The
+principal approves or rejects it through the dashboard or principal-session
+API.
+
+An approved retry must repeat the original terms and is consumed when the
+reservation succeeds. It cannot be reused for a different transaction. The
+authorization JWT also binds the semantic context, so changing it at x402
+verification or settlement fails closed.
 
 ## Reload separation of duties
 
@@ -78,6 +107,11 @@ low-balance threshold. It cannot approve or fund the request. The principal can:
 - reject;
 - leave the request pending;
 - fund directly without an agent request in sandbox mode.
+
+Wallet-level reload controls can cap maximum balance, a single reload,
+cumulative reload amount and period, and reload count and period. The server
+rechecks these limits when funding, after the principal decision, so an old
+approval cannot bypass newer balance or velocity state.
 
 Only one pending request per agent and wallet exists. The agent persists an
 idempotency key before the first call and reuses it for the exact request. That
@@ -108,12 +142,18 @@ turning it into spendable value.
 
 Principal-session endpoints are under `/v1/principal/prepaid-wallets*` and cover
 wallets, assignments, direct reloads, reload decisions, activity, and release or
-block actions. DPoP agent endpoints are under `/v1/prepaid-wallets*` and cover
-listing, payment authorization, and reload requests. The official x402 v2
+block actions. Principal policies and exact approvals use
+`/v1/principal/prepaid-wallet-spend-policies*` and
+`/v1/principal/prepaid-wallet-payment-approvals*`. Developer-level policies use
+`/v1/prepaid-wallet-spend-policies*` under API-key authentication. DPoP agent
+endpoints are under `/v1/prepaid-wallets*` and cover listing, payment
+authorization, and reload requests. The official x402 v2
 facilitator endpoints are `/v1/x402/supported`, `/v1/x402/verify`, and
 `/v1/x402/settle`.
 
 See the [x402 integration guide](/integrations/x402) for code and failure
-handling. Self-hosting operators must also complete [Prepaid Wallet Production
+handling and [Agent Wallet Governance](/guides/agent-wallet-governance) for the
+Grantex, issuer, runtime, principal, and merchant boundaries. Self-hosting
+operators must also complete [Prepaid Wallet Production
 Readiness](/guides/prepaid-wallet-production) for public routing, migration,
 notification, merchant-recovery, custody, and external-review dependencies.

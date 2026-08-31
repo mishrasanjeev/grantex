@@ -3,6 +3,10 @@ import type { OAuthAgentClient } from './oauth-agent.js';
 export type PrepaidCustodyMode = 'sandbox_ledger' | 'external';
 export type PrepaidWalletStatus = 'active' | 'blocked' | 'closed';
 export type WalletAssignmentStatus = 'active' | 'blocked' | 'revoked';
+export type WalletSpendPolicyScope = 'assignment' | 'wallet' | 'agent' | 'group' | 'principal' | 'developer';
+export type WalletSpendPolicyEffect = 'limit' | 'deny' | 'require_approval';
+export type WalletSpendPolicyWindow = 'per_authorization' | 'rolling' | 'calendar_day' | 'calendar_week' | 'calendar_month' | 'lifetime';
+export type WalletSpendPolicyStatus = 'active' | 'disabled' | 'revoked';
 
 export interface PrepaidWallet {
   walletId: string;
@@ -18,6 +22,11 @@ export interface PrepaidWallet {
   availableAmount: string;
   reservedAmount: string;
   lowBalanceThreshold: string;
+  maxBalance: string | null;
+  maxReloadAmount: string | null;
+  reloadCumulativeLimit: string | null;
+  reloadPeriodSeconds: number | null;
+  reloadCountLimit: number | null;
   status: PrepaidWalletStatus;
   blockedAt: string | null;
   blockedReason: string | null;
@@ -46,6 +55,11 @@ export interface AssignedPrepaidWallet {
   cumulativePeriodSeconds: number;
   allowedRecipients: string[];
   allowedScopes: string[];
+  allowedResourceOrigins: string[];
+  allowAnyRecipient: boolean;
+  allowAnyScope: boolean;
+  allowAnyResource: boolean;
+  budgetGroup: string | null;
   validFrom: string;
   validUntil: string | null;
   allWalletsBlocked: boolean;
@@ -64,6 +78,11 @@ export interface WalletAssignment {
   cumulativePeriodSeconds: number;
   allowedRecipients: string[];
   allowedScopes: string[];
+  allowedResourceOrigins: string[];
+  allowAnyRecipient: boolean;
+  allowAnyScope: boolean;
+  allowAnyResource: boolean;
+  budgetGroup: string | null;
   validFrom: string;
   validUntil: string | null;
   blockedAt: string | null;
@@ -82,6 +101,11 @@ export interface CreatePrepaidWalletParams {
   asset: string;
   decimals?: number;
   lowBalanceThreshold?: string;
+  maxBalance?: string;
+  maxReloadAmount?: string;
+  reloadCumulativeLimit?: string;
+  reloadPeriodSeconds?: number;
+  reloadCountLimit?: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -92,6 +116,11 @@ export interface AssignPrepaidWalletParams {
   cumulativePeriodSeconds: number;
   allowedRecipients?: string[];
   allowedScopes?: string[];
+  allowedResourceOrigins?: string[];
+  allowAnyRecipient?: boolean;
+  allowAnyScope?: boolean;
+  allowAnyResource?: boolean;
+  budgetGroup?: string;
   validUntil?: string;
 }
 
@@ -105,9 +134,14 @@ export interface PrepaidAuthorizationRequest {
   scope: string;
   maxTimeoutSeconds: number;
   idempotencyKey: string;
+  approvalRequestId?: string;
+  merchantId?: string;
+  purpose?: string;
+  projectId?: string;
+  costCenter?: string;
 }
 
-export interface PrepaidAuthorizationResponse {
+export interface PrepaidAuthorization {
   authorization: string;
   reservationId: string;
   walletId: string;
@@ -119,6 +153,103 @@ export interface PrepaidAuthorizationResponse {
   expiresAt: string;
   remainingAvailable: string;
   remainingCumulative: string;
+  policyDecisionId: string | null;
+}
+
+export interface PrepaidApprovalRequired {
+  status: 'approval_required';
+  approvalRequestId: string;
+  walletId: string;
+  assignmentId: string;
+  policyIds: string[];
+  expiresAt: string;
+}
+
+export type PrepaidAuthorizationResponse = PrepaidAuthorization | PrepaidApprovalRequired;
+
+export interface WalletSpendPolicyInput {
+  name: string;
+  description?: string;
+  scopeType: WalletSpendPolicyScope;
+  scopeId?: string;
+  effect: WalletSpendPolicyEffect;
+  onExceed?: 'deny' | 'require_approval';
+  maxAmount?: string;
+  maxCount?: number;
+  windowType?: WalletSpendPolicyWindow;
+  windowSeconds?: number;
+  recipients?: string[];
+  resourceOrigins?: string[];
+  actionScopes?: string[];
+  assets?: string[];
+  networks?: string[];
+  merchantIds?: string[];
+  purposes?: string[];
+  projectIds?: string[];
+  costCenters?: string[];
+  requireVerifiedMerchant?: boolean;
+  priority?: number;
+  validFrom?: string;
+  validUntil?: string;
+}
+
+export interface WalletSpendPolicy {
+  policyId: string;
+  developerId: string;
+  principalId: string | null;
+  name: string;
+  description: string | null;
+  scopeType: WalletSpendPolicyScope;
+  scopeId: string | null;
+  effect: WalletSpendPolicyEffect;
+  onExceed: 'deny' | 'require_approval';
+  maxAmount: string | null;
+  maxCount: number | null;
+  windowType: WalletSpendPolicyWindow;
+  windowSeconds: number | null;
+  recipients: string[];
+  resourceOrigins: string[];
+  actionScopes: string[];
+  assets: string[];
+  networks: string[];
+  merchantIds: string[];
+  purposes: string[];
+  projectIds: string[];
+  costCenters: string[];
+  requireVerifiedMerchant: boolean;
+  priority: number;
+  status: WalletSpendPolicyStatus;
+  version: number;
+  validFrom: string;
+  validUntil: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WalletPaymentApproval {
+  approvalRequestId: string;
+  walletId: string;
+  assignmentId: string;
+  agentId: string;
+  amount: string;
+  asset: string;
+  network: string;
+  recipient: string;
+  resource: string;
+  scope: string;
+  merchantId: string | null;
+  purpose: string | null;
+  projectId: string | null;
+  costCenter: string | null;
+  policyIds: string[];
+  status: 'pending' | 'approved' | 'rejected' | 'consumed' | 'expired';
+  reason: string | null;
+  expiresAt: string;
+  decidedAt: string | null;
+  consumedAt: string | null;
+  reservationId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface WalletReloadRequest {
@@ -141,6 +272,8 @@ export interface PrepaidWalletActivity {
   reservations: Array<Record<string, unknown>>;
   reloadRequests: WalletReloadRequest[];
   ledger: Array<Record<string, unknown>>;
+  policyDecisions: Array<Record<string, unknown>>;
+  paymentApprovals: WalletPaymentApproval[];
 }
 
 interface DpopResourceClient {
@@ -291,6 +424,36 @@ export class PrincipalPrepaidWalletClient {
     );
   }
 
+  createSpendPolicy(params: WalletSpendPolicyInput): Promise<WalletSpendPolicy> {
+    return this.#request('/v1/principal/prepaid-wallet-spend-policies', jsonRequest(params));
+  }
+
+  async listSpendPolicies(): Promise<WalletSpendPolicy[]> {
+    return (await this.#request<{ policies: WalletSpendPolicy[] }>('/v1/principal/prepaid-wallet-spend-policies')).policies;
+  }
+
+  setSpendPolicyStatus(policyId: string, status: WalletSpendPolicyStatus): Promise<WalletSpendPolicy> {
+    return this.#request(
+      `/v1/principal/prepaid-wallet-spend-policies/${encodeURIComponent(policyId)}/status`,
+      jsonRequest({ status }, 'PATCH'),
+    );
+  }
+
+  async listPaymentApprovals(): Promise<WalletPaymentApproval[]> {
+    return (await this.#request<{ approvals: WalletPaymentApproval[] }>('/v1/principal/prepaid-wallet-payment-approvals')).approvals;
+  }
+
+  decidePaymentApproval(
+    approvalRequestId: string,
+    decision: 'approved' | 'rejected',
+    reason?: string,
+  ): Promise<WalletPaymentApproval> {
+    return this.#request(
+      `/v1/principal/prepaid-wallet-payment-approvals/${encodeURIComponent(approvalRequestId)}/decision`,
+      jsonRequest({ decision, ...(reason !== undefined ? { reason } : {}) }),
+    );
+  }
+
   async #request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
     headers.set('Authorization', `Bearer ${this.#sessionToken}`);
@@ -300,11 +463,62 @@ export class PrincipalPrepaidWalletClient {
   }
 }
 
+/** Developer API-key client for organization-wide and cross-principal wallet policy. */
+export class DeveloperPrepaidWalletPolicyClient {
+  readonly #baseUrl: string;
+  #apiKey: string;
+
+  constructor(options: { baseUrl: string; apiKey: string }) {
+    this.#baseUrl = normalizeUrl(options.baseUrl);
+    if (!options.apiKey) throw new Error('apiKey is required');
+    this.#apiKey = options.apiKey;
+  }
+
+  setApiKey(apiKey: string): void {
+    if (!apiKey) throw new Error('apiKey is required');
+    this.#apiKey = apiKey;
+  }
+
+  create(params: WalletSpendPolicyInput): Promise<WalletSpendPolicy> {
+    return this.#request('/v1/prepaid-wallet-spend-policies', jsonRequest(params));
+  }
+
+  async list(): Promise<WalletSpendPolicy[]> {
+    return (await this.#request<{ policies: WalletSpendPolicy[] }>('/v1/prepaid-wallet-spend-policies')).policies;
+  }
+
+  setStatus(policyId: string, status: WalletSpendPolicyStatus): Promise<WalletSpendPolicy> {
+    return this.#request(
+      `/v1/prepaid-wallet-spend-policies/${encodeURIComponent(policyId)}/status`,
+      jsonRequest({ status }, 'PATCH'),
+    );
+  }
+
+  async #request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const headers = new Headers(init.headers);
+    headers.set('Authorization', `Bearer ${this.#apiKey}`);
+    headers.set('Accept', 'application/json');
+    return walletJson<T>(await fetch(`${this.#baseUrl}${path}`, { ...init, headers }));
+  }
+}
+
 function normalizeUrl(value: string): string {
   if (!value) throw new Error('A base URL is required');
   const url = new URL(value);
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw new Error('Base URLs must use HTTP or HTTPS');
+  }
+  if (url.protocol === 'http:' && !isLoopback(url.hostname)) {
+    throw new Error('Remote wallet endpoints must use HTTPS');
+  }
+  if (url.username || url.password) throw new Error('Base URLs must not contain credentials');
   if (url.search || url.hash) throw new Error('Base URLs must not contain a query or fragment');
   return url.toString().replace(/\/$/, '');
+}
+
+function isLoopback(hostname: string): boolean {
+  const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
 }
 
 function jsonRequest(body: unknown, method = 'POST'): RequestInit {

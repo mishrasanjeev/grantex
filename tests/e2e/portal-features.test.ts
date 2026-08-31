@@ -10,8 +10,13 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
+const RUN_SUFFIX = `${Date.now().toString(36)}-${process.pid}`;
 let KEY: string;
 let DEV_ID: string;
+
+function uniquePrincipal(prefix: string): string {
+  return `${prefix}_${RUN_SUFFIX}`;
+}
 
 async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<{ status: number; data: T }> {
   const headers: Record<string, string> = { Authorization: `Bearer ${KEY}` };
@@ -101,6 +106,7 @@ describe('Agent CRUD', () => {
 // ─── Full Auth Flow + Grants + Tokens ───────────────────────────────────────
 
 describe('Auth Flow, Grants, Tokens', () => {
+  const principalId = uniquePrincipal('portal_e2e_user');
   let agentId: string;
   let grantId: string;
   let grantToken: string;
@@ -116,7 +122,7 @@ describe('Auth Flow, Grants, Tokens', () => {
   it('authorizes and gets code (sandbox)', async () => {
     const { status, data } = await api('POST', '/v1/authorize', {
       agentId,
-      principalId: 'portal_e2e_user',
+      principalId,
       scopes: ['email:read'],
       expiresIn: '1h',
     });
@@ -250,15 +256,19 @@ describe('Usage', () => {
 // ─── Budgets ────────────────────────────────────────────────────────────────
 
 describe('Budgets', () => {
+  const principalId = uniquePrincipal('budget_user');
   let agentId: string;
   let grantId: string;
 
   beforeAll(async () => {
     const ag = await api('POST', '/v1/agents', { name: 'Budget Agent', scopes: ['email:read'] });
+    expect(ag.status, JSON.stringify(ag.data)).toBe(201);
     agentId = (ag.data as { agentId: string }).agentId;
-    const auth = await api('POST', '/v1/authorize', { agentId, principalId: 'budget_user', scopes: ['email:read'], expiresIn: '1h' });
+    const auth = await api('POST', '/v1/authorize', { agentId, principalId, scopes: ['email:read'], expiresIn: '1h' });
+    expect([200, 201], JSON.stringify(auth.data)).toContain(auth.status);
     const code = (auth.data as { code: string }).code;
     const token = await api('POST', '/v1/token', { code, agentId });
+    expect([200, 201], JSON.stringify(token.data)).toContain(token.status);
     grantId = (token.data as { grantId: string }).grantId;
   });
 
@@ -302,16 +312,20 @@ describe('Budgets', () => {
 // ─── DPDP Compliance ────────────────────────────────────────────────────────
 
 describe('DPDP Compliance', () => {
+  const principalId = uniquePrincipal('dpdp_user');
   let agentId: string;
   let grantId: string;
   let recordId: string;
 
   beforeAll(async () => {
     const ag = await api('POST', '/v1/agents', { name: 'DPDP Agent', scopes: ['email:read'] });
+    expect(ag.status, JSON.stringify(ag.data)).toBe(201);
     agentId = (ag.data as { agentId: string }).agentId;
-    const auth = await api('POST', '/v1/authorize', { agentId, principalId: 'dpdp_user', scopes: ['email:read'], expiresIn: '1h' });
+    const auth = await api('POST', '/v1/authorize', { agentId, principalId, scopes: ['email:read'], expiresIn: '1h' });
+    expect([200, 201], JSON.stringify(auth.data)).toContain(auth.status);
     const code = (auth.data as { code: string }).code;
     const token = await api('POST', '/v1/token', { code, agentId });
+    expect([200, 201], JSON.stringify(token.data)).toContain(token.status);
     grantId = (token.data as { grantId: string }).grantId;
   });
 
@@ -332,10 +346,10 @@ describe('DPDP Compliance', () => {
   it('creates consent record', async () => {
     const { status, data } = await api('POST', '/v1/dpdp/consent-records', {
       grantId,
-      dataPrincipalId: 'dpdp_user',
+      dataPrincipalId: principalId,
       purposes: [{ code: 'analytics', description: 'Usage analytics' }],
       consentNoticeId: noticeId,
-      processingExpiresAt: '2027-01-01T00:00:00Z',
+      processingExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
     });
     expect(status).toBe(201);
     recordId = (data as { recordId: string }).recordId;
@@ -347,14 +361,14 @@ describe('DPDP Compliance', () => {
   });
 
   it('gets principal records', async () => {
-    const { status, data } = await api('GET', '/v1/dpdp/data-principals/dpdp_user/records');
+    const { status, data } = await api('GET', `/v1/dpdp/data-principals/${encodeURIComponent(principalId)}/records`);
     expect(status).toBe(200);
     expect((data as { totalRecords: number }).totalRecords).toBeGreaterThanOrEqual(0);
   });
 
   it('files grievance', async () => {
     const { status, data } = await api('POST', '/v1/dpdp/grievances', {
-      dataPrincipalId: 'dpdp_user',
+      dataPrincipalId: principalId,
       type: 'violation',
       description: 'E2E test grievance',
     });
@@ -474,16 +488,20 @@ describe('Well-Known Endpoints', () => {
 // ─── Passports ──────────────────────────────────────────────────────────────
 
 describe('Passports', () => {
+  const principalId = uniquePrincipal('pp_user');
   let agentId: string;
   let grantId: string;
   let passportId: string;
 
   beforeAll(async () => {
     const ag = await api('POST', '/v1/agents', { name: 'Passport Agent', scopes: ['payments:mpp:inference'] });
+    expect(ag.status, JSON.stringify(ag.data)).toBe(201);
     agentId = (ag.data as { agentId: string }).agentId;
-    const auth = await api('POST', '/v1/authorize', { agentId, principalId: 'pp_user', scopes: ['payments:mpp:inference'], expiresIn: '1h' });
+    const auth = await api('POST', '/v1/authorize', { agentId, principalId, scopes: ['payments:mpp:inference'], expiresIn: '1h' });
+    expect([200, 201], JSON.stringify(auth.data)).toContain(auth.status);
     const code = (auth.data as { code: string }).code;
     const token = await api('POST', '/v1/token', { code, agentId });
+    expect([200, 201], JSON.stringify(token.data)).toContain(token.status);
     grantId = (token.data as { grantId: string }).grantId;
   });
 
@@ -509,9 +527,10 @@ describe('Passports', () => {
 // ─── Principal Sessions ─────────────────────────────────────────────────────
 
 describe('Principal Sessions', () => {
+  const principalId = uniquePrincipal('session_user');
   it('creates principal session', async () => {
     const { status } = await api('POST', '/v1/principal-sessions', {
-      principalId: 'session_user',
+      principalId,
       expiresIn: '1h',
     });
     // 201 = created, 404 = endpoint not deployed in this environment

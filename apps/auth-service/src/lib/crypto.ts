@@ -517,6 +517,10 @@ export interface WalletAuthorizationPayload {
   recipient: string;
   resource: string;
   scope: string;
+  merchantId?: string | null;
+  purpose?: string | null;
+  projectId?: string | null;
+  costCenter?: string | null;
   requestHash: string;
   expiresAt: number;
 }
@@ -540,6 +544,10 @@ export async function signWalletAuthorizationToken(
     recipient: authorization.recipient,
     resource: authorization.resource,
     scope: authorization.scope,
+    merchant_id: authorization.merchantId ?? null,
+    payment_purpose: authorization.purpose ?? null,
+    project_id: authorization.projectId ?? null,
+    cost_center: authorization.costCenter ?? null,
     request_hash: authorization.requestHash,
   })
     .setProtectedHeader({ alg: 'RS256', kid, typ: 'wallet-auth+jwt' })
@@ -588,6 +596,16 @@ export async function verifyWalletAuthorizationToken(
       || typeof payload.exp !== 'number' || !Number.isSafeInteger(payload.exp)) {
     throw new Error('Wallet authorization token is missing required claims');
   }
+  const optionalClaims = {
+    merchantId: payload['merchant_id'] ?? null,
+    purpose: payload['payment_purpose'] ?? null,
+    projectId: payload['project_id'] ?? null,
+    costCenter: payload['cost_center'] ?? null,
+  };
+  if (Object.values(optionalClaims).some((value) => value !== null
+      && (typeof value !== 'string' || value.length === 0))) {
+    throw new Error('Wallet authorization token contains invalid optional claims');
+  }
 
   return {
     authorizationId: claims.authorizationId as string,
@@ -604,6 +622,10 @@ export async function verifyWalletAuthorizationToken(
     recipient: claims.recipient as string,
     resource: claims.resource as string,
     scope: claims.scope as string,
+    merchantId: optionalClaims.merchantId as string | null,
+    purpose: optionalClaims.purpose as string | null,
+    projectId: optionalClaims.projectId as string | null,
+    costCenter: optionalClaims.costCenter as string | null,
     requestHash: claims.requestHash as string,
     expiresAt: payload.exp,
   };

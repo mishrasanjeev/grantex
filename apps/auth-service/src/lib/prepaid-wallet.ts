@@ -15,6 +15,17 @@ import {
   type WalletAuthorizationPayload,
 } from './crypto.js';
 import { emitEvent, type EventType } from './events.js';
+import {
+  WalletPolicyDecisionError,
+  WalletSpendPolicyError,
+  approvedPolicyIdsForPayment,
+  consumeWalletPaymentApproval,
+  createWalletPaymentApproval,
+  evaluateWalletSpendPolicies,
+  mapWalletPaymentApproval,
+  recordWalletPolicyDecision,
+  type WalletPaymentPolicyContext,
+} from './wallet-spend-policy.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -47,6 +58,11 @@ export interface CreateWalletInput {
   asset: string;
   decimals?: number;
   lowBalanceThreshold?: string;
+  maxBalance?: string;
+  maxReloadAmount?: string;
+  reloadCumulativeLimit?: string;
+  reloadPeriodSeconds?: number;
+  reloadCountLimit?: number;
   metadata?: Record<string, unknown>;
 }
 
@@ -58,6 +74,11 @@ export interface AssignWalletInput {
   cumulativePeriodSeconds: number;
   allowedRecipients?: string[];
   allowedScopes?: string[];
+  allowedResourceOrigins?: string[];
+  allowAnyRecipient?: boolean;
+  allowAnyScope?: boolean;
+  allowAnyResource?: boolean;
+  budgetGroup?: string;
   validUntil?: string;
 }
 
@@ -71,6 +92,11 @@ export interface ReservePaymentInput {
   scope: string;
   maxTimeoutSeconds: number;
   idempotencyKey: string;
+  approvalRequestId?: string;
+  merchantId?: string;
+  purpose?: string;
+  projectId?: string;
+  costCenter?: string;
 }
 
 export interface AgentWalletIdentity {
@@ -90,6 +116,10 @@ export interface PaymentRequirementsBinding {
   resource: string;
   scope: string;
   maxTimeoutSeconds: number;
+  merchantId?: string;
+  purpose?: string;
+  projectId?: string;
+  costCenter?: string;
 }
 
 export interface PrepaidAuthorization {
@@ -104,6 +134,16 @@ export interface PrepaidAuthorization {
   expiresAt: string;
   remainingAvailable: string;
   remainingCumulative: string;
+  policyDecisionId: string | null;
+}
+
+export interface PrepaidApprovalRequired {
+  status: 'approval_required';
+  approvalRequestId: string;
+  walletId: string;
+  assignmentId: string;
+  policyIds: string[];
+  expiresAt: string;
 }
 
 export interface SettlementResult {
@@ -180,6 +220,15 @@ export function validateResource(value: unknown): string {
   return resource;
 }
 
+function validateResourceOrigin(value: unknown): string {
+  const resource = validateResource(value);
+  const url = new URL(resource);
+  if (url.pathname !== '/' || url.search) {
+    throw new PrepaidWalletError(400, 'INVALID_RESOURCE_ORIGIN', 'allowedResourceOrigins entries must be origins without paths or queries');
+  }
+  return url.origin;
+}
+
 function hash(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
@@ -187,6 +236,59 @@ function hash(value: string): string {
 function assertBalanceCapacity(current: unknown, increment: string): void {
   if (BigInt(String(current)) + BigInt(increment) > MAX_ATOMIC_VALUE) {
     throw new PrepaidWalletError(409, 'WALLET_BALANCE_LIMIT_EXCEEDED', 'Wallet balance would exceed the supported atomic-unit range');
+  }
+}
+
+async function assertReloadControls(
+  tx: TxSql,
+  wallet: Record<string, unknown>,
+  increment: string,
+): Promise<void> {
+  const available = BigInt(String(wallet['available_amount']));
+  const reserved = BigInt(String(wallet['reserved_amount'] ?? '0'));
+  const amount = BigInt(increment);
+  const currentBalance = available + reserved;
+  assertBalanceCapacity(currentBalance.toString(), increment);
+
+  const maxBalance = wallet['max_balance'] === null || wallet['max_balance'] === undefined
+    ? null
+    : BigInt(String(wallet['max_balance']));
+  if (maxBalance !== null && currentBalance + amount > maxBalance) {
+    throw new PrepaidWalletError(409, 'WALLET_MAX_BALANCE_EXCEEDED', 'Reload would exceed the wallet maximum balance');
+  }
+
+  const maxReloadAmount = wallet['max_reload_amount'] === null || wallet['max_reload_amount'] === undefined
+    ? null
+    : BigInt(String(wallet['max_reload_amount']));
+  if (maxReloadAmount !== null && amount > maxReloadAmount) {
+    throw new PrepaidWalletError(409, 'WALLET_RELOAD_AMOUNT_EXCEEDED', 'Reload amount exceeds the wallet per-reload limit');
+  }
+
+  const periodSeconds = wallet['reload_period_seconds'] === null || wallet['reload_period_seconds'] === undefined
+    ? null
+    : Number(wallet['reload_period_seconds']);
+  const cumulativeLimit = wallet['reload_cumulative_limit'] === null || wallet['reload_cumulative_limit'] === undefined
+    ? null
+    : BigInt(String(wallet['reload_cumulative_limit']));
+  const countLimit = wallet['reload_count_limit'] === null || wallet['reload_count_limit'] === undefined
+    ? null
+    : Number(wallet['reload_count_limit']);
+  if (periodSeconds === null || (cumulativeLimit === null && countLimit === null)) return;
+
+  const usage = await tx`
+    SELECT COALESCE(SUM(amount), 0) AS amount, COUNT(*) AS count
+    FROM wallet_reload_requests
+    WHERE wallet_id = ${(wallet['control_wallet_id'] ?? wallet['id']) as string}
+      AND status = 'funded'
+      AND funded_at >= NOW() - make_interval(secs => ${periodSeconds})
+  `;
+  const fundedAmount = BigInt(String(usage[0]?.['amount'] ?? '0'));
+  const fundedCount = Number(usage[0]?.['count'] ?? 0);
+  if (cumulativeLimit !== null && fundedAmount + amount > cumulativeLimit) {
+    throw new PrepaidWalletError(409, 'WALLET_RELOAD_CUMULATIVE_LIMIT_EXCEEDED', 'Reload would exceed the wallet cumulative funding limit');
+  }
+  if (countLimit !== null && fundedCount + 1 > countLimit) {
+    throw new PrepaidWalletError(409, 'WALLET_RELOAD_COUNT_LIMIT_EXCEEDED', 'Reload would exceed the wallet funding-count limit');
   }
 }
 
@@ -200,6 +302,10 @@ function canonicalRequest(input: ReservePaymentInput): string {
     resource: input.resource,
     scope: input.scope,
     maxTimeoutSeconds: input.maxTimeoutSeconds,
+    merchantId: input.merchantId ?? null,
+    purpose: input.purpose ?? null,
+    projectId: input.projectId ?? null,
+    costCenter: input.costCenter ?? null,
   });
 }
 
@@ -218,6 +324,11 @@ function mapWallet(row: Record<string, unknown>) {
     availableAmount: String(row['available_amount']),
     reservedAmount: String(row['reserved_amount']),
     lowBalanceThreshold: String(row['low_balance_threshold']),
+    maxBalance: row['max_balance'] === null || row['max_balance'] === undefined ? null : String(row['max_balance']),
+    maxReloadAmount: row['max_reload_amount'] === null || row['max_reload_amount'] === undefined ? null : String(row['max_reload_amount']),
+    reloadCumulativeLimit: row['reload_cumulative_limit'] === null || row['reload_cumulative_limit'] === undefined ? null : String(row['reload_cumulative_limit']),
+    reloadPeriodSeconds: row['reload_period_seconds'] === null || row['reload_period_seconds'] === undefined ? null : Number(row['reload_period_seconds']),
+    reloadCountLimit: row['reload_count_limit'] === null || row['reload_count_limit'] === undefined ? null : Number(row['reload_count_limit']),
     status: row['status'],
     blockedAt: row['blocked_at'],
     blockedReason: row['blocked_reason'],
@@ -239,6 +350,11 @@ function mapAssignment(row: Record<string, unknown>) {
     cumulativePeriodSeconds: row['cumulative_period_seconds'],
     allowedRecipients: row['allowed_recipients'],
     allowedScopes: row['allowed_scopes'],
+    allowedResourceOrigins: row['allowed_resource_origins'] ?? [],
+    allowAnyRecipient: row['allow_any_recipient'] ?? false,
+    allowAnyScope: row['allow_any_scope'] ?? false,
+    allowAnyResource: row['allow_any_resource'] ?? false,
+    budgetGroup: row['budget_group'] ?? null,
     validFrom: row['valid_from'],
     validUntil: row['valid_until'],
     blockedAt: row['blocked_at'],
@@ -268,6 +384,20 @@ export async function createPrepaidWallet(
     throw new PrepaidWalletError(400, 'INVALID_DECIMALS', 'decimals must be an integer between 0 and 30');
   }
   const threshold = atomicAmount(raw.lowBalanceThreshold ?? '0', 'lowBalanceThreshold', true);
+  const maxBalance = raw.maxBalance === undefined ? null : atomicAmount(raw.maxBalance, 'maxBalance');
+  const maxReloadAmount = raw.maxReloadAmount === undefined ? null : atomicAmount(raw.maxReloadAmount, 'maxReloadAmount');
+  const reloadCumulativeLimit = raw.reloadCumulativeLimit === undefined
+    ? null
+    : atomicAmount(raw.reloadCumulativeLimit, 'reloadCumulativeLimit');
+  const reloadPeriodSeconds = raw.reloadPeriodSeconds ?? null;
+  const reloadCountLimit = raw.reloadCountLimit ?? null;
+  if ((reloadCumulativeLimit !== null || reloadCountLimit !== null)
+      && (!Number.isSafeInteger(reloadPeriodSeconds) || reloadPeriodSeconds! < 60 || reloadPeriodSeconds! > 31_536_000)) {
+    throw new PrepaidWalletError(400, 'INVALID_RELOAD_POLICY', 'reloadPeriodSeconds must be between 60 and 31536000 when a reload velocity limit is set');
+  }
+  if (reloadCountLimit !== null && (!Number.isSafeInteger(reloadCountLimit) || reloadCountLimit <= 0)) {
+    throw new PrepaidWalletError(400, 'INVALID_RELOAD_POLICY', 'reloadCountLimit must be a positive integer');
+  }
   const provider = raw.provider === undefined ? undefined : boundedText(raw.provider, 'provider');
   const providerWalletId = raw.providerWalletId === undefined
     ? undefined
@@ -284,11 +414,13 @@ export async function createPrepaidWallet(
       INSERT INTO prepaid_wallets (
         id, developer_id, principal_id, name, custody_mode, provider,
         provider_wallet_id, wallet_address, network, asset, decimals,
-        low_balance_threshold, metadata
+        low_balance_threshold, max_balance, max_reload_amount,
+        reload_cumulative_limit, reload_period_seconds, reload_count_limit, metadata
       ) VALUES (
         ${id}, ${owner.developerId}, ${owner.principalId}, ${name}, ${raw.custodyMode},
         ${provider ?? null}, ${providerWalletId ?? null}, ${walletAddress ?? null},
-        ${network}, ${asset}, ${decimals}, ${threshold}, ${JSON.stringify(raw.metadata ?? {})}
+        ${network}, ${asset}, ${decimals}, ${threshold}, ${maxBalance}, ${maxReloadAmount},
+        ${reloadCumulativeLimit}, ${reloadPeriodSeconds}, ${reloadCountLimit}, ${JSON.stringify(raw.metadata ?? {})}
       )
       RETURNING *
     `;
@@ -323,6 +455,8 @@ export async function listAgentWallets(sql: Sql, identity: AgentWalletIdentity) 
            a.id AS assignment_id, a.status AS assignment_status,
            a.per_transaction_limit, a.cumulative_limit,
            a.cumulative_period_seconds, a.allowed_recipients, a.allowed_scopes,
+           a.allowed_resource_origins, a.allow_any_recipient, a.allow_any_scope,
+           a.allow_any_resource, a.budget_group,
            a.valid_from, a.valid_until,
            COALESCE(c.all_wallets_blocked, FALSE) AS all_wallets_blocked
     FROM agent_wallet_assignments a
@@ -358,6 +492,11 @@ export async function listAgentWallets(sql: Sql, identity: AgentWalletIdentity) 
     cumulativePeriodSeconds: row['cumulative_period_seconds'],
     allowedRecipients: row['allowed_recipients'],
     allowedScopes: row['allowed_scopes'],
+    allowedResourceOrigins: row['allowed_resource_origins'],
+    allowAnyRecipient: row['allow_any_recipient'],
+    allowAnyScope: row['allow_any_scope'],
+    allowAnyResource: row['allow_any_resource'],
+    budgetGroup: row['budget_group'] ?? null,
     validFrom: row['valid_from'],
     validUntil: row['valid_until'],
     allWalletsBlocked: row['all_wallets_blocked'],
@@ -382,6 +521,29 @@ export async function assignWallet(
   }
   const allowedRecipients = stringList(raw.allowedRecipients, 'allowedRecipients');
   const allowedScopes = stringList(raw.allowedScopes, 'allowedScopes');
+  const allowedResourceOrigins = stringList(raw.allowedResourceOrigins, 'allowedResourceOrigins')
+    .map((value) => validateResourceOrigin(value));
+  const allowAnyRecipient = raw.allowAnyRecipient ?? false;
+  const allowAnyScope = raw.allowAnyScope ?? false;
+  const allowAnyResource = raw.allowAnyResource ?? false;
+  if (typeof allowAnyRecipient !== 'boolean' || typeof allowAnyScope !== 'boolean' || typeof allowAnyResource !== 'boolean') {
+    throw new PrepaidWalletError(400, 'INVALID_POLICY', 'allowAnyRecipient, allowAnyScope, and allowAnyResource must be booleans');
+  }
+  if (allowedRecipients.length === 0 && !allowAnyRecipient) {
+    throw new PrepaidWalletError(400, 'RECIPIENT_POLICY_REQUIRED', 'Set allowedRecipients or explicitly set allowAnyRecipient');
+  }
+  if (allowedScopes.length === 0 && !allowAnyScope) {
+    throw new PrepaidWalletError(400, 'SCOPE_POLICY_REQUIRED', 'Set allowedScopes or explicitly set allowAnyScope');
+  }
+  if (allowedResourceOrigins.length === 0 && !allowAnyResource) {
+    throw new PrepaidWalletError(400, 'RESOURCE_POLICY_REQUIRED', 'Set allowedResourceOrigins or explicitly set allowAnyResource');
+  }
+  if ((allowedRecipients.length > 0 && allowAnyRecipient)
+      || (allowedScopes.length > 0 && allowAnyScope)
+      || (allowedResourceOrigins.length > 0 && allowAnyResource)) {
+    throw new PrepaidWalletError(400, 'AMBIGUOUS_POLICY', 'An allowlist and its allow-any flag cannot both be set');
+  }
+  const budgetGroup = raw.budgetGroup === undefined ? null : boundedText(raw.budgetGroup, 'budgetGroup');
   if (allowedScopes.some((scope) => !SCOPE_PATTERN.test(scope))) {
     throw new PrepaidWalletError(400, 'INVALID_SCOPE', 'allowedScopes contains an invalid OAuth scope token');
   }
@@ -423,11 +585,13 @@ export async function assignWallet(
       INSERT INTO agent_wallet_assignments (
         id, wallet_id, developer_id, principal_id, agent_id,
         per_transaction_limit, cumulative_limit, cumulative_period_seconds,
-        allowed_recipients, allowed_scopes, valid_until
+        allowed_recipients, allowed_scopes, allowed_resource_origins,
+        allow_any_recipient, allow_any_scope, allow_any_resource, budget_group, valid_until
       ) VALUES (
         ${id}, ${walletId}, ${owner.developerId}, ${owner.principalId}, ${agentId},
         ${perTransactionLimit}, ${cumulativeLimit}, ${raw.cumulativePeriodSeconds},
-        ${allowedRecipients}, ${allowedScopes}, ${validUntil}
+        ${allowedRecipients}, ${allowedScopes}, ${allowedResourceOrigins},
+        ${allowAnyRecipient}, ${allowAnyScope}, ${allowAnyResource}, ${budgetGroup}, ${validUntil}
       )
       ON CONFLICT (wallet_id, principal_id, agent_id) DO UPDATE SET
         status = 'active',
@@ -436,6 +600,11 @@ export async function assignWallet(
         cumulative_period_seconds = EXCLUDED.cumulative_period_seconds,
         allowed_recipients = EXCLUDED.allowed_recipients,
         allowed_scopes = EXCLUDED.allowed_scopes,
+        allowed_resource_origins = EXCLUDED.allowed_resource_origins,
+        allow_any_recipient = EXCLUDED.allow_any_recipient,
+        allow_any_scope = EXCLUDED.allow_any_scope,
+        allow_any_resource = EXCLUDED.allow_any_resource,
+        budget_group = EXCLUDED.budget_group,
         valid_from = NOW(),
         valid_until = EXCLUDED.valid_until,
         blocked_at = NULL,
@@ -548,6 +717,24 @@ async function releaseReservations(
     `;
   }
   return rows.length;
+}
+
+export async function applyWalletSpendPolicyMutation<T>(
+  sql: Sql,
+  actor: { developerId: string; principalId: string | null },
+  mutation: (tx: TxSql) => Promise<T>,
+): Promise<T> {
+  let result: T | undefined;
+  await sql.begin(async (_tx) => {
+    const tx = _tx as unknown as TxSql;
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`wallet-policy:${actor.developerId}`}, 21))`;
+    result = await mutation(tx);
+    await releaseReservations(tx, {
+      developerId: actor.developerId,
+      ...(actor.principalId !== null ? { principalId: actor.principalId } : {}),
+    }, 'layered_spend_policy_changed');
+  });
+  return result!;
 }
 
 async function lockActiveAgentWalletControl(
@@ -758,6 +945,11 @@ function validatedReserveInput(raw: ReservePaymentInput): ReservePaymentInput {
     amount, asset, network, recipient, resource, scope,
     maxTimeoutSeconds: raw.maxTimeoutSeconds,
     idempotencyKey,
+    ...(raw.approvalRequestId ? { approvalRequestId: boundedText(raw.approvalRequestId, 'approvalRequestId') } : {}),
+    ...(raw.merchantId ? { merchantId: boundedText(raw.merchantId, 'merchantId') } : {}),
+    ...(raw.purpose ? { purpose: boundedText(raw.purpose, 'purpose') } : {}),
+    ...(raw.projectId ? { projectId: boundedText(raw.projectId, 'projectId') } : {}),
+    ...(raw.costCenter ? { costCenter: boundedText(raw.costCenter, 'costCenter') } : {}),
   };
 }
 
@@ -765,7 +957,7 @@ export async function reserveWalletPayment(
   sql: Sql,
   identity: AgentWalletIdentity,
   raw: ReservePaymentInput,
-): Promise<PrepaidAuthorization> {
+): Promise<PrepaidAuthorization | PrepaidApprovalRequired> {
   if (!identity.scopes.includes('wallet:spend')) {
     throw new PrepaidWalletError(403, 'INSUFFICIENT_SCOPE', 'wallet:spend scope is required');
   }
@@ -782,9 +974,12 @@ export async function reserveWalletPayment(
   let authorizationClaims: WalletAuthorizationPayload | undefined;
   let createdReservation = false;
   let lowBalanceThreshold = '0';
+  let decisionError: WalletPolicyDecisionError | undefined;
 
-  await sql.begin(async (_tx) => {
+  try {
+    await sql.begin(async (_tx) => {
     const tx = _tx as unknown as TxSql;
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`wallet-policy:${identity.developerId}`}, 21))`;
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`${identity.developerId}:${identity.agentId}`}, 13))`;
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`${identity.developerId}:${identity.principalId}:${identity.agentId}:${idempotencyHash}`}, 11))`;
     const authority = await tx`
@@ -838,7 +1033,7 @@ export async function reserveWalletPayment(
       throw new PrepaidWalletError(404, 'NO_ASSIGNED_WALLET', 'No prepaid wallet is assigned to this agent');
     }
 
-    let lastPolicyError: PrepaidWalletError | undefined;
+    let lastPolicyError: PrepaidWalletError | WalletPolicyDecisionError | undefined;
     for (const candidate of candidates) {
       const assignmentId = candidate['id'] as string;
       const lockedAssignments = await tx`
@@ -883,12 +1078,16 @@ export async function reserveWalletPayment(
           throw new PrepaidWalletError(403, 'ASSET_OR_NETWORK_NOT_ALLOWED', 'Payment asset or network does not match the wallet');
         }
         const allowedRecipients = row['allowed_recipients'] as string[];
-        if (allowedRecipients.length > 0 && !allowedRecipients.includes(input.recipient)) {
+        if (row['allow_any_recipient'] !== true && !allowedRecipients.includes(input.recipient)) {
           throw new PrepaidWalletError(403, 'RECIPIENT_NOT_ALLOWED', 'Payment recipient is not allowed by wallet policy');
         }
         const allowedScopes = row['allowed_scopes'] as string[];
-        if (allowedScopes.length > 0 && !allowedScopes.includes(input.scope)) {
+        if (row['allow_any_scope'] !== true && !allowedScopes.includes(input.scope)) {
           throw new PrepaidWalletError(403, 'SCOPE_NOT_ALLOWED', 'Payment scope is not allowed by wallet policy');
+        }
+        const allowedResourceOrigins = row['allowed_resource_origins'] as string[];
+        if (row['allow_any_resource'] !== true && !allowedResourceOrigins.includes(new URL(input.resource).origin)) {
+          throw new PrepaidWalletError(403, 'RESOURCE_NOT_ALLOWED', 'Payment resource origin is not allowed by wallet policy');
         }
         if (BigInt(input.amount) > BigInt(String(row['per_transaction_limit']))) {
           throw new PrepaidWalletError(402, 'PER_TRANSACTION_LIMIT_EXCEEDED', 'Payment exceeds the per-transaction wallet limit');
@@ -943,6 +1142,10 @@ export async function reserveWalletPayment(
             recipient: input.recipient,
             resource: input.resource,
             scope: input.scope,
+            merchantId: existing['merchant_id'] as string | null,
+            purpose: existing['purpose'] as string | null,
+            projectId: existing['project_id'] as string | null,
+            costCenter: existing['cost_center'] as string | null,
             requestHash,
             expiresAt: Math.floor(existingExpiry.getTime() / 1000),
           };
@@ -957,6 +1160,9 @@ export async function reserveWalletPayment(
             expiresAt: existingExpiry.toISOString(),
             remainingAvailable: String(balanceRows[0]?.['available_amount'] ?? row['available_amount']),
             remainingCumulative: (currentLimit > currentSpent ? currentLimit - currentSpent : 0n).toString(),
+            policyDecisionId: existing['policy_decision_id'] === null || existing['policy_decision_id'] === undefined
+              ? null
+              : String(existing['policy_decision_id']),
           };
           lowBalanceThreshold = String(row['low_balance_threshold']);
           break;
@@ -973,6 +1179,43 @@ export async function reserveWalletPayment(
         const cumulativeLimit = BigInt(String(row['cumulative_limit']));
         if (alreadySpent + BigInt(input.amount) > cumulativeLimit) {
           throw new PrepaidWalletError(402, 'CUMULATIVE_LIMIT_EXCEEDED', 'Payment exceeds the rolling cumulative wallet limit');
+        }
+
+        const policyContext: WalletPaymentPolicyContext = {
+          developerId: identity.developerId,
+          principalId: identity.principalId,
+          agentId: identity.agentId,
+          grantId: identity.grantId,
+          walletId: row['wallet_id'] as string,
+          assignmentId,
+          budgetGroup: row['budget_group'] as string | null,
+          requestHash,
+          amount: input.amount,
+          asset: input.asset,
+          network: input.network,
+          recipient: input.recipient,
+          resource: input.resource,
+          scope: input.scope,
+          merchantId: input.merchantId ?? null,
+          purpose: input.purpose ?? null,
+          projectId: input.projectId ?? null,
+          costCenter: input.costCenter ?? null,
+        };
+        let approvedPolicyIds: Set<string>;
+        try {
+          approvedPolicyIds = await approvedPolicyIdsForPayment(tx, policyContext, input.approvalRequestId ?? null);
+        } catch (error) {
+          if (error instanceof WalletSpendPolicyError) {
+            throw new PrepaidWalletError(error.statusCode, error.code, error.message);
+          }
+          throw error;
+        }
+        const policyEvaluation = await evaluateWalletSpendPolicies(tx, policyContext, approvedPolicyIds);
+        if (policyEvaluation.decision === 'denied') {
+          throw new WalletPolicyDecisionError(402, 'LAYERED_SPEND_POLICY_DENIED', 'Payment was denied by a layered Grantex spend policy', policyContext, policyEvaluation);
+        }
+        if (policyEvaluation.decision === 'approval_required') {
+          throw new WalletPolicyDecisionError(409, 'PAYMENT_APPROVAL_REQUIRED', 'Principal approval is required for this payment', policyContext, policyEvaluation);
         }
 
         const walletRows = await tx`
@@ -993,15 +1236,21 @@ export async function reserveWalletPayment(
           INSERT INTO wallet_payment_reservations (
             id, wallet_id, assignment_id, developer_id, principal_id, agent_id,
             grant_id, access_token_jti, authorization_jti, idempotency_key_hash,
-            request_hash, amount, asset, network, recipient, resource, scope, expires_at
+            request_hash, amount, asset, network, recipient, resource, scope,
+            merchant_id, purpose, project_id, cost_center, resource_origin, expires_at
           ) VALUES (
             ${reservationId}, ${row['wallet_id'] as string}, ${assignmentId},
             ${identity.developerId}, ${identity.principalId}, ${identity.agentId},
             ${identity.grantId}, ${identity.accessTokenJti}, ${authorizationId},
             ${idempotencyHash}, ${requestHash}, ${input.amount}, ${input.asset},
-            ${input.network}, ${input.recipient}, ${input.resource}, ${input.scope}, ${expiresAt}
+            ${input.network}, ${input.recipient}, ${input.resource}, ${input.scope},
+            ${input.merchantId ?? null}, ${input.purpose ?? null}, ${input.projectId ?? null},
+            ${input.costCenter ?? null}, ${new URL(input.resource).origin}, ${expiresAt}
           )
         `;
+        const policyDecisionId = await recordWalletPolicyDecision(tx, policyContext, policyEvaluation, { reservationId });
+        await tx`UPDATE wallet_payment_reservations SET policy_decision_id = ${policyDecisionId} WHERE id = ${reservationId}`;
+        await consumeWalletPaymentApproval(tx, input.approvalRequestId ?? null, reservationId);
         authorizationClaims = {
           authorizationId,
           reservationId,
@@ -1017,6 +1266,10 @@ export async function reserveWalletPayment(
           recipient: input.recipient,
           resource: input.resource,
           scope: input.scope,
+          merchantId: input.merchantId ?? null,
+          purpose: input.purpose ?? null,
+          projectId: input.projectId ?? null,
+          costCenter: input.costCenter ?? null,
           requestHash,
           expiresAt: expiresAtSeconds,
         };
@@ -1031,12 +1284,13 @@ export async function reserveWalletPayment(
           expiresAt: expiresAt.toISOString(),
           remainingAvailable: String(wallet['available_amount']),
           remainingCumulative: (cumulativeLimit - alreadySpent - BigInt(input.amount)).toString(),
+          policyDecisionId,
         };
         createdReservation = true;
         lowBalanceThreshold = String(row['low_balance_threshold']);
         break;
       } catch (error) {
-        if (!(error instanceof PrepaidWalletError)) throw error;
+        if (!(error instanceof PrepaidWalletError) && !(error instanceof WalletPolicyDecisionError)) throw error;
         lastPolicyError = error;
         if (input.walletId) throw error;
       }
@@ -1044,7 +1298,45 @@ export async function reserveWalletPayment(
     if (!result || !authorizationClaims) {
       throw lastPolicyError ?? new PrepaidWalletError(402, 'NO_ELIGIBLE_WALLET', 'No assigned wallet can authorize this payment');
     }
-  });
+    });
+  } catch (error) {
+    if (error instanceof WalletPolicyDecisionError) decisionError = error;
+    else throw error;
+  }
+
+  if (decisionError) {
+    if (decisionError.result.decision === 'approval_required') {
+      const approval = await createWalletPaymentApproval(sql, decisionError.context, decisionError.result);
+      await safeEvent(identity.developerId, 'wallet.payment.approval_required', {
+        approvalRequestId: approval.approvalRequestId,
+        walletId: approval.walletId,
+        agentId: identity.agentId,
+        principalId: identity.principalId,
+        amount: approval.amount,
+        asset: approval.asset,
+        policyIds: approval.policyIds,
+        expiresAt: approval.expiresAt,
+      });
+      return {
+        status: 'approval_required',
+        approvalRequestId: String(approval.approvalRequestId),
+        walletId: String(approval.walletId),
+        assignmentId: String(approval.assignmentId),
+        policyIds: approval.policyIds as string[],
+        expiresAt: new Date(approval.expiresAt as string).toISOString(),
+      };
+    }
+    await recordWalletPolicyDecision(sql, decisionError.context, decisionError.result);
+    await safeEvent(identity.developerId, 'wallet.payment.denied', {
+      walletId: decisionError.context.walletId,
+      agentId: identity.agentId,
+      principalId: identity.principalId,
+      amount: decisionError.context.amount,
+      asset: decisionError.context.asset,
+      policyIds: decisionError.result.matchedPolicyIds,
+    });
+    throw new PrepaidWalletError(decisionError.statusCode, decisionError.code, decisionError.message);
+  }
 
   const authorization = await signWalletAuthorizationToken(authorizationClaims!);
   if (createdReservation) {
@@ -1089,6 +1381,10 @@ function validatedBinding(raw: PaymentRequirementsBinding): PaymentRequirementsB
     resource: validateResource(raw.resource),
     scope: validateScope(raw.scope),
     maxTimeoutSeconds: raw.maxTimeoutSeconds,
+    ...(raw.merchantId ? { merchantId: boundedText(raw.merchantId, 'merchantId') } : {}),
+    ...(raw.purpose ? { purpose: boundedText(raw.purpose, 'purpose') } : {}),
+    ...(raw.projectId ? { projectId: boundedText(raw.projectId, 'projectId') } : {}),
+    ...(raw.costCenter ? { costCenter: boundedText(raw.costCenter, 'costCenter') } : {}),
   };
 }
 
@@ -1142,6 +1438,10 @@ export async function verifyWalletPayment(
       AND r.recipient = ${claims.recipient}
       AND r.resource = ${claims.resource}
       AND r.scope = ${claims.scope}
+      AND r.merchant_id IS NOT DISTINCT FROM ${claims.merchantId ?? null}
+      AND r.purpose IS NOT DISTINCT FROM ${claims.purpose ?? null}
+      AND r.project_id IS NOT DISTINCT FROM ${claims.projectId ?? null}
+      AND r.cost_center IS NOT DISTINCT FROM ${claims.costCenter ?? null}
       AND r.request_hash = ${claims.requestHash}
     LIMIT 1
   `;
@@ -1184,6 +1484,7 @@ export async function settleWalletPayment(
   let settlement: SettlementResult | undefined;
   await sql.begin(async (_tx) => {
     const tx = _tx as unknown as TxSql;
+    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`wallet-policy:${claims.developerId}`}, 21))`;
     const authority = await tx`
       SELECT g.id, ar.status AS reservation_status
       FROM grants g
@@ -1254,6 +1555,10 @@ export async function settleWalletPayment(
         AND r.recipient = ${claims.recipient}
         AND r.resource = ${claims.resource}
         AND r.scope = ${claims.scope}
+        AND r.merchant_id IS NOT DISTINCT FROM ${claims.merchantId ?? null}
+        AND r.purpose IS NOT DISTINCT FROM ${claims.purpose ?? null}
+        AND r.project_id IS NOT DISTINCT FROM ${claims.projectId ?? null}
+        AND r.cost_center IS NOT DISTINCT FROM ${claims.costCenter ?? null}
         AND r.request_hash = ${claims.requestHash}
       FOR UPDATE OF r
     `;
@@ -1389,7 +1694,9 @@ export async function requestWalletReload(
       throw new PrepaidWalletError(409, 'RELOAD_NOT_AVAILABLE', 'Wallet is not eligible for an agent reload request');
     }
     const eligible = await tx`
-      SELECT a.id AS assignment_id
+      SELECT a.id AS assignment_id, w.id, w.available_amount, w.reserved_amount,
+             w.max_balance, w.max_reload_amount, w.reload_cumulative_limit,
+             w.reload_period_seconds, w.reload_count_limit
       FROM agent_wallet_assignments a
       JOIN prepaid_wallets w ON w.id = a.wallet_id
       LEFT JOIN agent_wallet_controls c
@@ -1409,6 +1716,7 @@ export async function requestWalletReload(
     if (!eligible[0]) {
       throw new PrepaidWalletError(409, 'RELOAD_NOT_AVAILABLE', 'Wallet is not eligible for an agent reload request');
     }
+    await assertReloadControls(tx, eligible[0] as Record<string, unknown>, amount);
     const pending = await tx`
       SELECT * FROM wallet_reload_requests
       WHERE wallet_id = ${walletId}
@@ -1569,7 +1877,7 @@ export async function createPrincipalReload(
         throw new PrepaidWalletError(409, 'EXTERNAL_REFERENCE_CONFLICT', 'externalReference was already used for this wallet');
       }
     }
-    assertBalanceCapacity(wallet['available_amount'], amount);
+    await assertReloadControls(tx, wallet, amount);
     const reference = boundedReference
       ?? (wallet['custody_mode'] === 'sandbox_ledger' ? `sandbox:${requestId}` : undefined);
     if (!reference) {
@@ -1645,7 +1953,9 @@ export async function fundApprovedReload(
       throw new PrepaidWalletError(404, 'RELOAD_REQUEST_NOT_FOUND', 'Reload request not found');
     }
     const rows = await tx`
-      SELECT rr.*, w.custody_mode, w.available_amount, w.reserved_amount
+      SELECT rr.*, w.id AS control_wallet_id, w.custody_mode, w.available_amount, w.reserved_amount,
+             w.max_balance, w.max_reload_amount, w.reload_cumulative_limit,
+             w.reload_period_seconds, w.reload_count_limit
       FROM wallet_reload_requests rr
       JOIN prepaid_wallets w ON w.id = rr.wallet_id
       WHERE rr.id = ${requestId}
@@ -1670,7 +1980,7 @@ export async function fundApprovedReload(
     if (row['custody_mode'] !== 'sandbox_ledger') {
       throw new PrepaidWalletError(503, 'CUSTODY_ADAPTER_UNAVAILABLE', 'External custody funding is not configured');
     }
-    assertBalanceCapacity(row['available_amount'], String(row['amount']));
+    await assertReloadControls(tx, row, String(row['amount']));
     const reference = boundedReference
       ?? (row['custody_mode'] === 'sandbox_ledger' ? `sandbox:${requestId}` : undefined);
     if (!reference) {
@@ -1751,16 +2061,20 @@ export async function listWalletActivity(
     WHERE id = ${walletId} AND developer_id = ${owner.developerId} AND principal_id = ${owner.principalId}
   `;
   if (!owned[0]) throw new PrepaidWalletError(404, 'WALLET_NOT_FOUND', 'Wallet not found');
-  const [assignments, reservations, reloads, ledger] = await Promise.all([
+  const [assignments, reservations, reloads, ledger, policyDecisions, approvals] = await Promise.all([
     sql`SELECT * FROM agent_wallet_assignments WHERE wallet_id = ${walletId} ORDER BY created_at DESC`,
     sql`SELECT id, assignment_id, agent_id, amount, asset, network, recipient, resource, scope, status, transaction_id, expires_at, settled_at, released_at, release_reason, created_at FROM wallet_payment_reservations WHERE wallet_id = ${walletId} ORDER BY created_at DESC LIMIT 200`,
     sql`SELECT * FROM wallet_reload_requests WHERE wallet_id = ${walletId} ORDER BY created_at DESC LIMIT 200`,
     sql`SELECT id, entry_type, amount, available_after, reserved_after, reservation_id, reload_request_id, external_reference, metadata, created_at FROM wallet_ledger_entries WHERE wallet_id = ${walletId} ORDER BY created_at DESC LIMIT 200`,
+    sql`SELECT id, agent_id, assignment_id, reservation_id, approval_request_id, request_hash, decision, matched_policy_ids, evaluations, created_at FROM wallet_policy_decisions WHERE wallet_id = ${walletId} ORDER BY created_at DESC LIMIT 200`,
+    sql`SELECT id, agent_id, assignment_id, amount, asset, network, recipient, resource, scope, merchant_id, purpose, project_id, cost_center, policy_ids, status, reason, expires_at, decided_at, consumed_at, reservation_id, created_at, updated_at FROM wallet_payment_approval_requests WHERE wallet_id = ${walletId} ORDER BY created_at DESC LIMIT 200`,
   ]);
   return {
     assignments: assignments.map((row) => mapAssignment(row as Record<string, unknown>)),
     reservations,
     reloadRequests: reloads.map((row) => mapReload(row as Record<string, unknown>)),
     ledger,
+    policyDecisions,
+    paymentApprovals: approvals.map((row) => mapWalletPaymentApproval(row as Record<string, unknown>)),
   };
 }

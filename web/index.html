@@ -245,7 +245,7 @@
             "name": "Which Grantex SDK should I install?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Use @grantex/sdk@0.4.1 for TypeScript, grantex==0.3.14 for Python, and github.com/mishrasanjeev/grantex-go@v0.1.10 for Go. Review release status before upgrading because packages are independently versioned and Go v0.1.10 has documented workarounds."
+              "text": "Use @grantex/sdk@0.5.0 for TypeScript, grantex==0.4.0 for Python, and github.com/mishrasanjeev/grantex-go@v0.2.0 for Go. Review release status before upgrading because packages are independently versioned."
             }
           },
           {
@@ -1624,16 +1624,16 @@
   </div>
 </section>
 
-<!-- ── Published releases and capability highlights ───────────────────────── -->
+<!-- ── Release state and capability highlights ────────────────────────────── -->
 <section id="whats-new" class="snapshot-section">
   <div class="container">
     <div class="release-header">
       <div>
-        <div class="section-label">Published releases</div>
-        <h2 class="section-title">Current public releases</h2>
+        <div class="section-label">Release state</div>
+        <h2 class="section-title">Published packages and prepared candidates</h2>
         <p class="release-intro">
-          Release snapshot verified against npm, PyPI, and the Go module proxy on 30 August 2026.
-          Grantex packages are independently versioned.
+          Release snapshot verified on 31 August 2026. Wallet-governance SDKs are
+          release candidates until each exact version is registry-verified.
         </p>
       </div>
       <div class="release-links" aria-label="Release resources">
@@ -1651,23 +1651,23 @@
         <strong class="release-version">0.3.0</strong>
         <span class="release-meta">npm &middot; published 10 Aug 2026 &middot; Agent Skills</span>
       </a>
-      <a class="release-card" href="https://www.npmjs.com/package/@grantex/sdk/v/0.4.1">
+      <a class="release-card" href="https://www.npmjs.com/package/@grantex/sdk/v/0.5.0">
         <span class="release-language">TypeScript SDK</span>
         <span class="release-name">@grantex/sdk</span>
-        <strong class="release-version">0.4.1</strong>
-        <span class="release-meta">npm &middot; published 30 Aug 2026 &middot; prepaid wallets</span>
+        <strong class="release-version">0.5.0</strong>
+        <span class="release-meta">npm release candidate &middot; current published 0.4.1</span>
       </a>
-      <a class="release-card" href="https://pypi.org/project/grantex/0.3.14/">
+      <a class="release-card" href="https://pypi.org/project/grantex/0.4.0/">
         <span class="release-language">Python SDK</span>
         <span class="release-name">grantex</span>
-        <strong class="release-version">0.3.14</strong>
-        <span class="release-meta">PyPI &middot; published 11 Jul 2026</span>
+        <strong class="release-version">0.4.0</strong>
+        <span class="release-meta">PyPI release candidate &middot; current published 0.3.14</span>
       </a>
-      <a class="release-card" href="https://pkg.go.dev/github.com/mishrasanjeev/grantex-go@v0.1.10">
+      <a class="release-card" href="https://pkg.go.dev/github.com/mishrasanjeev/grantex-go@v0.2.0">
         <span class="release-language">Go SDK</span>
         <span class="release-name">github.com/mishrasanjeev/grantex-go</span>
-        <strong class="release-version">v0.1.10</strong>
-        <span class="release-meta">Go module proxy &middot; Go 1.26.1+ &middot; known SDK gaps</span>
+        <strong class="release-version">v0.2.0</strong>
+        <span class="release-meta">Go release candidate &middot; current published v0.1.10</span>
       </a>
       <a class="release-card" href="https://www.npmjs.com/package/@grantex/mcp-auth/v/2.0.2">
         <span class="release-language">MCP Auth</span>
@@ -1679,16 +1679,11 @@
 
     <div class="release-caveat" role="note">
       <strong>Known published-package limits:</strong>
-      Go SDK v0.1.10 needs workarounds for agent IDs and write payloads, audit
-      writes, reads, and filters, reserved query values, and list metadata. MCP Auth 2.0.2 is
+      MCP Auth 2.0.2 is
       single-process evaluation software with in-memory code state, no rendered
       consent page, and an incomplete backend code handoff.
-      <span class="release-progress">
-        <strong>Repository progress (not published):</strong> source on <code>main</code>
-        corrects the documented Go gaps and implements standard developer API-key
-        Free/Pro/Enterprise throughput. Custom-auth quota policy remains open. The public
-        Go card remains <code>v0.1.10</code>, and no managed-service rollout is implied.
-      </span>
+      <span class="release-progress">External issuer/custody, principal notification delivery,
+        and merchant result recovery remain operator-owned dependencies for managed wallets.</span>
       <a href="https://docs.grantex.dev/release-status">Read the exact boundaries and workarounds.</a>
     </div>
 
@@ -1784,7 +1779,7 @@
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Which Grantex SDK should I install?</summary>
-        <p>Use <code>@grantex/sdk@0.4.1</code> for TypeScript, <code>grantex==0.3.14</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.1.10</code> for Go. Review <a href="https://docs.grantex.dev/release-status">release status</a> before upgrading because packages are independently versioned and Go v0.1.10 has documented workarounds.</p>
+        <p>Use <code>@grantex/sdk@0.5.0</code> for TypeScript, <code>grantex==0.4.0</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.2.0</code> for Go. Review <a href="https://docs.grantex.dev/release-status">release status</a> before upgrading because packages are independently versioned.</p>
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Does local Grantex token verification check current revocation?</summary>
@@ -2251,22 +2246,22 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
     </p>
 
     <div class="install-commands">
-      <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/sdk@0.4.1', this)"
+      <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/sdk@0.5.0', this)"
               aria-label="Copy the TypeScript SDK install command">
         <span class="install-label">npm</span>
-        <code>npm install @grantex/sdk@0.4.1</code>
+        <code>npm install @grantex/sdk@0.5.0</code>
         <span class="install-copy">Copy</span>
       </button>
-      <button type="button" class="install-cmd" onclick="copyInstall('python -m pip install grantex==0.3.14', this)"
+      <button type="button" class="install-cmd" onclick="copyInstall('python -m pip install grantex==0.4.0', this)"
               aria-label="Copy the Python SDK install command">
         <span class="install-label">PyPI</span>
-        <code>python -m pip install grantex==0.3.14</code>
+        <code>python -m pip install grantex==0.4.0</code>
         <span class="install-copy">Copy</span>
       </button>
-      <button type="button" class="install-cmd" onclick="copyInstall('go get github.com/mishrasanjeev/grantex-go@v0.1.10', this)"
+      <button type="button" class="install-cmd" onclick="copyInstall('go get github.com/mishrasanjeev/grantex-go@v0.2.0', this)"
               aria-label="Copy the Go SDK version 0.1.10 install command">
         <span class="install-label">Go</span>
-        <code>go get github.com/mishrasanjeev/grantex-go@v0.1.10</code>
+        <code>go get github.com/mishrasanjeev/grantex-go@v0.2.0</code>
         <span class="install-copy">Copy</span>
       </button>
       <button type="button" class="install-cmd" onclick="copyInstall('npm install -g @grantex/cli@0.3.0', this)"
@@ -2294,7 +2289,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="code-block">
           <button type="button" class="copy-btn" aria-label="Copy the Node.js quickstart"
                   onclick="copyCode('code-node', this, 'node_quickstart_copy')">Copy</button>
-          <pre id="code-node"><span class="cm">// npm install @grantex/sdk@0.4.1</span>
+          <pre id="code-node"><span class="cm">// npm install @grantex/sdk@0.5.0</span>
 <span class="kw">import</span> <span class="op">{ </span><span class="id">Grantex</span><span class="op">,</span> <span class="id">verifyGrantToken</span><span class="op"> }</span> <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
 
 <span class="kw">const</span> <span class="id">grantex</span> <span class="op">=</span> <span class="kw">new</span> <span class="fn">Grantex</span><span class="op">({</span> <span class="id">apiKey</span><span class="op">:</span> <span class="str">'YOUR_API_KEY'</span> <span class="op">});</span>
@@ -2329,7 +2324,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="code-block">
           <button type="button" class="copy-btn" aria-label="Copy the Python quickstart"
                   onclick="copyCode('code-python', this, 'python_quickstart_copy')">Copy</button>
-          <pre id="code-python"><span class="cm"># python -m pip install grantex==0.3.14</span>
+          <pre id="code-python"><span class="cm"># python -m pip install grantex==0.4.0</span>
 <span class="kw">from</span> <span class="id">grantex</span> <span class="kw">import</span> <span class="id">AuthorizeParams</span><span class="op">,</span> <span class="id">ExchangeTokenParams</span><span class="op">,</span> <span class="id">Grantex</span>
 
 <span class="id">client</span> <span class="op">=</span> <span class="fn">Grantex</span><span class="op">(</span><span class="id">api_key</span><span class="op">=</span><span class="str">"YOUR_API_KEY"</span><span class="op">)</span>
@@ -2360,7 +2355,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="code-block">
           <button type="button" class="copy-btn" aria-label="Copy the Go quickstart"
                   onclick="copyCode('code-go', this, 'go_quickstart_copy')">Copy</button>
-          <pre id="code-go">// go get github.com/mishrasanjeev/grantex-go@v0.1.10
+          <pre id="code-go">// go get github.com/mishrasanjeev/grantex-go@v0.2.0
 package main
 
 import (
@@ -2589,13 +2584,16 @@ func main() {
     <div class="section-label">Principal-controlled agent payments</div>
     <h2 class="section-title">Prepaid Wallets for x402 v2</h2>
     <p class="section-sub">
-      Assign one or many prepaid wallets to an AI agent. Enforce transaction and rolling limits,
-      approve reloads, and stop one wallet or every wallet without loosening the x402 protocol.
+      Assign one or many prepaid wallets to an AI agent. Compose assignment, wallet, agent,
+      budget-group, principal, and tenant limits; require exact human approval; govern reloads;
+      and stop one wallet or every wallet without loosening the x402 protocol.
     </p>
     <div class="release-caveat" style="max-width:760px;margin:-24px 0 36px;">
-      <strong>Registry releases:</strong> install <code>@grantex/sdk@0.4.1</code> and
-      <code>@grantex/x402@0.2.0</code> for the managed-wallet flow. External custody remains
+      <strong>Registry releases:</strong> install <code>@grantex/sdk@0.5.0</code> and
+      <code>@grantex/x402@0.3.0</code> for the managed-wallet flow. External custody remains
       fail-closed until a self-hosting operator installs and verifies a provider adapter.
+      Grantex governs delegated agent authority and reservation; the issuer or custodian still owns
+      KYC/KYB, sanctions, custody, network controls, clearing, settlement, disputes, and reconciliation.
     </div>
 
     <!-- ── Visual flow pipeline ───────────────────────────────────────── -->
@@ -2605,7 +2603,7 @@ func main() {
         <div class="wallet-flow-step">
           <div style="font-size:36px;margin-bottom:8px;">&#x1F464;</div>
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Principal</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Funds wallets<br>sets policy + stop controls</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Funds wallets<br>sets budgets + exact approvals</div>
           <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
             <div style="font-family:var(--mono);font-size:10px;color:#6366f1;">assign(wallet, policy)</div>
           </div>
@@ -2616,7 +2614,7 @@ func main() {
         <div class="wallet-flow-step wide divided">
           <div style="font-size:36px;margin-bottom:8px;">&#x1F4DC;</div>
           <div style="font-size:13px;font-weight:700;color:#6366f1;margin-bottom:4px;">Prepaid Assignment</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Durable balance &middot; DPoP agent<br>Recipient + scope + rolling cap</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">DPoP agent &middot; safe defaults<br>Semantic + layered policy</div>
           <div style="display:flex;gap:4px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
             <span style="font-size:10px;font-family:var(--mono);background:rgba(99,102,241,0.15);color:#6366f1;padding:2px 8px;border-radius:10px;">weather:read</span>
             <span style="font-size:10px;font-family:var(--mono);background:rgba(16,185,129,0.15);color:#10b981;padding:2px 8px;border-radius:10px;">25 USDC / 24h</span>
@@ -2628,7 +2626,7 @@ func main() {
         <div class="wallet-flow-step wide">
           <div style="font-size:36px;margin-bottom:8px;">&#x1F916;</div>
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">AI Agent</div>
-          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Handles official x402 v2<br>402 &rarr; reserve &rarr; retry</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;">Handles official x402 v2<br>402 &rarr; approve if needed &rarr; retry</div>
           <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
             <div style="font-family:var(--mono);font-size:10px;color:#6366f1;">PAYMENT-SIGNATURE</div>
           </div>
@@ -2662,17 +2660,17 @@ func main() {
         <div class="card" style="border-left:3px solid #ef4444;margin:0;">
           <span class="card-icon">&#x26A0;</span>
           <h3>The Gap in x402</h3>
-          <p>x402 payment requirements do not by themselves establish which agent may use which principal-owned value. A reusable wallet key also cannot express rolling policy or an emergency stop.</p>
+          <p>x402 payment requirements do not by themselves establish which agent may use which principal-owned value. A reusable wallet key also cannot express shared budgets, exact approval, or an emergency stop.</p>
         </div>
         <div class="card" style="border-left:3px solid #10b981;margin:0;">
           <span class="card-icon">&#x1F6E1;</span>
-          <h3>Grantex Reserves Before It Authorizes</h3>
-          <p>Every payment is DPoP-bound to an agent, evaluated against wallet and assignment policy, and reserved atomically before a short-lived one-time authorization is issued.</p>
+          <h3>Layered Governance Before Authorization</h3>
+          <p>Every payment is DPoP-bound to an agent and evaluated across assignment, wallet, agent, budget-group, principal, and tenant policy. An allowed payment is reserved atomically before a short-lived one-time authorization is issued.</p>
         </div>
         <div class="card" style="border-left:3px solid #6366f1;margin:0;">
           <span class="card-icon">&#x1F50D;</span>
-          <h3>Reload and Stop Controls</h3>
-          <p>An agent may request a reload at the principal's threshold. Only the principal can approve and fund it, and can block one assignment, one wallet, or all of the agent's wallets.</p>
+          <h3>Exact Approval, Reload, and Stop</h3>
+          <p>A principal approval is bound to one exact payment and consumed once. Agents may request reloads within balance and velocity limits, while only the principal can fund them or block an assignment, wallet, or agent.</p>
         </div>
       </div>
       <!-- Right: code -->
@@ -2721,6 +2719,9 @@ func main() {
         <a href="https://docs.grantex.dev/integrations/x402" class="btn btn-primary"
            onclick="gtag('event','x402_docs_click',{event_category:'x402'})">
           Read the docs &rarr;
+        </a>
+        <a href="https://docs.grantex.dev/guides/agent-wallet-governance" class="btn btn-secondary">
+          Governance boundaries
         </a>
         <a href="/x402-playground/" class="btn btn-secondary"
            onclick="gtag('event','x402_playground_click',{event_category:'x402'})">

@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "canonicalUrl": "https://grantex.dev/release-status.json",
   "humanDocumentationUrl": "https://docs.grantex.dev/release-status",
-  "verifiedAt": "2026-08-30",
+  "verifiedAt": "2026-08-31",
   "product": {
     "name": "Grantex",
     "category": "AI agent authorization",
@@ -18,9 +18,9 @@
   },
   "selectionGuidance": {
     "shellCapableAgent": "Use published @grantex/cli@0.3.0 for Hermes, OpenClaw, and other shell-capable agents. Install the bundled skills with grantex agent install; no agent-specific SDK is required.",
-    "typescriptApplication": "Use @grantex/sdk@0.4.1.",
-    "pythonApplication": "Use grantex==0.3.14.",
-    "goApplication": "Use github.com/mishrasanjeev/grantex-go@v0.1.10 with the documented published-version workarounds.",
+    "typescriptApplication": "Release candidate: @grantex/sdk@0.5.0. Keep using @grantex/sdk@0.4.1 until 0.5.0 is registry-verified.",
+    "pythonApplication": "Release candidate: grantex==0.4.0. Keep using grantex==0.3.14 until 0.4.0 is registry-verified.",
+    "goApplication": "Release candidate: github.com/mishrasanjeev/grantex-go@v0.2.0. Keep using v0.1.10 until v0.2.0 is proxy-verified.",
     "mcpProductionIntegration": "Use established MCP-compatible transport authorization first, then a primary Grantex SDK or direct JWKS validation for agent-specific tool enforcement; treat @grantex/mcp-auth@2.0.2 as single-process evaluation software.",
     "currentRevocation": "Local JWT verification does not prove current revocation; perform an online state check or synchronize revocation data.",
     "mcpTransportAuthorization": "For MCP HTTP transport authorization, use an established MCP-compatible authorization server and maintained MCP SDK that implement the current MCP authorization specification.",
@@ -37,7 +37,7 @@
       "hostedMetadataUrl": "https://grantex.dev/.well-known/oauth-authorization-server",
       "documentationUrl": "https://docs.grantex.dev/guides/oauth-agent-grants",
       "implementationReportUrl": "https://github.com/mishrasanjeev/grantex/blob/main/docs/ietf-draft/implementation-report.md",
-      "sdkAvailability": "published in @grantex/sdk@0.4.1",
+      "sdkAvailability": "implemented in the @grantex/sdk@0.5.0 release candidate; registry publication pending",
       "evidence": {
         "authServiceTestsPassed": 2097,
         "typescriptSdkTestsPassed": 444,
@@ -71,12 +71,12 @@
       "label": "TypeScript SDK",
       "ecosystem": "npm",
       "name": "@grantex/sdk",
-      "version": "0.4.1",
-      "status": "published",
-      "installCommand": "npm install @grantex/sdk@0.4.1",
+      "version": "0.5.0",
+      "status": "release-candidate",
+      "installCommand": "npm install @grantex/sdk@0.5.0 after registry verification",
       "runtime": "Node.js 18+; ESM",
       "registryUrl": "https://registry.npmjs.org/%40grantex%2Fsdk/latest",
-      "packageUrl": "https://www.npmjs.com/package/@grantex/sdk/v/0.4.1",
+      "packageUrl": "https://www.npmjs.com/package/@grantex/sdk/v/0.5.0",
       "documentationUrl": "https://docs.grantex.dev/sdks/typescript/overview",
       "limitations": []
     },
@@ -85,12 +85,12 @@
       "label": "x402 Payment Protocol",
       "ecosystem": "npm",
       "name": "@grantex/x402",
-      "version": "0.2.0",
-      "status": "published",
-      "installCommand": "npm install @grantex/x402@0.2.0 @grantex/sdk@0.4.1",
+      "version": "0.3.0",
+      "status": "release-candidate",
+      "installCommand": "npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0 after registry verification",
       "runtime": "Node.js 20+; ESM",
       "registryUrl": "https://registry.npmjs.org/%40grantex%2Fx402/latest",
-      "packageUrl": "https://www.npmjs.com/package/@grantex/x402/v/0.2.0",
+      "packageUrl": "https://www.npmjs.com/package/@grantex/x402/v/0.3.0",
       "documentationUrl": "https://docs.grantex.dev/integrations/x402",
       "limitations": [
         {
@@ -106,12 +106,12 @@
       "label": "Python SDK",
       "ecosystem": "pypi",
       "name": "grantex",
-      "version": "0.3.14",
-      "status": "published",
-      "installCommand": "python -m pip install grantex==0.3.14",
+      "version": "0.4.0",
+      "status": "release-candidate",
+      "installCommand": "python -m pip install grantex==0.4.0 after registry verification",
       "runtime": "Python 3.9+",
       "registryUrl": "https://pypi.org/pypi/grantex/json",
-      "packageUrl": "https://pypi.org/project/grantex/0.3.14/",
+      "packageUrl": "https://pypi.org/project/grantex/0.4.0/",
       "documentationUrl": "https://docs.grantex.dev/sdks/python/overview",
       "limitations": []
     },
@@ -120,51 +120,14 @@
       "label": "Go SDK",
       "ecosystem": "go",
       "name": "github.com/mishrasanjeev/grantex-go",
-      "version": "v0.1.10",
-      "status": "published-with-known-limitations",
-      "installCommand": "go get github.com/mishrasanjeev/grantex-go@v0.1.10",
+      "version": "v0.2.0",
+      "status": "release-candidate",
+      "installCommand": "go get github.com/mishrasanjeev/grantex-go@v0.2.0 after proxy verification",
       "runtime": "Go 1.26.1+",
       "registryUrl": "https://proxy.golang.org/github.com/mishrasanjeev/grantex-go/@latest",
-      "packageUrl": "https://pkg.go.dev/github.com/mishrasanjeev/grantex-go@v0.1.10",
+      "packageUrl": "https://pkg.go.dev/github.com/mishrasanjeev/grantex-go@v0.2.0",
       "documentationUrl": "https://docs.grantex.dev/sdks/go/overview",
-      "limitations": [
-        {
-          "id": "go-agent-id-response-mapping",
-          "summary": "Agent.ID expects JSON id while the API returns agentId.",
-          "workaround": "Derive the registered agent ID from the returned did:grantex:<agentId> value.",
-          "workaroundUrl": "https://docs.grantex.dev/sdks/go/overview#known-v0110-limitations"
-        },
-        {
-          "id": "go-audit-write-payload",
-          "summary": "LogAuditParams omits the API-required agentDid and principalId fields.",
-          "workaround": "Use the REST API or CLI for audit writes.",
-          "workaroundUrl": "https://docs.grantex.dev/sdks/go/audit#log"
-        },
-        {
-          "id": "go-list-response-metadata",
-          "summary": "Agent and audit list responses declare total, page, and pageSize fields that the API does not return.",
-          "workaround": "Use len(result.Agents) or len(result.Entries); do not rely on pagination metadata in v0.1.10.",
-          "workaroundUrl": "https://docs.grantex.dev/sdks/go/overview#known-v0110-limitations"
-        },
-        {
-          "id": "go-agent-write-payload",
-          "summary": "Agent registration sends optional zero values, while agent updates cannot send status or an explicit empty scopes array.",
-          "workaround": "Provide description and scopes explicitly on registration; use the REST API to change status or clear all scopes.",
-          "workaroundUrl": "https://docs.grantex.dev/sdks/go/agents"
-        },
-        {
-          "id": "go-audit-read-contract",
-          "summary": "AuditEntry omits developerId, and audit list parameters expose since, until, page, and pageSize filters that the API ignores.",
-          "workaround": "Use only agentId, grantId, principalId, and action filters; decode raw REST responses when developerId is required.",
-          "workaroundUrl": "https://docs.grantex.dev/sdks/go/audit"
-        },
-        {
-          "id": "go-query-encoding",
-          "summary": "List helpers concatenate query values without URL encoding reserved characters.",
-          "workaround": "Avoid reserved characters in typed list filters or issue the request directly with a net/url-encoded query string.",
-          "workaroundUrl": "https://docs.grantex.dev/sdks/go/overview#known-v0110-limitations"
-        }
-      ]
+      "limitations": []
     },
     {
       "id": "mcp-auth",

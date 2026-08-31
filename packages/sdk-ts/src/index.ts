@@ -26,6 +26,7 @@ export {
 export {
   PrepaidWalletAgentClient,
   PrincipalPrepaidWalletClient,
+  DeveloperPrepaidWalletPolicyClient,
   type PrepaidCustodyMode,
   type PrepaidWalletStatus,
   type WalletAssignmentStatus,
@@ -36,6 +37,15 @@ export {
   type AssignPrepaidWalletParams,
   type PrepaidAuthorizationRequest,
   type PrepaidAuthorizationResponse,
+  type PrepaidAuthorization,
+  type PrepaidApprovalRequired,
+  type WalletSpendPolicyScope,
+  type WalletSpendPolicyEffect,
+  type WalletSpendPolicyWindow,
+  type WalletSpendPolicyStatus,
+  type WalletSpendPolicyInput,
+  type WalletSpendPolicy,
+  type WalletPaymentApproval,
   type WalletReloadRequest,
   type PrepaidWalletActivity,
 } from './prepaid-wallets.js';

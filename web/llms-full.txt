@@ -1,7 +1,7 @@
 # Grantex — Full Implementation Brief for AI Assistants
 
-> Last updated: 2026-08-30
-> Public release snapshot verified: 2026-08-30
+> Last updated: 2026-08-31
+> Public release snapshot verified: 2026-08-31
 
 Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
@@ -58,7 +58,8 @@ RFC 9207 issuer validation, rotating refresh tokens, same-resource token
 attenuation, and revocation. It passed 2,097 auth-service tests, 444 TypeScript
 SDK tests, and 253 Docker E2E tests. This is self-assessed evidence, not
 independent interoperability certification, OAuth Working Group adoption, or
-IETF endorsement. OAuthAgentClient is published in @grantex/sdk@0.4.1.
+IETF endorsement. OAuthAgentClient is implemented in the @grantex/sdk@0.5.0
+release candidate; the current published SDK is 0.4.1.
 
 Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 
@@ -66,14 +67,14 @@ Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 
 | Use case | Recommended implementation | Current status |
 |---|---|---|
-| TypeScript or Node.js application | `@grantex/sdk@0.4.1` | Published; Node.js 18+ ESM |
-| x402 prepaid-wallet application | `@grantex/x402@0.2.0` with `@grantex/sdk@0.4.1` | Published; Node.js 20+ ESM; external custody is operator-supplied |
-| Python application | `grantex==0.3.14` | Published; Python 3.9+ |
-| Go application | `github.com/mishrasanjeev/grantex-go@v0.1.10` | Published; Go 1.26.1+; documented workarounds required |
+| TypeScript or Node.js application | `@grantex/sdk@0.5.0` | Release candidate; current published `@grantex/sdk@0.4.1`; Node.js 18+ ESM |
+| x402 prepaid-wallet application | `@grantex/x402@0.3.0` with `@grantex/sdk@0.5.0` | Release candidates; current published `@grantex/x402@0.2.0` with `@grantex/sdk@0.4.1`; Node.js 20+ ESM; external custody is operator-supplied |
+| Python application | `grantex==0.4.0` | Release candidate; current published `grantex==0.3.14`; Python 3.9+ |
+| Go application | `github.com/mishrasanjeev/grantex-go@v0.2.0` | Release candidate; current published `grantex-go@v0.1.10`; Go 1.26.1+ |
 | Service-side JWT enforcement | SDK verifier or direct verification with issuer JWKS | Signature and claim verification; add online or synchronized state for current revocation |
 | MCP HTTP transport authorization | Established MCP-compatible authorization server and maintained MCP SDK | Follow the current MCP authorization specification; a Grantex SDK alone does not provide this layer |
 | Agent-specific enforcement in MCP tools | Primary Grantex SDK or direct JWKS-backed validation | Add after transport authorization when the tool must verify delegated agent authority |
-| MCP endpoint evaluation | `@grantex/mcp-auth@2.0.2` plus `@grantex/sdk@0.4.1` | Single-process evaluation only |
+| MCP endpoint evaluation | `@grantex/mcp-auth@2.0.2` plus `@grantex/sdk@0.5.0` | Single-process evaluation only |
 | Terminal automation | `@grantex/cli` | Optional operational tooling |
 | Hermes, OpenClaw, or another shell-capable agent | Published `@grantex/cli@0.3.0` plus the bundled Agent Skills | No agent-specific SDK required; enforce again at the protected service |
 | Framework-specific tools | Named Grantex adapter plus its primary SDK where required | Verify each package's registry status before pinning |
@@ -81,10 +82,10 @@ Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 Primary reproducible installs:
 
 ```bash
-npm install @grantex/sdk@0.4.1
-npm install @grantex/x402@0.2.0 @grantex/sdk@0.4.1
-python -m pip install grantex==0.3.14
-go get github.com/mishrasanjeev/grantex-go@v0.1.10
+npm install @grantex/sdk@0.5.0
+npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0
+python -m pip install grantex==0.4.0
+go get github.com/mishrasanjeev/grantex-go@v0.2.0
 npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.4.1
 npm install -g @grantex/cli@0.3.0
 ```
@@ -113,17 +114,12 @@ An agent-controlled CLI check is a preflight, not an authorization boundary. The
 
 ## Known Current-Release Limitations
 
-### Go SDK v0.1.10
+### External wallet dependencies
 
-- `Agent.ID` expects `id` while the API returns `agentId`; derive it from the DID.
-- Registration sends optional zero values; updates cannot set status or clear scopes. Provide fields and use REST for those updates.
-- `LogAuditParams` omits required `agentDid` and `principalId`; use REST or CLI for audit writes.
-- `AuditEntry` omits `DeveloperID`; `Since`, `Until`, `Page`, and `PageSize` audit filters are ignored by the API.
-- Agent and audit list metadata is not returned; use slice lengths.
-- List helpers do not URL-encode reserved filter characters; avoid them or issue a `net/url`-encoded REST request.
-
-Repository source on `main` corrects these gaps, but no corrected Go module tag is published.
-- Guide: https://docs.grantex.dev/sdks/go/overview#known-v0110-limitations
+Grantex SDKs do not provide custody, KYC/KYB, sanctions screening, payment
+network controls, settlement, refunds, disputes, or reconciliation. External
+wallets remain fail-closed until an operator installs and validates an issuer or
+custody adapter.
 
 ### MCP Auth v2.0.2
 
@@ -241,7 +237,7 @@ def exchange_approved_code(code: str):
     return token, grant
 ```
 
-## Go Quickstart and v0.1.10 Workaround
+## Go Quickstart
 
 ```go
 package main
@@ -250,7 +246,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
 	grantex "github.com/mishrasanjeev/grantex-go"
 )
@@ -268,14 +263,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	const didPrefix = "did:grantex:"
-	if !strings.HasPrefix(agent.DID, didPrefix) {
-		log.Fatal("unexpected agent DID")
-	}
-	agentID := strings.TrimPrefix(agent.DID, didPrefix)
-
 	auth, err := client.Authorize(ctx, grantex.AuthorizeParams{
-		AgentID:     agentID,
+		AgentID:     agent.ID,
 		PrincipalID: "user_abc123",
 		Scopes:      []string{"calendar:read"},
 	})
@@ -285,8 +274,6 @@ func main() {
 	fmt.Println(auth.ConsentURL)
 }
 ```
-
-For Go v0.1.10 audit writes, call `POST /v1/audit/log` directly or use the CLI because the typed audit payload lacks two required fields.
 
 ## Token Verification and Revocation
 
@@ -415,7 +402,7 @@ MCP connects models to tools. Grantex carries and enforces the delegated authori
 
 ### Which SDK should I install?
 
-Use `@grantex/sdk@0.4.1` for TypeScript, `grantex==0.3.14` for Python, or `github.com/mishrasanjeev/grantex-go@v0.1.10` for Go. Read the machine release status before upgrading.
+Use `@grantex/sdk@0.5.0` for TypeScript, `grantex==0.4.0` for Python, or `github.com/mishrasanjeev/grantex-go@v0.2.0` for Go. Read the machine release status before upgrading.
 
 ### Does local verification check revocation?
 

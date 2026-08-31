@@ -53,6 +53,26 @@ describe('PrepaidWalletAgentClient', () => {
     expect(JSON.parse(String(init.body))).toEqual(params);
   });
 
+  it('returns an exact approval challenge and sends the approved retry context unchanged', async () => {
+    dpopFetch.mockResolvedValueOnce(response({
+      status: 'approval_required', approvalRequestId: 'wapr_1', walletId: 'pwal_1',
+      assignmentId: 'wasn_1', policyIds: ['wspol_1'], expiresAt: new Date().toISOString(),
+    }, 202));
+    const request: PrepaidAuthorizationRequest = {
+      walletId: 'pwal_1', amount: '2500', asset: 'USDC', network: 'grantex:prepaid',
+      recipient: 'merchant', resource: 'https://merchant.test/pay', scope: 'commerce:pay',
+      maxTimeoutSeconds: 300, idempotencyKey: 'approval-payment-000001', merchantId: 'org_merchant',
+      purpose: 'software', projectId: 'project-7', costCenter: 'engineering',
+    };
+    await expect(client.authorizePayment(request)).resolves.toMatchObject({ status: 'approval_required' });
+
+    dpopFetch.mockResolvedValueOnce(response({ authorization: 'approved-wallet-jwt' }, 201));
+    await client.authorizePayment({ ...request, approvalRequestId: 'wapr_1' });
+    expect(JSON.parse(String(dpopFetch.mock.calls[1]![2]!.body))).toEqual({
+      ...request, approvalRequestId: 'wapr_1',
+    });
+  });
+
   it('requests reloads and surfaces API errors without leaking response internals', async () => {
     dpopFetch.mockResolvedValueOnce(response({ reloadRequestId: 'wrel_1', status: 'pending' }, 201));
     expect(await client.requestReload('pwal/1', '5000', 'reload-request-00000001', 'low funds')).toMatchObject({ status: 'pending' });
@@ -71,6 +91,10 @@ describe('PrepaidWalletAgentClient', () => {
     expect(() => new PrepaidWalletAgentClient({
       oauthClient: { fetch: dpopFetch }, accessToken: 'token', resourceUrl: 'https://api.grantex.dev/v1/other',
     })).toThrow('must end with /v1/prepaid-wallets');
+    expect(() => new PrepaidWalletAgentClient({
+      oauthClient: { fetch: dpopFetch }, accessToken: 'token',
+      resourceUrl: 'http://api.example/v1/prepaid-wallets',
+    })).toThrow('must use HTTPS');
   });
 });
 
@@ -82,6 +106,15 @@ describe('PrincipalPrepaidWalletClient', () => {
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
     client = new PrincipalPrepaidWalletClient({ baseUrl: 'https://api.grantex.dev/', sessionToken: 'session-one' });
+  });
+
+  it('rejects insecure remote and credential-bearing base URLs', () => {
+    expect(() => new PrincipalPrepaidWalletClient({
+      baseUrl: 'http://api.example', sessionToken: 'session',
+    })).toThrow('must use HTTPS');
+    expect(() => new PrincipalPrepaidWalletClient({
+      baseUrl: 'https://user:password@api.example', sessionToken: 'session',
+    })).toThrow('must not contain credentials');
   });
 
   it('covers create, list, activity, assignment, block, reload, decision, funding, and release routes', async () => {
@@ -97,6 +130,14 @@ describe('PrincipalPrepaidWalletClient', () => {
       () => client.decideReload('wrel_1', 'approved'),
       () => client.fundReload('wrel_1'),
       () => client.releaseReservation('wres_1', 'merchant cancelled'),
+      () => client.createSpendPolicy({
+        name: 'Daily engineering cap', scopeType: 'group', scopeId: 'engineering', effect: 'limit',
+        maxAmount: '10000', windowType: 'calendar_day', onExceed: 'require_approval',
+      }),
+      () => client.listSpendPolicies(),
+      () => client.setSpendPolicyStatus('wspol_1', 'disabled'),
+      () => client.listPaymentApprovals(),
+      () => client.decidePaymentApproval('wapr_1', 'approved', 'Business owner approved'),
     ];
     for (const call of calls) {
       fetchMock.mockResolvedValueOnce(response({ wallets: [], ok: true }));
@@ -109,6 +150,7 @@ describe('PrincipalPrepaidWalletClient', () => {
     }
     expect(fetchMock.mock.calls.map(([, init]) => init?.method ?? 'GET')).toEqual([
       'POST', 'GET', 'GET', 'POST', 'PATCH', 'PATCH', 'PUT', 'POST', 'POST', 'POST', 'POST',
+      'POST', 'GET', 'PATCH', 'GET', 'POST',
     ]);
   });
 

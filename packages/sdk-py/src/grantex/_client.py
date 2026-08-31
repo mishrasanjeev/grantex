@@ -38,6 +38,7 @@ from .resources._credentials import CredentialsClient
 from .resources._passports import PassportsClient
 from .resources._dpdp import DpdpClient
 from .resources._commerce import CommerceClient
+from .prepaid_wallets import WalletSpendPoliciesClient
 from .manifest import ToolManifest, Permission, EnforceResult
 from ._verify import verify_grant_token
 from ._types import VerifyGrantTokenOptions
@@ -70,6 +71,7 @@ class Grantex:
     passports: PassportsClient
     dpdp: DpdpClient
     commerce: CommerceClient
+    wallet_spend_policies: WalletSpendPoliciesClient
 
     @property
     def last_rate_limit(self) -> RateLimit | None:
@@ -122,6 +124,7 @@ class Grantex:
         self.passports = PassportsClient(self._http)
         self.dpdp = DpdpClient(self._http)
         self.commerce = CommerceClient(self._http)
+        self.wallet_spend_policies = WalletSpendPoliciesClient(self._http)
         self._manifests: dict[str, ToolManifest] = {}
         self._jwks_uri = f"{base_url.rstrip('/')}/.well-known/jwks.json"
 
@@ -359,7 +362,6 @@ class Grantex:
                 grant_token=lambda: state["grant_token"],
             )
         """
-        from typing import Callable as _Callable
         grantex = self
 
         original_run = getattr(tool, '_run', None)

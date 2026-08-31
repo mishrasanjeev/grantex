@@ -6,11 +6,11 @@ wallets, plus legacy standalone GDT authorization utilities.
 ## Install
 
 ```bash
-npm install @grantex/x402@0.2.0 @grantex/sdk@0.4.1
+npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0
 ```
 
-Managed prepaid-wallet APIs require `@grantex/x402` 0.2.0 or later and
-`@grantex/sdk` 0.4.0 or later.
+Layered policy, semantic payment context, and exact approval retry require
+`@grantex/x402` 0.3.0 or later and `@grantex/sdk` 0.5.0 or later.
 
 ## Production hosting dependencies
 
@@ -37,7 +37,7 @@ runbook.
 
 ```ts
 import { PrepaidWalletAgentClient } from '@grantex/sdk';
-import { createX402Agent } from '@grantex/x402';
+import { createX402Agent, PrepaidPaymentApprovalRequiredError } from '@grantex/x402';
 
 const walletAgent = new PrepaidWalletAgentClient({
   oauthClient,          // OAuthAgentClient configured for /v1/prepaid-wallets
@@ -88,14 +88,24 @@ The Grantex prepaid scheme is `exact` on `grantex:prepaid`:
     "asset": "USDC",
     "payTo": "merchant:data-api",
     "maxTimeoutSeconds": 120,
-    "extra": { "grantexScope": "data:read" }
+    "extra": {
+      "grantexScope": "data:read",
+      "grantexContext": {
+        "merchantId": "merchant:data-api",
+        "purpose": "research",
+        "projectId": "project-7",
+        "costCenter": "engineering"
+      }
+    }
   }]
 }
 ```
 
 `amount` is an atomic-unit integer string. `maxTimeoutSeconds` must be 1-300.
 The wallet service is authoritative for asset, recipient, scope, available
-balance, per-transaction limit, rolling cumulative limit, and principal blocks.
+balance, assignment limits, layered amount/count policy, exact approval, and
+principal blocks. Issuer/custodian KYC, custody, network, settlement, fraud,
+dispute, and reconciliation controls remain separate requirements.
 
 ## API
 
@@ -114,6 +124,24 @@ await agent.fetch(url, {
   method: 'POST',
   body: JSON.stringify(payload),
 });
+```
+
+If policy requires a human exception, `fetch` throws
+`PrepaidPaymentApprovalRequiredError`. After the principal approves it, retry
+the exact request:
+
+```ts
+try {
+  await agent.fetch(url, { idempotencyKey: durableLogicalOrderId });
+} catch (error) {
+  if (!(error instanceof PrepaidPaymentApprovalRequiredError)) throw error;
+  await waitForPrincipal(error.approval.approvalRequestId);
+  await agent.fetch(url, {
+    walletId: error.approval.walletId,
+    idempotencyKey: error.idempotencyKey,
+    approvalRequestId: error.approval.approvalRequestId,
+  });
+}
 ```
 
 Per-request `walletId` and `idempotencyKey` are SDK options and are never
@@ -140,9 +168,10 @@ HEADERS.PAYMENT_RESPONSE;
 ## Principal controls
 
 Use `PrincipalPrepaidWalletClient` from `@grantex/sdk` to create/fund wallets,
-assign one or many wallets to agents, set per-transaction and rolling caps,
-allow recipients/scopes, approve reload requests, release reservations, and
-block an assignment, a wallet, or all of one agent's wallets.
+assign one or many wallets to agents, set safe-default assignment controls,
+manage layered assignment/wallet/agent/group/principal policies, approve exact
+payments and reloads, release reservations, and block an assignment, a wallet,
+or all of one agent's wallets.
 
 `sandbox_ledger` is complete local/off-chain accounting. `external` custody
 records fail closed until a provider adapter is installed; arbitrary provider

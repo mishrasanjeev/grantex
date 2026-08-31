@@ -177,7 +177,8 @@ export async function validateSeoAeo(options = {}) {
       'go-query-encoding',
     ]);
     const actualGo = new Set((goSdk?.limitations || []).map((item) => item.id));
-    if (actualGo.size !== expectedGo.size || [...expectedGo].some((id) => !actualGo.has(id))) {
+    if (goSdk?.version === 'v0.1.10'
+      && (actualGo.size !== expectedGo.size || [...expectedGo].some((id) => !actualGo.has(id)))) {
       failures.push('release-status.json must publish all six Go SDK v0.1.10 limitations');
     }
   }
