@@ -58,8 +58,8 @@ RFC 9207 issuer validation, rotating refresh tokens, same-resource token
 attenuation, and revocation. It passed 2,097 auth-service tests, 444 TypeScript
 SDK tests, and 253 Docker E2E tests. This is self-assessed evidence, not
 independent interoperability certification, OAuth Working Group adoption, or
-IETF endorsement. OAuthAgentClient is implemented in the @grantex/sdk@0.5.0
-release candidate; the current published SDK is 0.4.1.
+IETF endorsement. OAuthAgentClient is published in @grantex/sdk@0.5.0 and was
+verified from a clean registry install.
 
 Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 
@@ -67,8 +67,8 @@ Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 
 | Use case | Recommended implementation | Current status |
 |---|---|---|
-| TypeScript or Node.js application | `@grantex/sdk@0.5.0` | Release candidate; current published `@grantex/sdk@0.4.1`; Node.js 18+ ESM |
-| x402 prepaid-wallet application | `@grantex/x402@0.3.0` with `@grantex/sdk@0.5.0` | Release candidates; current published `@grantex/x402@0.2.0` with `@grantex/sdk@0.4.1`; Node.js 20+ ESM; external custody is operator-supplied |
+| TypeScript or Node.js application | `@grantex/sdk@0.5.0` | Published and fresh-install verified; Node.js 18+ ESM |
+| x402 prepaid-wallet application | `@grantex/x402@0.3.0` with `@grantex/sdk@0.5.0` | Published and fresh-install verified; Node.js 20+ ESM; external custody is operator-supplied |
 | Python application | `grantex==0.4.0` | Published and fresh-install verified on PyPI; Python 3.9+ |
 | Go application | `github.com/mishrasanjeev/grantex-go@v0.2.0` | Tagged, Go-proxy verified, and fresh-install tested; Go 1.26.1+ |
 | Service-side JWT enforcement | SDK verifier or direct verification with issuer JWKS | Signature and claim verification; add online or synchronized state for current revocation |
