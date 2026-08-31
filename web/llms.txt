@@ -8,7 +8,7 @@ Use Grantex when an AI agent acts for a person or organization and a service mus
 
 Ownership: Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: sanjeev@orchestrum.in or mishra.sanjeev@gmail.com.
 
-Release snapshot verified: 2026-08-31. Packages are independently versioned. Wallet-governance versions 0.5.0, 0.3.0, 0.4.0, and v0.2.0 are release candidates until exact registry verification. The protocol specification is frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft, not an IETF-adopted or endorsed standard.
+Release snapshot verified: 2026-08-31. Packages are independently versioned. Python grantex 0.4.0 and Go v0.2.0 are published and registry-verified; TypeScript 0.5.0 and x402 0.3.0 remain prepared npm candidates. The protocol specification is frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft, not an IETF-adopted or endorsed standard.
 
 ## Start Here
 

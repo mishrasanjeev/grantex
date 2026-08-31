@@ -32,6 +32,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Commerce, SCIM Bearer data-plane, admin, and other custom-auth routes remain outside these plan buckets.
 
 ### Changed
+- Published Python SDK `grantex==0.4.0` to PyPI and Go SDK `v0.2.0` to the
+  standalone Go module on 2026-08-31; verified both from clean registry
+  installs, including the layered prepaid-wallet governance clients.
 - Published `@grantex/sdk@0.4.0`, corrective `@grantex/sdk@0.4.1`, and `@grantex/x402@0.2.0` to npm on 2026-08-30; registry-smoke-tested the prepaid-wallet exports, corrected SDK runtime identifier, x402 exports, and `grantex-x402` CLI.
 - Replaced the x402 client's simulated custom payment-proof flow with official x402 v2 `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` handling. The standalone GDT APIs remain available but are now documented as authorization context rather than durable cumulative spend enforcement.
 - Published TypeScript SDK 0.3.13, Python SDK 0.3.14, and Go SDK v0.1.10 on 2026-07-11; synchronized the public release snapshot across the landing page, README, compatibility matrix, and SDK documentation.

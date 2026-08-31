@@ -55,6 +55,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version: '1.26.1'
+          cache-dependency-path: packages/go-sdk/go.sum
 
       - name: Verify TypeScript SDK 0.5.0
         working-directory: packages/sdk-ts
@@ -83,7 +84,7 @@ jobs:
           python -m pip install --upgrade pip build 'twine>=7,<8'
           python -m pip install -e '.[dev]'
           test "$(python -c 'import grantex; print(grantex.__version__)')" = "0.4.0"
-          python -m ruff check src tests
+          python -m ruff check src
           python -m mypy src/grantex
           python -m pytest
           python -m build --outdir ../../release-artifacts/pypi

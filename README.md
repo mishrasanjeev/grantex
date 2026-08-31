@@ -104,12 +104,14 @@ See [Agent Wallet Governance](docs/guides/agent-wallet-governance.mdx) for the
 complete responsibility matrix, policy composition, exact approval protocol,
 and honest residual gap list.
 
-The managed clients are implemented in the `@grantex/sdk@0.5.0`,
-`@grantex/x402@0.3.0`, Python `grantex==0.4.0`, and Go `v0.2.0` release
-candidates. Use the prior published versions until the exact candidate is
-registry-verified. See the [x402 integration guide](docs/integrations/x402.mdx),
-[wallet lifecycle](docs/features/prepaid-wallets.mdx), and
-[production-readiness guide](docs/guides/prepaid-wallet-production.mdx).
+The managed clients are implemented in `@grantex/sdk@0.5.0`,
+`@grantex/x402@0.3.0`, Python `grantex==0.4.0`, and Go `v0.2.0`. Python and Go
+are registry-verified published releases; the TypeScript and x402 versions
+remain prepared npm candidates, so use their prior published versions until
+the exact candidates are registry-verified. See the [x402 integration
+guide](docs/integrations/x402.mdx), [wallet
+lifecycle](docs/features/prepaid-wallets.mdx), and [production-readiness
+guide](docs/guides/prepaid-wallet-production.mdx).
 
 ### Self-hosted prepaid-wallet dependencies
 
@@ -133,9 +135,9 @@ real-money product. Self-hosting operators must explicitly provide and test:
 - independent security, provider, reconciliation, incident-response, and
   applicable legal/regulatory review.
 
-The server deployment and npm release are separate. Registry consumers should
-verify the candidate versions in the registry before installing them rather
-than inferring availability from repository manifests. The
+The server deployment and each SDK release are separate. Registry consumers
+should verify an exact version before installing it rather than inferring
+availability from repository manifests. The
 [production-readiness guide](docs/guides/prepaid-wallet-production.mdx) contains
 the full hosting checklist and a maintainer-only PowerShell publication runbook.
 
@@ -1563,8 +1565,8 @@ check its registry page and compatibility notes before choosing a version.
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | Published package |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | Published package |
 | **TypeScript SDK** | `@grantex/sdk` (`0.5.0`) | Install after registry verification | Layered-wallet release candidate; current published version is `0.4.1` |
-| **Python SDK** | `grantex` (`0.4.0`) | Install after registry verification | Wallet-governance release candidate; current published version is `0.3.14` |
-| **Go SDK** | `grantex-go` (`v0.2.0`, Go 1.26.1+) | Install after proxy verification | Wallet-governance release candidate; current published version is `v0.1.10` |
+| **Python SDK** | `grantex` (`0.4.0`) | `python -m pip install grantex==0.4.0` | Registry-verified wallet-governance release |
+| **Go SDK** | `grantex-go` (`v0.2.0`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.2.0` | Proxy-verified wallet-governance release |
 | **CLI** | `@grantex/cli` (`0.3.0`) | `npm install -g @grantex/cli@0.3.0` | Registry-verified published package |
 | **Hermes Agent** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target hermes` | Published in 0.3.0; no dedicated SDK needed |
 | **OpenClaw** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target openclaw` | Published in 0.3.0; no dedicated SDK needed |
@@ -1576,8 +1578,8 @@ check its registry page and compatibility notes before choosing a version.
 | **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | Source present; verify registry before pinning |
 | **x402 Payment Protocol** | `@grantex/x402` (`0.3.0`) | Install after registry verification | Layered x402 v2 release candidate; current published version is `0.2.0`; external custody remains operator-supplied |
 
-The guarded `publish-primary-sdks.yml` workflow builds and tests each candidate
-once, then publishes those immutable artifacts. Before it can publish, a
+The guarded `publish-primary-sdks.yml` workflow builds and tests each prepared
+version once, then publishes those immutable artifacts. Before it can publish, a
 maintainer must configure the protected `sdk-release` GitHub environment, npm
 trusted-publisher records for both npm packages, a PyPI trusted publisher for
 `grantex`, and a narrowly scoped Go-repository release token. A manifest version

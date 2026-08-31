@@ -18,14 +18,15 @@ repository.
 | CLI | `@grantex/cli@0.3.0` | Published to npm with bundled Agent Skills | Node.js 18+; ESM |
 | TypeScript SDK | `@grantex/sdk@0.5.0` | Release candidate; current published release is `0.4.1` | Node.js 18+; ESM |
 | x402 Payment Protocol | `@grantex/x402@0.3.0` | Release candidate; current published release is `0.2.0`; external custody remains operator-supplied | Node.js 20+; ESM |
-| Python SDK | `grantex==0.4.0` | Release candidate; current published release is `0.3.14` | Python 3.9+ |
-| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.2.0` | Release candidate; current published release is `v0.1.10` | Go 1.26.1+ |
+| Python SDK | `grantex==0.4.0` | Published to PyPI and fresh-install verified | Python 3.9+ |
+| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.2.0` | Tagged, Go-proxy verified, and fresh-install tested | Go 1.26.1+ |
 | MCP Auth server | `@grantex/mcp-auth@2.0.2` | Published with known limitations | Node.js 18+; ESM |
 | OpenAPI contract | `0.5.0` | Repository contract with layered prepaid-wallet governance | Independent of public SDK versions |
 
 <Note>
-The four primary wallet SDK candidates must be independently registry-verified
-after publication. Installing them does not provision external
+The TypeScript and x402 wallet SDKs remain prepared npm candidates. Python
+`0.4.0` and Go `v0.2.0` were independently registry-verified after publication.
+Installing any SDK does not provision external
 custody, principal notification delivery, or merchant idempotency storage; see
 [Prepaid Wallet Production Readiness](/guides/prepaid-wallet-production).
 </Note>
@@ -42,8 +43,10 @@ custody, principal notification delivery, or merchant idempotency storage; see
   As of August 10, 2026, published `@grantex/cli@0.3.0` includes the Hermes,
   OpenClaw, and portable Agent Skills installer. Repository source on `main`
   includes corrected Go Agent/Audit read/write contracts and layered prepaid
-  wallet clients across TypeScript, Python, and Go. Standard developer API-key
-  plan throughput and custom-auth quotas remain separate from SDK publication.
+  wallet clients across TypeScript, Python, and Go. Python `0.4.0` and Go
+  `v0.2.0` are now published; the TypeScript and x402 candidates remain pending
+  on npm. Standard developer API-key plan throughput and custom-auth quotas
+  remain separate from SDK publication.
 </Info>
 
 ## Which Grantex package should I use?
@@ -51,8 +54,8 @@ custody, principal notification delivery, or merchant idempotency storage; see
 - **Hermes, OpenClaw, or another shell-capable agent:** use published `@grantex/cli@0.3.0`; install its bundled skills with `grantex agent install`. No agent-specific SDK is required.
 - **TypeScript application:** use published `@grantex/sdk@0.4.1` until candidate `0.5.0` is registry-verified.
 - **x402 prepaid-wallet application:** use published `@grantex/x402@0.2.0` with `@grantex/sdk@0.4.1` until candidates `0.3.0` and `0.5.0` are registry-verified; keep external custody disabled until an operator adapter passes review.
-- **Python application:** use published `grantex==0.3.14` until candidate `0.4.0` is registry-verified.
-- **Go application:** use published `github.com/mishrasanjeev/grantex-go@v0.1.10` until candidate `v0.2.0` is proxy-verified.
+- **Python application:** use published `grantex==0.4.0`; it includes developer, principal, and ES256 DPoP agent wallet clients.
+- **Go application:** use proxy-verified `github.com/mishrasanjeev/grantex-go@v0.2.0`; it includes corrected Agent/Audit contracts and layered wallet clients.
 - **MCP HTTP transport authorization:** use an established MCP-compatible authorization server and maintained MCP SDK that implement the current MCP authorization specification.
 - **Agent-specific MCP tool enforcement:** after transport authorization, use a primary Grantex SDK or direct JWKS validation at each tool boundary. Treat `@grantex/mcp-auth@2.0.2` as single-process evaluation software.
 - **Current revocation:** local JWT verification is insufficient by itself; perform an online state check or synchronize revocation data.
@@ -85,12 +88,12 @@ npm install @grantex/sdk@0.4.1
 npm install @grantex/x402@0.2.0 @grantex/sdk@0.4.1
 ```
 
-```bash Python (current published)
-python -m pip install grantex==0.3.14
+```bash Python
+python -m pip install grantex==0.4.0
 ```
 
-```bash Go (current published)
-go get github.com/mishrasanjeev/grantex-go@v0.1.10
+```bash Go
+go get github.com/mishrasanjeev/grantex-go@v0.2.0
 ```
 
 ```bash MCP Auth
