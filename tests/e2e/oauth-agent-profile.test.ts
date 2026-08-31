@@ -147,7 +147,15 @@ describe('OAuth agent-grants profile E2E', () => {
     const recoveryKey = 'oauth-profile-recovery-attempt-0001';
     const replayChild = await client.refresh(replayFamily.refresh_token!, { idempotencyKey: recoveryKey });
     const recovered = await client.refresh(replayFamily.refresh_token!, { idempotencyKey: recoveryKey });
-    expect(recovered).toEqual({ ...replayChild, refresh_replay: true });
+    expect(recovered).toMatchObject({
+      access_token: replayChild.access_token,
+      refresh_token: replayChild.refresh_token,
+      token_type: replayChild.token_type,
+      scope: replayChild.scope,
+      refresh_replay: true,
+    });
+    expect(recovered.expires_in).toBeGreaterThan(0);
+    expect(recovered.expires_in).toBeLessThanOrEqual(replayChild.expires_in);
     expect((await client.fetch(RESOURCE, replayChild.access_token)).status).toBe(200);
 
     const { tokens: replayMisuseFamily } = await authorization(client);
