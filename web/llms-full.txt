@@ -69,8 +69,8 @@ Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 |---|---|---|
 | TypeScript or Node.js application | `@grantex/sdk@0.5.0` | Release candidate; current published `@grantex/sdk@0.4.1`; Node.js 18+ ESM |
 | x402 prepaid-wallet application | `@grantex/x402@0.3.0` with `@grantex/sdk@0.5.0` | Release candidates; current published `@grantex/x402@0.2.0` with `@grantex/sdk@0.4.1`; Node.js 20+ ESM; external custody is operator-supplied |
-| Python application | `grantex==0.4.0` | Release candidate; current published `grantex==0.3.14`; Python 3.9+ |
-| Go application | `github.com/mishrasanjeev/grantex-go@v0.2.0` | Release candidate; current published `grantex-go@v0.1.10`; Go 1.26.1+ |
+| Python application | `grantex==0.4.0` | Published and fresh-install verified on PyPI; Python 3.9+ |
+| Go application | `github.com/mishrasanjeev/grantex-go@v0.2.0` | Tagged, Go-proxy verified, and fresh-install tested; Go 1.26.1+ |
 | Service-side JWT enforcement | SDK verifier or direct verification with issuer JWKS | Signature and claim verification; add online or synchronized state for current revocation |
 | MCP HTTP transport authorization | Established MCP-compatible authorization server and maintained MCP SDK | Follow the current MCP authorization specification; a Grantex SDK alone does not provide this layer |
 | Agent-specific enforcement in MCP tools | Primary Grantex SDK or direct JWKS-backed validation | Add after transport authorization when the tool must verify delegated agent authority |
