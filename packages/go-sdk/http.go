@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-const sdkVersion = "0.1.10"
+const sdkVersion = "0.2.0"
 
 func parseRateLimitHeaders(header http.Header) *RateLimit {
 	limitStr := header.Get("X-RateLimit-Limit")

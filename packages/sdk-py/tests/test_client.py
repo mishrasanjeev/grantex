@@ -1,7 +1,6 @@
 """Tests for the Grantex main client."""
 from __future__ import annotations
 
-import os
 
 import pytest
 import respx
@@ -95,7 +94,7 @@ def test_user_agent_header_sent() -> None:
         AuthorizeParams(agent_id="ag_01", user_id="u_01", scopes=[])
     )
     request = respx.calls[0].request
-    assert request.headers["user-agent"] == "grantex-python/0.3.14"
+    assert request.headers["user-agent"] == "grantex-python/0.4.0"
 
 
 @respx.mock

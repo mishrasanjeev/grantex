@@ -307,5 +307,9 @@ describe('GET /permissions', () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
     expect(res.body).toContain('Manage Permissions');
+    expect(res.body).toContain('Payment approvals');
+    expect(res.body).toContain('/v1/principal/prepaid-wallet-payment-approvals');
+    expect(res.body).toContain('Layered spend policies');
+    expect(res.body).toContain('/v1/principal/prepaid-wallet-spend-policies');
   });
 });

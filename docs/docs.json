@@ -79,6 +79,7 @@
             "group": "x402 Payment Protocol",
             "pages": [
               "features/prepaid-wallets",
+              "guides/agent-wallet-governance",
               "guides/prepaid-wallet-production",
               "features/x402-architecture",
               "features/x402-gdt-spec"

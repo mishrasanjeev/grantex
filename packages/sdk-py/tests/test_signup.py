@@ -29,7 +29,7 @@ def client() -> Grantex:
 
 @respx.mock
 def test_signup_happy_path() -> None:
-    route = respx.post("https://api.grantex.dev/v1/signup").mock(
+    respx.post("https://api.grantex.dev/v1/signup").mock(
         return_value=httpx.Response(201, json=MOCK_SIGNUP_RESPONSE)
     )
     result = Grantex.signup(SignupParams(name="Acme Corp"))

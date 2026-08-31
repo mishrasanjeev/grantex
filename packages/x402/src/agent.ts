@@ -36,15 +36,42 @@ export interface PrepaidAuthorizationRequest {
   scope: string;
   maxTimeoutSeconds: number;
   idempotencyKey: string;
+  approvalRequestId?: string;
+  merchantId?: string;
+  purpose?: string;
+  projectId?: string;
+  costCenter?: string;
 }
 
-export interface PrepaidAuthorizationResponse {
+export interface PrepaidAuthorization {
   authorization: string;
   reservationId: string;
   walletId: string;
   expiresAt: string;
   remainingAvailable: string;
   remainingCumulative: string;
+}
+
+export interface PrepaidApprovalRequired {
+  status: 'approval_required';
+  approvalRequestId: string;
+  walletId: string;
+  assignmentId: string;
+  policyIds: string[];
+  expiresAt: string;
+}
+
+export type PrepaidAuthorizationResponse = PrepaidAuthorization | PrepaidApprovalRequired;
+
+export class PrepaidPaymentApprovalRequiredError extends Error {
+  override readonly name = 'PrepaidPaymentApprovalRequiredError';
+
+  constructor(
+    readonly approval: PrepaidApprovalRequired,
+    readonly idempotencyKey: string,
+  ) {
+    super('Principal approval is required before this x402 payment can continue');
+  }
 }
 
 export interface X402AgentConfig {
@@ -68,6 +95,8 @@ export interface X402FetchOptions extends RequestInit {
    * response loss. Reuse it only for an identical logical payment.
    */
   idempotencyKey?: string;
+  /** Approved Grantex request returned by a prior PrepaidPaymentApprovalRequiredError. */
+  approvalRequestId?: string;
 }
 
 interface PaymentCreationContext {
@@ -89,6 +118,8 @@ class GrantexPrepaidScheme implements SchemeNetworkClient {
     private readonly authorizePayment: X402AgentConfig['authorizePayment'],
     private readonly walletId?: string,
     private readonly idempotencyKey?: string,
+    private readonly approvalRequestId?: string,
+    private readonly onApprovalRequired?: (error: PrepaidPaymentApprovalRequiredError) => void,
   ) {}
 
   async createPaymentPayload(x402Version: number, requirements: PaymentRequirements) {
@@ -109,9 +140,21 @@ class GrantexPrepaidScheme implements SchemeNetworkClient {
       ? extra['grantexScope']
       : undefined;
     if (!scope) throw new Error('x402 requirements must include extra.grantexScope');
+    const policyContext = extra && typeof extra['grantexContext'] === 'object'
+      && extra['grantexContext'] !== null && !Array.isArray(extra['grantexContext'])
+      ? extra['grantexContext'] as Record<string, unknown>
+      : {};
+    const contextValue = (name: string) => typeof policyContext[name] === 'string'
+      ? policyContext[name] as string
+      : undefined;
+    const merchantId = contextValue('merchantId');
+    const purpose = contextValue('purpose');
+    const projectId = contextValue('projectId');
+    const costCenter = contextValue('costCenter');
     const resource = this.#resources.get(requirements)?.url;
     if (!resource) throw new Error('x402 resource URL is unavailable during payment creation');
 
+    const idempotencyKey = this.idempotencyKey ?? randomUUID();
     const authorization = await this.authorizePayment({
       ...(this.walletId ? { walletId: this.walletId } : {}),
       amount: requirements.amount,
@@ -121,10 +164,19 @@ class GrantexPrepaidScheme implements SchemeNetworkClient {
       resource,
       scope,
       maxTimeoutSeconds: requirements.maxTimeoutSeconds,
-      idempotencyKey: this.idempotencyKey ?? randomUUID(),
+      idempotencyKey,
+      ...(this.approvalRequestId ? { approvalRequestId: this.approvalRequestId } : {}),
+      ...(merchantId ? { merchantId } : {}),
+      ...(purpose ? { purpose } : {}),
+      ...(projectId ? { projectId } : {}),
+      ...(costCenter ? { costCenter } : {}),
     });
-    if (!authorization || typeof authorization.authorization !== 'string'
-        || authorization.authorization.length === 0) {
+    if ('status' in authorization) {
+      const error = new PrepaidPaymentApprovalRequiredError(authorization, idempotencyKey);
+      this.onApprovalRequired?.(error);
+      throw error;
+    }
+    if (typeof authorization.authorization !== 'string' || authorization.authorization.length === 0) {
       throw new Error('Grantex authorization service returned an invalid wallet authorization');
     }
     return {
@@ -138,6 +190,7 @@ function prepaidClient(
   authorizePayment: X402AgentConfig['authorizePayment'],
   walletId?: string,
   idempotencyKey?: string,
+  approvalRequestId?: string,
 ) {
   if (idempotencyKey !== undefined
       && (idempotencyKey.trim().length < 16 || idempotencyKey.length > 256)) {
@@ -147,12 +200,40 @@ function prepaidClient(
   // authorization service. The generic x402 client's static $1/default-asset
   // cap cannot represent per-assignment rolling policies, so it is disabled
   // only for this registered network and replaced by the server decision.
-  return new x402Client()
+  let approvalError: PrepaidPaymentApprovalRequiredError | undefined;
+  const client = new x402Client()
     .setSpendControls({ allowedAssets: true, maxAmountPerPayment: false })
     .register(
       GRANTEX_PREPAID_NETWORK,
-      new GrantexPrepaidScheme(authorizePayment, walletId, idempotencyKey),
+      new GrantexPrepaidScheme(
+        authorizePayment,
+        walletId,
+        idempotencyKey,
+        approvalRequestId,
+        error => { approvalError = error; },
+      ),
     );
+  return {
+    client,
+    takeApprovalError() {
+      const error = approvalError;
+      approvalError = undefined;
+      return error;
+    },
+  };
+}
+
+async function preserveApprovalError<T>(
+  request: Promise<T>,
+  takeApprovalError: () => PrepaidPaymentApprovalRequiredError | undefined,
+): Promise<T> {
+  try {
+    return await request;
+  } catch (error) {
+    const approvalError = takeApprovalError();
+    if (approvalError) throw approvalError;
+    throw error;
+  }
 }
 
 /** Build a fetch-compatible x402 v2 client backed by a Grantex prepaid wallet. */
@@ -160,18 +241,25 @@ export function createX402Agent(config: X402AgentConfig) {
   if (!config || typeof config.authorizePayment !== 'function') {
     throw new Error('createX402Agent requires authorizePayment; fake payment proofs are not supported');
   }
-  const client = prepaidClient(config.authorizePayment, config.walletId);
-  const paymentFetch = wrapFetchWithPayment(config.fetch ?? globalThis.fetch, client);
+  const baseClient = prepaidClient(config.authorizePayment, config.walletId);
+  const paymentFetch = wrapFetchWithPayment(config.fetch ?? globalThis.fetch, baseClient.client);
 
   return {
-    client,
+    client: baseClient.client,
     fetch(input: RequestInfo | URL, options: X402FetchOptions = {}) {
-      const { walletId, idempotencyKey, ...requestInit } = options;
-      if (idempotencyKey !== undefined || (walletId !== undefined && walletId !== config.walletId)) {
-        const requestClient = prepaidClient(config.authorizePayment, walletId ?? config.walletId, idempotencyKey);
-        return wrapFetchWithPayment(config.fetch ?? globalThis.fetch, requestClient)(input, requestInit);
+      const { walletId, idempotencyKey, approvalRequestId, ...requestInit } = options;
+      if (idempotencyKey !== undefined || approvalRequestId !== undefined
+          || (walletId !== undefined && walletId !== config.walletId)) {
+        const requestClient = prepaidClient(
+          config.authorizePayment, walletId ?? config.walletId, idempotencyKey, approvalRequestId,
+        );
+        const request = wrapFetchWithPayment(
+          config.fetch ?? globalThis.fetch,
+          requestClient.client,
+        )(input, requestInit);
+        return preserveApprovalError(request, requestClient.takeApprovalError);
       }
-      return paymentFetch(input, requestInit);
+      return preserveApprovalError(paymentFetch(input, requestInit), baseClient.takeApprovalError);
     },
   };
 }

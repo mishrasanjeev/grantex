@@ -166,11 +166,13 @@ rules.
 
 Migrations run **automatically on every startup**. The auth service reads all `*.sql` files from the `migrations/` directory and executes each one using idempotent DDL (`CREATE TABLE IF NOT EXISTS`, etc.).
 
-The repository currently contains ordered migrations through `091`, including
+The repository currently contains ordered migrations through `092`, including
 `091_agent_prepaid_wallets.sql` for wallet balances, assignments,
-reservations, reloads, controls, and append-only ledger evidence. Inspect the
-migration directory in the exact release you deploy rather than relying on a
-copied file count.
+reservations, reloads, controls, and append-only ledger evidence, and
+`092_layered_wallet_spend_controls.sql` for safe assignment defaults, layered
+policy, exact payment approval, reload velocity controls, and policy-decision
+evidence. Inspect the migration directory in the exact release you deploy
+rather than relying on a copied file count.
 
 To upgrade, just restart the service — new migration files are applied automatically.
 

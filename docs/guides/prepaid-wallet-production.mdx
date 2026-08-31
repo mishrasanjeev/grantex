@@ -13,9 +13,9 @@ recovery store, notification channel, or regulatory approval for the operator.
 
 | Dependency | Required when | Current repository behavior | Operator action |
 | --- | --- | --- | --- |
-| PostgreSQL migration `091_agent_prepaid_wallets.sql` | Always | Startup applies ordered migrations automatically | Back up PostgreSQL, deploy the exact repository migration set, and verify startup completed before sending traffic |
+| PostgreSQL migrations `091_agent_prepaid_wallets.sql` and `092_layered_wallet_spend_controls.sql` | Always | Startup applies ordered migrations automatically | Back up PostgreSQL, deploy the exact repository migration set, and verify startup completed before sending traffic |
 | Public HTTPS routing | The issuer or wallet resource uses a public host | DPoP tokens bind the exact `/v1/prepaid-wallets` audience | Route the exact public wallet and OAuth paths to the auth service; do not rewrite them to static HTML |
-| `@grantex/sdk@0.4.1` and `@grantex/x402@0.2.0` | Applications install managed-wallet clients from npm | Both packages are registry-verified; npm publication remains separate from server deployment | Pin these exact versions, then complete the server, custody, notification, and merchant dependencies below |
+| `@grantex/sdk@0.5.0` and `@grantex/x402@0.3.0` | Applications install managed-wallet clients from npm | These are repository release candidates; npm publication remains separate from server deployment | Keep using published `0.4.1` and `0.2.0` until the exact candidate versions are registry-verified, then complete the server, custody, notification, and merchant dependencies below |
 | External custody adapter | Real bank, card, on-chain, or provider-held funds | `external` wallets fail with `503 CUSTODY_ADAPTER_UNAVAILABLE` | Implement and independently test provider funding, reservation, settlement, reconciliation, duplicate-event handling, and recovery |
 | Principal notification bridge | A human must receive reload alerts outside the Grantex UI | Wallet reload events are emitted to the event bus; no built-in email/SMS/chat delivery is claimed | Consume SSE/WebSocket events and deliver through an approved channel, or separately extend and test webhook registration for wallet events |
 | Merchant idempotency store | A paid request has side effects | Grantex makes reservation and settlement retries idempotent | Atomically store the merchant's business result under the caller's HTTP `Idempotency-Key` |
@@ -66,6 +66,9 @@ and API share one domain, explicitly forward at least:
 /v1/principal/prepaid-wallet-agents/**
 /v1/principal/prepaid-wallet-reload-requests/**
 /v1/principal/prepaid-wallet-reservations/**
+/v1/principal/prepaid-wallet-spend-policies/**
+/v1/principal/prepaid-wallet-payment-approvals/**
+/v1/prepaid-wallet-spend-policies/**
 /v1/x402/supported
 /v1/x402/verify
 /v1/x402/settle
@@ -99,8 +102,11 @@ if ($Authorize.StatusCode -ne 401 -or $Authorize.Content -notmatch 'INVALID_TOKE
 ## Preserve the financial evidence store
 
 Migration `091_agent_prepaid_wallets.sql` creates wallet, assignment,
-reservation, reload, control, and append-only ledger structures. Treat
-PostgreSQL as durable financial evidence:
+reservation, reload, control, and append-only ledger structures. Migration
+`092_layered_wallet_spend_controls.sql` adds safe assignment defaults, reload
+velocity controls, layered policy, exact payment approval, semantic reservation
+context, and append-only policy decisions. Treat PostgreSQL as durable financial
+evidence:
 
 - take and restore-test backups before and after migration;
 - run every auth-service instance against the same authoritative database;
@@ -116,8 +122,11 @@ remains the wallet system of record.
 ## Deliver reload notifications
 
 The service emits `wallet.low_balance`, `wallet.reload.requested`,
-`wallet.reload.approved`, `wallet.reload.rejected`, and `wallet.reloaded`
-events. Agents can request a reload but cannot approve or fund it.
+`wallet.reload.approved`, `wallet.reload.rejected`, `wallet.reloaded`,
+`wallet.payment.denied`, `wallet.payment.approval_required`,
+`wallet.payment.approval_approved`, `wallet.payment.approval_rejected`, and
+`wallet.spend_policy.changed` events. Agents can request a reload but cannot
+approve or fund it.
 
 There is no built-in promise that a reload request reaches email, SMS, Slack,
 WhatsApp, or another human channel. The current public webhook-registration API
@@ -156,9 +165,10 @@ npm view '@grantex/sdk' version
 npm view '@grantex/x402' version
 ```
 
-Verified August 30, 2026: repository source and the npm registry both provide
-SDK `0.4.1` and x402 `0.2.0`. Treat the registry as authoritative and pin exact
-versions. See [Release
+Release candidates prepared August 31, 2026: repository source provides SDK
+`0.5.0` and x402 `0.3.0`; registry publication is not inferred from the source
+tree. Treat the registry as authoritative and pin exact versions only after
+verification. See [Release
 Status](/release-status) for the public artifact matrix.
 
 ## Maintainer-only PowerShell publication
@@ -275,8 +285,63 @@ README, release documentation, and public website notices in one release PR.
 Do not describe the packages as published until the exact registry queries
 above succeed.
 
-For stronger future releases, configure npm trusted publishing from a dedicated
-GitHub Actions workflow with OIDC and provenance instead of maintaining a
+## Python and Go publication
+
+Python `0.4.0` must pass source import, Ruff, strict Mypy, Pytest, distribution
+build, and Twine metadata checks before upload:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path packages/sdk-py/src).Path
+python -m pip install --upgrade build twine
+python -m ruff check packages/sdk-py/src packages/sdk-py/tests
+python -m mypy packages/sdk-py/src/grantex
+python -m pytest packages/sdk-py/tests
+python -m build packages/sdk-py
+python -m twine check packages/sdk-py/dist/*
+python -m twine upload packages/sdk-py/dist/*
+
+$PyPI = Invoke-RestMethod 'https://pypi.org/pypi/grantex/0.4.0/json'
+if ($PyPI.info.version -ne '0.4.0') { throw 'PyPI verification failed.' }
+```
+
+The Go module path is a separate repository,
+`github.com/mishrasanjeev/grantex-go`. Publishing requires copying the reviewed
+`packages/go-sdk` tree to that repository, rerunning `go test ./...`, committing
+the exact source, and pushing annotated tag `v0.2.0`. A tag in the Grantex
+monorepo does not publish that module.
+
+The guarded [Publish primary
+SDKs](https://github.com/mishrasanjeev/grantex/actions/workflows/publish-primary-sdks.yml)
+workflow tests and builds all four SDKs once, uploads immutable distributions,
+and makes publication jobs consume those exact artifacts. Before the first run:
+
+1. Create the GitHub `sdk-release` environment and require a human reviewer.
+2. On npm, configure trusted-publisher records for both `@grantex/sdk` and
+   `@grantex/x402` using repository `mishrasanjeev/grantex`, workflow
+   `publish-primary-sdks.yml`, environment `sdk-release`, and the npm publish
+   action. Do not add a long-lived npm token fallback.
+3. On PyPI, configure the `grantex` project's trusted publisher with the same
+   repository, workflow filename, and `sdk-release` environment.
+4. Add `GRANTEX_GO_RELEASE_TOKEN` to the environment with write access limited
+   to `mishrasanjeev/grantex-go`; do not use a broadly scoped account token.
+5. Protect `main` and the publication workflow through review and required CI.
+
+Run the workflow only from reviewed `main`, type `RELEASE_PRIMARY_SDKS`, and
+select the registries to publish. The workflow fails closed when trusted
+publishing or the Go credential is absent; a version bump is not evidence that
+a registry release exists.
+
+After publication, verify from empty temporary projects rather than importing
+the monorepo checkout:
+
+```powershell
+npm view '@grantex/sdk@0.5.0' version dist.integrity --json
+npm view '@grantex/x402@0.3.0' version dist.integrity --json
+python -m pip download --no-deps --dest $env:TEMP 'grantex==0.4.0'
+go list -m -json 'github.com/mishrasanjeev/grantex-go@v0.2.0'
+```
+
+The workflow uses npm trusted publishing with OIDC and provenance instead of a
 long-lived npm token. See npm's official [scoped public package
 publishing](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/)
 and [trusted publishing](https://docs.npmjs.com/trusted-publishers/)
@@ -285,7 +350,7 @@ documentation before changing the release mechanism.
 ## Go-live checklist
 
 - [ ] Exact repository commit and npm package versions are recorded.
-- [ ] Migration `091_agent_prepaid_wallets.sql` completed and backup restore was tested.
+- [ ] Migrations `091_agent_prepaid_wallets.sql` and `092_layered_wallet_spend_controls.sql` completed and backup restore was tested.
 - [ ] Public OAuth, wallet, principal, and x402 routes reach the auth service over TLS.
 - [ ] DPoP tokens use the exact public wallet audience.
 - [ ] `sandbox_ledger` or `external` custody behavior is described accurately to users.

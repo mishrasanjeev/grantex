@@ -5,18 +5,13 @@ Official Go SDK for the [Grantex](https://grantex.dev) delegated authorization p
 ## Installation
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go
+go get github.com/mishrasanjeev/grantex-go@v0.2.0
 ```
 
 Requires Go 1.26.1 or newer, matching the module's `go.mod` directive.
 
-> **Published vs. repository source:** `v0.1.10` still has documented Agent and
-> Audit read/write contract gaps, exposes unsupported audit filters and list
-> metadata, and does not URL-encode reserved query values. See the [Go SDK overview](../../docs/sdks/go/overview.mdx#known-v0110-limitations)
-> for exact workarounds. This checkout corrects those contracts,
-> supports status and explicit scope clearing, removes no-op filters, and adds
-> API-shaped and query-encoding regression fixtures, but no corrected module tag
-> has been published yet.
+Version `v0.2.0` includes corrected Agent and Audit API contracts plus developer,
+principal, and ES256 DPoP agent clients for layered prepaid-wallet governance.
 
 ## Quick Start
 
@@ -27,7 +22,6 @@ import (
     "context"
     "fmt"
     "log"
-    "strings"
 
     grantex "github.com/mishrasanjeev/grantex-go"
 )
@@ -46,16 +40,9 @@ func main() {
         log.Fatal(err)
     }
 
-    // v0.1.10 does not populate agent.ID, so derive it from the returned DID.
-    const agentDIDPrefix = "did:grantex:"
-    if !strings.HasPrefix(agent.DID, agentDIDPrefix) {
-        log.Fatalf("unexpected agent DID: %q", agent.DID)
-    }
-    agentID := strings.TrimPrefix(agent.DID, agentDIDPrefix)
-
     // Create authorization request
     authReq, err := client.Authorize(ctx, grantex.AuthorizeParams{
-        AgentID:     agentID,
+        AgentID:     agent.ID,
         PrincipalID: "user-123",
         Scopes:      []string{"read:email", "send:email"},
         Audience:    "https://mail-api.example.com",
@@ -68,7 +55,7 @@ func main() {
     // Exchange code for token (after user consents)
     tokenResp, err := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
         Code:    "authorization-code",
-        AgentID: agentID,
+        AgentID: agent.ID,
     })
     if err != nil {
         log.Fatal(err)
@@ -113,6 +100,53 @@ client := grantex.NewClient("api-key",
 | `client.Vault` | Store, List, Get, Delete, Exchange |
 | `client.DPDP` | Consent records/notices, grievances, erasure, principal records, exports |
 | `client.Commerce` | GetProfile, SearchCatalog, CreateCart, CreatePaymentIntent, CreateCheckoutLink, GetOpsHealth |
+| `client.WalletSpendPolicies` | Create, List, SetStatus for developer-level wallet policy |
+
+## Agent prepaid wallets (v0.2.0+)
+
+```go
+key, err := grantex.GenerateDPoPKey()
+if err != nil {
+    log.Fatal(err)
+}
+agentWallets, err := grantex.NewAgentPrepaidWalletClient(
+    accessToken,
+    key,
+    "https://grantex.dev/v1/prepaid-wallets",
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+authorization, err := agentWallets.AuthorizePayment(ctx, grantex.PrepaidAuthorizationRequest{
+    Amount:            "2500",
+    Asset:             "USDC",
+    Network:           "grantex:prepaid",
+    Recipient:         "merchant:data-api",
+    Resource:          "https://merchant.example/data",
+    Scope:             "data:read",
+    MerchantID:        "merchant:data-api",
+    Purpose:           "research",
+    MaxTimeoutSeconds: 120,
+    IdempotencyKey:    logicalPaymentID,
+})
+
+principal, err := grantex.NewPrincipalPrepaidWalletClient(sessionToken)
+if err != nil {
+    log.Fatal(err)
+}
+if authorization.Status == "approval_required" {
+    _, err = principal.DecidePaymentApproval(
+        ctx, authorization.ApprovalRequestID, "approved", "Exact request reviewed",
+    )
+}
+```
+
+The agent client creates a fresh ES256 DPoP proof bound to the access token,
+method, and exact URL. Principal methods cover wallets, safe-default assignment,
+reload controls, layered policies, exact approvals, activity, and stop controls.
+Grantex does not replace issuer KYC, sanctions, custody, network authorization,
+settlement, dispute, or reconciliation systems.
 
 ## Commerce V1 / OACP
 

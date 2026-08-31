@@ -60,7 +60,6 @@ def test_400_on_token_exchange(client: Grantex) -> None:
 
 @respx.mock
 def test_400_on_webhook_creation(client: Grantex) -> None:
-    from grantex import CreateWebhookParams
 
     respx.post(f"{BASE_URL}/v1/webhooks").mock(
         return_value=httpx.Response(
@@ -233,7 +232,6 @@ def test_404_on_webhook_delete(client: Grantex) -> None:
 
 @respx.mock
 def test_404_on_domain_delete(client: Grantex) -> None:
-    from grantex.resources._domains import CreateDomainParams
 
     respx.delete(f"{BASE_URL}/v1/domains/dom_nonexistent").mock(
         return_value=httpx.Response(
@@ -555,7 +553,6 @@ def test_write_timeout_raises_network_error(client: Grantex) -> None:
     respx.post(f"{BASE_URL}/v1/audit/log").mock(
         side_effect=httpx.WriteTimeout("Write timed out")
     )
-    from grantex import LogAuditParams
 
     with pytest.raises(GrantexNetworkError):
         client.audit.log(

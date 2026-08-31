@@ -1,7 +1,6 @@
 """Tests for UsageClient — current usage and history."""
 from __future__ import annotations
 
-import json
 
 import pytest
 import respx

@@ -3,8 +3,10 @@ import { config } from '../config.js';
 import { getSql } from '../db/client.js';
 import { checkActiveOAuthAccessToken } from '../lib/active-grant-token.js';
 import { DpopError, verifyDpopProof } from '../lib/dpop.js';
+import { emitEvent, type EventType } from '../lib/events.js';
 import {
   PrepaidWalletError,
+  applyWalletSpendPolicyMutation,
   assignWallet,
   createPrepaidWallet,
   createPrincipalReload,
@@ -26,6 +28,15 @@ import {
   type PaymentRequirementsBinding,
 } from '../lib/prepaid-wallet.js';
 import { requirePrincipalSession, type AuthenticatedPrincipal } from '../lib/principal-auth.js';
+import {
+  WalletSpendPolicyError,
+  createWalletSpendPolicy,
+  decideWalletPaymentApproval,
+  listWalletPaymentApprovals,
+  listWalletSpendPolicies,
+  setWalletSpendPolicyStatus,
+  type WalletSpendPolicyInput,
+} from '../lib/wallet-spend-policy.js';
 
 const OAUTH_PROTOCOL = 'oauth-agent-grants-03';
 const WALLET_RESOURCE_PATH = '/v1/prepaid-wallets';
@@ -34,6 +45,10 @@ const X402_SCHEME = 'exact';
 const X402_NETWORK = 'grantex:prepaid';
 
 type Body = Record<string, unknown>;
+
+async function notify(developerId: string, type: EventType, data: Record<string, unknown>) {
+  await emitEvent(developerId, type, data).catch(() => undefined);
+}
 
 function endpoint(path: string): string {
   return `${config.publicBaseUrl.replace(/\/$/, '')}${path}`;
@@ -45,6 +60,13 @@ function requestTarget(request: FastifyRequest): string {
 
 function sendWalletError(reply: FastifyReply, request: FastifyRequest, error: unknown) {
   if (error instanceof PrepaidWalletError) {
+    return reply.status(error.statusCode).send({
+      message: error.message,
+      code: error.code,
+      requestId: request.id,
+    });
+  }
+  if (error instanceof WalletSpendPolicyError) {
     return reply.status(error.statusCode).send({
       message: error.message,
       code: error.code,
@@ -152,6 +174,63 @@ function optionalString(body: Body | null | undefined, name: string): string | u
   return value;
 }
 
+function optionalBoolean(body: Body | null | undefined, name: string): boolean | undefined {
+  const value = body?.[name];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'boolean') {
+    throw new PrepaidWalletError(400, 'INVALID_REQUEST', `${name} must be a boolean`);
+  }
+  return value;
+}
+
+function optionalNumber(body: Body | null | undefined, name: string): number | undefined {
+  const value = body?.[name];
+  if (value === undefined) return undefined;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new PrepaidWalletError(400, 'INVALID_REQUEST', `${name} must be a finite number`);
+  }
+  return value;
+}
+
+function optionalStringArray(body: Body | null | undefined, name: string): string[] | undefined {
+  const value = body?.[name];
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw new PrepaidWalletError(400, 'INVALID_REQUEST', `${name} must be a string array`);
+  }
+  return value as string[];
+}
+
+function spendPolicyInput(body: Body): WalletSpendPolicyInput {
+  const optionalLists = [
+    'recipients', 'resourceOrigins', 'actionScopes', 'assets', 'networks',
+    'merchantIds', 'purposes', 'projectIds', 'costCenters',
+  ] as const;
+  const input: WalletSpendPolicyInput = {
+    name: requiredString(body, 'name'),
+    scopeType: requiredString(body, 'scopeType') as WalletSpendPolicyInput['scopeType'],
+    effect: requiredString(body, 'effect') as WalletSpendPolicyInput['effect'],
+  };
+  const optionalStrings = ['description', 'scopeId', 'onExceed', 'maxAmount', 'windowType', 'validFrom', 'validUntil'] as const;
+  for (const key of optionalStrings) {
+    const value = optionalString(body, key);
+    if (value !== undefined) Object.assign(input, { [key]: value });
+  }
+  for (const key of optionalLists) {
+    const value = optionalStringArray(body, key);
+    if (value !== undefined) Object.assign(input, { [key]: value });
+  }
+  const maxCount = optionalNumber(body, 'maxCount');
+  const windowSeconds = optionalNumber(body, 'windowSeconds');
+  const priority = optionalNumber(body, 'priority');
+  const requireVerifiedMerchant = optionalBoolean(body, 'requireVerifiedMerchant');
+  if (maxCount !== undefined) input.maxCount = maxCount;
+  if (windowSeconds !== undefined) input.windowSeconds = windowSeconds;
+  if (priority !== undefined) input.priority = priority;
+  if (requireVerifiedMerchant !== undefined) input.requireVerifiedMerchant = requireVerifiedMerchant;
+  return input;
+}
+
 function record(value: unknown, name: string): Body {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new PrepaidWalletError(400, 'INVALID_REQUEST', `${name} must be an object`);
@@ -184,6 +263,13 @@ function x402Binding(value: unknown): { token: string; binding: PaymentRequireme
   const resource = record(payload['resource'], 'paymentPayload.resource');
   const schemePayload = record(payload['payload'], 'paymentPayload.payload');
   const extra = record(requirements['extra'], 'paymentRequirements.extra');
+  const context = extra['grantexContext'] === undefined
+    ? {}
+    : record(extra['grantexContext'], 'paymentRequirements.extra.grantexContext');
+  const merchantId = optionalString(context, 'merchantId');
+  const purpose = optionalString(context, 'purpose');
+  const projectId = optionalString(context, 'projectId');
+  const costCenter = optionalString(context, 'costCenter');
   return {
     token: requiredString(schemePayload, 'authorization'),
     binding: {
@@ -194,6 +280,10 @@ function x402Binding(value: unknown): { token: string; binding: PaymentRequireme
       resource: requiredString(resource, 'url'),
       scope: requiredString(extra, 'grantexScope'),
       maxTimeoutSeconds: requirements['maxTimeoutSeconds'] as number,
+      ...(merchantId !== undefined ? { merchantId } : {}),
+      ...(purpose !== undefined ? { purpose } : {}),
+      ...(projectId !== undefined ? { projectId } : {}),
+      ...(costCenter !== undefined ? { costCenter } : {}),
     },
   };
 }
@@ -226,6 +316,11 @@ export async function prepaidWalletRoutes(app: FastifyInstance): Promise<void> {
       const providerWalletId = optionalString(request.body, 'providerWalletId');
       const walletAddress = optionalString(request.body, 'walletAddress');
       const lowBalanceThreshold = optionalString(request.body, 'lowBalanceThreshold');
+      const maxBalance = optionalString(request.body, 'maxBalance');
+      const maxReloadAmount = optionalString(request.body, 'maxReloadAmount');
+      const reloadCumulativeLimit = optionalString(request.body, 'reloadCumulativeLimit');
+      const reloadPeriodSeconds = optionalNumber(request.body, 'reloadPeriodSeconds');
+      const reloadCountLimit = optionalNumber(request.body, 'reloadCountLimit');
       const wallet = await createPrepaidWallet(getSql(), owner, {
         name: requiredString(request.body, 'name'),
         custodyMode: requiredString(request.body, 'custodyMode') as 'sandbox_ledger' | 'external',
@@ -236,6 +331,11 @@ export async function prepaidWalletRoutes(app: FastifyInstance): Promise<void> {
         ...(walletAddress !== undefined ? { walletAddress } : {}),
         ...(request.body['decimals'] !== undefined ? { decimals: request.body['decimals'] as number } : {}),
         ...(lowBalanceThreshold !== undefined ? { lowBalanceThreshold } : {}),
+        ...(maxBalance !== undefined ? { maxBalance } : {}),
+        ...(maxReloadAmount !== undefined ? { maxReloadAmount } : {}),
+        ...(reloadCumulativeLimit !== undefined ? { reloadCumulativeLimit } : {}),
+        ...(reloadPeriodSeconds !== undefined ? { reloadPeriodSeconds } : {}),
+        ...(reloadCountLimit !== undefined ? { reloadCountLimit } : {}),
         ...(request.body['metadata'] !== undefined ? { metadata: record(request.body['metadata'], 'metadata') } : {}),
       });
       return reply.status(201).send(wallet);
@@ -269,6 +369,10 @@ export async function prepaidWalletRoutes(app: FastifyInstance): Promise<void> {
     if (!owner) return;
     try {
       const validUntil = optionalString(request.body, 'validUntil');
+      const allowAnyRecipient = optionalBoolean(request.body, 'allowAnyRecipient');
+      const allowAnyScope = optionalBoolean(request.body, 'allowAnyScope');
+      const allowAnyResource = optionalBoolean(request.body, 'allowAnyResource');
+      const budgetGroup = optionalString(request.body, 'budgetGroup');
       const assignment = await assignWallet(getSql(), owner, {
         walletId: request.params.walletId,
         agentId: requiredString(request.body, 'agentId'),
@@ -277,6 +381,11 @@ export async function prepaidWalletRoutes(app: FastifyInstance): Promise<void> {
         cumulativePeriodSeconds: request.body['cumulativePeriodSeconds'] as number,
         ...(request.body['allowedRecipients'] !== undefined ? { allowedRecipients: request.body['allowedRecipients'] as string[] } : {}),
         ...(request.body['allowedScopes'] !== undefined ? { allowedScopes: request.body['allowedScopes'] as string[] } : {}),
+        ...(request.body['allowedResourceOrigins'] !== undefined ? { allowedResourceOrigins: request.body['allowedResourceOrigins'] as string[] } : {}),
+        ...(allowAnyRecipient !== undefined ? { allowAnyRecipient } : {}),
+        ...(allowAnyScope !== undefined ? { allowAnyScope } : {}),
+        ...(allowAnyResource !== undefined ? { allowAnyResource } : {}),
+        ...(budgetGroup !== undefined ? { budgetGroup } : {}),
         ...(validUntil !== undefined ? { validUntil } : {}),
       });
       return reply.status(201).send(assignment);
@@ -377,6 +486,127 @@ export async function prepaidWalletRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
+  app.post<{ Body: Body }>('/v1/principal/prepaid-wallet-spend-policies', principalConfig, async (request, reply) => {
+    const owner = await principal(request, reply);
+    if (!owner) return;
+    try {
+      const policy = await applyWalletSpendPolicyMutation(
+        getSql(), owner, (tx) => createWalletSpendPolicy(tx, owner, spendPolicyInput(request.body)),
+      );
+      await notify(owner.developerId, 'wallet.spend_policy.changed', {
+        policyId: policy.policyId, principalId: owner.principalId, status: policy.status, action: 'created',
+      });
+      return reply.status(201).send(policy);
+    } catch (error) {
+      return sendWalletError(reply, request, error);
+    }
+  });
+
+  app.get('/v1/principal/prepaid-wallet-spend-policies', principalConfig, async (request, reply) => {
+    const owner = await principal(request, reply);
+    if (!owner) return;
+    try {
+      return reply.send({ policies: await listWalletSpendPolicies(getSql(), owner) });
+    } catch (error) {
+      return sendWalletError(reply, request, error);
+    }
+  });
+
+  app.patch<{ Params: { policyId: string }; Body: Body }>('/v1/principal/prepaid-wallet-spend-policies/:policyId/status', principalConfig, async (request, reply) => {
+    const owner = await principal(request, reply);
+    if (!owner) return;
+    try {
+      const policy = await applyWalletSpendPolicyMutation(
+        getSql(), owner, (tx) => setWalletSpendPolicyStatus(
+          tx, owner, request.params.policyId,
+          requiredString(request.body, 'status') as 'active' | 'disabled' | 'revoked',
+        ),
+      );
+      await notify(owner.developerId, 'wallet.spend_policy.changed', {
+        policyId: policy.policyId, principalId: owner.principalId, status: policy.status, action: 'status_changed',
+      });
+      return reply.send(policy);
+    } catch (error) {
+      return sendWalletError(reply, request, error);
+    }
+  });
+
+  app.get('/v1/principal/prepaid-wallet-payment-approvals', principalConfig, async (request, reply) => {
+    const owner = await principal(request, reply);
+    if (!owner) return;
+    try {
+      return reply.send({ approvals: await listWalletPaymentApprovals(getSql(), owner) });
+    } catch (error) {
+      return sendWalletError(reply, request, error);
+    }
+  });
+
+  app.post<{ Params: { approvalRequestId: string }; Body: Body }>('/v1/principal/prepaid-wallet-payment-approvals/:approvalRequestId/decision', principalConfig, async (request, reply) => {
+    const owner = await principal(request, reply);
+    if (!owner) return;
+    try {
+      const decision = requiredString(request.body, 'decision');
+      if (decision !== 'approved' && decision !== 'rejected') {
+        throw new PrepaidWalletError(400, 'INVALID_DECISION', 'decision must be approved or rejected');
+      }
+      const approval = await decideWalletPaymentApproval(
+        getSql(), owner, request.params.approvalRequestId, decision, optionalString(request.body, 'reason'),
+      );
+      await notify(owner.developerId, decision === 'approved'
+        ? 'wallet.payment.approval_approved'
+        : 'wallet.payment.approval_rejected', {
+        approvalRequestId: approval.approvalRequestId,
+        walletId: approval.walletId,
+        agentId: approval.agentId,
+        principalId: owner.principalId,
+      });
+      return reply.send(approval);
+    } catch (error) {
+      return sendWalletError(reply, request, error);
+    }
+  });
+
+  app.post<{ Body: Body }>('/v1/prepaid-wallet-spend-policies', async (request, reply) => {
+    const actor = { developerId: request.developer.id, principalId: null };
+    try {
+      const policy = await applyWalletSpendPolicyMutation(
+        getSql(), actor, (tx) => createWalletSpendPolicy(tx, actor, spendPolicyInput(request.body)),
+      );
+      await notify(actor.developerId, 'wallet.spend_policy.changed', {
+        policyId: policy.policyId, status: policy.status, action: 'created', scope: 'developer',
+      });
+      return reply.status(201).send(policy);
+    } catch (error) {
+      return sendWalletError(reply, request, error);
+    }
+  });
+
+  app.get('/v1/prepaid-wallet-spend-policies', async (request, reply) => {
+    try {
+      return reply.send({ policies: await listWalletSpendPolicies(getSql(), { developerId: request.developer.id, principalId: null }) });
+    } catch (error) {
+      return sendWalletError(reply, request, error);
+    }
+  });
+
+  app.patch<{ Params: { policyId: string }; Body: Body }>('/v1/prepaid-wallet-spend-policies/:policyId/status', async (request, reply) => {
+    const actor = { developerId: request.developer.id, principalId: null };
+    try {
+      const policy = await applyWalletSpendPolicyMutation(
+        getSql(), actor, (tx) => setWalletSpendPolicyStatus(
+          tx, actor, request.params.policyId,
+          requiredString(request.body, 'status') as 'active' | 'disabled' | 'revoked',
+        ),
+      );
+      await notify(actor.developerId, 'wallet.spend_policy.changed', {
+        policyId: policy.policyId, status: policy.status, action: 'status_changed', scope: 'developer',
+      });
+      return reply.send(policy);
+    } catch (error) {
+      return sendWalletError(reply, request, error);
+    }
+  });
+
   app.get('/v1/prepaid-wallets', agentConfig, async (request, reply) => {
     const identity = await agentIdentity(request, reply);
     if (!identity) return;
@@ -392,6 +622,11 @@ export async function prepaidWalletRoutes(app: FastifyInstance): Promise<void> {
     if (!identity) return;
     try {
       const walletId = optionalString(request.body, 'walletId');
+      const approvalRequestId = optionalString(request.body, 'approvalRequestId');
+      const merchantId = optionalString(request.body, 'merchantId');
+      const purpose = optionalString(request.body, 'purpose');
+      const projectId = optionalString(request.body, 'projectId');
+      const costCenter = optionalString(request.body, 'costCenter');
       const authorization = await reserveWalletPayment(getSql(), identity, {
         ...(walletId !== undefined ? { walletId } : {}),
         amount: requiredString(request.body, 'amount'),
@@ -402,8 +637,13 @@ export async function prepaidWalletRoutes(app: FastifyInstance): Promise<void> {
         scope: requiredString(request.body, 'scope'),
         maxTimeoutSeconds: request.body['maxTimeoutSeconds'] as number,
         idempotencyKey: requiredString(request.body, 'idempotencyKey'),
+        ...(approvalRequestId !== undefined ? { approvalRequestId } : {}),
+        ...(merchantId !== undefined ? { merchantId } : {}),
+        ...(purpose !== undefined ? { purpose } : {}),
+        ...(projectId !== undefined ? { projectId } : {}),
+        ...(costCenter !== undefined ? { costCenter } : {}),
       });
-      return reply.status(201).send(authorization);
+      return reply.status('status' in authorization ? 202 : 201).send(authorization);
     } catch (error) {
       return sendWalletError(reply, request, error);
     }

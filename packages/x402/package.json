@@ -1,6 +1,6 @@
 {
   "name": "@grantex/x402",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Official x402 v2 integration backed by principal-controlled Grantex prepaid wallets",
   "author": {
     "name": "Sanjeev Kumar",

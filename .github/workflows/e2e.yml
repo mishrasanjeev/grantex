@@ -54,6 +54,12 @@ jobs:
           E2E_ISSUER: https://grantex.dev
         run: npx vitest run --testTimeout=240000 tests/e2e/prepaid-wallets.test.ts
 
+      - name: Layered prepaid-wallet spend controls
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+          E2E_ISSUER: https://grantex.dev
+        run: npx vitest run --testTimeout=300000 tests/e2e/wallet-spend-controls.test.ts
+
       - name: Live-mode consent flow (via grantex.dev Firebase rewrites)
         env:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app

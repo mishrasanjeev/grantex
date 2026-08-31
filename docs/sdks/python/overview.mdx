@@ -6,10 +6,12 @@ description: "Install and configure the Grantex Python SDK for delegated authori
 
 ## Installation
 
-Current published release: **`grantex==0.3.14`** (verified July 12, 2026).
+Prepared release candidate: **`grantex==0.4.0`** (source verified August 31,
+2026). The current published release remains `0.3.14` until the candidate is
+registry-verified.
 
 ```bash
-python -m pip install grantex==0.3.14
+python -m pip install grantex==0.4.0
 ```
 
 The unpinned `python -m pip install grantex` command follows PyPI's current
@@ -23,6 +25,14 @@ release. Keep the exact version above in reproducible builds. See
 - [PyJWT](https://pyjwt.readthedocs.io/) >= 2.8 with [cryptography](https://cryptography.io/) (for offline token verification)
 
 All dependencies are installed automatically with the SDK.
+
+<Note>
+  Version `0.4.0` adds `WalletSpendPoliciesClient`,
+  `PrincipalPrepaidWalletClient`, `AgentPrepaidWalletClient`, and
+  `generate_dpop_key` for layered policy, exact approvals, reload governance,
+  and ES256 DPoP agent wallet calls. See [Agent Wallet
+  Governance](/guides/agent-wallet-governance).
+</Note>
 
 ## Quick Start
 

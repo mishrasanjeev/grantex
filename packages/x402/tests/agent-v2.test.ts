@@ -4,6 +4,7 @@ import type { PaymentRequired } from '@x402/core/types';
 import {
   GRANTEX_PREPAID_NETWORK,
   HEADERS,
+  PrepaidPaymentApprovalRequiredError,
   createX402Agent,
   type PrepaidAuthorizationRequest,
   type PrepaidAuthorizationResponse,
@@ -136,6 +137,54 @@ describe('official x402 v2 prepaid agent', () => {
     expect(firstRequest).not.toHaveProperty('idempotencyKey');
     expect(() => agent.fetch('https://api.example.com/weather', { idempotencyKey: 'short' }))
       .toThrow('16 to 256');
+  });
+
+  it('surfaces approval details and supports an exact approved retry with policy context', async () => {
+    const governed = {
+      ...requirements,
+      accepts: [{
+        ...requirements.accepts[0]!,
+        extra: {
+          grantexScope: 'weather:read',
+          grantexContext: {
+            merchantId: 'org_weather', purpose: 'research',
+            projectId: 'project-7', costCenter: 'engineering',
+          },
+        },
+      }],
+    } as PaymentRequired;
+    fetchMock.mockResolvedValueOnce(paymentRequiredResponse(governed));
+    authorizePayment.mockResolvedValueOnce({
+      status: 'approval_required', approvalRequestId: 'wapr_1', walletId: 'pwal_approval',
+      assignmentId: 'wasn_1', policyIds: ['wspol_1'], expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const agent = createX402Agent({ authorizePayment, fetch: fetchMock });
+
+    let challenge: PrepaidPaymentApprovalRequiredError | undefined;
+    try {
+      await agent.fetch('https://api.example.com/weather', { idempotencyKey: 'logical-approval-000001' });
+    } catch (error) {
+      expect(error).toBeInstanceOf(PrepaidPaymentApprovalRequiredError);
+      challenge = error as PrepaidPaymentApprovalRequiredError;
+    }
+    expect(challenge?.approval).toMatchObject({ approvalRequestId: 'wapr_1', walletId: 'pwal_approval' });
+    expect(authorizePayment.mock.calls[0]![0]).toMatchObject({
+      merchantId: 'org_weather', purpose: 'research', projectId: 'project-7', costCenter: 'engineering',
+    });
+
+    fetchMock
+      .mockResolvedValueOnce(paymentRequiredResponse(governed))
+      .mockResolvedValueOnce(new Response('OK', { status: 200 }));
+    authorizePayment.mockResolvedValueOnce(authorizationResponse());
+    const response = await agent.fetch('https://api.example.com/weather', {
+      walletId: challenge!.approval.walletId,
+      idempotencyKey: challenge!.idempotencyKey,
+      approvalRequestId: challenge!.approval.approvalRequestId,
+    });
+    expect(response.status).toBe(200);
+    expect(authorizePayment.mock.calls[1]![0]).toMatchObject({
+      walletId: 'pwal_approval', idempotencyKey: 'logical-approval-000001', approvalRequestId: 'wapr_1',
+    });
   });
 
   it('preserves POST method, body, and caller headers on the paid retry', async () => {

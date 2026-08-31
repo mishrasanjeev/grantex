@@ -16,9 +16,10 @@ End-to-end demo of the core Grantex authorization lifecycle using the Go SDK.
 - Go 1.26.1+
 - Docker (for the local Grantex stack)
 
-> This example's `go.mod` replaces the public module with `../../packages/go-sdk`,
-> so it exercises corrected repository source. A successful local run does not
-> prove that published `v0.1.10` contains the agent-ID and audit-write fixes.
+> This example's `go.mod` replaces the public module with `../../packages/go-sdk`
+> during repository development. Remove the `replace` directive to verify the
+> `v0.2.0` release candidate independently; keep using `v0.1.10` until the new
+> module tag is proxy-verified.
 
 ## Run
 

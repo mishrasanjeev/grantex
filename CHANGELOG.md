@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Added
+- Added layered prepaid-wallet spend governance across assignment, wallet,
+  agent, shared budget-group, principal, and developer scopes. Policies support
+  deny, exact principal approval, amount/count limits, reservation-aware rolling
+  and calendar windows, semantic filters, and verified-merchant requirements.
+- Added safe assignment defaults, wallet balance/reload velocity limits,
+  exact-bound single-use payment approvals, semantic authorization binding,
+  durable append-only policy decisions, and principal dashboard approval/policy
+  controls.
+- Added wallet-governance clients to TypeScript `0.5.0`, x402 `0.3.0`, Python
+  `0.4.0`, and Go `v0.2.0`, including ES256 DPoP agent requests in Python and Go.
+- Added a responsibility and gap matrix separating Grantex governance from
+  AgenticOrg/runtime, issuer/custodian, merchant, and principal obligations.
 - Added TypeScript SDK 0.4.0 prepaid-wallet clients and auth-service APIs for principal-owned multi-wallet assignment, per-transaction and rolling cumulative spend limits, recipient/scope allowlists, threshold reload requests with separate principal approval/funding, reservation release, activity views, and assignment/wallet/all-wallet agent stop controls.
 - Added durable atomic-unit wallet balances, reservations, reload requests, and append-only ledger entries with serialized concurrent spend enforcement and agent/principal-wide idempotency.
 - Added `@grantex/x402` 0.2.0 integration with official x402 v2 headers and Foundation client packages, backed by DPoP wallet reservations and idempotent facilitator verification/settlement.
@@ -25,6 +37,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Published TypeScript SDK 0.3.13, Python SDK 0.3.14, and Go SDK v0.1.10 on 2026-07-11; synchronized the public release snapshot across the landing page, README, compatibility matrix, and SDK documentation.
 
 ### Fixed
+- Preserved structured `PrepaidPaymentApprovalRequiredError` details across the
+  official x402 fetch wrapper so an approved retry can reuse the exact wallet,
+  approval request, and idempotency key.
+- Serialized cross-agent policy evaluation and policy mutation under a shared
+  advisory lock and fixed PostgreSQL array type inference in policy filters.
 - Corrected the TypeScript SDK `User-Agent` version and tied its regression test to `package.json` so future package bumps cannot publish a stale runtime identifier.
 - Hardened live authorization so policy decisions cannot replace authenticated Principal consent; bound redirects, resources, scopes, and registered agent keys through issuance and delegation.
 - Made refresh rotation recoverable for 300 seconds only when the authenticated caller repeats the same old token and idempotency key; recovery returns the exact committed token response and survives a server restart without extending any lifetime.

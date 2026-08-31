@@ -59,3 +59,6 @@ export const newWalletReservationId = (): string => `wres_${ulid()}`;
 export const newWalletReloadRequestId = (): string => `wrel_${ulid()}`;
 export const newWalletLedgerEntryId = (): string => `wled_${ulid()}`;
 export const newWalletTransactionId = (): string => `wtx_${ulid()}`;
+export const newWalletSpendPolicyId = (): string => `wspol_${ulid()}`;
+export const newWalletPolicyDecisionId = (): string => `wdec_${ulid()}`;
+export const newWalletApprovalRequestId = (): string => `wapr_${ulid()}`;

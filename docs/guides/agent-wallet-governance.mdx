@@ -1,0 +1,149 @@
+---
+title: "Agent Wallet Governance"
+description: "Responsibility boundaries, layered spend controls, exact payment approvals, reload governance, and deployment gaps for AI-agent prepaid wallets."
+---
+
+Grantex is the authorization and governance layer above a wallet, card, bank,
+or on-chain issuer. It does not replace custody, payment-network, or merchant
+controls. A production design combines all of these layers and fails closed if
+any required layer is unavailable.
+
+## Responsibility matrix
+
+| Layer | Owns | Does not delegate to Grantex |
+| --- | --- | --- |
+| Human principal | Assign wallets, approve authority, set budgets, approve exact exceptions, request reload funding, and block an assignment, wallet, or agent | Final consent and exceptional-spend decisions |
+| AgenticOrg or another agent runtime | Agent orchestration, task planning, connector execution, and the human interaction used to request approval or reload | Custody, OAuth consent, durable spend accounting, or payment-network authorization |
+| Grantex | Agent identity, OAuth delegation, DPoP sender binding, multi-wallet assignment, layered semantic policy, exact-bound approvals, reload separation of duties, atomic reservation, stop controls, and audit evidence | KYC/KYB, custody, settlement-network acceptance, chargebacks, or sanctions screening |
+| Wallet issuer or custodian | KYC/KYB, AML and sanctions controls, custody and safeguarding, card/account issuance, network authorization, MCC/geography/card controls, clearing, settlement, FX, refunds, disputes, fraud signals, and reconciliation | The principal's semantic agent authority or cross-wallet project budgets unless explicitly integrated |
+| Merchant or resource server | Server-trusted amount, payee, resource, order identity, HTTP idempotency, x402 verification/settlement, and delivery of the paid result | Trusting agent-supplied price, recipient, purpose, or settlement evidence |
+
+This division is deliberate. Issuer controls remain authoritative for movement
+of money. Grantex can make the authorization more precise by proving which agent
+may spend, for which principal, wallet, recipient, resource, action, project,
+purpose, and cost center.
+
+`purpose`, `projectId`, and `costCenter` are integrity-bound into the Grantex
+authorization and x402 exchange, but they originate with the caller. Grantex
+prevents an in-flight substitution; it does not independently prove that the
+caller chose the correct accounting label. High-assurance deployments must map
+these values from a trusted workflow, merchant order, or independently attested
+runtime context instead of accepting arbitrary model output.
+
+## Layered policy model
+
+Every payment first passes the assignment baseline and then every matching
+layered policy. Grantex supports policy scopes for:
+
+- one wallet assignment;
+- one wallet across assigned agents;
+- one agent across assigned wallets;
+- a shared `budgetGroup` across agents and wallets;
+- one principal;
+- the developer tenant.
+
+Policies can deny a matching payment, require principal approval, or limit
+amount and count. Limit windows can be per authorization, rolling seconds,
+calendar day, week, month, or lifetime. Optional filters match recipients,
+resource origins, action scopes, assets, networks, merchant IDs, purposes,
+project IDs, cost centers, and verified merchant status.
+
+The most restrictive applicable result wins:
+
+1. A deny policy rejects the payment.
+2. A limit breach rejects or requires approval according to `onExceed`.
+3. A matching approval policy requires approval.
+4. Only a fully allowed decision can reserve value.
+
+Reserved and settled amounts count toward limits. Policy evaluation, usage
+calculation, and wallet reservation run under database locks, so parallel agents
+cannot race a shared group or principal budget.
+
+## Safe assignment defaults
+
+New assignments do not silently allow every recipient, action scope, or HTTPS
+resource. The principal must provide an allowlist or explicitly opt into the
+corresponding `allowAnyRecipient`, `allowAnyScope`, or `allowAnyResource`
+setting. Existing assignments created before migration `092` retain their prior
+meaning during migration.
+
+An authorization can never add OAuth authority. The agent's DPoP access token
+must contain `wallet:spend` and the exact merchant action scope even when wallet
+policy would otherwise allow the payment.
+
+## Exact principal approval
+
+A `require_approval` result creates a short-lived durable request bound to the
+exact agent, principal, wallet, assignment, amount, asset, network, recipient,
+resource, action scope, merchant, purpose, project, cost center, policy set, and
+idempotency key.
+
+```ts
+import {
+  PrepaidPaymentApprovalRequiredError,
+  createX402Agent,
+} from '@grantex/x402';
+
+try {
+  await x402.fetch(resourceUrl, { idempotencyKey });
+} catch (error) {
+  if (!(error instanceof PrepaidPaymentApprovalRequiredError)) throw error;
+
+  await notifyPrincipal(error.approval.approvalRequestId);
+  // After the principal approves the request:
+  await x402.fetch(resourceUrl, {
+    walletId: error.approval.walletId,
+    idempotencyKey: error.idempotencyKey,
+    approvalRequestId: error.approval.approvalRequestId,
+  });
+}
+```
+
+Approval does not create a reusable spending token. A changed amount, recipient,
+resource, semantic context, wallet, or idempotency key is rejected. Successful
+reservation consumes the approval once.
+
+## Reload governance
+
+Agents may request reloads but cannot approve or fund them. Wallet controls can
+set a maximum balance, maximum single reload, cumulative reload amount and
+window, and reload count and window. These controls are rechecked when the
+principal funds an approved request, not only when the agent asks for it.
+
+Reload and payment events are emitted to the Grantex event stream. Operators
+must bridge those events to email, SMS, chat, or another approved human channel
+when the principal is not actively using the dashboard.
+
+## Audit and emergency controls
+
+Every policy decision has a durable decision ID, matched policy IDs, outcome,
+usage snapshot, and normalized payment context. Policy decisions are append-only.
+Wallet ledger entries are also append-only. The principal dashboard exposes
+pending approvals, policy status, wallet activity, reload requests, and stop
+controls.
+
+Blocking an assignment, a wallet, or all of one agent's wallets releases active
+reservations in that boundary. Disabling or revoking a policy also releases
+active reservations. Policy mutation, release, authorization, and settlement
+share a developer-scoped database lock, so they have a single serial order and
+a released authorization cannot settle afterward.
+
+## Current implementation and external gaps
+
+| Capability | Status | Production action |
+| --- | --- | --- |
+| Sandbox ledger, layered policy, exact approval, multi-wallet assignment, reload controls, reservation, settlement, and audit | Implemented and Docker E2E tested | Run migrations `091` and `092`, PostgreSQL backup/restore, and the published route probes |
+| TypeScript, x402, Python, and Go clients | Implemented in the release identified by each package manifest | Pin a registry-verified version; repository source alone does not prove publication |
+| External issuer/custody adapter | Not included; fails closed | Integrate the selected provider's authorization, funding, settlement, refund, dispute, webhook, and reconciliation APIs |
+| KYC/KYB, AML, sanctions, fraud, MCC, geography, card state, FX, and safeguarding | Issuer/operator responsibility | Configure and independently test the regulated provider controls |
+| Principal email/SMS/chat delivery | Event source only | Operate a durable notification bridge with retry, dead-letter handling, and escalation |
+| Merchant business-result recovery | Merchant responsibility | Atomically store the result under HTTP `Idempotency-Key` before returning success |
+| Multi-currency aggregate budgets | Not implemented | Use one atomic asset per policy or integrate a trusted, timestamped FX normalization service before aggregation |
+| Independent attestation of purpose, project, and cost-center labels | Not implemented; caller values are policy-evaluated and proof-bound | Derive labels from a trusted workflow/merchant mapping or require a signed upstream attestation before using them for accounting or compliance |
+| Provider refunds, disputes, and chargebacks in Grantex ledger | Not implemented | Reconcile provider lifecycle events and extend the append-only ledger before claiming end-to-end external accounting |
+| Policy simulation before activation | Not implemented | Create policies disabled, test in sandbox, inspect decisions, then activate; do not treat this as a formal dry-run API |
+| Fine-grained developer API-key roles for policy administration | Not implemented | Treat developer API keys as tenant administrators and isolate them accordingly |
+
+See [Agent Prepaid Wallets](/features/prepaid-wallets), the [x402 integration
+guide](/integrations/x402), and [Prepaid Wallet Production
+Readiness](/guides/prepaid-wallet-production) for protocol and hosting details.

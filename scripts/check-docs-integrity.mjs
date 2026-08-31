@@ -325,6 +325,12 @@ async function validateOpenApi() {
     'POST /v1/vault/credentials/exchange',
     'GET /v1/usage/history',
     'GET /v1/dpdp/consent-records',
+    'POST /v1/principal/prepaid-wallet-spend-policies',
+    'GET /v1/principal/prepaid-wallet-payment-approvals',
+    'POST /v1/principal/prepaid-wallet-payment-approvals/{approvalRequestId}/decision',
+    'POST /v1/prepaid-wallet-spend-policies',
+    'PATCH /v1/prepaid-wallet-spend-policies/{policyId}/status',
+    'POST /v1/prepaid-wallets/authorizations',
   ];
   for (const operation of requiredOperations) {
     if (!operations.has(operation)) failures.push('OpenAPI is missing critical operation ' + operation);
@@ -358,6 +364,30 @@ async function validateOpenApi() {
   if (!/maximum:\s*90\b/.test(usageHistory) || /maximum:\s*365\b/.test(usageHistory)) failures.push('Usage history must document the runtime 90-day maximum');
   const dpdpList = operations.get('GET /v1/dpdp/consent-records') || '';
   if (/name:\s*status\b/.test(dpdpList)) failures.push('DPDP consent list documents unsupported status query filtering');
+  const walletAuthorization = operations.get('POST /v1/prepaid-wallets/authorizations') || '';
+  for (const requiredContract of [
+    /'202':/,
+    /WalletPaymentApprovalRequired/,
+    /approvalRequestId/,
+    /merchantId/,
+    /purpose/,
+    /projectId/,
+    /costCenter/,
+    /maximum:\s*300\b/,
+  ]) {
+    if (!requiredContract.test(walletAuthorization)) {
+      failures.push('Prepaid wallet authorization is missing a layered-policy or semantic-context contract');
+      break;
+    }
+  }
+  for (const schema of ['WalletSpendPolicyInput', 'WalletSpendPolicy', 'WalletPaymentApproval']) {
+    if (!new RegExp('^    ' + schema + ':', 'm').test(text)) {
+      failures.push('OpenAPI is missing prepaid wallet schema ' + schema);
+    }
+  }
+  if (!/allowedResourceOrigins/.test(text) || !/allowAnyResource/.test(text) || !/budgetGroup/.test(text)) {
+    failures.push('OpenAPI is missing fail-closed assignment resource and budget-group controls');
+  }
 }
 
 function hasReleasePair(text, name, version) {
@@ -433,9 +463,6 @@ async function loadReleaseSnapshot() {
     }],
   ]);
   const expectedStatus = new Map([
-    ['typescript-sdk', 'published'],
-    ['python-sdk', 'published'],
-    ['go-sdk', 'published-with-known-limitations'],
     ['mcp-auth', 'published-with-known-limitations'],
   ]);
   const artifacts = Array.isArray(snapshot.artifacts) ? snapshot.artifacts : [];
@@ -457,7 +484,7 @@ async function loadReleaseSnapshot() {
     seenIds.add(artifact.id);
     if (artifact.name) seenNames.add(artifact.name);
 
-    if (!['published', 'published-with-known-limitations'].includes(artifact.status)) {
+    if (!['release-candidate', 'published', 'published-with-known-limitations'].includes(artifact.status)) {
       failures.push('release-status.json artifact ' + artifact.id + ' has invalid status ' + artifact.status);
     }
     if (artifact.id && expectedStatus.has(artifact.id) && artifact.status !== expectedStatus.get(artifact.id)) {
@@ -649,14 +676,19 @@ async function validateReleaseCopy() {
       }
     }
   }
+  const goRelease = releaseById.get('go-sdk');
   const stalePatterns = [
     [/\bMCP Auth Server v2\.0\.1\b/i, 'MCP Auth Server v2.0.1'],
     [/(?:TypeScript(?: SDK)?|@grantex\/sdk)[^\n]{0,120}\b0\.3\.13\b[^\n]{0,80}\bunreleased\b/i, 'TypeScript 0.3.13 marked unreleased'],
     [/(?:TypeScript(?: SDK)?|@grantex\/sdk)[^\n]{0,120}\b0\.3\.13\b[^\n]{0,80}\bprepared for publication\b/i, 'TypeScript 0.3.13 prepared for publication'],
     [/\blatest published(?: version)?(?:\s+is)?\s+0\.3\.12\b/i, 'latest published 0.3.12'],
     [/TypeScript\s+0\.3\.12[^\n]{0,80}Python\s+0\.3\.13[^\n]{0,80}Go\s+v0\.1\.9/i, 'stale three-SDK release summary'],
-    [/AgentID:\s+agent\.ID\b/, 'Go v0.1.10 empty Agent.ID used in a request'],
-    [/client\.Audit\.Log\s*\([\s\S]{0,160}?grantex\.LogAuditParams\s*\{/m, 'Go v0.1.10 audit payload documented as usable'],
+    ...(goRelease?.version === 'v0.1.10'
+      ? [
+        [/AgentID:\s+agent\.ID\b/, 'Go v0.1.10 empty Agent.ID used in a request'],
+        [/client\.Audit\.Log\s*\([\s\S]{0,160}?grantex\.LogAuditParams\s*\{/m, 'Go v0.1.10 audit payload documented as usable'],
+      ]
+      : []),
   ];
   const staleFiles = new Set([
     ...globalFiles,
@@ -758,7 +790,7 @@ async function validatePublishedVersions(releaseSnapshot) {
       const metadata = await fetchJson(registryUrl);
       const publishedVersion = String(metadata.version || '');
       if (!publishedVersion) throw new Error('npm response has no version');
-      if (advertised) {
+      if (advertised && advertised.status !== 'release-candidate') {
         if (advertised.version !== publishedVersion) {
           failures.push('release-status.json is out of sync with npm for ' + manifest.name + ' (' + advertised.version + ' != ' + publishedVersion + ')');
         }
@@ -787,7 +819,7 @@ async function validatePublishedVersions(releaseSnapshot) {
       const metadata = await fetchJson(registryUrl);
       const publishedVersion = String(metadata.info?.version || '');
       if (!publishedVersion) throw new Error('PyPI response has no version');
-      if (advertised) {
+      if (advertised && advertised.status !== 'release-candidate') {
         if (advertised.version !== publishedVersion) {
           failures.push('release-status.json is out of sync with PyPI for ' + name + ' (' + advertised.version + ' != ' + publishedVersion + ')');
         }
@@ -808,7 +840,7 @@ async function validatePublishedVersions(releaseSnapshot) {
       const metadata = await fetchJson(advertisedGo.registryUrl);
       const publishedVersion = String(metadata.Version || '');
       if (!publishedVersion) throw new Error('Go proxy response has no Version');
-      if (advertisedGo.version !== publishedVersion) {
+      if (advertisedGo.status !== 'release-candidate' && advertisedGo.version !== publishedVersion) {
         failures.push('release-status.json is out of sync with the Go proxy (' + advertisedGo.version + ' != ' + publishedVersion + ')');
       }
     } catch (error) {

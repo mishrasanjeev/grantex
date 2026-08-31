@@ -1,7 +1,6 @@
 """Shared fixtures and mock data for the Grantex Python SDK test suite."""
 from __future__ import annotations
 
-import pytest
 
 # ─── Mock response data (camelCase, matching the API JSON format) ─────────────
 

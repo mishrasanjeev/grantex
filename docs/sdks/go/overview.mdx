@@ -5,10 +5,12 @@ description: "Official Go SDK for the Grantex delegated authorization protocol"
 
 ## Installation
 
-Current published release: **`v0.1.10`** (verified July 12, 2026).
+Prepared release candidate: **`v0.2.0`** (source verified August 31, 2026). The
+current published release remains `v0.1.10` until the candidate is
+proxy-verified.
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.1.10
+go get github.com/mishrasanjeev/grantex-go@v0.2.0
 ```
 
 The unpinned `go get github.com/mishrasanjeev/grantex-go` command follows Go's
@@ -41,28 +43,11 @@ client := grantex.NewClient("your-api-key",
 | `WithTimeout(d)` | `30s` | HTTP request timeout |
 | `WithHTTPClient(c)` | `http.DefaultClient` | Custom `*http.Client` |
 
-## Known v0.1.10 limitations
-
-- Registration returns `agentId`, while `Agent.ID` expects `id`; derive the ID from the returned DID.
-- Registration sends optional zero values; updates cannot set `status` or send an explicit empty `scopes` array. Provide registration fields explicitly and use REST for those updates.
-- The typed audit payload omits required fields; use the [REST or CLI audit-write workaround](/sdks/go/audit#log).
-- `AuditEntry` omits `DeveloperID`, and the SDK advertises `Since`, `Until`, `Page`, and `PageSize` audit filters that the API ignores.
-- Agent and audit list structs expose `Total`, `Page`, and `PageSize`, but the API returns only `agents` or `entries`; use the slice length for this release.
-- List helpers do not URL-encode reserved characters in filter values; avoid them or issue a REST request with a `net/url`-encoded query.
-
-<Info>
-  Repository source on `main` corrects all documented `v0.1.10` Agent/Audit contract gaps, removes unsupported audit filters, and URL-encodes query values, with API-shaped regression coverage.
-  No corrected module tag has been published. The pinned `v0.1.10` install and workarounds remain the supported public-release guidance.
-</Info>
+Version `v0.2.0` corrects the former Agent/Audit contract and query-encoding
+gaps and adds complete developer, principal, and ES256 DPoP agent prepaid-wallet
+clients.
 
 ## Quick Start
-
-<Warning>
-  In `v0.1.10`, the API's `agentId` response does not populate `Agent.ID`
-  because that SDK field expects `id`. This example derives the ID from the
-  returned `did:grantex:<agentId>` value. Remove the workaround only after
-  upgrading to a release that corrects the response mapping.
-</Warning>
 
 ```go
 package main
@@ -71,7 +56,6 @@ import (
     "context"
     "fmt"
     "log"
-    "strings"
 
     grantex "github.com/mishrasanjeev/grantex-go"
 )
@@ -89,16 +73,11 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    const didPrefix = "did:grantex:"
-    if !strings.HasPrefix(agent.DID, didPrefix) {
-        log.Fatal("unexpected agent DID")
-    }
-    agentID := strings.TrimPrefix(agent.DID, didPrefix)
-    fmt.Printf("Agent registered: %s (DID: %s)\n", agentID, agent.DID)
+    fmt.Printf("Agent registered: %s (DID: %s)\n", agent.ID, agent.DID)
 
     // 2. Create authorization request
     authReq, err := client.Authorize(ctx, grantex.AuthorizeParams{
-        AgentID:     agentID,
+        AgentID:     agent.ID,
         PrincipalID: "user-123",
         Scopes:      []string{"read:email", "send:email"},
     })
@@ -110,7 +89,7 @@ func main() {
     // 3. Exchange authorization code for token (after user consents)
     tokenResp, err := client.Tokens.Exchange(ctx, grantex.ExchangeTokenParams{
         Code:    "authorization-code-from-callback",
-        AgentID: agentID,
+        AgentID: agent.ID,
     })
     if err != nil {
         log.Fatal(err)
@@ -152,6 +131,14 @@ func main() {
 | `client.Credentials` | Verifiable Credentials and SD-JWT |
 | `client.Commerce` | Commerce V1/OACP merchant discovery, catalog, checkout, webhooks, and ops |
 | `client.DPDP` | DPDP Act 2023 compliance — consent, grievances, erasure, exports |
+| `client.WalletSpendPolicies` | Developer-level layered wallet policy |
+
+Use `NewPrincipalPrepaidWalletClient` for human wallet, assignment, reload,
+policy, approval, activity, and stop operations. Use
+`NewAgentPrepaidWalletClient` with `GenerateDPoPKey` for assigned-wallet listing,
+payment authorization, and reload requests. Both constructors reject remote
+plain-HTTP wallet endpoints; check their returned errors. See [Agent Wallet
+Governance](/guides/agent-wallet-governance).
 
 ## Standalone Functions
 

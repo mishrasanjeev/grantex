@@ -1,7 +1,7 @@
 # Grantex Compatibility Matrix
 
-Last updated: 2026-08-30
-Public release snapshot verified: 2026-08-30
+Last updated: 2026-08-31
+Public release snapshot verified: 2026-08-31
 
 This repository uses package-specific versions; there is no monorepo-wide SDK or package release number. The protocol specification remains v1.0 Final, while repository metadata and package registries can move independently during a release.
 
@@ -10,11 +10,11 @@ This repository uses package-specific versions; there is no monorepo-wide SDK or
 | Surface | Current value | Notes |
 | --- | --- | --- |
 | Repository changelog | v0.3.12 | Latest top-level release entry in `CHANGELOG.md`. |
-| TypeScript SDK | @grantex/sdk 0.4.1 | Published to npm on 2026-08-30; corrects the runtime version identifier from 0.4.0. |
-| Python SDK | grantex 0.3.14 | Published to PyPI on 2026-07-11. |
-| Go SDK | github.com/mishrasanjeev/grantex-go v0.1.10 | Published through the Go module proxy on 2026-07-11 (requires Go 1.26.1); see known limitations below. |
-| x402 | @grantex/x402 0.2.0 | Published to npm on 2026-08-30 with official x402 v2 prepaid-wallet support. |
-| OpenAPI | 0.4.0 | Repository API contract including prepaid wallets; independent of the deployed/public snapshot. |
+| TypeScript SDK | @grantex/sdk 0.5.0 release candidate | Layered wallet policy, exact approvals, reload governance, and principal/developer control clients; current published release is 0.4.1. |
+| Python SDK | grantex 0.4.0 release candidate | Developer, principal, and ES256 DPoP agent wallet clients; current published release is 0.3.14. |
+| Go SDK | github.com/mishrasanjeev/grantex-go v0.2.0 release candidate | Corrected Agent/Audit contracts plus complete wallet-governance clients; current published release is v0.1.10 and Go 1.26.1 is required. |
+| x402 | @grantex/x402 0.3.0 release candidate | Official x402 v2, semantic policy context, structured exact-approval challenge, and approved retry; current published release is 0.2.0. |
+| OpenAPI | 0.5.0 | Repository API contract including layered prepaid-wallet governance; independent of the deployed/public snapshot. |
 | MCP Auth | @grantex/mcp-auth 2.0.2 | Independently versioned and published to npm; single-process evaluation limitations apply. |
 | Published snapshot | [release-status.json](release-status.json) | Machine-readable source for advertised versions and live registry checks. |
 
@@ -24,9 +24,9 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 
 | # | Directory | Published name | Version | Status |
 | ---: | --- | --- | ---: | --- |
-| 1 | `packages/sdk-ts` | @grantex/sdk | 0.4.1 | Primary SDK (TypeScript); published |
-| 2 | `packages/sdk-py` | grantex | 0.3.14 | Primary SDK (Python); published |
-| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.1.10 (Go 1.26.1) | Primary SDK (Go); published |
+| 1 | `packages/sdk-ts` | @grantex/sdk | 0.5.0 | Primary SDK (TypeScript); wallet-governance release candidate |
+| 2 | `packages/sdk-py` | grantex | 0.4.0 | Primary SDK (Python); wallet-governance release candidate |
+| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.2.0 (Go 1.26.1) | Primary SDK (Go); wallet-governance release candidate |
 | 4 | `packages/cli` | @grantex/cli | 0.3.0 | Tooling; published with bundled Agent Skills |
 | 5 | `packages/mcp-auth` | @grantex/mcp-auth | 2.0.2 | Independently versioned |
 | 6 | `packages/mcp` | @grantex/mcp | 0.1.10 | Adapter |
@@ -51,23 +51,10 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 | 25 | `packages/a2a` | @grantex/a2a | 0.1.3 | A2A bridge (TS) |
 | 26 | `packages/a2a-py` | grantex-a2a | 0.1.4 | A2A bridge (Python) |
 | 27 | `packages/mpp` | @grantex/mpp | 0.1.2 | MPP support |
-| 28 | `packages/x402` | @grantex/x402 | 0.2.0 | Official x402 v2 prepaid-wallet integration; published |
+| 28 | `packages/x402` | @grantex/x402 | 0.3.0 | Official x402 v2 layered-wallet integration |
 | 29 | `packages/terraform-provider-grantex` | terraform-provider-grantex | Go module (Go 1.25.0) | Terraform provider |
 
 ## Known Published-Package Limitations
-
-- **Go SDK `v0.1.10`:** the API returns `agentId`, while `Agent.ID` expects `id`,
-  so derive the ID from `did:grantex:<agentId>`. Registration sends optional
-  zero values; updates cannot set `status` or clear all scopes, so use REST for
-  those writes.
-  `LogAuditParams` omits required `agentDid` and `principalId`; use REST or CLI
-  for audit writes. `AuditEntry` omits `DeveloperID`, while `Since`, `Until`,
-  `Page`, and `PageSize` audit filters are ignored by the API.
-  Agent and audit list structs expose metadata the API does not return; use slice
-  lengths. List helpers also fail to URL-encode reserved characters in filter
-  values; avoid them or issue a `net/url`-encoded REST request.
-  See the Go SDK overview for the complete published-release workarounds. All are
-  corrected in repository source but require a new public module tag.
 
 - **MCP Auth `2.0.2`:** client registrations default to process memory and
   authorization codes always use a non-configurable process-local store.
@@ -76,11 +63,11 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
   code is not persisted for token exchange. Treat this release as single-process
   evaluation software until a corrected package is published.
 
-## Repository Source Ahead of Public Releases (updated 2026-07-14)
+## Release boundaries
 
 | Surface | Repository `main` status | Publication or deployment status |
 | --- | --- | --- |
-| Go SDK parity | All documented Agent/Audit read/write gaps are corrected; unsupported audit filters and phantom list metadata are removed; query values are URL-encoded; API-shaped regression tests cover the contracts. | No corrected tag is published; every `v0.1.10` limitation above still applies. |
+| Wallet governance | Layered policy, exact approvals, reload limits, safe assignment defaults, and durable decisions are implemented across the auth service and primary SDKs. | External custody, issuer controls, and merchant result recovery remain separately operated dependencies. |
 | Standard-auth throughput | Auth service source enforces Redis-backed Free/Pro/Enterprise budgets of 100/500/2,000 requests per minute per developer on API-key routes handled by the standard auth plugin, after the active Fastify per-IP policy (the 5,000/min default or a route override). Commerce, SCIM Bearer data-plane, admin, and other custom-auth routes remain outside these plan buckets. | Source completion does not confirm managed-service deployment. |
 
 ## Installation Guidance
@@ -88,11 +75,11 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 Install the verified public releases needed by your application:
 
 ```bash
-npm install @grantex/sdk@0.4.1
-npm install @grantex/x402@0.2.0 @grantex/sdk@0.4.1
-pip install grantex==0.3.14
-go get github.com/mishrasanjeev/grantex-go@v0.1.10
-npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.4.1
+npm install @grantex/sdk@0.5.0
+npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0
+pip install grantex==0.4.0
+go get github.com/mishrasanjeev/grantex-go@v0.2.0
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.0
 ```
 
 Unpinned install commands resolve to the registry's current release. For reproducible builds, keep the explicit versions above and review this matrix before upgrading.

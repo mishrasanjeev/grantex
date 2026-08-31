@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Grantex Auth Service API
-  version: 0.4.0
+  version: 0.5.0
   description: |
     Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
@@ -151,7 +151,7 @@ components:
 
     PrepaidWallet:
       type: object
-      required: [walletId, principalId, name, custodyMode, network, asset, decimals, availableAmount, reservedAmount, lowBalanceThreshold, status]
+      required: [walletId, principalId, name, custodyMode, network, asset, decimals, availableAmount, reservedAmount, lowBalanceThreshold, maxBalance, maxReloadAmount, reloadCumulativeLimit, reloadPeriodSeconds, reloadCountLimit, status]
       properties:
         walletId: { type: string, pattern: '^pwal_' }
         principalId: { type: string }
@@ -166,6 +166,11 @@ components:
         availableAmount: { type: string, pattern: '^\d+$', description: Integer atomic units }
         reservedAmount: { type: string, pattern: '^\d+$', description: Integer atomic units }
         lowBalanceThreshold: { type: string, pattern: '^\d+$' }
+        maxBalance: { type: [string, 'null'], pattern: '^\d+$', description: Optional hard ceiling on the post-reload available plus reserved balance }
+        maxReloadAmount: { type: [string, 'null'], pattern: '^\d+$', description: Optional maximum for one principal or agent-requested reload }
+        reloadCumulativeLimit: { type: [string, 'null'], pattern: '^\d+$', description: Optional cumulative funded reload ceiling within reloadPeriodSeconds }
+        reloadPeriodSeconds: { type: [integer, 'null'], minimum: 60, maximum: 31536000 }
+        reloadCountLimit: { type: [integer, 'null'], minimum: 1, description: Optional funded reload count ceiling within reloadPeriodSeconds }
         status: { type: string, enum: [active, blocked, closed] }
         blockedAt: { type: [string, 'null'], format: date-time }
         blockedReason: { type: [string, 'null'] }
@@ -176,7 +181,7 @@ components:
     AssignedPrepaidWallet:
       type: object
       description: Agent-visible wallet and assignment projection; custody-provider identifiers and metadata are omitted.
-      required: [walletId, name, network, asset, decimals, availableAmount, reservedAmount, lowBalanceThreshold, status, assignmentId, assignmentStatus, perTransactionLimit, cumulativeLimit, cumulativePeriodSeconds, allowedRecipients, allowedScopes, allWalletsBlocked]
+      required: [walletId, name, network, asset, decimals, availableAmount, reservedAmount, lowBalanceThreshold, status, assignmentId, assignmentStatus, perTransactionLimit, cumulativeLimit, cumulativePeriodSeconds, allowedRecipients, allowedScopes, allowedResourceOrigins, allowAnyRecipient, allowAnyScope, allowAnyResource, budgetGroup, allWalletsBlocked]
       properties:
         walletId: { type: string, pattern: '^pwal_' }
         name: { type: string }
@@ -196,6 +201,11 @@ components:
         cumulativePeriodSeconds: { type: integer, minimum: 60, maximum: 2592000 }
         allowedRecipients: { type: array, items: { type: string } }
         allowedScopes: { type: array, items: { type: string } }
+        allowedResourceOrigins: { type: array, items: { type: string, format: uri }, description: Exact origins only; empty denies every resource unless allowAnyResource is true }
+        allowAnyRecipient: { type: boolean, description: Explicit opt-out from recipient allowlisting }
+        allowAnyScope: { type: boolean, description: Explicit opt-out from assignment action-scope allowlisting; OAuth scopes still apply }
+        allowAnyResource: { type: boolean, description: Explicit opt-out from resource-origin allowlisting }
+        budgetGroup: { type: [string, 'null'], description: Optional shared policy bucket across agents and wallets }
         validFrom: { type: string, format: date-time }
         validUntil: { type: [string, 'null'], format: date-time }
         allWalletsBlocked: { type: boolean }
@@ -204,7 +214,7 @@ components:
 
     WalletAssignment:
       type: object
-      required: [assignmentId, walletId, agentId, principalId, status, perTransactionLimit, cumulativeLimit, cumulativePeriodSeconds, allowedRecipients, allowedScopes]
+      required: [assignmentId, walletId, agentId, principalId, status, perTransactionLimit, cumulativeLimit, cumulativePeriodSeconds, allowedRecipients, allowedScopes, allowedResourceOrigins, allowAnyRecipient, allowAnyScope, allowAnyResource, budgetGroup]
       properties:
         assignmentId: { type: string, pattern: '^wasn_' }
         walletId: { type: string }
@@ -216,12 +226,17 @@ components:
         cumulativePeriodSeconds: { type: integer, minimum: 60, maximum: 2592000 }
         allowedRecipients: { type: array, items: { type: string } }
         allowedScopes: { type: array, items: { type: string } }
+        allowedResourceOrigins: { type: array, items: { type: string, format: uri } }
+        allowAnyRecipient: { type: boolean }
+        allowAnyScope: { type: boolean }
+        allowAnyResource: { type: boolean }
+        budgetGroup: { type: [string, 'null'] }
         validFrom: { type: string, format: date-time }
         validUntil: { type: [string, 'null'], format: date-time }
 
     WalletAuthorization:
       type: object
-      required: [authorization, reservationId, walletId, assignmentId, amount, asset, network, recipient, expiresAt, remainingAvailable, remainingCumulative]
+      required: [authorization, reservationId, walletId, assignmentId, amount, asset, network, recipient, expiresAt, remainingAvailable, remainingCumulative, policyDecisionId]
       properties:
         authorization: { type: string, description: Short-lived one-time signed wallet authorization }
         reservationId: { type: string, pattern: '^wres_' }
@@ -234,6 +249,88 @@ components:
         expiresAt: { type: string, format: date-time }
         remainingAvailable: { type: string, pattern: '^\d+$' }
         remainingCumulative: { type: string, pattern: '^\d+$' }
+        policyDecisionId: { type: [string, 'null'], pattern: '^wdec_', description: Durable layered-policy decision attached to this reservation }
+
+    WalletSpendPolicyInput:
+      type: object
+      required: [name, scopeType, effect]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        scopeType: { type: string, enum: [assignment, wallet, agent, group, principal, developer] }
+        scopeId: { type: string, description: Required except for developer scope and the authenticated principal's own principal scope }
+        effect: { type: string, enum: [limit, deny, require_approval] }
+        onExceed: { type: string, enum: [deny, require_approval], default: deny }
+        maxAmount: { type: string, pattern: '^\d+$', description: Atomic-unit ceiling; a limit policy requires maxAmount or maxCount }
+        maxCount: { type: integer, minimum: 0 }
+        windowType: { type: string, enum: [per_authorization, rolling, calendar_day, calendar_week, calendar_month, lifetime], default: per_authorization }
+        windowSeconds: { type: integer, minimum: 10, maximum: 2678400, description: Required for a rolling window }
+        recipients: { type: array, maxItems: 200, items: { type: string } }
+        resourceOrigins: { type: array, maxItems: 200, items: { type: string, format: uri }, description: Origins without paths, queries, credentials, or fragments }
+        actionScopes: { type: array, maxItems: 200, items: { type: string } }
+        assets: { type: array, maxItems: 200, items: { type: string } }
+        networks: { type: array, maxItems: 200, items: { type: string } }
+        merchantIds: { type: array, maxItems: 200, items: { type: string } }
+        purposes: { type: array, maxItems: 200, items: { type: string } }
+        projectIds: { type: array, maxItems: 200, items: { type: string } }
+        costCenters: { type: array, maxItems: 200, items: { type: string } }
+        requireVerifiedMerchant: { type: boolean, default: false }
+        priority: { type: integer, minimum: -100000, maximum: 100000, default: 0 }
+        validFrom: { type: string, format: date-time }
+        validUntil: { type: string, format: date-time }
+
+    WalletSpendPolicy:
+      allOf:
+        - $ref: '#/components/schemas/WalletSpendPolicyInput'
+        - type: object
+          required: [policyId, developerId, principalId, status, version, createdAt, updatedAt]
+          properties:
+            policyId: { type: string, pattern: '^wspol_' }
+            developerId: { type: string }
+            principalId: { type: [string, 'null'] }
+            status: { type: string, enum: [active, disabled, revoked] }
+            version: { type: integer, minimum: 1 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+
+    WalletPaymentApproval:
+      type: object
+      required: [approvalRequestId, walletId, assignmentId, agentId, amount, asset, network, recipient, resource, scope, policyIds, status, expiresAt, createdAt, updatedAt]
+      properties:
+        approvalRequestId: { type: string, pattern: '^wapr_' }
+        walletId: { type: string, pattern: '^pwal_' }
+        assignmentId: { type: string, pattern: '^wasn_' }
+        agentId: { type: string }
+        amount: { type: string, pattern: '^[1-9]\d*$' }
+        asset: { type: string }
+        network: { type: string }
+        recipient: { type: string }
+        resource: { type: string, format: uri }
+        scope: { type: string }
+        merchantId: { type: [string, 'null'] }
+        purpose: { type: [string, 'null'] }
+        projectId: { type: [string, 'null'] }
+        costCenter: { type: [string, 'null'] }
+        policyIds: { type: array, items: { type: string, pattern: '^wspol_' } }
+        status: { type: string, enum: [pending, approved, rejected, expired, consumed] }
+        reason: { type: [string, 'null'] }
+        expiresAt: { type: string, format: date-time, description: Approval is valid for at most 15 minutes and only for this exact payment tuple }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        consumedAt: { type: [string, 'null'], format: date-time }
+        reservationId: { type: [string, 'null'], pattern: '^wres_' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    WalletPaymentApprovalRequired:
+      type: object
+      required: [status, approvalRequestId, walletId, assignmentId, policyIds, expiresAt]
+      properties:
+        status: { type: string, const: approval_required }
+        approvalRequestId: { type: string, pattern: '^wapr_' }
+        walletId: { type: string, pattern: '^pwal_' }
+        assignmentId: { type: string, pattern: '^wasn_' }
+        policyIds: { type: array, items: { type: string, pattern: '^wspol_' } }
+        expiresAt: { type: string, format: date-time }
 
     WalletReloadRequest:
       type: object
@@ -651,6 +748,11 @@ paths:
                 asset: { type: string, example: USDC }
                 decimals: { type: integer, default: 6, minimum: 0, maximum: 30 }
                 lowBalanceThreshold: { type: string, pattern: '^\d+$' }
+                maxBalance: { type: string, pattern: '^\d+$' }
+                maxReloadAmount: { type: string, pattern: '^\d+$' }
+                reloadCumulativeLimit: { type: string, pattern: '^\d+$' }
+                reloadPeriodSeconds: { type: integer, minimum: 60, maximum: 31536000 }
+                reloadCountLimit: { type: integer, minimum: 1 }
                 metadata: { type: object, additionalProperties: true }
       responses:
         '201':
@@ -692,8 +794,13 @@ paths:
                 perTransactionLimit: { type: string, pattern: '^[1-9]\d*$' }
                 cumulativeLimit: { type: string, pattern: '^[1-9]\d*$' }
                 cumulativePeriodSeconds: { type: integer, minimum: 60, maximum: 2592000 }
-                allowedRecipients: { type: array, items: { type: string }, default: [] }
-                allowedScopes: { type: array, items: { type: string }, default: [] }
+                allowedRecipients: { type: array, items: { type: string }, default: [], description: Empty denies every recipient unless allowAnyRecipient is explicitly true }
+                allowedScopes: { type: array, items: { type: string }, default: [], description: Empty denies every action unless allowAnyScope is explicitly true }
+                allowedResourceOrigins: { type: array, items: { type: string, format: uri }, default: [], description: Empty denies every resource unless allowAnyResource is explicitly true }
+                allowAnyRecipient: { type: boolean, default: false }
+                allowAnyScope: { type: boolean, default: false }
+                allowAnyResource: { type: boolean, default: false }
+                budgetGroup: { type: string, maxLength: 200 }
                 validUntil: { type: string, format: date-time }
       responses:
         '201':
@@ -867,6 +974,150 @@ paths:
       responses:
         '200': { description: Reservation released }
 
+  /v1/principal/prepaid-wallet-spend-policies:
+    post:
+      operationId: createPrincipalPrepaidWalletSpendPolicy
+      tags: [Prepaid Wallets]
+      summary: Create a layered spend policy within the authenticated principal partition
+      description: Principal sessions may create assignment, wallet, agent, group, or principal policies, but cannot create developer-wide policies. Policy creation releases active reservations so stale policy decisions cannot settle.
+      security: [{ principalSessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WalletSpendPolicyInput' }
+      responses:
+        '201':
+          description: Spend policy created
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletSpendPolicy' } } }
+        '403': { description: Requested scope exceeds the authenticated principal partition }
+    get:
+      operationId: listPrincipalPrepaidWalletSpendPolicies
+      tags: [Prepaid Wallets]
+      summary: List layered spend policies visible to the authenticated principal
+      security: [{ principalSessionAuth: [] }]
+      responses:
+        '200':
+          description: Principal and developer policies that can govern this principal
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [policies]
+                properties: { policies: { type: array, items: { $ref: '#/components/schemas/WalletSpendPolicy' } } }
+
+  /v1/principal/prepaid-wallet-spend-policies/{policyId}/status:
+    patch:
+      operationId: setPrincipalPrepaidWalletSpendPolicyStatus
+      tags: [Prepaid Wallets]
+      summary: Enable, disable, or terminally revoke a principal-owned spend policy
+      description: Any status change releases active reservations in this principal partition.
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: policyId, in: path, required: true, schema: { type: string, pattern: '^wspol_' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties: { status: { type: string, enum: [active, disabled, revoked] } }
+      responses:
+        '200':
+          description: Updated spend policy
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletSpendPolicy' } } }
+
+  /v1/principal/prepaid-wallet-payment-approvals:
+    get:
+      operationId: listPrincipalPrepaidWalletPaymentApprovals
+      tags: [Prepaid Wallets]
+      summary: List exact-bound payment approval requests for the authenticated principal
+      security: [{ principalSessionAuth: [] }]
+      responses:
+        '200':
+          description: Approval requests, including expired and consumed evidence
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [approvals]
+                properties: { approvals: { type: array, items: { $ref: '#/components/schemas/WalletPaymentApproval' } } }
+
+  /v1/principal/prepaid-wallet-payment-approvals/{approvalRequestId}/decision:
+    post:
+      operationId: decidePrincipalPrepaidWalletPaymentApproval
+      tags: [Prepaid Wallets]
+      summary: Approve or reject one exact payment request
+      description: Approval does not move funds. It permits one retry with the same wallet, amount, asset, network, recipient, resource, scope, semantic context, and idempotency key before expiry.
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: approvalRequestId, in: path, required: true, schema: { type: string, pattern: '^wapr_' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approved, rejected] }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Approval decision recorded
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletPaymentApproval' } } }
+        '409': { description: Request expired or already has a conflicting terminal decision }
+
+  /v1/prepaid-wallet-spend-policies:
+    post:
+      operationId: createDeveloperPrepaidWalletSpendPolicy
+      tags: [Prepaid Wallets]
+      summary: Create a layered spend policy using developer API-key authority
+      description: Developer API keys can define organization-wide developer policies as well as narrower principal, group, agent, wallet, and assignment scopes. Creating a policy releases active reservations in the developer partition.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WalletSpendPolicyInput' }
+      responses:
+        '201':
+          description: Spend policy created
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletSpendPolicy' } } }
+    get:
+      operationId: listDeveloperPrepaidWalletSpendPolicies
+      tags: [Prepaid Wallets]
+      summary: List every layered wallet spend policy in the developer partition
+      responses:
+        '200':
+          description: Developer policy list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [policies]
+                properties: { policies: { type: array, items: { $ref: '#/components/schemas/WalletSpendPolicy' } } }
+
+  /v1/prepaid-wallet-spend-policies/{policyId}/status:
+    patch:
+      operationId: setDeveloperPrepaidWalletSpendPolicyStatus
+      tags: [Prepaid Wallets]
+      summary: Enable, disable, or terminally revoke a developer-visible spend policy
+      parameters:
+        - { name: policyId, in: path, required: true, schema: { type: string, pattern: '^wspol_' } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties: { status: { type: string, enum: [active, disabled, revoked] } }
+      responses:
+        '200':
+          description: Updated spend policy
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletSpendPolicy' } } }
+
   /v1/prepaid-wallets:
     get:
       operationId: listAgentPrepaidWallets
@@ -908,10 +1159,18 @@ paths:
                 scope: { type: string }
                 maxTimeoutSeconds: { type: integer, minimum: 1, maximum: 300 }
                 idempotencyKey: { type: string, minLength: 16 }
+                approvalRequestId: { type: string, pattern: '^wapr_', description: Approved exact-bound request returned by a prior 202 response }
+                merchantId: { type: string }
+                purpose: { type: string }
+                projectId: { type: string }
+                costCenter: { type: string }
       responses:
         '201':
           description: Value reserved and authorization signed
           content: { application/json: { schema: { $ref: '#/components/schemas/WalletAuthorization' } } }
+        '202':
+          description: A matched policy requires principal approval; no value has been reserved
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletPaymentApprovalRequired' } } }
         '402': { description: Balance or spend limit exceeded }
         '403': { description: Assignment, recipient, scope, asset, network, or block policy denied }
         '409': { description: Idempotency conflict or prior authorization no longer usable }

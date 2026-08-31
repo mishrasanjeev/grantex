@@ -229,7 +229,7 @@ runner (`src/db/migrate.ts`) that reads all `*.sql` files from the `migrations/`
 alphabetical order and executes each one. All statements use idempotent DDL (`CREATE TABLE IF NOT EXISTS`,
 `ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`), so re-running is safe.
 
-The repository currently contains ordered migrations through `086`, covering core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, MCP certification-state integrity, and query-performance indexes. Index builds use `CREATE INDEX CONCURRENTLY`, and the runner serializes migrations across service instances with a PostgreSQL advisory lock. Inspect the migration directory in the exact release you deploy rather than relying on a copied file count.
+The repository currently contains ordered migrations through `092`, covering core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, MCP certification-state integrity, query-performance indexes, agent prepaid wallets, and layered wallet spend controls. Index builds use `CREATE INDEX CONCURRENTLY`, and the runner serializes migrations across service instances with a PostgreSQL advisory lock. Inspect the migration directory in the exact release you deploy rather than relying on a copied file count.
 
 **Upgrade procedure** — just restart the service:
 

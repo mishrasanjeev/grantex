@@ -147,6 +147,17 @@ from .resources._passports import PassportsClient
 from .resources._dpdp import DpdpClient
 from .resources._commerce import CommerceClient
 from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent, StreamOptions, Subscription
+from ._pkce import PkceChallenge, generate_pkce
+from ._verify import verify_grant_token
+from ._webhook import verify_webhook, verify_webhook_signature
+from .manifest import ToolManifest, Permission, EnforceResult
+from ._fastapi import GrantexEnforcer
+from .prepaid_wallets import (
+    AgentPrepaidWalletClient,
+    PrincipalPrepaidWalletClient,
+    WalletSpendPoliciesClient,
+    generate_dpop_key,
+)
 
 # ─── Aliases for cross-SDK naming consistency ────────────────────────────────
 # The TypeScript SDK uses SsoConnectionListResponse / SsoSessionListResponse
@@ -155,17 +166,15 @@ from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent,
 SsoConnectionListResponse = ListSsoConnectionsResponse
 SsoSessionListResponse = ListSsoSessionsResponse
 
-from ._pkce import PkceChallenge, generate_pkce
-from ._verify import verify_grant_token
-from ._webhook import verify_webhook, verify_webhook_signature
-from .manifest import ToolManifest, Permission, EnforceResult
-from ._fastapi import GrantexEnforcer
-
-__version__ = "0.3.14"
+__version__ = "0.4.0"
 
 __all__ = [
     # Main client
     "Grantex",
+    "AgentPrepaidWalletClient",
+    "PrincipalPrepaidWalletClient",
+    "WalletSpendPoliciesClient",
+    "generate_dpop_key",
     # Signup
     "SignupParams",
     "SignupResponse",

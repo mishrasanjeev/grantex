@@ -124,7 +124,61 @@ token = client.tokens.exchange(ExchangeTokenParams(
 | **Billing** | `client.billing.get_subscription()`, `.create_checkout()`, `.create_portal()` |
 | **SCIM 2.0** | `client.scim.create_user()`, `.list_users()`, `.get_user()`, `.update_user()`, `.delete_user()` |
 | **OIDC SSO** | `client.sso.create_config()`, `.get_config()`, `.get_login_url()`, `.handle_callback()` |
+| **Agent prepaid wallets** | Developer policy, principal wallet/policy/approval, and ES256 DPoP agent clients |
 | **Commerce V1/OACP** | `client.commerce.get_profile()`, `.search_catalog()`, `.create_cart()`, `.get_ops_health()` |
+
+## Agent prepaid wallets (0.4+)
+
+```python
+from grantex import (
+    AgentPrepaidWalletClient,
+    PrincipalPrepaidWalletClient,
+    generate_dpop_key,
+)
+
+principal = PrincipalPrepaidWalletClient(
+    base_url="https://grantex.dev",
+    session_token=session_token,
+)
+principal.create_spend_policy({
+    "name": "Research group budget",
+    "scopeType": "group",
+    "scopeId": "research-agents",
+    "effect": "limit",
+    "maxAmount": "1000000",
+    "windowType": "month",
+    "onExceed": "require_approval",
+})
+
+agent = AgentPrepaidWalletClient(
+    access_token=access_token,
+    private_key=generate_dpop_key(),  # persist securely across process restarts
+    resource_url="https://grantex.dev/v1/prepaid-wallets",
+)
+result = agent.authorize_payment({
+    "amount": "2500",
+    "asset": "USDC",
+    "network": "grantex:prepaid",
+    "recipient": "merchant:data-api",
+    "resource": "https://merchant.example/data",
+    "scope": "data:read",
+    "merchantId": "merchant:data-api",
+    "purpose": "research",
+    "maxTimeoutSeconds": 120,
+    "idempotencyKey": logical_payment_id,
+})
+
+if result.get("status") == "approval_required":
+    principal.decide_payment_approval(
+        result["approvalRequestId"], "approved", "Exact request reviewed"
+    )
+```
+
+The agent client creates a fresh ES256 DPoP proof for each request and binds it
+to the access token, method, and exact URL. An approved retry must preserve the
+original wallet, idempotency key, amount, payee, resource, and semantic context.
+Grantex governs delegated spend; external issuer/custody, KYC, sanctions,
+settlement, dispute, and reconciliation controls remain operator dependencies.
 
 ## Commerce V1 / OACP
 

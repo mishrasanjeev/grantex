@@ -23,28 +23,29 @@ const defaultTimeout = 30 * time.Second
 
 // Client is the main entry point for the Grantex SDK.
 type Client struct {
-	Agents            *AgentsService
-	Tokens            *TokensService
-	Grants            *GrantsService
-	Audit             *AuditService
-	Webhooks          *WebhooksService
-	Billing           *BillingService
-	Policies          *PoliciesService
-	Compliance        *ComplianceService
-	Anomalies         *AnomaliesService
-	SCIM              *SCIMService
-	SSO               *SSOService
-	PrincipalSessions *PrincipalSessionsService
-	Budgets           *BudgetsService
-	Events            *EventsService
-	Usage             *UsageService
-	Domains           *DomainsService
-	WebAuthn          *WebAuthnService
-	Credentials       *CredentialsService
-	Passports         *PassportsService
-	Vault             *VaultService
-	DPDP              *DPDPService
-	Commerce          *CommerceService
+	Agents              *AgentsService
+	Tokens              *TokensService
+	Grants              *GrantsService
+	Audit               *AuditService
+	Webhooks            *WebhooksService
+	Billing             *BillingService
+	Policies            *PoliciesService
+	Compliance          *ComplianceService
+	Anomalies           *AnomaliesService
+	SCIM                *SCIMService
+	SSO                 *SSOService
+	PrincipalSessions   *PrincipalSessionsService
+	Budgets             *BudgetsService
+	Events              *EventsService
+	Usage               *UsageService
+	Domains             *DomainsService
+	WebAuthn            *WebAuthnService
+	Credentials         *CredentialsService
+	Passports           *PassportsService
+	Vault               *VaultService
+	DPDP                *DPDPService
+	Commerce            *CommerceService
+	WalletSpendPolicies *WalletSpendPoliciesService
 
 	http *httpClient
 }
@@ -95,6 +96,7 @@ func NewClient(apiKey string, opts ...Option) *Client {
 	c.Vault = &VaultService{http: h}
 	c.DPDP = &DPDPService{http: h}
 	c.Commerce = &CommerceService{http: h}
+	c.WalletSpendPolicies = &WalletSpendPoliciesService{http: h}
 
 	return c
 }
