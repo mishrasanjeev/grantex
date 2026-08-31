@@ -105,10 +105,10 @@ complete responsibility matrix, policy composition, exact approval protocol,
 and honest residual gap list.
 
 The managed clients are implemented in `@grantex/sdk@0.5.0`,
-`@grantex/x402@0.3.0`, Python `grantex==0.4.0`, and Go `v0.2.0`. Python and Go
-are registry-verified published releases; the TypeScript and x402 versions
-remain prepared npm candidates, so use their prior published versions until
-the exact candidates are registry-verified. See the [x402 integration
+`@grantex/x402@0.3.0`, Python `grantex==0.4.0`, and Go `v0.2.0`. All four are
+registry-verified published releases. External custody, principal notification
+delivery, and merchant result idempotency remain operator responsibilities.
+See the [x402 integration
 guide](docs/integrations/x402.mdx), [wallet
 lifecycle](docs/features/prepaid-wallets.mdx), and [production-readiness
 guide](docs/guides/prepaid-wallet-production.mdx).
@@ -160,8 +160,8 @@ Verification completed with 2,097 auth-service tests, 444 SDK tests, and 253
 tests across 21 sequential Docker E2E files. This is self-assessed evidence for
 the tested Grantex configuration, not independent interoperability
 certification, OAuth Working Group adoption, or IETF endorsement. The
-`OAuthAgentClient` is part of the `@grantex/sdk@0.5.0` release candidate; the
-current registry release remains `0.4.1` until publication is verified.
+`OAuthAgentClient` is published in `@grantex/sdk@0.5.0` and was verified from a
+clean registry install.
 
 Revision `-02` remains the current Datatracker publication. Candidate `-03`
 must not be uploaded before 2026-09-09 and requires a fresh explicit approval
@@ -1538,9 +1538,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 ## Integrations
 
-This table is a source-and-registry status snapshot as of 2026-08-31. A
-release-candidate row is not a publication claim; use its explicitly named
-current published version until the candidate is verified in the registry. For
+This table is a source-and-registry status snapshot as of 2026-08-31. For
 integration packages, "Published package" identifies a public package surface;
 check its registry page and compatibility notes before choosing a version.
 
@@ -1564,7 +1562,7 @@ check its registry page and compatibility notes before choosing a version.
 | **Strands Agents SDK (Python)** | `grantex-strands` | `pip install grantex-strands` | Published package |
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | Published package |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | Published package |
-| **TypeScript SDK** | `@grantex/sdk` (`0.5.0`) | Install after registry verification | Layered-wallet release candidate; current published version is `0.4.1` |
+| **TypeScript SDK** | `@grantex/sdk` (`0.5.0`) | `npm install @grantex/sdk@0.5.0` | Registry-verified wallet-governance release |
 | **Python SDK** | `grantex` (`0.4.0`) | `python -m pip install grantex==0.4.0` | Registry-verified wallet-governance release |
 | **Go SDK** | `grantex-go` (`v0.2.0`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.2.0` | Proxy-verified wallet-governance release |
 | **CLI** | `@grantex/cli` (`0.3.0`) | `npm install -g @grantex/cli@0.3.0` | Registry-verified published package |
@@ -1576,7 +1574,7 @@ check its registry page and compatibility notes before choosing a version.
 | **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | Published package |
 | **Event Destinations** | `@grantex/destinations` | `npm install @grantex/destinations` | Published package |
 | **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | Source present; verify registry before pinning |
-| **x402 Payment Protocol** | `@grantex/x402` (`0.3.0`) | Install after registry verification | Layered x402 v2 release candidate; current published version is `0.2.0`; external custody remains operator-supplied |
+| **x402 Payment Protocol** | `@grantex/x402` (`0.3.0`) | `npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0` | Registry-verified layered x402 v2 release; external custody remains operator-supplied |
 
 The guarded `publish-primary-sdks.yml` workflow builds and tests each prepared
 version once, then publishes those immutable artifacts. Before it can publish, a

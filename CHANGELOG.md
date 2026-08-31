@@ -32,6 +32,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Commerce, SCIM Bearer data-plane, admin, and other custom-auth routes remain outside these plan buckets.
 
 ### Changed
+- Published `@grantex/sdk@0.5.0` and `@grantex/x402@0.3.0` to npm on
+  2026-08-31; verified registry integrity and installed both exact versions in
+  a clean project, including the layered-wallet and x402 approval exports.
 - Published Python SDK `grantex==0.4.0` to PyPI and Go SDK `v0.2.0` to the
   standalone Go module on 2026-08-31; verified both from clean registry
   installs, including the layered prepaid-wallet governance clients.
