@@ -7,8 +7,8 @@
     "start": "npx tsx src/index.ts"
   },
   "dependencies": {
-    "@grantex/sdk": "^0.5.0",
     "@grantex/langchain": "^0.1.7",
+    "@grantex/sdk": "^0.5.1",
     "@langchain/core": "^1.2.9"
   },
   "devDependencies": {

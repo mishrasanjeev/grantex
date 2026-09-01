@@ -104,11 +104,9 @@ See [Agent Wallet Governance](docs/guides/agent-wallet-governance.mdx) for the
 complete responsibility matrix, policy composition, exact approval protocol,
 and honest residual gap list.
 
-The managed clients are implemented in `@grantex/sdk@0.5.1`,
-`@grantex/x402@0.3.0`, Python `grantex==0.4.1`, and Go `v0.2.1`. x402,
-Python, and Go are registry-verified published releases; TypeScript `0.5.1`
-remains a source release candidate until npm publication and clean-install
-verification complete. External custody, principal notification delivery, and
+The managed clients are implemented in registry-verified `@grantex/sdk@0.5.1`,
+`@grantex/x402@0.3.0`, Python `grantex==0.4.1`, and Go `v0.2.1`. External
+custody, principal notification delivery, and
 merchant result idempotency remain operator responsibilities.
 See the [x402 integration
 guide](docs/integrations/x402.mdx), [wallet
@@ -181,9 +179,8 @@ Verification completed with 2,138 auth-service tests, 456 TypeScript SDK tests,
 and 255 tests across 23 sequential Docker E2E files. This is self-assessed evidence for
 the tested Grantex configuration, not independent interoperability
 certification, OAuth Working Group adoption, or IETF endorsement. The
-updated `OAuthAgentClient` is prepared in the `@grantex/sdk@0.5.1` source
-release candidate; continue using registry release `0.5.0` until publication
-and clean-install verification complete.
+updated `OAuthAgentClient` is published in registry-verified
+`@grantex/sdk@0.5.1`.
 
 Revision `-02` remains the current Datatracker publication. Candidate `-03`
 must not be uploaded before 2026-09-09 and requires a fresh explicit approval
@@ -219,15 +216,15 @@ Start with the [OACP runtime launch closure PRD](docs/guides/oacp/runtime-launch
 
 Grantex components are independently versioned. The protocol specification remains **v1.0 Final**; SDK, MCP package, and roadmap milestone versions are separate release lines and do not represent a monorepo-wide version.
 
-Current public releases and prepared patch candidates, verified 2026-09-01:
+Current public releases and repository versions, verified 2026-09-01:
 
-| Component | Published version | Prepared candidate | Reproducible install |
+| Component | Published version | Repository version | Reproducible install |
 | --- | ---: | ---: | --- |
-| TypeScript SDK | `@grantex/sdk` `0.5.0` | `0.5.1` | `npm install @grantex/sdk@0.5.0` |
-| x402 Payment Protocol | `@grantex/x402` `0.3.0` | - | `npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0` |
+| TypeScript SDK | `@grantex/sdk` `0.5.1` | `0.5.1` | `npm install @grantex/sdk@0.5.1` |
+| x402 Payment Protocol | `@grantex/x402` `0.3.0` | - | `npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.1` |
 | Python SDK | `grantex` `0.4.1` | - | `python -m pip install grantex==0.4.1` |
 | Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.2.1` (Go 1.26.1+) | - | `go get github.com/mishrasanjeev/grantex-go@v0.2.1` |
-| MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | - | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.0` |
+| MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | - | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.1` |
 
 > **Known published-package limits:** MCP Auth `2.0.2` keeps authorization codes
 > in process memory, does not render consent,
@@ -256,7 +253,7 @@ Omit a version pin to install the registry's current latest release. See the [re
 ## SDK quickstart
 
 ```bash
-npm install @grantex/sdk@0.5.0
+npm install @grantex/sdk@0.5.1
 ```
 
 ```typescript
@@ -294,7 +291,7 @@ if (!auth.code) {
 ```bash
 python -m pip install grantex==0.4.1               # Python SDK
 go get github.com/mishrasanjeev/grantex-go@v0.2.1 # Go SDK (Go 1.26.1+)
-npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.0 # MCP endpoint evaluation
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.1 # MCP endpoint evaluation
 npm install -g @grantex/cli@0.3.0                   # Optional CLI tooling
 ```
 
@@ -1571,7 +1568,7 @@ check its registry page and compatibility notes before choosing a version.
 | **DPDP Compliance** | `@grantex/dpdp` | `npm install @grantex/dpdp` | Published package |
 | **Adapters** | `@grantex/adapters` | `npm install @grantex/adapters` | Published package |
 | **MCP Tool Server** | `@grantex/mcp` (`0.1.10`) | `npm install @grantex/mcp` | Published package |
-| **MCP Authorization Server** | `@grantex/mcp-auth` (`2.0.2`) | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.4.1` | Published; single-process evaluation only |
+| **MCP Authorization Server** | `@grantex/mcp-auth` (`2.0.2`) | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.1` | Published; single-process evaluation only |
 | **Gateway** | `@grantex/gateway` | `npm install @grantex/gateway` | Published package |
 | **Express.js** | `@grantex/express` | `npm install @grantex/express` | Published package |
 | **FastAPI** | `grantex-fastapi` | `pip install grantex-fastapi` | Published package |
@@ -1584,7 +1581,7 @@ check its registry page and compatibility notes before choosing a version.
 | **Strands Agents SDK (Python)** | `grantex-strands` | `pip install grantex-strands` | Published package |
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | Published package |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | Published package |
-| **TypeScript SDK** | `@grantex/sdk` (`0.5.0`) | `npm install @grantex/sdk@0.5.0` | Published; source candidate `0.5.1` pending npm verification |
+| **TypeScript SDK** | `@grantex/sdk` (`0.5.1`) | `npm install @grantex/sdk@0.5.1` | Registry-verified published package |
 | **Python SDK** | `grantex` (`0.4.1`) | `python -m pip install grantex==0.4.1` | Registry-verified published package |
 | **Go SDK** | `grantex-go` (`v0.2.1`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.2.1` | Tag and public Go-proxy verified |
 | **CLI** | `@grantex/cli` (`0.3.0`) | `npm install -g @grantex/cli@0.3.0` | Registry-verified published package |
@@ -1596,7 +1593,7 @@ check its registry page and compatibility notes before choosing a version.
 | **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | Published package |
 | **Event Destinations** | `@grantex/destinations` | `npm install @grantex/destinations` | Published package |
 | **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | Source present; verify registry before pinning |
-| **x402 Payment Protocol** | `@grantex/x402` (`0.3.0`) | `npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0` | Registry-verified layered x402 v2 release; external custody remains operator-supplied |
+| **x402 Payment Protocol** | `@grantex/x402` (`0.3.0`) | `npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.1` | Registry-verified layered x402 v2 release; external custody remains operator-supplied |
 
 The guarded `publish-primary-sdks.yml` workflow builds and tests each prepared
 version once, then publishes those immutable artifacts. Before it can publish, a

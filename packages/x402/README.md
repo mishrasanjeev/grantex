@@ -6,7 +6,7 @@ wallets, plus legacy standalone GDT authorization utilities.
 ## Install
 
 ```bash
-npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.0
+npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.1
 ```
 
 Layered policy, semantic payment context, and exact approval retry require

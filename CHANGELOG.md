@@ -35,9 +35,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - TypeScript, Python, and Go HTTP clients now honor an explicit server
   `Retry-After` window beyond the ten-second exponential-backoff ceiling, with
   a two-minute defensive cap.
-- Prepared `@grantex/sdk@0.5.1`, Python `grantex==0.4.1`, and Go SDK
-  `v0.2.1` with five-minute in-process refresh retry-key retention and an
-  explicit durable idempotency-key option for retries that cross restarts.
+- Published `@grantex/sdk@0.5.1` to npm on 2026-09-01 and verified the
+  registry integrity, exact-version clean install, public exports, and
+  zero-vulnerability consumer audit. TypeScript `0.5.1`, Python
+  `grantex==0.4.1`, and Go SDK `v0.2.1` include five-minute in-process refresh
+  retry-key retention and an explicit durable idempotency-key option for
+  retries that cross restarts.
 - Published Python SDK `grantex==0.4.1` to PyPI and Go SDK `v0.2.1` to the
   standalone module on 2026-09-01; verified both from clean public-registry
   installs, including the explicit refresh idempotency-key APIs.

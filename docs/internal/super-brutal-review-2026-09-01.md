@@ -155,7 +155,9 @@ published labels in a follow-up reviewed commit.
 - Python `grantex==0.4.1` is published on PyPI and verified from a clean public
   index install. Go `v0.2.1` is tagged in the standalone repository, visible
   through `proxy.golang.org`, and verified from a clean consumer module.
-- TypeScript `@grantex/sdk@0.5.1` remains a source release candidate until npm
-  accepts the exact CI-built tarball and a clean consumer install passes. The
-  repository deliberately retains candidate wording until that external gate
-  is complete.
+- TypeScript `@grantex/sdk@0.5.1` was published from the exact CI-built tarball
+  on 2026-09-01. npm reported SHA-1
+  `979368bc85c6758f28b73695026401ec749cd50c` and SHA-512 integrity
+  `sha512-ulrRKqx/Y3RaT6iDoCW0awmDtRRE9wASElbRu/yJGxAaP1t3xTa8olq6k9XEmPe+xSOCFd7eKIjT4jziMY9Bog==`.
+  A clean consumer installed the exact version, imported `Grantex` and
+  `OAuthAgentClient`, and completed `npm audit` with zero vulnerabilities.
