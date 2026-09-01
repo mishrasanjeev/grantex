@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@grantex/sdk": "^0.5.1",
-    "next": "^15.5.21",
+    "next": "^16.3.3",
     "react": "^19.0.0",
     "react-dom": "^19.2.8"
   },
