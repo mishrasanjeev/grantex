@@ -245,7 +245,7 @@
             "name": "Which Grantex SDK should I install?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Use the registry-verified @grantex/sdk@0.5.0 for TypeScript, grantex==0.4.1 for Python, and github.com/mishrasanjeev/grantex-go@v0.2.1 for Go. TypeScript 0.5.1 remains a source candidate until npm and clean-install verification complete; see release status"
+              "text": "Use the registry-verified @grantex/sdk@0.5.1 for TypeScript, grantex==0.4.1 for Python, and github.com/mishrasanjeev/grantex-go@v0.2.1 for Go. See release status for exact evidence and limitations."
             }
           },
           {
@@ -1632,10 +1632,8 @@
         <div class="section-label">Release state</div>
         <h2 class="section-title">Primary SDK release state</h2>
         <p class="release-intro">
-          Release snapshot verified on 1 September 2026. TypeScript 0.5.0,
+          Release snapshot verified on 1 September 2026. TypeScript 0.5.1,
           Python 0.4.1, Go v0.2.1, and x402 0.3.0 are registry-verified.
-          Patch release candidate <code>@grantex/sdk@0.5.1</code> remains
-          source-only until npm publication and clean-install checks finish.
           External custody remains operator-supplied.
         </p>
       </div>
@@ -1654,10 +1652,10 @@
         <strong class="release-version">0.3.0</strong>
         <span class="release-meta">npm &middot; published 10 Aug 2026 &middot; Agent Skills</span>
       </a>
-      <a class="release-card" href="https://www.npmjs.com/package/@grantex/sdk/v/0.5.0">
+      <a class="release-card" href="https://www.npmjs.com/package/@grantex/sdk/v/0.5.1">
         <span class="release-language">TypeScript SDK</span>
         <span class="release-name">@grantex/sdk</span>
-        <strong class="release-version">0.5.0</strong>
+        <strong class="release-version">0.5.1</strong>
         <span class="release-meta">npm &middot; current published release</span>
       </a>
       <a class="release-card" href="https://www.npmjs.com/package/@grantex/x402/v/0.3.0">
@@ -1788,7 +1786,7 @@
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Which Grantex SDK should I install?</summary>
-        <p>Use the registry-verified <code>@grantex/sdk@0.5.0</code> for TypeScript, <code>grantex==0.4.1</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.2.1</code> for Go. TypeScript <code>0.5.1</code> remains a source candidate until npm and clean-install verification complete; see <a href="https://docs.grantex.dev/release-status">release status</a>.</p>
+        <p>Use the registry-verified <code>@grantex/sdk@0.5.1</code> for TypeScript, <code>grantex==0.4.1</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.2.1</code> for Go. See <a href="https://docs.grantex.dev/release-status">release status</a> for exact evidence and limitations.</p>
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Does local Grantex token verification check current revocation?</summary>
@@ -2255,10 +2253,10 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
     </p>
 
     <div class="install-commands">
-      <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/sdk@0.5.0', this)"
+      <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/sdk@0.5.1', this)"
               aria-label="Copy the TypeScript SDK install command">
         <span class="install-label">npm</span>
-        <code>npm install @grantex/sdk@0.5.0</code>
+        <code>npm install @grantex/sdk@0.5.1</code>
         <span class="install-copy">Copy</span>
       </button>
       <button type="button" class="install-cmd" onclick="copyInstall('python -m pip install grantex==0.4.1', this)"
@@ -2298,7 +2296,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="code-block">
           <button type="button" class="copy-btn" aria-label="Copy the Node.js quickstart"
                   onclick="copyCode('code-node', this, 'node_quickstart_copy')">Copy</button>
-          <pre id="code-node"><span class="cm">// npm install @grantex/sdk@0.5.0</span>
+          <pre id="code-node"><span class="cm">// npm install @grantex/sdk@0.5.1</span>
 <span class="kw">import</span> <span class="op">{ </span><span class="id">Grantex</span><span class="op">,</span> <span class="id">verifyGrantToken</span><span class="op"> }</span> <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
 
 <span class="kw">const</span> <span class="id">grantex</span> <span class="op">=</span> <span class="kw">new</span> <span class="fn">Grantex</span><span class="op">({</span> <span class="id">apiKey</span><span class="op">:</span> <span class="str">'YOUR_API_KEY'</span> <span class="op">});</span>
@@ -2598,7 +2596,7 @@ func main() {
       and stop one wallet or every wallet without loosening the x402 protocol.
     </p>
     <div class="release-caveat" style="max-width:760px;margin:-24px 0 36px;">
-      <strong>Registry releases:</strong> install <code>@grantex/sdk@0.5.0</code> and
+      <strong>Registry releases:</strong> install <code>@grantex/sdk@0.5.1</code> and
       <code>@grantex/x402@0.3.0</code> for the managed-wallet flow. External custody remains
       fail-closed until a self-hosting operator installs and verifies a provider adapter.
       Grantex governs delegated agent authority and reservation; the issuer or custodian still owns

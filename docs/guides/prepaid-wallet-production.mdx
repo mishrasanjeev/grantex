@@ -15,7 +15,7 @@ recovery store, notification channel, or regulatory approval for the operator.
 | --- | --- | --- | --- |
 | PostgreSQL migrations `091_agent_prepaid_wallets.sql` and `092_layered_wallet_spend_controls.sql` | Always | Startup applies ordered migrations automatically | Back up PostgreSQL, deploy the exact repository migration set, and verify startup completed before sending traffic |
 | Public HTTPS routing | The issuer or wallet resource uses a public host | DPoP tokens bind the exact `/v1/prepaid-wallets` audience | Route the exact public wallet and OAuth paths to the auth service; do not rewrite them to static HTML |
-| `@grantex/sdk@0.5.1` and `@grantex/x402@0.3.0` | Applications install managed-wallet clients from npm | x402 `0.3.0` is published; SDK `0.5.1` is a source release candidate pending clean registry verification | Continue using published SDK `0.5.0` until `0.5.1` is verified, then pin the exact versions and complete the dependencies below |
+| `@grantex/sdk@0.5.1` and `@grantex/x402@0.3.0` | Applications install managed-wallet clients from npm | Both exact versions are published and clean-install verified | Pin these exact versions and complete the dependencies below |
 | External custody adapter | Real bank, card, on-chain, or provider-held funds | `external` wallets fail with `503 CUSTODY_ADAPTER_UNAVAILABLE` | Implement and independently test provider funding, reservation, settlement, reconciliation, duplicate-event handling, and recovery |
 | Principal notification bridge | A human must receive reload alerts outside the Grantex UI | Wallet reload events are emitted to the event bus; no built-in email/SMS/chat delivery is claimed | Consume SSE/WebSocket events and deliver through an approved channel, or separately extend and test webhook registration for wallet events |
 | Merchant idempotency store | A paid request has side effects | Grantex makes reservation and settlement retries idempotent | Atomically store the merchant's business result under the caller's HTTP `Idempotency-Key` |
@@ -165,8 +165,8 @@ npm view '@grantex/sdk' version
 npm view '@grantex/x402' version
 ```
 
-Published and clean-install verified August 31, 2026: SDK `0.5.0` and x402
-`0.3.0`. Registry publication is not inferred from the source tree, so treat
+Published and clean-install verified: SDK `0.5.1` on September 1, 2026 and
+x402 `0.3.0` on August 31, 2026. Registry publication is not inferred from the source tree, so treat
 the registry as authoritative and verify exact versions before each deployment.
 See [Release
 Status](/release-status) for the public artifact matrix.
