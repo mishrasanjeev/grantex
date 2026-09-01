@@ -10,7 +10,7 @@
     "@ai-sdk/openai": "^3.0.0",
     "@grantex/sdk": "^0.5.1",
     "@grantex/vercel-ai": "^0.1.6",
-    "ai": "^6.0.0",
+    "ai": "^7.0.84",
     "zod": "^4.5.2"
   },
   "devDependencies": {
