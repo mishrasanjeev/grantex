@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { buildTestApp, seedAuth, authHeader, sqlMock, mockRedis } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
+import { metricRouteLabel } from '../src/plugins/metricsHook.js';
 
 let app: FastifyInstance;
 
@@ -186,5 +187,12 @@ describe('metrics instrumentation', () => {
     expect(r1.statusCode).toBe(200);
     expect(r2.statusCode).toBe(200);
     expect(r3.statusCode).toBe(200);
+  });
+
+  it('bounds metric cardinality for unmatched paths', () => {
+    expect(metricRouteLabel({ is404: true, routeOptions: { url: '/random/attacker/path' } } as never))
+      .toBe('__unmatched__');
+    expect(metricRouteLabel({ is404: false, routeOptions: { url: '/v1/agents/:id' } } as never))
+      .toBe('/v1/agents/:id');
   });
 });

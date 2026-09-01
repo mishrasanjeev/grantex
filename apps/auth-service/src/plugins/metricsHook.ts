@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Histogram } from 'prom-client';
 import { registry } from '../lib/metrics.js';
 import { config } from '../config.js';
@@ -11,6 +11,12 @@ const httpDuration = new Histogram({
   registers: [registry],
 });
 
+export function metricRouteLabel(request: Pick<FastifyRequest, 'is404' | 'routeOptions'>): string {
+  return request.is404
+    ? '__unmatched__'
+    : request.routeOptions?.url ?? '__unknown__';
+}
+
 export async function metricsHookPlugin(app: FastifyInstance): Promise<void> {
   if (!config.metricsEnabled) return;
 
@@ -22,7 +28,10 @@ export async function metricsHookPlugin(app: FastifyInstance): Promise<void> {
     }
 
     const duration = reply.elapsedTime / 1000; // ms → seconds
-    const route = request.routeOptions?.url ?? request.url;
+    // Never use the raw URL for unmatched routes. Attackers can otherwise
+    // create one Prometheus label set per random path and exhaust memory when
+    // the registry retains those time series indefinitely.
+    const route = metricRouteLabel(request);
 
     httpDuration
       .labels(request.method, route, String(reply.statusCode))
