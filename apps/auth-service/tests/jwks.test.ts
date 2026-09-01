@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { buildTestApp } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
+import { createJwksLoader } from '../src/routes/jwks.js';
 
 let app: FastifyInstance;
 
@@ -25,6 +26,7 @@ describe('GET /.well-known/jwks.json', () => {
     expect(typeof key['n']).toBe('string');
     expect(typeof key['e']).toBe('string');
     expect(typeof key['kid']).toBe('string');
+    expect(res.headers['cache-control']).toBe('public, max-age=5, must-revalidate');
   });
 
   it('does not require Authorization header', async () => {
@@ -42,6 +44,37 @@ describe('GET /.well-known/jwks.json', () => {
       url: '/v1/agents',
     });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('JWKS route cache', () => {
+  it('reuses values, deduplicates concurrent loads, and refreshes after expiry', async () => {
+    let now = 1_000;
+    let calls = 0;
+    let resolveLoad: ((value: { keys: Record<string, unknown>[] }) => void) | undefined;
+    const load = () => {
+      calls += 1;
+      return new Promise<{ keys: Record<string, unknown>[] }>((resolve) => {
+        resolveLoad = resolve;
+      });
+    };
+    const getJwks = createJwksLoader(load, 5_000, () => now);
+
+    const first = getJwks();
+    const concurrent = getJwks();
+    expect(calls).toBe(1);
+    resolveLoad?.({ keys: [{ kid: 'first' }] });
+    await expect(first).resolves.toEqual({ keys: [{ kid: 'first' }] });
+    await expect(concurrent).resolves.toEqual({ keys: [{ kid: 'first' }] });
+
+    await expect(getJwks()).resolves.toEqual({ keys: [{ kid: 'first' }] });
+    expect(calls).toBe(1);
+
+    now += 5_000;
+    const refreshed = getJwks();
+    expect(calls).toBe(2);
+    resolveLoad?.({ keys: [{ kid: 'second' }] });
+    await expect(refreshed).resolves.toEqual({ keys: [{ kid: 'second' }] });
   });
 });
 

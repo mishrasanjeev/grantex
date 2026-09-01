@@ -3,7 +3,42 @@ import { buildJwks } from '../lib/crypto.js';
 import { config } from '../config.js';
 import { DPOP_SIGNING_ALGORITHMS } from '../lib/dpop.js';
 
+type Jwks = Awaited<ReturnType<typeof buildJwks>>;
+
+export const JWKS_CACHE_TTL_MS = 5_000;
+
+// Public keys are safe to cache. Keep the TTL short so externally-provisioned
+// commerce key rotations become visible across instances within five seconds.
+export function createJwksLoader(
+  load: () => Promise<Jwks> = buildJwks,
+  ttlMs = JWKS_CACHE_TTL_MS,
+  now: () => number = Date.now,
+): () => Promise<Jwks> {
+  let cached: { value: Jwks; expiresAt: number } | undefined;
+  let inFlight: Promise<Jwks> | undefined;
+
+  return async () => {
+    if (cached && now() < cached.expiresAt) return cached.value;
+    if (inFlight) return inFlight;
+
+    inFlight = load()
+      .then((value) => {
+        cached = { value, expiresAt: now() + ttlMs };
+        return value;
+      })
+      .finally(() => {
+        inFlight = undefined;
+      });
+    return inFlight;
+  };
+}
+
 export async function jwksRoutes(app: FastifyInstance): Promise<void> {
+  const loadJwks = createJwksLoader(
+    buildJwks,
+    process.env.NODE_ENV === 'test' ? 0 : JWKS_CACHE_TTL_MS,
+  );
+
   app.get('/.well-known/oauth-authorization-server', async (_request, reply) => {
     const issuer = config.jwtIssuer.replace(/\/$/, '');
     const apiBase = config.publicBaseUrl.replace(/\/$/, '');
@@ -37,7 +72,9 @@ export async function jwksRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/.well-known/jwks.json', async (_request, reply) => {
-    const jwks = await buildJwks();
-    await reply.send(jwks);
+    const jwks = await loadJwks();
+    await reply
+      .header('cache-control', 'public, max-age=5, must-revalidate')
+      .send(jwks);
   });
 }

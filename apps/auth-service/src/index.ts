@@ -71,7 +71,7 @@ async function main() {
     }
   }
 
-  const app = await buildApp({ logger: true });
+  const app = await buildApp();
 
   try {
     await app.listen({ port: config.port, host: config.host });

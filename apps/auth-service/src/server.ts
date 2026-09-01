@@ -59,17 +59,19 @@ export type AppOptions = {
   trustProxy?: false | string | string[];
 };
 
-const defaultLoggerOptions = {
-  level: process.env.LOG_LEVEL || 'info',
-  ...(process.env.NODE_ENV === 'development'
-    && process.env.LOG_PRETTY !== 'false'
-    ? { transport: { target: 'pino-pretty' } }
-    : {}),
-};
+function defaultLoggerOptions() {
+  return {
+    level: process.env.LOG_LEVEL || 'info',
+    ...(process.env.NODE_ENV === 'development'
+      && process.env.LOG_PRETTY !== 'false'
+      ? { transport: { target: 'pino-pretty' } }
+      : {}),
+  };
+}
 
 export async function buildApp(opts: AppOptions = {}) {
   const app = Fastify({
-    logger: opts.logger ?? defaultLoggerOptions,
+    logger: opts.logger ?? defaultLoggerOptions(),
     trustProxy: opts.trustProxy ?? config.trustProxy,
     bodyLimit: 1_048_576,
     genReqId: () => randomUUID(),
@@ -133,7 +135,9 @@ export async function buildApp(opts: AppOptions = {}) {
       reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     }
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    reply.header('Cache-Control', 'no-store');
+    if (!reply.getHeader('Cache-Control')) {
+      reply.header('Cache-Control', 'no-store');
+    }
     if (!reply.getHeader('Content-Security-Policy')) {
       reply.header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
     }

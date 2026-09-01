@@ -55,34 +55,42 @@ async function timedRequest(url, options, timeoutMs = 10_000) {
 }
 
 async function runScenario(input) {
-  process.stderr.write(`[stress] ${input.name}: ${input.requests} requests at concurrency ${input.concurrency}\n`);
+  const targetDurationMs = input.durationMs;
+  const target = targetDurationMs === undefined
+    ? `${input.requests} requests`
+    : `${round(targetDurationMs / 1_000)} seconds`;
+  process.stderr.write(`[stress] ${input.name}: ${target} at concurrency ${input.concurrency}\n`);
   let next = 0;
-  const results = [];
+  let completed = 0;
+  let unexpected = 0;
+  let serverErrors = 0;
+  let networkErrors = 0;
+  const latencies = [];
+  const statusCounts = {};
   const started = performance.now();
+  const deadline = targetDurationMs === undefined ? null : started + targetDurationMs;
   const worker = async () => {
     while (true) {
       const index = next;
       next += 1;
-      if (index >= input.requests) return;
-      results.push(await timedRequest(
+      if (deadline === null ? index >= input.requests : performance.now() >= deadline) return;
+      const result = await timedRequest(
         `${baseUrl}${input.path(index)}`,
         input.options(index),
         input.timeoutMs,
-      ));
+      );
+      completed += 1;
+      latencies.push(result.elapsedMs);
+      const key = String(result.status);
+      statusCounts[key] = (statusCounts[key] ?? 0) + 1;
+      if (!input.acceptedStatuses.has(result.status)) unexpected += 1;
+      if (typeof result.status === 'number' && result.status >= 500) serverErrors += 1;
+      if (result.status === 'network_error' || result.status === 'timeout') networkErrors += 1;
     }
   };
   await Promise.all(Array.from({ length: input.concurrency }, worker));
-  const durationMs = performance.now() - started;
-  const latencies = results.map((result) => result.elapsedMs);
-  const statusCounts = {};
-  for (const result of results) {
-    const key = String(result.status);
-    statusCounts[key] = (statusCounts[key] ?? 0) + 1;
-  }
-  const unexpected = results.filter((result) => !input.acceptedStatuses.has(result.status)).length;
-  const serverErrors = results.filter((result) => typeof result.status === 'number' && result.status >= 500).length;
-  const networkErrors = (statusCounts.network_error ?? 0) + (statusCounts.timeout ?? 0);
-  const rps = results.length / (durationMs / 1000);
+  const elapsedMs = performance.now() - started;
+  const rps = completed / (elapsedMs / 1000);
   const p95Ms = percentile(latencies, 0.95);
   const passed = unexpected === 0
     && serverErrors === 0
@@ -92,9 +100,10 @@ async function runScenario(input) {
     && (input.validate === undefined || input.validate(statusCounts));
   return {
     name: input.name,
-    requests: results.length,
+    requests: completed,
     concurrency: input.concurrency,
-    duration_ms: round(durationMs),
+    requested_duration_seconds: targetDurationMs === undefined ? null : round(targetDurationMs / 1_000),
+    duration_ms: round(elapsedMs),
     requests_per_second: round(rps),
     p50_ms: round(percentile(latencies, 0.5)),
     p95_ms: round(p95Ms),
@@ -268,10 +277,9 @@ scenarios.push(await runScenario({
 if (!Number.isFinite(soakSeconds) || soakSeconds < 1 || soakSeconds > 300) {
   throw new Error('--soak-seconds must be between 1 and 300');
 }
-const estimatedSoakRequests = Math.max(1_000, Math.round(soakSeconds * 2_000));
 scenarios.push(await runScenario({
   name: 'jwks_sustained_soak',
-  requests: estimatedSoakRequests,
+  durationMs: soakSeconds * 1_000,
   concurrency: 75,
   path: () => '/.well-known/jwks.json',
   options: () => ({}),
