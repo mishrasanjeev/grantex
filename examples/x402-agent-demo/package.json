@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --skipLibCheck agent.ts",
+    "typecheck": "tsc --ignoreConfig --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --skipLibCheck --types node agent.ts",
     "start": "tsx agent.ts",
     "demo": "tsx agent.ts"
   },
@@ -15,8 +15,8 @@
     "tsx": "^4.21.0"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "typescript": "^5.9.3"
+    "@types/node": "^26.4.0",
+    "typescript": "^7.0.2"
   },
   "author": {
     "name": "Sanjeev Kumar",

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --skipLibCheck src/index.ts",
+    "typecheck": "tsc --ignoreConfig --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --skipLibCheck --types node src/index.ts",
     "start": "npx tsx src/index.ts"
   },
   "dependencies": {
@@ -11,12 +11,12 @@
     "@grantex/sdk": "^0.5.1",
     "@grantex/vercel-ai": "^0.1.6",
     "ai": "^6.0.0",
-    "zod": "^3.23.0"
+    "zod": "^4.5.2"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^26.4.0",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.0"
+    "typescript": "^7.0.2"
   },
   "author": {
     "name": "Sanjeev Kumar",
