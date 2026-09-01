@@ -4,7 +4,8 @@
   "scripts": {
     "audit:supply-chain": "node scripts/check-supply-chain.mjs --audit-npm",
     "audit:python": "python scripts/audit-python-dependencies.py",
-    "test:e2e:refresh-restart": "node scripts/verify-oauth-refresh-restart.mjs"
+    "test:e2e:refresh-restart": "node scripts/verify-oauth-refresh-restart.mjs",
+    "test:stress:docker": "node scripts/docker-stress-test.mjs"
   },
   "devDependencies": {
     "@grantex/sdk": "file:packages/sdk-ts",

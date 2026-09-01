@@ -1,0 +1,7 @@
+services:
+  auth-service:
+    environment:
+      # Avoid Windows/WSL localhost resolving to a competing ::1 relay while
+      # Docker publishes this service on the IPv4 loopback interface.
+      PUBLIC_BASE_URL: http://127.0.0.1:3001
+      JWT_ISSUER: http://127.0.0.1:3001
