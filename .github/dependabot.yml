@@ -262,6 +262,11 @@ updates:
     schedule: { interval: weekly }
     open-pull-requests-limit: 3
     labels: [dependencies, npm, examples]
+    # Next.js 15 requires the JavaScript TypeScript compiler API. TypeScript 7
+    # ships a native compiler that Next.js 15 cannot load during `next build`.
+    ignore:
+      - dependency-name: typescript
+        versions: [">=7"]
 
   - package-ecosystem: npm
     directory: /examples/token-expiry-refresh

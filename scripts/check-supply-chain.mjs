@@ -106,6 +106,16 @@ const knownMissingLicenseMetadata = new Map([
   ['typescript', 'Apache-2.0'],
   ['undici-types', 'MIT'],
 ]);
+const reviewedLicenseMetadataOverrides = new Map([
+  // sqlite-vec publishes "MIT OR Apache" while the upstream repository ships
+  // LICENSE-MIT and an SPDX-detected Apache-2.0 LICENSE-APACHE file.
+  ['sqlite-vec', 'MIT OR Apache-2.0'],
+  ['sqlite-vec-darwin-arm64', 'MIT OR Apache-2.0'],
+  ['sqlite-vec-darwin-x64', 'MIT OR Apache-2.0'],
+  ['sqlite-vec-linux-arm64', 'MIT OR Apache-2.0'],
+  ['sqlite-vec-linux-x64', 'MIT OR Apache-2.0'],
+  ['sqlite-vec-windows-x64', 'MIT OR Apache-2.0'],
+]);
 
 function packageName(packagePath) {
   return packagePath.split('node_modules/').at(-1);
@@ -143,7 +153,9 @@ for (const lockfile of lockfiles) {
     if (!packagePath || !entry.version || entry.link || resolved.startsWith('file:')) continue;
     packageEntries += 1;
     const name = packageName(packagePath);
-    const license = entry.license ?? knownMissingLicenseMetadata.get(name);
+    const license = reviewedLicenseMetadataOverrides.get(name)
+      ?? entry.license
+      ?? knownMissingLicenseMetadata.get(name);
     if (!license) {
       failures.push(`${lockfile}: ${name}@${entry.version} has no license metadata or reviewed exception`);
       continue;
