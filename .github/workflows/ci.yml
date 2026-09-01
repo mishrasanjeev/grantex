@@ -340,19 +340,19 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm install --no-save --no-audit --no-fund "$RUNNER_TEMP"/grantex-packs/grantex-sdk-*.tgz
-          npx tsc --noEmit
+          npm run typecheck
       - name: Typecheck LangChain example against checkout packages
         working-directory: examples/langchain-agent
         run: |
           npm install --no-audit --no-fund
           npm install --no-save --no-audit --no-fund "$RUNNER_TEMP"/grantex-packs/grantex-sdk-*.tgz "$RUNNER_TEMP"/grantex-packs/grantex-langchain-*.tgz
-          npx tsc --noEmit
+          npm run typecheck
       - name: Typecheck Vercel AI example against checkout packages
         working-directory: examples/vercel-ai-chatbot
         run: |
           npm install --no-audit --no-fund
           npm install --no-save --no-audit --no-fund "$RUNNER_TEMP"/grantex-packs/grantex-sdk-*.tgz "$RUNNER_TEMP"/grantex-packs/grantex-vercel-ai-*.tgz
-          npx tsc --noEmit
+          npm run typecheck
 
   nextjs-example:
     name: Example — nextjs-starter
