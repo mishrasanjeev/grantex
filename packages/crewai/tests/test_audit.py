@@ -32,9 +32,13 @@ def test_audit_logs_success(mock_grantex: MagicMock) -> None:
     result = tool._run(item="widget")
 
     assert result == "processed:widget"
+    mock_grantex.grants.get.assert_called_once_with("grnt_01")
+    mock_grantex.agents.get.assert_called_once_with("ag_01")
     mock_grantex.audit.log.assert_called_once_with(
         agent_id="ag_01",
+        agent_did="did:grantex:ag_01",
         grant_id="grnt_01",
+        principal_id="user_01",
         action="tool.run:test_tool",
         metadata={"kwargs": {"item": "widget"}},
         status="success",
@@ -55,7 +59,9 @@ def test_audit_logs_failure_and_reraises(mock_grantex: MagicMock) -> None:
 
     mock_grantex.audit.log.assert_called_once_with(
         agent_id="ag_01",
+        agent_did="did:grantex:ag_01",
         grant_id="grnt_01",
+        principal_id="user_01",
         action="tool.run:test_tool",
         metadata={"kwargs": {"item": "widget"}, "error": "something went wrong"},
         status="failure",
@@ -69,6 +75,18 @@ def test_audit_returns_same_tool_instance(mock_grantex: MagicMock) -> None:
         tool, mock_grantex, agent_id="ag_01", grant_id="grnt_01"
     )
     assert id(returned) == original_id
+
+
+def test_audit_rejects_grant_for_another_agent(mock_grantex: MagicMock) -> None:
+    tool = _make_tool(lambda: "ok")
+    mock_grantex.grants.get.return_value.agent_id = "ag_other"
+
+    with pytest.raises(ValueError, match="belongs to agent 'ag_other'"):
+        with_audit_logging(
+            tool, mock_grantex, agent_id="ag_01", grant_id="grnt_01"
+        )
+
+    mock_grantex.audit.log.assert_not_called()
 
 
 def test_audit_does_not_log_on_scope_error() -> None:

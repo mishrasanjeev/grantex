@@ -22,11 +22,12 @@ import os
 
 import httpx
 
-from grantex import ExchangeTokenParams, Grantex
+from grantex import ExchangeTokenParams, Grantex, ListAuditParams
 from grantex_adk import create_grantex_tool
 
 BASE_URL = os.environ.get("GRANTEX_URL", "http://localhost:3001")
 API_KEY = os.environ.get("GRANTEX_API_KEY", "sandbox-api-key-local")
+JWKS_URI = f"{BASE_URL}/.well-known/jwks.json"
 
 
 def get_grant_token(
@@ -71,6 +72,8 @@ def main() -> None:
         name="read_calendar",
         description="Read the user's upcoming calendar events",
         grant_token=grant_token,
+        jwks_uri=JWKS_URI,
+        issuer=BASE_URL,
         required_scope="calendar:read",
         func=lambda query="today": json.dumps({
             "events": [
@@ -84,6 +87,8 @@ def main() -> None:
         name="send_email",
         description="Send an email on behalf of the user",
         grant_token=grant_token,
+        jwks_uri=JWKS_URI,
+        issuer=BASE_URL,
         required_scope="email:send",
         func=lambda message="": f'Email sent successfully: "{message}"',
     )
@@ -111,6 +116,8 @@ def main() -> None:
             name="delete_account",
             description="Delete the user account",
             grant_token=grant_token,
+            jwks_uri=JWKS_URI,
+            issuer=BASE_URL,
             required_scope="account:delete",  # not in our grant!
             func=lambda: "deleted",
         )
@@ -120,7 +127,9 @@ def main() -> None:
 
     # ── 5. Inspect audit trail ─────────────────────────────────────────
     print("\n--- Audit trail ---")
-    audit_log = client.audit.list(agent_id=agent.id, grant_id=grant_id)
+    audit_log = client.audit.list(
+        ListAuditParams(agent_id=agent.id, grant_id=grant_id)
+    )
     for entry in audit_log.entries:
         print(f"  [{entry.status}] {entry.action} — {entry.timestamp}")
 

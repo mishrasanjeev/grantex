@@ -129,7 +129,9 @@ with_audit_logging(
 ) -> BaseTool
 ```
 
-Patches the tool's `_run` method to log audit entries via the Grantex client.
+Fetches the grant and agent once to validate their relationship and resolve the
+immutable agent DID and principal ID, then patches the tool's `_run` method to
+log complete audit entries via the Grantex client.
 
 | Parameter | Description |
 |---|---|
