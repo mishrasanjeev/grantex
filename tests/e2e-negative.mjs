@@ -225,6 +225,7 @@ async function test_scope_enforcement() {
     description: 'Admin',
     inputSchema: { type: 'object' },
     grantToken,
+    jwksUri: JWKS_URI,
     requiredScope: 'admin:all',
     execute: async () => 'should-not-run',
   });
@@ -246,6 +247,7 @@ async function test_scope_enforcement() {
     description: 'Write',
     inputSchema: { type: 'object' },
     grantToken: emptyAgent.grantToken,
+    jwksUri: JWKS_URI,
     requiredScope: 'file:write', // not granted
     execute: async () => 'should-not-run',
   });
@@ -262,6 +264,7 @@ async function test_scope_enforcement() {
     description: 'Read',
     inputSchema: { type: 'object', properties: { x: { type: 'string' } } },
     grantToken,
+    jwksUri: JWKS_URI,
     requiredScope: 'file:read',
     execute: async () => 'ok',
   });
@@ -487,6 +490,7 @@ async function test_integration_edge_cases() {
     description: 'Read',
     inputSchema: { type: 'object' },
     grantToken,
+    jwksUri: JWKS_URI,
     requiredScope: 'file:read',
     execute: async () => ({ data: 'sensitive' }),
   });
@@ -499,6 +503,7 @@ async function test_integration_edge_cases() {
     description: 'Case',
     inputSchema: { type: 'object' },
     grantToken,
+    jwksUri: JWKS_URI,
     requiredScope: 'FILE:READ', // wrong case
     execute: async () => 'bad',
   });
@@ -510,8 +515,8 @@ async function test_integration_edge_cases() {
   }
 
   // Multiple tools in registry, execute wrong one
-  const toolA = createGrantexTool({ name: 'a', description: 'A', inputSchema: { type: 'object' }, grantToken, requiredScope: 'file:read', execute: async () => 'A' });
-  const toolB = createGrantexTool({ name: 'b', description: 'B', inputSchema: { type: 'object' }, grantToken, requiredScope: 'file:write', execute: async () => 'B' });
+  const toolA = createGrantexTool({ name: 'a', description: 'A', inputSchema: { type: 'object' }, grantToken, jwksUri: JWKS_URI, requiredScope: 'file:read', execute: async () => 'A' });
+  const toolB = createGrantexTool({ name: 'b', description: 'B', inputSchema: { type: 'object' }, grantToken, jwksUri: JWKS_URI, requiredScope: 'file:write', execute: async () => 'B' });
   const reg = new GrantexToolRegistry();
   reg.register(toolA).register(toolB);
 
@@ -526,6 +531,7 @@ async function test_integration_edge_cases() {
     description: 'Crash',
     inputSchema: { type: 'object' },
     grantToken,
+    jwksUri: JWKS_URI,
     requiredScope: 'file:read',
     execute: async () => { throw new Error('intentional crash'); },
   });

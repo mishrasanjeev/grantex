@@ -25,6 +25,7 @@ docker compose up -d
 # Run the example
 cd examples/google-adk
 pip install -r requirements.txt
+pip install "grantex-adk[adk]"
 python main.py
 ```
 

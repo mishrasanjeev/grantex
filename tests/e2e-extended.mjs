@@ -19,6 +19,7 @@ import {
   verifyWebhookSignature,
   GrantexApiError,
 } from '@grantex/sdk';
+import { randomUUID } from 'node:crypto';
 
 const BASE_URL = process.env['GRANTEX_URL'] ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
 const API_KEY = process.env['GRANTEX_API_KEY'] ?? 'gx_test_playground_demo_2026';
@@ -62,7 +63,12 @@ async function test_token_refresh() {
   ok(original.valid === true, 'Original token is valid');
 
   // Refresh
-  const refreshed = await grantex.tokens.refresh({ refreshToken, agentId });
+  const refreshRecoveryKey = randomUUID();
+  const refreshed = await grantex.tokens.refresh({
+    refreshToken,
+    agentId,
+    idempotencyKey: refreshRecoveryKey,
+  });
   ok(!!refreshed.grantToken, 'Refresh returns new grantToken');
   ok(!!refreshed.refreshToken, 'Refresh returns new refreshToken');
   ok(refreshed.grantId === grantId, 'Refresh preserves grantId');
@@ -74,7 +80,11 @@ async function test_token_refresh() {
 
   // If the refresh response is lost after commit, retrying the previous
   // refresh token should recover the same already-rotated child token.
-  const recovered = await grantex.tokens.refresh({ refreshToken, agentId });
+  const recovered = await grantex.tokens.refresh({
+    refreshToken,
+    agentId,
+    idempotencyKey: refreshRecoveryKey,
+  });
   ok(recovered.refreshToken === refreshed.refreshToken, 'Previous refresh token replay recovers rotated refreshToken');
   ok(recovered.grantId === grantId, 'Replay recovery preserves grantId');
 

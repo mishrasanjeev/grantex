@@ -7,11 +7,11 @@ Run:
   python tests/e2e-python.py
 """
 
+import asyncio
+import json
 import os
 import sys
 import time
-import json
-import base64
 import traceback
 
 # Fix Windows console encoding
@@ -20,6 +20,7 @@ sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 BASE_URL = os.environ.get("GRANTEX_URL", "https://grantex-auth-dd4mtrt2gq-uc.a.run.app")
 API_KEY = os.environ.get("GRANTEX_API_KEY", "gx_test_playground_demo_2026")
+ISSUER = os.environ.get("GRANTEX_ISSUER", "https://grantex.dev")
 
 passed = 0
 failed = 0
@@ -40,20 +41,6 @@ def skip(msg):
     global skipped
     skipped += 1
     print(f"  [SKIP] {msg}")
-
-
-def make_token(scopes):
-    """Create a fake JWT for offline scope testing."""
-    header = base64.urlsafe_b64encode(json.dumps({"alg": "RS256"}).encode()).decode().rstrip("=")
-    payload = base64.urlsafe_b64encode(json.dumps({
-        "iss": "https://grantex.dev",
-        "sub": "user_01",
-        "scp": scopes,
-        "jti": "tok_01",
-        "grnt": "grnt_01",
-        "exp": 9999999999,
-    }).encode()).decode().rstrip("=")
-    return f"{header}.{payload}.fakesig"
 
 
 def getval(obj, *keys):
@@ -186,30 +173,35 @@ def test_crewai():
         skip("grantex-crewai or crewai not installed (requires heavy framework deps)")
         return
 
-    token = make_token(["file:read", "file:write"])
+    from grantex import Grantex
+    client = Grantex(api_key=API_KEY, base_url=BASE_URL)
+    _, token, _, _, _ = setup_agent(client, "crewai", ["file:read", "file:write"])
 
     tool = create_grantex_tool(
         name="read_file",
         description="Read a file",
         grant_token=token,
+        jwks_uri=f"{BASE_URL}/.well-known/jwks.json",
+        issuer=ISSUER,
         required_scope="file:read",
         func=lambda path: f"contents of {path}",
     )
     ok(tool.name == "read_file", "CrewAI tool created")
 
-    result = tool.run("test.txt")
+    result = tool.run(path="test.txt")
     ok("contents" in result, f"Tool executed: {result}")
 
-    bad_tool = create_grantex_tool(
-        name="admin_tool",
-        description="Admin",
-        grant_token=token,
-        required_scope="admin:all",
-        func=lambda: "bad",
-    )
     try:
-        bad_tool.run("")
-        ok(False, "Missing scope should throw")
+        create_grantex_tool(
+            name="admin_tool",
+            description="Admin",
+            grant_token=token,
+            jwks_uri=f"{BASE_URL}/.well-known/jwks.json",
+            issuer=ISSUER,
+            required_scope="admin:all",
+            func=lambda: "bad",
+        )
+        ok(False, "Missing scope should throw at creation")
     except Exception as e:
         ok("admin:all" in str(e), f"Scope error: {e}")
 
@@ -227,16 +219,45 @@ def test_openai_agents():
         skip("grantex-openai-agents or OpenAI Agents SDK not installed (requires heavy framework deps)")
         return
 
-    token = make_token(["data:read"])
+    from grantex import Grantex
+    client = Grantex(api_key=API_KEY, base_url=BASE_URL)
+    _, token, _, _, _ = setup_agent(client, "openai-agents", ["data:read"])
 
     tool = create_grantex_tool(
         name="query_data",
         description="Query data",
         grant_token=token,
+        jwks_uri=f"{BASE_URL}/.well-known/jwks.json",
+        issuer=ISSUER,
         required_scope="data:read",
         func=lambda q: f"results for {q}",
     )
     ok(tool.name == "query_data", "OpenAI Agents tool created")
+
+    from agents.tool_context import ToolContext
+    arguments = json.dumps({"q": "revenue"})
+    context = ToolContext(
+        context=None,
+        tool_name=tool.name,
+        tool_call_id="python-e2e-call",
+        tool_arguments=arguments,
+    )
+    result = asyncio.run(tool.on_invoke_tool(context, arguments))
+    ok("results for revenue" in result, f"Tool executed: {result}")
+
+    try:
+        create_grantex_tool(
+            name="admin_tool",
+            description="Admin",
+            grant_token=token,
+            jwks_uri=f"{BASE_URL}/.well-known/jwks.json",
+            issuer=ISSUER,
+            required_scope="admin:all",
+            func=lambda: "bad",
+        )
+        ok(False, "Missing scope should throw at creation")
+    except Exception as e:
+        ok("admin:all" in str(e), f"Scope error: {e}")
 
 
 # ================================================================
@@ -251,13 +272,17 @@ def test_google_adk():
         skip("grantex-adk not installed")
         return
 
-    token = make_token(["calendar:read"])
+    from grantex import Grantex
+    client = Grantex(api_key=API_KEY, base_url=BASE_URL)
+    _, token, _, _, _ = setup_agent(client, "google-adk", ["calendar:read"])
 
     # Valid scope — ADK tools use **kwargs
     tool = create_grantex_tool(
         name="read_calendar",
         description="Read calendar",
         grant_token=token,
+        jwks_uri=f"{BASE_URL}/.well-known/jwks.json",
+        issuer=ISSUER,
         required_scope="calendar:read",
         func=lambda date="today": f"events for {date}",
     )
@@ -272,6 +297,8 @@ def test_google_adk():
             name="admin",
             description="Admin",
             grant_token=token,
+            jwks_uri=f"{BASE_URL}/.well-known/jwks.json",
+            issuer=ISSUER,
             required_scope="admin:all",
             func=lambda: "bad",
         )

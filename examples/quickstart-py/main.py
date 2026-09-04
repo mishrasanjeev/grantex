@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 
 from grantex import (
+    AuthorizeParams,
     ExchangeTokenParams,
     Grantex,
     verify_grant_token,
@@ -44,30 +45,16 @@ def main() -> None:
 
     # ── 2. Authorize (sandbox mode — auto-approved) ────────────────────
     auth_request = client.authorize(
-        agent_id=agent.id,
-        user_id="test-user-001",
-        scopes=["calendar:read", "email:send"],
+        AuthorizeParams(
+            agent_id=agent.id,
+            user_id="test-user-001",
+            scopes=["calendar:read", "email:send"],
+        )
     )
     print(f"Auth request: {auth_request.request_id}")
 
-    # In sandbox mode the response includes a `code` we can exchange immediately.
-    # The SDK types don't include sandbox-only fields, so we access the raw dict.
-    code: str | None = getattr(auth_request, "_raw_code", None)
-    # The sandbox code is returned as part of the response — get it from the raw
-    # authorize response. Since the Python SDK parses into a dataclass, we need to
-    # reach into the HTTP layer. For simplicity, re-fetch via the raw response.
-    import httpx
-
-    raw = httpx.post(
-        f"{BASE_URL}/v1/authorize",
-        headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
-        json={
-            "agentId": agent.id,
-            "principalId": "test-user-001",
-            "scopes": ["calendar:read", "email:send"],
-        },
-    )
-    code = raw.json().get("code")
+    # Sandbox authorization responses include an immediately exchangeable code.
+    code = auth_request.code
     if not code:
         print("No code returned — are you using the sandbox API key?")
         raise SystemExit(1)
@@ -96,7 +83,9 @@ def main() -> None:
     # ── 5. Log an audit entry ──────────────────────────────────────────
     entry = client.audit.log(
         agent_id=agent.id,
+        agent_did=agent.did,
         grant_id=token.grant_id,
+        principal_id=verified.principal_id,
         action="calendar.read",
         status="success",
         metadata={"query": "today", "results": 3},

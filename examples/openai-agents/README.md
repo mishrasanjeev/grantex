@@ -25,6 +25,7 @@ docker compose up -d
 # Run the example
 cd examples/openai-agents
 pip install -r requirements.txt
+pip install "grantex-openai-agents[openai-agents]"
 python main.py
 ```
 

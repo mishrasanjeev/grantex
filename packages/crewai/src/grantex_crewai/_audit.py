@@ -31,6 +31,14 @@ def with_audit_logging(
         tool = with_audit_logging(tool, grantex_client,
                                   agent_id="ag_01...", grant_id="grnt_01...")
     """
+    grant = client.grants.get(grant_id)
+    if grant.agent_id != agent_id:
+        raise ValueError(
+            f"Grant {grant_id!r} belongs to agent {grant.agent_id!r}, "
+            f"not {agent_id!r}"
+        )
+    agent = client.agents.get(agent_id)
+
     original_run = tool._run  # noqa: SLF001
 
     def _audited_run(**kwargs: Any) -> str:
@@ -39,7 +47,9 @@ def with_audit_logging(
             result: str = original_run(**kwargs)
             client.audit.log(
                 agent_id=agent_id,
+                agent_did=agent.did,
                 grant_id=grant_id,
+                principal_id=grant.principal_id,
                 action=action,
                 metadata={"kwargs": kwargs},
                 status="success",
@@ -48,7 +58,9 @@ def with_audit_logging(
         except Exception as exc:
             client.audit.log(
                 agent_id=agent_id,
+                agent_did=agent.did,
                 grant_id=grant_id,
+                principal_id=grant.principal_id,
                 action=action,
                 metadata={"kwargs": kwargs, "error": str(exc)},
                 status="failure",

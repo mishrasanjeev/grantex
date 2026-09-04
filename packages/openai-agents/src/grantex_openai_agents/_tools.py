@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import wraps
 from typing import Any, Callable
 
 from grantex import GrantexTokenError, VerifyGrantTokenOptions, verify_grant_token
@@ -59,10 +60,12 @@ def create_grantex_tool(
 
     _verify_required_scope()
 
-    # Wrap func so the decorator sees a proper function with name/docstring
-    def _wrapper(**kwargs: Any) -> str:
+    # Preserve the callable's signature so the Agents SDK can build a strict
+    # JSON schema instead of treating the tool as an unbounded **kwargs object.
+    @wraps(func)
+    def _wrapper(*args: Any, **kwargs: Any) -> str:
         _verify_required_scope()
-        return func(**kwargs)
+        return func(*args, **kwargs)
 
     _wrapper.__name__ = name
     _wrapper.__doc__ = description

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 from grantex_openai_agents import create_grantex_tool, get_tool_scopes
@@ -64,6 +66,24 @@ def test_tool_run_delegates_to_func() -> None:
     result = tool.run(url="https://example.com")
     assert result == "fetched:https://example.com"
     assert calls == [{"url": "https://example.com"}]
+
+
+def test_tool_preserves_wrapped_function_signature() -> None:
+    def fetch(url: str, timeout: int = 10) -> str:
+        return f"{url}:{timeout}"
+
+    tool = create_grantex_tool(
+        name="fetch",
+        description="Fetch a URL.",
+        grant_token=TOKEN_WITH_SCOPES,
+        required_scope="data:read",
+        func=fetch,
+    )
+
+    assert (
+        str(inspect.signature(tool._func))
+        == "(url: 'str', timeout: 'int' = 10) -> 'str'"
+    )
 
 
 def test_get_tool_scopes_returns_scp_list() -> None:

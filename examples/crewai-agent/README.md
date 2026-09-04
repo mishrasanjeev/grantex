@@ -26,6 +26,7 @@ docker compose up -d
 # Run the example
 cd examples/crewai-agent
 pip install -r requirements.txt
+pip install "grantex-crewai[crewai]"
 python main.py
 ```
 

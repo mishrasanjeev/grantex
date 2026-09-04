@@ -17,16 +17,46 @@ Prerequisites:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 
 import httpx
 
-from grantex import ExchangeTokenParams, Grantex
+from agents.tool_context import ToolContext
+from grantex import ExchangeTokenParams, Grantex, ListAuditParams
 from grantex_openai_agents import create_grantex_tool
 
 BASE_URL = os.environ.get("GRANTEX_URL", "http://localhost:3001")
 API_KEY = os.environ.get("GRANTEX_API_KEY", "sandbox-api-key-local")
+JWKS_URI = f"{BASE_URL}/.well-known/jwks.json"
+
+
+def read_calendar(query: str = "today") -> str:
+    return json.dumps(
+        {
+            "events": [
+                {"title": "Team standup", "time": "9:00 AM", "query": query},
+                {"title": "Design review", "time": "2:00 PM", "query": query},
+            ]
+        }
+    )
+
+
+def send_email(message: str = "") -> str:
+    return f'Email sent successfully: "{message}"'
+
+
+async def invoke_tool(tool: object, arguments: dict[str, str]) -> object:
+    """Invoke a FunctionTool without starting an LLM-backed agent run."""
+    payload = json.dumps(arguments)
+    context = ToolContext(
+        context=None,
+        tool_name=tool.name,  # type: ignore[attr-defined]
+        tool_call_id="local-example-call",
+        tool_arguments=payload,
+    )
+    return await tool.on_invoke_tool(context, payload)  # type: ignore[attr-defined]
 
 
 def get_grant_token(
@@ -71,21 +101,20 @@ def main() -> None:
         name="read_calendar",
         description="Read the user's upcoming calendar events",
         grant_token=grant_token,
+        jwks_uri=JWKS_URI,
+        issuer=BASE_URL,
         required_scope="calendar:read",
-        func=lambda query="today": json.dumps({
-            "events": [
-                {"title": "Team standup", "time": "9:00 AM", "query": query},
-                {"title": "Design review", "time": "2:00 PM", "query": query},
-            ]
-        }),
+        func=read_calendar,
     )
 
     email_tool = create_grantex_tool(
         name="send_email",
         description="Send an email on behalf of the user",
         grant_token=grant_token,
+        jwks_uri=JWKS_URI,
+        issuer=BASE_URL,
         required_scope="email:send",
-        func=lambda message="": f'Email sent successfully: "{message}"',
+        func=send_email,
     )
 
     print("Tools created: read_calendar, send_email")
@@ -95,12 +124,15 @@ def main() -> None:
     # Here we invoke them directly to show the Grantex integration.
 
     print("\n--- Invoking read_calendar ---")
-    calendar_result = calendar_tool.run(query="today")
+    calendar_result = asyncio.run(invoke_tool(calendar_tool, {"query": "today"}))
     print(f"Result: {calendar_result}")
 
     print("\n--- Invoking send_email ---")
-    email_result = email_tool.run(
-        message="Meeting summary: standup at 9 AM, design review at 2 PM"
+    email_result = asyncio.run(
+        invoke_tool(
+            email_tool,
+            {"message": "Meeting summary: standup at 9 AM, design review at 2 PM"},
+        )
     )
     print(f"Result: {email_result}")
 
@@ -111,6 +143,8 @@ def main() -> None:
             name="delete_account",
             description="Delete the user account",
             grant_token=grant_token,
+            jwks_uri=JWKS_URI,
+            issuer=BASE_URL,
             required_scope="account:delete",  # not in our grant!
             func=lambda: "deleted",
         )
@@ -120,7 +154,9 @@ def main() -> None:
 
     # ── 5. Inspect audit trail ─────────────────────────────────────────
     print("\n--- Audit trail ---")
-    audit_log = client.audit.list(agent_id=agent.id, grant_id=grant_id)
+    audit_log = client.audit.list(
+        ListAuditParams(agent_id=agent.id, grant_id=grant_id)
+    )
     for entry in audit_log.entries:
         print(f"  [{entry.status}] {entry.action} — {entry.timestamp}")
 

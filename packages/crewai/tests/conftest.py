@@ -99,5 +99,13 @@ def _mock_verify_grant_token(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture()
 def mock_grantex() -> MagicMock:
     client = MagicMock()
+    client.grants.get.return_value = SimpleNamespace(
+        agent_id="ag_01",
+        principal_id="user_01",
+    )
+    client.agents.get.return_value = SimpleNamespace(
+        id="ag_01",
+        did="did:grantex:ag_01",
+    )
     client.audit.log = MagicMock(return_value=None)
     return client
