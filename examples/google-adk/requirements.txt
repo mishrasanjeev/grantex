@@ -1,4 +1,4 @@
-grantex>=0.4.0
+grantex>=0.4.1
 grantex-adk
 PyJWT>=2.13.0
 idna>=3.19
