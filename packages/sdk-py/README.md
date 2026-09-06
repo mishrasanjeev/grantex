@@ -1,5 +1,10 @@
 # grantex
 
+**Source update (not yet published):** agent and principal wallet clients expose
+`reconcile_reservation()`. Authorization dictionaries preserve the server's
+additive `evmPayment` payload. Automatic x402 HTTP retries are currently provided
+by the TypeScript adapter, not this SDK. See [Base custody setup](../../docs/guides/base-usdc-custody.mdx).
+
 Python SDK for the [Grantex](https://grantex.dev) delegated authorization protocol — OAuth 2.0 for AI agents.
 
 Grantex lets humans authorize AI agents with **verifiable, revocable, audited grants** built on JWT and the OAuth 2.0 model. This SDK provides a complete client for the Grantex API.

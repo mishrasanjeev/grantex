@@ -26,6 +26,13 @@ describe('PrepaidWalletAgentClient', () => {
 
   beforeEach(() => dpopFetch.mockReset());
 
+  it('reconciles signed EVM reservations through the DPoP client without resending a payment', async () => {
+    dpopFetch.mockResolvedValue(response({ reservationId: 'wres_1', status: 'settled', transaction: '0xtransaction' }));
+    expect(await client.reconcileReservation('wres_1')).toEqual({ reservationId: 'wres_1', status: 'settled', transaction: '0xtransaction' });
+    expect(dpopFetch.mock.calls[0]![0]).toBe('https://api.grantex.dev/v1/prepaid-wallets/reservations/wres_1/reconcile');
+    expect(dpopFetch.mock.calls[0]![2]).toEqual({ method: 'POST' });
+  });
+
   it('lists through the DPoP resource client and supports token rotation', async () => {
     dpopFetch.mockImplementation(async () => response({ wallets: [{ walletId: 'pwal_1' }] }));
     expect(await client.list()).toEqual([{ walletId: 'pwal_1' }]);

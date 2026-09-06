@@ -1,0 +1,8 @@
+{
+  "name": "grantex-base-usdc-local-tests",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test base-usdc.test.mjs" },
+  "devDependencies": { "solc": "0.8.35" },
+  "overrides": { "tmp": "^0.2.6" }
+}

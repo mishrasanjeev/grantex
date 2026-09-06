@@ -21,6 +21,20 @@ The prepaid-wallet API and SDK shown here are available in the published
 funding and settlement.
 </Note>
 
+## Payment network compatibility
+
+The default remains `exact` on `grantex:prepaid`. The source checkout now also
+supports opt-in Base native USDC EIP-3009. This addition is not included in the
+published versions listed above and is not a claim of hosted-service deployment.
+
+Configure `baseUsdc: { scope: 'licensing:preflight' }` on `createX402Agent`,
+supply a stable `idempotencyKey`, and provision the server's `base_usdc` custody
+provider. Policies and balance are checked before a durable EVM signature is
+returned. Merchants receive standard x402 fields, not a Grantex JWT, and need
+no `extra.grantexScope` change. See [Base USDC custody](/guides/base-usdc-custody)
+for setup, funding, finality and retries. Other chains/assets, Permit2, smart
+wallets and Solana remain unsupported; unconfigured custody fails closed.
+
 <Warning>
 Self-hosting the auth service does not create an external custody rail, reload
 notification channel, or merchant result store. Before production, complete
@@ -44,7 +58,7 @@ and make merchant side effects idempotent under the HTTP `Idempotency-Key`.
 | Merchant and action | Exact recipient, resource URL, scope, asset, network, merchant, purpose, project, and cost-center binding |
 | Exceptional payment | Short-lived principal approval bound to the exact request and consumed once |
 | Replay | Agent/principal-wide idempotency key plus a one-time reservation and authorization JTI |
-| Stop control | Assignment block, wallet block, or all-wallet agent block; active reservations are released |
+| Stop control | Blocks prevent new signatures. Local-ledger holds are released; signed EVM exposure remains held until finalized settlement or expiry |
 | Reload | Agent may request only at or below the principal's low-balance threshold; principal approves and funds separately |
 
 Amounts are positive integer strings in the asset's smallest unit. For a wallet
@@ -288,12 +302,13 @@ const authorization = await walletAgent.authorizePayment({
 ```
 
 The returned value is a reservation, not evidence of external-chain settlement.
-The resource server must use the x402 facilitator `/v1/x402/verify` and
+For `grantex:prepaid`, the resource server must use the x402 facilitator `/v1/x402/verify` and
 `/v1/x402/settle` operations. Verification is provisional: the resource server
 must complete a successful settlement before starting irreversible protected
 work or returning the paid result. In `sandbox_ledger`, settlement completes against
-the durable Grantex ledger. External custody is deliberately unavailable until
-a provider adapter can verify both funding and settlement.
+the durable Grantex ledger. Opt-in Base USDC instead uses the merchant's EVM
+facilitator and finalized-chain reconciliation through the configured
+`base_usdc` adapter. Other or unconfigured external providers fail closed.
 
 ## Legacy GDT utilities
 
@@ -315,7 +330,7 @@ for that guarantee.
 | Principal approval needed | `202 PAYMENT_APPROVAL_REQUIRED` with an exact approval request |
 | Recipient/scope mismatch | `403 RECIPIENT_NOT_ALLOWED` / `SCOPE_NOT_ALLOWED` |
 | Scope absent from OAuth grant | `403 PAYMENT_SCOPE_NOT_GRANTED` |
-| Principal block | `403 WALLET_BLOCKED`; affected reservations released |
+| Principal block | New signatures denied; sandbox reservations released, but signed EVM holds retained until finalized reconciliation |
 | Reused key with changed terms | `409 IDEMPOTENCY_CONFLICT` |
 | Expired/released reservation | x402 verification fails closed |
 | External provider not configured | `503 CUSTODY_ADAPTER_UNAVAILABLE` |
@@ -327,8 +342,9 @@ transaction identifier to let a resource server recover after losing the
 settlement response. Side-effecting resource handlers should key their own
 durable result cache or transaction on the caller's `Idempotency-Key` header.
 Use the same logical identifier for that header and the SDK `idempotencyKey`
-option. The latter is not sent to the merchant and cannot, by itself, recover a
-merchant response lost after settlement.
+option. The default prepaid adapter does not send that option as a header. The
+opt-in Base adapter also sets HTTP `Idempotency-Key` and rejects a conflicting
+header. Neither can recover lost business results unless the merchant persists them.
 
 See [x402 Architecture](/features/x402-architecture) for the trust boundaries
 and [Agent Prepaid Wallets](/features/prepaid-wallets) for the complete API

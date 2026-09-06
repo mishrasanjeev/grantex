@@ -127,16 +127,21 @@ identifiers, wallet addresses, principal identifiers, or wallet metadata.
 
 ## Custody boundary
 
-`sandbox_ledger` is the complete repository implementation. It is suitable for
+`sandbox_ledger` is the internal-ledger implementation. It is suitable for
 local development, deterministic integration tests, and off-chain prepaid
 accounting where the Grantex ledger is explicitly the system of record.
 
-`external` stores provider and provider-wallet references but does not claim
-custody integration. Funding and authorization fail with
-`CUSTODY_ADAPTER_UNAVAILABLE` until a provider adapter verifies provider events,
-handles duplicate webhooks, reconciles balances, and supplies settlement proof.
-This prevents a caller from manufacturing an external funding reference and
-turning it into spendable value.
+`external` with operator-configured `base_usdc` supports native Base USDC
+EIP-3009 payments. It verifies finalized funding receipts and settlement evidence
+and persists signatures with balance reservations. See [Base USDC custody](/guides/base-usdc-custody)
+for provisioning, SDK availability and the in-process signing-key risk.
+Other or unconfigured providers fail with `CUSTODY_ADAPTER_UNAVAILABLE`.
+Arbitrary provider references never become spendable value.
+
+For Base, blocking prevents new signatures but does not cancel already signed
+payments. Those reservations remain held and count against limits until
+finalized settlement or unused expiry, including across server restarts and RPC
+outages. Reconciliation never accepts caller-invented settlement evidence.
 
 ## API families
 

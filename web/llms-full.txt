@@ -122,6 +122,15 @@ network controls, settlement, refunds, disputes, or reconciliation. External
 wallets remain fail-closed until an operator installs and validates an issuer or
 custody adapter.
 
+The newer source checkout includes an opt-in native Base USDC EIP-3009 adapter
+with policy-gated signing, verified finalized funding and chain reconciliation.
+It requires operator-provisioned custody and trusted RPC. It is not in the
+listed registry releases, and server deployment alone does not activate real
+wallets. Blocks stop new signatures; existing signed exposure stays reserved
+until finalized settlement or unused expiry. This is not an HSM/MPC custody
+service or a claim of a successful funded third-party production call.
+Operator guide: https://docs.grantex.dev/guides/base-usdc-custody
+
 ### MCP Auth v2.0.2
 
 Treat `@grantex/mcp-auth@2.0.2` as single-process evaluation software:

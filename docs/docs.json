@@ -81,6 +81,7 @@
               "features/prepaid-wallets",
               "guides/agent-wallet-governance",
               "guides/prepaid-wallet-production",
+              "guides/base-usdc-custody",
               "features/x402-architecture",
               "features/x402-gdt-spec"
             ]

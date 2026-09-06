@@ -59,8 +59,13 @@ identity and the policy-evaluated semantic context.
 `@grantex/x402` uses official x402 v2 `PAYMENT-REQUIRED`,
 `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` messages. The old simulated
 `X-Payment-Proof` path is not used. `sandbox_ledger` is implemented end to end;
-external custody records deliberately fail closed until a provider adapter can
-verify funding and settlement.
+external custody records deliberately fail closed unless a configured provider
+can verify funding and settlement. The source checkout now includes opt-in
+Base native USDC EIP-3009 payments with policy-gated signing, verified funding,
+durable signature retries and finalized-chain reconciliation. This addition is
+not in the registry versions listed below. See the
+[Base USDC custody guide](docs/guides/base-usdc-custody.mdx), including the limit
+that blocking cannot recall an already issued on-chain signature.
 
 ```ts
 import { PrepaidWalletAgentClient } from '@grantex/sdk';

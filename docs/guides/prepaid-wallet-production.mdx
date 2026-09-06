@@ -11,12 +11,18 @@ recovery store, notification channel, or regulatory approval for the operator.
 
 ## Dependency matrix
 
+The source checkout includes a specific [Base USDC adapter](/guides/base-usdc-custody).
+It requires migration `094`, operator-provisioned keys, a trusted Base RPC,
+verified funding and reconciliation monitoring. It is not in the registry
+versions listed below. Other external providers still need their own adapter.
+Signed EVM holds are not released on a wallet block or a local timeout alone.
+
 | Dependency | Required when | Current repository behavior | Operator action |
 | --- | --- | --- | --- |
 | PostgreSQL migrations `091_agent_prepaid_wallets.sql` and `092_layered_wallet_spend_controls.sql` | Always | Startup applies ordered migrations automatically | Back up PostgreSQL, deploy the exact repository migration set, and verify startup completed before sending traffic |
 | Public HTTPS routing | The issuer or wallet resource uses a public host | DPoP tokens bind the exact `/v1/prepaid-wallets` audience | Route the exact public wallet and OAuth paths to the auth service; do not rewrite them to static HTML |
 | `@grantex/sdk@0.5.1` and `@grantex/x402@0.3.0` | Applications install managed-wallet clients from npm | Both exact versions are published and clean-install verified | Pin these exact versions and complete the dependencies below |
-| External custody adapter | Real bank, card, on-chain, or provider-held funds | `external` wallets fail with `503 CUSTODY_ADAPTER_UNAVAILABLE` | Implement and independently test provider funding, reservation, settlement, reconciliation, duplicate-event handling, and recovery |
+| External custody adapter | Real bank, card, on-chain, or provider-held funds | Configured `base_usdc` supports native Base USDC; other/unconfigured providers fail closed | Follow the Base custody guide or implement and independently test the selected provider's funding, reservation, settlement, reconciliation and recovery |
 | Principal notification bridge | A human must receive reload alerts outside the Grantex UI | Wallet reload events are emitted to the event bus; no built-in email/SMS/chat delivery is claimed | Consume SSE/WebSocket events and deliver through an approved channel, or separately extend and test webhook registration for wallet events |
 | Merchant idempotency store | A paid request has side effects | Grantex makes reservation and settlement retries idempotent | Atomically store the merchant's business result under the caller's HTTP `Idempotency-Key` |
 | Independent security, provider, and legal review | Real-money or regulated use | The repository makes no certification or stored-value claim | Complete threat review, penetration testing, provider approval, reconciliation sign-off, incident runbooks, and applicable legal/regulatory review |
@@ -29,10 +35,12 @@ tests, and deployments that explicitly intend to operate an internal ledger.
 It is not a bank account, prepaid card, on-chain balance, proof of external
 funds, or a regulated stored-value product.
 
-`external` records provider identifiers but is intentionally unusable for
-funding, authorization, and settlement until provider-specific code verifies
-provider state. Do not turn arbitrary provider references into balance. A
-production adapter must, at minimum:
+`external` requires provider-specific verification. The included `base_usdc`
+adapter verifies finalized native USDC funding and settlement through RPC and
+retains outstanding signed exposure through blocks and provider outages. It
+requires explicit operator provisioning; installation alone does not enable it.
+Other providers remain unavailable. Do not turn arbitrary provider references
+into balance. A production adapter must, at minimum:
 
 - authenticate signed provider webhooks and reject stale or replayed events;
 - deduplicate funding and settlement references transactionally;

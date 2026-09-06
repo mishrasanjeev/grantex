@@ -1,0 +1,42 @@
+name: Base USDC Docker Compatibility
+on:
+  pull_request:
+    paths:
+      - 'apps/auth-service/**'
+      - 'packages/x402/**'
+      - 'packages/sdk-ts/**'
+      - 'tests/base-usdc/**'
+      - 'docs/openapi.yaml'
+      - '.github/workflows/x402-base-compat.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  base-usdc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+      - name: Install and build checkout packages
+        run: |
+          npm ci --prefix apps/auth-service
+          npm ci --prefix packages/sdk-ts
+          npm run build --prefix packages/sdk-ts
+          npm ci
+          npm ci --prefix packages/x402
+          npm run build --prefix packages/x402
+          npm ci --prefix tests/base-usdc
+          npm audit --prefix tests/base-usdc --audit-level=low
+          node --test tests/base-usdc/api-contract.test.mjs
+      - name: Start isolated local payment stack
+        run: docker compose -p grantex-base-compat -f tests/base-usdc/compose.yml up --build -d
+      - name: Verify actual EVM execution and recovery
+        env:
+          GRANTEX_BASE_DOCKER_TEST: '1'
+        run: node --test tests/base-usdc/base-usdc.test.mjs
+      - name: Remove disposable test stack
+        if: always()
+        run: docker compose -p grantex-base-compat -f tests/base-usdc/compose.yml down --volumes

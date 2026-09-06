@@ -11,6 +11,33 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+func TestEVMReconciliationAndPayload(t *testing.T) {
+	var result PrepaidAuthorizationResponse
+	if err := json.Unmarshal([]byte(`{"evmPayment":{"signature":"0xtest","authorization":{"from":"0xfrom","to":"0xto","value":"20000","validAfter":"0","validBefore":"1","nonce":"0xnonce"}}}`), &result); err != nil || result.EVMPayment == nil || result.EVMPayment.Authorization.Value != "20000" {
+		t.Fatal("EVM authorization was not preserved", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/reservations/wres_1/reconcile") || r.Header.Get("DPoP") == "" {
+			t.Error("invalid reconciliation request")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"settled","transaction":"0xtest"}`))
+	}))
+	defer server.Close()
+	key, err := GenerateDPoPKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	client, err := NewAgentPrepaidWalletClient("access-token", key, server.URL+"/v1/prepaid-wallets", WithHTTPClient(server.Client()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconciled, err := client.ReconcileReservation(context.Background(), "wres_1")
+	if err != nil || reconciled["status"] != "settled" {
+		t.Fatal("reconciliation failed", err)
+	}
+}
+
 func TestAgentPrepaidWalletClientSendsDPoPAndPolicyContext(t *testing.T) {
 	var received PrepaidAuthorizationRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

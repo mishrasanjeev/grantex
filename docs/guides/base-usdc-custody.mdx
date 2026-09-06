@@ -1,0 +1,198 @@
+---
+title: "Base USDC Custody"
+description: "Governed x402 EIP-3009 signing, verified funding, safe retries and finalized-chain reconciliation."
+---
+
+<Warning>
+This adapter requires explicit custody/RPC provisioning even after the server
+code is deployed. It is not included in the listed registry releases. Local
+tests prove local EVM execution, not a real-money third-party payment. Server
+deployment, SDK publication and a funded production compatibility call are
+separate milestones; none implies the others.
+</Warning>
+
+## Supported boundary
+
+- x402 v2 `exact`, Base mainnet `eip155:8453`.
+- Native USDC `0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`, six decimals.
+- EOA wallets signing EIP-3009 `TransferWithAuthorization`, domain `USD Coin`, version `2`.
+- Existing Grantex assignment/layered policies, DPoP-bound OAuth, approvals and blocks.
+- Other chains, assets, Permit2 and contract wallets remain unsupported.
+
+The merchant's EVM facilitator settles Base payments. Grantex's existing
+`/v1/x402/verify` and `/v1/x402/settle` remain for `grantex:prepaid`. Grantex
+independently reconciles chain evidence; a merchant HTTP 200 is not evidence
+for updating the Base wallet ledger.
+
+## Provision custody
+
+Use a dedicated address for each wallet. Do not spend it through another app or
+share it across Grantex deployments: independent ledgers cannot coordinate the
+same balance. A unique database index prevents duplicate Base custody addresses
+within one deployment.
+
+Apply the complete migration set, including `094_base_usdc_custody.sql`.
+Configure these secrets on the authorization service, never in an agent,
+browser, repository or command-line log:
+
+| Setting | Purpose |
+| --- | --- |
+| `BASE_USDC_RPC_URL` | Trusted Base RPC; production requires HTTPS. Must support finalized blocks, historical reads, receipts and filtered logs |
+| `BASE_USDC_WALLETS` | Operator-controlled JSON mapping of wallet IDs to key and exact ownership |
+| `VAULT_ENCRYPTION_KEY` | Stable vault key for encrypted stored signatures; retain it with database backups |
+| `RSA_PRIVATE_KEY` | Stable OAuth signing key across service restarts |
+
+Mapping shape, with placeholders only:
+
+```json
+{
+  "principal-base-wallet-1": {
+    "privateKey": "0x<64 hex characters from your secret manager>",
+    "developerId": "dev_your_developer",
+    "principalId": "your-principal-id"
+  }
+}
+```
+
+This initial adapter uses an in-process custody key, not an HSM, MPC or managed
+wallet provider. Restrict secret access, isolate the service, keep a limited
+float and review the custody threat model before real-money use. Compromise of
+the signing service can bypass application policy. Replacing the signer must
+preserve ownership, reservation, retry and reconciliation guarantees.
+
+## Create and fund
+
+Using an authenticated principal-session client:
+
+```ts
+const wallet = await principal.create({
+  name: 'Agent Base USDC float',
+  custodyMode: 'external',
+  provider: 'base_usdc',
+  providerWalletId: 'principal-base-wallet-1',
+  walletAddress: custodyAddress,
+  network: 'eip155:8453',
+  asset: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+  decimals: 6,
+});
+```
+
+The key must derive `walletAddress`; its provisioned owner must match the
+caller. Transfer native USDC through the operator's approved funding process.
+Grantex does not charge a card or convert fiat. Once the transfer is finalized,
+credit it using the lowercase transaction hash and decimal transfer log index:
+
+```ts
+await principal.reload(wallet.walletId, '1000000', reloadIdempotencyKey,
+  `${transactionHash.toLowerCase()}:${transferLogIndex}`);
+```
+
+The receipt must be successful, canonical and finalized, with the exact USDC
+transfer amount and recipient. Self-transfers do not qualify. Each funding log
+is credited only once and chain balance must cover the total credited balance.
+Pending outgoing settlements can delay new credits until reconciliation catches
+up. Approved agent reload requests use the same proof through `fundReload`.
+
+Assign recipients, resource origins, scopes, per-transaction and cumulative
+limits through the usual principal API. Layered amount/count budgets and exact
+approval policies also apply. Hex address letter case cannot evade policy.
+
+## Authorize and pay
+
+Build the updated SDK and x402 package from this checkout:
+
+```ts
+const walletAgent = new PrepaidWalletAgentClient({ oauthClient, accessToken });
+const paid = createX402Agent({
+  walletId: wallet.walletId,
+  authorizePayment: walletAgent.x402Authorizer,
+  baseUsdc: { scope: 'licensing:preflight', purpose: 'licensing-check' },
+});
+const response = await paid.fetch(merchantUrl, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(input),
+  idempotencyKey: durableLogicalRequestId,
+});
+```
+
+The action scope comes from application configuration, must be granted by OAuth
+and must pass wallet policy. Merchants need no Grantex-specific challenge fields.
+The adapter rejects redirects, resource URL mismatches and incompatible terms.
+Use `agent.fetch`, not the exposed low-level `agent.client`, for request-bound
+Base handling. The server encrypts and commits the signature with its balance
+hold before returning it. The merchant gets no internal Grantex JWT or policy
+metadata. Timeouts are 10-300 seconds, further bounded by grant, token and
+assignment expiry.
+
+## Retries and blocks
+
+Reuse the same idempotency key for the same logical request after response loss.
+Retries recover the same stored signature and nonce, including after a service
+restart. Changed terms conflict. After settlement/expiry, inspect reconciliation
+and the merchant's stored result instead of automatically paying with a new key.
+
+**Blocking stops new signatures, but cannot recall an existing one.** Previously
+signed payments may still settle before their on-chain expiry. Revocation,
+policy changes, blocks and manual release cannot return that exposure to the
+available balance. Outstanding holds count against budgets across window edges.
+
+The service sweeps pending Base reservations every 30 seconds in bounded batches
+and log ranges. You can also reconcile explicitly:
+
+```ts
+const state = await walletAgent.reconcileReservation(reservationId);
+// { reservationId, status: 'reserved' | 'settled' | 'expired', transaction }
+```
+
+Agent and principal clients expose `reconcileReservation` in TypeScript,
+`reconcile_reservation` in Python and `ReconcileReservation` in Go. Python
+preserves `evmPayment` as a dictionary; TypeScript/Go have typed response fields.
+Automatic x402 HTTP retries are provided by the TypeScript adapter, not newly
+claimed as a Python/Go feature.
+
+Settlement requires a finalized matching nonce event and transfer receipt.
+Unused expiry requires a finalized block past expiry and an unused nonce.
+RPC failure, stale chain time or missing evidence leaves funds reserved. A
+consumed nonce without matching settlement evidence also remains reserved.
+Finality can take longer than the payment timeout. Monitor old pending holds
+and provider incidents; never manually credit them just to unblock spending.
+
+## Deployment and recovery runbook
+
+1. Back up PostgreSQL and the stable vault/signing keys. Deploy the reviewed
+   server and complete migration set with Base custody still unconfigured.
+2. Confirm `/health` and the existing OAuth/prepaid regression suite. Deploying
+   code alone does not activate a wallet or transfer funds.
+3. After custody review, inject the protected RPC and exact owner-to-wallet
+   mapping from your secret manager. Never use the Docker fixture keys or token
+   contract in production. Fund and reconcile a dedicated limited-float wallet.
+4. Run one approved low-value compatibility payment, retaining the HTTP status,
+   finalized transaction hash and matching ledger entry, not the signature/key.
+5. Operate reconciliation continuously. On request-throttled or scale-to-zero
+   runtimes such as Cloud Run, the in-process timer is not a guaranteed scheduler.
+   Use an always-allocated CPU instance with a minimum instance count, or an
+   authenticated external worker calling the reconciliation API for pending IDs.
+   Alert on stale pending holds and provider failures.
+
+During an incident, block new spending and keep reconciliation running. Do not
+roll back to server versions predating migration 094 handling while signed
+reservations remain: older release/block logic cannot preserve this exposure.
+Wait for finalized terminal outcomes before rollback, and retain encrypted
+signature records, vault keys and operator bindings until reconciliation and
+evidence retention requirements are satisfied. Never drop the additive columns
+as a rollback shortcut. An RPC outage delays availability rather than granting
+permission to release funds.
+
+## External responsibilities
+
+Provision and protect a funded wallet, trusted RPC and custody process. Confirm
+facilitator support with the merchant. Merchant result recovery requires its
+HTTP `Idempotency-Key` result store; Grantex cannot add that to an unrelated API.
+Notification delivery, KYC/AML, refunds, disputes and legal/provider approval
+remain operator responsibilities.
+
+The local tests use PostgreSQL, Redis, the auth-service, official x402 facilitator
+code and an isolated Anvil chain with a test-only USDC contract. This verifies
+real signatures and transfers locally, not Base-mainnet/PayAI availability. The
+repository's `tests/base-usdc/README.md` contains repeatable test commands.

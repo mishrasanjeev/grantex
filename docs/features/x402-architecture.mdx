@@ -97,10 +97,15 @@ record, a response lost after settlement fails closed with
 
 ## Blocking semantics
 
-Applying an assignment, wallet, or all-wallet agent block happens in the same
+For `grantex:prepaid`, applying an assignment, wallet, or all-wallet agent block happens in the same
 database transaction that releases affected outstanding reservations. New
 authorizations fail, old authorizations stop verifying, and reserved value
 returns to available value. Historical settlements remain immutable.
+
+For opt-in Base USDC, blocks prevent new signatures but cannot recall signatures
+already issued. These EVM reservations remain held until finalized settlement
+or confirmed unused expiry. Manual release, local timeout, policy mutation and
+RPC failure do not return that exposure to the available balance.
 
 ## Legacy GDT boundary
 
@@ -113,8 +118,14 @@ integrations should use `PrepaidWalletAgentClient.x402Authorizer`.
 ## External payment rails
 
 `grantex:prepaid` identifies the repository's managed prepaid settlement
-scheme. It does not claim an on-chain transfer. A future external-custody adapter
-must define a standard x402 network/scheme pair appropriate to the rail, verify
-provider funding and settlement, reconcile provider and Grantex state, and fail
-closed when evidence is stale or unavailable. Repository source intentionally
-does not convert arbitrary provider references into balance.
+scheme. It does not claim an on-chain transfer. The opt-in
+[Base USDC adapter](/guides/base-usdc-custody) uses standard x402 v2 `exact` on
+`eip155:8453`, a policy-gated EIP-3009 signer and the merchant's EVM facilitator.
+Grantex checks finalized USDC funding and reconciles on-chain nonce/transfer
+evidence independently of the merchant's HTTP response. It does not send an
+internal Grantex JWT to an EVM merchant. Other rails require separate adapters.
+
+Base `agent.fetch` binds the original request URL, sends the stable logical
+request key as HTTP `Idempotency-Key`, rejects redirects and reuses the stored
+signature after response loss. Merchant-side result persistence is still
+required. Unconfigured custody, stale RPC or ambiguous evidence fails closed.

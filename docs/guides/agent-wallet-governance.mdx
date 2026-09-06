@@ -122,11 +122,16 @@ Wallet ledger entries are also append-only. The principal dashboard exposes
 pending approvals, policy status, wallet activity, reload requests, and stop
 controls.
 
-Blocking an assignment, a wallet, or all of one agent's wallets releases active
+For the internal `grantex:prepaid` rail, blocking an assignment, a wallet, or all of one agent's wallets releases active
 reservations in that boundary. Disabling or revoking a policy also releases
 active reservations. Policy mutation, release, authorization, and settlement
 share a developer-scoped database lock, so they have a single serial order and
 a released authorization cannot settle afterward.
+
+Base USDC signatures have a different boundary: new signatures stop, but issued
+signatures remain valid on-chain until used or expired. Their reservations stay
+held and count against limits until finalized-chain reconciliation. See
+[Base USDC custody](/guides/base-usdc-custody) before enabling real funds.
 
 ## Current implementation and external gaps
 
@@ -134,7 +139,7 @@ a released authorization cannot settle afterward.
 | --- | --- | --- |
 | Sandbox ledger, layered policy, exact approval, multi-wallet assignment, reload controls, reservation, settlement, and audit | Implemented and Docker E2E tested | Run migrations `091` and `092`, PostgreSQL backup/restore, and the published route probes |
 | TypeScript, x402, Python, and Go clients | Implemented in the release identified by each package manifest | Pin a registry-verified version; repository source alone does not prove publication |
-| External issuer/custody adapter | Not included; fails closed | Integrate the selected provider's authorization, funding, settlement, refund, dispute, webhook, and reconciliation APIs |
+| External issuer/custody adapter | Opt-in native Base USDC adapter included in source; other/unconfigured rails fail closed | Provision protected custody and RPC using the Base guide, or integrate the chosen provider; refunds/disputes are not added by this adapter |
 | KYC/KYB, AML, sanctions, fraud, MCC, geography, card state, FX, and safeguarding | Issuer/operator responsibility | Configure and independently test the regulated provider controls |
 | Principal email/SMS/chat delivery | Event source only | Operate a durable notification bridge with retry, dead-letter handling, and escalation |
 | Merchant business-result recovery | Merchant responsibility | Atomically store the result under HTTP `Idempotency-Key` before returning success |

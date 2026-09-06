@@ -327,7 +327,11 @@ export async function setWalletSpendPolicyStatus(
 
 function matches(values: unknown, candidate: string | null): boolean {
   const filter = values as string[];
-  return filter.length === 0 || (candidate !== null && filter.includes(candidate));
+  return filter.length === 0 || (candidate !== null && filter.some(value => canonicalAddress(value) === canonicalAddress(candidate)));
+}
+
+function canonicalAddress(value: string): string {
+  return /^0x[0-9a-fA-F]{40}$/.test(value) ? value.toLowerCase() : value;
 }
 
 function resourceOrigin(resource: string): string | null {
@@ -375,14 +379,14 @@ async function usageForPolicy(tx: TxSql, row: Record<string, unknown>, context: 
     JOIN agent_wallet_assignments a ON a.id = r.assignment_id
     WHERE r.developer_id = ${context.developerId}
       AND r.status IN ('reserved','settled')
-      AND (${start}::timestamptz IS NULL OR r.created_at >= ${start})
+      AND (r.status = 'reserved' OR ${start}::timestamptz IS NULL OR r.created_at >= ${start})
       AND (${scopeType} <> 'assignment' OR r.assignment_id = ${scopeId})
       AND (${scopeType} <> 'wallet' OR r.wallet_id = ${scopeId})
       AND (${scopeType} <> 'agent' OR r.agent_id = ${scopeId})
       AND (${scopeType} <> 'group' OR a.budget_group = ${scopeId})
       AND (${scopeType} <> 'principal' OR r.principal_id = ${scopeId})
       AND (${scopeType} <> 'developer' OR r.developer_id = ${context.developerId})
-      AND (cardinality(${row['recipients'] as string[]}::text[]) = 0 OR r.recipient = ANY(${row['recipients'] as string[]}::text[]))
+      AND (cardinality(${row['recipients'] as string[]}::text[]) = 0 OR r.recipient = ANY(${(row['recipients'] as string[]).map(canonicalAddress)}::text[]))
       AND (cardinality(${row['resource_origins'] as string[]}::text[]) = 0
         OR COALESCE(r.resource_origin, CASE
           WHEN lower(r.resource) LIKE 'https://%'
@@ -393,7 +397,7 @@ async function usageForPolicy(tx: TxSql, row: Record<string, unknown>, context: 
         END)
           = ANY(${row['resource_origins'] as string[]}::text[]))
       AND (cardinality(${row['action_scopes'] as string[]}::text[]) = 0 OR r.scope = ANY(${row['action_scopes'] as string[]}::text[]))
-      AND (cardinality(${row['assets'] as string[]}::text[]) = 0 OR r.asset = ANY(${row['assets'] as string[]}::text[]))
+      AND (cardinality(${row['assets'] as string[]}::text[]) = 0 OR r.asset = ANY(${(row['assets'] as string[]).map(canonicalAddress)}::text[]))
       AND (cardinality(${row['networks'] as string[]}::text[]) = 0 OR r.network = ANY(${row['networks'] as string[]}::text[]))
       AND (cardinality(${row['merchant_ids'] as string[]}::text[]) = 0 OR r.merchant_id = ANY(${row['merchant_ids'] as string[]}::text[]))
       AND (cardinality(${row['purposes'] as string[]}::text[]) = 0 OR r.purpose = ANY(${row['purposes'] as string[]}::text[]))

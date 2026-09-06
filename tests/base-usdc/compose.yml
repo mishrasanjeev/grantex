@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    environment: { POSTGRES_DB: grantex, POSTGRES_USER: grantex, POSTGRES_PASSWORD: local-base-test-only }
+    ports: ["127.0.0.1:5549:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grantex"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+  anvil:
+    image: ghcr.io/foundry-rs/foundry@sha256:043752653d5be351c71709091b3db97c4421c907eb40ea294195e7f532aadf46
+    entrypoint: ["anvil"]
+    command: ["--host", "0.0.0.0", "--chain-id", "8453", "--silent"]
+    ports: ["127.0.0.1:8549:8545"]
+  auth-service:
+    build: ../../apps/auth-service
+    ports: ["127.0.0.1:3349:3001"]
+    environment:
+      DATABASE_URL: postgres://grantex:local-base-test-only@postgres:5432/grantex
+      REDIS_URL: redis://redis:6379
+      AUTO_GENERATE_KEYS: "true"
+      RSA_PRIVATE_KEY: ${BASE_TEST_RSA_PRIVATE_KEY:-}
+      NODE_ENV: development
+      PUBLIC_BASE_URL: http://localhost:3349
+      JWT_ISSUER: http://localhost:3349
+      ADMIN_API_KEY: local-base-test-admin-only
+      METRICS_API_KEY: local-base-test-metrics-only
+      VAULT_ENCRYPTION_KEY: 000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f
+      BASE_USDC_RPC_URL: http://anvil:8545
+      BASE_USDC_WALLETS: ${BASE_USDC_WALLETS:-}
+      LOG_PRETTY: "false"
+      HOST: 0.0.0.0
+      PORT: "3001"
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+      anvil: { condition: service_started }

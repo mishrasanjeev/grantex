@@ -216,21 +216,37 @@ type PrepaidAuthorizationRequest struct {
 }
 
 type PrepaidAuthorizationResponse struct {
-	Status              string   `json:"status,omitempty"`
-	ApprovalRequestID   string   `json:"approvalRequestId,omitempty"`
-	PolicyIDs           []string `json:"policyIds,omitempty"`
-	Authorization       string   `json:"authorization,omitempty"`
-	ReservationID       string   `json:"reservationId,omitempty"`
-	WalletID            string   `json:"walletId"`
-	AssignmentID        string   `json:"assignmentId"`
-	Amount              string   `json:"amount,omitempty"`
-	Asset               string   `json:"asset,omitempty"`
-	Network             string   `json:"network,omitempty"`
-	Recipient           string   `json:"recipient,omitempty"`
-	ExpiresAt           string   `json:"expiresAt"`
-	RemainingAvailable  string   `json:"remainingAvailable,omitempty"`
-	RemainingCumulative string   `json:"remainingCumulative,omitempty"`
-	PolicyDecisionID    *string  `json:"policyDecisionId,omitempty"`
+	EVMPayment          *EVMPayment `json:"evmPayment,omitempty"`
+	Status              string      `json:"status,omitempty"`
+	ApprovalRequestID   string      `json:"approvalRequestId,omitempty"`
+	PolicyIDs           []string    `json:"policyIds,omitempty"`
+	Authorization       string      `json:"authorization,omitempty"`
+	ReservationID       string      `json:"reservationId,omitempty"`
+	WalletID            string      `json:"walletId"`
+	AssignmentID        string      `json:"assignmentId"`
+	Amount              string      `json:"amount,omitempty"`
+	Asset               string      `json:"asset,omitempty"`
+	Network             string      `json:"network,omitempty"`
+	Recipient           string      `json:"recipient,omitempty"`
+	ExpiresAt           string      `json:"expiresAt"`
+	RemainingAvailable  string      `json:"remainingAvailable,omitempty"`
+	RemainingCumulative string      `json:"remainingCumulative,omitempty"`
+	PolicyDecisionID    *string     `json:"policyDecisionId,omitempty"`
+}
+
+// EVMPayment is a server-reserved EIP-3009 authorization, not a private key.
+type EVMPayment struct {
+	Signature     string           `json:"signature"`
+	Authorization EVMAuthorization `json:"authorization"`
+}
+
+type EVMAuthorization struct {
+	From        string `json:"from"`
+	To          string `json:"to"`
+	Value       string `json:"value"`
+	ValidAfter  string `json:"validAfter"`
+	ValidBefore string `json:"validBefore"`
+	Nonce       string `json:"nonce"`
 }
 
 type WalletReloadRequest struct {
@@ -458,6 +474,14 @@ func secureWalletURL(raw string, requireResourcePath bool) (string, error) {
 }
 func (c *AgentPrepaidWalletClient) AuthorizePayment(ctx context.Context, params PrepaidAuthorizationRequest) (*PrepaidAuthorizationResponse, error) {
 	return unmarshal[PrepaidAuthorizationResponse](c.request(ctx, http.MethodPost, "/authorizations", params))
+}
+
+func (c *PrincipalPrepaidWalletClient) ReconcileReservation(ctx context.Context, reservationID string) (WalletRecord, error) {
+	return unmarshalValue[WalletRecord](c.http.post(ctx, "/v1/principal/prepaid-wallets/reservations/"+url.PathEscape(reservationID)+"/reconcile", nil))
+}
+
+func (c *AgentPrepaidWalletClient) ReconcileReservation(ctx context.Context, reservationID string) (WalletRecord, error) {
+	return unmarshalValue[WalletRecord](c.request(ctx, http.MethodPost, "/reservations/"+url.PathEscape(reservationID)+"/reconcile", nil))
 }
 func (c *AgentPrepaidWalletClient) RequestReload(ctx context.Context, walletID, amount, idempotencyKey, reason string) (*WalletReloadRequest, error) {
 	body := WalletRecord{"amount": amount, "idempotencyKey": idempotencyKey}

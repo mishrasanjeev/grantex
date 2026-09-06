@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Added
+- Added opt-in governed Base native USDC x402 v2 EIP-3009 payments, verified
+  finalized funding, encrypted restart-safe signature recovery, and finalized
+  settlement/expiry reconciliation. Signed exposure survives blocks and timeouts.
+  Migration `094` and explicit custody/RPC provisioning are required. Added
+  TypeScript/Python/Go reconciliation methods, API documentation and isolated
+  Docker tests with official x402 facilitator execution. These additive client
+  APIs are source additions, not a claim of new registry publication.
 - Added layered prepaid-wallet spend governance across assignment, wallet,
   agent, shared budget-group, principal, and developer scopes. Policies support
   deny, exact principal approval, amount/count limits, reservation-aware rolling

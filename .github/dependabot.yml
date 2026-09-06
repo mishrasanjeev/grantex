@@ -287,6 +287,12 @@ updates:
     labels: [dependencies, npm, examples, x402]
 
   # ─── pip — every Python package directory with pyproject.toml ───────
+  - package-ecosystem: npm
+    directory: /tests/base-usdc
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 3
+    labels: [dependencies, javascript]
+
   - package-ecosystem: pip
     directory: /
     schedule: { interval: weekly }

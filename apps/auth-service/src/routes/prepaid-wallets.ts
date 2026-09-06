@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { config } from '../config.js';
 import { getSql } from '../db/client.js';
+import { BaseUsdcError } from '../lib/base-usdc-custody.js';
+import { reconcileBaseReservation, reconcileBaseReservations } from '../lib/base-usdc-reconciliation.js';
 import { checkActiveOAuthAccessToken } from '../lib/active-grant-token.js';
 import { DpopError, verifyDpopProof } from '../lib/dpop.js';
 import { emitEvent, type EventType } from '../lib/events.js';
@@ -59,7 +61,7 @@ function requestTarget(request: FastifyRequest): string {
 }
 
 function sendWalletError(reply: FastifyReply, request: FastifyRequest, error: unknown) {
-  if (error instanceof PrepaidWalletError) {
+  if (error instanceof PrepaidWalletError || error instanceof BaseUsdcError) {
     return reply.status(error.statusCode).send({
       message: error.message,
       code: error.code,
@@ -290,13 +292,18 @@ function x402Binding(value: unknown): { token: string; binding: PaymentRequireme
 
 export async function prepaidWalletRoutes(app: FastifyInstance): Promise<void> {
   let expirySweep: ReturnType<typeof setInterval> | undefined;
+  let sweeping = false;
   if (process.env['NODE_ENV'] !== 'test') {
     app.addHook('onReady', async () => {
       await releaseExpiredWalletReservations(getSql());
       expirySweep = setInterval(() => {
-        releaseExpiredWalletReservations(getSql()).catch((error: unknown) => {
+        if (sweeping) return;
+        sweeping = true;
+        releaseExpiredWalletReservations(getSql()).then(() => reconcileBaseReservations(getSql())).then(result => {
+          if (result.failed) app.log.warn(result, 'Base USDC reconciliation failures; funds remain reserved');
+        }).catch((error: unknown) => {
           app.log.error({ err: error }, 'prepaid wallet expiry sweep failed');
-        });
+        }).finally(() => { sweeping = false; });
       }, 30_000);
       expirySweep.unref();
     });
@@ -307,6 +314,23 @@ export async function prepaidWalletRoutes(app: FastifyInstance): Promise<void> {
 
   const principalConfig = { config: { skipAuth: true, rateLimit: { max: 120, timeWindow: '1 minute' } } };
   const agentConfig = { config: { skipAuth: true, rateLimit: { max: 240, timeWindow: '1 minute' } } };
+
+  app.post<{ Params: { id: string } }>('/v1/prepaid-wallets/reservations/:id/reconcile', agentConfig, async (request, reply) => {
+    const identity = await agentIdentity(request, reply);
+    if (!identity) return;
+    if (!identity.scopes.includes('wallet:spend') && !identity.scopes.includes('wallet:read')) {
+      return reply.status(403).send({ code: 'INSUFFICIENT_SCOPE', message: 'wallet:read or wallet:spend is required' });
+    }
+    try { return await reconcileBaseReservation(getSql(), identity, request.params.id); }
+    catch (error) { return sendWalletError(reply, request, error); }
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/principal/prepaid-wallets/reservations/:id/reconcile', principalConfig, async (request, reply) => {
+    const owner = await principal(request, reply);
+    if (!owner) return;
+    try { return await reconcileBaseReservation(getSql(), owner, request.params.id); }
+    catch (error) { return sendWalletError(reply, request, error); }
+  });
 
   app.post<{ Body: Body }>('/v1/principal/prepaid-wallets', principalConfig, async (request, reply) => {
     const owner = await principal(request, reply);

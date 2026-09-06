@@ -24,6 +24,8 @@ export {
   HEADERS,
   GRANTEX_PREPAID_NETWORK,
   GRANTEX_PREPAID_SCHEME,
+  BASE_USDC_NETWORK,
+  BASE_USDC_ASSET,
   PrepaidPaymentApprovalRequiredError,
 } from './agent.js';
 export type {
@@ -31,6 +33,8 @@ export type {
   PrepaidAuthorizationResponse,
   PrepaidAuthorization,
   PrepaidApprovalRequired,
+  EvmPayment,
+  BaseUsdcConfig,
 } from './agent.js';
 
 // Middleware
