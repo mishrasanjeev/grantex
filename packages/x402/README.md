@@ -12,6 +12,39 @@ npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.1
 Layered policy, semantic payment context, and exact approval retry require
 `@grantex/x402` 0.3.0 or later and `@grantex/sdk` 0.5.0 or later.
 
+## Payment network compatibility
+
+The default client supports `exact` on `grantex:prepaid`. This source checkout
+also supports opt-in Base native USDC EIP-3009 through Grantex's `base_usdc`
+custody adapter. **This addition is not in the published 0.3.0 package.**
+Build the checkout until a tested release containing it is published.
+
+```ts
+const paid = createX402Agent({
+  walletId,
+  authorizePayment: walletAgent.x402Authorizer,
+  baseUsdc: { scope: 'licensing:preflight' },
+});
+const response = await paid.fetch(merchantUrl, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(input),
+  idempotencyKey: durableLogicalRequestId,
+});
+```
+
+The configured server, not the agent, holds the signing key. Standard merchants
+need no Grantex-specific challenge fields. Only Base (`eip155:8453`), native
+USDC (`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`), EOA wallets and the
+`USD Coin`/`2` EIP-3009 domain are supported. Other chains/assets, Permit2 and
+smart wallets fail closed. Base requests reject redirects and resource URL
+mismatches; reuse the same idempotency key after response loss.
+
+Read the [custody setup and safety boundaries](../../docs/guides/base-usdc-custody.mdx).
+Blocking stops new signatures, but cannot recall one already issued. Signed
+amounts remain reserved until finalized on-chain settlement or unused expiry.
+Merchant result recovery still requires the merchant's idempotency store.
+
 ## Production hosting dependencies
 
 Installing these packages does not provision a production payment system.

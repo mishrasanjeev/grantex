@@ -142,6 +142,10 @@ export interface PrepaidAuthorizationRequest {
 }
 
 export interface PrepaidAuthorization {
+  evmPayment?: {
+    signature: string;
+    authorization: { from: string; to: string; value: string; validAfter: string; validBefore: string; nonce: string };
+  };
   authorization: string;
   reservationId: string;
   walletId: string;
@@ -323,6 +327,11 @@ export class PrepaidWalletAgentClient {
     return walletJson<PrepaidAuthorizationResponse>(response);
   }
 
+  async reconcileReservation(reservationId: string): Promise<{ reservationId: string; status: string; transaction: string | null }> {
+    return walletJson(await this.#oauthClient.fetch(`${this.#resourceUrl}/reservations/${encodeURIComponent(reservationId)}/reconcile`,
+      this.#accessToken, { method: 'POST' }));
+  }
+
   async requestReload(
     walletId: string,
     amount: string,
@@ -422,6 +431,10 @@ export class PrincipalPrepaidWalletClient {
       `/v1/principal/prepaid-wallet-reservations/${encodeURIComponent(reservationId)}/release`,
       jsonRequest({ reason }),
     );
+  }
+
+  reconcileReservation(reservationId: string): Promise<{ reservationId: string; status: string; transaction: string | null }> {
+    return this.#request(`/v1/principal/prepaid-wallets/reservations/${encodeURIComponent(reservationId)}/reconcile`, { method: 'POST' });
   }
 
   createSpendPolicy(params: WalletSpendPolicyInput): Promise<WalletSpendPolicy> {

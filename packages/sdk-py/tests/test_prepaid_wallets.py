@@ -19,6 +19,22 @@ def _client(handler: Any) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
+def test_reconcile_uses_dpop_without_a_payment_body() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST"
+        assert request.url.path.endswith("/reservations/wres_1/reconcile")
+        assert request.headers["Authorization"] == "DPoP access-token"
+        assert request.headers.get("DPoP")
+        return httpx.Response(200, json={"status": "settled", "transaction": "0xtest"})
+
+    client = AgentPrepaidWalletClient(
+        access_token="access-token", private_key=generate_dpop_key(),
+        resource_url="https://api.grantex.dev/v1/prepaid-wallets",
+        client=_client(handler),
+    )
+    assert client.reconcile_reservation("wres_1")["status"] == "settled"
+
+
 def test_agent_client_sends_dpop_and_preserves_approval_context() -> None:
     requests: list[httpx.Request] = []
 

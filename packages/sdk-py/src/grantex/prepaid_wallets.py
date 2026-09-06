@@ -160,6 +160,13 @@ class PrincipalPrepaidWalletClient:
             "POST", "/v1/principal/prepaid-wallet-spend-policies", params
         )
 
+    def reconcile_reservation(self, reservation_id: str) -> WalletRecord:
+        """Reconcile signed exposure using finalized chain evidence."""
+        return self._request(
+            "POST",
+            f"/v1/principal/prepaid-wallets/reservations/{quote(reservation_id, safe='')}/reconcile",
+        )
+
     def list_spend_policies(self) -> List[WalletRecord]:
         return _records(
             self._request("GET", "/v1/principal/prepaid-wallet-spend-policies").get(
@@ -250,6 +257,13 @@ class AgentPrepaidWalletClient:
 
     def authorize_payment(self, params: WalletRecord) -> WalletRecord:
         return self._request("POST", f"{self._resource_url}/authorizations", params)
+
+    def reconcile_reservation(self, reservation_id: str) -> WalletRecord:
+        """Confirm finalized Base settlement or expiry without releasing a live signature."""
+        return self._request(
+            "POST",
+            f"{self._resource_url}/reservations/{quote(reservation_id, safe='')}/reconcile",
+        )
 
     def request_reload(
         self,

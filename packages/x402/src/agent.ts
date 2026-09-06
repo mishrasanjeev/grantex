@@ -18,6 +18,22 @@ import type {
 
 export const GRANTEX_PREPAID_NETWORK = 'grantex:prepaid' as Network;
 export const GRANTEX_PREPAID_SCHEME = 'exact';
+export const BASE_USDC_NETWORK = 'eip155:8453' as Network;
+export const BASE_USDC_ASSET = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
+
+export interface EvmPayment {
+  signature: string;
+  authorization: { from: string; to: string; value: string; validAfter: string; validBefore: string; nonce: string };
+}
+
+export interface BaseUsdcConfig {
+  /** Trusted application scope and policy labels, never taken from merchant metadata. */
+  scope: string;
+  merchantId?: string;
+  purpose?: string;
+  projectId?: string;
+  costCenter?: string;
+}
 
 /** Canonical x402 v2 HTTP headers. */
 export const HEADERS = {
@@ -44,6 +60,7 @@ export interface PrepaidAuthorizationRequest {
 }
 
 export interface PrepaidAuthorization {
+  evmPayment?: EvmPayment;
   authorization: string;
   reservationId: string;
   walletId: string;
@@ -85,6 +102,8 @@ export interface X402AgentConfig {
   walletId?: string;
   /** Native fetch implementation, injectable for tests and non-browser runtimes. */
   fetch?: typeof globalThis.fetch;
+  /** Opt in to Base native USDC EIP-3009. Requires configured server custody and a stable request idempotencyKey. */
+  baseUsdc?: BaseUsdcConfig;
 }
 
 export interface X402FetchOptions extends RequestInit {
@@ -102,6 +121,62 @@ export interface X402FetchOptions extends RequestInit {
 interface PaymentCreationContext {
   paymentRequired: PaymentRequired;
   selectedRequirements: PaymentRequirements;
+}
+
+class GrantexBaseUsdcScheme implements SchemeNetworkClient {
+  readonly scheme = 'exact';
+  readonly schemeHooks = {
+    onBeforePaymentCreation: async (context: PaymentCreationContext) => {
+      if (context.paymentRequired.resource.url !== this.resource) {
+        throw new Error('x402 resource URL does not match the requested URL');
+      }
+    },
+  };
+
+  constructor(private readonly config: X402AgentConfig, private readonly resource: string,
+    private readonly options: { walletId: string | undefined; idempotencyKey: string | undefined; approvalRequestId: string | undefined },
+    private readonly onApprovalRequired: (error: PrepaidPaymentApprovalRequiredError) => void) {}
+
+  async createPaymentPayload(version: number, requirements: PaymentRequirements) {
+    if (version !== 2 || requirements.scheme !== 'exact' || requirements.network !== BASE_USDC_NETWORK
+        || requirements.asset.toLowerCase() !== BASE_USDC_ASSET
+        || requirements.extra?.['name'] !== 'USD Coin' || requirements.extra?.['version'] !== '2'
+        || (requirements.extra?.['assetTransferMethod'] !== undefined && requirements.extra['assetTransferMethod'] !== 'eip3009')) {
+      throw new Error('Only x402 v2 Base native USDC EIP-3009 payments are supported');
+    }
+    if (!/^[1-9][0-9]{0,77}$/.test(requirements.amount) || BigInt(requirements.amount) >= 2n ** 256n
+        || !/^0x[0-9a-fA-F]{40}$/.test(requirements.payTo)
+        || !Number.isSafeInteger(requirements.maxTimeoutSeconds)
+        || requirements.maxTimeoutSeconds < 10 || requirements.maxTimeoutSeconds > 300) {
+      throw new Error('Invalid Base USDC payment amount, recipient, or timeout');
+    }
+    const idempotencyKey = this.options.idempotencyKey!;
+    const response = await this.config.authorizePayment({
+      ...this.config.baseUsdc!,
+      ...(this.options.walletId ? { walletId: this.options.walletId } : {}),
+      ...(this.options.approvalRequestId ? { approvalRequestId: this.options.approvalRequestId } : {}),
+      amount: requirements.amount, asset: requirements.asset, network: requirements.network,
+      recipient: requirements.payTo, resource: this.resource, maxTimeoutSeconds: requirements.maxTimeoutSeconds, idempotencyKey,
+    });
+    if ('status' in response) {
+      const error = new PrepaidPaymentApprovalRequiredError(response, idempotencyKey);
+      this.onApprovalRequired(error);
+      throw error;
+    }
+    const payment = response.evmPayment;
+    const auth = payment?.authorization;
+    const now = Math.floor(Date.now() / 1000);
+    if (!payment || !auth || !/^0x[0-9a-fA-F]{130}$/.test(payment.signature)
+        || !/^0x[0-9a-fA-F]{40}$/.test(auth.from) || !/^0x[0-9a-fA-F]{64}$/.test(auth.nonce)
+        || auth.to.toLowerCase() !== requirements.payTo.toLowerCase() || auth.value !== requirements.amount
+        || auth.validAfter !== '0' || !/^[1-9][0-9]{0,12}$/.test(auth.validBefore)
+        || Number(auth.validBefore) <= now || Number(auth.validBefore) > now + requirements.maxTimeoutSeconds
+        || Number(auth.validBefore) * 1000 !== Date.parse(response.expiresAt)) {
+      throw new Error('Grantex returned an invalid or mismatched EVM payment authorization');
+    }
+    // Do not disclose the Grantex JWT, reservation, principal, or policy metadata to merchants.
+    return { x402Version: 2, payload: { signature: payment.signature, authorization: { ...auth } } };
+  }
 }
 
 class GrantexPrepaidScheme implements SchemeNetworkClient {
@@ -241,6 +316,7 @@ export function createX402Agent(config: X402AgentConfig) {
   if (!config || typeof config.authorizePayment !== 'function') {
     throw new Error('createX402Agent requires authorizePayment; fake payment proofs are not supported');
   }
+  if (config.baseUsdc && !config.baseUsdc.scope?.trim()) throw new Error('Base USDC requires a trusted application scope');
   const baseClient = prepaidClient(config.authorizePayment, config.walletId);
   const paymentFetch = wrapFetchWithPayment(config.fetch ?? globalThis.fetch, baseClient.client);
 
@@ -248,18 +324,36 @@ export function createX402Agent(config: X402AgentConfig) {
     client: baseClient.client,
     fetch(input: RequestInfo | URL, options: X402FetchOptions = {}) {
       const { walletId, idempotencyKey, approvalRequestId, ...requestInit } = options;
-      if (idempotencyKey !== undefined || approvalRequestId !== undefined
-          || (walletId !== undefined && walletId !== config.walletId)) {
+      if (!config.baseUsdc && idempotencyKey === undefined && approvalRequestId === undefined
+          && (walletId === undefined || walletId === config.walletId)) {
+        return preserveApprovalError(paymentFetch(input, requestInit), baseClient.takeApprovalError);
+      }
+      if (config.baseUsdc && !idempotencyKey) throw new Error('Base USDC requires a stable idempotencyKey to prevent duplicate payments');
         const requestClient = prepaidClient(
           config.authorizePayment, walletId ?? config.walletId, idempotencyKey, approvalRequestId,
         );
+        let evmApproval: PrepaidPaymentApprovalRequiredError | undefined;
+        if (config.baseUsdc) {
+          const target = new URL(input instanceof Request ? input.url : String(input));
+          if (target.username || target.password || target.hash || (target.protocol !== 'https:'
+              && !(target.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(target.hostname)))) {
+            throw new Error('Base USDC requires an HTTPS resource (HTTP loopback is allowed for tests)');
+          }
+          requestInit.redirect = 'error';
+          const headers = new Headers(requestInit.headers ?? (input instanceof Request ? input.headers : undefined));
+          if (headers.has('Idempotency-Key') && headers.get('Idempotency-Key') !== idempotencyKey) {
+            throw new Error('HTTP and payment idempotency keys must match');
+          }
+          headers.set('Idempotency-Key', idempotencyKey!);
+          requestInit.headers = headers;
+          requestClient.client.register(BASE_USDC_NETWORK, new GrantexBaseUsdcScheme(config, target.href,
+            { walletId: walletId ?? config.walletId, idempotencyKey, approvalRequestId }, error => { evmApproval = error; }));
+        }
         const request = wrapFetchWithPayment(
           config.fetch ?? globalThis.fetch,
           requestClient.client,
         )(input, requestInit);
-        return preserveApprovalError(request, requestClient.takeApprovalError);
-      }
-      return preserveApprovalError(paymentFetch(input, requestInit), baseClient.takeApprovalError);
+        return preserveApprovalError(request, () => evmApproval ?? requestClient.takeApprovalError());
     },
   };
 }

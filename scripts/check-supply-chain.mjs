@@ -101,6 +101,9 @@ const allowedLicenseIds = new Set([
   'LicenseRef-scancode-unicode',
 ]);
 const knownMissingLicenseMetadata = new Map([
+  // Reviewed memorystream@0.3.1 tarball LICENSE: MIT, Dmitry Nizovtsev (2011).
+  // solc test-only dependency; do not extend this exception to other versions.
+  ['memorystream@0.3.1', 'MIT'],
   ['@types/node', 'MIT'],
   ['fsevents', 'MIT'],
   ['typescript', 'Apache-2.0'],
@@ -155,6 +158,7 @@ for (const lockfile of lockfiles) {
     const name = packageName(packagePath);
     const license = reviewedLicenseMetadataOverrides.get(name)
       ?? entry.license
+      ?? knownMissingLicenseMetadata.get(`${name}@${entry.version}`)
       ?? knownMissingLicenseMetadata.get(name);
     if (!license) {
       failures.push(`${lockfile}: ${name}@${entry.version} has no license metadata or reviewed exception`);

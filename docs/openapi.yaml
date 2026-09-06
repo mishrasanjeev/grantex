@@ -250,6 +250,32 @@ components:
         remainingAvailable: { type: string, pattern: '^\d+$' }
         remainingCumulative: { type: string, pattern: '^\d+$' }
         policyDecisionId: { type: [string, 'null'], pattern: '^wdec_', description: Durable layered-policy decision attached to this reservation }
+        evmPayment: { $ref: '#/components/schemas/WalletEvmPayment' }
+
+    WalletEvmPayment:
+      type: object
+      description: Present only for configured Base native USDC custody. Bearer payment capability; never log it. Send only this payload through the standard EVM x402 payment header, not the internal Grantex authorization JWT.
+      required: [signature, authorization]
+      properties:
+        signature: { type: string, pattern: '^0x[0-9a-fA-F]+$' }
+        authorization:
+          type: object
+          required: [from, to, value, validAfter, validBefore, nonce]
+          properties:
+            from: { type: string, pattern: '^0x[0-9a-fA-F]{40}$' }
+            to: { type: string, pattern: '^0x[0-9a-fA-F]{40}$' }
+            value: { type: string, pattern: '^[1-9]\d*$' }
+            validAfter: { type: string, pattern: '^\d+$', description: Unix seconds }
+            validBefore: { type: string, pattern: '^\d+$', description: Unix seconds bounded by request and delegated authority expiry }
+            nonce: { type: string, pattern: '^0x[0-9a-fA-F]{64}$' }
+
+    WalletReconciliation:
+      type: object
+      required: [reservationId, status, transaction]
+      properties:
+        reservationId: { type: string, pattern: '^wres_' }
+        status: { type: string, enum: [reserved, settled, expired] }
+        transaction: { type: [string, 'null'], description: Finalized Base transaction hash when settled; otherwise null }
 
     WalletSpendPolicyInput:
       type: object
@@ -938,7 +964,7 @@ paths:
             schema:
               type: object
               properties:
-                externalReference: { type: string, description: Provider funding reference; repeated calls must use the same value }
+                externalReference: { type: string, description: Provider funding reference; repeated calls must use the same value. For base_usdc use the exact finalized transfer's lowercase transactionHash followed by a colon and decimal logIndex }
       responses:
         '200':
           description: Approved reload funded, or the existing funded result returned on an identical retry
@@ -1140,7 +1166,7 @@ paths:
       operationId: authorizePrepaidWalletPayment
       tags: [Prepaid Wallets]
       summary: Atomically reserve an eligible prepaid wallet payment
-      description: Requires wallet:spend, the exact requested payment scope, and a DPoP-bound access token whose audience is exactly /v1/prepaid-wallets.
+      description: Requires wallet:spend, the exact requested payment scope, and a DPoP-bound access token whose audience is exactly /v1/prepaid-wallets. Configured base_usdc custody signs native Base USDC EIP-3009 only after policy and balance checks. Its remaining authorization window must be 10-300 seconds. The encrypted signature and reservation commit atomically; an identical retry recovers the same nonce. Blocking cannot recall an already issued EVM signature.
       security: [{ dpopAuth: [] }]
       requestBody:
         required: true
@@ -1174,6 +1200,39 @@ paths:
         '402': { description: Balance or spend limit exceeded }
         '403': { description: Assignment, recipient, scope, asset, network, or block policy denied }
         '409': { description: Idempotency conflict or prior authorization no longer usable }
+        '503': { description: Custody is unconfigured, unavailable, on the wrong chain, or stale; no new payment capability is returned }
+
+  /v1/prepaid-wallets/reservations/{reservationId}/reconcile:
+    post:
+      operationId: reconcileAgentPrepaidWalletReservation
+      tags: [Prepaid Wallets]
+      summary: Reconcile an agent-owned Base reservation against finalized chain evidence
+      description: Requires DPoP and wallet:read or wallet:spend. No caller-supplied settlement evidence is trusted. An unused nonce is released only after finalized chain time passes signature expiry. Provider failure leaves the hold intact.
+      security: [{ dpopAuth: [] }]
+      parameters:
+        - { name: reservationId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Current idempotent reconciliation result
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletReconciliation' } } }
+        '404': { description: No EVM reservation visible to this owner and agent }
+        '503': { description: Custody or chain evidence unavailable; hold retained }
+
+  /v1/principal/prepaid-wallets/reservations/{reservationId}/reconcile:
+    post:
+      operationId: reconcilePrincipalPrepaidWalletReservation
+      tags: [Prepaid Wallets]
+      summary: Reconcile a principal-owned Base reservation
+      description: Uses the same finalized-chain checks as agent reconciliation, including after an agent is blocked. Manual release is not a substitute for EVM reconciliation.
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: reservationId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Current idempotent reconciliation result
+          content: { application/json: { schema: { $ref: '#/components/schemas/WalletReconciliation' } } }
+        '404': { description: No EVM reservation visible to this principal }
+        '503': { description: Custody or chain evidence unavailable; hold retained }
 
   /v1/prepaid-wallets/{walletId}/reload-requests:
     post:

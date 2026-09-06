@@ -77,7 +77,8 @@ For MCP HTTP transport authorization, use an established MCP-compatible authoriz
 - [OACP Documentation](https://docs.grantex.dev/guides/oacp/overview): Canonical ownership and non-ownership boundaries.
 - [AgenticOrg Integration Boundary](https://docs.grantex.dev/guides/oacp/agenticorg-integration): Buyer and seller runtime responsibilities versus Grantex authority.
 - [MPP Agent Identity](https://grantex.dev/for/mpp): Verifiable agent passports and spending constraints for machine payments.
-- [x402 Prepaid Wallets](https://grantex.dev/x402): Published `@grantex/x402@0.3.0` with registry-verified `@grantex/sdk@0.5.1` adds DPoP agent identity, layered cross-wallet policy, exact principal approvals, reload governance, atomic reservations, and stop controls. External custody adapters remain fail-closed.
+- [x402 Prepaid Wallets](https://grantex.dev/x402): Published `@grantex/x402@0.3.0` with registry-verified `@grantex/sdk@0.5.1` adds DPoP agent identity, layered cross-wallet policy, exact principal approvals, reload governance, atomic reservations, and stop controls. Opt-in Base USDC support is a newer source addition, not part of these registry releases.
+- [Base USDC Custody](https://docs.grantex.dev/guides/base-usdc-custody): Operator-provisioned native Base USDC EIP-3009 signing with finalized funding and reconciliation. Blocks stop new signatures but cannot recall issued ones. Requires dedicated custody, trusted RPC and updated source clients; no funded third-party production payment is claimed.
 
 ## Machine-Readable Sources
 

@@ -15,6 +15,8 @@ import {
   type WalletAuthorizationPayload,
 } from './crypto.js';
 import { emitEvent, type EventType } from './events.js';
+import { BASE_NETWORK, BASE_USDC_PROVIDER, BaseUsdcError, baseUsdcCustody, canonicalEvmAddress, type EvmPayment } from './base-usdc-custody.js';
+import { encrypt, decrypt } from './vault-crypto.js';
 import {
   WalletPolicyDecisionError,
   WalletSpendPolicyError,
@@ -28,6 +30,22 @@ import {
 } from './wallet-spend-policy.js';
 
 type Sql = ReturnType<typeof postgres>;
+
+export function readEvmPayment(row: Record<string, unknown>): EvmPayment {
+  const stored = JSON.parse(decrypt(String(row['evm_payment_ciphertext']))) as { reservationId: string; payment: EvmPayment };
+  if (stored.reservationId !== row['id'] || stored.payment.authorization.value !== String(row['amount'])
+      || stored.payment.authorization.to.toLowerCase() !== String(row['recipient']).toLowerCase()) {
+    throw new Error('Stored EVM payment binding is invalid');
+  }
+  return stored.payment;
+}
+
+async function verifyBaseFunding(wallet: Record<string, unknown>, owner: { developerId: string; principalId: string }, amount: string, reference: string) {
+  if (wallet['custody_mode'] !== 'external') return;
+  const custody = baseUsdcCustody({ ...owner, providerWalletId: String(wallet['provider_wallet_id']),
+    walletAddress: String(wallet['wallet_address']), network: String(wallet['network']), asset: String(wallet['asset']) });
+  await custody.verifyFunding(amount, reference, (BigInt(String(wallet['available_amount'])) + BigInt(String(wallet['reserved_amount']))).toString());
+}
 
 const MAX_ATOMIC_DIGITS = 78;
 const MAX_ATOMIC_VALUE = (10n ** BigInt(MAX_ATOMIC_DIGITS)) - 1n;
@@ -123,6 +141,7 @@ export interface PaymentRequirementsBinding {
 }
 
 export interface PrepaidAuthorization {
+  evmPayment?: EvmPayment;
   authorization: string;
   reservationId: string;
   walletId: string;
@@ -378,7 +397,7 @@ export async function createPrepaidWallet(
     throw new PrepaidWalletError(400, 'INVALID_CUSTODY_MODE', 'custodyMode must be sandbox_ledger or external');
   }
   const network = validateNetwork(raw.network);
-  const asset = boundedText(raw.asset, 'asset');
+  const asset = network === BASE_NETWORK ? canonicalEvmAddress(raw.asset) : boundedText(raw.asset, 'asset');
   const decimals = raw.decimals ?? 6;
   if (!Number.isSafeInteger(decimals) || decimals < 0 || decimals > 30) {
     throw new PrepaidWalletError(400, 'INVALID_DECIMALS', 'decimals must be an integer between 0 and 30');
@@ -408,6 +427,12 @@ export async function createPrepaidWallet(
   const walletAddress = raw.walletAddress === undefined
     ? undefined
     : boundedText(raw.walletAddress, 'walletAddress');
+  if (raw.custodyMode === 'external' && provider === BASE_USDC_PROVIDER) {
+    if (!walletAddress || decimals !== 6) {
+      throw new PrepaidWalletError(400, 'INVALID_BASE_WALLET', 'Base USDC wallets require walletAddress and 6 decimals');
+    }
+    baseUsdcCustody({ ...owner, providerWalletId: providerWalletId!, walletAddress, network, asset });
+  }
   const id = newPrepaidWalletId();
   try {
     const rows = await sql`
@@ -428,7 +453,7 @@ export async function createPrepaidWallet(
   } catch (error) {
     if (error && typeof error === 'object'
         && (error as { code?: unknown }).code === '23505'
-        && (error as { constraint_name?: unknown }).constraint_name === 'uq_prepaid_wallet_provider_ref') {
+        && ['uq_prepaid_wallet_provider_ref', 'uq_base_usdc_custody_address'].includes(String((error as { constraint_name?: unknown }).constraint_name))) {
       throw new PrepaidWalletError(409, 'PROVIDER_WALLET_EXISTS', 'This external provider wallet is already registered');
     }
     throw error;
@@ -647,6 +672,7 @@ async function releaseReservations(
     SELECT DISTINCT wallet_id
     FROM wallet_payment_reservations
     WHERE status = 'reserved'
+      AND evm_payment_ciphertext IS NULL
       AND (${predicate.reservationId ?? null}::text IS NULL OR id = ${predicate.reservationId ?? null})
       AND (${predicate.walletId ?? null}::text IS NULL OR wallet_id = ${predicate.walletId ?? null})
       AND (${predicate.assignmentId ?? null}::text IS NULL OR assignment_id = ${predicate.assignmentId ?? null})
@@ -670,6 +696,7 @@ async function releaseReservations(
     SET status = ${predicate.expiredOnly ? 'expired' : 'released'},
         released_at = NOW(), release_reason = ${reason}, updated_at = NOW()
     WHERE status = 'reserved'
+      AND evm_payment_ciphertext IS NULL
       AND (${predicate.reservationId ?? null}::text IS NULL OR id = ${predicate.reservationId ?? null})
       AND (${predicate.walletId ?? null}::text IS NULL OR wallet_id = ${predicate.walletId ?? null})
       AND (${predicate.assignmentId ?? null}::text IS NULL OR assignment_id = ${predicate.assignmentId ?? null})
@@ -962,6 +989,10 @@ export async function reserveWalletPayment(
     throw new PrepaidWalletError(403, 'INSUFFICIENT_SCOPE', 'wallet:spend scope is required');
   }
   const input = validatedReserveInput(raw);
+  if (input.network === BASE_NETWORK) {
+    if (/^0x[0-9a-fA-F]{40}$/.test(input.asset)) input.asset = canonicalEvmAddress(input.asset);
+    if (/^0x[0-9a-fA-F]{40}$/.test(input.recipient)) input.recipient = canonicalEvmAddress(input.recipient);
+  }
   if (!identity.scopes.includes(input.scope)) {
     throw new PrepaidWalletError(403, 'PAYMENT_SCOPE_NOT_GRANTED', 'The OAuth grant does not include the requested payment scope');
   }
@@ -983,7 +1014,7 @@ export async function reserveWalletPayment(
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`${identity.developerId}:${identity.agentId}`}, 13))`;
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`${identity.developerId}:${identity.principalId}:${identity.agentId}:${idempotencyHash}`}, 11))`;
     const authority = await tx`
-      SELECT g.id
+      SELECT g.id, g.expires_at AS grant_expires_at, gt.expires_at AS token_expires_at
       FROM grants g
       JOIN grant_tokens gt ON gt.grant_id = g.id AND gt.jti = ${identity.accessTokenJti}
       JOIN agents ag ON ag.id = g.agent_id AND ag.developer_id = g.developer_id
@@ -1033,7 +1064,7 @@ export async function reserveWalletPayment(
       throw new PrepaidWalletError(404, 'NO_ASSIGNED_WALLET', 'No prepaid wallet is assigned to this agent');
     }
 
-    let lastPolicyError: PrepaidWalletError | WalletPolicyDecisionError | undefined;
+    let lastPolicyError: PrepaidWalletError | WalletPolicyDecisionError | BaseUsdcError | undefined;
     for (const candidate of candidates) {
       const assignmentId = candidate['id'] as string;
       const lockedAssignments = await tx`
@@ -1046,7 +1077,7 @@ export async function reserveWalletPayment(
       const rows = await tx`
         SELECT a.*, w.status AS wallet_status, w.custody_mode, w.network AS wallet_network,
                w.asset AS wallet_asset, w.available_amount, w.reserved_amount,
-               w.low_balance_threshold, w.wallet_address, w.provider_wallet_id,
+               w.low_balance_threshold, w.wallet_address, w.provider_wallet_id, w.provider,
                COALESCE(c.all_wallets_blocked, FALSE) AS all_wallets_blocked
         FROM agent_wallet_assignments a
         JOIN prepaid_wallets w ON w.id = a.wallet_id
@@ -1067,7 +1098,11 @@ export async function reserveWalletPayment(
         if (row['wallet_status'] !== 'active' || row['status'] !== 'active' || row['all_wallets_blocked'] === true) {
           throw new PrepaidWalletError(403, 'WALLET_BLOCKED', 'The wallet or assignment is blocked');
         }
-        if (row['custody_mode'] !== 'sandbox_ledger') {
+        const custody = row['custody_mode'] === 'external' && row['provider'] === BASE_USDC_PROVIDER
+          ? baseUsdcCustody({ ...identity, providerWalletId: String(row['provider_wallet_id']),
+            walletAddress: String(row['wallet_address']), network: String(row['wallet_network']), asset: String(row['wallet_asset']) })
+          : undefined;
+        if (row['custody_mode'] !== 'sandbox_ledger' && !custody) {
           throw new PrepaidWalletError(503, 'CUSTODY_ADAPTER_UNAVAILABLE', 'External custody settlement is not configured');
         }
         if (new Date(row['valid_from'] as string) > new Date()
@@ -1078,7 +1113,8 @@ export async function reserveWalletPayment(
           throw new PrepaidWalletError(403, 'ASSET_OR_NETWORK_NOT_ALLOWED', 'Payment asset or network does not match the wallet');
         }
         const allowedRecipients = row['allowed_recipients'] as string[];
-        if (row['allow_any_recipient'] !== true && !allowedRecipients.includes(input.recipient)) {
+        if (row['allow_any_recipient'] !== true && !allowedRecipients.some(value =>
+          input.network === BASE_NETWORK ? value.toLowerCase() === input.recipient : value === input.recipient)) {
           throw new PrepaidWalletError(403, 'RECIPIENT_NOT_ALLOWED', 'Payment recipient is not allowed by wallet policy');
         }
         const allowedScopes = row['allowed_scopes'] as string[];
@@ -1114,6 +1150,9 @@ export async function reserveWalletPayment(
           if (existing['status'] !== 'reserved') {
             throw new PrepaidWalletError(409, 'IDEMPOTENCY_EXPIRED', 'The prior payment authorization is no longer usable');
           }
+          if (existing['evm_payment_ciphertext'] && new Date(existing['expires_at'] as string) <= new Date()) {
+            throw new PrepaidWalletError(409, 'PAYMENT_RECONCILIATION_REQUIRED', 'Signed payment has expired; wait for finalized chain reconciliation');
+          }
           const [balanceRows, spentRows] = await Promise.all([
             tx`SELECT available_amount FROM prepaid_wallets WHERE id = ${existing['wallet_id'] as string}`,
             tx`
@@ -1121,7 +1160,7 @@ export async function reserveWalletPayment(
               FROM wallet_payment_reservations
               WHERE assignment_id = ${assignmentId}
                 AND status IN ('reserved', 'settled')
-                AND created_at > NOW() - (${Number(row['cumulative_period_seconds'])} * INTERVAL '1 second')
+                AND (status = 'reserved' OR created_at > NOW() - (${Number(row['cumulative_period_seconds'])} * INTERVAL '1 second'))
             `,
           ]);
           const currentSpent = BigInt(String(spentRows[0]?.['spent'] ?? '0'));
@@ -1150,6 +1189,7 @@ export async function reserveWalletPayment(
             expiresAt: Math.floor(existingExpiry.getTime() / 1000),
           };
           result = {
+            ...(existing['evm_payment_ciphertext'] ? { evmPayment: readEvmPayment(existing) } : {}),
             reservationId: existing['id'] as string,
             walletId: existing['wallet_id'] as string,
             assignmentId,
@@ -1173,7 +1213,7 @@ export async function reserveWalletPayment(
           FROM wallet_payment_reservations
           WHERE assignment_id = ${assignmentId}
             AND status IN ('reserved', 'settled')
-            AND created_at > NOW() - (${Number(row['cumulative_period_seconds'])} * INTERVAL '1 second')
+            AND (status = 'reserved' OR created_at > NOW() - (${Number(row['cumulative_period_seconds'])} * INTERVAL '1 second'))
         `;
         const alreadySpent = BigInt(String(spentRows[0]?.['spent'] ?? '0'));
         const cumulativeLimit = BigInt(String(row['cumulative_limit']));
@@ -1218,6 +1258,18 @@ export async function reserveWalletPayment(
           throw new WalletPolicyDecisionError(409, 'PAYMENT_APPROVAL_REQUIRED', 'Principal approval is required for this payment', policyContext, policyEvaluation);
         }
 
+        // Persist the exact signature in the same transaction as the balance hold.
+        // It is never exposed unless the entire transaction commits successfully.
+        const paymentExpiry = custody ? new Date(Math.floor(Math.min(expiresAt.getTime(),
+          new Date(authority[0]['grant_expires_at'] as string).getTime(),
+          new Date(authority[0]['token_expires_at'] as string).getTime(),
+          row['valid_until'] ? new Date(row['valid_until'] as string).getTime() : Infinity) / 1000) * 1000) : expiresAt;
+        if (BigInt(String(row['available_amount'])) < BigInt(input.amount)) {
+          throw new PrepaidWalletError(402, 'INSUFFICIENT_WALLET_FUNDS', 'The prepaid wallet does not have enough available funds');
+        }
+        const signed = custody ? await custody.sign(input.amount, input.recipient, paymentExpiry, String(row['reserved_amount'])) : undefined;
+        const ciphertext = signed ? encrypt(JSON.stringify({ reservationId, payment: signed.payment })) : null;
+
         const walletRows = await tx`
           UPDATE prepaid_wallets
           SET available_amount = available_amount - ${input.amount},
@@ -1237,7 +1289,8 @@ export async function reserveWalletPayment(
             id, wallet_id, assignment_id, developer_id, principal_id, agent_id,
             grant_id, access_token_jti, authorization_jti, idempotency_key_hash,
             request_hash, amount, asset, network, recipient, resource, scope,
-            merchant_id, purpose, project_id, cost_center, resource_origin, expires_at
+            merchant_id, purpose, project_id, cost_center, resource_origin, expires_at,
+            evm_payment_ciphertext, evm_from_block
           ) VALUES (
             ${reservationId}, ${row['wallet_id'] as string}, ${assignmentId},
             ${identity.developerId}, ${identity.principalId}, ${identity.agentId},
@@ -1245,7 +1298,8 @@ export async function reserveWalletPayment(
             ${idempotencyHash}, ${requestHash}, ${input.amount}, ${input.asset},
             ${input.network}, ${input.recipient}, ${input.resource}, ${input.scope},
             ${input.merchantId ?? null}, ${input.purpose ?? null}, ${input.projectId ?? null},
-            ${input.costCenter ?? null}, ${new URL(input.resource).origin}, ${expiresAt}
+            ${input.costCenter ?? null}, ${new URL(input.resource).origin}, ${paymentExpiry},
+            ${ciphertext}, ${signed?.fromBlock ?? null}
           )
         `;
         const policyDecisionId = await recordWalletPolicyDecision(tx, policyContext, policyEvaluation, { reservationId });
@@ -1271,9 +1325,10 @@ export async function reserveWalletPayment(
           projectId: input.projectId ?? null,
           costCenter: input.costCenter ?? null,
           requestHash,
-          expiresAt: expiresAtSeconds,
+          expiresAt: Math.floor(paymentExpiry.getTime() / 1000),
         };
         result = {
+          ...(signed ? { evmPayment: signed.payment } : {}),
           reservationId,
           walletId: row['wallet_id'] as string,
           assignmentId,
@@ -1281,7 +1336,7 @@ export async function reserveWalletPayment(
           asset: input.asset,
           network: input.network,
           recipient: input.recipient,
-          expiresAt: expiresAt.toISOString(),
+          expiresAt: paymentExpiry.toISOString(),
           remainingAvailable: String(wallet['available_amount']),
           remainingCumulative: (cumulativeLimit - alreadySpent - BigInt(input.amount)).toString(),
           policyDecisionId,
@@ -1290,7 +1345,7 @@ export async function reserveWalletPayment(
         lowBalanceThreshold = String(row['low_balance_threshold']);
         break;
       } catch (error) {
-        if (!(error instanceof PrepaidWalletError) && !(error instanceof WalletPolicyDecisionError)) throw error;
+        if (!(error instanceof PrepaidWalletError) && !(error instanceof WalletPolicyDecisionError) && !(error instanceof BaseUsdcError)) throw error;
         lastPolicyError = error;
         if (input.walletId) throw error;
       }
@@ -1846,7 +1901,7 @@ export async function createPrincipalReload(
     `;
     const wallet = wallets[0] as Record<string, unknown> | undefined;
     if (!wallet) throw new PrepaidWalletError(404, 'WALLET_NOT_FOUND', 'Wallet not found');
-    if (wallet['custody_mode'] !== 'sandbox_ledger') {
+    if (wallet['custody_mode'] !== 'sandbox_ledger' && wallet['provider'] !== BASE_USDC_PROVIDER) {
       throw new PrepaidWalletError(503, 'CUSTODY_ADAPTER_UNAVAILABLE', 'External custody funding is not configured');
     }
     const existing = await tx`
@@ -1883,6 +1938,7 @@ export async function createPrincipalReload(
     if (!reference) {
       throw new PrepaidWalletError(400, 'EXTERNAL_REFERENCE_REQUIRED', 'External wallet reloads require a provider funding reference');
     }
+    await verifyBaseFunding(wallet, owner, amount, reference);
     const inserted = await tx`
       INSERT INTO wallet_reload_requests (
         id, wallet_id, developer_id, principal_id, amount, status,
@@ -1954,6 +2010,7 @@ export async function fundApprovedReload(
     }
     const rows = await tx`
       SELECT rr.*, w.id AS control_wallet_id, w.custody_mode, w.available_amount, w.reserved_amount,
+             w.provider, w.provider_wallet_id, w.wallet_address, w.network, w.asset,
              w.max_balance, w.max_reload_amount, w.reload_cumulative_limit,
              w.reload_period_seconds, w.reload_count_limit
       FROM wallet_reload_requests rr
@@ -1977,7 +2034,7 @@ export async function fundApprovedReload(
     if (row['status'] !== 'approved') {
       throw new PrepaidWalletError(409, 'RELOAD_NOT_APPROVED', 'Reload request is not approved for funding');
     }
-    if (row['custody_mode'] !== 'sandbox_ledger') {
+    if (row['custody_mode'] !== 'sandbox_ledger' && row['provider'] !== BASE_USDC_PROVIDER) {
       throw new PrepaidWalletError(503, 'CUSTODY_ADAPTER_UNAVAILABLE', 'External custody funding is not configured');
     }
     await assertReloadControls(tx, row, String(row['amount']));
@@ -1996,6 +2053,7 @@ export async function fundApprovedReload(
     if (referenceRows[0]) {
       throw new PrepaidWalletError(409, 'EXTERNAL_REFERENCE_CONFLICT', 'externalReference was already used for this wallet');
     }
+    await verifyBaseFunding(row, owner, String(row['amount']), reference);
     const walletRows = await tx`
       UPDATE prepaid_wallets
       SET available_amount = available_amount + ${String(row['amount'])}, updated_at = NOW()
@@ -2047,7 +2105,13 @@ export async function releaseReservationByPrincipal(
       principalId: owner.principalId,
     }, boundedText(reason, 'reason'));
   });
-  if (released === 0) throw new PrepaidWalletError(404, 'RESERVATION_NOT_FOUND', 'Active reservation not found');
+  if (released === 0) {
+    const pending = await sql`SELECT id FROM wallet_payment_reservations
+      WHERE id = ${reservationId} AND developer_id = ${owner.developerId} AND principal_id = ${owner.principalId}
+        AND status = 'reserved' AND evm_payment_ciphertext IS NOT NULL`;
+    if (pending[0]) throw new PrepaidWalletError(409, 'PAYMENT_RECONCILIATION_REQUIRED', 'Signed on-chain payments remain reserved until finalized settlement or expiry');
+    throw new PrepaidWalletError(404, 'RESERVATION_NOT_FOUND', 'Active reservation not found');
+  }
   return { reservationId, status: 'released' as const };
 }
 
