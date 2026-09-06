@@ -18,12 +18,11 @@ published to SDK registries. Server rollout is tracked separately below.
 
 ## Release preparation (7 September 2026)
 
-The workstation Docker rerun passed all 10 Base scenarios (11 test results),
+The final workstation Docker rerun passed all 11 Base scenarios (12 test results),
 including an explicit final payer-chain balance assertion. Both existing
 prepaid/layered-control E2E lifecycles also passed. Full x402 (206), TypeScript
-SDK (457), Python SDK (613) and Go SDK suites passed again. The API reference
-and the full auth-service suite (2,151 passed, two existing skips) passed again.
-The API reference
+SDK (457), Python SDK (613), Go SDK and full auth-service (2,151 passed, two
+existing skips) suites passed again. The API reference
 now describes the EVM payload and both authenticated reconciliation routes,
 with a passing contract test. Public guidance distinguishes sandbox release
 from signed EVM exposure and documents reconciliation scheduling and rollback.
@@ -34,6 +33,13 @@ fixture has its own update stream, and the checker accepts only the reviewed
 MIT-licensed memorystream 0.3.1 tarball. All 37 npm lockfiles and 4,308 package
 entries pass the policy check; auth-service production and compiler-fixture
 vulnerability audits each report zero vulnerabilities.
+
+The first PR CodeQL run flagged the local merchant fixture's request-dependent
+setup, reflected exception text and an unused import. The fixture now defines
+payment terms before accepting requests, explicitly requires verification and
+settlement success, and returns constant JSON errors. A new Docker scenario
+confirms missing/malformed headers cannot execute or settle work. The complete
+Docker rerun passed after these changes; no scanner suppression was added.
 
 Production deployment and post-deploy verification are pending at preparation
 time. Deployment does not provision a funded wallet or publish SDK packages.

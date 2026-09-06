@@ -8,7 +8,7 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import solc from 'solc';
 import { OAuthAgentClient, generateOAuthAgentKey, PrincipalPrepaidWalletClient, PrepaidWalletAgentClient } from '../../packages/sdk-ts/dist/index.js';
-import { createX402Agent, HEADERS } from '../../packages/x402/dist/agent.js';
+import { createX402Agent } from '../../packages/x402/dist/agent.js';
 
 const require = createRequire(new URL('../../apps/auth-service/package.json', import.meta.url));
 const { createPublicClient, createWalletClient, http, parseSignature } = require('viem');
@@ -138,36 +138,58 @@ test('Docker: governed Base USDC with official x402 facilitator and real EVM exe
 
     let reservation;
     let paidPayload;
-    let accepted;
     let settlement;
     const facilitator = new ExactEvmScheme(toFacilitatorEvmSigner({ ...rpc, ...writer, address: relayer.address }, { confirmationTimeoutMs: 10000 }));
     const fixture = JSON.parse(readFileSync(new URL('../../packages/x402/tests/fixtures/uk-taxi-phv-base-mainnet-402.json', import.meta.url)));
     const captured = JSON.parse(Buffer.from(fixture.paymentRequiredHeader, 'base64').toString());
+    const required = structuredClone(captured);
+    required.resource.url = merchantUrl;
+    required.accepts[0].payTo = merchantAddress;
+    const accepted = required.accepts[0];
+    const challenge = res => {
+      res.writeHead(402, { 'content-type': 'application/json',
+        'payment-required': Buffer.from(JSON.stringify(required)).toString('base64') });
+      res.end('{}');
+    };
     const requestBodies = [];
     const merchant = createServer(async (req, res) => {
       try {
         let body = ''; for await (const chunk of req) body += chunk;
         requestBodies.push(body);
-        const header = req.headers['payment-signature'];
-        if (!header) {
-          const required = structuredClone(captured);
-          required.resource.url = merchantUrl;
-          required.accepts[0].payTo = merchantAddress;
-          accepted = required.accepts[0];
-          res.writeHead(402, { 'payment-required': Buffer.from(JSON.stringify(required)).toString('base64') });
-          res.end('{}'); return;
+        let payload;
+        try { payload = JSON.parse(Buffer.from(String(req.headers['payment-signature'] ?? ''), 'base64').toString()); }
+        catch { challenge(res); return; }
+        let verification;
+        try { verification = await facilitator.verify(payload, accepted); }
+        catch { challenge(res); return; }
+        if (!verification.isValid) { challenge(res); return; }
+        paidPayload = payload;
+        settlement = await facilitator.settle(payload, accepted);
+        if (!settlement.success) {
+          res.writeHead(502, { 'content-type': 'application/json' });
+          res.end('{"error":"settlement_failed"}'); return;
         }
-        paidPayload = JSON.parse(Buffer.from(header, 'base64').toString());
-        const verification = await facilitator.verify(paidPayload, accepted);
-        assert.equal(verification.isValid, true, JSON.stringify(verification));
-        settlement = await facilitator.settle(paidPayload, accepted);
-        assert.equal(settlement.success, true, JSON.stringify(settlement));
         res.writeHead(200, { 'content-type': 'application/json', 'payment-response': Buffer.from(JSON.stringify(settlement)).toString('base64') });
         res.end('{"compatible":true}');
-      } catch (error) { res.writeHead(500); res.end(error.message); }
+      } catch {
+        res.writeHead(500, { 'content-type': 'application/json' });
+        res.end('{"error":"local_fixture_failed"}');
+      }
     });
     await new Promise(resolve => merchant.listen(3459, '127.0.0.1', resolve));
     t.after(() => new Promise(resolve => merchant.close(resolve)));
+    await t.test('missing and malformed payment headers cannot execute or settle merchant work', async () => {
+      for (const header of ['', 'not-base64-json', Buffer.from('{}').toString('base64')]) {
+        const response = await fetch(merchantUrl, { method: 'POST', body: '{}',
+          headers: { 'payment-signature': header } });
+        assert.equal(response.status, 402);
+        assert.equal(response.headers.get('content-type'), 'application/json');
+        assert.deepEqual(await response.json(), {});
+      }
+      assert.equal(await balance(merchantAddress), 0n);
+      assert.equal(settlement, undefined);
+      requestBodies.length = 0;
+    });
     await t.test('402 -> governed signing -> official facilitator verify/settle -> 200 with actual token transfer', async () => {
       const x402 = createX402Agent({ walletId: wallet.walletId, baseUsdc: { scope: 'licensing:preflight' },
         authorizePayment: async request => {

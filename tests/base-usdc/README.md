@@ -29,7 +29,8 @@ docker compose -p grantex-base-compat -f tests/base-usdc/compose.yml down --volu
 ```
 
 Tests cover custody ownership, duplicate registration, exact finalized funding,
-duplicate funding, denied spend terms, standard 402/authorize/retry, actual token
+duplicate funding, denied spend terms, missing/malformed payment headers,
+standard 402/authorize/retry, actual token
 transfer, official facilitator verification, tampering, replay, concurrent
 idempotency, auth-service restart, rolling-window exposure, blocking, settlement
 after blocking, RPC outage and finalized unused expiry. The existing root
