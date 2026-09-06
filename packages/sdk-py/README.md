@@ -142,7 +142,7 @@ from grantex import (
 )
 
 principal = PrincipalPrepaidWalletClient(
-    base_url="https://grantex.dev",
+    base_url="https://api.grantex.dev",
     session_token=session_token,
 )
 principal.create_spend_policy({
