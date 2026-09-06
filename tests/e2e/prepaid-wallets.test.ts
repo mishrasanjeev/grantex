@@ -490,10 +490,21 @@ describe('agent prepaid wallets and x402 v2 E2E', () => {
     }), 409, 'ASSIGNMENT_REVOKED');
     await expectApiError(principal.setAssignmentStatus(terminal.assignment.assignmentId, 'active'), 409, 'ASSIGNMENT_REVOKED');
 
-    const validity = await createWallet('Expiring assignment wallet', '1000', {
-      validUntil: new Date(Date.now() + 1_000).toISOString(),
+    const validity = await createWallet('Expiring assignment wallet', '1000');
+    // Start the short validity window after funding, not before several remote calls.
+    const expiringAssignment = await principal.assign(validity.wallet.walletId, {
+      agentId,
+      perTransactionLimit: '5000',
+      cumulativeLimit: '20000',
+      cumulativePeriodSeconds: 3600,
+      allowedRecipients: [RECIPIENT],
+      allowedScopes: [SCOPE],
+      allowedResourceOrigins: ['https://merchant.example'],
+      validUntil: new Date(Date.now() + 10_000).toISOString(),
     });
-    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    expect(expiringAssignment.validUntil).toBeTruthy();
+    await new Promise((resolve) => setTimeout(resolve,
+      Math.max(0, Date.parse(expiringAssignment.validUntil!) - Date.now()) + 250));
     await expectApiError(agent.authorizePayment(authorizationRequest({
       walletId: validity.wallet.walletId,
       amount: '1',

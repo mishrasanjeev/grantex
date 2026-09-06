@@ -64,7 +64,18 @@ preserve ownership, reservation, retry and reconciliation guarantees.
 
 Using an authenticated principal-session client:
 
+The hosted principal API origin is `https://api.grantex.dev`. The OAuth issuer
+and agent wallet audience remain `https://grantex.dev` and
+`https://grantex.dev/v1/prepaid-wallets` respectively. Do not change a token's
+audience to the principal API host. Self-hosted deployments use their configured
+origins. Health and protected metrics are served by the API origin, not the
+marketing site's limited Firebase rewrites.
+
 ```ts
+const principal = new PrincipalPrepaidWalletClient({
+  baseUrl: 'https://api.grantex.dev',
+  sessionToken,
+});
 const wallet = await principal.create({
   name: 'Agent Base USDC float',
   custodyMode: 'external',

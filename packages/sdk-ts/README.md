@@ -164,7 +164,7 @@ const agentWallets = new PrepaidWalletAgentClient({
 });
 
 const principalWallets = new PrincipalPrepaidWalletClient({
-  baseUrl: 'https://grantex.dev',
+  baseUrl: 'https://api.grantex.dev',
   sessionToken,
 });
 
