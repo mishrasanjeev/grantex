@@ -3,6 +3,7 @@
  * vi.mock() calls here ARE hoisted, so the mocks apply to all imports.
  */
 import { vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
 
 // ------------------------------------------------------------------
 // Mock objects — defined before the vi.mock factories reference them.
@@ -10,14 +11,18 @@ import { vi, beforeEach } from 'vitest';
 // by binding (not by value) and are always resolved at call time.
 // ------------------------------------------------------------------
 const baseSqlMock = vi.fn().mockResolvedValue([]);
-export const sqlMock = Object.assign(baseSqlMock, {
+export const sqlMock: Mock & { begin: Mock; json: Mock; unsafe: Mock } = Object.assign(baseSqlMock, {
   // Support sql.begin(async (tx) => { ... }) — passes sqlMock itself as the tx
   begin: vi.fn().mockImplementation(async (cb: (tx: unknown) => unknown) => cb(sqlMock)),
   json: vi.fn((value: unknown) => value),
   unsafe: vi.fn((query: string, parameters: unknown[] = []) => baseSqlMock([query], ...parameters)),
 });
 
-export const mockRedis = {
+export const mockRedis: Record<
+  'get' | 'getdel' | 'set' | 'del' | 'publish' | 'subscribe' | 'unsubscribe' |
+  'ping' | 'incr' | 'decr' | 'expire' | 'eval' | 'multi' | 'connect' |
+  'disconnect' | 'quit' | 'on' | 'duplicate' | 'sadd' | 'sismember' | 'srem' | 'smembers', Mock
+> & { options: { host: string; port: number } } = {
   get: vi.fn().mockResolvedValue(null),
   getdel: vi.fn().mockResolvedValue(null),
   set: vi.fn().mockResolvedValue('OK'),
@@ -74,7 +79,11 @@ function configureMockRedisMulti(): void {
 }
 configureMockRedisMulti();
 
-export const mockStripe = {
+export const mockStripe: {
+  checkout: { sessions: { create: Mock } };
+  billingPortal: { sessions: { create: Mock } };
+  webhooks: { constructEvent: Mock };
+} = {
   checkout: {
     sessions: { create: vi.fn().mockResolvedValue({ url: 'https://checkout.stripe.com/test' }) },
   },
@@ -175,7 +184,7 @@ vi.mock('prom-client', () => {
 });
 
 // Mock Stripe — prevents real HTTP calls and avoids needing STRIPE_SECRET_KEY.
-export const mockGetStripe = vi.fn().mockReturnValue(mockStripe);
+export const mockGetStripe: Mock = vi.fn().mockReturnValue(mockStripe);
 vi.mock('../src/lib/stripe.js', () => ({
   getStripe: (...args: unknown[]) => mockGetStripe(...args),
 }));
