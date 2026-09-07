@@ -7,15 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Verified SDK publications (2026-09-07)
+- Published `@grantex/sdk@0.6.0` and `@grantex/x402@0.4.0` to npm after the
+  workstation publishing approval completed. Both registry integrity hashes
+  exactly match the tested tarballs. A new consumer installed both exact versions
+  from npm and passed public-export, license/notice, Base safety, authenticated
+  reconciliation, and zero-vulnerability audit checks. The public registry
+  packages also passed the isolated Docker Base and existing wallet lifecycles,
+  then all 255 production E2E tests across 23 files in 281.80 seconds.
 - Published Python `grantex==0.5.0` to PyPI and Go SDK `v0.3.0` to the standalone
   module. Verified distribution hashes, clean public-registry installs, all
   613 Python tests, the Go race suite, and production reconciliation authentication
   boundaries. Both expose EVM payment responses and principal/agent reconciliation;
   neither adds an automatic x402 HTTP payment wrapper.
 - Included Apache-2.0 LICENSE and NOTICE files in the four primary release
-  artifacts. TypeScript `0.6.0` and x402 `0.4.0` remain prepared candidates
-  pending npm publishing approval; the public snapshot retains their prior
-  verified versions. Local EVM tests do not prove a funded mainnet payment.
+  artifacts. The public snapshot now reflects all four verified versions.
+  Local EVM tests do not prove a funded mainnet payment.
 
 ### SDK release candidates (2026-09-07)
 - Prepared TypeScript SDK 0.6.0, x402 0.4.0, Python SDK 0.5.0 and Go SDK
@@ -24,8 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   provides opt-in request-bound Base 402/sign/retry; Python and Go do not add
   automatic HTTP payment wrappers. Existing prepaid behavior remains the default.
 - Updated package runtime identifiers and the guarded primary-SDK publication
-  workflow. The public release snapshot remains on verified registry versions
-  until each new artifact is published and clean-install tested.
+  workflow. Publication and clean-install verification subsequently completed
+  for all four versions as recorded above.
 
 ### Added
 - Added opt-in governed Base native USDC x402 v2 EIP-3009 payments, verified
@@ -33,8 +39,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   settlement/expiry reconciliation. Signed exposure survives blocks and timeouts.
   Migration `094` and explicit custody/RPC provisioning are required. Added
   TypeScript/Python/Go reconciliation methods, API documentation and isolated
-  Docker tests with official x402 facilitator execution. These additive client
-  APIs are source additions, not a claim of new registry publication.
+  Docker tests with official x402 facilitator execution. Published client versions
+  are recorded separately in the verified SDK publications above.
 - Added layered prepaid-wallet spend governance across assignment, wallet,
   agent, shared budget-group, principal, and developer scopes. Policies support
   deny, exact principal approval, amount/count limits, reservation-aware rolling

@@ -14,13 +14,15 @@ passed with all publication flags disabled.
 | --- | --- |
 | Python `grantex==0.5.0` | Published to PyPI; wheel and sdist SHA-256 values match the local tested artifacts; clean public-index install verified |
 | Go `github.com/mishrasanjeev/grantex-go@v0.3.0` | Published tag at `1f6806670e908cb5470379c5e370eaff260bb829`; public proxy download and module checksums verified |
-| TypeScript `@grantex/sdk@0.6.0` | Prepared and tested; not registry verified or published at the time of this report; npm requires a separate publishing approval |
-| x402 `@grantex/x402@0.4.0` | Prepared and tested; not registry verified or published at the time of this report; npm requires a separate publishing approval |
+| TypeScript `@grantex/sdk@0.6.0` | Published to npm on 2026-09-07; registry integrity matches the tested tarball; exact-version clean registry install verified |
+| x402 `@grantex/x402@0.4.0` | Published to npm on 2026-09-07; registry integrity matches the tested tarball; exact-version clean registry install verified |
 
-The npm login succeeded. Earlier publish approvals expired, and exact-version
-registry requests still returned 404. The public release snapshot therefore
-retains TypeScript `0.5.1` and x402 `0.3.0`. Do not infer publication from a
-package manifest or from a successful local tarball installation.
+Earlier npm publish approvals expired and exact-version registry requests
+returned 404. A fresh approval completed on 2026-09-07, and both packages were
+published successfully. A new consumer directory installed the exact versions
+with npm registry tarball URLs in its lockfile and matching integrity values.
+The public release snapshot now advertises TypeScript `0.6.0` and x402 `0.4.0`.
+Do not infer publication from a manifest or local tarball installation alone.
 
 ## Verification
 
@@ -33,18 +35,21 @@ package manifest or from a successful local tarball installation.
 | Python installed artifacts | 613 tests passed against the local wheel and again against the clean public PyPI wheel |
 | Go source and publication | Full source tests, standalone race tests, and public-module race tests passed; `go mod verify` passed |
 | npm artifact consumer | Exact candidate versions, public exports, LICENSE/NOTICE, synchronous Base safety gates, and principal/DPoP-agent reconciliation wire contracts passed |
+| Public npm consumer | A separate clean directory installed exact registry versions; all artifact checks passed and npm audit reported zero vulnerabilities |
 | Local Docker Base | 11 scenarios plus the parent result passed (12 Node test results), using the final npm tarballs against the isolated PostgreSQL/Redis/auth-service/Anvil stack |
 | Local Docker existing wallets | Complete prepaid-wallet lifecycle and layered spend-control lifecycle passed using installed npm candidates |
+| Public npm Docker retest | 11 Base scenarios plus the parent result passed (12 Node results, 42.81s); existing prepaid-wallet and layered-policy lifecycle tests both passed (30.25s), using public registry packages |
 | API contract | Both Base API contract tests passed |
 | Public Python/Go production boundary | Principal and agent reconciliation requests with deliberately invalid credentials returned 401 in both installed SDKs |
 | Full production candidate E2E | 255 tests passed across all 23 files in 282.88 seconds, with `GRANTEX_SDK_TEST_ROOT` selecting installed TypeScript/x402 candidate tarballs; this was not an npm registry install |
+| Full production public-registry E2E | 255 tests passed across all 23 files in 281.80 seconds after publication, with `GRANTEX_SDK_TEST_ROOT` selecting the new clean npm registry consumer |
 | Documentation | Local integrity, mirrored metadata, links, navigation, JSON-LD, and live registry checks passed |
 | Supply chain | 37 lockfiles and 4,308 entries passed repository checks; tested npm dependency installations and consumer audit reported zero vulnerabilities |
 
 These are repeated suites, not additive distinct-test totals. Python and Go
 production 401 probes verify routing and authentication boundaries, not successful
-funded settlement. npm registry-install verification remains outstanding even
-though the full production candidate E2E suite passed.
+funded settlement. The public npm install is distinct from the earlier candidate
+installation; both use the same verified immutable artifact bytes.
 
 Final prepared npm artifact integrity values:
 
@@ -68,7 +73,7 @@ sha512-REjrrQFEnhEJDCuEgl3JDJqA82G3ENLaDobG2e5Xc6jv0x12sM+E9sg78j5LI0h+C97yKiORw
   its existing `E4`, `E7`, `E9`, and `F` gate. This does not claim that all of
   Ruff's additional opt-in findings were remediated.
 
-Local authenticated publication was used for Python and Go. This is not evidence
+Local authenticated publication was used for npm, Python and Go. This is not evidence
 that npm/PyPI trusted publishing is configured, nor an artifact-provenance claim.
 The standalone Go repository accepted an ordinary owner push of main and the
 annotated tag, while reporting a bypass of its pull-request rule. No force push
@@ -76,12 +81,12 @@ was used; future Go releases should follow a separate PR-gated publication path.
 
 ## Remaining boundaries
 
-- TypeScript/x402 npm publication and clean public-registry verification remain
-  open until fresh publishing approval succeeds. Never commit credentials,
-  disable two-factor authentication, or treat login as publish approval.
+- Publication and clean registry verification are complete for all four SDKs.
+  Future releases still require publishing approval or configured trusted
+  publishing. Never commit credentials or disable two-factor authentication.
 - Python and Go expose EVM payment responses and authenticated reconciliation,
   not an automatic HTTP 402/sign/retry wrapper. That wrapper belongs to the
-  prepared x402 adapter.
+  published x402 adapter.
 - The Base server implementation was deployed previously. This SDK release
   does not enable or fund custody; production Base RPC and wallet bindings are
   not configured by this release.

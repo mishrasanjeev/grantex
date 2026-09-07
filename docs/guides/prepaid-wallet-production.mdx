@@ -14,8 +14,8 @@ recovery store, notification channel, or regulatory approval for the operator.
 The source checkout includes a specific [Base USDC adapter](/guides/base-usdc-custody).
 It requires migration `094`, operator-provisioned keys, a trusted Base RPC,
 verified funding and reconciliation monitoring. Python `0.5.0` and Go `v0.3.0`
-publish the response and reconciliation APIs; the TypeScript `0.6.0` and x402
-`0.4.0` automatic Base payment candidates await npm publication. Other external
+publish the response and reconciliation APIs; published TypeScript `0.6.0` and
+x402 `0.4.0` support opt-in automatic Base payment retries. Other external
 providers still need their own adapter.
 Signed EVM holds are not released on a wallet block or a local timeout alone.
 
@@ -23,7 +23,7 @@ Signed EVM holds are not released on a wallet block or a local timeout alone.
 | --- | --- | --- | --- |
 | PostgreSQL migrations `091_agent_prepaid_wallets.sql` and `092_layered_wallet_spend_controls.sql` | Always | Startup applies ordered migrations automatically | Back up PostgreSQL, deploy the exact repository migration set, and verify startup completed before sending traffic |
 | Public HTTPS routing | The issuer or wallet resource uses a public host | DPoP tokens bind the exact `/v1/prepaid-wallets` audience | Route the exact public wallet and OAuth paths to the auth service; do not rewrite them to static HTML |
-| `@grantex/sdk@0.5.1` and `@grantex/x402@0.3.0` | Applications install managed-wallet clients from npm | Both exact versions are published and clean-install verified | Pin these exact versions and complete the dependencies below |
+| `@grantex/sdk@0.6.0` and `@grantex/x402@0.4.0` | Applications install managed-wallet clients from npm | Both exact versions are published and clean-install verified | Pin these exact versions and complete the dependencies below |
 | External custody adapter | Real bank, card, on-chain, or provider-held funds | Configured `base_usdc` supports native Base USDC; other/unconfigured providers fail closed | Follow the Base custody guide or implement and independently test the selected provider's funding, reservation, settlement, reconciliation and recovery |
 | Principal notification bridge | A human must receive reload alerts outside the Grantex UI | Wallet reload events are emitted to the event bus; no built-in email/SMS/chat delivery is claimed | Consume SSE/WebSocket events and deliver through an approved channel, or separately extend and test webhook registration for wallet events |
 | Merchant idempotency store | A paid request has side effects | Grantex makes reservation and settlement retries idempotent | Atomically store the merchant's business result under the caller's HTTP `Idempotency-Key` |
@@ -175,8 +175,8 @@ npm view '@grantex/sdk' version
 npm view '@grantex/x402' version
 ```
 
-Published and clean-install verified: SDK `0.5.1` on September 7, 2026 and
-x402 `0.3.0` on August 31, 2026. Registry publication is not inferred from the source tree, so treat
+Published and clean-install verified: SDK `0.6.0` and x402 `0.4.0` on
+September 7, 2026. Registry publication is not inferred from the source tree, so treat
 the registry as authoritative and verify exact versions before each deployment.
 See [Release
 Status](/release-status) for the public artifact matrix.
@@ -349,8 +349,8 @@ After publication, verify from empty temporary projects rather than importing
 the monorepo checkout:
 
 ```powershell
-npm view '@grantex/sdk@0.5.1' version dist.integrity --json
-npm view '@grantex/x402@0.3.0' version dist.integrity --json
+npm view '@grantex/sdk@0.6.0' version dist.integrity --json
+npm view '@grantex/x402@0.4.0' version dist.integrity --json
 python -m pip download --no-deps --dest $env:TEMP 'grantex==0.5.0'
 go list -m -json 'github.com/mishrasanjeev/grantex-go@v0.3.0'
 ```

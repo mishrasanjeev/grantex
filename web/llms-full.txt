@@ -60,7 +60,7 @@ SDK tests, and 255 Docker E2E tests, plus an encrypted refresh-recovery restart
 test. This is self-assessed evidence, not
 independent interoperability certification, OAuth Working Group adoption, or
 IETF endorsement. OAuthAgentClient is included in registry-verified
-@grantex/sdk@0.5.1.
+@grantex/sdk@0.6.0.
 
 Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 
@@ -68,14 +68,14 @@ Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 
 | Use case | Recommended implementation | Current status |
 |---|---|---|
-| TypeScript or Node.js application | `@grantex/sdk@0.5.1` | Published; npm and clean-install verified; Node.js 18+ ESM |
-| x402 prepaid-wallet application | `@grantex/x402@0.3.0` with `@grantex/sdk@0.5.1` | Both packages are published and registry verified; Node.js 20+ ESM; external custody is operator-supplied |
+| TypeScript or Node.js application | `@grantex/sdk@0.6.0` | Published; npm and clean-install verified; Node.js 18+ ESM |
+| x402 prepaid-wallet application | `@grantex/x402@0.4.0` with `@grantex/sdk@0.6.0` | Both packages are published and registry verified; Node.js 20+ ESM; external custody is operator-supplied |
 | Python application | `grantex==0.5.0` | Published; PyPI and clean-install verified; Python 3.9+ |
 | Go application | `github.com/mishrasanjeev/grantex-go@v0.3.0` | Published; tag, public Go proxy, and clean-install verified; Go 1.26.1+ |
 | Service-side JWT enforcement | SDK verifier or direct verification with issuer JWKS | Signature and claim verification; add online or synchronized state for current revocation |
 | MCP HTTP transport authorization | Established MCP-compatible authorization server and maintained MCP SDK | Follow the current MCP authorization specification; a Grantex SDK alone does not provide this layer |
 | Agent-specific enforcement in MCP tools | Primary Grantex SDK or direct JWKS-backed validation | Add after transport authorization when the tool must verify delegated agent authority |
-| MCP endpoint evaluation | `@grantex/mcp-auth@2.0.2` plus `@grantex/sdk@0.5.1` | Single-process evaluation only; both packages are published |
+| MCP endpoint evaluation | `@grantex/mcp-auth@2.0.2` plus `@grantex/sdk@0.6.0` | Single-process evaluation only; both packages are published |
 | Terminal automation | `@grantex/cli` | Optional operational tooling |
 | Hermes, OpenClaw, or another shell-capable agent | Published `@grantex/cli@0.3.0` plus the bundled Agent Skills | No agent-specific SDK required; enforce again at the protected service |
 | Framework-specific tools | Named Grantex adapter plus its primary SDK where required | Verify each package's registry status before pinning |
@@ -83,11 +83,11 @@ Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 Primary reproducible installs:
 
 ```bash
-npm install @grantex/sdk@0.5.1
-npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.1
+npm install @grantex/sdk@0.6.0
+npm install @grantex/x402@0.4.0 @grantex/sdk@0.6.0
 python -m pip install grantex==0.5.0
 go get github.com/mishrasanjeev/grantex-go@v0.3.0
-npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.1
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.6.0
 npm install -g @grantex/cli@0.3.0
 ```
 
@@ -126,7 +126,8 @@ The newer source checkout includes an opt-in native Base USDC EIP-3009 adapter
 with policy-gated signing, verified finalized funding and chain reconciliation.
 It requires operator-provisioned custody and trusted RPC. Python 0.5.0 and Go
 v0.3.0 publish EVM response and reconciliation APIs, not automatic HTTP payment
-wrappers. TypeScript 0.6.0 and x402 0.4.0 await npm publication. Server deployment
+wrappers. Published TypeScript 0.6.0 and x402 0.4.0 support the opt-in automatic
+Base 402/sign/retry flow. All four versions are registry verified. Server deployment
 alone does not activate real
 wallets. Blocks stop new signatures; existing signed exposure stays reserved
 until finalized settlement or unused expiry. This is not an HSM/MPC custody
@@ -414,7 +415,7 @@ MCP connects models to tools. Grantex carries and enforces the delegated authori
 
 ### Which SDK should I install?
 
-Use npm-verified `@grantex/sdk@0.5.1` for TypeScript, published `grantex==0.5.0` for Python, or public-proxy-verified `github.com/mishrasanjeev/grantex-go@v0.3.0` for Go. Read the machine release status before upgrading.
+Use npm-verified `@grantex/sdk@0.6.0` for TypeScript, published `grantex==0.5.0` for Python, or public-proxy-verified `github.com/mishrasanjeev/grantex-go@v0.3.0` for Go. Read the machine release status before upgrading.
 
 ### Does local verification check revocation?
 
