@@ -1,0 +1,74 @@
+---
+title: Dependency Updates and Validation
+description: Validate dependency upgrades locally before deploying Grantex.
+---
+
+## Toolchain and Lockfiles
+
+Use Node.js 24 LTS for repository development and CI. Vitest 5 requires at
+least Node.js 22.12. The production auth-service container uses the digest-pinned
+Node 26 image in its Dockerfile. A repository tooling upgrade is not an SDK release.
+
+Install with `npm ci` in each affected package. Upgrade `vitest` and
+`@vitest/coverage-v8` together to satisfy their exact peer-version requirement.
+Do not bypass a conflict with `--force` or `--legacy-peer-deps`. Dependabot groups
+these packages in the auth service, portal, CLI and TypeScript SDK.
+
+When multiple PRs touch one lockfile, preserve all requested manifest changes,
+regenerate the combined lockfile with npm, review its diff and perform a clean
+install. Recheck the root lockfile when a local `file:` SDK dependency changes.
+
+## Local Gates
+
+Run from the repository root. These commands do not deploy or publish packages:
+
+```bash
+npm ci
+node scripts/check-docs-integrity.mjs --live
+node scripts/check-supply-chain.mjs --audit-npm
+node scripts/verify-node-suite.mjs packages
+node scripts/verify-node-suite.mjs examples
+```
+
+For `node scripts/verify-node-suite.mjs apps` or `all`, set
+`AUDIT_INTEGRATION_DATABASE_URL` to a disposable local PostgreSQL database first.
+The suite intentionally refuses to silently skip the real-database audit tests.
+Never use the production database. Set `GRANTEX_TEST_REPORT_DIR` to an output
+parent directory to retain per-command logs, Vitest JSON and a summary in a
+new private, randomly named subdirectory; the parent defaults to the operating
+system temporary directory. The runner performs clean installs,
+typechecks, unit tests and available builds, with at most two Vitest workers.
+
+## Docker API and Payment Tests
+
+Build the changed auth-service image on the workstation. Point all of
+`E2E_BASE_URL`, `E2E_PUBLIC_BASE_URL` and `E2E_ISSUER` at the local service.
+Use the local metrics key only. Run every test file listed in
+`.github/workflows/e2e.yml`, including wallet limits, replay protection, consent,
+OAuth, refresh, SSO, compliance, audit, events and principal sessions.
+
+The isolated Base test stack is in `tests/base-usdc/compose.yml`. Build the
+TypeScript SDK and x402 package, install the auth-service and test-fixture
+dependencies, start that stack with Compose project `grantex-base-compat`, then
+set `GRANTEX_BASE_DOCKER_TEST=1` and run:
+
+```bash
+node --test tests/base-usdc/base-usdc.test.mjs
+```
+
+This uses an owned local Anvil chain, fixture USDC and the official x402
+facilitator implementation. It exercises real local EVM transfers, not funded
+Base-mainnet transactions. Never reuse fixture keys on a funded network.
+
+## Merge, Deploy and Verify
+
+Require green checks on the exact combined commit, not only older individual
+PR heads. Preserve security settings and review major-version API migrations.
+Merge the validated candidate, verify main CI, then confirm the Cloud Run
+revision and Firebase Hosting deployment before running the production E2E
+workflow. Keep production metrics credentials in secret storage, never reports.
+
+Record tested commits, actual pass/fail/skip counts, deployment identifiers,
+coverage limitations and any separate registry publication in the release report.
+Passing automated tests is not a guarantee that every device, issuer or external
+payment provider is compatible. SDK publishing is a separate versioned action.

@@ -8,7 +8,7 @@ Complete guide to deploying the Grantex authorization platform in your environme
 
 | Component | Minimum | Recommended | Purpose |
 |-----------|---------|-------------|---------|
-| **Node.js** | 18.0.0 | 20 LTS | Auth service, CLI, TypeScript packages |
+| **Node.js (source builds/tests)** | 22.12.0 | 24 LTS | Vitest 5 and repository build tooling; use the pinned Node 26 auth-service Docker image for container deployment |
 | **Python** | 3.9 | 3.12+ | Python SDK, FastAPI middleware, integrations |
 | **Go** | 1.26.1 | 1.26.1+ | Go SDK (the Terraform provider currently requires 1.25+) |
 | **PostgreSQL** | 14 | 16 | Primary database |
@@ -98,11 +98,9 @@ cp .env.example .env
 npm ci
 npm run build
 
-# Run migrations
-npm run migrate
-
-# Start
-NODE_ENV=production npm start
+# Startup applies all pending idempotent migrations before listening.
+# Load the reviewed production environment explicitly.
+NODE_ENV=production node --env-file=.env dist/index.js
 ```
 
 The service starts on port 3001 by default.

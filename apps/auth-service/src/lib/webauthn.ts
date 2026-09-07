@@ -7,7 +7,7 @@ import {
 import type {
   RegistrationResponseJSON,
   AuthenticationResponseJSON,
-  AuthenticatorTransportFuture,
+  AuthenticatorTransport,
 } from '@simplewebauthn/server';
 import { config } from '../config.js';
 
@@ -39,7 +39,7 @@ export async function generateRegOptions(
     },
     excludeCredentials: existingCredentials.map((c) => ({
       id: c.credentialId,
-      transports: c.transports as AuthenticatorTransportFuture[],
+      transports: c.transports as AuthenticatorTransport[],
     })),
   });
 }
@@ -63,7 +63,7 @@ export async function generateAuthOptions(
     rpID: config.fidoRpId,
     allowCredentials: credentials.map((c) => ({
       id: c.credentialId,
-      transports: c.transports as AuthenticatorTransportFuture[],
+      transports: c.transports as AuthenticatorTransport[],
     })),
     userVerification: 'preferred',
   });
@@ -84,7 +84,7 @@ export async function verifyAuthResponse(
       id: credential.credentialId,
       publicKey: uint8Key,
       counter: credential.counter,
-      transports: credential.transports as AuthenticatorTransportFuture[],
+      transports: credential.transports as AuthenticatorTransport[],
     },
   });
 }

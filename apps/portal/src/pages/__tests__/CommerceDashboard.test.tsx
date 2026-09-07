@@ -2684,7 +2684,8 @@ describe('CommerceOnboarding', () => {
       reason: 'Sandbox buyer-agent handoff evidence.',
     }));
     expect(screen.getByText('sandbox_handoff_withdrawn')).toBeInTheDocument();
-  });
+  // Five operator mutations and DOM state checks need headroom on CPU-limited Docker workers.
+  }, 15_000);
 });
 
 describe('CommerceCatalog', () => {

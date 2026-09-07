@@ -118,3 +118,9 @@ Apache-2.0
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+
+## Source Development
+
+Use Node.js 24 LTS and `npm ci` to build or test this checkout with Vitest 5.
+Repository validation steps are in [the dependency upgrade guide](https://docs.grantex.dev/guides/dependency-updates).
+Source-tooling requirements are separate from published package runtime support.

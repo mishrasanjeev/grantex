@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Dependency integration (2026-09-07)
+- Integrated the 49 pending dependency PRs as a single validation candidate,
+  including Vitest 5, SimpleWebAuthn 14, solc 0.8.36 and framework/type patches.
+- Paired Vitest and coverage upgrades, regenerated overlapping lockfiles and
+  grouped future Dependabot updates. CI source tooling uses Node.js 24.
+- Updated the WebAuthn transport type for v14 and added real-library option
+  generation and malformed-evidence rejection tests. Security policy is unchanged.
+- Updated contributor, README, deployment and release-status guidance. Published
+  SDK versions are unchanged; deployment/test evidence is recorded separately.
+
 ### Verified SDK publications (2026-09-07)
 - Published `@grantex/sdk@0.6.0` and `@grantex/x402@0.4.0` to npm after the
   workstation publishing approval completed. Both registry integrity hashes

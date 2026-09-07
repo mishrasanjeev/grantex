@@ -150,6 +150,7 @@
               "guides/rate-limits",
               "guides/webhooks",
               "guides/self-hosting",
+              "guides/dependency-updates",
               "guides/security-hardening",
               "guides/supply-chain-security",
               "guides/oauth-agent-grants",

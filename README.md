@@ -1492,6 +1492,11 @@ See the [Scope Enforcement Guide](https://docs.grantex.dev/guides/scope-enforcem
 
 ## Local Development
 
+Use Node.js 24 LTS for repository installs, builds and tests. The upgraded
+Vitest 5 toolchain needs Node.js 22.12 or newer; this contributor requirement
+is separate from the runtime requirements of an already published SDK.
+Use the checked-in lockfiles with `npm ci` and see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 Start the full stack with one command:
 
 ```bash

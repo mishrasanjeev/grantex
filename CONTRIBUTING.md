@@ -29,42 +29,43 @@ Look for issues tagged [`good first issue`](https://github.com/mishrasanjeev/gra
 ## Development Setup
 
 ```bash
-# Prerequisites: Node.js 18+, Python 3.9+, Docker (for local stack)
+# Prerequisites: Node.js 24 LTS, Python 3.9+, Docker (for local stack)
 
 git clone https://github.com/mishrasanjeev/grantex
 cd grantex
 
 # Start the full local stack (PostgreSQL + Redis + auth service)
-docker compose up --build
+docker compose up --build -d
 
 # TypeScript SDK
-cd packages/sdk-ts
-npm install
-npm run typecheck   # tsc --noEmit
-npm test            # vitest
+npm --prefix packages/sdk-ts ci
+npm --prefix packages/sdk-ts run typecheck
+npm --prefix packages/sdk-ts test
+npm --prefix packages/sdk-ts run build
 
 # Python SDK
 cd packages/sdk-py
 pip install -e ".[dev]"
 pytest
+cd ../..
 
 # Auth service
-cd apps/auth-service
-npm install
-npm run typecheck
-npm test            # vitest — 174 tests
+npm --prefix apps/auth-service ci
+npm --prefix apps/auth-service run typecheck
+npm --prefix apps/auth-service test
 
 # CLI
-cd packages/cli
-npm install
-npm run typecheck
+npm --prefix packages/cli ci
+npm --prefix packages/cli run typecheck
 
 # Integration packages (langchain, autogen, vercel-ai)
-cd packages/<package>
-npm install
-npm run typecheck
-npm test
+npm --prefix packages/langchain ci
+npm --prefix packages/langchain run typecheck
+npm --prefix packages/langchain test
 ```
+
+For the complete reproducible dependency and Docker validation procedure, see
+[Dependency Updates and Validation](docs/guides/dependency-updates.mdx).
 
 ---
 

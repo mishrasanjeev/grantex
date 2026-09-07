@@ -499,7 +499,9 @@ try {
 
 ## Testing
 
-49 tests across 6 test files (offline verifier, scope enforcer, consent bundles, hash chain, audit log, security):
+The suite covers offline verification, scope enforcement, consent bundles,
+hash-chain audit logs and security. Use Node.js 24 LTS for source development
+and the Vitest 5 toolchain. CI and the dated validation report record test counts.
 
 ```bash
 npm test            # run all tests
