@@ -18,7 +18,7 @@ for (const name of ['Grantex', 'OAuthAgentClient', 'generateOAuthAgentKey', 'Pri
 assert.equal(typeof x402.createX402Agent, 'function');
 assert.throws(() => x402.createX402Agent({ walletId: 'wal_test', authorizePayment: async () => ({}), baseUsdc: { scope: '' } }), /scope/);
 const guarded = x402.createX402Agent({ walletId: 'wal_test', authorizePayment: async () => ({}), baseUsdc: { scope: 'licensing:preflight' } });
-await assert.rejects(() => guarded.fetch('https://merchant.example/test'), /idempotencyKey/);
+assert.throws(() => guarded.fetch('https://merchant.example/test'), /idempotencyKey/);
 
 const seen = [];
 const result = { reservationId: 'wres_artifact', status: 'reserved', transaction: null };

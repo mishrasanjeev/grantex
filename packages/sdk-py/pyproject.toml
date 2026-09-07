@@ -61,3 +61,7 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 88
 target-version = "py39"
+
+[tool.ruff.lint]
+# Preserve the release gate used before Ruff 0.16 expanded its implicit defaults.
+select = ["E4", "E7", "E9", "F"]
