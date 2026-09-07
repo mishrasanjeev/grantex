@@ -4,10 +4,16 @@
 
 - Integration PR: https://github.com/mishrasanjeev/grantex/pull/1156
 - Baseline main: `32b85f0cb8b5bc55578f138fb93f8aa0206c5fe3`.
-- Reviewed integration code/test commit: `d1823c42f9b126e5e3351c95535347b8df7fa6bd`.
+- Final integration PR head: `ac3afc1db0f209f957cd52ceaa53804ec5e7b0f5`.
+- Integration merge: `884f30ca368e15aec9757cb9a06f51c48c9afe7d`.
 - Scope: all 49 open dependency PRs captured before the integration PR was opened.
   Nine had failing checks. All 49 captured heads are ancestors of the integration
   candidate; all 40 explicitly requested manifest changes were verified present.
+- A post-merge Dependabot scan opened three additional lockfile PRs, #1157-#1159.
+  They were tested separately and merged through
+  https://github.com/mishrasanjeev/grantex/pull/1160 at
+  `c000c41908fcf598807f859741d665d289f9e79c`.
+  GitHub confirmed all 52 original dependency PRs as merged, not merely closed.
 - No force pushes, admin merges, production security relaxation, registry publishes
   or funded mainnet payments are part of this batch.
 - Local work used an isolated checkout outside OneDrive. The original checkout's
@@ -85,24 +91,90 @@ execution, exact finalized funding, pre-signing denials, malformed challenges,
 tampering, replay, concurrent retry, restart recovery, block/exposure accounting,
 settlement and RPC-outage/expiry behavior.
 
-## CI Evidence
+## Post-Scan Local Revalidation
 
-All 36 active checks passed at `d1823c42`; the two expected skips were
-Mintlify's PR deployment and the scheduled/manual OWASP full scan.
-The exact final PR head must be green again after any report-only commit.
+The three additional PRs updated only two lockfiles: x402 core/fetch to 2.25.0
+and the destinations S3 development dependency to 3.1126.0. No production
+service source, package manifest, security control or SDK version changed.
 
-- CI: https://github.com/mishrasanjeev/grantex/actions/runs/34081914817
-- Base Docker compatibility: https://github.com/mishrasanjeev/grantex/actions/runs/34081914859
-- Security scan: https://github.com/mishrasanjeev/grantex/actions/runs/34081914968
-- CodeQL: https://github.com/mishrasanjeev/grantex/actions/runs/34081914959
-- Dependency review: https://github.com/mishrasanjeev/grantex/actions/runs/34081914840
+- A fresh two-CPU Linux Docker container passed SDK 457/457, x402 206/206 and
+  destinations 15/15 tests, plus clean installs, typechecks and builds.
+- A fresh public npm consumer installed `@grantex/sdk@0.6.0` and
+  `@grantex/x402@0.4.0`, resolving both `@x402/core` and `@x402/fetch` to 2.25.0.
+- That public consumer passed 12/12 Base Docker test results (11 scenarios),
+  zero skips, 50.55 seconds, and the full local API E2E suite: 255/255 tests in
+  23 files, zero skips, 92.37 seconds.
+- The final supply-chain audit passed: 37 lockfiles and 4,203 package entries,
+  with clean npm audits. The public package dependency ranges already accept
+  the updates; no registry republish was required or performed.
 
-## Deployment Gate
+## CI and Deployment Evidence
 
-At report preparation, main merge and production validation have not occurred.
-Local validation is complete; merge remains gated on the final PR-head checks. Record the
-merge SHA, Cloud Run revision, Firebase deployment and production E2E results
-after completion; do not infer deployment from a successful local test.
+Both integration PRs passed all 36 active checks at their exact final heads;
+the two expected skips were Mintlify's PR deployment and the scheduled/manual
+OWASP full scan. Merges used ordinary merge commits, not admin bypasses.
+
+Main `884f30ca` completed successfully:
+
+- CI: https://github.com/mishrasanjeev/grantex/actions/runs/34083153292
+- CodeQL: https://github.com/mishrasanjeev/grantex/actions/runs/34083153306
+- Security scan: https://github.com/mishrasanjeev/grantex/actions/runs/34083153311
+- Cloud Run deploy: https://github.com/mishrasanjeev/grantex/actions/runs/34083153298
+- Firebase portal/web deploy: https://github.com/mishrasanjeev/grantex/actions/runs/34083153345
+- Post-deploy MPP lifecycle/JWKS E2E: https://github.com/mishrasanjeev/grantex/actions/runs/34083264233
+
+Follow-up main `c000c419` also completed successfully:
+
+- CI: https://github.com/mishrasanjeev/grantex/actions/runs/34084189997
+- CodeQL: https://github.com/mishrasanjeev/grantex/actions/runs/34084189998
+- Security scan: https://github.com/mishrasanjeev/grantex/actions/runs/34084190001
+
+Cloud Run inspection confirmed revision `grantex-auth-00276-t4q` serving 100%
+of traffic from the image tagged `884f30ca368e15aec9757cb9a06f51c48c9afe7d`.
+There is no diff between that deployed source and `c000c419` in auth-service,
+portal, web, Firebase configuration or either deployment workflow. The
+client-lockfile-only follow-up correctly did not trigger another service deploy.
+Landing page, dashboard, API health and public JWKS returned HTTP 200.
+The new dependency guide was published by Mintlify and the live documentation
+integrity check passed after deployment.
+
+## Final Production E2E
+
+The workstation ran every E2E file listed in `.github/workflows/e2e.yml`
+against production after the follow-up main CI passed. Results:
+
+| Field | Verified value |
+| --- | --- |
+| API/test source | `c000c41908fcf598807f859741d665d289f9e79c` |
+| Start / finish (UTC) | 2026-09-07 04:47:34 / 04:52:26 |
+| Tests | 255 passed, 0 failed, 0 skipped |
+| Files / elapsed | 23 / 291.78 seconds |
+| API target | `https://grantex-auth-dd4mtrt2gq-uc.a.run.app` |
+| Public host / issuer | `https://grantex.dev` |
+| Client artifacts | Fresh public npm SDK 0.6.0 and x402 0.4.0, core/fetch 2.25.0 |
+| Live revision | `grantex-auth-00276-t4q`, 100% traffic |
+
+This is a new post-merge run, not a reused result from the earlier SDK release.
+The metrics credential was read from the deployed Secret Manager binding,
+passed only in the test process environment and never printed or committed.
+The JSON runner report was inspected for its success, pass, fail and skip fields;
+the process exit code alone was not used as proof. The later documentation-only
+changes do not alter the tested API, SDK or portal artifacts.
+
+All owned Grantex Docker validation containers and their isolated test stack
+were removed after local tests. Other workstation projects and the original
+checkout's untracked `output/` were left alone.
+
+## External Registry Limitation
+
+Dependabot's Terraform example update job failed with `dependency_not_found`:
+https://github.com/mishrasanjeev/grantex/actions/runs/34083220440.
+A direct registry check confirmed HTTP 404 for `mishrasanjeev/grantex` on
+September 7, 2026. This is not a failing PR or application deployment, but it
+means Terraform registry installation and automatic version discovery do not
+work for this source-only provider. README, compatibility/release status and
+both provider guides now state the limitation. The updater was not disabled
+to conceal it; publication and provider live acceptance tests remain separate work.
 
 ## Limits
 
@@ -168,6 +240,9 @@ after completion; do not infer deployment from a successful local test.
 | #1150 | `2135ea18f964` | chore(deps-dev): bump @types/node from 26.4.0 to 26.4.1 in /examples/x402-agent-demo |
 | #1151 | `c7025309ec3c` | chore(deps): bump ai from 7.0.87 to 7.0.92 in /examples/vercel-ai-chatbot |
 | #1152 | `da43bb8bae90` | chore(deps-dev): bump solc from 0.8.35 to 0.8.36 in /tests/base-usdc |
+| #1157 | `42719a393f01` | x402 core 2.24.0 to 2.25.0; post-scan revalidation |
+| #1158 | `2b7386065759` | x402 fetch 2.24.0 to 2.25.0; post-scan revalidation |
+| #1159 | `b5ca48ad49b9` | destinations S3 development dependency 3.1125.0 to 3.1126.0; post-scan revalidation |
 
 ## Upstream References
 
