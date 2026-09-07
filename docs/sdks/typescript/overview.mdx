@@ -6,12 +6,12 @@ description: "Install, configure, and get started with the @grantex/sdk TypeScri
 
 ## Installation
 
-Published release: **`@grantex/sdk@0.5.1`**. npm integrity, exact-version
+Published release: **`@grantex/sdk@0.6.0`**. npm integrity, exact-version
 clean installation, public exports, and a zero-vulnerability consumer audit
 were verified on 7 September 2026.
 
 ```bash
-npm install @grantex/sdk@0.5.1
+npm install @grantex/sdk@0.6.0
 ```
 
 The unpinned `npm install @grantex/sdk` command follows npm's current `latest`
@@ -19,11 +19,14 @@ tag. Keep the exact version above in reproducible builds. See
 [Release Status](/release-status) before upgrading.
 
 <Note>
-SDK `0.5.1` includes `PrepaidWalletAgentClient`,
+SDK `0.6.0` includes `PrepaidWalletAgentClient`,
 `PrincipalPrepaidWalletClient`, and `DeveloperPrepaidWalletPolicyClient` with
 safe assignment defaults, layered policy, exact approval, semantic context, and
-reload governance. External custody remains fail-closed until a
-self-hosting operator supplies and verifies a provider adapter. See [x402
+reload governance. Version `0.6.0` also adds EVM payment responses and
+`reconcileReservation()` to principal and agent wallet clients. Pair it with
+`@grantex/x402@0.4.0` for opt-in Base USDC 402/sign/retry. External custody
+remains fail-closed until the operator configures the Base custody/RPC adapter
+or supplies another verified provider. See [x402
 Prepaid Wallets](/integrations/x402) and [Agent Wallet
 Governance](/guides/agent-wallet-governance).
 </Note>
