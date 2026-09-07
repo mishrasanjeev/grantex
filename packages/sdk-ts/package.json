@@ -1,6 +1,6 @@
 {
   "name": "@grantex/sdk",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "TypeScript SDK for the Grantex delegated authorization protocol",
   "author": {
     "name": "Sanjeev Kumar",
@@ -30,7 +30,8 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

@@ -6,7 +6,7 @@ wallets, plus legacy standalone GDT authorization utilities.
 ## Install
 
 ```bash
-npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.1
+npm install @grantex/x402@0.4.0 @grantex/sdk@0.6.0
 ```
 
 Layered policy, semantic payment context, and exact approval retry require
@@ -14,10 +14,10 @@ Layered policy, semantic payment context, and exact approval retry require
 
 ## Payment network compatibility
 
-The default client supports `exact` on `grantex:prepaid`. This source checkout
-also supports opt-in Base native USDC EIP-3009 through Grantex's `base_usdc`
-custody adapter. **This addition is not in the published 0.3.0 package.**
-Build the checkout until a tested release containing it is published.
+The default client supports `exact` on `grantex:prepaid`. Version 0.4.0
+adds opt-in Base native USDC EIP-3009 through Grantex's `base_usdc`
+custody adapter. Version 0.3.0 does not include Base support. Provision a funded
+wallet and trusted RPC as described in the [Base custody guide](https://docs.grantex.dev/guides/base-usdc-custody).
 
 ```ts
 const paid = createX402Agent({

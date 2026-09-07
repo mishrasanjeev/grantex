@@ -41,6 +41,17 @@ This does not prove that a third-party production merchant or PayAI will accept
 a funded mainnet payment. The captured UK taxi challenge is a wire fixture; the
 local test substitutes only the local resource URL and test recipient.
 
+To verify release tarballs or published packages instead of checkout builds,
+install the exact SDK and x402 artifacts in a clean directory and set
+`GRANTEX_SDK_TEST_ROOT` to its absolute path before running the same suite.
+The test then imports both clients from that directory's `node_modules`.
+Run `node scripts/verify-sdk-artifacts.mjs <consumer-directory>` for the
+packaged export, wire-contract and version checks. Unset the environment
+variable after verification; all chain operations still target local Anvil.
+The root Vitest configuration also honors this variable for the existing
+production/local E2E suites, including the x402 import in the prepaid lifecycle.
+Missing installed artifacts fail immediately instead of falling back to source.
+
 The test compiler's `memorystream@0.3.1` tarball includes the MIT license
 (Copyright 2011 Dmitry Nizovtsev) but omits current lockfile license metadata.
 The supply-chain checker records that exact reviewed version, not a blanket
