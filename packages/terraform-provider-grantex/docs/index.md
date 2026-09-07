@@ -2,6 +2,16 @@
 
 The Grantex provider is used to manage [Grantex](https://grantex.dev) resources for delegated authorization of AI agents. It provides infrastructure-as-code management for agents, policies, webhooks, SSO configurations, and budget allocations.
 
+## Availability
+
+This provider is source-only. The public Terraform Registry lookup for
+`mishrasanjeev/grantex` returned HTTP 404 on September 7, 2026, so ordinary
+`terraform init` cannot install it from that registry. Local builds passed,
+but provider live acceptance tests and registry publication are separate work.
+Use the [source-build evaluation guide](https://docs.grantex.dev/guides/terraform)
+with a disposable sandbox account. The configuration and version constraint
+below are templates, not evidence of a published provider release.
+
 ## Example Usage
 
 ```hcl

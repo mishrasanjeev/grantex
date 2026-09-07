@@ -1605,7 +1605,7 @@ check its registry page and compatibility notes before choosing a version.
 | **A2A Bridge (TS)** | `@grantex/a2a` | `npm install @grantex/a2a` | Published package |
 | **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | Published package |
 | **Event Destinations** | `@grantex/destinations` | `npm install @grantex/destinations` | Published package |
-| **Terraform Provider** | `terraform-provider-grantex` | `terraform { required_providers { grantex = { source = "mishrasanjeev/grantex" } } }` | Source present; verify registry before pinning |
+| **Terraform Provider** | `terraform-provider-grantex` | [Source-build evaluation](https://docs.grantex.dev/guides/terraform) | Source only; public registry lookup returned 404 on September 7, 2026 |
 | **x402 Payment Protocol** | `@grantex/x402` (`0.4.0`) | `npm install @grantex/x402@0.4.0 @grantex/sdk@0.6.0` | Registry-verified layered x402 v2 release; external custody remains operator-supplied |
 
 The guarded `publish-primary-sdks.yml` workflow builds and tests each prepared

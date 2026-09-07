@@ -52,7 +52,7 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 | 26 | `packages/a2a-py` | grantex-a2a | 0.1.4 | A2A bridge (Python) |
 | 27 | `packages/mpp` | @grantex/mpp | 0.1.2 | MPP support |
 | 28 | `packages/x402` | @grantex/x402 | 0.4.0 | Official x402 v2 layered-wallet integration with opt-in Base USDC |
-| 29 | `packages/terraform-provider-grantex` | terraform-provider-grantex | Go module (Go 1.25.0) | Terraform provider |
+| 29 | `packages/terraform-provider-grantex` | terraform-provider-grantex | Go module (Go 1.25.0) | Source-only Terraform provider; public registry returned 404 on 2026-09-07 |
 
 ## Known Published-Package Limitations
 

@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Dependency integration (2026-09-07)
-- Integrated the 49 pending dependency PRs as a single validation candidate,
+- Merged the 49 pending dependency PRs through integration PR #1156,
   including Vitest 5, SimpleWebAuthn 14, solc 0.8.36 and framework/type patches.
 - Paired Vitest and coverage upgrades, regenerated overlapping lockfiles and
   grouped future Dependabot updates. CI source tooling uses Node.js 24.
@@ -15,6 +15,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   generation and malformed-evidence rejection tests. Security policy is unchanged.
 - Updated contributor, README, deployment and release-status guidance. Published
   SDK versions are unchanged; deployment/test evidence is recorded separately.
+- Revalidated and merged three post-scan lockfile updates through PR #1160:
+  x402 core/fetch 2.25.0 and destinations S3 3.1126.0. A fresh public npm consumer
+  passed the local Docker payment suite and all 255 local API E2E tests.
+- Cloud Run and Firebase deployments passed. The final production E2E run passed
+  255/255 tests across 23 files, with zero skips. Full local SDK/app, Python,
+  Go, security and deployment evidence is in the
+  [validation report](docs/internal/dependency-batch-2026-09-07.md).
+- Corrected Terraform availability guidance: its public provider registry lookup
+  returns 404. Source builds pass, but publication and live provider acceptance
+  remain separate work; ordinary registry installation is not available.
 
 ### Verified SDK publications (2026-09-07)
 - Published `@grantex/sdk@0.6.0` and `@grantex/x402@0.4.0` to npm after the

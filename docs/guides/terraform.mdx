@@ -7,7 +7,26 @@ description: "Manage Grantex resources as infrastructure with the official Terra
 
 The Grantex Terraform provider lets you manage agents, policies, webhooks, SSO configuration, and budget allocations as code.
 
-## Installation
+## Availability and Installation
+
+<Warning>
+The provider is currently source-only. On September 7, 2026, the public
+Terraform Registry lookup for `mishrasanjeev/grantex` returned HTTP 404.
+The configuration below is not an available registry install, and ordinary
+`terraform init` cannot download it. Registry publication and live acceptance
+testing remain separate release work; the repository build passing is not
+evidence that this provider is published or production-certified.
+</Warning>
+
+For local evaluation, build `packages/terraform-provider-grantex` with its
+declared Go toolchain and configure a local provider binary using HashiCorp's
+[development override instructions](https://developer.hashicorp.com/terraform/cli/config/config-file#development-overrides-for-provider-developers).
+Use a disposable sandbox account. Development overrides are not a production
+installation method and do not make registry-based initialization succeed.
+
+The following is a provider configuration template for that local evaluation
+or a future verified registry release. The version constraint is illustrative,
+not a claim that version `0.1` is available:
 
 ```hcl
 terraform {
