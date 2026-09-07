@@ -9,13 +9,13 @@ TypeScript SDK for the [Grantex](https://grantex.dev) delegated authorization pr
 
 ## Installation
 
-**Source update (not yet published):** the wallet clients now preserve the
+**New in 0.6.0:** the wallet clients preserve the
 server's Base USDC `evmPayment` payload and expose `reconcileReservation()` for
-finalized settlement/expiry. Use the updated `@grantex/x402` source adapter for
-the automatic 402/payment/retry flow. See [Base custody setup](../../docs/guides/base-usdc-custody.mdx).
+finalized settlement/expiry. Use `@grantex/x402@0.4.0` or later for
+the automatic 402/payment/retry flow. See [Base custody setup](https://docs.grantex.dev/guides/base-usdc-custody).
 
 ```bash
-npm install @grantex/sdk
+npm install @grantex/sdk@0.6.0
 ```
 
 ## Quick Start

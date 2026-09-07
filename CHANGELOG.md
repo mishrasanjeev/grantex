@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### SDK release candidates (2026-09-07)
+- Prepared TypeScript SDK 0.6.0, x402 0.4.0, Python SDK 0.5.0 and Go SDK
+  v0.3.0 for the governed Base USDC release. These versions add EVM payment
+  responses and authenticated finalized-chain reconciliation. The x402 adapter
+  provides opt-in request-bound Base 402/sign/retry; Python and Go do not add
+  automatic HTTP payment wrappers. Existing prepaid behavior remains the default.
+- Updated package runtime identifiers and the guarded primary-SDK publication
+  workflow. The public release snapshot remains on verified registry versions
+  until each new artifact is published and clean-install tested.
+
 ### Added
 - Added opt-in governed Base native USDC x402 v2 EIP-3009 payments, verified
   finalized funding, encrypted restart-safe signature recovery, and finalized

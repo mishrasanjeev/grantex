@@ -5,10 +5,16 @@ import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { randomUUID, generateKeyPairSync } from 'node:crypto';
 import { createServer } from 'node:http';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 import solc from 'solc';
-import { OAuthAgentClient, generateOAuthAgentKey, PrincipalPrepaidWalletClient, PrepaidWalletAgentClient } from '../../packages/sdk-ts/dist/index.js';
-import { createX402Agent } from '../../packages/x402/dist/agent.js';
+const consumer = process.env.GRANTEX_SDK_TEST_ROOT;
+const sdkModule = consumer ? pathToFileURL(resolve(consumer, 'node_modules/@grantex/sdk/dist/index.js'))
+  : new URL('../../packages/sdk-ts/dist/index.js', import.meta.url);
+const x402Module = consumer ? pathToFileURL(resolve(consumer, 'node_modules/@grantex/x402/dist/index.js'))
+  : new URL('../../packages/x402/dist/index.js', import.meta.url);
+const { OAuthAgentClient, generateOAuthAgentKey, PrincipalPrepaidWalletClient, PrepaidWalletAgentClient } = await import(sdkModule.href);
+const { createX402Agent } = await import(x402Module.href);
 
 const require = createRequire(new URL('../../apps/auth-service/package.json', import.meta.url));
 const { createPublicClient, createWalletClient, http, parseSignature } = require('viem');

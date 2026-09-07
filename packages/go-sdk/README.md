@@ -1,16 +1,16 @@
 # Grantex Go SDK
 
-**Source update (not yet published):** wallet responses include typed
+**New in v0.3.0:** wallet responses include typed
 `EVMPayment`/`EVMAuthorization` fields and agent/principal clients expose
 `ReconcileReservation`. Automatic x402 HTTP retries are currently provided by
-the TypeScript adapter. See [Base custody setup](../../docs/guides/base-usdc-custody.mdx).
+the TypeScript adapter. See [Base custody setup](https://docs.grantex.dev/guides/base-usdc-custody).
 
 Official Go SDK for the [Grantex](https://grantex.dev) delegated authorization protocol — OAuth 2.0 for AI agents.
 
 ## Installation
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.2.1
+go get github.com/mishrasanjeev/grantex-go@v0.3.0
 ```
 
 Requires Go 1.26.1 or newer, matching the module's `go.mod` directive.

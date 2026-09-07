@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       publish_npm:
-        description: 'Publish the prepared @grantex/sdk patch through npm trusted publishing'
+        description: 'Publish @grantex/sdk 0.6.0 and @grantex/x402 0.4.0 through trusted publishing'
         required: true
         default: false
         type: boolean
@@ -18,7 +18,7 @@ on:
         default: false
         type: boolean
       publish_go:
-        description: 'Sync packages/go-sdk to mishrasanjeev/grantex-go and tag v0.2.1'
+        description: 'Sync packages/go-sdk to mishrasanjeev/grantex-go and tag v0.3.0'
         required: true
         default: false
         type: boolean
@@ -38,7 +38,12 @@ jobs:
       - name: Validate confirmation
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
-        run: test "$CONFIRMATION" = 'RELEASE_PRIMARY_SDKS'
+          PUBLISH: ${{ inputs.publish_npm || inputs.publish_pypi || inputs.publish_go }}
+        run: |
+          test "$CONFIRMATION" = 'RELEASE_PRIMARY_SDKS'
+          if [ "$PUBLISH" = 'true' ]; then
+            test "$GITHUB_REF" = 'refs/heads/main'
+          fi
 
   verify:
     name: Verify all primary SDKs
@@ -57,10 +62,10 @@ jobs:
           go-version: '1.26.1'
           cache-dependency-path: packages/go-sdk/go.sum
 
-      - name: Verify TypeScript SDK 0.5.1
+      - name: Verify TypeScript SDK 0.6.0
         working-directory: packages/sdk-ts
         run: |
-          test "$(node -p "require('./package.json').version")" = "0.5.1"
+          test "$(node -p "require('./package.json').version")" = "0.6.0"
           npm ci
           npm run typecheck
           npm test
@@ -68,32 +73,40 @@ jobs:
           mkdir -p ../../release-artifacts/npm
           npm pack --pack-destination ../../release-artifacts/npm
 
-      - name: Verify x402 SDK 0.3.0
+      - name: Verify x402 SDK 0.4.0
         working-directory: packages/x402
         run: |
-          test "$(node -p "require('./package.json').version")" = "0.3.0"
+          test "$(node -p "require('./package.json').version")" = "0.4.0"
           npm ci
           npm run typecheck
           npm test
           npm run build
           npm pack --pack-destination ../../release-artifacts/npm
 
-      - name: Verify Python SDK 0.4.1
+      - name: Verify packed npm clients
+        run: |
+          mkdir -p "$RUNNER_TEMP/grantex-sdk-consumer"
+          npm install --prefix "$RUNNER_TEMP/grantex-sdk-consumer" --ignore-scripts \
+            "$PWD/release-artifacts/npm/grantex-sdk-0.6.0.tgz" \
+            "$PWD/release-artifacts/npm/grantex-x402-0.4.0.tgz"
+          node scripts/verify-sdk-artifacts.mjs "$RUNNER_TEMP/grantex-sdk-consumer"
+
+      - name: Verify Python SDK 0.5.0
         working-directory: packages/sdk-py
         run: |
           python -m pip install --upgrade pip build 'twine>=7,<8'
           python -m pip install -e '.[dev]'
-          test "$(python -c 'import grantex; print(grantex.__version__)')" = "0.4.1"
+          test "$(python -c 'import grantex; print(grantex.__version__)')" = "0.5.0"
           python -m ruff check src
           python -m mypy src/grantex
           python -m pytest
           python -m build --outdir ../../release-artifacts/pypi
           python -m twine check ../../release-artifacts/pypi/*
 
-      - name: Verify Go SDK v0.2.1
+      - name: Verify Go SDK v0.3.0
         working-directory: packages/go-sdk
         run: |
-          test "$(grep -Eo 'sdkVersion = "[^"]+"' http.go | cut -d'"' -f2)" = "0.2.1"
+          test "$(grep -Eo 'sdkVersion = "[^"]+"' http.go | cut -d'"' -f2)" = "0.3.0"
           go test ./...
 
       - name: Upload immutable release candidates
@@ -128,9 +141,10 @@ jobs:
           npm install --global npm@11.19.1
           node -e "const [major, minor] = process.versions.node.split('.').map(Number); if (major < 22 || (major === 22 && minor < 14)) process.exit(1)"
           node -e "const { execFileSync } = require('node:child_process'); const [major, minor, patch] = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim().split('.').map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) process.exit(1)"
-      - name: Publish TypeScript SDK patch
+      - name: Publish TypeScript and x402 SDKs
         run: |
-          npm publish release-artifacts/npm/grantex-sdk-0.5.1.tgz --access public
+          npm publish release-artifacts/npm/grantex-sdk-0.6.0.tgz --access public
+          npm publish release-artifacts/npm/grantex-x402-0.4.0.tgz --access public
 
   pypi:
     name: Publish Python SDK
@@ -170,12 +184,12 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: '1.26.1'
-      - name: Sync, test, commit, and tag v0.2.1
+      - name: Sync, test, commit, and tag v0.3.0
         shell: bash
         run: |
           set -euo pipefail
-          if git -C grantex-go ls-remote --exit-code --tags origin refs/tags/v0.2.1; then
-            echo 'v0.2.1 already exists' >&2
+          if git -C grantex-go ls-remote --exit-code --tags origin refs/tags/v0.3.0; then
+            echo 'v0.3.0 already exists' >&2
             exit 1
           fi
           rsync -a --delete --exclude='.git' grantex/packages/go-sdk/ grantex-go/
@@ -187,6 +201,6 @@ jobs:
             echo 'No Go SDK source change to publish' >&2
             exit 1
           }
-          git -C grantex-go commit -m 'release: v0.2.1'
-          git -C grantex-go tag -a v0.2.1 -m 'Grantex Go SDK v0.2.1'
-          git -C grantex-go push --atomic origin HEAD:main v0.2.1
+          git -C grantex-go commit -m 'release: v0.3.0'
+          git -C grantex-go tag -a v0.3.0 -m 'Grantex Go SDK v0.3.0'
+          git -C grantex-go push --atomic origin HEAD:main v0.3.0
