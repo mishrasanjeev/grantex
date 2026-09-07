@@ -59,9 +59,9 @@ npm --prefix packages/cli ci
 npm --prefix packages/cli run typecheck
 
 # Integration packages (langchain, autogen, vercel-ai)
-npm --prefix packages/<package> ci
-npm --prefix packages/<package> run typecheck
-npm --prefix packages/<package> test
+npm --prefix packages/langchain ci
+npm --prefix packages/langchain run typecheck
+npm --prefix packages/langchain test
 ```
 
 For the complete reproducible dependency and Docker validation procedure, see
