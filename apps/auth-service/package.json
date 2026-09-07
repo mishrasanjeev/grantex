@@ -32,7 +32,7 @@
     "@opentelemetry/resources": "^2.11.0",
     "@opentelemetry/sdk-node": "^0.222.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
-    "@simplewebauthn/server": "^13.3.3",
+    "@simplewebauthn/server": "^14.0.0",
     "@x402/evm": "2.25.0",
     "dotenv": "^17.4.2",
     "fastify": "^5.12.1",
