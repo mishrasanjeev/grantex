@@ -48,6 +48,9 @@ The test then imports both clients from that directory's `node_modules`.
 Run `node scripts/verify-sdk-artifacts.mjs <consumer-directory>` for the
 packaged export, wire-contract and version checks. Unset the environment
 variable after verification; all chain operations still target local Anvil.
+The root Vitest configuration also honors this variable for the existing
+production/local E2E suites, including the x402 import in the prepaid lifecycle.
+Missing installed artifacts fail immediately instead of falling back to source.
 
 The test compiler's `memorystream@0.3.1` tarball includes the MIT license
 (Copyright 2011 Dmitry Nizovtsev) but omits current lockfile license metadata.
