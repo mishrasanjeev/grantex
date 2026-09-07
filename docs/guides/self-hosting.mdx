@@ -6,6 +6,11 @@ description: "Run your own Grantex auth service — from local dev to production
 
 ## 1. Quick Start (Dev)
 
+Use Node.js 24 LTS for source installs, builds and tests, and `npm ci` with the
+committed lockfiles. Vitest 5 requires Node.js 22.12 or newer. The auth-service
+Dockerfile supplies its own pinned Node 26 runtime. These development-tooling
+requirements do not change the versions already published to SDK registries.
+
 ```bash
 git clone https://github.com/mishrasanjeev/grantex.git
 cd grantex

@@ -38,6 +38,11 @@ custody, principal notification delivery, or merchant idempotency storage; see
 
 ## Published and source-only changes
 
+The September 7 dependency integration updates repository test tooling to
+Vitest 5 and the auth service to SimpleWebAuthn 14. Use Node.js 24 LTS when
+building or testing this checkout. These maintenance changes do not publish
+new SDK versions; the registry versions above remain authoritative.
+
 Python `0.5.0` and Go `v0.3.0` were published on September 7, 2026. Both add
 EVM payment responses and authenticated principal/agent reconciliation and
 retain bounded refresh recovery. Full tests passed against a clean PyPI wheel

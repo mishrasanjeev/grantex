@@ -29,7 +29,7 @@ Look for issues tagged [`good first issue`](https://github.com/mishrasanjeev/gra
 ## Development Setup
 
 ```bash
-# Prerequisites: Node.js 18+, Python 3.9+, Docker (for local stack)
+# Prerequisites: Node.js 24 LTS, Python 3.9+, Docker (for local stack)
 
 git clone https://github.com/mishrasanjeev/grantex
 cd grantex
@@ -52,7 +52,7 @@ pytest
 cd apps/auth-service
 npm install
 npm run typecheck
-npm test            # vitest — 174 tests
+npm test            # complete auth-service suite
 
 # CLI
 cd packages/cli
