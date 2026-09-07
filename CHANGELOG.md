@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Verified SDK publications (2026-09-07)
+- Published Python `grantex==0.5.0` to PyPI and Go SDK `v0.3.0` to the standalone
+  module. Verified distribution hashes, clean public-registry installs, all
+  613 Python tests, the Go race suite, and production reconciliation authentication
+  boundaries. Both expose EVM payment responses and principal/agent reconciliation;
+  neither adds an automatic x402 HTTP payment wrapper.
+- Included Apache-2.0 LICENSE and NOTICE files in the four primary release
+  artifacts. TypeScript `0.6.0` and x402 `0.4.0` remain prepared candidates
+  pending npm publishing approval; the public snapshot retains their prior
+  verified versions. Local EVM tests do not prove a funded mainnet payment.
+
 ### SDK release candidates (2026-09-07)
 - Prepared TypeScript SDK 0.6.0, x402 0.4.0, Python SDK 0.5.0 and Go SDK
   v0.3.0 for the governed Base USDC release. These versions add EVM payment

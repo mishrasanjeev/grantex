@@ -5,8 +5,10 @@ description: "Governed x402 EIP-3009 signing, verified funding, safe retries and
 
 <Warning>
 This adapter requires explicit custody/RPC provisioning even after the server
-code is deployed. It is not included in the listed registry releases. Local
-tests prove local EVM execution, not a real-money third-party payment. Server
+code is deployed. Python `0.5.0` and Go `v0.3.0` publish the response and
+reconciliation APIs, not automatic HTTP payment wrappers. The TypeScript `0.6.0`
+and x402 `0.4.0` candidates await npm publication. Local tests prove local EVM
+execution, not a real-money third-party payment. Server
 deployment, SDK publication and a funded production compatibility call are
 separate milestones; none implies the others.
 </Warning>

@@ -7,7 +7,7 @@ keywords: ["Grantex CLI version", "Grantex SDK versions", "AI agent authorizatio
 
 ## Current releases and prepared candidates
 
-Last verified: **September 1, 2026**
+Last verified: **September 7, 2026**
 
 Grantex packages are versioned independently. There is no single version number
 that represents every SDK, integration, service, and protocol artifact in this
@@ -16,15 +16,15 @@ repository.
 | Surface | Published baseline | Prepared candidate | Status | Runtime requirement |
 |---|---:|---:|---|---|
 | CLI | `@grantex/cli@0.3.0` | - | Published to npm with bundled Agent Skills | Node.js 18+; ESM |
-| TypeScript SDK | `@grantex/sdk@0.5.1` | - | Published to npm and fresh-install verified | Node.js 18+; ESM |
-| x402 Payment Protocol | `@grantex/x402@0.3.0` | - | Published to npm and fresh-install verified; external custody remains operator-supplied | Node.js 20+; ESM |
-| Python SDK | `grantex==0.4.1` | - | Published to PyPI and fresh-install verified | Python 3.9+ |
-| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.2.1` | - | Tagged, public Go-proxy verified, and fresh-install verified | Go 1.26.1+ |
+| TypeScript SDK | `@grantex/sdk@0.5.1` | `0.6.0` | Baseline verified; candidate awaits npm publishing approval | Node.js 18+; ESM |
+| x402 Payment Protocol | `@grantex/x402@0.3.0` | `0.4.0` | Baseline verified; Base 402/sign/retry candidate awaits npm publishing approval | Node.js 20+; ESM |
+| Python SDK | `grantex==0.5.0` | - | Published to PyPI and fresh-install verified | Python 3.9+ |
+| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.3.0` | - | Tagged, public Go-proxy verified, and fresh-install verified | Go 1.26.1+ |
 | MCP Auth server | `@grantex/mcp-auth@2.0.2` | - | Published with known limitations | Node.js 18+; ESM |
 | OpenAPI contract | `0.5.0` | - | Repository contract with layered prepaid-wallet governance | Independent of public SDK versions |
 
 <Note>
-TypeScript `0.5.1`, Python `0.4.1`, Go `v0.2.1`, and x402 `0.3.0` are
+TypeScript `0.5.1`, Python `0.5.0`, Go `v0.3.0`, and x402 `0.3.0` are
 published and registry verified. Installing any SDK does not provision external
 custody, principal notification delivery, or merchant idempotency storage; see
 [Prepaid Wallet Production Readiness](/guides/prepaid-wallet-production).
@@ -38,12 +38,24 @@ custody, principal notification delivery, or merchant idempotency storage; see
 
 ## Published and source-only changes
 
+Python `0.5.0` and Go `v0.3.0` were published on September 7, 2026. Both add
+EVM payment responses and authenticated principal/agent reconciliation and
+retain bounded refresh recovery. Full tests passed against a clean PyPI wheel
+and the public Go module, including Go race tests. Neither language adds an
+automatic x402 HTTP payment-and-retry wrapper.
+
+TypeScript `0.6.0` and x402 `0.4.0` are built and tested candidates, not public
+npm releases yet. Their prepared tarballs include the license and notice files
+and pass installed-package tests and isolated Docker Base execution. Publication
+requires a separate npm approval after login. See [Base USDC
+Custody](/guides/base-usdc-custody) for the custody and RPC prerequisites.
+
 <Info>
   As of August 10, 2026, published `@grantex/cli@0.3.0` includes the Hermes,
   OpenClaw, and portable Agent Skills installer. Repository source on `main`
   includes corrected Go Agent/Audit read/write contracts and layered prepaid
   wallet clients across TypeScript, Python, and Go. TypeScript `0.5.1`, Python
-  `0.4.1`, and Go `v0.2.1` include matching bounded refresh-recovery behavior.
+  `0.5.0`, and Go `v0.3.0` include matching bounded refresh-recovery behavior.
   Standard developer API-key plan throughput and custom-auth quotas
   remain separate from SDK publication.
 </Info>
@@ -53,8 +65,8 @@ custody, principal notification delivery, or merchant idempotency storage; see
 - **Hermes, OpenClaw, or another shell-capable agent:** use published `@grantex/cli@0.3.0`; install its bundled skills with `grantex agent install`. No agent-specific SDK is required.
 - **TypeScript application:** use npm-verified `@grantex/sdk@0.5.1` for bounded refresh recovery, layered prepaid-wallet governance, and OAuth Agent Grants.
 - **x402 prepaid-wallet application:** use published `@grantex/x402@0.3.0` with published `@grantex/sdk@0.5.1`; keep external custody disabled until an operator adapter passes review.
-- **Python application:** use PyPI-verified `grantex==0.4.1` for bounded refresh recovery and layered prepaid-wallet governance.
-- **Go application:** use public-proxy-verified `github.com/mishrasanjeev/grantex-go@v0.2.1` for bounded refresh recovery, corrected Agent/Audit contracts, and layered prepaid-wallet governance.
+- **Python application:** use PyPI-verified `grantex==0.5.0` for bounded refresh recovery and layered prepaid-wallet governance.
+- **Go application:** use public-proxy-verified `github.com/mishrasanjeev/grantex-go@v0.3.0` for bounded refresh recovery, corrected Agent/Audit contracts, and layered prepaid-wallet governance.
 - **MCP HTTP transport authorization:** use an established MCP-compatible authorization server and maintained MCP SDK that implement the current MCP authorization specification.
 - **Agent-specific MCP tool enforcement:** after transport authorization, use a primary Grantex SDK or direct JWKS validation at each tool boundary. Treat `@grantex/mcp-auth@2.0.2` as single-process evaluation software.
 - **Current revocation:** local JWT verification is insufficient by itself; perform an online state check or synchronize revocation data.
@@ -88,11 +100,11 @@ npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.1
 ```
 
 ```bash Python
-python -m pip install grantex==0.4.1
+python -m pip install grantex==0.5.0
 ```
 
 ```bash Go
-go get github.com/mishrasanjeev/grantex-go@v0.2.1
+go get github.com/mishrasanjeev/grantex-go@v0.3.0
 ```
 
 ```bash MCP Auth

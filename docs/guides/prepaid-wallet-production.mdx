@@ -13,8 +13,10 @@ recovery store, notification channel, or regulatory approval for the operator.
 
 The source checkout includes a specific [Base USDC adapter](/guides/base-usdc-custody).
 It requires migration `094`, operator-provisioned keys, a trusted Base RPC,
-verified funding and reconciliation monitoring. It is not in the registry
-versions listed below. Other external providers still need their own adapter.
+verified funding and reconciliation monitoring. Python `0.5.0` and Go `v0.3.0`
+publish the response and reconciliation APIs; the TypeScript `0.6.0` and x402
+`0.4.0` automatic Base payment candidates await npm publication. Other external
+providers still need their own adapter.
 Signed EVM holds are not released on a wallet block or a local timeout alone.
 
 | Dependency | Required when | Current repository behavior | Operator action |
@@ -173,7 +175,7 @@ npm view '@grantex/sdk' version
 npm view '@grantex/x402' version
 ```
 
-Published and clean-install verified: SDK `0.5.1` on September 1, 2026 and
+Published and clean-install verified: SDK `0.5.1` on September 7, 2026 and
 x402 `0.3.0` on August 31, 2026. Registry publication is not inferred from the source tree, so treat
 the registry as authoritative and verify exact versions before each deployment.
 See [Release
@@ -295,7 +297,7 @@ above succeed.
 
 ## Python and Go publication
 
-Python `0.4.1` passed source import, Ruff, strict Mypy, Pytest, distribution
+Python `0.5.0` passed source import, Ruff, strict Mypy, Pytest, distribution
 build, and Twine metadata checks before upload:
 
 ```powershell
@@ -308,17 +310,17 @@ python -m build packages/sdk-py
 python -m twine check packages/sdk-py/dist/*
 python -m twine upload packages/sdk-py/dist/*
 
-$PyPI = Invoke-RestMethod 'https://pypi.org/pypi/grantex/0.4.1/json'
-if ($PyPI.info.version -ne '0.4.1') { throw 'PyPI verification failed.' }
+$PyPI = Invoke-RestMethod 'https://pypi.org/pypi/grantex/0.5.0/json'
+if ($PyPI.info.version -ne '0.5.0') { throw 'PyPI verification failed.' }
 ```
 
 The Go module path is a separate repository,
 `github.com/mishrasanjeev/grantex-go`. Publishing requires copying the reviewed
 `packages/go-sdk` tree to that repository, rerunning `go test ./...`, committing
-the exact source, and pushing annotated tag `v0.2.1`. A tag in the Grantex
+the exact source, and pushing annotated tag `v0.3.0`. A tag in the Grantex
 monorepo does not publish that module.
 
-Python `0.4.1` and Go `v0.2.1` were published on 1 September 2026 and verified
+Python `0.5.0` and Go `v0.3.0` were published on 7 September 2026 and verified
 from clean public-registry consumers. The steps remain here as the release
 runbook; they are not instructions to overwrite those immutable versions.
 
@@ -349,8 +351,8 @@ the monorepo checkout:
 ```powershell
 npm view '@grantex/sdk@0.5.1' version dist.integrity --json
 npm view '@grantex/x402@0.3.0' version dist.integrity --json
-python -m pip download --no-deps --dest $env:TEMP 'grantex==0.4.1'
-go list -m -json 'github.com/mishrasanjeev/grantex-go@v0.2.1'
+python -m pip download --no-deps --dest $env:TEMP 'grantex==0.5.0'
+go list -m -json 'github.com/mishrasanjeev/grantex-go@v0.3.0'
 ```
 
 The workflow uses npm trusted publishing with OIDC and provenance instead of a

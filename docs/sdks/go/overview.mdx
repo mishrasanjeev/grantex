@@ -5,12 +5,12 @@ description: "Official Go SDK for the Grantex delegated authorization protocol"
 
 ## Installation
 
-Published release: **`github.com/mishrasanjeev/grantex-go@v0.2.1`**. The tag,
+Published release: **`github.com/mishrasanjeev/grantex-go@v0.3.0`**. The tag,
 public Go proxy, clean module install, standard tests, and race tests were
 verified before this page was updated.
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.2.1
+go get github.com/mishrasanjeev/grantex-go@v0.3.0
 ```
 
 The unpinned `go get github.com/mishrasanjeev/grantex-go` command follows Go's
@@ -43,9 +43,12 @@ client := grantex.NewClient("your-api-key",
 | `WithTimeout(d)` | `30s` | HTTP request timeout |
 | `WithHTTPClient(c)` | `http.DefaultClient` | Custom `*http.Client` |
 
-Version `v0.2.1` adds bounded refresh lost-response recovery and audited retry
-behavior to the corrected Agent/Audit contracts and complete developer,
-principal, and ES256 DPoP agent prepaid-wallet clients introduced in `v0.2.0`.
+Version `v0.3.0` adds typed EVM payment responses and authenticated principal/agent
+reservation reconciliation for [Base USDC custody](/guides/base-usdc-custody).
+It retains bounded refresh lost-response recovery from `v0.2.1` and the corrected
+Agent/Audit contracts and ES256 DPoP wallet clients from `v0.2.0`. It does not add
+an automatic x402 HTTP payment-and-retry wrapper; applications must implement
+their merchant HTTP flow.
 
 ## Quick Start
 
