@@ -98,11 +98,9 @@ cp .env.example .env
 npm ci
 npm run build
 
-# Run migrations
-npm run migrate
-
-# Start
-NODE_ENV=production npm start
+# Startup applies all pending idempotent migrations before listening.
+# Load the reviewed production environment explicitly.
+NODE_ENV=production node --env-file=.env dist/index.js
 ```
 
 The service starts on port 3001 by default.
