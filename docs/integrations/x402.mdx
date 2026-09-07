@@ -13,9 +13,9 @@ wallet immediately. The x402 adapter uses the official x402 v2
 
 <Note>
 The prepaid-wallet API and SDK shown here are available in the published
-`@grantex/sdk@0.5.1`, `@grantex/x402@0.3.0`, Python `grantex==0.4.1`, and Go
-`v0.2.1`. All four versions are registry verified. TypeScript `0.5.1`, Python
-`0.4.1`, and Go `v0.2.1` include bounded refresh recovery and retry hardening.
+`@grantex/sdk@0.5.1`, `@grantex/x402@0.3.0`, Python `grantex==0.5.0`, and Go
+`v0.3.0`. All four versions are registry verified. TypeScript `0.5.1`, Python
+`0.5.0`, and Go `v0.3.0` include bounded refresh recovery and retry hardening.
 `sandbox_ledger` is a complete local ledger mode.
 `external` wallet records fail closed until a custody/provider adapter verifies
 funding and settlement.
@@ -24,8 +24,11 @@ funding and settlement.
 ## Payment network compatibility
 
 The default remains `exact` on `grantex:prepaid`. The source checkout now also
-supports opt-in Base native USDC EIP-3009. This addition is not included in the
-published versions listed above and is not a claim of hosted-service deployment.
+supports opt-in Base native USDC EIP-3009. Automatic Base 402/sign/retry requires
+the prepared TypeScript `0.6.0` and x402 `0.4.0` candidates, which await npm
+publication. Published Python `0.5.0` and Go `v0.3.0` include EVM payment responses
+and authenticated reconciliation, but no automatic HTTP payment wrapper. Server
+deployment and funded custody/RPC provisioning remain separate requirements.
 
 Configure `baseUsdc: { scope: 'licensing:preflight' }` on `createX402Agent`,
 supply a stable `idempotencyKey`, and provision the server's `base_usdc` custody
@@ -279,9 +282,11 @@ await principal.setWalletStatus(travel.walletId, 'blocked', 'Wallet under review
 await principal.setAgentBlocked(agentId, true, 'Principal emergency stop');
 ```
 
-Blocking releases outstanding reservations in the affected boundary. Settled
-transactions remain in the append-only wallet ledger. Unblocking permits new
-authorizations; it does not revive released or expired authorizations.
+Blocking releases outstanding local-ledger reservations in the affected boundary.
+Already signed EVM reservations remain held until finalized settlement or expiry;
+blocking cannot recall a signature. Settled transactions remain in the append-only
+wallet ledger. Unblocking permits new authorizations; it does not revive released
+or expired authorizations.
 
 ## Direct authorization
 

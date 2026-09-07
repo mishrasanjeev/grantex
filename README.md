@@ -62,8 +62,10 @@ identity and the policy-evaluated semantic context.
 external custody records deliberately fail closed unless a configured provider
 can verify funding and settlement. The source checkout now includes opt-in
 Base native USDC EIP-3009 payments with policy-gated signing, verified funding,
-durable signature retries and finalized-chain reconciliation. This addition is
-not in the registry versions listed below. See the
+durable signature retries and finalized-chain reconciliation. Python `0.5.0`
+and Go `v0.3.0` publish the EVM response and reconciliation APIs; neither adds
+an automatic HTTP payment wrapper. The TypeScript `0.6.0` and x402 `0.4.0`
+candidates, including automatic Base 402/sign/retry, await npm publication. See the
 [Base USDC custody guide](docs/guides/base-usdc-custody.mdx), including the limit
 that blocking cannot recall an already issued on-chain signature.
 
@@ -110,7 +112,7 @@ complete responsibility matrix, policy composition, exact approval protocol,
 and honest residual gap list.
 
 The managed clients are implemented in registry-verified `@grantex/sdk@0.5.1`,
-`@grantex/x402@0.3.0`, Python `grantex==0.4.1`, and Go `v0.2.1`. External
+`@grantex/x402@0.3.0`, Python `grantex==0.5.0`, and Go `v0.3.0`. External
 custody, principal notification delivery, and
 merchant result idempotency remain operator responsibilities.
 See the [x402 integration
@@ -221,14 +223,14 @@ Start with the [OACP runtime launch closure PRD](docs/guides/oacp/runtime-launch
 
 Grantex components are independently versioned. The protocol specification remains **v1.0 Final**; SDK, MCP package, and roadmap milestone versions are separate release lines and do not represent a monorepo-wide version.
 
-Current public releases and repository versions, verified 2026-09-01:
+Current public releases and repository versions, verified 2026-09-07:
 
 | Component | Published version | Repository version | Reproducible install |
 | --- | ---: | ---: | --- |
-| TypeScript SDK | `@grantex/sdk` `0.5.1` | `0.5.1` | `npm install @grantex/sdk@0.5.1` |
-| x402 Payment Protocol | `@grantex/x402` `0.3.0` | - | `npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.1` |
-| Python SDK | `grantex` `0.4.1` | - | `python -m pip install grantex==0.4.1` |
-| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.2.1` (Go 1.26.1+) | - | `go get github.com/mishrasanjeev/grantex-go@v0.2.1` |
+| TypeScript SDK | `@grantex/sdk` `0.5.1` | `0.6.0` (unpublished candidate) | `npm install @grantex/sdk@0.5.1` |
+| x402 Payment Protocol | `@grantex/x402` `0.3.0` | `0.4.0` (unpublished candidate) | `npm install @grantex/x402@0.3.0 @grantex/sdk@0.5.1` |
+| Python SDK | `grantex` `0.5.0` | - | `python -m pip install grantex==0.5.0` |
+| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.3.0` (Go 1.26.1+) | - | `go get github.com/mishrasanjeev/grantex-go@v0.3.0` |
 | MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | - | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.1` |
 
 > **Known published-package limits:** MCP Auth `2.0.2` keeps authorization codes
@@ -294,8 +296,8 @@ if (!auth.code) {
 ```
 
 ```bash
-python -m pip install grantex==0.4.1               # Python SDK
-go get github.com/mishrasanjeev/grantex-go@v0.2.1 # Go SDK (Go 1.26.1+)
+python -m pip install grantex==0.5.0               # Python SDK
+go get github.com/mishrasanjeev/grantex-go@v0.3.0 # Go SDK (Go 1.26.1+)
 npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.5.1 # MCP endpoint evaluation
 npm install -g @grantex/cli@0.3.0                   # Optional CLI tooling
 ```
@@ -1562,7 +1564,7 @@ Service providers implement scope definitions for their APIs. Agents declare whi
 
 ## Integrations
 
-This table is a source-and-registry status snapshot as of 2026-09-01. For
+This table is a source-and-registry status snapshot as of 2026-09-07. For
 integration packages, "Published package" identifies a public package surface;
 check its registry page and compatibility notes before choosing a version.
 
@@ -1587,8 +1589,8 @@ check its registry page and compatibility notes before choosing a version.
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | Published package |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | Published package |
 | **TypeScript SDK** | `@grantex/sdk` (`0.5.1`) | `npm install @grantex/sdk@0.5.1` | Registry-verified published package |
-| **Python SDK** | `grantex` (`0.4.1`) | `python -m pip install grantex==0.4.1` | Registry-verified published package |
-| **Go SDK** | `grantex-go` (`v0.2.1`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.2.1` | Tag and public Go-proxy verified |
+| **Python SDK** | `grantex` (`0.5.0`) | `python -m pip install grantex==0.5.0` | Registry-verified published package |
+| **Go SDK** | `grantex-go` (`v0.3.0`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.3.0` | Tag and public Go-proxy verified |
 | **CLI** | `@grantex/cli` (`0.3.0`) | `npm install -g @grantex/cli@0.3.0` | Registry-verified published package |
 | **Hermes Agent** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target hermes` | Published in 0.3.0; no dedicated SDK needed |
 | **OpenClaw** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target openclaw` | Published in 0.3.0; no dedicated SDK needed |
