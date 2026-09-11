@@ -28,7 +28,7 @@
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^5.0.0",
-    "autoprefixer": "^10.5.4",
+    "autoprefixer": "^10.5.5",
     "jsdom": "^30.0.0",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.0.0",
