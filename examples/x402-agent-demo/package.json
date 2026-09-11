@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@grantex/sdk": "^0.5.1",
-    "@grantex/x402": "^0.3.0",
+    "@grantex/x402": "^0.4.0",
     "jose": "^6.2.2",
     "tsx": "^4.21.0"
   },
