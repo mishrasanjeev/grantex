@@ -37,4 +37,4 @@ class WebAuthnClient:
         return ListWebAuthnCredentialsResponse.from_dict(data)
 
     def delete_credential(self, credential_id: str) -> None:
-        self._http.delete(f"/v1/webauthn/credentials/{quote(credential_id, safe="")}")
+        self._http.delete(f"/v1/webauthn/credentials/{quote(credential_id, safe='')}")

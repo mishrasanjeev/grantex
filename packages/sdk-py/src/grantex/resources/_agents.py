@@ -37,7 +37,7 @@ class AgentsClient:
         return Agent.from_dict(data)
 
     def get(self, agent_id: str) -> Agent:
-        data = self._http.get(f"/v1/agents/{quote(agent_id, safe="")}")
+        data = self._http.get(f"/v1/agents/{quote(agent_id, safe='')}")
         return Agent.from_dict(data)
 
     def list(self) -> ListAgentsResponse:
@@ -68,8 +68,8 @@ class AgentsClient:
             body["resourceServers"] = resource_servers
         if public_jwk is not None:
             body["publicJwk"] = public_jwk
-        data = self._http.post(f"/v1/agents/{quote(agent_id, safe="")}", body)
+        data = self._http.post(f"/v1/agents/{quote(agent_id, safe='')}", body)
         return Agent.from_dict(data)
 
     def delete(self, agent_id: str) -> None:
-        self._http.delete(f"/v1/agents/{quote(agent_id, safe="")}")
+        self._http.delete(f"/v1/agents/{quote(agent_id, safe='')}")

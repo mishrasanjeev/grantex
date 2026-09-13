@@ -43,7 +43,7 @@ class AuditClient:
         return ListAuditResponse.from_dict(data)
 
     def get(self, entry_id: str) -> AuditEntry:
-        data = self._http.get(f"/v1/audit/{quote(entry_id, safe="")}")
+        data = self._http.get(f"/v1/audit/{quote(entry_id, safe='')}")
         return AuditEntry.from_dict(data)
 
     def checkpoint(self) -> AuditCheckpoint:

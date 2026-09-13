@@ -29,7 +29,7 @@ class BudgetsClient:
 
     def balance(self, grant_id: str) -> BudgetAllocation:
         """Get the current budget balance for a grant."""
-        data = self._http.get(f"/v1/budget/balance/{quote(grant_id, safe="")}")
+        data = self._http.get(f"/v1/budget/balance/{quote(grant_id, safe='')}")
         return BudgetAllocation.from_dict(data)
 
     def transactions(
@@ -52,6 +52,6 @@ class BudgetsClient:
         if page_size is not None:
             params.append(f"pageSize={page_size}")
         qs = "&".join(params)
-        url = f"/v1/budget/transactions/{quote(grant_id, safe="")}{('?' + qs) if qs else ''}"
+        url = f"/v1/budget/transactions/{quote(grant_id, safe='')}{('?' + qs) if qs else ''}"
         data = self._http.get(url)
         return BudgetTransactionsResponse.from_dict(data)

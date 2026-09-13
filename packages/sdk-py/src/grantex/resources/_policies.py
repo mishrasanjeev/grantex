@@ -27,14 +27,14 @@ class PoliciesClient:
 
     def get(self, policy_id: str) -> Policy:
         """Get a single policy by ID."""
-        data = self._http.get(f"/v1/policies/{quote(policy_id, safe="")}")
+        data = self._http.get(f"/v1/policies/{quote(policy_id, safe='')}")
         return Policy.from_dict(data)
 
     def update(self, policy_id: str, params: UpdatePolicyParams) -> Policy:
         """Update a policy."""
-        data = self._http.patch(f"/v1/policies/{quote(policy_id, safe="")}", params.to_dict())
+        data = self._http.patch(f"/v1/policies/{quote(policy_id, safe='')}", params.to_dict())
         return Policy.from_dict(data)
 
     def delete(self, policy_id: str) -> None:
         """Delete a policy."""
-        self._http.delete(f"/v1/policies/{quote(policy_id, safe="")}")
+        self._http.delete(f"/v1/policies/{quote(policy_id, safe='')}")

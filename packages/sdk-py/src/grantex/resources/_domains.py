@@ -102,9 +102,9 @@ class DomainsClient:
 
     def verify(self, domain_id: str) -> VerifyDomainResponse:
         """Verify a custom domain via DNS."""
-        data = self._http.post(f"/v1/domains/{quote(domain_id, safe="")}/verify")
+        data = self._http.post(f"/v1/domains/{quote(domain_id, safe='')}/verify")
         return VerifyDomainResponse.from_dict(data)
 
     def delete(self, domain_id: str) -> None:
         """Delete a custom domain."""
-        self._http.delete(f"/v1/domains/{quote(domain_id, safe="")}")
+        self._http.delete(f"/v1/domains/{quote(domain_id, safe='')}")

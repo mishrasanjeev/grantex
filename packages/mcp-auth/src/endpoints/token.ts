@@ -188,8 +188,11 @@ export function registerTokenEndpoint(
       // Checked before touching Grantex so a token presented by the wrong
       // client is neither rotated nor consumed upstream. An unknown token is
       // refused too: without a binding there is nothing to verify against.
+      // Compare against the authenticated client record, not the raw
+      // client_id parameter: the guard is keyed on the identity the
+      // secret/registration check established above.
       const binding = await refreshTokenStore.get(refresh_token);
-      if (!binding || binding.clientId !== client_id) {
+      if (!binding || binding.clientId !== client.clientId) {
         return reply.status(400).send({
           error: 'invalid_grant',
           error_description: 'Refresh token was not issued to this client',

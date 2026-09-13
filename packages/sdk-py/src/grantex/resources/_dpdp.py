@@ -45,7 +45,7 @@ class DpdpClient:
 
         GET /v1/dpdp/consent-records/:recordId
         """
-        data = self._http.get(f"/v1/dpdp/consent-records/{quote(record_id, safe="")}")
+        data = self._http.get(f"/v1/dpdp/consent-records/{quote(record_id, safe='')}")
         return ConsentRecord.from_dict(data)
 
     def list_consent_records(
@@ -80,7 +80,7 @@ class DpdpClient:
         if delete_data:
             body["deleteProcessedData"] = True
         data = self._http.post(
-            f"/v1/dpdp/consent-records/{quote(record_id, safe="")}/withdraw", body
+            f"/v1/dpdp/consent-records/{quote(record_id, safe='')}/withdraw", body
         )
         return WithdrawConsentResponse.from_dict(data)
 
@@ -92,7 +92,7 @@ class DpdpClient:
         GET /v1/dpdp/data-principals/:principalId/records
         """
         data = self._http.get(
-            f"/v1/dpdp/data-principals/{quote(principal_id, safe="")}/records"
+            f"/v1/dpdp/data-principals/{quote(principal_id, safe='')}/records"
         )
         return PrincipalRecordsResponse.from_dict(data)
 
@@ -102,7 +102,7 @@ class DpdpClient:
         POST /v1/dpdp/data-principals/:principalId/erasure
         """
         data = self._http.post(
-            f"/v1/dpdp/data-principals/{quote(principal_id, safe="")}/erasure",
+            f"/v1/dpdp/data-principals/{quote(principal_id, safe='')}/erasure",
             {"dataPrincipalId": principal_id},
         )
         return ErasureResponse.from_dict(data)
@@ -130,7 +130,7 @@ class DpdpClient:
 
         GET /v1/dpdp/grievances/:grievanceId
         """
-        data = self._http.get(f"/v1/dpdp/grievances/{quote(grievance_id, safe="")}")
+        data = self._http.get(f"/v1/dpdp/grievances/{quote(grievance_id, safe='')}")
         return Grievance.from_dict(data)
 
     def create_export(self, params: CreateExportParams) -> ComplianceExport:
@@ -146,5 +146,5 @@ class DpdpClient:
 
         GET /v1/dpdp/exports/:exportId
         """
-        data = self._http.get(f"/v1/dpdp/exports/{quote(export_id, safe="")}")
+        data = self._http.get(f"/v1/dpdp/exports/{quote(export_id, safe='')}")
         return ComplianceExport.from_dict(data)

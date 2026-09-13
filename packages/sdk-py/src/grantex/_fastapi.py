@@ -20,15 +20,20 @@ Usage::
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Optional
 
 if TYPE_CHECKING:
     from ._client import Grantex
 
 from .manifest import EnforceResult
 
+# Both integrations are optional dependencies; the typed Optional aliases keep
+# ``mypy --strict`` happy whether or not fastapi/starlette are installed.
+_Header: Optional[Callable[..., Any]]
 try:
-    from fastapi import Header as _Header  # type: ignore[import-not-found,unused-ignore]
+    from fastapi import Header as _fastapi_header  # type: ignore[import-not-found,unused-ignore]
+
+    _Header = _fastapi_header
 except ImportError:  # pragma: no cover - fastapi is an optional dependency
     _Header = None
 
@@ -37,8 +42,13 @@ except ImportError:  # pragma: no cover - fastapi is an optional dependency
 # read and every request 401'd. Outside FastAPI the plain default still works.
 _AUTHORIZATION_DEFAULT: Any = _Header(default="") if _Header is not None else ""
 
+_run_in_threadpool: Optional[Callable[..., Awaitable[Any]]]
 try:
-    from starlette.concurrency import run_in_threadpool as _run_in_threadpool  # type: ignore[import-not-found,unused-ignore]
+    from starlette.concurrency import (  # type: ignore[import-not-found,unused-ignore]
+        run_in_threadpool as _starlette_run_in_threadpool,
+    )
+
+    _run_in_threadpool = _starlette_run_in_threadpool
 except ImportError:  # pragma: no cover
     _run_in_threadpool = None
 
@@ -75,6 +85,7 @@ class GrantexEnforcer:
 
         # enforce() verifies the token synchronously (a JWKS fetch on a cache
         # miss); keep that off the event loop.
+        result: EnforceResult
         if _run_in_threadpool is not None:
             result = await _run_in_threadpool(
                 self._grantex.enforce,

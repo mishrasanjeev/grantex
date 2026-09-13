@@ -26,4 +26,4 @@ class WebhooksClient:
         return ListWebhooksResponse.from_dict(data)
 
     def delete(self, webhook_id: str) -> None:
-        self._http.delete(f"/v1/webhooks/{quote(webhook_id, safe="")}")
+        self._http.delete(f"/v1/webhooks/{quote(webhook_id, safe='')}")

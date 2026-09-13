@@ -23,5 +23,5 @@ class AnomaliesClient:
 
     def acknowledge(self, anomaly_id: str) -> Anomaly:
         """Acknowledge an anomaly by ID."""
-        data = self._http.patch(f"/v1/anomalies/{quote(anomaly_id, safe="")}/acknowledge", {})
+        data = self._http.patch(f"/v1/anomalies/{quote(anomaly_id, safe='')}/acknowledge", {})
         return Anomaly.from_dict(data)
