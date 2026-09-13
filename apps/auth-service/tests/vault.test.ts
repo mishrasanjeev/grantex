@@ -230,7 +230,7 @@ describe('POST /v1/vault/credentials/exchange', () => {
       sub: 'user_123',
       agt: 'did:grantex:ag_01',
       dev: 'dev_TEST',
-      scp: ['google:read'],
+      scp: ['vault:google:exchange'],
       jti: 'tok_VAULT01',
       grnt: 'grnt_VAULT01',
       exp: Math.floor(Date.now() / 1000) + 3600,
@@ -283,7 +283,7 @@ describe('POST /v1/vault/credentials/exchange', () => {
       sub: 'user_123',
       agt: 'did:grantex:ag_01',
       dev: 'dev_TEST',
-      scp: ['google:read'],
+      scp: ['vault:google:exchange'],
       jti: 'tok_VAULT02',
       grnt: 'grnt_VAULT02',
       exp: Math.floor(Date.now() / 1000) + 3600,
@@ -345,7 +345,7 @@ describe('POST /v1/vault/credentials/exchange', () => {
       sub: 'user_123',
       agt: 'did:grantex:ag_01',
       dev: 'dev_TEST',
-      scp: ['google:read'],
+      scp: ['vault:google:exchange'],
       jti: 'tok_VAULT03',
       grnt: 'grnt_VAULT03',
       exp: Math.floor(Date.now() / 1000) + 3600,
@@ -388,7 +388,7 @@ describe('POST /v1/vault/credentials/exchange', () => {
       sub: 'user_123',
       agt: 'did:grantex:ag_01',
       dev: 'dev_TEST',
-      scp: ['google:read'],
+      scp: ['vault:google:exchange'],
       jti: 'tok_VAULT04',
       grnt: 'grnt_VAULT04',
       exp: Math.floor(Date.now() / 1000) + 3600,
@@ -405,5 +405,146 @@ describe('POST /v1/vault/credentials/exchange', () => {
 
     expect(res.statusCode).toBe(401);
     expect(res.json().code).toBe('UNAUTHORIZED');
+  });
+
+  it.each([
+    ['*'],
+    ['google:*'],
+    ['google:read'],
+    ['google:credentials:read'],
+    ['vault:google:*'],
+    ['vault:google:read'],
+    ['vault:credentials:exchange'],
+  ])('returns 403 for wildcard or read-style scope %s (exact vault:<service>:exchange required)', async (scope) => {
+    const { signGrantToken } = await import('../src/lib/crypto.js');
+    const token = await signGrantToken({
+      sub: 'user_123',
+      agt: 'did:grantex:ag_01',
+      dev: 'dev_TEST',
+      scp: [scope],
+      jti: `tok_VAULT_WILDCARD_${scope.replace(/[^a-z]/gi, '_')}`,
+      grnt: 'grnt_VAULT_WILDCARD',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+    sqlMock.mockResolvedValueOnce([
+      { is_revoked: false, expires_at: new Date(Date.now() + 3600_000).toISOString(), grant_status: 'active' },
+    ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/vault/credentials/exchange',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { service: 'google' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('FORBIDDEN');
+    expect(res.json().message).toContain('vault:google:exchange');
+    // The credential row must never be read for an unscoped exchange.
+    expect(sqlMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe('key-bound (cnf.jkt) grant tokens', () => {
+    const EXCHANGE_URI = 'https://grantex.dev/v1/vault/credentials/exchange';
+
+    async function dpopKey() {
+      const { generateKeyPair, exportJWK, calculateJwkThumbprint } = await import('jose');
+      const { privateKey, publicKey } = await generateKeyPair('ES256', { extractable: true });
+      const publicJwk = await exportJWK(publicKey);
+      return { privateKey, publicJwk, thumbprint: await calculateJwkThumbprint(publicJwk, 'sha256') };
+    }
+
+    async function keyBoundToken(thumbprint: string): Promise<string> {
+      const { signGrantToken } = await import('../src/lib/crypto.js');
+      return signGrantToken({
+        sub: 'user_123',
+        agt: 'did:grantex:ag_01',
+        dev: 'dev_TEST',
+        scp: ['vault:google:exchange'],
+        jti: `tok_VAULT_CNF_${Math.random().toString(16).slice(2)}`,
+        grnt: 'grnt_VAULT_CNF',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        cnf: { jkt: thumbprint },
+      });
+    }
+
+    async function dpopProof(token: string, key: Awaited<ReturnType<typeof dpopKey>>): Promise<string> {
+      const { SignJWT } = await import('jose');
+      const { accessTokenHash } = await import('../src/lib/dpop.js');
+      return new SignJWT({
+        htm: 'POST',
+        htu: EXCHANGE_URI,
+        jti: `dpop-${Math.random().toString(16).slice(2)}-${Date.now()}`,
+        iat: Math.floor(Date.now() / 1000),
+        ath: accessTokenHash(token),
+      })
+        .setProtectedHeader({ typ: 'dpop+jwt', alg: 'ES256', jwk: key.publicJwk })
+        .sign(key.privateKey);
+    }
+
+    function primeActiveGrant() {
+      sqlMock.mockResolvedValueOnce([
+        { is_revoked: false, expires_at: new Date(Date.now() + 3600_000).toISOString(), grant_status: 'active' },
+      ]);
+    }
+
+    it('rejects a bare Bearer presentation of a key-bound token (no DPoP proof)', async () => {
+      const token = await keyBoundToken((await dpopKey()).thumbprint);
+      primeActiveGrant();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/vault/credentials/exchange',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { service: 'google' },
+      });
+
+      expect(res.statusCode).toBe(401);
+      expect(res.json().code).toBe('INVALID_DPOP_PROOF');
+      expect(sqlMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects a DPoP proof signed by a key other than the bound one', async () => {
+      const boundKey = await dpopKey();
+      const otherKey = await dpopKey();
+      const token = await keyBoundToken(boundKey.thumbprint);
+      primeActiveGrant();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/vault/credentials/exchange',
+        headers: { authorization: `DPoP ${token}`, dpop: await dpopProof(token, otherKey) },
+        payload: { service: 'google' },
+      });
+
+      expect(res.statusCode).toBe(401);
+      expect(res.json().code).toBe('DPOP_KEY_MISMATCH');
+    });
+
+    it('releases the credential when the DPoP proof matches cnf.jkt', async () => {
+      const key = await dpopKey();
+      const token = await keyBoundToken(key.thumbprint);
+      primeActiveGrant();
+      sqlMock.mockResolvedValueOnce([
+        {
+          id: 'vault_cnf',
+          access_token: 'encrypted:ya29.bound_token',
+          refresh_token: null,
+          token_expires_at: null,
+          credential_type: 'oauth2',
+          metadata: {},
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/vault/credentials/exchange',
+        headers: { authorization: `DPoP ${token}`, dpop: await dpopProof(token, key) },
+        payload: { service: 'google' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().accessToken).toBe('ya29.bound_token');
+    });
   });
 });

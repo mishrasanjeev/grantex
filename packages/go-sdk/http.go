@@ -90,12 +90,22 @@ func (h *httpClient) postWithHeaders(ctx context.Context, path string, body inte
 	return h.doWithHeaders(ctx, http.MethodPost, path, body, headers)
 }
 
+// postNoRetry issues exactly one POST. Use it for requests whose body is
+// single-use (an authorization-code exchange): a retry after a timeout or
+// 5xx would replay the code, and the server rejects the second use.
+func (h *httpClient) postNoRetry(ctx context.Context, path string, body interface{}) ([]byte, error) {
+	return h.do(ctx, http.MethodPost, path, body, nil, 0)
+}
+
 func (h *httpClient) doWithHeaders(ctx context.Context, method, path string, body interface{}, headers map[string]string) ([]byte, error) {
 	maxRetries := h.maxRetries
 	if !h.maxRetriesSet {
 		maxRetries = defaultMaxRetries
 	}
+	return h.do(ctx, method, path, body, headers, maxRetries)
+}
 
+func (h *httpClient) do(ctx context.Context, method, path string, body interface{}, headers map[string]string, maxRetries int) ([]byte, error) {
 	// Pre-marshal the body so we can replay it on retries.
 	var bodyBytes []byte
 	if body != nil {

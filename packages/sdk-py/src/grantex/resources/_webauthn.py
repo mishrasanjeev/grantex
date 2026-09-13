@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from .._http import HttpClient
 from .._types import (
     WebAuthnRegistrationOptions,
@@ -35,4 +37,4 @@ class WebAuthnClient:
         return ListWebAuthnCredentialsResponse.from_dict(data)
 
     def delete_credential(self, credential_id: str) -> None:
-        self._http.delete(f"/v1/webauthn/credentials/{credential_id}")
+        self._http.delete(f"/v1/webauthn/credentials/{quote(credential_id, safe="")}")

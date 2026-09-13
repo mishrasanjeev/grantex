@@ -19,12 +19,28 @@ Usage::
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import asyncio
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ._client import Grantex
 
 from .manifest import EnforceResult
+
+try:
+    from fastapi import Header as _Header  # type: ignore[import-not-found,unused-ignore]
+except ImportError:  # pragma: no cover - fastapi is an optional dependency
+    _Header = None
+
+# Without ``Header()`` FastAPI binds a plain ``str`` parameter to the query
+# string, so the documented ``Authorization: Bearer <token>`` header was never
+# read and every request 401'd. Outside FastAPI the plain default still works.
+_AUTHORIZATION_DEFAULT: Any = _Header(default="") if _Header is not None else ""
+
+try:
+    from starlette.concurrency import run_in_threadpool as _run_in_threadpool  # type: ignore[import-not-found,unused-ignore]
+except ImportError:  # pragma: no cover
+    _run_in_threadpool = None
 
 
 class GrantexEnforcer:
@@ -42,7 +58,7 @@ class GrantexEnforcer:
         self,
         connector: str = "",
         tool: str = "",
-        authorization: str = "",
+        authorization: str = _AUTHORIZATION_DEFAULT,
     ) -> EnforceResult:
         """FastAPI dependency callable."""
         # Extract token from Authorization header
@@ -57,11 +73,22 @@ class GrantexEnforcer:
             except ImportError:
                 raise PermissionError("Missing grant token")
 
-        result = self._grantex.enforce(
-            grant_token=token,
-            connector=connector,
-            tool=tool,
-        )
+        # enforce() verifies the token synchronously (a JWKS fetch on a cache
+        # miss); keep that off the event loop.
+        if _run_in_threadpool is not None:
+            result = await _run_in_threadpool(
+                self._grantex.enforce,
+                grant_token=token,
+                connector=connector,
+                tool=tool,
+            )
+        else:
+            result = await asyncio.to_thread(
+                self._grantex.enforce,
+                grant_token=token,
+                connector=connector,
+                tool=tool,
+            )
 
         if not result.allowed:
             try:

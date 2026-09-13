@@ -56,10 +56,14 @@ export const agentsSuite: SuiteDefinition = {
     results.push(
       await test('PATCH /v1/agents/:id updates agent', '§10', async () => {
         const id = crudAgentId || sharedId;
-        const newName = `updated-${Date.now()}`;
+        // Never rename the shared agent: the runner finds it by name on later
+        // runs. When plan-limited, exercise PATCH via a harmless description change.
+        const patch = crudAgentId
+          ? { name: `updated-${Date.now()}` }
+          : { description: `conformance run ${new Date().toISOString()}` };
         const res = await ctx.http.patch<{ agentId: string; name: string }>(
           `/v1/agents/${id}`,
-          { name: newName },
+          patch,
         );
         expectStatus(res, 200);
         expectKeys(res.body, ['agentId', 'name']);

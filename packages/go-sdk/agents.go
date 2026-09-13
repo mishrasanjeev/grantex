@@ -1,6 +1,9 @@
 package grantex
 
-import "context"
+import (
+	"context"
+	"net/url"
+)
 
 // AgentsService handles agent registration and management.
 type AgentsService struct {
@@ -14,7 +17,7 @@ func (s *AgentsService) Register(ctx context.Context, params RegisterAgentParams
 
 // Get retrieves an agent by ID.
 func (s *AgentsService) Get(ctx context.Context, agentID string) (*Agent, error) {
-	return unmarshal[Agent](s.http.get(ctx, "/v1/agents/"+agentID))
+	return unmarshal[Agent](s.http.get(ctx, "/v1/agents/"+url.PathEscape(agentID)))
 }
 
 // List retrieves all agents for the current developer.
@@ -24,11 +27,11 @@ func (s *AgentsService) List(ctx context.Context) (*ListAgentsResponse, error) {
 
 // Update modifies an existing agent.
 func (s *AgentsService) Update(ctx context.Context, agentID string, params UpdateAgentParams) (*Agent, error) {
-	return unmarshal[Agent](s.http.patch(ctx, "/v1/agents/"+agentID, params))
+	return unmarshal[Agent](s.http.patch(ctx, "/v1/agents/"+url.PathEscape(agentID), params))
 }
 
 // Delete removes an agent.
 func (s *AgentsService) Delete(ctx context.Context, agentID string) error {
-	_, err := s.http.del(ctx, "/v1/agents/"+agentID)
+	_, err := s.http.del(ctx, "/v1/agents/"+url.PathEscape(agentID))
 	return err
 }

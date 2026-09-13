@@ -143,12 +143,20 @@ export function requireMcpAuth(
         ...(options.audience !== undefined ? { audience: options.audience } : {}),
       });
 
-      // Parse scopes from token
-      const tokenScopes = Array.isArray(payload['scp'])
-        ? (payload['scp'] as string[])
-        : typeof payload['scp'] === 'string'
-          ? (payload['scp'] as string).split(' ')
-          : [];
+      // `scp` must be a string array, matching @grantex/sdk. A space-separated
+      // string (or a missing claim) marks a foreign token from the same issuer
+      // and is rejected rather than coerced into scopes it never carried.
+      const scp = payload['scp'];
+      if (!Array.isArray(scp) || !scp.every((s) => typeof s === 'string')) {
+        return c.json(
+          {
+            error: 'unauthorized',
+            error_description: 'Token scp claim must be an array of strings',
+          },
+          401,
+        );
+      }
+      const tokenScopes = scp as string[];
 
       // Check required scopes
       if (requiredScopes.length > 0) {

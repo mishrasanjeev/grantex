@@ -56,12 +56,12 @@ describe('proxyRequest', () => {
     const fetchCall = vi.mocked(fetch).mock.calls[0]!;
     expect(fetchCall[0]).toBe('https://api.internal.com/calendar/events');
 
-    const headers = fetchCall[1]?.headers as Record<string, string>;
-    expect(headers['X-Grantex-Principal']).toBe('user_1');
-    expect(headers['X-Grantex-Agent']).toBe('did:grantex:agent:a1');
-    expect(headers['X-Grantex-GrantId']).toBe('grnt_1');
+    const headers = fetchCall[1]?.headers as Headers;
+    expect(headers.get('X-Grantex-Principal')).toBe('user_1');
+    expect(headers.get('X-Grantex-Agent')).toBe('did:grantex:agent:a1');
+    expect(headers.get('X-Grantex-GrantId')).toBe('grnt_1');
     // Authorization should be stripped
-    expect(headers['authorization']).toBeUndefined();
+    expect(headers.get('authorization')).toBeNull();
   });
 
   it('adds upstream headers', async () => {
@@ -76,8 +76,8 @@ describe('proxyRequest', () => {
       upstreamHeaders: { 'X-Internal-Auth': 'secret-key' },
     });
 
-    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Record<string, string>;
-    expect(headers['X-Internal-Auth']).toBe('secret-key');
+    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Headers;
+    expect(headers.get('X-Internal-Auth')).toBe('secret-key');
   });
 
   it('strips trailing slash from upstream', async () => {
@@ -168,9 +168,9 @@ describe('proxyRequest', () => {
       upstream: 'https://api.internal.com',
     });
 
-    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Record<string, string>;
+    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Headers;
     // fetch derives the length from what it actually sends.
-    expect(headers['content-length']).toBeUndefined();
+    expect(headers.get('content-length')).toBeNull();
   });
 
   it('relays a binary body byte for byte', async () => {
@@ -214,9 +214,9 @@ describe('proxyRequest', () => {
       upstream: 'https://api.internal.com',
     });
 
-    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Record<string, string>;
+    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Headers;
     // Dropping this would leave the upstream unable to decode the payload.
-    expect(headers['content-encoding']).toBe('gzip');
+    expect(headers.get('content-encoding')).toBe('gzip');
   });
 
   it('strips hop-by-hop request headers', async () => {
@@ -240,12 +240,12 @@ describe('proxyRequest', () => {
       upstream: 'https://api.internal.com',
     });
 
-    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Record<string, string>;
-    expect(headers['connection']).toBeUndefined();
-    expect(headers['transfer-encoding']).toBeUndefined();
-    expect(headers['proxy-authorization']).toBeUndefined();
-    expect(headers['upgrade']).toBeUndefined();
-    expect(headers['x-custom']).toBe('kept');
+    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Headers;
+    expect(headers.get('connection')).toBeNull();
+    expect(headers.get('transfer-encoding')).toBeNull();
+    expect(headers.get('proxy-authorization')).toBeNull();
+    expect(headers.get('upgrade')).toBeNull();
+    expect(headers.get('x-custom')).toBe('kept');
   });
 
   it('drops upstream content-encoding and content-length from the response', async () => {
@@ -282,20 +282,31 @@ describe('proxyRequest', () => {
       text: () => Promise.resolve(''),
     }));
 
+    // Node lower-cases inbound header names, so a spoof arrives exactly like
+    // this; the old plain-object build kept it as a second key that fetch
+    // merged into `user_attacker, user_1`.
     const req = mockReq({
       headers: {
         'content-type': 'application/json',
-        'X-Grantex-Principal': 'user_attacker',
-        'X-Grantex-GrantId': 'grnt_attacker',
+        'x-grantex-principal': 'user_attacker',
+        'x-grantex-agent': 'did:grantex:agent:attacker',
+        'x-grantex-grantid': 'grnt_attacker',
+        'x-grantex-role': 'admin',
       },
     });
     await proxyRequest(req, mockReply(), MOCK_GRANT, {
       upstream: 'https://api.internal.com',
     });
 
-    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Record<string, string>;
-    expect(headers['X-Grantex-Principal']).toBe('user_1');
-    expect(headers['X-Grantex-GrantId']).toBe('grnt_1');
+    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers;
+    expect(headers).toBeInstanceOf(Headers);
+    const sent = headers as Headers;
+    expect(sent.get('x-grantex-principal')).toBe('user_1');
+    expect(sent.get('x-grantex-agent')).toBe('did:grantex:agent:a1');
+    expect(sent.get('x-grantex-grantid')).toBe('grnt_1');
+    // Anything else in the reserved namespace is dropped, not relayed.
+    expect(sent.get('x-grantex-role')).toBeNull();
+    expect(sent.get('content-type')).toBe('application/json');
   });
 
   it('throws UPSTREAM_ERROR on network failure', async () => {

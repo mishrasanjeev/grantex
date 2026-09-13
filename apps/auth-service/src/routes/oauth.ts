@@ -470,7 +470,8 @@ export async function oauthRoutes(app: FastifyInstance): Promise<void> {
 
         if (token.startsWith('ref_')) {
           const refreshRows = await sql`
-            SELECT COALESCE(rt.family_id, rt.id) AS family_id
+            SELECT COALESCE(rt.family_id, rt.id) AS family_id,
+                   g.id AS grant_id, g.expires_at AS grant_expires_at
             FROM refresh_tokens rt
             JOIN grants g ON g.id = rt.grant_id
             WHERE rt.id = ${token}
@@ -479,11 +480,28 @@ export async function oauthRoutes(app: FastifyInstance): Promise<void> {
               AND g.protocol = ${OAUTH_PROTOCOL}
           `;
           if (refreshRows[0]) {
+            const grantId = refreshRows[0]['grant_id'] as string;
             await sql`
               UPDATE refresh_tokens
               SET is_used = TRUE, used_at = COALESCE(used_at, NOW())
               WHERE COALESCE(family_id, id) = ${refreshRows[0]['family_id'] as string}
             `;
+            // RFC 7009 §2.1: revoking a refresh token also invalidates the
+            // access tokens issued on the same grant. Mirror the replay-detected
+            // refresh path: revoke the grant, its access tokens, and the Redis
+            // fast path — otherwise outstanding access tokens stay live.
+            await sql`
+              UPDATE grants SET status = 'revoked', revoked_at = NOW()
+              WHERE id = ${grantId} AND status = 'active'
+            `;
+            await sql`
+              UPDATE grant_tokens SET is_revoked = TRUE
+              WHERE grant_id = ${grantId} AND is_revoked = FALSE
+            `;
+            const grantTtl = Math.max(1, Math.floor(
+              (new Date(refreshRows[0]['grant_expires_at'] as string).getTime() - Date.now()) / 1000,
+            ));
+            await getRedis().set(`revoked:grant:${grantId}`, '1', 'EX', grantTtl);
           }
           return reply.status(200).send();
         }

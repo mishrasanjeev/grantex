@@ -831,8 +831,14 @@ orgs = res.<span class="fn">json</span>()[<span class="str">"data"</span>]
   searchInput.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') {
       const q = searchInput.value.trim();
-      if (q) {
-        window.location.href = '/dashboard/registry?q=' + encodeURIComponent(q);
+      if (!q) return;
+      // There is no /dashboard/registry portal route. A DID resolves against
+      // the public trust-registry lookup API; anything else goes to the
+      // trust-registry docs, which describe how organizations are listed.
+      if (/^did:/i.test(q)) {
+        window.location.href = 'https://api.grantex.dev/v1/trust-registry/' + encodeURIComponent(q);
+      } else {
+        window.location.href = 'https://docs.grantex.dev/features/trust-registry';
       }
     }
   });

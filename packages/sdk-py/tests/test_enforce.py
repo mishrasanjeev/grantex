@@ -743,6 +743,47 @@ class TestPermissiveMode:
 
 class TestGrantexEnforcer:
     @patch("grantex._client.verify_grant_token")
+    def test_reads_bearer_token_from_authorization_header(self, mock_verify: object) -> None:
+        # Regression: ``authorization`` was a bare ``str`` parameter, which
+        # FastAPI binds to the query string, so the documented header was
+        # never read and every request 401'd.
+        fastapi = pytest.importorskip("fastapi")
+        from fastapi.testclient import TestClient
+
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("tool:salesforce:write",)
+        )
+        client = Grantex(api_key="test")
+        client.load_manifest(
+            ToolManifest(connector="salesforce", tools={"create_lead": Permission.WRITE})
+        )
+        from grantex._fastapi import GrantexEnforcer
+
+        enforcer = GrantexEnforcer(client)
+        app = fastapi.FastAPI()
+
+        @app.post("/api/tools/{connector}/{tool}")
+        async def execute_tool(
+            connector: str,
+            tool: str,
+            auth: EnforceResult = fastapi.Depends(enforcer),
+        ) -> dict[str, object]:
+            return {"allowed": auth.allowed, "connector": connector, "tool": tool}
+
+        http = TestClient(app)
+        ok = http.post(
+            "/api/tools/salesforce/create_lead",
+            headers={"Authorization": "Bearer tok"},
+        )
+        assert ok.status_code == 200, ok.text
+        assert ok.json() == {"allowed": True, "connector": "salesforce", "tool": "create_lead"}
+        mock_verify.assert_called_once()  # type: ignore[attr-defined]
+        assert mock_verify.call_args[0][0] == "tok"  # type: ignore[attr-defined]
+
+        missing = http.post("/api/tools/salesforce/create_lead")
+        assert missing.status_code == 401
+
+    @patch("grantex._client.verify_grant_token")
     def test_returns_result_when_allowed(self, mock_verify: object) -> None:
         mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
             scopes=("tool:salesforce:write",)

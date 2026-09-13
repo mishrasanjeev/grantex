@@ -21,6 +21,6 @@ export class WebhooksClient {
   }
 
   delete(webhookId: string): Promise<void> {
-    return this.#http.delete(`/v1/webhooks/${webhookId}`);
+    return this.#http.delete(`/v1/webhooks/${encodeURIComponent(webhookId)}`);
   }
 }

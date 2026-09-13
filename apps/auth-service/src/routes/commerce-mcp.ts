@@ -209,7 +209,10 @@ function isString(v: unknown): v is string {
 
 function asInt(v: unknown): number | null {
   if (typeof v === 'number' && Number.isSafeInteger(v)) return v;
-  if (typeof v === 'string' && /^\d+$/.test(v)) return Number.parseInt(v, 10);
+  if (typeof v === 'string' && /^\d+$/.test(v)) {
+    const parsed = Number.parseInt(v, 10);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
   return null;
 }
 

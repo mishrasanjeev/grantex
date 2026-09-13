@@ -38,7 +38,7 @@ output "active_grant_count" {
   - `scopes` (List of String) - The scopes authorized in the grant.
   - `status` (String) - The current status of the grant.
   - `expires_at` (String) - The timestamp when the grant expires.
-  - `created_at` (String) - The timestamp when the grant was created.
+  - `issued_at` (String) - The timestamp when the grant was issued.
 
 ## Ownership
 

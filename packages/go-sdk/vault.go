@@ -101,12 +101,12 @@ func (s *VaultService) List(ctx context.Context, params *ListVaultCredentialsPar
 
 // Get retrieves credential metadata by ID (no raw token).
 func (s *VaultService) Get(ctx context.Context, credentialID string) (*VaultCredential, error) {
-	return unmarshal[VaultCredential](s.http.get(ctx, fmt.Sprintf("/v1/vault/credentials/%s", credentialID)))
+	return unmarshal[VaultCredential](s.http.get(ctx, fmt.Sprintf("/v1/vault/credentials/%s", url.PathEscape(credentialID))))
 }
 
 // Delete removes a credential from the vault.
 func (s *VaultService) Delete(ctx context.Context, credentialID string) error {
-	_, err := s.http.del(ctx, fmt.Sprintf("/v1/vault/credentials/%s", credentialID))
+	_, err := s.http.del(ctx, fmt.Sprintf("/v1/vault/credentials/%s", url.PathEscape(credentialID)))
 	return err
 }
 

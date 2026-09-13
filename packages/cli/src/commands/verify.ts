@@ -4,6 +4,39 @@ import * as jose from 'jose';
 import { readFileSync } from 'node:fs';
 import { isJsonMode } from '../format.js';
 import { readTokenInput } from '../token-input.js';
+import { defaultConfigPath, loadConfig } from '../config.js';
+
+const PRODUCTION_BASE_URL = 'https://api.grantex.dev';
+const PRODUCTION_JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
+const PRODUCTION_ISSUER = 'https://grantex.dev';
+
+/** Same derivation as @grantex/sdk verify.ts: the hosted JWKS maps to grantex.dev. */
+function deriveIssuerFromJwksUrl(jwksUrl: URL): string {
+  if (jwksUrl.href.replace(/\/$/, '') === PRODUCTION_JWKS_URI) return PRODUCTION_ISSUER;
+  const suffix = '/.well-known/jwks.json';
+  return jwksUrl.pathname.endsWith(suffix)
+    ? `${jwksUrl.origin}${jwksUrl.pathname.slice(0, -suffix.length)}`
+    : `${jwksUrl.origin}${jwksUrl.pathname.replace(/\/$/, '')}`;
+}
+
+/**
+ * Where the CLI trusts keys from. The token's own `iss` is never consulted:
+ * an unverified claim choosing its own JWKS lets a forged token bring its
+ * own key (and points the CLI at any URL the attacker names). Trust comes
+ * from `--jwks`, else the configured base URL, else production.
+ */
+async function resolveTrustedJwks(explicit?: string): Promise<{ jwksUrl: URL; issuer: string }> {
+  let jwksUrl: URL;
+  if (explicit) {
+    jwksUrl = new URL(explicit);
+  } else {
+    const fileConfig = await loadConfig(defaultConfigPath());
+    const baseUrl = process.env['GRANTEX_URL'] ?? fileConfig?.baseUrl ?? PRODUCTION_BASE_URL;
+    jwksUrl = new URL(`${baseUrl.replace(/\/$/, '')}/.well-known/jwks.json`);
+  }
+  jwksUrl.hash = '';
+  return { jwksUrl, issuer: deriveIssuerFromJwksUrl(jwksUrl) };
+}
 
 interface GrantTokenClaims {
   iss?: string;
@@ -206,6 +239,9 @@ function printPretty(result: VerifyResult, header?: jose.ProtectedHeaderParamete
     console.log('');
     console.log(chalk.red('  Warning: Signature verification failed. This token may be tampered with.'));
   }
+  if (result.error && result.status !== 'malformed') {
+    console.log(chalk.dim(`  Reason: ${result.error}`));
+  }
   console.log('');
 }
 
@@ -277,47 +313,38 @@ export function verifyCommand(): Command {
       const now = Math.floor(Date.now() / 1000);
       const isExpired = claims.exp !== undefined && claims.exp < now;
 
-      // Attempt signature verification
+      // Signature verification. Always performed: a token is never reported
+      // valid on the strength of a successful decode alone.
       let signatureValid = false;
+      let verifyError: string | undefined;
       let mode: 'offline' | 'online' = 'offline';
+      // For an expired token the signature is still checked (so "expired"
+      // is only reported for a token the issuer actually signed); jose's
+      // exp check is bypassed by pinning the clock.
+      const currentDate = isExpired ? new Date(0) : undefined;
       try {
         if (opts.jwksFile) {
           // Offline JWKS file
           const jwksData = JSON.parse(readFileSync(opts.jwksFile, 'utf8'));
           const keySet = jose.createLocalJWKSet(jwksData);
-          await jose.jwtVerify(token, keySet, { currentDate: isExpired ? new Date(0) : undefined });
+          await jose.jwtVerify(token, keySet, { algorithms: ['RS256'], currentDate });
           signatureValid = true;
         } else {
-          // Remote JWKS
-          const jwksUrl = opts.jwks
-            ?? (claims.iss ? `${claims.iss.replace(/\/$/, '')}/.well-known/jwks.json` : undefined);
-          if (jwksUrl) {
-            mode = 'online';
-            const keySet = jose.createRemoteJWKSet(new URL(jwksUrl));
-            await jose.jwtVerify(token, keySet, { currentDate: isExpired ? new Date(0) : undefined });
-            signatureValid = true;
-          }
-          // If no jwksUrl, we skip signature verification (offline decode only)
+          mode = 'online';
+          const { jwksUrl, issuer } = await resolveTrustedJwks(opts.jwks);
+          const keySet = jose.createRemoteJWKSet(jwksUrl);
+          await jose.jwtVerify(token, keySet, { algorithms: ['RS256'], issuer, currentDate });
+          signatureValid = true;
         }
       } catch (err) {
-        // Signature verification failed (but token was parseable)
-        if (err instanceof jose.errors.JWSSignatureVerificationFailed) {
-          signatureValid = false;
-        }
-        // Other errors (network, etc.) — treat as not verified
+        verifyError = err instanceof Error ? err.message : String(err);
       }
 
       let status: VerifyResult['status'];
-      if (!signatureValid && (opts.jwks || opts.jwksFile || claims.iss)) {
+      if (!signatureValid) {
         status = isExpired ? 'expired' : 'invalid_signature';
-      } else if (isExpired) {
-        status = 'expired';
       } else {
-        status = signatureValid ? 'valid' : 'valid'; // If no JWKS available, we decoded OK
-      }
-      // If signature was explicitly checked and failed, override
-      if (!signatureValid && (opts.jwks || opts.jwksFile)) {
-        status = 'invalid_signature';
+        status = isExpired ? 'expired' : 'valid';
       }
 
       // Revocation check
@@ -361,6 +388,7 @@ export function verifyCommand(): Command {
         revocation,
         elapsedMs: Math.round(performance.now() - startTime),
         mode,
+        ...(verifyError !== undefined ? { error: verifyError } : {}),
       };
 
       if (useJson) {

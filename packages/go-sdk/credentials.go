@@ -54,7 +54,7 @@ type listCredentialsResponse struct {
 
 // Get retrieves a Verifiable Credential by ID.
 func (s *CredentialsService) Get(ctx context.Context, id string) (*VerifiableCredentialRecord, error) {
-	return unmarshal[VerifiableCredentialRecord](s.http.get(ctx, fmt.Sprintf("/v1/credentials/%s", id)))
+	return unmarshal[VerifiableCredentialRecord](s.http.get(ctx, fmt.Sprintf("/v1/credentials/%s", url.PathEscape(id))))
 }
 
 // List retrieves Verifiable Credentials with optional filters.

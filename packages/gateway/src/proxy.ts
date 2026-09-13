@@ -41,6 +41,9 @@ const HOP_BY_HOP_REQUEST_HEADERS = new Set([
  * client is neither the declared length nor the declared encoding. Relaying
  * either one leaves the client trying to gunzip plain text.
  */
+/** Reserved for headers the gateway itself asserts about the verified grant. */
+const GRANTEX_HEADER_PREFIX = 'x-grantex-';
+
 const SUPPRESSED_RESPONSE_HEADERS = new Set([
   'content-encoding',
   'content-length',
@@ -77,29 +80,36 @@ export async function proxyRequest(
 ): Promise<void> {
   const targetUrl = `${options.upstream.replace(/\/$/, '')}${req.url}`;
 
-  // Build headers: strip Authorization, add upstream headers + Grantex context
-  const headers: Record<string, string> = {};
+  // Build headers: strip Authorization, add upstream headers + Grantex context.
+  // A real `Headers` instance normalises names, so a later `set` replaces an
+  // earlier value instead of leaving two differently-cased keys that fetch
+  // would merge into `user_attacker, user_1` upstream.
+  const headers = new Headers();
 
-  // Forward original headers, minus this hop's own
+  // Forward original headers, minus this hop's own and anything in the
+  // gateway's reserved namespace: every inbound `x-grantex-*` is
+  // client-controlled and must never reach the upstream.
   const rawHeaders = req.headers;
   for (const [key, value] of Object.entries(rawHeaders)) {
-    if (HOP_BY_HOP_REQUEST_HEADERS.has(key.toLowerCase())) continue;
+    const name = key.toLowerCase();
+    if (HOP_BY_HOP_REQUEST_HEADERS.has(name)) continue;
+    if (name.startsWith(GRANTEX_HEADER_PREFIX)) continue;
     if (value !== undefined) {
-      headers[key] = Array.isArray(value) ? value.join(', ') : value;
+      headers.set(name, Array.isArray(value) ? value.join(', ') : value);
     }
   }
 
   // Add configured upstream headers
   if (options.upstreamHeaders) {
     for (const [key, value] of Object.entries(options.upstreamHeaders)) {
-      headers[key] = value;
+      headers.set(key, value);
     }
   }
 
   // Add Grantex context headers last so a client cannot spoof them
-  headers['X-Grantex-Principal'] = grant.principalId;
-  headers['X-Grantex-Agent'] = grant.agentDid;
-  headers['X-Grantex-GrantId'] = grant.grantId;
+  headers.set('x-grantex-principal', grant.principalId);
+  headers.set('x-grantex-agent', grant.agentDid);
+  headers.set('x-grantex-grantid', grant.grantId);
 
   const controller = new AbortController();
   const timeout = options.timeout ?? 30_000;

@@ -1,6 +1,7 @@
 package grantex
 
 import (
+	"net/url"
 	"context"
 	"fmt"
 )
@@ -73,7 +74,7 @@ func (s *BudgetsService) Debit(ctx context.Context, params DebitBudgetParams) (*
 
 // Balance retrieves the current budget balance for a grant.
 func (s *BudgetsService) Balance(ctx context.Context, grantID string) (*BudgetAllocation, error) {
-	return unmarshal[BudgetAllocation](s.http.get(ctx, fmt.Sprintf("/v1/budget/balance/%s", grantID)))
+	return unmarshal[BudgetAllocation](s.http.get(ctx, fmt.Sprintf("/v1/budget/balance/%s", url.PathEscape(grantID))))
 }
 
 // Allocations lists all budget allocations.
@@ -87,7 +88,7 @@ func (s *BudgetsService) Allocations(ctx context.Context) ([]BudgetAllocation, e
 
 // Transactions lists budget transactions for a grant.
 func (s *BudgetsService) Transactions(ctx context.Context, grantID string) ([]BudgetTransaction, error) {
-	resp, err := unmarshal[listTransactionsResponse](s.http.get(ctx, fmt.Sprintf("/v1/budget/transactions/%s", grantID)))
+	resp, err := unmarshal[listTransactionsResponse](s.http.get(ctx, fmt.Sprintf("/v1/budget/transactions/%s", url.PathEscape(grantID))))
 	if err != nil {
 		return nil, err
 	}

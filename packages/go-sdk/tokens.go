@@ -21,8 +21,13 @@ type TokensService struct {
 }
 
 // Exchange trades an authorization code for a grant token.
+//
+// The code is single-use, so unlike Refresh (which carries an
+// Idempotency-Key) this request is never retried: a retry after a lost
+// response would present a code the server has already consumed. Callers
+// surface the error and re-authorize instead.
 func (s *TokensService) Exchange(ctx context.Context, params ExchangeTokenParams) (*ExchangeTokenResponse, error) {
-	return unmarshal[ExchangeTokenResponse](s.http.post(ctx, "/v1/token", params))
+	return unmarshal[ExchangeTokenResponse](s.http.postNoRetry(ctx, "/v1/token", params))
 }
 
 // Refresh exchanges a refresh token for a new grant token.

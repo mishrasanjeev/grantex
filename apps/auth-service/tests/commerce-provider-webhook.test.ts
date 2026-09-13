@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { buildTestApp, sqlMock } from './helpers.js';
 import { TEST_COMMERCE_TENANT_ID } from './commerce-helpers.js';
-import { stableJson } from '../src/lib/commerce/idempotency.js';
 
 let app: FastifyInstance;
 
@@ -74,8 +73,10 @@ function webhookPayload(overrides: Record<string, unknown> = {}): Record<string,
   };
 }
 
-function signedHeaders(payload: Record<string, unknown>, timestamp = Math.floor(Date.now() / 1000)): Record<string, string> {
-  const rawBody = stableJson(payload);
+// Sign the exact bytes that will be sent: app.inject serialises object
+// payloads with JSON.stringify, and string payloads are sent verbatim.
+function signedHeaders(payload: Record<string, unknown> | string, timestamp = Math.floor(Date.now() / 1000)): Record<string, string> {
+  const rawBody = typeof payload === 'string' ? payload : JSON.stringify(payload);
   const signature = createHmac('sha256', MOCK_WEBHOOK_SECRET)
     .update(`${timestamp}.${rawBody}`)
     .digest('hex');
@@ -127,6 +128,47 @@ describe('Commerce provider webhook route', () => {
       .toMatchObject({ data: { status: 'processed', payment_status: 'paid' }, audit_event_id: 'caud_PAYMENT_PAID' });
     expect(flattenedSqlCalls()).toContain('provider.webhook.received');
     expect(flattenedSqlCalls()).toContain('payment_intent.paid');
+  });
+
+  it('verifies the signature over the raw bytes as sent (non-canonical whitespace and key order)', async () => {
+    const payload = webhookPayload({ event_id: 'evt_RAW_BYTES', status: 'paid' });
+    // Reverse key order and add whitespace — a canonical (key-sorted,
+    // whitespace-free) re-rendering would produce a different HMAC input.
+    const rawBody = `{
+  ${Object.keys(payload).reverse()
+      .map((key) => `${JSON.stringify(key)} :  ${JSON.stringify(payload[key])}`)
+      .join(',\n  ')}
+}
+`;
+    primeWebhookTransition('paid');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webhooks/providers/mock',
+      headers: { ...signedHeaders(rawBody), 'content-type': 'application/json' },
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { status: string; payment_status: string } }>().data)
+      .toMatchObject({ status: 'processed', payment_status: 'paid' });
+  });
+
+  it('rejects a signature computed over a canonical re-serialisation of the raw bytes', async () => {
+    const payload = webhookPayload({ event_id: 'evt_CANONICAL_SIG', status: 'paid' });
+    const rawBody = `{ ${Object.keys(payload).reverse()
+      .map((key) => `${JSON.stringify(key)}: ${JSON.stringify(payload[key])}`)
+      .join(', ')} }`;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webhooks/providers/mock',
+      headers: { ...signedHeaders(payload), 'content-type': 'application/json' },
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('webhook_signature_invalid');
   });
 
   it('mock provider webhook failure transitions payment_pending to failed', async () => {
@@ -289,6 +331,103 @@ describe('Commerce provider webhook route', () => {
         details: { reason: 'plural_live_disabled', provider_key: 'plural' },
       });
     expect(sqlMock).not.toHaveBeenCalled();
+  });
+
+  describe('plural sandbox environment', () => {
+    const PLURAL_SECRET = Buffer.from('plural-webhook-secret', 'utf8');
+
+    function pluralHeaders(rawBody: string): Record<string, string> {
+      const webhookId = `wh_${Math.random().toString(16).slice(2)}`;
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const signature = createHmac('sha256', PLURAL_SECRET)
+        .update(Buffer.concat([Buffer.from(`${webhookId}.${timestamp}.`, 'utf8'), Buffer.from(rawBody, 'utf8')]))
+        .digest('base64');
+      return {
+        'content-type': 'application/json',
+        'webhook-id': webhookId,
+        'webhook-timestamp': timestamp,
+        'webhook-signature': `v1,${signature}`,
+      };
+    }
+
+    function stubPluralCredentials(): void {
+      vi.stubEnv('PLURAL_PINE_CLIENT_ID', 'plural-client-sandbox');
+      vi.stubEnv('PLURAL_PINE_CLIENT_SECRET', 'plural-secret');
+      vi.stubEnv('PLURAL_WEBHOOK_SECRET', PLURAL_SECRET.toString('base64'));
+    }
+
+    const sandboxIntent = (overrides: Record<string, unknown> = {}) => paymentIntentRow({
+      provider: 'plural',
+      provider_environment: 'sandbox',
+      provider_payment_id: PAYMENT_INTENT,
+      provider_raw_status: 'PENDING',
+      ...overrides,
+    });
+
+    afterAll(() => vi.unstubAllEnvs());
+
+    it('accepts a sandbox webhook when only PLURAL_SANDBOX_ENABLED is set (no live flags)', async () => {
+      vi.unstubAllEnvs();
+      vi.stubEnv('PLURAL_SANDBOX_ENABLED', 'true');
+      stubPluralCredentials();
+      const rawBody = JSON.stringify({
+        event_id: 'evt_PLURAL_SANDBOX',
+        event_type: 'payment.paid',
+        merchant_order_reference: PAYMENT_INTENT,
+        order_id: 'order_PLURAL_SANDBOX',
+        status: 'paid',
+      });
+      sqlMock.mockResolvedValueOnce([sandboxIntent()]);
+      sqlMock.mockResolvedValueOnce([]);
+      sqlMock.mockResolvedValueOnce([webhookEventRow({ id: 'cwh_PLURAL_SANDBOX' })]);
+      // (no replay-payload insert: that store is mock-provider only)
+      sqlMock.mockResolvedValueOnce([{ id: 'caud_PLURAL_RECEIVED', occurred_at: new Date().toISOString() }]);
+      sqlMock.mockResolvedValueOnce([paymentIntentRow({ provider: 'plural', provider_environment: 'sandbox', status: 'paid', provider_raw_status: 'PAID' })]);
+      sqlMock.mockResolvedValueOnce([]);
+      sqlMock.mockResolvedValueOnce([{ id: 'caud_PLURAL_PAID', occurred_at: new Date().toISOString() }]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/webhooks/providers/plural',
+        headers: pluralHeaders(rawBody),
+        payload: rawBody,
+      });
+
+      // Previously the receiver defaulted to 'live' and rejected every
+      // sandbox-only deployment with plural_live_disabled.
+      expect(res.statusCode).not.toBe(403);
+      expect(res.json()).toMatchObject({ data: { status: 'processed', payment_status: 'paid' } });
+      expect(res.statusCode).toBe(200);
+      expect(sqlCallCount(/FROM commerce_payment_intents/i)).toBeGreaterThan(0);
+    });
+
+    it('rejects a live intent on a sandbox-only deployment once the intent environment is known', async () => {
+      vi.unstubAllEnvs();
+      vi.stubEnv('PLURAL_SANDBOX_ENABLED', 'true');
+      stubPluralCredentials();
+      const rawBody = JSON.stringify({
+        event_id: 'evt_PLURAL_LIVE_ON_SANDBOX',
+        event_type: 'payment.paid',
+        merchant_order_reference: PAYMENT_INTENT,
+        status: 'paid',
+      });
+      // The receiver gate passes (sandbox is permitted); the exact
+      // environment check after the intent loads must still reject.
+      sqlMock.mockResolvedValueOnce([sandboxIntent({ provider_environment: 'live' })]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/webhooks/providers/plural',
+        headers: pluralHeaders(rawBody),
+        payload: rawBody,
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json<{ error: { code: string; details?: { reason?: string } } }>().error)
+        .toMatchObject({ code: 'plural_live_disabled', details: { reason: 'plural_live_disabled' } });
+      expect(sqlCallCount(/FROM commerce_payment_intents/i)).toBe(1);
+      expect(sqlCallCount(/UPDATE commerce_payment_intents/i)).toBe(0);
+    });
   });
 
   it('does not update a payment intent when merchant boundary does not match', async () => {

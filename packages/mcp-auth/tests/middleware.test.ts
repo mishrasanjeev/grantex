@@ -239,6 +239,24 @@ describe('Express middleware', () => {
   });
 });
 
+describe('scp claim shape', () => {
+  // @grantex/sdk rejects any non-array scp; the middlewares used to split a
+  // space-separated string, so a foreign token from the same issuer gained
+  // scopes it never carried as an array.
+  it('Express rejects a space-separated string scp and a missing scp', async () => {
+    const mw = requireMcpAuth({ issuer, scopes: ['read'] });
+    const stringScp = await signTestJwt({ sub: 'user_abc', scp: 'read write' });
+    const noScp = await signTestJwt({ sub: 'user_abc' });
+    const mixedScp = await signTestJwt({ sub: 'user_abc', scp: ['read', 42] });
+
+    for (const token of [stringScp, noScp, mixedScp]) {
+      const result = await invokeMiddleware(mw, { authorization: `Bearer ${token}` });
+      expect(result.statusCode).toBe(401);
+      expect(JSON.parse(result.body).error).toBe('unauthorized');
+    }
+  });
+});
+
 describe('Hono middleware', () => {
   function run(mw: ReturnType<typeof requireMcpAuthHono>, authorization?: string) {
     const vars = new Map<string, unknown>();
@@ -263,5 +281,15 @@ describe('Hono middleware', () => {
     expect((ok.vars.get('mcpGrant') as { sub: string }).sub).toBe('user_abc');
     expect((await run(mw, `Bearer ${wrongIss}`)).status).toBe(401);
     expect((await run(mw, `Bearer ${wrongAud}`)).status).toBe(401);
+  });
+
+  it('rejects a space-separated string scp and a missing scp', async () => {
+    const mw = requireMcpAuthHono({ issuer });
+    const stringScp = await signTestJwt({ sub: 'user_abc', scp: 'read write' });
+    const noScp = await signTestJwt({ sub: 'user_abc' });
+
+    expect((await run(mw, `Bearer ${stringScp}`)).status).toBe(401);
+    expect((await run(mw, `Bearer ${noScp}`)).status).toBe(401);
+    expect((await run(mw, `Bearer ${await signTestJwt({ sub: 'user_abc', scp: ['read'] })}`)).status).toBe(200);
   });
 });

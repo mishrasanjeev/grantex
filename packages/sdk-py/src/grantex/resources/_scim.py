@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from typing import Any
 
 from .._http import HttpClient
@@ -31,7 +33,7 @@ class ScimClient:
 
     def revoke_token(self, token_id: str) -> None:
         """Revoke a SCIM token by ID."""
-        self._http.delete(f"/v1/scim/tokens/{token_id}")
+        self._http.delete(f"/v1/scim/tokens/{quote(token_id, safe="")}")
 
     # ── SCIM 2.0 Users ────────────────────────────────────────────────────
 
@@ -55,7 +57,7 @@ class ScimClient:
 
     def get_user(self, user_id: str) -> ScimUser:
         """Get a single provisioned user by ID."""
-        data = self._http.get(f"/scim/v2/Users/{user_id}")
+        data = self._http.get(f"/scim/v2/Users/{quote(user_id, safe="")}")
         return ScimUser.from_dict(data)
 
     def create_user(self, params: CreateScimUserParams) -> ScimUser:
@@ -65,7 +67,7 @@ class ScimClient:
 
     def replace_user(self, user_id: str, params: CreateScimUserParams) -> ScimUser:
         """Full replace of a user (PUT)."""
-        data = self._http.put(f"/scim/v2/Users/{user_id}", params.to_dict())
+        data = self._http.put(f"/scim/v2/Users/{quote(user_id, safe="")}", params.to_dict())
         return ScimUser.from_dict(data)
 
     def update_user(
@@ -74,12 +76,12 @@ class ScimClient:
         operations: list[dict[str, Any]],
     ) -> ScimUser:
         """Partial update via SCIM Operations (PATCH)."""
-        data = self._http.patch(f"/scim/v2/Users/{user_id}", {"Operations": operations})
+        data = self._http.patch(f"/scim/v2/Users/{quote(user_id, safe="")}", {"Operations": operations})
         return ScimUser.from_dict(data)
 
     def delete_user(self, user_id: str) -> None:
         """Deprovision a user (DELETE)."""
-        self._http.delete(f"/scim/v2/Users/{user_id}")
+        self._http.delete(f"/scim/v2/Users/{quote(user_id, safe="")}")
 
     # Keep reference to avoid unused-import
     _ScimToken = ScimToken

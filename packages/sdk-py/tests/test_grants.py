@@ -31,6 +31,23 @@ def _make_fake_jwt(payload: dict) -> str:
 
 
 @respx.mock
+def test_ids_are_percent_encoded_in_paths(client: Grantex) -> None:
+    # A caller-supplied id must stay inside its own path segment.
+    route = respx.get("https://api.grantex.dev/v1/grants/..%2Fadmin%3Fx%3D1").mock(
+        return_value=httpx.Response(200, json=MOCK_GRANT)
+    )
+    client.grants.get("../admin?x=1")
+    assert route.called
+    assert route.calls.last.request.url.raw_path == b"/v1/grants/..%2Fadmin%3Fx%3D1"
+
+    revoke = respx.delete("https://api.grantex.dev/v1/grants/grant%2F..%2F..%2Fv1%2Fagents").mock(
+        return_value=httpx.Response(204)
+    )
+    client.grants.revoke("grant/../../v1/agents")
+    assert revoke.called
+
+
+@respx.mock
 def test_get(client: Grantex) -> None:
     respx.get("https://api.grantex.dev/v1/grants/grant_01HXYZ").mock(
         return_value=httpx.Response(200, json=MOCK_GRANT)

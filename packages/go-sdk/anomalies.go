@@ -1,6 +1,9 @@
 package grantex
 
-import "context"
+import (
+	"context"
+	"net/url"
+)
 
 // AnomaliesService handles anomaly detection and management.
 type AnomaliesService struct {
@@ -29,5 +32,5 @@ func (s *AnomaliesService) List(ctx context.Context, params *ListAnomaliesParams
 
 // Acknowledge marks an anomaly as acknowledged.
 func (s *AnomaliesService) Acknowledge(ctx context.Context, anomalyID string) (*Anomaly, error) {
-	return unmarshal[Anomaly](s.http.post(ctx, "/v1/anomalies/"+anomalyID+"/acknowledge", nil))
+	return unmarshal[Anomaly](s.http.post(ctx, "/v1/anomalies/"+url.PathEscape(anomalyID)+"/acknowledge", nil))
 }

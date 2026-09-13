@@ -58,6 +58,14 @@ export interface McpAuthConfig {
   codeStore?: CodeStore;
   /** Custom store for authorizations awaiting Grantex consent (defaults to in-memory) */
   pendingStore?: PendingAuthorizationStore;
+  /**
+   * Store binding each issued refresh token to the client it was issued to
+   * (defaults to in-memory). `/token` refuses a `refresh_token` grant whose
+   * token is unknown here or bound to another client, so a deployment that
+   * restarts or runs several instances should supply a shared store —
+   * otherwise refresh tokens issued before the restart are rejected.
+   */
+  refreshTokenStore?: RefreshTokenStore;
   /** Code expiration in seconds (default: 600) */
   codeExpirationSeconds?: number;
   /** Consent UI customization */
@@ -148,4 +156,17 @@ export interface PendingAuthorizationStore {
   get(id: string): Promise<PendingAuthorization | undefined>;
   set(id: string, data: PendingAuthorization): Promise<void>;
   delete(id: string): Promise<boolean>;
+}
+
+/** Which client a refresh token was issued to (OAuth 2.1 §4.3.1 / RFC 6749 §6). */
+export interface RefreshTokenBinding {
+  refreshToken: string;
+  clientId: string;
+  expiresAt: number;
+}
+
+export interface RefreshTokenStore {
+  get(refreshToken: string): Promise<RefreshTokenBinding | undefined>;
+  set(refreshToken: string, data: RefreshTokenBinding): Promise<void>;
+  delete(refreshToken: string): Promise<boolean>;
 }

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from typing import Any, List
 from urllib.parse import urlencode
 
@@ -14,7 +16,7 @@ class GrantsClient:
         self._http = http
 
     def get(self, grant_id: str) -> Grant:
-        data = self._http.get(f"/v1/grants/{grant_id}")
+        data = self._http.get(f"/v1/grants/{quote(grant_id, safe="")}")
         return Grant.from_dict(data)
 
     def list(self, params: ListGrantsParams | None = None) -> ListGrantsResponse:
@@ -24,7 +26,7 @@ class GrantsClient:
         return ListGrantsResponse.from_dict(data)
 
     def revoke(self, grant_id: str) -> None:
-        self._http.delete(f"/v1/grants/{grant_id}")
+        self._http.delete(f"/v1/grants/{quote(grant_id, safe="")}")
 
     def delegate(
         self,

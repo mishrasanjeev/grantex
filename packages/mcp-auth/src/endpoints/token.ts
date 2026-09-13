@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { McpAuthConfig, ClientStore, CodeStore } from '../types.js';
+import type { McpAuthConfig, ClientStore, CodeStore, RefreshTokenStore } from '../types.js';
 import { verifyCodeChallenge } from '../lib/pkce.js';
 import { isConfidentialClient, parseBasicAuth, secretMatches } from '../lib/verify.js';
 import type { ClientRegistration } from '../types.js';
@@ -23,6 +23,13 @@ function clientAuthenticated(
   return secretMatches(client.clientSecret, body.client_secret);
 }
 
+/**
+ * How long a refresh-token→client binding is remembered. Grantex does not
+ * report a refresh token's own lifetime, so this only bounds store growth;
+ * an expired binding makes the token unusable here, never more permissive.
+ */
+const REFRESH_TOKEN_BINDING_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
 interface TokenBody {
   grant_type: string;
   code?: string;
@@ -38,7 +45,21 @@ export function registerTokenEndpoint(
   config: McpAuthConfig,
   clientStore: ClientStore,
   codeStore: CodeStore,
+  refreshTokenStore: RefreshTokenStore,
 ): void {
+  // A refresh token is bound to the client it was issued to (RFC 6749 §6,
+  // OAuth 2.1 §4.3.1). Recording the binding on every issue path, and
+  // re-recording it after rotation, is what lets the refresh_token grant
+  // refuse a token presented by a different client_id.
+  async function bindRefreshToken(refreshToken: string | undefined, clientId: string): Promise<void> {
+    if (refreshToken === undefined) return;
+    await refreshTokenStore.set(refreshToken, {
+      refreshToken,
+      clientId,
+      expiresAt: Date.now() + REFRESH_TOKEN_BINDING_TTL_MS,
+    });
+  }
+
   app.post<{ Body: TokenBody }>('/token', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = request.body ?? ({} as TokenBody);
     const { grant_type, code, redirect_uri, code_verifier, refresh_token } = body;
@@ -119,6 +140,8 @@ export function registerTokenEndpoint(
         });
       }
 
+      await bindRefreshToken(tokenResponse.refreshToken, client_id);
+
       return reply.send({
         access_token: tokenResponse.grantToken,
         token_type: 'bearer',
@@ -162,6 +185,17 @@ export function registerTokenEndpoint(
         });
       }
 
+      // Checked before touching Grantex so a token presented by the wrong
+      // client is neither rotated nor consumed upstream. An unknown token is
+      // refused too: without a binding there is nothing to verify against.
+      const binding = await refreshTokenStore.get(refresh_token);
+      if (!binding || binding.clientId !== client_id) {
+        return reply.status(400).send({
+          error: 'invalid_grant',
+          error_description: 'Refresh token was not issued to this client',
+        });
+      }
+
       let tokenResponse;
       try {
         tokenResponse = await config.grantex.tokens.refresh({
@@ -174,6 +208,12 @@ export function registerTokenEndpoint(
           error_description: `Refresh failed: ${err instanceof Error ? err.message : String(err)}`,
         });
       }
+
+      // Rotation: the old token is spent, the new one inherits the binding.
+      if (tokenResponse.refreshToken !== refresh_token) {
+        await refreshTokenStore.delete(refresh_token);
+      }
+      await bindRefreshToken(tokenResponse.refreshToken, client_id);
 
       return reply.send({
         access_token: tokenResponse.grantToken,

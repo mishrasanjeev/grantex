@@ -72,6 +72,27 @@ func TestTokensExchangeWithPKCE(t *testing.T) {
 	}
 }
 
+func TestTokensExchangeNeverRetries(t *testing.T) {
+	// The authorization code is single-use: a retried exchange after a lost
+	// response replays a code the server has already consumed.
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"message": "response lost"})
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL), WithMaxRetries(3))
+	_, err := client.Tokens.Exchange(context.Background(), ExchangeTokenParams{Code: "code-1", AgentID: "agent-1"})
+	if err == nil {
+		t.Fatal("expected the 503 to surface as an error")
+	}
+	if calls != 1 {
+		t.Fatalf("exchange was sent %d times, want exactly 1", calls)
+	}
+}
+
 func TestTokensRefresh(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/token/refresh" || r.Method != http.MethodPost {

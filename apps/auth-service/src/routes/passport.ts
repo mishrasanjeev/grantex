@@ -183,15 +183,17 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      // Validate budget if applicable
-      const budgetRows = await sql<{ remaining_budget: string }[]>`
+      // Validate budget whenever an allocation exists — including one that
+      // is fully spent (remaining_budget = 0). Filtering on `> 0` here made an
+      // exhausted budget look like "no budget", letting any amount be minted.
+      const budgetRows = await sql<{ remaining_budget: string | number }[]>`
         SELECT remaining_budget FROM budget_allocations
-        WHERE grant_id = ${grantId} AND remaining_budget > 0
+        WHERE grant_id = ${grantId}
         LIMIT 1
       `;
       if (budgetRows[0]) {
-        const remaining = parseFloat(budgetRows[0].remaining_budget);
-        if (maxTransactionAmount.amount > remaining) {
+        const remaining = Number(budgetRows[0].remaining_budget);
+        if (!Number.isFinite(remaining) || maxTransactionAmount.amount > remaining) {
           return reply.status(400).send({
             message: `maxTransactionAmount (${maxTransactionAmount.amount}) exceeds remaining budget (${remaining})`,
             code: 'AMOUNT_EXCEEDS_BUDGET',

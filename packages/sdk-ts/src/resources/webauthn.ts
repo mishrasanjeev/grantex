@@ -28,6 +28,6 @@ export class WebAuthnClient {
   }
 
   deleteCredential(credentialId: string): Promise<void> {
-    return this.#http.delete<void>(`/v1/webauthn/credentials/${credentialId}`);
+    return this.#http.delete<void>(`/v1/webauthn/credentials/${encodeURIComponent(credentialId)}`);
   }
 }

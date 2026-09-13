@@ -4,6 +4,8 @@ import type {
   AuthorizationCode,
   PendingAuthorization,
   PendingAuthorizationStore,
+  RefreshTokenBinding,
+  RefreshTokenStore,
 } from '../types.js';
 
 class InMemoryExpiringStore<T extends { expiresAt: number }> {
@@ -35,6 +37,10 @@ export class InMemoryCodeStore
 export class InMemoryPendingAuthorizationStore
   extends InMemoryExpiringStore<PendingAuthorization>
   implements PendingAuthorizationStore {}
+
+export class InMemoryRefreshTokenStore
+  extends InMemoryExpiringStore<RefreshTokenBinding>
+  implements RefreshTokenStore {}
 
 export function generateCode(): string {
   return randomBytes(32).toString('base64url');

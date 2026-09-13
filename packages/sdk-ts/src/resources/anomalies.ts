@@ -25,6 +25,6 @@ export class AnomaliesClient {
 
   /** Acknowledge an anomaly by ID. */
   acknowledge(anomalyId: string): Promise<Anomaly> {
-    return this.#http.patch<Anomaly>(`/v1/anomalies/${anomalyId}/acknowledge`, {});
+    return this.#http.patch<Anomaly>(`/v1/anomalies/${encodeURIComponent(anomalyId)}/acknowledge`, {});
   }
 }

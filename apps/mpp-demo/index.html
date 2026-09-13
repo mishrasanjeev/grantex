@@ -256,7 +256,9 @@
 
     function escapeHtml(s) {
       const d = document.createElement('div');
-      d.textContent = s;
+      // Coerce so numbers/undefined from pasted credentials render as text
+      // rather than "undefined", and never reach innerHTML unescaped.
+      d.textContent = s === undefined || s === null ? '' : String(s);
       return d.innerHTML;
     }
 
@@ -458,7 +460,7 @@
         if (validUntil <= new Date()) {
           resultDiv.innerHTML = `<div class="verify-result invalid">
             <span class="badge badge-red">PASSPORT_EXPIRED</span>
-            <p style="margin-top:0.5rem">Passport expired at ${credential.validUntil}</p>
+            <p style="margin-top:0.5rem">Passport expired at ${escapeHtml(credential.validUntil)}</p>
           </div>`;
           return;
         }
@@ -466,7 +468,7 @@
         if (credential.issuer !== 'did:web:grantex.dev') {
           resultDiv.innerHTML = `<div class="verify-result invalid">
             <span class="badge badge-red">UNTRUSTED_ISSUER</span>
-            <p style="margin-top:0.5rem">Issuer ${credential.issuer} is not trusted</p>
+            <p style="margin-top:0.5rem">Issuer ${escapeHtml(credential.issuer)} is not trusted</p>
           </div>`;
           return;
         }
@@ -474,25 +476,25 @@
         const sub = credential.credentialSubject;
         resultDiv.innerHTML = `<div class="verify-result valid">
           <span class="badge badge-green">VALID</span>
-          <p style="margin-top:0.75rem"><strong>Passport ID:</strong> ${credential.id}</p>
-          <p><strong>Agent DID:</strong> ${sub.id}</p>
-          <p><strong>Human Principal:</strong> ${sub.humanPrincipal}</p>
-          <p><strong>Organization:</strong> ${sub.organizationDID}</p>
-          <p><strong>Grant ID:</strong> ${sub.grantId}</p>
-          <p><strong>Categories:</strong> ${sub.allowedMPPCategories?.join(', ')}</p>
-          <p><strong>Max Amount:</strong> ${sub.maxTransactionAmount?.amount} ${sub.maxTransactionAmount?.currency}</p>
-          <p><strong>Payment Rails:</strong> ${sub.paymentRails?.join(', ')}</p>
-          <p><strong>Delegation Depth:</strong> ${sub.delegationDepth}</p>
-          <p><strong>Valid From:</strong> ${credential.validFrom}</p>
-          <p><strong>Valid Until:</strong> ${credential.validUntil}</p>
-          <p><strong>Issuer:</strong> ${credential.issuer}</p>
-          <p><strong>Proof Type:</strong> ${credential.proof?.type}</p>
-          <p><strong>Verification Method:</strong> ${credential.proof?.verificationMethod}</p>
+          <p style="margin-top:0.75rem"><strong>Passport ID:</strong> ${escapeHtml(credential.id)}</p>
+          <p><strong>Agent DID:</strong> ${escapeHtml(sub.id)}</p>
+          <p><strong>Human Principal:</strong> ${escapeHtml(sub.humanPrincipal)}</p>
+          <p><strong>Organization:</strong> ${escapeHtml(sub.organizationDID)}</p>
+          <p><strong>Grant ID:</strong> ${escapeHtml(sub.grantId)}</p>
+          <p><strong>Categories:</strong> ${escapeHtml(sub.allowedMPPCategories?.join(', '))}</p>
+          <p><strong>Max Amount:</strong> ${escapeHtml(sub.maxTransactionAmount?.amount)} ${escapeHtml(sub.maxTransactionAmount?.currency)}</p>
+          <p><strong>Payment Rails:</strong> ${escapeHtml(sub.paymentRails?.join(', '))}</p>
+          <p><strong>Delegation Depth:</strong> ${escapeHtml(sub.delegationDepth)}</p>
+          <p><strong>Valid From:</strong> ${escapeHtml(credential.validFrom)}</p>
+          <p><strong>Valid Until:</strong> ${escapeHtml(credential.validUntil)}</p>
+          <p><strong>Issuer:</strong> ${escapeHtml(credential.issuer)}</p>
+          <p><strong>Proof Type:</strong> ${escapeHtml(credential.proof?.type)}</p>
+          <p><strong>Verification Method:</strong> ${escapeHtml(credential.proof?.verificationMethod)}</p>
         </div>`;
       } catch (err) {
         resultDiv.innerHTML = `<div class="verify-result invalid">
           <span class="badge badge-red">MALFORMED_CREDENTIAL</span>
-          <p style="margin-top:0.5rem">${err.message}</p>
+          <p style="margin-top:0.5rem">${escapeHtml(err.message)}</p>
         </div>`;
       }
     }
@@ -516,15 +518,15 @@
         const levelBadge = data.trustLevel === 'soc2' ? 'badge-green' :
           data.trustLevel === 'verified' ? 'badge-green' : 'badge-yellow';
         resultDiv.innerHTML = `<div class="verify-result valid" style="margin-top:1rem">
-          <span class="badge ${levelBadge}">${data.trustLevel.toUpperCase()}</span>
-          <p style="margin-top:0.75rem"><strong>Organization:</strong> ${data.organizationDID}</p>
-          <p><strong>Domains:</strong> ${data.domains?.join(', ')}</p>
-          <p><strong>Verification:</strong> ${data.verificationMethod}</p>
-          <p><strong>Verified At:</strong> ${data.verifiedAt}</p>
+          <span class="badge ${levelBadge}">${escapeHtml(String(data.trustLevel ?? '').toUpperCase())}</span>
+          <p style="margin-top:0.75rem"><strong>Organization:</strong> ${escapeHtml(data.organizationDID)}</p>
+          <p><strong>Domains:</strong> ${escapeHtml(data.domains?.join(', '))}</p>
+          <p><strong>Verification:</strong> ${escapeHtml(data.verificationMethod)}</p>
+          <p><strong>Verified At:</strong> ${escapeHtml(data.verifiedAt)}</p>
         </div>`;
       } catch (err) {
         resultDiv.innerHTML = `<div class="verify-result invalid" style="margin-top:1rem">
-          <p>Failed to query trust registry: ${err.message}</p>
+          <p>Failed to query trust registry: ${escapeHtml(err.message)}</p>
         </div>`;
       }
     }

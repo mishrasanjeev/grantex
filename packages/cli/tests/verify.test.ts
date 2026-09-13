@@ -1,20 +1,58 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { createServer } from 'node:http';
+import type { Server } from 'node:http';
 import * as jose from 'jose';
 import { verifyCommand } from '../src/commands/verify.js';
 import { setJsonMode } from '../src/format.js';
 
 type TestKeyPair = Awaited<ReturnType<typeof jose.generateKeyPair>>;
 
-// Helper: create a self-signed JWT for testing
+// The CLI only trusts keys from the configured Grantex base URL (or
+// production), never from the token's own `iss`. Tests therefore stand up a
+// JWKS server, point GRANTEX_URL at it, and sign with its key.
+let issuerKeys: TestKeyPair;
+let jwksServer: Server;
+let issuer: string;
+let jwksRequests = 0;
+
+beforeAll(async () => {
+  issuerKeys = await jose.generateKeyPair('RS256');
+  const jwk = await jose.exportJWK(issuerKeys.publicKey);
+  jwk.kid = 'test-key-1';
+  jwk.alg = 'RS256';
+  jwk.use = 'sig';
+  jwksServer = createServer((req, res) => {
+    jwksRequests += 1;
+    if (req.url === '/.well-known/jwks.json') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ keys: [jwk] }));
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+  await new Promise<void>((resolve) => jwksServer.listen(0, '127.0.0.1', resolve));
+  const addr = jwksServer.address();
+  issuer = `http://127.0.0.1:${typeof addr === 'object' && addr ? addr.port : 0}`;
+});
+
+afterAll(async () => {
+  await new Promise<void>((resolve, reject) => jwksServer.close((err) => (err ? reject(err) : resolve())));
+});
+
+// Helper: create a JWT signed by the trusted issuer (or by a foreign key).
 async function createTestJwt(
   claims: Record<string, unknown> = {},
-  opts: { expired?: boolean; alg?: string } = {},
+  opts: { expired?: boolean; alg?: string; foreignKey?: boolean } = {},
 ): Promise<{ token: string; publicKey: TestKeyPair['publicKey']; privateKey: TestKeyPair['privateKey'] }> {
   const alg = opts.alg ?? 'RS256';
-  const { publicKey, privateKey } = await jose.generateKeyPair(alg);
+  const { publicKey, privateKey } = opts.foreignKey || alg !== 'RS256'
+    ? await jose.generateKeyPair(alg)
+    : issuerKeys;
   const now = Math.floor(Date.now() / 1000);
 
   const builder = new jose.SignJWT({
+    iss: issuer,
     sub: 'user_alice',
     agt: 'did:grantex:ag_01HXYZ',
     dev: 'dev_01',
@@ -37,16 +75,118 @@ async function createTestJwt(
   return { token, publicKey, privateKey };
 }
 
+function expectExit1() {
+  return vi.spyOn(process, 'exit').mockImplementation(() => {
+    throw new Error('process.exit');
+  });
+}
+
+function firstJsonOutput(): Record<string, unknown> {
+  return JSON.parse((console.log as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]);
+}
+
 describe('verifyCommand()', () => {
+  const savedUrl = process.env['GRANTEX_URL'];
+
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     setJsonMode(false);
+    process.env['GRANTEX_URL'] = issuer;
+    jwksRequests = 0;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     setJsonMode(false);
+    if (savedUrl === undefined) delete process.env['GRANTEX_URL'];
+    else process.env['GRANTEX_URL'] = savedUrl;
+  });
+
+  describe('trust anchoring', () => {
+    it('reports a token signed by a foreign key as invalid_signature, exit 1', async () => {
+      const { token } = await createTestJwt({}, { foreignKey: true });
+      const exitSpy = expectExit1();
+      setJsonMode(true);
+
+      const cmd = verifyCommand();
+      cmd.exitOverride();
+      await expect(cmd.parseAsync(['node', 'test', token, '--json'])).rejects.toThrow('process.exit');
+
+      expect(firstJsonOutput().status).toBe('invalid_signature');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('never fetches a JWKS from the token iss claim', async () => {
+      // A forged token naming an attacker-controlled issuer, signed by the
+      // attacker's key (which that issuer would happily publish).
+      const attacker = 'http://127.0.0.1:1'; // nothing listens here
+      const { token } = await createTestJwt({ iss: attacker }, { foreignKey: true });
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      expectExit1();
+      setJsonMode(true);
+
+      const cmd = verifyCommand();
+      cmd.exitOverride();
+      await expect(cmd.parseAsync(['node', 'test', token, '--json'])).rejects.toThrow('process.exit');
+
+      expect(firstJsonOutput().status).toBe('invalid_signature');
+      for (const call of fetchSpy.mock.calls) {
+        expect(String(call[0])).not.toContain(attacker);
+      }
+      expect(jwksRequests).toBe(1);
+    });
+
+    it('rejects a token from the trusted key whose iss does not match the trusted issuer', async () => {
+      const { token } = await createTestJwt({ iss: 'https://evil.example.com' });
+      expectExit1();
+      setJsonMode(true);
+
+      const cmd = verifyCommand();
+      cmd.exitOverride();
+      await expect(cmd.parseAsync(['node', 'test', token, '--json'])).rejects.toThrow('process.exit');
+
+      const parsed = firstJsonOutput();
+      expect(parsed.status).toBe('invalid_signature');
+      expect(String(parsed.error)).toMatch(/iss/);
+    });
+
+    it('does not report valid when no JWKS is reachable', async () => {
+      process.env['GRANTEX_URL'] = 'http://127.0.0.1:1';
+      const { token } = await createTestJwt();
+      expectExit1();
+      setJsonMode(true);
+
+      const cmd = verifyCommand();
+      cmd.exitOverride();
+      await expect(cmd.parseAsync(['node', 'test', token, '--json'])).rejects.toThrow('process.exit');
+
+      expect(firstJsonOutput().status).toBe('invalid_signature');
+    });
+
+    it('--jwks-file verifies offline against the given key set', async () => {
+      const { token } = await createTestJwt();
+      const fs = await import('node:fs');
+      const os = await import('node:os');
+      const path = await import('node:path');
+      const jwk = await jose.exportJWK(issuerKeys.publicKey);
+      jwk.kid = 'test-key-1';
+      const tmpFile = path.join(os.tmpdir(), `grantex-jwks-${Date.now()}.json`);
+      fs.writeFileSync(tmpFile, JSON.stringify({ keys: [jwk] }));
+
+      try {
+        setJsonMode(true);
+        const cmd = verifyCommand();
+        cmd.exitOverride();
+        await cmd.parseAsync(['node', 'test', token, '--jwks-file', tmpFile, '--json']);
+        const parsed = firstJsonOutput();
+        expect(parsed.status).toBe('valid');
+        expect(parsed.mode).toBe('offline');
+        expect(jwksRequests).toBe(0);
+      } finally {
+        fs.unlinkSync(tmpFile);
+      }
+    });
   });
 
   it('registers the "verify" command name', () => {

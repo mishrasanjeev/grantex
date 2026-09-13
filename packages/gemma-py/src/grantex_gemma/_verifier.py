@@ -96,13 +96,18 @@ class OfflineVerifier:
                 "No RSA keys available in JWKS snapshot"
             )
 
+        # The token must name its key and that key must be in the snapshot.
+        # Falling back to "some key" on a miss turned an unknown or stale kid
+        # into an ambiguous trust decision; the TypeScript verifier
+        # (gemma/src/verifier/offline-verifier.ts) rejects both cases.
         kid = header.get("kid")
+        if not isinstance(kid, str) or not kid:
+            raise OfflineVerificationError('JWT header missing "kid" claim')
         signing_key = self._keys.get(kid)
-        if signing_key is None and kid is not None:
-            # Fallback to first available key
-            signing_key = next(iter(self._keys.values()))
         if signing_key is None:
-            signing_key = next(iter(self._keys.values()))
+            raise OfflineVerificationError(
+                f'No key found in JWKS snapshot for kid="{kid}"'
+            )
 
         # Decode and verify
         try:
@@ -133,7 +138,17 @@ class OfflineVerifier:
                     f"Token missing required claim: {claim}"
                 )
 
-        scopes: list[str] = payload["scp"]
+        # `scp` must be a list of strings. A string would make the scope
+        # check below a substring match (`"read" in "read:all"`), granting
+        # scopes the token never carried.
+        raw_scopes = payload["scp"]
+        if not isinstance(raw_scopes, list) or not all(
+            isinstance(scope, str) for scope in raw_scopes
+        ):
+            raise OfflineVerificationError(
+                "Token claim 'scp' must be a list of strings"
+            )
+        scopes: list[str] = raw_scopes
 
         # Check required scopes
         if self._require_scopes:

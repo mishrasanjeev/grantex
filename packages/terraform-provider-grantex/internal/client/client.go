@@ -3,9 +3,12 @@ package client
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 )
 
@@ -49,9 +52,14 @@ type CreateAgentRequest struct {
 }
 
 // UpdateAgentRequest is the request body for updating an agent.
+//
+// PATCH /v1/agents/:id keeps the current value for every key that is absent,
+// so a field that should be cleared must be sent explicitly. Description is a
+// pointer for that reason: nil omits the key (keep), a pointer to "" clears it.
+// The API rejects a JSON null for description (400), hence "" rather than null.
 type UpdateAgentRequest struct {
 	Name        string   `json:"name,omitempty"`
-	Description string   `json:"description,omitempty"`
+	Description *string  `json:"description,omitempty"`
 	Scopes      []string `json:"scopes,omitempty"`
 }
 
@@ -68,7 +76,7 @@ func (c *Client) CreateAgent(req CreateAgentRequest) (*Agent, error) {
 // GetAgent retrieves an agent by ID.
 func (c *Client) GetAgent(agentID string) (*Agent, error) {
 	var agent Agent
-	err := c.doRequest("GET", fmt.Sprintf("/v1/agents/%s", agentID), nil, &agent)
+	err := c.doRequest("GET", fmt.Sprintf("/v1/agents/%s", url.PathEscape(agentID)), nil, &agent)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +86,7 @@ func (c *Client) GetAgent(agentID string) (*Agent, error) {
 // UpdateAgent updates an existing agent.
 func (c *Client) UpdateAgent(agentID string, req UpdateAgentRequest) (*Agent, error) {
 	var agent Agent
-	err := c.doRequest("PATCH", fmt.Sprintf("/v1/agents/%s", agentID), req, &agent)
+	err := c.doRequest("PATCH", fmt.Sprintf("/v1/agents/%s", url.PathEscape(agentID)), req, &agent)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +95,7 @@ func (c *Client) UpdateAgent(agentID string, req UpdateAgentRequest) (*Agent, er
 
 // DeleteAgent deletes an agent by ID.
 func (c *Client) DeleteAgent(agentID string) error {
-	return c.doRequest("DELETE", fmt.Sprintf("/v1/agents/%s", agentID), nil, nil)
+	return c.doRequest("DELETE", fmt.Sprintf("/v1/agents/%s", url.PathEscape(agentID)), nil, nil)
 }
 
 // ---------- Policy ----------
@@ -97,7 +105,7 @@ type Policy struct {
 	ID             string   `json:"id"`
 	Name           string   `json:"name"`
 	Effect         string   `json:"effect"`
-	Priority       int64    `json:"priority,omitempty"`
+	Priority       int64    `json:"priority"`
 	AgentID        string   `json:"agentId,omitempty"`
 	PrincipalID    string   `json:"principalId,omitempty"`
 	Scopes         []string `json:"scopes,omitempty"`
@@ -120,15 +128,21 @@ type CreatePolicyRequest struct {
 }
 
 // UpdatePolicyRequest is the request body for updating a policy.
+//
+// PATCH /v1/policies/:id treats an absent key as "keep the current value" and
+// an explicit null as "clear the value". No field uses omitempty so that a
+// zero priority, a removed agent/principal filter, a removed scope list or a
+// removed time window is actually sent (as 0 or null) instead of being
+// dropped from the request and silently kept server-side.
 type UpdatePolicyRequest struct {
-	Name           string   `json:"name,omitempty"`
-	Effect         string   `json:"effect,omitempty"`
-	Priority       int64    `json:"priority,omitempty"`
-	AgentID        string   `json:"agentId,omitempty"`
-	PrincipalID    string   `json:"principalId,omitempty"`
-	Scopes         []string `json:"scopes,omitempty"`
-	TimeOfDayStart string   `json:"timeOfDayStart,omitempty"`
-	TimeOfDayEnd   string   `json:"timeOfDayEnd,omitempty"`
+	Name           string   `json:"name"`
+	Effect         string   `json:"effect"`
+	Priority       int64    `json:"priority"`
+	AgentID        *string  `json:"agentId"`
+	PrincipalID    *string  `json:"principalId"`
+	Scopes         []string `json:"scopes"`
+	TimeOfDayStart *string  `json:"timeOfDayStart"`
+	TimeOfDayEnd   *string  `json:"timeOfDayEnd"`
 }
 
 // CreatePolicy creates a new policy.
@@ -144,7 +158,7 @@ func (c *Client) CreatePolicy(req CreatePolicyRequest) (*Policy, error) {
 // GetPolicy retrieves a policy by ID.
 func (c *Client) GetPolicy(id string) (*Policy, error) {
 	var policy Policy
-	err := c.doRequest("GET", fmt.Sprintf("/v1/policies/%s", id), nil, &policy)
+	err := c.doRequest("GET", fmt.Sprintf("/v1/policies/%s", url.PathEscape(id)), nil, &policy)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +168,7 @@ func (c *Client) GetPolicy(id string) (*Policy, error) {
 // UpdatePolicy updates an existing policy.
 func (c *Client) UpdatePolicy(id string, req UpdatePolicyRequest) (*Policy, error) {
 	var policy Policy
-	err := c.doRequest("PATCH", fmt.Sprintf("/v1/policies/%s", id), req, &policy)
+	err := c.doRequest("PATCH", fmt.Sprintf("/v1/policies/%s", url.PathEscape(id)), req, &policy)
 	if err != nil {
 		return nil, err
 	}
@@ -163,12 +177,15 @@ func (c *Client) UpdatePolicy(id string, req UpdatePolicyRequest) (*Policy, erro
 
 // DeletePolicy deletes a policy by ID.
 func (c *Client) DeletePolicy(id string) error {
-	return c.doRequest("DELETE", fmt.Sprintf("/v1/policies/%s", id), nil, nil)
+	return c.doRequest("DELETE", fmt.Sprintf("/v1/policies/%s", url.PathEscape(id)), nil, nil)
 }
 
 // ---------- Webhook ----------
 
 // Webhook represents a Grantex webhook resource.
+//
+// Secret is generated server-side and returned only by POST /v1/webhooks;
+// the list endpoint never includes it.
 type Webhook struct {
 	ID        string   `json:"id"`
 	URL       string   `json:"url"`
@@ -178,17 +195,15 @@ type Webhook struct {
 }
 
 // CreateWebhookRequest is the request body for creating a webhook.
+// The API does not accept a caller-supplied secret.
 type CreateWebhookRequest struct {
 	URL    string   `json:"url"`
 	Events []string `json:"events"`
-	Secret string   `json:"secret,omitempty"`
 }
 
-// UpdateWebhookRequest is the request body for updating a webhook.
-type UpdateWebhookRequest struct {
-	URL    string   `json:"url,omitempty"`
-	Events []string `json:"events,omitempty"`
-	Secret string   `json:"secret,omitempty"`
+// ListWebhooksResponse is the response from listing webhooks.
+type ListWebhooksResponse struct {
+	Webhooks []Webhook `json:"webhooks"`
 }
 
 // CreateWebhook creates a new webhook.
@@ -201,57 +216,64 @@ func (c *Client) CreateWebhook(req CreateWebhookRequest) (*Webhook, error) {
 	return &webhook, nil
 }
 
-// GetWebhook retrieves a webhook by ID.
-func (c *Client) GetWebhook(id string) (*Webhook, error) {
-	var webhook Webhook
-	err := c.doRequest("GET", fmt.Sprintf("/v1/webhooks/%s", id), nil, &webhook)
+// ListWebhooks lists all webhooks for the developer.
+func (c *Client) ListWebhooks() ([]Webhook, error) {
+	var resp ListWebhooksResponse
+	err := c.doRequest("GET", "/v1/webhooks", nil, &resp)
 	if err != nil {
 		return nil, err
 	}
-	return &webhook, nil
+	return resp.Webhooks, nil
 }
 
-// UpdateWebhook updates an existing webhook.
-func (c *Client) UpdateWebhook(id string, req UpdateWebhookRequest) (*Webhook, error) {
-	var webhook Webhook
-	err := c.doRequest("PATCH", fmt.Sprintf("/v1/webhooks/%s", id), req, &webhook)
+// GetWebhook retrieves a webhook by ID.
+//
+// The API exposes no GET /v1/webhooks/:id, so this lists the developer's
+// webhooks and picks the matching one. A missing webhook is reported as a
+// 404 APIError so callers can treat it like any other not-found response.
+func (c *Client) GetWebhook(id string) (*Webhook, error) {
+	webhooks, err := c.ListWebhooks()
 	if err != nil {
 		return nil, err
 	}
-	return &webhook, nil
+	for i := range webhooks {
+		if webhooks[i].ID == id {
+			w := webhooks[i]
+			return &w, nil
+		}
+	}
+	return nil, &APIError{StatusCode: http.StatusNotFound, Message: "Webhook not found", Code: "NOT_FOUND"}
 }
 
 // DeleteWebhook deletes a webhook by ID.
 func (c *Client) DeleteWebhook(id string) error {
-	return c.doRequest("DELETE", fmt.Sprintf("/v1/webhooks/%s", id), nil, nil)
+	return c.doRequest("DELETE", fmt.Sprintf("/v1/webhooks/%s", url.PathEscape(id)), nil, nil)
 }
 
 // ---------- SSO Config ----------
 
-// SSOConfig represents a Grantex SSO configuration resource.
+// SSOConfig represents the organisation's OIDC SSO configuration as returned by
+// GET/POST /v1/sso/config. The client secret is never returned.
 type SSOConfig struct {
-	ID           string `json:"id"`
-	Provider     string `json:"provider"`
-	Domain       string `json:"domain"`
-	ClientID     string `json:"clientId"`
-	ClientSecret string `json:"clientSecret,omitempty"`
-	MetadataURL  string `json:"metadataUrl,omitempty"`
-	CreatedAt    string `json:"createdAt"`
+	IssuerURL   string `json:"issuerUrl"`
+	ClientID    string `json:"clientId"`
+	RedirectURI string `json:"redirectUri"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
 }
 
-// UpsertSSOConfigRequest is the request body for creating/updating an SSO config.
+// UpsertSSOConfigRequest is the request body for creating/updating the SSO config.
 type UpsertSSOConfigRequest struct {
-	Provider     string `json:"provider"`
-	Domain       string `json:"domain"`
+	IssuerURL    string `json:"issuerUrl"`
 	ClientID     string `json:"clientId"`
 	ClientSecret string `json:"clientSecret"`
-	MetadataURL  string `json:"metadataUrl,omitempty"`
+	RedirectURI  string `json:"redirectUri"`
 }
 
-// UpsertSSOConfig creates or updates the SSO configuration.
+// UpsertSSOConfig creates or updates the SSO configuration (POST is an upsert).
 func (c *Client) UpsertSSOConfig(req UpsertSSOConfigRequest) (*SSOConfig, error) {
 	var config SSOConfig
-	err := c.doRequest("PUT", "/v1/sso/config", req, &config)
+	err := c.doRequest("POST", "/v1/sso/config", req, &config)
 	if err != nil {
 		return nil, err
 	}
@@ -276,13 +298,38 @@ func (c *Client) DeleteSSOConfig() error {
 // ---------- Budget ----------
 
 // BudgetAllocation represents a Grantex budget allocation resource.
+//
+// The API stores budgets as NUMERIC(18,4) and serialises them as JSON strings
+// (e.g. "50.0000"). json.Number accepts both a JSON string and a JSON number,
+// so decoding works regardless of which form the server emits.
 type BudgetAllocation struct {
-	ID              string  `json:"id"`
-	GrantID         string  `json:"grantId"`
-	InitialBudget   float64 `json:"initialBudget"`
-	RemainingBudget float64 `json:"remainingBudget"`
-	Currency        string  `json:"currency"`
-	CreatedAt       string  `json:"createdAt"`
+	ID              string      `json:"id"`
+	GrantID         string      `json:"grantId"`
+	InitialBudget   json.Number `json:"initialBudget"`
+	RemainingBudget json.Number `json:"remainingBudget"`
+	Currency        string      `json:"currency"`
+	CreatedAt       string      `json:"createdAt"`
+}
+
+// InitialBudgetFloat returns InitialBudget parsed as a float64.
+func (b *BudgetAllocation) InitialBudgetFloat() (float64, error) {
+	return parseBudgetNumber("initialBudget", b.InitialBudget)
+}
+
+// RemainingBudgetFloat returns RemainingBudget parsed as a float64.
+func (b *BudgetAllocation) RemainingBudgetFloat() (float64, error) {
+	return parseBudgetNumber("remainingBudget", b.RemainingBudget)
+}
+
+func parseBudgetNumber(field string, n json.Number) (float64, error) {
+	if n == "" {
+		return 0, nil
+	}
+	f, err := strconv.ParseFloat(string(n), 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s %q: %w", field, string(n), err)
+	}
+	return f, nil
 }
 
 // CreateBudgetAllocationRequest is the request body for creating a budget allocation.
@@ -305,7 +352,7 @@ func (c *Client) CreateBudgetAllocation(req CreateBudgetAllocationRequest) (*Bud
 // GetBudgetBalance retrieves the budget balance for a grant.
 func (c *Client) GetBudgetBalance(grantID string) (*BudgetAllocation, error) {
 	var alloc BudgetAllocation
-	err := c.doRequest("GET", fmt.Sprintf("/v1/budget/balance/%s", grantID), nil, &alloc)
+	err := c.doRequest("GET", fmt.Sprintf("/v1/budget/balance/%s", url.PathEscape(grantID)), nil, &alloc)
 	if err != nil {
 		return nil, err
 	}
@@ -314,7 +361,7 @@ func (c *Client) GetBudgetBalance(grantID string) (*BudgetAllocation, error) {
 
 // ---------- Grants (Data Source) ----------
 
-// Grant represents a Grantex grant.
+// Grant represents a Grantex grant as returned by GET /v1/grants.
 type Grant struct {
 	GrantID     string   `json:"grantId"`
 	AgentID     string   `json:"agentId"`
@@ -322,7 +369,7 @@ type Grant struct {
 	Scopes      []string `json:"scopes"`
 	Status      string   `json:"status"`
 	ExpiresAt   string   `json:"expiresAt"`
-	CreatedAt   string   `json:"createdAt"`
+	IssuedAt    string   `json:"issuedAt"`
 }
 
 // ListGrantsResponse is the response from listing grants.
@@ -332,22 +379,20 @@ type ListGrantsResponse struct {
 
 // ListGrants lists grants with optional filters.
 func (c *Client) ListGrants(agentID, principalID, status string) ([]Grant, error) {
-	path := "/v1/grants?"
-	params := []string{}
+	query := url.Values{}
 	if agentID != "" {
-		params = append(params, fmt.Sprintf("agentId=%s", agentID))
+		query.Set("agentId", agentID)
 	}
 	if principalID != "" {
-		params = append(params, fmt.Sprintf("principalId=%s", principalID))
+		query.Set("principalId", principalID)
 	}
 	if status != "" {
-		params = append(params, fmt.Sprintf("status=%s", status))
+		query.Set("status", status)
 	}
-	for i, p := range params {
-		if i > 0 {
-			path += "&"
-		}
-		path += p
+
+	path := "/v1/grants"
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
 	}
 
 	var resp ListGrantsResponse
@@ -361,18 +406,26 @@ func (c *Client) ListGrants(agentID, principalID, status string) ([]Grant, error
 // ---------- Internal ----------
 
 // APIError represents an error response from the Grantex API.
+// Routes emit {message, code, requestId} (see auth-service plugins/errors.ts).
 type APIError struct {
 	StatusCode int
-	Message    string `json:"error"`
+	Message    string `json:"message"`
 	Code       string `json:"code"`
+	RequestID  string `json:"requestId,omitempty"`
 }
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("grantex API error (status %d, code %s): %s", e.StatusCode, e.Code, e.Message)
 }
 
+// IsNotFound reports whether err is an APIError with HTTP status 404.
+func IsNotFound(err error) bool {
+	var apiErr *APIError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusNotFound
+}
+
 func (c *Client) doRequest(method, path string, body interface{}, result interface{}) error {
-	url := c.BaseURL + path
+	endpoint := c.BaseURL + path
 
 	var reqBody io.Reader
 	if body != nil {
@@ -383,7 +436,7 @@ func (c *Client) doRequest(method, path string, body interface{}, result interfa
 		reqBody = bytes.NewBuffer(jsonBytes)
 	}
 
-	req, err := http.NewRequest(method, url, reqBody)
+	req, err := http.NewRequest(method, endpoint, reqBody)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}

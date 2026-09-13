@@ -25,16 +25,16 @@ export class PoliciesClient {
 
   /** Get a single policy by ID. */
   get(policyId: string): Promise<Policy> {
-    return this.#http.get<Policy>(`/v1/policies/${policyId}`);
+    return this.#http.get<Policy>(`/v1/policies/${encodeURIComponent(policyId)}`);
   }
 
   /** Update a policy. */
   update(policyId: string, params: UpdatePolicyParams): Promise<Policy> {
-    return this.#http.patch<Policy>(`/v1/policies/${policyId}`, params);
+    return this.#http.patch<Policy>(`/v1/policies/${encodeURIComponent(policyId)}`, params);
   }
 
   /** Delete a policy. */
   delete(policyId: string): Promise<void> {
-    return this.#http.delete<void>(`/v1/policies/${policyId}`);
+    return this.#http.delete<void>(`/v1/policies/${encodeURIComponent(policyId)}`);
   }
 }

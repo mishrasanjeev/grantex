@@ -18,7 +18,7 @@ export class GrantsClient {
   }
 
   get(grantId: string): Promise<Grant> {
-    return this.#http.get<Grant>(`/v1/grants/${grantId}`);
+    return this.#http.get<Grant>(`/v1/grants/${encodeURIComponent(grantId)}`);
   }
 
   list(params?: ListGrantsParams): Promise<ListGrantsResponse> {
@@ -28,7 +28,7 @@ export class GrantsClient {
   }
 
   revoke(grantId: string): Promise<void> {
-    return this.#http.delete<void>(`/v1/grants/${grantId}`);
+    return this.#http.delete<void>(`/v1/grants/${encodeURIComponent(grantId)}`);
   }
 
   /**

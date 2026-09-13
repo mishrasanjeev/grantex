@@ -25,7 +25,7 @@ export class AuditClient {
   }
 
   get(entryId: string): Promise<AuditEntry> {
-    return this.#http.get<AuditEntry>(`/v1/audit/${entryId}`);
+    return this.#http.get<AuditEntry>(`/v1/audit/${encodeURIComponent(entryId)}`);
   }
 
   checkpoint(): Promise<AuditCheckpoint> {

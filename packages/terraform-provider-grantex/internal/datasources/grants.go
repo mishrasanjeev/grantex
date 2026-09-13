@@ -50,7 +50,7 @@ func grantObjectType() types.ObjectType {
 			"scopes":       types.ListType{ElemType: types.StringType},
 			"status":       types.StringType,
 			"expires_at":   types.StringType,
-			"created_at":   types.StringType,
+			"issued_at":    types.StringType,
 		},
 	}
 }
@@ -102,8 +102,8 @@ func (d *grantsDataSource) Schema(_ context.Context, _ datasource.SchemaRequest,
 							Description: "The timestamp when the grant expires.",
 							Computed:    true,
 						},
-						"created_at": schema.StringAttribute{
-							Description: "The timestamp when the grant was created.",
+						"issued_at": schema.StringAttribute{
+							Description: "The timestamp when the grant was issued.",
 							Computed:    true,
 						},
 					},
@@ -179,7 +179,7 @@ func (d *grantsDataSource) Read(ctx context.Context, req datasource.ReadRequest,
 				"scopes":       scopesList,
 				"status":       types.StringValue(g.Status),
 				"expires_at":   types.StringValue(g.ExpiresAt),
-				"created_at":   types.StringValue(g.CreatedAt),
+				"issued_at":    types.StringValue(g.IssuedAt),
 			},
 		)
 		resp.Diagnostics.Append(diags...)

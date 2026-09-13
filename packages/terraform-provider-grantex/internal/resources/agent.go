@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -14,8 +15,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &agentResource{}
-	_ resource.ResourceWithConfigure = &agentResource{}
+	_ resource.Resource                = &agentResource{}
+	_ resource.ResourceWithConfigure   = &agentResource{}
+	_ resource.ResourceWithImportState = &agentResource{}
 )
 
 // agentResourceModel maps the resource schema data to a Go type.
@@ -177,6 +179,11 @@ func (r *agentResource) Read(ctx context.Context, req resource.ReadRequest, resp
 
 	agent, err := r.client.GetAgent(state.AgentID.ValueString())
 	if err != nil {
+		if client.IsNotFound(err) {
+			// Deleted outside Terraform: drop it from state so the next plan recreates it.
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"Error reading agent",
 			"Could not read agent ID "+state.AgentID.ValueString()+": "+err.Error(),
@@ -230,12 +237,16 @@ func (r *agentResource) Update(ctx context.Context, req resource.UpdateRequest, 
 		return
 	}
 
-	updateReq := client.UpdateAgentRequest{
-		Name:   plan.Name.ValueString(),
-		Scopes: scopes,
-	}
+	// PATCH keeps the current description when the key is absent and rejects
+	// null, so the description is always sent: "" clears a removed attribute.
+	description := ""
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
-		updateReq.Description = plan.Description.ValueString()
+		description = plan.Description.ValueString()
+	}
+	updateReq := client.UpdateAgentRequest{
+		Name:        plan.Name.ValueString(),
+		Description: &description,
+		Scopes:      scopes,
 	}
 
 	agent, err := r.client.UpdateAgent(state.AgentID.ValueString(), updateReq)
@@ -281,4 +292,9 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 		)
 		return
 	}
+}
+
+// ImportState imports an agent by its agent ID.
+func (r *agentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("agent_id"), req, resp)
 }

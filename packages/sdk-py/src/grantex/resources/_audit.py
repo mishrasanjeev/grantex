@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from urllib.parse import urlencode
 
 from .._http import HttpClient
@@ -41,7 +43,7 @@ class AuditClient:
         return ListAuditResponse.from_dict(data)
 
     def get(self, entry_id: str) -> AuditEntry:
-        data = self._http.get(f"/v1/audit/{entry_id}")
+        data = self._http.get(f"/v1/audit/{quote(entry_id, safe="")}")
         return AuditEntry.from_dict(data)
 
     def checkpoint(self) -> AuditCheckpoint:

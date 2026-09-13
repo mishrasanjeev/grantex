@@ -42,6 +42,19 @@ describe('GrantsClient', () => {
     vi.clearAllMocks();
   });
 
+  it('percent-encodes the grant id so it cannot escape its path segment', async () => {
+    const fetchMock = makeFetch(200, MOCK_GRANT);
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new Grantex({ apiKey: 'test' });
+
+    await client.grants.get('../admin?x=1#frag');
+    await client.grants.revoke('grant/../../v1/agents');
+
+    const urls = fetchMock.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(urls[0]).toBe('https://api.grantex.dev/v1/grants/..%2Fadmin%3Fx%3D1%23frag');
+    expect(urls[1]).toBe('https://api.grantex.dev/v1/grants/grant%2F..%2F..%2Fv1%2Fagents');
+  });
+
   it('get() GETs /v1/grants/:id', async () => {
     vi.stubGlobal('fetch', makeFetch(200, MOCK_GRANT));
 

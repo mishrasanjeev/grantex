@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -14,7 +15,69 @@ import (
 const (
 	productionJwksURI = "https://api.grantex.dev/.well-known/jwks.json"
 	productionIssuer  = "https://grantex.dev"
+
+	// jwksMinRefreshInterval bounds how often the background cache re-fetches
+	// a key set when the issuer sends no cache headers.
+	jwksMinRefreshInterval = 10 * time.Minute
+	// jwksUnknownKidCooldown bounds how often an unknown kid may force an
+	// out-of-band refresh, so a flood of forged kids cannot become a flood of
+	// requests against the issuer.
+	jwksUnknownKidCooldown = 30 * time.Second
 )
+
+// A process-wide jwk.Cache replaces the per-call jwk.Fetch: every
+// verification used to download the key set again, which is both slow and a
+// way for a request flood to hammer the issuer. Registered URLs are refreshed
+// in the background; an unknown kid (key rotation) triggers one immediate
+// refresh subject to jwksUnknownKidCooldown.
+var (
+	jwksCacheOnce sync.Once
+	jwksCache     *jwk.Cache
+
+	jwksRefreshMu   sync.Mutex
+	jwksLastRefresh = map[string]time.Time{}
+)
+
+func getJwksCache() *jwk.Cache {
+	jwksCacheOnce.Do(func() {
+		jwksCache = jwk.NewCache(context.Background())
+	})
+	return jwksCache
+}
+
+// fetchJwks returns the cached key set for jwksURI, registering and fetching
+// it on first use.
+func fetchJwks(ctx context.Context, jwksURI string) (jwk.Set, error) {
+	cache := getJwksCache()
+	jwksRefreshMu.Lock()
+	if !cache.IsRegistered(jwksURI) {
+		if err := cache.Register(jwksURI, jwk.WithMinRefreshInterval(jwksMinRefreshInterval)); err != nil {
+			jwksRefreshMu.Unlock()
+			return nil, err
+		}
+		jwksLastRefresh[jwksURI] = time.Now()
+	}
+	jwksRefreshMu.Unlock()
+	return cache.Get(ctx, jwksURI)
+}
+
+// refreshJwksForUnknownKid re-fetches jwksURI once per cooldown window.
+// It returns (nil, false) when the cooldown has not elapsed.
+func refreshJwksForUnknownKid(ctx context.Context, jwksURI string) (jwk.Set, bool) {
+	jwksRefreshMu.Lock()
+	if time.Since(jwksLastRefresh[jwksURI]) < jwksUnknownKidCooldown {
+		jwksRefreshMu.Unlock()
+		return nil, false
+	}
+	jwksLastRefresh[jwksURI] = time.Now()
+	jwksRefreshMu.Unlock()
+
+	set, err := getJwksCache().Refresh(ctx, jwksURI)
+	if err != nil {
+		return nil, false
+	}
+	return set, true
+}
 
 // VerifyOptions configures local grant token verification using remotely retrieved JWKS.
 type VerifyOptions struct {
@@ -48,8 +111,8 @@ func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*V
 		return nil, err
 	}
 
-	// Fetch JWKS
-	set, err := jwk.Fetch(ctx, jwksURI)
+	// Fetch JWKS (cached; see fetchJwks)
+	set, err := fetchJwks(ctx, jwksURI)
 	if err != nil {
 		return nil, &TokenError{Message: "failed to fetch JWKS", Cause: err}
 	}
@@ -74,6 +137,12 @@ func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*V
 		}
 
 		key, found := set.LookupKeyID(kid)
+		if !found {
+			// The issuer may have rotated keys since the cached fetch.
+			if refreshed, ok := refreshJwksForUnknownKid(ctx, jwksURI); ok {
+				key, found = refreshed.LookupKeyID(kid)
+			}
+		}
 		if !found {
 			return nil, fmt.Errorf("key %s not found in JWKS", kid)
 		}

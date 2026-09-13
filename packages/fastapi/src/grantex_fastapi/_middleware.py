@@ -4,6 +4,7 @@ from typing import Any, Callable, Optional
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 from grantex import GrantexTokenError, VerifiedGrant, VerifyGrantTokenOptions, verify_grant_token
 
 from ._errors import ErrorCode, GrantexFastAPIError
@@ -55,7 +56,16 @@ class GrantexAuth:
 
     async def __call__(self, request: Request) -> VerifiedGrant:
         """FastAPI dependency that verifies the grant token and returns a VerifiedGrant."""
-        return self._verify(request)
+        return await self._verify_async(request)
+
+    async def _verify_async(self, request: Request) -> VerifiedGrant:
+        """Run the synchronous verifier in a worker thread.
+
+        ``verify_grant_token`` uses a blocking ``httpx`` JWKS fetch (cached,
+        but a miss still blocks); running it inline would stall the event
+        loop for every request on the app.
+        """
+        return await run_in_threadpool(self._verify, request)
 
     def _verify(self, request: Request) -> VerifiedGrant:
         """Core verification logic shared by __call__ and scopes()."""
@@ -102,7 +112,7 @@ class GrantexAuth:
         parent = self
 
         async def _dependency(request: Request) -> VerifiedGrant:
-            grant = parent._verify(request)
+            grant = await parent._verify_async(request)
             missing = [s for s in required_scopes if s not in grant.scopes]
             if missing:
                 raise GrantexFastAPIError(

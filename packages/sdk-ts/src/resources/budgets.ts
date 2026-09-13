@@ -26,7 +26,7 @@ export class BudgetsClient {
 
   /** Get the current budget balance for a grant. */
   balance(grantId: string): Promise<BudgetAllocation> {
-    return this.#http.get<BudgetAllocation>(`/v1/budget/balance/${grantId}`);
+    return this.#http.get<BudgetAllocation>(`/v1/budget/balance/${encodeURIComponent(grantId)}`);
   }
 
   /** List budget transactions for a grant. */
@@ -39,7 +39,7 @@ export class BudgetsClient {
     if (params?.pageSize !== undefined) query.set('pageSize', String(params.pageSize));
     const qs = query.toString();
     return this.#http.get<BudgetTransactionsResponse>(
-      `/v1/budget/transactions/${grantId}${qs ? `?${qs}` : ''}`,
+      `/v1/budget/transactions/${encodeURIComponent(grantId)}${qs ? `?${qs}` : ''}`,
     );
   }
 }

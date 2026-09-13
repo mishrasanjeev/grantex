@@ -193,7 +193,29 @@ export async function commerceTenantsRoutes(app: FastifyInstance): Promise<void>
         throw new CommerceHttpError(403, 'tenant_owner_required',
           'Binding a developer to a tenant requires admin or owner role on that tenant');
       }
+      // Owner role is scoped to the tenant, not to other developers: an
+      // owner may bind themselves, or an existing operator of this tenant,
+      // but must never rebind another developer's default tenant routing.
+      if (developerId !== op.developerId) {
+        if (isDefault) {
+          throw new CommerceHttpError(403, 'developer_default_forbidden',
+            'Only a platform admin or the developer themselves can change a developer\'s default tenant');
+        }
+        const operator = await sql<{ ok: boolean }[]>`
+          SELECT TRUE AS ok FROM commerce_tenant_operators
+           WHERE developer_id = ${developerId} AND tenant_id = ${tenantId}
+           LIMIT 1
+        `;
+        if (!operator[0]) {
+          throw new CommerceHttpError(403, 'developer_binding_forbidden',
+            'Tenant owners can only bind developers who are already operators of that tenant');
+        }
+      }
     }
+    // A non-admin binding another developer must not downgrade that
+    // developer's existing default mapping (ON CONFLICT would otherwise
+    // overwrite is_default with FALSE).
+    const preserveExistingDefault = !op.isPlatformAdmin && developerId !== op.developerId;
 
     // Validate the tenant exists (FK alone allows orphaned devs to be bound).
     const tenant = await sql<{ id: string; status: string }[]>`
@@ -220,7 +242,10 @@ export async function commerceTenantsRoutes(app: FastifyInstance): Promise<void>
         INSERT INTO commerce_developer_tenants (developer_id, tenant_id, is_default)
         VALUES (${developerId}, ${tenantId}, ${isDefault})
         ON CONFLICT (developer_id, tenant_id)
-          DO UPDATE SET is_default = EXCLUDED.is_default
+          DO UPDATE SET is_default = CASE
+            WHEN ${preserveExistingDefault} THEN commerce_developer_tenants.is_default
+            ELSE EXCLUDED.is_default
+          END
         RETURNING developer_id, tenant_id, is_default, created_at
       `;
       const audit = await appendCommerceAudit(tx as unknown as Sql, {

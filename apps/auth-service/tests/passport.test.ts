@@ -364,6 +364,33 @@ describe('POST /v1/passport/issue', () => {
     expect(res.json().code).toBe('AMOUNT_EXCEEDS_BUDGET');
   });
 
+  it('returns 400 when the budget allocation is fully exhausted (remaining_budget = 0)', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id, did: TEST_AGENT.did }]);
+    sqlMock.mockResolvedValueOnce([TEST_GRANT_WITH_MPP_SCOPES]);
+    // Exhausted allocation: previously filtered out by `remaining_budget > 0`,
+    // which let any amount through as if no budget existed.
+    sqlMock.mockResolvedValueOnce([{ remaining_budget: '0.00' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/passport/issue',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        grantId: 'grnt_MPP01',
+        allowedMPPCategories: ['inference'],
+        maxTransactionAmount: { amount: 1, currency: 'USDC' },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('AMOUNT_EXCEEDS_BUDGET');
+    const budgetQuery = sqlMock.mock.calls.map((call) => String(call[0])).find((q) => /budget_allocations/i.test(q));
+    expect(budgetQuery).toBeDefined();
+    expect(budgetQuery).not.toMatch(/remaining_budget\s*>\s*0/);
+  });
+
   it('returns 400 for invalid expiresIn format', async () => {
     seedAuth();
 

@@ -279,6 +279,26 @@ describe('GET /.well-known/grantex-commerce', () => {
     expect(parsed.discovery_posture.readiness_claim).toBe('none');
   });
 
+  it('advertises the MCP endpoint on MCP_PUBLIC_BASE_URL when the public host serves a page at /mcp', async () => {
+    // grantex.dev serves web/mcp.html at /mcp and Firebase resolves static
+    // files before rewrites, so the discovery document must point agents at
+    // the API origin or they POST JSON-RPC into a marketing page.
+    vi.stubEnv('MCP_PUBLIC_BASE_URL', 'https://api.grantex.dev');
+    sqlMock.mockResolvedValueOnce([merchantProfile()]);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/.well-known/grantex-commerce?merchant_id=mch_M5A',
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ mcp: { url: string }; native_rest: { base_url: string } }>();
+    expect(body.mcp.url).toBe('https://api.grantex.dev/mcp');
+    // Only the MCP endpoint moves; REST discovery stays on the public base.
+    expect(body.native_rest.base_url).not.toContain('api.grantex.dev');
+    vi.stubEnv('MCP_PUBLIC_BASE_URL', '');
+  });
+
   it('lists streamable_http MCP transport and all V1 tools', async () => {
     sqlMock.mockResolvedValueOnce([merchantProfile()]);
 

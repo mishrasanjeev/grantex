@@ -3,6 +3,7 @@ package grantex
 import (
 	"context"
 	"fmt"
+	"net/url"
 )
 
 // GrantsService handles grant management and delegation.
@@ -12,7 +13,7 @@ type GrantsService struct {
 
 // Get retrieves a grant by ID.
 func (s *GrantsService) Get(ctx context.Context, grantID string) (*Grant, error) {
-	return unmarshal[Grant](s.http.get(ctx, "/v1/grants/"+grantID))
+	return unmarshal[Grant](s.http.get(ctx, "/v1/grants/"+url.PathEscape(grantID)))
 }
 
 // List retrieves grants with optional filters.
@@ -42,7 +43,7 @@ func (s *GrantsService) List(ctx context.Context, params *ListGrantsParams) (*Li
 
 // Revoke revokes a grant by ID.
 func (s *GrantsService) Revoke(ctx context.Context, grantID string) error {
-	_, err := s.http.del(ctx, "/v1/grants/"+grantID)
+	_, err := s.http.del(ctx, "/v1/grants/"+url.PathEscape(grantID))
 	return err
 }
 

@@ -258,7 +258,7 @@
     <div id="advancedPanel" style="display:none;margin-top:16px;">
       <div class="field">
         <label for="apiKey">Sandbox API Key</label>
-        <input type="text" id="apiKey" placeholder="Leave blank to use the public demo key" autocomplete="off">
+        <input type="text" id="apiKey" placeholder="Leave blank to mint a throwaway sandbox key" autocomplete="off">
         <div class="hint">Optionally use your own sandbox key from the <a href="/dashboard">Dashboard</a>, or leave blank for the built-in demo key.</div>
       </div>
       <div class="field">
@@ -437,8 +437,22 @@
 <script>
 const $ = (id) => document.getElementById(id);
 
-const DEMO_KEY = 'gx_test_playground_demo_2026';
+// No shared demo key: the previous hardcoded constant had no provisioning
+// path, so Start mints a throwaway sandbox key via POST /v1/signup instead.
 const DEFAULT_BASE_URL = 'https://api.grantex.dev';
+
+async function mintSandboxKey(baseUrl) {
+  const res = await fetch(baseUrl + '/v1/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'playground-sandbox-' + Date.now(), mode: 'sandbox' }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || typeof body.apiKey !== 'string') {
+    throw new Error(body.message || ('Could not create a sandbox key (HTTP ' + res.status + ')'));
+  }
+  return body.apiKey;
+}
 
 let state = {
   apiKey: '',
@@ -527,13 +541,26 @@ function toggleAdvanced() {
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 
-function startFlow() {
+async function startFlow() {
   const advancedOpen = $('advancedPanel').style.display !== 'none';
   const customKey = advancedOpen ? $('apiKey').value.trim() : '';
-  state.apiKey = customKey || DEMO_KEY;
   state.baseUrl = (advancedOpen ? $('baseUrl').value.trim() : DEFAULT_BASE_URL).replace(/\/$/, '') || DEFAULT_BASE_URL;
 
   $('setupError').textContent = '';
+  if (customKey) {
+    state.apiKey = customKey;
+  } else {
+    $('startBtn').disabled = true;
+    try {
+      state.apiKey = await mintSandboxKey(state.baseUrl);
+    } catch (err) {
+      $('setupError').textContent = 'Could not mint a sandbox key: ' + (err && err.message ? err.message : String(err));
+      return;
+    } finally {
+      $('startBtn').disabled = false;
+    }
+  }
+
   $('startBtn').style.display = 'none';
   $('advancedToggle').style.display = 'none';
   $('advancedPanel').style.display = 'none';

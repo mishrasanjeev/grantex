@@ -24,23 +24,23 @@ func (s *SSOService) ListConnections(ctx context.Context) (*ListSsoConnectionsRe
 
 // GetConnection retrieves an SSO connection by ID.
 func (s *SSOService) GetConnection(ctx context.Context, id string) (*SsoConnection, error) {
-	return unmarshal[SsoConnection](s.http.get(ctx, "/v1/sso/connections/"+id))
+	return unmarshal[SsoConnection](s.http.get(ctx, "/v1/sso/connections/"+url.PathEscape(id)))
 }
 
 // UpdateConnection updates an existing SSO connection.
 func (s *SSOService) UpdateConnection(ctx context.Context, id string, params UpdateSsoConnectionParams) (*SsoConnection, error) {
-	return unmarshal[SsoConnection](s.http.patch(ctx, "/v1/sso/connections/"+id, params))
+	return unmarshal[SsoConnection](s.http.patch(ctx, "/v1/sso/connections/"+url.PathEscape(id), params))
 }
 
 // DeleteConnection deletes an SSO connection.
 func (s *SSOService) DeleteConnection(ctx context.Context, id string) error {
-	_, err := s.http.del(ctx, "/v1/sso/connections/"+id)
+	_, err := s.http.del(ctx, "/v1/sso/connections/"+url.PathEscape(id))
 	return err
 }
 
 // TestConnection tests an SSO connection's configuration.
 func (s *SSOService) TestConnection(ctx context.Context, id string) (*SsoConnectionTestResult, error) {
-	return unmarshal[SsoConnectionTestResult](s.http.post(ctx, "/v1/sso/connections/"+id+"/test", nil))
+	return unmarshal[SsoConnectionTestResult](s.http.post(ctx, "/v1/sso/connections/"+url.PathEscape(id)+"/test", nil))
 }
 
 // --- SSO Enforcement ---
@@ -59,7 +59,7 @@ func (s *SSOService) ListSessions(ctx context.Context) (*ListSsoSessionsResponse
 
 // RevokeSession revokes an SSO session by ID.
 func (s *SSOService) RevokeSession(ctx context.Context, id string) error {
-	_, err := s.http.del(ctx, "/v1/sso/sessions/"+id)
+	_, err := s.http.del(ctx, "/v1/sso/sessions/"+url.PathEscape(id))
 	return err
 }
 

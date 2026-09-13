@@ -41,21 +41,21 @@ class SsoClient:
 
     def get_connection(self, id: str) -> SsoConnection:
         """Get a single SSO connection by ID."""
-        data = self._http.get(f"/v1/sso/connections/{quote(id)}")
+        data = self._http.get(f"/v1/sso/connections/{quote(id, safe="")}")
         return SsoConnection.from_dict(data)
 
     def update_connection(self, id: str, params: UpdateSsoConnectionParams) -> SsoConnection:
         """Update an SSO connection."""
-        data = self._http.patch(f"/v1/sso/connections/{quote(id)}", params.to_dict())
+        data = self._http.patch(f"/v1/sso/connections/{quote(id, safe="")}", params.to_dict())
         return SsoConnection.from_dict(data)
 
     def delete_connection(self, id: str) -> None:
         """Delete an SSO connection."""
-        self._http.delete(f"/v1/sso/connections/{quote(id)}")
+        self._http.delete(f"/v1/sso/connections/{quote(id, safe="")}")
 
     def test_connection(self, id: str) -> SsoConnectionTestResult:
         """Test an SSO connection's IdP reachability."""
-        data = self._http.post(f"/v1/sso/connections/{quote(id)}/test", {})
+        data = self._http.post(f"/v1/sso/connections/{quote(id, safe="")}/test", {})
         return SsoConnectionTestResult.from_dict(data)
 
     # ── SSO enforcement ───────────────────────────────────────────────────
@@ -74,7 +74,7 @@ class SsoClient:
 
     def revoke_session(self, id: str) -> None:
         """Revoke an SSO session by ID."""
-        self._http.delete(f"/v1/sso/sessions/{quote(id)}")
+        self._http.delete(f"/v1/sso/sessions/{quote(id, safe="")}")
 
     # ── SSO login flow ────────────────────────────────────────────────────
 

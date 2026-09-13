@@ -3,6 +3,8 @@ import { getSql } from '../db/client.js';
 import { newVaultCredentialId } from '../lib/ids.js';
 import { encrypt, decrypt } from '../lib/vault-crypto.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
+import { config } from '../config.js';
+import { DpopError, verifyDpopProof } from '../lib/dpop.js';
 import { emitEvent } from '../lib/events.js';
 
 interface StoreCredentialBody {
@@ -36,18 +38,19 @@ function isValidServiceName(service: string): boolean {
   return /^[a-z0-9][a-z0-9._-]{0,63}$/i.test(service);
 }
 
+/**
+ * Releasing the raw upstream OAuth token is strictly more powerful than any
+ * `<service>:read` grant, so it needs its own explicit, exactly-matched scope
+ * (the tree moved to exact-match scopes; wildcards and `<service>:read` no
+ * longer unlock exchange).
+ */
+export function vaultExchangeScope(service: string): string {
+  return `vault:${service.toLowerCase()}:exchange`;
+}
+
 function canExchangeCredential(scopes: string[], service: string): boolean {
-  const normalized = service.toLowerCase();
-  const accepted = new Set([
-    '*',
-    `${normalized}:*`,
-    `${normalized}:read`,
-    `${normalized}:credentials:read`,
-    `vault:${normalized}:*`,
-    `vault:${normalized}:read`,
-    'vault:credentials:exchange',
-  ]);
-  return scopes.some((scope) => accepted.has(scope.toLowerCase()));
+  const required = vaultExchangeScope(service);
+  return scopes.some((scope) => scope.toLowerCase() === required);
 }
 
 export async function vaultRoutes(app: FastifyInstance): Promise<void> {
@@ -180,7 +183,8 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
     { config: { skipAuth: true, rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const auth = request.headers.authorization;
-      if (!auth || !auth.startsWith('Bearer ')) {
+      const authMatch = typeof auth === 'string' ? /^(?:Bearer|DPoP)[ \t]+([^\s]+)$/i.exec(auth) : null;
+      if (!authMatch) {
         return reply.status(401).send({
           message: 'Missing grant token',
           code: 'UNAUTHORIZED',
@@ -188,7 +192,7 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      const grantToken = auth.slice(7);
+      const grantToken = authMatch[1]!;
       const result = await checkActiveGrantToken(grantToken);
       if (!result.ok) {
         return reply.status(401).send({
@@ -198,6 +202,37 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
         });
       }
       const { claims } = result;
+
+      // Key-bound grant tokens (cnf.jkt) must prove possession of the bound
+      // key: a bare bearer presentation of a stolen token must not release
+      // the upstream credential (mirrors /oauth/resource).
+      if (claims.cnf?.jkt) {
+        try {
+          const proof = await verifyDpopProof(request.headers.dpop, {
+            method: 'POST',
+            targetUri: `${config.publicBaseUrl.replace(/\/$/, '')}/v1/vault/credentials/exchange`,
+            accessToken: grantToken,
+          });
+          if (proof.thumbprint !== claims.cnf.jkt) {
+            reply.header('WWW-Authenticate', 'DPoP error="invalid_token"');
+            return reply.status(401).send({
+              message: 'The DPoP key does not match the grant token binding',
+              code: 'DPOP_KEY_MISMATCH',
+              requestId: request.id,
+            });
+          }
+        } catch (error) {
+          if (error instanceof DpopError) {
+            reply.header('WWW-Authenticate', 'DPoP error="invalid_dpop_proof"');
+            return reply.status(401).send({
+              message: `Key-bound grant token requires a valid DPoP proof: ${error.message}`,
+              code: 'INVALID_DPOP_PROOF',
+              requestId: request.id,
+            });
+          }
+          throw error;
+        }
+      }
 
       const { service } = request.body;
       if (!service) {
@@ -216,7 +251,7 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
       }
       if (!canExchangeCredential(claims.scp, service)) {
         return reply.status(403).send({
-          message: `Grant token is not scoped for ${service} credential exchange`,
+          message: `Grant token is not scoped for ${service} credential exchange; the exact scope ${vaultExchangeScope(service)} is required (wildcards and ${service}:read do not unlock exchange)`,
           code: 'FORBIDDEN',
           requestId: request.id,
         });

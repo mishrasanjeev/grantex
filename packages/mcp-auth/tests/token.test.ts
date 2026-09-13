@@ -87,7 +87,25 @@ async function setupWithCode(options: { publicClient?: boolean } = {}) {
   const redirectUrl = new URL(location);
   const code = redirectUrl.searchParams.get('code')!;
 
-  return { app, mockGrantex, code };
+  return { app, mockGrantex, code, clientStore };
+}
+
+/** Redeem `code` so the mock's `rt_test_refresh` becomes bound to TEST_CLIENT_ID. */
+async function exchangeCode(app: Awaited<ReturnType<typeof setupWithCode>>['app'], code: string) {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/token',
+    payload: {
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: TEST_REDIRECT_URI,
+      client_id: TEST_CLIENT_ID,
+      client_secret: TEST_CLIENT_SECRET,
+      code_verifier: TEST_VERIFIER,
+    },
+  });
+  expect(response.statusCode).toBe(200);
+  return response.json() as { refresh_token: string };
 }
 
 describe('token endpoint', () => {
@@ -317,7 +335,8 @@ describe('token endpoint', () => {
   });
 
   it('handles refresh_token grant type', async () => {
-    const { app } = await setupWithCode();
+    const { app, code } = await setupWithCode();
+    await exchangeCode(app, code);
 
     const response = await app.inject({
       method: 'POST',
@@ -335,6 +354,83 @@ describe('token endpoint', () => {
     expect(body.access_token).toBe('gt_refreshed_token');
     expect(body.token_type).toBe('bearer');
     expect(body.refresh_token).toBe('rt_new_refresh');
+  });
+
+  describe('refresh_token client binding (RFC 6749 §6)', () => {
+    const OTHER_CLIENT_ID = 'other-client-id';
+    const OTHER_CLIENT_SECRET = 'other-secret';
+
+    it('rejects a refresh token presented by a different client without calling Grantex', async () => {
+      const { app, code, clientStore, mockGrantex } = await setupWithCode();
+      await clientStore.set(OTHER_CLIENT_ID, {
+        clientId: OTHER_CLIENT_ID,
+        clientSecret: OTHER_CLIENT_SECRET,
+        redirectUris: [TEST_REDIRECT_URI],
+        grantTypes: ['authorization_code', 'refresh_token'],
+        createdAt: new Date().toISOString(),
+      });
+      const { refresh_token } = await exchangeCode(app, code);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/token',
+        payload: {
+          grant_type: 'refresh_token',
+          refresh_token,
+          client_id: OTHER_CLIENT_ID,
+          client_secret: OTHER_CLIENT_SECRET,
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('invalid_grant');
+      expect(mockGrantex.tokens.refresh).not.toHaveBeenCalled();
+    });
+
+    it('rejects a refresh token this server never issued', async () => {
+      const { app, mockGrantex } = await setupWithCode();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/token',
+        payload: {
+          grant_type: 'refresh_token',
+          refresh_token: 'rt_never_issued',
+          client_id: TEST_CLIENT_ID,
+          client_secret: TEST_CLIENT_SECRET,
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('invalid_grant');
+      expect(mockGrantex.tokens.refresh).not.toHaveBeenCalled();
+    });
+
+    it('rebinds the rotated refresh token and retires the spent one', async () => {
+      const { app, code } = await setupWithCode();
+      await exchangeCode(app, code);
+
+      const refresh = (token: string) => app.inject({
+        method: 'POST',
+        url: '/token',
+        payload: {
+          grant_type: 'refresh_token',
+          refresh_token: token,
+          client_id: TEST_CLIENT_ID,
+          client_secret: TEST_CLIENT_SECRET,
+        },
+      });
+
+      const first = await refresh('rt_test_refresh');
+      expect(first.statusCode).toBe(200);
+      expect(first.json().refresh_token).toBe('rt_new_refresh');
+
+      // The rotated token is now the bound one; the spent one is refused.
+      expect((await refresh('rt_new_refresh')).statusCode).toBe(200);
+      const spent = await refresh('rt_test_refresh');
+      expect(spent.statusCode).toBe(400);
+      expect(spent.json().error).toBe('invalid_grant');
+    });
   });
 
   describe('client authentication (OAuth 2.1 §2.1)', () => {

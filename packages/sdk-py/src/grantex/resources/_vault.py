@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from typing import Any
 
 import httpx
@@ -41,12 +43,12 @@ class VaultClient:
 
     def get(self, credential_id: str) -> VaultCredential:
         """Get credential metadata by ID (no raw token)."""
-        data = self._http.get(f"/v1/vault/credentials/{credential_id}")
+        data = self._http.get(f"/v1/vault/credentials/{quote(credential_id, safe="")}")
         return VaultCredential.from_dict(data)
 
     def delete(self, credential_id: str) -> None:
         """Delete a credential from the vault."""
-        self._http.delete(f"/v1/vault/credentials/{credential_id}")
+        self._http.delete(f"/v1/vault/credentials/{quote(credential_id, safe="")}")
 
     def exchange(
         self,
