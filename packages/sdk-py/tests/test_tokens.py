@@ -152,3 +152,43 @@ def test_verify_inactive_token(client: Grantex) -> None:
     response = client.tokens.verify("expired.jwt.token")
     assert response.valid is False
     assert response.scopes is None
+
+
+@respx.mock
+def test_exchange_never_retries_on_transient_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A retried exchange can burn a single-use code whose first request committed."""
+    import time
+
+    from grantex import GrantexApiError, GrantexNetworkError
+    from grantex._types import ExchangeTokenParams
+
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+    client = Grantex(api_key="test-key", max_retries=3)
+
+    route = respx.post("https://api.grantex.dev/v1/token").mock(
+        return_value=httpx.Response(503, json={"message": "upstream unavailable"})
+    )
+    with pytest.raises(GrantexApiError):
+        client.tokens.exchange(ExchangeTokenParams(code="single_use_code", agent_id="ag_01"))
+    assert route.call_count == 1
+
+    route.mock(side_effect=httpx.ConnectError("socket hang up"))
+    with pytest.raises(GrantexNetworkError):
+        client.tokens.exchange(ExchangeTokenParams(code="single_use_code", agent_id="ag_01"))
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_other_posts_still_retry_on_5xx(monkeypatch: pytest.MonkeyPatch) -> None:
+    import time
+
+    from grantex import GrantexApiError
+
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+    client = Grantex(api_key="test-key", max_retries=2)
+    route = respx.post("https://api.grantex.dev/v1/tokens/verify").mock(
+        return_value=httpx.Response(503, json={"message": "unavailable"})
+    )
+    with pytest.raises(GrantexApiError):
+        client.tokens.verify("tok")
+    assert route.call_count == 3

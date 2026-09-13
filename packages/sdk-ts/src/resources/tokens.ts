@@ -11,7 +11,11 @@ export class TokensClient {
   }
 
   exchange(params: ExchangeTokenParams): Promise<ExchangeTokenResponse> {
-    return this.#http.post<ExchangeTokenResponse>('/v1/token', params);
+    // Authorization codes are single-use and the server has no idempotent
+    // replay for the exchange (unlike refresh): a retried request whose first
+    // attempt committed would fail with "code already used" and lose the
+    // tokens. Never retry; let the caller surface the error.
+    return this.#http.post<ExchangeTokenResponse>('/v1/token', params, { retry: false });
   }
 
   async refresh(params: RefreshTokenParams): Promise<ExchangeTokenResponse> {

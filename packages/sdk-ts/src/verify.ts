@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify, decodeJwt } from 'jose';
+import { missingScopes } from './scopes.js';
 import { GrantexTokenError } from './errors.js';
 import type { VerifiedGrant, VerifyGrantTokenOptions, GrantTokenPayload } from './types.js';
 
@@ -98,7 +99,7 @@ export async function verifyGrantToken(
 
   const requiredScopes = options.requiredScopes ?? [];
   if (requiredScopes.length > 0) {
-    const missing = requiredScopes.filter((s) => !verified.scopes.includes(s));
+    const missing = missingScopes(verified.scopes, requiredScopes);
     if (missing.length > 0) {
       throw new GrantexTokenError(
         `Grant token is missing required scopes: ${missing.join(', ')}`,

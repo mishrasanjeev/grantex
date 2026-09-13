@@ -21,7 +21,6 @@ import { openRefreshReplayToken, sealRefreshReplayToken } from '../lib/refresh-r
 
 const OAUTH_PROTOCOL = 'oauth-agent-grants-03';
 const PAR_LIFETIME_SECONDS = 90;
-const AUTH_REQUEST_LIFETIME_SECONDS = 600;
 const ACCESS_TOKEN_LIFETIME_SECONDS = 300;
 const GRANT_LIFETIME_SECONDS = 86_400;
 const RESOURCE_SCOPE = 'grantex.resource.read';
@@ -367,7 +366,7 @@ export async function oauthRoutes(app: FastifyInstance): Promise<void> {
 
       const authRequestId = newAuthRequestId();
       const code = par['mode'] === 'sandbox' ? newAuthorizationCode() : null;
-      const authExpiresAt = new Date(Date.now() + AUTH_REQUEST_LIFETIME_SECONDS * 1000);
+      const authExpiresAt = new Date(Date.now() + config.authRequestLifetimeSeconds * 1000);
       let claimed = false;
       await sql.begin(async (_tx) => {
         const tx = _tx as unknown as TxSql;

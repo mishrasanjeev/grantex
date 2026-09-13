@@ -234,9 +234,11 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    let expiresSeconds: number;
+    // `expiresIn` is the *grant* lifetime; it is validated here and applied
+    // when the code is exchanged (token.ts). The auth request / authorization
+    // code itself is short-lived (config.authRequestLifetimeSeconds).
     try {
-      expiresSeconds = parseExpiresIn(expiresIn);
+      parseExpiresIn(expiresIn);
     } catch {
       return reply.status(400).send({
         message: 'Invalid expiresIn format. Use e.g. "1h", "30m", "24h".',
@@ -244,7 +246,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
         requestId: request.id,
       });
     }
-    const expiresAt = new Date(Date.now() + expiresSeconds * 1000);
+    const expiresAt = new Date(Date.now() + config.authRequestLifetimeSeconds * 1000);
 
     const id = newAuthRequestId();
 

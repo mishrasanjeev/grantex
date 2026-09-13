@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import * as jose from 'jose';
-import { timingSafeEqual } from 'node:crypto';
 import type { McpAuthConfig, ClientStore } from '../types.js';
+import { createGrantexTokenVerifier, parseBasicAuth, secretMatches } from '../lib/verify.js';
 
 interface RevokeBody {
   token?: string;
@@ -10,37 +9,16 @@ interface RevokeBody {
   client_secret?: string;
 }
 
-/**
- * Extracts client credentials from Basic auth header.
- * Returns [clientId, clientSecret] or undefined if not present.
- */
-function parseBasicAuth(
-  authHeader: string | undefined,
-): [string, string] | undefined {
-  if (!authHeader) return undefined;
-  const lower = authHeader.toLowerCase();
-  if (!lower.startsWith('basic ')) return undefined;
-  const b64 = authHeader.slice(6).trim();
-  if (!b64) return undefined;
-  const decoded = Buffer.from(b64, 'base64').toString('utf-8');
-  const colonIdx = decoded.indexOf(':');
-  if (colonIdx < 0) return undefined;
-  return [decoded.slice(0, colonIdx), decoded.slice(colonIdx + 1)];
-}
-
-/** Constant-time client secret comparison. */
-function secretMatches(expected: string | undefined, provided: string | undefined): boolean {
-  if (typeof expected !== 'string' || typeof provided !== 'string') return false;
-  const a = Buffer.from(expected);
-  const b = Buffer.from(provided);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
 export function registerRevokeEndpoint(
   app: FastifyInstance,
   config: McpAuthConfig,
   clientStore: ClientStore,
 ): void {
+  // Revocation is bound to the requesting client (RFC 7009 §2.1), which
+  // requires a verified token: the MCP flow issues every grant with the
+  // client_id as the Principal (`sub`), so ownership is proven by signature.
+  const verifier = createGrantexTokenVerifier(config);
+
   // Rate limited via @fastify/rate-limit plugin config (20 req/min)
   app.post<{ Body: RevokeBody }>(
     '/revoke',
@@ -48,6 +26,13 @@ export function registerRevokeEndpoint(
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
+      if (!verifier.configured) {
+        return reply.status(503).send({
+          error: 'server_error',
+          error_description: 'grantexIssuer is not configured; token revocation is disabled',
+        });
+      }
+
       const body = request.body ?? {};
       const token = body.token;
 
@@ -60,6 +45,7 @@ export function registerRevokeEndpoint(
 
       // Authenticate client — Basic auth or body credentials
       const basicCreds = parseBasicAuth(request.headers.authorization);
+      let authenticatedClientId: string;
 
       if (basicCreds) {
         const [clientId, clientSecret] = basicCreds;
@@ -70,6 +56,7 @@ export function registerRevokeEndpoint(
             error_description: 'Invalid client credentials',
           });
         }
+        authenticatedClientId = client.clientId;
       } else if (body.client_id) {
         const client = await clientStore.get(body.client_id);
         if (!client) {
@@ -87,6 +74,7 @@ export function registerRevokeEndpoint(
             error_description: 'Invalid client credentials',
           });
         }
+        authenticatedClientId = client.clientId;
       } else {
         return reply.status(401).send({
           error: 'invalid_client',
@@ -95,19 +83,30 @@ export function registerRevokeEndpoint(
         });
       }
 
-      // Extract JTI from the token to revoke it
+      // Verify the token (signature, iss, aud) before trusting any claim in
+      // it. An expired token is still revocable (RFC 7009 §2.1).
       let jti: string | undefined;
+      let subject: string | undefined;
       try {
-        const payload = jose.decodeJwt(token);
+        const payload = await verifier.verify(token, { ignoreExpiration: true });
         jti = payload.jti;
+        subject = payload.sub;
       } catch {
-        // If we can't decode the token, per RFC 7009 we still return 200
+        // Invalid / unverifiable token: per RFC 7009 §2.2 respond 200 and do nothing.
         return reply.status(200).send();
       }
 
       if (!jti) {
         // No JTI to revoke — still return 200 per RFC 7009
         return reply.status(200).send();
+      }
+
+      // RFC 7009 §2.1: a client may only revoke tokens issued to it.
+      if (subject !== authenticatedClientId) {
+        return reply.status(403).send({
+          error: 'unauthorized_client',
+          error_description: 'Token was not issued to this client',
+        });
       }
 
       // Revoke via Grantex

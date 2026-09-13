@@ -129,6 +129,62 @@ describe('TokensClient', () => {
     expect(secondHeaders['Idempotency-Key']).toBe(firstHeaders['Idempotency-Key']);
   });
 
+  it('exchange() never retries: a 5xx or timeout after the code may have been consumed is surfaced, not replayed', async () => {
+    vi.useFakeTimers();
+    try {
+      const failure = {
+        ok: false,
+        status: 503,
+        headers: { get: () => null },
+        json: () => Promise.resolve({ message: 'upstream unavailable' }),
+        text: () => Promise.resolve(''),
+      };
+      const mockFetch = vi.fn().mockResolvedValue(failure);
+      vi.stubGlobal('fetch', mockFetch);
+
+      const grantex = new Grantex({ apiKey: 'test_key', maxRetries: 3 });
+      const pending = grantex.tokens.exchange({ code: 'single_use_code', agentId: 'ag_01' });
+      const rejection = expect(pending).rejects.toThrow('upstream unavailable');
+      await vi.runAllTimersAsync();
+      await rejection;
+      // With maxRetries=3 a retryable request would have been sent 4 times.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      const networkFetch = vi.fn().mockRejectedValue(new Error('socket hang up'));
+      vi.stubGlobal('fetch', networkFetch);
+      const pending2 = grantex.tokens.exchange({ code: 'single_use_code', agentId: 'ag_01' });
+      const rejection2 = expect(pending2).rejects.toThrow('socket hang up');
+      await vi.runAllTimersAsync();
+      await rejection2;
+      expect(networkFetch).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('other POSTs still retry on 5xx (retry default unchanged)', async () => {
+    vi.useFakeTimers();
+    try {
+      const failure = {
+        ok: false,
+        status: 503,
+        headers: { get: () => null },
+        json: () => Promise.resolve({ message: 'unavailable' }),
+        text: () => Promise.resolve(''),
+      };
+      const mockFetch = vi.fn().mockResolvedValue(failure);
+      vi.stubGlobal('fetch', mockFetch);
+      const grantex = new Grantex({ apiKey: 'test_key', maxRetries: 2 });
+      const pending = grantex.tokens.verify('tok');
+      const rejection = expect(pending).rejects.toThrow('unavailable');
+      await vi.runAllTimersAsync();
+      await rejection;
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('revoke() POSTs to /v1/tokens/revoke', async () => {
     const mockFetch = makeFetch(204, null);
     vi.stubGlobal('fetch', mockFetch);

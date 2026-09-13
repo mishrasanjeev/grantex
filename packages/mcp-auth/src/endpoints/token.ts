@@ -1,6 +1,27 @@
 import type { FastifyInstance } from 'fastify';
 import type { McpAuthConfig, ClientStore, CodeStore } from '../types.js';
 import { verifyCodeChallenge } from '../lib/pkce.js';
+import { isConfidentialClient, parseBasicAuth, secretMatches } from '../lib/verify.js';
+import type { ClientRegistration } from '../types.js';
+
+/**
+ * OAuth 2.1 §2.1: a confidential client MUST authenticate at the token
+ * endpoint. Public clients (no registered secret) rely on PKCE alone.
+ * Returns true when the request is authenticated for `client`.
+ */
+function clientAuthenticated(
+  client: ClientRegistration,
+  authorizationHeader: string | undefined,
+  body: TokenBody,
+): boolean {
+  if (!isConfidentialClient(client)) return true;
+  const basic = parseBasicAuth(authorizationHeader);
+  if (basic) {
+    const [basicId, basicSecret] = basic;
+    return basicId === client.clientId && secretMatches(client.clientSecret, basicSecret);
+  }
+  return secretMatches(client.clientSecret, body.client_secret);
+}
 
 interface TokenBody {
   grant_type: string;
@@ -19,7 +40,11 @@ export function registerTokenEndpoint(
   codeStore: CodeStore,
 ): void {
   app.post<{ Body: TokenBody }>('/token', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const { grant_type, code, redirect_uri, client_id, code_verifier, refresh_token } = request.body ?? {};
+    const body = request.body ?? ({} as TokenBody);
+    const { grant_type, code, redirect_uri, code_verifier, refresh_token } = body;
+    // client_id may arrive in the body or (for confidential clients) via Basic auth.
+    const basicCreds = parseBasicAuth(request.headers.authorization);
+    const client_id = body.client_id ?? basicCreds?.[0];
 
     if (grant_type === 'authorization_code') {
       if (!code || !redirect_uri || !client_id || !code_verifier) {
@@ -35,6 +60,12 @@ export function registerTokenEndpoint(
         return reply.status(401).send({
           error: 'invalid_client',
           error_description: 'Unknown client_id',
+        });
+      }
+      if (!clientAuthenticated(client, request.headers.authorization, body)) {
+        return reply.status(401).send({
+          error: 'invalid_client',
+          error_description: 'Client authentication failed',
         });
       }
 
@@ -114,6 +145,13 @@ export function registerTokenEndpoint(
         return reply.status(401).send({
           error: 'invalid_client',
           error_description: 'Unknown client_id',
+        });
+      }
+
+      if (!clientAuthenticated(client, request.headers.authorization, body)) {
+        return reply.status(401).send({
+          error: 'invalid_client',
+          error_description: 'Client authentication failed',
         });
       }
 

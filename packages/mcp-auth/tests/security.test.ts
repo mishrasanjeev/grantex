@@ -68,8 +68,10 @@ function createMockGrantex() {
       scopes: ['read', 'write'],
       expiresIn: '600s',
       expiresAt: new Date(Date.now() + 600_000).toISOString(),
-      status: 'pending' as const,
+      status: 'approved' as const,
       createdAt: new Date().toISOString(),
+      sandbox: true,
+      code: 'GRANTEX_SANDBOX_CODE',
     }),
     tokens: {
       exchange: vi.fn().mockResolvedValue({
@@ -108,8 +110,11 @@ async function createTestApp() {
     grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
     agentId: 'agent-1',
     scopes: ['read', 'write'],
-    issuer,
+    issuer: 'https://auth.example.com',
+    // Tokens are minted by Grantex: pin its issuer and JWKS.
+    grantexIssuer: issuer,
     clientStore,
+    sandboxAutoApprove: true,
   });
 
   return { app, mockGrantex, clientStore };
@@ -259,6 +264,7 @@ describe('OAuth 2.1 security', () => {
       scp: ['read'],
     })
       .setProtectedHeader({ alg: 'RS256', kid: 'test-key-1' })
+      .setIssuer(`http://127.0.0.1:${jwksPort}`)
       .setIssuedAt()
       .setJti('grnt_rs256')
       .setExpirationTime('1h')
@@ -301,6 +307,7 @@ describe('OAuth 2.1 security', () => {
         code,
         redirect_uri: TEST_REDIRECT_URI,
         client_id: TEST_CLIENT_ID,
+        client_secret: TEST_CLIENT_SECRET,
         code_verifier: TEST_VERIFIER,
       },
     });
@@ -316,6 +323,7 @@ describe('OAuth 2.1 security', () => {
         code,
         redirect_uri: TEST_REDIRECT_URI,
         client_id: TEST_CLIENT_ID,
+        client_secret: TEST_CLIENT_SECRET,
         code_verifier: TEST_VERIFIER,
       },
     });

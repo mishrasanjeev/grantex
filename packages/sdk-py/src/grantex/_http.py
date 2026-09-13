@@ -64,8 +64,22 @@ class HttpClient:
     def get(self, path: str, headers: dict[str, str] | None = None) -> Any:
         return self._request("GET", path, headers=headers)
 
-    def post(self, path: str, body: Any = None, headers: dict[str, str] | None = None) -> Any:
-        return self._request("POST", path, body=body, headers=headers)
+    def post(
+        self,
+        path: str,
+        body: Any = None,
+        headers: dict[str, str] | None = None,
+        *,
+        retry: bool = True,
+    ) -> Any:
+        """POST ``body`` to ``path``.
+
+        ``retry=False`` disables transient retries for non-idempotent requests
+        that must never be replayed (an authorization-code exchange: a retry
+        after a timeout/5xx can burn a single-use code whose first request
+        actually committed).
+        """
+        return self._request("POST", path, body=body, headers=headers, retry=retry)
 
     def put(self, path: str, body: Any = None, headers: dict[str, str] | None = None) -> Any:
         return self._request("PUT", path, body=body, headers=headers)
@@ -82,8 +96,10 @@ class HttpClient:
         path: str,
         body: Any = None,
         headers: dict[str, str] | None = None,
+        retry: bool = True,
     ) -> Any:
         url = f"{self._base_url}{path}"
+        max_retries = self._max_retries if retry else 0
         kwargs: dict[str, Any] = {}
         if body is not None:
             kwargs["json"] = body
@@ -92,7 +108,7 @@ class HttpClient:
 
         last_error: Exception | None = None
 
-        for attempt in range(self._max_retries + 1):
+        for attempt in range(max_retries + 1):
             if attempt > 0:
                 time.sleep(self._retry_delay(attempt - 1))
 
@@ -102,14 +118,14 @@ class HttpClient:
                 last_error = GrantexNetworkError(
                     f"Request timed out: {exc}", cause=exc
                 )
-                if attempt < self._max_retries:
+                if attempt < max_retries:
                     continue
                 raise last_error from exc
             except httpx.RequestError as exc:
                 last_error = GrantexNetworkError(
                     f"Network error: {exc}", cause=exc
                 )
-                if attempt < self._max_retries:
+                if attempt < max_retries:
                     continue
                 raise last_error from exc
 
@@ -124,7 +140,7 @@ class HttpClient:
                     body_data = response.text or None
 
                 # Retry on transient status codes
-                if response.status_code in _RETRYABLE_STATUS_CODES and attempt < self._max_retries:
+                if response.status_code in _RETRYABLE_STATUS_CODES and attempt < max_retries:
                     retry_after = _parse_retry_after(response.headers)
                     if retry_after is not None:
                         self._pending_retry_after = retry_after

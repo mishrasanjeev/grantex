@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import type { Server, IncomingMessage, ServerResponse } from 'node:http';
 import * as jose from 'jose';
 import { requireMcpAuth } from '../src/middleware/express.js';
+import { requireMcpAuth as requireMcpAuthHono } from '../src/middleware/hono.js';
 import type { McpAuthRequest } from '../src/middleware/express.js';
 
 let rsaPrivateKey: jose.CryptoKey;
@@ -50,10 +51,11 @@ afterAll(async () => {
 
 async function signTestJwt(
   claims: Record<string, unknown>,
-  options?: { expiresIn?: string },
+  options?: { expiresIn?: string; issuer?: string },
 ): Promise<string> {
   const builder = new jose.SignJWT(claims)
     .setProtectedHeader({ alg: 'RS256', kid: 'test-key-1' })
+    .setIssuer(options?.issuer ?? issuer)
     .setIssuedAt()
     .setSubject(claims['sub'] as string ?? 'user_abc')
     .setJti('grnt_mw_test');
@@ -203,5 +205,63 @@ describe('Express middleware', () => {
     });
 
     expect(result.statusCode).toBe(401);
+  });
+
+  describe('issuer / audience pinning', () => {
+    it('rejects a token from a different iss even when the key validates', async () => {
+      const mw = requireMcpAuth({ issuer: 'https://grantex.example.com', jwksUri: `${issuer}/.well-known/jwks.json` });
+      const wrongIss = await signTestJwt({ sub: 'user_abc', scp: ['read'] }, { issuer });
+      const rightIss = await signTestJwt({ sub: 'user_abc', scp: ['read'] }, { issuer: 'https://grantex.example.com' });
+
+      const rejected = await invokeMiddleware(mw, { authorization: `Bearer ${wrongIss}` });
+      expect(rejected.statusCode).toBe(401);
+
+      const accepted = await invokeMiddleware(mw, { authorization: `Bearer ${rightIss}` });
+      expect(accepted.statusCode).toBe(200);
+    });
+
+    it('rejects a token whose aud does not match the configured audience', async () => {
+      const mw = requireMcpAuth({ issuer, audience: 'https://mcp.example.com' });
+      const good = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://mcp.example.com' });
+      const bad = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://other.example.com' });
+      const none = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
+
+      expect((await invokeMiddleware(mw, { authorization: `Bearer ${good}` })).statusCode).toBe(200);
+      expect((await invokeMiddleware(mw, { authorization: `Bearer ${bad}` })).statusCode).toBe(401);
+      expect((await invokeMiddleware(mw, { authorization: `Bearer ${none}` })).statusCode).toBe(401);
+    });
+
+    it('fails closed when issuer is empty', async () => {
+      const mw = requireMcpAuth({ issuer: '' });
+      const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
+      expect((await invokeMiddleware(mw, { authorization: `Bearer ${token}` })).statusCode).toBe(401);
+    });
+  });
+});
+
+describe('Hono middleware', () => {
+  function run(mw: ReturnType<typeof requireMcpAuthHono>, authorization?: string) {
+    const vars = new Map<string, unknown>();
+    let status = 200;
+    let payload: unknown;
+    const c = {
+      req: { header: (name: string) => (name.toLowerCase() === 'authorization' ? authorization : undefined) },
+      set: (k: string, v: unknown) => { vars.set(k, v); },
+      json: (data: unknown, s?: number) => { payload = data; status = s ?? 200; return new Response(JSON.stringify(data), { status }); },
+    };
+    return mw(c, async () => {}).then((res) => ({ status: res ? res.status : 200, payload, vars }));
+  }
+
+  it('rejects a different iss and a mismatched aud, accepts the pinned pair', async () => {
+    const mw = requireMcpAuthHono({ issuer, audience: 'https://mcp.example.com' });
+    const good = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://mcp.example.com' });
+    const wrongIss = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://mcp.example.com' }, { issuer: 'https://evil.example.com' });
+    const wrongAud = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://other.example.com' });
+
+    const ok = await run(mw, `Bearer ${good}`);
+    expect(ok.status).toBe(200);
+    expect((ok.vars.get('mcpGrant') as { sub: string }).sub).toBe('user_abc');
+    expect((await run(mw, `Bearer ${wrongIss}`)).status).toBe(401);
+    expect((await run(mw, `Bearer ${wrongAud}`)).status).toBe(401);
   });
 });

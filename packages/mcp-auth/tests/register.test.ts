@@ -79,6 +79,37 @@ describe('register endpoint', () => {
     expect(body.client_secret.length).toBeGreaterThan(0);
   });
 
+  it('registers a public client (token_endpoint_auth_method=none) without a secret', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/register',
+      payload: {
+        redirect_uris: ['https://app.example.com/callback'],
+        token_endpoint_auth_method: 'none',
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body).toHaveProperty('client_id');
+    expect(body).not.toHaveProperty('client_secret');
+    expect(body.token_endpoint_auth_method).toBe('none');
+  });
+
+  it('rejects an unknown token_endpoint_auth_method', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/register',
+      payload: {
+        redirect_uris: ['https://app.example.com/callback'],
+        token_endpoint_auth_method: 'private_key_jwt',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('invalid_client_metadata');
+  });
+
   it('returns 400 when redirect_uris is missing', async () => {
     const response = await app.inject({
       method: 'POST',

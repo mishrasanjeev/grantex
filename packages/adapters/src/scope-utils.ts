@@ -30,6 +30,12 @@ export function findMatchingScope(
   grantedScopes: string[],
   requiredScope: string,
 ): ParsedScope | null {
+  // Exact match first (core SDK semantics); a constrained grant of the same
+  // base scope is returned only when no exact grant exists, and callers must
+  // then enforce the constraint (see BaseAdapter.verifyAndCheckScope).
+  if (grantedScopes.includes(requiredScope)) {
+    return parseScope(requiredScope);
+  }
   for (const scope of grantedScopes) {
     const parsed = parseScope(scope);
     if (parsed.baseScope === requiredScope) {

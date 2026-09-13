@@ -18,9 +18,20 @@ export abstract class BaseAdapter {
     this.timeout = config.timeout ?? 30_000;
   }
 
+  /**
+   * Verifies the token and checks `requiredScope`.
+   *
+   * Core Grantex semantics are exact-match: a constrained grant such as
+   * `payments:initiate:max_500` does NOT satisfy a bare `payments:initiate`
+   * requirement. Adapters that can enforce the constraint themselves (Stripe
+   * enforces `max_N` against the amount) opt in with `enforcesConstraint: true`
+   * and receive the parsed constraint; every other caller gets a
+   * `CONSTRAINT_VIOLATED` error instead of silently ignoring the limit.
+   */
   protected async verifyAndCheckScope(
     token: string,
     requiredScope: string,
+    options: { enforcesConstraint?: boolean } = {},
   ): Promise<{ grant: VerifiedGrant; matchedScope: ParsedScope }> {
     let grant: VerifiedGrant;
     try {
@@ -37,6 +48,12 @@ export abstract class BaseAdapter {
       throw new GrantexAdapterError(
         'SCOPE_MISSING',
         `Grant does not include required scope: ${requiredScope}`,
+      );
+    }
+    if (matchedScope.constraint && options.enforcesConstraint !== true) {
+      throw new GrantexAdapterError(
+        'CONSTRAINT_VIOLATED',
+        `Grant scope ${requiredScope} carries a constraint this adapter cannot enforce`,
       );
     }
 

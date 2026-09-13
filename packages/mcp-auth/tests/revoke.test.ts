@@ -85,13 +85,15 @@ function createMockGrantex() {
 
 async function signTestJwt(
   claims: Record<string, unknown>,
+  options: { expiresIn?: string; issuer?: string; key?: jose.CryptoKey } = {},
 ): Promise<string> {
   return new jose.SignJWT(claims)
     .setProtectedHeader({ alg: 'RS256', kid: 'test-key-1' })
+    .setIssuer(options.issuer ?? `http://127.0.0.1:${jwksPort}`)
     .setIssuedAt()
     .setJti('grnt_revoke_test')
-    .setExpirationTime('1h')
-    .sign(rsaPrivateKey);
+    .setExpirationTime(options.expiresIn ?? '1h')
+    .sign(options.key ?? rsaPrivateKey);
 }
 
 describe('revoke endpoint', () => {
@@ -117,7 +119,8 @@ describe('revoke endpoint', () => {
       grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
       agentId: 'agent-1',
       scopes: ['read', 'write'],
-      issuer,
+      issuer: 'https://auth.example.com',
+      grantexIssuer: issuer,
       clientStore,
       hooks: {
         onRevocation: onRevocationHook as (jti: string) => Promise<void>,
@@ -126,7 +129,7 @@ describe('revoke endpoint', () => {
   });
 
   it('revokes a valid token and returns 200', async () => {
-    const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
+    const token = await signTestJwt({ sub: TEST_CLIENT_ID, scp: ['read'] });
     const basicCreds = Buffer.from(
       `${TEST_CLIENT_ID}:${TEST_CLIENT_SECRET}`,
     ).toString('base64');
@@ -147,7 +150,7 @@ describe('revoke endpoint', () => {
       new Error('Token already revoked'),
     );
 
-    const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
+    const token = await signTestJwt({ sub: TEST_CLIENT_ID, scp: ['read'] });
     const basicCreds = Buffer.from(
       `${TEST_CLIENT_ID}:${TEST_CLIENT_SECRET}`,
     ).toString('base64');
@@ -163,7 +166,7 @@ describe('revoke endpoint', () => {
   });
 
   it('calls hooks.onRevocation with the JTI', async () => {
-    const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
+    const token = await signTestJwt({ sub: TEST_CLIENT_ID, scp: ['read'] });
     const basicCreds = Buffer.from(
       `${TEST_CLIENT_ID}:${TEST_CLIENT_SECRET}`,
     ).toString('base64');
@@ -179,7 +182,7 @@ describe('revoke endpoint', () => {
   });
 
   it('rejects unauthenticated request', async () => {
-    const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
+    const token = await signTestJwt({ sub: TEST_CLIENT_ID, scp: ['read'] });
 
     const response = await app.inject({
       method: 'POST',
@@ -193,7 +196,7 @@ describe('revoke endpoint', () => {
   });
 
   it('authenticates via client_id in body', async () => {
-    const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
+    const token = await signTestJwt({ sub: TEST_CLIENT_ID, scp: ['read'] });
 
     const response = await app.inject({
       method: 'POST',
@@ -238,5 +241,92 @@ describe('revoke endpoint', () => {
     });
 
     expect(response.statusCode).toBe(200);
+  });
+
+  describe('client binding (RFC 7009 §2.1)', () => {
+    const basic = () => `Basic ${Buffer.from(`${TEST_CLIENT_ID}:${TEST_CLIENT_SECRET}`).toString('base64')}`;
+
+    it('refuses to revoke a token issued to a different client', async () => {
+      const token = await signTestJwt({ sub: 'some-other-client', scp: ['read'] });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/revoke',
+        headers: { authorization: basic() },
+        payload: { token },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('unauthorized_client');
+      expect(mockGrantex.tokens.revoke).not.toHaveBeenCalled();
+      expect(onRevocationHook).not.toHaveBeenCalled();
+    });
+
+    it('ignores a forged (unsigned-by-Grantex) token claiming our client as sub', async () => {
+      const { privateKey: rogueKey } = await jose.generateKeyPair('RS256');
+      const forged = await signTestJwt({ sub: TEST_CLIENT_ID, scp: ['read'] }, { key: rogueKey });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/revoke',
+        headers: { authorization: basic() },
+        payload: { token: forged },
+      });
+
+      // RFC 7009: invalid token → 200, but nothing is revoked.
+      expect(response.statusCode).toBe(200);
+      expect(mockGrantex.tokens.revoke).not.toHaveBeenCalled();
+    });
+
+    it('ignores a token from a different issuer', async () => {
+      const token = await signTestJwt({ sub: TEST_CLIENT_ID, scp: ['read'] }, { issuer: 'https://evil.example.com' });
+      const response = await app.inject({
+        method: 'POST',
+        url: '/revoke',
+        headers: { authorization: basic() },
+        payload: { token },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(mockGrantex.tokens.revoke).not.toHaveBeenCalled();
+    });
+
+    it('still revokes an expired token that belongs to the client', async () => {
+      const token = await signTestJwt({ sub: TEST_CLIENT_ID, scp: ['read'] }, { expiresIn: '-1h' });
+      const response = await app.inject({
+        method: 'POST',
+        url: '/revoke',
+        headers: { authorization: basic() },
+        payload: { token },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(mockGrantex.tokens.revoke).toHaveBeenCalledWith('grnt_revoke_test');
+    });
+
+    it('fails closed (503) when grantexIssuer is not configured', async () => {
+      const clientStore = new InMemoryClientStore();
+      await clientStore.set(TEST_CLIENT_ID, {
+        clientId: TEST_CLIENT_ID,
+        clientSecret: TEST_CLIENT_SECRET,
+        redirectUris: ['https://app.example.com/callback'],
+        grantTypes: ['authorization_code'],
+        createdAt: new Date().toISOString(),
+      });
+      const appNoIssuer = await createMcpAuthServer({
+        grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
+        agentId: 'agent-1',
+        scopes: ['read'],
+        issuer: 'https://auth.example.com',
+        clientStore,
+      });
+      const token = await signTestJwt({ sub: TEST_CLIENT_ID, scp: ['read'] });
+      const response = await appNoIssuer.inject({
+        method: 'POST',
+        url: '/revoke',
+        headers: { authorization: basic() },
+        payload: { token },
+      });
+      expect(response.statusCode).toBe(503);
+      expect(mockGrantex.tokens.revoke).not.toHaveBeenCalled();
+    });
   });
 });

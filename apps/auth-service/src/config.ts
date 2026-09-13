@@ -190,6 +190,11 @@ export const config = {
   // argument is what enforces the hard cap — a larger value is rejected at boot
   // rather than silently honoured.
   maxDelegationDepth: integerSetting('MAX_DELEGATION_DEPTH', '3', 1, 10),
+  // Lifetime of a pending authorization request and its authorization code
+  // (SPEC §5.2 example: 15 minutes). This is deliberately decoupled from the
+  // grant lifetime (`expiresIn`, default 24h) — an authorization code is a
+  // short-lived, single-use credential (OAuth 2.1 §4.1.2 recommends <= 10 min).
+  authRequestLifetimeSeconds: integerSetting('AUTH_REQUEST_LIFETIME_SECONDS', '600', 30, 3_600),
 } as const;
 
 if (!config.rsaPrivateKey && !config.autoGenerateKeys) {

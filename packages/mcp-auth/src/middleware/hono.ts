@@ -29,8 +29,20 @@ export interface McpGrant {
 }
 
 export interface RequireMcpAuthOptions {
-  /** The issuer URL (JWKS fetched from {issuer}/.well-known/jwks.json) */
+  /**
+   * Expected `iss` claim — the Grantex authorization server that signed the
+   * token (e.g. `https://grantex.dev`), NOT this MCP server's own URL. The
+   * JWKS is fetched from `{issuer}/.well-known/jwks.json` unless `jwksUri`
+   * is given. Tokens whose `iss` differs are rejected.
+   */
   issuer: string;
+  /** Explicit JWKS URL (defaults to `{issuer}/.well-known/jwks.json`). */
+  jwksUri?: string;
+  /**
+   * Expected `aud` claim (this MCP server's resource identifier, RFC 8707).
+   * When set, tokens without a matching `aud` are rejected (SPEC §6.4).
+   */
+  audience?: string | string[];
   /** Required scopes (all must be present). Optional. */
   scopes?: string[];
   /** Allowed algorithms. Defaults to ['RS256', 'ES256', 'PS256', 'EdDSA']. */
@@ -51,19 +63,18 @@ interface HonoContext {
 
 type HonoNext = () => Promise<void>;
 
-// Module-level JWKS cache keyed by issuer URL
+// Module-level JWKS cache keyed by JWKS URL
 const jwksCache = new Map<string, ReturnType<typeof jose.createRemoteJWKSet>>();
 
 function getJwks(
-  issuer: string,
+  options: RequireMcpAuthOptions,
 ): ReturnType<typeof jose.createRemoteJWKSet> {
-  const issuerBase = issuer.endsWith('/') ? issuer.slice(0, -1) : issuer;
-  let jwks = jwksCache.get(issuerBase);
+  const issuerBase = options.issuer.endsWith('/') ? options.issuer.slice(0, -1) : options.issuer;
+  const jwksUrl = options.jwksUri ?? `${issuerBase}/.well-known/jwks.json`;
+  let jwks = jwksCache.get(jwksUrl);
   if (!jwks) {
-    jwks = jose.createRemoteJWKSet(
-      new URL(`${issuerBase}/.well-known/jwks.json`),
-    );
-    jwksCache.set(issuerBase, jwks);
+    jwks = jose.createRemoteJWKSet(new URL(jwksUrl));
+    jwksCache.set(jwksUrl, jwks);
   }
   return jwks;
 }
@@ -121,9 +132,15 @@ export function requireMcpAuth(
     }
 
     try {
-      const jwks = getJwks(options.issuer);
+      if (!options.issuer) {
+        // Fail closed: without a pinned issuer any JWKS-signed token would pass.
+        throw new Error('issuer is required');
+      }
+      const jwks = getJwks(options);
       const { payload } = await jose.jwtVerify(token, jwks, {
         algorithms,
+        issuer: options.issuer.endsWith('/') ? [options.issuer, options.issuer.slice(0, -1)] : [options.issuer, `${options.issuer}/`],
+        ...(options.audience !== undefined ? { audience: options.audience } : {}),
       });
 
       // Parse scopes from token

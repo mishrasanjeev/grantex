@@ -36,6 +36,13 @@ export interface HttpClientOptions {
 
 export interface RequestOptions {
   headers?: Record<string, string>;
+  /**
+   * Set to `false` for non-idempotent requests that must never be replayed
+   * (e.g. an authorization-code exchange: a retry after a timeout or 5xx can
+   * burn a single-use code whose first request actually committed).
+   * Defaults to `true`.
+   */
+  retry?: boolean;
 }
 
 export class HttpClient {
@@ -105,8 +112,9 @@ export class HttpClient {
 
     let lastError: unknown;
     let pendingRetryAfterMs: number | undefined;
+    const maxRetries = options?.retry === false ? 0 : this.#maxRetries;
 
-    for (let attempt = 0; attempt <= this.#maxRetries; attempt++) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (attempt > 0) {
         await this.#sleep(this.#retryDelay(attempt - 1, pendingRetryAfterMs));
         pendingRetryAfterMs = undefined;
@@ -134,7 +142,7 @@ export class HttpClient {
           err,
         );
         // Network errors are retryable
-        if (attempt < this.#maxRetries) {
+        if (attempt < maxRetries) {
           continue;
         }
         throw lastError;
@@ -154,7 +162,7 @@ export class HttpClient {
         }
 
         // Retry on transient status codes
-        if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < this.#maxRetries) {
+        if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < maxRetries) {
           pendingRetryAfterMs = this.#parseRetryAfter(response.headers);
           continue;
         }

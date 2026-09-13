@@ -57,8 +57,18 @@ const authServer = await createMcpAuthServer({
   agentId: 'ag_your_mcp_server',
   scopes: ['tools:read', 'tools:execute', 'resources:read'],
   issuer: 'https://your-mcp-server.example.com',
+  // Grantex signs the grant tokens: pin its issuer so /introspect and /revoke
+  // verify against the right JWKS (they fail closed without it).
+  grantexIssuer: 'https://grantex.dev',
+  audience: 'https://your-mcp-server.example.com',
 });
 ```
+
+Register `https://your-mcp-server.example.com/callback` (the consent callback,
+see `callbackUrl`) as a redirect URI on the Grantex Agent. `/authorize` sends the
+user-agent to the Grantex consent page and only issues the client's
+authorization code once the Principal has approved and Grantex has redirected
+back to that callback.
 
 ### 2. Start listening
 
@@ -73,7 +83,8 @@ console.log('MCP Auth Server running on http://localhost:3001');
 import { requireMcpAuth } from '@grantex/mcp-auth/express';
 
 app.use('/mcp', requireMcpAuth({
-  issuer: 'https://your-mcp-server.example.com',
+  issuer: 'https://grantex.dev',            // the Grantex issuer that signs grant tokens
+  audience: 'https://your-mcp-server.example.com',
   scopes: ['tools:execute'],
 }));
 ```
@@ -112,7 +123,13 @@ const server = await createMcpAuthServer(config);
 | `grantex` | `Grantex` | Yes | - | Grantex SDK client instance |
 | `agentId` | `string` | Yes | - | Agent ID for Grantex authorization |
 | `scopes` | `string[]` | Yes | - | Scopes to request from Grantex |
-| `issuer` | `string` | Yes | - | Base URL for this auth server (used in metadata) |
+| `issuer` | `string` | Yes | - | Base URL for this auth server (used in metadata and as the default consent callback base) |
+| `grantexIssuer` | `string` | For `/introspect`, `/revoke` | - | Expected `iss` of Grantex grant tokens (e.g. `https://grantex.dev`). Signatures are verified against its JWKS; both endpoints return 503 when unset |
+| `jwksUri` | `string` | No | `{grantexIssuer}/.well-known/jwks.json` | Explicit JWKS URL |
+| `audience` | `string \| string[]` | No | `allowedResources` | Expected `aud` claim on introspected tokens |
+| `callbackUrl` | `string` | No | `{issuer}/callback` | Where Grantex redirects the Principal after consent. Register it on the Grantex Agent |
+| `callbackPath` | `string` | No | `/callback` | Route path of the consent callback |
+| `sandboxAutoApprove` | `boolean` | No | `false` | Allow a Grantex sandbox auto-approval to skip the consent redirect and issue a code immediately |
 | `allowedRedirectUris` | `string[]` | No | `[]` | Declared but not enforced in `2.0.2`; the client's registered URI is checked |
 | `allowedResources` | `string[]` | No | `[]` | Allowed resource indicators (RFC 8707) |
 | `clientStore` | `ClientStore` | No | `InMemoryClientStore` | Client registrations only; authorization codes stay in process memory |
@@ -202,7 +219,8 @@ const app = express();
 
 // Protect all /mcp routes
 app.use('/mcp', requireMcpAuth({
-  issuer: 'https://your-mcp-server.example.com',
+  issuer: 'https://grantex.dev',            // the Grantex issuer that signs grant tokens
+  audience: 'https://your-mcp-server.example.com',
   scopes: ['tools:execute'],
 }));
 
@@ -222,7 +240,9 @@ app.listen(3000);
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `issuer` | `string` | Yes | - | Issuer URL (JWKS fetched from `{issuer}/.well-known/jwks.json`) |
+| `issuer` | `string` | Yes | - | Expected `iss` claim — the Grantex issuer that signed the token (JWKS fetched from `{issuer}/.well-known/jwks.json` unless `jwksUri` is set). Tokens with any other `iss` are rejected |
+| `jwksUri` | `string` | No | `{issuer}/.well-known/jwks.json` | Explicit JWKS URL |
+| `audience` | `string \| string[]` | No | - | Expected `aud` claim; when set, tokens without a matching `aud` are rejected |
 | `scopes` | `string[]` | No | `[]` | Required scopes (all must be present) |
 | `algorithms` | `string[]` | No | `['RS256', 'ES256', 'PS256', 'EdDSA']` | Allowed JWT algorithms |
 
@@ -254,7 +274,8 @@ const app = new Hono();
 
 // Protect routes
 app.use('/mcp/*', requireMcpAuth({
-  issuer: 'https://your-mcp-server.example.com',
+  issuer: 'https://grantex.dev',
+  audience: 'https://your-mcp-server.example.com',
   scopes: ['tools:execute'],
 }));
 

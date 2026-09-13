@@ -235,25 +235,55 @@ export function decodeGDT(token: string): GDTJWTPayload {
 // ---------------------------------------------------------------------------
 
 /**
- * Check whether a requested resource:action matches any of the granted scopes.
+ * Check whether a requested scope matches any of the granted scopes.
  *
- * Supports wildcard matching:
- * - "weather:*" matches "weather:read", "weather:write"
- * - "*" matches everything
- * - Exact match: "weather:read" matches "weather:read"
+ * Non-wildcard scopes follow the core SDK's canonical semantics
+ * (`@grantex/sdk` `scopeMatches`): exact string equality, where a constraint
+ * (`weather:read:max_5`) is part of the permission and is never satisfied by
+ * a broader or differently-constrained grant.
+ *
+ * GDT wildcard sugar is structural, not a string prefix:
+ * - "*" matches any unconstrained `resource:action`
+ * - "weather:*" matches any unconstrained `weather:<action>`
+ * A wildcard never covers a constrained scope such as `weather:read:max_5`
+ * — that scope must be granted verbatim, exactly as elsewhere in Grantex.
  */
-function scopeMatches(requested: string, granted: string[]): boolean {
+export function scopeMatches(requested: string, granted: string[]): boolean {
+  const requestedParsed = parseScope(requested);
   for (const scope of granted) {
-    if (scope === '*') return true;
+    // Canonical exact match (core SDK semantics).
     if (scope === requested) return true;
+    if (!requestedParsed || requestedParsed.constraint !== undefined) continue;
 
-    // Wildcard: "weather:*" matches "weather:read"
+    if (scope === '*') return true;
     if (scope.endsWith(':*')) {
-      const prefix = scope.slice(0, -1); // "weather:"
-      if (requested.startsWith(prefix)) return true;
+      const wildcardParsed = parseScope(scope);
+      if (wildcardParsed && wildcardParsed.constraint === undefined
+          && wildcardParsed.resource === requestedParsed.resource) {
+        return true;
+      }
     }
   }
   return false;
+}
+
+/**
+ * Port of `parseScope` from `@grantex/sdk/scopes` (kept identical so the two
+ * packages never drift; see tests/scope-parity.test.ts).
+ */
+export interface ParsedScope {
+  resource: string;
+  action: string;
+  constraint?: string;
+}
+
+export function parseScope(scope: string): ParsedScope | undefined {
+  if (typeof scope !== 'string') return undefined;
+  const parts = scope.split(':');
+  if (parts.length < 2 || parts.length > 3) return undefined;
+  if (parts.some((part) => part.length === 0)) return undefined;
+  const [resource, action, constraint] = parts as [string, string, string?];
+  return constraint !== undefined ? { resource, action, constraint } : { resource, action };
 }
 
 function formatEpochSeconds(value: unknown): string {
