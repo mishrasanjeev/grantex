@@ -59,7 +59,7 @@ import {
   supportsPkceS256,
 } from '../src/lib/sso.js';
 import { encrypt } from '../src/lib/vault-crypto.js';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { setSafeFetchForTests } from '../src/lib/url-security.js';
 import { signSsoState, verifySsoState } from '../src/routes/sso.js';
 
@@ -629,6 +629,22 @@ describe('POST /sso/callback/oidc', () => {
     state = signSsoState({
       org: 'dev_TEST', connectionId: 'sso_CONN01', oidcRequestId: OIDC_REQUEST_ID,
     });
+  });
+
+  it('does not accept state signed with the public kid as the HMAC key', () => {
+    // With auto-generated keys (no RSA_PRIVATE_KEY / SSO_STATE_SECRET) the
+    // fallback HMAC key used to be sha256(kid) where kid = "grantex-YYYY-MM",
+    // a value published in the JWKS. Anyone could forge state.
+    const now = new Date();
+    const kid = `grantex-${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const forgedKey = createHash('sha256').update(kid).digest('hex');
+    const payload = Buffer.from(JSON.stringify({
+      org: 'dev_ATTACKER', connectionId: 'sso_X', iat: Math.floor(Date.now() / 1000), nonce: 'n',
+    })).toString('base64url');
+    const sig = createHmac('sha256', forgedKey).update(payload).digest('base64url');
+    expect(verifySsoState(`${payload}.${sig}`)).toBeNull();
+    // Legitimately signed state still round-trips.
+    expect(verifySsoState(signSsoState({ org: 'dev_TEST', connectionId: 'sso_CONN01' }))).not.toBeNull();
   });
 
   it('rejects signed state after its ten-minute lifetime', () => {

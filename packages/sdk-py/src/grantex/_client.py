@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import math
 import os
+import re
 from typing import Any, Callable
 
 import httpx
@@ -45,6 +47,8 @@ from ._types import VerifyGrantTokenOptions
 
 _DEFAULT_BASE_URL = "https://api.grantex.dev"
 
+
+_CAP_RE = re.compile(r"^\d+(\.\d+)?$")
 
 class Grantex:
     """Main entry point for the Grantex SDK."""
@@ -270,7 +274,14 @@ class Grantex:
 
         # 6. Check capped amount if provided
         if amount is not None:
-            cap = self._extract_cap(scopes, connector)
+            if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount):
+                return self._apply_enforce_mode(_denied(f"Amount must be a finite number to enforce a budget cap on {connector}."))
+            try:
+                cap = self._extract_cap(scopes, connector)
+            except ValueError:
+                return self._apply_enforce_mode(_denied(
+                    f"A capped scope on {connector} carries a malformed cap; refusing to authorize amount {amount}."
+                ))
             if cap is not None and amount > cap:
                 return self._apply_enforce_mode(_denied(f"Amount {amount} exceeds budget cap of {cap} on {connector}."))
 
@@ -301,17 +312,28 @@ class Grantex:
 
     @staticmethod
     def _extract_cap(scopes: list[str], connector: str) -> float | None:
-        """Extract budget cap from capped scopes."""
+        """Extract the tightest budget cap from capped scopes for a connector.
+
+        Returning the first capped scope encountered let
+        ``tool:x:read:capped:1000`` shadow ``tool:x:write:capped:10`` purely by
+        ordering, and a malformed cap (``capped:abc``) silently disabled the
+        check. A malformed or negative cap now raises ``ValueError`` so the
+        caller fails closed.
+        """
+        cap: float | None = None
         for scope in scopes:
             parts = scope.split(":")
-            if parts[0] == "tool" and len(parts) > 1 and parts[1] == connector:
-                try:
-                    idx = parts.index("capped")
-                    if idx + 1 < len(parts):
-                        return float(parts[idx + 1])
-                except ValueError:
-                    continue
-        return None
+            if parts[0] not in ("tool", "agenticorg") or len(parts) < 2 or parts[1] != connector:
+                continue
+            if "capped" not in parts:
+                continue
+            idx = parts.index("capped")
+            raw = parts[idx + 1] if idx + 1 < len(parts) else ""
+            if not _CAP_RE.match(raw):
+                raise ValueError(f"malformed cap in scope {scope!r}")
+            value = float(raw)
+            cap = value if cap is None else min(cap, value)
+        return cap
 
     def _apply_enforce_mode(self, result: EnforceResult) -> EnforceResult:
         """In permissive mode, allow denied results with a warning."""

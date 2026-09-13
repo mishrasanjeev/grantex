@@ -387,6 +387,58 @@ class TestEnforceCappedScopes:
 
         assert result.allowed is True
 
+    @patch("grantex._client.verify_grant_token")
+    def test_tightest_cap_wins_regardless_of_scope_order(
+        self, mock_verify: object, client: Grantex
+    ) -> None:
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("tool:salesforce:read:capped:1000", "tool:salesforce:write:capped:10")
+        )
+        result = client.enforce("fake.jwt.token", "salesforce", "create_lead", amount=500)
+
+        assert result.allowed is False
+        assert "exceeds budget cap of 10" in result.reason
+
+    @patch("grantex._client.verify_grant_token")
+    def test_malformed_cap_fails_closed(
+        self, mock_verify: object, client: Grantex
+    ) -> None:
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("tool:salesforce:write:capped:abc",)
+        )
+        result = client.enforce("fake.jwt.token", "salesforce", "create_lead", amount=1)
+
+        assert result.allowed is False
+        assert "malformed cap" in result.reason
+
+    @patch("grantex._client.verify_grant_token")
+    def test_nan_cap_or_amount_fails_closed(
+        self, mock_verify: object, client: Grantex
+    ) -> None:
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("tool:salesforce:write:capped:nan",)
+        )
+        assert client.enforce("fake.jwt.token", "salesforce", "create_lead", amount=1).allowed is False
+
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("tool:salesforce:write:capped:5",)
+        )
+        assert client.enforce(
+            "fake.jwt.token", "salesforce", "create_lead", amount=float("nan")
+        ).allowed is False
+
+    @patch("grantex._client.verify_grant_token")
+    def test_cap_on_agenticorg_scope_is_enforced(
+        self, mock_verify: object, client: Grantex
+    ) -> None:
+        mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
+            scopes=("agenticorg:salesforce:write:capped:5",)
+        )
+        result = client.enforce("fake.jwt.token", "salesforce", "create_lead", amount=6)
+
+        assert result.allowed is False
+        assert "exceeds budget cap of 5" in result.reason
+
 
 # ── load_manifest / load_manifests ──────────────────────────────────────────
 

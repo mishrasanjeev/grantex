@@ -297,7 +297,21 @@ export class Grantex {
 
     // 6. Check capped amount if provided
     if (amount !== undefined) {
+      if (typeof amount !== 'number' || !Number.isFinite(amount)) {
+        return this.#applyEnforceMode({
+          ...base,
+          allowed: false,
+          reason: `Amount must be a finite number to enforce a budget cap on ${connector}.`,
+        });
+      }
       const cap = this.#extractCap(grant.scopes, connector);
+      if (cap === 'invalid') {
+        return this.#applyEnforceMode({
+          ...base,
+          allowed: false,
+          reason: `A capped scope on ${connector} carries a malformed cap; refusing to authorize amount ${amount}.`,
+        });
+      }
       if (cap !== undefined && amount > cap) {
         return this.#applyEnforceMode({
           ...base,
@@ -347,17 +361,23 @@ export class Grantex {
    * Extract the budget cap from capped scopes for a connector.
    * Scope format: `tool:{connector}:{permission}:{resource}:capped:{N}`
    */
-  #extractCap(scopes: string[], connector: string): number | undefined {
+  #extractCap(scopes: string[], connector: string): number | 'invalid' | undefined {
+    // The tightest cap on the connector wins. Returning the first capped scope
+    // encountered let `tool:x:read:capped:1000` shadow `tool:x:write:capped:10`
+    // purely by ordering, and a malformed cap (`capped:abc` → NaN) disabled the
+    // check entirely because `amount > NaN` is always false.
+    let cap: number | undefined;
     for (const scope of scopes) {
       const parts = scope.split(':');
-      if (parts[0] === 'tool' && parts[1] === connector) {
-        const cappedIdx = parts.indexOf('capped');
-        if (cappedIdx !== -1 && parts[cappedIdx + 1]) {
-          return Number(parts[cappedIdx + 1]);
-        }
-      }
+      if ((parts[0] !== 'tool' && parts[0] !== 'agenticorg') || parts[1] !== connector) continue;
+      const cappedIdx = parts.indexOf('capped');
+      if (cappedIdx === -1) continue;
+      const raw = parts[cappedIdx + 1];
+      const value = raw !== undefined && /^\d+(\.\d+)?$/.test(raw) ? Number(raw) : Number.NaN;
+      if (!Number.isFinite(value) || value < 0) return 'invalid';
+      cap = cap === undefined ? value : Math.min(cap, value);
     }
-    return undefined;
+    return cap;
   }
 
   #applyEnforceMode(result: EnforceResult): EnforceResult {

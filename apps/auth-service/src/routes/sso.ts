@@ -32,12 +32,20 @@ import { assertValidRedirectUri, safeFetch, validateOutboundUrl } from '../lib/u
  * Derive a deterministic HMAC key for SSO state signing.
  * Uses SSO_STATE_SECRET env var if set, otherwise derives from the RSA private key.
  */
+// Used only when neither SSO_STATE_SECRET nor RSA_PRIVATE_KEY is configured
+// (auto-generated dev keys). The previous fallback hashed the public `kid`
+// (`grantex-YYYY-MM`), which anyone can predict and therefore forge state with.
+let ephemeralSsoStateSecret: string | null = null;
+
 function getSsoHmacKey(): string {
   if (config.ssoStateSecret) return config.ssoStateSecret;
   // Derive from RSA private key — stable across restarts as long as the key doesn't change.
-  const { kid } = getKeyPair();
-  const raw = config.rsaPrivateKey ?? kid;
-  return crypto.createHash('sha256').update(raw).digest('hex');
+  if (config.rsaPrivateKey) {
+    return crypto.createHash('sha256').update(config.rsaPrivateKey).digest('hex');
+  }
+  getKeyPair(); // fail loudly if keys were never initialized
+  ephemeralSsoStateSecret ??= crypto.randomBytes(32).toString('hex');
+  return ephemeralSsoStateSecret;
 }
 
 /** Create an HMAC-signed SSO state parameter. */

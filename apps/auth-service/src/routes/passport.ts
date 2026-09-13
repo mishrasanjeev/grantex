@@ -62,6 +62,26 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
           requestId: request.id,
         });
       }
+      if (!Array.isArray(allowedMPPCategories) || allowedMPPCategories.length === 0
+          || allowedMPPCategories.some((c) => typeof c !== 'string')) {
+        return reply.status(400).send({
+          message: 'allowedMPPCategories must be a non-empty array of strings',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+      if (typeof maxTransactionAmount !== 'object' || Array.isArray(maxTransactionAmount)
+          || typeof maxTransactionAmount.amount !== 'number'
+          || !Number.isFinite(maxTransactionAmount.amount)
+          || maxTransactionAmount.amount < 0
+          || typeof maxTransactionAmount.currency !== 'string'
+          || maxTransactionAmount.currency.length === 0) {
+        return reply.status(400).send({
+          message: 'maxTransactionAmount must be { amount: finite non-negative number, currency: string }',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
 
       // Validate categories
       const invalidCategories = allowedMPPCategories.filter(
@@ -134,6 +154,20 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
           requestId: request.id,
         });
       }
+      // A passport is an offline-verifiable credential derived from the grant.
+      // It must only be minted from a grant that is still active, and it must
+      // not outlive it — otherwise an expired (or non-active) grant could be
+      // laundered into up to 30 days of merchant-accepted payment authority.
+      const grantExpiresAt = new Date(grant['expires_at'] as string);
+      if (grant['status'] !== 'active'
+          || Number.isNaN(grantExpiresAt.getTime())
+          || grantExpiresAt.getTime() <= Date.now()) {
+        return reply.status(400).send({
+          message: 'Grant is not active or has expired',
+          code: 'INVALID_GRANT',
+          requestId: request.id,
+        });
+      }
 
       // Validate categories map to grant scopes
       const grantScopes = grant['scopes'] as string[];
@@ -176,7 +210,9 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
       const issuerDid = `did:web:${domain}`;
 
       const now = new Date();
-      const expiresAt = new Date(now.getTime() + expirySeconds * 1000);
+      // Cap the passport at the grant's own expiry (SPEC §15: the passport
+      // binds the grant; it cannot carry authority the grant no longer has).
+      const expiresAt = new Date(Math.min(now.getTime() + expirySeconds * 1000, grantExpiresAt.getTime()));
 
       // Allocate StatusList2021 index (atomic; rolls onto a new list when full)
       const { listId: statusListId, index: statusListIdx } =

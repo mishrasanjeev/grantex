@@ -102,6 +102,12 @@ export function registerAuthorizeEndpoint(
       scopes,
       ...(resource !== undefined ? { resource } : {}),
       grantexAuthRequestId: grantexAuth.authRequestId,
+      // Sandbox / policy auto-approve returns the one-time exchange code
+      // inline. It was never captured, so /token fell back to sending the
+      // auth-request id as the code and every exchange failed with 502.
+      ...(typeof grantexAuth.code === 'string' && grantexAuth.code.length > 0
+        ? { grantexCode: grantexAuth.code }
+        : {}),
       expiresAt: Date.now() + codeExpiration * 1000,
     });
 

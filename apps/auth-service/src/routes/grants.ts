@@ -8,12 +8,24 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/grants
   app.get('/v1/grants', async (request, reply) => {
     const sql = getSql();
-    const query = request.query as Record<string, string>;
+    const query = request.query as Record<string, unknown>;
     const developerId = request.developer.id;
 
-    const agentId = query['agentId'] ?? null;
-    const principalId = query['principalId'] ?? null;
-    const status = query['status'] ?? null;
+    // Repeated query params arrive as arrays; binding one to `column = $n`
+    // is a Postgres type error that surfaced as a 500.
+    for (const name of ['agentId', 'principalId', 'status'] as const) {
+      const value = query[name];
+      if (value !== undefined && (typeof value !== 'string' || value.length > 256)) {
+        return reply.status(400).send({
+          message: `${name} must be a single string of at most 256 characters`,
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+    }
+    const agentId = (query['agentId'] as string | undefined) ?? null;
+    const principalId = (query['principalId'] as string | undefined) ?? null;
+    const status = (query['status'] as string | undefined) ?? null;
 
     const predicates = ['developer_id = $1'];
     const parameters: string[] = [developerId];

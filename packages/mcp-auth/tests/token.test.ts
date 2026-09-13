@@ -201,6 +201,87 @@ describe('token endpoint', () => {
     expect(body.scope).toBe('read write');
   });
 
+  it('forwards the Grantex sandbox/auto-approve code to the exchange instead of the auth-request id', async () => {
+    const clientStore = new InMemoryClientStore();
+    await clientStore.set(TEST_CLIENT_ID, {
+      clientId: TEST_CLIENT_ID,
+      clientSecret: 'test-secret',
+      redirectUris: [TEST_REDIRECT_URI],
+      grantTypes: ['authorization_code'],
+      createdAt: new Date().toISOString(),
+    });
+    const mockGrantex = createMockGrantex();
+    mockGrantex.authorize.mockResolvedValue({
+      authRequestId: 'auth-req-1',
+      consentUrl: 'https://example.com/consent',
+      agentId: 'agent-1',
+      principalId: 'principal-1',
+      scopes: ['read', 'write'],
+      expiresIn: '600s',
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
+      status: 'approved' as const,
+      createdAt: new Date().toISOString(),
+      sandbox: true,
+      code: 'GRANTEX_SANDBOX_CODE',
+    });
+    const app = await createMcpAuthServer({
+      grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
+      agentId: 'agent-1',
+      scopes: ['read', 'write'],
+      issuer: 'https://auth.example.com',
+      clientStore,
+    });
+    const authResponse = await app.inject({
+      method: 'GET',
+      url: '/authorize',
+      query: {
+        response_type: 'code',
+        client_id: TEST_CLIENT_ID,
+        redirect_uri: TEST_REDIRECT_URI,
+        code_challenge: TEST_CHALLENGE,
+        code_challenge_method: 'S256',
+      },
+    });
+    const code = new URL(authResponse.headers['location'] as string).searchParams.get('code')!;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/token',
+      payload: {
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: TEST_REDIRECT_URI,
+        client_id: TEST_CLIENT_ID,
+        code_verifier: TEST_VERIFIER,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockGrantex.tokens.exchange).toHaveBeenCalledWith({
+      code: 'GRANTEX_SANDBOX_CODE',
+      agentId: 'agent-1',
+    });
+  });
+
+  it('returns 400 (not 500) when code_verifier is not a string', async () => {
+    const { app, code } = await setupWithCode();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/token',
+      payload: {
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: TEST_REDIRECT_URI,
+        client_id: TEST_CLIENT_ID,
+        code_verifier: 12345,
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('invalid_grant');
+  });
+
   it('returns refresh_token when available', async () => {
     const { app, code } = await setupWithCode();
 

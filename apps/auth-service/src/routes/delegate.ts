@@ -21,9 +21,18 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
     const body = (request.body ?? {}) as Partial<DelegateBody>;
     const { parentGrantToken, subAgentId, scopes, expiresIn = '1h' } = body;
 
-    if (!parentGrantToken || !subAgentId || !scopes?.length) {
+    if (typeof parentGrantToken !== 'string' || parentGrantToken.length === 0
+        || typeof subAgentId !== 'string' || subAgentId.length === 0
+        || !Array.isArray(scopes) || scopes.length === 0) {
       return reply.status(400).send({
         message: 'parentGrantToken, subAgentId, and scopes are required',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    if (typeof expiresIn !== 'string') {
+      return reply.status(400).send({
+        message: 'expiresIn must be a string like "1h", "30m", or "1d"',
         code: 'BAD_REQUEST',
         requestId: request.id,
       });

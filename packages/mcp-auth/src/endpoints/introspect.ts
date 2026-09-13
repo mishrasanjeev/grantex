@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import * as jose from 'jose';
+import { timingSafeEqual } from 'node:crypto';
 import type { McpAuthConfig, ClientStore } from '../types.js';
 
 interface IntrospectBody {
@@ -23,6 +24,14 @@ function parseBasicAuth(
   const colonIdx = decoded.indexOf(':');
   if (colonIdx < 0) return undefined;
   return [decoded.slice(0, colonIdx), decoded.slice(colonIdx + 1)];
+}
+
+/** Constant-time client secret comparison. */
+function secretMatches(expected: string | undefined, provided: string | undefined): boolean {
+  if (typeof expected !== 'string' || typeof provided !== 'string') return false;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(provided);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 export function registerIntrospectEndpoint(
@@ -66,7 +75,7 @@ export function registerIntrospectEndpoint(
       if (basicCreds) {
         const [clientId, clientSecret] = basicCreds;
         const client = await clientStore.get(clientId);
-        if (!client || client.clientSecret !== clientSecret) {
+        if (!client || !secretMatches(client.clientSecret, clientSecret)) {
           return reply.status(401).send({
             error: 'invalid_client',
             error_description: 'Invalid client credentials',

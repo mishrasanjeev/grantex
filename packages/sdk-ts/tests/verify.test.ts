@@ -192,6 +192,37 @@ describe('verifyGrantToken', () => {
     ).rejects.toThrow(/missing required scopes/);
   });
 
+  it('rejects a string scp claim instead of substring-matching required scopes', async () => {
+    // A same-issuer JWT with `scp: "calendar:read calendar:write"` used to
+    // satisfy requiredScopes: ['calendar'] via String.prototype.includes.
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: { ...VALID_PAYLOAD, scp: 'calendar:read calendar:write' },
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await expect(
+      verifyGrantToken('fake.token.here', {
+        jwksUri: 'https://grantex.dev/.well-known/jwks.json',
+        requiredScopes: ['calendar'],
+      }),
+    ).rejects.toThrow(GrantexTokenError);
+  });
+
+  it('throws GrantexTokenError (not TypeError) when scp is absent and scopes are required', async () => {
+    const { scp: _scp, ...withoutScp } = VALID_PAYLOAD;
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: withoutScp,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await expect(
+      verifyGrantToken('fake.token.here', {
+        jwksUri: 'https://grantex.dev/.well-known/jwks.json',
+        requiredScopes: ['calendar:read'],
+      }),
+    ).rejects.toThrow(GrantexTokenError);
+  });
+
   it('passes when required scopes are a subset of token scopes', async () => {
     vi.mocked(jose.jwtVerify).mockResolvedValue({
       payload: VALID_PAYLOAD,
