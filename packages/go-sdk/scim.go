@@ -3,6 +3,7 @@ package grantex
 import (
 	"context"
 	"fmt"
+	"net/url"
 )
 
 // SCIMService handles SCIM 2.0 provisioning operations.
@@ -23,7 +24,7 @@ func (s *SCIMService) ListTokens(ctx context.Context) (*ListScimTokensResponse, 
 
 // RevokeToken revokes a SCIM provisioning token.
 func (s *SCIMService) RevokeToken(ctx context.Context, tokenID string) error {
-	_, err := s.http.del(ctx, "/v1/scim/tokens/"+tokenID)
+	_, err := s.http.del(ctx, "/v1/scim/tokens/"+url.PathEscape(tokenID))
 	return err
 }
 

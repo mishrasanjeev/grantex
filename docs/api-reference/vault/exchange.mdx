@@ -14,15 +14,13 @@ POST /v1/vault/credentials/exchange
 
 Requires a **Grantex grant token** (not an API key) in the `Authorization` header. This is a public endpoint -- no developer API key is needed.
 
-The grant token must also carry a credential scope for the requested service. Accepted scopes are:
+The grant token must also carry the explicit, exactly-matched exchange scope for the requested service:
 
-- `*`
-- `<service>:*`
-- `<service>:read`
-- `<service>:credentials:read`
-- `vault:<service>:*`
-- `vault:<service>:read`
-- `vault:credentials:exchange`
+- `vault:<service>:exchange` (for example `vault:github:exchange`)
+
+<Warning>
+**Rollout note (2026-09-13, security sweep).** Releasing the raw upstream token is strictly more powerful than a `<service>:read` grant, so exchange no longer accepts wildcard or read-style scopes (`*`, `<service>:*`, `<service>:read`, `<service>:credentials:read`, `vault:<service>:*`, `vault:<service>:read`, `vault:credentials:exchange`). Grants issued with only those scopes will receive `403 FORBIDDEN` from this endpoint after the rollout; re-issue them with `vault:<service>:exchange`. In addition, key-bound grant tokens (those carrying `cnf.jkt`) must now be presented with a `DPoP` proof (`Authorization: DPoP <grant_token>` plus a `DPoP` header whose `htu` is this endpoint and whose `ath` hashes the token); a bare `Bearer` presentation of a key-bound token is rejected with `401`.
+</Warning>
 
 ## Request Headers
 

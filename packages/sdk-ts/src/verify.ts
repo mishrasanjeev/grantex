@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify, decodeJwt } from 'jose';
+import { missingScopes } from './scopes.js';
 import { GrantexTokenError } from './errors.js';
 import type { VerifiedGrant, VerifyGrantTokenOptions, GrantTokenPayload } from './types.js';
 
@@ -89,9 +90,16 @@ export async function verifyGrantToken(
     throw new GrantexTokenError(`Grant token verification failed: ${message}`);
   }
 
+  // Validate the claim shape before touching `scp`. A signed-but-foreign JWT
+  // from the same issuer (e.g. a session or OAuth access token) may carry no
+  // `scp`, or a string `scp` on which `.includes()` degrades to a substring
+  // match. Either way this must surface as a GrantexTokenError, not a
+  // TypeError or a false positive.
+  const verified = payloadToVerifiedGrant(payload);
+
   const requiredScopes = options.requiredScopes ?? [];
   if (requiredScopes.length > 0) {
-    const missing = requiredScopes.filter((s) => !payload.scp.includes(s));
+    const missing = missingScopes(verified.scopes, requiredScopes);
     if (missing.length > 0) {
       throw new GrantexTokenError(
         `Grant token is missing required scopes: ${missing.join(', ')}`,
@@ -99,7 +107,7 @@ export async function verifyGrantToken(
     }
   }
 
-  return payloadToVerifiedGrant(payload);
+  return verified;
 }
 
 /**
@@ -127,6 +135,7 @@ export function claimsToVerifiedGrant(payload: GrantTokenPayload): VerifiedGrant
     typeof payload.agt !== 'string' ||
     typeof payload.dev !== 'string' ||
     !Array.isArray(payload.scp) ||
+    payload.scp.some((s) => typeof s !== 'string') ||
     typeof payload.iat !== 'number' ||
     typeof payload.exp !== 'number'
   ) {

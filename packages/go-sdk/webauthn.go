@@ -1,6 +1,7 @@
 package grantex
 
 import (
+	"net/url"
 	"context"
 	"fmt"
 )
@@ -65,6 +66,6 @@ func (s *WebAuthnService) ListCredentials(ctx context.Context, principalID strin
 
 // DeleteCredential removes a WebAuthn credential by ID.
 func (s *WebAuthnService) DeleteCredential(ctx context.Context, id string) error {
-	_, err := s.http.del(ctx, fmt.Sprintf("/v1/webauthn/credentials/%s", id))
+	_, err := s.http.del(ctx, fmt.Sprintf("/v1/webauthn/credentials/%s", url.PathEscape(id)))
 	return err
 }

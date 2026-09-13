@@ -214,9 +214,19 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+// Maximum units of a single variant per cart line. Bounds the arithmetic in
+// line_total_amount/subtotal so a large quantity cannot overflow a safe
+// integer even at the highest unit price.
+const MAX_LINE_ITEM_QUANTITY = 10_000;
+
 function asInt(v: unknown): number | null {
   if (typeof v === 'number' && Number.isSafeInteger(v)) return v;
-  if (typeof v === 'string' && /^\d+$/.test(v)) return Number.parseInt(v, 10);
+  if (typeof v === 'string' && /^\d+$/.test(v)) {
+    // The string branch must apply the same safe-integer bound as the
+    // number branch: parseInt('99999999999999999999') is finite but lossy.
+    const parsed = Number.parseInt(v, 10);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
   return null;
 }
 
@@ -280,6 +290,9 @@ function parseLineItems(value: unknown, fieldErrors: Record<string, string>): Ca
     if (!isString(variantId)) fieldErrors[`line_items[${i}].variant_id`] = 'required string';
     if (quantity === null || quantity <= 0) {
       fieldErrors[`line_items[${i}].quantity`] = 'required positive integer';
+    } else if (quantity > MAX_LINE_ITEM_QUANTITY) {
+      fieldErrors[`line_items[${i}].quantity`] = `must not exceed ${MAX_LINE_ITEM_QUANTITY}`;
+      return;
     }
     if (isString(variantId) && seen.has(variantId)) {
       fieldErrors[`line_items[${i}].variant_id`] = 'duplicate variant_id';
@@ -775,6 +788,13 @@ export async function commerceCartPaymentRoutes(app: FastifyInstance): Promise<v
     const subtotal = snapshot.reduce((sum, item) => sum + item.line_total_amount, 0);
     const taxAmount = 0;
     const total = subtotal + taxAmount;
+    if (!snapshot.every((item) => Number.isSafeInteger(item.line_total_amount))
+        || !Number.isSafeInteger(subtotal) || !Number.isSafeInteger(total)) {
+      throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
+        details: { fields: { line_items: 'cart total exceeds the supported amount range' } },
+        retryable: false,
+      });
+    }
     const cartId = newCommerceCartId();
     const snapshotHash = sha256hex(stableJson(snapshot));
 

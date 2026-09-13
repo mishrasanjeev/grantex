@@ -383,6 +383,85 @@ describe('enforce()', () => {
       expect(result.reason).toContain('Amount 1000 exceeds budget cap of 500');
     });
 
+    it('applies the tightest cap on the connector regardless of scope order', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(
+        makeGrant({ scopes: ['tool:salesforce:read:capped:1000', 'tool:salesforce:write:leads:capped:10'] }),
+      );
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+
+      const grantex = new Grantex({ apiKey: 'test_key' });
+      grantex.loadManifest(salesforceManifest);
+
+      const result = await grantex.enforce({
+        grantToken: 'fake.token',
+        connector: 'salesforce',
+        tool: 'create_lead',
+        amount: 500,
+      });
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('exceeds budget cap of 10');
+    });
+
+    it('denies when a capped scope carries a malformed cap (fails closed, not NaN-open)', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(
+        makeGrant({ scopes: ['tool:salesforce:write:leads:capped:abc'] }),
+      );
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+
+      const grantex = new Grantex({ apiKey: 'test_key' });
+      grantex.loadManifest(salesforceManifest);
+
+      const result = await grantex.enforce({
+        grantToken: 'fake.token',
+        connector: 'salesforce',
+        tool: 'create_lead',
+        amount: 1,
+      });
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('malformed cap');
+    });
+
+    it('denies a non-finite amount against a capped scope', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(
+        makeGrant({ scopes: ['tool:salesforce:write:leads:capped:500'] }),
+      );
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+
+      const grantex = new Grantex({ apiKey: 'test_key' });
+      grantex.loadManifest(salesforceManifest);
+
+      const result = await grantex.enforce({
+        grantToken: 'fake.token',
+        connector: 'salesforce',
+        tool: 'create_lead',
+        amount: Number.NaN,
+      });
+
+      expect(result.allowed).toBe(false);
+    });
+
+    it('honours caps on agenticorg: scopes too', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(
+        makeGrant({ scopes: ['agenticorg:salesforce:write:capped:5'] }),
+      );
+      vi.stubGlobal('fetch', makeFetch(200, {}));
+
+      const grantex = new Grantex({ apiKey: 'test_key' });
+      grantex.loadManifest(salesforceManifest);
+
+      const result = await grantex.enforce({
+        grantToken: 'fake.token',
+        connector: 'salesforce',
+        tool: 'create_lead',
+        amount: 6,
+      });
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('exceeds budget cap of 5');
+    });
+
     it('allows any amount when no cap is specified', async () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(
         makeGrant({ scopes: ['tool:salesforce:write'] }),

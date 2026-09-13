@@ -49,6 +49,24 @@ describe('POST /v1/principal-sessions', () => {
     expect(body.expiresAt).toBeTruthy();
   });
 
+  it('builds dashboardUrl from the configured public base URL, not the Host header', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([TEST_GRANT]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/principal-sessions',
+      headers: { ...authHeader(), host: 'evil.example.com', 'x-forwarded-proto': 'https' },
+      payload: { principalId: 'user_123' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ dashboardUrl: string }>();
+    // JWT_ISSUER (and thus PUBLIC_BASE_URL) is https://grantex.dev in tests.
+    expect(body.dashboardUrl.startsWith('https://grantex.dev/permissions#session=')).toBe(true);
+    expect(body.dashboardUrl).not.toContain('evil.example.com');
+  });
+
   it('returns 400 when principalId is missing', async () => {
     seedAuth();
 

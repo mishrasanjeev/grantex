@@ -8,7 +8,6 @@ import { authHeader, buildTestApp, sqlMock } from './helpers.js';
 import { seedCommerceContext, TEST_COMMERCE_TENANT_ID } from './commerce-helpers.js';
 import { encrypt } from '../src/lib/vault-crypto.js';
 import { sha256hex } from '../src/lib/hash.js';
-import { stableJson } from '../src/lib/commerce/idempotency.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const openapiPath = join(__dirname, '..', '..', '..', 'docs', 'api', 'grantex-commerce-v1.openapi.yaml');
@@ -108,12 +107,14 @@ function runtimeSigningKey(): string {
   return randomBytes(32).toString('base64url');
 }
 
+// Sign the exact bytes that will be sent: app.inject serialises object
+// payloads with JSON.stringify, and string payloads are sent verbatim.
 function signedHeaders(
-  payload: Record<string, unknown>,
+  payload: Record<string, unknown> | string,
   signingKey: string,
   timestamp = Math.floor(Date.now() / 1000),
 ): Record<string, string> {
-  const rawBody = stableJson(payload);
+  const rawBody = typeof payload === 'string' ? payload : JSON.stringify(payload);
   const signature = createHmac('sha256', signingKey)
     .update(`${timestamp}.${rawBody}`)
     .digest('hex');
@@ -324,6 +325,48 @@ describe('M12C signed inbound merchant webhook', () => {
     expect(flattenedSqlCalls()).toContain('merchant_webhook.received');
     expect(flattenedSqlCalls()).toContain('catalog.product.updated');
     expect(flattenedSqlCalls()).not.toContain(signingKey);
+  });
+
+  it('verifies the signature over the raw bytes as sent (non-canonical whitespace and key order)', async () => {
+    const signingKey = runtimeSigningKey();
+    const payload = merchantWebhookPayload();
+    const rawBody = `{
+  ${Object.keys(payload).reverse()
+      .map((key) => `${JSON.stringify(key)} :  ${JSON.stringify(payload[key])}`)
+      .join(',\n  ')}
+}
+`;
+    sqlMock.mockResolvedValueOnce([sourceRow(signingKey)]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'cwh_M12C_RAW' }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_MERCHANT_WEBHOOK_RECEIVED', occurred_at: NOW }]);
+    sqlMock.mockResolvedValueOnce([{ id: PRODUCT }]);
+    sqlMock.mockResolvedValueOnce([{ id: VARIANT }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_CATALOG_UPDATED', occurred_at: NOW }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/webhooks/merchant/${MERCHANT}/${SOURCE}`,
+      headers: { ...signedHeaders(rawBody, signingKey), 'content-type': 'application/json' },
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { status: string } }>().data.status).toBe('processed');
+
+    // A signature over a canonical re-serialisation must NOT verify.
+    sqlMock.mockResolvedValueOnce([sourceRow(signingKey)]);
+    sqlMock.mockResolvedValueOnce([{ id: 'cwh_M12C_CANONICAL_SIG' }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_CANONICAL_SIG', occurred_at: NOW }]);
+    const canonicalRes = await app.inject({
+      method: 'POST',
+      url: `/v1/webhooks/merchant/${MERCHANT}/${SOURCE}`,
+      headers: { ...signedHeaders(payload, signingKey), 'content-type': 'application/json' },
+      payload: rawBody,
+    });
+    expect(canonicalRes.statusCode).toBe(401);
+    expect(canonicalRes.json<{ error: { code: string } }>().error.code).toBe('webhook_signature_invalid');
   });
 
   it('rejects unsigned invalid and stale signed webhooks without catalog mutation', async () => {

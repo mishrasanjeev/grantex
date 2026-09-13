@@ -42,6 +42,19 @@ describe('GET /v1/grants', () => {
     expect(body.grants[0]!.grantId).toBe(TEST_GRANT.id);
   });
 
+  it('returns 400 (not 500) when a filter is repeated and arrives as an array', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/grants?agentId=ag_1&agentId=ag_2',
+      headers: authHeader(),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ code: string }>().code).toBe('BAD_REQUEST');
+  });
+
   it('returns empty list when no grants', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([]);

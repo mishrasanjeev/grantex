@@ -25,11 +25,11 @@ export class DomainsClient {
 
   /** Verify a custom domain via DNS. */
   verify(domainId: string): Promise<VerifyDomainResponse> {
-    return this.#http.post<VerifyDomainResponse>(`/v1/domains/${domainId}/verify`);
+    return this.#http.post<VerifyDomainResponse>(`/v1/domains/${encodeURIComponent(domainId)}/verify`);
   }
 
   /** Delete a custom domain. */
   delete(domainId: string): Promise<void> {
-    return this.#http.delete(`/v1/domains/${domainId}`);
+    return this.#http.delete(`/v1/domains/${encodeURIComponent(domainId)}`);
   }
 }

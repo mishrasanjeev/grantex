@@ -79,6 +79,54 @@ describe('POST /v1/commerce/developer-tenants — owner or admin', () => {
     expect(res.json<{ error: { code: string } }>().error.code).toBe('tenant_owner_required');
   });
 
+  it('tenant owner cannot rebind another developer\'s default tenant → 403 developer_default_forbidden', async () => {
+    // Owner of TEST_COMMERCE_TENANT_ID targets a victim developer with is_default=true.
+    sqlMock.mockResolvedValueOnce([TEST_DEVELOPER]);
+    sqlMock.mockResolvedValueOnce([{ tenant_id: TEST_COMMERCE_TENANT_ID, status: 'active', role: 'owner' }]);
+    sqlMock.mockResolvedValueOnce([{ ok: true }]);  // ownership check passes
+    const res = await app.inject({
+      method: 'POST', url: '/v1/commerce/developer-tenants', headers: authHeader(),
+      payload: { developer_id: 'dev_VICTIM', tenant_id: TEST_COMMERCE_TENANT_ID, is_default: true },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('developer_default_forbidden');
+    const sqlText = sqlMock.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(sqlText).not.toMatch(/UPDATE commerce_developer_tenants/i);
+    expect(sqlText).not.toMatch(/INSERT INTO commerce_developer_tenants/i);
+  });
+
+  it('tenant owner cannot bind a developer who is not an operator of that tenant → 403', async () => {
+    sqlMock.mockResolvedValueOnce([TEST_DEVELOPER]);
+    sqlMock.mockResolvedValueOnce([{ tenant_id: TEST_COMMERCE_TENANT_ID, status: 'active', role: 'owner' }]);
+    sqlMock.mockResolvedValueOnce([{ ok: true }]);  // ownership check passes
+    sqlMock.mockResolvedValueOnce([]);  // target developer is not an operator of the tenant
+    const res = await app.inject({
+      method: 'POST', url: '/v1/commerce/developer-tenants', headers: authHeader(),
+      payload: { developer_id: 'dev_VICTIM', tenant_id: TEST_COMMERCE_TENANT_ID },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe('developer_binding_forbidden');
+    expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n'))
+      .not.toMatch(/INSERT INTO commerce_developer_tenants/i);
+  });
+
+  it('tenant owner can set their own default binding', async () => {
+    sqlMock.mockResolvedValueOnce([TEST_DEVELOPER]);
+    sqlMock.mockResolvedValueOnce([{ tenant_id: TEST_COMMERCE_TENANT_ID, status: 'active', role: 'owner' }]);
+    sqlMock.mockResolvedValueOnce([{ ok: true }]);  // ownership check passes
+    sqlMock.mockResolvedValueOnce([{ id: TEST_COMMERCE_TENANT_ID, status: 'active' }]);  // tenant lookup
+    sqlMock.mockResolvedValueOnce([]);  // UPDATE clear own default
+    sqlMock.mockResolvedValueOnce([{
+      developer_id: TEST_DEVELOPER.id, tenant_id: TEST_COMMERCE_TENANT_ID, is_default: true, created_at: new Date(),
+    }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'caud_SELF', occurred_at: new Date().toISOString() }]);
+    const res = await app.inject({
+      method: 'POST', url: '/v1/commerce/developer-tenants', headers: authHeader(),
+      payload: { developer_id: TEST_DEVELOPER.id, tenant_id: TEST_COMMERCE_TENANT_ID, is_default: true },
+    });
+    expect(res.statusCode).toBe(201);
+  });
+
   it('disabled tenant cannot accept new bindings → 409 tenant_disabled', async () => {
     sqlMock.mockResolvedValueOnce([]);  // admin path
     sqlMock.mockResolvedValueOnce([{ id: TEST_COMMERCE_TENANT_ID, status: 'disabled' }]);

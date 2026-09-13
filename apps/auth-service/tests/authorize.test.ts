@@ -39,6 +39,43 @@ describe('POST /v1/authorize', () => {
     expect(body.expiresAt).toBeDefined();
   });
 
+  it('gives the auth request / code a short TTL independent of the grant expiresIn', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);                  // subscription lookup → free plan
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);    // grant count → 0
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]);
+    sqlMock.mockResolvedValueOnce([]);                  // policy lookup
+    sqlMock.mockResolvedValueOnce([]);                  // insert
+
+    const before = Date.now();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        principalId: 'user_123',
+        scopes: ['read'],
+        expiresIn: '24h',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json<{ expiresAt: string }>();
+    const ttlSeconds = (new Date(body.expiresAt).getTime() - before) / 1000;
+    // Default AUTH_REQUEST_LIFETIME_SECONDS is 600 (10 minutes); the 24h
+    // grant lifetime must not leak into the authorization code lifetime.
+    expect(ttlSeconds).toBeGreaterThan(500);
+    expect(ttlSeconds).toBeLessThanOrEqual(600 + 5);
+
+    // The grant lifetime is still persisted on the auth request so that the
+    // token exchange can apply it to the issued grant.
+    const insertCall = sqlMock.mock.calls.find((call) =>
+      String(call[0]).includes('INSERT INTO auth_requests'));
+    expect(insertCall).toBeDefined();
+    expect(insertCall!.slice(1)).toContain('24h');
+  });
+
   it('returns 400 when required fields are missing', async () => {
     seedAuth();
 

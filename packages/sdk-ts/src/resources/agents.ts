@@ -27,7 +27,7 @@ export class AgentsClient {
   }
 
   async get(agentId: string): Promise<Agent> {
-    return normalizeAgent(await this.#http.get<AgentResponse>(`/v1/agents/${agentId}`));
+    return normalizeAgent(await this.#http.get<AgentResponse>(`/v1/agents/${encodeURIComponent(agentId)}`));
   }
 
   async list(): Promise<ListAgentsResponse> {
@@ -37,12 +37,12 @@ export class AgentsClient {
 
   async update(agentId: string, params: UpdateAgentParams): Promise<Agent> {
     return normalizeAgent(
-      await this.#http.patch<AgentResponse>(`/v1/agents/${agentId}`, params),
+      await this.#http.patch<AgentResponse>(`/v1/agents/${encodeURIComponent(agentId)}`, params),
     );
   }
 
   delete(agentId: string): Promise<void> {
-    return this.#http.delete<void>(`/v1/agents/${agentId}`);
+    return this.#http.delete<void>(`/v1/agents/${encodeURIComponent(agentId)}`);
   }
 }
 

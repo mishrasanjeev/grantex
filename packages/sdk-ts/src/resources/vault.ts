@@ -36,12 +36,12 @@ export class VaultClient {
 
   /** Get credential metadata by ID (no raw token). */
   get(credentialId: string): Promise<VaultCredential> {
-    return this.#http.get<VaultCredential>(`/v1/vault/credentials/${credentialId}`);
+    return this.#http.get<VaultCredential>(`/v1/vault/credentials/${encodeURIComponent(credentialId)}`);
   }
 
   /** Delete a credential from the vault. */
   delete(credentialId: string): Promise<void> {
-    return this.#http.delete(`/v1/vault/credentials/${credentialId}`);
+    return this.#http.delete(`/v1/vault/credentials/${encodeURIComponent(credentialId)}`);
   }
 
   /**

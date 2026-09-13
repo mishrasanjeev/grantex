@@ -717,7 +717,15 @@ export class PluralPaymentProvider implements PaymentProvider {
     replay: boolean;
     provider_metadata: Record<string, unknown>;
   }> {
-    const config = getPluralConfig('live', { webhook: true });
+    // Inbound events do not carry their environment; verify with whichever
+    // environment this deployment permits (live when the live flags are on,
+    // otherwise sandbox). The webhook secret is shared across environments,
+    // and the route enforces the intent's exact environment after lookup.
+    const pluralLiveEnabled = process.env['COMMERCE_LIVE_MODE_ENABLED'] === 'true'
+      && process.env['PLURAL_LIVE_ENABLED'] === 'true';
+    const webhookEnvironment: CommerceEnvironment = !pluralLiveEnabled
+      && process.env['PLURAL_SANDBOX_ENABLED'] === 'true' ? 'sandbox' : 'live';
+    const config = getPluralConfig(webhookEnvironment, { webhook: true });
     const webhookId = input.headers['webhook-id'];
     const webhookTimestamp = input.headers['webhook-timestamp'];
     const webhookSignature = input.headers['webhook-signature'];

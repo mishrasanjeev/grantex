@@ -123,6 +123,7 @@ curl http://localhost:3001/health
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/grantex` |
 | `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
 | `JWT_ISSUER` | JWT issuer claim (your domain) | `https://auth.example.com` |
+| `MCP_PUBLIC_BASE_URL` | Origin advertised as the MCP endpoint in `/.well-known/grantex-commerce`; set to the API origin when `PUBLIC_BASE_URL` is a static host whose `/mcp` serves a page (defaults to `PUBLIC_BASE_URL`) | `https://api.example.com` |
 | `RSA_PRIVATE_KEY` | RSA private key (PEM format) for JWT signing | `-----BEGIN RSA PRIVATE KEY-----...` |
 | `ADMIN_API_KEY` | Strong key protecting `/v1/admin/*` endpoints (required in production) | 32+ random bytes |
 | `VAULT_ENCRYPTION_KEY` | 32-byte hex or base64 key for credential-vault encryption (required in production) | `openssl rand -hex 32` |

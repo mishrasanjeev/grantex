@@ -53,6 +53,29 @@ def _make_app(
 
 class TestGrantexAuth:
     @patch("grantex_fastapi._middleware.verify_grant_token")
+    def test_verification_runs_off_the_event_loop(self, mock_verify: MagicMock) -> None:
+        # verify_grant_token blocks on a JWKS fetch; it must not run on the
+        # loop thread or every in-flight request stalls behind it.
+        import threading
+
+        loop_thread = threading.current_thread().name
+        seen: dict[str, str] = {}
+
+        def record(*_args: Any, **_kwargs: Any) -> VerifiedGrant:
+            seen["thread"] = threading.current_thread().name
+            return MOCK_GRANT
+
+        mock_verify.side_effect = record
+        grantex = GrantexAuth(jwks_uri=JWKS_URI)
+        app = _make_app(grantex, scopes=("calendar:read",))
+        client = TestClient(app)
+
+        response = client.get("/api/test", headers={"Authorization": "Bearer tok"})
+        assert response.status_code == 200
+        assert seen["thread"] != loop_thread
+        assert seen["thread"] != getattr(client, "_loop_thread_name", loop_thread)
+
+    @patch("grantex_fastapi._middleware.verify_grant_token")
     def test_valid_token(self, mock_verify: MagicMock) -> None:
         mock_verify.return_value = MOCK_GRANT
         grantex = GrantexAuth(jwks_uri=JWKS_URI)

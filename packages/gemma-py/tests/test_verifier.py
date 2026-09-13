@@ -78,6 +78,61 @@ async def test_reject_mismatched_kid(
 
 
 @pytest.mark.asyncio
+async def test_reject_token_without_kid(
+    rsa_key_pair: tuple[RSAPrivateKey, RSAPublicKey],
+    jwks_snapshot: JWKSSnapshot,
+) -> None:
+    """A token that does not name its key is rejected even when signed by a snapshot key."""
+    private_key, _ = rsa_key_pair
+    now = int(time.time())
+    token = pyjwt.encode(
+        {
+            "jti": "tok_nokid", "sub": "sub", "agt": "agt", "dev": "dev",
+            "scp": ["read:contacts"], "iat": now, "exp": now + 3600,
+        },
+        private_key,
+        algorithm="RS256",
+    )
+    verifier = create_offline_verifier(jwks_snapshot)
+    with pytest.raises(OfflineVerificationError, match="kid"):
+        await verifier.verify(token)
+
+
+@pytest.mark.asyncio
+async def test_reject_unknown_kid_without_fallback(
+    rsa_key_pair: tuple[RSAPrivateKey, RSAPublicKey],
+    jwks_snapshot: JWKSSnapshot,
+) -> None:
+    """Regression: an unknown kid used to fall back to the first snapshot key,
+    so a token signed by that key but naming a different kid verified."""
+    token = make_test_jwt(rsa_key_pair, kid="kid-that-is-not-in-the-snapshot")
+    verifier = create_offline_verifier(jwks_snapshot)
+    with pytest.raises(OfflineVerificationError, match="No key found"):
+        await verifier.verify(token)
+
+
+@pytest.mark.asyncio
+async def test_reject_string_scp_claim(
+    rsa_key_pair: tuple[RSAPrivateKey, RSAPublicKey],
+    jwks_snapshot: JWKSSnapshot,
+) -> None:
+    """Regression: a string scp made the required-scope check a substring
+    match, so "read:contacts" was satisfied by "read:contacts-archive"."""
+    token = make_test_jwt(
+        rsa_key_pair, claims={"scp": "read:contacts-archive write:calendar"}
+    )
+    verifier = create_offline_verifier(
+        jwks_snapshot, require_scopes=["read:contacts"]
+    )
+    with pytest.raises(OfflineVerificationError, match="list of strings"):
+        await verifier.verify(token)
+
+    mixed = make_test_jwt(rsa_key_pair, claims={"scp": ["read:contacts", 42]})
+    with pytest.raises(OfflineVerificationError, match="list of strings"):
+        await create_offline_verifier(jwks_snapshot).verify(mixed)
+
+
+@pytest.mark.asyncio
 async def test_reject_expired_token(
     rsa_key_pair: tuple[RSAPrivateKey, RSAPublicKey],
     jwks_snapshot: JWKSSnapshot,

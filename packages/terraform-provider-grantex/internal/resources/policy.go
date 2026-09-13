@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
@@ -11,15 +13,25 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/mishrasanjeev/terraform-provider-grantex/internal/client"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &policyResource{}
-	_ resource.ResourceWithConfigure = &policyResource{}
+	_ resource.Resource                = &policyResource{}
+	_ resource.ResourceWithConfigure   = &policyResource{}
+	_ resource.ResourceWithImportState = &policyResource{}
 )
+
+// optionalString converts an optional Terraform string into the pointer form
+// used by PATCH requests: nil (sent as JSON null) when the attribute is unset.
+func optionalString(v types.String) *string {
+	if v.IsNull() || v.IsUnknown() {
+		return nil
+	}
+	s := v.ValueString()
+	return &s
+}
 
 // policyResourceModel maps the resource schema data to a Go type.
 type policyResourceModel struct {
@@ -200,6 +212,11 @@ func (r *policyResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	policy, err := r.client.GetPolicy(state.ID.ValueString())
 	if err != nil {
+		if client.IsNotFound(err) {
+			// Deleted outside Terraform: drop it from state so the next plan recreates it.
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"Error reading policy",
 			"Could not read policy ID "+state.ID.ValueString()+": "+err.Error(),
@@ -266,25 +283,21 @@ func (r *policyResource) Update(ctx context.Context, req resource.UpdateRequest,
 		return
 	}
 
+	// Every field is sent. PATCH /v1/policies/:id keeps the current value for an
+	// absent key, so a removed optional attribute must go out as an explicit
+	// null (and priority 0 as 0) or the API would silently keep the old value
+	// and the plan would never converge.
 	updateReq := client.UpdatePolicyRequest{
-		Name:     plan.Name.ValueString(),
-		Effect:   plan.Effect.ValueString(),
-		Priority: plan.Priority.ValueInt64(),
+		Name:           plan.Name.ValueString(),
+		Effect:         plan.Effect.ValueString(),
+		Priority:       plan.Priority.ValueInt64(),
+		AgentID:        optionalString(plan.AgentID),
+		PrincipalID:    optionalString(plan.PrincipalID),
+		TimeOfDayStart: optionalString(plan.TimeOfDayStart),
+		TimeOfDayEnd:   optionalString(plan.TimeOfDayEnd),
 	}
 
-	if !plan.AgentID.IsNull() && !plan.AgentID.IsUnknown() {
-		updateReq.AgentID = plan.AgentID.ValueString()
-	}
-	if !plan.PrincipalID.IsNull() && !plan.PrincipalID.IsUnknown() {
-		updateReq.PrincipalID = plan.PrincipalID.ValueString()
-	}
-	if !plan.TimeOfDayStart.IsNull() && !plan.TimeOfDayStart.IsUnknown() {
-		updateReq.TimeOfDayStart = plan.TimeOfDayStart.ValueString()
-	}
-	if !plan.TimeOfDayEnd.IsNull() && !plan.TimeOfDayEnd.IsUnknown() {
-		updateReq.TimeOfDayEnd = plan.TimeOfDayEnd.ValueString()
-	}
-
+	// Scopes stays nil (JSON null = "all scopes") when the attribute is unset.
 	if !plan.Scopes.IsNull() && !plan.Scopes.IsUnknown() {
 		var scopes []string
 		diags = plan.Scopes.ElementsAs(ctx, &scopes, false)
@@ -329,4 +342,9 @@ func (r *policyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 		)
 		return
 	}
+}
+
+// ImportState imports a policy by its ID.
+func (r *policyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
 }

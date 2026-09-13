@@ -7,7 +7,6 @@ import {
 } from '../lib/commerce/errors.js';
 import { appendCommerceAudit } from '../lib/commerce/audit.js';
 import { newCommerceWebhookEventId } from '../lib/commerce/ids.js';
-import { stableJson } from '../lib/commerce/idempotency.js';
 import { sha256hex } from '../lib/hash.js';
 import { encrypt } from '../lib/vault-crypto.js';
 import {
@@ -15,7 +14,8 @@ import {
   isPaymentProviderError,
   type ProviderKey,
 } from '../lib/commerce/payment-providers/index.js';
-import { ensureCommerceLiveMode } from '../lib/commerce/live-mode-guard.js';
+import type { CommerceEnvironment } from '../lib/commerce/payment-providers/types.js';
+import { ensureCommerceLiveMode, getCommerceLiveModeStatus } from '../lib/commerce/live-mode-guard.js';
 import {
   assertPaymentStatusTransition,
   type CommercePaymentStatus,
@@ -46,6 +46,7 @@ interface PaymentIntentForWebhookRow {
   amount: number | string;
   currency: string;
   provider: ProviderKey;
+  provider_environment: CommerceEnvironment;
   provider_payment_id: string;
   status: CommercePaymentStatus;
   provider_raw_status: string | null;
@@ -93,10 +94,27 @@ function headersToRecord(headers: FastifyRequest['headers']): Record<string, str
   return out;
 }
 
+// The environment a webhook belongs to is only known once its payment intent
+// loads. Before that, gate the receiver on whichever environment the
+// deployment permits: live when the live flags are on, otherwise sandbox.
+// With neither enabled this resolves to 'live' and the guard rejects with the
+// same plural_live_disabled error as before.
+function receiverEnvironment(providerKey: ProviderKey): CommerceEnvironment {
+  if (providerKey !== 'plural') return 'live';
+  const status = getCommerceLiveModeStatus();
+  const liveEnabled = status.liveModeEnabled && status.pluralLiveEnabled;
+  return !liveEnabled && status.pluralSandboxEnabled ? 'sandbox' : 'live';
+}
+
+// The HMAC must be computed over the exact bytes the provider signed. The
+// plugin installs a raw-body parser for application/json, so anything else
+// here means the body was re-parsed (and would be re-serialised) — refuse
+// rather than verify a canonical rendering the sender never produced.
 function requestBodyToRaw(body: unknown): string {
   if (Buffer.isBuffer(body)) return body.toString('utf8');
   if (typeof body === 'string') return body;
-  return stableJson(body ?? {});
+  throw new CommerceHttpError(400, 'webhook_body_invalid',
+    'Provider webhook body must be delivered as raw application/json bytes', { retryable: false });
 }
 
 function safeHeaderMetadata(
@@ -170,7 +188,8 @@ async function findPaymentIntentForWebhook(
   if (!input.providerPaymentId) return null;
   const rows = await sql<PaymentIntentForWebhookRow[]>`
     SELECT pi.id, pi.tenant_id, pi.merchant_id, pi.agent_id, pi.passport_jti,
-           pi.amount, pi.currency, pi.provider, pi.provider_payment_id,
+           pi.amount, pi.currency, pi.provider, pi.provider_environment,
+           pi.provider_payment_id,
            pi.status, pi.provider_raw_status, pi.policy_version, pi.decision_id,
            pi.updated_at
       FROM commerce_payment_intents pi
@@ -452,6 +471,17 @@ async function recordRejectedWebhook(
 export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promise<void> {
   app.setErrorHandler(commerceErrorHandler);
 
+  // Keep the raw request bytes: provider signatures cover the body exactly
+  // as sent (whitespace and key order included), so it must not be parsed
+  // and re-serialised before verification. Scoped to this plugin only.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'buffer' },
+    (_req, body, done) => {
+      done(null, body as Buffer);
+    },
+  );
+
   app.addHook('onRoute', (routeOptions) => {
     if (!routeOptions.config) {
       (routeOptions as unknown as { config: Record<string, unknown> }).config = {};
@@ -485,9 +515,12 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
       // by the outbound provider calls so that, for example, a Plural
       // event arriving at a deployment without PLURAL_LIVE_ENABLED is
       // rejected before any state transition runs. The environment is
-      // not on the URL; pass providerKey alone — mock is permitted in
-      // every deployment, plural falls under the plural-specific gate.
-      ensureCommerceLiveMode({ providerKey });
+      // not on the URL and is only known once the intent loads, so the
+      // receiver is gated on "any environment this deployment permits":
+      // sandbox-only deployments must accept Plural sandbox events (the
+      // old `providerKey`-only call defaulted to 'live' and rejected
+      // them). The exact environment is enforced after the intent loads.
+      ensureCommerceLiveMode({ providerKey, environment: receiverEnvironment(providerKey) });
       const receivedAt = new Date().toISOString();
       const rawBody = requestBodyToRaw(request.body);
       const payloadHash = sha256hex(rawBody);
@@ -607,6 +640,12 @@ export async function commerceProviderWebhookRoutes(app: FastifyInstance): Promi
         providerPaymentId: parsed.provider_payment_id,
         merchantRef: parsed.merchant_ref,
       });
+      // Now that the intent is known, enforce the exact environment it was
+      // created in (a sandbox intent must not be advanced by a deployment
+      // that only permits live, and vice versa).
+      if (paymentIntent) {
+        ensureCommerceLiveMode({ providerKey, environment: paymentIntent.provider_environment });
+      }
       const existing = await findExistingWebhookEvent(sql, {
         providerKey,
         eventId: providerEvent.event_id,

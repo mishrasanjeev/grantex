@@ -5,7 +5,6 @@ import { getSql, type TxSql } from '../db/client.js';
 import { appendCommerceAudit, type CommerceAuditEventType } from '../lib/commerce/audit.js';
 import { commerceErrorHandler, CommerceHttpError } from '../lib/commerce/errors.js';
 import { newCommerceProductId, newCommerceVariantId, newCommerceWebhookEventId } from '../lib/commerce/ids.js';
-import { stableJson } from '../lib/commerce/idempotency.js';
 import { isCommerceCategoryPreset } from '../lib/commerce/presets.js';
 import { sha256hex } from '../lib/hash.js';
 import { decrypt } from '../lib/vault-crypto.js';
@@ -126,8 +125,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function asInt(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value) && Math.trunc(value) === value) return value;
-  if (typeof value === 'string' && /^\d+$/.test(value)) return Number.parseInt(value, 10);
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return value;
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
   return null;
 }
 
@@ -143,10 +145,15 @@ function nullableString(value: unknown): value is string | null {
   return value === null || isString(value);
 }
 
+// The HMAC must be computed over the exact bytes the merchant signed. The
+// plugin installs a raw-body parser for application/json, so anything else
+// here means the body was re-parsed (and would be re-serialised) — refuse
+// rather than verify a canonical rendering the sender never produced.
 function requestBodyToRaw(body: unknown): string {
   if (Buffer.isBuffer(body)) return body.toString('utf8');
   if (typeof body === 'string') return body;
-  return stableJson(body ?? {});
+  throw new CommerceHttpError(400, 'webhook_body_invalid',
+    'Merchant webhook body must be delivered as raw application/json bytes', { retryable: false });
 }
 
 function parseMerchantWebhookPayload(rawBody: string, payloadHash: string): ParsedMerchantWebhookPayload {
@@ -509,6 +516,17 @@ async function upsertCatalogProductFromWebhook(
 
 export async function commerceMerchantWebhookRoutes(app: FastifyInstance): Promise<void> {
   app.setErrorHandler(commerceErrorHandler);
+
+  // Keep the raw request bytes: merchant signatures cover the body exactly
+  // as sent (whitespace and key order included), so it must not be parsed
+  // and re-serialised before verification. Scoped to this plugin only.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'buffer' },
+    (_req, body, done) => {
+      done(null, body as Buffer);
+    },
+  );
 
   app.addHook('onRoute', (routeOptions) => {
     if (!routeOptions.config) {

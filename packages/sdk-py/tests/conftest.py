@@ -1,6 +1,16 @@
 """Shared fixtures and mock data for the Grantex Python SDK test suite."""
 from __future__ import annotations
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _isolated_jwks_cache() -> None:
+    """The JWKS cache is process-wide; keep tests from seeing each other's keys."""
+    from grantex._verify import clear_jwks_cache
+
+    clear_jwks_cache()
+
 
 # ─── Mock response data (camelCase, matching the API JSON format) ─────────────
 

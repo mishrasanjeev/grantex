@@ -20,6 +20,18 @@ function publicUrl(path: string): string {
   return new URL(path, config.publicBaseUrl).toString();
 }
 
+// The MCP transport lives on the API service. When PUBLIC_BASE_URL is a
+// static host that also serves a page at /mcp (grantex.dev serves
+// web/mcp.html, and Firebase resolves static files before rewrites), the
+// advertised endpoint must point at the API origin instead, or agents that
+// follow the discovery document POST JSON-RPC into a marketing page.
+// Read at call time (like COMMERCE_V1_ENABLED) so deployments can set it
+// without a rebuild.
+function mcpUrl(): string {
+  const base = process.env['MCP_PUBLIC_BASE_URL']?.trim() || config.publicBaseUrl;
+  return new URL('/mcp', base).toString();
+}
+
 function resolvePublicDiscoveryMerchantId(requestedMerchantId: string | null): string {
   const allowlist = commercePublicDiscoveryMerchantAllowlist();
   if (allowlist.length === 0) {
@@ -97,7 +109,7 @@ export async function commerceWellKnownRoutes(app: FastifyInstance): Promise<voi
         required_scopes: V1_COMMERCE_REQUIRED_SCOPES,
         mcp: {
           transport: 'streamable_http',
-          url: publicUrl('/mcp'),
+          url: mcpUrl(),
         },
         native_rest: {
           base_url: publicUrl('/v1/commerce'),

@@ -3,6 +3,7 @@ export { Grantex } from './client.js';
 
 // Standalone token verification (no Grantex account needed)
 export { verifyGrantToken } from './verify.js';
+export { parseScope, scopeMatches, hasScope, missingScopes, type ParsedScope } from './scopes.js';
 
 // Webhook signature verification
 export { verifyWebhookSignature, verifyWebhook, type VerifyWebhookOptions } from './webhook.js';

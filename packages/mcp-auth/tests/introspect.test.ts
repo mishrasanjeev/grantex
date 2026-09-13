@@ -85,7 +85,7 @@ function createMockGrantex() {
   };
 }
 
-async function createTestApp() {
+async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
   const clientStore = new InMemoryClientStore();
   await clientStore.set(TEST_CLIENT_ID, {
     clientId: TEST_CLIENT_ID,
@@ -102,20 +102,28 @@ async function createTestApp() {
     grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
     agentId: 'agent-1',
     scopes: ['read', 'write'],
-    issuer,
+    // This server's own URL serves no JWKS; tokens come from Grantex.
+    issuer: 'https://auth.example.com',
+    grantexIssuer: issuer,
     clientStore,
+    ...overrides,
   });
 
   return { app, mockGrantex, clientStore, issuer };
 }
 
+function grantexIssuer(): string {
+  return `http://127.0.0.1:${jwksPort}`;
+}
+
 async function signTestJwt(
   claims: Record<string, unknown>,
-  options?: { expiresIn?: string; algorithm?: string },
+  options?: { expiresIn?: string; algorithm?: string; issuer?: string },
 ): Promise<string> {
   const alg = options?.algorithm ?? 'RS256';
   const builder = new jose.SignJWT(claims)
     .setProtectedHeader({ alg, kid: 'test-key-1' })
+    .setIssuer(options?.issuer ?? grantexIssuer())
     .setIssuedAt()
     .setJti('grnt_01HXYZ');
 
@@ -284,5 +292,70 @@ describe('introspect endpoint', () => {
     const body = response.json();
     expect(body.active).toBe(true);
     expect(body.grantex_delegation_depth).toBe(0);
+  });
+
+  describe('issuer / audience pinning', () => {
+    it('returns active=false for a token signed by the right key but a different iss', async () => {
+      const token = await signTestJwt(
+        { sub: 'user_abc', scp: ['read'] },
+        { issuer: 'https://evil.example.com' },
+      );
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/introspect',
+        payload: { token },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().active).toBe(false);
+    });
+
+    it('returns active=false when aud does not match the configured audience', async () => {
+      const ctx = await createTestApp({ audience: 'https://mcp.example.com' });
+      const good = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://mcp.example.com' });
+      const bad = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://other.example.com' });
+      const none = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
+
+      const goodRes = await ctx.app.inject({ method: 'POST', url: '/introspect', payload: { token: good } });
+      const badRes = await ctx.app.inject({ method: 'POST', url: '/introspect', payload: { token: bad } });
+      const noneRes = await ctx.app.inject({ method: 'POST', url: '/introspect', payload: { token: none } });
+
+      expect(goodRes.json().active).toBe(true);
+      expect(badRes.json().active).toBe(false);
+      expect(noneRes.json().active).toBe(false);
+    });
+
+    it('defaults the expected audience to allowedResources', async () => {
+      const ctx = await createTestApp({ allowedResources: ['https://mcp.example.com'] });
+      const bad = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://other.example.com' });
+      const res = await ctx.app.inject({ method: 'POST', url: '/introspect', payload: { token: bad } });
+      expect(res.json().active).toBe(false);
+    });
+
+    it('honours an explicit jwksUri', async () => {
+      const ctx = await createTestApp({
+        grantexIssuer: 'https://grantex.example.com',
+        jwksUri: `${grantexIssuer()}/.well-known/jwks.json`,
+      });
+      const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] }, { issuer: 'https://grantex.example.com' });
+      const res = await ctx.app.inject({ method: 'POST', url: '/introspect', payload: { token } });
+      expect(res.json().active).toBe(true);
+    });
+
+    it('fails closed (503) when grantexIssuer is not configured', async () => {
+      const clientStore = new InMemoryClientStore();
+      const appNoIssuer = await createMcpAuthServer({
+        grantex: createMockGrantex() as unknown as McpAuthConfig['grantex'],
+        agentId: 'agent-1',
+        scopes: ['read'],
+        issuer: grantexIssuer(), // even though this URL serves a JWKS, it is not pinned as the token issuer
+        clientStore,
+      });
+      const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
+      const res = await appNoIssuer.inject({ method: 'POST', url: '/introspect', payload: { token } });
+      expect(res.statusCode).toBe(503);
+      expect(res.json().error).toBe('server_error');
+    });
   });
 });

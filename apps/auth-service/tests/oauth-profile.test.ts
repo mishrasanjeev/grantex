@@ -524,3 +524,53 @@ describe('OAuth agent-grants profile routes', () => {
     expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n')).toContain('g.protocol =');
   });
 });
+
+describe('POST /oauth/revoke', () => {
+  it('revoking a refresh token also revokes the grant, its access tokens, and the Redis fast path', async () => {
+    const grantExpiresAt = new Date(Date.now() + 3_600_000).toISOString();
+    sqlMock
+      .mockResolvedValueOnce([{ id: 'ag_oauth', developer_id: 'dev_oauth', key_thumbprint: dpopKey.thumbprint }])
+      .mockResolvedValueOnce([{ family_id: 'ref_oauth_parent', grant_id: 'grnt_oauth_refresh', grant_expires_at: grantExpiresAt }])
+      .mockResolvedValueOnce([])   // UPDATE refresh_tokens (family)
+      .mockResolvedValueOnce([])   // UPDATE grants
+      .mockResolvedValueOnce([]);  // UPDATE grant_tokens
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/oauth/revoke',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        dpop: await dpopProof({ method: 'POST', uri: 'https://grantex.dev/oauth/revoke' }),
+      },
+      payload: form({ client_id: 'ag_oauth', token: 'ref_oauth_parent' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const sqlText = sqlMock.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(sqlText).toContain('UPDATE refresh_tokens');
+    expect(sqlText).toContain("UPDATE grants SET status = 'revoked'");
+    expect(sqlText).toContain('UPDATE grant_tokens SET is_revoked = TRUE');
+    expect(mockRedis.set).toHaveBeenCalledWith('revoked:grant:grnt_oauth_refresh', '1', 'EX', expect.any(Number));
+  });
+
+  it('does not touch grants when the refresh token belongs to another client', async () => {
+    sqlMock
+      .mockResolvedValueOnce([{ id: 'ag_oauth', developer_id: 'dev_oauth', key_thumbprint: dpopKey.thumbprint }])
+      .mockResolvedValueOnce([]);  // no refresh row for this client/developer/protocol
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/oauth/revoke',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        dpop: await dpopProof({ method: 'POST', uri: 'https://grantex.dev/oauth/revoke' }),
+      },
+      payload: form({ client_id: 'ag_oauth', token: 'ref_someone_else' }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    const sqlText = sqlMock.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(sqlText).not.toContain("UPDATE grants SET status = 'revoked'");
+    expect(mockRedis.set).not.toHaveBeenCalledWith(expect.stringContaining('revoked:grant:'), '1', 'EX', expect.any(Number));
+  });
+});

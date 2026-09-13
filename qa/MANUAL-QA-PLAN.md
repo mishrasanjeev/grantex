@@ -329,7 +329,7 @@ npx @grantex/conformance --base-url http://localhost:3001 --api-key dev-api-key-
 | **AUTH-003** | Authorize with non-existent agent | P0 | POST `/v1/authorize` with invalid `agentId` | 404: Agent not found. |
 | **AUTH-004** | Authorize with scopes not on agent | P1 | Agent has `["email:read"]`, request `["email:read", "calendar:write"]` | 400: Scope `calendar:write` not registered on agent. |
 | **AUTH-005** | Authorize with redirect URI | P1 | POST `/v1/authorize` with `redirectUri: "https://app.example.com/callback"` and `state: "abc123"` | 201: `consentUrl` generated. After approval, redirect includes `?code=...&state=abc123`. |
-| **AUTH-006** | Authorize with custom expiresIn | P2 | POST `/v1/authorize` with `expiresIn: "1h"` | 201: `expiresAt` is ~1 hour from now (not default 24h). |
+| **AUTH-006** | Authorize with custom expiresIn | P2 | POST `/v1/authorize` with `expiresIn: "1h"`, then exchange the code | 201: `expiresAt` on the auth request is the short code TTL (~10 min, `AUTH_REQUEST_LIFETIME_SECONDS`), independent of `expiresIn`. The `/v1/token` response `expiresAt` is ~1 hour from now (not default 24h). |
 | **AUTH-007** | Authorize with audience | P2 | POST `/v1/authorize` with `audience: "https://api.example.com"` | 201: Created. Token will include `aud` claim. |
 | **AUTH-008** | Authorize with budget | P2 | POST `/v1/authorize` with `budget: 100.00` | 201: Created. Budget allocation created after token exchange. |
 | **AUTH-009** | Rate limit on authorize (10/min) | P1 | POST `/v1/authorize` 11 times in 1 minute | 11th request returns 429: Too Many Requests. |

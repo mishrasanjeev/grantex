@@ -431,6 +431,100 @@ func TestResolveVerificationEndpointsFromIssuerDID(t *testing.T) {
 	}
 }
 
+// countingJWKSServer serves whatever keys() returns and counts fetches.
+func countingJWKSServer(t *testing.T, keys func() []*rsa.PrivateKey, kids func() []string) (*httptest.Server, *int) {
+	t.Helper()
+	var fetches int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fetches++
+		var set []map[string]interface{}
+		for i, key := range keys() {
+			set = append(set, map[string]interface{}{
+				"kty": "RSA",
+				"kid": kids()[i],
+				"use": "sig",
+				"alg": "RS256",
+				"n":   base64urlEncode(key.PublicKey.N.Bytes()),
+				"e":   base64urlEncode(big.NewInt(int64(key.PublicKey.E)).Bytes()),
+			})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"keys": set})
+	}))
+	return server, &fetches
+}
+
+func signWithKid(t *testing.T, key *rsa.PrivateKey, kid, iss string) string {
+	t.Helper()
+	now := time.Now()
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"iss": iss, "sub": "user-1", "agt": "did:grantex:agent-1", "dev": "dev-1",
+		"scp": []string{"read:email"}, "iat": now.Unix(), "exp": now.Add(time.Hour).Unix(), "jti": "jti-" + kid,
+	})
+	token.Header["kid"] = kid
+	signed, err := token.SignedString(key)
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	return signed
+}
+
+func TestVerifyGrantTokenCachesJWKSAcrossCalls(t *testing.T) {
+	key := generateTestKey(t)
+	server, fetches := countingJWKSServer(t,
+		func() []*rsa.PrivateKey { return []*rsa.PrivateKey{key} },
+		func() []string { return []string{"test-kid-1"} })
+	defer server.Close()
+
+	tokenStr := signWithKid(t, key, "test-kid-1", server.URL)
+	for i := 0; i < 3; i++ {
+		if _, err := VerifyGrantToken(context.Background(), tokenStr, VerifyOptions{JwksURI: server.URL}); err != nil {
+			t.Fatalf("verify %d: %v", i, err)
+		}
+	}
+	if *fetches != 1 {
+		t.Fatalf("JWKS fetched %d times across 3 verifications, want 1", *fetches)
+	}
+}
+
+func TestVerifyGrantTokenRefreshesJWKSOnUnknownKid(t *testing.T) {
+	oldKey := generateTestKey(t)
+	newKey := generateTestKey(t)
+	current := oldKey
+	currentKid := "kid-old"
+	server, fetches := countingJWKSServer(t,
+		func() []*rsa.PrivateKey { return []*rsa.PrivateKey{current} },
+		func() []string { return []string{currentKid} })
+	defer server.Close()
+
+	// Warm the cache with the old key.
+	if _, err := VerifyGrantToken(context.Background(), signWithKid(t, oldKey, "kid-old", server.URL), VerifyOptions{JwksURI: server.URL}); err != nil {
+		t.Fatalf("warm-up verify: %v", err)
+	}
+
+	// Issuer rotates. The new kid is unknown to the cache; inside the cooldown
+	// it must fail without another fetch.
+	current, currentKid = newKey, "kid-new"
+	rotated := signWithKid(t, newKey, "kid-new", server.URL)
+	if _, err := VerifyGrantToken(context.Background(), rotated, VerifyOptions{JwksURI: server.URL}); err == nil {
+		t.Fatal("expected unknown kid inside the cooldown to fail")
+	}
+	if *fetches != 1 {
+		t.Fatalf("JWKS fetched %d times inside cooldown, want 1", *fetches)
+	}
+
+	// Past the cooldown the unknown kid triggers exactly one refresh.
+	jwksRefreshMu.Lock()
+	jwksLastRefresh[server.URL] = time.Now().Add(-jwksUnknownKidCooldown - time.Second)
+	jwksRefreshMu.Unlock()
+	if _, err := VerifyGrantToken(context.Background(), rotated, VerifyOptions{JwksURI: server.URL}); err != nil {
+		t.Fatalf("verify after rotation: %v", err)
+	}
+	if *fetches != 2 {
+		t.Fatalf("JWKS fetched %d times after rotation, want 2", *fetches)
+	}
+}
+
 func TestVerifyGrantTokenNoJwksURI(t *testing.T) {
 	_, err := VerifyGrantToken(context.Background(), "some-token", VerifyOptions{})
 	if err == nil {

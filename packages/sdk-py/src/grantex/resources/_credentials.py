@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from .._http import HttpClient
 from .._types import (
     VerifiableCredentialRecord,
@@ -16,7 +18,7 @@ class CredentialsClient:
         self._http = http
 
     def get(self, credential_id: str) -> VerifiableCredentialRecord:
-        data = self._http.get(f"/v1/credentials/{credential_id}")
+        data = self._http.get(f"/v1/credentials/{quote(credential_id, safe='')}")
         return VerifiableCredentialRecord.from_dict(data)
 
     def list(

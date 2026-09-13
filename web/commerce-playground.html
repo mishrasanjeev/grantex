@@ -896,8 +896,10 @@
     function restoreConfig() {
       const savedBase = localStorage.getItem('grantex-commerce-playground-api-base');
       const savedMerchant = localStorage.getItem('grantex-commerce-playground-merchant-id');
-      if (savedBase) $('api-base').value = savedBase;
-      else if (location.protocol === 'http:' || location.protocol === 'https:') $('api-base').value = location.origin;
+      // Fall back to the hosted API, never to location.origin: grantex.dev is
+      // static Firebase hosting and does not serve the commerce REST/MCP
+      // routes, so an origin-based default sends every call to a 404 page.
+      $('api-base').value = savedBase || 'https://api.grantex.dev';
       if (savedMerchant) $('merchant-id').value = savedMerchant;
     }
 

@@ -31,7 +31,7 @@ export class ScimClient {
 
   /** Revoke a SCIM token by ID. */
   revokeToken(tokenId: string): Promise<void> {
-    return this.#http.delete<void>(`/v1/scim/tokens/${tokenId}`);
+    return this.#http.delete<void>(`/v1/scim/tokens/${encodeURIComponent(tokenId)}`);
   }
 
   // ── SCIM 2.0 Users ────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ export class ScimClient {
 
   /** Get a single provisioned user by ID. */
   getUser(userId: string): Promise<ScimUser> {
-    return this.#http.get<ScimUser>(`/scim/v2/Users/${userId}`);
+    return this.#http.get<ScimUser>(`/scim/v2/Users/${encodeURIComponent(userId)}`);
   }
 
   /** Provision a new user. */
@@ -57,7 +57,7 @@ export class ScimClient {
 
   /** Full replace of a user (PUT). */
   replaceUser(userId: string, params: CreateScimUserParams): Promise<ScimUser> {
-    return this.#http.put<ScimUser>(`/scim/v2/Users/${userId}`, params);
+    return this.#http.put<ScimUser>(`/scim/v2/Users/${encodeURIComponent(userId)}`, params);
   }
 
   /** Partial update via SCIM Operations (PATCH). */
@@ -65,12 +65,12 @@ export class ScimClient {
     userId: string,
     operations: Array<{ op: string; path?: string; value: unknown }>,
   ): Promise<ScimUser> {
-    return this.#http.patch<ScimUser>(`/scim/v2/Users/${userId}`, { Operations: operations });
+    return this.#http.patch<ScimUser>(`/scim/v2/Users/${encodeURIComponent(userId)}`, { Operations: operations });
   }
 
   /** Deprovision a user (DELETE). */
   deleteUser(userId: string): Promise<void> {
-    return this.#http.delete<void>(`/scim/v2/Users/${userId}`);
+    return this.#http.delete<void>(`/scim/v2/Users/${encodeURIComponent(userId)}`);
   }
 }
 

@@ -6,7 +6,7 @@
  * rejects with a 403 Forbidden.
  */
 
-import { verifyGDT } from './verify.js';
+import { verifyGDT, scopeMatches } from './verify.js';
 import type { X402MiddlewareOptions, VerifyContext, VerifyResult } from './types.js';
 
 const GDT_HEADER = 'X-Grantex-GDT';
@@ -143,14 +143,10 @@ export function x402Middleware(options: X402MiddlewareOptions = {}) {
     // Check all required scopes if multiple are specified
     if (requiredScopes && requiredScopes.length > 1) {
       for (const scope of requiredScopes) {
-        if (!result.scopes.includes(scope) && !result.scopes.includes('*')) {
-          // Check wildcard patterns
-          const matched = result.scopes.some((s) => {
-            if (s.endsWith(':*')) {
-              return scope.startsWith(s.slice(0, -1));
-            }
-            return false;
-          });
+        {
+          // Same semantics as verifyGDT's resource check (exact match for
+          // constrained scopes, structural wildcards otherwise).
+          const matched = scopeMatches(scope, result.scopes);
           if (!matched) {
             res.status(403).json({
               error: 'INSUFFICIENT_SCOPE',

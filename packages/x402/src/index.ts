@@ -9,7 +9,7 @@
 
 // Core GDT operations
 export { issueGDT, parseExpiry } from './gdt.js';
-export { verifyGDT, decodeGDT } from './verify.js';
+export { verifyGDT, decodeGDT, scopeMatches, parseScope, type ParsedScope } from './verify.js';
 
 // Cryptographic utilities
 export { generateKeyPair, derivePublicKey } from './crypto.js';

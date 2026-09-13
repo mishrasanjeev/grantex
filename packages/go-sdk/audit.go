@@ -1,6 +1,9 @@
 package grantex
 
-import "context"
+import (
+	"context"
+	"net/url"
+)
 
 // AuditService handles audit logging and retrieval.
 type AuditService struct {
@@ -36,7 +39,7 @@ func (s *AuditService) List(ctx context.Context, params *ListAuditParams) (*List
 
 // Get retrieves a single audit entry by ID.
 func (s *AuditService) Get(ctx context.Context, entryID string) (*AuditEntry, error) {
-	return unmarshal[AuditEntry](s.http.get(ctx, "/v1/audit/"+entryID))
+	return unmarshal[AuditEntry](s.http.get(ctx, "/v1/audit/"+url.PathEscape(entryID)))
 }
 
 // Checkpoint signs the current audit-chain head for external witnessing.

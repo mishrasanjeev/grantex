@@ -2,10 +2,13 @@ package resources
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/float64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -15,8 +18,9 @@ import (
 
 // Ensure the implementation satisfies the expected interfaces.
 var (
-	_ resource.Resource              = &budgetAllocationResource{}
-	_ resource.ResourceWithConfigure = &budgetAllocationResource{}
+	_ resource.Resource                = &budgetAllocationResource{}
+	_ resource.ResourceWithConfigure   = &budgetAllocationResource{}
+	_ resource.ResourceWithImportState = &budgetAllocationResource{}
 )
 
 // budgetAllocationResourceModel maps the resource schema data to a Go type.
@@ -47,7 +51,7 @@ func (r *budgetAllocationResource) Metadata(_ context.Context, req resource.Meta
 // Schema defines the schema for the resource.
 func (r *budgetAllocationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a Grantex budget allocation. Allocates a spending budget to a grant for cost control. This resource is create-only; updates are not supported.",
+		Description: "Manages a Grantex budget allocation. Allocates a spending budget to a grant for cost control. The API offers no update or delete for allocations: every configurable attribute forces replacement, and destroying the resource only removes it from Terraform state.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Description: "The unique identifier for the budget allocation.",
@@ -57,22 +61,25 @@ func (r *budgetAllocationResource) Schema(_ context.Context, _ resource.SchemaRe
 				},
 			},
 			"grant_id": schema.StringAttribute{
-				Description: "The grant ID to allocate budget to.",
+				Description: "The grant ID to allocate budget to. Changing this forces a new resource.",
 				Required:    true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
 			"initial_budget": schema.Float64Attribute{
-				Description: "The initial budget amount to allocate.",
+				Description: "The initial budget amount to allocate. Changing this forces a new resource; because the API keeps the existing allocation for the grant, the replacement will be refused (409) until that allocation is removed out of band.",
 				Required:    true,
+				PlanModifiers: []planmodifier.Float64{
+					float64planmodifier.RequiresReplace(),
+				},
 			},
 			"remaining_budget": schema.Float64Attribute{
 				Description: "The remaining budget amount.",
 				Computed:    true,
 			},
 			"currency": schema.StringAttribute{
-				Description: "The currency for the budget. Defaults to 'USD'.",
+				Description: "The currency for the budget. Defaults to 'USD'. Changing this forces a new resource.",
 				Optional:    true,
 				Computed:    true,
 				Default:     stringdefault.StaticString("USD"),
@@ -109,6 +116,27 @@ func (r *budgetAllocationResource) Configure(_ context.Context, req resource.Con
 	r.client = c
 }
 
+// applyBudgetAllocation copies an API allocation into the model, parsing the
+// string-encoded NUMERIC(18,4) amounts.
+func applyBudgetAllocation(model *budgetAllocationResourceModel, alloc *client.BudgetAllocation) error {
+	initial, err := alloc.InitialBudgetFloat()
+	if err != nil {
+		return err
+	}
+	remaining, err := alloc.RemainingBudgetFloat()
+	if err != nil {
+		return err
+	}
+
+	model.ID = types.StringValue(alloc.ID)
+	model.GrantID = types.StringValue(alloc.GrantID)
+	model.InitialBudget = types.Float64Value(initial)
+	model.RemainingBudget = types.Float64Value(remaining)
+	model.Currency = types.StringValue(alloc.Currency)
+	model.CreatedAt = types.StringValue(alloc.CreatedAt)
+	return nil
+}
+
 // Create creates the resource and sets the initial Terraform state.
 func (r *budgetAllocationResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
 	var plan budgetAllocationResourceModel
@@ -126,6 +154,16 @@ func (r *budgetAllocationResource) Create(ctx context.Context, req resource.Crea
 
 	alloc, err := r.client.CreateBudgetAllocation(createReq)
 	if err != nil {
+		var apiErr *client.APIError
+		if errors.As(err, &apiErr) && apiErr.StatusCode == 409 && apiErr.Code == "CONFLICT" {
+			resp.Diagnostics.AddError(
+				"Budget allocation already exists for this grant",
+				"Grant "+plan.GrantID.ValueString()+" already has a budget allocation and the Grantex API does not support "+
+					"updating or deleting allocations. Import the existing allocation instead: "+
+					"terraform import <address> "+plan.GrantID.ValueString()+". API error: "+err.Error(),
+			)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"Error creating budget allocation",
 			"Could not create budget allocation, unexpected error: "+err.Error(),
@@ -133,9 +171,13 @@ func (r *budgetAllocationResource) Create(ctx context.Context, req resource.Crea
 		return
 	}
 
-	plan.ID = types.StringValue(alloc.ID)
-	plan.RemainingBudget = types.Float64Value(alloc.RemainingBudget)
-	plan.CreatedAt = types.StringValue(alloc.CreatedAt)
+	if err := applyBudgetAllocation(&plan, alloc); err != nil {
+		resp.Diagnostics.AddError(
+			"Error decoding budget allocation",
+			"The allocation was created but its response could not be decoded: "+err.Error(),
+		)
+		return
+	}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -152,6 +194,10 @@ func (r *budgetAllocationResource) Read(ctx context.Context, req resource.ReadRe
 
 	alloc, err := r.client.GetBudgetBalance(state.GrantID.ValueString())
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"Error reading budget allocation",
 			"Could not read budget allocation for grant "+state.GrantID.ValueString()+": "+err.Error(),
@@ -159,20 +205,21 @@ func (r *budgetAllocationResource) Read(ctx context.Context, req resource.ReadRe
 		return
 	}
 
-	state.ID = types.StringValue(alloc.ID)
-	state.GrantID = types.StringValue(alloc.GrantID)
-	state.InitialBudget = types.Float64Value(alloc.InitialBudget)
-	state.RemainingBudget = types.Float64Value(alloc.RemainingBudget)
-	state.Currency = types.StringValue(alloc.Currency)
-	state.CreatedAt = types.StringValue(alloc.CreatedAt)
+	if err := applyBudgetAllocation(&state, alloc); err != nil {
+		resp.Diagnostics.AddError(
+			"Error decoding budget allocation",
+			"Could not decode budget allocation for grant "+state.GrantID.ValueString()+": "+err.Error(),
+		)
+		return
+	}
 
 	diags = resp.State.Set(ctx, state)
 	resp.Diagnostics.Append(diags...)
 }
 
-// Update is a no-op for budget allocations (create-only resource).
-// Changes to grant_id or currency trigger RequiresReplace, so this should
-// only be called if initial_budget changes, which we accept as a no-op.
+// Update is never reached: grant_id, initial_budget and currency all force
+// replacement and the remaining attributes are computed. It exists only to
+// satisfy resource.Resource and carries the planned values forward.
 func (r *budgetAllocationResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan budgetAllocationResourceModel
 	diags := req.Plan.Get(ctx, &plan)
@@ -181,20 +228,30 @@ func (r *budgetAllocationResource) Update(ctx context.Context, req resource.Upda
 		return
 	}
 
-	resp.Diagnostics.AddWarning(
-		"Budget allocation update not supported",
-		"Budget allocations are create-only. To change the budget, destroy and recreate the resource.",
-	)
-
-	// Preserve the existing state with the new plan values.
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
 }
 
 // Delete performs a logical delete of the budget allocation.
-// The API does not support deleting budget allocations, so this is a no-op
-// that simply removes the resource from Terraform state.
-func (r *budgetAllocationResource) Delete(_ context.Context, _ resource.DeleteRequest, _ *resource.DeleteResponse) {
-	// Logical delete: remove from state only.
-	// The budget allocation remains in the Grantex API but is no longer tracked.
+// The API does not support deleting budget allocations, so this only removes
+// the resource from Terraform state; the allocation remains on the grant.
+func (r *budgetAllocationResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var state budgetAllocationResourceModel
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.AddWarning(
+		"Budget allocation removed from state only",
+		"The Grantex API does not support deleting budget allocations. The allocation for grant "+
+			state.GrantID.ValueString()+" remains in Grantex and is no longer tracked by Terraform.",
+	)
+}
+
+// ImportState imports an allocation by its grant ID (the balance endpoint is
+// keyed by grant, and each grant has at most one allocation).
+func (r *budgetAllocationResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	resource.ImportStatePassthroughID(ctx, path.Root("grant_id"), req, resp)
 }

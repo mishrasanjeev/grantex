@@ -43,7 +43,9 @@ export class StripeAdapter extends BaseAdapter {
     token: string,
     params: CreatePaymentIntentParams,
   ): Promise<AdapterResult> {
-    const { grant, matchedScope } = await this.verifyAndCheckScope(token, 'payments:initiate');
+    const { grant, matchedScope } = await this.verifyAndCheckScope(token, 'payments:initiate', {
+      enforcesConstraint: true,
+    });
     const credential = await this.resolveCredential();
 
     // Enforce constraint: max_500 means max $500 = max 50000 cents

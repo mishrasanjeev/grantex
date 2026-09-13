@@ -13,7 +13,11 @@ class TokensClient:
         self._refresh_retry_keys: dict[str, tuple[str, float]] = {}
 
     def exchange(self, params: ExchangeTokenParams) -> ExchangeTokenResponse:
-        data = self._http.post("/v1/token", params.to_dict())
+        # Authorization codes are single-use and the server has no idempotent
+        # replay for the exchange (unlike refresh): a retried request whose
+        # first attempt committed would fail with "code already used" and lose
+        # the tokens. Never retry; surface the error to the caller.
+        data = self._http.post("/v1/token", params.to_dict(), retry=False)
         return ExchangeTokenResponse.from_dict(data)
 
     def refresh(self, params: RefreshTokenParams) -> ExchangeTokenResponse:

@@ -248,6 +248,35 @@ describe('POST /v1/grants/delegate', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('returns 400 (not 500) when scopes is a string instead of an array', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      // A non-empty string has `.length` so it passed the old truthiness
+      // check and then crashed on `scopes.some(...)`.
+      payload: { parentGrantToken: parentToken, subAgentId: SUB_AGENT.id, scopes: 'read' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ code: string }>().code).toBe('BAD_REQUEST');
+  });
+
+  it('returns 400 (not 500) when expiresIn is not a string', async () => {
+    seedAuth();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/grants/delegate',
+      headers: authHeader(),
+      payload: { parentGrantToken: parentToken, subAgentId: SUB_AGENT.id, scopes: ['read'], expiresIn: 3600 },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
   it('returns 400 for an invalid expiresIn instead of leaking a 500', async () => {
     seedAuth();
     mockRedis.get.mockResolvedValue(null);

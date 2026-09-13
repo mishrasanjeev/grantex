@@ -6,6 +6,7 @@ import {
 } from '../lib/crypto.js';
 import { revokeGrantCascade } from '../lib/revoke.js';
 import { requirePrincipalSession } from '../lib/principal-auth.js';
+import { config } from '../config.js';
 
 const PERMISSIONS_CSP = [
   "default-src 'self'",
@@ -79,7 +80,11 @@ export async function principalRoutes(app: FastifyInstance): Promise<void> {
 
       return reply.status(201).send({
         sessionToken,
-        dashboardUrl: `${request.protocol}://${request.hostname}/permissions#session=${encodeURIComponent(sessionToken)}`,
+        // Built from the configured public base URL, never from the request's
+        // Host header: this URL is returned to (and may be emailed to) the
+        // Principal, so an attacker-controlled Host must not be able to point
+        // it — and the session token in the fragment — at another origin.
+        dashboardUrl: `${config.publicBaseUrl.replace(/\/$/, '')}/permissions#session=${encodeURIComponent(sessionToken)}`,
         expiresAt,
       });
     },

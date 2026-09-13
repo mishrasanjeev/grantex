@@ -210,6 +210,108 @@ describe('POST /v1/passport/issue', () => {
     expect(res.json().message).toContain('revoked');
   });
 
+  it('returns 400 when the grant has expired (status still active)', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id, did: TEST_AGENT.did }]);
+    sqlMock.mockResolvedValueOnce([{ ...TEST_GRANT_WITH_MPP_SCOPES, expires_at: past.toISOString() }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/passport/issue',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        grantId: 'grnt_MPP01',
+        allowedMPPCategories: ['inference'],
+        maxTransactionAmount: { amount: 100, currency: 'USDC' },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('INVALID_GRANT');
+  });
+
+  it('returns 400 when the grant status is not active', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id, did: TEST_AGENT.did }]);
+    sqlMock.mockResolvedValueOnce([{ ...TEST_GRANT_WITH_MPP_SCOPES, status: 'expired' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/passport/issue',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        grantId: 'grnt_MPP01',
+        allowedMPPCategories: ['inference'],
+        maxTransactionAmount: { amount: 100, currency: 'USDC' },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('INVALID_GRANT');
+  });
+
+  it('caps the passport expiry at the grant expiry', async () => {
+    seedAuth();
+    const grantExpiry = new Date(Date.now() + 3600_000); // 1h from now
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id, did: TEST_AGENT.did }]);
+    sqlMock.mockResolvedValueOnce([{ ...TEST_GRANT_WITH_MPP_SCOPES, expires_at: grantExpiry.toISOString() }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'vcsl_PP01', nextIndex: 0, next_index: 0 }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/passport/issue',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        grantId: 'grnt_MPP01',
+        allowedMPPCategories: ['inference'],
+        maxTransactionAmount: { amount: 100, currency: 'USDC' },
+        expiresIn: '720h',
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const expiresAt = new Date(res.json().expiresAt).getTime();
+    expect(expiresAt).toBeLessThanOrEqual(grantExpiry.getTime());
+    expect(res.json().credential.validUntil).toBe(new Date(expiresAt).toISOString());
+  });
+
+  it('returns 400 (not 500) for a malformed allowedMPPCategories / maxTransactionAmount', async () => {
+    seedAuth();
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/v1/passport/issue',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        grantId: 'grnt_MPP01',
+        allowedMPPCategories: 'inference',
+        maxTransactionAmount: { amount: 100, currency: 'USDC' },
+      },
+    });
+    expect(bad.statusCode).toBe(400);
+
+    seedAuth();
+    const badAmount = await app.inject({
+      method: 'POST',
+      url: '/v1/passport/issue',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        grantId: 'grnt_MPP01',
+        allowedMPPCategories: ['inference'],
+        maxTransactionAmount: { amount: 'lots', currency: 'USDC' },
+      },
+    });
+    expect(badAmount.statusCode).toBe(400);
+  });
+
   it('returns 400 when grant lacks required MPP scopes', async () => {
     seedAuth();
     // Agent lookup
@@ -260,6 +362,33 @@ describe('POST /v1/passport/issue', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('AMOUNT_EXCEEDS_BUDGET');
+  });
+
+  it('returns 400 when the budget allocation is fully exhausted (remaining_budget = 0)', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id, did: TEST_AGENT.did }]);
+    sqlMock.mockResolvedValueOnce([TEST_GRANT_WITH_MPP_SCOPES]);
+    // Exhausted allocation: previously filtered out by `remaining_budget > 0`,
+    // which let any amount through as if no budget existed.
+    sqlMock.mockResolvedValueOnce([{ remaining_budget: '0.00' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/passport/issue',
+      headers: authHeader(),
+      payload: {
+        agentId: TEST_AGENT.id,
+        grantId: 'grnt_MPP01',
+        allowedMPPCategories: ['inference'],
+        maxTransactionAmount: { amount: 1, currency: 'USDC' },
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('AMOUNT_EXCEEDS_BUDGET');
+    const budgetQuery = sqlMock.mock.calls.map((call) => String(call[0])).find((q) => /budget_allocations/i.test(q));
+    expect(budgetQuery).toBeDefined();
+    expect(budgetQuery).not.toMatch(/remaining_budget\s*>\s*0/);
   });
 
   it('returns 400 for invalid expiresIn format', async () => {

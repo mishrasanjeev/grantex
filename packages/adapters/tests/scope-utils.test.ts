@@ -77,15 +77,40 @@ describe('findMatchingScope', () => {
     expect(result).toBeNull();
   });
 
-  it('returns first matching scope', () => {
+  it('returns the tightest cap when several max grants coexist, regardless of order', () => {
+    // Regression: the first constrained grant used to win, so a stale
+    // `max_5000` listed before a tightened `max_50` lifted the cap.
     const result = findMatchingScope(
-      ['payments:initiate:max_100', 'payments:initiate:max_500'],
+      ['payments:initiate:max_5000', 'payments:initiate:max_50'],
       'payments:initiate',
     );
     expect(result).toEqual({
       baseScope: 'payments:initiate',
-      constraint: { type: 'max', value: 100 },
+      constraint: { type: 'max', value: 50 },
     });
+    expect(
+      findMatchingScope(['payments:initiate:limit_10', 'payments:initiate:limit_100'], 'payments:initiate'),
+    ).toEqual({ baseScope: 'payments:initiate', constraint: { type: 'limit', value: 10 } });
+  });
+
+  it('returns the highest floor when several min grants coexist', () => {
+    const result = findMatchingScope(
+      ['orders:place:min_5', 'orders:place:min_50', 'orders:place:min_20'],
+      'orders:place',
+    );
+    expect(result).toEqual({
+      baseScope: 'orders:place',
+      constraint: { type: 'min', value: 50 },
+    });
+  });
+
+  it('rejects grants whose constraint types conflict', () => {
+    expect(
+      findMatchingScope(['payments:initiate:max_500', 'payments:initiate:min_10'], 'payments:initiate'),
+    ).toBeNull();
+    expect(
+      findMatchingScope(['payments:initiate:max_500', 'payments:initiate:limit_500'], 'payments:initiate'),
+    ).toBeNull();
   });
 });
 

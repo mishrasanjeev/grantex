@@ -8,36 +8,114 @@ import type {
 
 const DEFAULT_JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
 const DEFAULT_TRUSTED_ISSUERS = ['did:web:grantex.dev'];
-const JWKS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 /** Tolerance for issuer/verifier clock drift when applying validFrom. */
 const CLOCK_SKEW_TOLERANCE_MS = 60 * 1000;
 
-interface JwksCacheEntry {
-  jwks: jose.JSONWebKeySet;
-  fetchedAt: number;
+/**
+ * JWKS caching mirrors JOSE's `createRemoteJWKSet` semantics (see
+ * `@grantex/sdk` verify.ts) — the resolver itself is not used here because
+ * jose 5 fetches with node:http and the package's tests stub global fetch:
+ *   - a fetched set is reused for `JWKS_CACHE_MAX_AGE_MS`;
+ *   - a kid the cached set does not know triggers one re-fetch, but no more
+ *     often than `JWKS_COOLDOWN_MS`, so a flood of unknown kids cannot turn
+ *     into a flood of requests against the issuer;
+ *   - a failed fetch is remembered for `JWKS_FAILURE_CACHE_MS` (negative
+ *     caching) so an outage does not become a retry storm;
+ *   - the resolver map is bounded, so caller-supplied JWKS URLs cannot grow
+ *     process memory without limit.
+ */
+const JWKS_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+const JWKS_COOLDOWN_MS = 30 * 1000;
+const JWKS_FAILURE_CACHE_MS = 30 * 1000;
+const MAX_JWKS_RESOLVERS = 64;
+
+type LocalKeySet = ReturnType<typeof jose.createLocalJWKSet>;
+
+class JwksResolver {
+  #keySet: LocalKeySet | null = null;
+  #fetchedAt = 0;
+  #failure: { at: number; error: PassportVerificationError } | null = null;
+  #inflight: Promise<LocalKeySet> | null = null;
+
+  constructor(private readonly jwksUri: string) {}
+
+  /** jose `JWTVerifyGetKey`: resolve the signing key for a protected header. */
+  readonly getKey: jose.JWTVerifyGetKey = async (protectedHeader, token) => {
+    const keySet = await this.#load(false);
+    try {
+      return await keySet(protectedHeader, token);
+    } catch (err) {
+      if (!(err instanceof jose.errors.JWKSNoMatchingKey)) throw err;
+      // Key rotation: the kid may simply be newer than the cached set.
+      if (Date.now() - this.#fetchedAt < JWKS_COOLDOWN_MS) throw err;
+      const refreshed = await this.#load(true);
+      return refreshed(protectedHeader, token);
+    }
+  };
+
+  async #load(force: boolean): Promise<LocalKeySet> {
+    const now = Date.now();
+    if (!force && this.#keySet !== null && now - this.#fetchedAt < JWKS_CACHE_MAX_AGE_MS) {
+      return this.#keySet;
+    }
+    if (this.#failure !== null && now - this.#failure.at < JWKS_FAILURE_CACHE_MS) {
+      throw this.#failure.error;
+    }
+    if (this.#inflight === null) {
+      this.#inflight = this.#fetch().finally(() => {
+        this.#inflight = null;
+      });
+    }
+    return this.#inflight;
+  }
+
+  async #fetch(): Promise<LocalKeySet> {
+    try {
+      const response = await fetch(this.jwksUri, {
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) {
+        throw new PassportVerificationError(
+          'INVALID_SIGNATURE',
+          `Failed to fetch JWKS from ${this.jwksUri}: ${response.status}`,
+        );
+      }
+      const jwks = (await response.json()) as jose.JSONWebKeySet;
+      const keySet = jose.createLocalJWKSet(jwks);
+      this.#keySet = keySet;
+      this.#fetchedAt = Date.now();
+      this.#failure = null;
+      return keySet;
+    } catch (err) {
+      const error = err instanceof PassportVerificationError
+        ? err
+        : new PassportVerificationError(
+            'INVALID_SIGNATURE',
+            `Failed to fetch JWKS from ${this.jwksUri}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+      this.#failure = { at: Date.now(), error };
+      throw error;
+    }
+  }
 }
 
-const jwksCache = new Map<string, JwksCacheEntry>();
+const jwksResolvers = new Map<string, JwksResolver>();
 
-async function fetchJwks(jwksUri: string): Promise<jose.JSONWebKeySet> {
-  const cached = jwksCache.get(jwksUri);
-  if (cached && Date.now() - cached.fetchedAt < JWKS_CACHE_TTL_MS) {
-    return cached.jwks;
+function getJwksResolver(jwksUri: string): JwksResolver {
+  const cached = jwksResolvers.get(jwksUri);
+  if (cached !== undefined) {
+    // Refresh LRU position.
+    jwksResolvers.delete(jwksUri);
+    jwksResolvers.set(jwksUri, cached);
+    return cached;
   }
-
-  const response = await fetch(jwksUri, {
-    headers: { 'Accept': 'application/json' },
-  });
-  if (!response.ok) {
-    throw new PassportVerificationError(
-      'INVALID_SIGNATURE',
-      `Failed to fetch JWKS from ${jwksUri}: ${response.status}`,
-    );
+  const resolver = new JwksResolver(jwksUri);
+  if (jwksResolvers.size >= MAX_JWKS_RESOLVERS) {
+    const oldest = jwksResolvers.keys().next().value as string | undefined;
+    if (oldest !== undefined) jwksResolvers.delete(oldest);
   }
-
-  const jwks = (await response.json()) as jose.JSONWebKeySet;
-  jwksCache.set(jwksUri, { jwks, fetchedAt: Date.now() });
-  return jwks;
+  jwksResolvers.set(jwksUri, resolver);
+  return resolver;
 }
 
 function decodePassport(encodedCredential: string): AgentPassportCredential {
@@ -104,7 +182,7 @@ function canonicalize(value: unknown): string {
  */
 async function verifyProof(
   proofValue: string,
-  jwks: jose.JSONWebKeySet,
+  getKey: jose.JWTVerifyGetKey,
 ): Promise<SignedClaims> {
   if (typeof proofValue !== 'string' || proofValue.length === 0) {
     throw new PassportVerificationError(
@@ -113,12 +191,15 @@ async function verifyProof(
     );
   }
 
-  const keyStore = jose.createLocalJWKSet(jwks);
   let payload: jose.JWTPayload;
   try {
     // jwtVerify enforces the signature *and* the signed exp/nbf window.
-    ({ payload } = await jose.jwtVerify(proofValue, keyStore));
+    // RS256 only: the issuer signs with RSA and pinning the algorithm keeps
+    // a key-confusion swap to another family from being accepted.
+    ({ payload } = await jose.jwtVerify(proofValue, getKey, { algorithms: ['RS256'] }));
   } catch (err) {
+    // A JWKS fetch failure already carries its own code (INVALID_SIGNATURE).
+    if (err instanceof PassportVerificationError) throw err;
     const message = err instanceof Error ? err.message : String(err);
     if (err instanceof jose.errors.JWTExpired) {
       throw new PassportVerificationError(
@@ -228,8 +309,10 @@ export async function verifyPassport(
   // Verify the proof, then pin the envelope to what was actually signed.
   // Every check from here on runs on signed data.
   const jwksUri = options?.jwksUri ?? DEFAULT_JWKS_URI;
-  const jwks = await fetchJwks(jwksUri);
-  const signed = await verifyProof(credential.proof.proofValue, jwks);
+  const signed = await verifyProof(
+    credential.proof.proofValue,
+    getJwksResolver(jwksUri).getKey,
+  );
   assertEnvelopeMatchesProof(credential, signed);
 
   // The signed issuer must independently clear the trust list — the envelope
@@ -407,5 +490,5 @@ export function requireAgentPassport(
 
 /** Clear the in-memory JWKS cache. Useful for testing. */
 export function clearJwksCache(): void {
-  jwksCache.clear();
+  jwksResolvers.clear();
 }

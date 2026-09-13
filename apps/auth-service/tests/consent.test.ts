@@ -204,6 +204,35 @@ describe('POST /v1/consent/:id/approve', () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it('does not let a sandbox developer with fido_required approve without a verified passkey', async () => {
+    // The DB is mocked, so pin the predicate itself: the UPDATE must only
+    // bypass fido_verified for sandbox developers that have NOT opted into
+    // FIDO. Previously `d.mode = 'sandbox' OR fido_verified` approved such
+    // requests unconditionally and the FIDO_REQUIRED branch was unreachable.
+    sqlMock.mockClear();
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{
+      fido_required: true,
+      mode: 'sandbox',
+      fido_verified: false,
+      status: 'pending',
+      expires_at: FUTURE,
+    }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/consent/areq_TEST01/approve',
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ code: string }>().code).toBe('FIDO_REQUIRED');
+
+    const updateSql = (sqlMock.mock.calls[0]![0] as TemplateStringsArray).join('?');
+    expect(updateSql).toContain("UPDATE auth_requests");
+    expect(updateSql).toMatch(/d\.mode = 'sandbox' AND COALESCE\(d\.fido_required, FALSE\) = FALSE/);
+    expect(updateSql).not.toMatch(/\(d\.mode = 'sandbox' OR auth_requests\.fido_verified = TRUE\)/);
+  });
+
   it('blocks approval when FIDO is required but not verified', async () => {
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{
@@ -363,6 +392,7 @@ describe('POST /v1/consent/:id/deny', () => {
   });
 
   it('blocks denial when FIDO is required but not verified', async () => {
+    sqlMock.mockClear();
     sqlMock.mockResolvedValueOnce([]);
     sqlMock.mockResolvedValueOnce([{
       fido_required: true,
@@ -379,6 +409,10 @@ describe('POST /v1/consent/:id/deny', () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.json<{ code: string }>().code).toBe('FIDO_REQUIRED');
+
+    const updateSql = (sqlMock.mock.calls[0]![0] as TemplateStringsArray).join('?');
+    expect(updateSql).toContain("SET status = 'denied'");
+    expect(updateSql).toMatch(/d\.mode = 'sandbox' AND COALESCE\(d\.fido_required, FALSE\) = FALSE/);
   });
 
   it('requires principal verification for live denial even when developer FIDO is optional', async () => {

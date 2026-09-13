@@ -105,7 +105,7 @@ export const delegationSuite: SuiteDefinition = {
           ctx.cleanup.trackGrant(del1.body.grantId);
 
           // Delegate depth-1 → self (depth 2)
-          const del2 = await ctx.http.post<{ grantToken: string; grantId: string }>(
+          const del2 = await ctx.http.post<{ grantToken: string; grantId: string; code?: string }>(
             '/v1/grants/delegate',
             {
               parentGrantToken: del1.body.grantToken,
@@ -119,8 +119,10 @@ export const delegationSuite: SuiteDefinition = {
             const payload = JSON.parse(atob(parts[1]!)) as { delegationDepth: number };
             expectEqual(payload.delegationDepth, 2, 'delegationDepth');
           } else {
-            // Server enforces depth limit — also valid
-            expectStatus(del2, 400);
+            // Server enforces depth limit — also valid. The chain must terminate
+            // with 403 DELEGATION_DEPTH_EXCEEDED, not a generic 400.
+            expectStatus(del2, 403);
+            expectEqual(del2.body.code, 'DELEGATION_DEPTH_EXCEEDED', 'code');
           }
         },
       ),

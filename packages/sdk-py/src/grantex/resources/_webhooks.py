@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from typing import List
 
 from .._http import HttpClient
@@ -24,4 +26,4 @@ class WebhooksClient:
         return ListWebhooksResponse.from_dict(data)
 
     def delete(self, webhook_id: str) -> None:
-        self._http.delete(f"/v1/webhooks/{webhook_id}")
+        self._http.delete(f"/v1/webhooks/{quote(webhook_id, safe='')}")

@@ -437,7 +437,10 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
           AND EXISTS (
             SELECT 1 FROM developers d
             WHERE d.id = auth_requests.developer_id
-              AND (d.mode = 'sandbox' OR auth_requests.fido_verified = TRUE)
+              AND (
+                (d.mode = 'sandbox' AND COALESCE(d.fido_required, FALSE) = FALSE)
+                OR auth_requests.fido_verified = TRUE
+              )
           )
         RETURNING id, code, redirect_uri, state, protocol
       `;
@@ -487,7 +490,10 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
           AND EXISTS (
             SELECT 1 FROM developers d
             WHERE d.id = auth_requests.developer_id
-              AND (d.mode = 'sandbox' OR auth_requests.fido_verified = TRUE)
+              AND (
+                (d.mode = 'sandbox' AND COALESCE(d.fido_required, FALSE) = FALSE)
+                OR auth_requests.fido_verified = TRUE
+              )
           )
         RETURNING id, redirect_uri, state, protocol
       `;

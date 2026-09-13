@@ -205,4 +205,4 @@ def _path_with_query(path: str, params: CommerceRecord | None = None) -> str:
 def _quote(value: str) -> str:
     from urllib.parse import quote
 
-    return quote(value, safe="")
+    return quote(value, safe='')

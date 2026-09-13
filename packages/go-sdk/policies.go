@@ -1,6 +1,9 @@
 package grantex
 
-import "context"
+import (
+	"context"
+	"net/url"
+)
 
 // PoliciesService handles access policy management.
 type PoliciesService struct {
@@ -19,16 +22,16 @@ func (s *PoliciesService) List(ctx context.Context) (*ListPoliciesResponse, erro
 
 // Get retrieves a policy by ID.
 func (s *PoliciesService) Get(ctx context.Context, policyID string) (*Policy, error) {
-	return unmarshal[Policy](s.http.get(ctx, "/v1/policies/"+policyID))
+	return unmarshal[Policy](s.http.get(ctx, "/v1/policies/"+url.PathEscape(policyID)))
 }
 
 // Update modifies an existing policy.
 func (s *PoliciesService) Update(ctx context.Context, policyID string, params UpdatePolicyParams) (*Policy, error) {
-	return unmarshal[Policy](s.http.patch(ctx, "/v1/policies/"+policyID, params))
+	return unmarshal[Policy](s.http.patch(ctx, "/v1/policies/"+url.PathEscape(policyID), params))
 }
 
 // Delete removes a policy.
 func (s *PoliciesService) Delete(ctx context.Context, policyID string) error {
-	_, err := s.http.del(ctx, "/v1/policies/"+policyID)
+	_, err := s.http.del(ctx, "/v1/policies/"+url.PathEscape(policyID))
 	return err
 }

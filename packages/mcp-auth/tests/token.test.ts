@@ -19,8 +19,10 @@ function createMockGrantex() {
       scopes: ['read', 'write'],
       expiresIn: '600s',
       expiresAt: new Date(Date.now() + 600_000).toISOString(),
-      status: 'pending' as const,
+      status: 'approved' as const,
       createdAt: new Date().toISOString(),
+      sandbox: true,
+      code: 'GRANTEX_SANDBOX_CODE',
     }),
     tokens: {
       exchange: vi.fn().mockResolvedValue({
@@ -41,11 +43,14 @@ function createMockGrantex() {
   };
 }
 
-async function setupWithCode() {
+const TEST_CLIENT_SECRET = 'test-secret';
+
+async function setupWithCode(options: { publicClient?: boolean } = {}) {
   const clientStore = new InMemoryClientStore();
   await clientStore.set(TEST_CLIENT_ID, {
     clientId: TEST_CLIENT_ID,
-    clientSecret: 'test-secret',
+    // Confidential by default; `publicClient` registers a PKCE-only client.
+    ...(options.publicClient ? { tokenEndpointAuthMethod: 'none' as const } : { clientSecret: TEST_CLIENT_SECRET }),
     redirectUris: [TEST_REDIRECT_URI],
     grantTypes: ['authorization_code', 'refresh_token'],
     createdAt: new Date().toISOString(),
@@ -59,6 +64,9 @@ async function setupWithCode() {
     scopes: ['read', 'write'],
     issuer: 'https://auth.example.com',
     clientStore,
+    // Test fixture uses the gated sandbox short path to obtain a code
+    // without driving the Grantex consent flow.
+    sandboxAutoApprove: true,
   });
 
   // Issue an authorization code via the authorize endpoint
@@ -79,7 +87,25 @@ async function setupWithCode() {
   const redirectUrl = new URL(location);
   const code = redirectUrl.searchParams.get('code')!;
 
-  return { app, mockGrantex, code };
+  return { app, mockGrantex, code, clientStore };
+}
+
+/** Redeem `code` so the mock's `rt_test_refresh` becomes bound to TEST_CLIENT_ID. */
+async function exchangeCode(app: Awaited<ReturnType<typeof setupWithCode>>['app'], code: string) {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/token',
+    payload: {
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: TEST_REDIRECT_URI,
+      client_id: TEST_CLIENT_ID,
+      client_secret: TEST_CLIENT_SECRET,
+      code_verifier: TEST_VERIFIER,
+    },
+  });
+  expect(response.statusCode).toBe(200);
+  return response.json() as { refresh_token: string };
 }
 
 describe('token endpoint', () => {
@@ -148,6 +174,7 @@ describe('token endpoint', () => {
         code: 'nonexistent-code',
         redirect_uri: TEST_REDIRECT_URI,
         client_id: TEST_CLIENT_ID,
+        client_secret: TEST_CLIENT_SECRET,
         code_verifier: TEST_VERIFIER,
       },
     });
@@ -168,6 +195,7 @@ describe('token endpoint', () => {
         code,
         redirect_uri: TEST_REDIRECT_URI,
         client_id: TEST_CLIENT_ID,
+        client_secret: TEST_CLIENT_SECRET,
         code_verifier: 'wrong-verifier-value',
       },
     });
@@ -189,6 +217,7 @@ describe('token endpoint', () => {
         code,
         redirect_uri: TEST_REDIRECT_URI,
         client_id: TEST_CLIENT_ID,
+        client_secret: TEST_CLIENT_SECRET,
         code_verifier: TEST_VERIFIER,
       },
     });
@@ -199,6 +228,90 @@ describe('token endpoint', () => {
     expect(body.token_type).toBe('bearer');
     expect(body.expires_in).toBeGreaterThan(0);
     expect(body.scope).toBe('read write');
+  });
+
+  it('forwards the Grantex sandbox/auto-approve code to the exchange instead of the auth-request id', async () => {
+    const clientStore = new InMemoryClientStore();
+    await clientStore.set(TEST_CLIENT_ID, {
+      clientId: TEST_CLIENT_ID,
+      clientSecret: 'test-secret',
+      redirectUris: [TEST_REDIRECT_URI],
+      grantTypes: ['authorization_code'],
+      createdAt: new Date().toISOString(),
+    });
+    const mockGrantex = createMockGrantex();
+    mockGrantex.authorize.mockResolvedValue({
+      authRequestId: 'auth-req-1',
+      consentUrl: 'https://example.com/consent',
+      agentId: 'agent-1',
+      principalId: 'principal-1',
+      scopes: ['read', 'write'],
+      expiresIn: '600s',
+      expiresAt: new Date(Date.now() + 600_000).toISOString(),
+      status: 'approved' as const,
+      createdAt: new Date().toISOString(),
+      sandbox: true,
+      code: 'GRANTEX_SANDBOX_CODE',
+    });
+    const app = await createMcpAuthServer({
+      grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
+      agentId: 'agent-1',
+      scopes: ['read', 'write'],
+      issuer: 'https://auth.example.com',
+      clientStore,
+      sandboxAutoApprove: true,
+    });
+    const authResponse = await app.inject({
+      method: 'GET',
+      url: '/authorize',
+      query: {
+        response_type: 'code',
+        client_id: TEST_CLIENT_ID,
+        redirect_uri: TEST_REDIRECT_URI,
+        code_challenge: TEST_CHALLENGE,
+        code_challenge_method: 'S256',
+      },
+    });
+    const code = new URL(authResponse.headers['location'] as string).searchParams.get('code')!;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/token',
+      payload: {
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: TEST_REDIRECT_URI,
+        client_id: TEST_CLIENT_ID,
+        client_secret: TEST_CLIENT_SECRET,
+        code_verifier: TEST_VERIFIER,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockGrantex.tokens.exchange).toHaveBeenCalledWith({
+      code: 'GRANTEX_SANDBOX_CODE',
+      agentId: 'agent-1',
+    });
+  });
+
+  it('returns 400 (not 500) when code_verifier is not a string', async () => {
+    const { app, code } = await setupWithCode();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/token',
+      payload: {
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: TEST_REDIRECT_URI,
+        client_id: TEST_CLIENT_ID,
+        client_secret: TEST_CLIENT_SECRET,
+        code_verifier: 12345,
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('invalid_grant');
   });
 
   it('returns refresh_token when available', async () => {
@@ -212,6 +325,7 @@ describe('token endpoint', () => {
         code,
         redirect_uri: TEST_REDIRECT_URI,
         client_id: TEST_CLIENT_ID,
+        client_secret: TEST_CLIENT_SECRET,
         code_verifier: TEST_VERIFIER,
       },
     });
@@ -221,7 +335,8 @@ describe('token endpoint', () => {
   });
 
   it('handles refresh_token grant type', async () => {
-    const { app } = await setupWithCode();
+    const { app, code } = await setupWithCode();
+    await exchangeCode(app, code);
 
     const response = await app.inject({
       method: 'POST',
@@ -230,6 +345,7 @@ describe('token endpoint', () => {
         grant_type: 'refresh_token',
         refresh_token: 'rt_test_refresh',
         client_id: TEST_CLIENT_ID,
+        client_secret: TEST_CLIENT_SECRET,
       },
     });
 
@@ -238,5 +354,180 @@ describe('token endpoint', () => {
     expect(body.access_token).toBe('gt_refreshed_token');
     expect(body.token_type).toBe('bearer');
     expect(body.refresh_token).toBe('rt_new_refresh');
+  });
+
+  describe('refresh_token client binding (RFC 6749 §6)', () => {
+    const OTHER_CLIENT_ID = 'other-client-id';
+    const OTHER_CLIENT_SECRET = 'other-secret';
+
+    it('rejects a refresh token presented by a different client without calling Grantex', async () => {
+      const { app, code, clientStore, mockGrantex } = await setupWithCode();
+      await clientStore.set(OTHER_CLIENT_ID, {
+        clientId: OTHER_CLIENT_ID,
+        clientSecret: OTHER_CLIENT_SECRET,
+        redirectUris: [TEST_REDIRECT_URI],
+        grantTypes: ['authorization_code', 'refresh_token'],
+        createdAt: new Date().toISOString(),
+      });
+      const { refresh_token } = await exchangeCode(app, code);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/token',
+        payload: {
+          grant_type: 'refresh_token',
+          refresh_token,
+          client_id: OTHER_CLIENT_ID,
+          client_secret: OTHER_CLIENT_SECRET,
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('invalid_grant');
+      expect(mockGrantex.tokens.refresh).not.toHaveBeenCalled();
+    });
+
+    it('rejects a refresh token this server never issued', async () => {
+      const { app, mockGrantex } = await setupWithCode();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/token',
+        payload: {
+          grant_type: 'refresh_token',
+          refresh_token: 'rt_never_issued',
+          client_id: TEST_CLIENT_ID,
+          client_secret: TEST_CLIENT_SECRET,
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('invalid_grant');
+      expect(mockGrantex.tokens.refresh).not.toHaveBeenCalled();
+    });
+
+    it('rebinds the rotated refresh token and retires the spent one', async () => {
+      const { app, code } = await setupWithCode();
+      await exchangeCode(app, code);
+
+      const refresh = (token: string) => app.inject({
+        method: 'POST',
+        url: '/token',
+        payload: {
+          grant_type: 'refresh_token',
+          refresh_token: token,
+          client_id: TEST_CLIENT_ID,
+          client_secret: TEST_CLIENT_SECRET,
+        },
+      });
+
+      const first = await refresh('rt_test_refresh');
+      expect(first.statusCode).toBe(200);
+      expect(first.json().refresh_token).toBe('rt_new_refresh');
+
+      // The rotated token is now the bound one; the spent one is refused.
+      expect((await refresh('rt_new_refresh')).statusCode).toBe(200);
+      const spent = await refresh('rt_test_refresh');
+      expect(spent.statusCode).toBe(400);
+      expect(spent.json().error).toBe('invalid_grant');
+    });
+  });
+
+  describe('client authentication (OAuth 2.1 §2.1)', () => {
+    it('rejects a confidential client that omits client_secret even with valid PKCE', async () => {
+      const { app, code, mockGrantex } = await setupWithCode();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/token',
+        payload: {
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: TEST_REDIRECT_URI,
+          client_id: TEST_CLIENT_ID,
+          code_verifier: TEST_VERIFIER,
+        },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error).toBe('invalid_client');
+      expect(mockGrantex.tokens.exchange).not.toHaveBeenCalled();
+    });
+
+    it('rejects a wrong client_secret', async () => {
+      const { app, code } = await setupWithCode();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/token',
+        payload: {
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: TEST_REDIRECT_URI,
+          client_id: TEST_CLIENT_ID,
+          client_secret: 'not-the-secret',
+          code_verifier: TEST_VERIFIER,
+        },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error).toBe('invalid_client');
+    });
+
+    it('accepts client_secret_basic', async () => {
+      const { app, code } = await setupWithCode();
+      const basic = Buffer.from(`${TEST_CLIENT_ID}:${TEST_CLIENT_SECRET}`).toString('base64');
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/token',
+        headers: { authorization: `Basic ${basic}` },
+        payload: {
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: TEST_REDIRECT_URI,
+          code_verifier: TEST_VERIFIER,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().access_token).toBe('gt_test_token');
+    });
+
+    it('rejects refresh_token grant for a confidential client without its secret', async () => {
+      const { app } = await setupWithCode();
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/token',
+        payload: {
+          grant_type: 'refresh_token',
+          refresh_token: 'rt_test_refresh',
+          client_id: TEST_CLIENT_ID,
+        },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error).toBe('invalid_client');
+    });
+
+    it('public client (token_endpoint_auth_method=none) is PKCE-only', async () => {
+      const { app, code } = await setupWithCode({ publicClient: true });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/token',
+        payload: {
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: TEST_REDIRECT_URI,
+          client_id: TEST_CLIENT_ID,
+          code_verifier: TEST_VERIFIER,
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().access_token).toBe('gt_test_token');
+    });
   });
 });

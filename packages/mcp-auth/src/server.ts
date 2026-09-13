@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { InMemoryClientStore } from './lib/clients.js';
-import { InMemoryCodeStore } from './lib/codes.js';
+import { InMemoryCodeStore, InMemoryPendingAuthorizationStore, InMemoryRefreshTokenStore } from './lib/codes.js';
 import { registerMetadataEndpoint } from './endpoints/metadata.js';
 import { registerRegisterEndpoint } from './endpoints/register.js';
 import { registerAuthorizeEndpoint } from './endpoints/authorize.js';
@@ -19,12 +19,14 @@ export async function createMcpAuthServer(
   await app.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 
   const clientStore = config.clientStore ?? new InMemoryClientStore();
-  const codeStore = new InMemoryCodeStore();
+  const codeStore = config.codeStore ?? new InMemoryCodeStore();
+  const pendingStore = config.pendingStore ?? new InMemoryPendingAuthorizationStore();
+  const refreshTokenStore = config.refreshTokenStore ?? new InMemoryRefreshTokenStore();
 
   registerMetadataEndpoint(app, config);
   registerRegisterEndpoint(app, clientStore);
-  registerAuthorizeEndpoint(app, config, clientStore, codeStore);
-  registerTokenEndpoint(app, config, clientStore, codeStore);
+  registerAuthorizeEndpoint(app, config, clientStore, codeStore, pendingStore);
+  registerTokenEndpoint(app, config, clientStore, codeStore, refreshTokenStore);
   registerIntrospectEndpoint(app, config, clientStore);
   registerRevokeEndpoint(app, config, clientStore);
 

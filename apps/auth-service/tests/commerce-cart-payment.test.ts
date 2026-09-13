@@ -459,6 +459,51 @@ describe('Commerce cart APIs', () => {
     expect(res.statusCode).toBe(403);
     expect(res.json<{ error: { code: string } }>().error.code).toBe('agent_required');
   });
+
+  it('rejects a string quantity beyond the safe-integer range (string path must match the number path)', async () => {
+    seedAgentAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/carts',
+      headers: { ...agentHeader(), 'idempotency-key': 'cart-key-unsafe-string' },
+      payload: { ...cartPayload(), line_items: [{ variant_id: VARIANT, quantity: '99999999999999999999' }] },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ error: { code: string; details: { fields: Record<string, string> } } }>().error)
+      .toMatchObject({ code: 'validation_failed', details: { fields: { 'line_items[0].quantity': 'required positive integer' } } });
+    expect(flattenedSqlCalls()).not.toContain('INSERT INTO commerce_carts');
+  });
+
+  it('caps line item quantity at 10000', async () => {
+    seedAgentAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/carts',
+      headers: { ...agentHeader(), 'idempotency-key': 'cart-key-quantity-cap' },
+      payload: { ...cartPayload(), line_items: [{ variant_id: VARIANT, quantity: '10001' }] },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields['line_items[0].quantity'])
+      .toBe('must not exceed 10000');
+  });
+
+  it('rejects a cart whose subtotal would leave the safe-integer range before insert', async () => {
+    seedAgentAuth();
+    sqlMock.mockResolvedValueOnce([merchant()]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([variantRow({ price_amount: 900_719_925_475 })]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/carts',
+      headers: { ...agentHeader(), 'idempotency-key': 'cart-key-subtotal-overflow' },
+      payload: { ...cartPayload(), line_items: [{ variant_id: VARIANT, quantity: 10_000 }] },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json<{ error: { code: string; details: { fields: Record<string, string> } } }>().error)
+      .toMatchObject({ code: 'validation_failed', details: { fields: { line_items: 'cart total exceeds the supported amount range' } } });
+    expect(flattenedSqlCalls()).not.toContain('INSERT INTO commerce_carts');
+  });
 });
 
 describe('Commerce payment intent APIs', () => {

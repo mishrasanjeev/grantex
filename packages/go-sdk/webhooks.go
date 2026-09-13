@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -27,7 +28,7 @@ func (s *WebhooksService) List(ctx context.Context) (*ListWebhooksResponse, erro
 
 // Delete removes a webhook endpoint.
 func (s *WebhooksService) Delete(ctx context.Context, webhookID string) error {
-	_, err := s.http.del(ctx, "/v1/webhooks/"+webhookID)
+	_, err := s.http.del(ctx, "/v1/webhooks/"+url.PathEscape(webhookID))
 	return err
 }
 

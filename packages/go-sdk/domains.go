@@ -1,6 +1,7 @@
 package grantex
 
 import (
+	"net/url"
 	"context"
 	"fmt"
 )
@@ -50,11 +51,11 @@ func (s *DomainsService) List(ctx context.Context) ([]Domain, error) {
 
 // Verify triggers DNS verification for a domain.
 func (s *DomainsService) Verify(ctx context.Context, id string) (*VerifyDomainResponse, error) {
-	return unmarshal[VerifyDomainResponse](s.http.post(ctx, fmt.Sprintf("/v1/domains/%s/verify", id), nil))
+	return unmarshal[VerifyDomainResponse](s.http.post(ctx, fmt.Sprintf("/v1/domains/%s/verify", url.PathEscape(id)), nil))
 }
 
 // Delete removes a custom domain.
 func (s *DomainsService) Delete(ctx context.Context, id string) error {
-	_, err := s.http.del(ctx, fmt.Sprintf("/v1/domains/%s", id))
+	_, err := s.http.del(ctx, fmt.Sprintf("/v1/domains/%s", url.PathEscape(id)))
 	return err
 }

@@ -27,7 +27,7 @@ export class DpdpClient {
   }
 
   getConsentRecord(recordId: string): Promise<ConsentRecord> {
-    return this.#http.get<ConsentRecord>(`/v1/dpdp/consent-records/${recordId}`);
+    return this.#http.get<ConsentRecord>(`/v1/dpdp/consent-records/${encodeURIComponent(recordId)}`);
   }
 
   listConsentRecords(principalId?: string): Promise<ListConsentRecordsResponse> {
@@ -36,7 +36,7 @@ export class DpdpClient {
   }
 
   withdrawConsent(recordId: string, params: WithdrawConsentParams): Promise<WithdrawConsentResponse> {
-    return this.#http.post<WithdrawConsentResponse>(`/v1/dpdp/consent-records/${recordId}/withdraw`, params);
+    return this.#http.post<WithdrawConsentResponse>(`/v1/dpdp/consent-records/${encodeURIComponent(recordId)}/withdraw`, params);
   }
 
   listPrincipalRecords(principalId: string): Promise<PrincipalRecordsResponse> {
@@ -58,7 +58,7 @@ export class DpdpClient {
   }
 
   getGrievance(grievanceId: string): Promise<Grievance> {
-    return this.#http.get<Grievance>(`/v1/dpdp/grievances/${grievanceId}`);
+    return this.#http.get<Grievance>(`/v1/dpdp/grievances/${encodeURIComponent(grievanceId)}`);
   }
 
   createExport(params: CreateDpdpExportParams): Promise<DpdpExport> {
@@ -66,6 +66,6 @@ export class DpdpClient {
   }
 
   getExport(exportId: string): Promise<DpdpExport> {
-    return this.#http.get<DpdpExport>(`/v1/dpdp/exports/${exportId}`);
+    return this.#http.get<DpdpExport>(`/v1/dpdp/exports/${encodeURIComponent(exportId)}`);
   }
 }

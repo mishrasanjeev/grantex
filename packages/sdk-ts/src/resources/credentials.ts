@@ -16,7 +16,7 @@ export class CredentialsClient {
   }
 
   get(credentialId: string): Promise<VerifiableCredentialRecord> {
-    return this.#http.get<VerifiableCredentialRecord>(`/v1/credentials/${credentialId}`);
+    return this.#http.get<VerifiableCredentialRecord>(`/v1/credentials/${encodeURIComponent(credentialId)}`);
   }
 
   list(params?: ListCredentialsParams): Promise<ListCredentialsResponse> {

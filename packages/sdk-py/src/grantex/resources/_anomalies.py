@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from .._http import HttpClient
 from .._types import Anomaly, DetectAnomaliesResponse, ListAnomaliesResponse
 
@@ -21,5 +23,5 @@ class AnomaliesClient:
 
     def acknowledge(self, anomaly_id: str) -> Anomaly:
         """Acknowledge an anomaly by ID."""
-        data = self._http.patch(f"/v1/anomalies/{anomaly_id}/acknowledge", {})
+        data = self._http.patch(f"/v1/anomalies/{quote(anomaly_id, safe='')}/acknowledge", {})
         return Anomaly.from_dict(data)

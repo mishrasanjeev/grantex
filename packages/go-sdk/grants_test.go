@@ -37,6 +37,30 @@ func TestGrantsGet(t *testing.T) {
 	}
 }
 
+func TestGrantsIDIsPathEscaped(t *testing.T) {
+	// A caller-supplied id must stay inside its own path segment: without
+	// escaping, "grant/../../v1/agents" would be normalised into another route.
+	var got []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.URL.EscapedPath())
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(Grant{ID: "grant-1"})
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL))
+	if _, err := client.Grants.Get(context.Background(), "grant/../../v1/agents"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := client.Grants.Revoke(context.Background(), "../admin?x=1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"/v1/grants/grant%2F..%2F..%2Fv1%2Fagents", "/v1/grants/..%2Fadmin%3Fx=1"}
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("paths not escaped: got %v, want %v", got, want)
+	}
+}
+
 func TestGrantsList(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/grants" || r.Method != http.MethodGet {

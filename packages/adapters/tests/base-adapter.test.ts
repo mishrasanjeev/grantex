@@ -22,8 +22,8 @@ const MOCK_GRANT: VerifiedGrant = {
 };
 
 class TestAdapter extends BaseAdapter {
-  async testVerifyAndCheckScope(token: string, scope: string) {
-    return this.verifyAndCheckScope(token, scope);
+  async testVerifyAndCheckScope(token: string, scope: string, options?: { enforcesConstraint?: boolean }) {
+    return this.verifyAndCheckScope(token, scope, options);
   }
 
   async testResolveCredential() {
@@ -107,13 +107,34 @@ describe('BaseAdapter', () => {
       }
     });
 
-    it('finds scope with constraint', async () => {
+    it('finds scope with constraint when the caller enforces it', async () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(MOCK_GRANT);
       const adapter = new TestAdapter(baseConfig);
 
-      const result = await adapter.testVerifyAndCheckScope('token', 'payments:initiate');
+      const result = await adapter.testVerifyAndCheckScope('token', 'payments:initiate', { enforcesConstraint: true });
       expect(result.matchedScope.baseScope).toBe('payments:initiate');
       expect(result.matchedScope.constraint).toEqual({ type: 'max', value: 500 });
+    });
+
+    it('rejects a constrained grant when the caller cannot enforce the constraint (core exact-match semantics)', async () => {
+      // Regression: `payments:initiate:max_500` used to satisfy a bare
+      // `payments:initiate` requirement for adapters that ignore the constraint.
+      vi.mocked(verifyGrantToken).mockResolvedValue(MOCK_GRANT);
+      const adapter = new TestAdapter(baseConfig);
+
+      await expect(adapter.testVerifyAndCheckScope('token', 'payments:initiate'))
+        .rejects.toMatchObject({ code: 'CONSTRAINT_VIOLATED' });
+    });
+
+    it('prefers an exact grant over a constrained one for the same base scope', async () => {
+      vi.mocked(verifyGrantToken).mockResolvedValue({
+        ...MOCK_GRANT,
+        scopes: ['payments:initiate:max_500', 'payments:initiate'],
+      });
+      const adapter = new TestAdapter(baseConfig);
+
+      const result = await adapter.testVerifyAndCheckScope('token', 'payments:initiate');
+      expect(result.matchedScope.constraint).toBeUndefined();
     });
   });
 

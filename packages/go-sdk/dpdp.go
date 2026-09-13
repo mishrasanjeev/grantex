@@ -179,7 +179,7 @@ func (s *DPDPService) CreateConsentRecord(ctx context.Context, params CreateCons
 
 // GetConsentRecord fetches a single consent record by ID.
 func (s *DPDPService) GetConsentRecord(ctx context.Context, recordID string) (*ConsentRecord, error) {
-	return unmarshal[ConsentRecord](s.http.get(ctx, fmt.Sprintf("/v1/dpdp/consent-records/%s", recordID)))
+	return unmarshal[ConsentRecord](s.http.get(ctx, fmt.Sprintf("/v1/dpdp/consent-records/%s", url.PathEscape(recordID))))
 }
 
 // ListConsentRecords lists consent records, optionally filtered by data principal ID.
@@ -199,17 +199,17 @@ func (s *DPDPService) ListConsentRecords(ctx context.Context, principalID string
 
 // WithdrawConsent withdraws consent for a consent record.
 func (s *DPDPService) WithdrawConsent(ctx context.Context, recordID string, params WithdrawConsentParams) (*WithdrawConsentResponse, error) {
-	return unmarshal[WithdrawConsentResponse](s.http.post(ctx, fmt.Sprintf("/v1/dpdp/consent-records/%s/withdraw", recordID), params))
+	return unmarshal[WithdrawConsentResponse](s.http.post(ctx, fmt.Sprintf("/v1/dpdp/consent-records/%s/withdraw", url.PathEscape(recordID)), params))
 }
 
 // ListPrincipalRecords lists all consent records for a data principal (right to access).
 func (s *DPDPService) ListPrincipalRecords(ctx context.Context, principalID string) (*PrincipalRecordsResponse, error) {
-	return unmarshal[PrincipalRecordsResponse](s.http.get(ctx, fmt.Sprintf("/v1/dpdp/data-principals/%s/records", principalID)))
+	return unmarshal[PrincipalRecordsResponse](s.http.get(ctx, fmt.Sprintf("/v1/dpdp/data-principals/%s/records", url.PathEscape(principalID))))
 }
 
 // RequestErasure submits a data erasure request for a data principal.
 func (s *DPDPService) RequestErasure(ctx context.Context, principalID string) (*ErasureResponse, error) {
-	return unmarshal[ErasureResponse](s.http.post(ctx, fmt.Sprintf("/v1/dpdp/data-principals/%s/erasure", principalID), map[string]string{
+	return unmarshal[ErasureResponse](s.http.post(ctx, fmt.Sprintf("/v1/dpdp/data-principals/%s/erasure", url.PathEscape(principalID)), map[string]string{
 		"dataPrincipalId": principalID,
 	}))
 }
@@ -226,7 +226,7 @@ func (s *DPDPService) FileGrievance(ctx context.Context, params FileGrievancePar
 
 // GetGrievance retrieves a grievance by ID.
 func (s *DPDPService) GetGrievance(ctx context.Context, grievanceID string) (*Grievance, error) {
-	return unmarshal[Grievance](s.http.get(ctx, fmt.Sprintf("/v1/dpdp/grievances/%s", grievanceID)))
+	return unmarshal[Grievance](s.http.get(ctx, fmt.Sprintf("/v1/dpdp/grievances/%s", url.PathEscape(grievanceID))))
 }
 
 // CreateExport generates a compliance export (DPDP audit, GDPR Article 15, EU AI Act).
@@ -236,5 +236,5 @@ func (s *DPDPService) CreateExport(ctx context.Context, params CreateExportParam
 
 // GetExport retrieves an export by ID.
 func (s *DPDPService) GetExport(ctx context.Context, exportID string) (*ComplianceExport, error) {
-	return unmarshal[ComplianceExport](s.http.get(ctx, fmt.Sprintf("/v1/dpdp/exports/%s", exportID)))
+	return unmarshal[ComplianceExport](s.http.get(ctx, fmt.Sprintf("/v1/dpdp/exports/%s", url.PathEscape(exportID))))
 }
