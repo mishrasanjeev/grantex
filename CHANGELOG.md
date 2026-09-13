@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Security bug sweeps (2026-09-13)
+- auth-service: inbound commerce webhooks verify the HMAC over the raw request
+  bytes (canonical re-serialisation rejected real senders); tenant owners can no
+  longer rebind another developer's default commerce tenant; MPP passport
+  budget caps are enforced at zero remaining; vault credential exchange requires
+  the exact `vault:<service>:exchange` scope and a DPoP proof for key-bound
+  tokens; Plural sandbox webhooks are gated on the intent's environment;
+  `/oauth/revoke` with a refresh token revokes the grant; string quantities pass
+  the safe-integer check. Earlier in the series: consent FIDO gate, passport
+  lifetime, SSO state key, mcp-auth exchange/introspect/revoke hardening.
+- Public host: Firebase rewrites for `/mcp`, `/v1/commerce/**`, `/permissions`,
+  `/v1/principal/**`, `/v1/agents`, `/v1/authorize`, `/v1/token/**` and
+  `/v1/x402/**`; commerce discovery advertises the MCP endpoint from
+  `MCP_PUBLIC_BASE_URL`; mpp-demo verify screen escapes pasted credentials; the
+  playground mints a sandbox key instead of a dead hard-coded one.
+- SDKs: gateway strips inbound `x-grantex-*` identity headers; Go `Exchange`
+  never retries a single-use code; the Python FastAPI enforcer reads the
+  `Authorization` header (it bound to the query string); JWKS caching and
+  off-loop verification in Python and Go; CLI `verify` no longer fetches JWKS
+  from the unverified `iss`; adapters pick the tightest constrained scope;
+  mcp-auth binds refresh tokens to the authenticated client and rejects string
+  `scp`; resource ids are percent-encoded in every SDK path. Python paths are
+  3.9-compatible and `mypy --strict` clean.
+- Conformance runner no longer deletes other agents in the target tenant;
+  the Terraform provider matches the real SSO/webhook/budget/grants contracts,
+  drops 404s from state and supports import.
+- Rollout: grants issued with the old vault exchange scopes get 403 after
+  deploy (re-issue with `vault:<service>:exchange`); set `MCP_PUBLIC_BASE_URL`
+  where the public host serves a page at `/mcp`.
+
 ### Dependency integration (2026-09-07)
 - Merged the 49 pending dependency PRs through integration PR #1156,
   including Vitest 5, SimpleWebAuthn 14, solc 0.8.36 and framework/type patches.
