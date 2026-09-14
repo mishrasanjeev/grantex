@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Published auth-service image
+- `ghcr.io/mishrasanjeev/grantex-auth-service` is built for amd64 and arm64
+  on changes to `main` and on `v*` tags, scanned before push, and published
+  with build provenance and SBOM attestations and a keyless cosign signature.
+  Pull requests build and scan without pushing. See "Prebuilt image" in
+  `DEPLOYMENT.md`.
+
 ### Container scanning and SBOM
 - CI builds the auth-service image on every pull request, push to `main` and
   weekly, scans it with Trivy 0.74.0 (failing on fixable HIGH/CRITICAL

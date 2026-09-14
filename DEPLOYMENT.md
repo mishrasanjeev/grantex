@@ -105,6 +105,27 @@ NODE_ENV=production node --env-file=.env dist/index.js
 
 The service starts on port 3001 by default.
 
+#### Prebuilt image
+
+Instead of building from source you can run the published image,
+`ghcr.io/mishrasanjeev/grantex-auth-service`, for `linux/amd64` and
+`linux/arm64`. It is built by `.github/workflows/publish-auth-service-image.yml`
+on every change to `main` (tags `main` and `sha-<commit>`) and on `v*` release
+tags, is vulnerability-scanned before it is pushed, and carries a build
+provenance attestation, an SBOM attestation and a keyless cosign signature.
+Pin it by digest, and verify the signature before first use:
+
+```bash
+cosign verify ghcr.io/mishrasanjeev/grantex-auth-service@sha256:<digest> \
+  --certificate-identity-regexp '^https://github.com/mishrasanjeev/grantex/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+gh attestation verify oci://ghcr.io/mishrasanjeev/grantex-auth-service@sha256:<digest> \
+  --owner mishrasanjeev
+```
+
+The image takes the same environment variables as a source deployment.
+
 ### Step 4: Verify
 
 ```bash
