@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Python SDK event stream timeouts
+- `EventsClient.stream()` and `subscribe()` no longer wait forever for a server
+  that never accepts the connection: connect, write and pool acquisition are
+  bounded at 10 seconds. Reads stay unbounded so an idle stream is not closed
+  between events.
+
 ### Security bug sweeps (2026-09-13)
 - auth-service: inbound commerce webhooks verify the HMAC over the raw request
   bytes (canonical re-serialisation rejected real senders); tenant owners can no
