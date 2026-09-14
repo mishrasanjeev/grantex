@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### CodeQL for Python
+- CodeQL analysis now covers the Python packages as well as
+  JavaScript/TypeScript, on pull requests, pushes to `main` and weekly.
+
 ### Python static security analysis
 - CI runs bandit 1.9.4 over every Python package's shipped source on each pull
   request, push to `main` and weekly. See "Python static security analysis" in
