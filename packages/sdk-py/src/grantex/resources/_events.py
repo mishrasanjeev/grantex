@@ -8,6 +8,10 @@ import threading
 import httpx
 
 
+# The stream may sit idle between events, so reads are unbounded; connecting,
+# sending the request and acquiring a pooled connection are not.
+_STREAM_TIMEOUT = httpx.Timeout(connect=10.0, read=None, write=10.0, pool=10.0)
+
 EventHandler = Callable[["GrantexEvent"], None]
 ErrorHandler = Callable[[Exception], None]
 
@@ -69,7 +73,7 @@ class EventsClient:
             url,
             params=params,
             headers={"Authorization": f"Bearer {self._api_key}"},
-            timeout=None,
+            timeout=_STREAM_TIMEOUT,
         ) as response:
             response.raise_for_status()
             buffer = ""
