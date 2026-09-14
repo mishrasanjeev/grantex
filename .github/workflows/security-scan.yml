@@ -8,6 +8,54 @@ on:
     - cron: '0 2 * * 1'   # Weekly full scan Mondays 02:00 UTC
 
 jobs:
+  secret-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install pinned gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Self-test the scanner
+        run: bash scripts/test-scan-secrets.sh
+      - name: Scan commits
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request)
+              bash scripts/scan-secrets.sh range "$PR_BASE" "$PR_HEAD" ;;
+            push)
+              if [[ "$PUSH_BEFORE" =~ ^0+$ ]]; then
+                bash scripts/scan-secrets.sh history
+              else
+                bash scripts/scan-secrets.sh range "$PUSH_BEFORE" "$PUSH_AFTER"
+              fi ;;
+            *)
+              bash scripts/scan-secrets.sh history ;;
+          esac
+
   node-supply-chain:
     name: Node Dependency & License Audit
     runs-on: ubuntu-latest
