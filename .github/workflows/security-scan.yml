@@ -107,6 +107,42 @@ jobs:
       - name: Scan shipped Python code
         run: bash scripts/scan-python-security.sh
 
+  container-scan:
+    name: Container Scan & SBOM (auth-service)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TRIVY_VERSION: 0.74.0
+      TRIVY_SHA256: 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install pinned Trivy
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
+          echo "${TRIVY_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" trivy
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Self-test the scanner
+        run: bash scripts/test-scan-container.sh
+      - name: Build auth-service image
+        run: docker build -t grantex-auth-service:scan apps/auth-service
+      - name: Scan image and write SBOM
+        run: bash scripts/scan-container.sh image grantex-auth-service:scan auth-service.cdx.json
+      - name: Upload SBOM
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: auth-service-sbom
+          path: auth-service.cdx.json
+          if-no-files-found: ignore
+
   go-supply-chain:
     name: Go Vulnerability & License Audit
     runs-on: ubuntu-latest

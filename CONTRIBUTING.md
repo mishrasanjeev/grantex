@@ -29,7 +29,6 @@ Look for issues tagged [`good first issue`](https://github.com/mishrasanjeev/gra
 ## Development Setup
 
 ```bash
-
 # Prerequisites: Node.js 24 LTS, Python 3.9+, Docker (for local stack)
 
 git clone https://github.com/mishrasanjeev/grantex
@@ -67,6 +66,27 @@ npm --prefix packages/langchain test
 
 For the complete reproducible dependency and Docker validation procedure, see
 [Dependency Updates and Validation](docs/guides/dependency-updates.mdx).
+
+### Container scanning
+
+Every pull request, push to `main` and the weekly schedule builds the
+auth-service image, scans it with [Trivy](https://trivy.dev/) 0.74.0 and
+uploads a CycloneDX SBOM as the `auth-service-sbom` artifact. The scan fails on
+HIGH or CRITICAL vulnerabilities that have a fixed version. Run it locally:
+
+```bash
+docker build -t grantex-auth-service:scan apps/auth-service
+bash scripts/scan-container.sh image grantex-auth-service:scan auth-service.cdx.json
+bash scripts/test-scan-container.sh   # scanner self-test
+```
+
+**Exceptions.** Fix a finding when you can: bump the pinned base image digest,
+update the dependency, or keep the package out of the runtime image. When a fix
+has to wait, add an entry to `.trivyignore.yaml` with the vulnerability `id`,
+the exact package `purls`, a `statement` saying why it is accepted and which
+`FINDINGS.md` entry tracks the fix, and an `expired_at` date no more than 30
+days out. An expired entry stops applying and the scan fails again, so an
+exception is either fixed or renewed on purpose — never forgotten.
 
 ### Python static security analysis
 
