@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Makefile
+- `make install`, `make check` and `make test` cover the Python SDK, the
+  TypeScript SDK, `@grantex/mcp-auth` and the auth service, and run as the
+  `make` job in CI. See "Development Setup" in `CONTRIBUTING.md`.
+
 ### Published auth-service image
 - `ghcr.io/mishrasanjeev/grantex-auth-service` is built for amd64 and arm64
   on changes to `main` and on `v*` tags, scanned before push, and published

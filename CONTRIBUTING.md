@@ -28,6 +28,29 @@ Look for issues tagged [`good first issue`](https://github.com/mishrasanjeev/gra
 
 ## Development Setup
 
+The core protocol packages — the Python SDK, the TypeScript SDK,
+`@grantex/mcp-auth` and the auth service — share three entry points, which CI
+also runs:
+
+```bash
+make install   # dependencies (use a virtualenv for Python; PYTHON=... to choose one)
+make check     # documentation integrity, ruff, mypy --strict, TypeScript typecheck
+make test      # unit tests
+```
+
+`make test` also runs the auth service's real-Postgres audit integration test
+when `AUDIT_INTEGRATION_DATABASE_URL` points at a disposable database; without
+it that test is skipped locally (CI always sets it):
+
+```bash
+docker run -d --rm --name grantex-test-pg -p 5432:5432 \
+  -e POSTGRES_USER=grantex_test -e POSTGRES_PASSWORD=grantex_test -e POSTGRES_DB=grantex_test \
+  postgres:16-alpine
+AUDIT_INTEGRATION_DATABASE_URL=postgres://grantex_test:grantex_test@127.0.0.1:5432/grantex_test make test
+```
+
+Other packages use their own commands:
+
 ```bash
 # Prerequisites: Node.js 24 LTS, Python 3.9+, Docker (for local stack)
 
