@@ -23,6 +23,7 @@ jobs:
       matrix:
         language:
           - javascript-typescript
+          - python
 
     steps:
       - name: Checkout repository

@@ -8,6 +8,54 @@ on:
     - cron: '0 2 * * 1'   # Weekly full scan Mondays 02:00 UTC
 
 jobs:
+  secret-scan:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install pinned gitleaks
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" gitleaks
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Self-test the scanner
+        run: bash scripts/test-scan-secrets.sh
+      - name: Scan commits
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request)
+              bash scripts/scan-secrets.sh range "$PR_BASE" "$PR_HEAD" ;;
+            push)
+              if [[ "$PUSH_BEFORE" =~ ^0+$ ]]; then
+                bash scripts/scan-secrets.sh history
+              else
+                bash scripts/scan-secrets.sh range "$PUSH_BEFORE" "$PUSH_AFTER"
+              fi ;;
+            *)
+              bash scripts/scan-secrets.sh history ;;
+          esac
+
   node-supply-chain:
     name: Node Dependency & License Audit
     runs-on: ubuntu-latest
@@ -40,6 +88,60 @@ jobs:
       - run: python -m pip install --disable-pip-version-check pip-audit==2.10.1
       - name: Audit every tracked Python dependency and license surface
         run: python scripts/audit-python-dependencies.py
+
+  python-static-analysis:
+    name: Python Static Security Analysis (bandit)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check bandit==1.9.4
+      - name: Self-test the scanner
+        run: bash scripts/test-scan-python-security.sh
+      - name: Scan shipped Python code
+        run: bash scripts/scan-python-security.sh
+
+  container-scan:
+    name: Container Scan & SBOM (auth-service)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TRIVY_VERSION: 0.74.0
+      TRIVY_SHA256: 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install pinned Trivy
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${archive}"
+          echo "${TRIVY_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" trivy
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Self-test the scanner
+        run: bash scripts/test-scan-container.sh
+      - name: Build auth-service image
+        run: docker build -t grantex-auth-service:scan apps/auth-service
+      - name: Scan image and write SBOM
+        run: bash scripts/scan-container.sh image grantex-auth-service:scan auth-service.cdx.json
+      - name: Upload SBOM
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: auth-service-sbom
+          path: auth-service.cdx.json
+          if-no-files-found: ignore
 
   go-supply-chain:
     name: Go Vulnerability & License Audit

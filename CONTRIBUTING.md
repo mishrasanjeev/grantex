@@ -28,6 +28,29 @@ Look for issues tagged [`good first issue`](https://github.com/mishrasanjeev/gra
 
 ## Development Setup
 
+The core protocol packages — the Python SDK, the TypeScript SDK,
+`@grantex/mcp-auth` and the auth service — share three entry points, which CI
+also runs:
+
+```bash
+make install   # dependencies (use a virtualenv for Python; PYTHON=... to choose one)
+make check     # documentation integrity, ruff, mypy --strict, TypeScript typecheck
+make test      # unit tests
+```
+
+`make test` also runs the auth service's real-Postgres audit integration test
+when `AUDIT_INTEGRATION_DATABASE_URL` points at a disposable database; without
+it that test is skipped locally (CI always sets it):
+
+```bash
+docker run -d --rm --name grantex-test-pg -p 5432:5432 \
+  -e POSTGRES_USER=grantex_test -e POSTGRES_PASSWORD=grantex_test -e POSTGRES_DB=grantex_test \
+  postgres:16-alpine
+AUDIT_INTEGRATION_DATABASE_URL=postgres://grantex_test:grantex_test@127.0.0.1:5432/grantex_test make test
+```
+
+Other packages use their own commands:
+
 ```bash
 # Prerequisites: Node.js 24 LTS, Python 3.9+, Docker (for local stack)
 
@@ -66,6 +89,77 @@ npm --prefix packages/langchain test
 
 For the complete reproducible dependency and Docker validation procedure, see
 [Dependency Updates and Validation](docs/guides/dependency-updates.mdx).
+
+### Container scanning
+
+Every pull request, push to `main` and the weekly schedule builds the
+auth-service image, scans it with [Trivy](https://trivy.dev/) 0.74.0 and
+uploads a CycloneDX SBOM as the `auth-service-sbom` artifact. The scan fails on
+HIGH or CRITICAL vulnerabilities that have a fixed version. Run it locally:
+
+```bash
+docker build -t grantex-auth-service:scan apps/auth-service
+bash scripts/scan-container.sh image grantex-auth-service:scan auth-service.cdx.json
+bash scripts/test-scan-container.sh   # scanner self-test
+```
+
+**Exceptions.** Fix a finding when you can: bump the pinned base image digest,
+update the dependency, or keep the package out of the runtime image. When a fix
+has to wait, add an entry to `.trivyignore.yaml` with the vulnerability `id`,
+the exact package `purls`, a `statement` saying why it is accepted and which
+`FINDINGS.md` entry tracks the fix, and an `expired_at` date no more than 30
+days out. An expired entry stops applying and the scan fails again, so an
+exception is either fixed or renewed on purpose — never forgotten.
+
+### Python static security analysis
+
+Every pull request runs [bandit](https://bandit.readthedocs.io/) 1.9.4 over the
+shipped source of each Python package (`packages/*/pyproject.toml`), at medium
+severity and above; tests are excluded. Run it locally with:
+
+```bash
+pip install bandit==1.9.4
+bash scripts/scan-python-security.sh
+bash scripts/test-scan-python-security.sh   # scanner self-test
+```
+
+Fix a finding rather than suppressing it. If a finding is a false positive,
+add `# nosec <test id>` on that line with a comment saying why, and explain it
+in the pull request.
+
+### Secret scanning
+
+Every pull request, every push to `main` and a weekly full-history run are
+scanned with [gitleaks](https://github.com/gitleaks/gitleaks) 8.30.1. To catch
+a credential before it is committed, install the pre-commit hook once per
+clone:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+You can run the same checks CI runs:
+
+```bash
+bash scripts/scan-secrets.sh range origin/main HEAD   # your branch
+bash scripts/scan-secrets.sh history                  # everything
+bash scripts/test-scan-secrets.sh                     # scanner self-test
+```
+
+The scanner fails closed: a missing or different gitleaks version, an unknown
+mode or an unresolvable commit is an error, not a pass.
+
+If a scan reports a finding:
+
+1. **A real credential** — revoke or rotate it first, then remove it from the
+   branch. Rewriting history does not un-leak a pushed secret; rotation does.
+   Report it privately as described in [SECURITY.md](SECURITY.md).
+2. **A placeholder** (a test fixture or documentation example) — prefer
+   changing it so it no longer looks like a credential, for example by using
+   an obviously fake value. If it must stay, append `gitleaks:allow` as a
+   comment on that line, or add its fingerprint (printed with the finding) to
+   `.gitleaksignore` and say why in the pull request.
 
 ---
 
