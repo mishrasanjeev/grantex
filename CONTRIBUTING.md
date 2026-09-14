@@ -28,6 +28,18 @@ Look for issues tagged [`good first issue`](https://github.com/mishrasanjeev/gra
 
 ## Development Setup
 
+The core protocol packages — the Python SDK, the TypeScript SDK,
+`@grantex/mcp-auth` and the auth service — share three entry points, which CI
+also runs:
+
+```bash
+make install   # dependencies (use a virtualenv for Python; PYTHON=... to choose one)
+make check     # documentation integrity, ruff, mypy --strict, TypeScript typecheck
+make test      # unit tests
+```
+
+Other packages use their own commands:
+
 ```bash
 # Prerequisites: Node.js 24 LTS, Python 3.9+, Docker (for local stack)
 

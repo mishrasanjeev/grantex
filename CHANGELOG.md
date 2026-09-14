@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Makefile
+- `make install`, `make check` and `make test` cover the Python SDK, the
+  TypeScript SDK, `@grantex/mcp-auth` and the auth service, and run as the
+  `make` job in CI. See "Development Setup" in `CONTRIBUTING.md`.
+
 ### Security bug sweeps (2026-09-13)
 - auth-service: inbound commerce webhooks verify the HMAC over the raw request
   bytes (canonical re-serialisation rejected real senders); tenant owners can no
