@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Python static security analysis
+- CI runs bandit 1.9.4 over every Python package's shipped source on each pull
+  request, push to `main` and weekly. See "Python static security analysis" in
+  `CONTRIBUTING.md`.
+
 ### Secret scanning
 - CI scans every pull request, every push to `main` and, weekly, the full
   history with gitleaks 8.30.1 (pinned and checksum-verified). A pre-commit
