@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### CodeQL for Python
+- CodeQL analysis now covers the Python packages as well as
+  JavaScript/TypeScript, on pull requests, pushes to `main` and weekly.
+
 ### Security bug sweeps (2026-09-13)
 - auth-service: inbound commerce webhooks verify the HMAC over the raw request
   bytes (canonical re-serialisation rejected real senders); tenant owners can no
