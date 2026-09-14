@@ -22,6 +22,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `FINDINGS.md` (base image OpenSSL, npm's bundled packages, and a TypeScript
   compiler binary in the runtime image) with exceptions expiring 2026-10-14.
 
+### CodeQL for Python
+- CodeQL analysis now covers the Python packages as well as
+  JavaScript/TypeScript, on pull requests, pushes to `main` and weekly.
+
+### Python static security analysis
+- CI runs bandit 1.9.4 over every Python package's shipped source on each pull
+  request, push to `main` and weekly. See "Python static security analysis" in
+  `CONTRIBUTING.md`.
+
+### Secret scanning
+- CI scans every pull request, every push to `main` and, weekly, the full
+  history with gitleaks 8.30.1 (pinned and checksum-verified). A pre-commit
+  hook is available; see "Secret scanning" in `CONTRIBUTING.md`. Existing
+  findings were triaged as placeholders and baselined in `.gitleaksignore`.
+
+### Python SDK event stream timeouts
+- `EventsClient.stream()` and `subscribe()` no longer wait forever for a server
+  that never accepts the connection: connect, write and pool acquisition are
+  bounded at 10 seconds. Reads stay unbounded so an idle stream is not closed
+  between events.
+
 ### Security bug sweeps (2026-09-13)
 - auth-service: inbound commerce webhooks verify the HMAC over the raw request
   bytes (canonical re-serialisation rejected real senders); tenant owners can no

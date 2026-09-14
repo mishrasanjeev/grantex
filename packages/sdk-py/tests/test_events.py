@@ -2,6 +2,7 @@ import threading
 import time
 from unittest.mock import patch
 
+import httpx
 import pytest
 from grantex.resources._events import EventsClient, GrantexEvent, StreamOptions, Subscription
 
@@ -54,6 +55,40 @@ class TestEventsClient:
         client = EventsClient("https://api.grantex.dev", "test-key")
         assert client._base_url == "https://api.grantex.dev"
         assert client._api_key == "test-key"
+
+    def test_stream_bounds_connect_but_not_read(self):
+        """A server that never accepts must not hang the caller; an idle stream must stay open."""
+        captured = {}
+
+        class _Response:
+            def raise_for_status(self):
+                return None
+
+            def iter_text(self):
+                yield 'data: {"id":"evt_1","type":"grant.created","createdAt":"2026-03-01T00:00:00Z"}\n'
+
+        class _Stream:
+            def __enter__(self):
+                return _Response()
+
+            def __exit__(self, *exc):
+                return False
+
+        def fake_stream(method, url, **kwargs):
+            captured.update(kwargs)
+            return _Stream()
+
+        client = EventsClient("https://api.example.com", "test-key")
+        with patch("grantex.resources._events.httpx.stream", side_effect=fake_stream):
+            events = list(client.stream())
+
+        assert [e.id for e in events] == ["evt_1"]
+        timeout = captured["timeout"]
+        assert isinstance(timeout, httpx.Timeout)
+        assert timeout.read is None
+        assert timeout.connect is not None and 0 < timeout.connect <= 30
+        assert timeout.write is not None and 0 < timeout.write <= 30
+        assert timeout.pool is not None and 0 < timeout.pool <= 30
 
 
 class TestSubscription:
