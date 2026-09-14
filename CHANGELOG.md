@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Container scanning and SBOM
+- CI builds the auth-service image on every pull request, push to `main` and
+  weekly, scans it with Trivy 0.74.0 (failing on fixable HIGH/CRITICAL
+  vulnerabilities) and publishes a CycloneDX SBOM artifact. Accepted
+  exceptions are dated and expire; see "Container scanning" in
+  `CONTRIBUTING.md`. The 16 findings in today's image are tracked in
+  `FINDINGS.md` (base image OpenSSL, npm's bundled packages, and a TypeScript
+  compiler binary in the runtime image) with exceptions expiring 2026-10-14.
+
 ### Security bug sweeps (2026-09-13)
 - auth-service: inbound commerce webhooks verify the HMAC over the raw request
   bytes (canonical re-serialisation rejected real senders); tenant owners can no
