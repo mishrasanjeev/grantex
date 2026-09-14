@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Secret scanning
+- CI scans every pull request, every push to `main` and, weekly, the full
+  history with gitleaks 8.30.1 (pinned and checksum-verified). A pre-commit
+  hook is available; see "Secret scanning" in `CONTRIBUTING.md`. Existing
+  findings were triaged as placeholders and baselined in `.gitleaksignore`.
+
 ### Security bug sweeps (2026-09-13)
 - auth-service: inbound commerce webhooks verify the HMAC over the raw request
   bytes (canonical re-serialisation rejected real senders); tenant owners can no
