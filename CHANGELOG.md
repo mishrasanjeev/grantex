@@ -11,6 +11,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   TypeScript SDK, `@grantex/mcp-auth` and the auth service, and run as the
   `make` job in CI. See "Development Setup" in `CONTRIBUTING.md`.
 
+### Published auth-service image
+- `ghcr.io/mishrasanjeev/grantex-auth-service` is built for amd64 and arm64
+  on changes to `main` and on `v*` tags, scanned before push, and published
+  with build provenance and SBOM attestations and a keyless cosign signature.
+  Pull requests build and scan without pushing. See "Prebuilt image" in
+  `DEPLOYMENT.md`.
+
+### Container scanning and SBOM
+- CI builds the auth-service image on every pull request, push to `main` and
+  weekly, scans it with Trivy 0.74.0 (failing on fixable HIGH/CRITICAL
+  vulnerabilities) and publishes a CycloneDX SBOM artifact. Accepted
+  exceptions are dated and expire; see "Container scanning" in
+  `CONTRIBUTING.md`. The 16 findings in today's image are tracked in
+  `FINDINGS.md` (base image OpenSSL, npm's bundled packages, and a TypeScript
+  compiler binary in the runtime image) with exceptions expiring 2026-10-14.
+
+### CodeQL for Python
+- CodeQL analysis now covers the Python packages as well as
+  JavaScript/TypeScript, on pull requests, pushes to `main` and weekly.
+
+### Python static security analysis
+- CI runs bandit 1.9.4 over every Python package's shipped source on each pull
+  request, push to `main` and weekly. See "Python static security analysis" in
+  `CONTRIBUTING.md`.
+
+### Secret scanning
+- CI scans every pull request, every push to `main` and, weekly, the full
+  history with gitleaks 8.30.1 (pinned and checksum-verified). A pre-commit
+  hook is available; see "Secret scanning" in `CONTRIBUTING.md`. Existing
+  findings were triaged as placeholders and baselined in `.gitleaksignore`.
+
+### Python SDK event stream timeouts
+- `EventsClient.stream()` and `subscribe()` no longer wait forever for a server
+  that never accepts the connection: connect, write and pool acquisition are
+  bounded at 10 seconds. Reads stay unbounded so an idle stream is not closed
+  between events.
+
 ### Security bug sweeps (2026-09-13)
 - auth-service: inbound commerce webhooks verify the HMAC over the raw request
   bytes (canonical re-serialisation rejected real senders); tenant owners can no
