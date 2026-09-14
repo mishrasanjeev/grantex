@@ -38,6 +38,17 @@ make check     # documentation integrity, ruff, mypy --strict, TypeScript typech
 make test      # unit tests
 ```
 
+`make test` also runs the auth service's real-Postgres audit integration test
+when `AUDIT_INTEGRATION_DATABASE_URL` points at a disposable database; without
+it that test is skipped locally (CI always sets it):
+
+```bash
+docker run -d --rm --name grantex-test-pg -p 5432:5432 \
+  -e POSTGRES_USER=grantex_test -e POSTGRES_PASSWORD=grantex_test -e POSTGRES_DB=grantex_test \
+  postgres:16-alpine
+AUDIT_INTEGRATION_DATABASE_URL=postgres://grantex_test:grantex_test@127.0.0.1:5432/grantex_test make test
+```
+
 Other packages use their own commands:
 
 ```bash
