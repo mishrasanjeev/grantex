@@ -67,6 +67,40 @@ npm --prefix packages/langchain test
 For the complete reproducible dependency and Docker validation procedure, see
 [Dependency Updates and Validation](docs/guides/dependency-updates.mdx).
 
+### Secret scanning
+
+Every pull request, every push to `main` and a weekly full-history run are
+scanned with [gitleaks](https://github.com/gitleaks/gitleaks) 8.30.1. To catch
+a credential before it is committed, install the pre-commit hook once per
+clone:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+You can run the same checks CI runs:
+
+```bash
+bash scripts/scan-secrets.sh range origin/main HEAD   # your branch
+bash scripts/scan-secrets.sh history                  # everything
+bash scripts/test-scan-secrets.sh                     # scanner self-test
+```
+
+The scanner fails closed: a missing or different gitleaks version, an unknown
+mode or an unresolvable commit is an error, not a pass.
+
+If a scan reports a finding:
+
+1. **A real credential** — revoke or rotate it first, then remove it from the
+   branch. Rewriting history does not un-leak a pushed secret; rotation does.
+   Report it privately as described in [SECURITY.md](SECURITY.md).
+2. **A placeholder** (a test fixture or documentation example) — prefer
+   changing it so it no longer looks like a credential, for example by using
+   an obviously fake value. If it must stay, append `gitleaks:allow` as a
+   comment on that line, or add its fingerprint (printed with the finding) to
+   `.gitleaksignore` and say why in the pull request.
+
 ---
 
 ## Repository Structure
