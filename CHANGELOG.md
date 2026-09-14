@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Python static security analysis
+- CI runs bandit 1.9.4 over every Python package's shipped source on each pull
+  request, push to `main` and weekly. See "Python static security analysis" in
+  `CONTRIBUTING.md`.
+
 ### Python SDK event stream timeouts
 - `EventsClient.stream()` and `subscribe()` no longer wait forever for a server
   that never accepts the connection: connect, write and pool acquisition are

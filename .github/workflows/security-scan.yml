@@ -41,6 +41,24 @@ jobs:
       - name: Audit every tracked Python dependency and license surface
         run: python scripts/audit-python-dependencies.py
 
+  python-static-analysis:
+    name: Python Static Security Analysis (bandit)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check bandit==1.9.4
+      - name: Self-test the scanner
+        run: bash scripts/test-scan-python-security.sh
+      - name: Scan shipped Python code
+        run: bash scripts/scan-python-security.sh
+
   go-supply-chain:
     name: Go Vulnerability & License Audit
     runs-on: ubuntu-latest

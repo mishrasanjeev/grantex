@@ -67,6 +67,22 @@ npm --prefix packages/langchain test
 For the complete reproducible dependency and Docker validation procedure, see
 [Dependency Updates and Validation](docs/guides/dependency-updates.mdx).
 
+### Python static security analysis
+
+Every pull request runs [bandit](https://bandit.readthedocs.io/) 1.9.4 over the
+shipped source of each Python package (`packages/*/pyproject.toml`), at medium
+severity and above; tests are excluded. Run it locally with:
+
+```bash
+pip install bandit==1.9.4
+bash scripts/scan-python-security.sh
+bash scripts/test-scan-python-security.sh   # scanner self-test
+```
+
+Fix a finding rather than suppressing it. If a finding is a false positive,
+add `# nosec <test id>` on that line with a comment saying why, and explain it
+in the pull request.
+
 ---
 
 ## Repository Structure
