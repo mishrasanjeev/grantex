@@ -3,6 +3,15 @@
 Tested: 6 September 2026, 16:59:07 UTC (22:29:07 IST).
 Source baseline: `0b7f717ca2cb9affdb9ef8af51ae11fa395a0b4d`.
 
+> **Endpoint update, 14 September 2026.** The service owner retired the Railway
+> host this probe used (`uk-taxi-phv-mcp-production-6ef3`) and serves the same
+> endpoints from `https://uk-taxi-phv-mcp-production.up.railway.app`
+> ([grantex#1233](https://github.com/mishrasanjeev/grantex/issues/1233)). The
+> URLs below point at the canonical host. The regression fixture was
+> re-captured from it with the same unsigned request at 17:10:00 UTC: HTTP
+> 402, body `{}`, and payment terms identical to the table below; only the
+> resource URL changed. The historical findings are unchanged.
+
 ## Verdict
 
 Historical probe below: this records the unmodified published 0.3.0 client's
@@ -29,7 +38,8 @@ merchant header/schema defect. Paid service output and settlement are untested.
 One unsigned POST was made through the unmodified published
 `@grantex/x402@0.3.0` client to:
 
-`https://uk-taxi-phv-mcp-production-6ef3.up.railway.app/api/v1/preflight`
+`https://uk-taxi-phv-mcp-production.up.railway.app/api/v1/preflight` (then
+served from the since-retired host noted above)
 
 ```json
 {
@@ -77,8 +87,8 @@ The diagnostic reports accepted network `eip155:8453` versus registered network
 `grantex:prepaid`. Observed counters: one HTTP request, zero Grantex
 authorization calls, zero payment signatures, zero paid retries.
 
-The public [OpenAPI](https://uk-taxi-phv-mcp-production-6ef3.up.railway.app/openapi.json)
-and [x402 metadata](https://uk-taxi-phv-mcp-production-6ef3.up.railway.app/.well-known/x402)
+The public [OpenAPI](https://uk-taxi-phv-mcp-production.up.railway.app/openapi.json)
+and [x402 metadata](https://uk-taxi-phv-mcp-production.up.railway.app/.well-known/x402)
 agree on the price, endpoint and network.
 [PayAI supported schemes](https://facilitator.payai.network/supported) includes
 x402 v2 `exact` on `eip155:8453`. Reading that endpoint is not payment

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### x402 UK Taxi / PHV compatibility fixture
+- The external compatibility fixture and report now use the service's
+  canonical host, `uk-taxi-phv-mcp-production.up.railway.app`, after the
+  provider retired its previous Railway host (#1233). The 402 challenge was
+  re-captured with the same unsigned request; payment terms are unchanged.
+
 ### Security bug sweeps (2026-09-13)
 - auth-service: inbound commerce webhooks verify the HMAC over the raw request
   bytes (canonical re-serialisation rejected real senders); tenant owners can no
