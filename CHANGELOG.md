@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### x402 UK Taxi / PHV compatibility fixture
+- The external compatibility fixture and report now use the service's
+  canonical host, `uk-taxi-phv-mcp-production.up.railway.app`, after the
+  provider retired its previous Railway host (#1233). The 402 challenge was
+  re-captured with the same unsigned request; payment terms are unchanged.
+
 ### Makefile
 - `make install`, `make check` and `make test` cover the Python SDK, the
   TypeScript SDK, `@grantex/mcp-auth` and the auth service, and run as the
