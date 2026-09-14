@@ -29,6 +29,7 @@ Look for issues tagged [`good first issue`](https://github.com/mishrasanjeev/gra
 ## Development Setup
 
 ```bash
+
 # Prerequisites: Node.js 24 LTS, Python 3.9+, Docker (for local stack)
 
 git clone https://github.com/mishrasanjeev/grantex
@@ -66,6 +67,56 @@ npm --prefix packages/langchain test
 
 For the complete reproducible dependency and Docker validation procedure, see
 [Dependency Updates and Validation](docs/guides/dependency-updates.mdx).
+
+### Python static security analysis
+
+Every pull request runs [bandit](https://bandit.readthedocs.io/) 1.9.4 over the
+shipped source of each Python package (`packages/*/pyproject.toml`), at medium
+severity and above; tests are excluded. Run it locally with:
+
+```bash
+pip install bandit==1.9.4
+bash scripts/scan-python-security.sh
+bash scripts/test-scan-python-security.sh   # scanner self-test
+```
+
+Fix a finding rather than suppressing it. If a finding is a false positive,
+add `# nosec <test id>` on that line with a comment saying why, and explain it
+in the pull request.
+
+### Secret scanning
+
+Every pull request, every push to `main` and a weekly full-history run are
+scanned with [gitleaks](https://github.com/gitleaks/gitleaks) 8.30.1. To catch
+a credential before it is committed, install the pre-commit hook once per
+clone:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+You can run the same checks CI runs:
+
+```bash
+bash scripts/scan-secrets.sh range origin/main HEAD   # your branch
+bash scripts/scan-secrets.sh history                  # everything
+bash scripts/test-scan-secrets.sh                     # scanner self-test
+```
+
+The scanner fails closed: a missing or different gitleaks version, an unknown
+mode or an unresolvable commit is an error, not a pass.
+
+If a scan reports a finding:
+
+1. **A real credential** — revoke or rotate it first, then remove it from the
+   branch. Rewriting history does not un-leak a pushed secret; rotation does.
+   Report it privately as described in [SECURITY.md](SECURITY.md).
+2. **A placeholder** (a test fixture or documentation example) — prefer
+   changing it so it no longer looks like a credential, for example by using
+   an obviously fake value. If it must stay, append `gitleaks:allow` as a
+   comment on that line, or add its fingerprint (printed with the finding) to
+   `.gitleaksignore` and say why in the pull request.
 
 ---
 
