@@ -150,7 +150,22 @@ from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent,
 from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook, verify_webhook_signature
-from .manifest import ToolManifest, Permission, EnforceResult
+from .denials import (
+    CapSubReason,
+    DenialReason,
+    ManifestSubReason,
+    PurposeSubReason,
+    TokenSubReason,
+    ToolSubReason,
+)
+from .manifest import (
+    EnforceResult,
+    ManifestValidationError,
+    Permission,
+    ToolCaps,
+    ToolManifest,
+    ToolSpec,
+)
 from ._fastapi import GrantexEnforcer
 from .prepaid_wallets import (
     AgentPrepaidWalletClient,
@@ -336,8 +351,17 @@ __all__ = [
     "ComplianceExport",
     # Scope Enforcement / Manifests
     "ToolManifest",
+    "ToolSpec",
+    "ToolCaps",
+    "ManifestValidationError",
     "Permission",
     "EnforceResult",
+    "DenialReason",
+    "CapSubReason",
+    "ManifestSubReason",
+    "PurposeSubReason",
+    "TokenSubReason",
+    "ToolSubReason",
     # FastAPI Integration
     "GrantexEnforcer",
     # Version

@@ -1,0 +1,17 @@
+{
+  "connector": "acme_kyb",
+  "version": "1.0.0",
+  "tools": {
+    "resolve_business": {"permission": "read", "allowed_purposes": ["aml.cdd.*"], "caps": {"per_hour": 200}},
+    "verify_business": {
+      "permission": "read",
+      "allowed_purposes": ["aml.cdd.*"],
+      "caps": {"per_hour": 50, "per_case": 3},
+      "cost_units": {"base": 5, "ownership": 10, "web_insights": 3}
+    },
+    "screen_person": {"permission": "read", "allowed_purposes": ["aml.*"], "caps": {"per_case": 25}},
+    "monitor_enroll": {"permission": "write", "allowed_purposes": ["aml.cdd.ongoing"]},
+    "monitor_delete": {"permission": "delete", "requires_decision": true},
+    "case_decision": {"permission": "write", "requires_decision": true, "four_eyes_on": ["decline"]}
+  }
+}

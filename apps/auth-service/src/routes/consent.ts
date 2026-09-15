@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { describeScope } from '../lib/scopes.js';
+import { describePurpose } from '../lib/purpose.js';
 import { config } from '../config.js';
 import { newAuthorizationCode } from '../lib/ids.js';
 
@@ -30,6 +31,9 @@ const CONSENT_HTML = `<!DOCTYPE html>
   .agent-name { font-size: 16px; font-weight: 600; color: #111; }
   .agent-desc { font-size: 14px; color: #666; margin-top: 4px; }
   .agent-did { font-size: 11px; color: #999; margin-top: 6px; word-break: break-all; font-family: monospace; }
+  .purpose-box { margin-bottom: 20px; }
+  .purpose { font-size: 15px; font-weight: 600; color: #111; }
+  .purpose-note { font-size: 13px; color: #666; margin-top: 4px; }
   .scopes-label { font-size: 13px; font-weight: 600; color: #444; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
   .scope-list { list-style: none; margin-bottom: 20px; }
   .scope-list li { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; color: #333; }
@@ -286,6 +290,11 @@ const CONSENT_HTML = `<!DOCTYPE html>
       (data.agentDescription ? '<div class="agent-desc">' + esc(data.agentDescription) + '</div>' : '') +
       '<div class="agent-did">' + esc(data.agentDid) + '</div>' +
     '</div>' +
+    (data.purpose ?
+      '<div class="purpose-box"><div class="scopes-label">Purpose</div>' +
+        '<div class="purpose" id="purpose">' + esc(data.purposeDescription || data.purpose) + '</div>' +
+        '<div class="purpose-note">The agent may use this access only for this purpose.</div>' +
+      '</div>' : '') +
     '<div class="scopes-label">Requested permissions</div>' +
     '<ul class="scope-list">' + scopeItems + '</ul>' +
     (data.targetResource ?
@@ -370,9 +379,10 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         developer_name: string;
         authorization_details: unknown;
         principal_id: string;
+        purpose: string | null;
       }[]>`
         SELECT ar.id, ar.scopes, ar.expires_at, ar.status, ar.redirect_uri, ar.state, ar.principal_id,
-               ar.audience, ar.expires_in, ar.protocol, ar.authorization_details,
+               ar.audience, ar.expires_in, ar.protocol, ar.authorization_details, ar.purpose,
                a.name AS agent_name, a.description AS agent_description, a.did AS agent_did,
                d.fido_required, d.mode, d.name AS developer_name
         FROM auth_requests ar
@@ -398,6 +408,9 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         agentDescription: row.agent_description ?? null,
         scopes: row.scopes,
         scopeDescriptions: row.scopes.map(describeScope),
+        ...(typeof row.purpose === 'string'
+          ? { purpose: row.purpose, purposeDescription: describePurpose(row.purpose) }
+          : {}),
         expiresAt: row.expires_at,
         status: row.status,
         fidoRequired: row.mode === 'live' || Boolean(row.fido_required),

@@ -1,0 +1,8 @@
+{
+  "connector": "acme_kyb",
+  "tools": {
+    "resolve_business": "read",
+    "monitor_enroll": "write",
+    "monitor_delete": "delete"
+  }
+}
