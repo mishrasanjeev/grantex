@@ -172,55 +172,64 @@ Breaking changes
   no routes.
 
 ### Decision grants in the auth service
-Behind `DECISION_GRANTS_ENABLED` (default off; the endpoints answer 404
-`DECISION_GRANTS_DISABLED` until it is `true`). Profile in
-`spec/decision-grant.md`.
+Behind `DECISION_GRANTS_ENABLED` (default off; every decision endpoint and page
+answers 404 until it is `true`). Profile in `spec/decision-grant.md`.
 
-- Approver sessions: `POST /v1/decisions/approver-sessions` exchanges an ID
-  token from one of the developer's active OIDC SSO connections, once, for a
-  session that lasts as long as the step-up window. Step-up is an `acr` in
-  `DECISION_STEP_UP_ACR` or an `amr` in `DECISION_STEP_UP_AMR` (default
-  `mfa,hwk`) with `auth_time` within `DECISION_STEP_UP_MAX_AGE_SECONDS`
-  (default 3600). Anything else is refused with `step_up_required`.
-- Decision requests: `POST /v1/decisions/requests` for one semantic action
-  (`{case_id, action, decision, subject, amount?}`), a connector and a case
-  version, with memo and policy-score references; `fourEyesOn` or
-  `approvalsRequired: 2` asks for two approvers. `GET`, `cancel`, and
-  `PUT /v1/decisions/cases/:caseId` to register a new case version, which
-  supersedes open requests and revokes unconsumed grants (`case_changed`).
-- Approval: `POST /v1/decisions/requests/:id/approvals` with the
-  `Grantex-Approver-Session` header, the action hash the approver saw and the
-  dwell time (bounded by `DECISION_MIN_DWELL_MS`/`DECISION_MAX_DWELL_MS` and by
-  the request's age) mints a `typ: decision+jwt` token (audience
-  `urn:grantex:decision`) with `approver_auth`, `acr`, `amr`, `auth_time`,
-  `dwell_ms`, `action`, `action_hash`, `connector`, `case_version`,
-  `decision_request`, `jti` and an expiry capped at 24 hours and at the
-  request's expiry. For four eyes, the second grant names the first
-  (`four_eyes.first_jti`, `first_sub`); the same subject, or the same email
-  under another subject, is refused (`same_approver`).
-- Consumption: `POST /v1/decisions/consume` verifies one grant, or both grants
-  of a four-eyes decision, against the action about to be performed and the
-  current case version, and consumes them atomically in Postgres (two parallel
-  consumptions of one `jti`: exactly one succeeds). Refusals carry
-  `reason: decision_invalid` and a `subReason`: `action_mismatch`,
-  `wrong_case`, `consumed`, `expired`, `case_changed`, `revoked`,
-  `same_approver`, `four_eyes_incomplete`, `unknown_grant`, `malformed`.
-- Every request, approval (approver identity, authentication method, dwell
-  time, semantic action), consumption, refused consumption, case change and
-  cancellation is appended to the developer's audit hash chain in the same
-  transaction.
-- A minimal server-rendered approval page (`/decisions/:id`, opened with a
-  one-time ticket from `POST /v1/decisions/requests/:id/page-tickets`): escaped
-  memo reference, policy score reference and exact action, no script, CSRF
-  token bound to session and rendering, SameSite=Strict HttpOnly cookie, dwell
-  time measured by the server.
-- Metrics: `grantex_decision_grants_minted_total`,
+- **Who can approve.** A person signed in on the service's approval page
+  (`/decisions/:id`) through an OpenID Connect authorization code flow with
+  PKCE, state bound to the browser and a nonce (`/decisions/login`,
+  `/decisions/callback`), with an identity provider the **service
+  administrator** allow-listed for the developer
+  (`POST /v1/admin/developers/:developerId/decision-approver-idps`,
+  `ADMIN_API_KEY`, the operator named and audited). A developer API key cannot
+  add an identity provider, sign an approver in or approve; `sso_connections`
+  are not used for approvals.
+- **ID token checks.** Discovery `issuer` equals the configured issuer; key by
+  `kid` from the provider's JWKS (refetched once for an unknown `kid`),
+  asymmetric algorithms only; `iss`, `aud`, `azp`, `exp`, `iat`, `nonce`;
+  step-up is an `acr` in `DECISION_STEP_UP_ACR` or an `amr` in
+  `DECISION_STEP_UP_AMR` (default `mfa,hwk`) with `auth_time` within
+  `DECISION_STEP_UP_MAX_AGE_SECONDS` (default 3600). A nonce is accepted once
+  per issuer and subject. An email counts only when `email_verified`; an
+  identity provider can require it.
+- **Session.** The secret is only in a `__Host-` HttpOnly Secure SameSite=Lax
+  cookie on the service's origin (only its hash is stored) and lasts until the
+  step-up window ends.
+- **Decision requests** (developer API key): `POST /v1/decisions/requests` with
+  the semantic action, connector, case version, `memo` and `policyScore`
+  (content stored with its SHA-256, shown verbatim, bound into the grant) and
+  `fourEyesOn`; `GET`, `cancel`; `PUT /v1/decisions/cases/:caseId` supersedes
+  open requests and revokes unconsumed grants (`case_changed`). Bodies with
+  duplicate member names are refused.
+- **Approval** only by form post from the approval page: session cookie, CSRF
+  token bound to session, request and rendering, `Origin` of the service
+  required (`Sec-Fetch-Site`, when sent, `same-origin`), CSP without script,
+  `frame-ancestors 'none'`. Dwell time is measured by the service from
+  rendering to submission; approvals faster than `DECISION_MIN_DWELL_MS`
+  (default 2000) are refused.
+- **Token.** `typ: decision+jwt`, audience `urn:grantex:decision`, `kid`;
+  `sub` is `user:<issuer hash>:<idp sub>`; `approver_auth`, `acr`, `amr`,
+  `auth_time`, `action`, `action_hash`, `connector`, `case_version`,
+  `dwell_ms`, `dwell_source: "server"`, `memo_hash`, `policy_score_hash`,
+  `decision_request`, `jti`, expiry capped at 24 hours and at the request's
+  expiry; for four eyes the second grant names the first. The same approver
+  (namespaced subject) or the same verified email cannot approve twice.
+- **Consumption** (developer API key): `POST /v1/decisions/consume` verifies
+  (key chosen by `kid`, RS256 or ES256) and atomically consumes one grant or
+  both grants of a four-eyes decision. Refusals carry `reason:
+  decision_invalid` and a `subReason`. Every refusal is audited with the
+  attempted action and hash; if that record cannot be written the answer is
+  503 `DECISION_AUDIT_UNAVAILABLE`.
+- **Audit chain:** identity-provider changes, sign-ins, requests, approvals
+  (approver, identity provider, authentication method, dwell time and source,
+  action, memo and policy score hashes), consumptions, refusals, case changes
+  and cancellations, each in the transaction it records. Approver emails are
+  stored only as keyed hashes and names encrypted.
+- **Metrics:** `grantex_decision_grants_minted_total{approvals_required,position,dwell_source}`,
   `grantex_decision_grants_consumed_total`,
-  `grantex_decision_grants_rejected_total{stage,reason}` and the
-  `grantex_decision_dwell_seconds` histogram.
-- Migration `098_decision_grants.sql`: new tables only (`decision_cases`,
-  `decision_requests`, `decision_approver_sessions`, `decision_grants`,
-  `decision_page_tickets`, `decision_page_views`).
+  `grantex_decision_grants_rejected_total{stage,reason}`,
+  `grantex_decision_dwell_seconds{dwell_source}`.
+- **Migration** `098_decision_grants.sql`: new tables only.
 - No change to existing endpoints or tokens.
 
 ### Decision action hash: stricter inputs and extra decision fields

@@ -4,14 +4,15 @@
  * Everything here fails closed: an unreadable or ambiguous input is a refusal
  * with a reason, never a default.
  */
+import { createHash } from 'node:crypto';
 
 /** Absolute ceiling on a decision grant's lifetime, from minting and from the request. */
 export const DECISION_MAX_LIFETIME_SECONDS = 86_400;
 
 /**
- * Why a decision request, approval or consumption was refused. The first four
- * are the PRD Appendix B sub-reasons of `decision_invalid`; the others are
- * documented in spec/decision-grant.md.
+ * Why a decision request, sign-in, approval or consumption was refused. The
+ * first four are the PRD Appendix B sub-reasons of `decision_invalid`; the
+ * others are documented in spec/decision-grant.md.
  */
 export const DecisionSubReason = {
   ACTION_MISMATCH: 'action_mismatch',
@@ -26,6 +27,8 @@ export const DecisionSubReason = {
   MALFORMED: 'malformed',
   FOUR_EYES_INCOMPLETE: 'four_eyes_incomplete',
   CLOSED: 'closed',
+  AUTHENTICATION_FAILED: 'authentication_failed',
+  DWELL_TOO_SHORT: 'dwell_too_short',
 } as const;
 export type DecisionSubReason = (typeof DecisionSubReason)[keyof typeof DecisionSubReason];
 
@@ -47,16 +50,18 @@ export interface StepUpPolicy {
   amrValues: readonly string[];
   /** How long after `auth_time` a session counts as stepped up. */
   maxAgeSeconds: number;
-  /** How old an ID token (`iat`) may be when it is exchanged. */
+  /** How old an ID token (`iat`) may be when it is received. */
   idTokenMaxAgeSeconds: number;
 }
 
 export interface ApproverClaims {
+  /** The identity provider's `sub`. */
   subject: string;
   acr?: string;
   amr: string[];
   authTime: number;
-  email?: string;
+  /** Present only when the identity provider marked it verified. */
+  verifiedEmail?: string;
   name?: string;
 }
 
@@ -64,45 +69,50 @@ const AMR_VALUE_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const SUBJECT_RE = /^[\x21-\x7e]{1,255}$/;
 
 /**
- * Reads the approver claims from a verified ID token payload. Refuses a token
- * without a usable `sub` or `auth_time`, or with malformed `acr`/`amr`.
+ * Reads the approver claims from an ID token payload whose signature,
+ * issuer, audience, `azp`, `nonce` and expiry were already verified. Refuses a
+ * token without a usable `sub` or `auth_time`, a stale `iat`, or malformed
+ * `acr` / `amr`. An email counts only with `email_verified: true`.
  */
 export function approverClaimsFromIdToken(payload: Record<string, unknown>, nowSeconds: number, policy: StepUpPolicy): ApproverClaims {
   const subject = payload['sub'];
   if (typeof subject !== 'string' || !SUBJECT_RE.test(subject)) {
-    throw new DecisionError(DecisionSubReason.MALFORMED, 400, 'ID token sub is missing or not a printable ASCII string of at most 255 characters');
+    throw new DecisionError(DecisionSubReason.AUTHENTICATION_FAILED, 401, 'ID token sub is missing or not a printable ASCII string of at most 255 characters');
   }
   const authTime = payload['auth_time'];
   if (typeof authTime !== 'number' || !Number.isSafeInteger(authTime) || authTime <= 0) {
     throw new DecisionError(DecisionSubReason.STEP_UP_REQUIRED, 403, 'ID token has no auth_time, so step-up cannot be established');
   }
   if (authTime > nowSeconds + 60) {
-    throw new DecisionError(DecisionSubReason.MALFORMED, 400, 'ID token auth_time is in the future');
+    throw new DecisionError(DecisionSubReason.AUTHENTICATION_FAILED, 401, 'ID token auth_time is in the future');
   }
   const iat = payload['iat'];
-  if (typeof iat !== 'number' || !Number.isFinite(iat) || nowSeconds - iat > policy.idTokenMaxAgeSeconds) {
-    throw new DecisionError(DecisionSubReason.EXPIRED, 401, `ID token must have been issued within the last ${policy.idTokenMaxAgeSeconds} seconds`);
+  if (typeof iat !== 'number' || !Number.isFinite(iat) || iat > nowSeconds + 60 || nowSeconds - iat > policy.idTokenMaxAgeSeconds) {
+    throw new DecisionError(DecisionSubReason.AUTHENTICATION_FAILED, 401, `ID token must have been issued within the last ${policy.idTokenMaxAgeSeconds} seconds`);
   }
   const acr = payload['acr'];
   if (acr !== undefined && (typeof acr !== 'string' || acr.length === 0 || acr.length > 255)) {
-    throw new DecisionError(DecisionSubReason.MALFORMED, 400, 'ID token acr is malformed');
+    throw new DecisionError(DecisionSubReason.AUTHENTICATION_FAILED, 401, 'ID token acr is malformed');
   }
   const amr = payload['amr'];
   let amrValues: string[] = [];
   if (amr !== undefined) {
     if (!Array.isArray(amr) || amr.length > 16 || !amr.every((v) => typeof v === 'string' && AMR_VALUE_RE.test(v))) {
-      throw new DecisionError(DecisionSubReason.MALFORMED, 400, 'ID token amr is malformed');
+      throw new DecisionError(DecisionSubReason.AUTHENTICATION_FAILED, 401, 'ID token amr is malformed');
     }
     amrValues = [...new Set(amr as string[])].sort();
   }
-  const email = typeof payload['email'] === 'string' && payload['email'].length <= 320 ? payload['email'] : undefined;
+  const email = payload['email'];
+  const verifiedEmail = payload['email_verified'] === true && typeof email === 'string' && email.length > 0 && email.length <= 320
+    ? email
+    : undefined;
   const name = typeof payload['name'] === 'string' && payload['name'].length <= 256 ? payload['name'] : undefined;
   return {
     subject,
     ...(typeof acr === 'string' ? { acr } : {}),
     amr: amrValues,
     authTime,
-    ...(email !== undefined ? { email } : {}),
+    ...(verifiedEmail !== undefined ? { verifiedEmail } : {}),
     ...(name !== undefined ? { name } : {}),
   };
 }
@@ -140,32 +150,34 @@ export function approverAuthMethod(claims: Pick<ApproverClaims, 'amr'>): string 
   return claims.amr.length > 0 ? `sso+${claims.amr.join('+')}` : 'sso+acr';
 }
 
-/** The decision grant's `sub` for an identity-provider subject. */
-export function approverSubject(idpSubject: string): string {
-  return `user:${idpSubject}`;
+/**
+ * The decision grant's `sub`: the identity provider's subject namespaced by
+ * its issuer, `user:<first 22 base64url characters of SHA-256(issuer)>:<sub>`,
+ * so the same `sub` at two identity providers is two approvers.
+ */
+export function approverSubject(issuer: string, idpSubject: string): string {
+  const namespace = createHash('sha256').update(issuer, 'utf8').digest('base64url').slice(0, 22);
+  return `user:${namespace}:${idpSubject}`;
 }
 
 export interface DwellPolicy {
+  /** Approvals faster than this are refused (`dwell_too_short`). */
   minMs: number;
+  /** Longest dwell recorded; longer views are recorded as this value. */
   maxMs: number;
 }
 
 /**
- * Validates a dwell time supplied by an approval surface: an integer within
- * the configured range and no longer than the request has existed (plus five
- * seconds of clock skew).
+ * Dwell time measured by the service from rendering the approval page to its
+ * submission (both server timestamps). Refuses a submission faster than the
+ * configured minimum; caps the recorded value at the maximum.
  */
-export function validateDwellMs(value: unknown, requestCreatedAtMs: number, nowMs: number, policy: DwellPolicy): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
-    throw new DecisionError(DecisionSubReason.MALFORMED, 400, 'dwellMs must be an integer number of milliseconds');
+export function serverDwellMs(renderedAtMs: number, submittedAtMs: number, policy: DwellPolicy): number {
+  const measured = Math.max(0, Math.floor(submittedAtMs - renderedAtMs));
+  if (measured < policy.minMs) {
+    throw new DecisionError(DecisionSubReason.DWELL_TOO_SHORT, 400, `The decision must be on screen for at least ${policy.minMs} ms before it is approved`);
   }
-  if (value < policy.minMs || value > policy.maxMs) {
-    throw new DecisionError(DecisionSubReason.MALFORMED, 400, `dwellMs must be between ${policy.minMs} and ${policy.maxMs}`);
-  }
-  if (value > nowMs - requestCreatedAtMs + 5_000) {
-    throw new DecisionError(DecisionSubReason.MALFORMED, 400, 'dwellMs is longer than the decision request has existed');
-  }
-  return value;
+  return Math.min(measured, policy.maxMs);
 }
 
 /** Expiry of a decision grant minted now for a request expiring at `requestExpiresAtMs`. */

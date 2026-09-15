@@ -1,63 +1,45 @@
 /**
- * Decision-grant API (PRD G-3). Developer API key on every route; approval
- * routes additionally need a step-up approver session in the
- * `Grantex-Approver-Session` header. Disabled unless
+ * Decision-grant API for platforms (PRD G-3), authenticated with the developer
+ * API key. A platform can register case versions, create and cancel decision
+ * requests, read their results and consume decision grants. It cannot sign
+ * approvers in, approve, or configure the identity providers approvers use:
+ * approval happens only in the approver's browser on the service's approval
+ * page (routes/decision-page.ts), and identity providers are configured by the
+ * service administrator (routes/decision-admin.ts). Disabled unless
  * `DECISION_GRANTS_ENABLED=true`. Specified in spec/decision-grant.md.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getSql } from '../db/client.js';
 import { config } from '../config.js';
-import {
-  decisionDwellSeconds,
-  decisionGrantsConsumedTotal,
-  decisionGrantsMintedTotal,
-  decisionGrantsRejectedTotal,
-} from '../lib/metrics.js';
+import { decisionGrantsConsumedTotal, decisionGrantsRejectedTotal } from '../lib/metrics.js';
 import { ActionValidationError, parseDecisionAction, type DecisionAction } from '../lib/decisions/action.js';
-import { ApproverIdentityError, verifyApproverIdToken } from '../lib/decisions/approver-identity.js';
+import { DuplicateKeyError, parseJsonRejectingDuplicates } from '../lib/decisions/canonical.js';
 import {
   DECISION_MAX_LIFETIME_SECONDS,
   DecisionError,
-  DecisionSubReason,
-  approverClaimsFromIdToken,
-  approverSubject,
   isCaseVersion,
   isConnectorName,
   isReference,
 } from '../lib/decisions/policy.js';
 import { DecisionSettingsError, decisionGrantsEnabled, decisionSettings, type DecisionSettings } from '../lib/decisions/settings.js';
 import {
-  approveDecisionRequest,
   auditConsumeRefusal,
   cancelDecisionRequest,
   consumeDecisionGrants,
-  createApproverSession,
   createDecisionRequest,
-  createPageTicket,
-  getApproverSession,
   getDecisionRequest,
-  revokeApproverSession,
+  reviewContent,
   setCaseVersion,
   type DecisionGrantRow,
   type DecisionRequestRow,
 } from '../lib/decisions/store.js';
-import {
-  DecisionTokenError,
-  signApproverSession,
-  signDecisionGrant,
-  verifyApproverSession,
-  verifyDecisionGrantSignature,
-} from '../lib/decisions/token.js';
+import { signDecisionGrant, verifyDecisionGrantSignature } from '../lib/decisions/token.js';
 
-export const APPROVER_SESSION_HEADER = 'grantex-approver-session';
-
-type Stage = 'session' | 'request' | 'approve' | 'consume' | 'case';
+type Stage = 'request' | 'consume' | 'case';
 
 function codeForStatus(status: number): string {
   switch (status) {
     case 400: return 'BAD_REQUEST';
-    case 401: return 'APPROVER_SESSION_INVALID';
-    case 403: return 'STEP_UP_REQUIRED';
     case 404: return 'NOT_FOUND';
     case 410: return 'DECISION_EXPIRED';
     default: return 'DECISION_INVALID';
@@ -80,7 +62,7 @@ function badRequest(reply: FastifyReply, request: FastifyRequest, message: strin
 }
 
 /** Returns the settings, or sends the refusal and returns null. */
-async function guard(request: FastifyRequest, reply: FastifyReply): Promise<DecisionSettings | null> {
+export async function decisionGuard(request: FastifyRequest, reply: FastifyReply): Promise<DecisionSettings | null> {
   if (!decisionGrantsEnabled()) {
     await reply.status(404).send({
       message: 'Decision grants are not enabled on this service',
@@ -105,25 +87,6 @@ async function guard(request: FastifyRequest, reply: FastifyReply): Promise<Deci
   }
 }
 
-/** Resolves the approver session header to a session of the calling developer. */
-async function approverSessionId(request: FastifyRequest): Promise<string> {
-  const header = request.headers[APPROVER_SESSION_HEADER];
-  if (typeof header !== 'string' || header.length === 0) {
-    throw new DecisionError(DecisionSubReason.STEP_UP_REQUIRED, 401, `The ${APPROVER_SESSION_HEADER} header with a step-up approver session is required`);
-  }
-  let verified;
-  try {
-    verified = await verifyApproverSession(header);
-  } catch (err) {
-    if (err instanceof DecisionTokenError) throw new DecisionError(DecisionSubReason.MALFORMED, 401, err.message);
-    throw err;
-  }
-  if (verified.developerId !== request.developer.id) {
-    throw new DecisionError(DecisionSubReason.MALFORMED, 401, 'Approver session is invalid or revoked');
-  }
-  return verified.sessionId;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -142,7 +105,9 @@ function requestResponse(request: DecisionRequestRow, grants: DecisionGrantRow[]
     approvalsRequired: request.approvals_required,
     approvalsReceived: grants.length,
     memoRef: request.memo_ref,
+    memoHash: request.memo_hash,
     policyScoreRef: request.policy_score_ref,
+    policyScoreHash: request.policy_score_hash,
     agentId: request.agent_id,
     grantId: request.grant_id,
     expiresAt: request.expires_at.toISOString(),
@@ -152,6 +117,7 @@ function requestResponse(request: DecisionRequestRow, grants: DecisionGrantRow[]
       sub: g.approver_sub,
       approverAuth: g.approver_auth,
       dwellMs: g.dwell_ms,
+      dwellSource: g.dwell_source,
       position: g.approval_position,
       issuedAt: g.issued_at.toISOString(),
       expiresAt: g.expires_at.toISOString(),
@@ -164,73 +130,23 @@ function requestResponse(request: DecisionRequestRow, grants: DecisionGrantRow[]
 }
 
 export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
-  // POST /v1/decisions/approver-sessions — exchange a step-up ID token for an approver session.
-  app.post('/v1/decisions/approver-sessions', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const settings = await guard(request, reply);
-    if (!settings) return reply;
-    const body = request.body;
-    if (!isRecord(body) || typeof body['connectionId'] !== 'string' || !ID_RE.test(body['connectionId'])
-        || typeof body['idToken'] !== 'string' || body['idToken'].length === 0 || body['idToken'].length > 16_384) {
-      return badRequest(reply, request, 'connectionId and idToken are required');
-    }
-    const sql = getSql();
-    const developerId = request.developer.id;
-    let verified;
+  // Decision request bodies are parsed with duplicate member names refused,
+  // so the action hashed is the action the platform sent.
+  app.removeContentTypeParser('application/json');
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_request, body, done) => {
     try {
-      verified = await verifyApproverIdToken(sql, developerId, body['connectionId'], body['idToken']);
+      const text = typeof body === 'string' ? body : body.toString('utf8');
+      done(null, text.length === 0 ? undefined : parseJsonRejectingDuplicates(text));
     } catch (err) {
-      if (err instanceof ApproverIdentityError) {
-        decisionGrantsRejectedTotal.labels('session', 'authentication_failed').inc();
-        return reply.status(401).send({ message: err.message, code: 'APPROVER_AUTH_FAILED', requestId: request.id });
-      }
-      throw err;
+      const error = new Error(err instanceof DuplicateKeyError ? `Request body repeats the member name ${JSON.stringify(err.key)}` : 'Request body is not valid JSON') as Error & { statusCode: number };
+      error.statusCode = 400;
+      done(error, undefined);
     }
-    try {
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const claims = approverClaimsFromIdToken(verified.payload, nowSeconds, settings.stepUp);
-      const session = await createApproverSession(sql, {
-        developerId,
-        connectionId: verified.connectionId,
-        issuer: verified.issuer,
-        claims,
-        idToken: body['idToken'],
-        stepUp: settings.stepUp,
-        nowSeconds,
-      });
-      const expiresAt = Math.floor(session.expires_at.getTime() / 1000);
-      const sessionToken = await signApproverSession(session.id, developerId, expiresAt);
-      return reply.status(201).send({
-        sessionId: session.id,
-        sessionToken,
-        expiresAt: session.expires_at.toISOString(),
-        approver: {
-          sub: approverSubject(session.subject),
-          idp: session.issuer,
-          email: session.email,
-          name: session.name,
-        },
-        approverAuth: session.approver_auth,
-        acr: session.acr,
-        amr: session.amr,
-        authTime: session.auth_time.toISOString(),
-      });
-    } catch (err) {
-      if (err instanceof DecisionError) return sendDecisionError(reply, request, 'session', err);
-      throw err;
-    }
-  });
-
-  // DELETE /v1/decisions/approver-sessions/:id — end an approver session.
-  app.delete<{ Params: { id: string } }>('/v1/decisions/approver-sessions/:id', async (request, reply) => {
-    if (!(await guard(request, reply))) return reply;
-    const revoked = await revokeApproverSession(getSql(), request.developer.id, request.params.id);
-    if (!revoked) return reply.status(404).send({ message: 'Approver session not found', code: 'NOT_FOUND', requestId: request.id });
-    return reply.status(204).send();
   });
 
   // PUT /v1/decisions/cases/:caseId — register the case's current version.
   app.put<{ Params: { caseId: string } }>('/v1/decisions/cases/:caseId', async (request, reply) => {
-    if (!(await guard(request, reply))) return reply;
+    if (!(await decisionGuard(request, reply))) return reply;
     const caseId = request.params.caseId;
     let validCaseId = true;
     try {
@@ -248,7 +164,7 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /v1/decisions/requests — ask for a decision on one semantic action.
   app.post('/v1/decisions/requests', async (request, reply) => {
-    if (!(await guard(request, reply))) return reply;
+    if (!(await decisionGuard(request, reply))) return reply;
     const body = request.body;
     if (!isRecord(body)) return badRequest(reply, request, 'Request body must be a JSON object');
     let action: DecisionAction;
@@ -288,8 +204,13 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
       }
       expiresInSeconds = value;
     }
-    for (const key of ['memoRef', 'policyScoreRef'] as const) {
-      if (body[key] !== undefined && !isReference(body[key])) return badRequest(reply, request, `${key} must be 1-512 printable ASCII characters`);
+    const memo = body['memo'];
+    const policyScore = body['policyScore'];
+    if (!isRecord(memo) || !isRecord(policyScore)) {
+      return badRequest(reply, request, 'memo {content, ref?, hash?} and policyScore {content, ref?, hash?} are required: the approver reviews them');
+    }
+    for (const [name, value] of [['memo.ref', memo['ref']], ['policyScore.ref', policyScore['ref']]] as const) {
+      if (value !== undefined && !isReference(value)) return badRequest(reply, request, `${name} must be 1-512 printable ASCII characters`);
     }
     for (const key of ['agentId', 'grantId'] as const) {
       if (body[key] !== undefined && (typeof body[key] !== 'string' || !ID_RE.test(body[key] as string))) {
@@ -298,6 +219,7 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     try {
+      const review = reviewContent(memo['content'], memo['hash'], policyScore['content'], policyScore['hash']);
       const { request: row, created } = await createDecisionRequest(getSql(), {
         developerId: request.developer.id,
         action,
@@ -305,8 +227,9 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
         caseVersion: body['caseVersion'],
         approvalsRequired,
         expiresInSeconds,
-        ...(typeof body['memoRef'] === 'string' ? { memoRef: body['memoRef'] } : {}),
-        ...(typeof body['policyScoreRef'] === 'string' ? { policyScoreRef: body['policyScoreRef'] } : {}),
+        review,
+        ...(typeof memo['ref'] === 'string' ? { memoRef: memo['ref'] } : {}),
+        ...(typeof policyScore['ref'] === 'string' ? { policyScoreRef: policyScore['ref'] } : {}),
         ...(typeof body['agentId'] === 'string' ? { agentId: body['agentId'] } : {}),
         ...(typeof body['grantId'] === 'string' ? { grantId: body['grantId'] } : {}),
       });
@@ -323,7 +246,7 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
 
   // GET /v1/decisions/requests/:id — status, approvals and, once fully approved, the decision grants.
   app.get<{ Params: { id: string } }>('/v1/decisions/requests/:id', async (request, reply) => {
-    if (!(await guard(request, reply))) return reply;
+    if (!(await decisionGuard(request, reply))) return reply;
     const found = await getDecisionRequest(getSql(), request.developer.id, request.params.id);
     if (!found) return reply.status(404).send({ message: 'Decision request not found', code: 'NOT_FOUND', requestId: request.id });
     const now = Date.now();
@@ -334,64 +257,9 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(requestResponse(found.request, found.grants, tokens));
   });
 
-  // POST /v1/decisions/requests/:id/approvals — the approver approves the exact action shown.
-  app.post<{ Params: { id: string } }>('/v1/decisions/requests/:id/approvals', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const settings = await guard(request, reply);
-    if (!settings) return reply;
-    const body = request.body;
-    if (!isRecord(body)) return badRequest(reply, request, 'Request body must be a JSON object');
-    try {
-      const sessionId = await approverSessionId(request);
-      const result = await approveDecisionRequest(getSql(), {
-        developerId: request.developer.id,
-        requestId: request.params.id,
-        sessionId,
-        actionHash: body['actionHash'],
-        dwell: { kind: 'reported', dwellMs: body['dwellMs'] },
-        stepUp: settings.stepUp,
-        dwellPolicy: settings.dwell,
-      });
-      decisionGrantsMintedTotal.labels(String(result.request.approvals_required), String(result.approvalsReceived)).inc();
-      decisionDwellSeconds.observe(result.claims.dwell_ms / 1000);
-      return reply.status(201).send({
-        decisionGrant: result.token,
-        jti: result.claims.jti,
-        sub: result.claims.sub,
-        expiresAt: new Date(result.claims.exp * 1000).toISOString(),
-        approvalsRequired: result.request.approvals_required,
-        approvalsReceived: result.approvalsReceived,
-        status: result.request.status,
-      });
-    } catch (err) {
-      if (err instanceof DecisionError) return sendDecisionError(reply, request, 'approve', err);
-      throw err;
-    }
-  });
-
-  // POST /v1/decisions/requests/:id/page-tickets — one-time link to the server-rendered approval page.
-  app.post<{ Params: { id: string } }>('/v1/decisions/requests/:id/page-tickets', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
-    const settings = await guard(request, reply);
-    if (!settings) return reply;
-    try {
-      const sessionId = await approverSessionId(request);
-      const sql = getSql();
-      await getApproverSession(sql, request.developer.id, sessionId);
-      const found = await getDecisionRequest(sql, request.developer.id, request.params.id);
-      if (!found) return reply.status(404).send({ message: 'Decision request not found', code: 'NOT_FOUND', requestId: request.id });
-      const ticket = await createPageTicket(sql, request.developer.id, found.request.id, sessionId, settings.pageTicketSeconds);
-      return reply.status(201).send({
-        url: `${config.publicBaseUrl.replace(/\/$/, '')}/decisions/${encodeURIComponent(found.request.id)}?ticket=${encodeURIComponent(ticket)}`,
-        expiresAt: new Date(Date.now() + settings.pageTicketSeconds * 1000).toISOString(),
-      });
-    } catch (err) {
-      if (err instanceof DecisionError) return sendDecisionError(reply, request, 'approve', err);
-      throw err;
-    }
-  });
-
   // POST /v1/decisions/requests/:id/cancel — withdraw a request and revoke its unconsumed grants.
   app.post<{ Params: { id: string } }>('/v1/decisions/requests/:id/cancel', async (request, reply) => {
-    if (!(await guard(request, reply))) return reply;
+    if (!(await decisionGuard(request, reply))) return reply;
     const row = await cancelDecisionRequest(getSql(), request.developer.id, request.params.id);
     if (!row) return reply.status(404).send({ message: 'No open decision request with this id', code: 'NOT_FOUND', requestId: request.id });
     return reply.send({ requestId: row.id, status: row.status });
@@ -399,7 +267,7 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /v1/decisions/consume — verify and atomically consume the decision grants for one action.
   app.post('/v1/decisions/consume', { config: { rateLimit: { max: 600, timeWindow: '1 minute' } } }, async (request, reply) => {
-    if (!(await guard(request, reply))) return reply;
+    if (!(await decisionGuard(request, reply))) return reply;
     const body = request.body;
     if (!isRecord(body)) return badRequest(reply, request, 'Request body must be a JSON object');
     for (const key of ['agentId', 'grantId'] as const) {
@@ -409,42 +277,45 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
     }
     const sql = getSql();
     const developerId = request.developer.id;
+    const context = {
+      ...(typeof body['agentId'] === 'string' ? { agentId: body['agentId'] } : {}),
+      ...(typeof body['grantId'] === 'string' ? { grantId: body['grantId'] } : {}),
+    };
     try {
       const result = await consumeDecisionGrants(sql, {
         developerId,
         tokens: body['decisionGrants'],
         action: body['action'],
         caseVersion: body['caseVersion'],
-        ...(typeof body['agentId'] === 'string' ? { agentId: body['agentId'] } : {}),
-        ...(typeof body['grantId'] === 'string' ? { grantId: body['grantId'] } : {}),
+        ...context,
       });
       decisionGrantsConsumedTotal.inc(result.jtis.length);
       return reply.send({ consumed: true, ...result });
     } catch (err) {
       if (!(err instanceof DecisionError)) throw err;
-      // Record refusals of grants this developer holds (signature verified,
-      // developer matched), so replay attempts are visible in the audit chain.
-      if (err.subReason !== DecisionSubReason.MALFORMED && err.subReason !== DecisionSubReason.UNKNOWN_GRANT) {
-        const jtis: string[] = [];
-        for (const token of Array.isArray(body['decisionGrants']) ? body['decisionGrants'] : []) {
-          try {
-            const claims = await verifyDecisionGrantSignature(token as string);
-            if (claims.dev === developerId) jtis.push(claims.jti);
-          } catch {
-            // Unverifiable tokens are not recorded.
-          }
+      // Every refusal is recorded with what was attempted. If the record
+      // cannot be written the request fails; it is refused either way.
+      const jtis: string[] = [];
+      for (const token of Array.isArray(body['decisionGrants']) ? body['decisionGrants'].slice(0, 2) : []) {
+        try {
+          const claims = await verifyDecisionGrantSignature(token as string);
+          if (claims.dev === developerId) jtis.push(claims.jti);
+        } catch {
+          // Unverifiable tokens contribute no jti.
         }
-        if (jtis.length > 0) {
-          try {
-            await auditConsumeRefusal(sql, developerId, err.subReason, {
-              jtis,
-              ...(typeof body['agentId'] === 'string' ? { agentId: body['agentId'] } : {}),
-              ...(typeof body['grantId'] === 'string' ? { grantId: body['grantId'] } : {}),
-            });
-          } catch (auditErr) {
-            request.log.error({ err: auditErr }, 'failed to audit a refused decision-grant consumption');
-          }
-        }
+      }
+      try {
+        await auditConsumeRefusal(sql, developerId, err.subReason, { jtis, action: body['action'], caseVersion: body['caseVersion'], ...context });
+      } catch (auditErr) {
+        request.log.error({ err: auditErr }, 'failed to audit a refused decision-grant consumption');
+        decisionGrantsRejectedTotal.labels('consume', 'audit_unavailable').inc();
+        return reply.status(503).send({
+          message: 'The refusal could not be recorded; the decision grant was not consumed',
+          code: 'DECISION_AUDIT_UNAVAILABLE',
+          reason: 'decision_invalid',
+          subReason: err.subReason,
+          requestId: request.id,
+        });
       }
       return sendDecisionError(reply, request, 'consume', err);
     }

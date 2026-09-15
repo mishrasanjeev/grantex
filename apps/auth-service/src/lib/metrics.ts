@@ -94,8 +94,8 @@ export const anomaliesUnacknowledged = new Gauge({
 
 export const decisionGrantsMintedTotal = new Counter({
   name: 'grantex_decision_grants_minted_total',
-  help: 'Decision grants minted, by approvals the decision requires (1, or 2 for four eyes) and approval position',
-  labelNames: ['approvals_required', 'position'] as const,
+  help: 'Decision grants minted, by approvals the decision requires (1, or 2 for four eyes), approval position and dwell-time source',
+  labelNames: ['approvals_required', 'position', 'dwell_source'] as const,
   registers: [registry],
 });
 
@@ -107,14 +107,15 @@ export const decisionGrantsConsumedTotal = new Counter({
 
 export const decisionGrantsRejectedTotal = new Counter({
   name: 'grantex_decision_grants_rejected_total',
-  help: 'Refused decision-grant operations, by stage (session, request, approve, consume) and sub-reason',
+  help: 'Refused decision-grant operations, by stage (sign_in, request, approve, consume, case) and sub-reason',
   labelNames: ['stage', 'reason'] as const,
   registers: [registry],
 });
 
 export const decisionDwellSeconds = new Histogram({
   name: 'grantex_decision_dwell_seconds',
-  help: 'Time an approver looked at a decision before approving it, in seconds',
+  help: 'Time an approver looked at a decision before approving it, in seconds, by dwell-time source',
+  labelNames: ['dwell_source'] as const,
   buckets: [1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 1800, 3600],
   registers: [registry],
 });

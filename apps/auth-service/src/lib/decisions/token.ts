@@ -1,20 +1,20 @@
 /**
- * Decision-grant and approver-session tokens (PRD G-3).
+ * Decision-grant tokens (PRD G-3).
  *
  * A decision grant is a JWT with header `typ: decision+jwt` and audience
  * `urn:grantex:decision`, signed with the platform key that signs grant
  * tokens, so SDKs verify it with the same JWKS. The profile is specified in
  * spec/decision-grant.md.
  */
-import { SignJWT, jwtVerify, decodeProtectedHeader, type JWTPayload } from 'jose';
+import { SignJWT, createLocalJWKSet, decodeProtectedHeader, exportJWK, jwtVerify, type JWK, type JWTPayload } from 'jose';
 import { config } from '../../config.js';
 import { getKeyPair } from '../crypto.js';
 import { isActionHash, parseDecisionAction, type DecisionAction } from './action.js';
 
 export const DECISION_GRANT_TYP = 'decision+jwt';
 export const DECISION_GRANT_AUDIENCE = 'urn:grantex:decision';
-export const APPROVER_SESSION_TYP = 'approver-session+jwt';
-export const APPROVER_SESSION_AUDIENCE = 'urn:grantex:decision-approver';
+/** Algorithms a platform signing key may use. */
+export const DECISION_GRANT_ALGORITHMS = ['RS256', 'ES256'] as const;
 
 export interface FourEyesClaim {
   approvals_required: 2;
@@ -43,22 +43,49 @@ export interface DecisionGrantClaims {
   connector: string;
   case_version: string;
   dwell_ms: number;
+  dwell_source: 'server';
   decision_request: string;
+  memo_hash: string;
+  policy_score_hash: string;
   memo_ref?: string;
   policy_score_ref?: string;
   four_eyes?: FourEyesClaim;
 }
 
-function signingKey(): { privateKey: CryptoKey; publicKey: CryptoKey; kid: string; alg: string } {
+interface PlatformKey {
+  privateKey: CryptoKey;
+  publicKey: CryptoKey;
+  kid: string;
+  alg: string;
+}
+
+function activeKey(): PlatformKey {
   const pair = getKeyPair() as ReturnType<typeof getKeyPair> & { alg?: string };
   return { privateKey: pair.privateKey, publicKey: pair.publicKey, kid: pair.kid, alg: pair.alg ?? 'RS256' };
+}
+
+let cachedKeySet: { kid: string; resolve: ReturnType<typeof createLocalJWKSet> } | undefined;
+
+/**
+ * Resolves the verification key from the token's `kid` and `alg` in the
+ * platform key set, never from the header alone. With one active key this is
+ * a set of one; when the key ring with retired keys is available the set is
+ * built from it (see the ES256 key-rotation change).
+ */
+async function platformKeySet(): Promise<ReturnType<typeof createLocalJWKSet>> {
+  const key = activeKey();
+  if (cachedKeySet?.kid !== key.kid) {
+    const jwk: JWK = { ...(await exportJWK(key.publicKey)), kid: key.kid, alg: key.alg, use: 'sig' };
+    cachedKeySet = { kid: key.kid, resolve: createLocalJWKSet({ keys: [jwk] }) };
+  }
+  return cachedKeySet.resolve;
 }
 
 /** Signs a decision grant. `iss` and `aud` are always this service's; any given are ignored. */
 export async function signDecisionGrant(
   claims: Omit<DecisionGrantClaims, 'iss' | 'aud'> & { iss?: string; aud?: string },
 ): Promise<string> {
-  const { privateKey, kid, alg } = signingKey();
+  const { privateKey, kid, alg } = activeKey();
   const { sub, jti, iat, exp, iss: _iss, aud: _aud, ...rest } = claims;
   return new SignJWT({ ...rest })
     .setProtectedHeader({ alg, kid, typ: DECISION_GRANT_TYP })
@@ -79,12 +106,13 @@ export class DecisionTokenError extends Error {
 }
 
 const JTI_RE = /^dgnt_[0-9A-HJKMNP-TV-Z]{26}$/;
+const HASH_RE = /^sha256:[A-Za-z0-9_-]{43}$/;
 
 /**
- * Verifies a decision grant's signature, type, issuer and audience and
- * returns its claims. Expiry is not checked here (`currentDate` is set far in
- * the past): the caller reports `expired` itself, after the signature is
- * known to be good.
+ * Verifies a decision grant's signature (key chosen by `kid`, algorithm from
+ * an allowlist), type, issuer and audience and returns its claims. Expiry is
+ * not checked here: the caller reports `expired` itself, after the signature
+ * is known to be good.
  */
 export async function verifyDecisionGrantSignature(token: string): Promise<DecisionGrantClaims> {
   if (typeof token !== 'string' || token.length === 0 || token.length > 16_384) {
@@ -99,18 +127,20 @@ export async function verifyDecisionGrantSignature(token: string): Promise<Decis
   if (header.typ !== DECISION_GRANT_TYP) {
     throw new DecisionTokenError(`decision grant typ must be ${DECISION_GRANT_TYP}`);
   }
-  const { publicKey, alg } = signingKey();
+  if (typeof header.kid !== 'string' || header.kid.length === 0) {
+    throw new DecisionTokenError('decision grant has no kid');
+  }
   let payload: JWTPayload;
   try {
-    ({ payload } = await jwtVerify(token, publicKey, {
+    ({ payload } = await jwtVerify(token, await platformKeySet(), {
       issuer: config.jwtIssuer,
       audience: DECISION_GRANT_AUDIENCE,
-      algorithms: [alg],
+      algorithms: [...DECISION_GRANT_ALGORITHMS],
       typ: DECISION_GRANT_TYP,
       currentDate: new Date(0),
     }));
   } catch {
-    throw new DecisionTokenError('decision grant signature, issuer or audience is invalid');
+    throw new DecisionTokenError('decision grant signature, key, issuer or audience is invalid');
   }
   return parseDecisionGrantClaims(payload);
 }
@@ -140,6 +170,10 @@ export function parseDecisionGrantClaims(payload: JWTPayload): DecisionGrantClai
   if (!isActionHash(actionHash)) throw new DecisionTokenError('decision grant action_hash is malformed');
   const amr = p['amr'];
   if (!Array.isArray(amr) || !amr.every((v) => typeof v === 'string')) throw new DecisionTokenError('decision grant amr is invalid');
+  if (p['dwell_source'] !== 'server') throw new DecisionTokenError('decision grant dwell_source is invalid');
+  const memoHash = str('memo_hash');
+  const policyScoreHash = str('policy_score_hash');
+  if (!HASH_RE.test(memoHash) || !HASH_RE.test(policyScoreHash)) throw new DecisionTokenError('decision grant memo or policy score hash is malformed');
   const fourEyes = p['four_eyes'];
   let fourEyesClaim: FourEyesClaim | undefined;
   if (fourEyes !== undefined) {
@@ -177,48 +211,14 @@ export function parseDecisionGrantClaims(payload: JWTPayload): DecisionGrantClai
     connector: str('connector'),
     case_version: str('case_version'),
     dwell_ms: int('dwell_ms'),
+    dwell_source: 'server',
     decision_request: str('decision_request'),
+    memo_hash: memoHash,
+    policy_score_hash: policyScoreHash,
     ...(typeof p['memo_ref'] === 'string' ? { memo_ref: p['memo_ref'] } : {}),
     ...(typeof p['policy_score_ref'] === 'string' ? { policy_score_ref: p['policy_score_ref'] } : {}),
     ...(fourEyesClaim !== undefined ? { four_eyes: fourEyesClaim } : {}),
   };
   if (claims.exp <= claims.iat) throw new DecisionTokenError('decision grant exp must be after iat');
   return claims;
-}
-
-export async function signApproverSession(sessionId: string, developerId: string, expiresAt: number): Promise<string> {
-  const { privateKey, kid, alg } = signingKey();
-  return new SignJWT({ dev: developerId })
-    .setProtectedHeader({ alg, kid, typ: APPROVER_SESSION_TYP })
-    .setIssuer(config.jwtIssuer)
-    .setAudience(APPROVER_SESSION_AUDIENCE)
-    .setSubject(sessionId)
-    .setIssuedAt()
-    .setExpirationTime(expiresAt)
-    .sign(privateKey);
-}
-
-/** Returns the session id and developer of a valid approver-session token. */
-export async function verifyApproverSession(token: string): Promise<{ sessionId: string; developerId: string }> {
-  if (typeof token !== 'string' || token.length === 0 || token.length > 4_096) {
-    throw new DecisionTokenError('approver session token is missing');
-  }
-  const { publicKey, alg } = signingKey();
-  let payload: JWTPayload;
-  try {
-    ({ payload } = await jwtVerify(token, publicKey, {
-      issuer: config.jwtIssuer,
-      audience: APPROVER_SESSION_AUDIENCE,
-      algorithms: [alg],
-      typ: APPROVER_SESSION_TYP,
-    }));
-  } catch {
-    throw new DecisionTokenError('approver session token is invalid or expired');
-  }
-  const sessionId = payload.sub;
-  const developerId = payload['dev'];
-  if (typeof sessionId !== 'string' || !sessionId.startsWith('dsess_') || typeof developerId !== 'string' || developerId.length === 0) {
-    throw new DecisionTokenError('approver session token claims are invalid');
-  }
-  return { sessionId, developerId };
 }
