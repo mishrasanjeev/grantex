@@ -34,7 +34,9 @@ const MANIFEST: LoadedManifest = {
 };
 
 describe('docs/mcp-auth.md examples', () => {
-  const doc = readFileSync(`${repoRoot}docs/mcp-auth.md`, 'utf8');
+  // Compare with LF line endings whatever the checkout's autocrlf setting.
+  const read = (path: string) => readFileSync(path, 'utf8').split(String.fromCharCode(13)).join('');
+  const doc = read(`${repoRoot}docs/mcp-auth.md`);
   const snippets = [...doc.matchAll(/<!-- snippet: (\S+) -->\n```typescript\n([\s\S]*?)\n```/g)];
 
   it('embeds every example file verbatim', () => {
@@ -42,7 +44,7 @@ describe('docs/mcp-auth.md examples', () => {
     const referenced = snippets.map((m) => m[1]!.replace('packages/mcp-auth/tests/docs/examples/', '')).sort();
     expect(referenced).toEqual(files);
     for (const [, path, code] of snippets) {
-      expect(code, path).toBe(readFileSync(`${repoRoot}${path}`, 'utf8').replace(/\n+$/, ''));
+      expect(code, path).toBe(read(`${repoRoot}${path}`).replace(/\n+$/, ''));
     }
   });
 

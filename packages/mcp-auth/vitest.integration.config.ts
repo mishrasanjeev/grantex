@@ -1,5 +1,5 @@
 import { defineConfig } from 'vitest/config';
-import { packageAliases } from './vitest.aliases';
+import { packageAliases } from './vitest.aliases.ts';
 
 // Real Postgres and Redis, and a spawned server process. Run with
 // `npm run test:integration`; tests/integration/env.ts names the variables.
