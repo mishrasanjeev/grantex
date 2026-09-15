@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import { isIP } from 'node:net';
 import {
+  parseSigningAlgorithm,
+  parseSigningKeyStore,
+} from './lib/signing-algorithms.js';
+import {
   commercePublicDiscoveryMerchantAllowlist,
   isCommercePublicDiscoveryEnabled,
 } from './lib/commerce/public-discovery.js';
@@ -98,7 +102,22 @@ export const config = {
   databaseUrl: required('DATABASE_URL'),
   redisUrl: required('REDIS_URL'),
   rsaPrivateKey: process.env['RSA_PRIVATE_KEY'] ?? null,
+  // EC P-256 private key (PKCS#8 PEM) for ES256 signing.
+  ecPrivateKey: process.env['EC_PRIVATE_KEY'] ?? null,
   autoGenerateKeys: process.env['AUTO_GENERATE_KEYS'] === 'true',
+  // Algorithm of the platform signing key (lib/signing-keys.ts). RS256 stays
+  // the default for 0.6.
+  jwtSigningAlg: parseSigningAlgorithm('JWT_SIGNING_ALG', optional('JWT_SIGNING_ALG', 'RS256')),
+  // Overrides the kid of an env-store signing key.
+  jwtSigningKid: process.env['JWT_SIGNING_KID'] ?? null,
+  // Public JWK Set of keys that no longer sign but must still verify.
+  jwtRetiredPublicKeys: process.env['JWT_RETIRED_PUBLIC_KEYS'] ?? null,
+  // 'env' (keys from the settings above) or 'postgres' (generated, stored
+  // encrypted in platform_signing_keys, rotated with the rotate CLI).
+  signingKeyStore: parseSigningKeyStore('SIGNING_KEY_STORE', optional('SIGNING_KEY_STORE', 'env')),
+  // How long a retired stored key stays in the JWK Set. Must exceed the
+  // longest token lifetime. Default 30 days.
+  signingKeyRetiredGraceSeconds: integerSetting('SIGNING_KEY_RETIRED_GRACE_SECONDS', '2592000', 3_600, 31_622_400),
   jwtIssuer: optional('JWT_ISSUER', 'https://grantex.dev'),
   // Base URL for client-facing pages and endpoints embedded in responses
   // (consent page, VC status lists, offline-sync endpoint, email links).
@@ -197,9 +216,20 @@ export const config = {
   authRequestLifetimeSeconds: integerSetting('AUTH_REQUEST_LIFETIME_SECONDS', '600', 30, 3_600),
 } as const;
 
-if (!config.rsaPrivateKey && !config.autoGenerateKeys) {
+/** The private-key setting the env store signs with, for the configured algorithm. */
+export function signingKeySettingName(alg: string = config.jwtSigningAlg): 'RSA_PRIVATE_KEY' | 'EC_PRIVATE_KEY' {
+  return alg === 'ES256' ? 'EC_PRIVATE_KEY' : 'RSA_PRIVATE_KEY';
+}
+
+function hasEnvSigningKey(): boolean {
+  return (config.jwtSigningAlg === 'ES256' ? config.ecPrivateKey : config.rsaPrivateKey) !== null;
+}
+
+if (config.signingKeyStore === 'env' && !hasEnvSigningKey() && !config.autoGenerateKeys) {
   throw new Error(
-    'Either RSA_PRIVATE_KEY or AUTO_GENERATE_KEYS=true must be set',
+    config.jwtSigningAlg === 'ES256'
+      ? 'Either EC_PRIVATE_KEY or AUTO_GENERATE_KEYS=true must be set when JWT_SIGNING_ALG=ES256'
+      : 'Either RSA_PRIVATE_KEY or AUTO_GENERATE_KEYS=true must be set',
   );
 }
 
@@ -213,8 +243,8 @@ export function validateConfig(): void {
 
   if (!config.databaseUrl) errors.push('DATABASE_URL is required');
   if (!config.redisUrl) errors.push('REDIS_URL is required');
-  if (!config.rsaPrivateKey && !config.autoGenerateKeys) {
-    errors.push('RSA_PRIVATE_KEY is required (or AUTO_GENERATE_KEYS=true outside production)');
+  if (config.signingKeyStore === 'env' && !hasEnvSigningKey() && !config.autoGenerateKeys) {
+    errors.push(`${signingKeySettingName()} is required (or AUTO_GENERATE_KEYS=true outside production)`);
   }
   if (!config.jwtIssuer) errors.push('JWT_ISSUER is required');
   if (config.metricsEnabled && config.metricsRequireAuth && !config.metricsApiKey) {
@@ -226,8 +256,11 @@ export function validateConfig(): void {
   if (process.env['NODE_ENV'] === 'production' && !config.vaultEncryptionKey) {
     errors.push('VAULT_ENCRYPTION_KEY is required');
   }
-  if (process.env['NODE_ENV'] === 'production' && !config.rsaPrivateKey) {
-    errors.push('RSA_PRIVATE_KEY is required in production; AUTO_GENERATE_KEYS is development-only');
+  if (process.env['NODE_ENV'] === 'production' && config.signingKeyStore === 'env' && !hasEnvSigningKey()) {
+    errors.push(`${signingKeySettingName()} is required in production; AUTO_GENERATE_KEYS is development-only`);
+  }
+  if (config.signingKeyStore === 'postgres' && !config.vaultEncryptionKey) {
+    errors.push('VAULT_ENCRYPTION_KEY is required when SIGNING_KEY_STORE=postgres');
   }
   if (process.env['NODE_ENV'] === 'production' && (config.seedApiKey || config.seedSandboxKey)) {
     errors.push('SEED_API_KEY and SEED_SANDBOX_KEY must not be configured in production');

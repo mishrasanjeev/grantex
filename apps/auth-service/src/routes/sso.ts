@@ -39,9 +39,12 @@ let ephemeralSsoStateSecret: string | null = null;
 
 function getSsoHmacKey(): string {
   if (config.ssoStateSecret) return config.ssoStateSecret;
-  // Derive from RSA private key — stable across restarts as long as the key doesn't change.
-  if (config.rsaPrivateKey) {
-    return crypto.createHash('sha256').update(config.rsaPrivateKey).digest('hex');
+  // Derive from the configured private key — stable across restarts as long as
+  // the key doesn't change. RSA first, so existing RS256 deployments keep their
+  // derived key when an EC key is added.
+  const configuredPrivateKey = config.rsaPrivateKey ?? config.ecPrivateKey;
+  if (configuredPrivateKey) {
+    return crypto.createHash('sha256').update(configuredPrivateKey).digest('hex');
   }
   getKeyPair(); // fail loudly if keys were never initialized
   ephemeralSsoStateSecret ??= crypto.randomBytes(32).toString('hex');

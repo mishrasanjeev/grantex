@@ -25,17 +25,18 @@ async function main() {
   // Initialize OpenTelemetry tracing (must be first — hooks module loading)
   await initTracing();
 
-  // Initialize RSA keys
-  await initKeys();
-
-  // Initialize Ed25519 key (optional — for DID / VC support)
-  await initEdKey();
-
   // Initialize DB connection
   const sql = getSql();
 
   // Run migrations (idempotent — safe to re-run on every startup)
   await runMigrations(sql);
+
+  // Initialize the platform signing keys. After migrations, because the
+  // postgres key store reads platform_signing_keys.
+  await initKeys();
+
+  // Initialize Ed25519 key (optional — for DID / VC support)
+  await initEdKey();
 
   // Initialize Redis connection
   const redis = getRedis();

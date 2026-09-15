@@ -9,11 +9,24 @@ import {
   type CryptoKey as KeyLike,
 } from 'jose';
 import { config } from '../config.js';
+import { logger } from './logger.js';
+import {
+  getSigningKeyRing,
+  loadEnvSigningKeyRing,
+  loadPostgresSigningKeyRing,
+  reloadPostgresSigningKeyRing,
+  reloadSigningKeyRing,
+  resolvePlatformVerificationKey,
+  setSigningKeyRing,
+  SIGNING_ALGORITHMS,
+  type SigningAlgorithm,
+} from './signing-keys.js';
 
 export interface KeyPair {
   privateKey: KeyLike;
   publicKey: KeyLike;
   kid: string;
+  alg: SigningAlgorithm;
 }
 
 export interface GrantTokenPayload {
@@ -86,60 +99,68 @@ export interface VerifiedOAuthAccessTokenClaims {
   authorizationDetails?: Array<Record<string, unknown>>;
 }
 
-let _keyPair: KeyPair | null = null;
+let _reloadTimer: ReturnType<typeof setInterval> | null = null;
+export const SIGNING_KEY_RELOAD_INTERVAL_MS = 60_000;
 
-function buildKid(): string {
-  const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-  return `grantex-${year}-${month}`;
-}
-
+/**
+ * Load the platform signing keys (lib/signing-keys.ts) for the configured
+ * store. The postgres store reloads every minute so a rotation made by another
+ * instance is picked up; `stopKeyReload()` stops that timer.
+ */
 export async function initKeys(): Promise<void> {
-  if (config.rsaPrivateKey) {
-    const pem = config.rsaPrivateKey.replace(/\\n/g, '\n');
-    const privateKey = await importPKCS8(pem, 'RS256', { extractable: true });
-
-    // Extract public key by exporting the private key as JWK, then re-importing
-    // only the public components (n, e) via Node's crypto module + importSPKI
-    const privateJwk = await exportJWK(privateKey);
-    const { n, e } = privateJwk;
-    if (!n || !e) throw new Error('Cannot extract RSA public key components');
-
-    // Build a minimal public JWK for importSPKI workaround
-    const { createPublicKey } = await import('node:crypto');
-    const nodePk = createPublicKey({
-      key: { kty: 'RSA', n, e },
-      format: 'jwk',
+  stopKeyReload();
+  if (config.signingKeyStore === 'postgres') {
+    const { getSql } = await import('../db/client.js');
+    const sql = getSql();
+    const ring = await loadPostgresSigningKeyRing(sql, {
+      alg: config.jwtSigningAlg,
+      retiredGraceSeconds: config.signingKeyRetiredGraceSeconds,
     });
-    const spkiPem = nodePk.export({ type: 'spki', format: 'pem' }) as string;
-    const publicKey = await importSPKI(spkiPem, 'RS256');
-
-    _keyPair = { privateKey, publicKey, kid: buildKid() };
+    setSigningKeyRing(ring, () => reloadPostgresSigningKeyRing(sql, config.signingKeyRetiredGraceSeconds));
+    _reloadTimer = setInterval(() => {
+      // A failed reload keeps the last good key set; verification of an
+      // unknown kid still fails closed.
+      reloadSigningKeyRing().catch((err: unknown) => {
+        logger.warn(
+          { err: err instanceof Error ? err.message : String(err), code: (err as { code?: unknown }).code },
+          'platform signing key reload failed; keeping the previous key set',
+        );
+      });
+    }, SIGNING_KEY_RELOAD_INTERVAL_MS);
+    _reloadTimer.unref();
     return;
   }
 
-  if (config.autoGenerateKeys) {
-    const { privateKey, publicKey } = await generateKeyPair('RS256', {
-      modulusLength: 2048,
-      extractable: true,
-    });
-    _keyPair = { privateKey, publicKey, kid: buildKid() };
-    return;
-  }
-
-  throw new Error('No RSA key configured');
+  setSigningKeyRing(await loadEnvSigningKeyRing({
+    alg: config.jwtSigningAlg,
+    rsaPrivateKey: config.rsaPrivateKey,
+    ecPrivateKey: config.ecPrivateKey,
+    autoGenerate: config.autoGenerateKeys,
+    kid: config.jwtSigningKid,
+    retiredPublicKeys: config.jwtRetiredPublicKeys,
+  }));
 }
 
+export function stopKeyReload(): void {
+  if (_reloadTimer !== null) {
+    clearInterval(_reloadTimer);
+    _reloadTimer = null;
+  }
+}
+
+/** The active signing key. */
 export function getKeyPair(): KeyPair {
-  if (!_keyPair) throw new Error('Keys not initialized — call initKeys() first');
-  return _keyPair;
+  const { active } = getSigningKeyRing();
+  return { privateKey: active.privateKey, publicKey: active.publicKey, kid: active.kid, alg: active.alg };
 }
+
+/** The `algorithms` allowlist for every platform-token verification. */
+const PLATFORM_ALGORITHMS: string[] = [...SIGNING_ALGORITHMS];
 
 export async function signGrantToken(
   payload: GrantTokenPayload,
 ): Promise<string> {
-  const { privateKey, kid } = getKeyPair();
+  const { privateKey, kid, alg } = getKeyPair();
   const builder = new SignJWT({
     agt: payload.agt,
     dev: payload.dev,
@@ -157,7 +178,7 @@ export async function signGrantToken(
     ...(payload.delegationDepth !== undefined ? { delegationDepth: payload.delegationDepth } : {}),
     ...(payload.bdg !== undefined ? { bdg: payload.bdg } : {}),
   })
-    .setProtectedHeader({ alg: 'RS256', kid, typ: 'at+jwt' })
+    .setProtectedHeader({ alg, kid, typ: 'at+jwt' })
     .setIssuer(config.jwtIssuer)
     .setSubject(payload.sub)
     .setJti(payload.jti)
@@ -174,7 +195,7 @@ export async function signGrantToken(
 export async function signOAuthAccessToken(
   payload: OAuthAccessTokenPayload,
 ): Promise<string> {
-  const { privateKey, kid } = getKeyPair();
+  const { privateKey, kid, alg } = getKeyPair();
   const builder = new SignJWT({
     client_id: payload.clientId,
     scope: payload.scopes.join(' '),
@@ -184,7 +205,7 @@ export async function signOAuthAccessToken(
       ? { authorization_details: payload.authorizationDetails }
       : {}),
   })
-    .setProtectedHeader({ alg: 'RS256', kid, typ: 'at+jwt' })
+    .setProtectedHeader({ alg, kid, typ: 'at+jwt' })
     .setIssuer(config.jwtIssuer)
     .setSubject(payload.sub)
     .setAudience(payload.aud)
@@ -198,10 +219,9 @@ export async function signOAuthAccessToken(
 export async function verifyOAuthAccessToken(
   token: string,
 ): Promise<VerifiedOAuthAccessTokenClaims> {
-  const { publicKey } = getKeyPair();
-  const { payload, protectedHeader } = await jwtVerify(token, publicKey, {
+  const { payload, protectedHeader } = await jwtVerify(token, resolvePlatformVerificationKey, {
     issuer: config.jwtIssuer,
-    algorithms: ['RS256'],
+    algorithms: PLATFORM_ALGORITHMS,
   });
   if (protectedHeader.typ !== 'at+jwt') {
     throw new Error('OAuth access token typ must be at+jwt');
@@ -259,7 +279,7 @@ export async function signAuditCheckpoint(payload: {
   entryCount: number;
   checkpointId: string;
 }): Promise<string> {
-  const { privateKey, kid } = getKeyPair();
+  const { privateKey, kid, alg } = getKeyPair();
   return new SignJWT({
     typ: 'grantex-audit-checkpoint+jwt',
     developer_id: payload.developerId,
@@ -267,7 +287,7 @@ export async function signAuditCheckpoint(payload: {
     head_hash: payload.headHash,
     entry_count: payload.entryCount,
   })
-    .setProtectedHeader({ alg: 'RS256', kid, typ: 'JWT' })
+    .setProtectedHeader({ alg, kid, typ: 'JWT' })
     .setIssuer(config.jwtIssuer)
     .setJti(payload.checkpointId)
     .setIssuedAt()
@@ -278,10 +298,9 @@ export async function signAuditCheckpoint(payload: {
 export async function verifyGrantToken(
   token: string,
 ): Promise<VerifiedGrantTokenClaims> {
-  const { publicKey } = getKeyPair();
-  const { payload } = await jwtVerify(token, publicKey, {
+  const { payload } = await jwtVerify(token, resolvePlatformVerificationKey, {
     issuer: config.jwtIssuer,
-    algorithms: ['RS256'],
+    algorithms: PLATFORM_ALGORITHMS,
   });
 
   const sub = payload.sub;
@@ -384,16 +403,11 @@ export async function signWithEd25519(payload: Record<string, unknown>): Promise
 // ─── End Ed25519 ─────────────────────────────────────────────────────────────
 
 export async function buildJwks(): Promise<{ keys: Record<string, unknown>[] }> {
-  const { publicKey, kid } = getKeyPair();
-  const jwk = await exportJWK(publicKey);
-  const keys: Record<string, unknown>[] = [
-    {
-      ...jwk,
-      alg: 'RS256',
-      use: 'sig',
-      kid,
-    },
-  ];
+  // Every platform signing key: the active key first, then keys kept for
+  // verification. Each carries kid, alg and use=sig.
+  const keys: Record<string, unknown>[] = getSigningKeyRing()
+    .keys()
+    .map((key) => ({ ...key.publicJwk }));
 
   // Include Ed25519 key if initialized
   if (_edKeyPair) {
@@ -421,7 +435,7 @@ export async function buildJwks(): Promise<{ keys: Record<string, unknown>[] }> 
     }
   } catch {
     // Commerce keys are optional in the JWKS — if the DB is unavailable
-    // here we still serve the platform RS256/EdDSA keys. Log via the
+    // here we still serve the platform signing and EdDSA keys. Log via the
     // route layer (this lib should not depend on pino directly).
   }
 
@@ -463,12 +477,12 @@ export async function signPrincipalSessionToken(
   payload: PrincipalSessionPayload,
   expiresInSeconds: number,
 ): Promise<string> {
-  const { privateKey, kid } = getKeyPair();
+  const { privateKey, kid, alg } = getKeyPair();
   return new SignJWT({
     dev: payload.developerId,
     purpose: 'principal_dashboard',
   })
-    .setProtectedHeader({ alg: 'RS256', kid })
+    .setProtectedHeader({ alg, kid })
     .setIssuer(config.jwtIssuer)
     .setSubject(payload.principalId)
     .setIssuedAt()
@@ -479,10 +493,9 @@ export async function signPrincipalSessionToken(
 export async function verifyPrincipalSessionToken(
   token: string,
 ): Promise<PrincipalSessionPayload> {
-  const { publicKey } = getKeyPair();
-  const { payload } = await jwtVerify(token, publicKey, {
+  const { payload } = await jwtVerify(token, resolvePlatformVerificationKey, {
     issuer: config.jwtIssuer,
-    algorithms: ['RS256'],
+    algorithms: PLATFORM_ALGORITHMS,
   });
 
   if (payload['purpose'] !== 'principal_dashboard') {
@@ -528,7 +541,7 @@ export interface WalletAuthorizationPayload {
 export async function signWalletAuthorizationToken(
   authorization: WalletAuthorizationPayload,
 ): Promise<string> {
-  const { privateKey, kid } = getKeyPair();
+  const { privateKey, kid, alg } = getKeyPair();
   return new SignJWT({
     purpose: 'prepaid_wallet_payment',
     reservation_id: authorization.reservationId,
@@ -550,7 +563,7 @@ export async function signWalletAuthorizationToken(
     cost_center: authorization.costCenter ?? null,
     request_hash: authorization.requestHash,
   })
-    .setProtectedHeader({ alg: 'RS256', kid, typ: 'wallet-auth+jwt' })
+    .setProtectedHeader({ alg, kid, typ: 'wallet-auth+jwt' })
     .setIssuer(config.jwtIssuer)
     .setAudience(PREPAID_WALLET_AUDIENCE)
     .setSubject(authorization.agentId)
@@ -563,11 +576,10 @@ export async function signWalletAuthorizationToken(
 export async function verifyWalletAuthorizationToken(
   token: string,
 ): Promise<WalletAuthorizationPayload> {
-  const { publicKey } = getKeyPair();
-  const { payload, protectedHeader } = await jwtVerify(token, publicKey, {
+  const { payload, protectedHeader } = await jwtVerify(token, resolvePlatformVerificationKey, {
     issuer: config.jwtIssuer,
     audience: PREPAID_WALLET_AUDIENCE,
-    algorithms: ['RS256'],
+    algorithms: PLATFORM_ALGORITHMS,
   });
 
   if (protectedHeader.typ !== 'wallet-auth+jwt'
