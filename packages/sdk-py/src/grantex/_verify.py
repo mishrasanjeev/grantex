@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import json
 import threading
 import time
@@ -152,6 +153,7 @@ def verify_grant_token(
         ) from exc
 
     payload = _build_payload(payload_data, legacy_claims=options.legacy_claims)
+    _check_proof_of_possession(payload, options)
     for alias in payload.legacy_claims_used:
         warnings.warn(
             f"Grant token claim {alias!r} is a legacy alias of "
@@ -328,7 +330,27 @@ def _select_key(
     return matched
 
 
+def _check_proof_of_possession(payload: GrantTokenPayload, options: VerifyGrantTokenOptions) -> None:
+    if options.require_proof_of_possession and options.proof_jkt is None:
+        raise GrantexTokenError(
+            "Proof of possession is required but no proof key thumbprint (proof_jkt) was given"
+        )
+    if options.proof_jkt is None:
+        return
+    jkt = payload.cnf.get("jkt") if isinstance(payload.cnf, Mapping) else None
+    if not isinstance(jkt, str):
+        raise GrantexTokenError("Grant token is not key-bound (no cnf.jkt) but proof of possession is required")
+    if not hmac.compare_digest(jkt.encode(), options.proof_jkt.encode()):
+        raise GrantexTokenError("Grant token cnf.jkt does not match the proof key")
+
+
+def _reject_null(record: Mapping[str, Any], name: str, label: str) -> None:
+    if name in record and record[name] is None:
+        raise GrantexTokenError(f"Grant token claim {label} must not be null")
+
+
 def _string_claim(record: Mapping[str, Any], name: str, label: str) -> str | None:
+    _reject_null(record, name, label)
     value = record.get(name)
     if value is None:
         return None
@@ -338,6 +360,7 @@ def _string_claim(record: Mapping[str, Any], name: str, label: str) -> str | Non
 
 
 def _depth_claim(record: Mapping[str, Any], name: str, label: str) -> int | None:
+    _reject_null(record, name, label)
     value = record.get(name)
     if value is None:
         return None
@@ -368,8 +391,11 @@ def _parse_actor(value: Any) -> Mapping[str, Any]:
 def _build_payload(data: dict[str, Any], *, legacy_claims: bool = True) -> GrantTokenPayload:
     """Read grant claims: standard claims first, legacy aliases where the
     standard claim is absent (unless ``legacy_claims`` is false). A standard
-    claim and an alias that disagree raise :class:`GrantexTokenError`."""
+    claim and an alias that disagree raise :class:`GrantexTokenError`. A claim
+    that is present with a null value is refused, never treated as absent."""
     used: list[str] = []
+    for name in (GRANT_CLAIM, "scope", "scp", "act", "cnf", "client_id", "aud", "authorization_details"):
+        _reject_null(data, name, name)
 
     def read(alias: str, standard: _T | None, legacy: Callable[[], _T | None]) -> _T | None:
         if not legacy_claims:
@@ -408,7 +434,12 @@ def _build_payload(data: dict[str, Any], *, legacy_claims: bool = True) -> Grant
             raise GrantexTokenError("Grant token claim scp must be an array of strings")
         return list(scp)
 
-    scopes = read("scp", standard_scopes, legacy_scopes)
+    if legacy_claims and GRANT_CLAIM not in data and "scp" in data:
+        # A pre-0.6 token: scope, when present, is a lossy join of scp.
+        scopes: list[str] | None = legacy_scopes()
+        used.append("scp")
+    else:
+        scopes = read("scp", standard_scopes, legacy_scopes)
     agent_did = read(
         "agt",
         _string_claim(grant, "agent_did", f"{GRANT_CLAIM}.agent_did"),
@@ -434,7 +465,7 @@ def _build_payload(data: dict[str, Any], *, legacy_claims: bool = True) -> Grant
         _depth_claim(grant, "delegation_depth", f"{GRANT_CLAIM}.delegation_depth"),
         lambda: _depth_claim(data, "delegationDepth", "delegationDepth"),
     )
-    act = _parse_actor(data["act"]) if data.get("act") is not None else None
+    act = _parse_actor(data["act"]) if "act" in data else None
     standard_parent = (
         act.get("sub")
         if act is not None and (parent_grant_id is not None or delegation_depth is not None)
@@ -464,6 +495,13 @@ def _build_payload(data: dict[str, Any], *, legacy_claims: bool = True) -> Grant
     if cnf is not None and not isinstance(cnf, Mapping):
         raise GrantexTokenError("Grant token claim cnf must be an object")
     client_id = data.get("client_id")
+    if client_id is not None and (not isinstance(client_id, str) or not client_id):
+        raise GrantexTokenError("Grant token claim client_id must be a non-empty string")
+    aud = data.get("aud")
+    if aud is not None and not isinstance(aud, str) and not (
+        isinstance(aud, list) and all(isinstance(a, str) for a in aud)
+    ):
+        raise GrantexTokenError("Grant token claim aud must be a string or an array of strings")
 
     return GrantTokenPayload(
         iss=str(data.get("iss", "")),
@@ -474,7 +512,7 @@ def _build_payload(data: dict[str, Any], *, legacy_claims: bool = True) -> Grant
         iat=int(iat),
         exp=int(exp),
         jti=jti,
-        client_id=client_id if isinstance(client_id, str) else None,
+        client_id=client_id,
         grnt=grant_id,
         parent_agt=parent_agent_did,
         parent_grnt=parent_grant_id,
@@ -482,7 +520,7 @@ def _build_payload(data: dict[str, Any], *, legacy_claims: bool = True) -> Grant
         authorization_details=data.get("authorization_details"),
         act=act,
         cnf=cnf,
-        aud=data.get("aud"),
+        aud=aud,
         legacy_claims_used=tuple(used),
     )
 

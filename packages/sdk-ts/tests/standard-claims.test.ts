@@ -227,3 +227,70 @@ describe('decision references in authorization_details', () => {
     expect(() => parseDecisionReferences([entry, entry])).toThrow(/repeats connector/);
   });
 });
+
+describe('tokens issued by the auth service', () => {
+  // spec/examples/grant-token-0.6.issued.json (apps/auth-service/tests/grant-token-issued-fixture.test.ts).
+  const issued = JSON.parse(readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'spec', 'examples', 'grant-token-0.6.issued.json'),
+    'utf8',
+  )) as { issuer: string; audience: string; jwks: { keys: JWK[] }; tokens: Record<string, { token: string }> };
+
+  const serveIssued = () => vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(issued.jwks), {
+    status: 200, headers: { 'content-type': 'application/json' },
+  })));
+  const issuedOptions = { jwksUri: `${issued.issuer}/.well-known/jwks.json`, audience: issued.audience };
+
+  it.each(Object.keys(issued.tokens))('verifies %s', async (name) => {
+    serveIssued();
+    vi.spyOn(process, 'emitWarning').mockImplementation(() => {});
+    await expect(verifyGrantToken(issued.tokens[name]!.token, issuedOptions)).resolves.toMatchObject({
+      agentDid: 'did:grantex:ag_01UNDERWRITER',
+    });
+  });
+
+  it('reads scp from a pre-0.6 token whose scope contains whitespace', async () => {
+    serveIssued();
+    vi.spyOn(process, 'emitWarning').mockImplementation(() => {});
+    const grant = await verifyGrantToken(issued.tokens['pre_0_6_whitespace_scope_rs256']!.token, issuedOptions);
+    expect(grant.scopes).toEqual(['tool:acme_kyb:read', 'read case files']);
+  });
+
+  it('refuses a whitespace-scope token when reading standard claims only', async () => {
+    serveIssued();
+    await expect(verifyGrantToken(issued.tokens['whitespace_scope_es256']!.token, { ...issuedOptions, legacyClaims: false }))
+      .rejects.toThrow('missing required claims');
+  });
+});
+
+describe('null claims and proof of possession', () => {
+  it.each([
+    ['scope'], ['scp'], ['act'], ['cnf'], ['client_id'], ['aud'], ['authorization_details'], [GRANT_CLAIM],
+  ])('refuses a null %s', (name) => {
+    expect(() => claimsToVerifiedGrant({ ...claims(), [name]: null })).toThrow(`claim ${name} must not be null`);
+  });
+
+  it('refuses null grant members and a mistyped client_id', () => {
+    const grant = FIXTURE.standard[GRANT_CLAIM] as Record<string, unknown>;
+    expect(() => claimsToVerifiedGrant({ ...claims(), [GRANT_CLAIM]: { ...grant, grant_id: null } })).toThrow(GrantexTokenError);
+    expect(() => claimsToVerifiedGrant({ ...claims(), [GRANT_CLAIM]: { ...grant, delegation_depth: null } })).toThrow(GrantexTokenError);
+    expect(() => claimsToVerifiedGrant({ ...claims(), client_id: 7 })).toThrow('client_id must be a non-empty string');
+  });
+
+  it('checks cnf.jkt against proofJkt when given, and fails closed when proof is required', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ keys: [rsa.publicJwk, ec.publicJwk] }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    })));
+    const token = await sign(claims());
+    await expect(verifyGrantToken(token, { jwksUri: JWKS_URI, proofJkt: dpopJkt, requireProofOfPossession: true }))
+      .resolves.toMatchObject({ cnf: { jkt: dpopJkt } });
+    await expect(verifyGrantToken(token, { jwksUri: JWKS_URI, proofJkt: 'another-thumbprint' }))
+      .rejects.toThrow('does not match the proof key');
+    await expect(verifyGrantToken(token, { jwksUri: JWKS_URI, requireProofOfPossession: true }))
+      .rejects.toThrow('no proof key thumbprint');
+    const { cnf: _cnf, ...unbound } = claims();
+    await expect(verifyGrantToken(await sign(unbound), { jwksUri: JWKS_URI, proofJkt: dpopJkt, requireProofOfPossession: true }))
+      .rejects.toThrow('not key-bound');
+    // Without the options, cnf is returned but not enforced.
+    await expect(verifyGrantToken(token, { jwksUri: JWKS_URI })).resolves.toMatchObject({ cnf: { jkt: dpopJkt } });
+  });
+});

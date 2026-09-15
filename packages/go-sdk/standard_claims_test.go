@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/elliptic"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -89,46 +90,145 @@ func signFixture(t *testing.T, claims jwt.MapClaims, typ string) (string, *Verif
 	return signed, &VerifyOptions{JwksURI: server.URL}
 }
 
-func TestStockJWTLibraryValidatesTheStandardFormToken(t *testing.T) {
-	fixture := loadGrantTokenFixture(t)
-	key := generateECKey(t, elliptic.P256())
-	jwksServer := serveKeys(t, publicJWK(t, &key.PublicKey, "ec-1", "ES256"))
-	claims := fixtureClaims(fixture.Standard, jwksServer.URL, nil)
-	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
-	token.Header["kid"] = "ec-1"
-	token.Header["typ"] = "at+jwt"
-	signed, err := token.SignedString(key)
+// testdata/grant-token-0.6.issued.json is a copy of
+// spec/examples/grant-token-0.6.issued.json: tokens issued by the auth
+// service (apps/auth-service/tests/grant-token-issued-fixture.test.ts) and the
+// JWK Set that verifies them.
+type issuedTokensFixture struct {
+	Issuer   string                    `json:"issuer"`
+	Audience string                    `json:"audience"`
+	JWKS     map[string]interface{}    `json:"jwks"`
+	Tokens   map[string]issuedTokenRef `json:"tokens"`
+}
+
+type issuedTokenRef struct {
+	Alg   string `json:"alg"`
+	Kid   string `json:"kid"`
+	Token string `json:"token"`
+}
+
+func loadIssuedTokens(t *testing.T) issuedTokensFixture {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", "grant-token-0.6.issued.json"))
 	if err != nil {
-		t.Fatalf("sign: %v", err)
+		t.Fatalf("read issued fixture: %v", err)
+	}
+	var fixture issuedTokensFixture
+	if err := json.Unmarshal(raw, &fixture); err != nil {
+		t.Fatalf("parse issued fixture: %v", err)
+	}
+	return fixture
+}
+
+func TestIssuedTokensFixtureMatchesTheSpecExample(t *testing.T) {
+	spec, err := os.ReadFile(filepath.FromSlash("../../spec/examples/grant-token-0.6.issued.json"))
+	if os.IsNotExist(err) {
+		t.Skip("spec/examples is not present outside the monorepo")
+	}
+	if err != nil {
+		t.Fatalf("read spec example: %v", err)
+	}
+	local, err := os.ReadFile(filepath.Join("testdata", "grant-token-0.6.issued.json"))
+	if err != nil {
+		t.Fatalf("read testdata copy: %v", err)
+	}
+	normalize := func(b []byte) string { return strings.ReplaceAll(string(b), "\r\n", "\n") }
+	if normalize(spec) != normalize(local) {
+		t.Fatal("testdata/grant-token-0.6.issued.json differs from spec/examples; copy the spec example")
+	}
+}
+
+func TestStockJWTLibraryValidatesTheStandardFormToken(t *testing.T) {
+	fixture := loadIssuedTokens(t)
+	encoded, err := json.Marshal(fixture.JWKS)
+	if err != nil {
+		t.Fatalf("marshal jwks: %v", err)
+	}
+	set, err := jwk.Parse(encoded)
+	if err != nil {
+		t.Fatalf("parse jwks: %v", err)
 	}
 
-	set, err := jwk.Fetch(context.Background(), jwksServer.URL)
-	if err != nil {
-		t.Fatalf("fetch jwks: %v", err)
+	for _, name := range []string{"standard_rs256", "standard_es256"} {
+		t.Run(name, func(t *testing.T) {
+			parsed, err := jwt.Parse(fixture.Tokens[name].Token, func(tok *jwt.Token) (interface{}, error) {
+				kid, ok := tok.Header["kid"].(string)
+				if !ok {
+					return nil, fmt.Errorf("token has no kid")
+				}
+				entry, found := set.LookupKeyID(kid)
+				if !found {
+					return nil, fmt.Errorf("no key %q", kid)
+				}
+				var raw interface{}
+				if err := entry.Raw(&raw); err != nil {
+					return nil, err
+				}
+				return raw, nil
+			},
+				jwt.WithValidMethods([]string{"RS256", "ES256"}),
+				jwt.WithIssuer(fixture.Issuer),
+				jwt.WithAudience(fixture.Audience),
+				jwt.WithExpirationRequired(),
+				jwt.WithIssuedAt(),
+			)
+			if err != nil {
+				t.Fatalf("stock verification: %v", err)
+			}
+			payload := parsed.Claims.(jwt.MapClaims)
+			if parsed.Header["typ"] != "at+jwt" || payload["client_id"] != "ag_01UNDERWRITER" || payload["jti"] == nil {
+				t.Fatalf("unexpected standard claims: %v %v", parsed.Header, payload)
+			}
+			scope, _ := payload["scope"].(string)
+			if got := strings.Split(scope, " "); !reflect.DeepEqual(got, []string{"tool:acme_kyb:read", "tool:acme_kyb:write"}) {
+				t.Fatalf("scope = %v", got)
+			}
+			act, _ := payload["act"].(map[string]interface{})
+			if act["sub"] != "did:grantex:ag_01ORCHESTRATOR" {
+				t.Fatalf("act = %v", payload["act"])
+			}
+			for alias := range LegacyClaimAliases() {
+				if _, present := payload[alias]; present {
+					t.Fatalf("standard-form token carries legacy alias %s", alias)
+				}
+			}
+		})
 	}
-	parsed, err := jwt.Parse(signed, func(tok *jwt.Token) (interface{}, error) {
-		entry, _ := set.LookupKeyID(tok.Header["kid"].(string))
-		var raw interface{}
-		return raw, entry.Raw(&raw)
-	},
-		jwt.WithValidMethods([]string{"RS256", "ES256"}),
-		jwt.WithIssuer(jwksServer.URL),
-		jwt.WithAudience("https://agents.example.com"),
-		jwt.WithExpirationRequired(),
-		jwt.WithIssuedAt(),
-	)
-	if err != nil {
-		t.Fatalf("stock verification: %v", err)
+}
+
+func TestEveryIssuedTokenVerifiesWithTheSDK(t *testing.T) {
+	fixture := loadIssuedTokens(t)
+	keys, _ := fixture.JWKS["keys"].([]interface{})
+	maps := make([]map[string]interface{}, 0, len(keys))
+	for _, key := range keys {
+		maps = append(maps, key.(map[string]interface{}))
 	}
-	payload := parsed.Claims.(jwt.MapClaims)
-	if parsed.Header["typ"] != "at+jwt" || payload["client_id"] != "ag_01UNDERWRITER" || payload["jti"] == nil {
-		t.Fatalf("unexpected standard claims: %v %v", parsed.Header, payload)
+	server := serveKeys(t, maps...)
+	for name, entry := range fixture.Tokens {
+		entry := entry
+		t.Run(name, func(t *testing.T) {
+			grant, err := VerifyGrantToken(context.Background(), entry.Token, VerifyOptions{
+				JwksURI: server.URL, Issuer: fixture.Issuer, Audience: fixture.Audience,
+				OnLegacyClaim: func(string, string) {},
+			})
+			if err != nil {
+				t.Fatalf("verify: %v", err)
+			}
+			if grant.AgentDID != "did:grantex:ag_01UNDERWRITER" {
+				t.Fatalf("agent = %s", grant.AgentDID)
+			}
+			if strings.Contains(name, "whitespace") && !reflect.DeepEqual(grant.Scopes, []string{"tool:acme_kyb:read", "read case files"}) {
+				t.Fatalf("scopes = %v", grant.Scopes)
+			}
+		})
 	}
-	if got := strings.Split(payload["scope"].(string), " "); !reflect.DeepEqual(got, []string{"tool:acme_kyb:read", "tool:acme_kyb:write"}) {
-		t.Fatalf("scope = %v", got)
-	}
-	if payload["act"].(map[string]interface{})["sub"] != "did:grantex:ag_01ORCHESTRATOR" {
-		t.Fatalf("act = %v", payload["act"])
+
+	// A whitespace-scope token has no scope claim, so standard-only reading refuses it.
+	_, err := VerifyGrantToken(context.Background(), fixture.Tokens["whitespace_scope_es256"].Token, VerifyOptions{
+		JwksURI: server.URL, Issuer: fixture.Issuer, StandardClaimsOnly: true,
+	})
+	if err == nil {
+		t.Fatal("expected standard-only reading to refuse a token without scope")
 	}
 }
 
@@ -247,5 +347,93 @@ func TestVerifyGrantTokenRefusesMalformedStandardClaims(t *testing.T) {
 			signed, opts := signFixture(t, fixtureClaims(fixture.Standard, "", extra), "at+jwt")
 			expectRejected(t, signed, *opts)
 		})
+	}
+}
+
+func TestVerifyGrantTokenRefusesNullAndMistypedClaims(t *testing.T) {
+	fixture := loadGrantTokenFixture(t)
+	grant := fixture.Standard[GrantClaim].(map[string]interface{})
+	withMember := func(name string, value interface{}) map[string]interface{} {
+		copied := map[string]interface{}{}
+		for k, v := range grant {
+			copied[k] = v
+		}
+		copied[name] = value
+		return copied
+	}
+	cases := map[string]map[string]interface{}{}
+	for _, name := range []string{"scope", "scp", "act", "cnf", "client_id", "aud", "authorization_details", GrantClaim} {
+		cases["null "+name] = map[string]interface{}{name: json.RawMessage("null")}
+	}
+	cases["null grant_id"] = map[string]interface{}{GrantClaim: withMember("grant_id", nil)}
+	cases["null delegation_depth"] = map[string]interface{}{GrantClaim: withMember("delegation_depth", nil)}
+	cases["numeric client_id"] = map[string]interface{}{"client_id": 7}
+	cases["object authorization_details"] = map[string]interface{}{"authorization_details": map[string]interface{}{}}
+	for name, extra := range cases {
+		extra := extra
+		t.Run(name, func(t *testing.T) {
+			signed, opts := signFixture(t, fixtureClaims(fixture.Standard, "", nullable(extra)), "at+jwt")
+			expectRejected(t, signed, *opts)
+		})
+	}
+}
+
+// nullable turns json.RawMessage("null") placeholders into explicit JSON nulls
+// that survive fixtureClaims (which deletes nil values).
+func nullable(extra map[string]interface{}) map[string]interface{} {
+	out := map[string]interface{}{}
+	for name, value := range extra {
+		if raw, ok := value.(json.RawMessage); ok && string(raw) == "null" {
+			out[name] = raw
+			continue
+		}
+		out[name] = value
+	}
+	return out
+}
+
+func TestVerifyGrantTokenProofOfPossession(t *testing.T) {
+	fixture := loadGrantTokenFixture(t)
+	jkt := fixture.Standard["cnf"].(map[string]interface{})["jkt"].(string)
+
+	signed, opts := signFixture(t, fixtureClaims(fixture.Standard, "", nil), "at+jwt")
+	bound := *opts
+	bound.ProofJKT, bound.RequireProofOfPossession = jkt, true
+	if _, err := VerifyGrantToken(context.Background(), signed, bound); err != nil {
+		t.Fatalf("matching proof: %v", err)
+	}
+	wrong := *opts
+	wrong.ProofJKT = "another-thumbprint"
+	expectRejected(t, signed, wrong)
+	missing := *opts
+	missing.RequireProofOfPossession = true
+	expectRejected(t, signed, missing)
+	if grant, err := VerifyGrantToken(context.Background(), signed, *opts); err != nil || grant.Cnf["jkt"] != jkt {
+		t.Fatalf("cnf not returned without enforcement: %v %v", grant, err)
+	}
+
+	unbound, unboundOpts := signFixture(t, fixtureClaims(fixture.Standard, "", map[string]interface{}{"cnf": nil}), "at+jwt")
+	unboundOpts.ProofJKT, unboundOpts.RequireProofOfPossession = jkt, true
+	expectRejected(t, unbound, *unboundOpts)
+}
+
+func TestVerifyGrantTokenKeepsUnknownActorMembers(t *testing.T) {
+	fixture := loadGrantTokenFixture(t)
+	act := map[string]interface{}{"sub": "did:grantex:ag_01ORCHESTRATOR", "iss": "https://auth.example.com", "act": map[string]interface{}{"sub": "did:grantex:ag_01INTAKE", "client_id": "ag_01INTAKE"}}
+	signed, opts := signFixture(t, fixtureClaims(fixture.Standard, "", map[string]interface{}{"act": act}), "at+jwt")
+	grant, err := VerifyGrantToken(context.Background(), signed, *opts)
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if grant.Act.Members["iss"] != "https://auth.example.com" || grant.Act.Act.Members["client_id"] != "ag_01INTAKE" {
+		t.Fatalf("actor members lost: %+v", grant.Act)
+	}
+	encoded, err := json.Marshal(grant.Act)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var roundTrip map[string]interface{}
+	if err := json.Unmarshal(encoded, &roundTrip); err != nil || !reflect.DeepEqual(roundTrip, act) {
+		t.Fatalf("act round trip = %s (%v)", encoded, err)
 	}
 }

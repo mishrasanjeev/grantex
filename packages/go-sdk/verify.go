@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rsa"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -162,6 +163,32 @@ type VerifyOptions struct {
 	// OnLegacyClaim is called for each legacy alias a verification relied on.
 	// When nil, a deprecation message is logged once per alias per process.
 	OnLegacyClaim func(alias, standard string)
+
+	// ProofJKT is the RFC 7638 thumbprint of the key the caller proved
+	// possession of (for example with a verified DPoP proof). When set, the
+	// token's cnf.jkt must equal it. The verifier does not check DPoP proofs.
+	ProofJKT string
+
+	// RequireProofOfPossession fails closed unless ProofJKT is set and matches
+	// cnf.jkt. Without it, a token's cnf is returned but not enforced.
+	RequireProofOfPossession bool
+}
+
+func checkProofOfPossession(grant *VerifiedGrant, opts VerifyOptions) error {
+	if opts.RequireProofOfPossession && opts.ProofJKT == "" {
+		return &TokenError{Message: "proof of possession is required but no proof key thumbprint (ProofJKT) was given"}
+	}
+	if opts.ProofJKT == "" {
+		return nil
+	}
+	jkt, ok := grant.Cnf["jkt"].(string)
+	if !ok {
+		return &TokenError{Message: "grant token is not key-bound (no cnf.jkt) but proof of possession is required"}
+	}
+	if subtle.ConstantTimeCompare([]byte(jkt), []byte(opts.ProofJKT)) != 1 {
+		return &TokenError{Message: "grant token cnf.jkt does not match the proof key"}
+	}
+	return nil
 }
 
 func resolveAlgorithms(requested []string) ([]string, error) {
@@ -300,6 +327,9 @@ func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*V
 	if err != nil {
 		return nil, err
 	}
+	if err := checkProofOfPossession(grant, opts); err != nil {
+		return nil, err
+	}
 	if len(grant.LegacyClaimsUsed) > 0 {
 		warn := opts.OnLegacyClaim
 		if warn == nil {
@@ -333,8 +363,11 @@ func claimError(format string, args ...interface{}) error {
 
 func stringClaim(record map[string]interface{}, name, label string) (*string, error) {
 	raw, present := record[name]
-	if !present || raw == nil {
+	if !present {
 		return nil, nil
+	}
+	if raw == nil {
+		return nil, claimError("grant token claim %s must not be null", label)
 	}
 	value, ok := raw.(string)
 	if !ok || value == "" {
@@ -345,8 +378,11 @@ func stringClaim(record map[string]interface{}, name, label string) (*string, er
 
 func depthClaim(record map[string]interface{}, name, label string) (*int, error) {
 	raw, present := record[name]
-	if !present || raw == nil {
+	if !present {
 		return nil, nil
+	}
+	if raw == nil {
+		return nil, claimError("grant token claim %s must not be null", label)
 	}
 	number, ok := raw.(float64)
 	if !ok || number < 0 || number != math.Trunc(number) || number > float64(math.MaxInt32) {
@@ -367,6 +403,14 @@ func parseActor(raw interface{}) (*ActorClaim, error) {
 			return nil, claimError("grant token act claim must be an object with a non-empty string sub")
 		}
 		actor := &ActorClaim{Sub: sub}
+		for member, value := range record {
+			if member != "sub" && member != "act" {
+				if actor.Members == nil {
+					actor.Members = map[string]interface{}{}
+				}
+				actor.Members[member] = value
+			}
+		}
 		if root == nil {
 			root = actor
 		} else {
@@ -374,7 +418,7 @@ func parseActor(raw interface{}) (*ActorClaim, error) {
 		}
 		parent = actor
 		next, present := record["act"]
-		if !present || next == nil {
+		if !present {
 			return root, nil
 		}
 		if depth >= maxActorChainDepth {
@@ -394,6 +438,12 @@ func sameValue(a, b interface{}) bool {
 // aliases where the standard claim is absent (when legacy is true). A
 // standard claim and an alias that disagree are refused.
 func normalizeGrantClaims(claims jwt.MapClaims, legacy bool) (*VerifiedGrant, error) {
+	// A claim present with a null value is refused, never treated as absent.
+	for _, name := range []string{GrantClaim, "scope", "scp", "act", "cnf", "client_id", "aud", "authorization_details"} {
+		if raw, present := claims[name]; present && raw == nil {
+			return nil, claimError("grant token claim %s must not be null", name)
+		}
+	}
 	var used []string
 	aliases := LegacyClaimAliases()
 	agree := func(alias string, standard, legacyValue interface{}, standardPresent, legacyPresent bool) (bool, error) {
@@ -452,7 +502,12 @@ func normalizeGrantClaims(claims jwt.MapClaims, legacy bool) (*VerifiedGrant, er
 		}
 		scpPresent = true
 	}
-	if useLegacy, err := agree("scp", scopes, scp, scopePresent, scpPresent); err != nil {
+	_, grantPresent := claims[GrantClaim]
+	if legacy && !grantPresent && scpPresent {
+		// A pre-0.6 token: scope, when present, is a lossy join of scp.
+		scopes, scopePresent = scp, true
+		used = append(used, "scp")
+	} else if useLegacy, err := agree("scp", scopes, scp, scopePresent, scpPresent); err != nil {
 		return nil, err
 	} else if useLegacy {
 		scopes, scopePresent = scp, true
@@ -590,7 +645,11 @@ func normalizeGrantClaims(claims jwt.MapClaims, legacy bool) (*VerifiedGrant, er
 	if grantID != nil {
 		grant.GrantID = *grantID
 	}
-	if clientID, ok := claims["client_id"].(string); ok {
+	if raw, present := claims["client_id"]; present {
+		clientID, ok := raw.(string)
+		if !ok || clientID == "" {
+			return nil, claimError("grant token claim client_id must be a non-empty string")
+		}
 		grant.ClientID = &clientID
 	}
 	if raw, present := claims["cnf"]; present && raw != nil {
@@ -600,10 +659,18 @@ func normalizeGrantClaims(claims jwt.MapClaims, legacy bool) (*VerifiedGrant, er
 		}
 		grant.Cnf = cnf
 	}
-	if details, ok := claims["authorization_details"].([]interface{}); ok {
+	if raw, present := claims["authorization_details"]; present {
+		details, ok := raw.([]interface{})
+		if !ok {
+			return nil, claimError("grant token claim authorization_details must be an array")
+		}
 		grant.AuthorizationDetails = details
 	}
-	if audience, err := claims.GetAudience(); err == nil && len(audience) > 0 {
+	if _, present := claims["aud"]; present {
+		audience, err := claims.GetAudience()
+		if err != nil {
+			return nil, claimError("grant token claim aud must be a string or an array of strings")
+		}
 		grant.Audience = []string(audience)
 	}
 	return grant, nil

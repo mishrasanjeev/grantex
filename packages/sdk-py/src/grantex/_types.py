@@ -539,6 +539,13 @@ class VerifyGrantTokenOptions:
     standard claim. ``True`` in 0.6, with a :class:`LegacyClaimsWarning` when
     an alias is used; the default becomes ``False`` in 0.7. With ``False`` only
     standard claims are read and the token must have ``typ: at+jwt``."""
+    proof_jkt: str | None = None
+    """RFC 7638 thumbprint of the key the caller proved possession of (for
+    example with a verified DPoP proof). When set, the token's ``cnf.jkt`` must
+    equal it. The verifier does not check DPoP proofs itself."""
+    require_proof_of_possession: bool = False
+    """Fail closed unless ``proof_jkt`` is given and matches ``cnf.jkt``. Without
+    it, a token's ``cnf`` is returned but not enforced."""
 
 
 # ─── Raw JWT payload shape ────────────────────────────────────────────────────
