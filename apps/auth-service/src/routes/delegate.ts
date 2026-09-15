@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getSql, type TxSql } from '../db/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
+import { narrowToolsAuthorizationDetails, purposeOfToolsAuthorizationDetails } from '../lib/purpose.js';
 import { emitEvent } from '../lib/events.js';
 import { issueAgentGrantVC } from '../lib/vc.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
@@ -147,6 +148,18 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
     const expiresAt = new Date(Math.min(requestedExpiry, parentExpiry));
     const expTimestamp = Math.floor(expiresAt.getTime() / 1000);
 
+    // A delegated grant inherits the parent's purpose: it keeps the parent's
+    // tools entries for the connectors it is delegated, and never gains one.
+    let childDetails: Array<Record<string, unknown>>;
+    let childPurpose: string | undefined;
+    try {
+      const parentDetails = narrowToolsAuthorizationDetails(parentClaims.authorizationDetails, parentScp);
+      childPurpose = purposeOfToolsAuthorizationDetails(parentDetails);
+      childDetails = narrowToolsAuthorizationDetails(parentClaims.authorizationDetails, scopes);
+    } catch {
+      return reply.status(400).send({ message: 'Invalid parentGrantToken claims', code: 'BAD_REQUEST', requestId: request.id });
+    }
+
     const grantId = newGrantId();
     const jti = newTokenId();
     const refreshId = newRefreshTokenId();
@@ -169,6 +182,7 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
         ? { cnf: { jkt: subAgent['key_thumbprint'] as string } }
         : {}),
       act: { sub: parentAgt },
+      ...(childDetails.length > 0 ? { authorizationDetails: childDetails } : {}),
       exp: expTimestamp,
       ...(parentAgt !== undefined ? { parentAgt } : {}),
       parentGrnt,
@@ -198,7 +212,8 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       await tx`
         INSERT INTO grants (
           id, agent_id, principal_id, developer_id, scopes, expires_at,
-          audience, parent_grant_id, delegation_depth, agent_key_thumbprint
+          audience, parent_grant_id, delegation_depth, agent_key_thumbprint,
+          purpose, authorization_details
         )
         VALUES (
           ${grantId},
@@ -210,7 +225,9 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
           ${typeof parentClaims.aud === 'string' ? parentClaims.aud : null},
           ${parentGrnt},
           ${delegationDepth},
-          ${subAgent['key_thumbprint'] as string | null}
+          ${subAgent['key_thumbprint'] as string | null},
+          ${childPurpose ?? null},
+          ${childDetails.length > 0 ? tx.json(childDetails as never) : null}
         )
       `;
       await tx`

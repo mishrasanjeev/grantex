@@ -91,3 +91,19 @@ class PurposeSubReason:
     """The grant carries no purpose."""
     NOT_MATCHED = "not_matched"
     """The grant's purpose matches none of the tool's patterns."""
+    UNKNOWN_PURPOSE = "unknown_purpose"
+    """The grant's purpose is malformed or not in the purpose vocabulary."""
+
+
+class ToolSubReason:
+    """Sub-reasons for :attr:`DenialReason.TOOL_NOT_GRANTED`."""
+
+    NOT_IN_AUTHORIZATION_DETAILS = "not_in_authorization_details"
+    """The grant's tools entry for the connector does not list the tool."""
+
+
+class TokenSubReason:
+    """Sub-reasons for :attr:`DenialReason.TOKEN_INVALID`."""
+
+    MALFORMED_AUTHORIZATION_DETAILS = "malformed_authorization_details"
+    """The ``authorization_details`` claim cannot be read unambiguously."""

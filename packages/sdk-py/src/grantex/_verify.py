@@ -251,6 +251,7 @@ def _build_payload(data: dict[str, Any]) -> GrantTokenPayload:
         parent_agt=data.get("parentAgt"),
         parent_grnt=data.get("parentGrnt"),
         delegation_depth=int(raw_depth) if raw_depth is not None else None,
+        authorization_details=data.get("authorization_details"),
     )
 
 
@@ -268,4 +269,5 @@ def _payload_to_verified_grant(payload: GrantTokenPayload) -> VerifiedGrant:
         parent_agent_did=payload.parent_agt,
         parent_grant_id=payload.parent_grnt,
         delegation_depth=payload.delegation_depth,
+        authorization_details=payload.authorization_details,
     )

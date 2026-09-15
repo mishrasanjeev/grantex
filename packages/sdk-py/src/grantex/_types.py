@@ -129,6 +129,8 @@ class AuthorizeParams:
     code_challenge_method: str | None = None
     audience: str | None = None
     state: str | None = None
+    purpose: str | None = None
+    """Purpose of the grant (for example ``aml.cdd.onboarding``); see grantex.purpose."""
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -148,6 +150,8 @@ class AuthorizeParams:
             body["codeChallenge"] = self.code_challenge
         if self.code_challenge_method is not None:
             body["codeChallengeMethod"] = self.code_challenge_method
+        if self.purpose is not None:
+            body["purpose"] = self.purpose
         return body
 
 
@@ -166,6 +170,7 @@ class AuthorizationRequest:
     sandbox: bool | None = None
     policy_enforced: bool | None = None
     effect: str | None = None
+    purpose: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuthorizationRequest:
@@ -183,6 +188,7 @@ class AuthorizationRequest:
             sandbox=data.get("sandbox"),
             policy_enforced=data.get("policyEnforced"),
             effect=data.get("effect"),
+            purpose=data.get("purpose"),
         )
 
 
@@ -201,6 +207,7 @@ class Grant:
     issued_at: str
     expires_at: str
     revoked_at: str | None
+    purpose: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Grant:
@@ -215,6 +222,7 @@ class Grant:
             issued_at=data.get("issuedAt", ""),
             expires_at=data.get("expiresAt", ""),
             revoked_at=data.get("revokedAt"),
+            purpose=data.get("purpose"),
         )
 
 
@@ -266,6 +274,8 @@ class VerifiedGrant:
     parent_agent_did: str | None = None
     parent_grant_id: str | None = None
     delegation_depth: int | None = None
+    authorization_details: Any = None
+    """The raw ``authorization_details`` claim, when present."""
 
 
 # ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -413,6 +423,7 @@ class AuditEntry:
     prev_hash: str | None
     timestamp: str
     status: str
+    purpose: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuditEntry:
@@ -428,6 +439,7 @@ class AuditEntry:
             prev_hash=data.get("prevHash"),
             timestamp=data["timestamp"],
             status=data.get("status", "success"),
+            purpose=data.get("purpose"),
         )
 
 
@@ -528,6 +540,7 @@ class GrantTokenPayload:
     parent_agt: str | None = None
     parent_grnt: str | None = None
     delegation_depth: int | None = None
+    authorization_details: Any = None
 
 
 @dataclass

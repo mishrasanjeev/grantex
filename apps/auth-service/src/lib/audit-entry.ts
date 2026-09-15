@@ -15,5 +15,6 @@ export function toAuditEntryResponse(row: Record<string, unknown>) {
     prevHash: row['previous_hash'] ?? null,
     timestamp: row['timestamp'],
     status: row['status'] ?? 'success',
+    ...(typeof row['purpose'] === 'string' ? { purpose: row['purpose'] } : {}),
   };
 }

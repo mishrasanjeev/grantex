@@ -41,7 +41,7 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const rows = await sql.unsafe(`
-      SELECT id, agent_id, principal_id, developer_id, scopes, status, issued_at, expires_at, revoked_at
+      SELECT id, agent_id, principal_id, developer_id, scopes, status, issued_at, expires_at, revoked_at, purpose
       FROM grants
       WHERE ${predicates.join(' AND ')}
       ORDER BY issued_at DESC
@@ -54,7 +54,7 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string } }>('/v1/grants/:id', async (request, reply) => {
     const sql = getSql();
     const rows = await sql`
-      SELECT id, agent_id, principal_id, developer_id, scopes, status, issued_at, expires_at, revoked_at
+      SELECT id, agent_id, principal_id, developer_id, scopes, status, issued_at, expires_at, revoked_at, purpose
       FROM grants
       WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
     `;
@@ -110,6 +110,7 @@ function toGrantResponse(row: Record<string, unknown>) {
     principalId: row['principal_id'],
     developerId: row['developer_id'],
     scopes: row['scopes'],
+    ...(typeof row['purpose'] === 'string' ? { purpose: row['purpose'] } : {}),
     status: row['status'],
     issuedAt: row['issued_at'],
     expiresAt: row['expires_at'],

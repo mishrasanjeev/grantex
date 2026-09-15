@@ -42,7 +42,20 @@ from .resources._dpdp import DpdpClient
 from .resources._commerce import CommerceClient
 from .prepaid_wallets import WalletSpendPoliciesClient
 from .manifest import ManifestValidationError, ToolManifest, Permission, EnforceResult
-from .denials import CapSubReason, DenialReason, ManifestSubReason, PurposeSubReason
+from .denials import (
+    CapSubReason,
+    DenialReason,
+    ManifestSubReason,
+    PurposeSubReason,
+    TokenSubReason,
+    ToolSubReason,
+)
+from ._authorization_details import (
+    AuthorizationDetailsError,
+    ToolsAuthorization,
+    parse_tools_authorization,
+)
+from .purpose import is_known_purpose, match_purpose
 from ._verify import verify_grant_token
 from ._types import VerifyGrantTokenOptions
 
@@ -247,6 +260,8 @@ class Grantex:
         agent_did = getattr(grant, "agent_did", "")
         scopes = list(getattr(grant, "scopes", []))
 
+        result_purpose = ""
+
         def _denied(
             reason: str,
             code: str,
@@ -258,9 +273,25 @@ class Grantex:
                 grant_id=grant_id, agent_did=agent_did, scopes=scopes,
                 permission=permission, connector=connector, tool=tool,
                 reason_code=code, sub_reason=sub_reason, details=dict(details or {}),
+                purpose=result_purpose,
             ))
 
-        # 2. Look up manifest for the connector
+        # 2. Read the grant's tools authorization for this connector. A claim
+        #    that cannot be read unambiguously denies every call.
+        try:
+            tools_auth = parse_tools_authorization(
+                getattr(grant, "authorization_details", None)
+            )
+        except AuthorizationDetailsError as exc:
+            return _denied(
+                f"Grant token authorization_details cannot be used: {exc}.",
+                DenialReason.TOKEN_INVALID, TokenSubReason.MALFORMED_AUTHORIZATION_DETAILS,
+            )
+        entry: ToolsAuthorization | None = tools_auth.get(connector)
+        purpose = entry.purpose if entry is not None else None
+        result_purpose = purpose or ""
+
+        # 3. Look up manifest for the connector
         manifest = self._manifests.get(connector)
         if not manifest:
             return _denied(
@@ -268,7 +299,7 @@ class Grantex:
                 DenialReason.MANIFEST_UNKNOWN_TOOL, ManifestSubReason.UNKNOWN_CONNECTOR,
             )
 
-        # 3. Look up tool permission from manifest
+        # 4. Look up tool permission from manifest
         required_permission = manifest.get_permission(tool)
         if not required_permission:
             return _denied(
@@ -289,7 +320,7 @@ class Grantex:
                 DenialReason.MANIFEST_UNKNOWN_TOOL, ManifestSubReason.UNKNOWN_TOOL,
             )
 
-        # 4. Find the best matching scope for this connector
+        # 5. Find the best matching scope for this connector
         granted_permission = self._resolve_granted_permission(scopes, connector)
         if not granted_permission:
             return _denied(
@@ -297,24 +328,46 @@ class Grantex:
                 DenialReason.TOOL_NOT_GRANTED,
             )
 
-        # 5. Check permission hierarchy
+        # 6. Check permission hierarchy
         if not Permission.covers(granted_permission, required_permission):
             return _denied(
                 f"{granted_permission} scope does not permit {required_permission} operations on {connector}.",
                 DenialReason.PERMISSION_INSUFFICIENT,
             )
 
-        # 6. Purpose. This SDK version does not read a purpose from grant
-        #    tokens, so every grant is treated as carrying none.
-        if spec.allowed_purposes is not None:
+        # 7. The grant's tools list, when it has one, must name the tool.
+        if entry is not None and not entry.allows_tool(tool):
             return _denied(
-                f"Tool '{tool}' on {connector} is restricted to purposes "
-                f"{', '.join(spec.allowed_purposes)}; the grant carries no purpose.",
-                DenialReason.PURPOSE_NOT_ALLOWED, PurposeSubReason.MISSING,
-                {"allowed_purposes": list(spec.allowed_purposes)},
+                f"Grant does not list tool '{tool}' on connector '{connector}'.",
+                DenialReason.TOOL_NOT_GRANTED, ToolSubReason.NOT_IN_AUTHORIZATION_DETAILS,
             )
 
-        # 7. Decision. Decision grants are not accepted yet, so a tool that
+        # 8. Purpose. A tool that declares allowed_purposes needs a grant whose
+        #    purpose is known and matches one of them.
+        if spec.allowed_purposes is not None:
+            allowed = list(spec.allowed_purposes)
+            if purpose is None:
+                return _denied(
+                    f"Tool '{tool}' on {connector} is restricted to purposes "
+                    f"{', '.join(allowed)}; the grant carries no purpose.",
+                    DenialReason.PURPOSE_NOT_ALLOWED, PurposeSubReason.MISSING,
+                    {"allowed_purposes": allowed},
+                )
+            if not is_known_purpose(purpose):
+                return _denied(
+                    f"Grant purpose {purpose!r} is not in the purpose vocabulary.",
+                    DenialReason.PURPOSE_NOT_ALLOWED, PurposeSubReason.UNKNOWN_PURPOSE,
+                    {"allowed_purposes": allowed, "purpose": purpose},
+                )
+            if match_purpose(allowed, purpose) is None:
+                return _denied(
+                    f"Grant purpose '{purpose}' is not allowed for tool '{tool}' on "
+                    f"{connector}; allowed purposes: {', '.join(allowed)}.",
+                    DenialReason.PURPOSE_NOT_ALLOWED, PurposeSubReason.NOT_MATCHED,
+                    {"allowed_purposes": allowed, "purpose": purpose},
+                )
+
+        # 9. Decision. Decision grants are not accepted yet, so a tool that
         #    requires one is always denied.
         if spec.requires_decision:
             return _denied(
@@ -322,7 +375,7 @@ class Grantex:
                 DenialReason.DECISION_REQUIRED,
             )
 
-        # 8. Check capped amount if provided
+        # 10. Check capped amount if provided
         if amount is not None:
             if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount):
                 return _denied(
@@ -343,9 +396,14 @@ class Grantex:
                     {"limit": cap, "amount": amount},
                 )
 
-        # 9. Declared call caps and cost units need a meter, which this SDK
-        #    version does not provide: fail closed rather than ignore them.
-        if spec.caps is not None or spec.cost_units is not None:
+        # 11. Call caps and cost units (declared by the manifest or by the
+        #     grant) need a meter, which this SDK version does not provide:
+        #     fail closed rather than ignore them.
+        grant_caps = entry.caps if entry is not None else None
+        grant_caps_apply = grant_caps is not None and (
+            tool in grant_caps or (spec.cost_units is not None and "cost_units" in grant_caps)
+        )
+        if spec.caps is not None or spec.cost_units is not None or grant_caps_apply:
             return _denied(
                 f"Tool '{tool}' on {connector} declares caps or cost units, which "
                 "this SDK version cannot meter.",
@@ -356,6 +414,7 @@ class Grantex:
             allowed=True, reason="",
             grant_id=grant_id, agent_did=agent_did, scopes=scopes,
             permission=permission, connector=connector, tool=tool,
+            purpose=result_purpose,
         )
 
     @staticmethod
@@ -423,6 +482,7 @@ class Grantex:
                 reason_code=result.reason_code,
                 sub_reason=result.sub_reason,
                 details=result.details,
+                purpose=result.purpose,
             )
         return result
 

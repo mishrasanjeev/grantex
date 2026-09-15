@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Purpose-bound grants
+- `POST /v1/authorize` accepts `purpose`: a term from the controlled
+  vocabulary (`aml.cdd.onboarding`, `aml.cdd.ongoing`, `aml.screening`,
+  `procurement.vendor_onboarding`, `payments.payout`) or a private
+  `x-<org>.<term>`. Anything else, or a purpose without a
+  `tool:<connector>:<permission>` scope, is rejected with `INVALID_PURPOSE`.
+- The approved purpose is shown on the consent page, stored on the grant,
+  carried in grant tokens as `authorization_details` entries of type
+  `urn:grantex:tools:v1` (one per connector), kept on refresh, inherited by
+  delegated grants, returned by the grants API and recorded on audit entries.
+  Migration `095_purpose_bound_grants.sql` adds nullable `purpose` columns to
+  `auth_requests`, `grants` and `audit_entries`.
+- The Python and TypeScript SDKs add the purpose vocabulary and matcher
+  (`grantex.purpose`, `purposeMatches`), `purpose` on `AuthorizeParams`,
+  `Grant`, `AuditEntry` and `EnforceResult`, and read
+  `authorization_details` from verified grant tokens.
+- `enforce()` denies a call to a tool that declares `allowed_purposes` with
+  `purpose_not_allowed` when the grant has no purpose (`missing`), a purpose
+  outside the vocabulary (`unknown_purpose`) or one that matches no pattern
+  (`not_matched`). Wildcards are prefix-segment based: `aml.cdd.*` matches
+  `aml.cdd.onboarding`, not `aml.cddx`, and `aml.*` does not match `aml`.
+- `enforce()` also applies a `urn:grantex:tools:v1` entry's `tools` list
+  (`tool_not_granted` / `not_in_authorization_details`), denies every call when
+  `authorization_details` is malformed (`token_invalid` /
+  `malformed_authorization_details`), and fails closed with
+  `meter_unavailable` when the grant declares caps for the tool.
+- No change for tools without `allowed_purposes` or for requests without a
+  purpose.
+
 ### Tool manifest schema 0.6
 - Tool values in a manifest may now be objects carrying `permission`,
   `allowed_purposes`, `caps` (`per_hour`, `per_day`, `per_case`),

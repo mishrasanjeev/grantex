@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getSql, type TxSql } from '../db/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
+import { isKnownPurpose, purposeOfToolsAuthorizationDetails } from '../lib/purpose.js';
 import { emitEvent } from '../lib/events.js';
 import { tokenExchangeTotal, tokenExchangeDuration } from '../lib/metrics.js';
 import { withSpan } from '../lib/tracing.js';
@@ -132,7 +133,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           SELECT ar.id, ar.agent_id, ar.principal_id, ar.developer_id,
                  ar.scopes, ar.expires_in, ar.expires_at, ar.status,
                  ar.audience, ar.redirect_uri, ar.code_challenge,
-                 ar.agent_key_thumbprint, a.did AS agent_did
+                 ar.agent_key_thumbprint, ar.purpose, ar.authorization_details,
+                 a.did AS agent_did
           FROM auth_requests ar
           JOIN agents a ON a.id = ar.agent_id
           WHERE ar.code = ${code}
@@ -198,10 +200,27 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           );
         }
 
+        // The purpose the Principal approved travels unchanged to the grant and
+        // its token. A stored purpose without matching tools entries is a
+        // corrupt request: refuse to issue rather than drop the constraint.
+        const approvedPurpose = authReq['purpose'] ?? null;
+        const approvedDetails = authReq['authorization_details'] ?? null;
+        if (approvedPurpose !== null) {
+          if (!isKnownPurpose(approvedPurpose)
+              || !Array.isArray(approvedDetails)
+              || approvedDetails.length === 0
+              || purposeOfToolsAuthorizationDetails(approvedDetails as Array<Record<string, unknown>>) !== approvedPurpose) {
+            routeError(500, 'Authorization request purpose is inconsistent', 'INTERNAL_ERROR');
+          }
+        } else if (approvedDetails !== null) {
+          routeError(500, 'Authorization request purpose is inconsistent', 'INTERNAL_ERROR');
+        }
+        const grantAuthorizationDetails = approvedDetails as Array<Record<string, unknown>> | null;
+
         await tx`
           INSERT INTO grants (
             id, agent_id, principal_id, developer_id, scopes, expires_at,
-            audience, agent_key_thumbprint
+            audience, agent_key_thumbprint, purpose, authorization_details
           )
           VALUES (
             ${grantId},
@@ -211,7 +230,9 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             ${authReq['scopes'] as string[]},
             ${expiresAt},
             ${authReq['audience'] as string | null},
-            ${authReq['agent_key_thumbprint'] as string | null}
+            ${authReq['agent_key_thumbprint'] as string | null},
+            ${approvedPurpose as string | null},
+            ${grantAuthorizationDetails === null ? null : tx.json(grantAuthorizationDetails as never)}
           )
         `;
 
@@ -244,6 +265,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           ...(typeof authReq['agent_key_thumbprint'] === 'string'
             ? { cnf: { jkt: authReq['agent_key_thumbprint'] } }
             : {}),
+          ...(grantAuthorizationDetails !== null ? { authorizationDetails: grantAuthorizationDetails } : {}),
           exp: expTimestamp,
         }));
 
@@ -408,6 +430,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
                   rt.replay_grant_token,
                  g.agent_id, g.principal_id, g.developer_id, g.scopes, g.status AS grant_status,
                   g.expires_at AS grant_expires_at, g.audience, g.agent_key_thumbprint,
+                  g.authorization_details AS grant_authorization_details,
                  g.parent_grant_id, g.delegation_depth,
                  a.did AS agent_did, parent_agent.did AS parent_agent_did,
                   ba.remaining_budget, ba.currency AS budget_currency
@@ -466,6 +489,22 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         const parentGrnt = row['parent_grant_id'] as string | null | undefined;
         const parentAgt = row['parent_agent_did'] as string | null | undefined;
         const delegationDepth = Number(row['delegation_depth'] ?? 0);
+        // Refreshed tokens keep the grant's tools entries (purpose) and add the
+        // current budget entry, if any.
+        const storedDetails = row['grant_authorization_details'] ?? null;
+        if (storedDetails !== null && !Array.isArray(storedDetails)) {
+          routeError(500, 'Invalid grant authorization details', 'INTERNAL_ERROR');
+        }
+        const refreshedDetails: Array<Record<string, unknown>> = [
+          ...((storedDetails as Array<Record<string, unknown>> | null) ?? []),
+          ...(remainingBudgetText !== undefined && budgetCurrency
+            ? [{
+                type: 'urn:grantex:params:oauth:authorization-details:budget',
+                amount: remainingBudgetText,
+                currency: budgetCurrency,
+              }]
+            : []),
+        ];
 
         const signRefreshedGrantToken = () => signGrantToken({
           sub: row['principal_id'] as string,
@@ -481,15 +520,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             ? { cnf: { jkt: row['agent_key_thumbprint'] } }
             : {}),
           ...(budgetAmount !== undefined ? { bdg: budgetAmount } : {}),
-          ...(remainingBudgetText !== undefined && budgetCurrency
-            ? {
-                authorizationDetails: [{
-                  type: 'urn:grantex:params:oauth:authorization-details:budget',
-                  amount: remainingBudgetText,
-                  currency: budgetCurrency,
-                }],
-              }
-            : {}),
+          ...(refreshedDetails.length > 0 ? { authorizationDetails: refreshedDetails } : {}),
           ...(parentAgt ? { parentAgt } : {}),
           ...(parentGrnt ? { parentGrnt } : {}),
           ...(parentAgt ? { act: { sub: parentAgt } } : {}),

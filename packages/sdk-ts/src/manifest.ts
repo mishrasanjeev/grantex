@@ -522,6 +522,8 @@ export interface EnforceResult {
   subReason?: string;
   /** Structured denial context (for example `allowedPurposes` or `limit`). */
   details?: Record<string, unknown>;
+  /** The grant's purpose for this connector, when it carries one. */
+  purpose?: string;
 }
 
 /** Options for `grantex.enforce()`. */

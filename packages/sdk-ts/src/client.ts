@@ -21,7 +21,16 @@ import { CredentialsClient } from './resources/credentials.js';
 import { PassportsClient } from './resources/passports.js';
 import { DpdpClient } from './resources/dpdp.js';
 import { CommerceClient } from './resources/commerce.js';
-import { CapSubReason, DenialReason, ManifestSubReason, PurposeSubReason } from './denials.js';
+import {
+  CapSubReason,
+  DenialReason,
+  ManifestSubReason,
+  PurposeSubReason,
+  TokenSubReason,
+  ToolSubReason,
+} from './denials.js';
+import { AuthorizationDetailsError, parseToolsAuthorization, toolsAuthorizationAllows, type ToolsAuthorization } from './authorization-details.js';
+import { isKnownPurpose, matchPurpose } from './purpose.js';
 import { ToolManifest, permissionCovers, type ToolSpec, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 import { verifyGrantToken } from './verify.js';
 import type {
@@ -236,6 +245,7 @@ export class Grantex {
       connector,
       tool,
     };
+    let resultPurpose: string | undefined;
     const denied = (
       reason: string,
       reasonCode: DenialReason,
@@ -249,6 +259,7 @@ export class Grantex {
         reasonCode,
         ...(subReason !== undefined ? { subReason } : {}),
         ...(details !== undefined ? { details } : {}),
+        ...(resultPurpose !== undefined ? { purpose: resultPurpose } : {}),
       });
 
     // 1. Verify the token locally using JWKS retrieved from the configured URI
@@ -269,7 +280,23 @@ export class Grantex {
     base.agentDid = grant.agentDid;
     base.scopes = grant.scopes;
 
-    // 2. Look up manifest for the connector
+    // 2. Read the grant's tools authorization for this connector. A claim that
+    //    cannot be read unambiguously denies every call.
+    let entry: ToolsAuthorization | undefined;
+    try {
+      entry = parseToolsAuthorization(grant.authorizationDetails).get(connector);
+    } catch (err) {
+      if (!(err instanceof AuthorizationDetailsError)) throw err;
+      return denied(
+        `Grant token authorization_details cannot be used: ${err.message}.`,
+        DenialReason.TOKEN_INVALID,
+        TokenSubReason.MALFORMED_AUTHORIZATION_DETAILS,
+      );
+    }
+    const purpose = entry?.purpose;
+    resultPurpose = purpose;
+
+    // 3. Look up manifest for the connector
     const manifest = this.#manifests.get(connector);
     if (!manifest) {
       return denied(
@@ -279,7 +306,7 @@ export class Grantex {
       );
     }
 
-    // 3. Look up tool permission from manifest
+    // 4. Look up tool permission from manifest
     const requiredPermission = manifest.getPermission(tool);
     if (!requiredPermission) {
       return denied(
@@ -307,13 +334,13 @@ export class Grantex {
       );
     }
 
-    // 4. Find the best matching scope for this connector
+    // 5. Find the best matching scope for this connector
     const grantedPermission = this.#resolveGrantedPermission(grant.scopes, connector);
     if (!grantedPermission) {
       return denied(`No scope grants access to connector '${connector}'.`, DenialReason.TOOL_NOT_GRANTED);
     }
 
-    // 5. Check permission hierarchy
+    // 6. Check permission hierarchy
     if (!permissionCovers(grantedPermission, requiredPermission)) {
       return denied(
         `${grantedPermission} scope does not permit ${requiredPermission} operations on ${connector}.`,
@@ -321,24 +348,52 @@ export class Grantex {
       );
     }
 
-    // 6. Purpose. This SDK version does not read a purpose from grant tokens,
-    //    so every grant is treated as carrying none.
-    if (spec.allowedPurposes !== undefined) {
+    // 7. The grant's tools list, when it has one, must name the tool.
+    if (entry !== undefined && !toolsAuthorizationAllows(entry, tool)) {
       return denied(
-        `Tool '${tool}' on ${connector} is restricted to purposes ${spec.allowedPurposes.join(', ')}; the grant carries no purpose.`,
-        DenialReason.PURPOSE_NOT_ALLOWED,
-        PurposeSubReason.MISSING,
-        { allowedPurposes: [...spec.allowedPurposes] },
+        `Grant does not list tool '${tool}' on connector '${connector}'.`,
+        DenialReason.TOOL_NOT_GRANTED,
+        ToolSubReason.NOT_IN_AUTHORIZATION_DETAILS,
       );
     }
 
-    // 7. Decision. Decision grants are not accepted yet, so a tool that
+    // 8. Purpose. A tool that declares allowed_purposes needs a grant whose
+    //    purpose is known and matches one of them.
+    if (spec.allowedPurposes !== undefined) {
+      const allowedPurposes = [...spec.allowedPurposes];
+      if (purpose === undefined) {
+        return denied(
+          `Tool '${tool}' on ${connector} is restricted to purposes ${allowedPurposes.join(', ')}; the grant carries no purpose.`,
+          DenialReason.PURPOSE_NOT_ALLOWED,
+          PurposeSubReason.MISSING,
+          { allowedPurposes },
+        );
+      }
+      if (!isKnownPurpose(purpose)) {
+        return denied(
+          `Grant purpose ${JSON.stringify(purpose)} is not in the purpose vocabulary.`,
+          DenialReason.PURPOSE_NOT_ALLOWED,
+          PurposeSubReason.UNKNOWN_PURPOSE,
+          { allowedPurposes, purpose },
+        );
+      }
+      if (matchPurpose(allowedPurposes, purpose) === undefined) {
+        return denied(
+          `Grant purpose '${purpose}' is not allowed for tool '${tool}' on ${connector}; allowed purposes: ${allowedPurposes.join(', ')}.`,
+          DenialReason.PURPOSE_NOT_ALLOWED,
+          PurposeSubReason.NOT_MATCHED,
+          { allowedPurposes, purpose },
+        );
+      }
+    }
+
+    // 9. Decision. Decision grants are not accepted yet, so a tool that
     //    requires one is always denied.
     if (spec.requiresDecision) {
       return denied(`Tool '${tool}' on ${connector} requires a decision grant.`, DenialReason.DECISION_REQUIRED);
     }
 
-    // 8. Check capped amount if provided
+    // 10. Check capped amount if provided
     if (amount !== undefined) {
       if (typeof amount !== 'number' || !Number.isFinite(amount)) {
         return denied(
@@ -365,9 +420,14 @@ export class Grantex {
       }
     }
 
-    // 9. Declared call caps and cost units need a meter, which this SDK
-    //    version does not provide: fail closed rather than ignore them.
-    if (spec.caps !== undefined || spec.costUnits !== undefined) {
+    // 11. Call caps and cost units (declared by the manifest or by the grant)
+    //     need a meter, which this SDK version does not provide: fail closed
+    //     rather than ignore them.
+    const grantCaps = entry?.caps;
+    const grantCapsApply = grantCaps !== undefined
+      && (Object.prototype.hasOwnProperty.call(grantCaps, tool)
+        || (spec.costUnits !== undefined && Object.prototype.hasOwnProperty.call(grantCaps, 'cost_units')));
+    if (spec.caps !== undefined || spec.costUnits !== undefined || grantCapsApply) {
       return denied(
         `Tool '${tool}' on ${connector} declares caps or cost units, which this SDK version cannot meter.`,
         DenialReason.CAP_EXCEEDED,
@@ -375,7 +435,7 @@ export class Grantex {
       );
     }
 
-    return { ...base, allowed: true, reason: '' };
+    return { ...base, allowed: true, reason: '', ...(purpose !== undefined ? { purpose } : {}) };
   }
 
   /**

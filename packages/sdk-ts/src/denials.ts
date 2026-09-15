@@ -57,4 +57,18 @@ export const PurposeSubReason = {
   MISSING: 'missing',
   /** The grant's purpose matches none of the tool's patterns. */
   NOT_MATCHED: 'not_matched',
+  /** The grant's purpose is malformed or not in the purpose vocabulary. */
+  UNKNOWN_PURPOSE: 'unknown_purpose',
+} as const;
+
+/** Sub-reasons for `tool_not_granted`. */
+export const ToolSubReason = {
+  /** The grant's tools entry for the connector does not list the tool. */
+  NOT_IN_AUTHORIZATION_DETAILS: 'not_in_authorization_details',
+} as const;
+
+/** Sub-reasons for `token_invalid`. */
+export const TokenSubReason = {
+  /** The `authorization_details` claim cannot be read unambiguously. */
+  MALFORMED_AUTHORIZATION_DETAILS: 'malformed_authorization_details',
 } as const;

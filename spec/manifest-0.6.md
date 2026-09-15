@@ -68,7 +68,7 @@ as `aml.cdd.onboarding`, or a private term `x-<org>.<term>` such as
 (`aml.cdd.*`, `x-acme-bank.*`). A wildcard is only allowed as the whole last
 segment: `*`, `aml.*.onboarding` and `aml.cdd*` are invalid. Patterns are at
 most 128 characters. How a grant's purpose is matched against these patterns
-is specified with purpose-bound grants.
+is specified in `docs/concepts/purpose-bound-grants.md`.
 
 ### Rules beyond the property types
 
@@ -116,14 +116,16 @@ a `reason_code` (`reasonCode` in TypeScript) and, where one applies, a
 | Step | Denial `reason_code` | `sub_reason` |
 |---|---|---|
 | Grant token verification | `token_invalid` | |
+| `authorization_details` readable | `token_invalid` | `malformed_authorization_details` |
 | Manifest loaded for the connector | `manifest_unknown_tool` | `unknown_connector` |
 | Tool declared | `manifest_unknown_tool` | `unknown_tool`, `invalid_declaration` |
 | A scope covers the connector | `tool_not_granted` | |
 | Scope permission covers the tool's permission | `permission_insufficient` | |
-| `allowed_purposes` | `purpose_not_allowed` | `missing`, `not_matched` |
+| The grant's tools list (when present) names the tool | `tool_not_granted` | `not_in_authorization_details` |
+| `allowed_purposes` | `purpose_not_allowed` | `missing`, `unknown_purpose`, `not_matched` |
 | `requires_decision` | `decision_required` | |
 | `amount` within a `capped:N` scope | `cap_exceeded` | `invalid_amount`, `malformed_cap`, `amount_cap` |
-| `caps`, `cost_units` | `cap_exceeded` | `meter_unavailable` |
+| `caps`, `cost_units` (manifest or grant) | `cap_exceeded` | `meter_unavailable` |
 
 The reason codes are the Grantex denial taxonomy: `purpose_not_allowed`,
 `tool_not_granted`, `permission_insufficient`, `cap_exceeded`,
@@ -135,9 +137,9 @@ values intended for audit records and metric labels; `reason` remains a
 human-readable sentence and may change.
 
 Declarations are enforced fail-closed: an SDK that cannot evaluate a declared
-constraint denies the call rather than ignoring the constraint. In this
-release a tool that declares `allowed_purposes` is denied for every grant
-(tokens do not carry a purpose yet), a tool with `requires_decision` always
-returns `decision_required`, and a tool with `caps` or `cost_units` is denied
-with `meter_unavailable`. Tools declared with a permission only behave
+constraint denies the call rather than ignoring the constraint. Purpose
+matching is specified in `docs/concepts/purpose-bound-grants.md`. In this
+release a tool with `requires_decision` always returns `decision_required`,
+and a tool with `caps` or `cost_units`, or a grant with caps for the tool, is
+denied with `meter_unavailable`. Tools declared with a permission only behave
 exactly as before.

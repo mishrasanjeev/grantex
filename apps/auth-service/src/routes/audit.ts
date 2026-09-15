@@ -99,13 +99,14 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
       });
 
       const rows = await tx`
-        INSERT INTO audit_entries (id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status)
+        INSERT INTO audit_entries (id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status, purpose)
         VALUES (
           ${id}, ${agentId}, ${agentDid}, ${grantId}, ${principalId},
           ${developerId}, ${action}, ${tx.json(metadata as postgres.JSONValue)}, ${hash},
-          ${prevHash}, ${timestamp}, ${status}
+          ${prevHash}, ${timestamp}, ${status},
+          (SELECT g.purpose FROM grants g WHERE g.id = ${grantId} AND g.developer_id = ${developerId})
         )
-        RETURNING id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status
+        RETURNING id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status, purpose
       `;
       createdRow = rows[0] as Record<string, unknown> | undefined;
     });
@@ -147,7 +148,7 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const rows = await sql.unsafe(`
-      SELECT id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status
+      SELECT id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status, purpose
       FROM audit_entries
       WHERE ${predicates.join(' AND ')}
       -- Must mirror the chain builder's "timestamp DESC, id DESC" head lookup.
@@ -214,7 +215,7 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string } }>('/v1/audit/:id', async (request, reply) => {
     const sql = getSql();
     const rows = await sql`
-      SELECT id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status
+      SELECT id, agent_id, agent_did, grant_id, principal_id, developer_id, action, metadata, hash, previous_hash, timestamp, status, purpose
       FROM audit_entries
       WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
     `;
