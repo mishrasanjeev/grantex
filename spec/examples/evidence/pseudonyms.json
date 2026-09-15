@@ -1,0 +1,74 @@
+{
+  "key_seed": "grantex evidence example pseudonymisation key",
+  "key_derivation": "tenant key = SHA-256 of the UTF-8 key_seed; case key = HMAC-SHA256(tenant key, JCS([\"grantex-evidence-case-v1\", tenant_id, case_id]))",
+  "identifiers": [
+    {
+      "case_id": "case_demo_0001",
+      "class": "approver",
+      "pseudonym": "pz:bhcUFtRfM-yO1FrtK9d7a20zWq8PsW0Qz8wPf_pwdOI",
+      "tenant_id": "dev_demo_0001",
+      "value": "user:approver-a"
+    },
+    {
+      "case_id": "case_demo_0001",
+      "class": "principal",
+      "pseudonym": "pz:bLz5H0J2L85l3VMdZKnq0KUpRmSADpXwauYTJylYd34",
+      "tenant_id": "dev_demo_0001",
+      "value": "user:approver-a"
+    },
+    {
+      "case_id": "case_demo_0002",
+      "class": "approver",
+      "pseudonym": "pz:_wKoGPaX7kvjNRgQIXNH2G_EWSwHRuwPHCn5Jbry89Y",
+      "tenant_id": "dev_demo_0001",
+      "value": "user:approver-a"
+    },
+    {
+      "case_id": "case_demo_0001",
+      "class": "approver",
+      "pseudonym": "pz:zMk7CH_ahmVYGftzJCSJ32yFq0dUiOJgJZ-_yD_ptCc",
+      "tenant_id": "dev_demo_0002",
+      "value": "user:approver-a"
+    },
+    {
+      "case_id": "case_demo_0001",
+      "class": "subject",
+      "pseudonym": "pz:77iRvfRNbTYMDBXn4XmGZt9nBZErWjQeuIrp3ezbuw0",
+      "tenant_id": "dev_demo_0001",
+      "value": "gb:00000001"
+    },
+    {
+      "case_id": "case_demo_0001",
+      "class": "subject",
+      "pseudonym": "pz:HhU8Z81ashBwqa_xRu23xoNdBddTe3YLFImGh_7PC2w",
+      "tenant_id": "dev_demo_0001",
+      "value": "Société Exemple 例"
+    },
+    {
+      "case_id": "case_demo_0001",
+      "class": "record",
+      "pseudonym": "pz:cqj1_9C1ENvzoV9YmpjA5xZG80Ym6whvY9YVq2oUHWU",
+      "tenant_id": "dev_demo_0001",
+      "value": "mock:registry:00000001"
+    },
+    {
+      "case_id": "demo_0001",
+      "class": "record",
+      "pseudonym": "pz:vcdtJ7PHr3U7Q2rYxSe3k4R0d2xXJiLCT3S_zNGNqY0",
+      "tenant_id": "dev_demo_0001:case",
+      "value": "mock:registry:00000001"
+    }
+  ],
+  "content": {
+    "case_id": "case_demo_0001",
+    "digest": "sha256:3b9ec07de8ebdd90762745fcaef86f06a1da48da553af4af2dad31aa5347f118",
+    "keyed": "hmac-sha256:adc9931e3dba3aca0afb195731cf187c5593a679a523dfa4641cd91697656632",
+    "tenant_id": "dev_demo_0001"
+  },
+  "action": {
+    "action_hash": "sha256:n0N_vmI6x7OfVYocNEqun9J9zAb5eI26S-tK_62F1Bk",
+    "action_ref": "ak:BsX-XhggscVqoDg29duvCbqWgUsZK6FWK0S7sff9wC8",
+    "case_id": "case_demo_0001",
+    "tenant_id": "dev_demo_0001"
+  }
+}
