@@ -25,6 +25,8 @@ export const VerificationCode = {
   CASE_MISMATCH: 'case_mismatch',
   ACTION_HASH_MISMATCH: 'action_hash_mismatch',
   DECISION_INCONSISTENT: 'decision_inconsistent',
+  VALIDITY_VIOLATION: 'validity_violation',
+  AUTHORITY_VIOLATION: 'authority_violation',
   TOOL_CALL_INCONSISTENT: 'tool_call_inconsistent',
   ROOT_NOT_TRUSTED: 'root_not_trusted',
   ANCHOR_MISSING: 'anchor_missing',
@@ -80,8 +82,14 @@ export interface VerificationResult {
   actual: string | null;
   root: string | null;
   entryCount: number | null;
-  anchorChecked: boolean;
-  signatureChecked: boolean;
+  /** `absent`, `internal-consistency-only`, `pinned` (matches a caller-supplied anchor hash) or `signed`. */
+  anchorStatus: 'absent' | 'internal-consistency-only' | 'pinned' | 'signed';
+  /** `absent`, `unchecked` or `verified`. Only a verified service signature proves who exported the package. */
+  signatureStatus: 'absent' | 'unchecked' | 'verified';
+  signatureKid: string | null;
+  unsourcedInputs: number;
+  lateEntries: number;
+  tenantAssertedEntries: number;
 }
 
 /** JSON form of a result, identical to the Python SDK's `VerificationResult.to_dict()`. */
@@ -96,8 +104,12 @@ export function verificationResultToJson(result: VerificationResult): Record<str
     actual: result.actual,
     root: result.root,
     entry_count: result.entryCount,
-    anchor_checked: result.anchorChecked,
-    signature_checked: result.signatureChecked,
+    anchor_status: result.anchorStatus,
+    signature_status: result.signatureStatus,
+    signature_kid: result.signatureKid,
+    unsourced_inputs: result.unsourcedInputs,
+    late_entries: result.lateEntries,
+    tenant_asserted_entries: result.tenantAssertedEntries,
   };
 }
 

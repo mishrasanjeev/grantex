@@ -2,7 +2,8 @@
  * Evidence endpoints (PRD G-5). Tenant-scoped by the developer API key,
  * rate limited, and off unless EVIDENCE_EXPORT_ENABLED=true.
  *
- *   POST /v1/evidence/cases/:caseId/records  append evidence records
+ *   POST /v1/evidence/cases/:caseId/records  append evidence records (idempotent per record id)
+ *   POST /v1/evidence/cases/:caseId/void     void a recorded record (never deletes)
  *   POST /v1/evidence/cases/:caseId/export   assemble, anchor and return the package
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -14,6 +15,7 @@ import {
   appendEvidenceRecords,
   exportCasePackage,
   isValidCaseId,
+  voidEvidenceRecord,
 } from '../lib/evidence-service/service.js';
 import { evidenceEnabledFor, evidenceSettings } from '../lib/evidence-service/settings.js';
 
@@ -50,7 +52,8 @@ export async function evidenceRoutes(app: FastifyInstance): Promise<void> {
       const body = request.body as { records?: unknown } | undefined;
       try {
         const records = await appendEvidenceRecords(getSql(), request.developer.id, request.params.caseId, body?.records);
-        return reply.status(201).send({ case_id: request.params.caseId, records });
+        const created = records.some((r) => !r.duplicate);
+        return reply.status(created ? 201 : 200).send({ case_id: request.params.caseId, records });
       } catch (err) {
         if (err instanceof EvidenceServiceError) return sendError(request, reply, err);
         throw err;
@@ -58,26 +61,38 @@ export async function evidenceRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.post<{ Params: CaseParams; Body: { disclose?: unknown; sign?: unknown; state?: unknown } }>(
+  app.post<{ Params: CaseParams; Body: unknown }>(
+    '/v1/evidence/cases/:caseId/void',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const refused = guard(request, reply);
+      if (refused) return refused;
+      try {
+        const record = await voidEvidenceRecord(getSql(), request.developer.id, request.params.caseId, request.body ?? {});
+        return reply.status(record.duplicate ? 200 : 201).send({ case_id: request.params.caseId, record });
+      } catch (err) {
+        if (err instanceof EvidenceServiceError) return sendError(request, reply, err);
+        throw err;
+      }
+    },
+  );
+
+  app.post<{ Params: CaseParams; Body: unknown }>(
     '/v1/evidence/cases/:caseId/export',
     { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const refused = guard(request, reply);
       if (refused) return refused;
-      const body = (request.body ?? {}) as { disclose?: unknown; sign?: unknown; state?: unknown };
-      if (typeof body !== 'object' || Array.isArray(body)) {
-        return reply.status(400).send({ message: 'body must be an object', code: 'BAD_REQUEST', requestId: request.id });
-      }
       try {
         const result = await exportCasePackage(getSql(), {
           developerId: request.developer.id,
           caseId: request.params.caseId,
           issuer: config.jwtIssuer,
           settings: evidenceSettings(),
-          options: body,
+          options: request.body ?? {},
           signer: () => {
-            const { privateKey, kid } = getKeyPair();
-            return { privateKey, kid };
+            const { privateKey, kid, alg } = getKeyPair();
+            return { privateKey, kid, alg };
           },
         });
         return reply
@@ -86,6 +101,7 @@ export async function evidenceRoutes(app: FastifyInstance): Promise<void> {
           .header('cache-control', 'no-store')
           .header('grantex-evidence-root', result.root)
           .header('grantex-evidence-anchor', result.anchorHash)
+          .header('grantex-evidence-decisions', result.decisionsAvailable ? 'included' : 'unavailable')
           .send(Buffer.from(result.data));
       } catch (err) {
         if (err instanceof EvidenceServiceError) return sendError(request, reply, err);

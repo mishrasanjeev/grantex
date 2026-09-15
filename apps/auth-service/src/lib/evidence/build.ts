@@ -1,6 +1,9 @@
-/** Building evidence packages from case records. */
+/** Building evidence packages from case records (mirrors `grantex.evidence._build`). */
 import { CanonicalizationError, canonicalize } from './canonical.js';
-import { IDENTIFIER_CLASSES, auditEntryHash, chainRoot, entryHash, headerHash, pseudonymise, type IdentifierClass } from './hashing.js';
+import {
+  IDENTIFIER_CLASSES, PLATFORM_MARKER, actionReference, auditEntryHash, caseKey, chainRoot, entryHash, headerHash,
+  keyedContentDigest, pseudonym, type PseudonymClass,
+} from './hashing.js';
 import { EvidenceBuildError, VerificationFailure } from './result.js';
 import { FORMAT, checkDocument } from './verify.js';
 
@@ -9,10 +12,10 @@ type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-ex
 const ENTRY_INPUT_MEMBERS = new Set(['type', 'at', 'data', 'source', 'ext']);
 
 /**
- * How identifiers appear in a package. Every identifier class not in
- * `disclosed` is replaced by a per-case pseudonym computed with `key` (at least
- * 32 bytes, never written to the package; `keyId` names it). Disclosing every
- * class needs no key and produces scheme `none`.
+ * How identifiers and content digests appear in a package. Every class not in
+ * `disclosed` (`approver`, `content`, `principal`, `record`, `subject`) is keyed
+ * per case with `key` (at least 32 bytes, never written to the package; `keyId`
+ * names it). Disclosing every class needs no key and produces scheme `none`.
  */
 export interface PrivacySettings {
   key?: Uint8Array;
@@ -30,7 +33,7 @@ export interface EvidenceRecord {
   type: string;
   at: string;
   data: Json;
-  source?: { audit_entry_id: string; audit_hash: string };
+  source: { authority: 'platform' | 'tenant'; recorded_at: string; audit_entry_id?: string; audit_hash?: string; late?: true };
   ext?: Json;
 }
 
@@ -42,39 +45,102 @@ export function serializePackage(document: Json): Uint8Array {
 function privacyMember(privacy: PrivacySettings): Json {
   const disclosed = [...new Set(privacy.disclosed ?? [])].sort();
   const unknown = disclosed.filter((c) => !(IDENTIFIER_CLASSES as readonly string[]).includes(c));
-  if (unknown.length) throw new EvidenceBuildError('privacy_violation', `unknown identifier classes ${unknown.join(', ')}`);
+  if (unknown.length) throw new EvidenceBuildError('privacy_violation', `unknown classes ${unknown.join(', ')}`);
   if (disclosed.join('\n') === IDENTIFIER_CLASSES.join('\n')) return { disclosed, scheme: 'none' };
   if (!privacy.key || privacy.key.length < 32 || !privacy.keyId) {
-    throw new EvidenceBuildError(
-      'privacy_violation',
-      'pseudonymising identifiers requires a key of at least 32 bytes and a keyId',
-    );
+    throw new EvidenceBuildError('privacy_violation', 'keying undisclosed classes requires a key of at least 32 bytes and a keyId');
   }
   return { disclosed, key_id: privacy.keyId, scheme: 'hmac-sha256-v1' };
 }
 
+const isObject = (value: unknown): value is Json => value !== null && typeof value === 'object' && !Array.isArray(value);
+const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+class Protector {
+  private readonly disclosed: Set<string>;
+  private readonly key: Buffer | null = null;
+
+  constructor(privacy: PrivacySettings, disclosed: string[], kase: Json) {
+    this.disclosed = new Set(disclosed);
+    if (privacy.key && this.disclosed.size !== IDENTIFIER_CLASSES.length) {
+      if (typeof kase['tenant_id'] !== 'string' || typeof kase['case_id'] !== 'string') {
+        throw new EvidenceBuildError('schema_violation', 'case_id and tenant_id must be strings', 'case');
+      }
+      this.key = caseKey(privacy.key, kase['tenant_id'], kase['case_id']);
+    }
+  }
+
+  identifier(cls: PseudonymClass, holder: unknown, name: string): void {
+    if (this.disclosed.has(cls) || !isObject(holder) || typeof holder[name] !== 'string') return;
+    holder[name] = pseudonym(this.key!, cls, holder[name]);
+  }
+
+  content(holder: Json, name: string): void {
+    if (this.disclosed.has('content') || typeof holder[name] !== 'string') return;
+    holder[name] = keyedContentDigest(this.key!, holder[name]);
+  }
+
+  action(data: Json): void {
+    if (this.disclosed.has('subject') || typeof data['action_hash'] !== 'string') return;
+    const actionHash = data['action_hash'] as string;
+    delete data['action_hash'];
+    data['action_ref'] = actionReference(this.key!, actionHash);
+  }
+
+  refs(refs: unknown): void {
+    for (const ref of list(refs)) {
+      this.identifier('record', ref, 'record_id');
+      this.identifier('record', ref, 'excerpt_ref');
+    }
+  }
+
+  entry(entry: Json): void {
+    const data = entry['data'];
+    if (!isObject(data)) return;
+    switch (entry['type']) {
+      case 'grant':
+        this.identifier('principal', data, 'principal');
+        break;
+      case 'tool_call':
+        this.content(data, 'input_hash');
+        this.content(data, 'output_hash');
+        for (const record of list(data['upstream_records'])) this.identifier('record', record, 'record_id');
+        break;
+      case 'policy_evaluation':
+        for (const item of list(data['inputs'])) if (isObject(item)) this.refs(item['evidence']);
+        break;
+      case 'recommendation':
+        for (const section of list(data['sections'])) if (isObject(section)) this.refs(section['evidence']);
+        break;
+      case 'disposition':
+        for (const comparison of list(data['comparisons'])) if (isObject(comparison)) this.refs(comparison['evidence']);
+        this.refs([data['hit']]);
+        break;
+      case 'decision':
+        this.identifier('subject', data['action'], 'subject');
+        this.identifier('approver', data, 'approver');
+        this.action(data);
+        break;
+      case 'decision_consumption':
+        this.action(data);
+        break;
+      default:
+        break;
+    }
+  }
+}
+
 /**
- * Build a package from a case header and entry records. Identifiers are given
- * in the clear and pseudonymised here according to `privacy`. The result is
- * checked with the same rules as verification, so an invalid package is
- * refused with `EvidenceBuildError`.
+ * Build a package from a case header and entry records. Values are given in the
+ * clear (decisions carry the token's `action_hash`) and keyed here according to
+ * `privacy`. The result is checked with the verification rules, so an invalid
+ * package is refused with `EvidenceBuildError`.
  */
 export function buildPackage(input: { case: Json; entries: readonly EvidenceRecord[] | readonly Json[]; privacy: PrivacySettings }): BuiltPackage {
   const privacy = privacyMember(input.privacy);
-  const disclosed = new Set(privacy['disclosed'] as string[]);
   const kase = structuredClone(input.case);
-  const tenantId = kase['tenant_id'];
-  const caseId = kase['case_id'];
-
-  const protect = (cls: IdentifierClass, value: unknown): unknown => {
-    if (disclosed.has(cls) || typeof value !== 'string') return value;
-    if (typeof tenantId !== 'string' || typeof caseId !== 'string') {
-      throw new EvidenceBuildError('schema_violation', 'case_id and tenant_id must be strings', 'case');
-    }
-    return pseudonymise(input.privacy.key!, tenantId, caseId, cls, value);
-  };
-
-  if ('subject' in kase) kase['subject'] = protect('subject', kase['subject']);
+  const protect = new Protector(input.privacy, privacy['disclosed'] as string[], kase);
+  protect.identifier('subject', kase, 'subject');
   const document: Json = { case: kase, format: FORMAT, privacy, version: '1.0' };
   let previous: string;
   try {
@@ -87,22 +153,9 @@ export function buildPackage(input: { case: Json; entries: readonly EvidenceReco
 
   const entries = input.entries.map((record, index) => {
     const unknown = Object.keys(record).filter((name) => !ENTRY_INPUT_MEMBERS.has(name)).sort();
-    if (unknown.length) {
-      throw new EvidenceBuildError('schema_violation', `unknown record members ${unknown.join(', ')}`, `entries[${index}]`);
-    }
+    if (unknown.length) throw new EvidenceBuildError('schema_violation', `unknown record members ${unknown.join(', ')}`, `entries[${index}]`);
     const entry = structuredClone(record) as Json;
-    const data = entry['data'];
-    if (data !== null && typeof data === 'object' && !Array.isArray(data)) {
-      if (entry['type'] === 'grant' && 'principal' in data) {
-        data['principal'] = protect('principal', data['principal']);
-      } else if (entry['type'] === 'decision') {
-        if ('approver' in data) data['approver'] = protect('approver', data['approver']);
-        const action = data['action'];
-        if (action !== null && typeof action === 'object' && !Array.isArray(action) && 'subject' in action) {
-          action['subject'] = protect('subject', action['subject']);
-        }
-      }
-    }
+    protect.entry(entry);
     entry['seq'] = index;
     entry['prev'] = previous;
     try {
@@ -129,40 +182,30 @@ export function buildPackage(input: { case: Json; entries: readonly EvidenceReco
 }
 
 /**
- * The auth-service audit entry that records a package's root. The auth service
- * appends it to the tenant's audit hash chain on export and embeds it as the
- * package `anchor`.
+ * The platform audit entry that records a package's root. Its agent, DID and
+ * grant are empty, its principal is `platform` and its metadata carries the
+ * platform marker, none of which a tenant can write through `/v1/audit/log`.
  */
-export function anchorAuditEntry(
-  document: Json,
-  options: {
-    auditEntryId: string;
-    timestamp: string;
-    prevHash: string | null;
-    agentId?: string;
-    agentDid?: string;
-    grantId?: string;
-    principalId?: string;
-  },
-): Json {
+export function anchorAuditEntry(document: Json, options: { auditEntryId: string; timestamp: string; prevHash: string | null }): Json {
   const chain = document['chain'] as Json;
   const kase = document['case'] as Json;
   const audit: Json = {
     action: 'evidence.package_exported',
-    agentDid: options.agentDid ?? '',
-    agentId: options.agentId ?? '',
+    agentDid: '',
+    agentId: '',
     developerId: kase['tenant_id'],
-    grantId: options.grantId ?? '',
+    grantId: '',
     id: options.auditEntryId,
     metadata: {
       case_id: kase['case_id'],
       entry_count: chain['length'],
       format: document['format'],
+      [PLATFORM_MARKER]: true,
       package_root: chain['root'],
       version: document['version'],
     },
     prevHash: options.prevHash,
-    principalId: options.principalId ?? 'platform',
+    principalId: 'platform',
     status: 'success',
     timestamp: options.timestamp,
   };

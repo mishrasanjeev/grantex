@@ -7,28 +7,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Evidence export in the auth service
-- New `POST /v1/evidence/cases/{caseId}/records` appends validated evidence
-  records (run context, tool calls, policy evaluations, recommendations,
-  decisions, consumptions, revocations) to the developer's audit hash chain,
-  all or nothing, and `POST /v1/evidence/cases/{caseId}/export` returns the
-  case's evidence package: grant chain from the tool calls' grant to its root,
-  revocations, decision grants (`decision.approved` / `decision.consumed`
-  entries, without approver e-mail or name), identifiers pseudonymised per
-  tenant and case unless disclosed, root anchored as an
-  `evidence.package_exported` audit entry, optional RS256 signature, and the
-  root and anchor in `Grantex-Evidence-Root` / `Grantex-Evidence-Anchor`.
-- Tenant-scoped, rate limited (120 and 10 per minute), and off by default:
-  `EVIDENCE_EXPORT_ENABLED`, `EVIDENCE_EXPORT_DEVELOPER_IDS`,
-  `EVIDENCE_PSEUDONYMISATION_SECRET`, `EVIDENCE_PSEUDONYMISATION_KEY_ID`.
-- Export fails closed: a source audit entry that does not match its hash, or a
-  package that does not verify, returns `409 EVIDENCE_CHAIN_VERIFICATION_FAILED`
-  and raises the chain-verification alert.
-- Metrics `grantex_evidence_export_duration_seconds`,
-  `grantex_evidence_records_total` and
-  `grantex_evidence_chain_verification_failures_total`; alert rules in
-  `deploy/prometheus/evidence-alerts.yml`.
-- Migrations 099 and 100 add partial indexes on `audit_entries` for case
-  lookups (built concurrently, additive).
+- **Breaking:** `POST /v1/audit/log` now refuses actions starting with
+  `evidence.`, `decision.` or `grantex.` (`400 AUDIT_ACTION_RESERVED`) and
+  metadata members starting with `grantex:` (`400 AUDIT_METADATA_RESERVED`).
+  Those names are written only by the platform; accepting them from tenants
+  would let a tenant forge an evidence anchor or a decision record.
+- New `POST /v1/evidence/cases/{caseId}/records` (run context, tool calls,
+  policy evaluations, recommendations, dispositions), off by default
+  (`EVIDENCE_EXPORT_ENABLED`). Records are validated completely when written,
+  including references to earlier records, the grant chain and grant
+  validity; idempotent on their ids (same content: no-op, different: `409`);
+  and stored as platform-authored audit entries in server recording order.
+  `POST /v1/evidence/cases/{caseId}/void` withdraws a record without deleting it.
+- New `POST /v1/evidence/cases/{caseId}/export`: re-verifies each source audit
+  entry's hash and link, takes decisions only from the decision-grant store,
+  marks records made after a consumption or export as late, derives the case
+  state, keys identifiers and content per case, anchors the root as a
+  platform audit entry (subject to plan limits), optionally signs root and
+  anchor with the platform key, and returns the root and anchor in headers.
+  Disclosure needs `EVIDENCE_DISCLOSURE_DEVELOPER_IDS`.
+- Tampered or unlinked source entries return `409
+  EVIDENCE_CHAIN_VERIFICATION_FAILED`, increment
+  `grantex_evidence_chain_verification_failures_total` and raise the alert
+  (`deploy/prometheus/evidence-alerts.yml`); export duration is
+  `grantex_evidence_export_duration_seconds`.
+- Migrations 099 and 100 add the `evidence_records`, `evidence_cases` and
+  `audit_entry_counters` tables and a counter trigger on `audit_entries`,
+  created with a two-second lock timeout so startup is never blocked. Invalid
+  evidence settings stop the service at startup.
 
 ### Evidence package library
 - New `grantex.evidence` (Python) and `evidence` namespace of `@grantex/sdk`

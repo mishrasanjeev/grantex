@@ -192,10 +192,37 @@ curl http://localhost:3001/health
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | (none) | OpenTelemetry collector endpoint |
 | `EVIDENCE_EXPORT_ENABLED` | `false` | Enable the evidence record and export endpoints (`/v1/evidence/cases/...`) |
 | `EVIDENCE_EXPORT_DEVELOPER_IDS` | (all) | Comma-separated developer ids allowed to use evidence export (staged rollout) |
-| `EVIDENCE_PSEUDONYMISATION_SECRET` | (none) | Secret (at least 32 characters) from which each tenant's evidence pseudonymisation key is derived; without it only fully disclosed exports work |
-| `EVIDENCE_PSEUDONYMISATION_KEY_ID` | `v1` | Name of that secret recorded in packages; change it when rotating the secret |
+| `EVIDENCE_DISCLOSURE_DEVELOPER_IDS` | (none) | Developers allowed to export identifiers or content in the clear (`disclose`); nobody else may |
+| `EVIDENCE_PSEUDONYMISATION_SECRET` | (none) | Secret (at least 32 characters) from which each tenant's evidence pseudonymisation key is derived; exports need it. A shorter value stops the service at startup |
+| `EVIDENCE_PSEUDONYMISATION_KEY_ID` | `v1` | Name of that secret recorded in packages (`A-Z a-z 0-9 . _ : -`, at most 64; anything else stops the service at startup); change it when rotating the secret |
 | `SEED_API_KEY` | (none) | Pre-seed a developer API key on first start |
 | `SEED_SANDBOX_KEY` | (none) | Pre-seed a sandbox API key on first start |
+
+### Evidence packages (PRD G-5)
+
+Evidence export is off until `EVIDENCE_EXPORT_ENABLED=true`; roll it out per
+developer with `EVIDENCE_EXPORT_DEVELOPER_IDS`.
+
+- **Migrations.** `099_evidence_records.sql` creates new, empty tables only.
+  `100_audit_entry_counter_trigger.sql` adds a counter trigger to
+  `audit_entries`; creating it takes a brief lock, so the migration waits at
+  most two seconds and otherwise skips with a notice and retries on the next
+  start. Until the trigger exists, plan limits for evidence writes count with
+  `COUNT(*)`. Neither migration scans or rebuilds an existing table.
+- **Out-of-band index (before enabling export for large tenants).** Export
+  checks that each source audit entry links to an earlier entry by looking
+  up hashes. Build this index outside startup, then check it is valid:
+
+  ```sql
+  CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_developer_hash ON audit_entries (developer_id, hash);
+  SELECT indisvalid FROM pg_index WHERE indexrelid = 'idx_audit_developer_hash'::regclass;
+  -- if false: DROP INDEX CONCURRENTLY idx_audit_developer_hash; and create it again
+  ```
+- **Breaking change.** `POST /v1/audit/log` refuses actions starting with
+  `evidence.`, `decision.` or `grantex.` and metadata members starting with
+  `grantex:`. Clients that logged such names must rename them.
+- **Third-party verification** needs the service signature: export with
+  `"sign": true` and give auditors the JWKS from `/.well-known/jwks.json`.
 
 ### Startup Validation
 
