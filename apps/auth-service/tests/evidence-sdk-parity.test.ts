@@ -26,20 +26,22 @@ describe('evidence modules shared with the TypeScript SDK', () => {
       'build.ts', 'canonical.ts', 'checks.ts', 'document.ts', 'hashing.ts', 'result.ts', 'schema-1.0.ts', 'schema.ts', 'signature.ts', 'verify.ts',
     ]);
     for (const name of copied) {
+      // The SDK's evidence/canonical.ts re-exports the shared src/canonical.ts; the service copies that file.
+      const source = name === 'canonical.ts' ? join(SDK, '..', 'canonical.ts') : join(SDK, name);
       expect(normalise(readFileSync(join(COPY, name), 'utf8')), `${name} differs from the SDK; copy it again`)
-        .toBe(normalise(readFileSync(join(SDK, name), 'utf8')));
+        .toBe(normalise(readFileSync(source, 'utf8')));
     }
   });
 
   it('verify the shared fixture packages', () => {
-    for (const name of ['package.json', 'package-disclosed.json']) {
+    for (const name of ['evidence-package.json', 'evidence-package-disclosed.json']) {
       const result = verifyPackage(readFileSync(join(FIXTURES, name)), { expectedRoot: expected[name]!.root });
       expect(result.ok, `${name}: ${result.code}`).toBe(true);
     }
   });
 
   it('compute anchor hashes exactly as the audit chain does', () => {
-    const anchor = (JSON.parse(readFileSync(join(FIXTURES, 'package.json'), 'utf8')) as { anchor: { audit_entry: Record<string, any> } }).anchor.audit_entry; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const anchor = (JSON.parse(readFileSync(join(FIXTURES, 'evidence-package.json'), 'utf8')) as { anchor: { audit_entry: Record<string, any> } }).anchor.audit_entry; // eslint-disable-line @typescript-eslint/no-explicit-any
     const serviceHash = computeAuditHash({
       id: anchor['id'], agentId: anchor['agentId'], agentDid: anchor['agentDid'], grantId: anchor['grantId'],
       principalId: anchor['principalId'], developerId: anchor['developerId'], action: anchor['action'],
@@ -47,6 +49,6 @@ describe('evidence modules shared with the TypeScript SDK', () => {
     });
     expect(serviceHash).toBe(anchor['hash']);
     expect(auditEntryHash(anchor)).toBe(serviceHash);
-    expect(serviceHash).toBe(expected['package.json']!.anchor_hash);
+    expect(serviceHash).toBe(expected['evidence-package.json']!.anchor_hash);
   });
 });

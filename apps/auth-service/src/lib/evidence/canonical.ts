@@ -1,10 +1,5 @@
 /**
- * JSON Canonicalization Scheme (RFC 8785) for evidence packages.
- *
- * A verbatim copy of `canonical.ts` from the decision-grant canonicalisation
- * work (spec/canonicalization.md), private to the evidence module until that
- * file is released. The two must stay identical: once `src/canonical.ts` is on
- * main this copy is replaced by a re-export of it.
+ * JSON Canonicalization Scheme (RFC 8785).
  *
  * `canonicalize` turns a JSON value into its canonical text: object members
  * sorted by the UTF-16 code units of their names, no insignificant
