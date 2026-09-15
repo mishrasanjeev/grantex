@@ -1,13 +1,23 @@
 /**
  * Postgres caps backend: row locks serialize reservations per counter.
  *
- * A reservation runs in one transaction: it upserts a row per counter in
- * `grantex_cap_counters`, locks those rows in a fixed order (so concurrent
- * reservations cannot deadlock), prunes and sums the counter's reservations in
- * `grantex_cap_reservations`, and inserts the new reservation only if every
- * limit holds. Rows carry `tenant_id`. Time comes from the database
+ * A reservation runs in one READ COMMITTED transaction: it makes sure a row
+ * exists per counter in `grantex_cap_counters`, locks those rows in a fixed
+ * order (so concurrent reservations cannot deadlock), prunes and sums the
+ * counter's reservations in `grantex_cap_reservations`, and inserts the new
+ * reservation only if every limit holds. Time comes from the database
  * (`clock_timestamp()`) unless a clock is injected for tests. Same tables and
  * statements as the Python SDK's `PostgresCapsBackend`.
+ *
+ * Rows carry a SHA-256-derived hash of the tenant id, not the tenant id, in
+ * `tenant_id`: isolation comes from that hash being part of every key and
+ * query, and row-level security policies written against plain tenant ids do
+ * not match these rows.
+ *
+ * Expired rows are deleted lazily when their counter is next reserved. Run
+ * `prune()` periodically (for example hourly) to delete expired reservations,
+ * per-case reservations older than `caseTtlSeconds` if one is set, and
+ * counters with no reservations left.
  *
  * `pool` is a `pg` Pool, or anything with the same `connect()` / `query()` /
  * `release()` shape. Create the tables with `CAPS_SCHEMA_SQL` through your own
@@ -29,18 +39,26 @@ CREATE TABLE IF NOT EXISTS grantex_cap_reservations (
   reservation_id TEXT NOT NULL,
   units          BIGINT NOT NULL CHECK (units >= 0),
   reserved_at    TIMESTAMPTZ NOT NULL,
+  expires_at     TIMESTAMPTZ,
   PRIMARY KEY (tenant_id, counter_key, reservation_id),
   FOREIGN KEY (tenant_id, counter_key)
-    REFERENCES grantex_cap_counters (tenant_id, counter_key) ON DELETE CASCADE
+    REFERENCES grantex_cap_counters (tenant_id, counter_key)
 );
+
+ALTER TABLE grantex_cap_reservations ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_grantex_cap_reservations_time
   ON grantex_cap_reservations (tenant_id, counter_key, reserved_at);
+
+CREATE INDEX IF NOT EXISTS idx_grantex_cap_reservations_expiry
+  ON grantex_cap_reservations (expires_at)
+  WHERE expires_at IS NOT NULL;
 `;
 
 export interface PgClientLike {
-  query(text: string, values?: readonly unknown[]): Promise<{ rows: Array<Record<string, unknown>> }>;
-  release(): void;
+  query(text: string, values?: readonly unknown[]): Promise<{ rows: Array<Record<string, unknown>>; rowCount?: number | null }>;
+  /** `pg` destroys the connection instead of reusing it when given an error. */
+  release(err?: Error | boolean): void;
 }
 
 export interface PgPoolLike {
@@ -49,6 +67,7 @@ export interface PgPoolLike {
 
 const NOW_SQL =
   'SELECT CASE WHEN $1::bigint IS NULL THEN clock_timestamp() ELSE to_timestamp($1::bigint / 1000.0) END AS now';
+const LOCK_ATTEMPTS = 3;
 
 function int(value: unknown): number {
   const n = typeof value === 'number' ? value : typeof value === 'string' || typeof value === 'bigint' ? Number(value) : Number.NaN;
@@ -58,9 +77,20 @@ function int(value: unknown): number {
 
 export class PostgresCapsBackend implements CapsBackend {
   readonly #pool: PgPoolLike;
+  readonly #caseTtlSeconds: number | undefined;
 
-  constructor(pool: PgPoolLike) {
+  /**
+   * `caseTtlSeconds` optionally lets `prune()` delete per-case reservations
+   * that old; by default they are kept, because deleting them would reset the
+   * per-case cap.
+   */
+  constructor(pool: PgPoolLike, options: { caseTtlSeconds?: number } = {}) {
+    const ttl = options.caseTtlSeconds;
+    if (ttl !== undefined && (!Number.isInteger(ttl) || ttl <= 0)) {
+      throw new Error('caseTtlSeconds must be a positive integer');
+    }
     this.#pool = pool;
+    this.#caseTtlSeconds = ttl;
   }
 
   async ensureSchema(): Promise<void> {
@@ -107,26 +137,55 @@ export class PostgresCapsBackend implements CapsBackend {
     return int(row['used']);
   }
 
+  #expirySeconds(limit: ResolvedCapLimit): number | null {
+    const window = WINDOW_MS[limit.window];
+    if (window > 0) return window / 1000;
+    return this.#caseTtlSeconds ?? null;
+  }
+
+  /** Run `work` in a READ COMMITTED transaction; a connection whose rollback fails is destroyed. */
+  async #transaction<T>(work: (client: PgClientLike) => Promise<T>): Promise<T> {
+    const client = await this.#pool.connect();
+    let releaseError: Error | undefined;
+    try {
+      await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+      try {
+        const result = await work(client);
+        await client.query('COMMIT');
+        return result;
+      } catch (err) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rollbackError) {
+          // The original error propagates; the connection is not reused.
+          releaseError = rollbackError instanceof Error ? rollbackError : new Error(String(rollbackError));
+        }
+        throw err;
+      }
+    } finally {
+      client.release(releaseError);
+    }
+  }
+
   async reserve(tenantId: string, reservationId: string, limits: readonly ResolvedCapLimit[], nowMs: number | undefined): Promise<void> {
     const tenant = await tenantHash(tenantId);
     const ordered = [...limits].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-    const client = await this.#pool.connect();
-    let open = false;
-    try {
-      await client.query('BEGIN');
-      open = true;
+    await this.#transaction(async (client) => {
       for (const limit of ordered) {
-        await client.query(
-          'INSERT INTO grantex_cap_counters (tenant_id, counter_key) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-          [tenant, limit.key],
-        );
-      }
-      for (const limit of ordered) {
-        const { rows } = await client.query(
-          'SELECT counter_key FROM grantex_cap_counters WHERE tenant_id = $1 AND counter_key = $2 FOR UPDATE',
-          [tenant, limit.key],
-        );
-        if (rows.length !== 1) throw new Error('caps counter row missing after upsert');
+        let locked = false;
+        for (let attempt = 0; attempt < LOCK_ATTEMPTS && !locked; attempt += 1) {
+          await client.query(
+            'INSERT INTO grantex_cap_counters (tenant_id, counter_key) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+            [tenant, limit.key],
+          );
+          const { rows } = await client.query(
+            'SELECT counter_key FROM grantex_cap_counters WHERE tenant_id = $1 AND counter_key = $2 FOR UPDATE',
+            [tenant, limit.key],
+          );
+          // No row: prune() removed an empty counter between the two statements.
+          locked = rows.length === 1;
+        }
+        if (!locked) throw new Error('caps counter row could not be locked');
       }
       // Read the time after the locks are held, so a reservation that waited
       // is judged against the moment it actually runs.
@@ -141,20 +200,12 @@ export class PostgresCapsBackend implements CapsBackend {
       }
       for (const limit of ordered) {
         await client.query(
-          'INSERT INTO grantex_cap_reservations (tenant_id, counter_key, reservation_id, units, reserved_at) ' +
-            'VALUES ($1, $2, $3, $4, $5::timestamptz)',
-          [tenant, limit.key, reservationId, limit.units, now],
+          'INSERT INTO grantex_cap_reservations (tenant_id, counter_key, reservation_id, units, reserved_at, expires_at) ' +
+            'VALUES ($1, $2, $3, $4, $5::timestamptz, $5::timestamptz + make_interval(secs => $6::double precision))',
+          [tenant, limit.key, reservationId, limit.units, now, this.#expirySeconds(limit)],
         );
       }
-      await client.query('COMMIT');
-      open = false;
-    } finally {
-      if (open) {
-        // The original error propagates; a failed rollback must not mask it.
-        await client.query('ROLLBACK').catch(() => undefined);
-      }
-      client.release();
-    }
+    });
   }
 
   async refund(tenantId: string, reservationId: string, limits: readonly ResolvedCapLimit[]): Promise<void> {
@@ -181,5 +232,29 @@ export class PostgresCapsBackend implements CapsBackend {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * Delete expired reservations and counters left empty; returns the numbers
+   * deleted. Counters being reserved are locked and skipped, and a counter that
+   * still has reservations cannot be deleted (the foreign key refuses it,
+   * failing this run rather than losing a reservation; run it again).
+   */
+  async prune(nowMs?: number): Promise<{ reservations: number; counters: number }> {
+    return this.#transaction(async (client) => {
+      const now = await PostgresCapsBackend.#now(client, nowMs);
+      const expired = await client.query(
+        'DELETE FROM grantex_cap_reservations WHERE expires_at IS NOT NULL AND expires_at <= $1::timestamptz',
+        [now],
+      );
+      const empty = await client.query(
+        'DELETE FROM grantex_cap_counters WHERE (tenant_id, counter_key) IN (' +
+          ' SELECT c.tenant_id, c.counter_key FROM grantex_cap_counters c' +
+          ' WHERE NOT EXISTS (SELECT 1 FROM grantex_cap_reservations r' +
+          '   WHERE r.tenant_id = c.tenant_id AND r.counter_key = c.counter_key)' +
+          ' FOR UPDATE SKIP LOCKED)',
+      );
+      return { reservations: expired.rowCount ?? 0, counters: empty.rowCount ?? 0 };
+    });
   }
 }

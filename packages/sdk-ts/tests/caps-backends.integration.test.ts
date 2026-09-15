@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, vi } from 'vitest';
 import { Redis } from 'ioredis';
 import pg from 'pg';
 import {
@@ -161,6 +161,75 @@ for (const [name, url, make] of backends) {
     });
   });
 }
+
+for (const [name, url, make] of backends) {
+  describe.skipIf(!url)(`enforce() with the ${name} backend`, () => {
+    it('fifty parallel enforce() calls against a per-hour cap of ten', async () => {
+      const { ToolManifest } = await import('../src/manifest.js');
+      const verify = await import('../src/verify.js');
+      const { Grantex } = await import('../src/client.js');
+      const developerId = tenant();
+      const spy = vi.spyOn(verify, 'verifyGrantToken').mockResolvedValue({
+        tokenId: 'tok_01',
+        grantId: 'grnt_01',
+        principalId: 'user_01',
+        agentDid: 'did:grantex:ag_01',
+        developerId,
+        scopes: ['tool:acme_kyb:read'],
+        issuedAt: 1709000000,
+        expiresAt: 9999999999,
+      });
+      try {
+        const c = new Grantex({ apiKey: 'test-key', capsMeter: new CapsMeter(await make()) });
+        c.loadManifest(
+          ToolManifest.fromJSON({ connector: 'acme_kyb', tools: { resolve_business: { permission: 'read', caps: { per_hour: 10 } } } }),
+        );
+        const results = await Promise.all(
+          Array.from({ length: 50 }, () => c.enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'resolve_business' })),
+        );
+        expect(results.filter((r) => r.allowed)).toHaveLength(10);
+        const denied = new Set(
+          results
+            .filter((r) => !r.allowed)
+            .map((r) => [r.reasonCode, r.subReason, r.details?.['code'], r.details?.['limit'], r.details?.['window']].join('|')),
+        );
+        expect([...denied]).toEqual(['cap_exceeded|limit_reached|E1008|10|per_hour']);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+  });
+}
+
+describe.skipIf(!POSTGRES_URL)('postgres prune', () => {
+  it('deletes expired rows and keeps per-case counts', async () => {
+    const backend = await postgresBackend();
+    const t = tenant();
+    const meter = new CapsMeter(backend, { clock: () => T0 });
+    await meter.reserve(t, [limit(5, 'per_hour', 1, 'hourly')]);
+    await meter.reserve(t, [limit(1, 'per_case', 1, 'case_01')]);
+    const pruned = await backend.prune(T0 + HOUR);
+    expect(pruned.reservations).toBeGreaterThanOrEqual(1);
+    expect(pruned.counters).toBeGreaterThanOrEqual(1);
+    expect((await meter.usage(t, [limit(5, 'per_hour', 1, 'hourly')]))[0]?.used).toBe(0);
+    await expect(meter.reserve(t, [limit(1, 'per_case', 1, 'case_01')])).rejects.toBeInstanceOf(CapExceededError);
+    await meter.reserve(t, [limit(5, 'per_hour', 1, 'hourly')]);
+  });
+
+  it('honours caseTtlSeconds', async () => {
+    await postgresBackend();
+    const pool = new pg.Pool({ connectionString: POSTGRES_URL, max: 2 });
+    pools.push(pool);
+    const backend = new PostgresCapsBackend(pool, { caseTtlSeconds: 60 });
+    const t = tenant();
+    const meter = new CapsMeter(backend, { clock: () => T0 });
+    await meter.reserve(t, [limit(1, 'per_case', 1, 'case_ttl')]);
+    await backend.prune(T0 + 59_000);
+    await expect(meter.reserve(t, [limit(1, 'per_case', 1, 'case_ttl')])).rejects.toBeInstanceOf(CapExceededError);
+    await backend.prune(T0 + 60_000);
+    await meter.reserve(t, [limit(1, 'per_case', 1, 'case_ttl')]);
+  });
+});
 
 describe.skipIf(!REDIS_URL)('redis keys', () => {
   it('are tenant-scoped with one hash tag', async () => {
