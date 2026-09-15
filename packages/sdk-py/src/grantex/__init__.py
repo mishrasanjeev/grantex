@@ -150,7 +150,14 @@ from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent,
 from ._pkce import PkceChallenge, generate_pkce
 from ._verify import verify_grant_token
 from ._webhook import verify_webhook, verify_webhook_signature
-from .denials import CapSubReason, DenialReason, ManifestSubReason, PurposeSubReason
+from .denials import (
+    CapSubReason,
+    DenialReason,
+    ManifestSubReason,
+    PurposeSubReason,
+    TokenSubReason,
+    ToolSubReason,
+)
 from .manifest import (
     EnforceResult,
     ManifestValidationError,
@@ -353,6 +360,8 @@ __all__ = [
     "CapSubReason",
     "ManifestSubReason",
     "PurposeSubReason",
+    "TokenSubReason",
+    "ToolSubReason",
     # FastAPI Integration
     "GrantexEnforcer",
     # Version

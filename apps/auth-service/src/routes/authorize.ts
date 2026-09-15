@@ -12,6 +12,7 @@ import { checkRateLimit } from '../lib/rate-limit.js';
 import { assertValidRedirectUri } from '../lib/url-security.js';
 import { isValidPkceChallenge } from '../lib/pkce.js';
 import { validateResourceServers } from '../lib/agent-security.js';
+import { buildToolsAuthorizationDetails, isKnownPurpose, PURPOSE_VOCABULARY } from '../lib/purpose.js';
 
 const AUTHORIZE_MAX_PER_MINUTE = 10;
 const AUTHORIZE_WINDOW_SECONDS = 60;
@@ -26,6 +27,7 @@ interface AuthorizeBody {
   audience?: string;
   codeChallenge?: string;
   codeChallengeMethod?: string;
+  purpose?: string;
 }
 
 export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
@@ -40,7 +42,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     if (typeof body !== 'object' || body === null || Array.isArray(body)) {
       return reply.status(400).send({ message: 'Request body must be a JSON object', code: 'BAD_REQUEST', requestId: request.id });
     }
-    const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience, codeChallenge, codeChallengeMethod } = body;
+    const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience, codeChallenge, codeChallengeMethod, purpose } = body;
 
     const rl = await checkRateLimit(
       `authorize:${request.developer.id}`,
@@ -74,6 +76,26 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     }
     if (scopes.length > 100) {
       return reply.status(400).send({ message: 'Too many scopes (max 100)', code: 'BAD_REQUEST', requestId: request.id });
+    }
+    // A purpose binds the grant's tool calls, so it must be a known term and
+    // reach at least one connector through the token's authorization_details.
+    let toolsAuthorizationDetails: ReturnType<typeof buildToolsAuthorizationDetails> | null = null;
+    if (purpose !== undefined) {
+      if (!isKnownPurpose(purpose)) {
+        return reply.status(400).send({
+          message: `purpose must be one of ${[...PURPOSE_VOCABULARY.keys()].join(', ')} or a private term x-<org>.<term>`,
+          code: 'INVALID_PURPOSE',
+          requestId: request.id,
+        });
+      }
+      toolsAuthorizationDetails = buildToolsAuthorizationDetails(purpose, scopes);
+      if (toolsAuthorizationDetails.length === 0) {
+        return reply.status(400).send({
+          message: 'purpose requires at least one tool:<connector>:<permission> scope',
+          code: 'INVALID_PURPOSE',
+          requestId: request.id,
+        });
+      }
     }
     if (redirectUri !== undefined) {
       if (typeof redirectUri !== 'string' || redirectUri.length === 0 || redirectUri.length > 2048) {
@@ -261,7 +283,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       INSERT INTO auth_requests (
         id, agent_id, principal_id, developer_id, scopes, redirect_uri, state,
         expires_in, expires_at, audience, status, code, code_challenge,
-        code_challenge_method, agent_key_thumbprint
+        code_challenge_method, agent_key_thumbprint, purpose, authorization_details
       )
       VALUES (
         ${id}, ${agentId}, ${principalId}, ${developerId}, ${scopes},
@@ -271,7 +293,9 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
         ${autoCode},
         ${codeChallenge ?? null},
         ${codeChallengeMethod ?? null},
-        ${agent.key_thumbprint ?? null}
+        ${agent.key_thumbprint ?? null},
+        ${purpose ?? null},
+        ${toolsAuthorizationDetails === null ? null : sql.json(toolsAuthorizationDetails as never)}
       )
     `;
 
@@ -281,6 +305,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       authRequestId: id,
       consentUrl,
       expiresAt: expiresAt.toISOString(),
+      ...(purpose !== undefined ? { purpose } : {}),
     };
 
     if (isSandbox) {

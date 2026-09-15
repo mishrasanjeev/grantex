@@ -554,3 +554,6 @@ class EnforceResult:
 
     details: Dict[str, Any] = field(default_factory=dict)
     """Structured denial context (for example ``allowed_purposes`` or ``limit``)."""
+
+    purpose: str = ""
+    """The grant's purpose for this connector, when it carries one."""

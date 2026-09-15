@@ -94,7 +94,15 @@ export {
   type WrapToolOptions,
   type EnforceMiddlewareOptions,
 } from './manifest.js';
-export { DenialReason, CapSubReason, ManifestSubReason, PurposeSubReason } from './denials.js';
+export { DenialReason, CapSubReason, ManifestSubReason, PurposeSubReason, TokenSubReason, ToolSubReason } from './denials.js';
+export {
+  PURPOSE_VOCABULARY,
+  PRIVATE_PURPOSE_PREFIX,
+  isValidPurpose,
+  isKnownPurpose,
+  purposeMatches,
+  matchPurpose,
+} from './purpose.js';
 
 // DPDP Compliance
 export { DpdpClient } from './resources/dpdp.js';

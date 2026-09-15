@@ -110,6 +110,8 @@ export interface AuthorizeParams {
   codeChallenge?: string;
   /** Must be 'S256' when codeChallenge is provided */
   codeChallengeMethod?: string;
+  /** Purpose of the grant, e.g. `aml.cdd.onboarding` (see `PURPOSE_VOCABULARY`). */
+  purpose?: string;
 }
 
 export interface AuthorizationRequest {
@@ -130,6 +132,8 @@ export interface AuthorizationRequest {
   policyEnforced?: boolean;
   /** Returned when a policy was enforced */
   effect?: 'allow' | 'deny';
+  /** Purpose the request binds the grant to, when one was given. */
+  purpose?: string;
 }
 
 // ─── Grants ───────────────────────────────────────────────────────────────────
@@ -145,6 +149,8 @@ export interface Grant {
   issuedAt: string;
   expiresAt: string;
   revokedAt?: string;
+  /** Purpose the grant is bound to, when it has one. */
+  purpose?: string;
 }
 
 export interface ListGrantsParams {
@@ -184,6 +190,8 @@ export interface VerifiedGrant {
   parentGrantId?: string;
   /** Delegation depth (0 = root, n = nth-level delegation) */
   delegationDepth?: number;
+  /** Raw `authorization_details` claim (RFC 9396), when present. */
+  authorizationDetails?: unknown;
 }
 
 export interface DelegateParams {
@@ -269,6 +277,8 @@ export interface AuditEntry {
   prevHash: string | null;
   timestamp: string;
   status: 'success' | 'failure' | 'blocked';
+  /** Purpose of the grant the entry was recorded under, when it has one. */
+  purpose?: string;
 }
 
 export interface ListAuditParams {
@@ -351,6 +361,7 @@ export interface GrantTokenPayload {
   parentAgt?: string;
   parentGrnt?: string;
   delegationDepth?: number;
+  authorization_details?: unknown;
 }
 
 // ─── Billing ──────────────────────────────────────────────────────────────────

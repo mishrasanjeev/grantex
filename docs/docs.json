@@ -53,7 +53,8 @@
               "concepts/scope-registry",
               "concepts/delegation",
               "concepts/vs-oauth",
-              "concepts/tool-manifests"
+              "concepts/tool-manifests",
+              "concepts/purpose-bound-grants"
             ]
           },
           {
