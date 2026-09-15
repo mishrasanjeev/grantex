@@ -6,6 +6,14 @@ description: "OAuth 2.1 + PKCE endpoint package for MCP servers, with v2.0.2 lim
 
 <Info>Full feature guide: [MCP Auth Server](/features/mcp-auth-server)</Info>
 
+<Note>
+  `@grantex/mcp-auth` **3.0.0 is prepared in the repository but not yet
+  published**; npm serves `2.0.2`, which this page describes. For 3.0.0
+  (Postgres or Redis state, the current MCP authorization specification, a
+  rendered consent page and tool refusal at the MCP server) and migrating from
+  2.x, see [MCP Auth 3.0: deployment and consent page](/mcp-auth).
+</Note>
+
 ## Overview
 
 `@grantex/mcp-auth` registers OAuth 2.1-style metadata, PKCE authorization-code, client-registration, token, introspection, and revocation routes for MCP servers, plus JWT-verification middleware.

@@ -133,6 +133,13 @@ describe('CapsMeter', () => {
     expect(await meter.usage('dev_01', [limit(10)])).toMatchObject([{ used: 10, remaining: 0 }]);
   });
 
+  it('reports the real usage when a single call exceeds the cap', async () => {
+    const meter = new CapsMeter(new InMemoryCapsBackend(), { clock: clock().fn });
+    await meter.reserve('dev_01', [limit(10, 'per_hour', 4)]);
+    const err = await rejects(meter.reserve('dev_01', [limit(10, 'per_hour', 11)]));
+    expect([err.used, err.requested, err.limit]).toEqual([4, 11, 10]);
+  });
+
   it('refundUnsent releases units and is idempotent', async () => {
     const meter = new CapsMeter(new InMemoryCapsBackend(), { clock: clock().fn });
     const reservation = await meter.reserve('dev_01', [limit(1)]);
@@ -226,7 +233,28 @@ describe('buildCapLimits', () => {
       return 'no error';
     };
     expect(run({ caseId: 'c1', costComponents: ['base', 'screening'] })).toBe('invalid_cost_component');
+    expect(run({ caseId: 'c1', costComponents: [], grantCaps: { cost_units: { per_day: 100 } } })).toBe('invalid_cost_component');
     expect(run({})).toBe('case_required');
+    expect(
+      buildCapLimits({
+        connector: 'acme_kyb',
+        tool: 'get_case',
+        spec: { permission: 'read' as ToolSpec['permission'], requiresDecision: false, fourEyesOn: [] },
+        grantId: 'grnt_01',
+        costComponents: [],
+      }),
+    ).toEqual([]);
+    try {
+      buildCapLimits({
+        connector: 'acme_kyb',
+        tool: 'verify_business',
+        spec: { ...spec, caps: undefined, costUnits: { base: 2147483647, ownership: 1 } } as unknown as ToolSpec,
+        grantId: 'grnt_01',
+      });
+      throw new Error('expected an error');
+    } catch (err) {
+      expect((err as CapsConfigurationError).subReason).toBe('invalid_cost_component');
+    }
   });
 
   const malformed: unknown[] = [
@@ -441,3 +469,143 @@ describe('enforce() metering', () => {
     expect((await enforce(c, 'resolve_business')).allowed).toBe(true);
   });
 });
+
+describe('check-only and caps modes', () => {
+  it('reserve: false checks without consuming', async () => {
+    const meter = new CapsMeter(new InMemoryCapsBackend());
+    const c = client(meter);
+    let check;
+    for (let i = 0; i < 5; i += 1) {
+      check = await enforce(c, 'resolve_business', { reserve: false });
+      expect(check.allowed).toBe(true);
+      expect(check).not.toHaveProperty('reservation');
+    }
+    expect(check?.capsTenantId).toBe('dev_01');
+    expect((await meter.usage('dev_01', check!.capLimits!))[0]?.used).toBe(0);
+  });
+
+  it('check early, then reserve at the gateway, uses one unit', async () => {
+    const meter = new CapsMeter(new InMemoryCapsBackend());
+    const c = client(meter);
+    const check = await enforce(c, 'resolve_business', { reserve: false });
+    await meter.reserve(check.capsTenantId!, check.capLimits!);
+    expect((await enforce(c, 'resolve_business')).allowed).toBe(true);
+    const denied = await enforce(c, 'resolve_business', { reserve: false });
+    expect([denied.allowed, denied.subReason, denied.details?.['used'], denied.details?.['limit']]).toEqual([false, 'limit_reached', 2, 2]);
+  });
+
+  it('reserve: false still denies a disabled tool', async () => {
+    const r = await enforce(client(), 'screen_person', { reserve: false });
+    expect([r.allowed, r.details?.['limit']]).toEqual([false, 0]);
+  });
+
+  it('warn mode allows and reports what it would deny', async () => {
+    const meter = new CapsMeter(new InMemoryCapsBackend());
+    const c = new Grantex({ apiKey: 'test-key', capsMeter: meter, capsMode: 'warn' });
+    c.loadManifest(acmeKyb);
+    for (let i = 0; i < 2; i += 1) {
+      const r = await enforce(c, 'resolve_business');
+      expect([r.allowed, r.wouldDeny, r.reservation !== undefined]).toEqual([true, undefined, true]);
+    }
+    const over = await enforce(c, 'resolve_business');
+    expect([over.allowed, over.reservation, over.reasonCode]).toEqual([true, undefined, undefined]);
+    expect(over.wouldDeny).toMatchObject({ reason_code: 'cap_exceeded', sub_reason: 'limit_reached', details: { code: 'E1008' } });
+    expect((await meter.usage('dev_01', over.capLimits!))[0]?.used).toBe(2);
+  });
+
+  it('warn mode reports a missing meter', async () => {
+    const c = new Grantex({ apiKey: 'test-key', capsMode: 'warn' });
+    c.loadManifest(acmeKyb);
+    const r = await enforce(c, 'resolve_business');
+    expect([r.allowed, r.wouldDeny?.sub_reason]).toEqual([true, 'meter_unavailable']);
+  });
+
+  it('warn mode still denies malformed grant caps', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(
+      grant([{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', caps: { resolve_business: { per_week: 1 } } }]),
+    );
+    const c = new Grantex({ apiKey: 'test-key', capsMeter: new CapsMeter(new InMemoryCapsBackend()), capsMode: 'warn' });
+    c.loadManifest(acmeKyb);
+    expect((await enforce(c, 'resolve_business')).reasonCode).toBe('token_invalid');
+  });
+
+  it('off mode skips caps and the meter', async () => {
+    const backend = failingBackend(new Error('unused'));
+    const c = new Grantex({ apiKey: 'test-key', capsMeter: new CapsMeter(backend), capsMode: 'off' });
+    c.loadManifest(acmeKyb);
+    for (let i = 0; i < 3; i += 1) {
+      const r = await enforce(c, 'screen_person');
+      expect([r.allowed, r.reservation, r.wouldDeny]).toEqual([true, undefined, undefined]);
+    }
+    expect(backend.reserve).not.toHaveBeenCalled();
+  });
+
+  it('a per-call mode overrides the client', async () => {
+    const c = client();
+    expect((await enforce(c, 'screen_person', { capsMode: 'off' })).allowed).toBe(true);
+    expect((await enforce(c, 'screen_person')).allowed).toBe(false);
+  });
+
+  it('rejects an invalid mode', async () => {
+    expect(() => new Grantex({ apiKey: 'test-key', capsMode: 'audit' as 'warn' })).toThrow();
+    await expect(enforce(client(), 'resolve_business', { capsMode: 'audit' })).rejects.toThrow();
+  });
+
+  it('a tenant override scopes the counters', async () => {
+    const c = client();
+    for (let i = 0; i < 2; i += 1) expect((await enforce(c, 'resolve_business', { capsTenantId: 'tenant_a' })).allowed).toBe(true);
+    expect((await enforce(c, 'resolve_business', { capsTenantId: 'tenant_a' })).allowed).toBe(false);
+    const r = await enforce(c, 'resolve_business', { capsTenantId: 'tenant_b' });
+    expect([r.allowed, r.capsTenantId]).toEqual([true, 'tenant_b']);
+    expect((await enforce(c, 'resolve_business')).allowed).toBe(true);
+  });
+
+  it('permissive mode turns cap denials into allows', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const c = new Grantex({ apiKey: 'test-key', enforceMode: 'permissive' } as ConstructorParameters<typeof Grantex>[0]);
+    c.loadManifest(acmeKyb);
+    const r = await enforce(c, 'resolve_business');
+    expect([r.allowed, r.reasonCode, r.subReason]).toEqual([true, 'cap_exceeded', 'meter_unavailable']);
+  });
+});
+
+describe('wrappers pass case and cost components', () => {
+  it('wrapTool', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(
+      grant([{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', caps: { cost_units: { per_day: 12 } } }]),
+    );
+    const c = client();
+    let n = 0;
+    const invoke = vi.fn().mockResolvedValue('ok');
+    const wrapped = c.wrapTool(
+      { name: 'verify_business', description: 'verify', invoke },
+      { connector: 'acme_kyb', tool: 'verify_business', grantToken: 't', caseId: () => `case_0${(n += 1)}`, costComponents: ['base'] },
+    );
+    expect(await wrapped.invoke()).toBe('ok');
+    expect(await wrapped.invoke()).toBe('ok');
+    await expect(wrapped.invoke()).rejects.toThrow('E1008');
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('enforceMiddleware', async () => {
+    const c = client();
+    const middleware = c.enforceMiddleware({
+      extractToken: () => 't',
+      extractConnector: () => 'acme_kyb',
+      extractTool: () => 'verify_business',
+      extractCaseId: (req) => req['caseId'] as string | undefined,
+      extractCostComponents: () => ['base'],
+    });
+    const run = (req: Record<string, unknown>) =>
+      new Promise<{ status?: number; next: boolean }>((resolve) => {
+        const res = {
+          status: (code: number) => ({ json: () => resolve({ status: code, next: false }) }),
+        };
+        middleware(req, res, () => resolve({ next: true }));
+      });
+    for (let i = 0; i < 3; i += 1) expect(await run({ caseId: 'case_01' })).toEqual({ next: true });
+    expect(await run({ caseId: 'case_01' })).toEqual({ status: 403, next: false });
+    expect(await run({})).toEqual({ status: 403, next: false });
+  });
+});
+

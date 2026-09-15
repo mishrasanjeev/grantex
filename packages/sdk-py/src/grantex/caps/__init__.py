@@ -27,6 +27,10 @@ from ._limits import (
 )
 from ._memory import InMemoryCapsBackend
 from ._meter import (
+    CAPS_ENFORCE,
+    CAPS_MODES,
+    CAPS_OFF,
+    CAPS_WARN,
     ERROR_CODE,
     PER_CASE,
     PER_DAY,
@@ -46,6 +50,10 @@ from ._postgres import SCHEMA_SQL, PostgresCapsBackend
 from ._redis import RedisCapsBackend
 
 __all__ = [
+    "CAPS_ENFORCE",
+    "CAPS_MODES",
+    "CAPS_OFF",
+    "CAPS_WARN",
     "CASE_REQUIRED",
     "ERROR_CODE",
     "INVALID_CASE_ID",

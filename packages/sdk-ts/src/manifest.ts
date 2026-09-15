@@ -22,7 +22,7 @@
  */
 
 import type { DenialReason } from './denials.js';
-import type { Reservation } from './caps/meter.js';
+import type { CapLimit, CapsMode, Reservation } from './caps/meter.js';
 
 /* ------------------------------------------------------------------ */
 /*  Permission                                                         */
@@ -67,6 +67,9 @@ export const MANIFEST_SCHEMA_ID = 'https://grantex.dev/spec/manifest-0.6.schema.
 
 /** Largest cap or cost-unit value a manifest may declare. */
 export const MAX_COUNT = 2147483647;
+
+/** Not allowed as a tool name: grant `caps` use it for the cost-unit budget. */
+export const RESERVED_TOOL_NAME = 'cost_units';
 
 const TOP_LEVEL_KEYS = ['$schema', 'connector', 'version', 'description', 'tools'] as const;
 const TOOL_KEYS = [
@@ -190,6 +193,9 @@ function checkNames(connector: unknown, tools: Record<string, unknown>): void {
  * @throws {ManifestValidationError} the value does not conform to manifest 0.6.
  */
 export function parseToolDeclaration(tool: string, value: unknown): ToolSpec {
+  if (tool === RESERVED_TOOL_NAME) {
+    throw fail(`tool name ${q(tool)} is reserved: it names the cost-unit budget in grant caps`);
+  }
   if (typeof value === 'string') {
     if (!isPermission(value)) throw invalidPermission(value, tool);
     return { permission: value, requiresDecision: false, fourEyesOn: [] };
@@ -281,6 +287,48 @@ export function parseToolDeclaration(tool: string, value: unknown): ToolSpec {
     throw fail(`${path}.four_eyes_on: requires requires_decision: true`);
   }
   return spec;
+}
+
+/**
+ * Parse manifest JSON text, rejecting a key repeated in any object. `JSON.parse`
+ * alone keeps the last value, so a tool declared twice would load silently.
+ */
+export function parseManifestJson(text: string): unknown {
+  const data: unknown = JSON.parse(text);
+  const duplicate = findDuplicateKey(text);
+  if (duplicate !== undefined) throw fail(`duplicate key ${q(duplicate)} in manifest file`);
+  return data;
+}
+
+/** First key repeated within one object of already-valid JSON `text`. */
+function findDuplicateKey(text: string): string | undefined {
+  const stack: Array<{ keys: Set<string> | null; expectKey: boolean }> = [];
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      const top = stack[stack.length - 1];
+      if (top?.keys && top.expectKey) {
+        const key = JSON.parse(text.slice(i, j + 1)) as string;
+        if (top.keys.has(key)) return key;
+        top.keys.add(key);
+        top.expectKey = false;
+      }
+      i = j + 1;
+      continue;
+    }
+    if (ch === '{') stack.push({ keys: new Set(), expectKey: true });
+    else if (ch === '[') stack.push({ keys: null, expectKey: false });
+    else if (ch === '}' || ch === ']') stack.pop();
+    else if (ch === ',') {
+      const top = stack[stack.length - 1];
+      if (top?.keys) top.expectKey = true;
+    }
+    i += 1;
+  }
+  return undefined;
 }
 
 /** Render a ToolSpec in manifest 0.6 object form (omitting unset fields). */
@@ -403,7 +451,13 @@ export class ToolManifest {
     for (const name of Object.keys(this.tools)) {
       const spec = this.getToolSpec(name) ?? { permission: this.tools[name] as Permission, requiresDecision: false, fourEyesOn: [] };
       const rendered = toolSpecToObject(spec);
-      tools[name] = Object.keys(rendered).length === 1 ? spec.permission : rendered;
+      // defineProperty keeps a tool named "__proto__" as an own property.
+      Object.defineProperty(tools, name, {
+        value: Object.keys(rendered).length === 1 ? spec.permission : rendered,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
     return {
       connector: this.connector,
@@ -422,15 +476,17 @@ export class ToolManifest {
     const content = fs.readFileSync(filePath, 'utf-8');
     let data: unknown;
     if (filePath.endsWith('.yaml') || filePath.endsWith('.yml')) {
+      let yaml: { parse: (s: string, options?: { uniqueKeys?: boolean }) => unknown };
       try {
         // Dynamic import — yaml is an optional peer dependency
-        const yaml = (await import('yaml' as string)) as { parse: (s: string) => unknown };
-        data = yaml.parse(content);
+        yaml = (await import('yaml' as string)) as typeof yaml;
       } catch {
         throw new Error('yaml package required for YAML manifests: npm install yaml');
       }
+      // uniqueKeys makes the parser throw on a repeated key.
+      data = yaml.parse(content, { uniqueKeys: true });
     } else {
-      data = JSON.parse(content);
+      data = parseManifestJson(content);
     }
     if (!isPlainObject(data)) throw fail('a manifest must be a JSON object');
     return ToolManifest.fromJSON(data);
@@ -521,12 +577,26 @@ export interface EnforceResult {
   reasonCode?: DenialReason;
   /** Finer-grained denial code, where one applies. */
   subReason?: string;
-  /** Structured denial context (for example `allowedPurposes` or `limit`). */
+  /** Structured denial context. Keys are snake_case (`allowed_purposes`, `limit`, `window`), identical to the Python SDK. */
   details?: Record<string, unknown>;
   /** The grant's purpose for this connector, when it carries one. */
   purpose?: string;
   /** Caps reserved for this call, when the tool or grant declares caps. */
   reservation?: Reservation;
+  /** Counters this call is metered against (also set when `reserve: false`). */
+  capLimits?: readonly CapLimit[];
+  /** Tenant of `capLimits`; pass both to `CapsMeter.reserve`. */
+  capsTenantId?: string;
+  /** In caps warn mode, the cap denial that was not applied. */
+  wouldDeny?: WouldDeny;
+}
+
+/** A cap denial reported, not applied, in caps warn mode. Keys match the Python SDK. */
+export interface WouldDeny {
+  reason_code: string;
+  sub_reason: string;
+  reason: string;
+  details: Record<string, unknown>;
 }
 
 /** Options for `grantex.enforce()`. */
@@ -539,10 +609,20 @@ export interface EnforceOptions {
   tool: string;
   /** Amount for capped scope enforcement (optional). */
   amount?: number;
-  /** Case the call belongs to; required when a per-case cap applies. */
+  /** Case the call belongs to; required when a per-case cap applies. Set by the gateway, never the agent. */
   caseId?: string;
-  /** Manifest cost units the call incurs (default: all the tool declares). */
+  /** Manifest cost units the call incurs (default: all the tool declares). Set by the gateway, never the agent. */
   costComponents?: readonly string[];
+  /**
+   * `false` checks caps against current usage without consuming anything; reserve
+   * later with `CapsMeter.reserve(result.capsTenantId, result.capLimits)` or call
+   * `enforce()` again at the call that incurs cost. Default `true`.
+   */
+  reserve?: boolean;
+  /** Overrides the client's caps mode for this call. */
+  capsMode?: CapsMode;
+  /** Tenant of every counter of this call instead of the grant's developer. */
+  capsTenantId?: string;
 }
 
 /** Options for `grantex.wrapTool()`. */
@@ -553,6 +633,10 @@ export interface WrapToolOptions {
   tool: string;
   /** Grant token — static string or getter function for dynamic tokens. */
   grantToken: string | (() => string);
+  /** Case for per-case caps, or a getter evaluated per call. Never taken from the tool's (model-supplied) input. */
+  caseId?: string | (() => string | undefined);
+  /** Cost units the call incurs, or a getter evaluated per call. Never taken from the tool's input. */
+  costComponents?: readonly string[] | (() => readonly string[] | undefined);
 }
 
 /** Options for `grantex.enforceMiddleware()`. */
@@ -563,4 +647,8 @@ export interface EnforceMiddlewareOptions {
   extractConnector: (req: Record<string, unknown>) => string;
   /** Extract the tool name from the request. */
   extractTool: (req: Record<string, unknown>) => string;
+  /** Case for per-case caps, from trusted request context (not the agent's payload). */
+  extractCaseId?: (req: Record<string, unknown>) => string | undefined;
+  /** Cost units the call incurs, from trusted request context (not the agent's payload). */
+  extractCostComponents?: (req: Record<string, unknown>) => readonly string[] | undefined;
 }

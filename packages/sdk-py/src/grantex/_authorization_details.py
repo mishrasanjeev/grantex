@@ -20,6 +20,11 @@ scopes. Anything ambiguous — a claim that is not an array, an entry without a
 string ``type``, a tools entry with an unknown key, a value of the wrong type
 or two tools entries for one connector — raises
 :class:`AuthorizationDetailsError`, and ``enforce()`` denies.
+
+``caps`` is validated here, for every call on the connector: each key is an
+exact tool name or ``cost_units`` (the connector's cost-unit budget), never a
+wildcard, and each value is a non-empty object of ``per_hour``, ``per_day``
+and ``per_case`` counts from 0 to 2147483647.
 """
 
 from __future__ import annotations
@@ -34,6 +39,11 @@ DECISION_DETAIL_TYPE = "urn:grantex:decision:v1"
 _ENTRY_KEYS = frozenset({"type", "connector", "purpose", "data_region", "tools", "caps"})
 _NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}\Z")
 _TOOL_PATTERN_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}\*?\Z")
+_CAP_WINDOWS = ("per_hour", "per_day", "per_case")
+_MAX_COUNT = 2147483647
+
+COST_UNITS_KEY = "cost_units"
+"""Key of the connector cost-unit budget in ``caps``; reserved as a tool name."""
 
 
 class AuthorizationDetailsError(ValueError):
@@ -50,8 +60,8 @@ class ToolsAuthorization:
     data_region: Optional[str] = None
     tools: Optional[Tuple[str, ...]] = None
     """Tool names, or prefixes ending in ``*``; ``None`` means every tool."""
-    caps: Optional[Mapping[str, Any]] = None
-    """Cap declarations as issued; interpreted by the caps meter."""
+    caps: Optional[Mapping[str, Mapping[str, int]]] = None
+    """Validated caps: tool name (or ``cost_units``) to window to count."""
 
     def allows_tool(self, tool: str) -> bool:
         """Whether ``tools`` (when present) lists ``tool``."""
@@ -64,6 +74,32 @@ class ToolsAuthorization:
             elif entry == tool:
                 return True
         return False
+
+
+def _parse_caps(raw: Any, where: str) -> Dict[str, Dict[str, int]]:
+    if not isinstance(raw, Mapping) or not raw:
+        raise AuthorizationDetailsError(f"{where} must be a non-empty object")
+    parsed: Dict[str, Dict[str, int]] = {}
+    for name, windows in raw.items():
+        if not isinstance(name, str) or not (name == COST_UNITS_KEY or _NAME_RE.match(name)):
+            raise AuthorizationDetailsError(
+                f"{where} key {name!r} must be an exact tool name or cost_units; wildcards are not allowed"
+            )
+        if not isinstance(windows, Mapping) or not windows:
+            raise AuthorizationDetailsError(f"{where}.{name} must be a non-empty object")
+        counts: Dict[str, int] = {}
+        for window, value in windows.items():
+            if window not in _CAP_WINDOWS:
+                raise AuthorizationDetailsError(f"{where}.{name} has unknown window {window!r}")
+            if isinstance(value, float) and value.is_integer():
+                value = int(value)
+            if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= _MAX_COUNT:
+                raise AuthorizationDetailsError(
+                    f"{where}.{name}.{window} must be an integer between 0 and {_MAX_COUNT}"
+                )
+            counts[str(window)] = value
+        parsed[name] = counts
+    return parsed
 
 
 def parse_tools_authorization(claim: Any) -> Dict[str, ToolsAuthorization]:
@@ -121,11 +157,9 @@ def parse_tools_authorization(claim: Any) -> Dict[str, ToolsAuthorization]:
                 )
             tools = tuple(raw_tools)
 
-        caps: Optional[Mapping[str, Any]] = None
+        caps: Optional[Mapping[str, Mapping[str, int]]] = None
         if "caps" in raw:
-            if not isinstance(raw["caps"], Mapping):
-                raise AuthorizationDetailsError(f"{where}.caps must be an object")
-            caps = dict(raw["caps"])
+            caps = _parse_caps(raw["caps"], f"{where}.caps")
 
         entries[connector] = ToolsAuthorization(
             connector=connector,

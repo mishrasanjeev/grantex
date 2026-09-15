@@ -1,10 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { createMcpAuthServer } from '../src/server.js';
-import { InMemoryClientStore } from '../src/lib/clients.js';
+import { InMemoryStorage } from '../src/storage/memory.js';
+import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
+import { TEST_RESOURCE, upstreamGrantToken, authorizeWithConsent } from './helpers.js';
 
 const TEST_CLIENT_ID = 'test-client-id';
+const GT_TEST_TOKEN = upstreamGrantToken({ jti: 'gt_test_token' });
+const GT_REFRESHED_TOKEN = upstreamGrantToken({ jti: 'gt_refreshed_token' });
 const TEST_REDIRECT_URI = 'https://app.example.com/callback';
 const TEST_VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
 const TEST_CHALLENGE = createHash('sha256').update(TEST_VERIFIER).digest('base64url');
@@ -26,14 +30,14 @@ function createMockGrantex() {
     }),
     tokens: {
       exchange: vi.fn().mockResolvedValue({
-        grantToken: 'gt_test_token',
+        grantToken: GT_TEST_TOKEN,
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_test_refresh',
         grantId: 'grant-1',
       }),
       refresh: vi.fn().mockResolvedValue({
-        grantToken: 'gt_refreshed_token',
+        grantToken: GT_REFRESHED_TOKEN,
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_new_refresh',
@@ -46,11 +50,11 @@ function createMockGrantex() {
 const TEST_CLIENT_SECRET = 'test-secret';
 
 async function setupWithCode(options: { publicClient?: boolean } = {}) {
-  const clientStore = new InMemoryClientStore();
-  await clientStore.set(TEST_CLIENT_ID, {
+  const clientStore = new InMemoryStorage();
+  await clientStore.putClient({
     clientId: TEST_CLIENT_ID,
     // Confidential by default; `publicClient` registers a PKCE-only client.
-    ...(options.publicClient ? { tokenEndpointAuthMethod: 'none' as const } : { clientSecret: TEST_CLIENT_SECRET }),
+    ...(options.publicClient ? { tokenEndpointAuthMethod: 'none' as const } : { clientSecretHash: hashClientSecret(TEST_CLIENT_SECRET) }),
     redirectUris: [TEST_REDIRECT_URI],
     grantTypes: ['authorization_code', 'refresh_token'],
     createdAt: new Date().toISOString(),
@@ -63,14 +67,15 @@ async function setupWithCode(options: { publicClient?: boolean } = {}) {
     agentId: 'agent-1',
     scopes: ['read', 'write'],
     issuer: 'https://auth.example.com',
-    clientStore,
+    resource: TEST_RESOURCE,
+    storage: clientStore,
     // Test fixture uses the gated sandbox short path to obtain a code
     // without driving the Grantex consent flow.
     sandboxAutoApprove: true,
   });
 
   // Issue an authorization code via the authorize endpoint
-  const authResponse = await app.inject({
+  const authResponse = await authorizeWithConsent(app, {
     method: 'GET',
     url: '/authorize',
     query: {
@@ -224,17 +229,17 @@ describe('token endpoint', () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    expect(body.access_token).toBe('gt_test_token');
+    expect(body.access_token).toBe(GT_TEST_TOKEN);
     expect(body.token_type).toBe('bearer');
     expect(body.expires_in).toBeGreaterThan(0);
     expect(body.scope).toBe('read write');
   });
 
   it('forwards the Grantex sandbox/auto-approve code to the exchange instead of the auth-request id', async () => {
-    const clientStore = new InMemoryClientStore();
-    await clientStore.set(TEST_CLIENT_ID, {
+    const clientStore = new InMemoryStorage();
+    await clientStore.putClient({
       clientId: TEST_CLIENT_ID,
-      clientSecret: 'test-secret',
+      clientSecretHash: hashClientSecret('test-secret'),
       redirectUris: [TEST_REDIRECT_URI],
       grantTypes: ['authorization_code'],
       createdAt: new Date().toISOString(),
@@ -258,10 +263,11 @@ describe('token endpoint', () => {
       agentId: 'agent-1',
       scopes: ['read', 'write'],
       issuer: 'https://auth.example.com',
-      clientStore,
+      resource: TEST_RESOURCE,
+      storage: clientStore,
       sandboxAutoApprove: true,
     });
-    const authResponse = await app.inject({
+    const authResponse = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -291,6 +297,7 @@ describe('token endpoint', () => {
     expect(mockGrantex.tokens.exchange).toHaveBeenCalledWith({
       code: 'GRANTEX_SANDBOX_CODE',
       agentId: 'agent-1',
+      redirectUri: 'https://auth.example.com/callback',
     });
   });
 
@@ -351,7 +358,7 @@ describe('token endpoint', () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    expect(body.access_token).toBe('gt_refreshed_token');
+    expect(body.access_token).toBe(GT_REFRESHED_TOKEN);
     expect(body.token_type).toBe('bearer');
     expect(body.refresh_token).toBe('rt_new_refresh');
   });
@@ -362,9 +369,9 @@ describe('token endpoint', () => {
 
     it('rejects a refresh token presented by a different client without calling Grantex', async () => {
       const { app, code, clientStore, mockGrantex } = await setupWithCode();
-      await clientStore.set(OTHER_CLIENT_ID, {
+      await clientStore.putClient({
         clientId: OTHER_CLIENT_ID,
-        clientSecret: OTHER_CLIENT_SECRET,
+        clientSecretHash: hashClientSecret(OTHER_CLIENT_SECRET),
         redirectUris: [TEST_REDIRECT_URI],
         grantTypes: ['authorization_code', 'refresh_token'],
         createdAt: new Date().toISOString(),
@@ -491,7 +498,7 @@ describe('token endpoint', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().access_token).toBe('gt_test_token');
+      expect(response.json().access_token).toBe(GT_TEST_TOKEN);
     });
 
     it('rejects refresh_token grant for a confidential client without its secret', async () => {
@@ -527,7 +534,7 @@ describe('token endpoint', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().access_token).toBe('gt_test_token');
+      expect(response.json().access_token).toBe(GT_TEST_TOKEN);
     });
   });
 });

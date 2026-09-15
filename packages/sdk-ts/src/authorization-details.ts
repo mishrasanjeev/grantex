@@ -23,6 +23,11 @@
  * type, or two tools entries for one connector) throws
  * `AuthorizationDetailsError`, and `enforce()` denies. Mirrors the Python
  * SDK's `grantex._authorization_details`.
+ *
+ * `caps` is validated here, for every call on the connector: each key is an
+ * exact tool name or `cost_units` (the connector's cost-unit budget), never a
+ * wildcard, and each value is a non-empty object of `per_hour`, `per_day` and
+ * `per_case` counts from 0 to 2147483647.
  */
 
 export const TOOLS_DETAIL_TYPE = 'urn:grantex:tools:v1';
@@ -30,6 +35,13 @@ export const TOOLS_DETAIL_TYPE = 'urn:grantex:tools:v1';
 const ENTRY_KEYS = new Set(['type', 'connector', 'purpose', 'data_region', 'tools', 'caps']);
 const NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
 const TOOL_PATTERN_RE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}\*?$/;
+const CAP_WINDOWS = ['per_hour', 'per_day', 'per_case'] as const;
+const MAX_COUNT = 2147483647;
+
+/** Key of the connector cost-unit budget in `caps`; reserved as a tool name. */
+export const COST_UNITS_KEY = 'cost_units';
+
+export type CapWindowCounts = Partial<Record<(typeof CAP_WINDOWS)[number], number>>;
 
 export class AuthorizationDetailsError extends Error {
   constructor(message: string) {
@@ -46,12 +58,41 @@ export interface ToolsAuthorization {
   dataRegion?: string;
   /** Tool names, or prefixes ending in `*`; absent means every tool. */
   tools?: readonly string[];
-  /** Cap declarations as issued; interpreted by the caps meter. */
-  caps?: Readonly<Record<string, unknown>>;
+  /** Validated caps: tool name (or `cost_units`) to window to count. */
+  caps?: Readonly<Record<string, Readonly<CapWindowCounts>>>;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseCaps(raw: unknown, where: string): Record<string, CapWindowCounts> {
+  if (!isPlainObject(raw) || Object.keys(raw).length === 0) {
+    throw new AuthorizationDetailsError(`${where} must be a non-empty object`);
+  }
+  const parsed: Record<string, CapWindowCounts> = {};
+  for (const [name, windows] of Object.entries(raw)) {
+    if (!(name === COST_UNITS_KEY || NAME_RE.test(name))) {
+      throw new AuthorizationDetailsError(
+        `${where} key "${name}" must be an exact tool name or cost_units; wildcards are not allowed`,
+      );
+    }
+    if (!isPlainObject(windows) || Object.keys(windows).length === 0) {
+      throw new AuthorizationDetailsError(`${where}.${name} must be a non-empty object`);
+    }
+    const counts: CapWindowCounts = {};
+    for (const [window, value] of Object.entries(windows)) {
+      if (!(CAP_WINDOWS as readonly string[]).includes(window)) {
+        throw new AuthorizationDetailsError(`${where}.${name} has unknown window "${window}"`);
+      }
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > MAX_COUNT) {
+        throw new AuthorizationDetailsError(`${where}.${name}.${window} must be an integer between 0 and ${MAX_COUNT}`);
+      }
+      counts[window as (typeof CAP_WINDOWS)[number]] = value;
+    }
+    Object.defineProperty(parsed, name, { value: Object.freeze(counts), enumerable: true, writable: false, configurable: false });
+  }
+  return parsed;
 }
 
 /** Whether an entry's `tools` list (when present) names `tool`. */
@@ -112,9 +153,7 @@ export function parseToolsAuthorization(claim: unknown): Map<string, ToolsAuthor
       entry.tools = Object.freeze([...(tools as string[])]);
     }
     if ('caps' in raw) {
-      const caps = raw['caps'];
-      if (!isPlainObject(caps)) throw new AuthorizationDetailsError(`${where}.caps must be an object`);
-      entry.caps = Object.freeze({ ...caps });
+      entry.caps = Object.freeze(parseCaps(raw['caps'], `${where}.caps`));
     }
     entries.set(connector, entry);
   });

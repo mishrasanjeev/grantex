@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createMcpAuthServer } from '../src/server.js';
 import type { McpAuthConfig } from '../src/types.js';
+import { upstreamGrantToken } from './helpers.js';
+import { InMemoryStorage } from '../src/storage/memory.js';
 
 function createMockGrantex() {
   return {
@@ -18,14 +20,14 @@ function createMockGrantex() {
     }),
     tokens: {
       exchange: async () => ({
-        grantToken: 'gt_test',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_test' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_test',
         grantId: 'grant-1',
       }),
       refresh: async () => ({
-        grantToken: 'gt_refreshed',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_refreshed' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_new',
@@ -44,6 +46,8 @@ describe('metadata endpoint', () => {
       agentId: 'agent-1',
       scopes: ['read', 'write'],
       issuer: 'https://auth.example.com',
+      resource: 'https://mcp.example.com',
+      storage: new InMemoryStorage(),
     });
   });
 
@@ -95,6 +99,7 @@ describe('metadata endpoint', () => {
       agentId: 'agent-1',
       scopes: ['read'],
       issuer: 'https://auth.example.com',
+      storage: new InMemoryStorage(),
       allowedResources: ['https://api.example.com'],
     });
 
@@ -107,13 +112,13 @@ describe('metadata endpoint', () => {
     expect(body.resource_indicators_supported).toBe(true);
   });
 
-  it('omits resource_indicators_supported when no allowedResources', async () => {
+  it('advertises resource_indicators_supported without allowedResources (a resource is always bound)', async () => {
     const response = await app.inject({
       method: 'GET',
       url: '/.well-known/oauth-authorization-server',
     });
 
     const body = response.json();
-    expect(body).not.toHaveProperty('resource_indicators_supported');
+    expect(body.resource_indicators_supported).toBe(true);
   });
 });

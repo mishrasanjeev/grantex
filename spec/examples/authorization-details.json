@@ -1,0 +1,74 @@
+{
+  "description": "authorization_details claims shared by the Python and TypeScript SDK parsers. 'valid' cases list the tools entries each connector must yield (snake_case, as in the claim); 'invalid' cases must be rejected, which makes enforce() deny every call with token_invalid / malformed_authorization_details.",
+  "valid": [
+    {
+      "name": "no claim",
+      "claim": null,
+      "entries": {}
+    },
+    {
+      "name": "purpose only",
+      "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "purpose": "aml.cdd.onboarding"}],
+      "entries": {"acme_kyb": {"purpose": "aml.cdd.onboarding"}}
+    },
+    {
+      "name": "full entry with tool caps and a cost-unit budget",
+      "claim": [{
+        "type": "urn:grantex:tools:v1",
+        "connector": "acme_kyb",
+        "purpose": "aml.cdd.onboarding",
+        "data_region": "eu",
+        "tools": ["resolve_business", "verify_business", "screen_*"],
+        "caps": {"verify_business": {"per_hour": 50, "per_case": 3}, "screen_person": {"per_day": 0}, "cost_units": {"per_day": 5000}}
+      }],
+      "entries": {"acme_kyb": {
+        "purpose": "aml.cdd.onboarding",
+        "data_region": "eu",
+        "tools": ["resolve_business", "verify_business", "screen_*"],
+        "caps": {"verify_business": {"per_hour": 50, "per_case": 3}, "screen_person": {"per_day": 0}, "cost_units": {"per_day": 5000}}
+      }}
+    },
+    {
+      "name": "other detail types are ignored",
+      "claim": [
+        {"type": "urn:grantex:params:oauth:authorization-details:budget", "amount": "10.00", "currency": "USD"},
+        {"type": "urn:grantex:tools:v1", "connector": "other_kyb"}
+      ],
+      "entries": {"other_kyb": {}}
+    },
+    {
+      "name": "null purpose and region are absent",
+      "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "purpose": null, "data_region": null}],
+      "entries": {"acme_kyb": {}}
+    }
+  ],
+  "invalid": [
+    {"name": "claim is not an array", "claim": {"type": "urn:grantex:tools:v1", "connector": "acme_kyb"}},
+    {"name": "entry is not an object", "claim": ["urn:grantex:tools:v1"]},
+    {"name": "entry without type", "claim": [{"connector": "acme_kyb"}]},
+    {"name": "empty type", "claim": [{"type": "", "connector": "acme_kyb"}]},
+    {"name": "unknown key in a tools entry", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "scope": "all"}]},
+    {"name": "connector name with a space", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme kyb"}]},
+    {"name": "two entries for one connector", "claim": [
+      {"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "purpose": "aml.screening"},
+      {"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "purpose": "payments.payout"}
+    ]},
+    {"name": "purpose of the wrong type", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "purpose": 7}]},
+    {"name": "data_region of the wrong type", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "data_region": 1}]},
+    {"name": "tools is a string", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "tools": "resolve_business"}]},
+    {"name": "bare wildcard in tools", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "tools": ["*"]}]},
+    {"name": "caps is an array", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": []}]},
+    {"name": "empty caps", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {}}]},
+    {"name": "wildcard cap key", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "tools": ["screen_*"], "caps": {"screen_*": {"per_hour": 1}}}]},
+    {"name": "cap key with a space", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"screen person": {"per_hour": 1}}}]},
+    {"name": "cap value is a number", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"verify_business": 5}}]},
+    {"name": "cap value is empty", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"verify_business": {}}}]},
+    {"name": "unknown cap window", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"verify_business": {"per_week": 5}}}]},
+    {"name": "negative cap", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"verify_business": {"per_hour": -1}}}]},
+    {"name": "fractional cap", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"verify_business": {"per_hour": 1.5}}}]},
+    {"name": "boolean cap", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"verify_business": {"per_hour": true}}}]},
+    {"name": "string budget", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"cost_units": {"per_day": "5000"}}}]},
+    {"name": "cap above the maximum", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"verify_business": {"per_day": 2147483648}}}]},
+    {"name": "malformed cap for a tool other than the one called", "claim": [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"get_case": {"per_hour": 1}, "monitor_delete": {"per_hour": "x"}}}]}
+  ]
+}

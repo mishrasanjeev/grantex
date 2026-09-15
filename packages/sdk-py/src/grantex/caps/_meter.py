@@ -11,6 +11,14 @@ from typing import Callable, Dict, Optional, Protocol, Sequence, Tuple
 ERROR_CODE = "E1008"
 """Error code for an exceeded cap."""
 
+CAPS_OFF = "off"
+"""Caps are not evaluated."""
+CAPS_WARN = "warn"
+"""Caps are evaluated; a call they would deny is allowed and reported in ``would_deny``."""
+CAPS_ENFORCE = "enforce"
+"""Caps are evaluated and enforced (the default)."""
+CAPS_MODES = (CAPS_OFF, CAPS_WARN, CAPS_ENFORCE)
+
 PER_HOUR = "per_hour"
 PER_DAY = "per_day"
 PER_CASE = "per_case"
@@ -201,10 +209,22 @@ class CapsMeter:
         checked = validate_limits(tenant_id, limits)
         applied = tuple(limit for limit in checked if limit.units > 0)
         for limit in applied:
-            if limit.units > limit.limit:
-                # Includes a cap of zero: the tool is disabled, whatever the backend holds.
+            if limit.limit == 0:
+                # A cap of zero disables the tool, whatever the backend holds.
                 raise CapExceededError(
-                    limit=limit.limit, window=limit.window, used=0,
+                    limit=0, window=limit.window, used=0,
+                    requested=limit.units, scope=limit.scope, kind=limit.kind,
+                )
+            if limit.units > limit.limit:
+                # This call alone exceeds the cap; report what the counter holds.
+                try:
+                    used = self._backend.usage(tenant_id, limit, self._now())
+                except Exception as exc:
+                    raise MeterUnavailableError(
+                        f"caps backend unavailable: {type(exc).__name__}"
+                    ) from exc
+                raise CapExceededError(
+                    limit=limit.limit, window=limit.window, used=used,
                     requested=limit.units, scope=limit.scope, kind=limit.kind,
                 )
         reservation = Reservation(
