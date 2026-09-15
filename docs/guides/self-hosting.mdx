@@ -155,8 +155,12 @@ rules.
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
 | `REDIS_URL` | Yes | — | Redis connection string |
-| `RSA_PRIVATE_KEY` | Yes* | — | PEM private key for JWT signing. *Or set `AUTO_GENERATE_KEYS=true` (dev only) |
-| `AUTO_GENERATE_KEYS` | No | `false` | Auto-generate RSA keypair at startup (dev only) |
+| `JWT_SIGNING_ALG` | No | `RS256` | Signing algorithm: `RS256` or `ES256` |
+| `RSA_PRIVATE_KEY` | Yes* | — | PKCS#8 PEM RSA private key (RS256). *Or `EC_PRIVATE_KEY` for ES256, `SIGNING_KEY_STORE=postgres`, or `AUTO_GENERATE_KEYS=true` (dev only) |
+| `EC_PRIVATE_KEY` | Yes* | — | PKCS#8 PEM EC P-256 private key (ES256) |
+| `JWT_RETIRED_PUBLIC_KEYS` | No | — | JWK Set of public keys that must still verify after rotation |
+| `SIGNING_KEY_STORE` | No | `env` | `env` or `postgres` (generated, stored encrypted, rotated with `dist/cli/rotate-signing-key.js`) |
+| `AUTO_GENERATE_KEYS` | No | `false` | Auto-generate the signing key at startup (dev only) |
 | `JWT_ISSUER` | Yes | `https://grantex.dev` | `iss` claim in every JWT |
 | `PORT` | No | `3001` | Port the auth service listens on |
 | `HOST` | No | `0.0.0.0` | Bind address |
@@ -183,11 +187,14 @@ To upgrade, just restart the service — new migration files are applied automat
 
 ## 7. Key Rotation
 
-1. Generate a new RSA key pair (Section 2)
-2. Update `RSA_PRIVATE_KEY` in your env file or Kubernetes secret
-3. Restart the auth service
+The JWK Set publishes every platform signing key with `kid`, `alg` and `use: "sig"`, including keys
+kept for verification after rotation.
 
-The bundled JWKS endpoint publishes the active signing key. Replacing that key without also publishing the previous public key makes previously issued tokens fail signature verification. Schedule signing-key rotation after old tokens expire (or implement an overlapping multi-key JWKS) and test verifiers before removing the old key.
+- **Postgres key store** (`SIGNING_KEY_STORE=postgres`): run `node dist/cli/rotate-signing-key.js [--alg ES256]`.
+  The old key stays published for `SIGNING_KEY_RETIRED_GRACE_SECONDS`.
+- **Env key store**: publish the new key first (configure it under the other algorithm's setting),
+  then switch `JWT_SIGNING_ALG`, then move the old public JWK to `JWT_RETIRED_PUBLIC_KEYS` and remove
+  the old private key. See `docs/self-hosting.md` Section 7 for the full procedure.
 
 ## 8. Health Checks & Monitoring
 

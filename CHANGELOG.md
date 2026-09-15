@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### ES256 signing
+- The auth service can sign grant tokens, OAuth access tokens and its other
+  platform JWTs with ES256 (EC P-256) as well as RS256. `JWT_SIGNING_ALG`
+  selects the algorithm per deployment and defaults to `RS256`, so existing
+  deployments are unchanged. ES256 needs `EC_PRIVATE_KEY` (PKCS#8 PEM).
+- Key management: every platform signing key is published in
+  `/.well-known/jwks.json` with `kid`, `alg` and `use: "sig"`, together with
+  the keys kept for verification after a rotation. A configured key for the
+  algorithm that is not signing is published for verification only, so a new
+  key can be published before it signs; `JWT_RETIRED_PUBLIC_KEYS` keeps
+  retired public keys verifiable. `JWT_SIGNING_KID` fixes the `kid`.
+- `SIGNING_KEY_STORE=postgres` generates the key on first start and stores it
+  in `platform_signing_keys` (migration `096_platform_signing_keys.sql`),
+  encrypted with `VAULT_ENCRYPTION_KEY`. `node dist/cli/rotate-signing-key.js
+  [--alg ES256]` retires the active key, erasing its private key, and stores a
+  new one; retired keys stay published for
+  `SIGNING_KEY_RETIRED_GRACE_SECONDS` (default 30 days). Instances reload
+  keys every minute and when a token names an unknown `kid`.
+- Signing keys are validated at start: an RSA modulus of at least 2048 bits,
+  EC keys on P-256 only, no private members in published keys, unique `kid`s.
+- Verification everywhere (auth service, Python, TypeScript and Go SDKs) uses
+  an explicit allowlist of `RS256` and `ES256` and the JWK Set key named by
+  `kid` whose type matches the algorithm. `alg: none`, HS256, a key published
+  for another algorithm and a `kid` naming a key of the other type are
+  rejected. The SDKs add `algorithms` / `Algorithms` options that can only
+  narrow the list, and export `GRANT_TOKEN_ALGORITHMS` /
+  `GrantTokenAlgorithms()`.
+- **Break for verifiers:** code that pins RS256 on its own (for example a
+  resource server calling a JOSE library with `algorithms: ['RS256']`) rejects
+  tokens from a deployment that switches to ES256. Allow both algorithms
+  before an issuer switches. See `docs/migration-0.6.md`.
+- The `did:web` document lists every platform signing key instead of only the
+  RS256 key.
+
 ### Caps meter
 - New caps meter in both SDKs (`grantex.caps`, and `CapsMeter` in
   `@grantex/sdk`) enforces per-tool call caps over rolling `per_hour` and

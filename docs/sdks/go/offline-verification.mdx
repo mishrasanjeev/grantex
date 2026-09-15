@@ -33,6 +33,12 @@ fmt.Printf("Principal: %s, Scopes: %v\n", grant.PrincipalID, grant.Scopes)
 | `Issuer` | `string` | No | Expected `iss` claim. The hosted JWKS alias expects `https://grantex.dev`; custom JWKS URLs derive an issuer when omitted. |
 | `IssuerDID` | `string` | No | A `did:web` issuer used to derive the JWKS URL and expected issuer. An explicit `Issuer` takes precedence. |
 | `ClockTolerance` | `time.Duration` | No | Tolerance for clock skew |
+| `Algorithms` | `[]string` | No | Narrow the accepted algorithms to a subset of `GrantTokenAlgorithms()` (`RS256`, `ES256`, the default). Any other value returns a `TokenError`. |
+
+Grant tokens are signed with RS256 or ES256. The key is the JWK Set entry named by
+`kid`, and it must be an RSA public key for RS256 or an EC P-256 public key for
+ES256, published without a different `alg` and with `use` absent or `sig`.
+`alg: none` and HS256 are always rejected.
 
 Hosted tokens use the canonical issuer `https://grantex.dev`, even though the
 stable JWKS URL is served from `https://api.grantex.dev`. The SDK handles this

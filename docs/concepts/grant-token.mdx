@@ -1,12 +1,12 @@
 ---
 title: "Grant Token"
 sidebarTitle: "Grant Token"
-description: "Grantex grant tokens are RS256-signed JWTs with agent-specific claims."
+description: "Grantex grant tokens are RS256- or ES256-signed JWTs with agent-specific claims."
 ---
 
 ## Overview
 
-Grantex tokens are standard JWTs (RS256) extended with agent-specific claims.
+Grantex tokens are standard JWTs (RS256 by default, or ES256) extended with agent-specific claims.
 Any service can verify them locally using the published JWKS, without a
 per-token call to the Grantex verification API. Verifiers still need the public
 keys, fetched from the issuer and cached according to their SDK's behavior.
@@ -68,7 +68,7 @@ Grant tokens can be verified two ways:
 
 ### Offline (recommended)
 
-Verify the RS256 signature locally using the published JWKS. This avoids the
+Verify the RS256 or ES256 signature locally using the published JWKS. This avoids the
 online token-verification API, although the verifier may still need to retrieve
 the current public keys from the JWKS endpoint.
 
@@ -111,9 +111,9 @@ print(result.scopes)
 
 ## Security
 
-- **Algorithm pinning**: RS256 is hardcoded in all three verification layers (auth service, TypeScript SDK, Python SDK). The `alg` header in the token cannot override this.
+- **Algorithm allowlist**: every verification layer (auth service, TypeScript, Python and Go SDKs) accepts only RS256 and ES256, and only with a key of the matching type named by `kid`. The `alg` header cannot select another algorithm or another key.
 - **Replay prevention**: Every token's `jti` is tracked. Presenting a previously-seen `jti` returns `valid: false`.
-- **Minimum key size**: The auth service enforces a minimum 2048-bit RSA modulus on all signing keys.
+- **Minimum key size**: The auth service enforces a minimum 2048-bit RSA modulus on RSA signing keys; EC keys must be on P-256.
 
 ## Ownership
 

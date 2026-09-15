@@ -38,13 +38,17 @@ curl http://localhost:3001/.well-known/jwks.json
 
 ---
 
-## 2. Generating a Production RSA Key
+## 2. Generating a Production Signing Key
 
-Grantex signs grant tokens with RSA-256. Generate a 2048-bit private key once and store it
-securely:
+Grantex signs grant tokens with RS256 by default, or with ES256 when `JWT_SIGNING_ALG=ES256`.
+Generate the private key once, in PKCS#8 form, and store it securely:
 
 ```bash
-openssl genrsa -out private.pem 2048
+# RS256 (default): RSA_PRIVATE_KEY
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
+
+# ES256: EC_PRIVATE_KEY
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out private-ec.pem
 ```
 
 For use in environment variables or Kubernetes secrets, collapse it to a single line with
@@ -54,8 +58,12 @@ literal `\n` between each PEM line:
 awk 'NF {sub(/\r/, ""); printf "%s\\n", $0}' private.pem
 ```
 
-Copy the output (starting with `-----BEGIN RSA PRIVATE KEY-----\n...`) and use it as
-`RSA_PRIVATE_KEY`.
+Copy the output (starting with `-----BEGIN PRIVATE KEY-----\n...`) and use it as
+`RSA_PRIVATE_KEY` (or `EC_PRIVATE_KEY` for the EC key).
+
+Instead of supplying keys, `SIGNING_KEY_STORE=postgres` lets the service generate the key on
+first start and store it in `platform_signing_keys`, encrypted with `VAULT_ENCRYPTION_KEY`
+(see Section 7).
 
 > Keep `private.pem` out of source control. The JWKS endpoint (`GET /.well-known/jwks.json`)
 > exposes only the public key, so tokens remain verifiable after key rotation.
@@ -208,8 +216,14 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 |---|---|---|---|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
 | `REDIS_URL` | Yes | — | Redis connection string (include password if set) |
-| `RSA_PRIVATE_KEY` | Yes* | — | PEM private key for JWT signing. *Or set `AUTO_GENERATE_KEYS=true` (dev only) |
-| `AUTO_GENERATE_KEYS` | No | `false` | Auto-generate RSA keypair at startup (dev only — invalidated on restart) |
+| `JWT_SIGNING_ALG` | No | `RS256` | Signing algorithm: `RS256` or `ES256` |
+| `RSA_PRIVATE_KEY` | Yes* | — | PKCS#8 PEM RSA private key (RS256). *Required for `JWT_SIGNING_ALG=RS256` with the env key store, unless `AUTO_GENERATE_KEYS=true` (dev only). When `JWT_SIGNING_ALG=ES256`, a configured RSA key is published for verification only |
+| `EC_PRIVATE_KEY` | Yes* | — | PKCS#8 PEM EC P-256 private key (ES256). *Required for `JWT_SIGNING_ALG=ES256` with the env key store. When `JWT_SIGNING_ALG=RS256`, a configured EC key is published for verification only |
+| `JWT_SIGNING_KID` | No | — | `kid` of the env-store signing key (default: `grantex-YYYY-MM` for RS256, `grantex-es256-<thumbprint>` for ES256) |
+| `JWT_RETIRED_PUBLIC_KEYS` | No | — | JWK Set (JSON) of public keys that no longer sign but must still verify; each key needs `kid` and `alg` |
+| `SIGNING_KEY_STORE` | No | `env` | `env` (keys from the settings above) or `postgres` (generated and stored encrypted; needs `VAULT_ENCRYPTION_KEY`) |
+| `SIGNING_KEY_RETIRED_GRACE_SECONDS` | No | `2592000` | How long a retired stored key stays in the JWK Set; longer than your longest token lifetime |
+| `AUTO_GENERATE_KEYS` | No | `false` | Auto-generate the signing key at startup (dev only — invalidated on restart) |
 | `JWT_ISSUER` | Yes | `https://grantex.dev` | `iss` claim in every JWT; your public base URL |
 | `PORT` | No | `3001` | Port the auth service listens on |
 | `HOST` | No | `0.0.0.0` | Bind address |
@@ -248,9 +262,34 @@ New migration files are applied automatically on startup. No manual SQL executio
 
 ## 7. Key Rotation
 
-1. Generate a new RSA key pair (Section 2).
-2. Update `RSA_PRIVATE_KEY` in your env file or Kubernetes secret.
-3. Restart the auth service:
+`GET /.well-known/jwks.json` publishes every platform signing key with `kid`, `alg` and
+`use: "sig"`: the active key first, then keys kept for verification. Verifiers select the key by
+`kid` and refuse a key whose type does not match the token's algorithm.
+
+### Postgres key store
+
+With `SIGNING_KEY_STORE=postgres`, rotate with the bundled command:
+
+```bash
+node dist/cli/rotate-signing-key.js            # new key for JWT_SIGNING_ALG
+node dist/cli/rotate-signing-key.js --alg ES256 # switch algorithm
+```
+
+The command retires the active key, erases its private key, and stores a new active key. Running
+instances start signing with it within a minute. The retired public key stays in the JWK Set for
+`SIGNING_KEY_RETIRED_GRACE_SECONDS`, so tokens it signed keep verifying. The stored active key is
+authoritative: instances with a different `JWT_SIGNING_ALG` keep using it rather than rotating.
+
+### Env key store
+
+1. Publish the new key before it signs: add the new private key under the other setting (for
+   example `EC_PRIVATE_KEY` while `JWT_SIGNING_ALG=RS256`) and restart. It appears in the JWK Set
+   for verification only. Wait for verifier JWKS caches to refresh.
+2. Switch `JWT_SIGNING_ALG` (or replace the key) and restart. New tokens use the new key; the
+   old key, still configured, keeps verifying.
+3. Once you want the old private key gone, copy its public JWK (with `kid` and `alg`) from the
+   JWK Set into `JWT_RETIRED_PUBLIC_KEYS`, remove the private key setting and restart.
+4. Remove it from `JWT_RETIRED_PUBLIC_KEYS` after the tokens it signed have expired.
 
 ```bash
 # Docker Compose
@@ -260,10 +299,8 @@ docker compose -f docker-compose.prod.yml up -d auth-service
 kubectl rollout restart deployment/grantex -n grantex
 ```
 
-The bundled JWKS endpoint publishes the active signing key. Replacing that key without also
-publishing the previous public key makes previously issued tokens fail signature verification.
-Schedule signing-key rotation after old tokens expire (or implement an overlapping multi-key
-JWKS) and test verifiers before removing the old key.
+The RS256 key's default `kid` is `grantex-YYYY-MM` of the start month; set `JWT_SIGNING_KID` so the
+`kid` does not change when an instance restarts in a new month.
 
 ---
 
