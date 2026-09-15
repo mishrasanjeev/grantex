@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import * as jose from 'jose';
+import type { FastifyInstance, InjectOptions, LightMyRequestResponse } from 'fastify';
 import { vi } from 'vitest';
 import type { Mock } from 'vitest';
 import { InMemoryStorage } from '../src/storage/memory.js';
@@ -95,4 +96,73 @@ export function mockGrantex(options: { sandboxCode?: string } = {}): MockGrantex
 
 export function asGrantex(mock: MockGrantex): McpAuthConfig['grantex'] {
   return mock as unknown as McpAuthConfig['grantex'];
+}
+
+interface InjectResponse {
+  statusCode: number;
+  body: string;
+  headers: Record<string, string | string[] | number | undefined>;
+}
+
+interface Injector {
+  inject(options: {
+    method: 'POST';
+    url: string;
+    headers: Record<string, string>;
+    payload: string;
+  }): Promise<InjectResponse>;
+}
+
+/** Reads the consent form fields and the browser-binding cookie from a rendered consent page. */
+export function consentFormFrom(page: InjectResponse): { consentId: string; csrfToken: string; cookie: string } {
+  const consentId = /name="consent_id" value="([^"]+)"/.exec(page.body)?.[1];
+  const csrfToken = /name="csrf_token" value="([^"]+)"/.exec(page.body)?.[1];
+  const setCookie = page.headers['set-cookie'];
+  const cookie = String((Array.isArray(setCookie) ? setCookie[0] : setCookie) ?? '').split(';')[0];
+  if (!consentId || !csrfToken || !cookie) {
+    throw new Error(`not a consent page (status ${page.statusCode})`);
+  }
+  return { consentId, csrfToken, cookie };
+}
+
+/**
+ * Submits the consent page as the browser would: same-origin form post with
+ * the page's cookie. `/authorize` renders this page for every valid request.
+ */
+export function submitConsent(
+  app: Injector,
+  page: InjectResponse,
+  decision: 'approve' | 'deny' = 'approve',
+  issuer = 'https://auth.example.com',
+): Promise<InjectResponse> {
+  const { consentId, csrfToken, cookie } = consentFormFrom(page);
+  return app.inject({
+    method: 'POST',
+    url: '/consent',
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      cookie,
+      origin: new URL(issuer).origin,
+      'sec-fetch-site': 'same-origin',
+    },
+    payload: new URLSearchParams({ consent_id: consentId, csrf_token: csrfToken, decision }).toString(),
+  });
+}
+
+/**
+ * GET /authorize and, when it renders the consent page, approve it the way
+ * a browser would. Validation errors (400) are returned as they are, so a
+ * test can use this wherever it used to call /authorize directly; a success
+ * is now the 303 that follows the consent form.
+ */
+export async function authorizeWithConsent(app: FastifyInstance, options: InjectOptions): Promise<LightMyRequestResponse> {
+  const page = await app.inject(options);
+  if (page.statusCode !== 200) return page;
+  const { consentId, csrfToken, cookie } = consentFormFrom(page);
+  return app.inject({
+    method: 'POST',
+    url: '/consent',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', cookie, 'sec-fetch-site': 'same-origin' },
+    payload: new URLSearchParams({ consent_id: consentId, csrf_token: csrfToken, decision: 'approve' }).toString(),
+  });
 }

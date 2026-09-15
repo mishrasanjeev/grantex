@@ -13,6 +13,7 @@ import {
   TEST_RESOURCE,
   TEST_VERIFIER,
   asGrantex,
+  authorizeWithConsent,
   clientRecord,
   mockGrantex,
   seededStorage,
@@ -65,7 +66,7 @@ async function serverWith(storage: McpAuthStorage, grantex = mockGrantex({ sandb
 }
 
 async function issueCode(app: Awaited<ReturnType<typeof serverWith>>['app']): Promise<string> {
-  const response = await app.inject({
+  const response = await authorizeWithConsent(app, {
     method: 'GET',
     url: '/authorize',
     query: {
@@ -76,7 +77,7 @@ async function issueCode(app: Awaited<ReturnType<typeof serverWith>>['app']): Pr
       code_challenge_method: 'S256',
     },
   });
-  expect(response.statusCode).toBe(302);
+  expect(response.statusCode).toBe(303);
   return new URL(response.headers['location'] as string).searchParams.get('code')!;
 }
 

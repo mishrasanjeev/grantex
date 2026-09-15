@@ -4,7 +4,7 @@ import { createMcpAuthServer } from '../src/server.js';
 import { InMemoryStorage } from '../src/storage/memory.js';
 import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
-import { TEST_RESOURCE, upstreamGrantToken } from './helpers.js';
+import { TEST_RESOURCE, upstreamGrantToken, authorizeWithConsent } from './helpers.js';
 
 const TEST_CLIENT_ID = 'test-client-id';
 const GT_TEST_TOKEN = upstreamGrantToken({ jti: 'gt_test_token' });
@@ -75,7 +75,7 @@ async function setupWithCode(options: { publicClient?: boolean } = {}) {
   });
 
   // Issue an authorization code via the authorize endpoint
-  const authResponse = await app.inject({
+  const authResponse = await authorizeWithConsent(app, {
     method: 'GET',
     url: '/authorize',
     query: {
@@ -267,7 +267,7 @@ describe('token endpoint', () => {
       storage: clientStore,
       sandboxAutoApprove: true,
     });
-    const authResponse = await app.inject({
+    const authResponse = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
