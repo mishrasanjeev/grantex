@@ -1,6 +1,6 @@
 {
   "name": "@grantex/mcp-auth",
-  "version": "2.0.2",
+  "version": "3.0.0",
   "description": "OAuth 2.1 + PKCE authorization server for MCP servers, powered by Grantex",
   "author": {
     "name": "Sanjeev Kumar",
