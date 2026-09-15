@@ -7335,7 +7335,7 @@ paths:
       operationId: submitDecisionPage
       tags: [Decision Grants]
       summary: Approve from the page (form post)
-      description: Requires the approver session cookie, the page's CSRF token and an Origin header of this service; Sec-Fetch-Site, when sent, must be same-origin. Dwell time is measured by the service.
+      description: Requires the approver session cookie, the page's CSRF token and an Origin header of this service and Sec-Fetch-Site same-origin (a request without either is refused). Dwell time is measured by the service.
       security: []
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
