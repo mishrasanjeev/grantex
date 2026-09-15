@@ -1,4 +1,4 @@
-import type { CapsMeter } from './caps/meter.js';
+import type { CapsMeter, CapsMode } from './caps/meter.js';
 
 // ─── Rate Limits ─────────────────────────────────────────────────────────────
 
@@ -26,6 +26,8 @@ export interface GrantexClientOptions {
   maxRetries?: number;
   /** Meter for tools and grants that declare caps; without one such calls are denied. */
   capsMeter?: CapsMeter;
+  /** `enforce` (default) denies over-cap calls, `warn` allows them and reports `wouldDeny`, `off` skips caps. */
+  capsMode?: CapsMode;
 }
 
 // ─── Signup ─────────────────────────────────────────────────────────────────

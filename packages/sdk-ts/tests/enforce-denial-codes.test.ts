@@ -136,7 +136,7 @@ describe('declared constraints fail closed', () => {
       DenialReason.PURPOSE_NOT_ALLOWED,
       PurposeSubReason.MISSING,
     ]);
-    expect(r.details).toEqual({ allowedPurposes: ['aml.cdd.*'] });
+    expect(r.details).toEqual({ allowed_purposes: ['aml.cdd.*'] });
     expect(r.reason).toContain('purpose');
   });
 

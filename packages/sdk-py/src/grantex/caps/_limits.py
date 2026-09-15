@@ -87,7 +87,17 @@ def build_cap_limits(
             raise CapsConfigurationError(
                 f"cost components {components!r} are not all declared by tool {tool!r}", INVALID_COST_COMPONENT
             )
+        if declared_units and not components:
+            # A call to a tool that declares cost units incurs at least one of
+            # them; an empty list would skip the budget entirely.
+            raise CapsConfigurationError(
+                f"tool {tool!r} declares cost units, so cost_components cannot be empty", INVALID_COST_COMPONENT
+            )
     cost = sum(declared_units[c] for c in components)
+    if cost > MAX_COUNT:
+        raise CapsConfigurationError(
+            f"the cost of this call ({cost} units) exceeds {MAX_COUNT}", INVALID_COST_COMPONENT
+        )
 
     parsed_grant = parse_grant_caps(grant_caps)
     limits: List[CapLimit] = []

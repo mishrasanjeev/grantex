@@ -92,6 +92,7 @@ export {
   type ManifestToolCaps,
   type ToolSpec,
   type ToolCaps,
+  type WouldDeny,
   type WrapToolOptions,
   type EnforceMiddlewareOptions,
 } from './manifest.js';

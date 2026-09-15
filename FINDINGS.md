@@ -53,22 +53,34 @@ Remove an entry in the pull request that fixes it.
   well-formed `tools` and `caps`). Reject with `invalid_authorization_details`,
   persist the purpose on the grant, and show it on the consent page.
 
-## G-5 — Duplicate keys in a manifest JSON file are silently accepted
+## G-6 — mcp-auth uses the OAuth client id as the Grantex principal
 
-- **Found:** adding manifest schema 0.6 (2026-09-15).
-- **What:** `ToolManifest.from_file` (Python, `json.loads`) and
-  `ToolManifest.fromFile` (TypeScript, `JSON.parse`) keep the last value of a
-  repeated key. A manifest that declares the same tool twice, for example first
-  with `requires_decision: true` and then as `"read"`, loads as the second
-  declaration without any error. JSON Schema validators cannot see the
-  duplicate either, because they validate the parsed object.
-- **Fix:** reject duplicate keys while parsing manifest files: in Python an
-  `object_pairs_hook` that raises `ManifestValidationError`; in TypeScript a
-  duplicate-aware parse, for example a small tokenizer or a vetted
-  duplicate-detecting JSON parser. Add a shared invalid fixture that both
-  loaders must reject.
+- **Found:** `@grantex/mcp-auth` 3.0 work (PRD G-7), 2026-09-15.
+- **What:** `startUpstreamAuthorization` in
+  `packages/mcp-auth/src/endpoints/authorize.ts` calls `grantex.authorize`
+  with `userId: client_id` (unchanged from 2.x). Every person who authorizes
+  through one MCP client gets grants for the same principal, and a
+  metadata-document client's id is a public URL shared by every
+  installation. `/revoke` also relies on it (`sub` must equal the
+  authenticated client), and grant lists or audit by principal cannot tell
+  people apart.
+- **Fix:** establish the person's identity during the consent step (host
+  authentication hook or the Grantex consent result) and pass it as the
+  principal; change the revocation ownership check to use the grant's client
+  binding rather than `sub`.
 
-## G-6 — Verifiers outside the core SDKs pin RS256
+## G-7 — mcp-auth `/revoke` hides upstream revocation failures
+
+- **Found:** `@grantex/mcp-auth` 3.0 work (PRD G-7), 2026-09-15.
+- **What:** `packages/mcp-auth/src/endpoints/revoke.ts` catches and ignores any
+  error from `grantex.tokens.revoke` (RFC 7009 lets it answer 200). 3.0 records
+  the revocation in its own storage first, so this server and middleware
+  sharing that storage refuse the token, but Grantex and every other verifier
+  may still accept it, and nothing logs or counts the failure.
+- **Fix:** log the failure with the `jti` and a reason code, count it, and
+  retry the upstream revocation from a durable queue until it succeeds.
+
+## G-8 — Verifiers outside the core SDKs pin RS256
 
 - **Found:** adding ES256 signing (2026-09-15).
 - **What:** these reject every token or key from a deployment that sets
@@ -88,7 +100,7 @@ Remove an entry in the pull request that fixes it.
   signing key is RS256 or ES256 with `kid`, `alg` and `use: sig`", ignoring
   keys published for other purposes.
 
-## G-7 — The default RS256 `kid` changes when an instance restarts in a new month
+## G-9 — The default RS256 `kid` changes when an instance restarts in a new month
 
 - **Found:** adding ES256 signing (2026-09-15).
 - **What:** the env-store RS256 key's `kid` is `grantex-YYYY-MM` of the process

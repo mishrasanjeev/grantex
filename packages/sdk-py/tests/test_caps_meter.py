@@ -128,6 +128,13 @@ class TestCapsMeter:
         usage = meter.usage("dev_01", [_limit(10)])[0]
         assert (usage.used, usage.remaining) == (10, 0)
 
+    def test_a_single_call_above_the_cap_reports_the_real_usage(self) -> None:
+        meter = _meter()
+        meter.reserve("dev_01", [_limit(10, units=4)])
+        with pytest.raises(CapExceededError) as exc:
+            meter.reserve("dev_01", [_limit(10, units=11)])
+        assert (exc.value.used, exc.value.requested, exc.value.limit) == (4, 11, 10)
+
     def test_zero_unit_limits_are_not_recorded(self) -> None:
         meter = _meter()
         reservation = meter.reserve("dev_01", [_limit(1, units=0)])
@@ -228,6 +235,27 @@ class TestBuildCapLimits:
                 connector="acme_kyb", tool="verify_business", spec=self.SPEC, grant_id="grnt_01",
                 case_id="case_01", cost_components=["base", "screening"],
             )
+        assert exc.value.sub_reason == INVALID_COST_COMPONENT
+
+    def test_empty_cost_components_for_a_tool_with_cost_units_is_rejected(self) -> None:
+        with pytest.raises(CapsConfigurationError) as exc:
+            build_cap_limits(
+                connector="acme_kyb", tool="verify_business", spec=self.SPEC, grant_id="grnt_01",
+                grant_caps={"cost_units": {"per_day": 100}}, case_id="case_01", cost_components=[],
+            )
+        assert exc.value.sub_reason == INVALID_COST_COMPONENT
+
+    def test_empty_cost_components_for_a_tool_without_cost_units_is_allowed(self) -> None:
+        limits = build_cap_limits(
+            connector="acme_kyb", tool="get_case", spec=ToolSpec(permission="read"), grant_id="grnt_01",
+            cost_components=[],
+        )
+        assert limits == []
+
+    def test_a_cost_above_the_maximum_is_an_invalid_cost_component(self) -> None:
+        spec = ToolSpec(permission="read", cost_units={"base": 2147483647, "ownership": 1})
+        with pytest.raises(CapsConfigurationError) as exc:
+            build_cap_limits(connector="acme_kyb", tool="verify_business", spec=spec, grant_id="grnt_01")
         assert exc.value.sub_reason == INVALID_COST_COMPONENT
 
     def test_per_case_cap_needs_a_case(self) -> None:
@@ -431,3 +459,134 @@ class TestEnforceMetering:
         assert first.reservation is not None
         meter.refund_unsent(first.reservation)
         assert client.enforce("t", "acme_kyb", "resolve_business").allowed is True
+
+class TestCheckOnlyAndCapsModes:
+    def test_reserve_false_checks_without_consuming(self, verify: MagicMock) -> None:
+        meter = _meter()
+        client = _client(meter)
+        for _ in range(5):
+            check = client.enforce("t", "acme_kyb", "resolve_business", reserve=False)
+            assert check.allowed is True and check.reservation is None
+        assert check.caps_tenant_id == "dev_01"
+        assert [lim.window for lim in check.cap_limits] == ["per_hour"]
+        assert meter.usage("dev_01", check.cap_limits)[0].used == 0
+
+    def test_check_early_then_reserve_at_the_gateway_uses_one_unit(self, verify: MagicMock) -> None:
+        meter = _meter()
+        client = _client(meter)
+        check = client.enforce("t", "acme_kyb", "resolve_business", reserve=False)
+        reservation = meter.reserve(check.caps_tenant_id, check.cap_limits)
+        assert meter.usage("dev_01", reservation.limits)[0].used == 1
+        assert client.enforce("t", "acme_kyb", "resolve_business").allowed is True
+        denied = client.enforce("t", "acme_kyb", "resolve_business", reserve=False)
+        assert (denied.allowed, denied.sub_reason, denied.details["used"], denied.details["limit"]) == (
+            False, "limit_reached", 2, 2)
+
+    def test_reserve_false_still_denies_a_disabled_tool(self, verify: MagicMock) -> None:
+        result = _client().enforce("t", "acme_kyb", "screen_person", reserve=False)
+        assert (result.allowed, result.details["limit"]) == (False, 0)
+
+    def test_warn_mode_allows_and_reports_what_it_would_deny(self, verify: MagicMock) -> None:
+        meter = _meter()
+        client = Grantex(api_key="test-key", caps_meter=meter, caps_mode="warn")
+        client.load_manifest(ACME_KYB)
+        first = [client.enforce("t", "acme_kyb", "resolve_business") for _ in range(2)]
+        assert all(r.allowed and r.would_deny is None and r.reservation is not None for r in first)
+        over = client.enforce("t", "acme_kyb", "resolve_business")
+        assert over.allowed is True and over.reservation is None and over.reason_code == ""
+        assert over.would_deny is not None
+        assert (over.would_deny["reason_code"], over.would_deny["sub_reason"], over.would_deny["details"]["code"]) == (
+            "cap_exceeded", "limit_reached", "E1008")
+        assert meter.usage("dev_01", over.cap_limits)[0].used == 2  # the over-cap call reserved nothing
+
+    def test_warn_mode_reports_a_missing_meter(self, verify: MagicMock) -> None:
+        client = Grantex(api_key="test-key", caps_mode="warn")
+        client.load_manifest(ACME_KYB)
+        result = client.enforce("t", "acme_kyb", "resolve_business")
+        assert result.allowed is True
+        assert result.would_deny is not None and result.would_deny["sub_reason"] == "meter_unavailable"
+
+    def test_warn_mode_still_denies_malformed_grant_caps(self, verify: MagicMock) -> None:
+        verify.return_value = _grant(
+            [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"resolve_business": {"per_week": 1}}}]
+        )
+        client = Grantex(api_key="test-key", caps_meter=_meter(), caps_mode="warn")
+        client.load_manifest(ACME_KYB)
+        assert client.enforce("t", "acme_kyb", "resolve_business").reason_code == "token_invalid"
+
+    def test_off_mode_skips_caps_and_the_meter(self, verify: MagicMock) -> None:
+        backend = MagicMock()
+        client = Grantex(api_key="test-key", caps_meter=CapsMeter(backend), caps_mode="off")
+        client.load_manifest(ACME_KYB)
+        for _ in range(3):
+            result = client.enforce("t", "acme_kyb", "screen_person")
+            assert result.allowed is True and result.reservation is None and result.would_deny is None
+        backend.reserve.assert_not_called()
+
+    def test_per_call_mode_overrides_the_client(self, verify: MagicMock) -> None:
+        client = _client()
+        assert client.enforce("t", "acme_kyb", "screen_person", caps_mode="off").allowed is True
+        assert client.enforce("t", "acme_kyb", "screen_person").allowed is False
+
+    def test_invalid_mode_is_rejected(self, verify: MagicMock) -> None:
+        with pytest.raises(ValueError):
+            Grantex(api_key="test-key", caps_mode="audit")
+        with pytest.raises(ValueError):
+            _client().enforce("t", "acme_kyb", "resolve_business", caps_mode="audit")
+
+    def test_tenant_override_scopes_the_counters(self, verify: MagicMock) -> None:
+        meter = _meter()
+        client = _client(meter)
+        for _ in range(2):
+            assert client.enforce("t", "acme_kyb", "resolve_business", caps_tenant_id="tenant_a").allowed is True
+        assert client.enforce("t", "acme_kyb", "resolve_business", caps_tenant_id="tenant_a").allowed is False
+        result = client.enforce("t", "acme_kyb", "resolve_business", caps_tenant_id="tenant_b")
+        assert result.allowed is True and result.caps_tenant_id == "tenant_b"
+        assert client.enforce("t", "acme_kyb", "resolve_business").allowed is True  # dev_01 untouched
+
+    def test_permissive_mode_turns_cap_denials_into_allows(self, verify: MagicMock) -> None:
+        import warnings
+
+        client = Grantex(api_key="test-key", enforce_mode="permissive")
+        client.load_manifest(ACME_KYB)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            result = client.enforce("t", "acme_kyb", "resolve_business")
+        assert (result.allowed, result.reason_code, result.sub_reason) == (True, "cap_exceeded", "meter_unavailable")
+
+
+class TestWrapToolMetering:
+    def test_wrap_tool_passes_case_and_cost_components(self, verify: MagicMock) -> None:
+        verify.return_value = _grant(
+            [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"cost_units": {"per_day": 12}}}]
+        )
+        meter = _meter()
+        client = _client(meter)
+        cases = iter(["case_01", "case_02", "case_03"])
+
+        class FakeTool:
+            calls = 0
+
+            def _run(self, **kwargs: Any) -> str:
+                FakeTool.calls += 1
+                return "ok"
+
+        tool = client.wrap_tool(
+            FakeTool(), connector="acme_kyb", tool_name="verify_business", grant_token="t",
+            case_id=lambda: next(cases), cost_components=["base"],
+        )
+        assert tool._run() == "ok"
+        assert tool._run() == "ok"
+        with pytest.raises(PermissionError, match="E1008"):
+            tool._run()  # 5 + 5 used; another 5 exceeds the budget of 12
+        assert FakeTool.calls == 2
+
+    def test_wrap_tool_without_a_case_denies_a_per_case_cap(self, verify: MagicMock) -> None:
+        class FakeTool:
+            def _run(self, **kwargs: Any) -> str:
+                return "ok"
+
+        tool = _client().wrap_tool(FakeTool(), connector="acme_kyb", tool_name="verify_business", grant_token="t")
+        with pytest.raises(PermissionError, match="case"):
+            tool._run()
+

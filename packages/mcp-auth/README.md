@@ -24,6 +24,14 @@ middleware.
 > [feature guide](https://docs.grantex.dev/features/mcp-auth-server) for the full
 > current-status matrix.
 
+> [!NOTE]
+> Version **3.0.0 is prepared in this repository but not published**; npm
+> still serves `2.0.2`. 3.0.0 adds Postgres/Redis state, the MCP authorization
+> specification (2026-07-28) surface, a rendered consent page and tool refusal
+> at the MCP server, with breaking changes. Sections marked **3.0** describe
+> it; see [the 3.0 deployment guide](../../docs/mcp-auth.md) for deployment,
+> consent-page customisation and migrating from 2.x.
+
 ## What 2.0.2 implements
 
 - PKCE S256 request validation (no `plain` or implicit flow)
@@ -132,7 +140,7 @@ const server = await createMcpAuthServer(config);
 | `sandboxAutoApprove` | `boolean` | No | `false` | Allow a Grantex sandbox auto-approval to skip the consent redirect and issue a code immediately |
 | `allowedRedirectUris` | `string[]` | No | `[]` | Declared but not enforced in `2.0.2`; the client's registered URI is checked |
 | `allowedResources` | `string[]` | No | `[]` | Allowed resource indicators (RFC 8707) |
-| `clientStore` | `ClientStore` | No | `InMemoryClientStore` | Client registrations only; authorization codes stay in process memory |
+| `storage` | `McpAuthStorage` | Yes (**3.0**) | - | All authorization state; see [Storage](#storage-30). Replaces `clientStore` from 2.x |
 | `codeExpirationSeconds` | `number` | No | `600` | Authorization code TTL in seconds |
 | `consentUi` | `object` | No | - | Discovery metadata only; no consent page is created |
 | `hooks` | `object` | No | - | `onRevocation` runs; declared `onTokenIssued` is not invoked in `2.0.2` |
@@ -173,35 +181,131 @@ const server = await createMcpAuthServer({
 `onTokenIssued` is present in the exported type but is not called by the token
 endpoint in this release.
 
-### Custom Client Store
+### Storage (3.0)
 
-By default, client registrations are stored in memory. A custom `ClientStore` can persist clients, but the authorization-code store remains process-local and non-configurable in `2.0.2`:
+In 3.0 every piece of authorization state — client registrations, pending
+authorizations, authorization codes and their PKCE challenges, refresh-token
+bindings, consent records and revocations — goes through one `storage`.
+Codes, refresh tokens and consent ids are stored only as SHA-256 lookup keys,
+client secrets only as hashes, and single-use records are consumed
+atomically.
+
+Postgres (any driver with `query(text, params)`, such as `pg`):
 
 ```typescript
-import type { ClientStore, ClientRegistration } from '@grantex/mcp-auth';
+import pg from 'pg';
+import { createMcpAuthServer } from '@grantex/mcp-auth';
+import { PostgresStorage, runMigrations } from '@grantex/mcp-auth/postgres';
 
-class PostgresClientStore implements ClientStore {
-  async get(clientId: string): Promise<ClientRegistration | undefined> {
-    const row = await db.query('SELECT * FROM oauth_clients WHERE id = $1', [clientId]);
-    return row ?? undefined;
-  }
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+await runMigrations(pool); // idempotent; also shipped as migrations/*.sql
+const storage = new PostgresStorage({ db: pool });
 
-  async set(clientId: string, reg: ClientRegistration): Promise<void> {
-    await db.query(
-      'INSERT INTO oauth_clients (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = $2',
-      [clientId, JSON.stringify(reg)],
-    );
-  }
+const server = await createMcpAuthServer({ /* ...required fields... */ storage });
+```
 
-  async delete(clientId: string): Promise<boolean> {
-    const result = await db.query('DELETE FROM oauth_clients WHERE id = $1', [clientId]);
-    return result.rowCount > 0;
-  }
-}
+Redis 6.2 or later (with persistence enabled, so registrations survive a
+Redis restart):
 
+```typescript
+import { Redis } from 'ioredis';
+import { RedisStorage, fromIoredis } from '@grantex/mcp-auth/redis';
+
+const storage = new RedisStorage({ redis: fromIoredis(new Redis(process.env.REDIS_URL!)) });
+```
+
+`InMemoryStorage` from `@grantex/mcp-auth/testing` is for tests and refuses to
+start with `NODE_ENV=production`. To use another database, implement
+`McpAuthStorage`; the rules it must meet are documented on the interface and
+checked for the shipped implementations by `tests/storage-contract.ts` in the
+repository.
+
+### Protocol surface (3.0)
+
+3.0 targets the MCP authorization specification dated 2026-07-28;
+`tests/conformance/mcp-authorization-2026-07-28.test.ts` maps each
+authorization-server and MCP-server MUST to a test (SEC-12, not forwarding
+the client's token upstream, is the host application's to meet), plus the
+Security Best Practices' confused-deputy requirements: consent and the
+callback are bound to the approving browser with cookies, and the consent
+form is CSRF-protected.
+
+- **Resource indicators (RFC 8707).** `resource` (the canonical URI of your
+  MCP server, e.g. `https://mcp.example.com/mcp`) is required. Every grant is
+  requested with that resource as its audience, a request or token exchange
+  for any other resource is refused with `invalid_target`, and a token
+  Grantex returns without the right `aud` is never handed to the client.
+- **Discovery.** RFC 8414 metadata (also at the path-inserted location for an
+  issuer with a path) advertises `code_challenge_methods_supported: ["S256"]`,
+  `authorization_response_iss_parameter_supported` and
+  `client_id_metadata_document_supported`; every authorization response
+  carries `iss` (RFC 9207). RFC 9728 protected-resource metadata is served at
+  `/.well-known/oauth-protected-resource/<resource path>`.
+- **PKCE S256 only.** `plain`, an omitted method and malformed challenges are
+  refused. Requested scopes must be in `scopes_supported`.
+- **Client ID Metadata Documents.** A client may use an https URL as its
+  `client_id`; the server fetches the document with SSRF protections (https
+  only, every resolved address must be public and the connection is pinned to
+  it, no redirects, 16 KiB and 5 s limits, cache with TTL) and fails closed
+  with a reason code. Configure with `clientIdMetadataDocuments`.
+- **Manifest-derived scopes.** Pass `manifests` (0.5 or 0.6 manifest JSON) and
+  `scopes_supported` gains `tool:<connector>:<permission>` for each tool.
+- **Tools refused at the server.** `requireMcpAuth` requires `audience`, sends
+  RFC 9728 `WWW-Authenticate` challenges, can check `revocations` (the same
+  `storage`), and with `tools: toolPolicyFromManifests(manifests)` refuses any
+  `tools/call` outside the grant with a 403 — not just hidden from listing.
+  Tools marked `requires_decision` are refused with a `decision_required`
+  challenge unless a `DecisionVerifier` accepts the call. The header formats
+  are specified in `spec/mcp-auth-challenges.md` in the repository.
+
+```typescript
+import express from 'express';
+import { toolPolicyFromManifests } from '@grantex/mcp-auth';
+import { requireMcpAuth, protectedResourceMetadataHandler } from '@grantex/mcp-auth/express';
+import acmeKyb from './manifests/acme_kyb.json' with { type: 'json' };
+
+const app = express();
+app.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadataHandler({
+  resource: 'https://mcp.example.com/mcp',
+  authorizationServers: ['https://auth.example.com'],
+}));
+app.use('/mcp', express.json(), requireMcpAuth({
+  issuer: 'https://grantex.dev',
+  audience: 'https://mcp.example.com/mcp',
+  tools: toolPolicyFromManifests([acmeKyb]),
+  revocations: storage,
+}));
+```
+
+### Consent page (3.0)
+
+In 3.0 `GET /authorize` renders a consent page before anything is sent to
+Grantex, as the MCP authorization specification requires of a proxy
+authorization server. It shows the client, the host the user will be sent
+back to (with a warning when every redirect URI is on localhost), the
+purpose, data region and duration from the `grant` option, and each tool the
+requested scopes cover with its caps (from `manifests`). Approve continues to
+Grantex; Deny returns `access_denied` to the client.
+
+The page is server-rendered with no script, a strict CSP (the stylesheet is
+pinned by hash) and escaped values. The form is protected by a per-page CSRF
+token and a `__Host-` SameSite=Strict binding cookie, both stored only as
+hashes in a single-use consent record. Approval sets a SameSite=Lax callback
+cookie, and `/callback` issues a code only to the browser that approved.
+Purpose, region and limits are labelled as declared by the service. It is tested at 375 px in Chromium and
+with axe-core.
+
+```typescript
 const server = await createMcpAuthServer({
-  // ...
-  clientStore: new PostgresClientStore(),
+  // ...required fields...
+  grant: { purpose: 'aml.cdd.onboarding', dataRegion: 'eu', duration: '8h' },
+  consentUi: { appName: 'Acme Compliance', appLogo: 'https://acme.example.com/logo.png' },
+  consentPage: {
+    theme: { accentColor: '#0b6e4f', radiusPx: 4 },   // hex colours, WCAG AA contrast enforced
+    text: { approve: 'Grant access' },
+    renderDetails: (model, h) => h.html`<section><h2>Case tools</h2>
+      <ul>${model.tools.map((tool) => h.html`<li>${tool.name}</li>`)}</ul></section>`,
+  },
 });
 ```
 
@@ -357,6 +461,9 @@ self-hosted API. In both cases, the MCP auth Fastify process owns its client and
 code state. A custom `ClientStore` persists only registrations; `2.0.2` exposes
 no custom authorization-code store. Run a single process for evaluation and do
 not treat selecting Grantex Cloud as managed MCP-auth hosting.
+
+In 3.0 (unreleased) the same state lives in the configured `storage`, so
+several processes can share it; the MCP auth server is still yours to host.
 
 ## Conformance testing
 

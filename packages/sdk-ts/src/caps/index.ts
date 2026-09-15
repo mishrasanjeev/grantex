@@ -13,6 +13,7 @@
  */
 
 export {
+  CAPS_MODES,
   CAP_ERROR_CODE,
   CapExceededError,
   CapsConfigurationError,
@@ -25,6 +26,7 @@ export {
   tenantHash,
   type CapLimit,
   type CapWindow,
+  type CapsMode,
   type CapsBackend,
   type CounterUsage,
   type Reservation,

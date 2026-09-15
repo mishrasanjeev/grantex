@@ -4,8 +4,10 @@ import { createHash } from 'node:crypto';
 import * as jose from 'jose';
 import type { FastifyInstance } from 'fastify';
 import { createMcpAuthServer } from '../src/server.js';
-import { InMemoryClientStore } from '../src/lib/clients.js';
+import { InMemoryStorage } from '../src/storage/memory.js';
+import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
+import { upstreamGrantToken, authorizeWithConsent } from './helpers.js';
 
 const TEST_CLIENT_ID = 'test-client-id';
 const TEST_CLIENT_SECRET = 'test-secret';
@@ -75,14 +77,14 @@ function createMockGrantex() {
     }),
     tokens: {
       exchange: vi.fn().mockResolvedValue({
-        grantToken: 'gt_test',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_test' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_test',
         grantId: 'grant-1',
       }),
       refresh: vi.fn().mockResolvedValue({
-        grantToken: 'gt_refreshed',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_refreshed' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_new',
@@ -94,10 +96,10 @@ function createMockGrantex() {
 }
 
 async function createTestApp() {
-  const clientStore = new InMemoryClientStore();
-  await clientStore.set(TEST_CLIENT_ID, {
+  const clientStore = new InMemoryStorage();
+  await clientStore.putClient({
     clientId: TEST_CLIENT_ID,
-    clientSecret: TEST_CLIENT_SECRET,
+    clientSecretHash: hashClientSecret(TEST_CLIENT_SECRET),
     redirectUris: [TEST_REDIRECT_URI],
     grantTypes: ['authorization_code', 'refresh_token'],
     createdAt: new Date().toISOString(),
@@ -111,9 +113,10 @@ async function createTestApp() {
     agentId: 'agent-1',
     scopes: ['read', 'write'],
     issuer: 'https://auth.example.com',
+    resource: 'https://mcp.example.com',
     // Tokens are minted by Grantex: pin its issuer and JWKS.
     grantexIssuer: issuer,
-    clientStore,
+    storage: clientStore,
     sandboxAutoApprove: true,
   });
 
@@ -129,7 +132,7 @@ describe('OAuth 2.1 security', () => {
   });
 
   it('rejects implicit grant flow (response_type=token)', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -203,7 +206,7 @@ describe('OAuth 2.1 security', () => {
   });
 
   it('PKCE is required (no code_challenge => 400)', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -220,7 +223,7 @@ describe('OAuth 2.1 security', () => {
   });
 
   it('state parameter is passed through when present', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -233,14 +236,14 @@ describe('OAuth 2.1 security', () => {
       },
     });
 
-    expect(response.statusCode).toBe(302);
+    expect(response.statusCode).toBe(303);
     const location = response.headers['location'] as string;
     const url = new URL(location);
     expect(url.searchParams.get('state')).toBe('csrf-protection-state');
   });
 
   it('only S256 code_challenge_method accepted (not plain)', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -262,6 +265,7 @@ describe('OAuth 2.1 security', () => {
     const token = await new jose.SignJWT({
       sub: 'user_abc',
       scp: ['read'],
+      aud: 'https://mcp.example.com',
     })
       .setProtectedHeader({ alg: 'RS256', kid: 'test-key-1' })
       .setIssuer(`http://127.0.0.1:${jwksPort}`)
@@ -283,7 +287,7 @@ describe('OAuth 2.1 security', () => {
 
   it('authorization code is single-use (replayed code rejected)', async () => {
     // First, get an authorization code
-    const authResponse = await app.inject({
+    const authResponse = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {

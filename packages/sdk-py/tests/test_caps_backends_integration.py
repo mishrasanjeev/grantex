@@ -276,3 +276,33 @@ def test_lua_scripts_are_identical_in_both_sdks() -> None:
         match = re.search(rf"export const {name} = `(.*?)`;", source, re.S)
         assert match is not None, name
         assert match.group(1) == script, name
+
+
+def test_postgres_prune_deletes_expired_rows_and_keeps_per_case_counts() -> None:
+    _skip_or_fail(POSTGRES_URL, "GRANTEX_CAPS_POSTGRES_URL")
+    backend = _postgres_backend()
+    tenant = _tenant()
+    meter = CapsMeter(backend, clock=Clock())
+    meter.reserve(tenant, [_limit(5, counter="hourly")])
+    meter.reserve(tenant, [_limit(1, "per_case", counter="case_01")])
+    reservations, counters = backend.prune(now_ms=T0 + HOUR)
+    assert reservations >= 1 and counters >= 1
+    assert meter.usage(tenant, [_limit(5, counter="hourly")])[0].used == 0
+    with pytest.raises(CapExceededError):
+        meter.reserve(tenant, [_limit(1, "per_case", counter="case_01")])  # per-case rows never expire by default
+    meter.reserve(tenant, [_limit(5, counter="hourly")])  # a pruned counter is recreated
+
+
+def test_postgres_prune_honours_case_ttl() -> None:
+    _skip_or_fail(POSTGRES_URL, "GRANTEX_CAPS_POSTGRES_URL")
+    _postgres_backend()
+    backend = PostgresCapsBackend(_pg_connect_factory(POSTGRES_URL or ""), case_ttl_seconds=60)
+    tenant = _tenant()
+    meter = CapsMeter(backend, clock=Clock())
+    meter.reserve(tenant, [_limit(1, "per_case", counter="case_ttl")])
+    backend.prune(now_ms=T0 + 59_000)
+    with pytest.raises(CapExceededError):
+        meter.reserve(tenant, [_limit(1, "per_case", counter="case_ttl")])
+    backend.prune(now_ms=T0 + 60_000)
+    meter.reserve(tenant, [_limit(1, "per_case", counter="case_ttl")])
+

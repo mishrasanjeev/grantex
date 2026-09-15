@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Ajv2020Module from 'ajv/dist/2020.js';
-import { ToolManifest, Permission, ManifestValidationError, parseToolDeclaration } from '../src/manifest.js';
+import { ToolManifest, Permission, ManifestValidationError, parseManifestJson, parseToolDeclaration } from '../src/manifest.js';
 import * as allManifests from '../src/manifests/index.js';
 
 const Ajv2020 = Ajv2020Module as unknown as typeof Ajv2020Module.default;
@@ -270,3 +270,47 @@ describe('strings-only manifests keep pre-0.6 behaviour', () => {
     expect(m.getPermission('screen:person')).toBe(Permission.READ);
   });
 });
+
+describe('duplicate keys in manifest files', () => {
+  const dir = join(EXAMPLES_DIR, 'duplicate-keys');
+  const expected: Record<string, string> = {
+    'duplicate-tool.json': 'case_decision',
+    'duplicate-nested-key.json': 'per_hour',
+    'duplicate-escaped-key.json': 'connector',
+  };
+
+  it('has the shared fixtures', () => {
+    expect(readdirSync(dir).filter((f) => f.endsWith('.json')).sort()).toEqual(Object.keys(expected).sort());
+  });
+
+  for (const [file, key] of Object.entries(expected)) {
+    it(`rejects ${file}`, async () => {
+      await expect(ToolManifest.fromFile(join(dir, file))).rejects.toThrow(
+        new ManifestValidationError(`ToolManifest: duplicate key "${key}" in manifest file`),
+      );
+    });
+  }
+
+  it('loadManifestsFromDir rejects duplicate keys', async () => {
+    const { Grantex } = await import('../src/client.js');
+    const tmp = mkdtempSync(join(tmpdir(), 'grantex-dup-'));
+    writeFileSync(join(tmp, 'dup.json'), readFileSync(join(dir, 'duplicate-tool.json'), 'utf-8'));
+    await expect(new Grantex({ apiKey: 'test-key' }).loadManifestsFromDir(tmp)).rejects.toThrow('duplicate key');
+  });
+
+  it('accepts the same key in different objects and inside strings', () => {
+    expect(
+      parseManifestJson('{"connector": "acme_kyb", "tools": {"a": {"permission": "read"}, "b": {"permission": "read"}}, "description": "\\"tools\\": x"}'),
+    ).toMatchObject({ connector: 'acme_kyb' });
+  });
+});
+
+it('a tool named __proto__ round-trips through toJSON', () => {
+  const m = ToolManifest.fromJSON(JSON.parse('{"connector": "acme_kyb", "tools": {"__proto__": {"permission": "read", "caps": {"per_hour": 1}}}}') as Record<string, unknown>);
+  const rendered = JSON.parse(JSON.stringify(m)) as Record<string, unknown>;
+  expect(Object.keys(rendered['tools'] as object)).toEqual(['__proto__']);
+  const again = ToolManifest.fromJSON(rendered);
+  expect(again.getToolSpec('__proto__')).toEqual(m.getToolSpec('__proto__'));
+  expect(again.getToolSpec('__proto__')?.caps).toEqual({ perHour: 1 });
+});
+

@@ -1,0 +1,6 @@
+{
+  "connector": "acme_kyb",
+  "tools": {
+    "verify_business": {"permission": "read", "caps": {"per_hour": 5, "per_hour": 5000}}
+  }
+}

@@ -11,6 +11,8 @@ let rsaPublicJwk: jose.JWK;
 let jwksServer: Server;
 let jwksPort: number;
 let issuer: string;
+// requireMcpAuth requires an audience in 3.0 (MCP authorization, Token Handling).
+const AUDIENCE = 'https://mcp.example.com';
 
 beforeAll(async () => {
   const { privateKey, publicKey } = await jose.generateKeyPair('RS256');
@@ -53,7 +55,9 @@ async function signTestJwt(
   claims: Record<string, unknown>,
   options?: { expiresIn?: string; issuer?: string },
 ): Promise<string> {
-  const builder = new jose.SignJWT(claims)
+  // Audience-bound to the fixture MCP server unless a test sets aud itself
+  // (aud: undefined produces a token without one).
+  const builder = new jose.SignJWT('aud' in claims ? claims : { ...claims, aud: AUDIENCE })
     .setProtectedHeader({ alg: 'RS256', kid: 'test-key-1' })
     .setIssuer(options?.issuer ?? issuer)
     .setIssuedAt()
@@ -120,7 +124,7 @@ async function invokeMiddleware(
 
 describe('Express middleware', () => {
   it('passes valid token and sets mcpGrant', async () => {
-    const mw = requireMcpAuth({ issuer });
+    const mw = requireMcpAuth({ issuer, audience: AUDIENCE });
     const token = await signTestJwt({
       sub: 'user_abc',
       scp: ['read', 'write'],
@@ -140,7 +144,7 @@ describe('Express middleware', () => {
   });
 
   it('rejects missing token with 401', async () => {
-    const mw = requireMcpAuth({ issuer });
+    const mw = requireMcpAuth({ issuer, audience: AUDIENCE });
 
     const result = await invokeMiddleware(mw, {});
 
@@ -151,7 +155,7 @@ describe('Express middleware', () => {
   });
 
   it('rejects expired token with 401', async () => {
-    const mw = requireMcpAuth({ issuer });
+    const mw = requireMcpAuth({ issuer, audience: AUDIENCE });
     const token = await signTestJwt(
       { sub: 'user_abc', scp: ['read'] },
       { expiresIn: '-1h' },
@@ -167,7 +171,7 @@ describe('Express middleware', () => {
   });
 
   it('enforces required scopes (403)', async () => {
-    const mw = requireMcpAuth({ issuer, scopes: ['admin:write'] });
+    const mw = requireMcpAuth({ issuer, audience: AUDIENCE, scopes: ['admin:write'] });
     const token = await signTestJwt({
       sub: 'user_abc',
       scp: ['read'],
@@ -184,7 +188,7 @@ describe('Express middleware', () => {
   });
 
   it('passes when all required scopes present', async () => {
-    const mw = requireMcpAuth({ issuer, scopes: ['read'] });
+    const mw = requireMcpAuth({ issuer, audience: AUDIENCE, scopes: ['read'] });
     const token = await signTestJwt({
       sub: 'user_abc',
       scp: ['read', 'write'],
@@ -198,7 +202,7 @@ describe('Express middleware', () => {
   });
 
   it('rejects invalid Bearer format with 401', async () => {
-    const mw = requireMcpAuth({ issuer });
+    const mw = requireMcpAuth({ issuer, audience: AUDIENCE });
 
     const result = await invokeMiddleware(mw, {
       authorization: 'NotBearer some-token',
@@ -209,7 +213,7 @@ describe('Express middleware', () => {
 
   describe('issuer / audience pinning', () => {
     it('rejects a token from a different iss even when the key validates', async () => {
-      const mw = requireMcpAuth({ issuer: 'https://grantex.example.com', jwksUri: `${issuer}/.well-known/jwks.json` });
+      const mw = requireMcpAuth({ issuer: 'https://grantex.example.com', audience: AUDIENCE, jwksUri: `${issuer}/.well-known/jwks.json` });
       const wrongIss = await signTestJwt({ sub: 'user_abc', scp: ['read'] }, { issuer });
       const rightIss = await signTestJwt({ sub: 'user_abc', scp: ['read'] }, { issuer: 'https://grantex.example.com' });
 
@@ -224,7 +228,7 @@ describe('Express middleware', () => {
       const mw = requireMcpAuth({ issuer, audience: 'https://mcp.example.com' });
       const good = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://mcp.example.com' });
       const bad = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://other.example.com' });
-      const none = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
+      const none = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: undefined });
 
       expect((await invokeMiddleware(mw, { authorization: `Bearer ${good}` })).statusCode).toBe(200);
       expect((await invokeMiddleware(mw, { authorization: `Bearer ${bad}` })).statusCode).toBe(401);
@@ -232,7 +236,7 @@ describe('Express middleware', () => {
     });
 
     it('fails closed when issuer is empty', async () => {
-      const mw = requireMcpAuth({ issuer: '' });
+      const mw = requireMcpAuth({ issuer: '', audience: AUDIENCE });
       const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
       expect((await invokeMiddleware(mw, { authorization: `Bearer ${token}` })).statusCode).toBe(401);
     });
@@ -244,7 +248,7 @@ describe('scp claim shape', () => {
   // space-separated string, so a foreign token from the same issuer gained
   // scopes it never carried as an array.
   it('Express rejects a space-separated string scp and a missing scp', async () => {
-    const mw = requireMcpAuth({ issuer, scopes: ['read'] });
+    const mw = requireMcpAuth({ issuer, audience: AUDIENCE, scopes: ['read'] });
     const stringScp = await signTestJwt({ sub: 'user_abc', scp: 'read write' });
     const noScp = await signTestJwt({ sub: 'user_abc' });
     const mixedScp = await signTestJwt({ sub: 'user_abc', scp: ['read', 42] });
@@ -284,7 +288,7 @@ describe('Hono middleware', () => {
   });
 
   it('rejects a space-separated string scp and a missing scp', async () => {
-    const mw = requireMcpAuthHono({ issuer });
+    const mw = requireMcpAuthHono({ issuer, audience: AUDIENCE });
     const stringScp = await signTestJwt({ sub: 'user_abc', scp: 'read write' });
     const noScp = await signTestJwt({ sub: 'user_abc' });
 

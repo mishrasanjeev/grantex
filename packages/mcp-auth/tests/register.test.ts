@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createMcpAuthServer } from '../src/server.js';
 import type { McpAuthConfig } from '../src/types.js';
+import { upstreamGrantToken } from './helpers.js';
+import { InMemoryStorage } from '../src/storage/memory.js';
 
 function createMockGrantex() {
   return {
@@ -18,14 +20,14 @@ function createMockGrantex() {
     }),
     tokens: {
       exchange: async () => ({
-        grantToken: 'gt_test',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_test' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read'],
         refreshToken: 'rt_test',
         grantId: 'grant-1',
       }),
       refresh: async () => ({
-        grantToken: 'gt_refreshed',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_refreshed' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read'],
         refreshToken: 'rt_new',
@@ -44,6 +46,8 @@ describe('register endpoint', () => {
       agentId: 'agent-1',
       scopes: ['read'],
       issuer: 'https://auth.example.com',
+      resource: 'https://mcp.example.com',
+      storage: new InMemoryStorage(),
     });
   });
 
@@ -147,5 +151,34 @@ describe('register endpoint', () => {
 
     const body = response.json();
     expect(body.grant_types).toEqual(['authorization_code']);
+  });
+
+  it('rejects a client_name that is not a short non-empty string', async () => {
+    for (const client_name of [42, '', '   ', 'x'.repeat(201), ['name']]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/register',
+        payload: { redirect_uris: ['https://app.example.com/callback'], client_name },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('invalid_client_metadata');
+    }
+  });
+
+  it('accepts only authorization_code (plus refresh_token) as grant_types', async () => {
+    for (const grant_types of [['client_credentials'], ['refresh_token'], ['authorization_code', 'implicit'], 'authorization_code', []]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/register',
+        payload: { redirect_uris: ['https://app.example.com/callback'], grant_types },
+      });
+      expect(response.statusCode).toBe(400);
+    }
+    const ok = await app.inject({
+      method: 'POST',
+      url: '/register',
+      payload: { redirect_uris: ['https://app.example.com/callback'], grant_types: ['authorization_code', 'refresh_token'] },
+    });
+    expect(ok.statusCode).toBe(201);
   });
 });

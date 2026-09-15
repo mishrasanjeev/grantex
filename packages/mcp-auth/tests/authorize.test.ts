@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { createMcpAuthServer } from '../src/server.js';
-import { InMemoryClientStore } from '../src/lib/clients.js';
+import { InMemoryStorage } from '../src/storage/memory.js';
+import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
+import { TEST_RESOURCE, upstreamGrantToken, authorizeWithConsent, callbackCookieFrom } from './helpers.js';
 
 function computeS256Challenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
@@ -29,14 +31,14 @@ function createMockGrantex() {
     }),
     tokens: {
       exchange: vi.fn().mockResolvedValue({
-        grantToken: 'gt_test',
+        grantToken: upstreamGrantToken({ aud: TEST_RESOURCE, jti: 'gt_test' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_test',
         grantId: 'grant-1',
       }),
       refresh: vi.fn().mockResolvedValue({
-        grantToken: 'gt_refreshed',
+        grantToken: upstreamGrantToken({ aud: TEST_RESOURCE, jti: 'gt_refreshed' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_new',
@@ -47,10 +49,10 @@ function createMockGrantex() {
 }
 
 async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
-  const clientStore = new InMemoryClientStore();
-  await clientStore.set(TEST_CLIENT_ID, {
+  const clientStore = new InMemoryStorage();
+  await clientStore.putClient({
     clientId: TEST_CLIENT_ID,
-    clientSecret: 'test-secret',
+    clientSecretHash: hashClientSecret('test-secret'),
     redirectUris: [TEST_REDIRECT_URI],
     grantTypes: ['authorization_code'],
     createdAt: new Date().toISOString(),
@@ -63,7 +65,8 @@ async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
     agentId: 'agent-1',
     scopes: ['read', 'write'],
     issuer: 'https://auth.example.com',
-    clientStore,
+    resource: TEST_RESOURCE,
+    storage: clientStore,
     ...overrides,
   });
 
@@ -81,7 +84,7 @@ describe('authorize endpoint', () => {
   });
 
   it('returns 400 for unsupported response_type', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -99,7 +102,7 @@ describe('authorize endpoint', () => {
   });
 
   it('returns 400 when PKCE is missing', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -116,7 +119,7 @@ describe('authorize endpoint', () => {
   });
 
   it('returns 400 for unknown client_id', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -134,7 +137,7 @@ describe('authorize endpoint', () => {
   });
 
   it('returns 400 for unregistered redirect_uri', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -157,7 +160,7 @@ describe('authorize endpoint', () => {
       allowedResources: ['https://api.example.com'],
     });
 
-    const response = await appWithResources.inject({
+    const response = await authorizeWithConsent(appWithResources, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -176,7 +179,7 @@ describe('authorize endpoint', () => {
   });
 
   it('live mode: redirects to the Grantex consent flow and issues no code before approval', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -189,7 +192,7 @@ describe('authorize endpoint', () => {
       },
     });
 
-    expect(response.statusCode).toBe(302);
+    expect(response.statusCode).toBe(303);
     const location = response.headers['location'] as string;
     // The user-agent is sent to Grantex consent, not back to the client.
     expect(location).toBe('https://example.com/consent');
@@ -197,7 +200,7 @@ describe('authorize endpoint', () => {
   });
 
   it('calls grantex.authorize with our consent callback, an opaque state and the resource as audience', async () => {
-    await app.inject({
+    await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -223,7 +226,7 @@ describe('authorize endpoint', () => {
   });
 
   it('consent callback issues the client code bound to the Grantex code and echoes client state', async () => {
-    const authResponse = await app.inject({
+    const authResponse = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -235,13 +238,16 @@ describe('authorize endpoint', () => {
         state: 'my-state-value',
       },
     });
-    expect(authResponse.statusCode).toBe(302);
+    expect(authResponse.statusCode).toBe(303);
     const grantexState = (mockGrantex.authorize.mock.calls[0]![0] as { state: string }).state;
+    const cookie = callbackCookieFrom(authResponse);
 
-    // Grantex consent approved → redirect to our callback with its code.
+    // Grantex consent approved → redirect to our callback with its code, in
+    // the browser that approved the consent page.
     const callback = await app.inject({
       method: 'GET',
       url: '/callback',
+      headers: { cookie },
       query: { code: 'GRANTEX_LIVE_CODE', state: grantexState },
     });
     expect(callback.statusCode).toBe(302);
@@ -255,6 +261,7 @@ describe('authorize endpoint', () => {
     const replay = await app.inject({
       method: 'GET',
       url: '/callback',
+      headers: { cookie },
       query: { code: 'GRANTEX_LIVE_CODE', state: grantexState },
     });
     expect(replay.statusCode).toBe(400);
@@ -273,11 +280,15 @@ describe('authorize endpoint', () => {
       },
     });
     expect(token.statusCode).toBe(200);
-    expect(mockGrantex.tokens.exchange).toHaveBeenCalledWith({ code: 'GRANTEX_LIVE_CODE', agentId: 'agent-1' });
+    expect(mockGrantex.tokens.exchange).toHaveBeenCalledWith({
+      code: 'GRANTEX_LIVE_CODE',
+      agentId: 'agent-1',
+      redirectUri: 'https://auth.example.com/callback',
+    });
   });
 
   it('consent callback with error redirects the client with access_denied and no code', async () => {
-    await app.inject({
+    const approved = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -293,6 +304,7 @@ describe('authorize endpoint', () => {
     const callback = await app.inject({
       method: 'GET',
       url: '/callback',
+      headers: { cookie: callbackCookieFrom(approved) },
       query: { error: 'access_denied', state: grantexState },
     });
     expect(callback.statusCode).toBe(302);
@@ -319,7 +331,7 @@ describe('authorize endpoint', () => {
       sandbox: true,
       code: 'GRANTEX_SANDBOX_CODE',
     });
-    const response = await ctx.app.inject({
+    const response = await authorizeWithConsent(ctx.app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -342,7 +354,7 @@ describe('authorize endpoint', () => {
       sandbox: true,
       code: 'GRANTEX_SANDBOX_CODE',
     });
-    const response = await ctx.app.inject({
+    const response = await authorizeWithConsent(ctx.app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -354,7 +366,7 @@ describe('authorize endpoint', () => {
         state: 'my-state-value',
       },
     });
-    expect(response.statusCode).toBe(302);
+    expect(response.statusCode).toBe(303);
     const url = new URL(response.headers['location'] as string);
     expect(url.origin + url.pathname).toBe(TEST_REDIRECT_URI);
     expect(url.searchParams.get('code')).toBeTruthy();

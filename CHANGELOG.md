@@ -41,6 +41,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   RS256 key.
 
 ### Caps meter
+- This is the metering library for spend caps. The consent-page and per-case
+  display of caps and remaining budget, and the platform's per-tenant
+  `caps.enforce` rollout flag, are not included yet.
 - New caps meter in both SDKs (`grantex.caps`, and `CapsMeter` in
   `@grantex/sdk`) enforces per-tool call caps over rolling `per_hour` and
   `per_day` windows and `per_case`, plus cost-unit budgets. Caps come from the
@@ -68,8 +71,139 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A tool that declares `cost_units` while the grant sets no cost-unit budget
   is now allowed when a meter is configured, because there is nothing to
   meter. It is still denied without a meter.
+- Grant `caps` are validated when the token's `authorization_details` is
+  read, for every call on the connector. A key must be an exact tool name or
+  `cost_units`; wildcard keys such as `screen_*`, unknown windows and invalid
+  counts deny with `token_invalid` / `malformed_authorization_details` instead
+  of being ignored.
+- **Behaviour change:** `cost_units` is reserved and rejected as a manifest
+  tool name, in both object-form and strings-only manifests, because grant
+  caps use it for the cost-unit budget.
+- `enforce(..., reserve=False)` / `reserve: false` checks caps against
+  current usage without consuming anything, and returns `cap_limits` /
+  `capLimits` and `caps_tenant_id` / `capsTenantId` for a later
+  `CapsMeter.reserve()`. Check early (for example when validating scopes) and
+  reserve once, at the call that incurs cost.
+- `caps_mode` / `capsMode` on the client or per call: `enforce` (default)
+  denies, `warn` allows a call a cap would deny and reports it in
+  `would_deny` / `wouldDeny` (reserving only calls that fit), and `off`
+  skips caps. Malformed grant caps are denied in every mode.
+- `caps_tenant_id` / `capsTenantId` overrides the tenant of a call's counters
+  (default: the grant's developer).
+- Postgres backend: `prune()` deletes expired reservations and empty
+  counters (run it periodically); reservations use READ COMMITTED explicitly.
+  Redis backend: requires Redis 6.0 or later.
 - CI's `make` job runs the caps integration tests against Redis and Postgres
   service containers.
+
+### @grantex/mcp-auth 3.0.0 (prepared, not published)
+`packages/mcp-auth` is at 3.0.0 in the repository. It is **not published**;
+`@grantex/mcp-auth@2.0.2` remains the current npm release. Deployment,
+configuration, consent-page customisation and the migration table are in
+`docs/mcp-auth.md`.
+
+Added
+- Durable state: all authorization state (client registrations, consent
+  records, pending authorizations, authorization codes with their PKCE
+  challenges, refresh-token bindings, revocations) goes through
+  `McpAuthStorage`. `PostgresStorage` (`@grantex/mcp-auth/postgres`, migrations
+  in `migrations/` recorded in a `mcp_auth_schema_migrations` ledger,
+  `runMigrations()`, `purgeExpired()`) and `RedisStorage`
+  (`@grantex/mcp-auth/redis`, Redis 6.2+) survive restarts and serve replicas.
+  Single-use records are consumed atomically; codes, refresh tokens and
+  consent ids are stored only as SHA-256 keys and client secrets as hashes.
+  `InMemoryStorage` (`@grantex/mcp-auth/testing`) is for tests and refuses
+  `NODE_ENV=production`.
+- MCP authorization specification (2026-07-28): RFC 9728 protected-resource
+  metadata; RFC 8707 resource indicators with audience binding (an upstream
+  token without the matching `aud` is not returned); RFC 8414 metadata at the
+  path-inserted location, advertising `authorization_response_iss_parameter_supported`
+  and `client_id_metadata_document_supported`; `iss` on every authorization
+  response (RFC 9207); PKCE S256 only.
+- OAuth Client ID Metadata Documents with SSRF protections (public addresses
+  only with connection pinning, port 443 unless `allowedPorts`, no
+  redirects, size and time limits, TTL cache, optional host trust policy),
+  failing closed with a reason code.
+- `/revoke` also revokes refresh tokens bound to the client (RFC 7009).
+- Rendered consent page before anything reaches Grantex, showing the client,
+  redirect host, purpose, data region, duration, tools with caps and decision
+  requirements, labelled as declared by the service; strict CSP with no
+  script, CSRF token plus a per-consent `__Host-` SameSite=Strict cookie;
+  customisable theme (WCAG AA contrast enforced), text, `lang`, `extraCss`
+  and `renderDetails`. New `grant` and `consentPage` options.
+- Confused-deputy protection: approval sets a `__Host-` Secure HttpOnly
+  SameSite=Lax callback-binding cookie whose hash is stored on the pending
+  authorization, and `/callback` issues a code only to the browser that
+  presents it.
+- `manifests` option and `toolPolicyFromManifests()`: scopes derived from
+  tool manifests in the 0.5 and 0.6 form.
+- Resource-server guard (`requireMcpAuth` for Express and Hono,
+  `createMcpResourceGuard`): RFC 9728 challenges, revocation checks against
+  the same storage, and refusal of any `tools/call` outside the grant with
+  403. Tools marked `requires_decision` are refused with a `decision_required`
+  challenge unless a `DecisionVerifier` accepts (and consumes) a decision
+  grant, and a batch with more than one such call is refused (format:
+  `spec/mcp-auth-challenges.md`). With a tools policy, a body that is not
+  parsed JSON-RPC 2.0 is refused (`body_not_parsed`). `onDenial` reports
+  refusals with low-cardinality reasons (`grant_revoked`, ...); a guard
+  without `revocations` warns at start-up. `grant.authorizeParams` is the
+  extension point for purpose-bound grants.
+- Tests: storage contract against memory, real Postgres and real Redis; a
+  server-process restart test on both; a conformance suite mapping each
+  server-side MUST of the specification and the Security Best Practices'
+  state-binding and CSRF requirements to a test (SEC-12, not forwarding the
+  client's token upstream, is listed as the host's responsibility); the
+  consent page in
+  Chromium at 375 px with axe-core; documentation examples compiled and run.
+
+Fixed
+- The upstream token exchange sends the consent callback as `redirectUri`;
+  2.x omitted it, so live exchanges with the auth service failed.
+- `/revoke` records the revocation locally, so `/introspect` and the
+  middleware refuse the token even if the upstream call fails.
+- Concurrent redemptions of one code or refresh token can no longer both
+  succeed.
+- An error thrown by a downstream Hono handler is no longer turned into a 401.
+
+Breaking changes
+- `storage` is required. `clientStore`, `codeStore`, `pendingStore`,
+  `refreshTokenStore`, the `*Store` types and the `InMemory*Store` classes are
+  removed; `createMcpAuthServer` throws when given them.
+- `ClientRegistration.clientSecret` is replaced by `clientSecretHash`; code,
+  pending-authorization and refresh-binding records no longer carry their own
+  key. A client record without `tokenEndpointAuthMethod: 'none'` is
+  confidential, and one without a secret hash cannot authenticate.
+- `resource` (or `allowedResources`) is required; tokens are always
+  audience-checked at `/introspect` and `/revoke`.
+- `issuer` must be https (http only on localhost) with no query or fragment.
+- `GET /authorize` returns the consent page (200 HTML) instead of a 302 to
+  Grantex; the flow continues with `POST /consent`, which answers 303.
+- `/callback` answers 403 unless the browser presents the callback-binding
+  cookie set when it approved consent.
+- `requireMcpAuth` requires `audience` and throws without it; its 401 and 403
+  responses carry `WWW-Authenticate`.
+- Requested scopes outside `scopes_supported` are refused with
+  `invalid_scope`.
+- `/register` refuses redirect URIs that are neither https nor loopback http,
+  a `client_name` that is not 1-200 characters, and `grant_types` other than
+  `authorization_code` with optional `refresh_token`.
+- A refresh that returns the same refresh token no longer hands it out
+  again; the response omits `refresh_token`.
+- Upstream consent errors other than `access_denied` reach the client as
+  `server_error`; upstream error text is not forwarded, including in
+  `error_description` from `/authorize` and `/token`.
+- Metadata documents are fetched only from port 443 unless
+  `clientIdMetadataDocuments.allowedPorts` allows another.
+- With a tools policy, `requireMcpAuth` refuses request bodies that are not
+  parsed JSON-RPC 2.0 messages with 400.
+- `consentPage.theme.fontFamily` allows only letters, digits, spaces, commas
+  and hyphens; `consentPage.expiresInSeconds` must be 60-3600.
+- `/introspect` reports a token without `jti` as inactive.
+- `consentUi.appLogo`, `privacyUrl` and `termsUrl` must be https URLs.
+- A URL-shaped `client_id` is resolved only as a metadata document.
+- Removed: the unenforced `allowedRedirectUris` option, and the metadata's
+  advertised `grantex_extensions.consent_ui` and `audit_stream` URLs, which had
+  no routes.
 
 ### Purpose-bound grants
 - `POST /v1/authorize` accepts `purpose`: a term from the controlled
@@ -127,6 +261,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   are enforced exactly as before. Manifests made only of permission strings
   still load with unknown top-level keys, now with a deprecation warning; a
   future minor release will reject them.
+- **Behaviour change:** manifest files (JSON and YAML) with a key repeated
+  inside one object are rejected with `ManifestValidationError`
+  (`duplicate key "<key>" in manifest file`) by `from_file` / `fromFile` and
+  `load_manifests_from_dir` / `loadManifestsFromDir`, instead of silently
+  keeping the last value.
 
 ### Verified Python SDK publication (2026-09-15)
 - Published Python `grantex==0.5.1` to PyPI (uploaded 2026-09-15 01:56 UTC),
