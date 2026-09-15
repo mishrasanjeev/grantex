@@ -54,6 +54,8 @@ tags:
     description: Authorization request creation and approval
   - name: Consent
     description: End-user consent UI and approval flow
+  - name: Event Bridge
+    description: Provider events (SSF/CAEP SETs, signed webhooks) mapped to grant actions
   - name: Tokens
     description: Token exchange, verification, and revocation
   - name: OAuth Agent Grants
@@ -138,6 +140,40 @@ components:
       description: SCIM provisioning token
 
   schemas:
+    EventSource:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [ssf, webhook] }
+        name: { type: string }
+        status: { type: string, enum: [active, disabled] }
+        ingestUrl: { type: string, format: uri }
+        issuer: { type: string }
+        audience: { type: string }
+        jwksUri: { type: string }
+        jwks: { type: object }
+        algorithms: { type: array, items: { type: string } }
+        maxAgeSeconds: { type: integer }
+        toleranceSeconds: { type: integer }
+        secretRotatedAt: { type: [string, "null"], format: date-time }
+        previousSecretExpiresAt: { type: [string, "null"], format: date-time }
+        secret: { type: string, description: "Only in create and rotate responses of webhook sources" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    EventBridgeAccepted:
+      type: object
+      properties:
+        status: { type: string, enum: [unmapped, applied, observed, duplicate] }
+        requestId: { type: string }
+    EventBridgeRefused:
+      type: object
+      properties:
+        err:
+          type: string
+          description: Verification failure reason (also the metric label)
+        description: { type: string }
+        code: { type: string, enum: [EVENT_UNVERIFIABLE] }
+        requestId: { type: string }
     Error:
       type: object
       properties:
@@ -2876,6 +2912,217 @@ paths:
                 $ref: "#/components/schemas/Error"
 
   # ── Webhooks ─────────────────────────────────────────────────────────
+  /v1/event-sources:
+    post:
+      operationId: createEventSource
+      tags: [Event Bridge]
+      summary: Register an event source
+      description: |
+        Register an SSF/CAEP transmitter (`kind: ssf`) that pushes Security Event Tokens, or a
+        generic signed webhook sender (`kind: webhook`). A webhook source's `secret` is returned
+        once and stored encrypted. Requires `EVENT_BRIDGE_ENABLED=true` (403 `FEATURE_DISABLED`
+        otherwise). See docs/concepts/event-bridge-and-revocation.md.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [kind, name]
+              properties:
+                kind: { type: string, enum: [ssf, webhook] }
+                name: { type: string, maxLength: 128 }
+                issuer: { type: string, maxLength: 512, description: "ssf: expected iss" }
+                audience: { type: string, maxLength: 512, description: "ssf: expected aud (default: the ingest URL)" }
+                jwksUri: { type: string, format: uri, description: "ssf: transmitter JWK Set URL" }
+                jwks: { type: object, description: "ssf: inline public JWK Set" }
+                algorithms: { type: array, items: { type: string, enum: [RS256, PS256, ES256, ES384, EdDSA] } }
+                maxAgeSeconds: { type: integer, minimum: 30, maximum: 86400, default: 300 }
+                toleranceSeconds: { type: integer, minimum: 30, maximum: 3600, default: 300, description: "webhook: replay window" }
+      responses:
+        "201":
+          description: Source registered (webhook sources include `secret`, shown once)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSource"
+        "403":
+          description: Event bridge not enabled
+        "422":
+          description: Validation failed
+        "503":
+          description: VAULT_ENCRYPTION_KEY is not configured (webhook sources)
+    get:
+      operationId: listEventSources
+      tags: [Event Bridge]
+      summary: List event sources
+      responses:
+        "200":
+          description: Sources
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sources:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EventSource"
+  /v1/event-sources/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getEventSource
+      tags: [Event Bridge]
+      summary: Get an event source
+      responses:
+        "200":
+          description: Source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSource"
+        "404":
+          description: Not found (including sources of another developer)
+    patch:
+      operationId: updateEventSource
+      tags: [Event Bridge]
+      summary: Update or disable an event source
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                status: { type: string, enum: [active, disabled] }
+                issuer: { type: string }
+                audience: { type: string }
+                jwksUri: { type: [string, "null"] }
+                jwks: { type: [object, "null"] }
+                algorithms: { type: array, items: { type: string } }
+                maxAgeSeconds: { type: integer }
+                toleranceSeconds: { type: integer }
+      responses:
+        "200":
+          description: Updated source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSource"
+        "404":
+          description: Not found
+        "422":
+          description: Validation failed
+  /v1/event-sources/{id}/rotate-secret:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: rotateEventSourceSecret
+      tags: [Event Bridge]
+      summary: Rotate a webhook source secret
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                previousSecretTtlSeconds:
+                  type: integer
+                  minimum: 0
+                  maximum: 604800
+                  default: 86400
+                  description: How long the previous secret keeps verifying; 0 stops it immediately
+      responses:
+        "200":
+          description: Rotated; the new `secret` is shown once
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventSource"
+        "404":
+          description: Not found
+  /v1/event-bridge/ssf/{sourceId}:
+    parameters:
+      - { name: sourceId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: ingestSecurityEventToken
+      tags: [Event Bridge]
+      summary: Receive a Security Event Token (RFC 8935 push)
+      description: |
+        Authenticated by the SET signature (no API key). `typ` must be `secevent+jwt`; `iss`, `aud`,
+        `iat`, `jti` and `events` are verified against the registration. Unverifiable tokens are
+        refused with 401 and never acted on; a repeated `jti` is not acted on again.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/secevent+jwt:
+            schema:
+              type: string
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventBridgeAccepted"
+        "401":
+          description: Unverifiable delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventBridgeRefused"
+        "404":
+          description: Event bridge not enabled
+        "415":
+          description: Content-Type is not application/secevent+jwt
+  /v1/event-bridge/webhooks/{sourceId}:
+    parameters:
+      - { name: sourceId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: ingestSignedWebhookEvent
+      tags: [Event Bridge]
+      summary: Receive a generic signed webhook event
+      description: |
+        Authenticated by `X-Grantex-Signature: sha256=HEX(HMAC-SHA256(secret, "<timestamp>.<raw body>"))`
+        with `X-Grantex-Timestamp` inside the source replay window (no API key).
+      security: []
+      parameters:
+        - { name: X-Grantex-Timestamp, in: header, required: true, schema: { type: string } }
+        - { name: X-Grantex-Signature, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, type]
+              properties:
+                id: { type: string, maxLength: 256 }
+                type: { type: string, maxLength: 512 }
+                occurred_at: { type: string, format: date-time }
+                subject: { type: object }
+                data: { type: object }
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventBridgeAccepted"
+        "401":
+          description: Unverifiable delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventBridgeRefused"
+        "404":
+          description: Event bridge not enabled
+        "415":
+          description: Content-Type is not application/json
   /v1/webhooks:
     post:
       operationId: createWebhook

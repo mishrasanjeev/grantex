@@ -238,6 +238,9 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `STRIPE_WEBHOOK_SECRET` | No | — | Stripe webhook signature validation |
 | `STRIPE_PRICE_PRO` | No | — | Stripe price ID for Pro tier |
 | `STRIPE_PRICE_ENTERPRISE` | No | — | Stripe price ID for Enterprise tier |
+| `EVENT_BRIDGE_ENABLED` | No | `false` | Accept provider events (SSF/CAEP SETs, signed webhooks); see `docs/concepts/event-bridge-and-revocation.md` |
+| `EVENT_BRIDGE_DEVELOPER_IDS` | No | — | Limit the event bridge to these developers (comma separated) |
+| `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | No | `30000` | Event ingestion requests per source and client address |
 
 ---
 

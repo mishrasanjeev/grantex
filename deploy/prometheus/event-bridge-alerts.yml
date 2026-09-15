@@ -1,0 +1,30 @@
+# Prometheus alerting rules for the event bridge (PRD G-6, section 10).
+# Load with `rule_files`, or wrap the group in a PrometheusRule for the Prometheus Operator.
+groups:
+  - name: grantex-event-bridge
+    rules:
+      - alert: GrantexEventBridgeVerificationFailures
+        expr: sum by (source_type, reason) (increase(grantex_event_bridge_verification_failures_total[5m])) > 10
+        labels:
+          severity: warning
+        annotations:
+          summary: "Event bridge refused unverifiable deliveries ({{ $labels.source_type }}, {{ $labels.reason }})"
+          description: >-
+            More than 10 deliveries in 5 minutes failed verification and were not acted on.
+            A burst of signature_invalid or event_id_reused suggests forged or replayed events;
+            key_unavailable or stale usually means a transmitter rotated keys or its clock drifted.
+            Find the source ids in the auth service logs (alert=event_bridge_verification_failure).
+      - alert: GrantexEventBridgeVerificationFailureRatio
+        expr: >-
+          sum by (source_type) (rate(grantex_event_bridge_verification_failures_total[15m]))
+          / clamp_min(sum by (source_type) (rate(grantex_event_bridge_events_received_total[15m])), 1e-9) > 0.5
+          and sum by (source_type) (increase(grantex_event_bridge_events_received_total[15m])) > 20
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Most {{ $labels.source_type }} event bridge deliveries are failing verification"
+          description: >-
+            Over half of the deliveries received in 15 minutes were refused. Legitimate provider
+            events (for example a dissolution that should revoke grants) are not being acted on.
+            Check the transmitter's keys and audience, or the webhook secret rotation.

@@ -53,6 +53,8 @@ import { metricsHookPlugin } from './plugins/metricsHook.js';
 import websocket from '@fastify/websocket';
 import { oauthRoutes } from './routes/oauth.js';
 import { prepaidWalletRoutes } from './routes/prepaid-wallets.js';
+import { eventSourcesRoutes } from './routes/event-sources.js';
+import { eventBridgeIngestRoutes } from './routes/event-bridge-ingest.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -217,6 +219,10 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(consentBundlesRoutes);
   await app.register(mcpServersRoutes);
   await app.register(dpdpRoutes);
+  // Event bridge (PRD G-6): source registration, and ingestion in its own
+  // scope because signatures cover the raw request bytes.
+  await app.register(eventSourcesRoutes);
+  await app.register(eventBridgeIngestRoutes);
 
   // Grantex Commerce V1 — registered with prefix so all commerce paths
   // share the spec §16 envelope via the sub-instance error handler.
