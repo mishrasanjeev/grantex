@@ -1,11 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type {
-  McpAuthConfig,
-  ClientStore,
-  CodeStore,
-  PendingAuthorizationStore,
-  PendingAuthorization,
-} from '../types.js';
+import type { McpAuthConfig, PendingAuthorization } from '../types.js';
+import type { McpAuthStorage } from '../storage/types.js';
 import { generateCode } from '../lib/codes.js';
 
 interface AuthorizeQuery {
@@ -53,13 +48,12 @@ interface IssueCodeInput {
 async function issueCodeAndRedirect(
   reply: FastifyReply,
   config: McpAuthConfig,
-  codeStore: CodeStore,
+  storage: McpAuthStorage,
   input: IssueCodeInput,
 ): Promise<FastifyReply> {
   const code = generateCode();
   const codeExpiration = config.codeExpirationSeconds ?? 600;
-  await codeStore.set(code, {
-    code,
+  await storage.putAuthorizationCode(code, {
     clientId: input.clientId,
     redirectUri: input.redirectUri,
     codeChallenge: input.codeChallenge,
@@ -80,9 +74,7 @@ async function issueCodeAndRedirect(
 export function registerAuthorizeEndpoint(
   app: FastifyInstance,
   config: McpAuthConfig,
-  clientStore: ClientStore,
-  codeStore: CodeStore,
-  pendingStore: PendingAuthorizationStore,
+  storage: McpAuthStorage,
 ): void {
   app.get<{ Querystring: AuthorizeQuery }>('/authorize', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const {
@@ -113,7 +105,7 @@ export function registerAuthorizeEndpoint(
     }
 
     // Validate client
-    const client = await clientStore.get(client_id);
+    const client = await storage.getClient(client_id);
     if (!client) {
       return reply.status(400).send({
         error: 'invalid_client',
@@ -177,7 +169,7 @@ export function registerAuthorizeEndpoint(
             + 'Set sandboxAutoApprove: true to allow this in sandbox mode.',
         });
       }
-      return issueCodeAndRedirect(reply, config, codeStore, {
+      return issueCodeAndRedirect(reply, config, storage, {
         clientId: client_id,
         redirectUri: redirect_uri,
         codeChallenge: code_challenge,
@@ -190,7 +182,6 @@ export function registerAuthorizeEndpoint(
     }
 
     const pending: PendingAuthorization = {
-      id: pendingId,
       clientId: client_id,
       redirectUri: redirect_uri,
       codeChallenge: code_challenge,
@@ -201,7 +192,7 @@ export function registerAuthorizeEndpoint(
       grantexAuthRequestId: grantexAuth.authRequestId,
       expiresAt: Date.now() + codeExpiration * 1000,
     };
-    await pendingStore.set(pendingId, pending);
+    await storage.putPendingAuthorization(pendingId, pending);
 
     return reply.redirect(grantexAuth.consentUrl);
   });
@@ -218,15 +209,14 @@ export function registerAuthorizeEndpoint(
       });
     }
 
-    const pending = await pendingStore.get(state);
+    // Atomic take: a replayed (or concurrent) callback must not mint a second code.
+    const pending = await storage.takePendingAuthorization(state);
     if (!pending) {
       return reply.status(400).send({
         error: 'invalid_request',
         error_description: 'Unknown or expired authorization request',
       });
     }
-    // Single use — a replayed callback must not mint a second code.
-    await pendingStore.delete(state);
 
     if (error || typeof code !== 'string' || code.length === 0) {
       const redirectUrl = new URL(pending.redirectUri);
@@ -235,7 +225,7 @@ export function registerAuthorizeEndpoint(
       return reply.redirect(redirectUrl.toString());
     }
 
-    return issueCodeAndRedirect(reply, config, codeStore, {
+    return issueCodeAndRedirect(reply, config, storage, {
       clientId: pending.clientId,
       redirectUri: pending.redirectUri,
       codeChallenge: pending.codeChallenge,

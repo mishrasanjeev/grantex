@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto';
 import * as jose from 'jose';
 import type { FastifyInstance } from 'fastify';
 import { createMcpAuthServer } from '../src/server.js';
-import { InMemoryClientStore } from '../src/lib/clients.js';
+import { InMemoryStorage } from '../src/storage/memory.js';
+import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
 
 const TEST_CLIENT_ID = 'test-client-id';
@@ -94,10 +95,10 @@ function createMockGrantex() {
 }
 
 async function createTestApp() {
-  const clientStore = new InMemoryClientStore();
-  await clientStore.set(TEST_CLIENT_ID, {
+  const clientStore = new InMemoryStorage();
+  await clientStore.putClient({
     clientId: TEST_CLIENT_ID,
-    clientSecret: TEST_CLIENT_SECRET,
+    clientSecretHash: hashClientSecret(TEST_CLIENT_SECRET),
     redirectUris: [TEST_REDIRECT_URI],
     grantTypes: ['authorization_code', 'refresh_token'],
     createdAt: new Date().toISOString(),
@@ -113,7 +114,7 @@ async function createTestApp() {
     issuer: 'https://auth.example.com',
     // Tokens are minted by Grantex: pin its issuer and JWKS.
     grantexIssuer: issuer,
-    clientStore,
+    storage: clientStore,
     sandboxAutoApprove: true,
   });
 

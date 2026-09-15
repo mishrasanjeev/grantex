@@ -24,6 +24,13 @@ middleware.
 > [feature guide](https://docs.grantex.dev/features/mcp-auth-server) for the full
 > current-status matrix.
 
+> [!NOTE]
+> The next major version (3.0, unreleased) is being built on `main`: all
+> authorization state goes through a pluggable `storage` (Postgres or Redis),
+> so it survives restarts and is shared by replicas. The examples marked
+> **3.0** below describe that unreleased code; `2.0.2` on npm does not have
+> them.
+
 ## What 2.0.2 implements
 
 - PKCE S256 request validation (no `plain` or implicit flow)
@@ -132,7 +139,7 @@ const server = await createMcpAuthServer(config);
 | `sandboxAutoApprove` | `boolean` | No | `false` | Allow a Grantex sandbox auto-approval to skip the consent redirect and issue a code immediately |
 | `allowedRedirectUris` | `string[]` | No | `[]` | Declared but not enforced in `2.0.2`; the client's registered URI is checked |
 | `allowedResources` | `string[]` | No | `[]` | Allowed resource indicators (RFC 8707) |
-| `clientStore` | `ClientStore` | No | `InMemoryClientStore` | Client registrations only; authorization codes stay in process memory |
+| `storage` | `McpAuthStorage` | Yes (**3.0**) | - | All authorization state; see [Storage](#storage-30). Replaces `clientStore` from 2.x |
 | `codeExpirationSeconds` | `number` | No | `600` | Authorization code TTL in seconds |
 | `consentUi` | `object` | No | - | Discovery metadata only; no consent page is created |
 | `hooks` | `object` | No | - | `onRevocation` runs; declared `onTokenIssued` is not invoked in `2.0.2` |
@@ -173,37 +180,44 @@ const server = await createMcpAuthServer({
 `onTokenIssued` is present in the exported type but is not called by the token
 endpoint in this release.
 
-### Custom Client Store
+### Storage (3.0)
 
-By default, client registrations are stored in memory. A custom `ClientStore` can persist clients, but the authorization-code store remains process-local and non-configurable in `2.0.2`:
+In 3.0 every piece of authorization state — client registrations, pending
+authorizations, authorization codes and their PKCE challenges, refresh-token
+bindings, consent records and revocations — goes through one `storage`.
+Codes, refresh tokens and consent ids are stored only as SHA-256 lookup keys,
+client secrets only as hashes, and single-use records are consumed
+atomically.
+
+Postgres (any driver with `query(text, params)`, such as `pg`):
 
 ```typescript
-import type { ClientStore, ClientRegistration } from '@grantex/mcp-auth';
+import pg from 'pg';
+import { createMcpAuthServer } from '@grantex/mcp-auth';
+import { PostgresStorage, runMigrations } from '@grantex/mcp-auth/postgres';
 
-class PostgresClientStore implements ClientStore {
-  async get(clientId: string): Promise<ClientRegistration | undefined> {
-    const row = await db.query('SELECT * FROM oauth_clients WHERE id = $1', [clientId]);
-    return row ?? undefined;
-  }
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+await runMigrations(pool); // idempotent; also shipped as migrations/*.sql
+const storage = new PostgresStorage({ db: pool });
 
-  async set(clientId: string, reg: ClientRegistration): Promise<void> {
-    await db.query(
-      'INSERT INTO oauth_clients (id, data) VALUES ($1, $2) ON CONFLICT (id) DO UPDATE SET data = $2',
-      [clientId, JSON.stringify(reg)],
-    );
-  }
-
-  async delete(clientId: string): Promise<boolean> {
-    const result = await db.query('DELETE FROM oauth_clients WHERE id = $1', [clientId]);
-    return result.rowCount > 0;
-  }
-}
-
-const server = await createMcpAuthServer({
-  // ...
-  clientStore: new PostgresClientStore(),
-});
+const server = await createMcpAuthServer({ /* ...required fields... */ storage });
 ```
+
+Redis 6.2 or later (with persistence enabled, so registrations survive a
+Redis restart):
+
+```typescript
+import { Redis } from 'ioredis';
+import { RedisStorage, fromIoredis } from '@grantex/mcp-auth/redis';
+
+const storage = new RedisStorage({ redis: fromIoredis(new Redis(process.env.REDIS_URL!)) });
+```
+
+`InMemoryStorage` from `@grantex/mcp-auth/testing` is for tests and refuses to
+start with `NODE_ENV=production`. To use another database, implement
+`McpAuthStorage`; the rules it must meet are documented on the interface and
+checked for the shipped implementations by `tests/storage-contract.ts` in the
+repository.
 
 ## Express.js Middleware
 
@@ -357,6 +371,9 @@ self-hosted API. In both cases, the MCP auth Fastify process owns its client and
 code state. A custom `ClientStore` persists only registrations; `2.0.2` exposes
 no custom authorization-code store. Run a single process for evaluation and do
 not treat selecting Grantex Cloud as managed MCP-auth hosting.
+
+In 3.0 (unreleased) the same state lives in the configured `storage`, so
+several processes can share it; the MCP auth server is still yours to host.
 
 ## Conformance testing
 

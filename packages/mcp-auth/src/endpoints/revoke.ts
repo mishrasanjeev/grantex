@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import type { McpAuthConfig, ClientStore } from '../types.js';
-import { createGrantexTokenVerifier, parseBasicAuth, secretMatches } from '../lib/verify.js';
+import type { McpAuthConfig } from '../types.js';
+import type { McpAuthStorage } from '../storage/types.js';
+import { createGrantexTokenVerifier, isConfidentialClient, parseBasicAuth, secretMatches } from '../lib/verify.js';
 
 interface RevokeBody {
   token?: string;
@@ -9,10 +10,13 @@ interface RevokeBody {
   client_secret?: string;
 }
 
+/** Retention for a revoked token that carries no `exp` claim. */
+const MAX_REVOCATION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 export function registerRevokeEndpoint(
   app: FastifyInstance,
   config: McpAuthConfig,
-  clientStore: ClientStore,
+  storage: McpAuthStorage,
 ): void {
   // Revocation is bound to the requesting client (RFC 7009 §2.1), which
   // requires a verified token: the MCP flow issues every grant with the
@@ -49,8 +53,8 @@ export function registerRevokeEndpoint(
 
       if (basicCreds) {
         const [clientId, clientSecret] = basicCreds;
-        const client = await clientStore.get(clientId);
-        if (!client || !secretMatches(client.clientSecret, clientSecret)) {
+        const client = await storage.getClient(clientId);
+        if (!client || !secretMatches(client.clientSecretHash, clientSecret)) {
           return reply.status(401).send({
             error: 'invalid_client',
             error_description: 'Invalid client credentials',
@@ -58,7 +62,7 @@ export function registerRevokeEndpoint(
         }
         authenticatedClientId = client.clientId;
       } else if (body.client_id) {
-        const client = await clientStore.get(body.client_id);
+        const client = await storage.getClient(body.client_id);
         if (!client) {
           return reply.status(401).send({
             error: 'invalid_client',
@@ -66,8 +70,8 @@ export function registerRevokeEndpoint(
           });
         }
         if (
-          client.clientSecret &&
-          !secretMatches(client.clientSecret, body.client_secret)
+          isConfidentialClient(client) &&
+          !secretMatches(client.clientSecretHash, body.client_secret)
         ) {
           return reply.status(401).send({
             error: 'invalid_client',
@@ -87,10 +91,12 @@ export function registerRevokeEndpoint(
       // it. An expired token is still revocable (RFC 7009 §2.1).
       let jti: string | undefined;
       let subject: string | undefined;
+      let expiresAtMs: number | undefined;
       try {
         const payload = await verifier.verify(token, { ignoreExpiration: true });
         jti = payload.jti;
         subject = payload.sub;
+        expiresAtMs = typeof payload.exp === 'number' ? payload.exp * 1000 : undefined;
       } catch {
         // Invalid / unverifiable token: per RFC 7009 §2.2 respond 200 and do nothing.
         return reply.status(200).send();
@@ -108,6 +114,16 @@ export function registerRevokeEndpoint(
           error_description: 'Token was not issued to this client',
         });
       }
+
+      // Record the revocation locally first: /introspect and middleware
+      // configured with the same storage refuse the token from now on, even
+      // if the upstream call below fails. A storage failure is not swallowed
+      // (the client gets a 500 and can retry).
+      await storage.revokeToken(jti, {
+        clientId: authenticatedClientId,
+        revokedAt: Date.now(),
+        expiresAt: expiresAtMs ?? Date.now() + MAX_REVOCATION_RETENTION_MS,
+      });
 
       // Revoke via Grantex
       try {

@@ -4,7 +4,8 @@ import type { Server } from 'node:http';
 import * as jose from 'jose';
 import type { FastifyInstance } from 'fastify';
 import { createMcpAuthServer } from '../src/server.js';
-import { InMemoryClientStore } from '../src/lib/clients.js';
+import { InMemoryStorage } from '../src/storage/memory.js';
+import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
 
 const TEST_CLIENT_ID = 'test-client-id';
@@ -86,10 +87,10 @@ function createMockGrantex() {
 }
 
 async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
-  const clientStore = new InMemoryClientStore();
-  await clientStore.set(TEST_CLIENT_ID, {
+  const clientStore = new InMemoryStorage();
+  await clientStore.putClient({
     clientId: TEST_CLIENT_ID,
-    clientSecret: TEST_CLIENT_SECRET,
+    clientSecretHash: hashClientSecret(TEST_CLIENT_SECRET),
     redirectUris: ['https://app.example.com/callback'],
     grantTypes: ['authorization_code'],
     createdAt: new Date().toISOString(),
@@ -105,7 +106,7 @@ async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
     // This server's own URL serves no JWKS; tokens come from Grantex.
     issuer: 'https://auth.example.com',
     grantexIssuer: issuer,
-    clientStore,
+    storage: clientStore,
     ...overrides,
   });
 
@@ -344,13 +345,13 @@ describe('introspect endpoint', () => {
     });
 
     it('fails closed (503) when grantexIssuer is not configured', async () => {
-      const clientStore = new InMemoryClientStore();
+      const clientStore = new InMemoryStorage();
       const appNoIssuer = await createMcpAuthServer({
         grantex: createMockGrantex() as unknown as McpAuthConfig['grantex'],
         agentId: 'agent-1',
         scopes: ['read'],
         issuer: grantexIssuer(), // even though this URL serves a JWKS, it is not pinned as the token issuer
-        clientStore,
+        storage: clientStore,
       });
       const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
       const res = await appNoIssuer.inject({ method: 'POST', url: '/introspect', payload: { token } });

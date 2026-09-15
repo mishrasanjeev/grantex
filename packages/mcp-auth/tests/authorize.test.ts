@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { createMcpAuthServer } from '../src/server.js';
-import { InMemoryClientStore } from '../src/lib/clients.js';
+import { InMemoryStorage } from '../src/storage/memory.js';
+import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
 
 function computeS256Challenge(verifier: string): string {
@@ -47,10 +48,10 @@ function createMockGrantex() {
 }
 
 async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
-  const clientStore = new InMemoryClientStore();
-  await clientStore.set(TEST_CLIENT_ID, {
+  const clientStore = new InMemoryStorage();
+  await clientStore.putClient({
     clientId: TEST_CLIENT_ID,
-    clientSecret: 'test-secret',
+    clientSecretHash: hashClientSecret('test-secret'),
     redirectUris: [TEST_REDIRECT_URI],
     grantTypes: ['authorization_code'],
     createdAt: new Date().toISOString(),
@@ -63,7 +64,7 @@ async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
     agentId: 'agent-1',
     scopes: ['read', 'write'],
     issuer: 'https://auth.example.com',
-    clientStore,
+    storage: clientStore,
     ...overrides,
   });
 

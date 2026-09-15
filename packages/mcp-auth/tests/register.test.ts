@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createMcpAuthServer } from '../src/server.js';
 import type { McpAuthConfig } from '../src/types.js';
+import { InMemoryStorage } from '../src/storage/memory.js';
 
 function createMockGrantex() {
   return {
@@ -44,6 +45,7 @@ describe('register endpoint', () => {
       agentId: 'agent-1',
       scopes: ['read'],
       issuer: 'https://auth.example.com',
+      storage: new InMemoryStorage(),
     });
   });
 

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { createMcpAuthServer } from '../src/server.js';
-import { InMemoryClientStore } from '../src/lib/clients.js';
+import { InMemoryStorage } from '../src/storage/memory.js';
+import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
 
 const TEST_CLIENT_ID = 'test-client-id';
@@ -46,11 +47,11 @@ function createMockGrantex() {
 const TEST_CLIENT_SECRET = 'test-secret';
 
 async function setupWithCode(options: { publicClient?: boolean } = {}) {
-  const clientStore = new InMemoryClientStore();
-  await clientStore.set(TEST_CLIENT_ID, {
+  const clientStore = new InMemoryStorage();
+  await clientStore.putClient({
     clientId: TEST_CLIENT_ID,
     // Confidential by default; `publicClient` registers a PKCE-only client.
-    ...(options.publicClient ? { tokenEndpointAuthMethod: 'none' as const } : { clientSecret: TEST_CLIENT_SECRET }),
+    ...(options.publicClient ? { tokenEndpointAuthMethod: 'none' as const } : { clientSecretHash: hashClientSecret(TEST_CLIENT_SECRET) }),
     redirectUris: [TEST_REDIRECT_URI],
     grantTypes: ['authorization_code', 'refresh_token'],
     createdAt: new Date().toISOString(),
@@ -63,7 +64,7 @@ async function setupWithCode(options: { publicClient?: boolean } = {}) {
     agentId: 'agent-1',
     scopes: ['read', 'write'],
     issuer: 'https://auth.example.com',
-    clientStore,
+    storage: clientStore,
     // Test fixture uses the gated sandbox short path to obtain a code
     // without driving the Grantex consent flow.
     sandboxAutoApprove: true,
@@ -231,10 +232,10 @@ describe('token endpoint', () => {
   });
 
   it('forwards the Grantex sandbox/auto-approve code to the exchange instead of the auth-request id', async () => {
-    const clientStore = new InMemoryClientStore();
-    await clientStore.set(TEST_CLIENT_ID, {
+    const clientStore = new InMemoryStorage();
+    await clientStore.putClient({
       clientId: TEST_CLIENT_ID,
-      clientSecret: 'test-secret',
+      clientSecretHash: hashClientSecret('test-secret'),
       redirectUris: [TEST_REDIRECT_URI],
       grantTypes: ['authorization_code'],
       createdAt: new Date().toISOString(),
@@ -258,7 +259,7 @@ describe('token endpoint', () => {
       agentId: 'agent-1',
       scopes: ['read', 'write'],
       issuer: 'https://auth.example.com',
-      clientStore,
+      storage: clientStore,
       sandboxAutoApprove: true,
     });
     const authResponse = await app.inject({
@@ -362,9 +363,9 @@ describe('token endpoint', () => {
 
     it('rejects a refresh token presented by a different client without calling Grantex', async () => {
       const { app, code, clientStore, mockGrantex } = await setupWithCode();
-      await clientStore.set(OTHER_CLIENT_ID, {
+      await clientStore.putClient({
         clientId: OTHER_CLIENT_ID,
-        clientSecret: OTHER_CLIENT_SECRET,
+        clientSecretHash: hashClientSecret(OTHER_CLIENT_SECRET),
         redirectUris: [TEST_REDIRECT_URI],
         grantTypes: ['authorization_code', 'refresh_token'],
         createdAt: new Date().toISOString(),
