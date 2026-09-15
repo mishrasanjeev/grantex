@@ -162,8 +162,9 @@ Remove an entry in the pull request that fixes it.
   non-monotonic `ulid()`, so the later entry's id can sort before the earlier
   one. The next writer then links to the wrong head, and chain verification
   (`/v1/compliance/evidence-pack`, `audit-log verify`) reports a broken link
-  that is not tampering. The evidence endpoints avoid it for their own entries
-  by stamping `max(now, head + 1 ms)`.
+  that is not tampering. The evidence endpoints avoid it for their own entries:
+  they stamp `max(now, head timestamp)` and, within the head's millisecond,
+  derive an id that sorts after the head's.
 - **Fix:** stamp every audit entry with `max(now, head timestamp + 1 ms)` under
   the existing advisory lock (or use `monotonicFactory()` for audit ids), in
   every writer of `audit_entries`.
