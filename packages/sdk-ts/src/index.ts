@@ -107,6 +107,8 @@ export {
   type EnforceMiddlewareOptions,
 } from './manifest.js';
 export * from './caps/index.js';
+// Evidence packages (namespaced; grantex.evidence in the Python SDK)
+export * as evidence from './evidence/index.js';
 export { DenialReason, CapSubReason, ManifestSubReason, PurposeSubReason, TokenSubReason, ToolSubReason } from './denials.js';
 export {
   PURPOSE_VOCABULARY,

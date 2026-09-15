@@ -140,6 +140,19 @@ grantex audit log --agent-id ag_... --agent-did did:grantex:ag_... --grant-id gr
   --principal-id user@example.com --action email.read --status success
 ```
 
+### Evidence packages
+
+```bash
+# Verify against a root obtained independently (for example from the audit log).
+# Exits 1 and prints the failing entry, field, expected and actual hash on any break.
+grantex evidence verify package.json --root sha256:<64 hex> [--anchor <audit hash>] [--jwks jwks.json]
+
+# Export a case from the auth service; the package is verified before it is saved.
+grantex evidence export case_... --out package.json [--disclose approver] [--sign]
+```
+
+See spec/evidence-package.md.
+
 ### Policies
 
 ```bash
