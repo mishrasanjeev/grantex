@@ -28,6 +28,7 @@ import { webhooksCommand } from './commands/webhooks.js';
 import { verifyCommand } from './commands/verify.js';
 import { decodeCommand } from './commands/decode.js';
 import { auditCmdCommand } from './commands/audit-cmd.js';
+import { evidenceCommand } from './commands/evidence.js';
 import { registryCommand } from './commands/registry-cmd.js';
 import { initCommand } from './commands/init.js';
 import { manifestCommand } from './commands/manifest.js';
@@ -75,6 +76,7 @@ export function createProgram(): Command {
   program.addCommand(verifyCommand());
   program.addCommand(decodeCommand());
   program.addCommand(auditCmdCommand());
+  program.addCommand(evidenceCommand());
   program.addCommand(registryCommand());
   program.addCommand(initCommand());
   program.addCommand(manifestCommand());

@@ -29,6 +29,7 @@ from ._build import (
     serialize_package,
 )
 from ._canonical import CanonicalizationError, canonicalize
+from ._client import EvidenceApiError, ExportedPackage, export_package, record_evidence
 from ._document import DEFAULT_MAX_BYTES
 from ._hashing import (
     IDENTIFIER_CLASSES,
@@ -56,7 +57,9 @@ __all__ = [
     "BuiltPackage",
     "CanonicalizationError",
     "DEFAULT_MAX_BYTES",
+    "EvidenceApiError",
     "EvidenceBuildError",
+    "ExportedPackage",
     "FORMAT",
     "IDENTIFIER_CLASSES",
     "PrivacySettings",
@@ -76,9 +79,11 @@ __all__ = [
     "digest",
     "digest_bytes",
     "entry_hash",
+    "export_package",
     "header_hash",
     "is_pseudonym",
     "pseudonymise",
+    "record_evidence",
     "serialize_package",
     "sign_root",
     "upstream_records_for",
