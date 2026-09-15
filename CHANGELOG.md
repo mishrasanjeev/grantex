@@ -24,37 +24,222 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Evidence package library
 - New `grantex.evidence` (Python) and `evidence` namespace of `@grantex/sdk`
-  (also importable as `@grantex/sdk/evidence`): build, canonicalise and
-  verify evidence packages (`spec/evidence-package.md`). `verify_package` /
-  `verifyPackage` require a trusted root, fail closed on an unknown version,
-  duplicate members, non-canonical numbers or bytes, or a missing root, and
-  report the exact failing link (entry index, field path, expected and actual
-  hash). Anchors (auth service audit entries) and detached ES256/RS256
-  signatures are checked; a signed package without a key set fails unless the
-  caller explicitly accepts it unchecked.
-- `build_package` / `buildPackage` hash-chain a case and pseudonymise
-  identifiers per case unless disclosed; `upstream_records_for` /
-  `upstreamRecordsFor` list every upstream record behind a recommendation.
-- Both SDKs produce identical bytes and identical verification results for
-  every case in `spec/examples/evidence/`.
+  (also `@grantex/sdk/evidence`): build, canonicalise and verify evidence
+  packages (`spec/evidence-package.md`) with identical results in both
+  languages for every case in `spec/examples/evidence/`.
+- Verification requires a trusted root, fails closed and reports the exact
+  failing link; it enforces privacy keying, entry authority, recording order,
+  clock skew, grant and decision validity windows, complete single-use
+  consumptions, unsourced-input marking and void records, and reports the
+  anchor and signature trust status.
+- Builders key `principal`, `approver`, `subject`, `record` identifiers and
+  `content` digests per case (JCS-array HMAC derivations) and replace
+  `action_hash` with a keyed `action_ref` while the subject is pseudonymised.
 - Canonicalisation uses the shared RFC 8785 implementation
   (`grantex.canonical`, `canonical.ts`).
 
 ### Evidence package format
 - New specification of the per-case evidence package, format 1.0
-  (`spec/evidence-package.md`), with a JSON Schema
+  (`spec/evidence-package.md`), JSON Schema
   (`spec/evidence-package-1.0.schema.json`) and shared examples and test cases
-  (`spec/examples/evidence/`). A package holds the grant chain with purposes
-  and caps, tool calls with input/output hashes and upstream record
-  identifiers, run context versions, policy evaluations with cited inputs,
-  recommendations with cited sections, human decisions (approver,
-  authentication method, dwell time, decision grant `jti` and `action_hash`)
-  and revocations, in a hash chain whose root is anchored in the auth service
-  audit chain and may be signed (ES256 or RS256).
-- A package is valid only as its RFC 8785 canonical form; identifiers of
-  principals, approvers and case subjects are pseudonymised per case by
-  default, with a documented opt-out per identifier class.
+  (`spec/examples/evidence/`): grant chain, tool calls with keyed content
+  digests and upstream record references, run context, policy evaluations,
+  recommendations, screening dispositions, decisions and consumptions,
+  revocations and voids; every entry records who asserted it and when it was
+  recorded; hash chain, platform anchor and service signature over root and
+  anchor.
+- Private by default: identifiers, record references and content digests are
+  keyed per case, with operator-approved disclosure.
 - New concepts page `docs/concepts/evidence-and-verification.md`.
+
+### Breaking changes from 0.5 (summary)
+`docs/migration-0.6.md` explains each item and what to do. Manifests,
+purpose-bound grants, caps, signing and claims each have their own entry
+below.
+
+- **Manifests.**
+  - Object-form tool declarations are validated strictly.
+  - Manifest files with a duplicate key are rejected.
+  - `cost_units` is a reserved tool name.
+  - `enforce()` denies calls it cannot evaluate: a tool with
+    `allowed_purposes` needs a matching grant purpose, a tool with
+    `requires_decision` always returns `decision_required`, and a tool with
+    caps needs a caps meter.
+- **Purpose-bound grants.**
+  - `POST /v1/authorize` rejects an unknown `purpose`, or a purpose without a
+    connector scope, with `INVALID_PURPOSE`.
+  - `enforce()` denies every call on a token with malformed
+    `authorization_details`.
+  - `enforce()` applies a tools entry's `tools` list.
+- **Caps.** Grant caps with wildcard or unknown keys, windows or counts deny
+  every call on the connector. Units are not refunded when a call fails.
+- **Signing.**
+  - Key ids are RFC 7638 thumbprints. The RSA key is also published under
+    the pre-0.6 `grantex-YYYY-MM` kids, which the auth service still
+    accepts, so outstanding tokens keep verifying across months and
+    instances.
+  - Tokens may be ES256 when a deployment sets `JWT_SIGNING_ALG=ES256`, so
+    verifiers that pin RS256 must allow ES256 first.
+  - Switching to the postgres key store imports the env keys with the same
+    kids.
+  - SDK verifiers refuse a key whose type, curve, `alg` or `use` does not
+    match the token's algorithm.
+  - The auth service refuses to start with an RSA key under 2048 bits, a
+    non-P-256 EC key, an invalid verification key set, or (postgres store) a
+    retired-key grace shorter than `MAX_GRANT_LIFETIME_SECONDS`.
+- **Claims.**
+  - `GRANT_TOKEN_LEGACY_CLAIMS` keeps the `agt`, `dev`, `grnt`, `scp`,
+    `parentAgt`, `parentGrnt`, `delegationDepth` and `bdg` aliases in tokens.
+    It is on for 0.6 and **defaults to off in 0.7**, and SDK verifiers stop
+    reading the aliases by default in 0.7.
+  - Delegated `act` claims are nested.
+  - A 0.6 token whose standard claim and alias disagree is refused; pre-0.6
+    tokens are read from `scp`.
+  - SDK verifiers refuse null or mistyped claims.
+  - New authorization requests refuse scopes containing whitespace. Existing
+    such grants keep working, but their tokens omit `scope`.
+  - `enforce()` honours decision references in the grant.
+  - TypeScript `GrantTokenPayload.agt`, `dev` and `scp` are optional and
+    deprecated.
+
+### Migration guide
+- `docs/migration-0.6.md` covers every break from 0.5 to 0.6. It gives an
+  upgrade order (verifiers first, then the auth service, then new features,
+  then turning off legacy claims before 0.7), plus the database migrations,
+  the new settings and a checklist.
+
+### Standard grant token claims
+- Grant tokens follow the OAuth profile in `spec/grant-token-0.6.md`, and a
+  stock JOSE library validates them with standard semantics. The claims are
+  `iss`, `sub`, `aud` (when bound), `exp`, `iat`, `jti`, `client_id` and a
+  space-delimited `scope`, plus:
+  - `cnf.jkt` when the agent key is bound;
+  - an RFC 8693 `act` chain on delegated grants;
+  - `authorization_details` (RFC 9396) with purpose, tools, caps, budget and
+    the new decision references (`urn:grantex:decision:v1`);
+  - Grantex's grant record fields under `urn:grantex:grant` (`grant_id`,
+    `agent_did`, `developer_id`, `parent_grant_id`, `delegation_depth`).
+- **Legacy aliases behind a flag.** `agt`, `dev`, `grnt`, `scp`,
+  `parentAgt`, `parentGrnt`, `delegationDepth` and `bdg` are still issued,
+  with the same values, while `GRANT_TOKEN_LEGACY_CLAIMS=true`. That is the
+  default for 0.6. **The default flips to `false` in 0.7**, when tokens stop
+  carrying the aliases.
+- **Break: delegation `act` is nested.** A delegated token's `act` now nests
+  the parent token's `act`, so a second-level delegation carries
+  `{"sub": <parent agent>, "act": {"sub": <grandparent agent>}}` instead of
+  only the parent. The chain is stored on the grant (migration
+  `098_grant_actor_chain.sql`), so refreshed tokens keep it. Grants delegated
+  before the migration refresh with the parent agent only, as before.
+- **Break: disagreeing claims are refused.** The auth service and the SDK
+  verifiers refuse a 0.6 token (one with `urn:grantex:grant`) whose standard
+  claim and legacy alias disagree (for example `scope` and `scp`), and an
+  `act` claim without a string `sub` or deeper than 10. Tokens issued before
+  0.6 are read from `scp`, so they keep verifying.
+- **Break: null claims are refused.** The SDK verifiers refuse a token with a
+  `null` `urn:grantex:grant` (or member), `scope`, `scp`, `act`, `cnf`,
+  `client_id`, `aud` or `authorization_details`, and a mistyped `client_id`,
+  `aud` or `authorization_details`, instead of treating it as absent.
+- **Break: whitespace in new scopes.** `POST /v1/authorize` refuses a scope
+  containing whitespace with `400 INVALID_SCOPE`. Grants created earlier
+  keep working: refresh and delegation still issue tokens, which omit
+  `scope` and always carry `scp`, so standard-only readers refuse them rather
+  than read a different scope set.
+- **`act.sub` is the delegating agent**, not the current actor as in the
+  usual RFC 8693 reading. The current actor is `client_id`. The Go SDK keeps
+  any other members of `act` (`ActorClaim.Members`).
+- **Proof of possession.** The SDK verifiers return `cnf` but do not enforce
+  it by default. `proof_jkt` / `proofJkt` / `ProofJKT` requires `cnf.jkt` to
+  match a thumbprint the caller verified, and `require_proof_of_possession` /
+  `requireProofOfPossession` / `RequireProofOfPossession` fails closed without
+  one.
+- The auth service logs a deprecation notice at start while
+  `GRANT_TOKEN_LEGACY_CLAIMS=true`.
+- `spec/examples/grant-token-0.6.issued.json` holds tokens issued by the auth
+  service, which the Python and Go SDK tests validate with PyJWT and
+  golang-jwt.
+- **SDK verifiers.** The Python, TypeScript and Go verifiers read the
+  standard claims first. They fall back to an alias when the standard claim
+  is absent, and report each alias used:
+  - Python: a `LegacyClaimsWarning` (a `FutureWarning`).
+  - TypeScript: a `DeprecationWarning` with code `GRANTEX_LEGACY_CLAIM`.
+  - Go: `OnLegacyClaim` or a log line.
+
+  `legacy_claims=False` / `legacyClaims: false` / `StandardClaimsOnly: true`
+  reads standard claims only and requires `typ: at+jwt`; this becomes the
+  default in 0.7. `Grantex(legacy_claims=...)` and
+  `new Grantex({ legacyClaims })` pass the setting to `enforce()`.
+  `VerifiedGrant` adds `act`, `cnf`, `audience` and `legacy_claims_used` /
+  `legacyClaimsUsed` (Go: `Act`, `Cnf`, `Audience`, `AuthorizationDetails`,
+  `LegacyClaimsUsed`).
+- **Break (TypeScript types):** in `GrantTokenPayload`, `agt`, `dev` and
+  `scp` are now optional and deprecated, and `scope`, `act`, `cnf`, `aud`
+  and `urn:grantex:grant` are added.
+- **Decision references.** `enforce()` returns `decision_required` for a
+  tool listed in the grant's `urn:grantex:decision:v1` entry, even when the
+  manifest does not declare `requires_decision`. A malformed decision entry
+  denies every call with `malformed_authorization_details`. A delegated grant
+  keeps the decision references of the connectors it keeps.
+  `parse_decision_references` / `parseDecisionReferences` read them.
+- `SPEC.md` §6 and §9, the protocol and concept pages, and the SDK
+  verification pages describe the profile.
+
+### ES256 signing
+- The auth service can sign grant tokens, OAuth access tokens and its other
+  platform JWTs with ES256 (EC P-256) as well as RS256. `JWT_SIGNING_ALG`
+  selects the algorithm per deployment and defaults to `RS256`, so existing
+  deployments are unchanged. ES256 needs `EC_PRIVATE_KEY` (PKCS#8 PEM).
+- **Key ids.** Every platform signing key is published in
+  `/.well-known/jwks.json` with `kid`, `alg` and `use: "sig"`.
+  - A key's `kid` is its RFC 7638 thumbprint (`grantex-rs256-…`,
+    `grantex-es256-…`), so all instances agree whenever they started.
+  - **Behaviour change:** the RS256 key's `kid` is no longer `grantex-YYYY-MM`
+    of the process start month. Tokens with that kid, or with none, still
+    verify in the auth service with the RSA key (`RSA_PRIVATE_KEY`, or
+    `JWT_LEGACY_KID_KEY`).
+  - The JWK Set also lists the RSA key under `grantex-YYYY-MM` for the last
+    `JWT_LEGACY_KID_MONTHS` (13) months, so SDK verifiers find it too.
+  - For `SIGNING_KEY_ACTIVATION_DELAY_SECONDS` after start, instances still
+    sign under the legacy kid.
+  - The JWK Set therefore has more entries than before.
+- **Env store.**
+  - A configured key for the algorithm that is not signing, and every key in
+    `JWT_VERIFICATION_PUBLIC_KEYS`, is published for verification only.
+    Rotation is publish-then-sign and never invalidates outstanding tokens.
+  - The same key listed twice counts as one key, so rotating RSA to RSA in the
+    same month raises no duplicate `kid`.
+- **`SIGNING_KEY_STORE=postgres`** (migration `096_platform_signing_keys.sql`).
+  - Keys are stored encrypted with `VAULT_ENCRYPTION_KEY` and bound to their
+    `kid` as authenticated data.
+  - The first start imports the configured env keys: the env signing key
+    becomes the stored active key with the same `kid`, and other keys are
+    stored as retired.
+  - `node dist/cli/rotate-signing-key.js [--alg ES256]` publishes a new pending
+    key, which signs after `SIGNING_KEY_ACTIVATION_DELAY_SECONDS` (default
+    900). The previous key is then retired with its private key erased, and
+    stays published for `SIGNING_KEY_RETIRED_GRACE_SECONDS` (default 30 days).
+  - Instances reload every minute and on an unknown `kid`. Periodic reloads do
+    not reset the unknown-kid cooldown.
+- `MAX_GRANT_LIFETIME_SECONDS` (unset by default) caps grant `expiresIn` at
+  authorization and delegation. With the postgres store, start-up refuses a
+  retired-key grace shorter than it, and warns when it is unset.
+- SSO state HMAC keys fall back to an HKDF of `VAULT_ENCRYPTION_KEY` when no
+  `SSO_STATE_SECRET` or private key is configured, so instances agree.
+  Production refuses to start without any of them.
+- Signing keys are validated at start: an RSA modulus of at least 2048 bits,
+  EC keys on P-256 only, no private members in published keys, unique `kid`s.
+- Verification everywhere (auth service, Python, TypeScript and Go SDKs) uses
+  an explicit allowlist of `RS256` and `ES256` and the JWK Set key named by
+  `kid` whose type matches the algorithm. `alg: none`, HS256, a key published
+  for another algorithm and a `kid` naming a key of the other type are
+  rejected. The SDKs add `algorithms` / `Algorithms` options that can only
+  narrow the list, and export `GRANT_TOKEN_ALGORITHMS` /
+  `GrantTokenAlgorithms()`.
+- **Break for verifiers:** code that pins RS256 on its own (for example a
+  resource server calling a JOSE library with `algorithms: ['RS256']`) rejects
+  tokens from a deployment that switches to ES256. Allow both algorithms
+  before an issuer switches. See `docs/migration-0.6.md`.
+- The `did:web` document lists every platform signing key instead of only the
+  RS256 key.
 
 ### Caps meter
 - This is the metering library for spend caps. The consent-page and per-case

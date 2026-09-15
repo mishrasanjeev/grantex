@@ -13,7 +13,7 @@ def upstream_records_for(
     """Every upstream record behind a recommendation.
 
     Follows the recommendation's section citations and the citations of the
-    policy evaluation it is based on to the tool calls that retrieved each
+    policy evaluations it is based on to the tool calls that retrieved each
     record. Returns one item per distinct (call, record), ordered by entry
     sequence then record position, with the citing field paths. Call this on
     a package that has passed :func:`verify_package`; it raises ``KeyError``
@@ -39,10 +39,11 @@ def upstream_records_for(
     for s, section in enumerate(rec["sections"]):
         for e, ref in enumerate(section["evidence"]):
             citations.append((f"entries[{rec_seq}].data.sections[{s}].evidence[{e}]", ref))
-    eval_seq, evaluation = evaluations[rec["evaluation_id"]]
-    for i, item in enumerate(evaluation["inputs"]):
-        for e, ref in enumerate(item["evidence"]):
-            citations.append((f"entries[{eval_seq}].data.inputs[{i}].evidence[{e}]", ref))
+    for evaluation_id in rec["evaluation_ids"]:
+        eval_seq, evaluation = evaluations[evaluation_id]
+        for i, item in enumerate(evaluation["inputs"]):
+            for e, ref in enumerate(item["evidence"]):
+                citations.append((f"entries[{eval_seq}].data.inputs[{i}].evidence[{e}]", ref))
 
     found: Dict[Tuple[int, int], Dict[str, Any]] = {}
     for path, ref in citations:

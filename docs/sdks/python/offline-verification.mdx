@@ -56,6 +56,10 @@ from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenErr
 | `audience`         | `str \| None`    | No       | `None`  | Expected `aud` claim. If `None`, audience is not validated.        |
 | `issuer`           | `str \| None`    | No       | `None`  | Expected `iss` claim. The hosted alias expects `https://grantex.dev`; custom JWKS URLs derive it when omitted. |
 | `issuer_did`       | `str \| None`    | No       | `None`  | A `did:web` issuer used to derive the JWKS URL and expected issuer. An explicit `issuer` takes precedence. |
+| `algorithms`       | `list[str] \| None` | No    | `None`  | Narrow the accepted algorithms to a subset of `["RS256", "ES256"]`. Any other value raises `GrantexTokenError`. |
+| `proof_jkt`        | `str \| None`    | No       | `None`  | Thumbprint of the key the caller proved possession of (for example with a verified DPoP proof); the token's `cnf.jkt` must match. The verifier does not check DPoP proofs. |
+| `require_proof_of_possession` | `bool` | No     | `False` | Fail closed unless `proof_jkt` is given and matches `cnf.jkt`. |
+| `legacy_claims`    | `bool`           | No       | `True`  | Read legacy claim aliases (`agt`, `dev`, `grnt`, `scp`, `parentAgt`, `parentGrnt`, `delegationDepth`) when the standard claim is absent, with a `LegacyClaimsWarning`. The default becomes `False` in 0.7. With `False`, only standard claims are read and `typ` must be `at+jwt`. |
 
 ## Response
 
@@ -74,10 +78,20 @@ from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenErr
 | `parent_agent_did`  | `str \| None`     | Parent agent DID (delegation chains only).            |
 | `parent_grant_id`   | `str \| None`     | Parent grant ID (delegation chains only).             |
 | `delegation_depth`  | `int \| None`     | Delegation depth (0 = root grant).                    |
+| `authorization_details` | `Any`         | The `authorization_details` claim, when present.      |
+| `act`               | `Mapping \| None` | RFC 8693 actor chain (delegated grants).              |
+| `cnf`               | `Mapping \| None` | Confirmation claim, e.g. `{"jkt": ...}`.              |
+| `audience`          | `str \| list \| None` | The `aud` claim.                                 |
+| `legacy_claims_used` | `tuple[str, ...]` | Legacy aliases read because the standard claim was absent. |
+
+Fields are read from the standard claims (`scope`, `client_id`, `act`, `urn:grantex:grant`) first;
+see `spec/grant-token-0.6.md`.
 
 ## Algorithm
 
-The algorithm is fixed to **RS256** per SPEC section 11. Tokens signed with any other algorithm are rejected. This cannot be overridden.
+Tokens signed with **RS256** or **ES256** are accepted (`grantex.GRANT_TOKEN_ALGORITHMS`). `alg: none`, HS256 and every other algorithm are rejected, and `algorithms` can only narrow the list.
+
+The key is the JWK Set entry named by the token's `kid` whose type matches the algorithm: an RSA key for RS256, an EC key on P-256 for ES256. A key published with a different `alg` or a `use` other than `sig` is never used, and there is no fallback to another key.
 
 ## Examples
 
@@ -159,9 +173,9 @@ else:
 
 `verify_grant_token()` raises `GrantexTokenError` in the following cases:
 
-- The token header uses an algorithm other than RS256
+- The token header uses an algorithm other than RS256 or ES256, or one excluded by `algorithms`
 - The JWKS endpoint is unreachable or returns invalid data
-- No matching RSA key is found in the JWKS
+- No key of the type the algorithm requires is found in the JWKS under the token's `kid`
 - The token signature is invalid
 - The token is expired
 - The token issuer does not match the expected issuer

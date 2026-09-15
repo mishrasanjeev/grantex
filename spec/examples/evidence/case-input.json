@@ -17,8 +17,8 @@
       "type": "grant",
       "at": "2026-09-14T09:00:00.000Z",
       "source": {
-        "audit_entry_id": "alog_demo_0001",
-        "audit_hash": "701a24d10a6469e3e288c3df01318a1c3b5a5f59281b611ff3609062265277ef"
+        "authority": "platform",
+        "recorded_at": "2026-09-14T09:00:00.000Z"
       },
       "data": {
         "agent_id": "ag_demo_orchestrator",
@@ -33,6 +33,7 @@
               "verify_business",
               "ownership",
               "screen_*",
+              "web_presence",
               "case_decision"
             ],
             "caps": {
@@ -53,6 +54,7 @@
         "parent_grant_id": null,
         "principal": "user:underwriting-team",
         "purpose": "aml.cdd.onboarding",
+        "revoked_at": null,
         "scopes": [
           "tool:acme_kyb:read",
           "tool:acme_kyb:write"
@@ -63,6 +65,10 @@
     {
       "type": "grant",
       "at": "2026-09-14T09:01:00.000Z",
+      "source": {
+        "authority": "platform",
+        "recorded_at": "2026-09-14T09:01:00.000Z"
+      },
       "data": {
         "agent_id": "ag_demo_underwriter",
         "authorization_details": [
@@ -76,6 +82,7 @@
               "verify_business",
               "ownership",
               "screen_person",
+              "web_presence",
               "case_decision"
             ],
             "caps": {
@@ -95,6 +102,7 @@
         "parent_grant_id": "grnt_demo_root",
         "principal": "user:underwriting-team",
         "purpose": "aml.cdd.onboarding",
+        "revoked_at": "2026-09-14T10:00:00.000Z",
         "scopes": [
           "tool:acme_kyb:read",
           "tool:acme_kyb:write"
@@ -105,6 +113,10 @@
     {
       "type": "run_context",
       "at": "2026-09-14T09:05:00.000Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:05:00.200Z"
+      },
       "data": {
         "agent_id": "ag_demo_underwriter",
         "model": {
@@ -142,6 +154,10 @@
     {
       "type": "tool_call",
       "at": "2026-09-14T09:05:01.000Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:05:01.200Z"
+      },
       "data": {
         "call_id": "call_0001",
         "connector": "acme_kyb",
@@ -161,13 +177,17 @@
             "retrieved_at": "2026-09-14T09:05:01.000Z"
           }
         ],
-        "completed_at": "2026-09-14T09:05:01.900Z",
+        "completed_at": "2026-09-14T09:05:01.150Z",
         "cost_units": 1
       }
     },
     {
       "type": "tool_call",
       "at": "2026-09-14T09:05:03.000Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:05:03.200Z"
+      },
       "data": {
         "call_id": "call_0002",
         "connector": "acme_kyb",
@@ -192,13 +212,17 @@
             "retrieved_at": "2026-09-14T09:05:03.000Z"
           }
         ],
-        "completed_at": "2026-09-14T09:05:03.900Z",
+        "completed_at": "2026-09-14T09:05:03.150Z",
         "cost_units": 5
       }
     },
     {
       "type": "tool_call",
       "at": "2026-09-14T09:05:07.000Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:05:07.200Z"
+      },
       "data": {
         "call_id": "call_0003",
         "connector": "acme_kyb",
@@ -218,13 +242,17 @@
             "retrieved_at": "2026-09-14T09:05:07.000Z"
           }
         ],
-        "completed_at": "2026-09-14T09:05:07.900Z",
+        "completed_at": "2026-09-14T09:05:07.150Z",
         "cost_units": 10
       }
     },
     {
       "type": "tool_call",
       "at": "2026-09-14T09:05:09.000Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:05:09.200Z"
+      },
       "data": {
         "call_id": "call_0004",
         "connector": "acme_kyb",
@@ -244,18 +272,114 @@
             "retrieved_at": "2026-09-14T09:05:09.000Z"
           }
         ],
-        "completed_at": "2026-09-14T09:05:09.900Z",
+        "completed_at": "2026-09-14T09:05:09.150Z",
         "cost_units": 2
+      }
+    },
+    {
+      "type": "tool_call",
+      "at": "2026-09-14T09:05:09.500Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:05:09.700Z"
+      },
+      "data": {
+        "call_id": "call_0009",
+        "connector": "acme_kyb",
+        "grant_id": "grnt_demo_leaf",
+        "input_hash": "sha256:92e8e7f334eaa6ef163a570ee1ea2680514199dbd988d0a51ea36f52f5ab712f",
+        "outcome": "error",
+        "output_hash": null,
+        "provider": "mock",
+        "purpose": "aml.cdd.onboarding",
+        "run_id": "run_demo_0001",
+        "started_at": "2026-09-14T09:05:09.500Z",
+        "tool": "web_presence",
+        "upstream_records": []
+      }
+    },
+    {
+      "type": "void",
+      "at": "2026-09-14T09:05:09.800Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:05:10.000Z"
+      },
+      "data": {
+        "reason_code": "recorded_in_error",
+        "target_id": "call_0009",
+        "target_type": "tool_call",
+        "voided_at": "2026-09-14T09:05:09.800Z"
+      }
+    },
+    {
+      "type": "disposition",
+      "at": "2026-09-14T09:05:09.900Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:05:10.100Z"
+      },
+      "data": {
+        "comparisons": [
+          {
+            "evidence": [
+              {
+                "call_id": "call_0004",
+                "field": "name",
+                "provider": "mock",
+                "record_id": "mock:screening:hit-0001",
+                "retrieved_at": "2026-09-14T09:05:09.000Z"
+              }
+            ],
+            "identifier": "name",
+            "result": "partial"
+          },
+          {
+            "evidence": [
+              {
+                "call_id": "call_0004",
+                "field": "date_of_birth",
+                "provider": "mock",
+                "record_id": "mock:screening:hit-0001",
+                "retrieved_at": "2026-09-14T09:05:09.000Z"
+              }
+            ],
+            "identifier": "date_of_birth",
+            "result": "mismatch"
+          },
+          {
+            "evidence": [],
+            "identifier": "nationality",
+            "result": "not_available"
+          }
+        ],
+        "confidence_band": "high",
+        "disposition_id": "disp_0001",
+        "hit": {
+          "call_id": "call_0004",
+          "field": "hit",
+          "provider": "mock",
+          "record_id": "mock:screening:hit-0001",
+          "retrieved_at": "2026-09-14T09:05:09.000Z"
+        },
+        "outcome": "false_positive",
+        "rationale_digest": "sha256:67c689de9ac1feb2bd472dc4950f9e5e4ff84cc923fa5b4f67845e28c945daa1",
+        "run_id": "run_demo_0001"
       }
     },
     {
       "type": "policy_evaluation",
       "at": "2026-09-14T09:05:10.000Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:05:10.200Z"
+      },
       "data": {
         "evaluation_id": "eval_0001",
         "fired_rules": [
           {
-            "reason": "Declared owners do not reconcile with the ownership graph",
+            "reason_code": "ownership_not_reconciled",
+            "reason_digest": "sha256:40596683d38ea57d37dffec684415625838c25c54c109b25de066f386c58f52c",
             "rule_id": "ownership_reconciled",
             "tier": "medium"
           }
@@ -299,6 +423,12 @@
             ],
             "path": "screening.unresolved_true_matches",
             "value": 0
+          },
+          {
+            "evidence": [],
+            "path": "application.declared_owner_count",
+            "unsourced": true,
+            "value": 2
           }
         ],
         "policy": {
@@ -314,14 +444,21 @@
     {
       "type": "recommendation",
       "at": "2026-09-14T09:05:11.000Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:05:11.200Z"
+      },
       "data": {
-        "evaluation_id": "eval_0001",
+        "evaluation_ids": [
+          "eval_0001"
+        ],
         "memo_digest": "sha256:37cf3ec0864d50e59dc518d57861fc84a38db5b187ef04a1cf51d81249dfc22f",
         "missing_items": [
           "declared_owner_evidence"
         ],
         "outcome": "refer",
         "recommendation_id": "rec_0001",
+        "run_id": "run_demo_0001",
         "sections": [
           {
             "evidence": [
@@ -387,6 +524,10 @@
     {
       "type": "tool_call",
       "at": "2026-09-14T09:06:00.000Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:06:00.200Z"
+      },
       "data": {
         "call_id": "call_0005",
         "connector": "acme_kyb",
@@ -408,6 +549,10 @@
     {
       "type": "decision",
       "at": "2026-09-14T09:20:00.000Z",
+      "source": {
+        "authority": "platform",
+        "recorded_at": "2026-09-14T09:20:00.000Z"
+      },
       "data": {
         "action": {
           "action": "case_decision",
@@ -431,6 +576,10 @@
     {
       "type": "decision",
       "at": "2026-09-14T09:31:00.000Z",
+      "source": {
+        "authority": "platform",
+        "recorded_at": "2026-09-14T09:31:00.000Z"
+      },
       "data": {
         "action": {
           "action": "case_decision",
@@ -455,6 +604,10 @@
     {
       "type": "decision_consumption",
       "at": "2026-09-14T09:31:05.000Z",
+      "source": {
+        "authority": "platform",
+        "recorded_at": "2026-09-14T09:31:05.000Z"
+      },
       "data": {
         "action_hash": "sha256:n0N_vmI6x7OfVYocNEqun9J9zAb5eI26S-tK_62F1Bk",
         "call_id": "call_0006",
@@ -468,6 +621,11 @@
     {
       "type": "tool_call",
       "at": "2026-09-14T09:31:05.000Z",
+      "source": {
+        "authority": "tenant",
+        "recorded_at": "2026-09-14T09:31:05.200Z",
+        "late": true
+      },
       "data": {
         "call_id": "call_0006",
         "connector": "acme_kyb",
@@ -481,12 +639,16 @@
         "started_at": "2026-09-14T09:31:05.000Z",
         "tool": "case_decision",
         "upstream_records": [],
-        "completed_at": "2026-09-14T09:31:05.900Z"
+        "completed_at": "2026-09-14T09:31:05.150Z"
       }
     },
     {
       "type": "revocation",
       "at": "2026-09-14T10:00:00.000Z",
+      "source": {
+        "authority": "platform",
+        "recorded_at": "2026-09-14T10:00:00.000Z"
+      },
       "data": {
         "cascade": false,
         "event_id": "evt_demo_0001",

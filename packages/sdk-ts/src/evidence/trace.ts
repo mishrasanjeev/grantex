@@ -42,12 +42,14 @@ export function upstreamRecordsFor(document: Json, recommendationId: string): Up
       citations.push([`entries[${recSeq}].data.sections[${s}].evidence[${e}]`, ref]);
     });
   });
-  const [evalSeq, evaluation] = evaluations.get(rec['evaluation_id'])!;
-  (evaluation['inputs'] as Json[]).forEach((item, i) => {
-    (item['evidence'] as Json[]).forEach((ref, e) => {
-      citations.push([`entries[${evalSeq}].data.inputs[${i}].evidence[${e}]`, ref]);
+  for (const evaluationId of rec['evaluation_ids'] as string[]) {
+    const [evalSeq, evaluation] = evaluations.get(evaluationId)!;
+    (evaluation['inputs'] as Json[]).forEach((item, i) => {
+      (item['evidence'] as Json[]).forEach((ref, e) => {
+        citations.push([`entries[${evalSeq}].data.inputs[${i}].evidence[${e}]`, ref]);
+      });
     });
-  });
+  }
 
   const found = new Map<string, [number, number, UpstreamRecordTrace]>();
   for (const [path, ref] of citations) {

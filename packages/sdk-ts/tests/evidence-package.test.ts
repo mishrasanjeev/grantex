@@ -16,8 +16,17 @@ import { SCHEMA_KEYWORDS } from '../src/evidence/schema.js';
 
 const Ajv2020 = Ajv2020Module as unknown as typeof Ajv2020Module.default;
 
+const I_EVAL = 10;
+const I_REC = 11;
+const I_DEC1 = 13;
+const I_REVOKE = 17;
+
 const {
   IDENTIFIER_CLASSES,
+  actionReference,
+  caseKey,
+  isActionReference,
+  keyedContentDigest,
   VerificationCode,
   anchorAuditEntry,
   attachAnchor,
@@ -80,6 +89,8 @@ function applyCase(testCase: Json, fixtureFiles: Record<string, Buffer>): Uint8A
     const op = mutation['op'];
     if (op === 'set') parent(document, mutation['path'])[mutation['path'].at(-1)] = structuredClone(mutation['value']);
     else if (op === 'delete') delete parent(document, mutation['path'])[mutation['path'].at(-1)];
+    else if (op === 'insert') (parent(document, mutation['path']) as unknown as unknown[]).splice(mutation['path'].at(-1), 0, structuredClone(mutation['value']));
+    else if (op === 'copy_entry') document['entries'].splice(mutation['to'], 0, structuredClone(document['entries'][mutation['from']]));
     else if (op === 'rehash_entry') {
       const entry = document['entries'][mutation['index']];
       entry['hash'] = entryHash(entry);
@@ -197,11 +208,20 @@ describe('build', () => {
 
   it('pseudonymises identifiers by default', () => {
     const raw = read('evidence-package.json').toString('utf8');
-    for (const secret of ['user:approver-a', 'user:approver-b', 'user:underwriting-team', 'gb:00000001']) {
+    for (const secret of ['user:approver-a', 'user:approver-b', 'user:underwriting-team', 'gb:00000001', 'mock:registry:00000001']) {
       expect(raw.includes(secret)).toBe(false);
     }
-    const decision = readJson('evidence-package.json')['entries'][10]['data'];
+    const decision = readJson('evidence-package.json')['entries'][I_DEC1]['data'];
     expect(isPseudonym(decision['approver']) && isPseudonym(decision['action']['subject'])).toBe(true);
+    expect('action_hash' in decision).toBe(false);
+    expect(isActionReference(decision['action_ref'])).toBe(true);
+    for (const entry of readJson('case-input.json')['entries'] as Json[]) {
+      for (const name of ['action_hash', 'input_hash', 'output_hash']) {
+        if (typeof entry['data'][name] === 'string') expect(raw.includes(entry['data'][name]), name).toBe(false);
+      }
+    }
+    const guess = decisionActionHash({ action: 'case_decision', case_id: 'case_demo_0001', decision: 'decline', subject: 'gb:00000001' });
+    expect(raw.includes(guess)).toBe(false);
   });
 
   it('discloses only the classes the case owner opted out of', () => {
@@ -211,15 +231,19 @@ describe('build', () => {
       entries: input['entries'],
       privacy: { key: keyFromSeed(input['privacy']['key_seed']), keyId: 'k1', disclosed: ['approver'] },
     });
-    expect(built.document['entries'][10]['data']['approver']).toBe('user:approver-a');
-    expect(isPseudonym(built.document['entries'][10]['data']['action']['subject'])).toBe(true);
+    expect(built.document['entries'][I_DEC1]['data']['approver']).toBe('user:approver-a');
+    expect(isPseudonym(built.document['entries'][I_DEC1]['data']['action']['subject'])).toBe(true);
     expect(verifyPackage(built.data, { expectedRoot: built.root }).ok).toBe(true);
   });
 
   it('matches the shared pseudonym vectors', () => {
     const vectors = readJson('pseudonyms.json');
     const key = keyFromSeed(vectors['key_seed']);
-    for (const item of vectors['vectors'] as Json[]) {
+    const content = vectors['content'] as Json;
+    expect(keyedContentDigest(caseKey(key, content['tenant_id'], content['case_id']), content['digest'])).toBe(content['keyed']);
+    const action = vectors['action'] as Json;
+    expect(actionReference(caseKey(key, action['tenant_id'], action['case_id']), action['action_hash'])).toBe(action['action_ref']);
+    for (const item of vectors['identifiers'] as Json[]) {
       expect(pseudonymise(key, item['tenant_id'], item['case_id'], item['class'], item['value'])).toBe(item['pseudonym']);
     }
   });
@@ -248,13 +272,15 @@ describe('verification', () => {
       expectedAnchorHash: expected['evidence-package.json']['anchor_hash'],
       requireAnchor: true,
     });
-    expect(pinned.ok && pinned.anchorChecked).toBe(true);
+    expect(pinned.ok && pinned.anchorStatus === 'pinned').toBe(true);
+    const unpinned = verifyPackage(read('evidence-package.json'), { expectedRoot: expected['evidence-package.json']['root'] });
+    expect([unpinned.anchorStatus, unpinned.unsourcedInputs, unpinned.lateEntries, unpinned.tenantAssertedEntries]).toEqual(['internal-consistency-only', 1, 1, 12]);
     const signed = verifyPackage(read('evidence-package-signed.json'), {
       expectedRoot: expected['evidence-package-signed.json']['root'],
       jwks: readJson('jwks.json'),
       requireSignature: true,
     });
-    expect(signed.ok && signed.signatureChecked).toBe(true);
+    expect([signed.ok, signed.signatureStatus, signed.anchorStatus, signed.signatureKid]).toEqual([true, 'verified', 'signed', 'evidence-example-es256']);
   });
 
   const cases = (readJson('invalid-cases.json')['cases'] as Json[]);
@@ -309,7 +335,7 @@ describe('verification', () => {
     const input = readJson('case-input.json');
     const sample = buildPackage({
       case: input['case'],
-      entries: [0, 1, 2, 3, 13, 14].map((i) => input['entries'][i]),
+      entries: [0, 1, 2, 3, 4, I_REVOKE].map((i) => input['entries'][i]),
       privacy: { key: keyFromSeed(input['privacy']['key_seed']), keyId: input['privacy']['key_id'], disclosed: [] },
     });
     const data = Buffer.from(sample.data);
@@ -338,8 +364,8 @@ describe('verification', () => {
 
 describe('auditor, anchors and signatures', () => {
   it('an auditor identifies every upstream record behind a recommendation from the package alone', () => {
-    expect(verifyPackage(read('evidence-package.json'), { expectedRoot: expected['evidence-package.json']['root'] }).ok).toBe(true);
-    const records = upstreamRecordsFor(readJson('evidence-package.json'), 'rec_0001');
+    expect(verifyPackage(read('evidence-package-disclosed.json'), { expectedRoot: expected['evidence-package-disclosed.json']['root'] }).ok).toBe(true);
+    const records = upstreamRecordsFor(readJson('evidence-package-disclosed.json'), 'rec_0001');
     expect(records.map((r) => [r.call_id, r.tool, r.provider, r.record_id])).toEqual([
       ['call_0001', 'resolve_business', 'mock', 'mock:registry:00000001'],
       ['call_0002', 'verify_business', 'mock', 'mock:verification:v-0001'],
@@ -347,7 +373,10 @@ describe('auditor, anchors and signatures', () => {
       ['call_0003', 'ownership', 'mock', 'mock:ownership:g-0001'],
       ['call_0004', 'screen_person', 'mock', 'mock:screening:hit-0001'],
     ]);
-    expect(records[3]!.cited_by).toEqual(['entries[8].data.sections[2].evidence[0]', 'entries[7].data.inputs[1].evidence[0]']);
+    expect(records[3]!.cited_by).toEqual([`entries[${I_REC}].data.sections[2].evidence[0]`, `entries[${I_EVAL}].data.inputs[1].evidence[0]`]);
+    const input = readJson('case-input.json');
+    const pseudonymised = upstreamRecordsFor(readJson('evidence-package.json'), 'rec_0001');
+    expect(pseudonymised.map((r) => r.record_id)).toEqual(records.map((r) => pseudonymise(keyFromSeed(input['privacy']['key_seed']), 'dev_demo_0001', 'case_demo_0001', 'record', r.record_id)));
   });
 
   it('anchor hash uses the auth-service audit layout', () => {

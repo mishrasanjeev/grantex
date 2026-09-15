@@ -69,3 +69,36 @@ export function decrypt(ciphertext: string): string {
   // dependency on the cipher's internals.
   return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
 }
+
+const CONTEXT_PREFIX = 'ctx1:';
+
+/**
+ * Encrypt with AES-256-GCM, binding the ciphertext to `context` as additional
+ * authenticated data: decrypting it under any other context fails. Used where a
+ * ciphertext must not be movable between records (for example a signing key
+ * row and its kid).
+ */
+export function encryptWithContext(plaintext: string, context: string): string {
+  const key = getKey();
+  const iv = randomBytes(IV_LENGTH);
+  const cipher = createCipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH });
+  cipher.setAAD(Buffer.from(context, 'utf8'));
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  return CONTEXT_PREFIX + Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString('base64');
+}
+
+/** Decrypt a value from `encryptWithContext` under the same `context`. Throws on any mismatch. */
+export function decryptWithContext(ciphertext: string, context: string): string {
+  if (!ciphertext.startsWith(CONTEXT_PREFIX)) {
+    throw new Error('Ciphertext is not bound to a context');
+  }
+  const key = getKey();
+  const data = Buffer.from(ciphertext.slice(CONTEXT_PREFIX.length), 'base64');
+  if (data.length < IV_LENGTH + TAG_LENGTH) {
+    throw new Error('Ciphertext is too short to contain an IV and auth tag');
+  }
+  const decipher = createDecipheriv(ALGORITHM, key, data.subarray(0, IV_LENGTH), { authTagLength: TAG_LENGTH });
+  decipher.setAAD(Buffer.from(context, 'utf8'));
+  decipher.setAuthTag(data.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH));
+  return Buffer.concat([decipher.update(data.subarray(IV_LENGTH + TAG_LENGTH)), decipher.final()]).toString('utf8');
+}

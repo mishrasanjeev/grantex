@@ -33,6 +33,12 @@ from ._client import EvidenceApiError, ExportedPackage, export_package, record_e
 from ._document import DEFAULT_MAX_BYTES
 from ._hashing import (
     IDENTIFIER_CLASSES,
+    PLATFORM_MARKER,
+    action_reference,
+    case_key,
+    is_action_reference,
+    keyed_content_digest,
+    pseudonym,
     audit_entry_hash,
     chain_root,
     decision_action_hash,
@@ -49,7 +55,8 @@ from ._result import (
     VerificationFailure,
     VerificationResult,
 )
-from ._signature import SIGNATURE_TYPE, sign_root, verify_signature
+from ._checks import MAX_CLOCK_SKEW_MS
+from ._signature import SIGNATURE_TYPE, sign_root, signed_payload, verify_signature
 from ._trace import upstream_records_for
 from ._verify import FORMAT, SUPPORTED_VERSIONS, verify_package
 
@@ -62,18 +69,22 @@ __all__ = [
     "ExportedPackage",
     "FORMAT",
     "IDENTIFIER_CLASSES",
+    "MAX_CLOCK_SKEW_MS",
+    "PLATFORM_MARKER",
     "PrivacySettings",
     "SIGNATURE_TYPE",
     "SUPPORTED_VERSIONS",
     "VerificationCode",
     "VerificationFailure",
     "VerificationResult",
+    "action_reference",
     "anchor_audit_entry",
     "attach_anchor",
     "attach_signature",
     "audit_entry_hash",
     "build_package",
     "canonicalize",
+    "case_key",
     "chain_root",
     "decision_action_hash",
     "digest",
@@ -81,11 +92,15 @@ __all__ = [
     "entry_hash",
     "export_package",
     "header_hash",
+    "is_action_reference",
     "is_pseudonym",
+    "keyed_content_digest",
+    "pseudonym",
     "pseudonymise",
     "record_evidence",
     "serialize_package",
     "sign_root",
+    "signed_payload",
     "upstream_records_for",
     "verify_package",
     "verify_signature",

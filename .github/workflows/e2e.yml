@@ -152,6 +152,12 @@ jobs:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
         run: npx vitest run --testTimeout=120000 tests/e2e/mpp-passport.test.ts
 
+      # The previous files use the sandbox account's per-minute request budget
+      # (20/min); cross-feature starts with a burst of setup calls and was
+      # failing with 429 on the shared production limiter. Let the window reset.
+      - name: Wait for the per-minute rate-limit window
+        run: sleep 65
+
       - name: Cross-feature
         env:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app

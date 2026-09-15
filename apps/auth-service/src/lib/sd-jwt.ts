@@ -4,12 +4,13 @@
  * SD-JWT format: <issuer-jwt>~<disclosure1>~<disclosure2>~...~<optional-kb-jwt>
  * Each disclosure is: base64url(JSON([salt, claim_name, claim_value]))
  *
- * Uses the existing RS256 key pair from crypto.ts and `jose` for JWT operations.
+ * Uses the platform signing key from crypto.ts and `jose` for JWT operations.
  */
 
 import { randomBytes, createHash } from 'node:crypto';
 import { SignJWT, jwtVerify, decodeJwt, decodeProtectedHeader } from 'jose';
 import { getKeyPair } from './crypto.js';
+import { resolvePlatformVerificationKey, SIGNING_ALGORITHMS } from './signing-keys.js';
 import { newVerifiableCredentialId } from './ids.js';
 import { config } from '../config.js';
 
@@ -111,7 +112,7 @@ export async function issueSDJWT(params: SDJWTIssueParams): Promise<{
 
   const selectiveFields = params.selectiveFields ?? DEFAULT_SELECTIVE_FIELDS;
   const vcId = newVerifiableCredentialId();
-  const { privateKey, kid } = getKeyPair();
+  const { privateKey, kid, alg } = getKeyPair();
   const domain = config.didWebDomain;
   const issuerDid = `did:web:${domain}`;
 
@@ -164,7 +165,7 @@ export async function issueSDJWT(params: SDJWTIssueParams): Promise<{
     vc: vcClaim,
     _sd_alg: 'sha-256',
   })
-    .setProtectedHeader({ alg: 'RS256', kid, typ: 'vc+sd-jwt' })
+    .setProtectedHeader({ alg, kid, typ: 'vc+sd-jwt' })
     .setIssuer(issuerDid)
     .setSubject(agentDid)
     .setJti(vcId)
@@ -227,7 +228,6 @@ export async function verifySDJWT(
   }
 
   // Verify the issuer JWT signature
-  const { publicKey } = getKeyPair();
 
   let decoded: Record<string, unknown>;
   try {
@@ -240,8 +240,8 @@ export async function verifySDJWT(
   const vcIdFields = vcId !== undefined ? { vcId } : {};
 
   try {
-    await jwtVerify(issuerJwt, publicKey, {
-      algorithms: ['RS256'],
+    await jwtVerify(issuerJwt, resolvePlatformVerificationKey, {
+      algorithms: [...SIGNING_ALGORITHMS],
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Verification failed';
