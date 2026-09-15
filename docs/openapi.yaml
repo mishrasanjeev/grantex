@@ -3300,6 +3300,139 @@ paths:
                     items:
                       $ref: "#/components/schemas/Grant"
 
+  /v1/evidence/cases/{caseId}/records:
+    post:
+      operationId: recordEvidence
+      tags: [Compliance]
+      summary: Append evidence records to a case
+      description: Validates 1-100 records against spec/evidence-package-1.0.schema.json and appends them to the developer's audit hash chain as evidence.<type> entries, all or nothing. Requires EVIDENCE_EXPORT_ENABLED.
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[!-~]{1,256}$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [records]
+              properties:
+                records:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [type, at, data]
+                    properties:
+                      type:
+                        type: string
+                        enum: [run_context, tool_call, policy_evaluation, recommendation, decision, decision_consumption, revocation]
+                      at:
+                        type: string
+                        description: UTC timestamp with millisecond precision
+                      data:
+                        type: object
+                        description: Entry data as specified in spec/evidence-package.md
+                      ext:
+                        type: object
+                      agent_id:
+                        type: string
+                      agent_did:
+                        type: string
+      responses:
+        "201":
+          description: Records appended
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  case_id:
+                    type: string
+                  records:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        audit_entry_id:
+                          type: string
+                        hash:
+                          type: string
+        "400":
+          description: EVIDENCE_RECORD_INVALID (with field_path) or BAD_REQUEST
+        "402":
+          description: PLAN_LIMIT_EXCEEDED
+        "403":
+          description: FEATURE_DISABLED
+
+  /v1/evidence/cases/{caseId}/export:
+    post:
+      operationId: exportEvidencePackage
+      tags: [Compliance]
+      summary: Export a case's evidence package
+      description: Assembles the case's evidence records, decision grants, grant chain and revocations into an evidence package (spec/evidence-package.md), verifies every source audit entry, anchors the package root in the audit chain and returns the canonical package bytes. Requires EVIDENCE_EXPORT_ENABLED.
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[!-~]{1,256}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                disclose:
+                  type: array
+                  description: Identifier classes to include in the clear
+                  items:
+                    type: string
+                    enum: [approver, principal, subject]
+                sign:
+                  type: boolean
+                  default: false
+                state:
+                  type: string
+                  enum: [open, decided, closed]
+      responses:
+        "200":
+          description: Canonical evidence package bytes
+          headers:
+            Grantex-Evidence-Root:
+              description: Package root, sha256 followed by 64 hex digits
+              schema:
+                type: string
+            Grantex-Evidence-Anchor:
+              description: Hash of the evidence.package_exported audit entry
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Evidence package 1.0 (spec/evidence-package-1.0.schema.json)
+        "400":
+          description: BAD_REQUEST
+        "403":
+          description: FEATURE_DISABLED
+        "404":
+          description: EVIDENCE_CASE_NOT_FOUND
+        "409":
+          description: EVIDENCE_CHAIN_VERIFICATION_FAILED
+        "413":
+          description: EVIDENCE_CASE_TOO_LARGE
+        "422":
+          description: EVIDENCE_INCOMPLETE, EVIDENCE_GRANT_CHAIN_AMBIGUOUS or EVIDENCE_SOURCE_INVALID
+        "503":
+          description: EVIDENCE_PSEUDONYMISATION_KEY_MISSING or EVIDENCE_SIGNING_UNAVAILABLE
+
   /v1/compliance/export/audit:
     get:
       operationId: exportAuditEntries

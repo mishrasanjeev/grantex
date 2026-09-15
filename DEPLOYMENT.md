@@ -187,6 +187,10 @@ curl http://localhost:3001/health
 | `METRICS_ENABLED` | `true` | Enable Prometheus metrics endpoint |
 | `USAGE_METERING_ENABLED` | `true` | Enable usage metering counters |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | (none) | OpenTelemetry collector endpoint |
+| `EVIDENCE_EXPORT_ENABLED` | `false` | Enable the evidence record and export endpoints (`/v1/evidence/cases/...`) |
+| `EVIDENCE_EXPORT_DEVELOPER_IDS` | (all) | Comma-separated developer ids allowed to use evidence export (staged rollout) |
+| `EVIDENCE_PSEUDONYMISATION_SECRET` | (none) | Secret (at least 32 characters) from which each tenant's evidence pseudonymisation key is derived; without it only fully disclosed exports work |
+| `EVIDENCE_PSEUDONYMISATION_KEY_ID` | `v1` | Name of that secret recorded in packages; change it when rotating the secret |
 | `SEED_API_KEY` | (none) | Pre-seed a developer API key on first start |
 | `SEED_SANDBOX_KEY` | (none) | Pre-seed a sandbox API key on first start |
 
