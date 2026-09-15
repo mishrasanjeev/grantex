@@ -3300,6 +3300,189 @@ paths:
                     items:
                       $ref: "#/components/schemas/Grant"
 
+  /v1/evidence/cases/{caseId}/records:
+    post:
+      operationId: recordEvidence
+      tags: [Compliance]
+      summary: Append evidence records to a case
+      description: Validates 1-100 records (structure, record rules, references to records already on the case, the grant chain and grant validity) and appends them as platform-authored audit entries, all or nothing. Idempotent on each record's id. Requires EVIDENCE_EXPORT_ENABLED.
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[!-~]{1,256}$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [records]
+              properties:
+                records:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [type, at, data]
+                    properties:
+                      type:
+                        type: string
+                        enum: [run_context, tool_call, policy_evaluation, recommendation, disposition]
+                      at:
+                        type: string
+                        description: UTC timestamp with millisecond precision, not in the future
+                      data:
+                        type: object
+                        description: Entry data as specified in spec/evidence-package.md, values in the clear
+                      ext:
+                        type: object
+                      agent_id:
+                        type: string
+                      agent_did:
+                        type: string
+      responses:
+        "201":
+          description: Records appended (200 when every record was already recorded with the same content)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  case_id:
+                    type: string
+                  records:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        audit_entry_id:
+                          type: string
+                        hash:
+                          type: string
+                        duplicate:
+                          type: boolean
+        "400":
+          description: EVIDENCE_RECORD_INVALID (with field_path) or BAD_REQUEST
+        "402":
+          description: PLAN_LIMIT_EXCEEDED
+        "403":
+          description: FEATURE_DISABLED
+        "409":
+          description: EVIDENCE_RECORD_CONFLICT (the id was recorded with different content)
+        "422":
+          description: EVIDENCE_REFERENCE_INVALID, EVIDENCE_GRANT_CHAIN_AMBIGUOUS, EVIDENCE_GRANT_CHAIN_INVALID or EVIDENCE_OUTSIDE_GRANT_VALIDITY (with field_path)
+
+  /v1/evidence/cases/{caseId}/void:
+    post:
+      operationId: voidEvidenceRecord
+      tags: [Compliance]
+      summary: Void a recorded evidence record
+      description: Appends a void entry for an earlier record of the case; nothing is deleted and the record can no longer be cited. Voiding again for the same reason is a no-op.
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[!-~]{1,256}$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_type, target_id, reason_code]
+              properties:
+                target_type:
+                  type: string
+                  enum: [run_context, tool_call, policy_evaluation, recommendation, disposition]
+                target_id:
+                  type: string
+                reason_code:
+                  type: string
+      responses:
+        "201":
+          description: Record voided (200 when it was already voided for the same reason)
+        "400":
+          description: EVIDENCE_RECORD_INVALID
+        "403":
+          description: FEATURE_DISABLED
+        "409":
+          description: EVIDENCE_RECORD_CONFLICT
+        "422":
+          description: EVIDENCE_REFERENCE_INVALID
+
+  /v1/evidence/cases/{caseId}/export:
+    post:
+      operationId: exportEvidencePackage
+      tags: [Compliance]
+      summary: Export a case's evidence package
+      description: Re-verifies every source audit entry and its link, adds the grant chain, decisions from the decision-grant store and revocations, keys identifiers and content per case, anchors the package root as a platform audit entry, optionally signs root and anchor, and returns the canonical package bytes. The case state is derived, not supplied. Requires EVIDENCE_EXPORT_ENABLED.
+      parameters:
+        - name: caseId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[!-~]{1,256}$"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                disclose:
+                  type: array
+                  description: Classes to include in the clear; requires the developer in EVIDENCE_DISCLOSURE_DEVELOPER_IDS
+                  items:
+                    type: string
+                    enum: [approver, content, principal, record, subject]
+                sign:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Canonical evidence package bytes
+          headers:
+            Grantex-Evidence-Root:
+              description: Package root, sha256 followed by 64 hex digits
+              schema:
+                type: string
+            Grantex-Evidence-Anchor:
+              description: Hash of the evidence.package_exported platform audit entry
+              schema:
+                type: string
+            Grantex-Evidence-Decisions:
+              description: included, or unavailable when the decision-grant store is not present
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Evidence package 1.0 (spec/evidence-package-1.0.schema.json)
+        "400":
+          description: BAD_REQUEST
+        "402":
+          description: PLAN_LIMIT_EXCEEDED
+        "403":
+          description: FEATURE_DISABLED or EVIDENCE_DISCLOSURE_NOT_PERMITTED
+        "404":
+          description: EVIDENCE_CASE_NOT_FOUND
+        "409":
+          description: EVIDENCE_CHAIN_VERIFICATION_FAILED
+        "413":
+          description: EVIDENCE_CASE_TOO_LARGE
+        "422":
+          description: EVIDENCE_INCOMPLETE, EVIDENCE_GRANT_CHAIN_INVALID or EVIDENCE_SOURCE_INVALID
+        "503":
+          description: EVIDENCE_PSEUDONYMISATION_KEY_MISSING or EVIDENCE_SIGNING_UNAVAILABLE
+
   /v1/compliance/export/audit:
     get:
       operationId: exportAuditEntries

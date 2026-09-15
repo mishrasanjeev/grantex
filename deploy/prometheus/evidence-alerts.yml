@@ -1,0 +1,24 @@
+# Prometheus alerting rules for evidence packages (PRD G-5, section 10).
+# Load with `rule_files`, or wrap the group in a PrometheusRule for the Prometheus Operator.
+groups:
+  - name: grantex-evidence
+    rules:
+      - alert: GrantexEvidenceChainVerificationFailure
+        expr: sum by (source, code) (increase(grantex_evidence_chain_verification_failures_total[5m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Evidence chain verification failed ({{ $labels.source }}, {{ $labels.code }})"
+          description: >-
+            An audit entry behind an evidence package no longer matches its hash, or an
+            assembled package failed verification. Treat it as possible tampering: find the
+            entry in the auth service logs (alert=evidence_chain_verification_failure),
+            preserve the database state and follow the incident runbook.
+      - alert: GrantexEvidenceExportSlow
+        expr: histogram_quantile(0.95, sum by (le) (rate(grantex_evidence_export_duration_seconds_bucket{outcome="success"}[15m]))) > 5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Evidence export p95 is above 5 seconds
+          description: The 95th percentile of successful evidence exports has exceeded the 5 second objective for 15 minutes.

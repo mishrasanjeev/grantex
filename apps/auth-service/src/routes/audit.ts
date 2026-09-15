@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type postgres from 'postgres';
 import { getSql, type TxSql } from '../db/client.js';
 import { toAuditEntryResponse } from '../lib/audit-entry.js';
+import { reservedAuditError } from '../lib/audit-reserved.js';
 import { newAuditEntryId } from '../lib/ids.js';
 import { computeAuditHash } from '../lib/hash.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
@@ -44,6 +45,10 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
+    }
+    const reserved = reservedAuditError(action, metadata);
+    if (reserved) {
+      return reply.status(400).send({ message: reserved.message, code: reserved.code, requestId: request.id });
     }
 
     const sql = getSql();
