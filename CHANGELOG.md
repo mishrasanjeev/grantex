@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Caps meter
+- This is the metering library for spend caps. The consent-page and per-case
+  display of caps and remaining budget, and the platform's per-tenant
+  `caps.enforce` rollout flag, are not included yet.
 - New caps meter in both SDKs (`grantex.caps`, and `CapsMeter` in
   `@grantex/sdk`) enforces per-tool call caps over rolling `per_hour` and
   `per_day` windows and `per_case`, plus cost-unit budgets. Caps come from the
@@ -53,6 +56,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   skips caps. Malformed grant caps are denied in every mode.
 - `caps_tenant_id` / `capsTenantId` overrides the tenant of a call's counters
   (default: the grant's developer).
+- Postgres backend: `prune()` deletes expired reservations and empty
+  counters (run it periodically); reservations use READ COMMITTED explicitly.
+  Redis backend: requires Redis 6.0 or later.
 - CI's `make` job runs the caps integration tests against Redis and Postgres
   service containers.
 

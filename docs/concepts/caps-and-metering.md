@@ -95,10 +95,64 @@ const result = await grantex.enforce({
 });
 ```
 
-The tenant is the grant's developer (`dev` claim). A call's cost is the sum of
-the manifest `cost_units` for the components it incurs. Metering attaches to
-the call that incurs the cost, in the code that makes that call, and never to
-parsing its result afterwards.
+The tenant is the grant's developer (`dev` claim) unless you pass
+`caps_tenant_id` / `capsTenantId`, which applies to every counter of that call.
+A call's cost is the sum of the manifest `cost_units` for the components it
+incurs. Metering attaches to the call that incurs the cost, in the code that
+makes that call, and never to parsing its result afterwards.
+
+### Case and cost components come from the gateway
+
+`case_id` and `cost_components` decide which counters a call is charged to, so
+the tool gateway sets them from its own context: the case being worked, and
+the provider request it is about to send. Never take them from the agent's or
+model's tool arguments, or an agent could name a fresh case to escape a
+per-case cap or claim a cheaper component. The same applies to
+`wrap_tool(case_id=..., cost_components=...)` / `wrapTool({ caseId,
+costComponents })` and to `enforceMiddleware({ extractCaseId,
+extractCostComponents })`, which should read trusted request context.
+
+An empty `cost_components` list for a tool that declares cost units is denied
+(`invalid_cost_component`); omit the argument to charge every declared unit.
+
+### Check early, reserve once
+
+An agent platform often checks a call twice, once when the plan is validated
+and again at the tool gateway. Only the second check should consume a unit:
+
+```python
+# while validating the plan: decision only, nothing consumed
+check = grantex.enforce(grant_token=token, connector="acme_kyb", tool="verify_business",
+                        case_id=case_id, reserve=False)
+
+# at the gateway, immediately before the provider call
+result = grantex.enforce(grant_token=token, connector="acme_kyb", tool="verify_business",
+                         case_id=case_id, cost_components=["base"])
+```
+
+`reserve=False` (`reserve: false`) compares current usage with the caps and
+returns `cap_limits` / `capLimits` and `caps_tenant_id` / `capsTenantId`. The
+check is point in time: another call can take the last unit before you
+reserve, so the reserving `enforce()` (or
+`meter.reserve(result.caps_tenant_id, result.cap_limits)`) is the decision
+that counts.
+
+### Rolling caps out: `caps_mode`
+
+| Mode | Behaviour |
+|---|---|
+| `enforce` (default) | Calls a cap would deny are denied |
+| `warn` | Calls a cap, a missing meter or an unavailable backend would deny are **allowed**; `result.would_deny` / `wouldDeny` carries the `reason_code`, `sub_reason`, `reason` and `details` they would have got. Calls that fit are reserved as in `enforce`; calls over a cap reserve nothing, so counters show what enforcement would have allowed |
+| `off` | Caps are not evaluated and no meter is needed |
+
+Set it on the client (`Grantex(caps_mode="warn")`, `new Grantex({ capsMode: 'warn' })`)
+or per call. Malformed grant caps are a token problem and are denied in every
+mode. Log `would_deny` while in `warn`, review it, then switch to `enforce`.
+
+The client's separate `enforce_mode="permissive"` (development only) turns
+**every** denial into an allow, including `cap_exceeded` and
+`meter_unavailable`; the result keeps its `reason_code`, but nothing is reserved
+for such a call.
 
 ### When a cap is exceeded
 
@@ -119,7 +173,7 @@ Other `cap_exceeded` sub-reasons:
 |---|---|
 | `case_required` | A `per_case` cap applies and no `case_id` was passed |
 | `invalid_case_id` | `case_id` is empty or longer than 256 characters |
-| `invalid_cost_component` | `cost_components` names a unit the tool does not declare |
+| `invalid_cost_component` | `cost_components` names a unit the tool does not declare, is empty for a tool that declares units, or the call's cost exceeds 2147483647 |
 | `meter_unavailable` | No meter is configured, or its backend failed |
 
 Malformed grant caps deny as `token_invalid` / `malformed_authorization_details`.
@@ -154,19 +208,30 @@ Both SDKs derive the same counter keys and run the same Lua script and SQL, so
 Python and TypeScript workers can share one Redis or Postgres. Fifty parallel
 calls against a cap of ten reserve exactly ten, on both backends, in CI.
 
-**Redis.** Keys look like `grantex:caps:{<tenant hash>}:<counter hash>:z|s`.
-Everything a reservation touches shares one hash tag, so it works on Redis
-Cluster. Time comes from the Redis server. Per-hour and per-day keys expire
-after their window. Per-case keys never expire unless you set
-`case_ttl_seconds` / `caseTtlSeconds`, because an expired per-case counter
-would reset the cap. Run Redis with `maxmemory-policy noeviction`: an evicted
-counter forgets reservations.
+**Redis** (6.0 or later; the scripts use `SET ... KEEPTTL`). Keys look like
+`grantex:caps:{<tenant hash>}:<counter hash>:z|s`. Everything a reservation
+touches shares one hash tag, so it works on Redis Cluster. Time comes from the
+Redis server. Per-hour and per-day keys expire one window plus 60 seconds after
+the **last** reservation on the counter (each reservation resets the TTL);
+entries older than the window are dropped whenever the counter is used.
+Per-case keys never expire unless you set `case_ttl_seconds` /
+`caseTtlSeconds`, because an expired per-case counter would reset the cap. Run
+Redis with `maxmemory-policy noeviction`: an evicted counter forgets
+reservations.
 
 **Postgres.** Create the tables with `grantex.caps.SCHEMA_SQL` or
 `CAPS_SCHEMA_SQL` in your migrations, or call `ensure_schema()` /
 `ensureSchema()`. The Python backend takes a factory for DB-API connections
 with `%s` placeholders, for example `pg8000`. The TypeScript backend takes a
-`pg` `Pool`. Rows carry the tenant hash, and time comes from the database.
+`pg` `Pool`. Reservations run in READ COMMITTED transactions and time comes
+from the database. Rows carry a hash of the tenant id rather than the id, so
+row-level security policies keyed on tenant ids do not apply to these tables.
+Expired rows are removed when their counter is next used; run `prune()`
+periodically (for example hourly, from a scheduled job) to delete expired
+reservations and empty counters from all tenants. Per-case reservations are
+kept unless the backend was given `case_ttl_seconds` / `caseTtlSeconds`.
+`prune()` skips counters that are being reserved; if a race makes it fail, run
+it again.
 
 ### No automatic failover
 
@@ -178,5 +243,11 @@ exceed every cap. Choose one backend per deployment. If it is unavailable,
 ## Remaining budget
 
 `meter.usage(tenant_id, limits)` returns what each counter holds and what
-remains, for a consent page or a per-case view. Build the limits for a tool
-with `grantex.caps.build_cap_limits` (`buildCapLimits`).
+remains. Build the limits for a tool with `grantex.caps.build_cap_limits`
+(`buildCapLimits`), or use `result.cap_limits` from `enforce()`.
+
+## Not yet covered
+
+This is the metering library. Showing caps and remaining budget on the consent
+page and in a per-case view, and a per-tenant `caps.enforce` rollout flag in
+the platform that drives `caps_mode`, are separate work.

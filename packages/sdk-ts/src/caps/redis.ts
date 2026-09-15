@@ -8,8 +8,11 @@
  * before checking. Time comes from the Redis server (`TIME`) unless a clock is
  * injected for tests.
  *
- * Operational requirement: run Redis with `maxmemory-policy noeviction`. An
- * evicted counter would forget reservations and let calls exceed a cap.
+ * Requires Redis 6.0 or later (`SET ... KEEPTTL`). Run it with
+ * `maxmemory-policy noeviction`: an evicted counter would forget reservations
+ * and let calls exceed a cap. Per-hour and per-day keys expire one window plus
+ * 60 seconds after the last reservation on the counter; per-case keys only with
+ * `caseTtlSeconds`.
  *
  * The scripts are byte-identical to the Python SDK's (`grantex/caps/_redis.py`);
  * a test in each SDK checks this.
