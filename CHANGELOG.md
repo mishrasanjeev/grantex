@@ -421,6 +421,12 @@ Breaking changes
   requiring the grant's developer and the tool's connector (refused as
   `malformed` otherwise), binding manifest `decision_fields`, and answering
   `valid` only after consumption. Tool policies carry `decisionFields`.
+  The guard and the verifier apply the access token's
+  `urn:grantex:decision:v1` entries: a listed tool needs a decision grant,
+  the entry's `four_eyes_on` requires two approvers, and a token with a
+  malformed decision entry is refused for every `tools/call`
+  (`decision_invalid` / `malformed_authorization_details`). **Behaviour
+  change** for tokens that carry such entries.
 - Behaviour change (no API break): a call to a `requires_decision` tool that
   carries a valid decision grant which the auth service consumes is now
   allowed. Calls without one are denied exactly as before.

@@ -474,7 +474,8 @@ export const decisionVerifier: DecisionVerifier = {
 - **Grantex decision grants.** `grantexDecisionVerifier(options)` is the
   reference `DecisionVerifier` for decision grants issued by the Grantex auth
   service (`spec/decision-grant.md`). It reads one grant, or two
-  comma-separated grants for a decision in `four_eyes_on`, from the
+  comma-separated grants for a decision in `four_eyes_on` (the manifest's
+  or the grant's `urn:grantex:decision:v1` entry's), from the
   `grantex-decision-grant` request header (`header` to change it); derives
   the semantic action from the tool name and the call's `case_id`,
   `decision`, `subject`, `amount` and the manifest's `decision_fields`;
@@ -491,6 +492,11 @@ export const decisionVerifier: DecisionVerifier = {
   `four_eyes_incomplete`, `malformed`, ...) in the `decision_invalid` body.
   Consumption spends the grant: if the tool call fails afterwards, a person
   has to approve again.
+  The guard also reads the access token's `urn:grantex:decision:v1` entries
+  (`spec/grant-token-0.6.md`): a tool listed there needs a decision grant even
+  when its manifest does not declare `requires_decision`, and a token whose
+  decision entries cannot be read is refused for every `tools/call`
+  (`decision_invalid` / `malformed_authorization_details`).
 - **Purpose-bound grants.** `grant.authorizeParams` returns extra parameters
   for the Grantex authorize call (for example `authorization_details` with
   purpose and region). It cannot override the agent, principal, scopes,
