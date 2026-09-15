@@ -1,8 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import type { ClientStore, ClientRegistration, RegisterClientRequest, TokenEndpointAuthMethod } from '../types.js';
+import type { ClientRegistration, RegisterClientRequest, TokenEndpointAuthMethod } from '../types.js';
+import type { McpAuthStorage } from '../storage/types.js';
+import { hashClientSecret } from '../lib/verify.js';
 
-export function registerRegisterEndpoint(app: FastifyInstance, clientStore: ClientStore): void {
+export function registerRegisterEndpoint(app: FastifyInstance, storage: McpAuthStorage): void {
   app.post<{ Body: RegisterClientRequest }>('/register', async (request, reply) => {
     const { redirect_uris, grant_types, client_name, token_endpoint_auth_method } = request.body ?? {};
 
@@ -30,7 +32,8 @@ export function registerRegisterEndpoint(app: FastifyInstance, clientStore: Clie
 
     const registration: ClientRegistration = {
       clientId,
-      ...(clientSecret !== undefined ? { clientSecret } : {}),
+      // Only the hash is stored; the secret is shown to the client once, below.
+      ...(clientSecret !== undefined ? { clientSecretHash: hashClientSecret(clientSecret) } : {}),
       tokenEndpointAuthMethod: authMethod,
       redirectUris: redirect_uris,
       grantTypes: resolvedGrantTypes,
@@ -38,7 +41,7 @@ export function registerRegisterEndpoint(app: FastifyInstance, clientStore: Clie
       createdAt: new Date().toISOString(),
     };
 
-    await clientStore.set(clientId, registration);
+    await storage.putClient(registration);
 
     return reply.status(201).send({
       client_id: clientId,

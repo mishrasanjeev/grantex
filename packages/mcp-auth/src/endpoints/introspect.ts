@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import type { McpAuthConfig, ClientStore } from '../types.js';
+import type { McpAuthConfig } from '../types.js';
+import type { McpAuthStorage } from '../storage/types.js';
 import { createGrantexTokenVerifier, parseBasicAuth, secretMatches } from '../lib/verify.js';
 
 interface IntrospectBody {
@@ -10,7 +11,7 @@ interface IntrospectBody {
 export function registerIntrospectEndpoint(
   app: FastifyInstance,
   config: McpAuthConfig,
-  clientStore: ClientStore,
+  storage: McpAuthStorage,
 ): void {
   // Tokens are issued by Grantex, not by this server: verify them against
   // the Grantex JWKS with iss/aud pinned. Fail closed when unconfigured.
@@ -46,8 +47,8 @@ export function registerIntrospectEndpoint(
       );
       if (basicCreds) {
         const [clientId, clientSecret] = basicCreds;
-        const client = await clientStore.get(clientId);
-        if (!client || !secretMatches(client.clientSecret, clientSecret)) {
+        const client = await storage.getClient(clientId);
+        if (!client || !secretMatches(client.clientSecretHash, clientSecret)) {
           return reply.status(401).send({
             error: 'invalid_client',
             error_description: 'Invalid client credentials',
@@ -58,6 +59,13 @@ export function registerIntrospectEndpoint(
       try {
         // Signature + alg allow-list + iss + aud (when configured).
         const payload = await verifier.verify(token);
+
+        // A token revoked through this server is inactive even though its
+        // signature is still valid. A storage failure throws into the catch
+        // below and the token is reported inactive (fail closed).
+        if (typeof payload.jti !== 'string' || await storage.isTokenRevoked(payload.jti)) {
+          return reply.send({ active: false });
+        }
 
         // Build RFC 7662 introspection response
         const scopes = Array.isArray(payload['scp'])

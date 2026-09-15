@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import type { McpAuthConfig, ClientStore, CodeStore, RefreshTokenStore } from '../types.js';
+import type { McpAuthConfig } from '../types.js';
+import type { McpAuthStorage } from '../storage/types.js';
 import { verifyCodeChallenge } from '../lib/pkce.js';
 import { isConfidentialClient, parseBasicAuth, secretMatches } from '../lib/verify.js';
 import type { ClientRegistration } from '../types.js';
@@ -18,9 +19,9 @@ function clientAuthenticated(
   const basic = parseBasicAuth(authorizationHeader);
   if (basic) {
     const [basicId, basicSecret] = basic;
-    return basicId === client.clientId && secretMatches(client.clientSecret, basicSecret);
+    return basicId === client.clientId && secretMatches(client.clientSecretHash, basicSecret);
   }
-  return secretMatches(client.clientSecret, body.client_secret);
+  return secretMatches(client.clientSecretHash, body.client_secret);
 }
 
 /**
@@ -43,19 +44,21 @@ interface TokenBody {
 export function registerTokenEndpoint(
   app: FastifyInstance,
   config: McpAuthConfig,
-  clientStore: ClientStore,
-  codeStore: CodeStore,
-  refreshTokenStore: RefreshTokenStore,
+  storage: McpAuthStorage,
 ): void {
   // A refresh token is bound to the client it was issued to (RFC 6749 §6,
   // OAuth 2.1 §4.3.1). Recording the binding on every issue path, and
   // re-recording it after rotation, is what lets the refresh_token grant
   // refuse a token presented by a different client_id.
-  async function bindRefreshToken(refreshToken: string | undefined, clientId: string): Promise<void> {
+  async function bindRefreshToken(
+    refreshToken: string | undefined,
+    clientId: string,
+    resource: string | undefined,
+  ): Promise<void> {
     if (refreshToken === undefined) return;
-    await refreshTokenStore.set(refreshToken, {
-      refreshToken,
+    await storage.putRefreshTokenBinding(refreshToken, {
       clientId,
+      ...(resource !== undefined ? { resource } : {}),
       expiresAt: Date.now() + REFRESH_TOKEN_BINDING_TTL_MS,
     });
   }
@@ -76,7 +79,7 @@ export function registerTokenEndpoint(
       }
 
       // Validate client
-      const client = await clientStore.get(client_id);
+      const client = await storage.getClient(client_id);
       if (!client) {
         return reply.status(401).send({
           error: 'invalid_client',
@@ -90,17 +93,17 @@ export function registerTokenEndpoint(
         });
       }
 
-      // Look up authorization code
-      const authCode = await codeStore.get(code);
+      // Consume the code atomically before any other check: it is single
+      // use, so of any number of concurrent requests at most one gets it,
+      // and a failed attempt (wrong client, redirect_uri or verifier) still
+      // spends it.
+      const authCode = await storage.consumeAuthorizationCode(code);
       if (!authCode) {
         return reply.status(400).send({
           error: 'invalid_grant',
           error_description: 'Invalid or expired authorization code',
         });
       }
-
-      // Delete code immediately (single-use)
-      await codeStore.delete(code);
 
       // Verify code belongs to client
       if (authCode.clientId !== client_id) {
@@ -140,7 +143,7 @@ export function registerTokenEndpoint(
         });
       }
 
-      await bindRefreshToken(tokenResponse.refreshToken, client_id);
+      await bindRefreshToken(tokenResponse.refreshToken, client_id, authCode.resource);
 
       return reply.send({
         access_token: tokenResponse.grantToken,
@@ -163,7 +166,7 @@ export function registerTokenEndpoint(
         });
       }
 
-      const client = await clientStore.get(client_id);
+      const client = await storage.getClient(client_id);
       if (!client) {
         return reply.status(401).send({
           error: 'invalid_client',
@@ -185,14 +188,13 @@ export function registerTokenEndpoint(
         });
       }
 
-      // Checked before touching Grantex so a token presented by the wrong
-      // client is neither rotated nor consumed upstream. An unknown token is
-      // refused too: without a binding there is nothing to verify against.
-      // Compare against the authenticated client record, not the raw
-      // client_id parameter: the guard is keyed on the identity the
-      // secret/registration check established above.
-      const binding = await refreshTokenStore.get(refresh_token);
-      if (!binding || binding.clientId !== client.clientId) {
+      // Taken atomically before touching Grantex, and only when bound to
+      // the authenticated client record (not the raw client_id parameter):
+      // a token presented by the wrong client is neither rotated nor
+      // consumed, an unknown token is refused, and two concurrent refreshes
+      // of one token cannot both proceed.
+      const binding = await storage.takeRefreshTokenBinding(refresh_token, client.clientId);
+      if (!binding) {
         return reply.status(400).send({
           error: 'invalid_grant',
           error_description: 'Refresh token was not issued to this client',
@@ -206,17 +208,18 @@ export function registerTokenEndpoint(
           agentId: config.agentId,
         });
       } catch (err) {
+        // Nothing was issued, so restore the binding: a transient upstream
+        // failure must not strand a refresh token the client still holds.
+        // Grantex remains the authority on whether the token is still valid.
+        await storage.putRefreshTokenBinding(refresh_token, binding);
         return reply.status(400).send({
           error: 'invalid_grant',
           error_description: `Refresh failed: ${err instanceof Error ? err.message : String(err)}`,
         });
       }
 
-      // Rotation: the old token is spent, the new one inherits the binding.
-      if (tokenResponse.refreshToken !== refresh_token) {
-        await refreshTokenStore.delete(refresh_token);
-      }
-      await bindRefreshToken(tokenResponse.refreshToken, client_id);
+      // Rotation: the old binding is already spent; the new token inherits it.
+      await bindRefreshToken(tokenResponse.refreshToken, client.clientId, binding.resource);
 
       return reply.send({
         access_token: tokenResponse.grantToken,

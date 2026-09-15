@@ -1,22 +1,20 @@
 export { createMcpAuthServer } from './server.js';
-export { InMemoryClientStore } from './lib/clients.js';
-export { InMemoryCodeStore, InMemoryPendingAuthorizationStore, InMemoryRefreshTokenStore } from './lib/codes.js';
 export { verifyCodeChallenge } from './lib/pkce.js';
+export { hashClientSecret } from './lib/verify.js';
 export { registerIntrospectEndpoint } from './endpoints/introspect.js';
 export { registerRevokeEndpoint } from './endpoints/revoke.js';
+export type { McpAuthStorage, RevocationChecker } from './storage/types.js';
 export type {
   McpAuthConfig,
   ClientRegistration,
   RegisterClientRequest,
   AuthorizationCode,
-  ClientStore,
-  CodeStore,
   TokenIssuedEvent,
   TokenEndpointAuthMethod,
   PendingAuthorization,
-  PendingAuthorizationStore,
   RefreshTokenBinding,
-  RefreshTokenStore,
+  ConsentRecord,
+  RevocationRecord,
 } from './types.js';
 
 // Re-export middleware types (actual middleware in subpath exports)
