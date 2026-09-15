@@ -4,7 +4,8 @@ import type { Server } from 'node:http';
 import * as jose from 'jose';
 import type { FastifyInstance } from 'fastify';
 import { createMcpAuthServer } from '../src/server.js';
-import { InMemoryClientStore } from '../src/lib/clients.js';
+import { InMemoryStorage } from '../src/storage/memory.js';
+import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
 
 const TEST_CLIENT_ID = 'test-client-id';
@@ -102,10 +103,10 @@ describe('revoke endpoint', () => {
   let onRevocationHook: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
-    const clientStore = new InMemoryClientStore();
-    await clientStore.set(TEST_CLIENT_ID, {
+    const clientStore = new InMemoryStorage();
+    await clientStore.putClient({
       clientId: TEST_CLIENT_ID,
-      clientSecret: TEST_CLIENT_SECRET,
+      clientSecretHash: hashClientSecret(TEST_CLIENT_SECRET),
       redirectUris: ['https://app.example.com/callback'],
       grantTypes: ['authorization_code'],
       createdAt: new Date().toISOString(),
@@ -121,7 +122,7 @@ describe('revoke endpoint', () => {
       scopes: ['read', 'write'],
       issuer: 'https://auth.example.com',
       grantexIssuer: issuer,
-      clientStore,
+      storage: clientStore,
       hooks: {
         onRevocation: onRevocationHook as (jti: string) => Promise<void>,
       },
@@ -303,10 +304,10 @@ describe('revoke endpoint', () => {
     });
 
     it('fails closed (503) when grantexIssuer is not configured', async () => {
-      const clientStore = new InMemoryClientStore();
-      await clientStore.set(TEST_CLIENT_ID, {
+      const clientStore = new InMemoryStorage();
+      await clientStore.putClient({
         clientId: TEST_CLIENT_ID,
-        clientSecret: TEST_CLIENT_SECRET,
+        clientSecretHash: hashClientSecret(TEST_CLIENT_SECRET),
         redirectUris: ['https://app.example.com/callback'],
         grantTypes: ['authorization_code'],
         createdAt: new Date().toISOString(),
@@ -316,7 +317,7 @@ describe('revoke endpoint', () => {
         agentId: 'agent-1',
         scopes: ['read'],
         issuer: 'https://auth.example.com',
-        clientStore,
+        storage: clientStore,
       });
       const token = await signTestJwt({ sub: TEST_CLIENT_ID, scp: ['read'] });
       const response = await appNoIssuer.inject({
