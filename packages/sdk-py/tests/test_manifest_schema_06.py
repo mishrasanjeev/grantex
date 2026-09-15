@@ -72,7 +72,7 @@ class TestManifest06AcceptanceCriteria:
         assert str(exc.value) == (
             'ToolManifest: tools.verify_business: unknown key "max_calls" '
             "(allowed: permission, allowed_purposes, caps, cost_units, "
-            "requires_decision, four_eyes_on)"
+            "requires_decision, four_eyes_on, decision_fields)"
         )
 
     def test_manifest_declaring_requires_decision_on_a_read_tool_is_rejected(self) -> None:
