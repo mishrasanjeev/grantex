@@ -206,6 +206,27 @@ Breaking changes
   advertised `grantex_extensions.consent_ui` and `audit_stream` URLs, which had
   no routes.
 
+### Canonicalisation and decision action hash
+- RFC 8785 JSON canonicalisation in both SDKs: `grantex.canonical`
+  (`canonicalize`, `canonicalize_bytes`, `serialize_number`) and
+  `canonicalize`, `canonicalizeToBytes`, `serializeNumber` in `@grantex/sdk`.
+  Values without one canonical form (NaN, infinities, unpaired surrogates,
+  non-JSON types, nesting deeper than 64; in Python, integers a double cannot
+  hold exactly) raise `CanonicalizationError`. Tested against the RFC 8785
+  test vectors, the first 100,000 lines of the RFC 8785 ES6 number test and
+  shared fixtures in `spec/examples/canonicalization/`.
+- The semantic action a decision grant approves (PRD G-3) and its hash:
+  `grantex.decisions.DecisionAction` (`from_dict`, `from_tool_call`,
+  `canonical_json`, `action_hash`), `compute_action_hash`, `is_action_hash`,
+  and `parseDecisionAction`, `decisionActionFromToolCall`,
+  `canonicalActionJson`, `computeActionHash`, `isActionHash` in
+  `@grantex/sdk`. `action_hash = "sha256:" + base64url(SHA-256(JCS({case_id,
+  action, decision, subject, amount?})))`. Extra tool arguments, member order
+  and whitespace do not change the hash; any change to those five fields
+  does. Rules in `spec/canonicalization.md`, cross-language cases in
+  `spec/examples/decision-grant/action-hash.json`.
+- New modules only; no existing API or behaviour changes.
+
 ### Purpose-bound grants
 - `POST /v1/authorize` accepts `purpose`: a term from the controlled
   vocabulary (`aml.cdd.onboarding`, `aml.cdd.ongoing`, `aml.screening`,

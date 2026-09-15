@@ -96,7 +96,7 @@ from pathlib import Path
 
 from grantex.evidence import upstream_records_for, verify_package
 
-data = Path("spec/examples/evidence/package.json").read_bytes()
+data = Path("spec/examples/evidence/evidence-package.json").read_bytes()
 root = "sha256:e2f5dbf9add538342f753afe20c9ee4b90b63e8a6eb78740d95590022680765c"
 
 result = verify_package(data, expected_root=root, require_anchor=True)
@@ -113,7 +113,7 @@ for record in upstream_records_for(json.loads(data), "rec_0001"):
 import { readFileSync } from 'node:fs';
 import { evidence } from '@grantex/sdk';
 
-const data = readFileSync('spec/examples/evidence/package.json');
+const data = readFileSync('spec/examples/evidence/evidence-package.json');
 const result = evidence.verifyPackage(data, {
   expectedRoot: 'sha256:e2f5dbf9add538342f753afe20c9ee4b90b63e8a6eb78740d95590022680765c',
   requireAnchor: true,
