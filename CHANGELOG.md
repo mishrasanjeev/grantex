@@ -6,6 +6,62 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Breaking changes from 0.5 (summary)
+`docs/migration-0.6.md` explains each item and what to do. Manifests,
+purpose-bound grants, caps, signing and claims each have their own entry
+below.
+
+- **Manifests.**
+  - Object-form tool declarations are validated strictly.
+  - Manifest files with a duplicate key are rejected.
+  - `cost_units` is a reserved tool name.
+  - `enforce()` denies calls it cannot evaluate: a tool with
+    `allowed_purposes` needs a matching grant purpose, a tool with
+    `requires_decision` always returns `decision_required`, and a tool with
+    caps needs a caps meter.
+- **Purpose-bound grants.**
+  - `POST /v1/authorize` rejects an unknown `purpose`, or a purpose without a
+    connector scope, with `INVALID_PURPOSE`.
+  - `enforce()` denies every call on a token with malformed
+    `authorization_details`.
+  - `enforce()` applies a tools entry's `tools` list.
+- **Caps.** Grant caps with wildcard or unknown keys, windows or counts deny
+  every call on the connector. Units are not refunded when a call fails.
+- **Signing.**
+  - Key ids are RFC 7638 thumbprints. The RSA key is also published under
+    the pre-0.6 `grantex-YYYY-MM` kids, which the auth service still
+    accepts, so outstanding tokens keep verifying across months and
+    instances.
+  - Tokens may be ES256 when a deployment sets `JWT_SIGNING_ALG=ES256`, so
+    verifiers that pin RS256 must allow ES256 first.
+  - Switching to the postgres key store imports the env keys with the same
+    kids.
+  - SDK verifiers refuse a key whose type, curve, `alg` or `use` does not
+    match the token's algorithm.
+  - The auth service refuses to start with an RSA key under 2048 bits, a
+    non-P-256 EC key, an invalid verification key set, or (postgres store) a
+    retired-key grace shorter than `MAX_GRANT_LIFETIME_SECONDS`.
+- **Claims.**
+  - `GRANT_TOKEN_LEGACY_CLAIMS` keeps the `agt`, `dev`, `grnt`, `scp`,
+    `parentAgt`, `parentGrnt`, `delegationDepth` and `bdg` aliases in tokens.
+    It is on for 0.6 and **defaults to off in 0.7**, and SDK verifiers stop
+    reading the aliases by default in 0.7.
+  - Delegated `act` claims are nested.
+  - A 0.6 token whose standard claim and alias disagree is refused; pre-0.6
+    tokens are read from `scp`.
+  - SDK verifiers refuse null or mistyped claims.
+  - New authorization requests refuse scopes containing whitespace. Existing
+    such grants keep working, but their tokens omit `scope`.
+  - `enforce()` honours decision references in the grant.
+  - TypeScript `GrantTokenPayload.agt`, `dev` and `scp` are optional and
+    deprecated.
+
+### Migration guide
+- `docs/migration-0.6.md` covers every break from 0.5 to 0.6. It gives an
+  upgrade order (verifiers first, then the auth service, then new features,
+  then turning off legacy claims before 0.7), plus the database migrations,
+  the new settings and a checklist.
+
 ### Standard grant token claims
 - Grant tokens follow the OAuth profile in `spec/grant-token-0.6.md`, and a
   stock JOSE library validates them with standard semantics. The claims are
