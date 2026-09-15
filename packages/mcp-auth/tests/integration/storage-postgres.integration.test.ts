@@ -52,7 +52,15 @@ afterAll(async () => {
     const { rows } = await getPool().query(
       `SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'mcp_auth_%' ORDER BY table_name`,
     );
-    expect(rows.map((row: { table_name: string }) => row.table_name)).toEqual(TABLES);
+    expect(rows.map((row: { table_name: string }) => row.table_name)).toEqual([...TABLES, 'mcp_auth_schema_migrations'].sort());
+  });
+
+  it('records each migration once in the ledger and does not re-apply it', async () => {
+    const before = await getPool().query('SELECT version, applied_at FROM mcp_auth_schema_migrations ORDER BY version');
+    expect(before.rows.map((row: { version: string }) => row.version)).toEqual(['001_mcp_auth_state.sql']);
+    await runMigrations(getPool());
+    const after = await getPool().query('SELECT version, applied_at FROM mcp_auth_schema_migrations ORDER BY version');
+    expect(after.rows).toEqual(before.rows);
   });
 
   it('purgeExpired removes expired rows and keeps live ones', async () => {
