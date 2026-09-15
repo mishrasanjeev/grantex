@@ -1,14 +1,24 @@
 import * as jose from 'jose';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { McpAuthConfig, ClientRegistration } from '../types.js';
+import { acceptedResources } from './resource.js';
 
 export const ALLOWED_ALGORITHMS = ['RS256', 'ES256', 'PS256', 'EdDSA'];
 
-/** Constant-time client secret comparison. */
-export function secretMatches(expected: string | undefined, provided: string | undefined): boolean {
-  if (typeof expected !== 'string' || typeof provided !== 'string') return false;
-  const a = Buffer.from(expected);
-  const b = Buffer.from(provided);
+/** Stored form of a client secret: `sha256:<base64url digest>`. */
+export function hashClientSecret(secret: string): string {
+  return `sha256:${createHash('sha256').update(secret, 'utf8').digest('base64url')}`;
+}
+
+/**
+ * Constant-time check of a presented client secret against the stored hash.
+ * False for a missing secret, a missing hash or a hash in an unknown format.
+ */
+export function secretMatches(expectedHash: string | undefined, provided: string | undefined): boolean {
+  if (typeof expectedHash !== 'string' || !expectedHash.startsWith('sha256:')) return false;
+  if (typeof provided !== 'string') return false;
+  const a = Buffer.from(expectedHash);
+  const b = Buffer.from(hashClientSecret(provided));
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
@@ -30,9 +40,14 @@ export function parseBasicAuth(
   return [decoded.slice(0, colonIdx), decoded.slice(colonIdx + 1)];
 }
 
-/** A client is confidential when it was registered with a secret. */
+/**
+ * A client is public only when it registered `token_endpoint_auth_method:
+ * none` and holds no secret. Anything else is confidential and must
+ * authenticate, so a record that lost its secret hash fails closed.
+ */
 export function isConfidentialClient(client: ClientRegistration): boolean {
-  return typeof client.clientSecret === 'string' && client.clientSecret.length > 0;
+  const hasSecret = typeof client.clientSecretHash === 'string' && client.clientSecretHash.length > 0;
+  return hasSecret || client.tokenEndpointAuthMethod !== 'none';
 }
 
 export function resolveJwksUri(options: { grantexIssuer?: string; jwksUri?: string }): URL | undefined {
@@ -52,16 +67,14 @@ export interface GrantexTokenVerifier {
 
 /**
  * Builds a verifier for Grantex grant tokens: signature against the Grantex
- * JWKS, `iss` must equal `grantexIssuer`, and `aud` must match the configured
- * audience (defaults to `allowedResources`) when one is set.
+ * JWKS, `iss` must equal `grantexIssuer`, and `aud` must name the configured
+ * `audience` or, by default, one of the resources this server issues tokens
+ * for (`resource` and `allowedResources`). The audience is always checked.
  */
 export function createGrantexTokenVerifier(config: McpAuthConfig): GrantexTokenVerifier {
   const jwksUrl = resolveJwksUri(config);
   const issuer = config.grantexIssuer;
-  const audience = config.audience
-    ?? (config.allowedResources && config.allowedResources.length > 0
-      ? config.allowedResources
-      : undefined);
+  const audience = config.audience ?? acceptedResources(config);
   let jwks: ReturnType<typeof jose.createRemoteJWKSet> | undefined;
 
   return {
@@ -88,7 +101,7 @@ export function createGrantexTokenVerifier(config: McpAuthConfig): GrantexTokenV
         algorithms: ALLOWED_ALGORITHMS,
         // Tolerate a trailing-slash difference between config and the claim.
         issuer: issuer.endsWith('/') ? [issuer, issuer.slice(0, -1)] : [issuer, `${issuer}/`],
-        ...(audience !== undefined ? { audience } : {}),
+        audience,
         ...(currentDate !== undefined ? { currentDate } : {}),
       });
       return payload;
