@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -12,6 +13,7 @@ import {
   describePurpose,
   isKnownPurpose,
   narrowToolsAuthorizationDetails,
+  PURPOSE_VOCABULARY,
   purposeOfToolsAuthorizationDetails,
 } from '../src/lib/purpose.js';
 
@@ -359,10 +361,73 @@ describe('consent shows the purpose', () => {
     expect(res.json()).not.toHaveProperty('purpose');
   });
 
-  it('the consent page renders the purpose, escaped', async () => {
-    const res = await app.inject({ method: 'GET', url: '/consent?req=areq_TEST01' });
-    expect(res.body).toContain("esc(data.purposeDescription || data.purpose)");
-    expect(res.body).toContain('The agent may use this access only for this purpose.');
+  /**
+   * Serve the consent page, run its script against the real GET
+   * /v1/consent/:id response with a minimal DOM, and return the HTML it renders.
+   */
+  async function renderConsentPage(row: Record<string, unknown>): Promise<string> {
+    const page = await app.inject({ method: 'GET', url: '/consent?req=areq_TEST01' });
+    const script = /<script>([\s\S]*?)<\/script>/.exec(page.body)?.[1];
+    expect(script).toBeDefined();
+    sqlMock.mockResolvedValueOnce([row]);
+    const content = { innerHTML: '<div class="spinner"></div>' };
+    const button = { disabled: false, addEventListener: () => undefined };
+    const context = vm.createContext({
+      URLSearchParams,
+      Date,
+      Math,
+      String,
+      JSON,
+      Uint8Array,
+      atob,
+      btoa,
+      location: { search: '?req=areq_TEST01', href: 'https://auth.example.com/consent?req=areq_TEST01' },
+      navigator: {},
+      document: { getElementById: (id: string) => (id === 'content' ? content : button) },
+      fetch: async (url: string) => {
+        const res = await app.inject({ method: 'GET', url });
+        return { ok: res.statusCode < 400, status: res.statusCode, json: async () => res.json() };
+      },
+    });
+    vm.runInContext(script as string, context);
+    for (let i = 0; i < 50 && content.innerHTML.includes('spinner'); i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return content.innerHTML;
+  }
+
+  const consentRow = {
+    id: 'areq_TEST01',
+    scopes: TOOL_SCOPES,
+    expires_at: new Date(Date.now() + 86400_000).toISOString(),
+    status: 'pending',
+    redirect_uri: null,
+    state: null,
+    agent_name: 'Underwriting Agent',
+    agent_description: null,
+    agent_did: 'did:grantex:ag_TEST01AGENTID',
+    purpose: 'aml.cdd.onboarding',
+  };
+
+  it('the rendered consent page shows the purpose label above the permissions', async () => {
+    const html = await renderConsentPage(consentRow);
+    expect(html).toContain(
+      '<div class="purpose" id="purpose">Customer due diligence at onboarding (aml.cdd.onboarding)</div>',
+    );
+    expect(html).toContain('The agent may use this access only for this purpose.');
+    expect(html.indexOf('id="purpose"')).toBeLessThan(html.indexOf('Requested permissions'));
+  });
+
+  it('the rendered consent page escapes a stored purpose', async () => {
+    const html = await renderConsentPage({ ...consentRow, purpose: 'x-acme.<img src=x onerror=alert(1)>' });
+    expect(html).toContain('x-acme.&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).not.toContain('<img');
+  });
+
+  it('the rendered consent page has no purpose block without a purpose', async () => {
+    const html = await renderConsentPage({ ...consentRow, purpose: null });
+    expect(html).toContain('Requested permissions');
+    expect(html).not.toContain('id="purpose"');
   });
 });
 
@@ -426,6 +491,22 @@ describe('GET /v1/grants/:id returns the purpose', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json<{ purpose: string }>().purpose).toBe('aml.screening');
   });
+});
+
+describe('purpose vocabulary matches the SDKs', () => {
+  const fixtures = JSON.parse(
+    readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'spec', 'examples', 'purpose-matching.json'), 'utf-8'),
+  ) as { vocabulary: string[]; known_cases: Array<{ purpose: string; known: boolean }> };
+
+  it('has the same vocabulary', () => {
+    expect([...PURPOSE_VOCABULARY.keys()].sort()).toEqual([...fixtures.vocabulary].sort());
+  });
+
+  for (const c of fixtures.known_cases) {
+    it(`isKnownPurpose(${JSON.stringify(c.purpose)}) is ${c.known}`, () => {
+      expect(isKnownPurpose(c.purpose)).toBe(c.known);
+    });
+  }
 });
 
 describe('purpose library', () => {
