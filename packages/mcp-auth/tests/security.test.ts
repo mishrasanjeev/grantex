@@ -7,7 +7,7 @@ import { createMcpAuthServer } from '../src/server.js';
 import { InMemoryStorage } from '../src/storage/memory.js';
 import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
-import { upstreamGrantToken } from './helpers.js';
+import { upstreamGrantToken, authorizeWithConsent } from './helpers.js';
 
 const TEST_CLIENT_ID = 'test-client-id';
 const TEST_CLIENT_SECRET = 'test-secret';
@@ -132,7 +132,7 @@ describe('OAuth 2.1 security', () => {
   });
 
   it('rejects implicit grant flow (response_type=token)', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -206,7 +206,7 @@ describe('OAuth 2.1 security', () => {
   });
 
   it('PKCE is required (no code_challenge => 400)', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -223,7 +223,7 @@ describe('OAuth 2.1 security', () => {
   });
 
   it('state parameter is passed through when present', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -236,14 +236,14 @@ describe('OAuth 2.1 security', () => {
       },
     });
 
-    expect(response.statusCode).toBe(302);
+    expect(response.statusCode).toBe(303);
     const location = response.headers['location'] as string;
     const url = new URL(location);
     expect(url.searchParams.get('state')).toBe('csrf-protection-state');
   });
 
   it('only S256 code_challenge_method accepted (not plain)', async () => {
-    const response = await app.inject({
+    const response = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -287,7 +287,7 @@ describe('OAuth 2.1 security', () => {
 
   it('authorization code is single-use (replayed code rejected)', async () => {
     // First, get an authorization code
-    const authResponse = await app.inject({
+    const authResponse = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {

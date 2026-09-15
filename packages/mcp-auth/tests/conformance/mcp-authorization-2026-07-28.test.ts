@@ -46,6 +46,8 @@ import {
   TEST_RESOURCE,
   TEST_VERIFIER,
   asGrantex,
+  authorizeWithConsent,
+  submitConsent,
   clientRecord,
   mockGrantex,
   seededStorage,
@@ -78,6 +80,10 @@ export const REQUIREMENTS: Requirement[] = [
   { id: 'CIMD-01', role: 'authorization-server', section: 'Client ID Metadata Documents', text: 'Authorization servers MUST validate that the fetched document\'s client_id matches the URL exactly.' },
   { id: 'CIMD-02', role: 'authorization-server', section: 'Client ID Metadata Documents', text: 'Authorization servers MUST validate redirect URIs presented in an authorization request against those in the metadata document.' },
   { id: 'CIMD-03', role: 'authorization-server', section: 'Client ID Metadata Documents', text: 'Authorization servers MUST validate the document structure is valid JSON and contains required fields.' },
+  { id: 'CIMD-05', role: 'authorization-server', section: 'Localhost Redirect URI Risks', text: 'Authorization servers MUST clearly display the redirect URI hostname during authorization.' },
+  { id: 'DEPUTY-01', role: 'authorization-server', section: 'Confused Deputy Problem', text: 'MCP proxy servers using static client IDs MUST obtain user consent for each dynamically registered client before forwarding to third-party authorization servers.' },
+  { id: 'DEPUTY-02', role: 'authorization-server', section: 'Security Best Practices: Confused Deputy Problem', text: 'MCP proxy servers MUST bind the consent decision and the authorization state to the user agent that gave consent (a secure, HttpOnly cookie), and verify it at the callback before issuing an authorization code.' },
+  { id: 'DEPUTY-03', role: 'authorization-server', section: 'Security Best Practices: Confused Deputy Problem', text: 'The consent form MUST be protected against CSRF.' },
   { id: 'CIMD-04', role: 'authorization-server', section: 'Client ID Metadata Document Security', text: 'Authorization servers MUST consider the security implications of fetching documents (SSRF).' },
   { id: 'RESP-01', role: 'authorization-server', section: 'Authorization Response Validation', text: 'Authorization servers that include iss MUST advertise authorization_response_iss_parameter_supported: true.' },
   { id: 'RESP-02', role: 'client', section: 'Authorization Response Validation', text: 'Clients MUST record the issuer and apply RFC 9207 validation before redeeming a code.', outOfScope: CLIENT_ONLY },
@@ -160,6 +166,22 @@ async function authServer(overrides: Partial<McpAuthConfig> = {}, grantex = mock
 }
 
 function authorize(app: FastifyInstance, query: Record<string, string> = {}) {
+  return authorizeWithConsent(app, {
+    method: 'GET',
+    url: '/authorize',
+    query: {
+      response_type: 'code',
+      client_id: TEST_CLIENT_ID,
+      redirect_uri: TEST_REDIRECT_URI,
+      code_challenge: TEST_CHALLENGE,
+      code_challenge_method: 'S256',
+      ...query,
+    },
+  });
+}
+
+/** GET /authorize without approving: the consent page itself. */
+function consentPage(app: FastifyInstance, query: Record<string, string> = {}) {
   return app.inject({
     method: 'GET',
     url: '/authorize',
@@ -176,7 +198,7 @@ function authorize(app: FastifyInstance, query: Record<string, string> = {}) {
 
 async function issueCode(app: FastifyInstance, clientId = TEST_CLIENT_ID): Promise<string> {
   const response = await authorize(app, { client_id: clientId });
-  expect(response.statusCode).toBe(302);
+  expect(response.statusCode).toBe(303);
   return new URL(response.headers['location'] as string).searchParams.get('code')!;
 }
 
@@ -318,6 +340,63 @@ describe('MCP authorization 2026-07-28: authorization server', () => {
     const response = await authorize(app, { client_id: 'https://localhost/client.json', redirect_uri: 'http://127.0.0.1:3000/cb' });
     expect(response.statusCode).toBe(400);
     expect(response.json().error_description).toMatch(/address_not_allowed/);
+    expect(grantex.authorize).not.toHaveBeenCalled();
+  });
+
+  must('CIMD-05', 'the consent page shows the redirect URI host prominently', async () => {
+    const { app } = await authServer();
+    const page = await consentPage(app);
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toMatch(/<p class="redirect wrap">app\.example\.com<\/p>/);
+  });
+
+  must('DEPUTY-01', 'a dynamically registered client reaches Grantex only after the Principal approves on the consent page', async () => {
+    const grantex = mockGrantex();
+    const { app } = await authServer({ sandboxAutoApprove: false }, grantex);
+    const registered = (await app.inject({ method: 'POST', url: '/register', payload: { redirect_uris: [TEST_REDIRECT_URI], token_endpoint_auth_method: 'none' } })).json();
+    const page = await consentPage(app, { client_id: registered.client_id });
+    expect(page.statusCode).toBe(200);
+    expect(grantex.authorize).not.toHaveBeenCalled();
+    const denied = await submitConsent(app, page, 'deny', ISSUER);
+    expect(denied.statusCode).toBe(303);
+    expect(grantex.authorize).not.toHaveBeenCalled();
+    const approved = await submitConsent(app, await consentPage(app, { client_id: registered.client_id }), 'approve', ISSUER);
+    expect(approved.statusCode).toBe(303);
+    expect(grantex.authorize).toHaveBeenCalledTimes(1);
+  });
+
+  must('DEPUTY-02', 'a code is issued only to the browser holding the callback-binding cookie set at approval', async () => {
+    const grantex = mockGrantex();
+    const { app } = await authServer({ sandboxAutoApprove: false }, grantex);
+    const approved = await submitConsent(app, await consentPage(app), 'approve', ISSUER);
+    const state = (grantex.authorize.mock.calls[0]![0] as { state: string }).state;
+    const bindingCookie = ([] as string[]).concat(approved.headers['set-cookie'] as string | string[])
+      .find((c) => c.startsWith('__Host-mcp_auth_callback_'))!;
+    expect(bindingCookie).toMatch(/HttpOnly; SameSite=Lax; .*Secure/);
+    const withoutCookie = await app.inject({ method: 'GET', url: '/callback', query: { code: 'UPSTREAM', state } });
+    expect(withoutCookie.statusCode).toBe(403);
+    expect(withoutCookie.headers['location']).toBeUndefined();
+
+    const second = await submitConsent(app, await consentPage(app), 'approve', ISSUER);
+    const secondState = (grantex.authorize.mock.calls[1]![0] as { state: string }).state;
+    const cookie = ([] as string[]).concat(second.headers['set-cookie'] as string | string[])
+      .find((c) => c.startsWith('__Host-mcp_auth_callback_'))!.split(';')[0]!;
+    const withCookie = await app.inject({ method: 'GET', url: '/callback', headers: { cookie }, query: { code: 'UPSTREAM', state: secondState } });
+    expect(withCookie.statusCode).toBe(302);
+    expect(new URL(String(withCookie.headers['location'])).searchParams.get('code')).toBeTruthy();
+  });
+
+  must('DEPUTY-03', 'the consent form needs its CSRF token and binding cookie, and refuses cross-site posts', async () => {
+    const grantex = mockGrantex();
+    const { app } = await authServer({ sandboxAutoApprove: false }, grantex);
+    const page = await consentPage(app);
+    const consentId = /name="consent_id" value="([^"]+)"/.exec(page.body)![1]!;
+    const csrfToken = /name="csrf_token" value="([^"]+)"/.exec(page.body)![1]!;
+    const form = new URLSearchParams({ consent_id: consentId, csrf_token: csrfToken, decision: 'approve' }).toString();
+    const crossSite = await app.inject({ method: 'POST', url: '/consent', headers: { 'content-type': 'application/x-www-form-urlencoded', 'sec-fetch-site': 'cross-site' }, payload: form });
+    expect(crossSite.statusCode).toBe(403);
+    const noCookie = await app.inject({ method: 'POST', url: '/consent', headers: { 'content-type': 'application/x-www-form-urlencoded', 'sec-fetch-site': 'same-origin' }, payload: form });
+    expect(noCookie.statusCode).toBe(403);
     expect(grantex.authorize).not.toHaveBeenCalled();
   });
 

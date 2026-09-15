@@ -12,6 +12,8 @@ import {
   TEST_RESOURCE,
   TEST_VERIFIER,
   asGrantex,
+  authorizeWithConsent,
+  callbackCookieFrom,
   clientRecord,
   mockGrantex,
   seededStorage,
@@ -54,8 +56,8 @@ function authorizeQuery(overrides: Record<string, string | string[] | undefined>
 }
 
 async function codeFor(app: FastifyInstance, overrides: Record<string, string | string[] | undefined> = {}): Promise<string> {
-  const response = await app.inject({ method: 'GET', url: '/authorize', query: authorizeQuery(overrides) });
-  expect(response.statusCode).toBe(302);
+  const response = await authorizeWithConsent(app, { method: 'GET', url: '/authorize', query: authorizeQuery(overrides) });
+  expect(response.statusCode).toBe(303);
   return new URL(response.headers['location'] as string).searchParams.get('code')!;
 }
 
@@ -144,7 +146,7 @@ describe('resource indicators (RFC 8707) and audience binding', () => {
   it('refuses a resource that is not accepted, has a fragment or is repeated', async () => {
     const { app, grantex } = await build();
     for (const resource of ['https://other.example.com/mcp', 'https://mcp.example.com/mcp#x', [TEST_RESOURCE, TEST_RESOURCE]]) {
-      const response = await app.inject({ method: 'GET', url: '/authorize', query: authorizeQuery({ resource }) });
+      const response = await authorizeWithConsent(app, { method: 'GET', url: '/authorize', query: authorizeQuery({ resource }) });
       expect(response.statusCode).toBe(400);
       expect(response.json().error).toBe('invalid_target');
     }
@@ -153,7 +155,7 @@ describe('resource indicators (RFC 8707) and audience binding', () => {
 
   it('requires the resource parameter when several resources are accepted', async () => {
     const { app } = await build({ allowedResources: ['https://mcp.example.com/other'] });
-    const response = await app.inject({ method: 'GET', url: '/authorize', query: authorizeQuery() });
+    const response = await authorizeWithConsent(app, { method: 'GET', url: '/authorize', query: authorizeQuery() });
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ error: 'invalid_target' });
     expect(await codeFor(app, { resource: 'https://mcp.example.com/other' })).toBeTruthy();
@@ -236,14 +238,14 @@ describe('resource indicators (RFC 8707) and audience binding', () => {
 describe('PKCE: S256 only', () => {
   it('refuses plain, an omitted method and a malformed challenge', async () => {
     const { app, grantex } = await build();
-    const plain = await app.inject({ method: 'GET', url: '/authorize', query: authorizeQuery({ code_challenge_method: 'plain', code_challenge: TEST_VERIFIER }) });
+    const plain = await authorizeWithConsent(app, { method: 'GET', url: '/authorize', query: authorizeQuery({ code_challenge_method: 'plain', code_challenge: TEST_VERIFIER }) });
     expect(plain.statusCode).toBe(400);
     expect(plain.json().error_description).toMatch(/"plain" is not supported/);
 
-    const omitted = await app.inject({ method: 'GET', url: '/authorize', query: authorizeQuery({ code_challenge_method: undefined }) });
+    const omitted = await authorizeWithConsent(app, { method: 'GET', url: '/authorize', query: authorizeQuery({ code_challenge_method: undefined }) });
     expect(omitted.statusCode).toBe(400);
 
-    const malformed = await app.inject({ method: 'GET', url: '/authorize', query: authorizeQuery({ code_challenge: 'too-short' }) });
+    const malformed = await authorizeWithConsent(app, { method: 'GET', url: '/authorize', query: authorizeQuery({ code_challenge: 'too-short' }) });
     expect(malformed.statusCode).toBe(400);
     expect(malformed.json().error_description).toMatch(/43 characters/);
     expect(grantex.authorize).not.toHaveBeenCalled();
@@ -253,7 +255,7 @@ describe('PKCE: S256 only', () => {
 describe('scopes', () => {
   it('refuses a scope the server does not support', async () => {
     const { app, grantex } = await build();
-    const response = await app.inject({ method: 'GET', url: '/authorize', query: authorizeQuery({ scope: 'read admin:everything' }) });
+    const response = await authorizeWithConsent(app, { method: 'GET', url: '/authorize', query: authorizeQuery({ scope: 'read admin:everything' }) });
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ error: 'invalid_scope', error_description: 'Unsupported scope: admin:everything' });
     expect(grantex.authorize).not.toHaveBeenCalled();
@@ -274,15 +276,16 @@ describe('scopes', () => {
 describe('authorization responses carry iss (RFC 9207)', () => {
   it('on success and on an upstream denial, and never reflects upstream error text', async () => {
     const { app } = await build();
-    const success = await app.inject({ method: 'GET', url: '/authorize', query: authorizeQuery({ state: 's1' }) });
+    const success = await authorizeWithConsent(app, { method: 'GET', url: '/authorize', query: authorizeQuery({ state: 's1' }) });
     expect(new URL(success.headers['location'] as string).searchParams.get('iss')).toBe(ISSUER);
 
     const live = await build({ sandboxAutoApprove: false }, mockGrantex());
-    await live.app.inject({ method: 'GET', url: '/authorize', query: authorizeQuery({ state: 's2' }) });
+    const approved = await authorizeWithConsent(live.app, { method: 'GET', url: '/authorize', query: authorizeQuery({ state: 's2' }) });
     const grantexState = (live.grantex.authorize.mock.calls[0]![0] as { state: string }).state;
     const denied = await live.app.inject({
       method: 'GET',
       url: '/callback',
+      headers: { cookie: callbackCookieFrom(approved) },
       query: { error: '<script>alert(1)</script>', state: grantexState },
     });
     const location = new URL(denied.headers['location'] as string);

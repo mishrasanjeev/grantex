@@ -96,8 +96,14 @@ async function registerClient(base: string) {
   return (await response.json()) as { client_id: string; client_secret: string };
 }
 
-/** Starts an authorization; returns the state Grantex was given. */
-async function authorize(base: string, clientId: string, challenge: string, clientState: string): Promise<string> {
+interface ConsentForm {
+  consentId: string;
+  csrfToken: string;
+  cookie: string;
+}
+
+/** Renders the consent page for an authorization request and reads its form. */
+async function consentPage(base: string, clientId: string, challenge: string, clientState: string): Promise<ConsentForm> {
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: clientId,
@@ -107,17 +113,47 @@ async function authorize(base: string, clientId: string, challenge: string, clie
     state: clientState,
   });
   const response = await fetch(`${base}/authorize?${params}`, { redirect: 'manual' });
-  expect(response.status).toBe(302);
+  expect(response.status).toBe(200);
+  const body = await response.text();
+  return {
+    consentId: /name="consent_id" value="([^"]+)"/.exec(body)![1]!,
+    csrfToken: /name="csrf_token" value="([^"]+)"/.exec(body)![1]!,
+    cookie: response.headers.get('set-cookie')!.split(';')[0]!,
+  };
+}
+
+interface Approval {
+  /** The state Grantex was given. */
+  state: string;
+  /** The callback-binding cookie set on the approving browser. */
+  cookie: string;
+}
+
+/** Approves a consent form. */
+async function approve(base: string, form: ConsentForm): Promise<Approval> {
+  const response = await fetch(`${base}/consent`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: form.cookie, 'sec-fetch-site': 'same-origin' },
+    body: new URLSearchParams({ consent_id: form.consentId, csrf_token: form.csrfToken, decision: 'approve' }),
+  });
+  expect(response.status).toBe(303);
   const grantexState = new URL(response.headers.get('location')!).searchParams.get('state');
   expect(grantexState).toBeTruthy();
-  return grantexState!;
+  const cookie = response.headers.getSetCookie().map((c) => c.split(';')[0]!).find((c) => /mcp_auth_callback_\w/.test(c) && !c.endsWith('='));
+  expect(cookie).toBeTruthy();
+  return { state: grantexState!, cookie: cookie! };
+}
+
+async function authorize(base: string, clientId: string, challenge: string, clientState: string): Promise<Approval> {
+  return approve(base, await consentPage(base, clientId, challenge, clientState));
 }
 
 /** Completes upstream consent; returns the client's authorization code. */
-async function callback(base: string, grantexState: string, clientState: string): Promise<string> {
+async function callback(base: string, approval: Approval, clientState: string): Promise<string> {
   const response = await fetch(
-    `${base}/callback?${new URLSearchParams({ code: `upstream-${grantexState.slice(0, 8)}`, state: grantexState })}`,
-    { redirect: 'manual' },
+    `${base}/callback?${new URLSearchParams({ code: `upstream-${approval.state.slice(0, 8)}`, state: approval.state })}`,
+    { redirect: 'manual', headers: { cookie: approval.cookie } },
   );
   expect(response.status).toBe(302);
   const location = new URL(response.headers.get('location')!);
@@ -172,12 +208,16 @@ const backends: Array<{ name: string; env: () => Record<string, string>; skip: b
 
 for (const backend of backends) {
   (backend.skip ? describe.skip : describe)(`state survives a server restart (${backend.name})`, () => {
-    it('clients, pending consent, codes, refresh bindings and revocations outlive a killed process', async () => {
+    it('clients, consent pages, pending consent, codes, refresh bindings and revocations outlive a killed process', async () => {
       const env = backend.env();
       const first = await start(env);
 
       // Created on the first process.
       const client = await registerClient(first.base);
+
+      // A consent page rendered but not yet submitted.
+      const consentPkce = pkce();
+      const openConsent = await consentPage(first.base, client.client_id, consentPkce.challenge, 'consent-state');
 
       const pendingPkce = pkce();
       const pendingState = await authorize(first.base, client.client_id, pendingPkce.challenge, 'pending-state');
@@ -218,7 +258,11 @@ for (const backend of backends) {
       await kill(first);
       const second = await start(env);
 
-      // The consent that was still pending completes on the new process.
+      // The consent page rendered by the killed process is submitted to the new one.
+      const afterRestartState = await approve(second.base, openConsent);
+      expect(await callback(second.base, afterRestartState, 'consent-state')).toBeTruthy();
+
+      // The upstream consent that was still pending completes on the new process.
       const lateCode = await callback(second.base, pendingState, 'pending-state');
       const late = await token(second.base, {
         grant_type: 'authorization_code',

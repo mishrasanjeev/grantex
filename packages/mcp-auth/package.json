@@ -48,7 +48,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "npm run build && vitest run -c vitest.integration.config.ts"
+    "test:integration": "npm run build && vitest run -c vitest.integration.config.ts",
+    "test:e2e": "vitest run -c vitest.e2e.config.ts"
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.0.0",
@@ -57,10 +58,12 @@
     "jose": "^6.2.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@types/node": "^26.0.0",
     "@types/pg": "^8.23.1",
     "ioredis": "^6.0.0",
     "pg": "^8.23.0",
+    "playwright": "^1.63.0",
     "postgres": "^3.4.9",
     "selfsigned": "^5.5.0",
     "typescript": "^7.0.2",

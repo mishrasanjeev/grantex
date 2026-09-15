@@ -272,6 +272,38 @@ app.use('/mcp', express.json(), requireMcpAuth({
 }));
 ```
 
+### Consent page (3.0)
+
+In 3.0 `GET /authorize` renders a consent page before anything is sent to
+Grantex, as the MCP authorization specification requires of a proxy
+authorization server. It shows the client, the host the user will be sent
+back to (with a warning when every redirect URI is on localhost), the
+purpose, data region and duration from the `grant` option, and each tool the
+requested scopes cover with its caps (from `manifests`). Approve continues to
+Grantex; Deny returns `access_denied` to the client.
+
+The page is server-rendered with no script, a strict CSP (the stylesheet is
+pinned by hash) and escaped values. The form is protected by a per-page CSRF
+token and a `__Host-` SameSite=Strict binding cookie, both stored only as
+hashes in a single-use consent record. Approval sets a SameSite=Lax callback
+cookie, and `/callback` issues a code only to the browser that approved.
+Purpose, region and limits are labelled as declared by the service. It is tested at 375 px in Chromium and
+with axe-core.
+
+```typescript
+const server = await createMcpAuthServer({
+  // ...required fields...
+  grant: { purpose: 'aml.cdd.onboarding', dataRegion: 'eu', duration: '8h' },
+  consentUi: { appName: 'Acme Compliance', appLogo: 'https://acme.example.com/logo.png' },
+  consentPage: {
+    theme: { accentColor: '#0b6e4f', radiusPx: 4 },   // hex colours, WCAG AA contrast enforced
+    text: { approve: 'Grant access' },
+    renderDetails: (model, h) => h.html`<section><h2>Case tools</h2>
+      <ul>${model.tools.map((tool) => h.html`<li>${tool.name}</li>`)}</ul></section>`,
+  },
+});
+```
+
 ## Express.js Middleware
 
 Protect Express routes with JWT signature, claim, algorithm, and scope validation.

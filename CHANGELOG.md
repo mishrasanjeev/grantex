@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### @grantex/mcp-auth 3.0 (unreleased): rendered consent page
+- `GET /authorize` renders a consent page and sends nothing to Grantex until
+  the Principal approves (MCP authorization, Confused Deputy Problem). It
+  shows the client, the redirect host (with a localhost warning), purpose,
+  data region, duration, the service, each covered tool with its caps and
+  decision requirement, and the scopes.
+- New `grant` option (`purpose`, `purposeDescription`, `dataRegion`,
+  `duration` sent as `expiresIn`, and `authorizeParams` as the extension
+  point for purpose-bound grants) and `consentPage` option (validated theme
+  with WCAG AA contrast, text, `lang`, `extraCss`, `renderDetails` using the
+  escaping `html` helper).
+- Strict CSP with no script and a hashed stylesheet; CSRF token plus a
+  per-consent `__Host-` SameSite=Strict binding cookie, both stored as hashes
+  in a single-use consent record; cross-site submissions refused.
+- The upstream round trip is bound to the approving browser: approval sets a
+  `__Host-` Secure HttpOnly SameSite=Lax callback cookie whose hash is stored
+  on the pending authorization, and `/callback` issues a code only when it
+  matches (confused-deputy protection).
+- The page labels purpose, data region and call limits as declared, and says
+  they are enforced only where the grant and the service apply them.
+- Chromium tests at 375 px and axe-core (WCAG 2.x A/AA) run in CI.
+- **Breaking:** `GET /authorize` returns 200 HTML instead of a 302 to
+  Grantex; the flow continues with `POST /consent`, which answers 303.
+- **Breaking:** `consentUi.appLogo`, `privacyUrl` and `termsUrl` must be
+  https URLs.
+- **Breaking:** `/callback` answers 403 without the callback cookie set on
+  the browser that approved consent.
+- **Breaking:** `/register` refuses a `client_name` that is not a string of
+  1-200 characters and `grant_types` other than `authorization_code` with
+  optional `refresh_token`.
+- **Breaking:** `consentPage.theme.fontFamily` allows only letters, digits,
+  spaces, commas and hyphens (no quotes), and `consentPage.expiresInSeconds`
+  must be 60-3600.
+
 ### @grantex/mcp-auth 3.0 (unreleased): MCP authorization 2026-07-28 surface
 - Resource indicators (RFC 8707): new required `resource` option (or
   `allowedResources`). Grants are requested with the resource as audience;

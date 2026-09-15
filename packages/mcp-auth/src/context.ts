@@ -5,6 +5,8 @@ import { createClientMetadataResolver, isClientIdMetadataUrl, ClientMetadataErro
 import type { ClientMetadataResolver } from './lib/client-metadata.js';
 import { toolPolicyFromManifests } from './resource/tool-policy.js';
 import type { ToolPolicy } from './resource/tool-policy.js';
+import { prepareConsentPage } from './consent/page.js';
+import type { PreparedConsentPage } from './consent/page.js';
 
 /** Everything the endpoints share, derived once from the configuration. */
 export interface ServerContext {
@@ -18,6 +20,7 @@ export interface ServerContext {
   scopesSupported: string[];
   toolPolicy?: ToolPolicy;
   clientMetadata: ClientMetadataResolver;
+  consentPage: PreparedConsentPage;
   /**
    * Looks a client up by id: a registered (or pre-registered) client from
    * storage, or — for an https URL id — its validated metadata document.
@@ -27,6 +30,40 @@ export interface ServerContext {
 }
 
 const contexts = new WeakMap<McpAuthConfig, ServerContext>();
+
+const PURPOSE = /^(?:[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*|x-[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z][a-z0-9_]*)+)$/;
+const REGION = /^[A-Za-z0-9][A-Za-z0-9-]{0,31}$/;
+const DURATION = /^\d{1,6}[smhd]$/;
+
+function assertGrantAndBranding(config: McpAuthConfig): void {
+  const grant = config.grant ?? {};
+  if (grant.purpose !== undefined && (typeof grant.purpose !== 'string' || grant.purpose.length > 128 || !PURPOSE.test(grant.purpose))) {
+    throw new Error('createMcpAuthServer: grant.purpose must be a purpose code such as aml.cdd.onboarding or x-<org>.<term>');
+  }
+  if (grant.purposeDescription !== undefined && (typeof grant.purposeDescription !== 'string' || grant.purposeDescription.length > 300)) {
+    throw new Error('createMcpAuthServer: grant.purposeDescription must be a string of at most 300 characters');
+  }
+  if (grant.dataRegion !== undefined && (typeof grant.dataRegion !== 'string' || !REGION.test(grant.dataRegion))) {
+    throw new Error('createMcpAuthServer: grant.dataRegion must be a short region code such as eu or us-east');
+  }
+  if (grant.duration !== undefined && (typeof grant.duration !== 'string' || !DURATION.test(grant.duration))) {
+    throw new Error('createMcpAuthServer: grant.duration must look like 30m, 8h or 7d');
+  }
+  if (grant.authorizeParams !== undefined && typeof grant.authorizeParams !== 'function') {
+    throw new Error('createMcpAuthServer: grant.authorizeParams must be a function');
+  }
+  for (const key of ['appLogo', 'privacyUrl', 'termsUrl'] as const) {
+    const value = config.consentUi?.[key];
+    if (value === undefined) continue;
+    let ok = false;
+    try {
+      ok = new URL(value).protocol === 'https:';
+    } catch {
+      ok = false;
+    }
+    if (!ok) throw new Error(`createMcpAuthServer: consentUi.${key} must be an https URL`);
+  }
+}
 
 function assertIssuer(issuer: unknown): string {
   if (typeof issuer !== 'string' || issuer.length === 0) {
@@ -62,6 +99,8 @@ export function serverContext(config: McpAuthConfig): ServerContext {
     throw new Error('createMcpAuthServer: configure `scopes` or `manifests` so clients have scopes to request');
   }
   const clientMetadata = createClientMetadataResolver(config.clientIdMetadataDocuments);
+  assertGrantAndBranding(config);
+  const consentPage = prepareConsentPage(config.consentPage);
   const storage = config.storage;
 
   const context: ServerContext = {
@@ -72,6 +111,7 @@ export function serverContext(config: McpAuthConfig): ServerContext {
     scopesSupported,
     ...(toolPolicy !== undefined ? { toolPolicy } : {}),
     clientMetadata,
+    consentPage,
     async getClient(clientId) {
       if (typeof clientId !== 'string' || clientId.length === 0) return undefined;
       if (isClientIdMetadataUrl(clientId)) return clientMetadata.resolve(clientId);
