@@ -385,6 +385,14 @@ export interface VerifyGrantTokenOptions {
    * claims are read and the token must have `typ: at+jwt`.
    */
   legacyClaims?: boolean;
+  /**
+   * RFC 7638 thumbprint of the key the caller proved possession of (for
+   * example with a verified DPoP proof). When set, the token's `cnf.jkt` must
+   * equal it. The verifier does not check DPoP proofs itself.
+   */
+  proofJkt?: string;
+  /** Fail closed unless `proofJkt` is given and matches `cnf.jkt`. Without it, `cnf` is returned but not enforced. */
+  requireProofOfPossession?: boolean;
 }
 
 // ─── Raw JWT payload shape ────────────────────────────────────────────────────

@@ -97,27 +97,68 @@ def _verify(token: str, **options: Any) -> VerifiedGrant:
     return verify_grant_token(token, VerifyGrantTokenOptions(jwks_uri=JWKS_URI, **options))
 
 
-@pytest.mark.parametrize("alg", ["RS256", "ES256"])
-def test_a_stock_jose_library_validates_the_token_using_only_standard_semantics(alg: str) -> None:
-    token = _sign(_claims(), alg)
+# Tokens issued by the auth service itself (apps/auth-service/tests/grant-token-issued-fixture.test.ts).
+ISSUED: Dict[str, Any] = json.loads(
+    (Path(__file__).resolve().parents[3] / "spec" / "examples" / "grant-token-0.6.issued.json").read_text(
+        encoding="utf-8"
+    )
+)
+
+
+def _serve(mocker: Any, jwks: Dict[str, Any]) -> None:
+    response = mocker.Mock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = jwks
+    mocker.patch("grantex._verify.httpx.get", return_value=response)
+
+
+@pytest.mark.parametrize("name", ["standard_rs256", "standard_es256"])
+def test_a_stock_jose_library_validates_the_token_using_only_standard_semantics(name: str) -> None:
+    token = ISSUED["tokens"][name]["token"]
 
     header = jwt.get_unverified_header(token)
     assert header["typ"] == "at+jwt"
-    key = jwt.PyJWKSet.from_dict(JWKS)[header["kid"]]
+    key = jwt.PyJWKSet.from_dict(ISSUED["jwks"])[header["kid"]]
     payload = jwt.decode(
         token,
         key.key,
         algorithms=["RS256", "ES256"],
-        audience=AUDIENCE,
-        issuer=ISSUER,
+        audience=ISSUED["audience"],
+        issuer=ISSUED["issuer"],
         options={"require": ["iss", "sub", "aud", "exp", "iat", "jti"]},
     )
 
     assert payload["client_id"] == "ag_01UNDERWRITER"
     assert payload["scope"].split(" ") == ["tool:acme_kyb:read", "tool:acme_kyb:write"]
-    assert payload["cnf"]["jkt"] == DPOP_JKT
+    assert payload["cnf"] == STANDARD["cnf"]
     assert payload["act"] == {"sub": "did:grantex:ag_01ORCHESTRATOR", "act": {"sub": "did:grantex:ag_01INTAKE"}}
     assert payload["authorization_details"] == STANDARD["authorization_details"]
+    assert not set(LEGACY_CLAIM_ALIASES) & set(payload)
+
+
+@pytest.mark.parametrize("name", sorted(ISSUED["tokens"]))
+def test_every_auth_service_issued_token_verifies_with_the_sdk(mocker: Any, name: str) -> None:
+    _serve(mocker, ISSUED["jwks"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", LegacyClaimsWarning)
+        grant = _verify(ISSUED["tokens"][name]["token"], audience=ISSUED["audience"])
+    assert grant.agent_did == "did:grantex:ag_01UNDERWRITER"
+
+
+def test_a_pre_0_6_token_with_a_whitespace_scope_reads_scp(mocker: Any) -> None:
+    _serve(mocker, ISSUED["jwks"])
+    with pytest.warns(LegacyClaimsWarning):
+        grant = _verify(ISSUED["tokens"]["pre_0_6_whitespace_scope_rs256"]["token"])
+    assert grant.scopes == ("tool:acme_kyb:read", "read case files")
+
+
+def test_a_whitespace_scope_token_needs_legacy_claims(mocker: Any) -> None:
+    _serve(mocker, ISSUED["jwks"])
+    token = ISSUED["tokens"]["whitespace_scope_es256"]["token"]
+    with pytest.warns(LegacyClaimsWarning):
+        assert _verify(token).scopes == ("tool:acme_kyb:read", "read case files")
+    with pytest.raises(GrantexTokenError, match="missing required claims"):
+        _verify(token, legacy_claims=False)
 
 
 def test_standard_claims_are_mapped_without_a_warning() -> None:
@@ -298,3 +339,46 @@ def test_client_legacy_claims_option_reaches_the_verifier() -> None:
     _, verify = _enforce(_grant(None), "get_case")
     assert verify.call_args[0][1].legacy_claims is True
     assert isinstance(verify, MagicMock)
+
+
+# ─── Null claims and proof of possession ──────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"scope": None},
+        {"scp": None},
+        {"act": None},
+        {"cnf": None},
+        {"client_id": None},
+        {"aud": None},
+        {"authorization_details": None},
+        {GRANT_CLAIM: None},
+        {GRANT_CLAIM: {**STANDARD[GRANT_CLAIM], "grant_id": None}},
+        {GRANT_CLAIM: {**STANDARD[GRANT_CLAIM], "delegation_depth": None}},
+        {"client_id": 7},
+    ],
+)
+def test_null_or_mistyped_standard_claims_are_refused(extra: Dict[str, Any]) -> None:
+    with pytest.raises(GrantexTokenError, match="must not be null|must be"):
+        _verify(_sign(_claims(extra)), audience=AUDIENCE if "aud" not in extra else None)
+
+
+def test_proof_of_possession_is_checked_against_cnf_jkt_when_given() -> None:
+    token = _sign(_claims())
+    assert _verify(token, proof_jkt=DPOP_JKT, require_proof_of_possession=True).cnf == {"jkt": DPOP_JKT}
+    with pytest.raises(GrantexTokenError, match="does not match the proof key"):
+        _verify(token, proof_jkt="another-thumbprint")
+
+
+def test_required_proof_of_possession_fails_closed() -> None:
+    with pytest.raises(GrantexTokenError, match="no proof key thumbprint"):
+        _verify(_sign(_claims()), require_proof_of_possession=True)
+    unbound = {k: v for k, v in _claims().items() if k != "cnf"}
+    with pytest.raises(GrantexTokenError, match="not key-bound"):
+        _verify(_sign(unbound), proof_jkt=DPOP_JKT, require_proof_of_possession=True)
+
+
+def test_cnf_is_not_enforced_unless_asked() -> None:
+    assert _verify(_sign(_claims())).cnf == {"jkt": DPOP_JKT}

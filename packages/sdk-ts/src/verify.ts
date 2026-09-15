@@ -165,6 +165,7 @@ export async function verifyGrantToken(
   // match. Either way this must surface as a GrantexTokenError, not a
   // TypeError or a false positive.
   const verified = normalizeGrantClaims(payload as unknown as Record<string, unknown>, legacyClaims);
+  checkProofOfPossession(verified, options);
   if (verified.legacyClaimsUsed !== undefined) warnLegacyAliases(verified.legacyClaimsUsed);
 
   const requiredScopes = options.requiredScopes ?? [];
@@ -251,7 +252,29 @@ function depthClaim(record: Record<string, unknown>, name: string, label: string
   return value;
 }
 
+function checkProofOfPossession(grant: VerifiedGrant, options: VerifyGrantTokenOptions): void {
+  if (options.requireProofOfPossession === true && options.proofJkt === undefined) {
+    throw new GrantexTokenError('Proof of possession is required but no proof key thumbprint (proofJkt) was given');
+  }
+  if (options.proofJkt === undefined) return;
+  const jkt = grant.cnf?.jkt;
+  if (typeof jkt !== 'string') {
+    throw new GrantexTokenError('Grant token is not key-bound (no cnf.jkt) but proof of possession is required');
+  }
+  const a = new TextEncoder().encode(jkt);
+  const b = new TextEncoder().encode(options.proofJkt);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) diff |= (a[i] ?? 0) ^ (b[i] ?? 0);
+  if (diff !== 0) throw new GrantexTokenError('Grant token cnf.jkt does not match the proof key');
+}
+
+const NON_NULLABLE_CLAIMS = [GRANT_CLAIM, 'scope', 'scp', 'act', 'cnf', 'client_id', 'aud', 'authorization_details'];
+
 function normalizeGrantClaims(payload: Record<string, unknown>, legacyClaims: boolean): VerifiedGrant {
+  // A claim present with a null value is refused, never treated as absent.
+  for (const name of NON_NULLABLE_CLAIMS) {
+    if (payload[name] === null) throw new GrantexTokenError(`Grant token claim ${name} must not be null`);
+  }
   const used: string[] = [];
   const read = <T>(alias: string, standard: T | undefined, legacy: () => T | undefined): T | undefined => {
     if (!legacyClaims) return standard;
@@ -276,14 +299,22 @@ function normalizeGrantClaims(payload: Record<string, unknown>, legacyClaims: bo
   if (rawScope !== undefined && typeof rawScope !== 'string') {
     throw new GrantexTokenError('Grant token claim scope must be a space-delimited string');
   }
-  const scopes = read('scp', rawScope?.split(' ').filter((s) => s.length > 0), () => {
+  const legacyScopes = (): string[] | undefined => {
     const scp = payload['scp'];
     if (scp === undefined) return undefined;
     if (!Array.isArray(scp) || scp.some((s) => typeof s !== 'string')) {
       throw new GrantexTokenError('Grant token claim scp must be an array of strings');
     }
     return scp as string[];
-  });
+  };
+  let scopes: string[] | undefined;
+  if (legacyClaims && rawGrant === undefined && payload['scp'] !== undefined) {
+    // A pre-0.6 token: scope, when present, is a lossy join of scp.
+    scopes = legacyScopes();
+    used.push('scp');
+  } else {
+    scopes = read('scp', rawScope?.split(' ').filter((s) => s.length > 0), legacyScopes);
+  }
   const agentDid = read('agt', stringClaim(grant, 'agent_did', `${GRANT_CLAIM}.agent_did`), () => stringClaim(payload, 'agt', 'agt'));
   const developerId = read('dev', stringClaim(grant, 'developer_id', `${GRANT_CLAIM}.developer_id`), () => stringClaim(payload, 'dev', 'dev'));
   const grantId = read('grnt', stringClaim(grant, 'grant_id', `${GRANT_CLAIM}.grant_id`), () => stringClaim(payload, 'grnt', 'grnt'));
@@ -311,11 +342,18 @@ function normalizeGrantClaims(payload: Record<string, unknown>, legacyClaims: bo
     );
   }
   const clientId = payload['client_id'];
+  if (clientId !== undefined && (typeof clientId !== 'string' || clientId.length === 0)) {
+    throw new GrantexTokenError('Grant token claim client_id must be a non-empty string');
+  }
   const cnf = payload['cnf'];
   if (cnf !== undefined && !isPlainObject(cnf)) {
     throw new GrantexTokenError('Grant token claim cnf must be an object');
   }
   const aud = payload['aud'];
+  if (aud !== undefined && typeof aud !== 'string'
+      && !(Array.isArray(aud) && aud.every((value) => typeof value === 'string'))) {
+    throw new GrantexTokenError('Grant token claim aud must be a string or an array of strings');
+  }
 
   return {
     tokenId: jti,

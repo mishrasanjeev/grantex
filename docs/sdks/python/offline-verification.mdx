@@ -57,6 +57,8 @@ from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenErr
 | `issuer`           | `str \| None`    | No       | `None`  | Expected `iss` claim. The hosted alias expects `https://grantex.dev`; custom JWKS URLs derive it when omitted. |
 | `issuer_did`       | `str \| None`    | No       | `None`  | A `did:web` issuer used to derive the JWKS URL and expected issuer. An explicit `issuer` takes precedence. |
 | `algorithms`       | `list[str] \| None` | No    | `None`  | Narrow the accepted algorithms to a subset of `["RS256", "ES256"]`. Any other value raises `GrantexTokenError`. |
+| `proof_jkt`        | `str \| None`    | No       | `None`  | Thumbprint of the key the caller proved possession of (for example with a verified DPoP proof); the token's `cnf.jkt` must match. The verifier does not check DPoP proofs. |
+| `require_proof_of_possession` | `bool` | No     | `False` | Fail closed unless `proof_jkt` is given and matches `cnf.jkt`. |
 | `legacy_claims`    | `bool`           | No       | `True`  | Read legacy claim aliases (`agt`, `dev`, `grnt`, `scp`, `parentAgt`, `parentGrnt`, `delegationDepth`) when the standard claim is absent, with a `LegacyClaimsWarning`. The default becomes `False` in 0.7. With `False`, only standard claims are read and `typ` must be `at+jwt`. |
 
 ## Response

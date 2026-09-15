@@ -157,7 +157,7 @@ curl http://localhost:3001/health
 | `VAULT_ENCRYPTION_KEY` | 32-byte hex or base64 key for credential-vault encryption (required in production) | `openssl rand -hex 32` |
 | `METRICS_API_KEY` | Key protecting `/metrics` when production metrics are enabled | 32+ random bytes |
 
-> **Note:** `SIGNING_KEY_STORE=postgres` generates the signing key on first start and stores it encrypted with `VAULT_ENCRYPTION_KEY`; rotate it with `node dist/cli/rotate-signing-key.js`. See `docs/self-hosting.md` Section 7.
+> **Note:** `SIGNING_KEY_STORE=postgres` stores the signing keys encrypted with `VAULT_ENCRYPTION_KEY`, importing the configured env keys on first start, and rotates them publish-then-sign with `node dist/cli/rotate-signing-key.js`. Tokens issued before 0.6 (kid `grantex-YYYY-MM`) keep verifying. See `docs/self-hosting.md` Section 7.
 
 > **Note:** Set `AUTO_GENERATE_KEYS=true` instead of `RSA_PRIVATE_KEY` for development. The service will generate an ephemeral RSA key pair on startup. **Do not use this in production** — keys change on every restart.
 

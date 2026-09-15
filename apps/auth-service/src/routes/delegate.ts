@@ -143,6 +143,13 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
         requestId: request.id,
       });
     }
+    if (config.maxGrantLifetimeSeconds !== null && expiresSeconds > config.maxGrantLifetimeSeconds) {
+      return reply.status(400).send({
+        message: `expiresIn exceeds the maximum grant lifetime of ${config.maxGrantLifetimeSeconds} seconds`,
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
     const now = Date.now();
     const requestedExpiry = now + expiresSeconds * 1000;
     const parentExpiry = parentExp * 1000;

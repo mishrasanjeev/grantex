@@ -254,6 +254,21 @@ type VerifiedGrant struct {
 type ActorClaim struct {
 	Sub string      `json:"sub"`
 	Act *ActorClaim `json:"act,omitempty"`
+	// Members holds the actor's other members (for example iss), as issued.
+	Members map[string]interface{} `json:"-"`
+}
+
+// MarshalJSON writes the actor with its other members alongside sub and act.
+func (a ActorClaim) MarshalJSON() ([]byte, error) {
+	out := make(map[string]interface{}, len(a.Members)+2)
+	for name, value := range a.Members {
+		out[name] = value
+	}
+	out["sub"] = a.Sub
+	if a.Act != nil {
+		out["act"] = a.Act
+	}
+	return json.Marshal(out)
 }
 
 // --- Audit ---

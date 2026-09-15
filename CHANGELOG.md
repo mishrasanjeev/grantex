@@ -72,14 +72,35 @@ below.
   the parent token's `act`, so a second-level delegation carries
   `{"sub": <parent agent>, "act": {"sub": <grandparent agent>}}` instead of
   only the parent. The chain is stored on the grant (migration
-  `097_grant_actor_chain.sql`), so refreshed tokens keep it. Grants delegated
+  `098_grant_actor_chain.sql`), so refreshed tokens keep it. Grants delegated
   before the migration refresh with the parent agent only, as before.
 - **Break: disagreeing claims are refused.** The auth service and the SDK
-  verifiers refuse a token whose standard claim and legacy alias disagree
-  (for example `scope` and `scp`), and an `act` claim without a string `sub`
-  or deeper than 10.
-- **Break: whitespace in a scope.** Issuing a grant token whose scope
-  contains whitespace now fails, because `scope` is space-delimited.
+  verifiers refuse a 0.6 token (one with `urn:grantex:grant`) whose standard
+  claim and legacy alias disagree (for example `scope` and `scp`), and an
+  `act` claim without a string `sub` or deeper than 10. Tokens issued before
+  0.6 are read from `scp`, so they keep verifying.
+- **Break: null claims are refused.** The SDK verifiers refuse a token with a
+  `null` `urn:grantex:grant` (or member), `scope`, `scp`, `act`, `cnf`,
+  `client_id`, `aud` or `authorization_details`, and a mistyped `client_id`,
+  `aud` or `authorization_details`, instead of treating it as absent.
+- **Break: whitespace in new scopes.** `POST /v1/authorize` refuses a scope
+  containing whitespace with `400 INVALID_SCOPE`. Grants created earlier
+  keep working: refresh and delegation still issue tokens, which omit
+  `scope` and always carry `scp`, so standard-only readers refuse them rather
+  than read a different scope set.
+- **`act.sub` is the delegating agent**, not the current actor as in the
+  usual RFC 8693 reading. The current actor is `client_id`. The Go SDK keeps
+  any other members of `act` (`ActorClaim.Members`).
+- **Proof of possession.** The SDK verifiers return `cnf` but do not enforce
+  it by default. `proof_jkt` / `proofJkt` / `ProofJKT` requires `cnf.jkt` to
+  match a thumbprint the caller verified, and `require_proof_of_possession` /
+  `requireProofOfPossession` / `RequireProofOfPossession` fails closed without
+  one.
+- The auth service logs a deprecation notice at start while
+  `GRANT_TOKEN_LEGACY_CLAIMS=true`.
+- `spec/examples/grant-token-0.6.issued.json` holds tokens issued by the auth
+  service, which the Python and Go SDK tests validate with PyJWT and
+  golang-jwt.
 - **SDK verifiers.** The Python, TypeScript and Go verifiers read the
   standard claims first. They fall back to an alias when the standard claim
   is absent, and report each alias used:
@@ -111,19 +132,43 @@ below.
   platform JWTs with ES256 (EC P-256) as well as RS256. `JWT_SIGNING_ALG`
   selects the algorithm per deployment and defaults to `RS256`, so existing
   deployments are unchanged. ES256 needs `EC_PRIVATE_KEY` (PKCS#8 PEM).
-- Key management: every platform signing key is published in
-  `/.well-known/jwks.json` with `kid`, `alg` and `use: "sig"`, together with
-  the keys kept for verification after a rotation. A configured key for the
-  algorithm that is not signing is published for verification only, so a new
-  key can be published before it signs; `JWT_RETIRED_PUBLIC_KEYS` keeps
-  retired public keys verifiable. `JWT_SIGNING_KID` fixes the `kid`.
-- `SIGNING_KEY_STORE=postgres` generates the key on first start and stores it
-  in `platform_signing_keys` (migration `096_platform_signing_keys.sql`),
-  encrypted with `VAULT_ENCRYPTION_KEY`. `node dist/cli/rotate-signing-key.js
-  [--alg ES256]` retires the active key, erasing its private key, and stores a
-  new one; retired keys stay published for
-  `SIGNING_KEY_RETIRED_GRACE_SECONDS` (default 30 days). Instances reload
-  keys every minute and when a token names an unknown `kid`.
+- **Key ids.** Every platform signing key is published in
+  `/.well-known/jwks.json` with `kid`, `alg` and `use: "sig"`.
+  - A key's `kid` is its RFC 7638 thumbprint (`grantex-rs256-…`,
+    `grantex-es256-…`), so all instances agree whenever they started.
+  - **Behaviour change:** the RS256 key's `kid` is no longer `grantex-YYYY-MM`
+    of the process start month. Tokens with that kid, or with none, still
+    verify in the auth service with the RSA key (`RSA_PRIVATE_KEY`, or
+    `JWT_LEGACY_KID_KEY`).
+  - The JWK Set also lists the RSA key under `grantex-YYYY-MM` for the last
+    `JWT_LEGACY_KID_MONTHS` (13) months, so SDK verifiers find it too.
+  - For `SIGNING_KEY_ACTIVATION_DELAY_SECONDS` after start, instances still
+    sign under the legacy kid.
+  - The JWK Set therefore has more entries than before.
+- **Env store.**
+  - A configured key for the algorithm that is not signing, and every key in
+    `JWT_VERIFICATION_PUBLIC_KEYS`, is published for verification only.
+    Rotation is publish-then-sign and never invalidates outstanding tokens.
+  - The same key listed twice counts as one key, so rotating RSA to RSA in the
+    same month raises no duplicate `kid`.
+- **`SIGNING_KEY_STORE=postgres`** (migration `096_platform_signing_keys.sql`).
+  - Keys are stored encrypted with `VAULT_ENCRYPTION_KEY` and bound to their
+    `kid` as authenticated data.
+  - The first start imports the configured env keys: the env signing key
+    becomes the stored active key with the same `kid`, and other keys are
+    stored as retired.
+  - `node dist/cli/rotate-signing-key.js [--alg ES256]` publishes a new pending
+    key, which signs after `SIGNING_KEY_ACTIVATION_DELAY_SECONDS` (default
+    900). The previous key is then retired with its private key erased, and
+    stays published for `SIGNING_KEY_RETIRED_GRACE_SECONDS` (default 30 days).
+  - Instances reload every minute and on an unknown `kid`. Periodic reloads do
+    not reset the unknown-kid cooldown.
+- `MAX_GRANT_LIFETIME_SECONDS` (unset by default) caps grant `expiresIn` at
+  authorization and delegation. With the postgres store, start-up refuses a
+  retired-key grace shorter than it, and warns when it is unset.
+- SSO state HMAC keys fall back to an HKDF of `VAULT_ENCRYPTION_KEY` when no
+  `SSO_STATE_SECRET` or private key is configured, so instances agree.
+  Production refuses to start without any of them.
 - Signing keys are validated at start: an RSA modulus of at least 2048 bits,
   EC keys on P-256 only, no private members in published keys, unique `kid`s.
 - Verification everywhere (auth service, Python, TypeScript and Go SDKs) uses

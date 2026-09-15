@@ -26,14 +26,16 @@ import {
   SigningKeyError,
   SigningKeyRing,
   loadEnvSigningKeyRing,
-  parseRetiredPublicKeys,
+  parseVerificationPublicKeys,
+  privateKeyContext,
+  reloadSigningKeyRing,
   resolvePlatformVerificationKey,
   setSigningKeyRing,
   UNKNOWN_KID_RELOAD_COOLDOWN_MS,
   getSigningKeyRing,
 } from '../src/lib/signing-keys.js';
 import { buildTestApp, sqlMock } from './helpers.js';
-import { encrypt } from '../src/lib/vault-crypto.js';
+import { encryptWithContext } from '../src/lib/vault-crypto.js';
 import { stopKeyReload } from '../src/lib/crypto.js';
 import { parseRotateArgs } from '../src/cli/rotate-signing-key.js';
 
@@ -43,8 +45,10 @@ type MutableConfig = {
   rsaPrivateKey: string | null;
   ecPrivateKey: string | null;
   autoGenerateKeys: boolean;
-  jwtSigningKid: string | null;
-  jwtRetiredPublicKeys: string | null;
+  jwtVerificationPublicKeys: string | null;
+  jwtLegacyKidKey: string | null;
+  jwtLegacyKidMonths: number;
+  signingKeyActivationDelaySeconds: number;
 };
 const mutable = config as unknown as MutableConfig;
 const original: MutableConfig = {
@@ -53,8 +57,10 @@ const original: MutableConfig = {
   rsaPrivateKey: config.rsaPrivateKey,
   ecPrivateKey: config.ecPrivateKey,
   autoGenerateKeys: config.autoGenerateKeys,
-  jwtSigningKid: config.jwtSigningKid,
-  jwtRetiredPublicKeys: config.jwtRetiredPublicKeys,
+  jwtVerificationPublicKeys: config.jwtVerificationPublicKeys,
+  jwtLegacyKidKey: config.jwtLegacyKidKey,
+  jwtLegacyKidMonths: config.jwtLegacyKidMonths,
+  signingKeyActivationDelaySeconds: config.signingKeyActivationDelaySeconds,
 };
 
 let rsaPem: string;
@@ -73,7 +79,7 @@ afterEach(async () => {
 });
 
 async function useKeys(settings: Partial<MutableConfig>): Promise<void> {
-  Object.assign(mutable, original, { autoGenerateKeys: false }, settings);
+  Object.assign(mutable, original, { autoGenerateKeys: false, jwtLegacyKidMonths: 0 }, settings);
   await initKeys();
 }
 
@@ -157,22 +163,25 @@ describe('ES256 signing key', () => {
 
   it('rejects an EC_PRIVATE_KEY that is an RSA key or not on P-256', async () => {
     await expect(loadEnvSigningKeyRing({
-      alg: 'ES256', rsaPrivateKey: null, ecPrivateKey: rsaPem, autoGenerate: false, kid: null, retiredPublicKeys: null,
+      alg: 'ES256', rsaPrivateKey: null, ecPrivateKey: rsaPem, autoGenerate: false, verificationPublicKeys: null, legacyKidKey: null,
     })).rejects.toMatchObject({ code: 'invalid_key' });
     await expect(loadEnvSigningKeyRing({
-      alg: 'ES256', rsaPrivateKey: null, ecPrivateKey: p384Pem, autoGenerate: false, kid: null, retiredPublicKeys: null,
+      alg: 'ES256', rsaPrivateKey: null, ecPrivateKey: p384Pem, autoGenerate: false, verificationPublicKeys: null, legacyKidKey: null,
     })).rejects.toMatchObject({ code: 'invalid_key' });
   });
 
   it('rejects an RSA_PRIVATE_KEY that is an EC key', async () => {
     await expect(loadEnvSigningKeyRing({
-      alg: 'RS256', rsaPrivateKey: ecPem, ecPrivateKey: null, autoGenerate: false, kid: null, retiredPublicKeys: null,
+      alg: 'RS256', rsaPrivateKey: ecPem, ecPrivateKey: null, autoGenerate: false, verificationPublicKeys: null, legacyKidKey: null,
     })).rejects.toMatchObject({ code: 'invalid_key' });
   });
 
-  it('honours JWT_SIGNING_KID', async () => {
-    await useKeys({ jwtSigningAlg: 'ES256', ecPrivateKey: ecPem, jwtSigningKid: 'grantex-prod-2026-09' });
-    expect(decodeProtectedHeader(await grantToken()).kid).toBe('grantex-prod-2026-09');
+  it('uses the thumbprint kid for RS256 keys too, the same on every instance', async () => {
+    await useKeys({ jwtSigningAlg: 'RS256', rsaPrivateKey: rsaPem });
+    const first = decodeProtectedHeader(await grantToken()).kid;
+    expect(first).toMatch(/^grantex-rs256-[A-Za-z0-9_-]{16}$/);
+    await useKeys({ jwtSigningAlg: 'RS256', rsaPrivateKey: rsaPem });
+    expect(decodeProtectedHeader(await grantToken()).kid).toBe(first);
   });
 });
 
@@ -202,62 +211,78 @@ describe('rotation keeps old keys for verification', () => {
     // Step 2: remove the RSA private key and keep only its public key.
     const rsaPublic = (await buildJwks()).keys.find((key) => key['alg'] === 'RS256')!;
     await useKeys({
-      jwtSigningAlg: 'ES256', ecPrivateKey: ecPem, jwtRetiredPublicKeys: JSON.stringify({ keys: [rsaPublic] }),
+      jwtSigningAlg: 'ES256', ecPrivateKey: ecPem, jwtVerificationPublicKeys: JSON.stringify({ keys: [rsaPublic] }),
     });
     await expect(verifyGrantToken(before)).resolves.toMatchObject({ sub: 'user_es' });
     await expect(verifyGrantToken(after)).resolves.toMatchObject({ sub: 'user_es' });
   });
 
-  it('rejects a retired key set with a duplicate kid, private members, HS256 or a key-type mismatch', async () => {
+  it('rejects a verification key set with a reused kid, private members, HS256, a legacy kid or a key-type mismatch', async () => {
     const ecJwk = { ...(await exportJWK((await generateKeyPair('ES256', { extractable: true })).publicKey)), kid: 'old', alg: 'ES256' };
+    const otherEcJwk = { ...(await exportJWK((await generateKeyPair('ES256', { extractable: true })).publicKey)), kid: 'old', alg: 'ES256' };
     const rsaPair = await generateKeyPair('RS256', { modulusLength: 2048, extractable: true });
     const rsaJwk = { ...(await exportJWK(rsaPair.publicKey)), kid: 'old-rsa', alg: 'RS256' };
+    const ringOf = (keys: Awaited<ReturnType<typeof parseVerificationPublicKeys>>) =>
+      new SigningKeyRing({ ...getSigningKeyRing().active, kid: 'active-kid', legacyKidAlias: false }, keys);
 
-    await expect(parseRetiredPublicKeys(JSON.stringify({ keys: [ecJwk, ecJwk] })).then((keys) =>
-      new SigningKeyRing({ ...keys[0]!, privateKey: getKeyPair().privateKey, status: 'active' }, keys.slice(1))))
+    await expect(parseVerificationPublicKeys(JSON.stringify({ keys: [ecJwk, otherEcJwk] })).then(ringOf))
       .rejects.toMatchObject({ code: 'duplicate_kid' });
-    await expect(parseRetiredPublicKeys(JSON.stringify({ keys: [{ ...(await exportJWK(rsaPair.privateKey)), kid: 'x', alg: 'RS256' }] })))
+    // The same key listed twice is one key.
+    await expect(parseVerificationPublicKeys(JSON.stringify({ keys: [ecJwk, ecJwk] })).then((keys) => ringOf(keys).keys()))
+      .resolves.toHaveLength(2);
+    await expect(parseVerificationPublicKeys(JSON.stringify({ keys: [{ ...rsaJwk, kid: 'grantex-2026-09' }] })))
       .rejects.toMatchObject({ code: 'invalid_key' });
-    await expect(parseRetiredPublicKeys(JSON.stringify({ keys: [{ kty: 'oct', k: 'c2VjcmV0', kid: 'h', alg: 'HS256' }] })))
+    await expect(parseVerificationPublicKeys(JSON.stringify({ keys: [{ ...(await exportJWK(rsaPair.privateKey)), kid: 'x', alg: 'RS256' }] })))
+      .rejects.toMatchObject({ code: 'invalid_key' });
+    await expect(parseVerificationPublicKeys(JSON.stringify({ keys: [{ kty: 'oct', k: 'c2VjcmV0', kid: 'h', alg: 'HS256' }] })))
       .rejects.toMatchObject({ code: 'unsupported_alg' });
-    await expect(parseRetiredPublicKeys(JSON.stringify({ keys: [{ ...rsaJwk, alg: 'ES256' }] })))
+    await expect(parseVerificationPublicKeys(JSON.stringify({ keys: [{ ...rsaJwk, alg: 'ES256' }] })))
       .rejects.toMatchObject({ code: 'alg_key_mismatch' });
-    await expect(parseRetiredPublicKeys(JSON.stringify({ keys: [{ ...ecJwk, alg: 'none' }] })))
+    await expect(parseVerificationPublicKeys(JSON.stringify({ keys: [{ ...ecJwk, alg: 'none' }] })))
       .rejects.toMatchObject({ code: 'unsupported_alg' });
-    await expect(parseRetiredPublicKeys('not json')).rejects.toBeInstanceOf(SigningKeyError);
-    await expect(parseRetiredPublicKeys(JSON.stringify({ keys: [rsaJwk] }))).resolves.toHaveLength(1);
+    await expect(parseVerificationPublicKeys('not json')).rejects.toBeInstanceOf(SigningKeyError);
+    await expect(parseVerificationPublicKeys(JSON.stringify({ keys: [rsaJwk] }))).resolves.toHaveLength(1);
   });
 
   it('rejects an RSA key shorter than 2048 bits', async () => {
     // A 1024-bit modulus, built as bytes: the size check runs before import.
     const jwk = { kty: 'RSA', n: randomBytes(128).toString('base64url'), e: 'AQAB', kid: 'weak', alg: 'RS256' };
-    await expect(parseRetiredPublicKeys(JSON.stringify({ keys: [jwk] }))).rejects.toMatchObject({ code: 'invalid_key' });
+    await expect(parseVerificationPublicKeys(JSON.stringify({ keys: [jwk] }))).rejects.toMatchObject({ code: 'invalid_key' });
   });
 
-  it('reloads the key set once when a token names an unknown kid, then fails closed', async () => {
+  it('reloads at most once per cooldown for unknown kids, and periodic reloads do not reset the cooldown', async () => {
     await useKeys({ jwtSigningAlg: 'ES256', ecPrivateKey: ecPem });
     const current = getSigningKeyRing();
     const other = await loadEnvSigningKeyRing({
-      alg: 'ES256', rsaPrivateKey: null, ecPrivateKey: null, autoGenerate: true, kid: 'rotated-in', retiredPublicKeys: null,
+      alg: 'ES256', rsaPrivateKey: null, ecPrivateKey: null, autoGenerate: true, verificationPublicKeys: null, legacyKidKey: null,
     });
+    let published = false;
     let reloads = 0;
     setSigningKeyRing(current, async () => {
       reloads += 1;
-      return new SigningKeyRing(current.active, [{ ...other.active, privateKey: null, status: 'retired' }]);
+      return new SigningKeyRing(current.active, published ? [{ ...other.active, privateKey: null, status: 'retired' }] : []);
     });
-    const header = { alg: 'ES256', kid: 'rotated-in' };
-
-    // Inside the cooldown there is no reload.
-    await expect(resolvePlatformVerificationKey(header)).rejects.toMatchObject({ code: 'unknown_kid' });
-    expect(reloads).toBe(0);
-
+    const header = { alg: 'ES256', kid: other.active.kid };
     const realNow = Date.now;
-    Date.now = () => realNow() + UNKNOWN_KID_RELOAD_COOLDOWN_MS + 1;
+    let offset = 0;
+    Date.now = () => realNow() + offset;
     try {
-      await expect(resolvePlatformVerificationKey(header)).resolves.toBeDefined();
+      // The first unknown kid reloads once, then fails closed.
+      await expect(resolvePlatformVerificationKey(header)).rejects.toMatchObject({ code: 'unknown_kid' });
       expect(reloads).toBe(1);
-      await expect(resolvePlatformVerificationKey({ alg: 'ES256', kid: 'never-published' }))
-        .rejects.toMatchObject({ code: 'unknown_kid' });
+      published = true;
+      // Inside the cooldown there is no further reload...
+      await expect(resolvePlatformVerificationKey(header)).rejects.toMatchObject({ code: 'unknown_kid' });
+      expect(reloads).toBe(1);
+      // ...and a periodic reload (which here happens not to see the key) does not reset it.
+      offset = UNKNOWN_KID_RELOAD_COOLDOWN_MS - 1_000;
+      published = false;
+      await reloadSigningKeyRing();
+      expect(reloads).toBe(2);
+      published = true;
+      offset = UNKNOWN_KID_RELOAD_COOLDOWN_MS + 1;
+      await expect(resolvePlatformVerificationKey(header)).resolves.toBeDefined();
+      expect(reloads).toBe(3);
     } finally {
       Date.now = realNow;
     }
@@ -268,6 +293,7 @@ describe('algorithm and key confusion', () => {
   it('rejects an ES256 token whose kid names the RSA key', async () => {
     await useKeys({ jwtSigningAlg: 'RS256', rsaPrivateKey: rsaPem, ecPrivateKey: ecPem });
     const rsaKid = getKeyPair().kid;
+    expect(rsaKid).toMatch(/^grantex-rs256-/);
     const { privateKey } = await generateKeyPair('ES256');
     const forged = await new SignJWT({ agt: 'did:grantex:ag', dev: 'dev', scp: ['read'] })
       .setProtectedHeader({ alg: 'ES256', kid: rsaKid })
@@ -328,6 +354,16 @@ describe('algorithm and key confusion', () => {
     await expect(resolvePlatformVerificationKey({ alg: 'none', kid })).rejects.toMatchObject({ code: 'unsupported_alg' });
   });
 
+  it('rejects an ES256 token carrying a legacy grantex-YYYY-MM kid', async () => {
+    await useKeys({ jwtSigningAlg: 'RS256', rsaPrivateKey: rsaPem, ecPrivateKey: ecPem });
+    const { privateKey } = await generateKeyPair('ES256');
+    const forged = await new SignJWT({ agt: 'did:grantex:ag', dev: 'dev', scp: ['read'] })
+      .setProtectedHeader({ alg: 'ES256', kid: 'grantex-2026-09' })
+      .setIssuer(config.jwtIssuer).setSubject('user').setJti('tok').setIssuedAt().setExpirationTime(exp())
+      .sign(privateKey);
+    await expect(verifyGrantToken(forged)).rejects.toMatchObject({ code: 'unknown_kid' });
+  });
+
   it('rejects a token without kid unless its alg is the active key algorithm', async () => {
     await useKeys({ jwtSigningAlg: 'RS256', rsaPrivateKey: rsaPem, ecPrivateKey: ecPem });
     await expect(resolvePlatformVerificationKey({ alg: 'RS256' })).resolves.toBe(getKeyPair().publicKey);
@@ -349,14 +385,19 @@ describe('postgres key store start-up', () => {
   it('signs with the stored active key and reloads on a timer', async () => {
     const { privateKey, publicKey } = await generateKeyPair('ES256', { extractable: true });
     const publicJwk = { ...(await exportJWK(publicKey)), kid: 'grantex-es256-stored', alg: 'ES256', use: 'sig' };
+    sqlMock.mockResolvedValueOnce([]); // import lock
+    sqlMock.mockResolvedValueOnce([{ kid: 'grantex-es256-stored', status: 'active', legacy_kid_alias: false }]);
+    sqlMock.mockResolvedValueOnce([]); // promotion lock
+    sqlMock.mockResolvedValueOnce([]); // no pending key due
     sqlMock.mockResolvedValueOnce([{
       kid: 'grantex-es256-stored',
       algorithm: 'ES256',
       public_key_jwk: publicJwk,
-      encrypted_private_key_jwk: encrypt(JSON.stringify(await exportJWK(privateKey))),
+      encrypted_private_key_jwk: encryptWithContext(JSON.stringify(await exportJWK(privateKey)), privateKeyContext('grantex-es256-stored')),
       status: 'active',
+      legacy_kid_alias: false,
     }]);
-    Object.assign(mutable, { signingKeyStore: 'postgres', jwtSigningAlg: 'RS256' });
+    Object.assign(mutable, { signingKeyStore: 'postgres', jwtSigningAlg: 'RS256', rsaPrivateKey: null });
     try {
       await initKeys();
       expect(getKeyPair()).toMatchObject({ kid: 'grantex-es256-stored', alg: 'ES256' });
@@ -369,14 +410,20 @@ describe('postgres key store start-up', () => {
   it('refuses a stored active key whose public key does not match its private key', async () => {
     const stored = await generateKeyPair('ES256', { extractable: true });
     const other = await generateKeyPair('ES256', { extractable: true });
-    sqlMock.mockResolvedValueOnce([{
+    const storedRow = {
       kid: 'grantex-es256-mismatch',
       algorithm: 'ES256',
       public_key_jwk: { ...(await exportJWK(other.publicKey)), kid: 'grantex-es256-mismatch', alg: 'ES256', use: 'sig' },
-      encrypted_private_key_jwk: encrypt(JSON.stringify(await exportJWK(stored.privateKey))),
+      encrypted_private_key_jwk: encryptWithContext(JSON.stringify(await exportJWK(stored.privateKey)), privateKeyContext('grantex-es256-mismatch')),
       status: 'active',
-    }]);
-    Object.assign(mutable, { signingKeyStore: 'postgres' });
+      legacy_kid_alias: false,
+    };
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ kid: storedRow.kid, status: 'active', legacy_kid_alias: false }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([storedRow]);
+    Object.assign(mutable, { signingKeyStore: 'postgres', autoGenerateKeys: false, rsaPrivateKey: null });
     await expect(initKeys()).rejects.toMatchObject({ code: 'invalid_key' });
   });
 });

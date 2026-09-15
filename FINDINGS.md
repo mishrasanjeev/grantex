@@ -100,21 +100,6 @@ Remove an entry in the pull request that fixes it.
   signing key is RS256 or ES256 with `kid`, `alg` and `use: sig`", ignoring
   keys published for other purposes.
 
-## G-9 — The default RS256 `kid` changes when an instance restarts in a new month
-
-- **Found:** adding ES256 signing (2026-09-15).
-- **What:** the env-store RS256 key's `kid` is `grantex-YYYY-MM` of the process
-  start date (`legacyRsaKid` in `apps/auth-service/src/lib/signing-keys.ts`,
-  previously `buildKid` in `crypto.ts`). The same key gets a new `kid` after a
-  restart in a new month, and two instances started in different months
-  publish different `kid`s for one key. SDK verifiers select keys by `kid`, so
-  tokens signed before the restart, or by the other instance, fail
-  verification until they expire.
-- **Fix:** default the `kid` to the RFC 7638 thumbprint (as ES256 and stored
-  keys already do) in a release that announces the `kid` change, publishing
-  the old `kid` alongside for one token lifetime. Until then, set
-  `JWT_SIGNING_KID` (documented in `docs/self-hosting.md` Section 7).
-
 ## G-10 — `POST /v1/authorize` cannot request caps or decision references
 
 - **Found:** aligning grant token claims with the OAuth profile (2026-09-15).
@@ -131,18 +116,19 @@ Remove an entry in the pull request that fixes it.
   parsers), show them on the consent page, store them on the grant, and cover
   them in `spec/grant-token-0.6.md` issuance tests.
 
-## G-11 — Scopes containing whitespace are accepted at authorization
+## G-11 — Scopes containing whitespace are accepted outside authorization requests
 
 - **Found:** aligning grant token claims with the OAuth profile (2026-09-15).
-- **What:** `POST /v1/authorize` (`apps/auth-service/src/routes/authorize.ts`)
-  only rejects blank scopes, so a scope such as `"read files"` can be approved.
-  Such a scope cannot be represented in the space-delimited `scope` claim, and
-  token issuance now refuses it, so the approved request fails at
-  `POST /v1/token` instead of at authorization. The same applies to agent
-  registration scopes and consent bundles.
+- **What:** `POST /v1/authorize` now refuses scopes containing whitespace, but
+  agent registration (`apps/auth-service/src/routes/agents.ts`) and consent
+  bundles (`apps/auth-service/src/routes/consent-bundles.ts`) still accept
+  them. Tokens for such scopes omit the space-delimited `scope` claim and rely
+  on the deprecated `scp` alias, so they stop working for standard-only
+  readers and once legacy claims are off in 0.7.
 - **Fix:** validate scopes as RFC 6749 scope-tokens (printable ASCII, no
-  space, `"` or `\`) wherever they enter: authorization requests, agent
-  registration, delegation and consent bundles. Return `400 INVALID_SCOPE`.
+  space, `"` or `\`) at agent registration and consent-bundle creation,
+  returning `400 INVALID_SCOPE`, and plan a migration for stored grants that
+  already hold such scopes before 0.7.
 
 ## G-12 — Integrations read legacy grant token claims directly
 
