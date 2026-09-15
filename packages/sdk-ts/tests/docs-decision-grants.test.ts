@@ -51,9 +51,13 @@ describe('docs/concepts/decision-grants.md TypeScript examples', () => {
     const doc = read(join(repoRoot, 'docs', 'concepts', 'decision-grants.md'));
     for (const file of ['decision-enforce.ts', 'decision-request.ts']) {
       const path = `packages/sdk-ts/tests/docs/examples/${file}`;
-      const match = new RegExp(`<!-- snippet: ${path.replace(/[.]/g, '\\.')} -->\\n\`\`\`ts\\n([\\s\\S]*?)\\n\`\`\``).exec(doc);
-      expect(match, path).not.toBeNull();
-      expect(match![1]).toBe(read(join(repoRoot, path)).replace(/\n+$/, ''));
+      const opening = `<!-- snippet: ${path} -->\n\`\`\`ts\n`;
+      const start = doc.indexOf(opening);
+      expect(start, path).toBeGreaterThanOrEqual(0);
+      const body = doc.slice(start + opening.length);
+      const end = body.indexOf('\n```');
+      expect(end, path).toBeGreaterThanOrEqual(0);
+      expect(body.slice(0, end)).toBe(read(join(repoRoot, path)).replace(/\n+$/, ''));
     }
   });
 
