@@ -60,7 +60,7 @@ The delegated token includes additional JWT claims that trace the delegation cha
 
 | Claim | Description |
 |-------|-------------|
-| `act` | RFC 8693 actor chain. `act.sub` is the parent agent that created this delegation; a deeper delegation nests the parent token's `act` inside, so the chain reads from the most recent delegator to the first |
+| `act` | RFC 8693 actor chain. `act.sub` is the parent agent that created this delegation (not the current actor, which is the token's `client_id`, unlike the usual RFC 8693 reading); a deeper delegation nests the parent token's `act` inside, so the chain reads from the most recent delegator to the first |
 | `urn:grantex:grant.parent_grant_id` | Grant ID of the parent grant |
 | `urn:grantex:grant.delegation_depth` | Number of hops from the root grant (root = 0, first child = 1) |
 

@@ -304,7 +304,7 @@ The last four claims are legacy aliases (6.3).
 | `client_id` | string | The agent's client identifier (RFC 9068) |
 | `scope` | string | Granted scopes, space-delimited (RFC 9068) |
 | `cnf` | object | `jkt`: thumbprint of the agent key that must prove possession (RFC 9449), when key-bound |
-| `act` | object | Delegation chain (RFC 8693): `act.sub` is the delegating agent; nested `act` members are earlier actors |
+| `act` | object | Delegation chain (RFC 8693 syntax): `act.sub` is the delegating agent, not the current actor (the current actor is `client_id`); nested `act` members are earlier delegators |
 | `authorization_details` | array | Purpose, tools, caps, budget and decision references (RFC 9396) |
 | `urn:grantex:grant` | object | `grant_id`, `agent_did`, `developer_id`, and for delegated grants `parent_grant_id` and `delegation_depth` |
 

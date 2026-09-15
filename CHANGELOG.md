@@ -26,14 +26,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the parent token's `act`, so a second-level delegation carries
   `{"sub": <parent agent>, "act": {"sub": <grandparent agent>}}` instead of
   only the parent. The chain is stored on the grant (migration
-  `097_grant_actor_chain.sql`), so refreshed tokens keep it. Grants delegated
+  `098_grant_actor_chain.sql`), so refreshed tokens keep it. Grants delegated
   before the migration refresh with the parent agent only, as before.
 - **Break: disagreeing claims are refused.** The auth service and the SDK
-  verifiers refuse a token whose standard claim and legacy alias disagree
-  (for example `scope` and `scp`), and an `act` claim without a string `sub`
-  or deeper than 10.
-- **Break: whitespace in a scope.** Issuing a grant token whose scope
-  contains whitespace now fails, because `scope` is space-delimited.
+  verifiers refuse a 0.6 token (one with `urn:grantex:grant`) whose standard
+  claim and legacy alias disagree (for example `scope` and `scp`), and an
+  `act` claim without a string `sub` or deeper than 10. Tokens issued before
+  0.6 are read from `scp`, so they keep verifying.
+- **Break: null claims are refused.** The SDK verifiers refuse a token with a
+  `null` `urn:grantex:grant` (or member), `scope`, `scp`, `act`, `cnf`,
+  `client_id`, `aud` or `authorization_details`, and a mistyped `client_id`,
+  `aud` or `authorization_details`, instead of treating it as absent.
+- **Break: whitespace in new scopes.** `POST /v1/authorize` refuses a scope
+  containing whitespace with `400 INVALID_SCOPE`. Grants created earlier
+  keep working: refresh and delegation still issue tokens, which omit
+  `scope` and always carry `scp`, so standard-only readers refuse them rather
+  than read a different scope set.
+- **`act.sub` is the delegating agent**, not the current actor as in the
+  usual RFC 8693 reading. The current actor is `client_id`. The Go SDK keeps
+  any other members of `act` (`ActorClaim.Members`).
+- **Proof of possession.** The SDK verifiers return `cnf` but do not enforce
+  it by default. `proof_jkt` / `proofJkt` / `ProofJKT` requires `cnf.jkt` to
+  match a thumbprint the caller verified, and `require_proof_of_possession` /
+  `requireProofOfPossession` / `RequireProofOfPossession` fails closed without
+  one.
+- The auth service logs a deprecation notice at start while
+  `GRANT_TOKEN_LEGACY_CLAIMS=true`.
+- `spec/examples/grant-token-0.6.issued.json` holds tokens issued by the auth
+  service, which the Python and Go SDK tests validate with PyJWT and
+  golang-jwt.
 - **SDK verifiers.** The Python, TypeScript and Go verifiers read the
   standard claims first. They fall back to an alias when the standard claim
   is absent, and report each alias used:

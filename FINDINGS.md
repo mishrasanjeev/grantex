@@ -116,18 +116,19 @@ Remove an entry in the pull request that fixes it.
   parsers), show them on the consent page, store them on the grant, and cover
   them in `spec/grant-token-0.6.md` issuance tests.
 
-## G-11 — Scopes containing whitespace are accepted at authorization
+## G-11 — Scopes containing whitespace are accepted outside authorization requests
 
 - **Found:** aligning grant token claims with the OAuth profile (2026-09-15).
-- **What:** `POST /v1/authorize` (`apps/auth-service/src/routes/authorize.ts`)
-  only rejects blank scopes, so a scope such as `"read files"` can be approved.
-  Such a scope cannot be represented in the space-delimited `scope` claim, and
-  token issuance now refuses it, so the approved request fails at
-  `POST /v1/token` instead of at authorization. The same applies to agent
-  registration scopes and consent bundles.
+- **What:** `POST /v1/authorize` now refuses scopes containing whitespace, but
+  agent registration (`apps/auth-service/src/routes/agents.ts`) and consent
+  bundles (`apps/auth-service/src/routes/consent-bundles.ts`) still accept
+  them. Tokens for such scopes omit the space-delimited `scope` claim and rely
+  on the deprecated `scp` alias, so they stop working for standard-only
+  readers and once legacy claims are off in 0.7.
 - **Fix:** validate scopes as RFC 6749 scope-tokens (printable ASCII, no
-  space, `"` or `\`) wherever they enter: authorization requests, agent
-  registration, delegation and consent bundles. Return `400 INVALID_SCOPE`.
+  space, `"` or `\`) at agent registration and consent-bundle creation,
+  returning `400 INVALID_SCOPE`, and plan a migration for stored grants that
+  already hold such scopes before 0.7.
 
 ## G-12 — Integrations read legacy grant token claims directly
 
