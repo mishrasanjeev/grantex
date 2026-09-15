@@ -224,7 +224,11 @@ repository.
 
 3.0 targets the MCP authorization specification dated 2026-07-28;
 `tests/conformance/mcp-authorization-2026-07-28.test.ts` maps each
-authorization-server and MCP-server MUST to a test.
+authorization-server and MCP-server MUST to a test (SEC-12, not forwarding
+the client's token upstream, is the host application's to meet), plus the
+Security Best Practices' confused-deputy requirements: consent and the
+callback are bound to the approving browser with cookies, and the consent
+form is CSRF-protected.
 
 - **Resource indicators (RFC 8707).** `resource` (the canonical URI of your
   MCP server, e.g. `https://mcp.example.com/mcp`) is required. Every grant is

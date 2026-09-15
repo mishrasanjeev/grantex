@@ -22,7 +22,9 @@ server and hands the actual grant to Grantex. 3.0 is built for production:
   resource metadata (RFC 9728), resource indicators with audience binding
   (RFC 8707), PKCE S256 only, `iss` in authorization responses (RFC 9207),
   and OAuth Client ID Metadata Documents. A conformance suite maps each
-  server-side MUST to a test.
+  server-side MUST of the specification, plus the Security Best Practices'
+  confused-deputy requirements (consent and callback bound to the approving
+  browser, CSRF-protected consent), to a test.
 - **A rendered consent page** that shows purpose, tools, caps, data region and
   duration before anything reaches Grantex.
 - **Tools refused at the MCP server**, not merely hidden from `tools/list`,
@@ -40,10 +42,12 @@ server and hands the actual grant to Grantex. 3.0 is built for production:
    identified by an https metadata-document URL.
 4. `/authorize` validates the request and renders the **consent page**.
 5. The Principal approves; only then does the server ask Grantex to
-   authorize the grant, with the resource as its audience. The Principal may
-   confirm again in Grantex.
-6. Grantex redirects to `/callback`; the server issues a single-use code to
-   the client's redirect URI with `iss`.
+   authorize the grant, with the resource as its audience, and it sets a
+   callback-binding cookie on that browser. The Principal may confirm again
+   in Grantex.
+6. Grantex redirects to `/callback`. Only if the browser presents the
+   callback-binding cookie does the server issue a single-use code to the
+   client's redirect URI with `iss`.
 7. The client redeems the code at `/token` (PKCE verifier, optional
    `resource`); the server exchanges the upstream code and returns the grant
    token only if its audience is the requested resource.
@@ -98,18 +102,20 @@ export async function openPostgresStorage(databaseUrl: string) {
 ```
 
 - **Migrations** ship in `migrations/` (`001_mcp_auth_state.sql`). They are
-  forward-only and idempotent; `runMigrations()` applies them in order, each
-  in one transaction under an advisory lock. To use your own migration tool,
-  apply the same files in name order.
+  forward-only; `runMigrations()` applies each file once, in name order, in
+  one transaction under an advisory lock, and records it in
+  `mcp_auth_schema_migrations`. To use your own migration tool, apply the
+  same files in name order and record them the same way.
 - **Tables:** `mcp_auth_clients`, `mcp_auth_pending_authorizations`,
   `mcp_auth_authorization_codes`, `mcp_auth_refresh_token_bindings`,
   `mcp_auth_consents`, `mcp_auth_revocations`. Put them in a dedicated
   schema with the connection's `search_path` if you share a database.
 - **Secrets at rest:** codes, refresh tokens, consent ids and pending
   authorization ids are stored only as SHA-256 keys, and client secrets only
-  as hashes. The `record` column holds binding data (client, redirect URI,
-  PKCE challenge, scopes, resource) and, for an issued code, the upstream
-  Grantex code for up to `codeExpirationSeconds`; treat backups accordingly.
+  as hashes. The `record` column holds binding data in clear JSON (client,
+  redirect URI, PKCE challenge, scopes, resource) and, for an issued code,
+  the upstream Grantex code for up to `codeExpirationSeconds`. That code is a
+  single-use credential: restrict access to the tables and their backups.
 - **Single use** is enforced with `DELETE … RETURNING`: of any number of
   concurrent redemptions of one code, exactly one succeeds.
 - `postgres` (postgres.js) works through `fromPostgresJs(sql)`.
@@ -224,8 +230,8 @@ export async function startAuthServer(options: {
 | `grantexIssuer`, `jwksUri`, `audience` | for `/introspect`, `/revoke` | Issuer of grant tokens, its JWKS, and the audience to require (defaults to the accepted resources). |
 | `grant` | no | `purpose`, `purposeDescription`, `dataRegion`, `duration` (sent as `expiresIn`), `authorizeParams`. |
 | `consentUi` | no | `appName`, and https `appLogo`, `privacyUrl`, `termsUrl`. |
-| `consentPage` | no | Theme, text, `lang`, `extraCss`, `renderDetails`, `expiresInSeconds`. |
-| `clientIdMetadataDocuments` | no | `enabled` (default true), `allowedHosts`, `timeoutMs` (5000), `maxBytes` (16384), `cacheTtlSeconds` (300), `maxCacheTtlSeconds` (86400). |
+| `consentPage` | no | Theme, text, `lang`, `extraCss`, `renderDetails`, `expiresInSeconds` (60–3600). |
+| `clientIdMetadataDocuments` | no | `enabled` (default true), `allowedHosts`, `allowedPorts` (`[443]`), `timeoutMs` (5000), `maxBytes` (16384), `cacheTtlSeconds` (300), `maxCacheTtlSeconds` (86400). |
 | `resourceName`, `resourceDocumentation` | no | Published in protected-resource metadata. |
 | `callbackUrl`, `callbackPath` | no | Upstream consent callback (default `{issuer}/callback`). |
 | `codeExpirationSeconds` | no | Authorization code and pending authorization lifetime (600). |
@@ -238,21 +244,22 @@ export async function startAuthServer(options: {
 |---|---|
 | `GET /.well-known/oauth-authorization-server` | RFC 8414 metadata (also at `/.well-known/oauth-authorization-server/<issuer path>`). |
 | `GET /.well-known/oauth-protected-resource/<resource path>` | RFC 9728 metadata for each accepted resource (and at the root when there is one). |
-| `POST /register` | Dynamic client registration (https or loopback redirect URIs). |
+| `POST /register` | Dynamic client registration (https or loopback redirect URIs; `grant_types` `authorization_code` with optional `refresh_token`; `client_name` up to 200 characters). |
 | `GET /authorize` | Validates the request and renders the consent page. |
 | `POST /consent` | Consent form submission; answers 303. |
-| `GET /callback` | Upstream consent callback. |
+| `GET /callback` | Upstream consent callback; issues a code only to the browser holding the callback-binding cookie. |
 | `POST /token` | `authorization_code` and `refresh_token` grants. |
-| `POST /introspect`, `POST /revoke` | RFC 7662 and RFC 7009, backed by stored revocations. |
+| `POST /introspect`, `POST /revoke` | RFC 7662 and RFC 7009, backed by stored revocations; `/revoke` also revokes refresh tokens bound to the client. |
 
 ## Clients
 
 - **Client ID Metadata Documents** (preferred by the specification). The
   client uses an https URL as `client_id`. The server fetches it with SSRF
-  protections: every address the host resolves to must be public (loopback,
-  private, link-local, carrier-grade NAT, multicast, documentation, NAT64,
-  6to4 and IPv4-mapped ranges are refused) and the connection is pinned to
-  the vetted address; redirects are not followed; the body is limited in
+  protections: only port 443 unless `allowedPorts` says otherwise; every
+  address the host resolves to must be public (loopback, private,
+  link-local, carrier-grade NAT, multicast, documentation, AS112, AMT,
+  NAT64, 6to4 and IPv4-mapped ranges are refused) and the connection is
+  pinned to the vetted address; redirects are not followed; the body is limited in
   size and time; the document must name its own URL as `client_id`, carry
   `client_name` and https or loopback `redirect_uris`, and use
   `token_endpoint_auth_method: none`. Results are cached per
@@ -276,10 +283,12 @@ The page shows:
   metadata document, whose name is not verified);
 - the **host the Principal will be sent back to**, prominently, with a warning
   when every redirect URI is on localhost;
-- **purpose**, **data region** and **duration** from `grant`;
+- **purpose**, **data region** and **duration** from `grant`, labelled as
+  declared by the service (the page says they are enforced only where the
+  grant and the service apply them);
 - the service (`resourceName` and `resource`);
-- each **tool** the requested scopes cover with its permission and **caps**,
-  and which tools need a decision grant;
+- each **tool** the requested scopes cover with its permission and declared
+  **caps**, and which tools need a decision grant;
 - the scopes requested.
 
 **Security.** The page is server-rendered with an escaping template and no
@@ -291,6 +300,14 @@ form-action 'self' https:; frame-ancestors 'none'; base-uri 'none'`,
 sets a per-consent `__Host-` cookie (Secure, HttpOnly, SameSite=Strict); both
 are stored only as hashes in a consent record that is consumed exactly once.
 A submission from another site is refused before the record is touched.
+
+**Bound to the approving browser.** Approval sets a second `__Host-` cookie
+(Secure, HttpOnly, SameSite=Lax, so it survives the return from Grantex)
+whose hash is stored on the pending authorization. `/callback` issues a code
+only when the returning browser presents it; otherwise it answers 403 and
+the authorization is spent. This stops an attacker who approves consent for
+their own client from sending the Grantex consent link to someone else and
+collecting that person's code.
 
 **Tested.** The page is checked in Chromium at 375 px (no overflow, 44 px
 touch targets, stylesheet applied under the CSP) and with axe-core against
@@ -308,7 +325,7 @@ export const consentPage: ConsentPageOptions = {
     accentColor: '#0b6e4f',
     textColor: '#111827',
     radiusPx: 4,
-    fontFamily: '"Inter", system-ui, sans-serif',
+    fontFamily: 'Inter, system-ui, sans-serif',
   },
   text: {
     title: 'Allow case tools?',
@@ -331,11 +348,11 @@ export const consentPage: ConsentPageOptions = {
 
 | Option | Rules |
 |---|---|
-| `theme` | `backgroundColor`, `surfaceColor`, `textColor`, `mutedTextColor`, `accentColor`, `accentTextColor`, `borderColor` as hex colours; `radiusPx` 0–24; `fontFamily` letters, digits, spaces, commas, quotes and hyphens. Text/background pairs must reach 4.5:1 contrast or the server refuses to start. |
+| `theme` | `backgroundColor`, `surfaceColor`, `textColor`, `mutedTextColor`, `accentColor`, `accentTextColor`, `borderColor` as hex colours; `radiusPx` 0–24; `fontFamily` letters, digits, spaces, commas and hyphens (unquoted family names). Text/background pairs must reach 4.5:1 contrast or the server refuses to start. |
 | `text` | Any of the page's strings (for wording or translation). |
 | `lang` | BCP 47 tag for the `lang` attribute. |
 | `extraCss` | Appended to the stylesheet and covered by its CSP hash; no `<style>` or comment markup. |
-| `renderDetails` | Replaces the details section. Must return `helpers.html` output. The header, redirect host, warnings and form cannot be replaced. |
+| `renderDetails` | Replaces the details section. Must return `helpers.html` output (`html` works only as a template tag). The header, redirect host, warnings and form cannot be replaced. |
 | `expiresInSeconds` | How long a rendered page can be submitted (600). |
 
 ## Protecting the MCP server
@@ -394,15 +411,26 @@ export function createMcpApp(options: {
 | Situation | Response |
 |---|---|
 | No token | `401`, `WWW-Authenticate: Bearer resource_metadata="…"` |
-| Malformed, expired, revoked, wrong issuer or audience | `401`, `error="invalid_token"` |
+| Malformed, expired, revoked (`grant_revoked`), wrong issuer or audience | `401`, `error="invalid_token"` |
+| With `tools`: a body that is not parsed JSON-RPC 2.0 (a string, Buffer, `{}`, an array with a non-message) | `400`, `reason: "body_not_parsed"` |
 | Missing required `scopes` | `403`, `error="insufficient_scope"`, `scope="…"` |
 | `tools/call` for a tool the grant does not cover | `403`, `insufficient_scope` with the scope that would grant it; body `reason: "tool_not_granted"` |
 | `tools/call` for an undeclared tool | `403`, body `reason: "manifest_unknown_tool"` |
 | `requires_decision` tool without a valid decision grant | `403`, `error="insufficient_authorization"`, `decision_required="<connector>:<tool>"` |
+| More than one `requires_decision` call in one batch | `403`, body `reason: "decision_invalid"`, `sub_reason: "multiple_decisions_in_batch"` |
 | Revocation state unreadable | `503` |
 
 A batch with one refused call is refused as a whole. Mount it after
-`express.json()`: with `tools` configured, an unparsed body is refused.
+`express.json()`: with `tools` configured, a body the guard cannot read as
+JSON-RPC 2.0 is refused, so a handler that parses the raw body itself can
+never act on a call the guard did not check. Every refusal is reported to
+`onDenial` with a low-cardinality reason (`missing_token`, `invalid_token`,
+`grant_revoked`, `insufficient_scope`, `tool_not_granted`,
+`manifest_unknown_tool`, `body_not_parsed`, `decision_required`,
+`decision_invalid`, ...) for metrics. Creating the middleware without
+`revocations` logs a warning. The MCP server must also never forward the
+client's access token to upstream APIs; the guard exposes the verified grant
+on the request, not a token to pass on.
 `filterToolsForGrant()` can also hide ungranted tools from `tools/list`.
 Framework-neutral hosts can use `createMcpResourceGuard()` directly.
 
@@ -422,7 +450,10 @@ The exact challenge formats are specified in
 - **Decision grants.** Every call to a `requires_decision` tool goes to the
   configured `DecisionVerifier`, which returns `valid`, `absent` or
   `invalid` with a sub-reason (`action_mismatch`, `expired`, `consumed`,
-  `same_approver`). Without one, such calls are refused:
+  `same_approver`). A verifier that returns `valid` must consume the decision
+  grant atomically first, so one grant never authorises two calls; a batch
+  with more than one such call is refused before any verifier runs. Without
+  a verifier, such calls are refused:
 
 <!-- snippet: packages/mcp-auth/tests/docs/examples/decision-verifier.ts -->
 ```typescript
@@ -450,9 +481,14 @@ export const decisionVerifier: DecisionVerifier = {
 ## Conformance
 
 `packages/mcp-auth/tests/conformance/mcp-authorization-2026-07-28.test.ts`
-lists every MUST of the MCP authorization specification dated 2026-07-28.
-Each requirement on an authorization server or MCP server has a test; client
-requirements are listed as out of scope. Run it with `npx vitest run
+lists every MUST of the MCP authorization specification dated 2026-07-28,
+plus the confused-deputy requirements from the MCP Security Best Practices
+(consent and the authorization state bound to the approving browser and
+verified at the callback; CSRF protection on the consent form). Each
+requirement on an authorization server or MCP server has a test, except
+SEC-12 (the MCP server must not pass the client's token to upstream APIs),
+which only the host application can meet and is listed with that reason.
+Client requirements are listed as out of scope. Run it with `npx vitest run
 tests/conformance`.
 
 ## Migrating from 2.x
@@ -464,7 +500,10 @@ tests/conformance`.
 | No `resource` needed | `resource` (or `allowedResources`) is required; tokens are always audience-bound and `/introspect` always checks `aud`. |
 | Any issuer URL | `issuer` must be https (http only on localhost). |
 | `/authorize` redirected to Grantex | `/authorize` renders the consent page; the flow continues with `POST /consent` (303). |
-| Upstream error text relayed to the client | Only `access_denied` or `server_error`, plus `iss`. |
+| `/callback` accepted any request with a known `state` | `/callback` requires the callback-binding cookie set on the browser that approved (403 otherwise). |
+| Any `client_name` and `grant_types` at `/register` | `client_name` 1–200 characters; `grant_types` `authorization_code` with optional `refresh_token`. |
+| Metadata documents from any port | Port 443 unless `allowedPorts`. |
+| Upstream error text relayed to the client | Only `access_denied` or `server_error`, plus `iss`; `/authorize` and `/token` no longer put upstream text in `error_description`. |
 | Any requested scope forwarded | Scopes outside `scopes`/`manifests` are `invalid_scope`. |
 | Any redirect URI at `/register` | https or loopback http only. |
 | `allowedRedirectUris` (not enforced) | Removed. |

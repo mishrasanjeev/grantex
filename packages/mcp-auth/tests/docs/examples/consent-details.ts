@@ -6,7 +6,7 @@ export const consentPage: ConsentPageOptions = {
     accentColor: '#0b6e4f',
     textColor: '#111827',
     radiusPx: 4,
-    fontFamily: '"Inter", system-ui, sans-serif',
+    fontFamily: 'Inter, system-ui, sans-serif',
   },
   text: {
     title: 'Allow case tools?',

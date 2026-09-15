@@ -72,7 +72,7 @@ describe('docs/mcp-auth.md examples', () => {
       },
     });
     expect(page.statusCode).toBe(200);
-    for (const text of ['Allow case tools?', 'aml.cdd.onboarding', '<dd>eu</dd>', '8 hours', 'verify_business', 'per case: at most 3 calls']) {
+    for (const text of ['Allow case tools?', 'aml.cdd.onboarding', '<dd>eu</dd>', '8 hours', 'verify_business', 'declared limit per case: 3 calls']) {
       expect(page.body).toContain(text);
     }
     expect(grantex.authorize).not.toHaveBeenCalled();
