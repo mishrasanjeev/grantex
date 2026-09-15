@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### @grantex/mcp-auth 3.0 (unreleased): durable authorization state
+- All authorization state goes through a new `McpAuthStorage` interface:
+  client registrations, authorizations awaiting consent, authorization codes
+  with their PKCE challenges, refresh-token bindings, consent records and
+  revocations. `PostgresStorage` (`@grantex/mcp-auth/postgres`, with
+  idempotent migrations in `migrations/` and `runMigrations()`) and
+  `RedisStorage` (`@grantex/mcp-auth/redis`, Redis 6.2+) keep it across
+  restarts and replicas; `InMemoryStorage` (`@grantex/mcp-auth/testing`) is
+  for tests and refuses to run with `NODE_ENV=production`.
+- Authorization codes, pending authorizations and refresh-token bindings are
+  consumed atomically, so concurrent redemptions yield at most one token.
+  Codes, refresh tokens and consent ids are stored only as SHA-256 keys.
+- `/revoke` records the revocation locally before calling Grantex, and
+  `/introspect` reports revoked tokens as inactive.
+- **Breaking:** `storage` is required. `clientStore`, `codeStore`,
+  `pendingStore` and `refreshTokenStore`, their `*Store` types and the
+  `InMemory*Store` classes are removed (`createMcpAuthServer` throws when
+  given them).
+- **Breaking:** `ClientRegistration.clientSecret` is replaced by
+  `clientSecretHash`; the secret is returned once at registration and never
+  stored. Code, pending-authorization and refresh-binding records no longer
+  carry their own key.
+- **Breaking:** a client record without `tokenEndpointAuthMethod: 'none'` is
+  confidential; one that has no secret hash can no longer authenticate.
+- **Breaking:** `/introspect` reports a token without a `jti` as inactive.
+- The package is not published; `@grantex/mcp-auth@2.0.2` remains the
+  current npm release.
+
 ### Python SDK 0.5.1
 - Prepares `grantex==0.5.1`, a patch release of the Python SDK carrying the
   SDK fixes merged since 0.5.0: `enforce()` applies the tightest budget cap,
