@@ -18,8 +18,12 @@ describe('GET /.well-known/jwks.json', () => {
 
     expect(res.statusCode).toBe(200);
     const body = res.json<{ keys: Array<Record<string, unknown>> }>();
-    expect(body.keys).toHaveLength(1);
+    // The signing key, then the same public key under the 13 legacy
+    // grantex-YYYY-MM kids that pre-0.6 tokens carry.
+    expect(body.keys).toHaveLength(14);
+    expect(new Set(body.keys.map((k) => k['n'])).size).toBe(1);
     const key = body.keys[0]!;
+    expect(key['kid']).toMatch(/^grantex-rs256-/);
     expect(key['kty']).toBe('RSA');
     expect(key['alg']).toBe('RS256');
     expect(key['use']).toBe('sig');

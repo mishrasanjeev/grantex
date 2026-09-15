@@ -348,6 +348,11 @@ export interface VerifyGrantTokenOptions {
   issuerDid?: string;
   /** @internal override clock for testing */
   clockTolerance?: number;
+  /**
+   * Signature algorithms to accept, a subset of `['RS256', 'ES256']` (the
+   * default). Any other value is rejected.
+   */
+  algorithms?: Array<'RS256' | 'ES256'>;
 }
 
 // ─── Raw JWT payload shape ────────────────────────────────────────────────────

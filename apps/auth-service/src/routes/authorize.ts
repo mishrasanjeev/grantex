@@ -245,11 +245,19 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     // `expiresIn` is the *grant* lifetime; it is validated here and applied
     // when the code is exchanged (token.ts). The auth request / authorization
     // code itself is short-lived (config.authRequestLifetimeSeconds).
+    let grantLifetimeSeconds: number;
     try {
-      parseExpiresIn(expiresIn);
+      grantLifetimeSeconds = parseExpiresIn(expiresIn);
     } catch {
       return reply.status(400).send({
         message: 'Invalid expiresIn format. Use e.g. "1h", "30m", "24h".',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    if (config.maxGrantLifetimeSeconds !== null && grantLifetimeSeconds > config.maxGrantLifetimeSeconds) {
+      return reply.status(400).send({
+        message: `expiresIn exceeds the maximum grant lifetime of ${config.maxGrantLifetimeSeconds} seconds`,
         code: 'BAD_REQUEST',
         requestId: request.id,
       });

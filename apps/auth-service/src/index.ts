@@ -1,5 +1,5 @@
 import { initTracing } from './lib/tracing.js';
-import { config, validateConfig } from './config.js';
+import { config, signingKeyConfigWarnings, validateConfig } from './config.js';
 import { initKeys, initEdKey } from './lib/crypto.js';
 import { getSql } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
@@ -25,17 +25,22 @@ async function main() {
   // Initialize OpenTelemetry tracing (must be first — hooks module loading)
   await initTracing();
 
-  // Initialize RSA keys
-  await initKeys();
-
-  // Initialize Ed25519 key (optional — for DID / VC support)
-  await initEdKey();
-
   // Initialize DB connection
   const sql = getSql();
 
   // Run migrations (idempotent — safe to re-run on every startup)
   await runMigrations(sql);
+
+  for (const warning of signingKeyConfigWarnings(config)) {
+    console.warn(`[config] Warning: ${warning}`);
+  }
+
+  // Initialize the platform signing keys. After migrations, because the
+  // postgres key store reads platform_signing_keys.
+  await initKeys();
+
+  // Initialize Ed25519 key (optional — for DID / VC support)
+  await initEdKey();
 
   // Initialize Redis connection
   const redis = getRedis();

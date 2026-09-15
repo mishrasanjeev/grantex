@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { buildJwks, getEdKeyPair } from '../lib/crypto.js';
+import { getSigningKeyRing } from '../lib/signing-keys.js';
 import { exportJWK } from 'jose';
 import { config } from '../config.js';
 import { getSql } from '../db/client.js';
@@ -55,14 +56,16 @@ export async function didRoutes(app: FastifyInstance): Promise<void> {
 
     const verificationMethods: Record<string, unknown>[] = [];
 
-    // RS256 key (always present)
-    const rsaKey = jwks.keys.find((k) => k['alg'] === 'RS256');
-    if (rsaKey) {
+    // Platform signing keys (RS256 or ES256): the active key and any key
+    // still published for verification.
+    const platformKids = new Set(getSigningKeyRing().keys().map((key) => key.kid));
+    for (const key of jwks.keys) {
+      if (!platformKids.has(key['kid'] as string)) continue;
       verificationMethods.push({
-        id: `${didId}#${rsaKey['kid'] as string}`,
+        id: `${didId}#${key['kid'] as string}`,
         type: 'JsonWebKey2020',
         controller: didId,
-        publicKeyJwk: rsaKey,
+        publicKeyJwk: key,
       });
     }
 

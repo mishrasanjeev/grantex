@@ -82,9 +82,9 @@ The DID resolves to an identity document containing:
 
 ### 3.3 Key Management
 
-- Identity Services MUST use RS256 (RSA + SHA-256) for signing
+- Identity Services MUST sign with RS256 (RSA + SHA-256, at least 2048 bits) or ES256 (ECDSA P-256 + SHA-256)
 - Private keys MUST never leave the Identity Service
-- Public keys MUST be published at `/.well-known/jwks.json`
+- Public keys MUST be published at `/.well-known/jwks.json`, each with `kid`, `alg` and `use: "sig"`
 - Key rotation MUST be supported without changing the DID
 
 ---
@@ -248,10 +248,20 @@ Response:
 ```json
 {
   "alg": "RS256",
-  "typ": "JWT",
+  "typ": "at+jwt",
   "kid": "grantex-2026-02"
 }
 ```
+
+`alg` is `RS256` (RSA, at least 2048 bits) or `ES256` (ECDSA on P-256). An
+implementation signs with one algorithm per deployment; RS256 is the default.
+`kid` names the signing key in the issuer's JWK Set, where every key carries
+`kid`, `alg` and `use: "sig"`. A `kid` MUST identify one key on every instance
+(the reference implementation uses the RFC 7638 thumbprint). Keys that no
+longer sign stay in the JWK Set while tokens they signed can still be
+presented, and a key that signed tokens under an earlier `kid` (such as the
+pre-0.6 `grantex-YYYY-MM`) MUST also be published under that `kid` for as long
+as those tokens are valid.
 
 ### 6.2 Payload
 
@@ -283,7 +293,10 @@ Response:
 
 Services receiving a Grant Token MUST verify:
 
-1. Signature using the JWKS at `iss/.well-known/jwks.json`
+1. Signature using the JWKS at `iss/.well-known/jwks.json`, with an explicit
+   algorithm allowlist of `RS256` and `ES256`. The key is the JWK Set entry named
+   by `kid` whose key type matches the algorithm (RSA for RS256, EC P-256 for
+   ES256) and whose `alg`, when present, equals the token's `alg`
 2. `exp` has not passed
 3. `aud` matches the service's identifier (if set)
 4. `scp` contains the required scopes for the requested operation
@@ -720,8 +733,9 @@ Content-Type: application/json
 
 ## 14. Security Considerations
 
-- Tokens MUST be signed with RS256. Symmetric algorithms (HS256) are NOT permitted.
+- Tokens MUST be signed with RS256 or ES256. Symmetric algorithms (HS256) are NOT permitted.
 - Implementations MUST explicitly reject JWTs with `alg: none`. Both `alg: none` and HS256 MUST be rejected by all verifiers.
+- Verifiers MUST NOT use a key for an algorithm other than the one it is published for, and MUST NOT fall back to another key when `kid` does not match: an RS256 token naming an EC key, or an ES256 token naming an RSA key, is rejected.
 - Token replay MUST be detectable via `jti` tracking.
 - Consent UIs MUST validate `state` parameter to prevent CSRF.
 - Redirect URIs MUST be pre-registered and exactly matched.

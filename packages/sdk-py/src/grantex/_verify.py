@@ -7,11 +7,23 @@ from typing import Any
 
 import httpx
 import jwt
-from jwt.algorithms import RSAAlgorithm
+from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 
 from ._errors import GrantexTokenError
 from ._types import GrantTokenPayload, VerifiedGrant, VerifyGrantTokenOptions
 
+
+GRANT_TOKEN_ALGORITHMS: tuple[str, ...] = ("RS256", "ES256")
+"""Signature algorithms a grant token may use.
+
+Each maps to exactly one key type: RS256 to an RSA key, ES256 to an EC key on
+P-256. ``none``, the HMAC family and every other algorithm are refused.
+"""
+
+_KEY_TYPE_FOR_ALGORITHM: dict[str, tuple[str, str | None]] = {
+    "RS256": ("RSA", None),
+    "ES256": ("EC", "P-256"),
+}
 
 _PRODUCTION_JWKS_URI = "https://api.grantex.dev/.well-known/jwks.json"
 _PRODUCTION_ISSUER = "https://grantex.dev"
@@ -48,12 +60,16 @@ def verify_grant_token(
 ) -> VerifiedGrant:
     """Verify a Grantex grant token locally using remotely retrieved JWKS.
 
-    Algorithm is fixed to RS256 per SPEC §11 and cannot be overridden.
+    The signature must be RS256 or ES256 (:data:`GRANT_TOKEN_ALGORITHMS`);
+    ``options.algorithms`` can narrow that list but never widen it. The key is
+    the JWK Set entry with the token's ``kid`` whose key type (and curve)
+    matches the algorithm and whose ``alg``, when published, equals it.
 
     Raises:
         GrantexTokenError: if the token is invalid, expired, tampered, or
             missing required scopes.
     """
+    allowed = _resolve_algorithms(options.algorithms)
     try:
         header = jwt.get_unverified_header(token)
     except jwt.PyJWTError as exc:
@@ -61,10 +77,11 @@ def verify_grant_token(
             f"Grant token verification failed: {exc}"
         ) from exc
 
-    if header.get("alg") != "RS256":
+    alg = header.get("alg")
+    if not isinstance(alg, str) or alg not in allowed:
         raise GrantexTokenError(
-            f"Grant token uses unsupported algorithm '{header.get('alg')}'; "
-            "only RS256 is allowed per SPEC §11"
+            f"Grant token uses unsupported algorithm '{alg}'; "
+            f"allowed: {', '.join(allowed)}"
         )
 
     jwks_uri = options.jwks_uri
@@ -77,10 +94,12 @@ def verify_grant_token(
     if expected_issuer is None:
         expected_issuer = _derive_issuer_from_jwks_uri(jwks_uri)
 
-    signing_key = _fetch_signing_key(jwks_uri, header.get("kid"))
+    signing_key = _fetch_signing_key(jwks_uri, header.get("kid"), alg)
 
     decode_kwargs: dict[str, Any] = {
-        "algorithms": ["RS256"],
+        # Only the header's algorithm, already checked against the allowlist
+        # and against the key's type.
+        "algorithms": [alg],
         "leeway": options.clock_tolerance,
         "issuer": expected_issuer,
     }
@@ -111,6 +130,23 @@ def verify_grant_token(
             )
 
     return _payload_to_verified_grant(payload)
+
+
+def _resolve_algorithms(requested: list[str] | None) -> tuple[str, ...]:
+    if requested is None:
+        return GRANT_TOKEN_ALGORITHMS
+    if isinstance(requested, str) or not requested:
+        raise GrantexTokenError(
+            "algorithms must list at least one of "
+            + ", ".join(GRANT_TOKEN_ALGORITHMS)
+        )
+    unsupported = [a for a in requested if a not in GRANT_TOKEN_ALGORITHMS]
+    if unsupported:
+        raise GrantexTokenError(
+            f"Unsupported grant token algorithm {', '.join(map(str, unsupported))}; "
+            f"allowed: {', '.join(GRANT_TOKEN_ALGORITHMS)}"
+        )
+    return tuple(dict.fromkeys(requested))
 
 
 def _derive_issuer_from_jwks_uri(jwks_uri: str) -> str:
@@ -175,56 +211,79 @@ def _get_jwks(jwks_uri: str, *, force_refresh: bool = False) -> _JwksCacheEntry:
     return fresh
 
 
-def _fetch_signing_key(jwks_uri: str, kid: str | None) -> Any:
-    """Resolve the RSA public key for ``kid`` from the (cached) JWKS."""
+def _fetch_signing_key(jwks_uri: str, kid: str | None, alg: str = "RS256") -> Any:
+    """Resolve the public key for ``kid`` and ``alg`` from the (cached) JWKS."""
+    if alg not in _KEY_TYPE_FOR_ALGORITHM:
+        raise GrantexTokenError(f"Grant token uses unsupported algorithm '{alg}'")
     if kid is not None and (not isinstance(kid, str) or not kid):
         raise GrantexTokenError("Grant token kid header must be a non-empty string")
 
     entry = _get_jwks(jwks_uri)
-    matched = _select_key(entry.keys, kid)
+    matched = _select_key(entry.keys, kid, alg)
     if matched is None and kid is not None:
         # Key rotation: the kid may simply be newer than the cached set. One
         # refresh per cooldown window keeps unknown kids from being a DoS lever.
         if time.monotonic() - entry.fetched_at >= _JWKS_REFRESH_COOLDOWN_SECONDS:
             entry = _get_jwks(jwks_uri, force_refresh=True)
-            matched = _select_key(entry.keys, kid)
+            matched = _select_key(entry.keys, kid, alg)
 
+    kty = _KEY_TYPE_FOR_ALGORITHM[alg][0]
     if matched is None:
         raise GrantexTokenError(
-            f"No matching RSA key found in JWKS (kid={kid!r})"
+            f"No matching {kty} key found in JWKS for {alg} (kid={kid!r})"
         )
 
     try:
-        return RSAAlgorithm.from_jwk(matched)
+        if kty == "RSA":
+            return RSAAlgorithm.from_jwk(matched)
+        return ECAlgorithm.from_jwk(matched)
     except Exception as exc:
         raise GrantexTokenError(
-            f"Failed to construct RSA key from JWK: {exc}"
+            f"Failed to construct {kty} key from JWK: {exc}"
         ) from exc
 
 
-def _select_key(keys: list[dict[str, Any]], kid: str | None) -> dict[str, Any] | None:
+def _key_matches_algorithm(key: dict[str, Any], alg: str) -> bool:
+    kty, crv = _KEY_TYPE_FOR_ALGORITHM[alg]
+    if key.get("kty") != kty:
+        return False
+    if crv is not None and key.get("crv") != crv:
+        return False
+    # A key published for another algorithm is never used for this one.
+    if "alg" in key and key.get("alg") != alg:
+        return False
+    if "use" in key and key.get("use") != "sig":
+        return False
+    return True
+
+
+def _select_key(
+    keys: list[dict[str, Any]], kid: str | None, alg: str = "RS256"
+) -> dict[str, Any] | None:
+    kty = _KEY_TYPE_FOR_ALGORITHM[alg][0]
     matched: dict[str, Any] | None = None
     if kid is not None:
-        # A token that names a key must match that exact RSA key. Falling back
-        # to another key turns an unknown/stale kid into an ambiguous trust
-        # decision and differs from JOSE resolver behavior in the other SDKs.
+        # A token that names a key must match that exact key, of the type its
+        # algorithm requires. Falling back to another key turns an unknown or
+        # stale kid into an ambiguous trust decision and differs from JOSE
+        # resolver behavior in the other SDKs.
         matching_keys = [
             key for key in keys
-            if key.get("kid") == kid and key.get("kty") == "RSA"
+            if key.get("kid") == kid and _key_matches_algorithm(key, alg)
         ]
         if len(matching_keys) == 1:
             matched = matching_keys[0]
         elif len(matching_keys) > 1:
             raise GrantexTokenError(
-                f"JWKS contains multiple RSA keys with kid={kid!r}"
+                f"JWKS contains multiple {kty} keys with kid={kid!r}"
             )
     else:
-        rsa_keys = [key for key in keys if key.get("kty") == "RSA"]
-        if len(rsa_keys) == 1:
-            matched = rsa_keys[0]
-        elif len(rsa_keys) > 1:
+        candidates = [key for key in keys if _key_matches_algorithm(key, alg)]
+        if len(candidates) == 1:
+            matched = candidates[0]
+        elif len(candidates) > 1:
             raise GrantexTokenError(
-                "Grant token header is missing kid and JWKS contains multiple RSA keys"
+                f"Grant token header is missing kid and JWKS contains multiple {kty} keys"
             )
     return matched
 

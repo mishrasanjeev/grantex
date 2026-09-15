@@ -76,7 +76,7 @@ The DID resolves to an identity document containing:
 
 ### 3.3 Key Management
 
-- Identity Services MUST use RS256 (RSA + SHA-256) for signing
+- Identity Services MUST sign with RS256 (RSA + SHA-256, at least 2048 bits) or ES256 (ECDSA P-256 + SHA-256)
 - Private keys MUST never leave the Identity Service
 - Public keys MUST be published at `/.well-known/jwks.json`
 - Key rotation MUST be supported without changing the DID
@@ -192,10 +192,13 @@ Content-Type: application/json
 ```json
 {
   "alg": "RS256",
-  "typ": "JWT",
+  "typ": "at+jwt",
   "kid": "grantex-2026-02"
 }
 ```
+
+`alg` is `RS256` or `ES256` (one per deployment; RS256 by default). Verifiers use an explicit
+allowlist of those two and select the JWK Set key by `kid`, of the key type the algorithm requires.
 
 ### 6.2 Payload
 
@@ -353,7 +356,7 @@ Advisory-only runtime monitoring. Anomaly types: `unusual_scope_access`, `high_f
 
 ## 14. Security Considerations
 
-- Tokens MUST be signed with RS256. HS256 and `alg: none` MUST be rejected.
+- Tokens MUST be signed with RS256 or ES256. HS256 and `alg: none` MUST be rejected, and a key MUST NOT be used for an algorithm other than the one it is published for.
 - Token replay MUST be detectable via `jti` tracking.
 - Consent UIs MUST validate `state` to prevent CSRF.
 - Redirect URIs MUST be pre-registered and exactly matched.

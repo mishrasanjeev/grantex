@@ -38,6 +38,7 @@
 3a290f5a53438c126f3d2dbf2a685a787a6e9579:docs/ietf-draft/draft-mishra-oauth-agent-grants-01.xml:generic-api-key:654
 3a290f5a53438c126f3d2dbf2a685a787a6e9579:docs/ietf-draft/draft-mishra-oauth-agent-grants-01.xml:generic-api-key:793
 3a290f5a53438c126f3d2dbf2a685a787a6e9579:docs/ietf-draft/draft-mishra-oauth-agent-grants-01.xml:generic-api-key:819
+3e3fd4c3dc2185f47a780aaf130315736912b899:apps/auth-service/.env.example:private-key:9
 3fab033b0af4845278994b08baa260a088ef10c5:packages/mpp/tests/middleware.test.ts:generic-api-key:9
 3fab033b0af4845278994b08baa260a088ef10c5:packages/mpp/tests/passport.test.ts:generic-api-key:53
 3fac4a8bd254ed5c37f2737da1661c93a464ac55:docs/sdks/python/enforce.mdx:generic-api-key:69
@@ -76,12 +77,19 @@
 6b825376902d29c367933087a0433579c4f13382:docs/ietf-draft/draft-mishra-oauth-agent-grants-02.xml:generic-api-key:619
 6b825376902d29c367933087a0433579c4f13382:docs/ietf-draft/draft-mishra-oauth-agent-grants-02.xml:generic-api-key:747
 6b825376902d29c367933087a0433579c4f13382:docs/ietf-draft/draft-mishra-oauth-agent-grants-02.xml:generic-api-key:768
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:packages/go-sdk/testdata/signing-keys-legacy-kid.json:jwt:134
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:packages/go-sdk/testdata/signing-keys-legacy-kid.json:jwt:139
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:packages/go-sdk/testdata/signing-keys-legacy-kid.json:jwt:144
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:spec/examples/signing-keys-legacy-kid.json:jwt:134
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:spec/examples/signing-keys-legacy-kid.json:jwt:139
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:spec/examples/signing-keys-legacy-kid.json:jwt:144
 6ed4b65ee443ec11e0005599de51fe3594154475:packages/sdk-py/tests/test_domains.py:generic-api-key:21
 6ed4b65ee443ec11e0005599de51fe3594154475:packages/sdk-py/tests/test_domains.py:generic-api-key:62
 77af32e6896485e2cee3d908aa76601ab470b560:packages/gemma/tests/consent.test.ts:generic-api-key:21
 78aba22b3ca22aa4e6a2f731ce25f7042bddb25d:apps/auth-service/tests/events-stream.test.ts:generic-api-key:45
 790ccc7e7baf08368beeda2712499c1f950ff13e:docs/reports/commerce-v1-option-a-smoke-evidence.md:generic-api-key:63
 7aafaa494100dcd3692c1c7e2058b79ff87dc79a:agentic-org-scope-enforcement-fix.md:generic-api-key:642
+7ac0f9485bc7121c23221937b344675d017deeba:DEPLOYMENT.md:private-key:154
 813ee176ee74b47fb8786ac4bee3b85675b4cace:apps/auth-service/tests/helpers.ts:generic-api-key:15
 820410e54ce71adfdc826df2b594eb6c562e98e8:apps/auth-service/vitest.config.ts:generic-api-key:17
 8415bcfbf7edf036bfeb771a239763f18a8351ea:scripts/commerce-pilot-seed-local.mjs:generic-api-key:20
@@ -124,6 +132,7 @@ e0fc2d8dd5fc1d2544c34af4f0924cb812cb82ce:docs/ietf-draft/draft-mishra-oauth-agen
 e0fc2d8dd5fc1d2544c34af4f0924cb812cb82ce:docs/ietf-draft/draft-mishra-oauth-agent-grants-00.md:generic-api-key:432
 e0fc2d8dd5fc1d2544c34af4f0924cb812cb82ce:docs/ietf-draft/draft-mishra-oauth-agent-grants-00.md:generic-api-key:535
 e0fc2d8dd5fc1d2544c34af4f0924cb812cb82ce:docs/ietf-draft/draft-mishra-oauth-agent-grants-00.md:generic-api-key:554
+e2e6e9e773a565b329ba2b178023ec9c507d957c:apps/auth-service/tests/signing-keys-legacy-kid.test.ts:generic-api-key:220
 e5d8cad4b6565a9a43f86f024e7dccdfee8d001a:docs/guides/trust-registry-setup.mdx:generic-api-key:110
 e5d8cad4b6565a9a43f86f024e7dccdfee8d001a:docs/guides/trust-registry-setup.mdx:generic-api-key:73
 eb731517c0e6abba7072328cb82dee5d49d13f5e:docs/internal/commerce-v1/commerce-v1-oacp-final-launch-evidence.md:generic-api-key:14

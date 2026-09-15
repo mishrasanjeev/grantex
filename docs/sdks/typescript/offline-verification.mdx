@@ -8,7 +8,7 @@ description: "Verify grant tokens locally with published JWKS keys, without a pe
 
 `verifyGrantToken()` is a standalone function that verifies signatures and claims
 locally after retrieving the published JWKS (JSON Web Key Set). It validates the
-RS256 signature, issuer, expiry, and optional scopes and audience. The current
+RS256 or ES256 signature, issuer, expiry, and optional scopes and audience. The current
 standalone helper resolves the remote JWKS on each invocation, so it is not a
 network-free hot path.
 
@@ -89,6 +89,13 @@ This function does not require a `Grantex` client instance.
   Optional clock-skew tolerance, in seconds, for time-based JWT claims.
 </ParamField>
 
+<ParamField body="algorithms" type="Array<'RS256' | 'ES256'>">
+  Narrow the accepted signature algorithms. The default is `GRANT_TOKEN_ALGORITHMS`
+  (`['RS256', 'ES256']`); any other value throws `GrantexTokenError`. The key is the
+  JWK Set entry named by `kid` whose type matches the algorithm (RSA for RS256, EC
+  P-256 for ES256); `alg: none` and HS256 are always rejected.
+</ParamField>
+
 ## Response: `VerifiedGrant`
 
 <ResponseField name="tokenId" type="string">
@@ -140,6 +147,7 @@ This function does not require a `Grantex` client instance.
 `verifyGrantToken()` throws `GrantexTokenError` in the following cases:
 
 - The JWT signature is invalid
+- The token uses an algorithm other than RS256 or ES256, or names a key of the wrong type
 - The token has expired
 - The token issuer does not match the expected issuer
 - Required claims (`jti`, `sub`, `agt`, `dev`, `scp`, `iat`, `exp`) are missing

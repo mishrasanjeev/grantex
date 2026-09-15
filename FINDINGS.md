@@ -80,3 +80,22 @@ Remove an entry in the pull request that fixes it.
 - **Fix:** log the failure with the `jti` and a reason code, count it, and
   retry the upstream revocation from a durable queue until it succeeds.
 
+## G-8 — Verifiers outside the core SDKs pin RS256
+
+- **Found:** adding ES256 signing (2026-09-15).
+- **What:** these reject every token or key from a deployment that sets
+  `JWT_SIGNING_ALG=ES256`, and some already disagree with the default JWK Set:
+  - `packages/cli/src/commands/verify.ts` calls `jwtVerify` with
+    `algorithms: ['RS256']`.
+  - `packages/gemma/src/verifier/jwks-cache.ts` and `offline-verifier.ts`, and
+    `packages/gemma-py/src/grantex_gemma/_verifier.py`, accept only RS256.
+  - `packages/mpp/src/verifier.ts` verifies agent passports with RS256 only;
+    passports are signed with the platform signing key.
+  - `packages/conformance/src/suites/security.ts` ("JWKS only contains RS256
+    keys") fails whenever the JWK Set holds any other key. The auth service
+    always publishes an EdDSA key (`initEdKey` generates one), so this check
+    already fails against a default deployment.
+- **Fix:** accept `RS256` and `ES256` with key-type matching by `kid` (as the
+  core SDKs now do), and change the conformance check to "every platform
+  signing key is RS256 or ES256 with `kid`, `alg` and `use: sig`", ignoring
+  keys published for other purposes.
