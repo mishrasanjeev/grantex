@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Evidence package library
+- New `grantex.evidence` (Python) and `evidence` namespace of `@grantex/sdk`
+  (also importable as `@grantex/sdk/evidence`): build, canonicalise and
+  verify evidence packages (`spec/evidence-package.md`). `verify_package` /
+  `verifyPackage` require a trusted root, fail closed on an unknown version,
+  duplicate members, non-canonical numbers or bytes, or a missing root, and
+  report the exact failing link (entry index, field path, expected and actual
+  hash). Anchors (auth service audit entries) and detached ES256/RS256
+  signatures are checked; a signed package without a key set fails unless the
+  caller explicitly accepts it unchecked.
+- `build_package` / `buildPackage` hash-chain a case and pseudonymise
+  identifiers per case unless disclosed; `upstream_records_for` /
+  `upstreamRecordsFor` list every upstream record behind a recommendation.
+- Both SDKs produce identical bytes and identical verification results for
+  every case in `spec/examples/evidence/`.
+- The evidence modules carry a private copy of the RFC 8785 implementation
+  from the decision-grant work; it is replaced by the shared module once that
+  is released.
+
 ### Evidence package format
 - New specification of the per-case evidence package, format 1.0
   (`spec/evidence-package.md`), with a JSON Schema
