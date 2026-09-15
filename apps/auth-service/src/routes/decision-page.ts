@@ -15,7 +15,7 @@
  *   with no script (CSP) and no framing.
  * - Approval is a form post that must carry the session cookie, a CSRF token
  *   bound to the session, the request and this rendering, and an `Origin` of
- *   this service (`Sec-Fetch-Site`, when sent, must be `same-origin`). Dwell
+ *   this service and `Sec-Fetch-Site: same-origin` (both required). Dwell
  *   time is measured by the service from rendering to submission.
  *
  * The decision grant the service signs is the attestation: it binds the
@@ -130,7 +130,10 @@ function sendPage(reply: FastifyReply, status: number, title: string, body: stri
     .status(status)
     .header('Content-Security-Policy', PAGE_CSP)
     .header('X-Frame-Options', 'DENY')
-    .header('Referrer-Policy', 'no-referrer')
+    // same-origin, not no-referrer: under no-referrer browsers send
+    // `Origin: null` on the page's own form posts, which the required-Origin
+    // check refuses. same-origin still sends no Referer to other sites.
+    .header('Referrer-Policy', 'same-origin')
     .header('Cache-Control', 'no-store')
     .type('text/html; charset=utf-8')
     .send(layout(title, body));
@@ -170,12 +173,16 @@ function settingsOrPage(reply: FastifyReply): DecisionSettings | null {
   }
 }
 
-/** A form post from this service's own page: Origin required and equal; Sec-Fetch-Site, when sent, same-origin. */
+/**
+ * A form post from this service's own page. Both headers are required: Origin
+ * equal to the service origin and Sec-Fetch-Site `same-origin`. A request
+ * without either is refused (every current browser sends both on a form post;
+ * a client that omits them is not the approval page).
+ */
 function sameOriginSubmission(request: FastifyRequest, publicOrigin: string): boolean {
   const origin = request.headers.origin;
   if (typeof origin !== 'string' || origin !== publicOrigin) return false;
-  const fetchSite = request.headers['sec-fetch-site'];
-  return fetchSite === undefined || fetchSite === 'same-origin';
+  return request.headers['sec-fetch-site'] === 'same-origin';
 }
 
 function reviewSection(request: DecisionRequestRow): string {

@@ -205,4 +205,61 @@ describe('grantexDecisionVerifier', () => {
     expect(missing.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'malformed' });
     expect((await callTool(verifier, { [DECISION_GRANT_HEADER]: token }, { ...args, currency: 'GBP' }, { toolName: 'payout_release' })).status).toBe(200);
   });
+
+  describe("the grant's urn:grantex:decision:v1 entry", () => {
+    // The manifest declares case_review as a plain write tool: only the grant says it needs a decision.
+    const plainPolicy = toolPolicyFromManifests([{ connector: 'acme_kyb', tools: { case_decision: { permission: 'write', requires_decision: true }, case_review: 'write' } }]);
+    const reference = (fourEyes: Record<string, string[]> = { case_decision: ['decline'], case_review: ['decline'] }) => ({
+      dev: 'dev_01',
+      authorization_details: [{ type: 'urn:grantex:decision:v1', connector: 'acme_kyb', tools: ['case_decision', 'case_review'], four_eyes_on: fourEyes }],
+    });
+    const decline = { ...ACTION, decision: 'decline' };
+
+    it('makes a listed tool need a decision grant', async () => {
+      const { verifier, consume } = verifierWithIssuer();
+      const absent = await callTool(verifier, {}, args, { policy: plainPolicy, toolName: 'case_review', grant: reference() });
+      expect(absent.body).toMatchObject({ reason: 'decision_required' });
+      const review = { ...ACTION, action: 'case_review' };
+      const ok = await callTool(verifier, { [DECISION_GRANT_HEADER]: await decisionGrant({ action: review }) }, args, { policy: plainPolicy, toolName: 'case_review', grant: reference() });
+      expect(ok.status).toBe(200);
+      expect((await callTool(verifier, {}, args, { policy: plainPolicy, toolName: 'case_review' })).status).toBe(200);
+      expect(consume).toHaveBeenCalledTimes(1);
+    });
+
+    it('requires two approvers for a decision in its four_eyes_on', async () => {
+      const { verifier, consume } = verifierWithIssuer();
+      const token = await decisionGrant({ action: decline });
+      const outcome = await callTool(verifier, { [DECISION_GRANT_HEADER]: token }, { ...args, decision: 'decline' }, { policy: plainPolicy, grant: reference() });
+      expect(outcome.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'four_eyes_incomplete' });
+      // Without the entry, the manifest alone needs one approver.
+      expect((await callTool(verifier, { [DECISION_GRANT_HEADER]: token }, { ...args, decision: 'decline' }, { policy: plainPolicy })).status).toBe(200);
+      expect(consume).toHaveBeenCalledTimes(1);
+    });
+
+    it('reads four eyes from the grant when the verifier is called directly', async () => {
+      const { verifier, consume } = verifierWithIssuer();
+      const token = await decisionGrant({ action: decline });
+      const requirement = plainPolicy.requirementFor('case_decision')!;
+      const outcome = await verifier.verify({
+        grant: { sub: 'client-a', iss: issuer, jti: 'tok_1', scopes: ['tool:acme_kyb:write'], developerId: 'dev_01', exp: 0, iat: 0, raw: reference() },
+        requirement,
+        arguments: { ...args, decision: 'decline' },
+        header: (name) => (name === DECISION_GRANT_HEADER ? token : undefined),
+      });
+      expect(outcome).toEqual({ status: 'invalid', subReason: 'four_eyes_incomplete' });
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('refuses the call when a decision entry is malformed', async () => {
+      const { verifier, consume } = verifierWithIssuer();
+      const token = await decisionGrant();
+      const malformed = { dev: 'dev_01', authorization_details: [{ type: 'urn:grantex:decision:v1', connector: 'acme_kyb', tools: 'case_decision' }] };
+      const outcome = await callTool(verifier, { [DECISION_GRANT_HEADER]: token }, args, { policy: plainPolicy, grant: malformed });
+      expect(outcome.status).toBe(403);
+      expect(outcome.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'malformed_authorization_details' });
+      const plainTool = await callTool(verifier, {}, args, { policy: plainPolicy, toolName: 'case_review', grant: malformed });
+      expect(plainTool.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'malformed_authorization_details' });
+      expect(consume).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -16,11 +16,14 @@
  *
  * The grant's developer (`dev`, from the access token) and the tool's
  * connector (from a manifest-derived policy) are always checked; a call
- * without either is refused. A tool's `decision_fields` are read from the
+ * without either is refused. A decision needs two approvers when the
+ * manifest's `four_eyes_on` or the grant's `urn:grantex:decision:v1` entry
+ * lists it. A tool's `decision_fields` are read from the
  * arguments into the action. Consumption spends the grant: if the tool call
  * fails afterwards, a person has to approve again.
  */
 import type { DecisionCheck, DecisionOutcome, DecisionVerifier } from './guard.js';
+import { DecisionReferenceError, withGrantDecisionReference } from './decision-references.js';
 
 /** Default request header carrying the decision grant(s), comma-separated. */
 export const DECISION_GRANT_HEADER = 'grantex-decision-grant';
@@ -134,7 +137,17 @@ export function grantexDecisionVerifier<Set extends VerifiedDecisionGrants>(
       if (typeof caseVersion !== 'string' || caseVersion.length === 0) {
         return { status: 'invalid', subReason: 'case_changed' };
       }
-      const approvalsRequired: 1 | 2 = check.requirement.fourEyesOn?.includes(action.decision) ? 2 : 1;
+      // Four eyes when the manifest or the grant's decision entry lists the
+      // decision (the guard already merges both; a verifier called directly
+      // reads the grant itself).
+      let requirement;
+      try {
+        requirement = withGrantDecisionReference(check.requirement, check.grant.raw['authorization_details']);
+      } catch (err) {
+        if (err instanceof DecisionReferenceError) return { status: 'invalid', subReason: 'malformed' };
+        throw err;
+      }
+      const approvalsRequired: 1 | 2 = requirement.fourEyesOn?.includes(action.decision) ? 2 : 1;
 
       let verified: Set;
       try {

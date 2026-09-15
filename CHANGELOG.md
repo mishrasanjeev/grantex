@@ -446,6 +446,11 @@ reviewers and integrators:
   action from the tool input; `enforceMiddleware` takes
   `extractDecisionGrants`, `extractArguments` and `extractCaseVersion`, and
   its 403 body now includes `reason` and `subReason`.
+- The FastAPI `GrantexEnforcer` passes decision grants to `enforce()`: grants
+  from the `Grantex-Decision-Grant` header (comma-separated), arguments from
+  the JSON body, and the case version from a required `case_version`
+  callback (server case state); each source can be replaced. Its 403 detail
+  adds `reason_code` and `sub_reason`.
 - `decisions_mode` / `decisionsMode` (client option and per call):
   `enforce` (default) denies. `warn` is for rollout only and is not a
   control: it does not deny a `requires_decision` call without a valid
@@ -469,6 +474,12 @@ reviewers and integrators:
   requiring the grant's developer and the tool's connector (refused as
   `malformed` otherwise), binding manifest `decision_fields`, and answering
   `valid` only after consumption. Tool policies carry `decisionFields`.
+  The guard and the verifier apply the access token's
+  `urn:grantex:decision:v1` entries: a listed tool needs a decision grant,
+  the entry's `four_eyes_on` requires two approvers, and a token with a
+  malformed decision entry is refused for every `tools/call`
+  (`decision_invalid` / `malformed_authorization_details`). **Behaviour
+  change** for tokens that carry such entries.
 - Behaviour change (no API break): a call to a `requires_decision` tool that
   carries a valid decision grant which the auth service consumes is now
   allowed. Calls without one are denied exactly as before.
@@ -505,7 +516,7 @@ answers 404 until it is `true`). Profile in `spec/decision-grant.md`.
   duplicate member names are refused.
 - **Approval** only by form post from the approval page: session cookie, CSRF
   token bound to session, request and rendering, `Origin` of the service
-  required (`Sec-Fetch-Site`, when sent, `same-origin`), CSP without script,
+  and `Sec-Fetch-Site: same-origin` both required, CSP without script,
   `frame-ancestors 'none'`. Dwell time is measured by the service from
   rendering to submission; approvals faster than `DECISION_MIN_DWELL_MS`
   (default 2000) are refused.
