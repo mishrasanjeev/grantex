@@ -2,6 +2,9 @@ package grantex
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rsa"
 	"fmt"
 	"net/url"
 	"strings"
@@ -11,6 +14,17 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 )
+
+// grantTokenAlgorithms are the signature algorithms a grant token may use.
+// Each maps to one key type: RS256 to an RSA key, ES256 to an EC key on P-256.
+// "none", the HMAC family and every other algorithm are refused.
+var grantTokenAlgorithms = []string{"RS256", "ES256"}
+
+// GrantTokenAlgorithms returns the signature algorithms VerifyGrantToken
+// accepts by default: RS256 and ES256.
+func GrantTokenAlgorithms() []string {
+	return append([]string(nil), grantTokenAlgorithms...)
+}
 
 const (
 	productionJwksURI = "https://api.grantex.dev/.well-known/jwks.json"
@@ -100,12 +114,85 @@ type VerifyOptions struct {
 
 	// ClockTolerance allows for clock skew between servers. Defaults to 0.
 	ClockTolerance time.Duration
+
+	// Algorithms narrows the accepted signature algorithms to a subset of
+	// GrantTokenAlgorithms (RS256 and ES256, the default when empty). Any
+	// other value is rejected.
+	Algorithms []string
+}
+
+func resolveAlgorithms(requested []string) ([]string, error) {
+	if len(requested) == 0 {
+		return GrantTokenAlgorithms(), nil
+	}
+	allowed := make([]string, 0, len(requested))
+	seen := make(map[string]bool, len(requested))
+	for _, alg := range requested {
+		supported := false
+		for _, candidate := range grantTokenAlgorithms {
+			if alg == candidate {
+				supported = true
+				break
+			}
+		}
+		if !supported {
+			return nil, &TokenError{Message: fmt.Sprintf("unsupported grant token algorithm %q; allowed: %s", alg, strings.Join(grantTokenAlgorithms, ", "))}
+		}
+		if !seen[alg] {
+			seen[alg] = true
+			allowed = append(allowed, alg)
+		}
+	}
+	return allowed, nil
+}
+
+// publicKeyForAlgorithm returns the raw public key of a JWK Set entry for alg.
+// The entry must be of the key type (and curve) alg requires, must not be
+// published for a different algorithm or for a use other than "sig", and
+// must be a public key.
+func publicKeyForAlgorithm(key jwk.Key, alg string) (interface{}, error) {
+	if published := key.Algorithm().String(); published != "" && published != alg {
+		return nil, fmt.Errorf("key %s is published for %s, not %s", key.KeyID(), published, alg)
+	}
+	if use := key.KeyUsage(); use != "" && use != "sig" {
+		return nil, fmt.Errorf("key %s has use %q, not sig", key.KeyID(), use)
+	}
+
+	var rawKey interface{}
+	if err := key.Raw(&rawKey); err != nil {
+		return nil, fmt.Errorf("failed to extract raw key: %w", err)
+	}
+	switch alg {
+	case "RS256":
+		pub, ok := rawKey.(*rsa.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("RS256 requires an RSA public key; key %s is %T", key.KeyID(), rawKey)
+		}
+		return pub, nil
+	case "ES256":
+		pub, ok := rawKey.(*ecdsa.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("ES256 requires an EC public key; key %s is %T", key.KeyID(), rawKey)
+		}
+		if pub.Curve != elliptic.P256() {
+			return nil, fmt.Errorf("ES256 requires curve P-256; key %s is on %s", key.KeyID(), pub.Curve.Params().Name)
+		}
+		return pub, nil
+	default:
+		return nil, fmt.Errorf("unsupported algorithm %s", alg)
+	}
 }
 
 // VerifyGrantToken performs local JWT verification using JWKS retrieved from JwksURI.
-// It verifies the RS256 signature, expiration, issuer, required grant claims,
-// and optionally checks required scopes and audience.
+// It verifies the RS256 or ES256 signature, expiration, issuer, required grant
+// claims, and optionally checks required scopes and audience. The key is the
+// JWK Set entry named by the token's kid, of the key type its algorithm
+// requires.
 func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*VerifiedGrant, error) {
+	algorithms, err := resolveAlgorithms(opts.Algorithms)
+	if err != nil {
+		return nil, err
+	}
 	jwksURI, expectedIssuer, err := resolveVerificationEndpoints(opts)
 	if err != nil {
 		return nil, err
@@ -119,7 +206,7 @@ func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*V
 
 	// Parse and verify the JWT
 	parserOpts := []jwt.ParserOption{
-		jwt.WithValidMethods([]string{"RS256"}),
+		jwt.WithValidMethods(algorithms),
 		jwt.WithIssuer(expectedIssuer),
 		jwt.WithExpirationRequired(),
 	}
@@ -147,11 +234,9 @@ func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*V
 			return nil, fmt.Errorf("key %s not found in JWKS", kid)
 		}
 
-		var rawKey interface{}
-		if err := key.Raw(&rawKey); err != nil {
-			return nil, fmt.Errorf("failed to extract raw key: %w", err)
-		}
-		return rawKey, nil
+		// WithValidMethods has already limited the algorithm; the key must
+		// also be of the type that algorithm requires.
+		return publicKeyForAlgorithm(key, t.Method.Alg())
 	}, parserOpts...)
 
 	if err != nil {

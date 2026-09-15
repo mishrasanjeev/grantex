@@ -3,6 +3,31 @@ import { missingScopes } from './scopes.js';
 import { GrantexTokenError } from './errors.js';
 import type { VerifiedGrant, VerifyGrantTokenOptions, GrantTokenPayload } from './types.js';
 
+/**
+ * Signature algorithms a grant token may use. Each maps to one key type (RSA
+ * for RS256, EC P-256 for ES256), and JOSE only selects a JWK Set key of that
+ * type, published for that algorithm, under the token's `kid`. `none`, the
+ * HMAC family and every other algorithm are refused.
+ */
+export const GRANT_TOKEN_ALGORITHMS = ['RS256', 'ES256'] as const;
+export type GrantTokenAlgorithm = (typeof GRANT_TOKEN_ALGORITHMS)[number];
+
+function resolveAlgorithms(requested: readonly string[] | undefined): string[] {
+  if (requested === undefined) return [...GRANT_TOKEN_ALGORITHMS];
+  if (!Array.isArray(requested) || requested.length === 0) {
+    throw new GrantexTokenError('algorithms must list at least one of RS256, ES256');
+  }
+  const unsupported = requested.filter(
+    (alg) => !(GRANT_TOKEN_ALGORITHMS as readonly string[]).includes(alg),
+  );
+  if (unsupported.length > 0) {
+    throw new GrantexTokenError(
+      `Unsupported grant token algorithm ${unsupported.map(String).join(', ')}; allowed: ${GRANT_TOKEN_ALGORITHMS.join(', ')}`,
+    );
+  }
+  return [...new Set(requested)];
+}
+
 const PRODUCTION_JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
 const PRODUCTION_ISSUER = 'https://grantex.dev';
 const MAX_REMOTE_JWKS_RESOLVERS = 64;
@@ -40,7 +65,8 @@ export function clearRemoteJwksCache(): void {
 
 /**
  * Verify a Grantex grant token locally using JWKS retrieved from the configured URI.
- * Algorithm is fixed to RS256 per SPEC §11 and cannot be overridden.
+ * The signature must be RS256 or ES256 (`GRANT_TOKEN_ALGORITHMS`); `options.algorithms`
+ * can narrow that list but never widen it.
  *
  * @throws {GrantexTokenError} if the token is invalid, expired, or missing required scopes.
  */
@@ -48,6 +74,7 @@ export async function verifyGrantToken(
   token: string,
   options: VerifyGrantTokenOptions,
 ): Promise<VerifiedGrant> {
+  const algorithms = resolveAlgorithms(options.algorithms);
   let jwksUri = options.jwksUri;
   let expectedIssuer = options.issuer;
   if (options.issuerDid?.startsWith('did:web:')) {
@@ -73,7 +100,7 @@ export async function verifyGrantToken(
   let payload: GrantTokenPayload;
   try {
     const jwtOptions = {
-      algorithms: ['RS256'] as string[],
+      algorithms,
       issuer: expectedIssuer,
       ...(options.clockTolerance !== undefined
         ? { clockTolerance: options.clockTolerance }

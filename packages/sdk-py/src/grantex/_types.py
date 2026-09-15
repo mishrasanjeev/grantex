@@ -520,6 +520,9 @@ class VerifyGrantTokenOptions:
     audience: str | None = None
     issuer_did: str | None = None
     issuer: str | None = None
+    algorithms: list[str] | None = None
+    """Signature algorithms to accept: a subset of ``["RS256", "ES256"]`` (the
+    default). Any other value is rejected."""
 
 
 # ─── Raw JWT payload shape ────────────────────────────────────────────────────
