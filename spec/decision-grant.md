@@ -1,266 +1,350 @@
 # Decision grant profile
 
 Status: draft for Grantex 0.6 (PRD G-3). Implemented by the auth service
-(`apps/auth-service`, behind `DECISION_GRANTS_ENABLED`), the Python SDK
-(`grantex.decisions`), the TypeScript SDK (`@grantex/sdk`) and
+(`apps/auth-service`, off unless `DECISION_GRANTS_ENABLED=true`), the Python
+SDK (`grantex.decisions`), the TypeScript SDK (`@grantex/sdk`) and
 `@grantex/mcp-auth` (`grantexDecisionVerifier`).
 
-A **decision grant** is a second credential, next to the agent's grant
-token, that a named person mints for **one semantic action** on **one case**.
-A tool whose manifest entry declares `"requires_decision": true` cannot be
-called without one; with `four_eyes_on` listing the decision, it needs two,
-from different people.
+A **decision grant** is a second credential, next to the agent's grant token,
+that a named person mints for **one semantic action** on **one case**. A tool
+whose manifest entry declares `"requires_decision": true` cannot be called
+without one; with `four_eyes_on` listing the decision it needs two, from
+different people.
 
 Keywords MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
-## 1. Roles
+## 1. Roles and credentials
 
-| Role | Does |
-|---|---|
-| Platform | Runs the workflow and the approvals surface (for example an approvals console). Creates decision requests, registers case versions, presents decisions to people, and holds the developer API key. |
-| Approver | A named person, authenticated through one of the developer's OIDC SSO connections with step-up. |
-| Issuer | The Grantex auth service. Mints, records, audits and consumes decision grants. |
-| Enforcer | Whatever authorises the tool call: `enforce()` in an SDK, or an MCP server using `mcp-auth`. |
+| Role | Credential | Can |
+|---|---|---|
+| Service administrator | `ADMIN_API_KEY` of the auth service | Allow-list the identity providers whose users may approve for a developer; disable them. |
+| Platform (for example an approvals console or workflow engine) | Developer API key | Register case versions, create and cancel decision requests, read results, consume decision grants. **Cannot** add an identity provider, sign an approver in or approve. |
+| Approver | A browser session on the auth service, created by signing in with an allow-listed identity provider with step-up | Review and approve decisions on the auth service's approval page. |
+| Enforcer | Issuer's JWKS; developer API key for consumption | Verify decision grants and consume them before allowing a tool call: `enforce()`, or an MCP server with `grantexDecisionVerifier`. |
+
+The separation is the point of the feature: nothing a developer API key or an
+agent can do produces an approval.
 
 ## 2. Semantic action and canonicalisation
 
-The action is `{case_id, action, decision, subject, amount?}` and its hash is
+The action is `{case_id, action, decision, subject, amount?, extra?}` and
 
 ```
 action_hash = "sha256:" || base64url( SHA-256( UTF-8( JCS(action) ) ) )
 ```
 
-with RFC 8785 canonicalisation and unpadded base64url. Field rules, the
-derivation from a tool call and the shared test vectors are in
-[`canonicalization.md`](canonicalization.md). The enforcer derives the action
-from the call it is about to authorise: `action` is the tool name; `case_id`,
-`decision`, `subject` and `amount` are read from the call's arguments; other
-arguments are ignored. A re-planned payload, a new timestamp or a reordered
-field therefore keep the decision valid, and a different case, tool,
-decision, subject or amount invalidate it.
+with RFC 8785 canonicalisation and unpadded base64url. Field rules, refused
+characters, `extra` and the shared test vectors are in
+[`canonicalization.md`](canonicalization.md).
+
+The enforcer derives the action from the call it is about to authorise:
+`action` is the tool name; `case_id`, `decision`, `subject`, `amount` and each
+name the manifest lists in the tool's `decision_fields` (into `extra`) are read
+from the call's arguments; other arguments are ignored. When a caller passes
+both an explicit action and the arguments, they MUST hash identically.
+
+**Only bound fields are approved.** A tool whose effect depends on an argument
+that is not one of the core fields MUST declare it in `decision_fields`;
+otherwise an approved decision can be carried out with any value of that
+argument.
 
 ## 3. Token
 
-A decision grant is a JWS compact JWT.
+A decision grant is a JWS compact JWT signed with the platform signing key
+that signs grant tokens.
 
 **Protected header**
 
 | Parameter | Value |
 |---|---|
-| `typ` | `decision+jwt` (MUST). Verifiers MUST refuse any other value, so a grant token (`at+jwt`) is never accepted as a decision grant and vice versa. |
-| `alg` | The platform signing algorithm (RS256 in 0.6). Verifiers MUST use an allowlist. |
-| `kid` | Key identifier in the issuer's JWKS. |
+| `typ` | `decision+jwt`. Verifiers MUST refuse any other value, so a grant token (`at+jwt`) is never accepted as a decision grant. |
+| `alg` | `RS256` or `ES256`. Verifiers MUST use an allowlist. |
+| `kid` | REQUIRED. Verifiers MUST select the key by `kid` (and key type) from the issuer's key set, never from the header alone. |
 
 **Claims**
 
 | Claim | Type | Meaning |
 |---|---|---|
-| `iss` | string | Issuer. MUST equal the expected issuer. |
-| `aud` | string | `urn:grantex:decision`. MUST be checked. |
-| `sub` | string | The approver: `user:<identity-provider subject>`. |
+| `iss` | string | Issuer; MUST equal the expected issuer. |
+| `aud` | string | `urn:grantex:decision`; MUST be checked. |
+| `sub` | string | The approver: `user:<ns>:<sub>`, where `<sub>` is the identity provider's subject and `<ns>` the first 22 base64url characters of SHA-256 of the identity provider's issuer. The same `sub` at two identity providers is two approvers. |
 | `jti` | string | `dgnt_` followed by a 26-character ULID. Single use. |
-| `iat`, `exp` | integer | Issued at and expiry, seconds. `exp - iat` MUST NOT exceed 86400. |
-| `dev` | string | Developer (tenant) the grant belongs to. |
-| `idp` | string | Issuer of the approver's ID token. |
-| `approver_auth` | string | How the approver authenticated: `sso` followed by `+<amr>` for each authentication method reported, sorted (for example `sso+hwk+pwd`), or `sso+acr` when only `acr` was reported. |
-| `acr` | string | Optional. Authentication context class from the ID token. |
-| `amr` | string[] | Authentication methods from the ID token (RFC 8176 values). |
+| `iat`, `exp` | integer | Issued at and expiry. `exp - iat` MUST NOT exceed 86400. |
+| `dev` | string | Developer (tenant). |
+| `idp` | string | Issuer of the approver's identity provider. |
+| `approver_auth` | string | `sso` followed by `+<amr>` for each authentication method the identity provider reported, sorted (`sso+hwk+pwd`), or `sso+acr` when only `acr` was reported. |
+| `acr` | string | Optional; from the ID token. |
+| `amr` | string[] | From the ID token (RFC 8176 values). |
 | `auth_time` | integer | When the approver last authenticated with step-up. |
 | `action` | object | The semantic action (section 2). |
-| `action_hash` | string | Hash of `action`. Verifiers MUST recompute it and refuse a mismatch. |
-| `connector` | string | Manifest connector of the tool. Not part of the hash; checked separately. |
+| `action_hash` | string | Hash of `action`; verifiers MUST recompute it. |
+| `connector` | string | Manifest connector of the tool; checked by verifiers, not part of the hash. |
 | `case_version` | string | Case version the decision was taken on (section 5). |
-| `dwell_ms` | integer | Milliseconds the approver spent on the decision before approving. |
+| `dwell_ms` | integer | Milliseconds from rendering the approval page to its submission, measured by the auth service. |
+| `dwell_source` | string | `server`. Verifiers MUST refuse any other value. |
+| `memo_hash` | string | `sha256:` base64url SHA-256 of the memo text shown to the approver. |
+| `policy_score_hash` | string | `sha256:` base64url SHA-256 of the RFC 8785 canonical JSON of the policy score shown. |
+| `memo_ref`, `policy_score_ref` | string | Optional platform references to the memo and policy score. |
 | `decision_request` | string | `dreq_...` identifier of the decision request. |
-| `memo_ref`, `policy_score_ref` | string | Optional. References to the memo and policy score shown to the approver. |
-| `four_eyes` | object | Present when the decision needs two approvals: `{"approvals_required": 2, "position": 1}` on the first grant; `{"approvals_required": 2, "position": 2, "first_jti": "...", "first_sub": "..."}` on the second. |
+| `four_eyes` | object | For a two-approver decision: `{"approvals_required": 2, "position": 1}` on the first grant; `{"approvals_required": 2, "position": 2, "first_jti": "...", "first_sub": "..."}` on the second. |
 
-Example (second approval of a four-eyes decline):
+Example (the second approval of a four-eyes decline):
 
 ```json
 {
   "iss": "https://grantex.dev", "aud": "urn:grantex:decision",
-  "sub": "user:approver-b", "jti": "dgnt_01K8Z000000000000000000QA2",
+  "sub": "user:bil3roIxTbMBJLooUOGo1Z:approver-b", "jti": "dgnt_01K8Z000000000000000000QA2",
   "iat": 1790000000, "exp": 1790086400,
   "dev": "dev_01", "idp": "https://idp.example.com",
   "approver_auth": "sso+hwk+pwd", "amr": ["hwk", "pwd"], "auth_time": 1789999900,
   "action": {"case_id": "case_8841", "action": "case_decision", "decision": "decline", "subject": "gb:00000001"},
   "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
-  "connector": "acme_kyb", "case_version": "v7", "dwell_ms": 61250,
+  "connector": "acme_kyb", "case_version": "v7",
+  "dwell_ms": 61250, "dwell_source": "server",
+  "memo_hash": "sha256:MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
+  "policy_score_hash": "sha256:PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP",
   "decision_request": "dreq_01K8Z000000000000000000QR1",
   "four_eyes": {"approvals_required": 2, "position": 2,
-                "first_jti": "dgnt_01K8Z000000000000000000QA1", "first_sub": "user:approver-a"}
+                "first_jti": "dgnt_01K8Z000000000000000000QA1", "first_sub": "user:bil3roIxTbMBJLooUOGo1Z:approver-a"}
 }
 ```
 
 ## 4. Minting
 
-1. **Step-up.** The platform exchanges the approver's ID token from an active
-   OIDC SSO connection of the developer (`POST /v1/decisions/approver-sessions`).
-   The issuer MUST verify it against that connection (JWKS signature, issuer,
-   audience, expiry), MUST accept each ID token once, and MUST require step-up:
-   an `acr` in the configured list or an `amr` in the configured list, with
-   `auth_time` inside the configured window (default one hour). The resulting
-   approver session lasts until that window ends. Step-up happens once per
-   session.
-2. **Request.** The platform creates a decision request
-   (`POST /v1/decisions/requests`) with the action, connector, case version,
-   memo and policy-score references, and the manifest's `four_eyes_on` (or
-   `approvalsRequired: 2`). A request lives at most 24 hours.
-3. **Attestation.** The approval surface MUST show the memo, the policy
-   score and the exact action and hash, and MUST measure the dwell time. The
-   approver's one click sends `POST /v1/decisions/requests/{id}/approvals`
-   with the approver session, the **action hash that was displayed** and the
-   dwell time. The issuer MUST refuse a different hash (`action_mismatch`), a
-   dwell time outside its configured range or longer than the request has
-   existed, a changed case (`case_changed`), an expired request (`expired`) and
-   an expired step-up (`step_up_required`). The issuer's own approval page
-   measures dwell time itself, from rendering to submission.
-4. **Four eyes.** The second grant is minted only after the first and names
-   it. The issuer MUST refuse a second approval by the same `sub`, and SHOULD
-   refuse one by the same email under another subject (`same_approver`).
-5. **Audit.** The issuer MUST append the request, every approval (approver
-   identity, identity provider, `approver_auth`, `acr`, `amr`, `auth_time`,
-   `dwell_ms`, action, action hash, case version, four-eyes position), every
-   consumption and refused consumption, case changes and cancellations to the
-   developer's audit hash chain, in the same transaction as the change.
+### 4.1 Approver identity providers
 
-`exp` is the earlier of `iat + 86400` and the request's expiry.
+The service administrator allow-lists an OpenID Connect client for a developer
+(`POST /v1/admin/developers/{developerId}/decision-approver-idps` with
+`ADMIN_API_KEY`): issuer, client id, optional client secret (stored encrypted),
+optional `acr_values`, whether a verified email is required, and the operator
+making the change (`actor`), which is recorded in the developer's audit chain.
+The developer's SSO connections play no part.
+
+### 4.2 Sign-in and step-up
+
+1. An approver opens the approval page `/decisions/{requestId}` on the auth
+   service. Without a session the page offers the developer's allow-listed
+   identity providers.
+2. `/decisions/login` starts an authorization code flow: `state` (single use,
+   bound to the browser with a `__Host-` cookie), `nonce`, PKCE S256,
+   `max_age` equal to the step-up window, and `acr_values` when configured.
+3. `/decisions/callback` consumes the state, exchanges the code, and verifies
+   the ID token:
+   - the discovery document's `issuer` MUST equal the configured issuer;
+   - the signature MUST verify with a key selected by `kid` from the
+     provider's JWKS (asymmetric algorithms only; an unknown `kid` refetches
+     the set at most once per cooldown);
+   - `iss`, `aud` (the client id), `azp` (MUST equal the client id when
+     present, and MUST be present with several audiences), `exp`, `iat`
+     (recent), `nonce`, `sub`;
+   - step-up: an `acr` in the configured list or an `amr` in the configured
+     list (default `mfa`, `hwk`), with `auth_time` inside the window (default
+     one hour);
+   - when the identity provider requires it, a verified email
+     (`email_verified: true`).
+   A nonce is accepted once per issuer and subject.
+4. The service creates a session and sets its secret only as a
+   `__Host-grantex_decision_session` cookie (HttpOnly, Secure, SameSite=Lax,
+   Path=/). No API returns it. The session ends when the step-up window ends,
+   when the approver signs out, or when its identity provider is disabled.
+
+### 4.3 Decision requests
+
+The platform creates a request (`POST /v1/decisions/requests`) with the action,
+the connector, the case version, the memo text and the policy score (a JSON
+object), and the manifest's `four_eyes_on`. The service stores the memo and
+policy score with their hashes. A request lives at most 24 hours. Request
+bodies with duplicate member names are refused.
+
+### 4.4 Approval
+
+The approval page shows the memo, the policy score and the exact action with
+its hash, all HTML-escaped, with a Content-Security-Policy that allows no
+script and no framing. The approver's one click posts a form. The service MUST
+refuse unless:
+
+- the session cookie is valid and step-up is still within the window;
+- the CSRF token (HMAC of session, request and rendering) matches;
+- `Origin` is present and equal to the service's origin, and
+  `Sec-Fetch-Site`, when sent, is `same-origin`;
+- the submitted action hash is the request's (`action_mismatch`);
+- the request is pending and unexpired and its case version is current
+  (`closed`, `expired`, `case_changed`);
+- the page was rendered to this session and not yet submitted, and at least
+  the configured minimum dwell time (default 2 seconds) has passed
+  (`dwell_too_short`);
+- for four eyes, the approver is not the first approver: neither the same
+  `sub` nor the same verified email (`same_approver`).
+
+Dwell time is measured from two database timestamps (rendering, submission);
+no client supplies it. The decision grant is minted in the same transaction
+that records the approval. The second four-eyes grant names the first.
+
+**Attestation.** The signed decision grant is the attestation: it binds the
+approver, their authentication, the action hash, the memo and policy score
+hashes and the measured dwell time. A per-decision signature by a key
+generated in the browser was considered and not adopted: such a key is usable
+by any script running on the service's origin, exactly as the HttpOnly
+session is, so it would add script to the page without separating any
+attacker the session does not already separate.
+
+### 4.5 Audit
+
+The service appends to the developer's audit hash chain, each in the
+transaction it records: identity-provider changes (with the operator), sign-ins
+(identity provider, `approver_auth`, `acr`, `amr`, `auth_time`), requests,
+approvals (approver `sub`, identity provider, authentication method, dwell
+time and source, action, action hash, memo and policy score hashes, four-eyes
+position), consumptions, refused consumptions (with the attempted action and
+hash), case changes and cancellations. Approver emails are stored only as keyed
+hashes and names encrypted.
 
 ## 5. Case-bound validity
 
-A decision grant is valid until the first of: it is consumed; its case
-changes; it expires (absolute ceiling 24 hours); its request is cancelled.
+A decision grant is valid until the first of: it is consumed; its case changes;
+it expires (absolute ceiling 24 hours, and never after its request); its
+request is cancelled.
 
-The platform chooses what a **case version** is: an opaque string (at most 128
+The platform chooses what a case version is: an opaque string (at most 128
 printable ASCII characters) that changes whenever the case changes materially,
-for example a hash of the evidence the decision was based on. It registers the
+for example a hash of the evidence the decision is based on. It registers the
 current version with `PUT /v1/decisions/cases/{caseId}`; a new version
 supersedes open requests and revokes unconsumed grants for other versions.
-Enforcers MUST pass the current version from their own case state (never from
-the agent's arguments) and MUST refuse a grant for another version
+Enforcers MUST pass the current version from their own case state, never from
+the agent's arguments, and MUST refuse a grant for another version
 (`case_changed`).
-
-Wall-clock expiry alone would break against asynchronous provider calls that
-outlast a short lifetime; case binding keeps a decision usable while the case
-is unchanged, and no longer.
 
 ## 6. Verification and single use
 
 An enforcer MUST, in this order:
 
 1. Refuse a missing grant with `decision_required`.
-2. Verify offline: `typ`, algorithm allowlist, signature, `iss`, `aud`,
-   required claims, `jti` shape, `action_hash` = hash of `action`, lifetime
-   at most 24 hours, `dev` equal to the agent grant's developer, then the
-   action: `wrong_case` (different `case_id`), `action_mismatch` (different
-   hash or connector), `case_changed`, `expired`.
+2. Verify each grant offline: `typ`, `kid`, algorithm allowlist, signature,
+   `iss`, `aud`, required claims, `jti` shape, `action_hash` equals the hash
+   of `action`, lifetime at most 24 hours, `dwell_source` is `server`,
+   `memo_hash` and `policy_score_hash` present, `dev` equals the agent grant's
+   developer (`unknown_grant`); then `wrong_case`, `action_mismatch` (hash or
+   connector), `case_changed`, `expired`.
 3. For four eyes (the manifest lists the decision in `four_eyes_on`, **or**
-   any presented grant carries `four_eyes`): require exactly two grants with
-   different `jti` and `sub`, positions 1 and 2, the second naming the first's
-   `jti` and `sub`, the same `decision_request` (`four_eyes_incomplete`,
+   any presented grant carries `four_eyes`): exactly two grants, different
+   `jti` and `sub`, positions 1 and 2, the second naming the first's `jti` and
+   `sub`, the same `decision_request` (`four_eyes_incomplete`,
    `same_approver`, `malformed`).
 4. **Consume** every presented grant at the issuer
-   (`POST /v1/decisions/consume`), atomically: all or none. Allow the call
-   only if the issuer confirmed consumption of exactly the presented `jti`s.
+   (`POST /v1/decisions/consume`), all or none, and allow the call only if the
+   issuer confirmed exactly the presented `jti`s.
 
-Offline verification alone MUST NOT allow a call: a grant verified offline
-can be replayed until it expires. The issuer consumes with a conditional
-update in one transaction and re-checks the action, case version, expiry,
-revocation and four eyes under row locks, so two concurrent consumptions of
-one `jti` yield exactly one success.
+Offline verification alone MUST NOT allow a call. The issuer consumes with a
+conditional update in one transaction, re-checking the action, case version,
+expiry, revocation and four eyes (subjects and verified-email hashes) under row
+locks, so two concurrent consumptions of one `jti` yield exactly one success.
+Every refusal is audited; if the refusal cannot be recorded the issuer answers
+503 and nothing is consumed.
 
-An SDK SHOULD perform consumption after every other check of the call (in
-`enforce()`, after caps are reserved) and release other reservations when
-consumption fails. It MUST NOT retry a consumption request automatically.
+An SDK SHOULD consume after every other check of the call (in `enforce()`,
+after caps are reserved), MUST refund those reservations and deny when
+consumption fails for any reason, and MUST NOT retry a consumption request.
+
+**Consumption spends the grant.** If the consumption response is lost, or the
+tool call fails after consumption, the grant stays spent; a person has to
+approve again. Platforms SHOULD make the tool call idempotent per decision
+request.
 
 ## 7. Errors
 
-Enforcers report `decision_required` (no grant) or `decision_invalid` with a
-sub-reason. The first four are PRD Appendix B's.
+`decision_required` (no grant) or `decision_invalid` with a sub-reason. The
+first four are PRD Appendix B's.
 
-| Sub-reason | Meaning |
-|---|---|
-| `action_mismatch` | The grant approves a different action (tool, decision, subject, amount) or connector; or the approval surface submitted a hash other than the request's. |
-| `expired` | Past `exp`, or the decision request expired. |
-| `consumed` | The grant was already used. |
-| `same_approver` | The same person approved twice, or the same grant was presented twice. |
-| `case_changed` | The case version differs from the one approved. |
-| `wrong_case` | The grant is for another case (replay across cases). |
-| `step_up_required` | Issuer only: the approver has not stepped up, or step-up is too old. |
-| `four_eyes_incomplete` | Two approvals are needed and fewer were presented. |
-| `revoked` | The request was cancelled. |
-| `unknown_grant` | The issuer does not know the grant, or it belongs to another developer. |
-| `malformed` | The grant, the action or the request cannot be read, or fails signature, issuer, audience or claim checks. |
-| `consume_unavailable` | Enforcer only: the issuer could not confirm consumption. |
-| `closed` | Issuer only: the request is not open for approval. |
+| Sub-reason | Where | Meaning |
+|---|---|---|
+| `action_mismatch` | issuer, enforcer | Another action (tool, decision, subject, amount, extra field) or connector; an approval of a hash other than the request's; an explicit action that differs from the call's arguments. |
+| `expired` | issuer, enforcer | Past `exp`, or the request expired. |
+| `consumed` | issuer, enforcer | Already used. |
+| `same_approver` | issuer, enforcer | The same approver twice, or the same grant twice. |
+| `case_changed` | issuer, enforcer | The case version differs from the one approved. |
+| `wrong_case` | issuer, enforcer | The grant is for another case. |
+| `four_eyes_incomplete` | issuer, enforcer | Two approvals needed, fewer presented. |
+| `revoked` | issuer | The request was cancelled. |
+| `unknown_grant` | issuer, enforcer | Unknown to the issuer, or another developer's. |
+| `malformed` | issuer, enforcer | Unreadable, bad signature, key, issuer, audience, claims, `dwell_source`; a verifier without the developer or connector to check against. |
+| `consume_unavailable` | enforcer | The issuer could not confirm consumption. |
+| `step_up_required` | issuer (sign-in, approval) | No step-up, or step-up too old. |
+| `authentication_failed` | issuer (sign-in) | The ID token failed verification. |
+| `dwell_too_short` | issuer (approval) | Approved faster than the minimum dwell time. |
+| `closed` | issuer (approval) | The request is not open for approval. |
 
-The auth service answers refusals with `{"reason": "decision_invalid",
+The auth service answers API refusals with `{"reason": "decision_invalid",
 "subReason": "...", "code": "..."}`. `@grantex/mcp-auth` answers with the
-`decision_required` challenge of [`mcp-auth-challenges.md`](mcp-auth-challenges.md)
-and the sub-reason in the body; its reference verifier reads grants from the
-`grantex-decision-grant` request header (two comma-separated grants for four
-eyes).
+`decision_required` challenge of
+[`mcp-auth-challenges.md`](mcp-auth-challenges.md) and the sub-reason in the
+body; its reference verifier reads grants from the `grantex-decision-grant`
+request header (two comma-separated grants for four eyes).
 
 ## 8. Threat model
 
 **Defends against**
 
-- *An agent approving its own actions.* Only a person authenticated at an
-  identity provider can obtain an approver session; the agent's grant token
-  cannot mint decision grants, and `typ` separation stops one token type
-  being used as the other.
-- *A prompt-injected or re-planned agent swapping the action.* The grant is
-  bound to the semantic action; any change to case, tool, decision, subject,
-  amount or connector is refused.
-- *Replay:* of a consumed grant (single use at the issuer), across cases
-  (`case_id` in the hash), after the case changed (case version), after 24
-  hours (ceiling), across tenants (`dev`).
-- *Showing one action and signing another* (a compromised or buggy console
-  changing the action between render and submit). The issuer requires the
-  displayed action hash and binds it to the request.
-- *One person satisfying four eyes.* Distinct `sub` enforced at minting (with
-  a unique constraint) and again at verification and consumption, plus an
-  email check at the issuer.
-- *Races.* Concurrent approvals and consumptions serialise on row locks and
-  unique constraints.
-- *Undetected tampering with the record.* Approvals and consumptions are in
-  the audit hash chain, written in the same transaction.
+- *The platform or an agent approving on its own.* Approvals exist only as
+  form posts from a browser session created by the service's own sign-in flow
+  with an identity provider only the service administrator can allow-list. The
+  developer API key has no approval, sign-in or identity-provider API; the
+  session secret is never returned to an API caller; `typ` separation stops a
+  grant token being used as a decision grant.
+- *Replaying someone's ID token.* The sign-in state is single use and bound to
+  the browser that started it, the nonce is checked and accepted once per
+  issuer and subject, `azp` and audience are checked, and discovery must name
+  the configured issuer.
+- *Forged dwell time.* Only server-measured dwell is accepted, and approvals
+  faster than a minimum are refused.
+- *A prompt-injected or re-planned agent changing the action.* The grant is
+  bound to the semantic action (and declared `decision_fields`); any change is
+  refused.
+- *Replay:* of a consumed grant (single use at the issuer), across cases, after
+  the case changed, after 24 hours, across tenants.
+- *Showing one action and signing another.* The page shows the stored action,
+  memo and policy score; the submitted hash must be the request's; the memo and
+  policy score hashes are in the grant.
+- *Cross-site submission and framing.* CSRF token, required `Origin`,
+  `Sec-Fetch-Site`, SameSite cookie, `frame-ancestors 'none'`, no script.
+- *One identity satisfying four eyes.* Distinct namespaced `sub` and distinct
+  verified-email hash, enforced at approval (with a unique constraint) and at
+  consumption; SDKs check distinct `sub` offline.
+- *Races.* Approvals and consumptions serialise on row locks and unique
+  constraints.
+- *Undetected tampering with the record.* Every step is in the audit hash chain.
 
 **Does not defend against**
 
-- *A malicious or compromised platform holding the developer API key.* It
-  can create requests for arbitrary actions and supply dwell times. It cannot
-  mint a grant without an approver's step-up ID token, but it can put a
-  misleading action in front of a real approver. Approvers must be able to
-  trust the surface they approve on.
-- *A compromised identity provider or approver account,* or a person who
-  controls two identities at different identity providers without a shared
-  email: four eyes compares identities, not humans.
-- *Rubber-stamping.* Dwell time is recorded and exported (a histogram and
-  audit entries) so an alert can catch it collapsing; a click is not proof of
-  review. Dwell supplied by an approval surface is bounded but self-reported.
-- *An enforcer that skips consumption* (offline verification only), or a tool
-  that performs the action without calling `enforce()` at all. Decision grants
-  protect the paths that check them.
-- *A stale case version supplied by the platform.* The case version is only
-  as current as the platform's own case state.
+- *A compromised or malicious service administrator,* who can allow-list an
+  identity provider they control.
+- *A compromised identity provider or approver account,* or one person holding
+  two identities without a shared verified email.
+- *Misleading content.* The platform writes the memo and policy score; the page
+  shows them faithfully, but a person can be misled by what the platform wrote.
+- *Rubber-stamping.* A minimum dwell time and a dwell-time histogram make it
+  visible, not impossible.
+- *Script injection on the auth service's origin.* It could act within an
+  approver's session (section 4.4).
+- *Arguments outside the bound fields,* when a manifest omits a meaningful
+  argument from `decision_fields`.
+- *An enforcer that skips consumption,* or a tool that acts without calling
+  `enforce()`.
+- *A stale case version* supplied by the platform.
 - *Issuer compromise or signing-key theft.*
-- *Availability.* When the issuer is unreachable, decisions cannot be
-  consumed and calls are refused (fail closed).
+- *Availability.* When the issuer is unreachable, decisions cannot be consumed
+  and calls are refused (fail closed).
 
 ## 9. APIs
 
 | | Python | TypeScript | Auth service |
 |---|---|---|---|
-| Approver session | `grantex.decisions.create_approver_session` | `grantex.decisions.createApproverSession` | `POST /v1/decisions/approver-sessions` |
-| Case version | `set_case_version` | `setCaseVersion` | `PUT /v1/decisions/cases/{caseId}` |
+| Approver identity providers | | | `POST`, `GET /v1/admin/developers/{id}/decision-approver-idps`, `POST .../{idpId}/disable` (admin credential) |
+| Case version | `grantex.decisions.set_case_version` | `grantex.decisions.setCaseVersion` | `PUT /v1/decisions/cases/{caseId}` |
 | Request | `create_request`, `get_request`, `cancel_request` | `createRequest`, `getRequest`, `cancelRequest` | `POST /v1/decisions/requests`, `GET .../{id}`, `POST .../{id}/cancel` |
-| Approve | `approve` | `approve` | `POST /v1/decisions/requests/{id}/approvals` |
-| Approval page | `create_page_ticket` | `createPageTicket` | `POST .../{id}/page-tickets`, `GET/POST /decisions/{id}` |
+| Sign in and approve | | | `GET /decisions/{id}`, `GET /decisions/login`, `GET /decisions/callback`, `POST /decisions/{id}`, `POST /decisions/logout` (browser only) |
 | Verify offline | `verify_decision_grant(s)` | `verifyDecisionGrant(s)` | |
 | Consume | `consume` | `consume` | `POST /v1/decisions/consume` |
-| Enforce | `enforce(..., decision_grants, arguments or decision_action, case_version, decisions_mode)` | `enforce({..., decisionGrants, arguments or decisionAction, caseVersion, decisionsMode})` | |
+| Enforce | `enforce(..., decision_grants, arguments and/or decision_action, case_version, decisions_mode)`; `wrap_tool(..., decision_grants, case_version)` | `enforce({..., decisionGrants, arguments and/or decisionAction, caseVersion, decisionsMode})`; `wrapTool`, `enforceMiddleware` | |
 | MCP | | `grantexDecisionVerifier` (`@grantex/mcp-auth`) | |
 
 Shared test cases: `spec/examples/decision-grant/action-hash.json` and
