@@ -289,6 +289,48 @@ export function parseToolDeclaration(tool: string, value: unknown): ToolSpec {
   return spec;
 }
 
+/**
+ * Parse manifest JSON text, rejecting a key repeated in any object. `JSON.parse`
+ * alone keeps the last value, so a tool declared twice would load silently.
+ */
+export function parseManifestJson(text: string): unknown {
+  const data: unknown = JSON.parse(text);
+  const duplicate = findDuplicateKey(text);
+  if (duplicate !== undefined) throw fail(`duplicate key ${q(duplicate)} in manifest file`);
+  return data;
+}
+
+/** First key repeated within one object of already-valid JSON `text`. */
+function findDuplicateKey(text: string): string | undefined {
+  const stack: Array<{ keys: Set<string> | null; expectKey: boolean }> = [];
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      const top = stack[stack.length - 1];
+      if (top?.keys && top.expectKey) {
+        const key = JSON.parse(text.slice(i, j + 1)) as string;
+        if (top.keys.has(key)) return key;
+        top.keys.add(key);
+        top.expectKey = false;
+      }
+      i = j + 1;
+      continue;
+    }
+    if (ch === '{') stack.push({ keys: new Set(), expectKey: true });
+    else if (ch === '[') stack.push({ keys: null, expectKey: false });
+    else if (ch === '}' || ch === ']') stack.pop();
+    else if (ch === ',') {
+      const top = stack[stack.length - 1];
+      if (top?.keys) top.expectKey = true;
+    }
+    i += 1;
+  }
+  return undefined;
+}
+
 /** Render a ToolSpec in manifest 0.6 object form (omitting unset fields). */
 export function toolSpecToObject(spec: ToolSpec): ManifestToolObject {
   const out: ManifestToolObject = { permission: spec.permission };
@@ -409,7 +451,13 @@ export class ToolManifest {
     for (const name of Object.keys(this.tools)) {
       const spec = this.getToolSpec(name) ?? { permission: this.tools[name] as Permission, requiresDecision: false, fourEyesOn: [] };
       const rendered = toolSpecToObject(spec);
-      tools[name] = Object.keys(rendered).length === 1 ? spec.permission : rendered;
+      // defineProperty keeps a tool named "__proto__" as an own property.
+      Object.defineProperty(tools, name, {
+        value: Object.keys(rendered).length === 1 ? spec.permission : rendered,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
     return {
       connector: this.connector,
@@ -428,15 +476,17 @@ export class ToolManifest {
     const content = fs.readFileSync(filePath, 'utf-8');
     let data: unknown;
     if (filePath.endsWith('.yaml') || filePath.endsWith('.yml')) {
+      let yaml: { parse: (s: string, options?: { uniqueKeys?: boolean }) => unknown };
       try {
         // Dynamic import — yaml is an optional peer dependency
-        const yaml = (await import('yaml' as string)) as { parse: (s: string) => unknown };
-        data = yaml.parse(content);
+        yaml = (await import('yaml' as string)) as typeof yaml;
       } catch {
         throw new Error('yaml package required for YAML manifests: npm install yaml');
       }
+      // uniqueKeys makes the parser throw on a repeated key.
+      data = yaml.parse(content, { uniqueKeys: true });
     } else {
-      data = JSON.parse(content);
+      data = parseManifestJson(content);
     }
     if (!isPlainObject(data)) throw fail('a manifest must be a JSON object');
     return ToolManifest.fromJSON(data);

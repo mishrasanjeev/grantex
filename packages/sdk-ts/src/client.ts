@@ -42,7 +42,7 @@ import {
   type Reservation,
 } from './caps/meter.js';
 import { MALFORMED_GRANT_CAPS, buildCapLimits, type BuildCapLimitsOptions } from './caps/limits.js';
-import { ToolManifest, permissionCovers, type WouldDeny, type ToolSpec, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
+import { ToolManifest, parseManifestJson, permissionCovers, type WouldDeny, type ToolSpec, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 import { verifyGrantToken } from './verify.js';
 import type {
   AuthorizationRequest,
@@ -249,8 +249,11 @@ export class Grantex {
     const files = fs.readdirSync(dirPath).filter((f: string) => f.endsWith('.json'));
     for (const file of files) {
       const content = fs.readFileSync(path.join(dirPath, file), 'utf-8');
-      const data = JSON.parse(content) as Record<string, unknown>;
-      this.loadManifest(ToolManifest.fromJSON(data));
+      const data = parseManifestJson(content);
+      if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+        throw new Error(`ToolManifest: a manifest must be a JSON object (${file})`);
+      }
+      this.loadManifest(ToolManifest.fromJSON(data as Record<string, unknown>));
     }
   }
 

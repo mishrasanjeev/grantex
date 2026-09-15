@@ -35,7 +35,7 @@ import re
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple, Union
 
 if TYPE_CHECKING:
     from .caps import CapLimit, Reservation
@@ -190,6 +190,41 @@ def is_valid_purpose_pattern(value: Any) -> bool:
 
 def _unique_strings(value: Any) -> bool:
     return len(set(value)) == len(value)
+
+
+def _reject_duplicate_keys(pairs: List[Tuple[str, Any]]) -> Dict[str, Any]:
+    """``json.loads`` hook: a repeated key would silently keep only its last value."""
+    out: Dict[str, Any] = {}
+    for key, value in pairs:
+        if key in out:
+            raise _fail(f"duplicate key {_q(key)} in manifest file")
+        out[key] = value
+    return out
+
+
+def _load_yaml_rejecting_duplicates(raw: str) -> Any:
+    try:
+        import yaml  # type: ignore[import-not-found,unused-ignore,import-untyped]
+    except ImportError:
+        raise ImportError("PyYAML is required to load YAML manifests: pip install pyyaml")
+
+    class _UniqueKeyLoader(yaml.SafeLoader):  # type: ignore[misc,name-defined,unused-ignore]
+        pass
+
+    def _construct_mapping(loader: Any, node: Any, deep: bool = False) -> Dict[Any, Any]:
+        loader.flatten_mapping(node)
+        out: Dict[Any, Any] = {}
+        for key_node, value_node in node.value:
+            key = loader.construct_object(key_node, deep=deep)
+            if key in out:
+                raise _fail(f"duplicate key {_q(key)} in manifest file")
+            out[key] = loader.construct_object(value_node, deep=deep)
+        return out
+
+    _UniqueKeyLoader.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_mapping
+    )
+    return yaml.load(raw, Loader=_UniqueKeyLoader)  # nosec B506 - SafeLoader subclass
 
 
 def _check_names(connector: Any, tools: Mapping[Any, Any]) -> None:
@@ -457,13 +492,9 @@ class ToolManifest:
         p = Path(path)
         raw = p.read_text(encoding="utf-8")
         if p.suffix in (".yaml", ".yml"):
-            try:
-                import yaml  # type: ignore[import-not-found,unused-ignore,import-untyped]
-                data = yaml.safe_load(raw)
-            except ImportError:
-                raise ImportError("PyYAML is required to load YAML manifests: pip install pyyaml")
+            data = _load_yaml_rejecting_duplicates(raw)
         else:
-            data = json.loads(raw)
+            data = json.loads(raw, object_pairs_hook=_reject_duplicate_keys)
         if not isinstance(data, Mapping):
             raise _fail("a manifest must be a JSON object")
         return cls.from_dict(data)

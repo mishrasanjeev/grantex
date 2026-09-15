@@ -112,6 +112,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   are enforced exactly as before. Manifests made only of permission strings
   still load with unknown top-level keys, now with a deprecation warning; a
   future minor release will reject them.
+- **Behaviour change:** manifest files (JSON and YAML) with a key repeated
+  inside one object are rejected with `ManifestValidationError`
+  (`duplicate key "<key>" in manifest file`) by `from_file` / `fromFile` and
+  `load_manifests_from_dir` / `loadManifestsFromDir`, instead of silently
+  keeping the last value.
 
 ### Verified Python SDK publication (2026-09-15)
 - Published Python `grantex==0.5.1` to PyPI (uploaded 2026-09-15 01:56 UTC),
