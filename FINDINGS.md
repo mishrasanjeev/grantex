@@ -80,3 +80,16 @@ Remove an entry in the pull request that fixes it.
 - **Fix:** log the failure with the `jti` and a reason code, count it, and
   retry the upstream revocation from a durable queue until it succeeds.
 
+
+## G-13 — SSO ID-token verification does not refresh the JWKS for an unknown `kid`
+
+- **Found:** decision grants (PRD G-3), which verify approver ID tokens with
+  the SSO library, 2026-09-15.
+- **What:** `verifyIdToken` in `apps/auth-service/src/lib/sso.ts` caches an
+  identity provider's JWKS for one hour and only refetches when the cache is
+  older than that. A token signed with a key the provider rotated in within
+  the hour fails verification until the cache expires, so SSO logins and
+  decision approver sessions fail (closed) after every provider key rotation.
+- **Fix:** on a `kid` not in the cached set, refetch once, rate-limited by a
+  cooldown (as `createRemoteJWKSet` and the Python SDK's JWKS cache do), and
+  add a test with a rotated provider key.
