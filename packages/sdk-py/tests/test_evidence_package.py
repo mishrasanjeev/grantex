@@ -13,6 +13,7 @@ import copy
 import hashlib
 import json
 import random
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Tuple
@@ -22,6 +23,9 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
 from grantex.evidence import (
     IDENTIFIER_CLASSES,
+    action_reference,
+    case_key,
+    keyed_content_digest,
     EvidenceBuildError,
     PrivacySettings,
     VerificationCode,
@@ -151,12 +155,45 @@ def test_build_produces_the_shared_fixture_bytes() -> None:
 def test_identifiers_are_pseudonymised_by_default() -> None:
     document = json.loads(_read("evidence-package.json"))
     raw = _read("evidence-package.json").decode("utf-8")
-    for secret in ("user:approver-a", "user:approver-b", "user:underwriting-team", "gb:00000001"):
+    for secret in ("user:approver-a", "user:approver-b", "user:underwriting-team", "gb:00000001", "mock:registry:00000001"):
         assert secret not in raw
     assert is_pseudonym(document["case"]["subject"])
-    decision = document["entries"][10]["data"]
+    decision = document["entries"][fx.I_DEC1]["data"]
     assert is_pseudonym(decision["approver"]) and is_pseudonym(decision["action"]["subject"])
+    assert "action_hash" not in decision and decision["action_ref"].startswith("ak:")
+    assert document["entries"][fx.I_CALL1]["data"]["input_hash"].startswith("hmac-sha256:")
     assert document["privacy"] == {"disclosed": [], "key_id": "example-key-1", "scheme": "hmac-sha256-v1"}
+
+
+def test_the_subject_cannot_be_confirmed_by_guessing() -> None:
+    """An unkeyed action_hash or content digest would let anyone test a guessed subject."""
+    raw = _read("evidence-package.json").decode("utf-8")
+    source = fx.case_input()
+    for entry in source["entries"]:
+        data = entry["data"]
+        for name in ("action_hash", "input_hash", "output_hash"):
+            if isinstance(data.get(name), str):
+                assert data[name] not in raw, name
+    for guess in ("gb:00000001", "gb:00000002"):
+        action = {"action": "case_decision", "case_id": fx.CASE_ID, "decision": "decline", "subject": guess}
+        assert decision_action_hash(action) not in raw
+
+
+def test_packages_of_two_cases_share_no_keyed_values() -> None:
+    first = fx.case_input()
+    second = copy.deepcopy(first)
+    second["case"]["case_id"] = "case_demo_0002"
+    for entry in second["entries"]:
+        if entry["type"] == "decision":
+            entry["data"]["action"]["case_id"] = "case_demo_0002"
+            entry["data"]["action_hash"] = decision_action_hash(entry["data"]["action"])
+        if entry["type"] == "decision_consumption":
+            entry["data"]["action_hash"] = second["entries"][fx.I_DEC1]["data"]["action_hash"]
+    settings = fx.privacy_settings(first["privacy"])
+    a = build_package(case=first["case"], entries=first["entries"], privacy=settings).data.decode("utf-8")
+    b = build_package(case=second["case"], entries=second["entries"], privacy=settings).data.decode("utf-8")
+    keyed = re.compile(r"(?:pz:|ak:)[A-Za-z0-9_-]{43}|hmac-sha256:[0-9a-f]{64}")
+    assert set(keyed.findall(a)) and not set(keyed.findall(a)) & set(keyed.findall(b))
 
 
 def test_opt_out_discloses_only_the_configured_classes() -> None:
@@ -166,7 +203,7 @@ def test_opt_out_discloses_only_the_configured_classes() -> None:
         entries=source["entries"],
         privacy=PrivacySettings(key=fx.example_key(), key_id="k1", disclosed=frozenset({"approver"})),
     )
-    decision = built.document["entries"][10]["data"]
+    decision = built.document["entries"][fx.I_DEC1]["data"]
     assert decision["approver"] == "user:approver-a"
     assert is_pseudonym(decision["action"]["subject"])
     assert is_pseudonym(built.document["entries"][0]["data"]["principal"])
@@ -177,11 +214,15 @@ def test_pseudonyms_are_stable_per_case_and_match_vectors() -> None:
     vectors = json.loads(_read("pseudonyms.json"))
     key = hashlib.sha256(vectors["key_seed"].encode("utf-8")).digest()
     seen = set()
-    for item in vectors["vectors"]:
+    for item in vectors["identifiers"]:
         token = pseudonymise(key, item["tenant_id"], item["case_id"], item["class"], item["value"])
         assert token == item["pseudonym"] and is_pseudonym(token)
         assert token not in seen
         seen.add(token)
+    content = vectors["content"]
+    assert keyed_content_digest(case_key(key, content["tenant_id"], content["case_id"]), content["digest"]) == content["keyed"]
+    action = vectors["action"]
+    assert action_reference(case_key(key, action["tenant_id"], action["case_id"]), action["action_hash"]) == action["action_ref"]
 
 
 def test_build_refuses_pseudonymisation_without_a_key() -> None:
@@ -200,7 +241,7 @@ def test_build_refuses_invalid_records_with_the_verifier_rules() -> None:
     assert (info.value.code, info.value.field_path) == ("schema_violation", "entries[3].data.notes")
 
     entries = copy.deepcopy(source["entries"])
-    entries[8]["data"]["sections"][0]["evidence"][0]["record_id"] = "mock:registry:unknown"
+    entries[fx.I_REC]["data"]["sections"][0]["evidence"][0]["record_id"] = "mock:registry:unknown"
     with pytest.raises(EvidenceBuildError) as info:
         build_package(case=source["case"], entries=entries, privacy=PrivacySettings(disclosed=frozenset(IDENTIFIER_CLASSES)))
     assert info.value.code == "dangling_reference"
@@ -226,16 +267,20 @@ def test_anchor_is_checked_and_can_be_pinned() -> None:
         expected_anchor_hash=expected["anchor_hash"],
         require_anchor=True,
     )
-    assert result.ok and result.anchor_checked
+    assert result.ok and result.anchor_status == "pinned"
+    unpinned = verify_package(_read("evidence-package.json"), expected_root=expected["root"])
+    assert unpinned.anchor_status == "internal-consistency-only"
+    assert (unpinned.unsourced_inputs, unpinned.late_entries, unpinned.tenant_asserted_entries) == (1, 1, 12)
 
 
 def test_signed_package_verifies_with_the_key_set() -> None:
     expected = _expected()["evidence-package-signed.json"]
     jwks = json.loads(_read("jwks.json"))
     result = verify_package(_read("evidence-package-signed.json"), expected_root=expected["root"], jwks=jwks, require_signature=True)
-    assert result.ok and result.signature_checked
+    assert result.ok and (result.signature_status, result.anchor_status) == ("verified", "signed")
+    assert result.signature_kid == "evidence-example-es256"
     skipped = verify_package(_read("evidence-package-signed.json"), expected_root=expected["root"], allow_unverified_signature=True)
-    assert skipped.ok and not skipped.signature_checked
+    assert skipped.ok and (skipped.signature_status, skipped.anchor_status) == ("unchecked", "internal-consistency-only")
 
 
 def test_trailing_line_feed_is_accepted_once() -> None:
@@ -342,7 +387,7 @@ def test_tampering_with_any_field_fails_verification() -> None:
 
 def _small_package() -> Tuple[bytes, str]:
     source = fx.case_input()
-    entries = [source["entries"][i] for i in (0, 1, 2, 3, 13, 14)]
+    entries = [source["entries"][i] for i in (0, 1, 2, 3, 4, fx.I_REVOKE)]
     built = build_package(case=source["case"], entries=entries, privacy=fx.privacy_settings(source["privacy"]))
     return built.data, built.root
 
@@ -383,8 +428,8 @@ def test_verification_refuses_a_malformed_trusted_root() -> None:
 
 
 def test_auditor_identifies_every_upstream_record_behind_a_recommendation_from_the_package_alone() -> None:
-    document = json.loads(_read("evidence-package.json"))
-    assert verify_package(_read("evidence-package.json"), expected_root=_expected()["evidence-package.json"]["root"]).ok
+    document = json.loads(_read("evidence-package-disclosed.json"))
+    assert verify_package(_read("evidence-package-disclosed.json"), expected_root=_expected()["evidence-package-disclosed.json"]["root"]).ok
     records = upstream_records_for(document, "rec_0001")
     assert [(r["call_id"], r["tool"], r["provider"], r["record_id"]) for r in records] == [
         ("call_0001", "resolve_business", "mock", "mock:registry:00000001"),
@@ -396,8 +441,13 @@ def test_auditor_identifies_every_upstream_record_behind_a_recommendation_from_t
     assert all(r["grant_id"] == "grnt_demo_leaf" and r["cited_by"] for r in records)
     ownership = records[3]
     assert ownership["cited_by"] == [
-        "entries[8].data.sections[2].evidence[0]",
-        "entries[7].data.inputs[1].evidence[0]",
+        f"entries[{fx.I_REC}].data.sections[2].evidence[0]",
+        f"entries[{fx.I_EVAL}].data.inputs[1].evidence[0]",
+    ]
+    # In the default (pseudonymised) package the same records appear under stable per-case pseudonyms.
+    pseudonymised = upstream_records_for(json.loads(_read("evidence-package.json")), "rec_0001")
+    assert [r["record_id"] for r in pseudonymised] == [
+        pseudonymise(fx.example_key(), fx.TENANT_ID, fx.CASE_ID, "record", r["record_id"]) for r in records
     ]
 
 
@@ -492,7 +542,9 @@ def test_structural_failures_agree_with_a_stock_json_schema_validator() -> None:
     jsonschema = pytest.importorskip("jsonschema")
     validator = jsonschema.Draft202012Validator(json.loads(SPEC_SCHEMA.read_text(encoding="utf-8")))
     files = _files()
-    structural = [c for c in _invalid_cases() if c["expect"]["code"] == "schema_violation"]
+    # Calendar validity and the unsourced rule are verifier rules beyond JSON Schema keywords.
+    beyond_schema = {"impossible calendar date", "input cites evidence and is marked unsourced"}
+    structural = [c for c in _invalid_cases() if c["expect"]["code"] == "schema_violation" and c["name"] not in beyond_schema]
     assert structural
     for case in structural:
         assert list(validator.iter_errors(json.loads(fx.apply_case(case, files)))), case["name"]

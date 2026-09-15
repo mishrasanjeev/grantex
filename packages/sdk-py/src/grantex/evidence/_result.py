@@ -40,6 +40,8 @@ class VerificationCode:
     CASE_MISMATCH = "case_mismatch"
     ACTION_HASH_MISMATCH = "action_hash_mismatch"
     DECISION_INCONSISTENT = "decision_inconsistent"
+    VALIDITY_VIOLATION = "validity_violation"
+    AUTHORITY_VIOLATION = "authority_violation"
     TOOL_CALL_INCONSISTENT = "tool_call_inconsistent"
     ROOT_NOT_TRUSTED = "root_not_trusted"
     ANCHOR_MISSING = "anchor_missing"
@@ -83,6 +85,12 @@ class VerificationResult:
     ``ok`` is true only when every check passed. Otherwise ``code`` names the
     first check that failed and ``entry_index``, ``field_path``, ``expected``
     and ``actual`` locate it where that is meaningful.
+
+    ``anchor_status`` says how far the anchor can be trusted: ``absent``;
+    ``internal-consistency-only`` (it matches the package, which anyone able to
+    write the package could arrange); ``pinned`` (it equals an anchor hash the
+    caller obtained independently); ``signed`` (the service signature covers
+    it). ``signature_status`` is ``absent``, ``unchecked`` or ``verified``.
     """
 
     ok: bool
@@ -94,8 +102,12 @@ class VerificationResult:
     actual: Optional[str] = None
     root: Optional[str] = None
     entry_count: Optional[int] = None
-    anchor_checked: bool = False
-    signature_checked: bool = False
+    anchor_status: str = "absent"
+    signature_status: str = "absent"
+    signature_kid: Optional[str] = None
+    unsourced_inputs: int = 0
+    late_entries: int = 0
+    tenant_asserted_entries: int = 0
     details: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -110,8 +122,12 @@ class VerificationResult:
             "actual": self.actual,
             "root": self.root,
             "entry_count": self.entry_count,
-            "anchor_checked": self.anchor_checked,
-            "signature_checked": self.signature_checked,
+            "anchor_status": self.anchor_status,
+            "signature_status": self.signature_status,
+            "signature_kid": self.signature_kid,
+            "unsourced_inputs": self.unsourced_inputs,
+            "late_entries": self.late_entries,
+            "tenant_asserted_entries": self.tenant_asserted_entries,
         }
 
 

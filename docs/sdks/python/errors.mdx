@@ -107,7 +107,7 @@ except GrantexTokenError as e:
 ```
 
 Common causes:
-- Token uses an algorithm other than RS256
+- Token uses an algorithm other than RS256 or ES256, or names a key of the wrong type
 - Token signature is invalid
 - Token is expired
 - Required claims are missing (`jti`, `sub`, `agt`, `dev`, `scp`, `iat`, `exp`)

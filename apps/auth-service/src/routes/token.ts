@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getSql, type TxSql } from '../db/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
+import { parseActorClaim } from '../lib/grant-token-claims.js';
 import { isKnownPurpose, purposeOfToolsAuthorizationDetails } from '../lib/purpose.js';
 import { emitEvent } from '../lib/events.js';
 import { tokenExchangeTotal, tokenExchangeDuration } from '../lib/metrics.js';
@@ -431,7 +432,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
                  g.agent_id, g.principal_id, g.developer_id, g.scopes, g.status AS grant_status,
                   g.expires_at AS grant_expires_at, g.audience, g.agent_key_thumbprint,
                   g.authorization_details AS grant_authorization_details,
-                 g.parent_grant_id, g.delegation_depth,
+                 g.parent_grant_id, g.delegation_depth, g.actor_chain,
                  a.did AS agent_did, parent_agent.did AS parent_agent_did,
                   ba.remaining_budget, ba.currency AS budget_currency
           FROM refresh_tokens rt
@@ -489,6 +490,19 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         const parentGrnt = row['parent_grant_id'] as string | null | undefined;
         const parentAgt = row['parent_agent_did'] as string | null | undefined;
         const delegationDepth = Number(row['delegation_depth'] ?? 0);
+        // The stored RFC 8693 actor chain; grants delegated before it was
+        // stored fall back to the delegating agent alone.
+        let refreshedAct: Record<string, unknown> | undefined;
+        try {
+          refreshedAct = row['actor_chain'] !== null && row['actor_chain'] !== undefined
+            ? parseActorClaim(row['actor_chain']) as Record<string, unknown>
+            : (parentAgt ? { sub: parentAgt } : undefined);
+        } catch {
+          routeError(500, 'Invalid grant actor chain', 'INTERNAL_ERROR');
+        }
+        if (refreshedAct !== undefined && parentAgt && refreshedAct['sub'] !== parentAgt) {
+          routeError(500, 'Invalid grant actor chain', 'INTERNAL_ERROR');
+        }
         // Refreshed tokens keep the grant's tools entries (purpose) and add the
         // current budget entry, if any.
         const storedDetails = row['grant_authorization_details'] ?? null;
@@ -523,7 +537,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           ...(refreshedDetails.length > 0 ? { authorizationDetails: refreshedDetails } : {}),
           ...(parentAgt ? { parentAgt } : {}),
           ...(parentGrnt ? { parentGrnt } : {}),
-          ...(parentAgt ? { act: { sub: parentAgt } } : {}),
+          ...(refreshedAct !== undefined ? { act: refreshedAct } : {}),
           ...(delegationDepth > 0 ? { delegationDepth } : {}),
           exp: Math.floor(grantExpiresAt.getTime() / 1000),
         });

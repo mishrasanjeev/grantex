@@ -24,7 +24,7 @@ from ._canonical import canonicalize
 from ._document import format_path
 from ._result import VerificationCode, VerificationFailure
 
-__all__ = ["load_schema", "validate", "SCHEMA_KEYWORDS", "matches"]
+__all__ = ["load_schema", "validate", "SCHEMA_KEYWORDS", "matches", "is_valid_timestamp", "timestamp_ms"]
 
 Path = Tuple[Union[str, int], ...]
 
@@ -42,6 +42,7 @@ SCHEMA_KEYWORDS = frozenset(
         "minLength",
         "maxLength",
         "pattern",
+        "format",
         "minimum",
         "maximum",
         "minItems",
@@ -60,6 +61,45 @@ SCHEMA_KEYWORDS = frozenset(
 )
 
 _PATTERNS: Dict[str, Pattern[str]] = {}
+_TIMESTAMP = re.compile(
+    r"([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})[.]([0-9]{3})Z"
+)
+_DAYS = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+
+
+def _parse_timestamp(value: str) -> Optional[Tuple[int, int, int, int, int, int, int]]:
+    match = _TIMESTAMP.match(value) if len(value) == 24 else None
+    if match is None:
+        return None
+    year, month, day, hour, minute, second, milli = (int(g) for g in match.groups())
+    if year < 1 or not 1 <= month <= 12 or hour > 23 or minute > 59 or second > 59:
+        return None
+    leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+    days = 29 if month == 2 and leap else _DAYS[month - 1]
+    if not 1 <= day <= days:
+        return None
+    return year, month, day, hour, minute, second, milli
+
+
+def is_valid_timestamp(value: object) -> bool:
+    """``YYYY-MM-DDTHH:MM:SS.sssZ`` naming a real calendar instant (no leap seconds)."""
+    return isinstance(value, str) and _parse_timestamp(value) is not None
+
+
+def timestamp_ms(value: str) -> int:
+    """Milliseconds since the epoch of a valid timestamp."""
+    parts = _parse_timestamp(value)
+    if parts is None:
+        raise ValueError(f"invalid timestamp {value!r}")
+    year, month, day, hour, minute, second, milli = parts
+    # Days from civil (proleptic Gregorian), exact for years 1-9999.
+    y = year - (1 if month <= 2 else 0)
+    era = y // 400
+    yoe = y - era * 400
+    doy = (153 * (month + (-3 if month > 2 else 9)) + 2) // 5 + day - 1
+    doe = yoe * 365 + yoe // 4 - yoe // 100 + doy
+    days = era * 146097 + doe - 719468
+    return (((days * 24 + hour) * 60 + minute) * 60 + second) * 1000 + milli
 _SCHEMA: Optional[Dict[str, Any]] = None
 
 
@@ -207,6 +247,8 @@ def _validate(
             raise _fail(path, f"longer than {schema['maxLength']} characters")
         if "pattern" in schema and not _pattern(schema["pattern"]).search(value):
             raise _fail(path, f"does not match {schema['pattern']}")
+        if schema.get("format") == "date-time" and not is_valid_timestamp(value):
+            raise _fail(path, "not a valid UTC timestamp with millisecond precision")
     elif kind == "number":
         if "minimum" in schema and value < schema["minimum"]:
             raise _fail(path, f"less than {schema['minimum']}")

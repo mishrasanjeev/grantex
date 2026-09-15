@@ -1,4 +1,10 @@
-"""Hashes used by evidence packages (spec/evidence-package.md, "Hash chain")."""
+"""Hashes and keyed pseudonyms used by evidence packages.
+
+See spec/evidence-package.md, "Identifiers and privacy" and "Hash chain".
+Every keyed value is an HMAC-SHA256 under a per-case key, and every HMAC input
+is the RFC 8785 form of a JSON array, so no two inputs can collide by
+concatenation.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +17,7 @@ from ._canonical import canonicalize
 
 __all__ = [
     "IDENTIFIER_CLASSES",
+    "PLATFORM_MARKER",
     "digest",
     "digest_bytes",
     "header_hash",
@@ -18,17 +25,31 @@ __all__ = [
     "chain_root",
     "decision_action_hash",
     "audit_entry_hash",
+    "case_key",
+    "pseudonym",
     "pseudonymise",
+    "keyed_content_digest",
+    "action_reference",
     "is_pseudonym",
+    "is_action_reference",
 ]
 
-IDENTIFIER_CLASSES = ("approver", "principal", "subject")
-"""Classes of identifier that are pseudonymised unless disclosed."""
+IDENTIFIER_CLASSES = ("approver", "content", "principal", "record", "subject")
+"""Classes of value that are keyed per case unless disclosed (sorted)."""
+
+PLATFORM_MARKER = "grantex:platform"
+"""Metadata member only the auth service writes; /v1/audit/log refuses it."""
 
 _PSEUDONYM_PREFIX = "pz:"
-_CASE_DERIVATION_LABEL = "grantex-evidence-v1"
+_ACTION_PREFIX = "ak:"
+_KEYED_DIGEST_PREFIX = "hmac-sha256:"
 _HEADER_MEMBERS = ("case", "format", "privacy", "version")
 _CHAIN_MEMBERS = ("alg", "canonicalization", "genesis", "head", "length")
+_B64URL = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
 def digest_bytes(data: bytes) -> str:
@@ -57,20 +78,16 @@ def chain_root(chain: Mapping[str, Any]) -> str:
 
 
 def decision_action_hash(action: Mapping[str, Any]) -> str:
-    """The decision-grant ``action_hash`` of a semantic action (PRD G-3).
-
-    ``"sha256:" + base64url(SHA-256(JCS(action)))`` without padding.
-    """
+    """The decision-grant ``action_hash``: ``"sha256:" + base64url(SHA-256(JCS(action)))``."""
     raw = hashlib.sha256(canonicalize(dict(action)).encode("utf-8")).digest()
-    return "sha256:" + base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+    return "sha256:" + _b64url(raw)
 
 
 def audit_entry_hash(entry: Mapping[str, Any]) -> str:
     """Hash of an auth-service audit entry, as the audit chain stores it.
 
-    This is the auth service's current audit hash layout: SHA-256 (lower-case
-    hex) of a JSON object with members in this fixed order, metadata with
-    members sorted, and no whitespace.
+    SHA-256 (lower-case hex) of a JSON object with members in this fixed
+    order, each value in RFC 8785 form, and no whitespace.
     """
     prev_hash: Optional[str] = entry["prevHash"]
     text = (
@@ -91,36 +108,62 @@ def audit_entry_hash(entry: Mapping[str, Any]) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def case_key(tenant_key: bytes, tenant_id: str, case_id: str) -> bytes:
+    """``HMAC-SHA256(tenant_key, JCS(["grantex-evidence-case-v1", tenant_id, case_id]))``."""
+    if len(tenant_key) < 32:
+        raise ValueError("pseudonymisation key must be at least 32 bytes")
+    label = canonicalize(["grantex-evidence-case-v1", tenant_id, case_id]).encode("utf-8")
+    return hmac.new(tenant_key, label, hashlib.sha256).digest()
+
+
+def _mac(key: bytes, parts: Any) -> bytes:
+    return hmac.new(key, canonicalize(parts).encode("utf-8"), hashlib.sha256).digest()
+
+
+def pseudonym(key: bytes, identifier_class: str, value: str) -> str:
+    """``"pz:" + base64url(HMAC(case_key, JCS(["pseudonym-v1", class, value])))``."""
+    if identifier_class not in ("approver", "principal", "record", "subject"):
+        raise ValueError(f"not an identifier class: {identifier_class!r}")
+    return _PSEUDONYM_PREFIX + _b64url(_mac(key, ["pseudonym-v1", identifier_class, value]))
+
+
 def pseudonymise(
     tenant_key: bytes, tenant_id: str, case_id: str, identifier_class: str, value: str
 ) -> str:
-    """Stable per-case pseudonym for an identifier.
+    """Stable per-case pseudonym for an identifier (derives the case key first)."""
+    return pseudonym(case_key(tenant_key, tenant_id, case_id), identifier_class, value)
 
-    ``case_key = HMAC-SHA256(tenant_key, "grantex-evidence-v1:" + tenant_id + ":" + case_id)``
-    and the pseudonym is ``"pz:" + base64url(HMAC-SHA256(case_key, class + ":" + value))``.
-    The same identifier in the same case always maps to the same pseudonym;
-    across cases it does not, so packages cannot be joined on it.
+
+def keyed_content_digest(key: bytes, value_digest: str) -> str:
+    """``"hmac-sha256:" + hex(HMAC(case_key, JCS(["content-v1", digest])))``.
+
+    Replaces a tool input or output digest so equal inputs in two cases cannot
+    be matched across packages.
     """
-    if identifier_class not in IDENTIFIER_CLASSES:
-        raise ValueError(f"unknown identifier class {identifier_class!r}")
-    if len(tenant_key) < 32:
-        raise ValueError("pseudonymisation key must be at least 32 bytes")
-    case_key = hmac.new(
-        tenant_key,
-        f"{_CASE_DERIVATION_LABEL}:{tenant_id}:{case_id}".encode("utf-8"),
-        hashlib.sha256,
-    ).digest()
-    mac = hmac.new(
-        case_key, f"{identifier_class}:{value}".encode("utf-8"), hashlib.sha256
-    ).digest()
-    return _PSEUDONYM_PREFIX + base64.urlsafe_b64encode(mac).rstrip(b"=").decode("ascii")
+    return _KEYED_DIGEST_PREFIX + _mac(key, ["content-v1", value_digest]).hex()
+
+
+def action_reference(key: bytes, action_hash: str) -> str:
+    """``"ak:" + base64url(HMAC(case_key, JCS(["action-v1", action_hash])))``.
+
+    Stands in for a decision ``action_hash`` when the subject is pseudonymised:
+    an unkeyed hash over the clear subject would let anyone confirm a guess.
+    """
+    return _ACTION_PREFIX + _b64url(_mac(key, ["action-v1", action_hash]))
+
+
+def _prefixed_b64(value: object, prefix: str) -> bool:
+    if not isinstance(value, str) or not value.startswith(prefix):
+        return False
+    body = value[len(prefix) :]
+    return len(body) == 43 and all(c in _B64URL for c in body)
 
 
 def is_pseudonym(value: object) -> bool:
     """Whether ``value`` has the pseudonym form ``pz:`` + 43 base64url characters."""
-    if not isinstance(value, str) or not value.startswith(_PSEUDONYM_PREFIX):
-        return False
-    body = value[len(_PSEUDONYM_PREFIX) :]
-    return len(body) == 43 and all(
-        c.isascii() and (c.isalnum() or c in "-_") for c in body
-    )
+    return _prefixed_b64(value, _PSEUDONYM_PREFIX)
+
+
+def is_action_reference(value: object) -> bool:
+    """Whether ``value`` has the form ``ak:`` + 43 base64url characters."""
+    return _prefixed_b64(value, _ACTION_PREFIX)

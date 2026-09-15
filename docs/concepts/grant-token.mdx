@@ -1,12 +1,12 @@
 ---
 title: "Grant Token"
 sidebarTitle: "Grant Token"
-description: "Grantex grant tokens are RS256-signed JWTs with agent-specific claims."
+description: "Grantex grant tokens are RS256- or ES256-signed JWTs with agent-specific claims."
 ---
 
 ## Overview
 
-Grantex tokens are standard JWTs (RS256) extended with agent-specific claims.
+Grantex tokens are standard JWTs (RS256 by default, or ES256) extended with agent-specific claims.
 Any service can verify them locally using the published JWKS, without a
 per-token call to the Grantex verification API. Verifiers still need the public
 keys, fetched from the issuer and cached according to their SDK's behavior.
@@ -17,15 +17,23 @@ keys, fetched from the issuer and cached according to their SDK's behavior.
 {
   "iss": "https://grantex.dev",
   "sub": "user_abc123",
-  "agt": "did:grantex:ag_01HXYZ123abc",
-  "dev": "org_yourcompany",
-  "scp": ["calendar:read", "payments:initiate:max_500"],
+  "aud": "https://api.targetservice.com",
   "iat": 1709000000,
   "exp": 1709086400,
   "jti": "tok_01HXYZ987xyz",
-  "grnt": "grnt_01HXYZ456def"
+  "client_id": "ag_01HXYZ123abc",
+  "scope": "calendar:read payments:initiate:max_500",
+  "urn:grantex:grant": {
+    "grant_id": "grnt_01HXYZ456def",
+    "agent_did": "did:grantex:ag_01HXYZ123abc",
+    "developer_id": "org_yourcompany"
+  }
 }
 ```
+
+Grant tokens are RFC 9068 JWT access tokens (`typ: at+jwt`). A stock OAuth or JOSE
+library validates them with standard semantics; the full profile is
+`spec/grant-token-0.6.md`.
 
 ## Standard Claims
 
@@ -33,19 +41,35 @@ keys, fetched from the issuer and cached according to their SDK's behavior.
 |-------|------|-------------|
 | `iss` | `string` | Issuer — the Grantex server that signed the token |
 | `sub` | `string` | The end-user (principal) who authorized this agent |
+| `aud` | `string?` | Intended audience, when the grant is bound to a resource — services should reject tokens with a mismatched `aud` |
 | `iat` | `number` | Issued-at timestamp (seconds since epoch) |
 | `exp` | `number` | Expiry timestamp (seconds since epoch) |
 | `jti` | `string` | Unique token ID — used for real-time revocation |
+| `client_id` | `string` | The agent's client identifier |
+| `scope` | `string` | Exact scopes granted, space-delimited — services should check these |
+| `cnf` | `object?` | `jkt`: thumbprint of the agent key that must prove possession (DPoP), when key-bound |
+| `act` | `object?` | Delegation chain (RFC 8693), on delegated grants |
+| `authorization_details` | `array?` | Purpose, tools, caps, budget and decision references (RFC 9396) |
 
-## Grantex-Specific Claims
+## Grantex Grant Claim
 
-| Claim | Type | Description |
-|-------|------|-------------|
-| `agt` | `string` | The agent's DID — cryptographically verifiable identity |
-| `dev` | `string` | The developer org that built the agent |
-| `scp` | `string[]` | Exact scopes granted — services should check these |
-| `grnt` | `string` | Grant record ID — links token to the persisted grant |
-| `aud` | `string?` | Intended audience (optional) — services should reject tokens with a mismatched `aud` |
+`urn:grantex:grant` carries the grant record under a collision-resistant name:
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `grant_id` | `string` | Grant record ID — links token to the persisted grant |
+| `agent_did` | `string` | The agent's DID — cryptographically verifiable identity |
+| `developer_id` | `string` | The developer org that built the agent |
+| `parent_grant_id` | `string?` | Parent grant, on delegated grants |
+| `delegation_depth` | `number?` | Hops from the root grant, on delegated grants |
+
+## Legacy Claim Aliases
+
+`agt`, `dev`, `grnt`, `scp`, `parentAgt`, `parentGrnt`, `delegationDepth` and `bdg` are the
+pre-0.6 names. They are still issued, with the same values, while the auth service's
+`GRANT_TOKEN_LEGACY_CLAIMS` is on — the default in 0.6; it defaults off in 0.7. The SDK
+verifiers read the standard claim first, fall back to an alias with a deprecation warning,
+and reject a token whose claim and alias disagree. See `docs/migration-0.6.md`.
 
 The hosted service publishes keys at
 `https://api.grantex.dev/.well-known/jwks.json`, but its canonical `iss` value is
@@ -58,9 +82,11 @@ Present on tokens issued to sub-agents via `grants.delegate()`:
 
 | Claim | Type | Description |
 |-------|------|-------------|
-| `parentAgt` | `string` | DID of the parent agent that spawned this sub-agent |
-| `parentGrnt` | `string` | Grant ID of the parent grant — full delegation chain is traceable |
-| `delegationDepth` | `number` | How many hops from the root grant (root = 0) |
+| `act` | `object` | RFC 8693 actor chain: `act.sub` is the parent agent's DID; nested `act` members are earlier delegators |
+| `urn:grantex:grant.parent_grant_id` | `string` | Grant ID of the parent grant — full delegation chain is traceable |
+| `urn:grantex:grant.delegation_depth` | `number` | How many hops from the root grant (root = 0) |
+
+The legacy aliases `parentAgt`, `parentGrnt` and `delegationDepth` carry the same values while legacy claims are issued.
 
 ## Verification
 
@@ -68,7 +94,7 @@ Grant tokens can be verified two ways:
 
 ### Offline (recommended)
 
-Verify the RS256 signature locally using the published JWKS. This avoids the
+Verify the RS256 or ES256 signature locally using the published JWKS. This avoids the
 online token-verification API, although the verifier may still need to retrieve
 the current public keys from the JWKS endpoint.
 
@@ -111,9 +137,9 @@ print(result.scopes)
 
 ## Security
 
-- **Algorithm pinning**: RS256 is hardcoded in all three verification layers (auth service, TypeScript SDK, Python SDK). The `alg` header in the token cannot override this.
+- **Algorithm allowlist**: every verification layer (auth service, TypeScript, Python and Go SDKs) accepts only RS256 and ES256, and only with a key of the matching type named by `kid`. The `alg` header cannot select another algorithm or another key.
 - **Replay prevention**: Every token's `jti` is tracked. Presenting a previously-seen `jti` returns `valid: false`.
-- **Minimum key size**: The auth service enforces a minimum 2048-bit RSA modulus on all signing keys.
+- **Minimum key size**: The auth service enforces a minimum 2048-bit RSA modulus on RSA signing keys; EC keys must be on P-256.
 
 ## Ownership
 

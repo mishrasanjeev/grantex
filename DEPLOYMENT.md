@@ -151,10 +151,13 @@ curl http://localhost:3001/health
 | `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
 | `JWT_ISSUER` | JWT issuer claim (your domain) | `https://auth.example.com` |
 | `MCP_PUBLIC_BASE_URL` | Origin advertised as the MCP endpoint in `/.well-known/grantex-commerce`; set to the API origin when `PUBLIC_BASE_URL` is a static host whose `/mcp` serves a page (defaults to `PUBLIC_BASE_URL`) | `https://api.example.com` |
-| `RSA_PRIVATE_KEY` | RSA private key (PEM format) for JWT signing | `-----BEGIN RSA PRIVATE KEY-----...` |
+| `RSA_PRIVATE_KEY` | RSA private key (PKCS#8 PEM) for RS256 signing, the default `JWT_SIGNING_ALG` | `-----BEGIN PRIVATE KEY-----...` |
+| `EC_PRIVATE_KEY` | EC P-256 private key (PKCS#8 PEM), required instead when `JWT_SIGNING_ALG=ES256` | Same PEM form as `RSA_PRIVATE_KEY` |
 | `ADMIN_API_KEY` | Strong key protecting `/v1/admin/*` endpoints (required in production) | 32+ random bytes |
 | `VAULT_ENCRYPTION_KEY` | 32-byte hex or base64 key for credential-vault encryption (required in production) | `openssl rand -hex 32` |
 | `METRICS_API_KEY` | Key protecting `/metrics` when production metrics are enabled | 32+ random bytes |
+
+> **Note:** `SIGNING_KEY_STORE=postgres` stores the signing keys encrypted with `VAULT_ENCRYPTION_KEY`, importing the configured env keys on first start, and rotates them publish-then-sign with `node dist/cli/rotate-signing-key.js`. Tokens issued before 0.6 (kid `grantex-YYYY-MM`) keep verifying. See `docs/self-hosting.md` Section 7.
 
 > **Note:** Set `AUTO_GENERATE_KEYS=true` instead of `RSA_PRIVATE_KEY` for development. The service will generate an ephemeral RSA key pair on startup. **Do not use this in production** — keys change on every restart.
 

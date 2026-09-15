@@ -1,4 +1,9 @@
-"""Detached JWS signatures over an evidence package root (ES256 or RS256)."""
+"""Detached JWS signatures over an evidence package root and anchor (ES256 or RS256).
+
+The signed payload is the RFC 8785 form of ``{"anchor": <anchor audit hash or
+null>, "root": <package root>}``, so a verified signature attests both the
+package and the audit-chain entry that recorded it.
+"""
 
 from __future__ import annotations
 
@@ -15,12 +20,13 @@ from cryptography.hazmat.primitives.asymmetric.utils import (
     encode_dss_signature,
 )
 
+from ._canonical import canonicalize
 from ._result import VerificationCode as Code
 from ._result import VerificationFailure
 
-__all__ = ["SIGNATURE_TYPE", "sign_root", "verify_signature"]
+__all__ = ["SIGNATURE_TYPE", "sign_root", "signed_payload", "verify_signature"]
 
-SIGNATURE_TYPE = "grantex-evidence-root+jws"
+SIGNATURE_TYPE = "grantex-evidence-package+jws"
 
 PrivateKey = Union[ec.EllipticCurvePrivateKey, rsa.RSAPrivateKey]
 
@@ -40,8 +46,15 @@ def _b64url_decode(text: str) -> Optional[bytes]:
     return raw if _b64url(raw) == text else None
 
 
-def sign_root(root: str, private_key: PrivateKey, kid: str) -> Dict[str, str]:
-    """Return a ``signature`` member: a detached JWS over ``root``.
+def signed_payload(root: str, anchor_hash: Optional[str]) -> bytes:
+    """The bytes a package signature covers."""
+    return canonicalize({"anchor": anchor_hash, "root": root}).encode("utf-8")
+
+
+def sign_root(
+    root: str, private_key: PrivateKey, kid: str, anchor_hash: Optional[str] = None
+) -> Dict[str, str]:
+    """Return a ``signature`` member: a detached JWS over the root and anchor hash.
 
     ES256 for a P-256 key, RS256 for an RSA key (2048 bits or more).
     """
@@ -59,7 +72,7 @@ def sign_root(root: str, private_key: PrivateKey, kid: str) -> Dict[str, str]:
     header_b64 = _b64url(
         json.dumps(header, separators=(",", ":"), sort_keys=True).encode("utf-8")
     )
-    signing_input = f"{header_b64}.{_b64url(root.encode('ascii'))}".encode("ascii")
+    signing_input = f"{header_b64}.{_b64url(signed_payload(root, anchor_hash))}".encode("ascii")
     if isinstance(private_key, ec.EllipticCurvePrivateKey):
         der = private_key.sign(signing_input, ec.ECDSA(hashes.SHA256()))
         r, s = decode_dss_signature(der)
@@ -109,9 +122,9 @@ def _public_key(jwk: Mapping[str, Any], alg: str) -> Union[ec.EllipticCurvePubli
 
 
 def verify_signature(
-    signature: Mapping[str, Any], root: str, jwks: Mapping[str, Any]
+    signature: Mapping[str, Any], root: str, anchor_hash: Optional[str], jwks: Mapping[str, Any]
 ) -> None:
-    """Verify a ``signature`` member against ``root`` with keys from a JWKS."""
+    """Verify a ``signature`` member against the root and anchor hash with keys from a JWKS."""
     alg = signature["alg"]
     kid = signature["kid"]
     header_b64, _, signature_b64 = signature["jws"].partition("..")
@@ -139,7 +152,7 @@ def verify_signature(
             field_path="signature.kid",
         )
     public_key = _public_key(matching[0], alg)
-    signing_input = f"{header_b64}.{_b64url(root.encode('ascii'))}".encode("ascii")
+    signing_input = f"{header_b64}.{_b64url(signed_payload(root, anchor_hash))}".encode("ascii")
     try:
         if isinstance(public_key, ec.EllipticCurvePublicKey):
             if len(signature_raw) != 64:

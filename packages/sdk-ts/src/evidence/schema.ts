@@ -22,13 +22,46 @@ type Path = ReadonlyArray<string | number>;
 
 export const SCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
   '$schema', '$id', '$defs', '$ref', 'title', 'description', 'type', 'const', 'enum',
-  'minLength', 'maxLength', 'pattern', 'minimum', 'maximum', 'minItems', 'maxItems',
+  'minLength', 'maxLength', 'pattern', 'format', 'minimum', 'maximum', 'minItems', 'maxItems',
   'items', 'uniqueItems', 'properties', 'required', 'additionalProperties',
   'propertyNames', 'maxProperties', 'allOf', 'if', 'then',
 ]);
 
 const patterns = new Map<string, RegExp>();
 let checked = false;
+const TIMESTAMP = /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})[.]([0-9]{3})Z$/;
+const DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+type TimeParts = [number, number, number, number, number, number, number];
+
+function parseTimestamp(value: string): TimeParts | null {
+  const match = value.length === 24 ? TIMESTAMP.exec(value) : null;
+  if (!match) return null;
+  const [year, month, day, hour, minute, second, milli] = match.slice(1).map(Number) as TimeParts;
+  if (year < 1 || month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) return null;
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = month === 2 && leap ? 29 : DAYS[month - 1]!;
+  if (day < 1 || day > days) return null;
+  return [year, month, day, hour, minute, second, milli];
+}
+
+/** `YYYY-MM-DDTHH:MM:SS.sssZ` naming a real calendar instant (no leap seconds). */
+export function isValidTimestamp(value: unknown): boolean {
+  return typeof value === 'string' && parseTimestamp(value) !== null;
+}
+
+/** Milliseconds since the epoch of a valid timestamp (the same arithmetic as the Python SDK). */
+export function timestampMs(value: string): number {
+  const parts = parseTimestamp(value);
+  if (!parts) throw new Error(`invalid timestamp ${value}`);
+  const [year, month, day, hour, minute, second, milli] = parts;
+  const y = year - (month <= 2 ? 1 : 0);
+  const era = Math.floor(y / 400);
+  const yoe = y - era * 400;
+  const doy = Math.floor((153 * (month + (month > 2 ? -3 : 9)) + 2) / 5) + day - 1;
+  const doe = yoe * 365 + Math.floor(yoe / 4) - Math.floor(yoe / 100) + doy;
+  const days = era * 146097 + doe - 719468;
+  return (((days * 24 + hour) * 60 + minute) * 60 + second) * 1000 + milli;
+}
 
 function checkKeywords(node: unknown, where: string): void {
   if (node === null || typeof node !== 'object' || Array.isArray(node)) return;
@@ -158,6 +191,9 @@ function validateNode(value: unknown, input: SchemaNode, root: SchemaNode, path:
     }
     if (has(schema, 'pattern') && !pattern(schema['pattern'] as string).test(text)) {
       throw fail(path, `does not match ${String(schema['pattern'])}`);
+    }
+    if (schema['format'] === 'date-time' && !isValidTimestamp(text)) {
+      throw fail(path, 'not a valid UTC timestamp with millisecond precision');
     }
   } else if (kind === 'number') {
     const number = value as number;
