@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createMcpAuthServer } from '../src/server.js';
 import type { McpAuthConfig } from '../src/types.js';
+import { upstreamGrantToken } from './helpers.js';
 import { InMemoryStorage } from '../src/storage/memory.js';
 
 function createMockGrantex() {
@@ -19,14 +20,14 @@ function createMockGrantex() {
     }),
     tokens: {
       exchange: async () => ({
-        grantToken: 'gt_test',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_test' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read'],
         refreshToken: 'rt_test',
         grantId: 'grant-1',
       }),
       refresh: async () => ({
-        grantToken: 'gt_refreshed',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_refreshed' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read'],
         refreshToken: 'rt_new',
@@ -45,6 +46,7 @@ describe('register endpoint', () => {
       agentId: 'agent-1',
       scopes: ['read'],
       issuer: 'https://auth.example.com',
+      resource: 'https://mcp.example.com',
       storage: new InMemoryStorage(),
     });
   });

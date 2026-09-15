@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { McpAuthConfig } from '../types.js';
-import type { McpAuthStorage } from '../storage/types.js';
+import { serverContext } from '../context.js';
+import { ClientMetadataError } from '../lib/client-metadata.js';
 import { createGrantexTokenVerifier, parseBasicAuth, secretMatches } from '../lib/verify.js';
 
 interface IntrospectBody {
@@ -11,8 +12,13 @@ interface IntrospectBody {
 export function registerIntrospectEndpoint(
   app: FastifyInstance,
   config: McpAuthConfig,
-  storage: McpAuthStorage,
 ): void {
+  const ctx = serverContext(config);
+  const { storage } = ctx;
+  const getClient = (clientId: string) => ctx.getClient(clientId).catch((err: unknown) => {
+    if (err instanceof ClientMetadataError) return undefined;
+    throw err;
+  });
   // Tokens are issued by Grantex, not by this server: verify them against
   // the Grantex JWKS with iss/aud pinned. Fail closed when unconfigured.
   const verifier = createGrantexTokenVerifier(config);
@@ -47,7 +53,7 @@ export function registerIntrospectEndpoint(
       );
       if (basicCreds) {
         const [clientId, clientSecret] = basicCreds;
-        const client = await storage.getClient(clientId);
+        const client = await getClient(clientId);
         if (!client || !secretMatches(client.clientSecretHash, clientSecret)) {
           return reply.status(401).send({
             error: 'invalid_client',

@@ -5,6 +5,7 @@ import { createMcpAuthServer } from '../src/server.js';
 import { InMemoryStorage } from '../src/storage/memory.js';
 import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
+import { TEST_RESOURCE, upstreamGrantToken } from './helpers.js';
 
 function computeS256Challenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
@@ -30,14 +31,14 @@ function createMockGrantex() {
     }),
     tokens: {
       exchange: vi.fn().mockResolvedValue({
-        grantToken: 'gt_test',
+        grantToken: upstreamGrantToken({ aud: TEST_RESOURCE, jti: 'gt_test' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_test',
         grantId: 'grant-1',
       }),
       refresh: vi.fn().mockResolvedValue({
-        grantToken: 'gt_refreshed',
+        grantToken: upstreamGrantToken({ aud: TEST_RESOURCE, jti: 'gt_refreshed' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_new',
@@ -64,6 +65,7 @@ async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
     agentId: 'agent-1',
     scopes: ['read', 'write'],
     issuer: 'https://auth.example.com',
+    resource: TEST_RESOURCE,
     storage: clientStore,
     ...overrides,
   });
@@ -274,7 +276,11 @@ describe('authorize endpoint', () => {
       },
     });
     expect(token.statusCode).toBe(200);
-    expect(mockGrantex.tokens.exchange).toHaveBeenCalledWith({ code: 'GRANTEX_LIVE_CODE', agentId: 'agent-1' });
+    expect(mockGrantex.tokens.exchange).toHaveBeenCalledWith({
+      code: 'GRANTEX_LIVE_CODE',
+      agentId: 'agent-1',
+      redirectUri: 'https://auth.example.com/callback',
+    });
   });
 
   it('consent callback with error redirects the client with access_denied and no code', async () => {

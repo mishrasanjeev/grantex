@@ -7,6 +7,7 @@ import { createMcpAuthServer } from '../src/server.js';
 import { InMemoryStorage } from '../src/storage/memory.js';
 import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
+import { upstreamGrantToken } from './helpers.js';
 
 const TEST_CLIENT_ID = 'test-client-id';
 const TEST_CLIENT_SECRET = 'test-secret';
@@ -68,14 +69,14 @@ function createMockGrantex() {
     }),
     tokens: {
       exchange: vi.fn().mockResolvedValue({
-        grantToken: 'gt_test',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_test' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_test',
         grantId: 'grant-1',
       }),
       refresh: vi.fn().mockResolvedValue({
-        grantToken: 'gt_refreshed',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_refreshed' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_new',
@@ -105,6 +106,7 @@ async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
     scopes: ['read', 'write'],
     // This server's own URL serves no JWKS; tokens come from Grantex.
     issuer: 'https://auth.example.com',
+    resource: 'https://mcp.example.com',
     grantexIssuer: issuer,
     storage: clientStore,
     ...overrides,
@@ -122,7 +124,9 @@ async function signTestJwt(
   options?: { expiresIn?: string; algorithm?: string; issuer?: string },
 ): Promise<string> {
   const alg = options?.algorithm ?? 'RS256';
-  const builder = new jose.SignJWT(claims)
+  // Tokens are audience-bound to the fixture resource unless a test sets aud
+  // itself (aud: undefined produces a token without one).
+  const builder = new jose.SignJWT('aud' in claims ? claims : { ...claims, aud: 'https://mcp.example.com' })
     .setProtectedHeader({ alg, kid: 'test-key-1' })
     .setIssuer(options?.issuer ?? grantexIssuer())
     .setIssuedAt()
@@ -316,7 +320,7 @@ describe('introspect endpoint', () => {
       const ctx = await createTestApp({ audience: 'https://mcp.example.com' });
       const good = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://mcp.example.com' });
       const bad = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://other.example.com' });
-      const none = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
+      const none = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: undefined });
 
       const goodRes = await ctx.app.inject({ method: 'POST', url: '/introspect', payload: { token: good } });
       const badRes = await ctx.app.inject({ method: 'POST', url: '/introspect', payload: { token: bad } });
@@ -351,6 +355,7 @@ describe('introspect endpoint', () => {
         agentId: 'agent-1',
         scopes: ['read'],
         issuer: grantexIssuer(), // even though this URL serves a JWKS, it is not pinned as the token issuer
+        resource: 'https://mcp.example.com',
         storage: clientStore,
       });
       const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] });

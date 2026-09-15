@@ -1,6 +1,7 @@
 import * as jose from 'jose';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { McpAuthConfig, ClientRegistration } from '../types.js';
+import { acceptedResources } from './resource.js';
 
 export const ALLOWED_ALGORITHMS = ['RS256', 'ES256', 'PS256', 'EdDSA'];
 
@@ -66,16 +67,14 @@ export interface GrantexTokenVerifier {
 
 /**
  * Builds a verifier for Grantex grant tokens: signature against the Grantex
- * JWKS, `iss` must equal `grantexIssuer`, and `aud` must match the configured
- * audience (defaults to `allowedResources`) when one is set.
+ * JWKS, `iss` must equal `grantexIssuer`, and `aud` must name the configured
+ * `audience` or, by default, one of the resources this server issues tokens
+ * for (`resource` and `allowedResources`). The audience is always checked.
  */
 export function createGrantexTokenVerifier(config: McpAuthConfig): GrantexTokenVerifier {
   const jwksUrl = resolveJwksUri(config);
   const issuer = config.grantexIssuer;
-  const audience = config.audience
-    ?? (config.allowedResources && config.allowedResources.length > 0
-      ? config.allowedResources
-      : undefined);
+  const audience = config.audience ?? acceptedResources(config);
   let jwks: ReturnType<typeof jose.createRemoteJWKSet> | undefined;
 
   return {
@@ -102,7 +101,7 @@ export function createGrantexTokenVerifier(config: McpAuthConfig): GrantexTokenV
         algorithms: ALLOWED_ALGORITHMS,
         // Tolerate a trailing-slash difference between config and the claim.
         issuer: issuer.endsWith('/') ? [issuer, issuer.slice(0, -1)] : [issuer, `${issuer}/`],
-        ...(audience !== undefined ? { audience } : {}),
+        audience,
         ...(currentDate !== undefined ? { currentDate } : {}),
       });
       return payload;

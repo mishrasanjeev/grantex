@@ -8,6 +8,7 @@ import { registerTokenEndpoint } from './endpoints/token.js';
 import { registerIntrospectEndpoint } from './endpoints/introspect.js';
 import { registerRevokeEndpoint } from './endpoints/revoke.js';
 import type { McpAuthConfig } from './types.js';
+import { serverContext } from './context.js';
 
 const STORAGE_METHODS = [
   'getClient', 'putClient', 'deleteClient',
@@ -44,18 +45,19 @@ export async function createMcpAuthServer(
   config: McpAuthConfig,
 ): Promise<FastifyInstance> {
   assertStorage(config);
+  // Validates issuer, resources, scopes and manifests; throws on anything
+  // that would leave tokens unbound or requests ambiguous.
+  const ctx = serverContext(config);
   const app = Fastify({ logger: false });
 
   await app.register(rateLimit, { max: 100, timeWindow: '1 minute' });
 
-  const { storage } = config;
-
-  registerMetadataEndpoint(app, config);
-  registerRegisterEndpoint(app, storage);
-  registerAuthorizeEndpoint(app, config, storage);
-  registerTokenEndpoint(app, config, storage);
-  registerIntrospectEndpoint(app, config, storage);
-  registerRevokeEndpoint(app, config, storage);
+  registerMetadataEndpoint(app, ctx);
+  registerRegisterEndpoint(app, ctx.storage);
+  registerAuthorizeEndpoint(app, ctx);
+  registerTokenEndpoint(app, ctx);
+  registerIntrospectEndpoint(app, config);
+  registerRevokeEndpoint(app, config);
 
   return app;
 }

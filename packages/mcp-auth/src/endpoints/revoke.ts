@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { McpAuthConfig } from '../types.js';
-import type { McpAuthStorage } from '../storage/types.js';
+import { serverContext } from '../context.js';
+import { ClientMetadataError } from '../lib/client-metadata.js';
 import { createGrantexTokenVerifier, isConfidentialClient, parseBasicAuth, secretMatches } from '../lib/verify.js';
 
 interface RevokeBody {
@@ -16,8 +17,13 @@ const MAX_REVOCATION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export function registerRevokeEndpoint(
   app: FastifyInstance,
   config: McpAuthConfig,
-  storage: McpAuthStorage,
 ): void {
+  const ctx = serverContext(config);
+  const { storage } = ctx;
+  const getClient = (clientId: string) => ctx.getClient(clientId).catch((err: unknown) => {
+    if (err instanceof ClientMetadataError) return undefined;
+    throw err;
+  });
   // Revocation is bound to the requesting client (RFC 7009 §2.1), which
   // requires a verified token: the MCP flow issues every grant with the
   // client_id as the Principal (`sub`), so ownership is proven by signature.
@@ -30,13 +36,6 @@ export function registerRevokeEndpoint(
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
-      if (!verifier.configured) {
-        return reply.status(503).send({
-          error: 'server_error',
-          error_description: 'grantexIssuer is not configured; token revocation is disabled',
-        });
-      }
-
       const body = request.body ?? {};
       const token = body.token;
 
@@ -53,7 +52,7 @@ export function registerRevokeEndpoint(
 
       if (basicCreds) {
         const [clientId, clientSecret] = basicCreds;
-        const client = await storage.getClient(clientId);
+        const client = await getClient(clientId);
         if (!client || !secretMatches(client.clientSecretHash, clientSecret)) {
           return reply.status(401).send({
             error: 'invalid_client',
@@ -62,7 +61,7 @@ export function registerRevokeEndpoint(
         }
         authenticatedClientId = client.clientId;
       } else if (body.client_id) {
-        const client = await storage.getClient(body.client_id);
+        const client = await getClient(body.client_id);
         if (!client) {
           return reply.status(401).send({
             error: 'invalid_client',
@@ -84,6 +83,21 @@ export function registerRevokeEndpoint(
           error: 'invalid_client',
           error_description:
             'Client authentication is required. Provide Basic auth or client_id in body.',
+        });
+      }
+
+      // RFC 7009 §2.1: refresh tokens are revocable too. A refresh token this
+      // server bound to the authenticated client is deleted, so it can no
+      // longer be used here; one bound to another client is left alone.
+      if (body.token_type_hint !== 'access_token') {
+        const binding = await storage.takeRefreshTokenBinding(token, authenticatedClientId);
+        if (binding) return reply.status(200).send();
+      }
+
+      if (!verifier.configured) {
+        return reply.status(503).send({
+          error: 'server_error',
+          error_description: 'grantexIssuer is not configured; access-token revocation is disabled',
         });
       }
 

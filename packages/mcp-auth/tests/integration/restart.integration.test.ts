@@ -134,7 +134,7 @@ function token(base: string, body: Record<string, string>) {
 }
 
 async function signGrant(clientId: string): Promise<string> {
-  return new jose.SignJWT({ scp: ['tools:read'] })
+  return new jose.SignJWT({ scp: ['tools:read'], aud: 'https://mcp.example.com/mcp' })
     .setProtectedHeader({ alg: 'RS256', kid: 'restart' })
     .setIssuer(grantexIssuer)
     .setSubject(clientId)

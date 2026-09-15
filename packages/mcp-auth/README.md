@@ -219,6 +219,59 @@ start with `NODE_ENV=production`. To use another database, implement
 checked for the shipped implementations by `tests/storage-contract.ts` in the
 repository.
 
+### Protocol surface (3.0)
+
+3.0 targets the MCP authorization specification dated 2026-07-28;
+`tests/conformance/mcp-authorization-2026-07-28.test.ts` maps each
+authorization-server and MCP-server MUST to a test.
+
+- **Resource indicators (RFC 8707).** `resource` (the canonical URI of your
+  MCP server, e.g. `https://mcp.example.com/mcp`) is required. Every grant is
+  requested with that resource as its audience, a request or token exchange
+  for any other resource is refused with `invalid_target`, and a token
+  Grantex returns without the right `aud` is never handed to the client.
+- **Discovery.** RFC 8414 metadata (also at the path-inserted location for an
+  issuer with a path) advertises `code_challenge_methods_supported: ["S256"]`,
+  `authorization_response_iss_parameter_supported` and
+  `client_id_metadata_document_supported`; every authorization response
+  carries `iss` (RFC 9207). RFC 9728 protected-resource metadata is served at
+  `/.well-known/oauth-protected-resource/<resource path>`.
+- **PKCE S256 only.** `plain`, an omitted method and malformed challenges are
+  refused. Requested scopes must be in `scopes_supported`.
+- **Client ID Metadata Documents.** A client may use an https URL as its
+  `client_id`; the server fetches the document with SSRF protections (https
+  only, every resolved address must be public and the connection is pinned to
+  it, no redirects, 16 KiB and 5 s limits, cache with TTL) and fails closed
+  with a reason code. Configure with `clientIdMetadataDocuments`.
+- **Manifest-derived scopes.** Pass `manifests` (0.5 or 0.6 manifest JSON) and
+  `scopes_supported` gains `tool:<connector>:<permission>` for each tool.
+- **Tools refused at the server.** `requireMcpAuth` requires `audience`, sends
+  RFC 9728 `WWW-Authenticate` challenges, can check `revocations` (the same
+  `storage`), and with `tools: toolPolicyFromManifests(manifests)` refuses any
+  `tools/call` outside the grant with a 403 — not just hidden from listing.
+  Tools marked `requires_decision` are refused with a `decision_required`
+  challenge unless a `DecisionVerifier` accepts the call. The header formats
+  are specified in `spec/mcp-auth-challenges.md` in the repository.
+
+```typescript
+import express from 'express';
+import { toolPolicyFromManifests } from '@grantex/mcp-auth';
+import { requireMcpAuth, protectedResourceMetadataHandler } from '@grantex/mcp-auth/express';
+import acmeKyb from './manifests/acme_kyb.json' with { type: 'json' };
+
+const app = express();
+app.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadataHandler({
+  resource: 'https://mcp.example.com/mcp',
+  authorizationServers: ['https://auth.example.com'],
+}));
+app.use('/mcp', express.json(), requireMcpAuth({
+  issuer: 'https://grantex.dev',
+  audience: 'https://mcp.example.com/mcp',
+  tools: toolPolicyFromManifests([acmeKyb]),
+  revocations: storage,
+}));
+```
+
 ## Express.js Middleware
 
 Protect Express routes with JWT signature, claim, algorithm, and scope validation.
