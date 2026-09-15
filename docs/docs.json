@@ -56,7 +56,8 @@
               "concepts/vs-oauth",
               "concepts/tool-manifests",
               "concepts/purpose-bound-grants",
-              "concepts/caps-and-metering"
+              "concepts/caps-and-metering",
+              "concepts/event-bridge-and-revocation"
             ]
           },
           {
