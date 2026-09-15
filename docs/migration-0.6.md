@@ -12,6 +12,11 @@ can alter the behaviour of an existing deployment, SDK integration or
 resource server, grouped by feature. The [CHANGELOG](../CHANGELOG.md) has the
 full list of additions.
 
+**No step in this guide invalidates an outstanding token.** Upgrading keeps
+every token issued before 0.6 verifying, in the auth service and in the SDK
+verifiers, and every key change below publishes the new key before it signs
+and keeps the old key published until the tokens it signed have expired.
+
 Package version numbers are set when the release is cut. "0.5" and "0.6" here
 mean the Grantex protocol, auth service and SDK behaviour before and after these
 changes.
@@ -29,13 +34,17 @@ changes.
 | Caps | Tools and grants with caps need a caps meter | Anyone adopting caps |
 | Caps | Grant caps with wildcard or unknown keys deny | Issuers of custom caps |
 | Signing | Signing keys are validated at start | Deployments with a weak or malformed key |
+| Signing | Key ids are thumbprints; the RSA key is also published under its old `grantex-YYYY-MM` kids | Resource servers that pin a `kid` or cache the JWK Set by size |
+| Signing | Verifiers select keys by exact `kid` and key type | Custom JWK Sets with mislabelled keys |
 | Signing | Tokens may be ES256 | Resource servers that pin RS256 |
+| Signing | Env keys are imported when switching to the postgres key store | Operators adopting `SIGNING_KEY_STORE=postgres` |
 | Claims | Standard claims added; legacy aliases flagged | Resource servers that read `agt`, `dev`, `grnt`, `scp` |
 | Claims | Delegated `act` claims are nested | Code that reads `act` on delegated tokens |
-| Claims | Disagreeing claims and aliases are refused | Custom token issuers |
-| Claims | A scope containing whitespace cannot be issued | Grants with such scopes |
+| Claims | Disagreeing claims and aliases are refused on 0.6 tokens | Custom token issuers |
+| Claims | Null or mistyped claims are refused by the SDK verifiers | Custom token issuers |
+| Claims | New scopes cannot contain whitespace; existing such grants lose `scope` in their tokens | Grants with such scopes, standard-only readers |
 | TypeScript | `GrantTokenPayload.agt` / `dev` / `scp` are optional | TypeScript code that reads the raw payload type |
-| Database | Migrations `095`, `096`, `097` | Self-hosted auth service (applied automatically) |
+| Database | Migrations `095`, `096`, `098` | Self-hosted auth service (applied automatically) |
 
 ## Upgrade order
 
@@ -47,9 +56,12 @@ changes.
    working.
 3. **Adopt the new features** (purposes, object-form manifests, caps) one at a
    time. Each denies calls it cannot evaluate.
-4. **Before 0.7**, move every resource server off the legacy aliases, then set
-   `GRANT_TOKEN_LEGACY_CLAIMS=false` (the 0.7 default). Switch to ES256, if you
-   want it, only after step 1 is complete everywhere.
+4. **Before 0.7**, move every resource server to the standard claims (0.6
+   SDKs already read them). Then set `GRANT_TOKEN_LEGACY_CLAIMS=false` (the 0.7
+   default). This changes only tokens issued from then on; tokens already
+   issued keep their aliases until they expire. Switch to ES256, if you want
+   it, only after step 1 is complete everywhere, following the rotation steps
+   below.
 
 ---
 
@@ -192,8 +204,35 @@ For a gradual rollout, use `caps_mode="warn"` / `capsMode: 'warn'` to report
 Reference: [`SPEC.md`](../SPEC.md) §6.1 and §14, and
 [self-hosting Section 7](self-hosting.md).
 
-**Unchanged:** `JWT_SIGNING_ALG` defaults to `RS256`, and an existing
-`RSA_PRIVATE_KEY` keeps its `kid`.
+**Unchanged:** `JWT_SIGNING_ALG` defaults to `RS256`, and the same
+`RSA_PRIVATE_KEY` keeps signing.
+
+**Behaviour change — key ids and the `kid` strictness they required.** A 0.5
+auth service published its RSA key under `grantex-YYYY-MM`, the month the
+process started, and verified its own tokens without looking at `kid`. 0.6
+verifies by `kid` and key type everywhere, which on its own would have broken
+tokens across a month boundary or across instances started in different
+months. 0.6 therefore:
+
+- names each key by its RFC 7638 thumbprint (`grantex-rs256-…`,
+  `grantex-es256-…`), the same on every instance;
+- verifies an RS256 token whose `kid` is any `grantex-YYYY-MM`, or that has no
+  `kid`, with the *legacy key* — `RSA_PRIVATE_KEY`, or the key named by
+  `JWT_LEGACY_KID_KEY`;
+- also publishes the legacy key under `grantex-YYYY-MM` for the current month
+  and the previous `JWT_LEGACY_KID_MONTHS - 1` months (default 13 in total),
+  so SDK verifiers that select keys by `kid` find it;
+- keeps signing under the legacy `kid` for
+  `SIGNING_KEY_ACTIVATION_DELAY_SECONDS` (default 900) after start, so
+  resource servers holding a JWK Set fetched from a 0.5 instance keep
+  accepting new tokens until they refresh it.
+
+The JWK Set is therefore larger (one entry per alias). *Action:* none for most
+deployments. Raise `JWT_LEGACY_KID_MONTHS` if you issued grants that live longer
+than a year before upgrading. Do not remove the RSA key while pre-0.6 tokens are
+valid, and set `JWT_LEGACY_KID_KEY` to its thumbprint `kid` if it stops being
+`RSA_PRIVATE_KEY`. There is deliberately no setting to rename a key's `kid`:
+changing a published `kid` would invalidate the tokens signed under it.
 
 **Resource servers must accept ES256 before an issuer switches.** A deployment
 may now set `JWT_SIGNING_ALG=ES256`. It then signs grant tokens, OAuth access
@@ -224,24 +263,54 @@ refuses to start with:
 - an RSA key shorter than 2048 bits;
 - an `EC_PRIVATE_KEY` that is not P-256;
 - a key in the wrong setting (for example an RSA key in `EC_PRIVATE_KEY`);
-- a `JWT_RETIRED_PUBLIC_KEYS` entry with private members, an unsupported `alg`
-  or a duplicate `kid`.
+- a `JWT_VERIFICATION_PUBLIC_KEYS` entry with private members, an unsupported
+  `alg`, a legacy `grantex-YYYY-MM` kid, or a `kid` used by a different key;
+- a `JWT_LEGACY_KID_KEY` that names no configured RSA key;
+- with the postgres key store, a `SIGNING_KEY_RETIRED_GRACE_SECONDS` shorter
+  than `MAX_GRANT_LIFETIME_SECONDS` (a warning when the latter is unset).
+
+In production it also refuses to start when SSO state has no persistent key:
+`SSO_STATE_SECRET` is unset and there is no `RSA_PRIVATE_KEY`, `EC_PRIVATE_KEY`
+or `VAULT_ENCRYPTION_KEY` to derive one from. Deployments with
+`RSA_PRIVATE_KEY` derive the same key as in 0.5.
 
 `RSA_PRIVATE_KEY` must be PKCS#8 (`-----BEGIN PRIVATE KEY-----`), as before.
 
-**Key management:**
+**Rotating keys without invalidating tokens** (details in
+[self-hosting Section 7](self-hosting.md)):
 
-- The JWK Set lists every platform signing key with `kid`, `alg` and
-  `use: "sig"`.
-- A configured key for the other algorithm is published for verification only.
-- `JWT_RETIRED_PUBLIC_KEYS` keeps retired keys verifiable.
-- `SIGNING_KEY_STORE=postgres` generates and stores the key (migration
-  `096_platform_signing_keys.sql`), encrypted with `VAULT_ENCRYPTION_KEY`, and
-  rotates it with `node dist/cli/rotate-signing-key.js`.
-- The DID document lists every platform signing key.
+- **Env key store.**
+  1. Publish the new public key in `JWT_VERIFICATION_PUBLIC_KEYS`, or set the
+     other algorithm's private key setting, and wait at least
+     `SIGNING_KEY_ACTIVATION_DELAY_SECONDS`.
+  2. Switch the private key, keeping the old public key in
+     `JWT_VERIFICATION_PUBLIC_KEYS` (and `JWT_LEGACY_KID_KEY` for the old RSA
+     key).
+  3. Remove the old key only after its tokens have expired.
 
-*Action:* set `JWT_SIGNING_KID` if you run the env key store. The default RS256
-`kid` changes with the month an instance starts (FINDINGS G-9).
+  The same key listed twice is one key, so an RSA-to-RSA rotation in one month
+  raises no duplicate `kid`.
+- **Postgres key store.** `node dist/cli/rotate-signing-key.js [--alg ES256]`
+  publishes a pending key that signs only after
+  `SIGNING_KEY_ACTIVATION_DELAY_SECONDS`. The previous key is then retired,
+  its private key erased, and it stays published for
+  `SIGNING_KEY_RETIRED_GRACE_SECONDS`. The legacy key stays published for the
+  alias window.
+
+**Switching from the env store to the postgres store** (migration
+`096_platform_signing_keys.sql`). Set `SIGNING_KEY_STORE=postgres` and keep the
+key settings for the first start:
+
+- The env signing key becomes the stored active key, with the same `kid`.
+- The other env keys are stored as retired public keys.
+- The RSA key keeps its legacy kid marker.
+
+Nothing changes for verifiers. Remove the private key settings once the table
+holds the keys. Stored private keys are encrypted with `VAULT_ENCRYPTION_KEY`
+and bound to their `kid`. Erasing a retired key does not remove copies in dead
+tuples, WAL, replicas or backups; see self-hosting Section 7.
+
+The DID document lists every platform signing key.
 
 ## Standard grant token claims
 
@@ -292,8 +361,11 @@ option off, aliases are ignored and `typ` must be `at+jwt`.
 1. Upgrade.
 2. Watch for the deprecation warning. It means a token came from an issuer
    that is not yet on 0.6.
-3. Once no warning appears, set `legacy_claims=False` / `legacyClaims: false`
-   / `StandardClaimsOnly: true`.
+3. Set `legacy_claims=False` / `legacyClaims: false` /
+   `StandardClaimsOnly: true` only when no warning has appeared for longer than
+   your longest grant lifetime (so no pre-0.6 token can still be presented),
+   and no grant with a whitespace scope remains (below). Until then keep the
+   default: it accepts both forms.
 
 *Action for resource servers with their own verifier:* read the standard
 claims. With `jose`:
@@ -310,6 +382,8 @@ const grant = payload['urn:grantex:grant'] as { grant_id: string; agent_did: str
 With PyJWT:
 
 ```python
+if jwt.get_unverified_header(token).get("typ") != "at+jwt":
+    raise jwt.InvalidTokenError("typ must be at+jwt")
 payload = jwt.decode(token, key, algorithms=["RS256", "ES256"], issuer=issuer, audience=audience,
                      options={"require": ["iss", "sub", "aud", "exp", "iat", "jti"]})
 scopes = payload["scope"].split(" ")
@@ -317,36 +391,74 @@ grant_id = payload["urn:grantex:grant"]["grant_id"]
 ```
 
 These mirror `packages/sdk-ts/tests/standard-claims.test.ts` and
-`packages/sdk-py/tests/test_standard_claims.py`. Integrations in this
-repository that still read the aliases directly are listed in FINDINGS G-12.
+`packages/sdk-py/tests/test_standard_claims.py`, which validate tokens issued by
+the auth service (`spec/examples/grant-token-0.6.issued.json`). A custom
+verifier that must accept pre-0.6 tokens during the transition reads `scp`
+when the token has no `urn:grantex:grant`. Integrations in this repository
+that still read the aliases directly are listed in FINDINGS G-12.
 
-*Action for operators:* keep the default until every resource server has
-migrated, then set `GRANT_TOKEN_LEGACY_CLAIMS=false`. Tokens issued before the
-change keep their aliases until they expire; 0.6 verifiers read both.
+*Action for operators:* keep the default. Setting
+`GRANT_TOKEN_LEGACY_CLAIMS=false` affects only tokens issued afterwards; tokens
+already issued keep their aliases until they expire, and 0.6 verifiers read
+both forms. Set it only once every resource server reads the standard claims,
+because a verifier that reads only the aliases cannot use the new tokens. The
+auth service logs a deprecation notice at start while it is `true`.
+
+**Proof of possession.** `cnf.jkt` is carried as before, and the SDK verifiers
+return it without enforcing it. To enforce it, verify the DPoP proof yourself
+and pass its key thumbprint as `proof_jkt` / `proofJkt` / `ProofJKT`; add
+`require_proof_of_possession` / `requireProofOfPossession` /
+`RequireProofOfPossession` to fail closed when none is passed.
 
 **Behaviour change — nested `act` on delegation.** A delegated token's `act`
 now nests the parent token's `act` (RFC 8693). A second-level delegation
 carries `{"sub": <parent agent>, "act": {"sub": <grandparent agent>}}`, where
 0.5 carried only the parent. The chain is stored on the grant (migration
-`097_grant_actor_chain.sql`), so refreshed tokens keep it. Grants delegated
-before the migration refresh with the parent agent only, as before. *Action:*
-read `act.sub` for the delegating agent; walk nested `act` for earlier ones.
+`098_grant_actor_chain.sql`), so refreshed tokens keep it. Grants delegated
+before the migration refresh with the parent agent only, as before. `act.sub`
+is the delegating agent, not the current actor as in the usual RFC 8693
+reading; the current actor is `client_id`. *Action:* read `act.sub` for the
+delegating agent; walk nested `act` for earlier ones.
 
 **Behaviour change — disagreeing claims are refused.** The auth service
-(`invalid_claims`) and the SDK verifiers refuse a token where:
+(`invalid_claims`) and the SDK verifiers refuse a 0.6 token (one with
+`urn:grantex:grant`) where:
 
 - a standard claim and its alias disagree, for example `scope` and `scp`;
 - `act` has no string `sub` or is nested more than 10 deep;
 - `urn:grantex:grant` is not an object.
 
-Tokens issued by the auth service never disagree. This affects only custom
-issuers and tampering.
+Tokens issued by the auth service never disagree. A token issued before 0.6
+has no `urn:grantex:grant`; its `scope` was a join of `scp` that is lossy for
+scopes containing whitespace, so its `scp` is read and the two are not
+compared. Outstanding pre-0.6 tokens therefore keep verifying.
 
-**Behaviour change — whitespace in scopes.** `scope` is space-delimited, so the
-auth service refuses to issue a grant token for a scope that contains
-whitespace. Such scopes are still accepted at authorization (FINDINGS G-11),
-so the failure shows up at token exchange or refresh. *Action:* use scope
-names without spaces.
+**Behaviour change — null and mistyped claims.** The SDK verifiers refuse a
+token where any of these is present with a `null` value, where 0.5 treated
+null as absent:
+
+- `urn:grantex:grant` or any of its members;
+- `scope`, `scp`, `act`, `cnf`, `client_id`, `aud` or `authorization_details`;
+- a legacy alias.
+
+They also refuse a `client_id` that is not a non-empty string, an `aud` that is
+not a string or an array of strings, and an `authorization_details` that is not
+an array. Tokens issued by the auth service never contain such values.
+
+**Behaviour change — whitespace in scopes.**
+
+- **New grants.** `POST /v1/authorize` refuses a scope containing whitespace
+  with `400 INVALID_SCOPE`. *Action:* use scope names without spaces.
+- **Existing grants.** Grants created earlier with such a scope keep working:
+  token exchange, refresh and delegation still issue tokens, and outstanding
+  tokens verify. Because `scope` is space-delimited and cannot hold such a
+  scope, these tokens omit `scope` and always carry `scp`, whatever
+  `GRANT_TOKEN_LEGACY_CLAIMS` says. A verifier reading standard claims only
+  (`legacy_claims=False`, and the 0.7 default) refuses them rather than read a
+  different scope set. *Action:* re-issue such grants with space-free scopes
+  before switching verifiers to standard-only.
+- **Other entry points.** Agent registration and consent bundles still accept
+  such scopes (FINDINGS G-11).
 
 **Behaviour change — decision references.** `enforce()` returns
 `decision_required` for a tool listed in the grant's `urn:grantex:decision:v1`
@@ -365,13 +477,14 @@ new optional fields (`act`, `cnf`, `audience`, `legacyClaimsUsed`; Go also
 
 ## Database migrations
 
-All three are additive and apply automatically on start.
+All three are additive and apply automatically on start. (`097` is used by the
+decision-grant work, not by these changes.)
 
 | Migration | Change |
 |---|---|
 | `095_purpose_bound_grants.sql` | Nullable `purpose` on `auth_requests`, `grants`, `audit_entries` |
 | `096_platform_signing_keys.sql` | `platform_signing_keys` table (used only with `SIGNING_KEY_STORE=postgres`) |
-| `097_grant_actor_chain.sql` | Nullable `actor_chain` on `grants` |
+| `098_grant_actor_chain.sql` | Nullable `actor_chain` on `grants` |
 
 ## New settings
 
@@ -379,10 +492,13 @@ All three are additive and apply automatically on start.
 |---|---|---|
 | `JWT_SIGNING_ALG` | `RS256` | `RS256` or `ES256` |
 | `EC_PRIVATE_KEY` | — | PKCS#8 EC P-256 key for ES256 |
-| `JWT_SIGNING_KID` | — | Fixed `kid` for the env-store signing key |
-| `JWT_RETIRED_PUBLIC_KEYS` | — | JWK Set of retired public keys that must still verify |
+| `JWT_VERIFICATION_PUBLIC_KEYS` | — | JWK Set of public keys published for verification only (a key about to sign, or one that no longer signs) |
+| `JWT_LEGACY_KID_KEY` | the `RSA_PRIVATE_KEY` key | Thumbprint `kid` of the RSA key that signed pre-0.6 tokens |
+| `JWT_LEGACY_KID_MONTHS` | `13` | Months of `grantex-YYYY-MM` aliases published for that key |
 | `SIGNING_KEY_STORE` | `env` | `env` or `postgres` |
+| `SIGNING_KEY_ACTIVATION_DELAY_SECONDS` | `900` | How long a new key is published before it signs |
 | `SIGNING_KEY_RETIRED_GRACE_SECONDS` | `2592000` | How long a retired stored key stays published |
+| `MAX_GRANT_LIFETIME_SECONDS` | — | Longest grant lifetime accepted; the postgres-store grace must cover it |
 | `GRANT_TOKEN_LEGACY_CLAIMS` | `true` (0.6), `false` (0.7) | Issue the legacy claim aliases |
 
 ## Checklist
@@ -391,7 +507,9 @@ All three are additive and apply automatically on start.
 - [ ] Manifest files load with the 0.6 SDK: no duplicate keys, no tool named `cost_units`.
 - [ ] Object-form declarations are paired with purposes on grants, a caps meter, or an accepted `decision_required`.
 - [ ] Clients that push `authorization_details` send well-formed entries.
-- [ ] The auth service starts with the configured signing keys, and `JWT_SIGNING_KID` is set for the env store.
+- [ ] The auth service starts with the configured signing keys; the RSA key that signed pre-0.6 tokens stays configured (or is named by `JWT_LEGACY_KID_KEY`) until those tokens expire.
+- [ ] Key rotations publish the new key first and keep the old key until its tokens expire.
+- [ ] No grant with a whitespace scope remains before verifiers read standard claims only.
 - [ ] No deprecation warning for legacy claims appears on any resource server.
 - [ ] Custom verifiers read `scope`, `client_id`, `act` and `urn:grantex:grant`.
-- [ ] `GRANT_TOKEN_LEGACY_CLAIMS=false` is planned before 0.7.
+- [ ] `GRANT_TOKEN_LEGACY_CLAIMS=false` is planned before 0.7, after every resource server reads the standard claims.

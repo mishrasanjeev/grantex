@@ -28,20 +28,30 @@ below.
 - **Caps.** Grant caps with wildcard or unknown keys, windows or counts deny
   every call on the connector. Units are not refunded when a call fails.
 - **Signing.**
+  - Key ids are RFC 7638 thumbprints. The RSA key is also published under
+    the pre-0.6 `grantex-YYYY-MM` kids, which the auth service still
+    accepts, so outstanding tokens keep verifying across months and
+    instances.
   - Tokens may be ES256 when a deployment sets `JWT_SIGNING_ALG=ES256`, so
     verifiers that pin RS256 must allow ES256 first.
+  - Switching to the postgres key store imports the env keys with the same
+    kids.
   - SDK verifiers refuse a key whose type, curve, `alg` or `use` does not
     match the token's algorithm.
   - The auth service refuses to start with an RSA key under 2048 bits, a
-    non-P-256 EC key or an invalid retired key set.
+    non-P-256 EC key, an invalid verification key set, or (postgres store) a
+    retired-key grace shorter than `MAX_GRANT_LIFETIME_SECONDS`.
 - **Claims.**
   - `GRANT_TOKEN_LEGACY_CLAIMS` keeps the `agt`, `dev`, `grnt`, `scp`,
     `parentAgt`, `parentGrnt`, `delegationDepth` and `bdg` aliases in tokens.
     It is on for 0.6 and **defaults to off in 0.7**, and SDK verifiers stop
     reading the aliases by default in 0.7.
   - Delegated `act` claims are nested.
-  - A token whose standard claim and alias disagree is refused.
-  - A scope containing whitespace cannot be issued.
+  - A 0.6 token whose standard claim and alias disagree is refused; pre-0.6
+    tokens are read from `scp`.
+  - SDK verifiers refuse null or mistyped claims.
+  - New authorization requests refuse scopes containing whitespace. Existing
+    such grants keep working, but their tokens omit `scope`.
   - `enforce()` honours decision references in the grant.
   - TypeScript `GrantTokenPayload.agt`, `dev` and `scp` are optional and
     deprecated.
