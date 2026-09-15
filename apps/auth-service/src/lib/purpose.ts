@@ -68,6 +68,30 @@ export function buildToolsAuthorizationDetails(purpose: string, scopes: readonly
   return connectorsInScopes(scopes).map((connector) => ({ type: TOOLS_DETAIL_TYPE, connector, purpose }));
 }
 
+export type RequestedPurpose =
+  | { ok: true; purpose: string | null; details: ToolsAuthorizationDetail[] | null }
+  | { ok: false; message: string };
+
+/**
+ * Validate the `purpose` of an authorization request against its scopes. No
+ * purpose is valid and yields none; a purpose must be a known term and reach
+ * at least one connector scope.
+ */
+export function resolveRequestedPurpose(purpose: unknown, scopes: readonly string[]): RequestedPurpose {
+  if (purpose === undefined) return { ok: true, purpose: null, details: null };
+  if (!isKnownPurpose(purpose)) {
+    return {
+      ok: false,
+      message: `purpose must be one of ${[...PURPOSE_VOCABULARY.keys()].join(', ')} or a private term x-<org>.<term>`,
+    };
+  }
+  const details = buildToolsAuthorizationDetails(purpose, scopes);
+  if (details.length === 0) {
+    return { ok: false, message: 'purpose requires at least one tool:<connector>:<permission> scope' };
+  }
+  return { ok: true, purpose, details };
+}
+
 /**
  * The tools entries of a stored `authorization_details` value that apply to
  * `scopes`, for a delegated grant. Throws when the stored value is not an

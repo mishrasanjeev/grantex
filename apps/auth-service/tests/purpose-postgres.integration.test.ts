@@ -58,7 +58,7 @@ describePostgres('purpose-bound grants against real Postgres', () => {
         VALUES (
           ${id}, ${agentId}, ${'did:grantex:' + agentId}, ${grantId}, 'user_01',
           ${owner}, 'acme_kyb.resolve_business', ${sql.json({})}, ${'hash_' + id},
-          ${null}, ${new Date().toISOString()}, 'success',
+          NULL, ${new Date().toISOString()}, 'success',
           (SELECT g.purpose FROM grants g WHERE g.id = ${grantId} AND g.developer_id = ${owner})
         )
         RETURNING purpose`;
