@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grantex.dev/spec/manifest-0.6.schema.json",
+  "title": "Grantex tool manifest 0.6",
+  "description": "Declares, for one connector, the permission each tool requires and the optional purpose, cap, cost and decision constraints that enforce() applies to calls of that tool. See spec/manifest-0.6.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["connector", "tools"],
+  "properties": {
+    "$schema": {
+      "description": "Optional reference to this schema. Ignored by loaders.",
+      "type": "string"
+    },
+    "connector": {
+      "description": "Connector name. Appears in scopes as tool:<connector>:<permission>.",
+      "$ref": "#/$defs/name"
+    },
+    "version": {
+      "description": "Version of this manifest (not of the schema). Defaults to 1.0.0.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "description": {
+      "description": "Human-readable description of the connector.",
+      "type": "string"
+    },
+    "tools": {
+      "description": "Tool name to tool declaration.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "#/$defs/name" },
+      "additionalProperties": { "$ref": "#/$defs/tool" }
+    }
+  },
+  "$defs": {
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$"
+    },
+    "permission": {
+      "description": "Required permission level. admin > delete > write > read.",
+      "enum": ["read", "write", "delete", "admin"]
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647
+    },
+    "purposePattern": {
+      "description": "A purpose (aml.cdd.onboarding), a prefix-segment wildcard (aml.cdd.*) or a private term (x-<org>.<term>, x-<org>.*).",
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^(?:[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*(?:\\.\\*)?|x-[a-z0-9]+(?:-[a-z0-9]+)*(?:(?:\\.[a-z][a-z0-9_]*)+(?:\\.\\*)?|\\.\\*))$"
+    },
+    "tool": {
+      "oneOf": [
+        { "$ref": "#/$defs/permission" },
+        { "$ref": "#/$defs/toolObject" }
+      ]
+    },
+    "toolObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["permission"],
+      "properties": {
+        "permission": { "$ref": "#/$defs/permission" },
+        "allowed_purposes": {
+          "description": "The grant's purpose must match at least one pattern. Omit to apply no purpose restriction.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/purposePattern" }
+        },
+        "caps": {
+          "description": "Call caps. per_hour and per_day are rolling windows; per_case counts calls within one case. A cap of 0 disables the tool.",
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "properties": {
+            "per_hour": { "$ref": "#/$defs/count" },
+            "per_day": { "$ref": "#/$defs/count" },
+            "per_case": { "$ref": "#/$defs/count" }
+          }
+        },
+        "cost_units": {
+          "description": "Cost units charged against a grant's cost-unit budget, by component (for example base, ownership).",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+          "additionalProperties": { "$ref": "#/$defs/count" }
+        },
+        "requires_decision": {
+          "description": "When true, a call also needs a decision grant. Not allowed on read tools.",
+          "type": "boolean"
+        },
+        "four_eyes_on": {
+          "description": "Decision values that need two decision grants from different approvers. Requires requires_decision: true.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" }
+        }
+      },
+      "if": {
+        "properties": { "permission": { "const": "read" } }
+      },
+      "then": {
+        "properties": { "requires_decision": { "const": false } }
+      },
+      "dependentSchemas": {
+        "four_eyes_on": {
+          "properties": { "requires_decision": { "const": true } },
+          "required": ["requires_decision"]
+        }
+      }
+    }
+  }
+}

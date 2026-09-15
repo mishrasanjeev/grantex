@@ -75,7 +75,26 @@ export {
 } from './resources/passports.js';
 
 // Scope enforcement
-export { ToolManifest, Permission, permissionCovers, type EnforceOptions, type EnforceResult, type ToolManifestOptions, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
+export {
+  ToolManifest,
+  Permission,
+  permissionCovers,
+  ManifestValidationError,
+  MANIFEST_SCHEMA_ID,
+  parseToolDeclaration,
+  isValidPurposePattern,
+  type EnforceOptions,
+  type EnforceResult,
+  type ToolManifestOptions,
+  type ToolDeclaration,
+  type ManifestToolObject,
+  type ManifestToolCaps,
+  type ToolSpec,
+  type ToolCaps,
+  type WrapToolOptions,
+  type EnforceMiddlewareOptions,
+} from './manifest.js';
+export { DenialReason, CapSubReason, ManifestSubReason, PurposeSubReason } from './denials.js';
 
 // DPDP Compliance
 export { DpdpClient } from './resources/dpdp.js';
