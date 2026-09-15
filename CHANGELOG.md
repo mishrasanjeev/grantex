@@ -171,6 +171,39 @@ Breaking changes
   advertised `grantex_extensions.consent_ui` and `audit_stream` URLs, which had
   no routes.
 
+### Decision grants: specification, concepts and breaking changes
+- `spec/decision-grant.md`: the decision-grant profile (roles, semantic
+  action and canonicalisation, token header and claims, minting with step-up
+  and one-click attestation, case-bound validity, verification and single
+  use, four eyes, errors, threat model, APIs).
+- `docs/concepts/decision-grants.md`: the flow, the four-eyes model,
+  validity, enforcing in Python, TypeScript and MCP, rolling out with
+  `decisions.required`, operating, and what decision grants do and do not
+  protect against.
+- `spec/manifest-0.6.md` and `docs/concepts/tool-manifests.mdx` describe
+  `requires_decision` enforcement instead of the interim always-deny rule.
+
+Breaking and behaviour changes across the decision-grant series, for
+reviewers and integrators:
+- **Behaviour:** `enforce()` can now **allow** a call to a
+  `requires_decision` tool, when it carries decision grants that verify and
+  that the auth service consumes. Before, every such call was denied. Calls
+  without decision grants are denied as before.
+- **Behaviour:** `decision_required` denials now carry
+  `details: {"decision_required": "<connector>:<tool>"}` (previously empty
+  `details`).
+- **New dependency on the auth service at call time** for decision tools:
+  `enforce()` consumes grants online and refuses the call when the service
+  cannot confirm (`consume_unavailable`). Offline-only deployments cannot call
+  decision tools.
+- `@grantex/mcp-auth`: `DecisionOutcome` sub-reasons include the new values
+  (`case_changed`, `wrong_case`, `four_eyes_incomplete`, `malformed`,
+  `revoked`, `unknown_grant`, `consume_unavailable`); the type was already a
+  string, so no type break.
+- Auth service: migration `097_decision_grants.sql` adds tables only; all
+  decision endpoints are off unless `DECISION_GRANTS_ENABLED=true`.
+- No existing public API was removed or renamed.
+
 ### Decision grants in the SDKs and mcp-auth
 - `enforce()` in both SDKs now accepts decision grants for tools whose
   manifest entry has `requires_decision` (previously every such call was
