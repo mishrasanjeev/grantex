@@ -54,7 +54,7 @@ def test_shared_hashes_are_distinct() -> None:
 )
 def test_equivalent_tool_calls_share_one_hash(group: Dict[str, Any]) -> None:
     for text in group["arguments"]:
-        action = DecisionAction.from_tool_call(group["tool"], json.loads(text))
+        action = DecisionAction.from_tool_call(group["tool"], json.loads(text), group.get("extra_fields", ()))
         assert action.action_hash() == group["action_hash"], text
 
 
@@ -103,8 +103,9 @@ def test_integer_amount_must_be_exact() -> None:
 
 
 def _random_text(rng: random.Random, length: int) -> str:
+    # U+00AD (soft hyphen) is an invisible format character, refused in actions.
     return "".join(
-        chr(rng.choice([rng.randint(0x20, 0x7E), rng.randint(0xA0, 0x24F), rng.randint(0x1F600, 0x1F64F)]))
+        chr(rng.choice([rng.randint(0x20, 0x7E), rng.randint(0xAE, 0x24F), rng.randint(0x1F600, 0x1F64F)]))
         for _ in range(length)
     )
 
@@ -208,3 +209,55 @@ def test_amount_number_and_string_are_different_actions() -> None:
     assert compute_action_hash({**BASE, "amount": 5}) != compute_action_hash({**BASE, "amount": "5"})
     assert compute_action_hash({**BASE, "amount": 5}) == compute_action_hash({**BASE, "amount": 5.0})
     assert compute_action_hash({**BASE, "amount": 5}) != compute_action_hash(BASE)
+
+
+@pytest.mark.parametrize("case", FIXTURES["duplicate_keys"], ids=lambda c: c["name"])
+def test_shared_duplicate_member_names_refused(case: Dict[str, Any]) -> None:
+    with pytest.raises(ActionValidationError) as info:
+        DecisionAction.from_json(case["action_json"])
+    assert (info.value.code, info.value.field) == (case["code"], case["field"])
+
+
+def test_from_json_accepts_a_valid_action() -> None:
+    assert DecisionAction.from_json(json.dumps(BASE)).action_hash() == compute_action_hash(BASE)
+
+
+def test_extra_fields_must_be_declared_and_present_in_the_call() -> None:
+    args = {"case_id": "case_8841", "decision": "approve", "subject": "gb:00000001", "currency": "GBP"}
+    without = DecisionAction.from_tool_call("payout_release", args)
+    with_currency = DecisionAction.from_tool_call("payout_release", args, ["currency"])
+    assert without.action_hash() != with_currency.action_hash()
+    assert with_currency.to_dict()["extra"] == {"currency": "GBP"}
+    with pytest.raises(ActionValidationError) as info:
+        DecisionAction.from_tool_call("payout_release", {**args, "currency": None}, ["currency"])
+    assert (info.value.code, info.value.field) == ("missing_field", "extra.currency")
+    with pytest.raises(ActionValidationError):
+        DecisionAction.from_tool_call("payout_release", args, ["subject"])
+
+
+def test_subclasses_cannot_change_the_canonical_form() -> None:
+    import enum
+
+    class LoudFloat(float):
+        def __repr__(self) -> str:
+            return "999"
+
+    class Code(enum.IntEnum):
+        ONE = 1
+
+    class Shouty(str):
+        def __str__(self) -> str:
+            return "changed"
+
+    from grantex.canonical import canonicalize
+
+    assert canonicalize([LoudFloat(1.5), Code.ONE, Shouty("x")]) == '[1.5,1,"x"]'
+    assert compute_action_hash({**BASE, "amount": LoudFloat(1250.5)}) == compute_action_hash({**BASE, "amount": 1250.5})
+
+
+@pytest.mark.parametrize("code_point", [0x00AD, 0x061C, 0x180E, 0x200B, 0x200D, 0x202E, 0x2066, 0x2069, 0xFEFF, 0xE0041])
+def test_invisible_format_characters_refused(code_point: int) -> None:
+    for field in ("case_id", "subject"):
+        with pytest.raises(ActionValidationError) as info:
+            DecisionAction.from_dict({**BASE, field: "a" + chr(code_point) + "b"})
+        assert (info.value.code, info.value.field) == ("invalid_value", field)

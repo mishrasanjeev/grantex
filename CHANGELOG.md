@@ -223,6 +223,21 @@ Behind `DECISION_GRANTS_ENABLED` (default off; the endpoints answer 404
   `decision_page_tickets`, `decision_page_views`).
 - No change to existing endpoints or tokens.
 
+### Decision action hash: stricter inputs and extra decision fields
+- The semantic action may carry `extra`: further fields the manifest declares
+  for a tool (`decision_fields`, for example a currency), included in the
+  hash. `from_tool_call` / `decisionActionFromToolCall` take the declared
+  names and require them in the call. Hashes of actions without `extra` are
+  unchanged.
+- **Break:** `case_id`, `subject` and extra string values containing invisible
+  Unicode format characters (soft hyphen, zero-width, bidirectional controls,
+  tags) are now refused (`invalid_value`). Such actions hashed before.
+- `DecisionAction.from_json` (Python) and `parseDecisionActionJson`,
+  `parseJsonRejectingDuplicates` (TypeScript) refuse duplicate member names
+  (`duplicate_key`).
+- Python canonicalisation ignores overridden `__repr__` / `__str__` on
+  `float`, `int` and `str` subclasses.
+
 ### Canonicalisation and decision action hash
 - RFC 8785 JSON canonicalisation in both SDKs: `grantex.canonical`
   (`canonicalize`, `canonicalize_bytes`, `serialize_number`) and

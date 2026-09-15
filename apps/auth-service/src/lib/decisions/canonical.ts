@@ -117,3 +117,50 @@ function serializeString(value: string): string {
   // \b \t \n \f \r \" \\ as two-character escapes, other C0 controls as \u00xx.
   return JSON.stringify(value);
 }
+
+/** A JSON text repeats a member name within one object. */
+export class DuplicateKeyError extends CanonicalizationError {
+  readonly key: string;
+  constructor(key: string) {
+    super(`duplicate member name ${JSON.stringify(key)}`);
+    this.name = 'DuplicateKeyError';
+    this.key = key;
+  }
+}
+
+/**
+ * Parses JSON text like `JSON.parse`, but throws `DuplicateKeyError` when an
+ * object repeats a member name (after unescaping), instead of silently keeping
+ * the last value. Use it wherever the raw text of a value to canonicalise is
+ * available.
+ */
+export function parseJsonRejectingDuplicates(text: string): unknown {
+  const value: unknown = JSON.parse(text);
+  const stack: { keys: Set<string> | null; expectKey: boolean }[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      const top = stack[stack.length - 1];
+      if (top?.keys && top.expectKey) {
+        const key = JSON.parse(text.slice(i, j + 1)) as string;
+        if (top.keys.has(key)) throw new DuplicateKeyError(key);
+        top.keys.add(key);
+        top.expectKey = false;
+      }
+      i = j + 1;
+      continue;
+    }
+    if (ch === '{') stack.push({ keys: new Set(), expectKey: true });
+    else if (ch === '[') stack.push({ keys: null, expectKey: false });
+    else if (ch === '}' || ch === ']') stack.pop();
+    else if (ch === ',') {
+      const top = stack[stack.length - 1];
+      if (top?.keys) top.expectKey = true;
+    }
+    i += 1;
+  }
+  return value;
+}
