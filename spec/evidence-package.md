@@ -56,7 +56,7 @@ Unknown members are refused everywhere except inside `ext` objects and inside
 9396 allows further members).
 
 A trimmed example (the full package is
-[`examples/evidence/package.json`](examples/evidence/package.json); it is shown
+[`examples/evidence/evidence-package.json`](examples/evidence/evidence-package.json); it is shown
 here indented, but a package is only valid in its canonical form):
 
 ```json
@@ -314,10 +314,9 @@ hashed.
 
 To read a package comfortably, pretty-print a copy; verify the original.
 
-> Implementation note: the evidence modules carry a private copy of the RFC
-> 8785 implementation that the decision-grant work adds as
-> `grantex.canonical` / `canonical.ts`. The copies are identical and will be
-> replaced by the shared modules when those are released.
+The SDKs use one implementation for decision action hashes and evidence
+packages: `grantex.canonical` (Python) and `canonical.ts` (TypeScript), tested
+against the vectors in [`examples/canonicalization/`](examples/canonicalization/).
 
 ## Hash chain
 

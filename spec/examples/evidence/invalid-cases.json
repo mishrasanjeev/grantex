@@ -3,7 +3,7 @@
   "cases": [
     {
       "name": "missing trusted root",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "options": {
         "expected_root": null
       },
@@ -17,7 +17,7 @@
     },
     {
       "name": "wrong trusted root",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "options": {
         "expected_root": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
       },
@@ -31,7 +31,7 @@
     },
     {
       "name": "package larger than the limit",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "options": {
         "max_bytes": 1024
       },
@@ -45,7 +45,7 @@
     },
     {
       "name": "byte-order mark",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "raw_prefix",
@@ -62,7 +62,7 @@
     },
     {
       "name": "truncated",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "raw_truncate",
@@ -79,7 +79,7 @@
     },
     {
       "name": "duplicate member",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "raw_replace",
@@ -97,7 +97,7 @@
     },
     {
       "name": "whitespace",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "raw_replace",
@@ -115,7 +115,7 @@
     },
     {
       "name": "number spelled 61250.0",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "raw_replace",
@@ -133,7 +133,7 @@
     },
     {
       "name": "number spelled 6.125e4",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "raw_replace",
@@ -151,7 +151,7 @@
     },
     {
       "name": "integer beyond 2^53",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "raw_replace",
@@ -169,7 +169,7 @@
     },
     {
       "name": "unknown format",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -189,7 +189,7 @@
     },
     {
       "name": "unknown version",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -209,7 +209,7 @@
     },
     {
       "name": "unknown top-level member",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -229,7 +229,7 @@
     },
     {
       "name": "missing chain root",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "delete",
@@ -249,7 +249,7 @@
     },
     {
       "name": "unknown tool call outcome",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -272,7 +272,7 @@
     },
     {
       "name": "raw approver identifier while pseudonymised",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -295,7 +295,7 @@
     },
     {
       "name": "header field edited",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -316,7 +316,7 @@
     },
     {
       "name": "entry field edited",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -339,7 +339,7 @@
     },
     {
       "name": "entry field edited and its hash recomputed",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -366,7 +366,7 @@
     },
     {
       "name": "sequence number edited",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -388,7 +388,7 @@
     },
     {
       "name": "last entry edited and rehashed",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -415,7 +415,7 @@
     },
     {
       "name": "chain length edited",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -436,7 +436,7 @@
     },
     {
       "name": "chain root edited",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -457,7 +457,7 @@
     },
     {
       "name": "cost edited and whole chain rehashed",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -483,7 +483,7 @@
     },
     {
       "name": "cited upstream record removed and chain rehashed",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -509,7 +509,7 @@
     },
     {
       "name": "grant chain parent edited and rehashed",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -535,7 +535,7 @@
     },
     {
       "name": "entries reordered and rehashed",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -560,7 +560,7 @@
     },
     {
       "name": "second approver made the first and rehashed",
-      "package": "package-disclosed.json",
+      "package": "evidence-package-disclosed.json",
       "mutations": [
         {
           "op": "set",
@@ -586,7 +586,7 @@
     },
     {
       "name": "decision action edited and rehashed",
-      "package": "package-disclosed.json",
+      "package": "evidence-package-disclosed.json",
       "mutations": [
         {
           "op": "set",
@@ -613,7 +613,7 @@
     },
     {
       "name": "decision for another case",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -640,7 +640,7 @@
     },
     {
       "name": "denied call with output",
-      "package": "package-disclosed.json",
+      "package": "evidence-package-disclosed.json",
       "mutations": [
         {
           "op": "set",
@@ -666,7 +666,7 @@
     },
     {
       "name": "duplicate call id",
-      "package": "package-disclosed.json",
+      "package": "evidence-package-disclosed.json",
       "mutations": [
         {
           "op": "set",
@@ -692,7 +692,7 @@
     },
     {
       "name": "anchor audit entry edited",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -714,7 +714,7 @@
     },
     {
       "name": "anchor records another root",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "mutations": [
         {
           "op": "set",
@@ -740,7 +740,7 @@
     },
     {
       "name": "untrusted anchor",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "options": {
         "expected_anchor_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
       },
@@ -754,7 +754,7 @@
     },
     {
       "name": "anchor required but absent",
-      "package": "package-disclosed.json",
+      "package": "evidence-package-disclosed.json",
       "options": {
         "require_anchor": true
       },
@@ -768,7 +768,7 @@
     },
     {
       "name": "signature required but absent",
-      "package": "package.json",
+      "package": "evidence-package.json",
       "options": {
         "require_signature": true
       },
@@ -782,7 +782,7 @@
     },
     {
       "name": "signed package without a key set",
-      "package": "package-signed.json",
+      "package": "evidence-package-signed.json",
       "expect": {
         "code": "signature_unverified",
         "entry_index": null,
@@ -793,7 +793,7 @@
     },
     {
       "name": "signature from another key set",
-      "package": "package-signed.json",
+      "package": "evidence-package-signed.json",
       "options": {
         "jwks": {
           "keys": []
@@ -809,7 +809,7 @@
     },
     {
       "name": "signature kid edited",
-      "package": "package-signed.json",
+      "package": "evidence-package-signed.json",
       "options": {
         "jwks": "jwks.json"
       },
@@ -833,7 +833,7 @@
     },
     {
       "name": "signature bytes edited",
-      "package": "package-signed.json",
+      "package": "evidence-package-signed.json",
       "options": {
         "jwks": "jwks.json"
       },
