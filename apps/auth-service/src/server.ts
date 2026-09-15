@@ -53,6 +53,8 @@ import { metricsHookPlugin } from './plugins/metricsHook.js';
 import websocket from '@fastify/websocket';
 import { oauthRoutes } from './routes/oauth.js';
 import { prepaidWalletRoutes } from './routes/prepaid-wallets.js';
+import { decisionsRoutes } from './routes/decisions.js';
+import { decisionPageRoutes } from './routes/decision-page.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -217,6 +219,11 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(consentBundlesRoutes);
   await app.register(mcpServersRoutes);
   await app.register(dpdpRoutes);
+
+  // Decision grants (PRD G-3): API (developer key) and the approval page
+  // (approver session cookie). Both refuse unless DECISION_GRANTS_ENABLED=true.
+  await app.register(decisionsRoutes);
+  await app.register(decisionPageRoutes);
 
   // Grantex Commerce V1 — registered with prefix so all commerce paths
   // share the spec §16 envelope via the sub-instance error handler.

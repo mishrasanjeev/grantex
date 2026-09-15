@@ -88,3 +88,33 @@ export const anomaliesUnacknowledged = new Gauge({
   help: 'Current number of unacknowledged anomalies',
   registers: [registry],
 });
+
+// ── Decision grants (PRD G-3) ─────────────────────────────────────────────────
+// Labels are fixed enumerations: never ids, subjects or case identifiers.
+
+export const decisionGrantsMintedTotal = new Counter({
+  name: 'grantex_decision_grants_minted_total',
+  help: 'Decision grants minted, by approvals the decision requires (1, or 2 for four eyes) and approval position',
+  labelNames: ['approvals_required', 'position'] as const,
+  registers: [registry],
+});
+
+export const decisionGrantsConsumedTotal = new Counter({
+  name: 'grantex_decision_grants_consumed_total',
+  help: 'Decision grants consumed (one per grant, so a four-eyes decision counts two)',
+  registers: [registry],
+});
+
+export const decisionGrantsRejectedTotal = new Counter({
+  name: 'grantex_decision_grants_rejected_total',
+  help: 'Refused decision-grant operations, by stage (session, request, approve, consume) and sub-reason',
+  labelNames: ['stage', 'reason'] as const,
+  registers: [registry],
+});
+
+export const decisionDwellSeconds = new Histogram({
+  name: 'grantex_decision_dwell_seconds',
+  help: 'Time an approver looked at a decision before approving it, in seconds',
+  buckets: [1, 2, 5, 10, 20, 30, 60, 120, 300, 600, 1800, 3600],
+  registers: [registry],
+});

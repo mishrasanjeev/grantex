@@ -54,6 +54,8 @@ tags:
     description: Authorization request creation and approval
   - name: Consent
     description: End-user consent UI and approval flow
+  - name: Decision Grants
+    description: Decisions a named person approves for one semantic action (spec/decision-grant.md). Disabled unless DECISION_GRANTS_ENABLED=true.
   - name: Tokens
     description: Token exchange, verification, and revocation
   - name: OAuth Agent Grants
@@ -7119,3 +7121,215 @@ paths:
       responses:
         "200": { description: Verifiable presentation }
         "400": { description: Invalid presentation request }
+  /v1/decisions/approver-sessions:
+    post:
+      operationId: createDecisionApproverSession
+      tags: [Decision Grants]
+      summary: Exchange a step-up ID token for an approver session
+      description: |
+        The ID token must come from one of the developer's active OIDC SSO connections, have been issued within
+        DECISION_ID_TOKEN_MAX_AGE_SECONDS, carry `auth_time`, and show step-up (`acr` in DECISION_STEP_UP_ACR or an
+        `amr` in DECISION_STEP_UP_AMR) within DECISION_STEP_UP_MAX_AGE_SECONDS. Each ID token is exchanged once. The
+        session lasts until the step-up window ends.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [connectionId, idToken]
+              properties:
+                connectionId: { type: string }
+                idToken: { type: string }
+      responses:
+        "201": { description: "Approver session: sessionToken, sessionId, expiresAt, approver (sub, idp, email, name), approverAuth, acr, amr, authTime" }
+        "401": { description: "The ID token did not verify against the connection (APPROVER_AUTH_FAILED)" }
+        "403": { description: "Step-up missing or too old (subReason step_up_required)" }
+        "409": { description: "ID token already exchanged (subReason consumed)" }
+  /v1/decisions/approver-sessions/{id}:
+    delete:
+      operationId: revokeDecisionApproverSession
+      tags: [Decision Grants]
+      summary: End an approver session
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Revoked }
+        "404": { description: Not found }
+  /v1/decisions/cases/{caseId}:
+    put:
+      operationId: setDecisionCaseVersion
+      tags: [Decision Grants]
+      summary: Register the current version of a case
+      description: A new version supersedes the case's open decision requests and revokes its unconsumed decision grants (case_changed).
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: caseId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [caseVersion]
+              properties:
+                caseVersion: { type: string, maxLength: 128 }
+      responses:
+        "200": { description: "caseId, caseVersion, previousVersion, supersededRequests, revokedGrants" }
+  /v1/decisions/requests:
+    post:
+      operationId: createDecisionRequest
+      tags: [Decision Grants]
+      summary: Ask a person to decide one semantic action
+      description: Idempotent per action hash and case version while the request is open (200 returns the open request).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, connector, caseVersion]
+              properties:
+                action:
+                  type: object
+                  required: [case_id, action, decision, subject]
+                  additionalProperties: false
+                  properties:
+                    case_id: { type: string }
+                    action: { type: string }
+                    decision: { type: string }
+                    subject: { type: string }
+                    amount: { oneOf: [{ type: number }, { type: string }] }
+                connector: { type: string }
+                caseVersion: { type: string }
+                fourEyesOn: { type: array, items: { type: string }, description: "The manifest's four_eyes_on; two approvals are required when it lists the decision" }
+                approvalsRequired: { type: integer, enum: [1, 2] }
+                expiresInSeconds: { type: integer, minimum: 60, maximum: 86400 }
+                memoRef: { type: string }
+                policyScoreRef: { type: string }
+                agentId: { type: string }
+                grantId: { type: string }
+      responses:
+        "201": { description: Created }
+        "200": { description: An open request for the same action and case version already exists }
+        "400": { description: "Invalid action (INVALID_ACTION) or parameters" }
+        "409": { description: "caseVersion is not the case's current version (subReason case_changed)" }
+  /v1/decisions/requests/{id}:
+    get:
+      operationId: getDecisionRequest
+      tags: [Decision Grants]
+      summary: Status and approvals of a decision request
+      description: Includes `decisionGrants` (the tokens) only when the request is fully approved and no grant is consumed, revoked or expired.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Decision request }
+        "404": { description: Not found }
+  /v1/decisions/requests/{id}/approvals:
+    post:
+      operationId: approveDecisionRequest
+      tags: [Decision Grants]
+      summary: Approve the exact action and mint a decision grant
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: Grantex-Approver-Session, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actionHash, dwellMs]
+              properties:
+                actionHash: { type: string, description: The action hash the approval surface displayed }
+                dwellMs: { type: integer, description: Milliseconds from render to submit, measured by the approval surface }
+      responses:
+        "201": { description: "decisionGrant (typ decision+jwt), jti, sub, expiresAt, approvalsRequired, approvalsReceived, status" }
+        "400": { description: dwellMs out of range }
+        "401": { description: Approver session missing or invalid }
+        "403": { description: "Step-up expired (subReason step_up_required)" }
+        "409": { description: "Refused (subReason action_mismatch, same_approver, case_changed, consumed or closed)" }
+        "410": { description: "Request expired (subReason expired)" }
+  /v1/decisions/requests/{id}/page-tickets:
+    post:
+      operationId: createDecisionPageTicket
+      tags: [Decision Grants]
+      summary: One-time link to the server-rendered approval page
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: Grantex-Approver-Session, in: header, required: true, schema: { type: string } }
+      responses:
+        "201": { description: "url, expiresAt" }
+  /v1/decisions/requests/{id}/cancel:
+    post:
+      operationId: cancelDecisionRequest
+      tags: [Decision Grants]
+      summary: Cancel a decision request and revoke its unconsumed decision grants
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Cancelled }
+        "404": { description: No open request }
+  /v1/decisions/consume:
+    post:
+      operationId: consumeDecisionGrants
+      tags: [Decision Grants]
+      summary: Verify and atomically consume the decision grants for one action
+      description: One grant, or both grants of a four-eyes decision; either all are consumed or none is. Refusals of grants the developer holds are recorded in the audit chain.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decisionGrants, action, caseVersion]
+              properties:
+                decisionGrants: { type: array, minItems: 1, maxItems: 2, items: { type: string } }
+                action: { type: object, description: The semantic action about to be performed }
+                caseVersion: { type: string }
+                agentId: { type: string }
+                grantId: { type: string }
+      responses:
+        "200": { description: "consumed, requestId, jtis, approvers, actionHash" }
+        "400": { description: "Malformed request or token (subReason malformed)" }
+        "409": { description: "Refused (subReason action_mismatch, wrong_case, consumed, same_approver, case_changed, revoked, expired, four_eyes_incomplete or unknown_grant)" }
+  /decisions/{id}:
+    get:
+      operationId: renderDecisionPage
+      tags: [Decision Grants]
+      summary: Server-rendered approval page (HTML)
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: ticket, in: query, required: false, schema: { type: string } }
+      responses:
+        "200": { description: Page with the memo reference, policy score reference and exact action }
+        "303": { description: Ticket redeemed; approver session cookie set }
+        "401": { description: No approver session }
+    post:
+      operationId: submitDecisionPage
+      tags: [Decision Grants]
+      summary: Approve from the rendered page (form post with CSRF token)
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Approved }
+        "403": { description: Cross-site submission or invalid CSRF token }
