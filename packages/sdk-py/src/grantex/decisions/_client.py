@@ -42,7 +42,10 @@ class DecisionConsumer(Protocol):
         *,
         agent_id: Optional[str] = None,
         grant_id: Optional[str] = None,
-    ) -> ConsumedDecision: ...
+    ) -> ConsumedDecision:
+        """Consume every grant in ``grants`` or none. Raise
+        ``DecisionGrantError`` with the refusal's sub-reason, or any other
+        exception when the issuer cannot confirm consumption."""
 
 
 def _action_dict(action: Union[DecisionAction, Mapping[str, Any]]) -> Dict[str, Any]:
