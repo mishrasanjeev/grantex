@@ -228,7 +228,38 @@ When storing manifests as files (for git, CI, or team sharing), use this JSON fo
 | `connector` | `string` | Yes | Unique connector identifier |
 | `version` | `string` | No | Semantic version of the manifest (default `"1.0.0"`) |
 | `description` | `string` | No | Human-readable description |
-| `tools` | `object` | Yes | Map of tool name to permission level (`"read"`, `"write"`, `"delete"`, `"admin"`) |
+| `tools` | `object` | Yes | Map of tool name to a permission level (`"read"`, `"write"`, `"delete"`, `"admin"`) or, from schema 0.6, a tool object |
+
+### Tool objects (schema 0.6)
+
+A tool can also be declared as an object that adds constraints to its permission. String and object forms can be mixed in one file:
+
+```json
+{
+  "connector": "acme_kyb",
+  "tools": {
+    "get_case": "read",
+    "verify_business": {
+      "permission": "read",
+      "allowed_purposes": ["aml.cdd.*"],
+      "caps": {"per_hour": 50, "per_case": 3},
+      "cost_units": {"base": 5, "ownership": 10}
+    },
+    "case_decision": {"permission": "write", "requires_decision": true, "four_eyes_on": ["decline"]}
+  }
+}
+```
+
+| Key | Meaning |
+|-----|---------|
+| `permission` | Required permission level |
+| `allowed_purposes` | Purpose patterns the grant's purpose must match (`aml.cdd.*`) |
+| `caps` | `per_hour`, `per_day` (rolling windows) and `per_case` call caps; `0` disables the tool |
+| `cost_units` | Units charged per call against a cost-unit budget |
+| `requires_decision` | The call also needs a decision grant (not allowed on `read` tools) |
+| `four_eyes_on` | Decisions that need two different approvers |
+
+Manifests that use the object form are validated against the published JSON Schema, `spec/manifest-0.6.schema.json`: an unknown key is rejected with an error naming its path. Denied `enforce()` results carry a stable `reason_code` (`reasonCode` in TypeScript) such as `purpose_not_allowed`, `decision_required` or `cap_exceeded`. See the [manifest 0.6 specification](https://github.com/mishrasanjeev/grantex/blob/main/spec/manifest-0.6.md) for every rule and denial code.
 
 ---
 

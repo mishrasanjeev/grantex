@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Tool manifest schema 0.6
+- Tool values in a manifest may now be objects carrying `permission`,
+  `allowed_purposes`, `caps` (`per_hour`, `per_day`, `per_case`),
+  `cost_units`, `requires_decision` and `four_eyes_on`, alongside the existing
+  permission strings; both forms can be mixed in one file. The schema is
+  published as JSON Schema 2020-12 in `spec/manifest-0.6.schema.json`, with
+  the rules in `spec/manifest-0.6.md`.
+- The Python and TypeScript loaders validate such manifests strictly and raise
+  `ManifestValidationError` naming the offending path for an unknown key, a
+  `requires_decision` on a `read` tool, `four_eyes_on` without
+  `requires_decision`, or a malformed purpose pattern, cap or cost unit. New
+  exports: `ToolSpec`, `ToolCaps`, `ManifestValidationError`,
+  `ToolManifest.get_tool_spec()` / `getToolSpec()`, `to_dict()` / `toJSON()`.
+- Denied `enforce()` results carry a stable `reason_code` / `reasonCode` from
+  the new `DenialReason` taxonomy (`purpose_not_allowed`, `tool_not_granted`,
+  `permission_insufficient`, `cap_exceeded`, `decision_required`,
+  `decision_invalid`, `grant_revoked`, `region_mismatch`,
+  `manifest_unknown_tool`, `token_invalid`), an optional sub-reason and
+  structured details. `reason` is unchanged.
+- `enforce()` fails closed on declarations it cannot evaluate yet: a tool
+  declaring `allowed_purposes` is denied (`purpose_not_allowed`), one with
+  `requires_decision` returns `decision_required`, and one with `caps` or
+  `cost_units` is denied (`cap_exceeded` / `meter_unavailable`).
+- No change for existing manifests: tools declared with a permission string
+  are enforced exactly as before. Manifests made only of permission strings
+  still load with unknown top-level keys, now with a deprecation warning; a
+  future minor release will reject them.
+
 ### Verified Python SDK publication (2026-09-15)
 - Published Python `grantex==0.5.1` to PyPI (uploaded 2026-09-15 01:56 UTC),
   built from `main` at `1bc13b2e`. Distribution SHA-256 values:

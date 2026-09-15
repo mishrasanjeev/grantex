@@ -1,0 +1,14 @@
+{
+  "$schema": "https://grantex.dev/spec/manifest-0.6.schema.json",
+  "connector": "acme_kyb",
+  "version": "1.1.0",
+  "description": "String and object tool forms in one manifest",
+  "tools": {
+    "get_case": "read",
+    "add_case_note": "write",
+    "verify_business": {"permission": "read", "allowed_purposes": ["aml.cdd.onboarding", "x-acme-bank.kyb_refresh"], "caps": {"per_day": 500, "per_case": 3}, "cost_units": {"base": 5}},
+    "archive_case": {"permission": "admin", "requires_decision": false},
+    "disable_everything": {"permission": "read", "caps": {"per_hour": 0}},
+    "private_lookup": {"permission": "read", "allowed_purposes": ["x-acme-bank.*"]}
+  }
+}
