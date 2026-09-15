@@ -24,14 +24,15 @@ BASE = "https://auth.example.com"
 
 def _run(*argv: str) -> Tuple[int, str, str]:
     out, err = io.StringIO(), io.StringIO()
-    code = run(list(argv), out, err)
+    args = list(argv)
+    code = run(args[1:] if args[:1] == ["evidence"] else args, out, err)
     return code, out.getvalue(), err.getvalue()
 
 
 def test_verify_exits_zero_for_a_valid_package() -> None:
     code, out, err = _run("evidence", "verify", str(EXAMPLES / "evidence-package.json"), "--root", ROOT, "--anchor", ANCHOR)
     assert code == EXIT_OK, err
-    assert out.startswith("verified: 15 entries") and "anchor" in out
+    assert out.startswith("verified: 18 entries") and "pinned to the --anchor hash" in out
 
 
 def test_e2e_step8_verify_then_corrupt_one_byte_fails_with_the_link(tmp_path: Path) -> None:
@@ -43,8 +44,8 @@ def test_e2e_step8_verify_then_corrupt_one_byte_fails_with_the_link(tmp_path: Pa
     code, out, err = _run("evidence", "verify", str(corrupted), "--root", ROOT)
     assert code == EXIT_FAILED
     assert out == ""
-    assert err.splitlines()[0] == "FAILED entry_hash_mismatch: entry 10 content does not match its hash"
-    assert "  entry:    10" in err and "  field:    entries[10].hash" in err
+    assert err.splitlines()[0] == "FAILED entry_hash_mismatch: entry 13 content does not match its hash"
+    assert "  entry:    13" in err and "  field:    entries[13].hash" in err
     assert "  expected: sha256:" in err and "  actual:   sha256:" in err
 
 
@@ -59,7 +60,11 @@ def test_verify_requires_a_root() -> None:
     code, _, _ = _run("evidence", "verify", str(EXAMPLES / "evidence-package.json"))
     assert code == EXIT_USAGE
     code, _, err = _run("evidence", "verify", str(EXAMPLES / "evidence-package.json"), "--root", "not-a-root")
-    assert code == EXIT_FAILED and err.startswith("FAILED missing_root")
+    assert code == EXIT_USAGE and "--root must be" in err
+    code, _, err = _run("evidence", "verify", str(EXAMPLES / "evidence-package.json"), "--root", ROOT, "--max-bytes", "-1")
+    assert code == EXIT_USAGE and "--max-bytes" in err
+    code, out, _ = _run("evidence", "verify", str(EXAMPLES / "evidence-package.json"), "--root", ROOT)
+    assert code == EXIT_OK and "anchor:    internal-consistency-only" in out and "unsourced policy inputs: 1" in out
 
 
 def test_verify_signed_package_needs_keys_or_explicit_skip() -> None:
@@ -67,7 +72,7 @@ def test_verify_signed_package_needs_keys_or_explicit_skip() -> None:
     code, _, err = _run("evidence", "verify", signed, "--root", ROOT)
     assert code == EXIT_FAILED and "signature_unverified" in err
     code, out, _ = _run("evidence", "verify", signed, "--root", ROOT, "--jwks", str(EXAMPLES / "jwks.json"), "--require-signature")
-    assert code == EXIT_OK and "signature" in out
+    assert code == EXIT_OK and "signature: verified (kid evidence-example-es256)" in out and "covered by the verified service signature" in out
     assert _run("evidence", "verify", signed, "--root", ROOT, "--skip-signature")[0] == EXIT_OK
     assert _run("evidence", "verify", signed, "--root", ROOT, "--skip-signature", "--jwks", str(EXAMPLES / "jwks.json"))[0] == EXIT_USAGE
 
@@ -156,7 +161,7 @@ def test_export_does_not_derive_a_path_from_an_unsafe_case_id(monkeypatch: pytes
     )
     code, _, err = _run("evidence", "export", "../case_demo_0001")
     assert code == EXIT_USAGE and "pass --out" in err
-    assert str(route.calls.last.request.url).endswith("/cases/..%2Fcase_demo_0001/export")
+    assert not route.called  # refused before contacting the service
 
 
 @respx.mock

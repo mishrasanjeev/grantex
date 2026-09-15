@@ -1,7 +1,7 @@
 import { Command, Option } from 'commander';
 import chalk from 'chalk';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { evidence } from '@grantex/sdk';
+import type { evidence as EvidenceModule } from '@grantex/sdk';
 import { defaultConfigPath, loadConfig, resolveConfig } from '../config.js';
 import { isJsonMode } from '../format.js';
 
@@ -10,30 +10,70 @@ export const EXIT_OK = 0;
 export const EXIT_FAILED = 1;
 export const EXIT_USAGE = 2;
 
+/** The first @grantex/sdk release that ships the evidence module. */
+export const EVIDENCE_SDK_VERSION = '0.7.0';
+
 const SAFE_FILE_STEM = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,127}$/;
 const ROOT = /^sha256:[0-9a-f]{64}$/;
 const AUDIT_HASH = /^[0-9a-f]{64}$/;
+const IDENTIFIER_CLASSES = ['approver', 'content', 'principal', 'record', 'subject'];
 
-function printResult(result: evidence.VerificationResult): void {
+type Evidence = typeof EvidenceModule;
+
+/**
+ * Load the evidence module lazily, so the CLI still starts (and every other
+ * command works) with an older @grantex/sdk that does not ship it.
+ */
+export async function loadEvidence(importer: () => Promise<Record<string, unknown>> = () => import('@grantex/sdk')): Promise<Evidence> {
+  let sdk: Record<string, unknown>;
+  try {
+    sdk = await importer();
+  } catch (err) {
+    return usage(`cannot load @grantex/sdk: ${(err as Error).message}`);
+  }
+  let module: Evidence | undefined;
+  try {
+    module = sdk['evidence'] as Evidence | undefined;
+  } catch {
+    module = undefined; // some module loaders throw for a missing export instead of returning undefined
+  }
+  if (!module || typeof module.verifyPackage !== 'function') {
+    return usage(`grantex evidence requires @grantex/sdk >= ${EVIDENCE_SDK_VERSION}; upgrade @grantex/sdk`);
+  }
+  return module;
+}
+
+function describeTrust(result: EvidenceModule.VerificationResult): string[] {
+  const anchor = {
+    absent: 'absent',
+    'internal-consistency-only': 'internal-consistency-only (verify the service signature, or pin --anchor from the audit log)',
+    pinned: 'pinned to the --anchor hash you supplied',
+    signed: 'covered by the verified service signature',
+  }[result.anchorStatus];
+  const signature = {
+    absent: 'absent',
+    unchecked: 'present but not checked (--skip-signature)',
+    verified: `verified (kid ${String(result.signatureKid)})`,
+  }[result.signatureStatus];
+  const lines = ['  root:      matches --root', `  anchor:    ${anchor}`, `  signature: ${signature}`];
+  if (result.unsourcedInputs) lines.push(`  unsourced policy inputs: ${result.unsourcedInputs}`);
+  if (result.lateEntries) lines.push(`  entries recorded late:   ${result.lateEntries}`);
+  if (result.tenantAssertedEntries) lines.push(`  tenant-asserted entries: ${result.tenantAssertedEntries}`);
+  return lines;
+}
+
+function printResult(evidence: Evidence, result: EvidenceModule.VerificationResult): void {
   if (isJsonMode()) {
     console.log(JSON.stringify(evidence.verificationResultToJson(result), null, 2));
     return;
   }
   if (result.ok) {
-    const checks = ['hash chain', 'trusted root'];
-    if (result.anchorChecked) checks.push('anchor');
-    if (result.signatureChecked) checks.push('signature');
     console.log(`${chalk.green('verified')}: ${result.entryCount} entries, root ${result.root}`);
-    console.log(`  checked: ${checks.join(', ')}`);
+    for (const line of describeTrust(result)) console.log(line);
     return;
   }
   console.error(`${chalk.red('FAILED')} ${result.code}: ${result.message}`);
-  const rows: Array<[string, unknown]> = [
-    ['entry', result.entryIndex],
-    ['field', result.fieldPath],
-    ['expected', result.expected],
-    ['actual', result.actual],
-  ];
+  const rows: Array<[string, unknown]> = [['entry', result.entryIndex], ['field', result.fieldPath], ['expected', result.expected], ['actual', result.actual]];
   for (const [label, value] of rows) {
     if (value !== null && value !== undefined) console.error(`  ${`${label}:`.padEnd(9)} ${String(value)}`);
   }
@@ -45,7 +85,7 @@ function usage(message: string): never {
 }
 
 interface VerifyFlags {
-  root: string;
+  root?: string;
   anchor?: string;
   requireAnchor?: boolean;
   jwks?: string;
@@ -58,8 +98,8 @@ interface ExportFlags {
   out?: string;
   disclose?: string[];
   sign?: boolean;
-  state?: string;
   url?: string;
+  timeout?: string;
 }
 
 function readInput(file: string): Uint8Array {
@@ -70,23 +110,29 @@ function readInput(file: string): Uint8Array {
   }
 }
 
-export function evidenceCommand(): Command {
+export function evidenceCommand(importer?: () => Promise<Record<string, unknown>>): Command {
   const cmd = new Command('evidence').description('Verify and export evidence packages');
 
   cmd
     .command('verify <package>')
-    .description('Verify an evidence package against a trusted root (exits 1 on any break)')
-    .requiredOption('--root <root>', 'trusted package root, sha256:<64 hex>')
+    .description('Verify an evidence package against a trusted root (exits 1 on any break, 2 on usage errors)')
+    .option('--root <root>', 'trusted package root, sha256:<64 hex> (required)')
     .option('--anchor <hash>', 'trusted anchor audit entry hash (64 hex)')
     .option('--require-anchor', 'fail when the package has no anchor')
-    .option('--jwks <file>', 'JSON Web Key Set file to verify a signature')
+    .option('--jwks <file>', 'JSON Web Key Set file to verify the service signature')
     .option('--require-signature', 'fail when the package is not signed')
     .option('--skip-signature', 'accept a signed package without checking its signature')
     .option('--max-bytes <n>', 'size limit in bytes (default 64 MiB)')
-    .action((file: string, flags: VerifyFlags) => {
-      if (flags.skipSignature && (flags.jwks || flags.requireSignature)) {
-        usage('--skip-signature cannot be combined with --jwks or --require-signature');
+    .action(async (file: string, flags: VerifyFlags) => {
+      if (flags.root === undefined || !ROOT.test(flags.root)) usage('--root must be the trusted package root, sha256:<64 lower-case hex digits>');
+      if (flags.anchor !== undefined && !AUDIT_HASH.test(flags.anchor)) usage('--anchor must be 64 lower-case hex digits');
+      let maxBytes: number | undefined;
+      if (flags.maxBytes !== undefined) {
+        maxBytes = Number(flags.maxBytes);
+        if (!/^[0-9]+$/.test(flags.maxBytes) || !Number.isSafeInteger(maxBytes)) usage('--max-bytes must not be negative');
       }
+      if (flags.skipSignature && (flags.jwks || flags.requireSignature)) usage('--skip-signature cannot be combined with --jwks or --require-signature');
+      const evidence = await loadEvidence(importer);
       const data = readInput(file);
       let jwks: unknown;
       if (flags.jwks) {
@@ -97,7 +143,7 @@ export function evidenceCommand(): Command {
         }
         if (jwks === null || typeof jwks !== 'object' || Array.isArray(jwks)) usage(`key set ${flags.jwks} is not a JSON object`);
       }
-      const options: evidence.VerifyOptions = {
+      const options: EvidenceModule.VerifyOptions = {
         expectedRoot: flags.root,
         requireAnchor: flags.requireAnchor ?? false,
         requireSignature: flags.requireSignature ?? false,
@@ -105,13 +151,9 @@ export function evidenceCommand(): Command {
       };
       if (flags.anchor !== undefined) options.expectedAnchorHash = flags.anchor;
       if (jwks !== undefined) options.jwks = jwks;
-      if (flags.maxBytes !== undefined) {
-        const limit = Number(flags.maxBytes);
-        if (!Number.isSafeInteger(limit) || limit < 0) usage('--max-bytes must be a non-negative integer');
-        options.maxBytes = limit;
-      }
+      if (maxBytes !== undefined) options.maxBytes = maxBytes;
       const result = evidence.verifyPackage(data, options);
-      printResult(result);
+      printResult(evidence, result);
       if (!result.ok) process.exit(EXIT_FAILED);
     });
 
@@ -119,31 +161,35 @@ export function evidenceCommand(): Command {
     .command('export <caseId>')
     .description("Export a case's evidence package from the auth service")
     .option('-o, --out <file>', 'write the package here (default: <caseId>.evidence.json)')
-    .addOption(new Option('--disclose <class...>', 'identifier classes to include in the clear').choices([...evidence.IDENTIFIER_CLASSES]))
-    .option('--sign', 'ask the service to sign the package root')
-    .addOption(new Option('--state <state>', 'case state').choices(['open', 'decided', 'closed']))
+    .addOption(new Option('--disclose <class...>', 'classes to include in the clear (needs permission on the service)').choices(IDENTIFIER_CLASSES))
+    .option('--sign', 'ask the service to sign the package root and anchor')
     .option('--url <url>', 'auth service URL (default: configured URL or GRANTEX_URL)')
+    .option('--timeout <seconds>', 'request timeout in seconds', '30')
     .action(async (caseId: string, flags: ExportFlags) => {
       const config = resolveConfig(await loadConfig(defaultConfigPath()));
       const baseUrl = flags.url ?? config?.baseUrl;
       const apiKey = config?.apiKey;
       if (!baseUrl || !apiKey) usage('configure the CLI (grantex config set) or set GRANTEX_URL and GRANTEX_KEY');
       const path = flags.out ?? (SAFE_FILE_STEM.test(caseId) ? `${caseId}.evidence.json` : usage('the case id is not a safe file name; pass --out'));
+      const timeoutSeconds = Number(flags.timeout ?? '30');
+      if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) usage('--timeout must be a positive number of seconds');
+      const evidence = await loadEvidence(importer);
 
-      const body: Record<string, unknown> = { disclose: [...new Set(flags.disclose ?? [])].sort(), sign: flags.sign ?? false };
-      if (flags.state !== undefined) body['state'] = flags.state;
+      const body = { disclose: [...new Set(flags.disclose ?? [])].sort(), sign: flags.sign ?? false };
       let response: Response;
+      let data: Uint8Array;
       try {
         response = await fetch(`${baseUrl.replace(/\/$/, '')}/v1/evidence/cases/${encodeURIComponent(caseId)}/export`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(body),
+          signal: AbortSignal.timeout(Math.round(timeoutSeconds * 1000)),
         });
+        data = new Uint8Array(await response.arrayBuffer());
       } catch (err) {
         console.error(`${chalk.red('FAILED')} export: ${(err as Error).message}`);
         process.exit(EXIT_FAILED);
       }
-      const data = new Uint8Array(await response.arrayBuffer());
       if (!response.ok) {
         let detail = response.statusText;
         try {
@@ -161,13 +207,12 @@ export function evidenceCommand(): Command {
         console.error(`${chalk.red('FAILED')} export: EVIDENCE_ROOT_HEADER_INVALID: response has no valid root or anchor header`);
         process.exit(EXIT_FAILED);
       }
-      // Refuse to save a package that does not verify against the root the
-      // service says it anchored.
-      const options: evidence.VerifyOptions = { expectedRoot: root, requireAnchor: true, allowUnverifiedSignature: true };
+      // Refuse to save a package that does not verify against the root and anchor the service reported.
+      const options: EvidenceModule.VerifyOptions = { expectedRoot: root, requireAnchor: true, allowUnverifiedSignature: true };
       if (anchor !== null) options.expectedAnchorHash = anchor;
       const result = evidence.verifyPackage(data, options);
       if (!result.ok) {
-        printResult(result);
+        printResult(evidence, result);
         process.exit(EXIT_FAILED);
       }
       try {
@@ -181,7 +226,7 @@ export function evidenceCommand(): Command {
         console.log(`exported: ${path} (${result.entryCount} entries)`);
         console.log(`  root:   ${root}`);
         console.log(`  anchor: ${anchor ?? ''}`);
-        console.log(`  verify: grantex evidence verify ${path} --root ${root}`);
+        console.log(`  verify: grantex evidence verify ${path} --root ${root}${anchor ? ` --anchor ${anchor}` : ''}`);
       }
     });
 

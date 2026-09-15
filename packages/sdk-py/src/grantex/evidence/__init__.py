@@ -29,7 +29,7 @@ from ._build import (
     serialize_package,
 )
 from ._canonical import CanonicalizationError, canonicalize
-from ._client import EvidenceApiError, ExportedPackage, export_package, record_evidence
+from ._client import EvidenceApiError, ExportedPackage, export_package, record_evidence, void_record
 from ._document import DEFAULT_MAX_BYTES
 from ._hashing import (
     IDENTIFIER_CLASSES,
@@ -104,4 +104,5 @@ __all__ = [
     "upstream_records_for",
     "verify_package",
     "verify_signature",
+    "void_record",
 ]

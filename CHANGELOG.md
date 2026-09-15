@@ -7,20 +7,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Evidence CLI
-- `grantex evidence verify package.json --root <root>` in the Python SDK (new
-  `grantex` console script) and in `@grantex/cli`: exits 0 only when the
-  package verifies against the trusted root, otherwise prints the failing
-  check with entry, field, expected and actual values and exits 1 (input and
-  usage errors exit 2). `--anchor`, `--require-anchor`, `--jwks`,
-  `--require-signature`, `--skip-signature`, `--max-bytes` and `--json`.
-- `grantex evidence export <caseId>` calls the auth service export endpoint
-  with `GRANTEX_URL` / `GRANTEX_KEY` (or the CLI configuration), verifies the
-  package against the returned root and anchor before writing it, and prints
-  the verify command. `--disclose`, `--sign`, `--state`, `--out`.
-- Python: `grantex.evidence.export_package` and `record_evidence` (batches of
-  100) call the evidence endpoints.
-- `@grantex/cli` registers 33 commands; the command-count test changes
-  accordingly.
+- `grantex evidence verify package.json --root <root>` in `@grantex/cli`, and
+  `grantex-evidence verify` in the Python SDK (a separate name so it does not
+  clash with the npm `grantex` binary): exit 0 only when the package verifies,
+  1 on any break with entry, field, expected and actual values, 2 on usage
+  errors including a missing or malformed `--root`. The output states the
+  trust basis: anchor internal-consistency-only, pinned or covered by the
+  verified service signature. `--anchor`, `--require-anchor`, `--jwks`,
+  `--require-signature`, `--skip-signature`, `--max-bytes`, `--json`.
+- `grantex evidence export <caseId>` / `grantex-evidence export` verify the
+  exported package against the returned root and anchor before writing it.
+- `@grantex/cli` loads the evidence module lazily and starts with an
+  `@grantex/sdk` that lacks it, reporting that evidence needs
+  `@grantex/sdk >= 0.7.0`; the dependency floor is raised when that SDK is
+  released. The command-count test changes to 33.
+- Python: `grantex.evidence.record_evidence` (batches of 100),
+  `void_record` and `export_package` call the evidence endpoints.
 
 ### Evidence package library
 - New `grantex.evidence` (Python) and `evidence` namespace of `@grantex/sdk`

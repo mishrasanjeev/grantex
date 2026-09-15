@@ -37,6 +37,12 @@ async function run(...args: string[]): Promise<number> {
   }
 }
 
+// The evidence module is imported lazily by the command; load it once up front so
+// the first test does not pay the import under a parallel test run.
+beforeAll(async () => {
+  await import('@grantex/sdk');
+}, 60_000);
+
 beforeEach(() => {
   logs = [];
   errors = [];
@@ -62,16 +68,26 @@ const corrupt = (): string => {
 describe('grantex evidence verify', () => {
   it('exits 0 for a valid package', async () => {
     expect(await run('verify', PACKAGE, '--root', ROOT, '--anchor', ANCHOR)).toBe(0);
-    expect(logs[0]).toContain('15 entries');
-    expect(logs[1]).toContain('anchor');
+    expect(logs[0]).toContain('18 entries');
+    expect(logs).toContain('  anchor:    pinned to the --anchor hash you supplied');
+    logs = [];
+    expect(await run('verify', PACKAGE, '--root', ROOT)).toBe(0);
+    expect(logs.some((l) => l.startsWith('  anchor:    internal-consistency-only'))).toBe(true);
+    expect(logs).toContain('  unsourced policy inputs: 1');
+  });
+
+  it('reports a verified service signature as the trust basis', async () => {
+    expect(await run('verify', join(EXAMPLES, 'evidence-package-signed.json'), '--root', ROOT, '--jwks', join(EXAMPLES, 'jwks.json'))).toBe(0);
+    expect(logs).toContain('  signature: verified (kid evidence-example-es256)');
+    expect(logs).toContain('  anchor:    covered by the verified service signature');
   });
 
   it('e2e step 8: corrupting one byte fails and prints the failing link', async () => {
     expect(await run('verify', PACKAGE, '--root', ROOT)).toBe(0);
     expect(await run('verify', corrupt(), '--root', ROOT)).toBe(EXIT_FAILED);
-    expect(errors[0]).toContain('entry_hash_mismatch: entry 10 content does not match its hash');
-    expect(errors).toContain('  entry:    10');
-    expect(errors).toContain('  field:    entries[10].hash');
+    expect(errors[0]).toContain('entry_hash_mismatch: entry 13 content does not match its hash');
+    expect(errors).toContain('  entry:    13');
+    expect(errors).toContain('  field:    entries[13].hash');
     expect(errors.some((l) => l.startsWith('  expected: sha256:'))).toBe(true);
   });
 
@@ -82,11 +98,25 @@ describe('grantex evidence verify', () => {
     expect(body).toMatchObject({ ok: false, code: 'root_not_trusted', field_path: 'chain.root', entry_index: null });
   });
 
-  it('requires a trusted root', async () => {
-    // commander reports a missing required option itself, with a non-zero exit.
-    expect(await run('verify', PACKAGE)).not.toBe(0);
-    expect(await run('verify', PACKAGE, '--root', 'not-a-root')).toBe(EXIT_FAILED);
-    expect(errors.join('\n')).toContain('missing_root');
+  it('treats a missing or malformed root and a negative size limit as usage errors (exit 2, as the Python CLI)', async () => {
+    expect(await run('verify', PACKAGE)).toBe(EXIT_USAGE);
+    expect(await run('verify', PACKAGE, '--root', 'not-a-root')).toBe(EXIT_USAGE);
+    expect(errors.join('\n')).toContain('--root must be');
+    expect(await run('verify', PACKAGE, '--root', ROOT, '--max-bytes', '-1')).toBe(EXIT_USAGE);
+  });
+
+  it('starts and explains the requirement when the installed SDK has no evidence module', async () => {
+    const older = async (): Promise<Record<string, unknown>> => ({ Grantex: class {} });
+    const cmd = evidenceCommand(older);
+    cmd.exitOverride();
+    let code = 0;
+    try {
+      await cmd.parseAsync(['verify', PACKAGE, '--root', ROOT], { from: 'user' });
+    } catch (err) {
+      code = err instanceof Exit ? err.code : -1;
+    }
+    expect(code).toBe(EXIT_USAGE);
+    expect(errors.join('\n')).toContain('requires @grantex/sdk >= 0.7.0');
   });
 
   it('needs keys or an explicit skip for a signed package', async () => {

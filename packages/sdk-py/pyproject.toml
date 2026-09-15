@@ -32,7 +32,7 @@ dependencies = [
 ]
 
 [project.scripts]
-grantex = "grantex.cli:main"
+grantex-evidence = "grantex.cli.evidence:main"
 
 [project.urls]
 Homepage = "https://grantex.dev"

@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 import httpx
 
-__all__ = ["EvidenceApiError", "ExportedPackage", "export_package", "record_evidence"]
+__all__ = ["EvidenceApiError", "ExportedPackage", "export_package", "record_evidence", "void_record"]
 
 _ROOT = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _AUDIT_HASH = re.compile(r"[0-9a-f]{64}\Z")
@@ -71,14 +71,11 @@ def export_package(
     api_key: str,
     disclose: Iterable[str] = (),
     sign: bool = False,
-    state: Optional[str] = None,
     timeout: float = 30.0,
     transport: Optional[httpx.BaseTransport] = None,
 ) -> ExportedPackage:
     """Export the evidence package of a case (``POST /v1/evidence/cases/{id}/export``)."""
     body: Dict[str, Any] = {"disclose": sorted(set(disclose)), "sign": sign}
-    if state is not None:
-        body["state"] = state
     with httpx.Client(timeout=timeout, transport=transport) as client:
         response = client.post(
             _url(base_url, case_id, "export"),
@@ -125,3 +122,30 @@ def record_evidence(
             body = response.json()
             results.extend(body.get("records", []) if isinstance(body, dict) else [])
     return results
+
+
+def void_record(
+    case_id: str,
+    *,
+    target_type: str,
+    target_id: str,
+    reason_code: str,
+    base_url: str,
+    api_key: str,
+    timeout: float = 30.0,
+    transport: Optional[httpx.BaseTransport] = None,
+) -> Dict[str, Any]:
+    """Void a recorded evidence record (``POST /v1/evidence/cases/{id}/void``).
+
+    Nothing is deleted: a ``void`` entry naming the record is appended, and the
+    record can no longer be cited.
+    """
+    with httpx.Client(timeout=timeout, transport=transport) as client:
+        response = client.post(
+            _url(base_url, case_id, "void"),
+            json={"reason_code": reason_code, "target_id": target_id, "target_type": target_type},
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+    _raise_for(response)
+    body = response.json()
+    return body if isinstance(body, dict) else {}
