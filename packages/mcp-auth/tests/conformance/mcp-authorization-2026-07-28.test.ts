@@ -82,6 +82,8 @@ export const REQUIREMENTS: Requirement[] = [
   { id: 'CIMD-03', role: 'authorization-server', section: 'Client ID Metadata Documents', text: 'Authorization servers MUST validate the document structure is valid JSON and contains required fields.' },
   { id: 'CIMD-05', role: 'authorization-server', section: 'Localhost Redirect URI Risks', text: 'Authorization servers MUST clearly display the redirect URI hostname during authorization.' },
   { id: 'DEPUTY-01', role: 'authorization-server', section: 'Confused Deputy Problem', text: 'MCP proxy servers using static client IDs MUST obtain user consent for each dynamically registered client before forwarding to third-party authorization servers.' },
+  { id: 'DEPUTY-02', role: 'authorization-server', section: 'Security Best Practices: Confused Deputy Problem', text: 'MCP proxy servers MUST bind the consent decision and the authorization state to the user agent that gave consent (a secure, HttpOnly cookie), and verify it at the callback before issuing an authorization code.' },
+  { id: 'DEPUTY-03', role: 'authorization-server', section: 'Security Best Practices: Confused Deputy Problem', text: 'The consent form MUST be protected against CSRF.' },
   { id: 'CIMD-04', role: 'authorization-server', section: 'Client ID Metadata Document Security', text: 'Authorization servers MUST consider the security implications of fetching documents (SSRF).' },
   { id: 'RESP-01', role: 'authorization-server', section: 'Authorization Response Validation', text: 'Authorization servers that include iss MUST advertise authorization_response_iss_parameter_supported: true.' },
   { id: 'RESP-02', role: 'client', section: 'Authorization Response Validation', text: 'Clients MUST record the issuer and apply RFC 9207 validation before redeeming a code.', outOfScope: CLIENT_ONLY },
@@ -361,6 +363,41 @@ describe('MCP authorization 2026-07-28: authorization server', () => {
     const approved = await submitConsent(app, await consentPage(app, { client_id: registered.client_id }), 'approve', ISSUER);
     expect(approved.statusCode).toBe(303);
     expect(grantex.authorize).toHaveBeenCalledTimes(1);
+  });
+
+  must('DEPUTY-02', 'a code is issued only to the browser holding the callback-binding cookie set at approval', async () => {
+    const grantex = mockGrantex();
+    const { app } = await authServer({ sandboxAutoApprove: false }, grantex);
+    const approved = await submitConsent(app, await consentPage(app), 'approve', ISSUER);
+    const state = (grantex.authorize.mock.calls[0]![0] as { state: string }).state;
+    const bindingCookie = ([] as string[]).concat(approved.headers['set-cookie'] as string | string[])
+      .find((c) => c.startsWith('__Host-mcp_auth_callback_'))!;
+    expect(bindingCookie).toMatch(/HttpOnly; SameSite=Lax; .*Secure/);
+    const withoutCookie = await app.inject({ method: 'GET', url: '/callback', query: { code: 'UPSTREAM', state } });
+    expect(withoutCookie.statusCode).toBe(403);
+    expect(withoutCookie.headers['location']).toBeUndefined();
+
+    const second = await submitConsent(app, await consentPage(app), 'approve', ISSUER);
+    const secondState = (grantex.authorize.mock.calls[1]![0] as { state: string }).state;
+    const cookie = ([] as string[]).concat(second.headers['set-cookie'] as string | string[])
+      .find((c) => c.startsWith('__Host-mcp_auth_callback_'))!.split(';')[0]!;
+    const withCookie = await app.inject({ method: 'GET', url: '/callback', headers: { cookie }, query: { code: 'UPSTREAM', state: secondState } });
+    expect(withCookie.statusCode).toBe(302);
+    expect(new URL(String(withCookie.headers['location'])).searchParams.get('code')).toBeTruthy();
+  });
+
+  must('DEPUTY-03', 'the consent form needs its CSRF token and binding cookie, and refuses cross-site posts', async () => {
+    const grantex = mockGrantex();
+    const { app } = await authServer({ sandboxAutoApprove: false }, grantex);
+    const page = await consentPage(app);
+    const consentId = /name="consent_id" value="([^"]+)"/.exec(page.body)![1]!;
+    const csrfToken = /name="csrf_token" value="([^"]+)"/.exec(page.body)![1]!;
+    const form = new URLSearchParams({ consent_id: consentId, csrf_token: csrfToken, decision: 'approve' }).toString();
+    const crossSite = await app.inject({ method: 'POST', url: '/consent', headers: { 'content-type': 'application/x-www-form-urlencoded', 'sec-fetch-site': 'cross-site' }, payload: form });
+    expect(crossSite.statusCode).toBe(403);
+    const noCookie = await app.inject({ method: 'POST', url: '/consent', headers: { 'content-type': 'application/x-www-form-urlencoded', 'sec-fetch-site': 'same-origin' }, payload: form });
+    expect(noCookie.statusCode).toBe(403);
+    expect(grantex.authorize).not.toHaveBeenCalled();
   });
 
   must('RESP-01', 'includes iss in responses and advertises it', async () => {

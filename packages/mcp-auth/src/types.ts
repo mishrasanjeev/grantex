@@ -197,6 +197,11 @@ export interface PendingAuthorization {
   /** The client's own `state`, echoed back on the final redirect. */
   clientState?: string;
   grantexAuthRequestId: string;
+  /**
+   * SHA-256 of the callback-binding cookie set on the browser that approved
+   * the consent page. `/callback` issues a code only to that browser.
+   */
+  browserBindingHash?: string;
   expiresAt: number;
 }
 

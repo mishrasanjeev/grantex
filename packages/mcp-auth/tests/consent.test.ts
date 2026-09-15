@@ -13,6 +13,7 @@ import {
   TEST_REDIRECT_URI,
   TEST_RESOURCE,
   asGrantex,
+  callbackCookieFrom,
   clientRecord,
   consentFormFrom,
   mockGrantex,
@@ -379,5 +380,72 @@ describe('customisation', () => {
     expect(html`<p>${'<a href="x">&</a>'}</p>`.value).toBe('<p>&lt;a href=&quot;x&quot;&gt;&amp;&lt;/a&gt;</p>');
     expect(html`<ul>${['<1>', html`<li>${'2'}</li>`]}</ul>`.value).toBe('<ul>&lt;1&gt;<li>2</li></ul>');
     expect(escapeHtml("'`")).toBe('&#39;&#96;');
+  });
+});
+
+describe('the upstream round trip is bound to the browser that approved', () => {
+  async function approvedFlow() {
+    const grantex = mockGrantex();
+    const { app, storage } = await build({}, grantex);
+    const approved = await submitConsent(app, await authorize(app), 'approve', ISSUER);
+    expect(approved.statusCode).toBe(303);
+    const state = (grantex.authorize.mock.calls[0]![0] as { state: string }).state;
+    return { app, storage, approved, state, cookie: callbackCookieFrom(approved) };
+  }
+
+  const callback = (app: FastifyInstance, state: string, cookie?: string) => app.inject({
+    method: 'GET',
+    url: '/callback',
+    ...(cookie !== undefined ? { headers: { cookie } } : {}),
+    query: { code: 'UPSTREAM_LIVE_CODE', state },
+  });
+
+  it('approving sets a __Host-, Secure, HttpOnly, SameSite=Lax callback cookie', async () => {
+    const { approved } = await approvedFlow();
+    const cookies = ([] as string[]).concat(approved.headers['set-cookie'] as string | string[]);
+    const binding = cookies.find((c) => c.startsWith('__Host-mcp_auth_callback_'));
+    expect(binding).toMatch(/^__Host-mcp_auth_callback_[A-Za-z0-9_-]{16}=[A-Za-z0-9_-]{43}; Path=\/; HttpOnly; SameSite=Lax; Max-Age=600; Secure$/);
+  });
+
+  it('confused deputy: a victim who opens the attacker\'s upstream consent link gets no code', async () => {
+    // The attacker approved consent for their own client and now sends the
+    // Grantex consent URL to a victim, whose browser returns to /callback
+    // without the attacker's binding cookie.
+    const { app, state, cookie } = await approvedFlow();
+    const victim = await callback(app, state);
+    expect(victim.statusCode).toBe(403);
+    expect(victim.headers['location']).toBeUndefined();
+    expect(victim.body).not.toMatch(/code=/);
+    // The authorization is spent: not even the attacker's own browser can finish it now.
+    expect((await callback(app, state, cookie)).statusCode).toBe(400);
+  });
+
+  it('a different browser\'s cookie is refused', async () => {
+    const { app, state, cookie } = await approvedFlow();
+    const [name] = cookie.split('=');
+    expect((await callback(app, state, `${name}=${'B'.repeat(43)}`)).statusCode).toBe(403);
+  });
+
+  it('the approving browser receives the code and the cookie is cleared', async () => {
+    const { app, state, cookie } = await approvedFlow();
+    const result = await callback(app, state, cookie);
+    expect(result.statusCode).toBe(302);
+    expect(new URL(String(result.headers['location'])).searchParams.get('code')).toBeTruthy();
+    expect(String(result.headers['set-cookie'])).toMatch(/mcp_auth_callback_[A-Za-z0-9_-]{16}=; .*Max-Age=0/);
+  });
+
+  it('a pending authorization without a binding (written before binding existed) is refused', async () => {
+    const { app, storage } = await build();
+    await storage.putPendingAuthorization('legacy-state-0123456789', {
+      clientId: TEST_CLIENT_ID,
+      redirectUri: TEST_REDIRECT_URI,
+      codeChallenge: TEST_CHALLENGE,
+      codeChallengeMethod: 'S256',
+      scopes: ['tool:acme_kyb:read'],
+      resource: TEST_RESOURCE,
+      grantexAuthRequestId: 'areq_legacy',
+      expiresAt: Date.now() + 60_000,
+    });
+    expect((await callback(app, 'legacy-state-0123456789')).statusCode).toBe(403);
   });
 });

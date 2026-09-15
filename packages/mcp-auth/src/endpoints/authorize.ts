@@ -5,6 +5,8 @@ import { generateCode } from '../lib/codes.js';
 import { ClientMetadataError } from '../lib/client-metadata.js';
 import { resolveRequestedResource } from '../lib/resource.js';
 import { renderConsent } from './consent.js';
+import { appendCookie, bindingCookie, bindingCookieName, hashesMatch, readCookie, sha256 } from '../lib/cookies.js';
+import { renderMessagePage } from '../consent/page.js';
 
 interface CallbackQuery {
   code?: string;
@@ -248,6 +250,11 @@ export async function startUpstreamAuthorization(
     }, status);
   }
 
+  // Bind the upstream round trip to this browser (MCP Security Best
+  // Practices, confused deputy): otherwise anyone who approves consent for
+  // their own client could send the Grantex consent URL to someone else
+  // and receive that person's code at their redirect URI.
+  const callbackBinding = generateCode();
   const pending: PendingAuthorization = {
     clientId: request.client.clientId,
     redirectUri: request.redirectUri,
@@ -257,10 +264,13 @@ export async function startUpstreamAuthorization(
     resource: request.resource,
     ...(request.clientState !== undefined ? { clientState: request.clientState } : {}),
     grantexAuthRequestId: grantexAuth.authRequestId,
+    browserBindingHash: sha256(callbackBinding),
     expiresAt: Date.now() + codeExpiration * 1000,
   };
   await ctx.storage.putPendingAuthorization(pendingId, pending);
 
+  // SameSite=Lax: the callback is a top-level navigation from Grantex.
+  appendCookie(reply, bindingCookie(ctx, bindingCookieName(ctx, 'callback', pendingId), callbackBinding, codeExpiration, 'Lax'));
   return reply.redirect(grantexAuth.consentUrl, status);
 }
 
@@ -289,11 +299,25 @@ export function registerAuthorizeEndpoint(app: FastifyInstance, ctx: ServerConte
 
     // Atomic take: a replayed (or concurrent) callback must not mint a second code.
     const pending = await ctx.storage.takePendingAuthorization(state);
+    const cookie = bindingCookieName(ctx, 'callback', state);
+    appendCookie(reply, bindingCookie(ctx, cookie, '', 0, 'Lax'));
     if (!pending) {
       return reply.status(400).send({
         error: 'invalid_request',
         error_description: 'Unknown or expired authorization request',
       });
+    }
+
+    // Only the browser that approved the consent page may finish the flow.
+    // A mismatch spends the authorization and issues nothing, not even an
+    // error redirect to the client.
+    if (!hashesMatch(pending.browserBindingHash, readCookie(request, cookie))) {
+      const page = renderMessagePage(
+        ctx.consentPage,
+        'Request refused',
+        'This authorization was started in a different browser. Return to the application and start again.',
+      );
+      return reply.status(403).headers(page.headers).send(page.body);
     }
 
     if (error || typeof code !== 'string' || code.length === 0) {
