@@ -212,7 +212,7 @@ reviewers and integrators:
   `revoked`, `unknown_grant`, `consume_unavailable`); the type was already a
   string, so no type break. `grantexDecisionVerifier` refuses calls without
   the grant's developer or the tool's connector.
-- Auth service: migration `098_decision_grants.sql` adds tables only (safe on
+- Auth service: migration `097_decision_grants.sql` adds tables only (safe on
   a live database, no effect on issued tokens); all decision endpoints and
   pages are off unless `DECISION_GRANTS_ENABLED=true`. Approvals are possible
   only on the auth service's approval page, after signing in with an identity
