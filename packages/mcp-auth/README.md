@@ -285,7 +285,9 @@ Grantex; Deny returns `access_denied` to the client.
 The page is server-rendered with no script, a strict CSP (the stylesheet is
 pinned by hash) and escaped values. The form is protected by a per-page CSRF
 token and a `__Host-` SameSite=Strict binding cookie, both stored only as
-hashes in a single-use consent record. It is tested at 375 px in Chromium and
+hashes in a single-use consent record. Approval sets a SameSite=Lax callback
+cookie, and `/callback` issues a code only to the browser that approved.
+Purpose, region and limits are labelled as declared by the service. It is tested at 375 px in Chromium and
 with axe-core.
 
 ```typescript

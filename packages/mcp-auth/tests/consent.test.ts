@@ -102,8 +102,9 @@ describe('the consent page', () => {
       TEST_RESOURCE,
       'resolve_business',
       'verify_business',
-      'per hour: at most 50 calls',
-      'per case: at most 3 calls',
+      'declared limit per hour: 50 calls',
+      'declared limit per case: 3 calls',
+      'They are enforced only where your grant and the service apply them.',
       'tool:acme_kyb:read',
     ]) {
       expect(body).toContain(expected);
@@ -313,7 +314,7 @@ describe('customisation', () => {
   it('applies theme colours, text and extra CSS, keeping the CSP hash in step', async () => {
     const { app } = await build({
       consentPage: {
-        theme: { accentColor: '#0b6e4f', radiusPx: 4, fontFamily: '"Inter", system-ui, sans-serif' },
+        theme: { accentColor: '#0b6e4f', radiusPx: 4, fontFamily: 'Inter, system-ui, sans-serif' },
         text: { title: 'Grant access to your case tools?', approve: 'Grant access' },
         extraCss: '.card{box-shadow:none}',
         lang: 'en-GB',
@@ -358,6 +359,12 @@ describe('customisation', () => {
       [{ theme: { textColor: '#bbbbbb' } }, /contrast/],
       [{ theme: { accentColor: 'red;}body{display:none' } }, /hex colour/],
       [{ theme: { fontFamily: 'x;}</style><script>' } }, /fontFamily/],
+      [{ theme: { fontFamily: '"Inter", sans-serif' } }, /fontFamily/],
+      [{ theme: { fontFamily: 'Inter; color: red' } }, /fontFamily/],
+      [{ theme: { fontFamily: 'Inter{}' } }, /fontFamily/],
+      [{ expiresInSeconds: 5 }, /expiresInSeconds/],
+      [{ expiresInSeconds: 86400 }, /expiresInSeconds/],
+      [{ expiresInSeconds: 90.5 }, /expiresInSeconds/],
       [{ theme: { radiusPx: 99 } }, /radiusPx/],
       [{ extraCss: '</style><script>alert(1)</script>' }, /extraCss/],
       [{ lang: 'en"><script>' }, /lang/],
@@ -374,6 +381,14 @@ describe('customisation', () => {
     expect(contrastRatio(DEFAULT_THEME.textColor, DEFAULT_THEME.surfaceColor)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(DEFAULT_THEME.mutedTextColor, DEFAULT_THEME.surfaceColor)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(DEFAULT_THEME.accentTextColor, DEFAULT_THEME.accentColor)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('the html helper refuses to be called with an ordinary array', () => {
+    expect(() => (html as unknown as (s: string[]) => unknown)(['<script>alert(1)</script>'])).toThrow(/template literal tag/);
+    const frozenWithoutRaw = Object.freeze(['<script>']) as unknown as TemplateStringsArray;
+    expect(() => html(frozenWithoutRaw)).toThrow(/template literal tag/);
+    const mismatched = Object.freeze(Object.assign(['<p>', '</p>'], { raw: Object.freeze(['<p>', '</p>']) })) as unknown as TemplateStringsArray;
+    expect(() => html(mismatched)).toThrow(/template literal tag/);
   });
 
   it('the html helper escapes interpolations and nests safely', () => {

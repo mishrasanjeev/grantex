@@ -152,4 +152,33 @@ describe('register endpoint', () => {
     const body = response.json();
     expect(body.grant_types).toEqual(['authorization_code']);
   });
+
+  it('rejects a client_name that is not a short non-empty string', async () => {
+    for (const client_name of [42, '', '   ', 'x'.repeat(201), ['name']]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/register',
+        payload: { redirect_uris: ['https://app.example.com/callback'], client_name },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('invalid_client_metadata');
+    }
+  });
+
+  it('accepts only authorization_code (plus refresh_token) as grant_types', async () => {
+    for (const grant_types of [['client_credentials'], ['refresh_token'], ['authorization_code', 'implicit'], 'authorization_code', []]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/register',
+        payload: { redirect_uris: ['https://app.example.com/callback'], grant_types },
+      });
+      expect(response.statusCode).toBe(400);
+    }
+    const ok = await app.inject({
+      method: 'POST',
+      url: '/register',
+      payload: { redirect_uris: ['https://app.example.com/callback'], grant_types: ['authorization_code', 'refresh_token'] },
+    });
+    expect(ok.statusCode).toBe(201);
+  });
 });

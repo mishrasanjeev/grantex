@@ -51,6 +51,7 @@ export interface ConsentText {
   localhostWarning: string;
   metadataDocumentNote: string;
   detailsHeading: string;
+  declaredNote: string;
   purposeLabel: string;
   noPurpose: string;
   regionLabel: string;
@@ -76,12 +77,13 @@ export const DEFAULT_TEXT: ConsentText = {
   localhostWarning: 'This application runs on your own device (localhost). Only continue if you started this sign-in yourself.',
   metadataDocumentNote: 'This application identified itself with a published metadata document; its name was not verified by this server.',
   detailsHeading: 'What you are granting',
-  purposeLabel: 'Purpose',
+  declaredNote: 'The purpose, data region and call limits below are declared by this service. They are enforced only where your grant and the service apply them.',
+  purposeLabel: 'Declared purpose',
   noPurpose: 'No purpose declared',
-  regionLabel: 'Data region',
-  noRegion: 'Not restricted',
-  durationLabel: 'Duration',
-  noDuration: 'Set by the authorization server',
+  regionLabel: 'Declared data region',
+  noRegion: 'None declared',
+  durationLabel: 'Requested duration',
+  noDuration: 'Set by Grantex',
   resourceLabel: 'Service',
   toolsHeading: 'Tools',
   noTools: 'No tools are covered by the requested permissions.',
@@ -117,7 +119,7 @@ export interface ConsentPageOptions {
   renderDetails?: (model: ConsentViewModel, helpers: ConsentRenderHelpers) => SafeHtml;
   /** Extra CSS appended to the stylesheet (covered by the CSP hash). Must not contain `</style`. */
   extraCss?: string;
-  /** How long a rendered page can be submitted, in seconds (default 600). */
+  /** How long a rendered page can be submitted, in seconds (60-3600, default 600). */
   expiresInSeconds?: number;
 }
 
@@ -143,6 +145,10 @@ export function prepareConsentPage(options: ConsentPageOptions = {}): PreparedCo
   if (!LANG.test(lang)) throw new Error('consentPage.lang must be a BCP 47 language tag');
   if (options.extraCss !== undefined && (typeof options.extraCss !== 'string' || /<\/?style|<!--/i.test(options.extraCss))) {
     throw new Error('consentPage.extraCss must be a string without <style> or HTML comment markup');
+  }
+  if (options.expiresInSeconds !== undefined
+    && (!Number.isInteger(options.expiresInSeconds) || options.expiresInSeconds < 60 || options.expiresInSeconds > 3600)) {
+    throw new Error('consentPage.expiresInSeconds must be an integer from 60 to 3600');
   }
   if (options.renderDetails !== undefined && typeof options.renderDetails !== 'function') {
     throw new Error('consentPage.renderDetails must be a function');
@@ -179,7 +185,7 @@ export function toolsForScopes(policy: ToolPolicy | undefined, scopes: readonly 
       ...(requirement.permission !== undefined ? { permission: requirement.permission } : {}),
       caps: Object.entries(requirement.caps ?? {})
         .filter(([, value]) => typeof value === 'number')
-        .map(([key, value]) => ({ label: capLabel(key), value: value === 0 ? 'disabled' : `at most ${value} calls` })),
+        .map(([key, value]) => ({ label: `declared limit ${capLabel(key)}`, value: value === 0 ? 'disabled' : `${value} calls` })),
       ...(requirement.allowedPurposes !== undefined ? { allowedPurposes: requirement.allowedPurposes } : {}),
       requiresDecision: requirement.requiresDecision,
     }));
@@ -189,6 +195,7 @@ function defaultDetails(model: ConsentViewModel, { text }: ConsentRenderHelpers)
   return html`
     <section aria-labelledby="details-heading">
       <h2 id="details-heading">${text.detailsHeading}</h2>
+      <p class="muted">${text.declaredNote}</p>
       <dl>
         <dt>${text.purposeLabel}</dt>
         <dd>${model.purpose
