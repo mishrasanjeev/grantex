@@ -1,4 +1,5 @@
 import type { Grantex } from '@grantex/sdk';
+import type { McpAuthStorage } from './storage/types.js';
 
 export interface TokenIssuedEvent {
   accessToken: string;
@@ -17,6 +18,17 @@ export interface McpAuthConfig {
   scopes: string[];
   /** Base URL for this auth server (used in metadata) */
   issuer: string;
+  /**
+   * Where every piece of authorization state lives: client registrations,
+   * authorizations awaiting consent, authorization codes (with their PKCE
+   * challenges), refresh-token bindings, consent records and revocations.
+   *
+   * Required. Use `PostgresStorage` (`@grantex/mcp-auth/postgres`) or
+   * `RedisStorage` (`@grantex/mcp-auth/redis`) so state survives a restart
+   * and is shared by every replica. `InMemoryStorage`
+   * (`@grantex/mcp-auth/testing`) exists for tests only.
+   */
+  storage: McpAuthStorage;
   /**
    * Expected `iss` claim of Grantex grant tokens (the Grantex authorization
    * server, e.g. `https://grantex.dev`). Required for `/introspect` and
@@ -52,20 +64,6 @@ export interface McpAuthConfig {
   allowedRedirectUris?: string[];
   /** Allowed resource indicators (RFC 8707) */
   allowedResources?: string[];
-  /** Custom client store (defaults to in-memory) */
-  clientStore?: ClientStore;
-  /** Custom authorization code store (defaults to in-memory) */
-  codeStore?: CodeStore;
-  /** Custom store for authorizations awaiting Grantex consent (defaults to in-memory) */
-  pendingStore?: PendingAuthorizationStore;
-  /**
-   * Store binding each issued refresh token to the client it was issued to
-   * (defaults to in-memory). `/token` refuses a `refresh_token` grant whose
-   * token is unknown here or bound to another client, so a deployment that
-   * restarts or runs several instances should supply a shared store —
-   * otherwise refresh tokens issued before the restart are rejected.
-   */
-  refreshTokenStore?: RefreshTokenStore;
   /** Code expiration in seconds (default: 600) */
   codeExpirationSeconds?: number;
   /** Consent UI customization */
@@ -87,11 +85,13 @@ export type TokenEndpointAuthMethod = 'none' | 'client_secret_basic' | 'client_s
 export interface ClientRegistration {
   clientId: string;
   /**
-   * Present only for confidential clients. When set, `/token` requires the
-   * secret (constant-time compared) in addition to PKCE. Public clients
+   * SHA-256 of the client secret (`sha256:<base64url>`), present only for
+   * confidential clients. The secret itself is returned once, at
+   * registration, and never stored. When set, `/token` requires the secret
+   * (compared by hash in constant time) in addition to PKCE. Public clients
    * (`token_endpoint_auth_method: 'none'`) have no secret and are PKCE-only.
    */
-  clientSecret?: string;
+  clientSecretHash?: string;
   tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
   redirectUris: string[];
   grantTypes: string[];
@@ -111,12 +111,14 @@ export interface RegisterClientRequest {
   token_endpoint_auth_method?: TokenEndpointAuthMethod;
 }
 
-/** An OAuth authorization that is waiting for the Principal to approve it in Grantex. */
+/**
+ * An OAuth authorization that is waiting for the Principal to approve it in
+ * Grantex. Keyed in storage by the opaque `state` sent to Grantex.
+ */
 export interface PendingAuthorization {
-  /** Opaque `state` sent to Grantex; the consent callback is keyed by it. */
-  id: string;
   clientId: string;
   redirectUri: string;
+  /** PKCE S256 code challenge presented by the client. */
   codeChallenge: string;
   codeChallengeMethod: 'S256';
   scopes: string[];
@@ -127,10 +129,11 @@ export interface PendingAuthorization {
   expiresAt: number;
 }
 
+/** Keyed in storage by the authorization code handed to the client. */
 export interface AuthorizationCode {
-  code: string;
   clientId: string;
   redirectUri: string;
+  /** PKCE S256 code challenge the `code_verifier` must match at `/token`. */
   codeChallenge: string;
   codeChallengeMethod: 'S256';
   scopes: string[];
@@ -140,33 +143,42 @@ export interface AuthorizationCode {
   expiresAt: number;
 }
 
-export interface ClientStore {
-  get(clientId: string): Promise<ClientRegistration | undefined>;
-  set(clientId: string, registration: ClientRegistration): Promise<void>;
-  delete(clientId: string): Promise<boolean>;
-}
-
-export interface CodeStore {
-  get(code: string): Promise<AuthorizationCode | undefined>;
-  set(code: string, data: AuthorizationCode): Promise<void>;
-  delete(code: string): Promise<boolean>;
-}
-
-export interface PendingAuthorizationStore {
-  get(id: string): Promise<PendingAuthorization | undefined>;
-  set(id: string, data: PendingAuthorization): Promise<void>;
-  delete(id: string): Promise<boolean>;
-}
-
-/** Which client a refresh token was issued to (OAuth 2.1 §4.3.1 / RFC 6749 §6). */
+/**
+ * Which client a refresh token was issued to (OAuth 2.1 §4.3.1 / RFC 6749
+ * §6). Keyed in storage by the refresh token; the token itself is not part
+ * of the record.
+ */
 export interface RefreshTokenBinding {
-  refreshToken: string;
   clientId: string;
+  resource?: string;
   expiresAt: number;
 }
 
-export interface RefreshTokenStore {
-  get(refreshToken: string): Promise<RefreshTokenBinding | undefined>;
-  set(refreshToken: string, data: RefreshTokenBinding): Promise<void>;
-  delete(refreshToken: string): Promise<boolean>;
+/**
+ * A Principal's pending decision on the consent page for one authorization
+ * request. Keyed in storage by an unguessable consent id and consumed
+ * exactly once, when the consent form is submitted.
+ */
+export interface ConsentRecord {
+  clientId: string;
+  redirectUri: string;
+  codeChallenge: string;
+  codeChallengeMethod: 'S256';
+  scopes: string[];
+  resource?: string;
+  clientState?: string;
+  /** SHA-256 of the anti-CSRF token embedded in the consent form. */
+  csrfTokenHash: string;
+  /** SHA-256 of the browser-binding cookie set with the consent page. */
+  browserBindingHash: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+/** A token revoked through this server. Keyed in storage by the token `jti`. */
+export interface RevocationRecord {
+  clientId?: string;
+  revokedAt: number;
+  /** When the revoked token would have expired anyway (unix ms). */
+  expiresAt: number;
 }

@@ -17,6 +17,18 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./postgres": {
+      "import": "./dist/postgres.js",
+      "types": "./dist/postgres.d.ts"
+    },
+    "./redis": {
+      "import": "./dist/redis.js",
+      "types": "./dist/redis.d.ts"
+    },
+    "./testing": {
+      "import": "./dist/testing.js",
+      "types": "./dist/testing.d.ts"
+    },
     "./express": {
       "import": "./dist/middleware/express.js",
       "types": "./dist/middleware/express.d.ts"
@@ -28,13 +40,15 @@
   },
   "files": [
     "dist",
+    "migrations",
     "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:integration": "npm run build && vitest run -c vitest.integration.config.ts"
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.0.0",
@@ -44,6 +58,10 @@
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
+    "@types/pg": "^8.23.1",
+    "ioredis": "^6.0.0",
+    "pg": "^8.23.0",
+    "postgres": "^3.4.9",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
   },
