@@ -148,7 +148,14 @@ from .resources._dpdp import DpdpClient
 from .resources._commerce import CommerceClient
 from .resources._events import EventsClient, GrantexEvent as GrantexStreamEvent, StreamOptions, Subscription
 from ._pkce import PkceChallenge, generate_pkce
-from ._verify import GRANT_TOKEN_ALGORITHMS, verify_grant_token
+from ._verify import (
+    GRANT_CLAIM,
+    GRANT_TOKEN_ALGORITHMS,
+    LEGACY_CLAIM_ALIASES,
+    LegacyClaimsWarning,
+    verify_grant_token,
+)
+from ._authorization_details import DecisionReference, parse_decision_references
 from ._webhook import verify_webhook, verify_webhook_signature
 from .denials import (
     CapSubReason,
@@ -200,6 +207,11 @@ __all__ = [
     # Standalone verify
     "verify_grant_token",
     "GRANT_TOKEN_ALGORITHMS",
+    "GRANT_CLAIM",
+    "LEGACY_CLAIM_ALIASES",
+    "LegacyClaimsWarning",
+    "DecisionReference",
+    "parse_decision_references",
     # Webhook signature verification
     "verify_webhook",
     "verify_webhook_signature",

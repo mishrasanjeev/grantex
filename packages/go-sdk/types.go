@@ -237,6 +237,23 @@ type VerifiedGrant struct {
 	ParentAgentDID  *string  `json:"parentAgentDid,omitempty"`
 	ParentGrantID   *string  `json:"parentGrantId,omitempty"`
 	DelegationDepth *int     `json:"delegationDepth,omitempty"`
+	// AuthorizationDetails is the raw RFC 9396 authorization_details claim.
+	AuthorizationDetails []interface{} `json:"authorizationDetails,omitempty"`
+	// Act is the RFC 8693 act claim: the delegating actor, earlier actors nested.
+	Act *ActorClaim `json:"act,omitempty"`
+	// Cnf is the confirmation claim, e.g. {"jkt": ...} for a DPoP-bound token.
+	Cnf map[string]interface{} `json:"cnf,omitempty"`
+	// Audience is the aud claim, when the grant is bound to a resource.
+	Audience []string `json:"audience,omitempty"`
+	// LegacyClaimsUsed lists legacy claim aliases that were read because the
+	// token had no standard claim for them. Empty for 0.6 tokens.
+	LegacyClaimsUsed []string `json:"legacyClaimsUsed,omitempty"`
+}
+
+// ActorClaim is an RFC 8693 actor. Nested Act members are earlier actors.
+type ActorClaim struct {
+	Sub string      `json:"sub"`
+	Act *ActorClaim `json:"act,omitempty"`
 }
 
 // --- Audit ---

@@ -276,6 +276,16 @@ class VerifiedGrant:
     delegation_depth: int | None = None
     authorization_details: Any = None
     """The raw ``authorization_details`` claim, when present."""
+    act: Any = None
+    """The RFC 8693 ``act`` claim: the delegating actor, earlier actors nested."""
+    cnf: Any = None
+    """The confirmation claim (``cnf``), e.g. ``{"jkt": ...}`` for a DPoP-bound token."""
+    audience: Any = None
+    """The ``aud`` claim, when the grant is bound to a resource."""
+    legacy_claims_used: tuple[str, ...] = ()
+    """Legacy claim aliases read because the token had no standard claim for
+    them (for example ``scp`` without ``scope``). Empty for 0.6 tokens. Reading
+    aliases is deprecated and off by default from 0.7."""
 
 
 # ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -523,6 +533,12 @@ class VerifyGrantTokenOptions:
     algorithms: list[str] | None = None
     """Signature algorithms to accept: a subset of ``["RS256", "ES256"]`` (the
     default). Any other value is rejected."""
+    legacy_claims: bool = True
+    """Read legacy claim aliases (``agt``, ``dev``, ``grnt``, ``scp``,
+    ``parentAgt``, ``parentGrnt``, ``delegationDepth``) when a token lacks the
+    standard claim. ``True`` in 0.6, with a :class:`LegacyClaimsWarning` when
+    an alias is used; the default becomes ``False`` in 0.7. With ``False`` only
+    standard claims are read and the token must have ``typ: at+jwt``."""
 
 
 # ─── Raw JWT payload shape ────────────────────────────────────────────────────
@@ -544,6 +560,10 @@ class GrantTokenPayload:
     parent_grnt: str | None = None
     delegation_depth: int | None = None
     authorization_details: Any = None
+    act: Any = None
+    cnf: Any = None
+    aud: Any = None
+    legacy_claims_used: tuple[str, ...] = ()
 
 
 @dataclass

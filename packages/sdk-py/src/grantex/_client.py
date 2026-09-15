@@ -52,7 +52,9 @@ from .denials import (
 )
 from ._authorization_details import (
     AuthorizationDetailsError,
+    DecisionReference,
     ToolsAuthorization,
+    parse_decision_references,
     parse_tools_authorization,
 )
 from .purpose import is_known_purpose, match_purpose
@@ -113,6 +115,7 @@ class Grantex:
         max_retries: int = 3,
         enforce_mode: str = "strict",
         caps_meter: CapsMeter | None = None,
+        legacy_claims: bool = True,
     ) -> None:
         resolved_key = (api_key or os.environ.get("GRANTEX_API_KEY", "")).strip()
         if not resolved_key:
@@ -123,6 +126,9 @@ class Grantex:
 
         self._enforce_mode = enforce_mode
         self._caps_meter = caps_meter
+        # Whether enforce() reads legacy grant token claim aliases; True in 0.6,
+        # False by default from 0.7.
+        self._legacy_claims = legacy_claims
 
         self._http = HttpClient(
             base_url=base_url,
@@ -268,7 +274,9 @@ class Grantex:
         try:
             grant = verify_grant_token(
                 grant_token,
-                VerifyGrantTokenOptions(jwks_uri=self._jwks_uri),
+                VerifyGrantTokenOptions(
+                    jwks_uri=self._jwks_uri, legacy_claims=self._legacy_claims
+                ),
             )
         except Exception as e:
             return self._apply_enforce_mode(EnforceResult(
@@ -304,12 +312,16 @@ class Grantex:
             tools_auth = parse_tools_authorization(
                 getattr(grant, "authorization_details", None)
             )
+            decision_refs = parse_decision_references(
+                getattr(grant, "authorization_details", None)
+            )
         except AuthorizationDetailsError as exc:
             return _denied(
                 f"Grant token authorization_details cannot be used: {exc}.",
                 DenialReason.TOKEN_INVALID, TokenSubReason.MALFORMED_AUTHORIZATION_DETAILS,
             )
         entry: ToolsAuthorization | None = tools_auth.get(connector)
+        decision_ref: DecisionReference | None = decision_refs.get(connector)
         purpose = entry.purpose if entry is not None else None
         result_purpose = purpose or ""
 
@@ -390,8 +402,9 @@ class Grantex:
                 )
 
         # 9. Decision. Decision grants are not accepted yet, so a tool that
-        #    requires one is always denied.
-        if spec.requires_decision:
+        #    requires one, in the manifest or in the grant's decision
+        #    references, is always denied.
+        if spec.requires_decision or (decision_ref is not None and tool in decision_ref.tools):
             return _denied(
                 f"Tool '{tool}' on {connector} requires a decision grant.",
                 DenialReason.DECISION_REQUIRED,

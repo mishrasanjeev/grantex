@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import threading
 import time
+import warnings
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable, Mapping, TypeVar
 
 import httpx
 import jwt
@@ -24,6 +26,32 @@ _KEY_TYPE_FOR_ALGORITHM: dict[str, tuple[str, str | None]] = {
     "RS256": ("RSA", None),
     "ES256": ("EC", "P-256"),
 }
+
+GRANT_CLAIM = "urn:grantex:grant"
+"""Claim holding Grantex's grant record fields (spec/grant-token-0.6.md)."""
+
+LEGACY_CLAIM_ALIASES: Mapping[str, str] = {
+    "agt": f"{GRANT_CLAIM}.agent_did",
+    "dev": f"{GRANT_CLAIM}.developer_id",
+    "grnt": f"{GRANT_CLAIM}.grant_id",
+    "scp": "scope",
+    "parentAgt": "act.sub",
+    "parentGrnt": f"{GRANT_CLAIM}.parent_grant_id",
+    "delegationDepth": f"{GRANT_CLAIM}.delegation_depth",
+}
+"""Legacy claim aliases and the standard claims that replace them."""
+
+_MAX_ACTOR_CHAIN_DEPTH = 10
+
+_T = TypeVar("_T")
+
+
+class LegacyClaimsWarning(FutureWarning):
+    """A grant token was read through a legacy claim alias.
+
+    Reading aliases is deprecated in 0.6 and off by default from 0.7.
+    """
+
 
 _PRODUCTION_JWKS_URI = "https://api.grantex.dev/.well-known/jwks.json"
 _PRODUCTION_ISSUER = "https://grantex.dev"
@@ -83,6 +111,10 @@ def verify_grant_token(
             f"Grant token uses unsupported algorithm '{alg}'; "
             f"allowed: {', '.join(allowed)}"
         )
+    if not options.legacy_claims and header.get("typ") != "at+jwt":
+        raise GrantexTokenError(
+            f"Grant token typ must be at+jwt, got {header.get('typ')!r}"
+        )
 
     jwks_uri = options.jwks_uri
     expected_issuer = options.issuer
@@ -119,7 +151,15 @@ def verify_grant_token(
             f"Grant token verification failed: {exc}"
         ) from exc
 
-    payload = _build_payload(payload_data)
+    payload = _build_payload(payload_data, legacy_claims=options.legacy_claims)
+    for alias in payload.legacy_claims_used:
+        warnings.warn(
+            f"Grant token claim {alias!r} is a legacy alias of "
+            f"{LEGACY_CLAIM_ALIASES[alias]}. Reading legacy claim aliases is "
+            "deprecated and stops by default in 0.7; see docs/migration-0.6.md.",
+            LegacyClaimsWarning,
+            stacklevel=2,
+        )
 
     required_scopes = options.required_scopes or []
     if required_scopes:
@@ -288,29 +328,162 @@ def _select_key(
     return matched
 
 
-def _build_payload(data: dict[str, Any]) -> GrantTokenPayload:
-    required = ("jti", "sub", "agt", "dev", "scp", "iat", "exp")
-    for field in required:
-        if field not in data:
+def _string_claim(record: Mapping[str, Any], name: str, label: str) -> str | None:
+    value = record.get(name)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise GrantexTokenError(f"Grant token claim {label} must be a non-empty string")
+    return value
+
+
+def _depth_claim(record: Mapping[str, Any], name: str, label: str) -> int | None:
+    value = record.get(name)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise GrantexTokenError(f"Grant token claim {label} must be a non-negative integer")
+    return int(value)
+
+
+def _parse_actor(value: Any) -> Mapping[str, Any]:
+    current = value
+    depth = 1
+    while True:
+        if not isinstance(current, Mapping) or not isinstance(current.get("sub"), str) or not current["sub"]:
             raise GrantexTokenError(
-                f"Grant token is missing required claims ({', '.join(required)})"
+                "Grant token act claim must be an object with a non-empty string sub"
             )
-    raw_depth = data.get("delegationDepth")
+        if "act" not in current:
+            break
+        if depth >= _MAX_ACTOR_CHAIN_DEPTH:
+            raise GrantexTokenError(
+                f"Grant token act chain is deeper than {_MAX_ACTOR_CHAIN_DEPTH}"
+            )
+        current = current["act"]
+        depth += 1
+    return value  # type: ignore[no-any-return]
+
+
+def _build_payload(data: dict[str, Any], *, legacy_claims: bool = True) -> GrantTokenPayload:
+    """Read grant claims: standard claims first, legacy aliases where the
+    standard claim is absent (unless ``legacy_claims`` is false). A standard
+    claim and an alias that disagree raise :class:`GrantexTokenError`."""
+    used: list[str] = []
+
+    def read(alias: str, standard: _T | None, legacy: Callable[[], _T | None]) -> _T | None:
+        if not legacy_claims:
+            return standard
+        alias_value = legacy()
+        if (
+            standard is not None
+            and alias_value is not None
+            and json.dumps(standard) != json.dumps(alias_value)
+        ):
+            raise GrantexTokenError(
+                f"Grant token claim {LEGACY_CLAIM_ALIASES[alias]} disagrees with "
+                f"its legacy alias {alias}"
+            )
+        if standard is None and alias_value is not None:
+            used.append(alias)
+        return standard if standard is not None else alias_value
+
+    raw_grant = data.get(GRANT_CLAIM)
+    if raw_grant is not None and not isinstance(raw_grant, Mapping):
+        raise GrantexTokenError(f"Grant token claim {GRANT_CLAIM} must be an object")
+    grant: Mapping[str, Any] = raw_grant or {}
+
+    raw_scope = data.get("scope")
+    if raw_scope is not None and not isinstance(raw_scope, str):
+        raise GrantexTokenError("Grant token claim scope must be a space-delimited string")
+    standard_scopes = (
+        [s for s in raw_scope.split(" ") if s] if raw_scope is not None else None
+    )
+
+    def legacy_scopes() -> list[str] | None:
+        scp = data.get("scp")
+        if scp is None:
+            return None
+        if not isinstance(scp, (list, tuple)) or not all(isinstance(s, str) for s in scp):
+            raise GrantexTokenError("Grant token claim scp must be an array of strings")
+        return list(scp)
+
+    scopes = read("scp", standard_scopes, legacy_scopes)
+    agent_did = read(
+        "agt",
+        _string_claim(grant, "agent_did", f"{GRANT_CLAIM}.agent_did"),
+        lambda: _string_claim(data, "agt", "agt"),
+    )
+    developer_id = read(
+        "dev",
+        _string_claim(grant, "developer_id", f"{GRANT_CLAIM}.developer_id"),
+        lambda: _string_claim(data, "dev", "dev"),
+    )
+    grant_id = read(
+        "grnt",
+        _string_claim(grant, "grant_id", f"{GRANT_CLAIM}.grant_id"),
+        lambda: _string_claim(data, "grnt", "grnt"),
+    )
+    parent_grant_id = read(
+        "parentGrnt",
+        _string_claim(grant, "parent_grant_id", f"{GRANT_CLAIM}.parent_grant_id"),
+        lambda: _string_claim(data, "parentGrnt", "parentGrnt"),
+    )
+    delegation_depth = read(
+        "delegationDepth",
+        _depth_claim(grant, "delegation_depth", f"{GRANT_CLAIM}.delegation_depth"),
+        lambda: _depth_claim(data, "delegationDepth", "delegationDepth"),
+    )
+    act = _parse_actor(data["act"]) if data.get("act") is not None else None
+    standard_parent = (
+        act.get("sub")
+        if act is not None and (parent_grant_id is not None or delegation_depth is not None)
+        else None
+    )
+    parent_agent_did = read(
+        "parentAgt", standard_parent, lambda: _string_claim(data, "parentAgt", "parentAgt")
+    )
+
+    jti, sub, iat, exp = data.get("jti"), data.get("sub"), data.get("iat"), data.get("exp")
+    if (
+        not isinstance(jti, str)
+        or not isinstance(sub, str)
+        or isinstance(iat, bool) or not isinstance(iat, (int, float))
+        or isinstance(exp, bool) or not isinstance(exp, (int, float))
+        or scopes is None
+        or agent_did is None
+        or developer_id is None
+    ):
+        required = (
+            "jti, sub, iat, exp, scope or scp, agent_did or agt, developer_id or dev"
+            if legacy_claims
+            else f"jti, sub, iat, exp, scope, {GRANT_CLAIM}.agent_did, {GRANT_CLAIM}.developer_id"
+        )
+        raise GrantexTokenError(f"Grant token is missing required claims ({required})")
+    cnf = data.get("cnf")
+    if cnf is not None and not isinstance(cnf, Mapping):
+        raise GrantexTokenError("Grant token claim cnf must be an object")
+    client_id = data.get("client_id")
+
     return GrantTokenPayload(
-        iss=data.get("iss", ""),
-        sub=str(data["sub"]),
-        agt=str(data["agt"]),
-        dev=str(data["dev"]),
-        scp=tuple(data["scp"]),
-        iat=int(data["iat"]),
-        exp=int(data["exp"]),
-        jti=str(data["jti"]),
-        client_id=data.get("client_id"),
-        grnt=data.get("grnt"),
-        parent_agt=data.get("parentAgt"),
-        parent_grnt=data.get("parentGrnt"),
-        delegation_depth=int(raw_depth) if raw_depth is not None else None,
+        iss=str(data.get("iss", "")),
+        sub=sub,
+        agt=agent_did,
+        dev=developer_id,
+        scp=tuple(scopes),
+        iat=int(iat),
+        exp=int(exp),
+        jti=jti,
+        client_id=client_id if isinstance(client_id, str) else None,
+        grnt=grant_id,
+        parent_agt=parent_agent_did,
+        parent_grnt=parent_grant_id,
+        delegation_depth=delegation_depth,
         authorization_details=data.get("authorization_details"),
+        act=act,
+        cnf=cnf,
+        aud=data.get("aud"),
+        legacy_claims_used=tuple(used),
     )
 
 
@@ -329,4 +502,8 @@ def _payload_to_verified_grant(payload: GrantTokenPayload) -> VerifiedGrant:
         parent_grant_id=payload.parent_grnt,
         delegation_depth=payload.delegation_depth,
         authorization_details=payload.authorization_details,
+        act=payload.act,
+        cnf=payload.cnf,
+        audience=payload.aud,
+        legacy_claims_used=payload.legacy_claims_used,
     )

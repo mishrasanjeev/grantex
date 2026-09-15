@@ -29,7 +29,14 @@ import {
   TokenSubReason,
   ToolSubReason,
 } from './denials.js';
-import { AuthorizationDetailsError, parseToolsAuthorization, toolsAuthorizationAllows, type ToolsAuthorization } from './authorization-details.js';
+import {
+  AuthorizationDetailsError,
+  parseDecisionReferences,
+  parseToolsAuthorization,
+  toolsAuthorizationAllows,
+  type DecisionReference,
+  type ToolsAuthorization,
+} from './authorization-details.js';
 import { isKnownPurpose, matchPurpose } from './purpose.js';
 import { CapExceededError, CapsConfigurationError, MeterUnavailableError, type CapsMeter, type Reservation } from './caps/meter.js';
 import { MALFORMED_GRANT_CAPS, buildCapLimits, type BuildCapLimitsOptions } from './caps/limits.js';
@@ -55,6 +62,7 @@ export class Grantex {
   readonly #manifests: Map<string, ToolManifest> = new Map();
   #jwksUri: string;
   #issuer: string | undefined;
+  #legacyClaims: boolean | undefined;
   #enforceMode: 'strict' | 'permissive';
   readonly #capsMeter: CapsMeter | undefined;
 
@@ -128,6 +136,7 @@ export class Grantex {
     this.commerce = new CommerceClient(this.#http);
     this.#jwksUri = options.jwksUri ?? `${normalizedBaseUrl}/.well-known/jwks.json`;
     this.#issuer = options.issuer;
+    this.#legacyClaims = options.legacyClaims;
     this.#enforceMode = (options as Record<string, unknown>)['enforceMode'] as 'strict' | 'permissive' ?? 'strict';
     this.#capsMeter = options.capsMeter;
   }
@@ -272,6 +281,7 @@ export class Grantex {
       grant = await verifyGrantToken(grantToken, {
         jwksUri: this.#jwksUri,
         ...(this.#issuer !== undefined ? { issuer: this.#issuer } : {}),
+        ...(this.#legacyClaims !== undefined ? { legacyClaims: this.#legacyClaims } : {}),
       });
     } catch (err) {
       return denied(
@@ -287,8 +297,10 @@ export class Grantex {
     // 2. Read the grant's tools authorization for this connector. A claim that
     //    cannot be read unambiguously denies every call.
     let entry: ToolsAuthorization | undefined;
+    let decisionReference: DecisionReference | undefined;
     try {
       entry = parseToolsAuthorization(grant.authorizationDetails).get(connector);
+      decisionReference = parseDecisionReferences(grant.authorizationDetails).get(connector);
     } catch (err) {
       if (!(err instanceof AuthorizationDetailsError)) throw err;
       return denied(
@@ -392,8 +404,9 @@ export class Grantex {
     }
 
     // 9. Decision. Decision grants are not accepted yet, so a tool that
-    //    requires one is always denied.
-    if (spec.requiresDecision) {
+    //    requires one, in the manifest or in the grant's decision references,
+    //    is always denied.
+    if (spec.requiresDecision || decisionReference?.tools.includes(tool)) {
       return denied(`Tool '${tool}' on ${connector} requires a decision grant.`, DenialReason.DECISION_REQUIRED);
     }
 

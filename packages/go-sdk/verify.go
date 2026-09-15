@@ -5,7 +5,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rsa"
+	"encoding/json"
 	"fmt"
+	"log"
+	"math"
 	"net/url"
 	"strings"
 	"sync"
@@ -19,6 +22,36 @@ import (
 // Each maps to one key type: RS256 to an RSA key, ES256 to an EC key on P-256.
 // "none", the HMAC family and every other algorithm are refused.
 var grantTokenAlgorithms = []string{"RS256", "ES256"}
+
+// GrantClaim is the claim holding Grantex's grant record fields.
+const GrantClaim = "urn:grantex:grant"
+
+// maxActorChainDepth is the longest act chain accepted: the delegation hard cap.
+const maxActorChainDepth = 10
+
+// LegacyClaimAliases maps each legacy grant token claim alias to the standard
+// claim that replaces it. Reading an alias is deprecated in 0.6 and off by
+// default from 0.7.
+func LegacyClaimAliases() map[string]string {
+	return map[string]string{
+		"agt":             GrantClaim + ".agent_did",
+		"dev":             GrantClaim + ".developer_id",
+		"grnt":            GrantClaim + ".grant_id",
+		"scp":             "scope",
+		"parentAgt":       "act.sub",
+		"parentGrnt":      GrantClaim + ".parent_grant_id",
+		"delegationDepth": GrantClaim + ".delegation_depth",
+	}
+}
+
+var legacyClaimWarned sync.Map
+
+func defaultLegacyClaimWarning(alias, standard string) {
+	if _, loaded := legacyClaimWarned.LoadOrStore(alias, true); loaded {
+		return
+	}
+	log.Printf("grantex: DEPRECATED: grant token claim %q is a legacy alias of %s; reading legacy claim aliases stops by default in 0.7 (see docs/migration-0.6.md)", alias, standard)
+}
 
 // GrantTokenAlgorithms returns the signature algorithms VerifyGrantToken
 // accepts by default: RS256 and ES256.
@@ -119,6 +152,16 @@ type VerifyOptions struct {
 	// GrantTokenAlgorithms (RS256 and ES256, the default when empty). Any
 	// other value is rejected.
 	Algorithms []string
+
+	// StandardClaimsOnly stops reading legacy claim aliases (agt, dev, grnt,
+	// scp, parentAgt, parentGrnt, delegationDepth) and requires typ at+jwt.
+	// False in 0.6, where an alias is read when the standard claim is absent;
+	// reading aliases stops by default in 0.7.
+	StandardClaimsOnly bool
+
+	// OnLegacyClaim is called for each legacy alias a verification relied on.
+	// When nil, a deprecation message is logged once per alias per process.
+	OnLegacyClaim func(alias, standard string)
 }
 
 func resolveAlgorithms(requested []string) ([]string, error) {
@@ -247,60 +290,25 @@ func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*V
 	if !ok {
 		return nil, &TokenError{Message: "invalid token claims"}
 	}
-
-	// Validate and extract the core Grantex claims. A signed token with a
-	// malformed payload must not be treated as a partially populated grant.
-	jti, jtiOK := claims["jti"].(string)
-	sub, subOK := claims["sub"].(string)
-	agt, agtOK := claims["agt"].(string)
-	dev, devOK := claims["dev"].(string)
-	scp, scpOK := claims["scp"].([]interface{})
-	iat, iatErr := claims.GetIssuedAt()
-	exp, expErr := claims.GetExpirationTime()
-	if !jtiOK || !subOK || !agtOK || !devOK || !scpOK ||
-		iatErr != nil || iat == nil || expErr != nil || exp == nil {
-		return nil, &TokenError{Message: "token is missing or has invalid required claims (jti, sub, agt, dev, scp, iat, exp)"}
-	}
-
-	scopes := make([]string, 0, len(scp))
-	for _, scope := range scp {
-		value, ok := scope.(string)
-		if !ok {
-			return nil, &TokenError{Message: "token is missing or has invalid required claims (jti, sub, agt, dev, scp, iat, exp)"}
+	if opts.StandardClaimsOnly {
+		if typ, _ := parsed.Header["typ"].(string); typ != "at+jwt" {
+			return nil, &TokenError{Message: fmt.Sprintf("token typ must be at+jwt, got %q", typ)}
 		}
-		scopes = append(scopes, value)
 	}
 
-	grant := &VerifiedGrant{
-		TokenID:     jti,
-		PrincipalID: sub,
-		AgentDID:    agt,
-		DeveloperID: dev,
-		Scopes:      scopes,
-		IssuedAt:    iat.Unix(),
-		ExpiresAt:   exp.Unix(),
+	grant, err := normalizeGrantClaims(claims, !opts.StandardClaimsOnly)
+	if err != nil {
+		return nil, err
 	}
-	if clientID, ok := claims["client_id"].(string); ok {
-		grant.ClientID = &clientID
-	}
-
-	// Grant ID (falls back to jti)
-	if grnt, ok := claims["grnt"].(string); ok {
-		grant.GrantID = grnt
-	} else {
-		grant.GrantID = grant.TokenID
-	}
-
-	// Delegation claims
-	if parentAgt, ok := claims["parentAgt"].(string); ok {
-		grant.ParentAgentDID = &parentAgt
-	}
-	if parentGrnt, ok := claims["parentGrnt"].(string); ok {
-		grant.ParentGrantID = &parentGrnt
-	}
-	if depth, ok := claims["delegationDepth"].(float64); ok {
-		d := int(depth)
-		grant.DelegationDepth = &d
+	if len(grant.LegacyClaimsUsed) > 0 {
+		warn := opts.OnLegacyClaim
+		if warn == nil {
+			warn = defaultLegacyClaimWarning
+		}
+		aliases := LegacyClaimAliases()
+		for _, alias := range grant.LegacyClaimsUsed {
+			warn(alias, aliases[alias])
+		}
 	}
 
 	// Check required scopes
@@ -316,6 +324,288 @@ func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*V
 		}
 	}
 
+	return grant, nil
+}
+
+func claimError(format string, args ...interface{}) error {
+	return &TokenError{Message: fmt.Sprintf(format, args...)}
+}
+
+func stringClaim(record map[string]interface{}, name, label string) (*string, error) {
+	raw, present := record[name]
+	if !present || raw == nil {
+		return nil, nil
+	}
+	value, ok := raw.(string)
+	if !ok || value == "" {
+		return nil, claimError("grant token claim %s must be a non-empty string", label)
+	}
+	return &value, nil
+}
+
+func depthClaim(record map[string]interface{}, name, label string) (*int, error) {
+	raw, present := record[name]
+	if !present || raw == nil {
+		return nil, nil
+	}
+	number, ok := raw.(float64)
+	if !ok || number < 0 || number != math.Trunc(number) || number > float64(math.MaxInt32) {
+		return nil, claimError("grant token claim %s must be a non-negative integer", label)
+	}
+	depth := int(number)
+	return &depth, nil
+}
+
+func parseActor(raw interface{}) (*ActorClaim, error) {
+	var root *ActorClaim
+	var parent *ActorClaim
+	current := raw
+	for depth := 1; ; depth++ {
+		record, ok := current.(map[string]interface{})
+		sub, subOK := record["sub"].(string)
+		if !ok || !subOK || sub == "" {
+			return nil, claimError("grant token act claim must be an object with a non-empty string sub")
+		}
+		actor := &ActorClaim{Sub: sub}
+		if root == nil {
+			root = actor
+		} else {
+			parent.Act = actor
+		}
+		parent = actor
+		next, present := record["act"]
+		if !present || next == nil {
+			return root, nil
+		}
+		if depth >= maxActorChainDepth {
+			return nil, claimError("grant token act chain is deeper than %d", maxActorChainDepth)
+		}
+		current = next
+	}
+}
+
+func sameValue(a, b interface{}) bool {
+	left, errLeft := json.Marshal(a)
+	right, errRight := json.Marshal(b)
+	return errLeft == nil && errRight == nil && string(left) == string(right)
+}
+
+// normalizeGrantClaims reads grant claims: standard claims first, legacy
+// aliases where the standard claim is absent (when legacy is true). A
+// standard claim and an alias that disagree are refused.
+func normalizeGrantClaims(claims jwt.MapClaims, legacy bool) (*VerifiedGrant, error) {
+	var used []string
+	aliases := LegacyClaimAliases()
+	agree := func(alias string, standard, legacyValue interface{}, standardPresent, legacyPresent bool) (bool, error) {
+		if !legacy {
+			return false, nil
+		}
+		if standardPresent && legacyPresent && !sameValue(standard, legacyValue) {
+			return false, claimError("grant token claim %s disagrees with its legacy alias %s", aliases[alias], alias)
+		}
+		if !standardPresent && legacyPresent {
+			used = append(used, alias)
+			return true, nil
+		}
+		return false, nil
+	}
+
+	grantRecord := map[string]interface{}{}
+	if raw, present := claims[GrantClaim]; present && raw != nil {
+		record, ok := raw.(map[string]interface{})
+		if !ok {
+			return nil, claimError("grant token claim %s must be an object", GrantClaim)
+		}
+		grantRecord = record
+	}
+
+	// scope / scp
+	var scopes []string
+	scopePresent := false
+	if raw, present := claims["scope"]; present && raw != nil {
+		value, ok := raw.(string)
+		if !ok {
+			return nil, claimError("grant token claim scope must be a space-delimited string")
+		}
+		scopePresent = true
+		scopes = []string{}
+		for _, s := range strings.Split(value, " ") {
+			if s != "" {
+				scopes = append(scopes, s)
+			}
+		}
+	}
+	var scp []string
+	scpPresent := false
+	if raw, present := claims["scp"]; legacy && present && raw != nil {
+		items, ok := raw.([]interface{})
+		if !ok {
+			return nil, claimError("grant token claim scp must be an array of strings")
+		}
+		scp = make([]string, 0, len(items))
+		for _, item := range items {
+			value, ok := item.(string)
+			if !ok {
+				return nil, claimError("grant token claim scp must be an array of strings")
+			}
+			scp = append(scp, value)
+		}
+		scpPresent = true
+	}
+	if useLegacy, err := agree("scp", scopes, scp, scopePresent, scpPresent); err != nil {
+		return nil, err
+	} else if useLegacy {
+		scopes, scopePresent = scp, true
+	}
+
+	pick := func(alias, standardName string, parse func(map[string]interface{}, string, string) (*string, error)) (*string, error) {
+		standard, err := parse(grantRecord, standardName, GrantClaim+"."+standardName)
+		if err != nil {
+			return nil, err
+		}
+		var legacyValue *string
+		if legacy {
+			if legacyValue, err = parse(claims, alias, alias); err != nil {
+				return nil, err
+			}
+		}
+		var s, l interface{}
+		if standard != nil {
+			s = *standard
+		}
+		if legacyValue != nil {
+			l = *legacyValue
+		}
+		useLegacy, err := agree(alias, s, l, standard != nil, legacyValue != nil)
+		if err != nil {
+			return nil, err
+		}
+		if useLegacy {
+			return legacyValue, nil
+		}
+		return standard, nil
+	}
+
+	agentDID, err := pick("agt", "agent_did", stringClaim)
+	if err != nil {
+		return nil, err
+	}
+	developerID, err := pick("dev", "developer_id", stringClaim)
+	if err != nil {
+		return nil, err
+	}
+	grantID, err := pick("grnt", "grant_id", stringClaim)
+	if err != nil {
+		return nil, err
+	}
+	parentGrantID, err := pick("parentGrnt", "parent_grant_id", stringClaim)
+	if err != nil {
+		return nil, err
+	}
+
+	depth, err := depthClaim(grantRecord, "delegation_depth", GrantClaim+".delegation_depth")
+	if err != nil {
+		return nil, err
+	}
+	if legacy {
+		legacyDepth, err := depthClaim(claims, "delegationDepth", "delegationDepth")
+		if err != nil {
+			return nil, err
+		}
+		var s, l interface{}
+		if depth != nil {
+			s = *depth
+		}
+		if legacyDepth != nil {
+			l = *legacyDepth
+		}
+		useLegacy, err := agree("delegationDepth", s, l, depth != nil, legacyDepth != nil)
+		if err != nil {
+			return nil, err
+		}
+		if useLegacy {
+			depth = legacyDepth
+		}
+	}
+
+	var act *ActorClaim
+	if raw, present := claims["act"]; present && raw != nil {
+		if act, err = parseActor(raw); err != nil {
+			return nil, err
+		}
+	}
+	var parentAgentDID *string
+	if act != nil && (parentGrantID != nil || depth != nil) {
+		sub := act.Sub
+		parentAgentDID = &sub
+	}
+	if legacy {
+		legacyParent, err := stringClaim(claims, "parentAgt", "parentAgt")
+		if err != nil {
+			return nil, err
+		}
+		var s, l interface{}
+		if parentAgentDID != nil {
+			s = *parentAgentDID
+		}
+		if legacyParent != nil {
+			l = *legacyParent
+		}
+		useLegacy, err := agree("parentAgt", s, l, parentAgentDID != nil, legacyParent != nil)
+		if err != nil {
+			return nil, err
+		}
+		if useLegacy {
+			parentAgentDID = legacyParent
+		}
+	}
+
+	jti, jtiOK := claims["jti"].(string)
+	sub, subOK := claims["sub"].(string)
+	iat, iatErr := claims.GetIssuedAt()
+	exp, expErr := claims.GetExpirationTime()
+	if !jtiOK || !subOK || iatErr != nil || iat == nil || expErr != nil || exp == nil ||
+		!scopePresent || agentDID == nil || developerID == nil {
+		if legacy {
+			return nil, &TokenError{Message: "token is missing or has invalid required claims (jti, sub, iat, exp, scope or scp, agent_did or agt, developer_id or dev)"}
+		}
+		return nil, &TokenError{Message: "token is missing or has invalid required claims (jti, sub, iat, exp, scope, " + GrantClaim + ".agent_did, " + GrantClaim + ".developer_id)"}
+	}
+
+	grant := &VerifiedGrant{
+		TokenID:          jti,
+		GrantID:          jti,
+		PrincipalID:      sub,
+		AgentDID:         *agentDID,
+		DeveloperID:      *developerID,
+		Scopes:           scopes,
+		IssuedAt:         iat.Unix(),
+		ExpiresAt:        exp.Unix(),
+		ParentAgentDID:   parentAgentDID,
+		ParentGrantID:    parentGrantID,
+		DelegationDepth:  depth,
+		Act:              act,
+		LegacyClaimsUsed: used,
+	}
+	if grantID != nil {
+		grant.GrantID = *grantID
+	}
+	if clientID, ok := claims["client_id"].(string); ok {
+		grant.ClientID = &clientID
+	}
+	if raw, present := claims["cnf"]; present && raw != nil {
+		cnf, ok := raw.(map[string]interface{})
+		if !ok {
+			return nil, claimError("grant token claim cnf must be an object")
+		}
+		grant.Cnf = cnf
+	}
+	if details, ok := claims["authorization_details"].([]interface{}); ok {
+		grant.AuthorizationDetails = details
+	}
+	if audience, err := claims.GetAudience(); err == nil && len(audience) > 0 {
+		grant.Audience = []string(audience)
+	}
 	return grant, nil
 }
 
