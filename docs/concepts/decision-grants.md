@@ -217,8 +217,11 @@ export async function callCaseDecision(
 }
 ```
 
-`wrap_tool` / `wrapTool` and `enforceMiddleware` accept the decision grants
-and case version too. MCP servers use `grantexDecisionVerifier` from
+`wrap_tool` / `wrapTool`, `enforceMiddleware` and the FastAPI
+`GrantexEnforcer` accept the decision grants and case version too (the FastAPI
+dependency reads grants from the `grantex-decision-grant` header and needs a
+`case_version` callback that reads your own case state). MCP servers use
+`grantexDecisionVerifier` from
 `@grantex/mcp-auth` (see [mcp-auth](/mcp-auth)); clients send grants in the
 `grantex-decision-grant` header and receive a `decision_required` challenge
 without one.

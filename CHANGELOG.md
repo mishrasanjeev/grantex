@@ -516,7 +516,8 @@ answers 404 until it is `true`). Profile in `spec/decision-grant.md`.
   duplicate member names are refused.
 - **Approval** only by form post from the approval page: session cookie, CSRF
   token bound to session, request and rendering, `Origin` of the service
-  and `Sec-Fetch-Site: same-origin` both required, CSP without script,
+  and `Sec-Fetch-Site: same-origin` both required, `Referrer-Policy:
+  same-origin` (so the browser sends the real `Origin`), CSP without script,
   `frame-ancestors 'none'`. Dwell time is measured by the service from
   rendering to submission; approvals faster than `DECISION_MIN_DWELL_MS`
   (default 2000) are refused.

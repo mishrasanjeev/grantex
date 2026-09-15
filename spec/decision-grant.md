@@ -165,13 +165,15 @@ bodies with duplicate member names are refused.
 
 The approval page shows the memo, the policy score and the exact action with
 its hash, all HTML-escaped, with a Content-Security-Policy that allows no
-script and no framing. The approver's one click posts a form. The service MUST
-refuse unless:
+script and no framing, and `Referrer-Policy: same-origin` (under
+`no-referrer` browsers send `Origin: null` on the page's own form posts). The
+approver's one click posts a form. The service MUST refuse unless:
 
 - the session cookie is valid and step-up is still within the window;
 - the CSRF token (HMAC of session, request and rendering) matches;
 - `Origin` is present and equal to the service's origin, and
-  `Sec-Fetch-Site`, when sent, is `same-origin`;
+  `Sec-Fetch-Site` is present and `same-origin` (a request without either
+  header is refused);
 - the submitted action hash is the request's (`action_mismatch`);
 - the request is pending and unexpired and its case version is current
   (`closed`, `expired`, `case_changed`);
@@ -284,7 +286,16 @@ The auth service answers API refusals with `{"reason": "decision_invalid",
 `decision_required` challenge of
 [`mcp-auth-challenges.md`](mcp-auth-challenges.md) and the sub-reason in the
 body; its reference verifier reads grants from the `grantex-decision-grant`
-request header (two comma-separated grants for four eyes).
+request header (two comma-separated grants for four eyes). The FastAPI
+`GrantexEnforcer` reads the same header, the arguments from the JSON body and
+the case version from a server-side callback, and answers 403 with
+`reason_code` and `sub_reason`.
+
+A tool listed in the agent grant's `urn:grantex:decision:v1` entry
+(`grant-token-0.6.md`) needs a decision grant even when its manifest does not
+declare `requires_decision`, and a decision in that entry's `four_eyes_on`
+needs two approvers. `enforce()` in both SDKs and `@grantex/mcp-auth` apply
+this; a token whose decision entries cannot be read is refused.
 
 ## 8. Threat model
 
@@ -350,8 +361,11 @@ request header (two comma-separated grants for four eyes).
 | Sign in and approve | | | `GET /decisions/{id}`, `GET /decisions/login`, `GET /decisions/callback`, `POST /decisions/{id}`, `POST /decisions/logout` (browser only) |
 | Verify offline | `verify_decision_grant(s)` | `verifyDecisionGrant(s)` | |
 | Consume | `consume` | `consume` | `POST /v1/decisions/consume` |
-| Enforce | `enforce(..., decision_grants, arguments and/or decision_action, case_version, decisions_mode)`; `wrap_tool(..., decision_grants, case_version)` | `enforce({..., decisionGrants, arguments and/or decisionAction, caseVersion, decisionsMode})`; `wrapTool`, `enforceMiddleware` | |
+| Enforce | `enforce(..., decision_grants, arguments and/or decision_action, case_version, decisions_mode)`; `wrap_tool(..., decision_grants, case_version)`; FastAPI `GrantexEnforcer(..., case_version=...)` | `enforce({..., decisionGrants, arguments and/or decisionAction, caseVersion, decisionsMode})`; `wrapTool`, `enforceMiddleware` | |
 | MCP | | `grantexDecisionVerifier` (`@grantex/mcp-auth`) | |
 
 Shared test cases: `spec/examples/decision-grant/action-hash.json` and
-`spec/examples/decision-grant/verification.json`.
+`spec/examples/decision-grant/verification.json`. The whole flow (admin
+allow-list, request, browser sign-in with step-up and approval, `enforce()`
+in both SDKs, replay and four eyes) runs in Chromium against the auth service
+in `apps/auth-service/tests/e2e/decision-grants-browser.e2e.test.ts`.
