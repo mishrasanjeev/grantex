@@ -22,6 +22,7 @@
  */
 
 import type { DenialReason } from './denials.js';
+import type { Reservation } from './caps/meter.js';
 
 /* ------------------------------------------------------------------ */
 /*  Permission                                                         */
@@ -524,6 +525,8 @@ export interface EnforceResult {
   details?: Record<string, unknown>;
   /** The grant's purpose for this connector, when it carries one. */
   purpose?: string;
+  /** Caps reserved for this call, when the tool or grant declares caps. */
+  reservation?: Reservation;
 }
 
 /** Options for `grantex.enforce()`. */
@@ -536,6 +539,10 @@ export interface EnforceOptions {
   tool: string;
   /** Amount for capped scope enforcement (optional). */
   amount?: number;
+  /** Case the call belongs to; required when a per-case cap applies. */
+  caseId?: string;
+  /** Manifest cost units the call incurs (default: all the tool declares). */
+  costComponents?: readonly string[];
 }
 
 /** Options for `grantex.wrapTool()`. */

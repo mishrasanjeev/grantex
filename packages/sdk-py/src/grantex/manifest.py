@@ -35,7 +35,10 @@ import re
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Tuple, Union
+
+if TYPE_CHECKING:
+    from .caps import Reservation
 
 
 # ── Permission ──────────────────────────────────────────────────────────
@@ -557,3 +560,6 @@ class EnforceResult:
 
     purpose: str = ""
     """The grant's purpose for this connector, when it carries one."""
+
+    reservation: Optional["Reservation"] = None
+    """Caps reserved for this call, when the tool or grant declares caps."""

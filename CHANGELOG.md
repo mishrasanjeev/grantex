@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Caps meter
+- New caps meter in both SDKs (`grantex.caps`, and `CapsMeter` in
+  `@grantex/sdk`) enforces per-tool call caps over rolling `per_hour` and
+  `per_day` windows and `per_case`, plus cost-unit budgets. Caps come from the
+  manifest (tenant-wide) and from the grant's `urn:grantex:tools:v1` entry
+  (per grant, including a `cost_units` budget for the connector). Every
+  applicable counter is reserved atomically, so concurrent calls cannot exceed
+  a cap.
+- Backends: Redis (one Lua script, tenant-scoped keys with a shared hash tag,
+  server time) and Postgres (row locks and upserts on `grantex_cap_counters` /
+  `grantex_cap_reservations`; create them with `SCHEMA_SQL` /
+  `CAPS_SCHEMA_SQL`), plus an in-memory backend for tests only. Python and
+  TypeScript share counter keys, the Lua script and the SQL. There is no
+  automatic failover between backends.
+- `Grantex(caps_meter=...)` / `new Grantex({ capsMeter })` meters calls in
+  `enforce()`, which takes `case_id` / `caseId` and `cost_components` /
+  `costComponents`. Units are reserved as the last check, and
+  `EnforceResult.reservation` identifies them. Exceeding a cap denies with
+  `cap_exceeded` / `limit_reached` and details carrying error code `E1008`,
+  the limit and the window. A cap of zero disables a tool. A missing or
+  unavailable meter denies with `meter_unavailable`, a missing case for a
+  per-case cap with `case_required`.
+- Failed calls are not refunded. `CapsMeter.refund_unsent()` /
+  `refundUnsent()` releases a reservation only when the provider call is
+  known not to have been sent.
+- A tool that declares `cost_units` while the grant sets no cost-unit budget
+  is now allowed when a meter is configured, because there is nothing to
+  meter. It is still denied without a meter.
+- CI's `make` job runs the caps integration tests against Redis and Postgres
+  service containers.
+
 ### Purpose-bound grants
 - `POST /v1/authorize` accepts `purpose`: a term from the controlled
   vocabulary (`aml.cdd.onboarding`, `aml.cdd.ongoing`, `aml.screening`,

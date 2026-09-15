@@ -47,8 +47,18 @@ export const CapSubReason = {
   INVALID_AMOUNT: 'invalid_amount',
   /** A `capped:N` scope carries a malformed cap. */
   MALFORMED_CAP: 'malformed_cap',
-  /** The tool declares caps or cost units and they cannot be metered. */
+  /** The tool declares caps or cost units and they cannot be metered: no meter, or its backend is unavailable. */
   METER_UNAVAILABLE: 'meter_unavailable',
+  /**
+   * A call cap or cost-unit budget would be exceeded (error code E1008). `details`
+   * carries `code`, `limit`, `window`, `used`, `requested`, `scope` and `kind`.
+   */
+  LIMIT_REACHED: 'limit_reached',
+  /** A per-case cap applies and no `caseId` was given. */
+  CASE_REQUIRED: 'case_required',
+  INVALID_CASE_ID: 'invalid_case_id',
+  /** `costComponents` names a unit the tool does not declare. */
+  INVALID_COST_COMPONENT: 'invalid_cost_component',
 } as const;
 
 /** Sub-reasons for `purpose_not_allowed`. */

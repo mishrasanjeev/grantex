@@ -56,6 +56,15 @@ from ._authorization_details import (
     parse_tools_authorization,
 )
 from .purpose import is_known_purpose, match_purpose
+from .caps import (
+    MALFORMED_GRANT_CAPS,
+    CapExceededError,
+    CapsConfigurationError,
+    CapsMeter,
+    MeterUnavailableError,
+    Reservation,
+    build_cap_limits,
+)
 from ._verify import verify_grant_token
 from ._types import VerifyGrantTokenOptions
 
@@ -103,6 +112,7 @@ class Grantex:
         timeout: float = 30.0,
         max_retries: int = 3,
         enforce_mode: str = "strict",
+        caps_meter: CapsMeter | None = None,
     ) -> None:
         resolved_key = (api_key or os.environ.get("GRANTEX_API_KEY", "")).strip()
         if not resolved_key:
@@ -112,6 +122,7 @@ class Grantex:
             )
 
         self._enforce_mode = enforce_mode
+        self._caps_meter = caps_meter
 
         self._http = HttpClient(
             base_url=base_url,
@@ -218,8 +229,19 @@ class Grantex:
         connector: str,
         tool: str,
         amount: float | None = None,
+        *,
+        case_id: str | None = None,
+        cost_components: list[str] | None = None,
     ) -> EnforceResult:
         """Enforce scope for a tool call.
+
+        When the tool (manifest) or the grant declares caps, the call is
+        metered with the client's ``caps_meter``: units are reserved as the
+        last step, only if every other check passed, and ``result.reservation``
+        identifies them. ``case_id`` is required for per-case caps;
+        ``cost_components`` names the manifest cost units the call incurs
+        (default: all of them). Reserve means the call counts even if it later
+        fails; see ``CapsMeter.refund_unsent``.
 
         1. Verifies the grant token JWT locally using the issuer's JWKS
         2. Looks up the tool's required permission from loaded manifests
@@ -397,24 +419,59 @@ class Grantex:
                 )
 
         # 11. Call caps and cost units (declared by the manifest or by the
-        #     grant) need a meter, which this SDK version does not provide:
-        #     fail closed rather than ignore them.
+        #     grant). Reserving is the last step, so a denied call never
+        #     consumes a cap; without a meter the call is denied.
         grant_caps = entry.caps if entry is not None else None
         grant_caps_apply = grant_caps is not None and (
             tool in grant_caps or (spec.cost_units is not None and "cost_units" in grant_caps)
         )
+        reservation: Reservation | None = None
         if spec.caps is not None or spec.cost_units is not None or grant_caps_apply:
-            return _denied(
-                f"Tool '{tool}' on {connector} declares caps or cost units, which "
-                "this SDK version cannot meter.",
-                DenialReason.CAP_EXCEEDED, CapSubReason.METER_UNAVAILABLE,
-            )
+            meter = self._caps_meter
+            if meter is None:
+                return _denied(
+                    f"Tool '{tool}' on {connector} declares caps or cost units and no "
+                    "caps meter is configured.",
+                    DenialReason.CAP_EXCEEDED, CapSubReason.METER_UNAVAILABLE,
+                )
+            try:
+                limits = build_cap_limits(
+                    connector=connector, tool=tool, spec=spec, grant_id=grant_id,
+                    grant_caps=grant_caps, case_id=case_id, cost_components=cost_components,
+                )
+            except CapsConfigurationError as exc:
+                if exc.sub_reason == MALFORMED_GRANT_CAPS:
+                    return _denied(
+                        f"Grant token authorization_details cannot be used: {exc}.",
+                        DenialReason.TOKEN_INVALID, TokenSubReason.MALFORMED_AUTHORIZATION_DETAILS,
+                    )
+                return _denied(
+                    f"Cannot meter tool '{tool}' on {connector}: {exc}.",
+                    DenialReason.CAP_EXCEEDED, exc.sub_reason,
+                )
+            try:
+                reservation = meter.reserve(getattr(grant, "developer_id", ""), limits)
+            except CapExceededError as exc:
+                return _denied(
+                    f"{exc} on {connector}.{tool}.",
+                    DenialReason.CAP_EXCEEDED, CapSubReason.LIMIT_REACHED,
+                    {
+                        "code": exc.code, "limit": exc.limit, "window": exc.window,
+                        "used": exc.used, "requested": exc.requested,
+                        "scope": exc.scope, "kind": exc.kind,
+                    },
+                )
+            except (MeterUnavailableError, CapsConfigurationError) as exc:
+                return _denied(
+                    f"Caps meter could not evaluate tool '{tool}' on {connector}: {exc}.",
+                    DenialReason.CAP_EXCEEDED, CapSubReason.METER_UNAVAILABLE,
+                )
 
         return EnforceResult(
             allowed=True, reason="",
             grant_id=grant_id, agent_did=agent_did, scopes=scopes,
             permission=permission, connector=connector, tool=tool,
-            purpose=result_purpose,
+            purpose=result_purpose, reservation=reservation,
         )
 
     @staticmethod
@@ -483,6 +540,7 @@ class Grantex:
                 sub_reason=result.sub_reason,
                 details=result.details,
                 purpose=result.purpose,
+                reservation=result.reservation,
             )
         return result
 

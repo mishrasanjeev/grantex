@@ -94,6 +94,7 @@ export {
   type WrapToolOptions,
   type EnforceMiddlewareOptions,
 } from './manifest.js';
+export * from './caps/index.js';
 export { DenialReason, CapSubReason, ManifestSubReason, PurposeSubReason, TokenSubReason, ToolSubReason } from './denials.js';
 export {
   PURPOSE_VOCABULARY,

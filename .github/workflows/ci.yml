@@ -26,9 +26,23 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       # The auth-service audit integration test refuses to skip in CI.
       AUDIT_INTEGRATION_DATABASE_URL: postgres://grantex_test:grantex_test@127.0.0.1:5432/grantex_test
+      # The caps meter integration tests (Python and TypeScript SDKs) run
+      # against real Redis and Postgres here and refuse to skip.
+      GRANTEX_CAPS_REDIS_URL: redis://127.0.0.1:6379/0
+      GRANTEX_CAPS_POSTGRES_URL: postgres://grantex_test:grantex_test@127.0.0.1:5432/grantex_test
+      GRANTEX_CAPS_REQUIRE_INTEGRATION: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

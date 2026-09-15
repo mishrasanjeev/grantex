@@ -54,7 +54,8 @@
               "concepts/delegation",
               "concepts/vs-oauth",
               "concepts/tool-manifests",
-              "concepts/purpose-bound-grants"
+              "concepts/purpose-bound-grants",
+              "concepts/caps-and-metering"
             ]
           },
           {
