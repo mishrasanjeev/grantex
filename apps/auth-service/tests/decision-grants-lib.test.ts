@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SignJWT, decodeJwt, decodeProtectedHeader, exportJWK, generateKeyPair } from 'jose';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { initKeys, getKeyPair, signGrantToken } from '../src/lib/crypto.js';
 import { canonicalize, CanonicalizationError, parseJsonRejectingDuplicates } from '../src/lib/decisions/canonical.js';
 import { ActionValidationError, computeActionHash, parseDecisionAction, type DecisionAction } from '../src/lib/decisions/action.js';
@@ -27,6 +27,7 @@ import { decisionSettings, DecisionSettingsError } from '../src/lib/decisions/se
 import { clearApproverIdpCaches, discover, verifyIdToken, type ApproverIdp } from '../src/lib/decisions/approver-oidc.js';
 import { approverEmailHash } from '../src/lib/decisions/personal-data.js';
 import { setSafeFetchForTests } from '../src/lib/url-security.js';
+import { SigningKeyRing, loadEnvSigningKeyRing, setSigningKeyRing, type SigningKey } from '../src/lib/signing-keys.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const EXAMPLES = join(ROOT, 'spec', 'examples');
@@ -223,6 +224,51 @@ describe('decision grant tokens', () => {
     await expect(verifyDecisionGrantSignature(await sign({}))).rejects.toThrow(/kid/);
     await expect(verifyDecisionGrantSignature(await sign({ kid }, { aud: 'urn:other' }))).rejects.toThrow(DecisionTokenError);
     await expect(verifyDecisionGrantSignature(await signDecisionGrant({ ...claims(), dwell_source: 'reported' as 'server' }))).rejects.toThrow(/dwell_source/);
+  });
+});
+
+describe('decision grant tokens across platform key rotation', () => {
+  const claims = () => ({
+    sub: 'user:bil3roIxTbMBJLooUOGo1Z:approver-1', jti: 'dgnt_01K00000000000000000000000', iat: 1_700_000_000, exp: 1_700_086_400,
+    dev: 'dev_TEST', idp: 'dapi_1', approver_auth: 'mfa', amr: ['mfa'], auth_time: 1_700_000_000,
+    action: ACTION, action_hash: computeActionHash(ACTION), connector: 'acme_kyb', case_version: 'v1',
+    dwell_ms: 61_250, dwell_source: 'server' as const, decision_request: 'dreq_01K00000000000000000000000',
+    memo_hash: HASH, policy_score_hash: HASH,
+  });
+  const generatedRing = (alg: 'RS256' | 'ES256') => loadEnvSigningKeyRing({
+    alg, rsaPrivateKey: null, ecPrivateKey: null, autoGenerate: true, verificationPublicKeys: null, legacyKidKey: null,
+  });
+  const retired = (key: SigningKey): SigningKey => ({ ...key, privateKey: null, status: 'retired' });
+
+  afterAll(async () => {
+    await initKeys();
+  });
+
+  it('keeps verifying a grant minted before rotation while the old key is retained, and refuses it once the key is gone', async () => {
+    const before = await generatedRing('RS256');
+    setSigningKeyRing(before);
+    const token = await signDecisionGrant(claims());
+    // The kid the platform signs with now (a legacy alias during the kid transition).
+    expect(decodeProtectedHeader(token)).toMatchObject({ alg: 'RS256', kid: getKeyPair().kid });
+
+    const after = await generatedRing('ES256');
+    setSigningKeyRing(new SigningKeyRing(after.active, [retired(before.active)]));
+    expect((await verifyDecisionGrantSignature(token)).jti).toBe('dgnt_01K00000000000000000000000');
+    const minted = await signDecisionGrant(claims());
+    expect(decodeProtectedHeader(minted)).toMatchObject({ alg: 'ES256', kid: after.active.kid });
+    expect((await verifyDecisionGrantSignature(minted)).action).toEqual(ACTION);
+
+    setSigningKeyRing(after);
+    await expect(verifyDecisionGrantSignature(token)).rejects.toThrow(DecisionTokenError);
+  });
+
+  it('refuses a token whose alg does not match the key named by its kid', async () => {
+    const ring = await generatedRing('ES256');
+    setSigningKeyRing(ring);
+    const token = await signDecisionGrant(claims());
+    const [, payload, signature] = token.split('.');
+    const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: ring.active.kid, typ: 'decision+jwt' })).toString('base64url');
+    await expect(verifyDecisionGrantSignature(`${header}.${payload}.${signature}`)).rejects.toThrow(DecisionTokenError);
   });
 });
 
