@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Python SDK 0.5.1
+- Prepares `grantex==0.5.1`, a patch release of the Python SDK carrying the
+  SDK fixes merged since 0.5.0: `enforce()` applies the tightest budget cap,
+  honours `agenticorg:` scopes and denies malformed, negative or non-finite
+  caps and amounts; the FastAPI enforcer reads the `Authorization` header
+  instead of the query string; grant-token verification caches the JWKS
+  (10-minute TTL, rate-limited refresh on an unknown `kid`) and runs off the
+  event loop; resource ids are percent-encoded in every request path;
+  single-use authorization codes are never retried; and event streams bound
+  connect, write and pool time at 10 seconds.
+- **Behaviour change:** calls that `enforce()` previously allowed with a
+  malformed or negative cap, or a non-finite amount, are now denied.
+
 ### x402 UK Taxi / PHV compatibility fixture
 - The external compatibility fixture and report now use the service's
   canonical host, `uk-taxi-phv-mcp-production.up.railway.app`, after the
