@@ -21,7 +21,17 @@ import { CredentialsClient } from './resources/credentials.js';
 import { PassportsClient } from './resources/passports.js';
 import { DpdpClient } from './resources/dpdp.js';
 import { CommerceClient } from './resources/commerce.js';
-import { ToolManifest, permissionCovers, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
+import {
+  CapSubReason,
+  DenialReason,
+  ManifestSubReason,
+  PurposeSubReason,
+  TokenSubReason,
+  ToolSubReason,
+} from './denials.js';
+import { AuthorizationDetailsError, parseToolsAuthorization, toolsAuthorizationAllows, type ToolsAuthorization } from './authorization-details.js';
+import { isKnownPurpose, matchPurpose } from './purpose.js';
+import { ToolManifest, permissionCovers, type ToolSpec, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 import { verifyGrantToken } from './verify.js';
 import type {
   AuthorizationRequest,
@@ -235,6 +245,22 @@ export class Grantex {
       connector,
       tool,
     };
+    let resultPurpose: string | undefined;
+    const denied = (
+      reason: string,
+      reasonCode: DenialReason,
+      subReason?: string,
+      details?: Record<string, unknown>,
+    ): EnforceResult =>
+      this.#applyEnforceMode({
+        ...base,
+        allowed: false,
+        reason,
+        reasonCode,
+        ...(subReason !== undefined ? { subReason } : {}),
+        ...(details !== undefined ? { details } : {}),
+        ...(resultPurpose !== undefined ? { purpose: resultPurpose } : {}),
+      });
 
     // 1. Verify the token locally using JWKS retrieved from the configured URI
     let grant: VerifiedGrant;
@@ -244,84 +270,172 @@ export class Grantex {
         ...(this.#issuer !== undefined ? { issuer: this.#issuer } : {}),
       });
     } catch (err) {
-      return this.#applyEnforceMode({
-        ...base,
-        allowed: false,
-        reason: `Token verification failed: ${err instanceof Error ? err.message : String(err)}`,
-      });
+      return denied(
+        `Token verification failed: ${err instanceof Error ? err.message : String(err)}`,
+        DenialReason.TOKEN_INVALID,
+      );
     }
 
     base.grantId = grant.grantId;
     base.agentDid = grant.agentDid;
     base.scopes = grant.scopes;
 
-    // 2. Look up manifest for the connector
+    // 2. Read the grant's tools authorization for this connector. A claim that
+    //    cannot be read unambiguously denies every call.
+    let entry: ToolsAuthorization | undefined;
+    try {
+      entry = parseToolsAuthorization(grant.authorizationDetails).get(connector);
+    } catch (err) {
+      if (!(err instanceof AuthorizationDetailsError)) throw err;
+      return denied(
+        `Grant token authorization_details cannot be used: ${err.message}.`,
+        DenialReason.TOKEN_INVALID,
+        TokenSubReason.MALFORMED_AUTHORIZATION_DETAILS,
+      );
+    }
+    const purpose = entry?.purpose;
+    resultPurpose = purpose;
+
+    // 3. Look up manifest for the connector
     const manifest = this.#manifests.get(connector);
     if (!manifest) {
-      return this.#applyEnforceMode({
-        ...base,
-        allowed: false,
-        reason: `No manifest loaded for connector '${connector}'. Load a manifest first.`,
-      });
+      return denied(
+        `No manifest loaded for connector '${connector}'. Load a manifest first.`,
+        DenialReason.MANIFEST_UNKNOWN_TOOL,
+        ManifestSubReason.UNKNOWN_CONNECTOR,
+      );
     }
 
-    // 3. Look up tool permission from manifest
+    // 4. Look up tool permission from manifest
     const requiredPermission = manifest.getPermission(tool);
     if (!requiredPermission) {
-      return this.#applyEnforceMode({
-        ...base,
-        allowed: false,
-        reason: `Unknown tool '${tool}' on connector '${connector}'. Tool not found in manifest.`,
-      });
+      return denied(
+        `Unknown tool '${tool}' on connector '${connector}'. Tool not found in manifest.`,
+        DenialReason.MANIFEST_UNKNOWN_TOOL,
+        ManifestSubReason.UNKNOWN_TOOL,
+      );
     }
     base.permission = requiredPermission;
+    let spec: ToolSpec | undefined;
+    try {
+      spec = manifest.getToolSpec(tool);
+    } catch (err) {
+      return denied(
+        `Tool '${tool}' on connector '${connector}' has an invalid declaration: ${err instanceof Error ? err.message : String(err)}`,
+        DenialReason.MANIFEST_UNKNOWN_TOOL,
+        ManifestSubReason.INVALID_DECLARATION,
+      );
+    }
+    if (spec === undefined) {
+      return denied(
+        `Unknown tool '${tool}' on connector '${connector}'. Tool not found in manifest.`,
+        DenialReason.MANIFEST_UNKNOWN_TOOL,
+        ManifestSubReason.UNKNOWN_TOOL,
+      );
+    }
 
-    // 4. Find the best matching scope for this connector
+    // 5. Find the best matching scope for this connector
     const grantedPermission = this.#resolveGrantedPermission(grant.scopes, connector);
     if (!grantedPermission) {
-      return this.#applyEnforceMode({
-        ...base,
-        allowed: false,
-        reason: `No scope grants access to connector '${connector}'.`,
-      });
+      return denied(`No scope grants access to connector '${connector}'.`, DenialReason.TOOL_NOT_GRANTED);
     }
 
-    // 5. Check permission hierarchy
+    // 6. Check permission hierarchy
     if (!permissionCovers(grantedPermission, requiredPermission)) {
-      return this.#applyEnforceMode({
-        ...base,
-        allowed: false,
-        reason: `${grantedPermission} scope does not permit ${requiredPermission} operations on ${connector}.`,
-      });
+      return denied(
+        `${grantedPermission} scope does not permit ${requiredPermission} operations on ${connector}.`,
+        DenialReason.PERMISSION_INSUFFICIENT,
+      );
     }
 
-    // 6. Check capped amount if provided
+    // 7. The grant's tools list, when it has one, must name the tool.
+    if (entry !== undefined && !toolsAuthorizationAllows(entry, tool)) {
+      return denied(
+        `Grant does not list tool '${tool}' on connector '${connector}'.`,
+        DenialReason.TOOL_NOT_GRANTED,
+        ToolSubReason.NOT_IN_AUTHORIZATION_DETAILS,
+      );
+    }
+
+    // 8. Purpose. A tool that declares allowed_purposes needs a grant whose
+    //    purpose is known and matches one of them.
+    if (spec.allowedPurposes !== undefined) {
+      const allowedPurposes = [...spec.allowedPurposes];
+      if (purpose === undefined) {
+        return denied(
+          `Tool '${tool}' on ${connector} is restricted to purposes ${allowedPurposes.join(', ')}; the grant carries no purpose.`,
+          DenialReason.PURPOSE_NOT_ALLOWED,
+          PurposeSubReason.MISSING,
+          { allowedPurposes },
+        );
+      }
+      if (!isKnownPurpose(purpose)) {
+        return denied(
+          `Grant purpose ${JSON.stringify(purpose)} is not in the purpose vocabulary.`,
+          DenialReason.PURPOSE_NOT_ALLOWED,
+          PurposeSubReason.UNKNOWN_PURPOSE,
+          { allowedPurposes, purpose },
+        );
+      }
+      if (matchPurpose(allowedPurposes, purpose) === undefined) {
+        return denied(
+          `Grant purpose '${purpose}' is not allowed for tool '${tool}' on ${connector}; allowed purposes: ${allowedPurposes.join(', ')}.`,
+          DenialReason.PURPOSE_NOT_ALLOWED,
+          PurposeSubReason.NOT_MATCHED,
+          { allowedPurposes, purpose },
+        );
+      }
+    }
+
+    // 9. Decision. Decision grants are not accepted yet, so a tool that
+    //    requires one is always denied.
+    if (spec.requiresDecision) {
+      return denied(`Tool '${tool}' on ${connector} requires a decision grant.`, DenialReason.DECISION_REQUIRED);
+    }
+
+    // 10. Check capped amount if provided
     if (amount !== undefined) {
       if (typeof amount !== 'number' || !Number.isFinite(amount)) {
-        return this.#applyEnforceMode({
-          ...base,
-          allowed: false,
-          reason: `Amount must be a finite number to enforce a budget cap on ${connector}.`,
-        });
+        return denied(
+          `Amount must be a finite number to enforce a budget cap on ${connector}.`,
+          DenialReason.CAP_EXCEEDED,
+          CapSubReason.INVALID_AMOUNT,
+        );
       }
       const cap = this.#extractCap(grant.scopes, connector);
       if (cap === 'invalid') {
-        return this.#applyEnforceMode({
-          ...base,
-          allowed: false,
-          reason: `A capped scope on ${connector} carries a malformed cap; refusing to authorize amount ${amount}.`,
-        });
+        return denied(
+          `A capped scope on ${connector} carries a malformed cap; refusing to authorize amount ${amount}.`,
+          DenialReason.CAP_EXCEEDED,
+          CapSubReason.MALFORMED_CAP,
+        );
       }
       if (cap !== undefined && amount > cap) {
-        return this.#applyEnforceMode({
-          ...base,
-          allowed: false,
-          reason: `Amount ${amount} exceeds budget cap of ${cap} on ${connector}.`,
-        });
+        return denied(
+          `Amount ${amount} exceeds budget cap of ${cap} on ${connector}.`,
+          DenialReason.CAP_EXCEEDED,
+          CapSubReason.AMOUNT_CAP,
+          { limit: cap, amount },
+        );
       }
     }
 
-    return { ...base, allowed: true, reason: '' };
+    // 11. Call caps and cost units (declared by the manifest or by the grant)
+    //     need a meter, which this SDK version does not provide: fail closed
+    //     rather than ignore them.
+    const grantCaps = entry?.caps;
+    const grantCapsApply = grantCaps !== undefined
+      && (Object.prototype.hasOwnProperty.call(grantCaps, tool)
+        || (spec.costUnits !== undefined && Object.prototype.hasOwnProperty.call(grantCaps, 'cost_units')));
+    if (spec.caps !== undefined || spec.costUnits !== undefined || grantCapsApply) {
+      return denied(
+        `Tool '${tool}' on ${connector} declares caps or cost units, which this SDK version cannot meter.`,
+        DenialReason.CAP_EXCEEDED,
+        CapSubReason.METER_UNAVAILABLE,
+      );
+    }
+
+    return { ...base, allowed: true, reason: '', ...(purpose !== undefined ? { purpose } : {}) };
   }
 
   /**

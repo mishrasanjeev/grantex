@@ -1,0 +1,180 @@
+{
+  "description": "Manifests that the JSON Schema and both SDK loaders must reject. 'error' is a substring of the loader's error message, identical in the Python and TypeScript SDKs.",
+  "cases": [
+    {
+      "name": "unknown key in a tool object",
+      "error": "ToolManifest: tools.verify_business: unknown key \"purposes\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "purposes": ["aml.cdd.*"]}}}
+    },
+    {
+      "name": "unknown key in caps",
+      "error": "ToolManifest: tools.verify_business.caps: unknown key \"per_week\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "caps": {"per_week": 5}}}}
+    },
+    {
+      "name": "unknown top-level key in a 0.6 manifest",
+      "error": "ToolManifest: unknown top-level key \"owner\"",
+      "manifest": {"connector": "acme_kyb", "owner": "team", "tools": {"verify_business": {"permission": "read"}}}
+    },
+    {
+      "name": "requires_decision on a read tool",
+      "error": "ToolManifest: tools.resolve_business: requires_decision is not allowed on a tool with read permission",
+      "manifest": {"connector": "acme_kyb", "tools": {"resolve_business": {"permission": "read", "requires_decision": true}}}
+    },
+    {
+      "name": "four_eyes_on without requires_decision",
+      "error": "ToolManifest: tools.case_decision.four_eyes_on: requires requires_decision: true",
+      "manifest": {"connector": "acme_kyb", "tools": {"case_decision": {"permission": "write", "four_eyes_on": ["decline"]}}}
+    },
+    {
+      "name": "tool object without permission",
+      "error": "ToolManifest: tools.verify_business: missing required key \"permission\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"allowed_purposes": ["aml.cdd.*"]}}}
+    },
+    {
+      "name": "invalid permission in a tool object",
+      "error": "ToolManifest: invalid permission \"execute\" for tool \"verify_business\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "execute"}}}
+    },
+    {
+      "name": "invalid permission string in a 0.6 manifest",
+      "error": "ToolManifest: invalid permission \"execute\" for tool \"get_case\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"get_case": "execute", "verify_business": {"permission": "read"}}}
+    },
+    {
+      "name": "tool value of the wrong type",
+      "error": "ToolManifest: tools.verify_business: must be a permission string or an object",
+      "manifest": {"connector": "acme_kyb", "tools": {"get_case": {"permission": "read"}, "verify_business": ["read"]}}
+    },
+    {
+      "name": "negative cap",
+      "error": "ToolManifest: tools.verify_business.caps.per_hour: must be an integer between 0 and 2147483647",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "caps": {"per_hour": -1}}}}
+    },
+    {
+      "name": "fractional cap",
+      "error": "ToolManifest: tools.verify_business.caps.per_case: must be an integer between 0 and 2147483647",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "caps": {"per_case": 2.5}}}}
+    },
+    {
+      "name": "boolean cap",
+      "error": "ToolManifest: tools.verify_business.caps.per_day: must be an integer between 0 and 2147483647",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "caps": {"per_day": true}}}}
+    },
+    {
+      "name": "cap above the maximum",
+      "error": "ToolManifest: tools.verify_business.caps.per_day: must be an integer between 0 and 2147483647",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "caps": {"per_day": 2147483648}}}}
+    },
+    {
+      "name": "empty caps",
+      "error": "ToolManifest: tools.verify_business.caps: must declare at least one of per_hour, per_day, per_case",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "caps": {}}}}
+    },
+    {
+      "name": "caps of the wrong type",
+      "error": "ToolManifest: tools.verify_business.caps: must be an object",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "caps": 10}}}
+    },
+    {
+      "name": "empty allowed_purposes",
+      "error": "ToolManifest: tools.verify_business.allowed_purposes: must be a non-empty array of unique purpose patterns",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "allowed_purposes": []}}}
+    },
+    {
+      "name": "duplicate allowed_purposes",
+      "error": "ToolManifest: tools.verify_business.allowed_purposes: must be a non-empty array of unique purpose patterns",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "allowed_purposes": ["aml.screening", "aml.screening"]}}}
+    },
+    {
+      "name": "uppercase purpose pattern",
+      "error": "ToolManifest: tools.verify_business.allowed_purposes[0]: invalid purpose pattern \"AML.cdd.*\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "allowed_purposes": ["AML.cdd.*"]}}}
+    },
+    {
+      "name": "bare wildcard purpose pattern",
+      "error": "ToolManifest: tools.verify_business.allowed_purposes[1]: invalid purpose pattern \"*\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "allowed_purposes": ["aml.screening", "*"]}}}
+    },
+    {
+      "name": "infix wildcard purpose pattern",
+      "error": "ToolManifest: tools.verify_business.allowed_purposes[0]: invalid purpose pattern \"aml.*.onboarding\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "allowed_purposes": ["aml.*.onboarding"]}}}
+    },
+    {
+      "name": "partial-segment wildcard purpose pattern",
+      "error": "ToolManifest: tools.verify_business.allowed_purposes[0]: invalid purpose pattern \"aml.cdd*\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "allowed_purposes": ["aml.cdd*"]}}}
+    },
+    {
+      "name": "private purpose without a term",
+      "error": "ToolManifest: tools.verify_business.allowed_purposes[0]: invalid purpose pattern \"x-acme-bank\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "allowed_purposes": ["x-acme-bank"]}}}
+    },
+    {
+      "name": "cost unit with a negative value",
+      "error": "ToolManifest: tools.verify_business.cost_units.base: must be an integer between 0 and 2147483647",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "cost_units": {"base": -5}}}}
+    },
+    {
+      "name": "cost unit with an invalid name",
+      "error": "ToolManifest: tools.verify_business.cost_units: invalid cost unit name \"Web-Insights\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "cost_units": {"Web-Insights": 3}}}}
+    },
+    {
+      "name": "empty cost_units",
+      "error": "ToolManifest: tools.verify_business.cost_units: must be a non-empty object",
+      "manifest": {"connector": "acme_kyb", "tools": {"verify_business": {"permission": "read", "cost_units": {}}}}
+    },
+    {
+      "name": "requires_decision of the wrong type",
+      "error": "ToolManifest: tools.case_decision.requires_decision: must be a boolean",
+      "manifest": {"connector": "acme_kyb", "tools": {"case_decision": {"permission": "write", "requires_decision": "yes"}}}
+    },
+    {
+      "name": "empty four_eyes_on",
+      "error": "ToolManifest: tools.case_decision.four_eyes_on: must be a non-empty array of unique decision names",
+      "manifest": {"connector": "acme_kyb", "tools": {"case_decision": {"permission": "write", "requires_decision": true, "four_eyes_on": []}}}
+    },
+    {
+      "name": "invalid four_eyes_on entry",
+      "error": "ToolManifest: tools.case_decision.four_eyes_on[0]: invalid decision name \"Decline!\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"case_decision": {"permission": "write", "requires_decision": true, "four_eyes_on": ["Decline!"]}}}
+    },
+    {
+      "name": "invalid tool name in a 0.6 manifest",
+      "error": "ToolManifest: invalid tool name \"screen_*\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"screen_*": {"permission": "read"}}}
+    },
+    {
+      "name": "invalid connector name in a 0.6 manifest",
+      "error": "ToolManifest: invalid connector name \"acme kyb\"",
+      "manifest": {"connector": "acme kyb", "tools": {"verify_business": {"permission": "read"}}}
+    },
+    {
+      "name": "connector of the wrong type in a 0.6 manifest",
+      "error": "ToolManifest: invalid connector name",
+      "manifest": {"connector": 42, "tools": {"verify_business": {"permission": "read"}}}
+    },
+    {
+      "name": "version of the wrong type in a 0.6 manifest",
+      "error": "ToolManifest: version: must be a non-empty string of at most 64 characters",
+      "manifest": {"connector": "acme_kyb", "version": 1, "tools": {"verify_business": {"permission": "read"}}}
+    },
+    {
+      "name": "description of the wrong type in a 0.6 manifest",
+      "error": "ToolManifest: description: must be a string",
+      "manifest": {"connector": "acme_kyb", "description": ["kyb"], "tools": {"verify_business": {"permission": "read"}}}
+    },
+    {
+      "name": "missing tools",
+      "error": "missing \"connector\" or \"tools\"",
+      "manifest": {"connector": "acme_kyb"}
+    },
+    {
+      "name": "tools of the wrong type",
+      "error": "ToolManifest: tools: must be an object mapping tool names to declarations",
+      "manifest": {"connector": "acme_kyb", "tools": ["verify_business"]}
+    }
+  ]
+}
