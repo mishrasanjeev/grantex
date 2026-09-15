@@ -152,7 +152,7 @@ describe('fixtures and schema', () => {
   it('fixture packages validate against the JSON Schema with a stock validator', () => {
     const ajv = new Ajv2020({ strict: false, allErrors: true });
     const validateSchema = ajv.compile(JSON.parse(readFileSync(SPEC_SCHEMA, 'utf8')) as object);
-    for (const name of ['package.json', 'package-disclosed.json', 'package-signed.json']) {
+    for (const name of ['evidence-package.json', 'evidence-package-disclosed.json', 'evidence-package-signed.json']) {
       expect(validateSchema(readJson(name)), name).toBe(true);
     }
   });
@@ -160,7 +160,7 @@ describe('fixtures and schema', () => {
 
 describe('canonicalisation stability', () => {
   it('reordering and whitespace never change the canonical form', () => {
-    const document = readJson('package.json');
+    const document = readJson('evidence-package.json');
     const reference = canonicalize(document);
     let seed = 8785;
     const random = (): number => {
@@ -185,22 +185,22 @@ describe('canonicalisation stability', () => {
 describe('build', () => {
   it('builds the shared fixture bytes, identical to the Python SDK', () => {
     const pseudonymised = fixtureBuild(false);
-    const anchor = readJson('package.json')['anchor']['audit_entry'];
+    const anchor = readJson('evidence-package.json')['anchor']['audit_entry'];
     const anchored = attachAnchor(
       pseudonymised.document,
       anchorAuditEntry(pseudonymised.document, { auditEntryId: anchor['id'], timestamp: anchor['timestamp'], prevHash: anchor['prevHash'] }),
     );
-    expect(Buffer.from(serializePackage(anchored)).equals(read('package.json'))).toBe(true);
-    expect(Buffer.from(fixtureBuild(true).data).equals(read('package-disclosed.json'))).toBe(true);
-    expect(pseudonymised.root).toBe(expected['package.json']['root']);
+    expect(Buffer.from(serializePackage(anchored)).equals(read('evidence-package.json'))).toBe(true);
+    expect(Buffer.from(fixtureBuild(true).data).equals(read('evidence-package-disclosed.json'))).toBe(true);
+    expect(pseudonymised.root).toBe(expected['evidence-package.json']['root']);
   });
 
   it('pseudonymises identifiers by default', () => {
-    const raw = read('package.json').toString('utf8');
+    const raw = read('evidence-package.json').toString('utf8');
     for (const secret of ['user:approver-a', 'user:approver-b', 'user:underwriting-team', 'gb:00000001']) {
       expect(raw.includes(secret)).toBe(false);
     }
-    const decision = readJson('package.json')['entries'][10]['data'];
+    const decision = readJson('evidence-package.json')['entries'][10]['data'];
     expect(isPseudonym(decision['approver']) && isPseudonym(decision['action']['subject'])).toBe(true);
   });
 
@@ -236,21 +236,21 @@ describe('build', () => {
 });
 
 describe('verification', () => {
-  it.each(['package.json', 'package-disclosed.json'])('%s verifies against its root', (name) => {
+  it.each(['evidence-package.json', 'evidence-package-disclosed.json'])('%s verifies against its root', (name) => {
     const result = verifyPackage(read(name), { expectedRoot: expected[name]['root'] });
     expect(result.ok).toBe(true);
     expect(result.entryCount).toBe(expected[name]['entry_count']);
   });
 
   it('checks and pins the anchor, and verifies the signature with the key set', () => {
-    const pinned = verifyPackage(read('package.json'), {
-      expectedRoot: expected['package.json']['root'],
-      expectedAnchorHash: expected['package.json']['anchor_hash'],
+    const pinned = verifyPackage(read('evidence-package.json'), {
+      expectedRoot: expected['evidence-package.json']['root'],
+      expectedAnchorHash: expected['evidence-package.json']['anchor_hash'],
       requireAnchor: true,
     });
     expect(pinned.ok && pinned.anchorChecked).toBe(true);
-    const signed = verifyPackage(read('package-signed.json'), {
-      expectedRoot: expected['package-signed.json']['root'],
+    const signed = verifyPackage(read('evidence-package-signed.json'), {
+      expectedRoot: expected['evidence-package-signed.json']['root'],
       jwks: readJson('jwks.json'),
       requireSignature: true,
     });
@@ -273,7 +273,7 @@ describe('verification', () => {
   });
 
   it('tampering with any field fails verification, with or without rehashing', () => {
-    for (const name of ['package.json', 'package-signed.json']) {
+    for (const name of ['evidence-package.json', 'evidence-package-signed.json']) {
       const document = readJson(name);
       const root = expected[name]['root'];
       const jwks = readJson('jwks.json');
@@ -325,8 +325,8 @@ describe('verification', () => {
   }, 300_000);
 
   it('e2e step 8: export, verify, corrupt one byte, verification fails', () => {
-    const data = read('package.json');
-    const root = expected['package.json']['root'];
+    const data = read('evidence-package.json');
+    const root = expected['evidence-package.json']['root'];
     expect(verifyPackage(data, { expectedRoot: root }).ok).toBe(true);
     const corrupted = Buffer.from(data);
     corrupted[Math.floor(data.length / 2)] = corrupted[Math.floor(data.length / 2)]! ^ 0x04;
@@ -338,8 +338,8 @@ describe('verification', () => {
 
 describe('auditor, anchors and signatures', () => {
   it('an auditor identifies every upstream record behind a recommendation from the package alone', () => {
-    expect(verifyPackage(read('package.json'), { expectedRoot: expected['package.json']['root'] }).ok).toBe(true);
-    const records = upstreamRecordsFor(readJson('package.json'), 'rec_0001');
+    expect(verifyPackage(read('evidence-package.json'), { expectedRoot: expected['evidence-package.json']['root'] }).ok).toBe(true);
+    const records = upstreamRecordsFor(readJson('evidence-package.json'), 'rec_0001');
     expect(records.map((r) => [r.call_id, r.tool, r.provider, r.record_id])).toEqual([
       ['call_0001', 'resolve_business', 'mock', 'mock:registry:00000001'],
       ['call_0002', 'verify_business', 'mock', 'mock:verification:v-0001'],
@@ -369,8 +369,8 @@ describe('auditor, anchors and signatures', () => {
   });
 
   it.each(['ES256', 'RS256'] as const)('detached %s signature round trip', (alg) => {
-    const document = readJson('package-disclosed.json');
-    const root = expected['package-disclosed.json']['root'];
+    const document = readJson('evidence-package-disclosed.json');
+    const root = expected['evidence-package-disclosed.json']['root'];
     const pair = (): { privateKey: KeyObject; publicKey: KeyObject } => (alg === 'ES256'
       ? generateKeyPairSync('ec', { namedCurve: 'P-256' })
       : generateKeyPairSync('rsa', { modulusLength: 2048 }));
@@ -383,18 +383,18 @@ describe('auditor, anchors and signatures', () => {
     const forged = serializePackage(attachSignature(document, signRoot(root, pair().privateKey, 'kid-1')));
     expect(verifyPackage(forged, { expectedRoot: root, jwks: { keys: [jwk] } }).code).toBe('signature_invalid');
     // A package signed by the Python SDK verifies here too.
-    expect(verifyPackage(read('package-signed.json'), { expectedRoot: expected['package-signed.json']['root'], jwks: readJson('jwks.json') }).ok).toBe(true);
+    expect(verifyPackage(read('evidence-package-signed.json'), { expectedRoot: expected['evidence-package-signed.json']['root'], jwks: readJson('jwks.json') }).ok).toBe(true);
   });
 
   it('refuses non-canonical base64 in a signature', () => {
-    const document = readJson('package-signed.json');
+    const document = readJson('evidence-package-signed.json');
     const [head, sig] = (document['signature']['jws'] as string).split('..') as [string, string];
     const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
     const last = alphabet.indexOf(sig.at(-1)!);
     const sibling = alphabet[Math.floor(last / 4) * 4 + ((last % 4) + 1) % 4]!;
     expect(Buffer.from(sig.slice(0, -1) + sibling, 'base64url').equals(Buffer.from(sig, 'base64url'))).toBe(true);
     document['signature']['jws'] = `${head}..${sig.slice(0, -1)}${sibling}`;
-    const result = verifyPackage(serializePackage(document), { expectedRoot: expected['package-signed.json']['root'], jwks: readJson('jwks.json') });
+    const result = verifyPackage(serializePackage(document), { expectedRoot: expected['evidence-package-signed.json']['root'], jwks: readJson('jwks.json') });
     expect(result.code).toBe('signature_invalid');
   });
 });

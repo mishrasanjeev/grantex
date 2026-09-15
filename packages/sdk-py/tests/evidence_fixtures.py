@@ -1,7 +1,7 @@
 """Shared evidence package fixtures (spec/examples/evidence/).
 
 ``python -m tests.evidence_fixtures`` (from packages/sdk-py) regenerates every
-fixture except ``package-signed.json`` and ``jwks.json`` unless ``--signed`` is
+fixture except ``evidence-package-signed.json`` and ``jwks.json`` unless ``--signed`` is
 passed, because a signed package needs a fresh key whose private half is
 discarded. ``test_evidence_fixtures_are_current`` fails when the committed
 fixtures differ from what this module produces.
@@ -319,7 +319,7 @@ def packages() -> Dict[str, Dict[str, Any]]:
         entries=source["entries"],
         privacy=PrivacySettings(disclosed=frozenset({"approver", "principal", "subject"})),
     )
-    return {"package.json": anchored, "package-disclosed.json": disclosed.document}
+    return {"evidence-package.json": anchored, "evidence-package-disclosed.json": disclosed.document}
 
 
 def _get_parent(document: Any, path: List[Any]) -> Any:
@@ -404,47 +404,47 @@ def verify_options(case: Mapping[str, Any], expected: Mapping[str, Any], fixture
 def invalid_cases() -> List[Dict[str, Any]]:
     e = ["entries"]
     return [
-        {"name": "missing trusted root", "package": "package.json", "options": {"expected_root": None}, "code": "missing_root"},
-        {"name": "wrong trusted root", "package": "package.json", "options": {"expected_root": "sha256:" + "0" * 64}, "code": "root_not_trusted"},
-        {"name": "package larger than the limit", "package": "package.json", "options": {"max_bytes": 1024}, "code": "too_large"},
-        {"name": "byte-order mark", "package": "package.json", "mutations": [{"op": "raw_prefix", "hex": "efbbbf"}], "code": "malformed_json"},
-        {"name": "truncated", "package": "package.json", "mutations": [{"op": "raw_truncate", "length": 200}], "code": "malformed_json"},
-        {"name": "duplicate member", "package": "package.json", "mutations": [{"op": "raw_replace", "find": "\"format\":\"grantex-evidence-package\"", "replace": "\"format\":\"grantex-evidence-package\",\"format\":\"grantex-evidence-package\""}], "code": "duplicate_key"},
-        {"name": "whitespace", "package": "package.json", "mutations": [{"op": "raw_replace", "find": "{\"anchor\"", "replace": "{ \"anchor\""}], "code": "non_canonical_document"},
-        {"name": "number spelled 61250.0", "package": "package.json", "mutations": [{"op": "raw_replace", "find": "\"dwell_ms\":61250", "replace": "\"dwell_ms\":61250.0"}], "code": "non_canonical_number"},
-        {"name": "number spelled 6.125e4", "package": "package.json", "mutations": [{"op": "raw_replace", "find": "\"dwell_ms\":61250", "replace": "\"dwell_ms\":6.125e4"}], "code": "non_canonical_number"},
-        {"name": "integer beyond 2^53", "package": "package.json", "mutations": [{"op": "raw_replace", "find": "\"dwell_ms\":61250", "replace": "\"dwell_ms\":9007199254740993"}], "code": "non_canonical_number"},
-        {"name": "unknown format", "package": "package.json", "mutations": [{"op": "set", "path": ["format"], "value": "other-package"}], "code": "unsupported_format"},
-        {"name": "unknown version", "package": "package.json", "mutations": [{"op": "set", "path": ["version"], "value": "1.1"}], "code": "unsupported_version"},
-        {"name": "unknown top-level member", "package": "package.json", "mutations": [{"op": "set", "path": ["extra"], "value": True}], "code": "schema_violation"},
-        {"name": "missing chain root", "package": "package.json", "mutations": [{"op": "delete", "path": ["chain", "root"]}], "code": "schema_violation"},
-        {"name": "unknown tool call outcome", "package": "package.json", "mutations": [{"op": "set", "path": e + [3, "data", "outcome"], "value": "maybe"}], "code": "schema_violation"},
-        {"name": "raw approver identifier while pseudonymised", "package": "package.json", "mutations": [{"op": "set", "path": e + [10, "data", "approver"], "value": "user:approver-a"}], "code": "privacy_violation"},
-        {"name": "header field edited", "package": "package.json", "mutations": [{"op": "set", "path": ["case", "state"], "value": "open"}], "code": "genesis_mismatch"},
-        {"name": "entry field edited", "package": "package.json", "mutations": [{"op": "set", "path": e + [10, "data", "dwell_ms"], "value": 61251}], "code": "entry_hash_mismatch"},
-        {"name": "entry field edited and its hash recomputed", "package": "package.json", "mutations": [{"op": "set", "path": e + [10, "data", "dwell_ms"], "value": 61251}, {"op": "rehash_entry", "index": 10}], "code": "link_mismatch"},
-        {"name": "sequence number edited", "package": "package.json", "mutations": [{"op": "set", "path": e + [4, "seq"], "value": 5}], "code": "sequence_mismatch"},
-        {"name": "last entry edited and rehashed", "package": "package.json", "mutations": [{"op": "set", "path": e + [14, "data", "reason"], "value": "manual"}, {"op": "rehash_entry", "index": 14}], "code": "head_mismatch"},
-        {"name": "chain length edited", "package": "package.json", "mutations": [{"op": "set", "path": ["chain", "length"], "value": 14}], "code": "length_mismatch"},
-        {"name": "chain root edited", "package": "package.json", "mutations": [{"op": "set", "path": ["chain", "root"], "value": "sha256:" + "a" * 64}], "code": "root_mismatch"},
-        {"name": "cost edited and whole chain rehashed", "package": "package.json", "mutations": [{"op": "set", "path": e + [4, "data", "cost_units"], "value": 0}, {"op": "rehash_chain"}], "code": "root_not_trusted"},
-        {"name": "cited upstream record removed and chain rehashed", "package": "package.json", "mutations": [{"op": "set", "path": e + [5, "data", "upstream_records"], "value": []}, {"op": "rehash_chain"}], "code": "dangling_reference"},
-        {"name": "grant chain parent edited and rehashed", "package": "package.json", "mutations": [{"op": "set", "path": e + [1, "data", "parent_grant_id"], "value": "grnt_other"}, {"op": "rehash_chain"}], "code": "grant_chain_broken"},
-        {"name": "entries reordered and rehashed", "package": "package.json", "mutations": [{"op": "set", "path": e + [9, "at"], "value": "2026-09-14T09:05:00.500Z"}, {"op": "rehash_chain"}], "code": "entries_out_of_order"},
-        {"name": "second approver made the first and rehashed", "package": "package-disclosed.json", "mutations": [{"op": "set", "path": e + [11, "data", "approver"], "value": "user:approver-a"}, {"op": "rehash_chain"}], "code": "decision_inconsistent"},
-        {"name": "decision action edited and rehashed", "package": "package-disclosed.json", "mutations": [{"op": "set", "path": e + [10, "data", "action", "decision"], "value": "approve"}, {"op": "rehash_chain"}], "code": "action_hash_mismatch"},
-        {"name": "decision for another case", "package": "package.json", "mutations": [{"op": "set", "path": e + [10, "data", "action", "case_id"], "value": "case_other"}, {"op": "rehash_chain"}], "code": "case_mismatch"},
-        {"name": "denied call with output", "package": "package-disclosed.json", "mutations": [{"op": "set", "path": e + [9, "data", "output_hash"], "value": "sha256:" + "b" * 64}, {"op": "rehash_chain"}], "code": "tool_call_inconsistent"},
-        {"name": "duplicate call id", "package": "package-disclosed.json", "mutations": [{"op": "set", "path": e + [4, "data", "call_id"], "value": "call_0001"}, {"op": "rehash_chain"}], "code": "duplicate_identifier"},
-        {"name": "anchor audit entry edited", "package": "package.json", "mutations": [{"op": "set", "path": ["anchor", "audit_entry", "timestamp"], "value": "2026-09-14T10:30:00.124Z"}], "code": "anchor_hash_mismatch"},
-        {"name": "anchor records another root", "package": "package.json", "mutations": [{"op": "set", "path": ["anchor", "audit_entry", "metadata", "package_root"], "value": "sha256:" + "c" * 64}, {"op": "rehash_anchor"}], "code": "anchor_mismatch"},
-        {"name": "untrusted anchor", "package": "package.json", "options": {"expected_anchor_hash": "d" * 64}, "code": "anchor_not_trusted"},
-        {"name": "anchor required but absent", "package": "package-disclosed.json", "options": {"require_anchor": True}, "code": "anchor_missing"},
-        {"name": "signature required but absent", "package": "package.json", "options": {"require_signature": True}, "code": "signature_missing"},
-        {"name": "signed package without a key set", "package": "package-signed.json", "code": "signature_unverified"},
-        {"name": "signature from another key set", "package": "package-signed.json", "options": {"jwks": {"keys": []}}, "code": "signature_key_unknown"},
-        {"name": "signature kid edited", "package": "package-signed.json", "options": {"jwks": "jwks.json"}, "mutations": [{"op": "set", "path": ["signature", "kid"], "value": "other-kid"}], "code": "signature_invalid"},
-        {"name": "signature bytes edited", "package": "package-signed.json", "options": {"jwks": "jwks.json"}, "mutations": [{"op": "raw_replace", "find": "..", "replace": "..A"}], "code": "signature_invalid"},
+        {"name": "missing trusted root", "package": "evidence-package.json", "options": {"expected_root": None}, "code": "missing_root"},
+        {"name": "wrong trusted root", "package": "evidence-package.json", "options": {"expected_root": "sha256:" + "0" * 64}, "code": "root_not_trusted"},
+        {"name": "package larger than the limit", "package": "evidence-package.json", "options": {"max_bytes": 1024}, "code": "too_large"},
+        {"name": "byte-order mark", "package": "evidence-package.json", "mutations": [{"op": "raw_prefix", "hex": "efbbbf"}], "code": "malformed_json"},
+        {"name": "truncated", "package": "evidence-package.json", "mutations": [{"op": "raw_truncate", "length": 200}], "code": "malformed_json"},
+        {"name": "duplicate member", "package": "evidence-package.json", "mutations": [{"op": "raw_replace", "find": "\"format\":\"grantex-evidence-package\"", "replace": "\"format\":\"grantex-evidence-package\",\"format\":\"grantex-evidence-package\""}], "code": "duplicate_key"},
+        {"name": "whitespace", "package": "evidence-package.json", "mutations": [{"op": "raw_replace", "find": "{\"anchor\"", "replace": "{ \"anchor\""}], "code": "non_canonical_document"},
+        {"name": "number spelled 61250.0", "package": "evidence-package.json", "mutations": [{"op": "raw_replace", "find": "\"dwell_ms\":61250", "replace": "\"dwell_ms\":61250.0"}], "code": "non_canonical_number"},
+        {"name": "number spelled 6.125e4", "package": "evidence-package.json", "mutations": [{"op": "raw_replace", "find": "\"dwell_ms\":61250", "replace": "\"dwell_ms\":6.125e4"}], "code": "non_canonical_number"},
+        {"name": "integer beyond 2^53", "package": "evidence-package.json", "mutations": [{"op": "raw_replace", "find": "\"dwell_ms\":61250", "replace": "\"dwell_ms\":9007199254740993"}], "code": "non_canonical_number"},
+        {"name": "unknown format", "package": "evidence-package.json", "mutations": [{"op": "set", "path": ["format"], "value": "other-package"}], "code": "unsupported_format"},
+        {"name": "unknown version", "package": "evidence-package.json", "mutations": [{"op": "set", "path": ["version"], "value": "1.1"}], "code": "unsupported_version"},
+        {"name": "unknown top-level member", "package": "evidence-package.json", "mutations": [{"op": "set", "path": ["extra"], "value": True}], "code": "schema_violation"},
+        {"name": "missing chain root", "package": "evidence-package.json", "mutations": [{"op": "delete", "path": ["chain", "root"]}], "code": "schema_violation"},
+        {"name": "unknown tool call outcome", "package": "evidence-package.json", "mutations": [{"op": "set", "path": e + [3, "data", "outcome"], "value": "maybe"}], "code": "schema_violation"},
+        {"name": "raw approver identifier while pseudonymised", "package": "evidence-package.json", "mutations": [{"op": "set", "path": e + [10, "data", "approver"], "value": "user:approver-a"}], "code": "privacy_violation"},
+        {"name": "header field edited", "package": "evidence-package.json", "mutations": [{"op": "set", "path": ["case", "state"], "value": "open"}], "code": "genesis_mismatch"},
+        {"name": "entry field edited", "package": "evidence-package.json", "mutations": [{"op": "set", "path": e + [10, "data", "dwell_ms"], "value": 61251}], "code": "entry_hash_mismatch"},
+        {"name": "entry field edited and its hash recomputed", "package": "evidence-package.json", "mutations": [{"op": "set", "path": e + [10, "data", "dwell_ms"], "value": 61251}, {"op": "rehash_entry", "index": 10}], "code": "link_mismatch"},
+        {"name": "sequence number edited", "package": "evidence-package.json", "mutations": [{"op": "set", "path": e + [4, "seq"], "value": 5}], "code": "sequence_mismatch"},
+        {"name": "last entry edited and rehashed", "package": "evidence-package.json", "mutations": [{"op": "set", "path": e + [14, "data", "reason"], "value": "manual"}, {"op": "rehash_entry", "index": 14}], "code": "head_mismatch"},
+        {"name": "chain length edited", "package": "evidence-package.json", "mutations": [{"op": "set", "path": ["chain", "length"], "value": 14}], "code": "length_mismatch"},
+        {"name": "chain root edited", "package": "evidence-package.json", "mutations": [{"op": "set", "path": ["chain", "root"], "value": "sha256:" + "a" * 64}], "code": "root_mismatch"},
+        {"name": "cost edited and whole chain rehashed", "package": "evidence-package.json", "mutations": [{"op": "set", "path": e + [4, "data", "cost_units"], "value": 0}, {"op": "rehash_chain"}], "code": "root_not_trusted"},
+        {"name": "cited upstream record removed and chain rehashed", "package": "evidence-package.json", "mutations": [{"op": "set", "path": e + [5, "data", "upstream_records"], "value": []}, {"op": "rehash_chain"}], "code": "dangling_reference"},
+        {"name": "grant chain parent edited and rehashed", "package": "evidence-package.json", "mutations": [{"op": "set", "path": e + [1, "data", "parent_grant_id"], "value": "grnt_other"}, {"op": "rehash_chain"}], "code": "grant_chain_broken"},
+        {"name": "entries reordered and rehashed", "package": "evidence-package.json", "mutations": [{"op": "set", "path": e + [9, "at"], "value": "2026-09-14T09:05:00.500Z"}, {"op": "rehash_chain"}], "code": "entries_out_of_order"},
+        {"name": "second approver made the first and rehashed", "package": "evidence-package-disclosed.json", "mutations": [{"op": "set", "path": e + [11, "data", "approver"], "value": "user:approver-a"}, {"op": "rehash_chain"}], "code": "decision_inconsistent"},
+        {"name": "decision action edited and rehashed", "package": "evidence-package-disclosed.json", "mutations": [{"op": "set", "path": e + [10, "data", "action", "decision"], "value": "approve"}, {"op": "rehash_chain"}], "code": "action_hash_mismatch"},
+        {"name": "decision for another case", "package": "evidence-package.json", "mutations": [{"op": "set", "path": e + [10, "data", "action", "case_id"], "value": "case_other"}, {"op": "rehash_chain"}], "code": "case_mismatch"},
+        {"name": "denied call with output", "package": "evidence-package-disclosed.json", "mutations": [{"op": "set", "path": e + [9, "data", "output_hash"], "value": "sha256:" + "b" * 64}, {"op": "rehash_chain"}], "code": "tool_call_inconsistent"},
+        {"name": "duplicate call id", "package": "evidence-package-disclosed.json", "mutations": [{"op": "set", "path": e + [4, "data", "call_id"], "value": "call_0001"}, {"op": "rehash_chain"}], "code": "duplicate_identifier"},
+        {"name": "anchor audit entry edited", "package": "evidence-package.json", "mutations": [{"op": "set", "path": ["anchor", "audit_entry", "timestamp"], "value": "2026-09-14T10:30:00.124Z"}], "code": "anchor_hash_mismatch"},
+        {"name": "anchor records another root", "package": "evidence-package.json", "mutations": [{"op": "set", "path": ["anchor", "audit_entry", "metadata", "package_root"], "value": "sha256:" + "c" * 64}, {"op": "rehash_anchor"}], "code": "anchor_mismatch"},
+        {"name": "untrusted anchor", "package": "evidence-package.json", "options": {"expected_anchor_hash": "d" * 64}, "code": "anchor_not_trusted"},
+        {"name": "anchor required but absent", "package": "evidence-package-disclosed.json", "options": {"require_anchor": True}, "code": "anchor_missing"},
+        {"name": "signature required but absent", "package": "evidence-package.json", "options": {"require_signature": True}, "code": "signature_missing"},
+        {"name": "signed package without a key set", "package": "evidence-package-signed.json", "code": "signature_unverified"},
+        {"name": "signature from another key set", "package": "evidence-package-signed.json", "options": {"jwks": {"keys": []}}, "code": "signature_key_unknown"},
+        {"name": "signature kid edited", "package": "evidence-package-signed.json", "options": {"jwks": "jwks.json"}, "mutations": [{"op": "set", "path": ["signature", "kid"], "value": "other-kid"}], "code": "signature_invalid"},
+        {"name": "signature bytes edited", "package": "evidence-package-signed.json", "options": {"jwks": "jwks.json"}, "mutations": [{"op": "raw_replace", "find": "..", "replace": "..A"}], "code": "signature_invalid"},
     ]
 
 
@@ -482,10 +482,10 @@ def render(signed: Optional[Mapping[str, bytes]] = None) -> Dict[str, bytes]:
     documents = packages()
     files: Dict[str, bytes] = {name: serialize_package(doc) for name, doc in documents.items()}
     if signed is None:
-        signed = {name: (FIXTURES / name).read_bytes() for name in ("package-signed.json", "jwks.json")}
+        signed = {name: (FIXTURES / name).read_bytes() for name in ("evidence-package-signed.json", "jwks.json")}
     files.update(signed)
-    signed_doc = json.loads(files["package-signed.json"])
-    documents["package-signed.json"] = signed_doc
+    signed_doc = json.loads(files["evidence-package-signed.json"])
+    documents["evidence-package-signed.json"] = signed_doc
     source = case_input()
     files["case-input.json"] = _json_file(source)
     files["pseudonyms.json"] = _json_file(pseudonym_vectors())
@@ -524,14 +524,14 @@ def make_signed() -> Dict[str, bytes]:
     documents = packages()
     key = ec.generate_private_key(ec.SECP256R1())
     kid = "evidence-example-es256"
-    doc = attach_signature(documents["package.json"], sign_root(documents["package.json"]["chain"]["root"], key, kid))
+    doc = attach_signature(documents["evidence-package.json"], sign_root(documents["evidence-package.json"]["chain"]["root"], key, kid))
     numbers = key.public_key().public_numbers()
 
     def b64(n: int) -> str:
         return base64.urlsafe_b64encode(n.to_bytes(32, "big")).rstrip(b"=").decode("ascii")
 
     jwks = {"keys": [{"alg": "ES256", "crv": "P-256", "kid": kid, "kty": "EC", "use": "sig", "x": b64(numbers.x), "y": b64(numbers.y)}]}
-    return {"package-signed.json": serialize_package(doc), "jwks.json": _json_file(jwks)}
+    return {"evidence-package-signed.json": serialize_package(doc), "jwks.json": _json_file(jwks)}
 
 
 def main(argv: List[str]) -> None:

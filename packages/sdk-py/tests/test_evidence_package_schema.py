@@ -37,13 +37,13 @@ def test_schema_is_valid_json_schema_2020_12() -> None:
     assert _schema()["$id"] == "https://grantex.dev/spec/evidence-package-1.0.schema.json"
 
 
-@pytest.mark.parametrize("name", ["package.json", "package-disclosed.json", "package-signed.json"])
+@pytest.mark.parametrize("name", ["evidence-package.json", "evidence-package-disclosed.json", "evidence-package-signed.json"])
 def test_example_packages_match_the_schema(name: str) -> None:
     assert list(_validator().iter_errors(_example(name))) == []
 
 
 def test_example_packages_are_canonical_json_without_whitespace() -> None:
-    for name in ("package.json", "package-disclosed.json", "package-signed.json"):
+    for name in ("evidence-package.json", "evidence-package-disclosed.json", "evidence-package-signed.json"):
         raw = (EXAMPLES / name).read_bytes()
         value = json.loads(raw)
         compact = json.dumps(value, separators=(",", ":"), sort_keys=True, ensure_ascii=False)
@@ -66,7 +66,7 @@ def test_example_packages_are_canonical_json_without_whitespace() -> None:
     ],
 )
 def test_schema_refuses_invalid_structure(path: list, value: Any) -> None:
-    document = _example("package.json")
+    document = _example("evidence-package.json")
     node = document
     for key in path[:-1]:
         node = node[key]
@@ -75,9 +75,9 @@ def test_schema_refuses_invalid_structure(path: list, value: Any) -> None:
 
 
 def test_schema_refuses_missing_required_members() -> None:
-    document = _example("package.json")
+    document = _example("evidence-package.json")
     del document["entries"][4]["data"]["upstream_records"]
     assert list(_validator().iter_errors(document))
-    document = _example("package.json")
+    document = _example("evidence-package.json")
     del document["chain"]["root"]
     assert list(_validator().iter_errors(document))
