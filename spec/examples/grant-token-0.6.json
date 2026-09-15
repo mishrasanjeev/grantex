@@ -1,0 +1,48 @@
+{
+  "description": "A delegated, key-bound grant token in the 0.6 profile (spec/grant-token-0.6.md). 'standard' is the payload issued with GRANT_TOKEN_LEGACY_CLAIMS=false; with the default GRANT_TOKEN_LEGACY_CLAIMS=true the payload also carries 'legacy_aliases'. The auth service's tests issue this exact payload, and the Python and TypeScript SDK tests verify it with stock JOSE libraries.",
+  "header": {"alg": "ES256", "kid": "grantex-es256-0000000000000000", "typ": "at+jwt"},
+  "standard": {
+    "iss": "https://auth.example.com",
+    "sub": "user_01EXAMPLEPRINCIPAL",
+    "aud": "https://agents.example.com",
+    "exp": 1760000000,
+    "iat": 1759996400,
+    "jti": "tok_01EXAMPLETOKEN",
+    "client_id": "ag_01UNDERWRITER",
+    "scope": "tool:acme_kyb:read tool:acme_kyb:write",
+    "cnf": {"jkt": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"},
+    "act": {"sub": "did:grantex:ag_01ORCHESTRATOR", "act": {"sub": "did:grantex:ag_01INTAKE"}},
+    "authorization_details": [
+      {
+        "type": "urn:grantex:tools:v1",
+        "connector": "acme_kyb",
+        "purpose": "aml.cdd.onboarding",
+        "data_region": "eu",
+        "tools": ["resolve_business", "verify_business", "case_decision", "screen_*"],
+        "caps": {"verify_business": {"per_hour": 50, "per_case": 3}, "cost_units": {"per_day": 5000}}
+      },
+      {
+        "type": "urn:grantex:decision:v1",
+        "connector": "acme_kyb",
+        "tools": ["case_decision"],
+        "four_eyes_on": {"case_decision": ["decline"]}
+      }
+    ],
+    "urn:grantex:grant": {
+      "grant_id": "grnt_01EXAMPLECHILD",
+      "agent_did": "did:grantex:ag_01UNDERWRITER",
+      "developer_id": "dev_01EXAMPLE",
+      "parent_grant_id": "grnt_01EXAMPLEPARENT",
+      "delegation_depth": 2
+    }
+  },
+  "legacy_aliases": {
+    "agt": "did:grantex:ag_01UNDERWRITER",
+    "dev": "dev_01EXAMPLE",
+    "scp": ["tool:acme_kyb:read", "tool:acme_kyb:write"],
+    "grnt": "grnt_01EXAMPLECHILD",
+    "parentAgt": "did:grantex:ag_01ORCHESTRATOR",
+    "parentGrnt": "grnt_01EXAMPLEPARENT",
+    "delegationDepth": 2
+  }
+}
