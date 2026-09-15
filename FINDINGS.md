@@ -53,21 +53,6 @@ Remove an entry in the pull request that fixes it.
   well-formed `tools` and `caps`). Reject with `invalid_authorization_details`,
   persist the purpose on the grant, and show it on the consent page.
 
-## G-5 — Duplicate keys in a manifest JSON file are silently accepted
-
-- **Found:** adding manifest schema 0.6 (2026-09-15).
-- **What:** `ToolManifest.from_file` (Python, `json.loads`) and
-  `ToolManifest.fromFile` (TypeScript, `JSON.parse`) keep the last value of a
-  repeated key. A manifest that declares the same tool twice, for example first
-  with `requires_decision: true` and then as `"read"`, loads as the second
-  declaration without any error. JSON Schema validators cannot see the
-  duplicate either, because they validate the parsed object.
-- **Fix:** reject duplicate keys while parsing manifest files: in Python an
-  `object_pairs_hook` that raises `ManifestValidationError`; in TypeScript a
-  duplicate-aware parse, for example a small tokenizer or a vetted
-  duplicate-detecting JSON parser. Add a shared invalid fixture that both
-  loaders must reject.
-
 ## G-6 — mcp-auth uses the OAuth client id as the Grantex principal
 
 - **Found:** `@grantex/mcp-auth` 3.0 work (PRD G-7), 2026-09-15.

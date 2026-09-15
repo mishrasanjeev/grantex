@@ -167,6 +167,16 @@
       "manifest": {"connector": "acme_kyb", "description": ["kyb"], "tools": {"verify_business": {"permission": "read"}}}
     },
     {
+      "name": "reserved tool name in object form",
+      "error": "ToolManifest: tool name \"cost_units\" is reserved",
+      "manifest": {"connector": "acme_kyb", "tools": {"cost_units": {"permission": "read", "caps": {"per_hour": 1}}}}
+    },
+    {
+      "name": "reserved tool name in a strings-only manifest",
+      "error": "ToolManifest: tool name \"cost_units\" is reserved",
+      "manifest": {"connector": "acme_kyb", "tools": {"get_case": "read", "cost_units": "read"}}
+    },
+    {
       "name": "missing tools",
       "error": "missing \"connector\" or \"tools\"",
       "manifest": {"connector": "acme_kyb"}

@@ -1,3 +1,5 @@
+import type { CapsMeter, CapsMode } from './caps/meter.js';
+
 // ─── Rate Limits ─────────────────────────────────────────────────────────────
 
 export interface RateLimit {
@@ -22,6 +24,10 @@ export interface GrantexClientOptions {
   timeout?: number;
   /** Maximum number of retries for transient failures (429, 502, 503, 504). Defaults to 3. Set to 0 to disable. */
   maxRetries?: number;
+  /** Meter for tools and grants that declare caps; without one such calls are denied. */
+  capsMeter?: CapsMeter;
+  /** `enforce` (default) denies over-cap calls, `warn` allows them and reports `wouldDeny`, `off` skips caps. */
+  capsMode?: CapsMode;
 }
 
 // ─── Signup ─────────────────────────────────────────────────────────────────

@@ -1,0 +1,7 @@
+{
+  "connector": "acme_kyb",
+  "tools": {
+    "case_decision": {"permission": "write", "requires_decision": true},
+    "case_decision": "read"
+  }
+}
