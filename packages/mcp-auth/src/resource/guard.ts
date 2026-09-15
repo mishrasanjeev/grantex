@@ -365,6 +365,7 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
       if (messages === undefined) {
         return deny(400, 'body_not_parsed', undefined, {
           error: 'invalid_request',
+          reason: 'body_not_parsed',
           error_description: 'With tool enforcement, the request body must be parsed JSON-RPC 2.0 (an object or a non-empty array of messages)',
         });
       }

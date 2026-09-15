@@ -23,6 +23,7 @@ export type ClientMetadataFailure =
   | 'invalid_client_id_url'
   | 'disabled'
   | 'host_not_trusted'
+  | 'port_not_allowed'
   | 'dns_failed'
   | 'address_not_allowed'
   | 'fetch_failed'
@@ -56,6 +57,12 @@ export interface ClientIdMetadataDocumentOptions {
    * (`*.example.com`, which does not match `example.com` itself).
    */
   allowedHosts?: string[];
+  /**
+   * Ports metadata documents may be fetched from (default `[443]`). Allow
+   * another port only for a host you trust: a port is how a fetch reaches
+   * services that are not web servers.
+   */
+  allowedPorts?: number[];
   /** Whole-request deadline in milliseconds (default 5000, at most 30000). */
   timeoutMs?: number;
   /** Maximum document size in bytes (default 16384, at most 1048576). */
@@ -208,6 +215,10 @@ export function createClientMetadataResolver(
   const resolveHost = internals.resolve ?? ((hostname: string) => dnsLookup(hostname, { all: true, verbatim: true }));
   const isAddressAllowed = internals.isAddressAllowed ?? isPublicAddress;
   const now = internals.now ?? Date.now;
+  const allowedPorts = options.allowedPorts ?? [443];
+  if (!Array.isArray(allowedPorts) || !allowedPorts.every((port) => Number.isInteger(port) && port > 0 && port < 65536)) {
+    throw new Error('clientIdMetadataDocuments.allowedPorts must be a list of TCP port numbers');
+  }
   const cache = new Map<string, CacheEntry>();
   const inFlight = new Map<string, Promise<ClientRegistration>>();
 
@@ -324,6 +335,10 @@ export function createClientMetadataResolver(
     const url = new URL(clientId);
     if (!hostAllowed(url.hostname, options.allowedHosts)) {
       throw new ClientMetadataError('host_not_trusted', `${url.hostname} is not in the client metadata trust policy`);
+    }
+    const port = url.port === '' ? 443 : Number(url.port);
+    if (!allowedPorts.includes(port)) {
+      throw new ClientMetadataError('port_not_allowed', `Metadata documents are not fetched from port ${port}`);
     }
     const pinned = await vettedAddress(url.hostname);
     const { body, cacheControl } = await fetchDocument(url, pinned);

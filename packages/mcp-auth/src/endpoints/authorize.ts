@@ -200,10 +200,11 @@ export async function startUpstreamAuthorization(
       redirectUri: resolveCallbackUrl(config),
       state: pendingId,
     });
-  } catch (err) {
+  } catch {
+    // Upstream error text is not shown to the user-agent.
     return reply.status(502).send({
       error: 'server_error',
-      error_description: `Grantex authorization failed: ${err instanceof Error ? err.message : String(err)}`,
+      error_description: 'The upstream authorization request failed',
     });
   }
 
