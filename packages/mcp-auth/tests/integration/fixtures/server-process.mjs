@@ -9,8 +9,12 @@
 //   MCP_AUTH_REDIS_PREFIX  key prefix (redis only)
 //   GRANTEX_ISSUER         issuer whose JWKS signs grant tokens
 import { randomBytes } from 'node:crypto';
+import { UnsecuredJWT } from 'jose';
 import { createMcpAuthServer } from '../../../dist/index.js';
 
+const RESOURCE = 'https://mcp.example.com/mcp';
+// Upstream grant tokens are audience-bound to the resource, as Grantex issues them.
+const grantFor = (jti) => new UnsecuredJWT({ aud: RESOURCE, jti, scp: ['tools:read'] }).setExpirationTime('1h').encode();
 const kind = process.env.MCP_AUTH_STORAGE;
 const url = process.env.MCP_AUTH_STORAGE_URL;
 
@@ -49,7 +53,7 @@ const grantex = {
   tokens: {
     async exchange({ code }) {
       return {
-        grantToken: `grant-for-${code}`,
+        grantToken: grantFor(`grant-for-${code}`),
         expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
         scopes: ['tools:read'],
         refreshToken: `rt_${randomBytes(12).toString('hex')}`,
@@ -58,7 +62,7 @@ const grantex = {
     },
     async refresh() {
       return {
-        grantToken: `refreshed-${randomBytes(6).toString('hex')}`,
+        grantToken: grantFor(`refreshed-${randomBytes(6).toString('hex')}`),
         expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
         scopes: ['tools:read'],
         refreshToken: `rt_${randomBytes(12).toString('hex')}`,
@@ -75,6 +79,7 @@ const app = await createMcpAuthServer({
   agentId: 'ag_restart',
   scopes: ['tools:read'],
   issuer: 'https://auth.example.com',
+  resource: RESOURCE,
   grantexIssuer: process.env.GRANTEX_ISSUER,
   storage,
 });

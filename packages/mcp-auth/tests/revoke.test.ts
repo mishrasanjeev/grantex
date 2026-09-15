@@ -7,6 +7,7 @@ import { createMcpAuthServer } from '../src/server.js';
 import { InMemoryStorage } from '../src/storage/memory.js';
 import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
+import { upstreamGrantToken } from './helpers.js';
 
 const TEST_CLIENT_ID = 'test-client-id';
 const TEST_CLIENT_SECRET = 'test-secret';
@@ -66,14 +67,14 @@ function createMockGrantex() {
     }),
     tokens: {
       exchange: vi.fn().mockResolvedValue({
-        grantToken: 'gt_test',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_test' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_test',
         grantId: 'grant-1',
       }),
       refresh: vi.fn().mockResolvedValue({
-        grantToken: 'gt_refreshed',
+        grantToken: upstreamGrantToken({ aud: 'https://mcp.example.com', jti: 'gt_refreshed' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_new',
@@ -88,7 +89,8 @@ async function signTestJwt(
   claims: Record<string, unknown>,
   options: { expiresIn?: string; issuer?: string; key?: jose.CryptoKey } = {},
 ): Promise<string> {
-  return new jose.SignJWT(claims)
+  // Audience-bound to the fixture resource, as Grantex grant tokens are.
+  return new jose.SignJWT({ aud: 'https://mcp.example.com', ...claims })
     .setProtectedHeader({ alg: 'RS256', kid: 'test-key-1' })
     .setIssuer(options.issuer ?? `http://127.0.0.1:${jwksPort}`)
     .setIssuedAt()
@@ -121,6 +123,7 @@ describe('revoke endpoint', () => {
       agentId: 'agent-1',
       scopes: ['read', 'write'],
       issuer: 'https://auth.example.com',
+      resource: 'https://mcp.example.com',
       grantexIssuer: issuer,
       storage: clientStore,
       hooks: {
@@ -317,6 +320,7 @@ describe('revoke endpoint', () => {
         agentId: 'agent-1',
         scopes: ['read'],
         issuer: 'https://auth.example.com',
+        resource: 'https://mcp.example.com',
         storage: clientStore,
       });
       const token = await signTestJwt({ sub: TEST_CLIENT_ID, scp: ['read'] });

@@ -10,6 +10,7 @@ import {
   TEST_CLIENT_ID,
   TEST_CLIENT_SECRET,
   TEST_REDIRECT_URI,
+  TEST_RESOURCE,
   TEST_VERIFIER,
   asGrantex,
   clientRecord,
@@ -39,7 +40,7 @@ afterAll(async () => {
 });
 
 async function grantToken(claims: Record<string, unknown> = {}): Promise<string> {
-  return new jose.SignJWT({ scp: ['read'], ...claims })
+  return new jose.SignJWT({ scp: ['read'], aud: TEST_RESOURCE, ...claims })
     .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
     .setIssuer(grantexIssuer)
     .setSubject(TEST_CLIENT_ID)
@@ -55,6 +56,7 @@ async function serverWith(storage: McpAuthStorage, grantex = mockGrantex({ sandb
     agentId: 'agent-1',
     scopes: ['read', 'write'],
     issuer: 'https://auth.example.com',
+    resource: TEST_RESOURCE,
     grantexIssuer,
     storage,
     sandboxAutoApprove: true,
@@ -220,7 +222,7 @@ describe('state goes through the configured storage', () => {
   it('a token without a jti is never reported active (it could not be revoked)', async () => {
     const storage = await seededStorage(clientRecord());
     const { app } = await serverWith(storage);
-    const token = await new jose.SignJWT({ scp: ['read'] })
+    const token = await new jose.SignJWT({ scp: ['read'], aud: TEST_RESOURCE })
       .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
       .setIssuer(grantexIssuer)
       .setSubject(TEST_CLIENT_ID)

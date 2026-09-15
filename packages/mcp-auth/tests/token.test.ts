@@ -4,8 +4,11 @@ import { createMcpAuthServer } from '../src/server.js';
 import { InMemoryStorage } from '../src/storage/memory.js';
 import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
+import { TEST_RESOURCE, upstreamGrantToken } from './helpers.js';
 
 const TEST_CLIENT_ID = 'test-client-id';
+const GT_TEST_TOKEN = upstreamGrantToken({ jti: 'gt_test_token' });
+const GT_REFRESHED_TOKEN = upstreamGrantToken({ jti: 'gt_refreshed_token' });
 const TEST_REDIRECT_URI = 'https://app.example.com/callback';
 const TEST_VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
 const TEST_CHALLENGE = createHash('sha256').update(TEST_VERIFIER).digest('base64url');
@@ -27,14 +30,14 @@ function createMockGrantex() {
     }),
     tokens: {
       exchange: vi.fn().mockResolvedValue({
-        grantToken: 'gt_test_token',
+        grantToken: GT_TEST_TOKEN,
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_test_refresh',
         grantId: 'grant-1',
       }),
       refresh: vi.fn().mockResolvedValue({
-        grantToken: 'gt_refreshed_token',
+        grantToken: GT_REFRESHED_TOKEN,
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_new_refresh',
@@ -64,6 +67,7 @@ async function setupWithCode(options: { publicClient?: boolean } = {}) {
     agentId: 'agent-1',
     scopes: ['read', 'write'],
     issuer: 'https://auth.example.com',
+    resource: TEST_RESOURCE,
     storage: clientStore,
     // Test fixture uses the gated sandbox short path to obtain a code
     // without driving the Grantex consent flow.
@@ -225,7 +229,7 @@ describe('token endpoint', () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    expect(body.access_token).toBe('gt_test_token');
+    expect(body.access_token).toBe(GT_TEST_TOKEN);
     expect(body.token_type).toBe('bearer');
     expect(body.expires_in).toBeGreaterThan(0);
     expect(body.scope).toBe('read write');
@@ -259,6 +263,7 @@ describe('token endpoint', () => {
       agentId: 'agent-1',
       scopes: ['read', 'write'],
       issuer: 'https://auth.example.com',
+      resource: TEST_RESOURCE,
       storage: clientStore,
       sandboxAutoApprove: true,
     });
@@ -292,6 +297,7 @@ describe('token endpoint', () => {
     expect(mockGrantex.tokens.exchange).toHaveBeenCalledWith({
       code: 'GRANTEX_SANDBOX_CODE',
       agentId: 'agent-1',
+      redirectUri: 'https://auth.example.com/callback',
     });
   });
 
@@ -352,7 +358,7 @@ describe('token endpoint', () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json();
-    expect(body.access_token).toBe('gt_refreshed_token');
+    expect(body.access_token).toBe(GT_REFRESHED_TOKEN);
     expect(body.token_type).toBe('bearer');
     expect(body.refresh_token).toBe('rt_new_refresh');
   });
@@ -492,7 +498,7 @@ describe('token endpoint', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().access_token).toBe('gt_test_token');
+      expect(response.json().access_token).toBe(GT_TEST_TOKEN);
     });
 
     it('rejects refresh_token grant for a confidential client without its secret', async () => {
@@ -528,7 +534,7 @@ describe('token endpoint', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.json().access_token).toBe('gt_test_token');
+      expect(response.json().access_token).toBe(GT_TEST_TOKEN);
     });
   });
 });
