@@ -370,7 +370,7 @@ export class Grantex {
           `Tool '${tool}' on ${connector} is restricted to purposes ${allowedPurposes.join(', ')}; the grant carries no purpose.`,
           DenialReason.PURPOSE_NOT_ALLOWED,
           PurposeSubReason.MISSING,
-          { allowedPurposes },
+          { allowed_purposes: allowedPurposes },
         );
       }
       if (!isKnownPurpose(purpose)) {
@@ -378,7 +378,7 @@ export class Grantex {
           `Grant purpose ${JSON.stringify(purpose)} is not in the purpose vocabulary.`,
           DenialReason.PURPOSE_NOT_ALLOWED,
           PurposeSubReason.UNKNOWN_PURPOSE,
-          { allowedPurposes, purpose },
+          { allowed_purposes: allowedPurposes, purpose },
         );
       }
       if (matchPurpose(allowedPurposes, purpose) === undefined) {
@@ -386,7 +386,7 @@ export class Grantex {
           `Grant purpose '${purpose}' is not allowed for tool '${tool}' on ${connector}; allowed purposes: ${allowedPurposes.join(', ')}.`,
           DenialReason.PURPOSE_NOT_ALLOWED,
           PurposeSubReason.NOT_MATCHED,
-          { allowedPurposes, purpose },
+          { allowed_purposes: allowedPurposes, purpose },
         );
       }
     }

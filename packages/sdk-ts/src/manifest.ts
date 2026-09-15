@@ -527,7 +527,7 @@ export interface EnforceResult {
   reasonCode?: DenialReason;
   /** Finer-grained denial code, where one applies. */
   subReason?: string;
-  /** Structured denial context (for example `allowedPurposes` or `limit`). */
+  /** Structured denial context. Keys are snake_case (`allowed_purposes`, `limit`, `window`), identical to the Python SDK. */
   details?: Record<string, unknown>;
   /** The grant's purpose for this connector, when it carries one. */
   purpose?: string;
