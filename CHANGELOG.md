@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Verified Python SDK publication (2026-09-15)
+- Published Python `grantex==0.5.1` to PyPI (uploaded 2026-09-15 01:56 UTC),
+  built from `main` at `1bc13b2e`. Distribution SHA-256 values:
+  wheel `5fce7d63dc8d6202c9ed9a4213de0125bd6cde9fe15d5aa5c373b5c36c3e836d`,
+  sdist `e1bd608fd236b30e93e4fc69ac5e2a596f7f80c254bfe53cc61b4e49065031cc`.
+- Before upload, Ruff, strict Mypy and all 623 Python tests passed on
+  Python 3.12 and 3.9. The installed PyPI wheel then passed the same 623 tests
+  in a clean virtual environment.
+- 0.5.1 is a patch release: `enforce()` applies the tightest cap and fails
+  closed on malformed, negative or non-finite amounts; the FastAPI enforcer
+  reads the `Authorization` header; JWKS verification is cached and runs off
+  the event loop; resource ids are percent-encoded; single-use codes are never
+  retried; and event streams bound connect time.
+- The public release snapshot (`release-status.json`, verified 2026-09-15) and
+  current-release documentation now advertise `grantex==0.5.1`. TypeScript
+  `0.6.0`, x402 `0.4.0`, Go `v0.3.0`, CLI `0.3.0` and MCP Auth `2.0.2` are
+  unchanged and re-verified against their registries. The OpenAPI contract
+  version is unrelated and remains `0.5.0`.
+
 ### Python SDK 0.5.1
 - Prepares `grantex==0.5.1`, a patch release of the Python SDK carrying the
   SDK fixes merged since 0.5.0: `enforce()` applies the tightest budget cap,

@@ -6,11 +6,11 @@ description: "Install and configure the Grantex Python SDK for delegated authori
 
 ## Installation
 
-Published release: **`grantex==0.5.0`**. PyPI metadata, distribution contents,
+Published release: **`grantex==0.5.1`**. PyPI metadata, distribution contents,
 and a clean public-index install were verified before this page was updated.
 
 ```bash
-python -m pip install grantex==0.5.0
+python -m pip install grantex==0.5.1
 ```
 
 The unpinned `python -m pip install grantex` command follows PyPI's current
@@ -24,6 +24,16 @@ release. Keep the exact version above in reproducible builds. See
 - [PyJWT](https://pyjwt.readthedocs.io/) >= 2.8 with [cryptography](https://cryptography.io/) (for offline token verification)
 
 All dependencies are installed automatically with the SDK.
+
+<Note>
+  Version `0.5.1` is a patch release. `enforce()` applies the tightest budget
+  cap and denies malformed, negative, or non-finite caps and amounts (calls that
+  earlier versions allowed with such values are now denied); the FastAPI
+  enforcer reads the `Authorization` header; grant-token verification caches
+  the JWKS and runs off the event loop; resource ids are percent-encoded in
+  request paths; single-use authorization codes are never retried; and event
+  streams bound connect time.
+</Note>
 
 <Note>
   Version `0.5.0` adds EVM payment responses and authenticated principal/agent
