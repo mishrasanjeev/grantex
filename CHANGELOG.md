@@ -200,7 +200,8 @@ reviewers and integrators:
   (`case_changed`, `wrong_case`, `four_eyes_incomplete`, `malformed`,
   `revoked`, `unknown_grant`, `consume_unavailable`); the type was already a
   string, so no type break.
-- Auth service: migration `097_decision_grants.sql` adds tables only; all
+- Auth service: migration `098_decision_grants.sql` adds tables only (safe on a
+  live database, no effect on issued tokens); all
   decision endpoints are off unless `DECISION_GRANTS_ENABLED=true`.
 - No existing public API was removed or renamed.
 
