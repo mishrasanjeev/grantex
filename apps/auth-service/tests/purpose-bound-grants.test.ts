@@ -367,8 +367,9 @@ describe('consent shows the purpose', () => {
    */
   async function renderConsentPage(row: Record<string, unknown>): Promise<string> {
     const page = await app.inject({ method: 'GET', url: '/consent?req=areq_TEST01' });
-    const script = /<script>([\s\S]*?)<\/script>/.exec(page.body)?.[1];
-    expect(script).toBeDefined();
+    const scriptStart = page.body.indexOf('<script>') + '<script>'.length;
+    const script = page.body.slice(scriptStart, page.body.indexOf('</script>', scriptStart));
+    expect(scriptStart).toBeGreaterThanOrEqual('<script>'.length);
     sqlMock.mockResolvedValueOnce([row]);
     const content = { innerHTML: '<div class="spinner"></div>' };
     const button = { disabled: false, addEventListener: () => undefined };
@@ -389,7 +390,7 @@ describe('consent shows the purpose', () => {
         return { ok: res.statusCode < 400, status: res.statusCode, json: async () => res.json() };
       },
     });
-    vm.runInContext(script as string, context);
+    vm.runInContext(script, context);
     for (let i = 0; i < 50 && content.innerHTML.includes('spinner'); i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
