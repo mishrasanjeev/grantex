@@ -38,6 +38,7 @@
 3a290f5a53438c126f3d2dbf2a685a787a6e9579:docs/ietf-draft/draft-mishra-oauth-agent-grants-01.xml:generic-api-key:654
 3a290f5a53438c126f3d2dbf2a685a787a6e9579:docs/ietf-draft/draft-mishra-oauth-agent-grants-01.xml:generic-api-key:793
 3a290f5a53438c126f3d2dbf2a685a787a6e9579:docs/ietf-draft/draft-mishra-oauth-agent-grants-01.xml:generic-api-key:819
+3e3fd4c3dc2185f47a780aaf130315736912b899:apps/auth-service/.env.example:private-key:9
 3fab033b0af4845278994b08baa260a088ef10c5:packages/mpp/tests/middleware.test.ts:generic-api-key:9
 3fab033b0af4845278994b08baa260a088ef10c5:packages/mpp/tests/passport.test.ts:generic-api-key:53
 3fac4a8bd254ed5c37f2737da1661c93a464ac55:docs/sdks/python/enforce.mdx:generic-api-key:69
@@ -82,6 +83,7 @@
 78aba22b3ca22aa4e6a2f731ce25f7042bddb25d:apps/auth-service/tests/events-stream.test.ts:generic-api-key:45
 790ccc7e7baf08368beeda2712499c1f950ff13e:docs/reports/commerce-v1-option-a-smoke-evidence.md:generic-api-key:63
 7aafaa494100dcd3692c1c7e2058b79ff87dc79a:agentic-org-scope-enforcement-fix.md:generic-api-key:642
+7ac0f9485bc7121c23221937b344675d017deeba:DEPLOYMENT.md:private-key:154
 813ee176ee74b47fb8786ac4bee3b85675b4cace:apps/auth-service/tests/helpers.ts:generic-api-key:15
 820410e54ce71adfdc826df2b594eb6c562e98e8:apps/auth-service/vitest.config.ts:generic-api-key:17
 8415bcfbf7edf036bfeb771a239763f18a8351ea:scripts/commerce-pilot-seed-local.mjs:generic-api-key:20

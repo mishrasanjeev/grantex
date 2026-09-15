@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   SignJWT,
@@ -229,8 +229,8 @@ describe('rotation keeps old keys for verification', () => {
   });
 
   it('rejects an RSA key shorter than 2048 bits', async () => {
-    const weak = generateKeyPairSync('rsa', { modulusLength: 1024 });
-    const jwk = { ...weak.publicKey.export({ format: 'jwk' }), kid: 'weak', alg: 'RS256' };
+    // A 1024-bit modulus, built as bytes: the size check runs before import.
+    const jwk = { kty: 'RSA', n: randomBytes(128).toString('base64url'), e: 'AQAB', kid: 'weak', alg: 'RS256' };
     await expect(parseRetiredPublicKeys(JSON.stringify({ keys: [jwk] }))).rejects.toMatchObject({ code: 'invalid_key' });
   });
 
