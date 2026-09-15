@@ -80,3 +80,31 @@ Remove an entry in the pull request that fixes it.
 - **Fix:** log the failure with the `jti` and a reason code, count it, and
   retry the upstream revocation from a durable queue until it succeeds.
 
+
+## G-13 — Audit chain entries written in the same millisecond can fork the chain
+
+- **Found:** evidence package export work (PRD G-5), 2026-09-15.
+- **What:** `POST /v1/audit/log` (`apps/auth-service/src/routes/audit.ts`) and
+  `appendDecisionAudit` take the chain head with
+  `ORDER BY timestamp DESC, id DESC` and stamp the new entry with
+  `new Date().toISOString()`. Two entries for one developer in the same
+  millisecond get equal timestamps, and `newAuditEntryId()` uses the
+  non-monotonic `ulid()`, so the later entry's id can sort before the earlier
+  one. The next writer then links to the wrong head, and chain verification
+  (`/v1/compliance/evidence-pack`, `audit-log verify`) reports a broken link
+  that is not tampering. The evidence endpoints avoid it for their own entries
+  by stamping `max(now, head + 1 ms)`.
+- **Fix:** stamp every audit entry with `max(now, head timestamp + 1 ms)` under
+  the existing advisory lock (or use `monotonicFactory()` for audit ids), in
+  every writer of `audit_entries`.
+
+## G-14 — Evidence records containing U+0000 fail with a 500
+
+- **Found:** evidence package export work (PRD G-5), 2026-09-15.
+- **What:** JSONB cannot store the code point U+0000 in a string. A record
+  whose strings contain it passes schema validation in
+  `POST /v1/evidence/cases/{caseId}/records` (and any `POST /v1/audit/log`
+  metadata containing it) and then fails on insert with an unhandled database
+  error instead of a 400 with a reason code.
+- **Fix:** refuse U+0000 in audit metadata and evidence record strings before
+  the insert, with `BAD_REQUEST` / `EVIDENCE_RECORD_INVALID` and the field path.
