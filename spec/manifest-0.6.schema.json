@@ -29,7 +29,11 @@
       "description": "Tool name to tool declaration.",
       "type": "object",
       "minProperties": 1,
-      "propertyNames": { "$ref": "#/$defs/name" },
+      "propertyNames": {
+        "$ref": "#/$defs/name",
+        "not": { "const": "cost_units" },
+        "description": "cost_units is reserved: grant caps use it for the cost-unit budget."
+      },
       "additionalProperties": { "$ref": "#/$defs/tool" }
     }
   },

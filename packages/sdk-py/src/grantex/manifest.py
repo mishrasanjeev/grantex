@@ -87,6 +87,9 @@ MANIFEST_SCHEMA_ID = "https://grantex.dev/spec/manifest-0.6.schema.json"
 MAX_COUNT = 2147483647
 """Largest cap or cost-unit value a manifest may declare."""
 
+RESERVED_TOOL_NAME = "cost_units"
+"""Not allowed as a tool name: grant ``caps`` use it for the cost-unit budget."""
+
 _TOP_LEVEL_KEYS = ("$schema", "connector", "version", "description", "tools")
 _TOOL_KEYS = (
     "permission",
@@ -203,6 +206,10 @@ def parse_tool_declaration(tool: str, value: Any) -> ToolSpec:
     Raises:
         ManifestValidationError: the value does not conform to manifest 0.6.
     """
+    if tool == RESERVED_TOOL_NAME:
+        raise _fail(
+            f"tool name {_q(tool)} is reserved: it names the cost-unit budget in grant caps"
+        )
     if isinstance(value, ToolSpec):
         value = tool_spec_to_dict(value)
     if isinstance(value, str):

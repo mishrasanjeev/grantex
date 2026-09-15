@@ -68,6 +68,9 @@ export const MANIFEST_SCHEMA_ID = 'https://grantex.dev/spec/manifest-0.6.schema.
 /** Largest cap or cost-unit value a manifest may declare. */
 export const MAX_COUNT = 2147483647;
 
+/** Not allowed as a tool name: grant `caps` use it for the cost-unit budget. */
+export const RESERVED_TOOL_NAME = 'cost_units';
+
 const TOP_LEVEL_KEYS = ['$schema', 'connector', 'version', 'description', 'tools'] as const;
 const TOOL_KEYS = [
   'permission',
@@ -190,6 +193,9 @@ function checkNames(connector: unknown, tools: Record<string, unknown>): void {
  * @throws {ManifestValidationError} the value does not conform to manifest 0.6.
  */
 export function parseToolDeclaration(tool: string, value: unknown): ToolSpec {
+  if (tool === RESERVED_TOOL_NAME) {
+    throw fail(`tool name ${q(tool)} is reserved: it names the cost-unit budget in grant caps`);
+  }
   if (typeof value === 'string') {
     if (!isPermission(value)) throw invalidPermission(value, tool);
     return { permission: value, requiresDecision: false, fourEyesOn: [] };

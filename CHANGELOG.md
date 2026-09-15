@@ -34,6 +34,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A tool that declares `cost_units` while the grant sets no cost-unit budget
   is now allowed when a meter is configured, because there is nothing to
   meter. It is still denied without a meter.
+- Grant `caps` are validated when the token's `authorization_details` is
+  read, for every call on the connector. A key must be an exact tool name or
+  `cost_units`; wildcard keys such as `screen_*`, unknown windows and invalid
+  counts deny with `token_invalid` / `malformed_authorization_details` instead
+  of being ignored.
+- **Behaviour change:** `cost_units` is reserved and rejected as a manifest
+  tool name, in both object-form and strings-only manifests, because grant
+  caps use it for the cost-unit budget.
 - CI's `make` job runs the caps integration tests against Redis and Postgres
   service containers.
 
