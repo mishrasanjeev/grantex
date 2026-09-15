@@ -135,7 +135,7 @@ describe('enforce() purpose', () => {
     expect((await enforce(grant('aml.cdd.ongoing'), 'monitor_enroll')).allowed).toBe(true);
     const r = await enforce(grant('aml.cdd.onboarding'), 'monitor_enroll');
     expect([r.reasonCode, r.subReason]).toEqual([DenialReason.PURPOSE_NOT_ALLOWED, PurposeSubReason.NOT_MATCHED]);
-    expect(r.details).toEqual({ allowedPurposes: ['aml.cdd.ongoing'], purpose: 'aml.cdd.onboarding' });
+    expect(r.details).toEqual({ allowed_purposes: ['aml.cdd.ongoing'], purpose: 'aml.cdd.onboarding' });
   });
 
   it('a private purpose matches a private pattern', async () => {

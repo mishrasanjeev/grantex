@@ -292,3 +292,48 @@ class TestStringsOnlyManifestsKeepPre06Behaviour:
     def test_string_tools_have_unconstrained_specs(self) -> None:
         m = ToolManifest(connector="acme_kyb", tools={"get_case": Permission.READ})
         assert m.get_tool_spec("get_case") == ToolSpec(permission="read")
+
+
+DUPLICATE_FILES = sorted((EXAMPLES_DIR / "duplicate-keys").glob("*.json"))
+EXPECTED_DUPLICATES = {
+    "duplicate-tool.json": "case_decision",
+    "duplicate-nested-key.json": "per_hour",
+    "duplicate-escaped-key.json": "connector",
+}
+
+
+@pytest.mark.parametrize("path", DUPLICATE_FILES, ids=[p.name for p in DUPLICATE_FILES])
+def test_duplicate_keys_in_a_manifest_file_are_rejected(path: Path) -> None:
+    with pytest.raises(ManifestValidationError) as exc:
+        ToolManifest.from_file(str(path))
+    assert str(exc.value) == f'ToolManifest: duplicate key "{EXPECTED_DUPLICATES[path.name]}" in manifest file'
+
+
+def test_duplicate_fixture_set_is_complete() -> None:
+    assert sorted(p.name for p in DUPLICATE_FILES) == sorted(EXPECTED_DUPLICATES)
+
+
+def test_duplicate_keys_in_a_yaml_manifest_are_rejected(tmp_path: Path) -> None:
+    pytest.importorskip("yaml")
+    p = tmp_path / "acme_kyb.yaml"
+    p.write_text("connector: acme_kyb\ntools:\n  get_case: read\n  get_case: admin\n", encoding="utf-8")
+    with pytest.raises(ManifestValidationError, match='duplicate key "get_case"'):
+        ToolManifest.from_file(str(p))
+    ok = tmp_path / "ok.yaml"
+    ok.write_text("connector: acme_kyb\ntools:\n  get_case: read\n", encoding="utf-8")
+    assert ToolManifest.from_file(str(ok)).get_permission("get_case") == "read"
+
+
+def test_load_manifests_from_dir_rejects_duplicate_keys(tmp_path: Path) -> None:
+    from grantex import Grantex
+
+    (tmp_path / "dup.json").write_text((EXAMPLES_DIR / "duplicate-keys" / "duplicate-tool.json").read_text(encoding="utf-8"), encoding="utf-8")
+    with pytest.raises(ManifestValidationError, match="duplicate key"):
+        Grantex(api_key="test-key").load_manifests_from_dir(str(tmp_path))
+
+
+def test_a_tool_named_proto_round_trips() -> None:
+    m = ToolManifest.from_dict({"connector": "acme_kyb", "tools": {"__proto__": {"permission": "read", "caps": {"per_hour": 1}}}})
+    again = ToolManifest.from_dict(json.loads(json.dumps(m.to_dict())))
+    assert again.get_tool_spec("__proto__") == m.get_tool_spec("__proto__")
+

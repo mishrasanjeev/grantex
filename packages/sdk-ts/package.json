@@ -47,8 +47,11 @@
   },
   "devDependencies": {
     "@types/node": "^26.0.0",
+    "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^5.0.0",
     "ajv": "^8.20.0",
+    "ioredis": "^6.0.0",
+    "pg": "^8.23.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"
   },

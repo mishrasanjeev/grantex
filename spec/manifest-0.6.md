@@ -125,7 +125,7 @@ a `reason_code` (`reasonCode` in TypeScript) and, where one applies, a
 | `allowed_purposes` | `purpose_not_allowed` | `missing`, `unknown_purpose`, `not_matched` |
 | `requires_decision` | `decision_required` | |
 | `amount` within a `capped:N` scope | `cap_exceeded` | `invalid_amount`, `malformed_cap`, `amount_cap` |
-| `caps`, `cost_units` (manifest or grant) | `cap_exceeded` | `meter_unavailable` |
+| `caps`, `cost_units` (manifest or grant), reserved last | `cap_exceeded` | `limit_reached` (E1008), `case_required`, `invalid_case_id`, `invalid_cost_component`, `meter_unavailable` |
 
 The reason codes are the Grantex denial taxonomy: `purpose_not_allowed`,
 `tool_not_granted`, `permission_insufficient`, `cap_exceeded`,
@@ -138,8 +138,8 @@ human-readable sentence and may change.
 
 Declarations are enforced fail-closed: an SDK that cannot evaluate a declared
 constraint denies the call rather than ignoring the constraint. Purpose
-matching is specified in `docs/concepts/purpose-bound-grants.md`. In this
-release a tool with `requires_decision` always returns `decision_required`,
-and a tool with `caps` or `cost_units`, or a grant with caps for the tool, is
-denied with `meter_unavailable`. Tools declared with a permission only behave
-exactly as before.
+matching is specified in `docs/concepts/purpose-bound-grants.md` and caps in
+`docs/concepts/caps-and-metering.md`. A tool with caps or cost units is
+denied with `meter_unavailable` when the client has no caps meter. In this
+release a tool with `requires_decision` always returns `decision_required`.
+Tools declared with a permission only behave exactly as before.

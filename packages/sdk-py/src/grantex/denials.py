@@ -81,7 +81,18 @@ class CapSubReason:
     MALFORMED_CAP = "malformed_cap"
     """A ``capped:N`` scope carries a malformed cap."""
     METER_UNAVAILABLE = "meter_unavailable"
-    """The tool declares caps or cost units and they cannot be metered."""
+    """The tool declares caps or cost units and they cannot be metered: no
+    meter is configured or its backend is unavailable."""
+    LIMIT_REACHED = "limit_reached"
+    """A call cap or cost-unit budget would be exceeded (error code E1008).
+    ``details`` carries ``limit``, ``window``, ``used``, ``requested``,
+    ``scope`` (``manifest`` or ``grant``) and ``kind`` (``calls`` or
+    ``cost_units``)."""
+    CASE_REQUIRED = "case_required"
+    """A per-case cap applies and no ``case_id`` was given."""
+    INVALID_CASE_ID = "invalid_case_id"
+    INVALID_COST_COMPONENT = "invalid_cost_component"
+    """``cost_components`` names a unit the tool does not declare."""
 
 
 class PurposeSubReason:

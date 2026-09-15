@@ -6,6 +6,62 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Caps meter
+- This is the metering library for spend caps. The consent-page and per-case
+  display of caps and remaining budget, and the platform's per-tenant
+  `caps.enforce` rollout flag, are not included yet.
+- New caps meter in both SDKs (`grantex.caps`, and `CapsMeter` in
+  `@grantex/sdk`) enforces per-tool call caps over rolling `per_hour` and
+  `per_day` windows and `per_case`, plus cost-unit budgets. Caps come from the
+  manifest (tenant-wide) and from the grant's `urn:grantex:tools:v1` entry
+  (per grant, including a `cost_units` budget for the connector). Every
+  applicable counter is reserved atomically, so concurrent calls cannot exceed
+  a cap.
+- Backends: Redis (one Lua script, tenant-scoped keys with a shared hash tag,
+  server time) and Postgres (row locks and upserts on `grantex_cap_counters` /
+  `grantex_cap_reservations`; create them with `SCHEMA_SQL` /
+  `CAPS_SCHEMA_SQL`), plus an in-memory backend for tests only. Python and
+  TypeScript share counter keys, the Lua script and the SQL. There is no
+  automatic failover between backends.
+- `Grantex(caps_meter=...)` / `new Grantex({ capsMeter })` meters calls in
+  `enforce()`, which takes `case_id` / `caseId` and `cost_components` /
+  `costComponents`. Units are reserved as the last check, and
+  `EnforceResult.reservation` identifies them. Exceeding a cap denies with
+  `cap_exceeded` / `limit_reached` and details carrying error code `E1008`,
+  the limit and the window. A cap of zero disables a tool. A missing or
+  unavailable meter denies with `meter_unavailable`, a missing case for a
+  per-case cap with `case_required`.
+- Failed calls are not refunded. `CapsMeter.refund_unsent()` /
+  `refundUnsent()` releases a reservation only when the provider call is
+  known not to have been sent.
+- A tool that declares `cost_units` while the grant sets no cost-unit budget
+  is now allowed when a meter is configured, because there is nothing to
+  meter. It is still denied without a meter.
+- Grant `caps` are validated when the token's `authorization_details` is
+  read, for every call on the connector. A key must be an exact tool name or
+  `cost_units`; wildcard keys such as `screen_*`, unknown windows and invalid
+  counts deny with `token_invalid` / `malformed_authorization_details` instead
+  of being ignored.
+- **Behaviour change:** `cost_units` is reserved and rejected as a manifest
+  tool name, in both object-form and strings-only manifests, because grant
+  caps use it for the cost-unit budget.
+- `enforce(..., reserve=False)` / `reserve: false` checks caps against
+  current usage without consuming anything, and returns `cap_limits` /
+  `capLimits` and `caps_tenant_id` / `capsTenantId` for a later
+  `CapsMeter.reserve()`. Check early (for example when validating scopes) and
+  reserve once, at the call that incurs cost.
+- `caps_mode` / `capsMode` on the client or per call: `enforce` (default)
+  denies, `warn` allows a call a cap would deny and reports it in
+  `would_deny` / `wouldDeny` (reserving only calls that fit), and `off`
+  skips caps. Malformed grant caps are denied in every mode.
+- `caps_tenant_id` / `capsTenantId` overrides the tenant of a call's counters
+  (default: the grant's developer).
+- Postgres backend: `prune()` deletes expired reservations and empty
+  counters (run it periodically); reservations use READ COMMITTED explicitly.
+  Redis backend: requires Redis 6.0 or later.
+- CI's `make` job runs the caps integration tests against Redis and Postgres
+  service containers.
+
 ### @grantex/mcp-auth 3.0.0 (prepared, not published)
 `packages/mcp-auth` is at 3.0.0 in the repository. It is **not published**;
 `@grantex/mcp-auth@2.0.2` remains the current npm release. Deployment,
@@ -192,6 +248,11 @@ Breaking changes
   are enforced exactly as before. Manifests made only of permission strings
   still load with unknown top-level keys, now with a deprecation warning; a
   future minor release will reject them.
+- **Behaviour change:** manifest files (JSON and YAML) with a key repeated
+  inside one object are rejected with `ManifestValidationError`
+  (`duplicate key "<key>" in manifest file`) by `from_file` / `fromFile` and
+  `load_manifests_from_dir` / `loadManifestsFromDir`, instead of silently
+  keeping the last value.
 
 ### Verified Python SDK publication (2026-09-15)
 - Published Python `grantex==0.5.1` to PyPI (uploaded 2026-09-15 01:56 UTC),

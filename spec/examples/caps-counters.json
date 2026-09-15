@@ -1,0 +1,80 @@
+{
+  "description": "Counter identities, storage keys and Redis key names shared by the Python and TypeScript caps meters. Workers in either language must address the same counters.",
+  "cases": [
+    {
+      "tenant_id": "dev_01",
+      "parts": [
+        "manifest",
+        "acme_kyb",
+        "verify_business",
+        "calls",
+        "per_hour"
+      ],
+      "window": "per_hour",
+      "counter_id": "[\"manifest\",\"acme_kyb\",\"verify_business\",\"calls\",\"per_hour\"]",
+      "counter_hash": "318cf6f9aa10f5bf60dec3c871f6e73d125f6ed2d6453942a9eede30cec55ce5",
+      "tenant_hash": "003549bb34f09e3487f0c4194316a0de",
+      "redis_keys": [
+        "grantex:caps:{003549bb34f09e3487f0c4194316a0de}:318cf6f9aa10f5bf60dec3c871f6e73d125f6ed2d6453942a9eede30cec55ce5:z",
+        "grantex:caps:{003549bb34f09e3487f0c4194316a0de}:318cf6f9aa10f5bf60dec3c871f6e73d125f6ed2d6453942a9eede30cec55ce5:s"
+      ]
+    },
+    {
+      "tenant_id": "dev_01",
+      "parts": [
+        "manifest",
+        "acme_kyb",
+        "verify_business",
+        "calls",
+        "per_case",
+        "case_8841"
+      ],
+      "window": "per_case",
+      "counter_id": "[\"manifest\",\"acme_kyb\",\"verify_business\",\"calls\",\"per_case\",\"case_8841\"]",
+      "counter_hash": "cf1636b7358db343a136c3a283e08f7da7a094af7146af9ff5cb05b432ebac87",
+      "tenant_hash": "003549bb34f09e3487f0c4194316a0de",
+      "redis_keys": [
+        "grantex:caps:{003549bb34f09e3487f0c4194316a0de}:cf1636b7358db343a136c3a283e08f7da7a094af7146af9ff5cb05b432ebac87:z",
+        "grantex:caps:{003549bb34f09e3487f0c4194316a0de}:cf1636b7358db343a136c3a283e08f7da7a094af7146af9ff5cb05b432ebac87:s"
+      ]
+    },
+    {
+      "tenant_id": "dev_01",
+      "parts": [
+        "grant",
+        "grnt_01",
+        "acme_kyb",
+        "cost_units",
+        "per_day"
+      ],
+      "window": "per_day",
+      "counter_id": "[\"grant\",\"grnt_01\",\"acme_kyb\",\"cost_units\",\"per_day\"]",
+      "counter_hash": "c7c38eb0334b9487d17e396a2eb37dc6d9f816f0fbaa7ca624abf2e4b5bdbcca",
+      "tenant_hash": "003549bb34f09e3487f0c4194316a0de",
+      "redis_keys": [
+        "grantex:caps:{003549bb34f09e3487f0c4194316a0de}:c7c38eb0334b9487d17e396a2eb37dc6d9f816f0fbaa7ca624abf2e4b5bdbcca:z",
+        "grantex:caps:{003549bb34f09e3487f0c4194316a0de}:c7c38eb0334b9487d17e396a2eb37dc6d9f816f0fbaa7ca624abf2e4b5bdbcca:s"
+      ]
+    },
+    {
+      "tenant_id": "tenant with spaces {and braces}",
+      "parts": [
+        "grant",
+        "grnt_02",
+        "acme_kyb",
+        "screen_person",
+        "calls",
+        "per_case",
+        "case \"quoted\" é"
+      ],
+      "window": "per_case",
+      "counter_id": "[\"grant\",\"grnt_02\",\"acme_kyb\",\"screen_person\",\"calls\",\"per_case\",\"case \\\"quoted\\\" é\"]",
+      "counter_hash": "cfe722ef9628bb0d726da6556f3ea2683b53a8de28ca59ec4dec713495cecc96",
+      "tenant_hash": "7ba26ef100b89e82e77024677632e802",
+      "redis_keys": [
+        "grantex:caps:{7ba26ef100b89e82e77024677632e802}:cfe722ef9628bb0d726da6556f3ea2683b53a8de28ca59ec4dec713495cecc96:z",
+        "grantex:caps:{7ba26ef100b89e82e77024677632e802}:cfe722ef9628bb0d726da6556f3ea2683b53a8de28ca59ec4dec713495cecc96:s"
+      ]
+    }
+  ]
+}
