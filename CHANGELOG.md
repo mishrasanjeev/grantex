@@ -6,6 +6,81 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Standard grant token claims
+- Grant tokens follow the OAuth profile in `spec/grant-token-0.6.md`, and a
+  stock JOSE library validates them with standard semantics. The claims are
+  `iss`, `sub`, `aud` (when bound), `exp`, `iat`, `jti`, `client_id` and a
+  space-delimited `scope`, plus:
+  - `cnf.jkt` when the agent key is bound;
+  - an RFC 8693 `act` chain on delegated grants;
+  - `authorization_details` (RFC 9396) with purpose, tools, caps, budget and
+    the new decision references (`urn:grantex:decision:v1`);
+  - Grantex's grant record fields under `urn:grantex:grant` (`grant_id`,
+    `agent_did`, `developer_id`, `parent_grant_id`, `delegation_depth`).
+- **Legacy aliases behind a flag.** `agt`, `dev`, `grnt`, `scp`,
+  `parentAgt`, `parentGrnt`, `delegationDepth` and `bdg` are still issued,
+  with the same values, while `GRANT_TOKEN_LEGACY_CLAIMS=true`. That is the
+  default for 0.6. **The default flips to `false` in 0.7**, when tokens stop
+  carrying the aliases.
+- **Break: delegation `act` is nested.** A delegated token's `act` now nests
+  the parent token's `act`, so a second-level delegation carries
+  `{"sub": <parent agent>, "act": {"sub": <grandparent agent>}}` instead of
+  only the parent. The chain is stored on the grant (migration
+  `098_grant_actor_chain.sql`), so refreshed tokens keep it. Grants delegated
+  before the migration refresh with the parent agent only, as before.
+- **Break: disagreeing claims are refused.** The auth service and the SDK
+  verifiers refuse a 0.6 token (one with `urn:grantex:grant`) whose standard
+  claim and legacy alias disagree (for example `scope` and `scp`), and an
+  `act` claim without a string `sub` or deeper than 10. Tokens issued before
+  0.6 are read from `scp`, so they keep verifying.
+- **Break: null claims are refused.** The SDK verifiers refuse a token with a
+  `null` `urn:grantex:grant` (or member), `scope`, `scp`, `act`, `cnf`,
+  `client_id`, `aud` or `authorization_details`, and a mistyped `client_id`,
+  `aud` or `authorization_details`, instead of treating it as absent.
+- **Break: whitespace in new scopes.** `POST /v1/authorize` refuses a scope
+  containing whitespace with `400 INVALID_SCOPE`. Grants created earlier
+  keep working: refresh and delegation still issue tokens, which omit
+  `scope` and always carry `scp`, so standard-only readers refuse them rather
+  than read a different scope set.
+- **`act.sub` is the delegating agent**, not the current actor as in the
+  usual RFC 8693 reading. The current actor is `client_id`. The Go SDK keeps
+  any other members of `act` (`ActorClaim.Members`).
+- **Proof of possession.** The SDK verifiers return `cnf` but do not enforce
+  it by default. `proof_jkt` / `proofJkt` / `ProofJKT` requires `cnf.jkt` to
+  match a thumbprint the caller verified, and `require_proof_of_possession` /
+  `requireProofOfPossession` / `RequireProofOfPossession` fails closed without
+  one.
+- The auth service logs a deprecation notice at start while
+  `GRANT_TOKEN_LEGACY_CLAIMS=true`.
+- `spec/examples/grant-token-0.6.issued.json` holds tokens issued by the auth
+  service, which the Python and Go SDK tests validate with PyJWT and
+  golang-jwt.
+- **SDK verifiers.** The Python, TypeScript and Go verifiers read the
+  standard claims first. They fall back to an alias when the standard claim
+  is absent, and report each alias used:
+  - Python: a `LegacyClaimsWarning` (a `FutureWarning`).
+  - TypeScript: a `DeprecationWarning` with code `GRANTEX_LEGACY_CLAIM`.
+  - Go: `OnLegacyClaim` or a log line.
+
+  `legacy_claims=False` / `legacyClaims: false` / `StandardClaimsOnly: true`
+  reads standard claims only and requires `typ: at+jwt`; this becomes the
+  default in 0.7. `Grantex(legacy_claims=...)` and
+  `new Grantex({ legacyClaims })` pass the setting to `enforce()`.
+  `VerifiedGrant` adds `act`, `cnf`, `audience` and `legacy_claims_used` /
+  `legacyClaimsUsed` (Go: `Act`, `Cnf`, `Audience`, `AuthorizationDetails`,
+  `LegacyClaimsUsed`).
+- **Break (TypeScript types):** in `GrantTokenPayload`, `agt`, `dev` and
+  `scp` are now optional and deprecated, and `scope`, `act`, `cnf`, `aud`
+  and `urn:grantex:grant` are added.
+- **Decision references.** `enforce()` returns `decision_required` for a
+  tool listed in the grant's `urn:grantex:decision:v1` entry, even when the
+  manifest does not declare `requires_decision`. A malformed decision entry
+  denies every call with `malformed_authorization_details`. A delegated grant
+  keeps the decision references of the connectors it keeps.
+  `parse_decision_references` / `parseDecisionReferences` read them.
+- `SPEC.md` §6 and §9, the protocol and concept pages, and the SDK
+  verification pages describe the profile.
+
 ### ES256 signing
 - The auth service can sign grant tokens, OAuth access tokens and its other
   platform JWTs with ES256 (EC P-256) as well as RS256. `JWT_SIGNING_ALG`

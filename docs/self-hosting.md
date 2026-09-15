@@ -228,6 +228,7 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `MAX_GRANT_LIFETIME_SECONDS` | No | — | Longest grant `expiresIn` accepted by authorization and delegation; with the postgres store, start-up refuses a grace shorter than this |
 | `SSO_STATE_SECRET` | No | derived | HMAC key for SSO state; derived from `RSA_PRIVATE_KEY`, `EC_PRIVATE_KEY` or `VAULT_ENCRYPTION_KEY` when unset, so every instance agrees |
 | `AUTO_GENERATE_KEYS` | No | `false` | Auto-generate the signing key at startup (dev only — invalidated on restart) |
+| `GRANT_TOKEN_LEGACY_CLAIMS` | No | `true` | Issue the pre-0.6 claim aliases (`agt`, `dev`, `grnt`, `scp`, `parentAgt`, `parentGrnt`, `delegationDepth`, `bdg`) next to the standard claims. Defaults to `false` in 0.7; see `docs/migration-0.6.md` |
 | `JWT_ISSUER` | Yes | `https://grantex.dev` | `iss` claim in every JWT; your public base URL |
 | `PORT` | No | `3001` | Port the auth service listens on |
 | `HOST` | No | `0.0.0.0` | Bind address |

@@ -26,6 +26,11 @@
 169f940db25840121666e9e8da75d7bb6d912c7f:docs/ietf-draft/draft-mishra-oauth-agent-grants-01.md:generic-api-key:476
 169f940db25840121666e9e8da75d7bb6d912c7f:docs/ietf-draft/draft-mishra-oauth-agent-grants-01.md:generic-api-key:579
 169f940db25840121666e9e8da75d7bb6d912c7f:docs/ietf-draft/draft-mishra-oauth-agent-grants-01.md:generic-api-key:598
+18d2e7d4f8a4cda3f11c594758ca611b3683031a:packages/go-sdk/testdata/grant-token-0.6.issued.json:jwt:31
+18d2e7d4f8a4cda3f11c594758ca611b3683031a:packages/go-sdk/testdata/grant-token-0.6.issued.json:jwt:37
+18d2e7d4f8a4cda3f11c594758ca611b3683031a:packages/go-sdk/testdata/grant-token-0.6.issued.json:jwt:43
+18d2e7d4f8a4cda3f11c594758ca611b3683031a:packages/go-sdk/testdata/grant-token-0.6.issued.json:jwt:49
+18d2e7d4f8a4cda3f11c594758ca611b3683031a:packages/go-sdk/testdata/grant-token-0.6.issued.json:jwt:55
 1b0b8286fe6ba8b0833d33eb249b2042a67367ee:docs/guides/end-user-permissions.mdx:generic-api-key:33
 236d94bd2b5e30b7cdf05c57a53699e0dc2c5f46:docs/internal/commerce-v1/commerce-v1-oacp-final-launch-evidence.md:generic-api-key:14
 3213dc48a5daa4efce2f9177d9eb1ce7b49e23e3:README.md:curl-auth-header:286
@@ -136,6 +141,11 @@ e2e6e9e773a565b329ba2b178023ec9c507d957c:apps/auth-service/tests/signing-keys-le
 e5d8cad4b6565a9a43f86f024e7dccdfee8d001a:docs/guides/trust-registry-setup.mdx:generic-api-key:110
 e5d8cad4b6565a9a43f86f024e7dccdfee8d001a:docs/guides/trust-registry-setup.mdx:generic-api-key:73
 eb731517c0e6abba7072328cb82dee5d49d13f5e:docs/internal/commerce-v1/commerce-v1-oacp-final-launch-evidence.md:generic-api-key:14
+ebd444845b0d87765fc1d6238233c0c418ec248f:spec/examples/grant-token-0.6.issued.json:jwt:31
+ebd444845b0d87765fc1d6238233c0c418ec248f:spec/examples/grant-token-0.6.issued.json:jwt:37
+ebd444845b0d87765fc1d6238233c0c418ec248f:spec/examples/grant-token-0.6.issued.json:jwt:43
+ebd444845b0d87765fc1d6238233c0c418ec248f:spec/examples/grant-token-0.6.issued.json:jwt:49
+ebd444845b0d87765fc1d6238233c0c418ec248f:spec/examples/grant-token-0.6.issued.json:jwt:55
 ed994c3d3b52f4c6a739edafb52f96275d67f844:docs/api-reference/consent-bundles.mdx:generic-api-key:59
 ed994c3d3b52f4c6a739edafb52f96275d67f844:docs/guides/ios-gemma4.mdx:generic-api-key:371
 ed994c3d3b52f4c6a739edafb52f96275d67f844:docs/guides/ios-gemma4.mdx:private-key:379

@@ -99,3 +99,53 @@ Remove an entry in the pull request that fixes it.
   core SDKs now do), and change the conformance check to "every platform
   signing key is RS256 or ES256 with `kid`, `alg` and `use: sig`", ignoring
   keys published for other purposes.
+
+## G-10 — `POST /v1/authorize` cannot request caps or decision references
+
+- **Found:** aligning grant token claims with the OAuth profile (2026-09-15).
+- **What:** `authorization_details` in grant tokens can carry per-grant caps
+  (`caps` in `urn:grantex:tools:v1`) and decision references
+  (`urn:grantex:decision:v1`), and the SDKs enforce both. But
+  `POST /v1/authorize` only accepts `purpose`, and
+  `apps/auth-service/src/lib/purpose.ts` builds tools entries with
+  `connector` and `purpose` only. Tokens from the Grantex flow therefore never
+  carry them. The OAuth PAR flow copies client-supplied entries unchecked
+  (G-4).
+- **Fix:** accept and validate `caps`, `tools`, `data_region` and decision
+  references on the authorization request (the same rules as the SDK
+  parsers), show them on the consent page, store them on the grant, and cover
+  them in `spec/grant-token-0.6.md` issuance tests.
+
+## G-11 — Scopes containing whitespace are accepted outside authorization requests
+
+- **Found:** aligning grant token claims with the OAuth profile (2026-09-15).
+- **What:** `POST /v1/authorize` now refuses scopes containing whitespace, but
+  agent registration (`apps/auth-service/src/routes/agents.ts`) and consent
+  bundles (`apps/auth-service/src/routes/consent-bundles.ts`) still accept
+  them. Tokens for such scopes omit the space-delimited `scope` claim and rely
+  on the deprecated `scp` alias, so they stop working for standard-only
+  readers and once legacy claims are off in 0.7.
+- **Fix:** validate scopes as RFC 6749 scope-tokens (printable ASCII, no
+  space, `"` or `\`) at agent registration and consent-bundle creation,
+  returning `400 INVALID_SCOPE`, and plan a migration for stored grants that
+  already hold such scopes before 0.7.
+
+## G-12 — Integrations read legacy grant token claims directly
+
+- **Found:** aligning grant token claims with the OAuth profile (2026-09-15).
+- **What:** these read `agt`, `dev`, `grnt` or `scp` from decoded tokens
+  instead of the SDK's `VerifiedGrant`:
+  - `packages/a2a`, `packages/a2a-py`
+  - `packages/anthropic`, `packages/crewai`, `packages/google-adk`,
+    `packages/openai-agents`, `packages/strands`, `packages/strands-py`,
+    `packages/vercel-ai`
+  - `packages/cli` (`verify`)
+  - `packages/gemma`, `packages/gemma-py`
+  - `packages/mcp-auth` (`endpoints/introspect.ts` and the Express and Hono
+    middleware)
+
+  They keep working while `GRANT_TOKEN_LEGACY_CLAIMS=true`. They break against
+  a deployment that sets it to `false`, and by default from 0.7.
+- **Fix:** read `scope`, `client_id`, `act` and `urn:grantex:grant` (or use
+  the core SDK verifiers' `VerifiedGrant`) before 0.7. Coordinate the
+  `mcp-auth` change with the open 3.0 pull requests.

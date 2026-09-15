@@ -89,6 +89,23 @@ This function does not require a `Grantex` client instance.
   Optional clock-skew tolerance, in seconds, for time-based JWT claims.
 </ParamField>
 
+<ParamField body="proofJkt" type="string">
+  Thumbprint of the key the caller proved possession of (for example with a verified DPoP
+  proof). The token's `cnf.jkt` must match it. The verifier does not check DPoP proofs.
+</ParamField>
+
+<ParamField body="requireProofOfPossession" type="boolean">
+  Fail closed unless `proofJkt` is given and matches `cnf.jkt`. Without it, `cnf` is returned but not enforced.
+</ParamField>
+
+<ParamField body="legacyClaims" type="boolean">
+  Read legacy claim aliases (`agt`, `dev`, `grnt`, `scp`, `parentAgt`, `parentGrnt`,
+  `delegationDepth`) when the standard claim is absent, emitting a `DeprecationWarning`
+  (code `GRANTEX_LEGACY_CLAIM`) once per alias. Defaults to `true` in 0.6 and `false` in 0.7.
+  With `false`, only standard claims are read and `typ` must be `at+jwt`. A token whose
+  standard claim and alias disagree is always rejected.
+</ParamField>
+
 <ParamField body="algorithms" type="Array<'RS256' | 'ES256'>">
   Narrow the accepted signature algorithms. The default is `GRANT_TOKEN_ALGORITHMS`
   (`['RS256', 'ES256']`); any other value throws `GrantexTokenError`. The key is the

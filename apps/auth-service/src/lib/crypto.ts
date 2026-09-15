@@ -11,6 +11,11 @@ import {
 import { config } from '../config.js';
 import { logger } from './logger.js';
 import {
+  buildGrantTokenClaims,
+  hasUnrepresentableScope,
+  normalizeGrantTokenClaims,
+} from './grant-token-claims.js';
+import {
   getSigningKeyRing,
   loadEnvKeys,
   loadEnvSigningKeyRing,
@@ -170,27 +175,24 @@ export function getKeyPair(): KeyPair {
 /** The `algorithms` allowlist for every platform-token verification. */
 const PLATFORM_ALGORITHMS: string[] = [...SIGNING_ALGORITHMS];
 
+/**
+ * Sign a `grantex-v1` grant token: standard claims always, legacy aliases
+ * while `GRANT_TOKEN_LEGACY_CLAIMS` is on (lib/grant-token-claims.ts).
+ */
 export async function signGrantToken(
   payload: GrantTokenPayload,
+  options: { legacyClaims?: boolean } = {},
 ): Promise<string> {
+  // A scope containing whitespace cannot be put in the space-delimited
+  // `scope`; such grants predate 0.6 and keep working through `scp`
+  // (buildGrantTokenClaims). New authorization requests refuse them.
+  if (hasUnrepresentableScope(payload.scp)) {
+    logger.warn({ jti: payload.jti }, 'grant token issued without scope: a granted scope contains whitespace');
+  }
   const { privateKey, kid, alg } = getKeyPair();
-  const builder = new SignJWT({
-    agt: payload.agt,
-    dev: payload.dev,
-    ...(payload.clientId !== undefined ? { client_id: payload.clientId } : {}),
-    scp: payload.scp,
-    scope: payload.scp.join(' '),
-    ...(payload.cnf !== undefined ? { cnf: payload.cnf } : {}),
-    ...(payload.act !== undefined ? { act: payload.act } : {}),
-    ...(payload.authorizationDetails !== undefined
-      ? { authorization_details: payload.authorizationDetails }
-      : {}),
-    ...(payload.grnt !== undefined ? { grnt: payload.grnt } : {}),
-    ...(payload.parentAgt !== undefined ? { parentAgt: payload.parentAgt } : {}),
-    ...(payload.parentGrnt !== undefined ? { parentGrnt: payload.parentGrnt } : {}),
-    ...(payload.delegationDepth !== undefined ? { delegationDepth: payload.delegationDepth } : {}),
-    ...(payload.bdg !== undefined ? { bdg: payload.bdg } : {}),
-  })
+  const builder = new SignJWT(buildGrantTokenClaims(payload, {
+    legacyClaims: options.legacyClaims ?? config.grantTokenLegacyClaims,
+  }))
     .setProtectedHeader({ alg, kid, typ: 'at+jwt' })
     .setIssuer(config.jwtIssuer)
     .setSubject(payload.sub)
@@ -316,40 +318,37 @@ export async function verifyGrantToken(
     algorithms: PLATFORM_ALGORITHMS,
   });
 
+  // Standard claims and legacy aliases are both read; they must agree.
+  const grant = normalizeGrantTokenClaims(payload);
   const sub = payload.sub;
-  const agt = payload['agt'] as string | undefined;
-  const dev = payload['dev'] as string | undefined;
-  const scp = payload['scp'] as string[] | undefined;
   const jti = payload.jti;
   const iat = payload.iat;
   const exp = payload.exp;
-  if (!sub || !agt || !dev || !scp || !jti || typeof iat !== 'number' || typeof exp !== 'number') {
+  if (!grant || !sub || !jti || typeof iat !== 'number' || typeof exp !== 'number') {
     throw new Error('Missing required grant token claims');
   }
 
   return {
     sub,
-    agt,
-    dev,
+    agt: grant.agt,
+    dev: grant.dev,
     ...(typeof payload['client_id'] === 'string' ? { clientId: payload['client_id'] } : {}),
-    scp,
+    scp: grant.scp,
     jti,
-    grnt: typeof payload['grnt'] === 'string' ? payload['grnt'] : jti,
+    grnt: grant.grnt ?? jti,
     iat,
     exp,
     ...(payload.aud !== undefined ? { aud: payload.aud as string | string[] } : {}),
     ...(payload.iss !== undefined ? { iss: payload.iss } : {}),
-    ...(payload['parentAgt'] !== undefined ? { parentAgt: payload['parentAgt'] as string } : {}),
-    ...(payload['parentGrnt'] !== undefined ? { parentGrnt: payload['parentGrnt'] as string } : {}),
-    ...(payload['delegationDepth'] !== undefined ? { delegationDepth: payload['delegationDepth'] as number } : {}),
+    ...(grant.parentAgt !== undefined ? { parentAgt: grant.parentAgt } : {}),
+    ...(grant.parentGrnt !== undefined ? { parentGrnt: grant.parentGrnt } : {}),
+    ...(grant.delegationDepth !== undefined ? { delegationDepth: grant.delegationDepth } : {}),
     ...(payload['bdg'] !== undefined ? { bdg: payload['bdg'] as number } : {}),
     ...(typeof payload['scope'] === 'string' ? { scope: payload['scope'] } : {}),
     ...(payload['cnf'] && typeof payload['cnf'] === 'object'
       ? { cnf: payload['cnf'] as { jkt: string } }
       : {}),
-    ...(payload['act'] && typeof payload['act'] === 'object'
-      ? { act: payload['act'] as Record<string, unknown> }
-      : {}),
+    ...(grant.act !== undefined ? { act: grant.act as Record<string, unknown> } : {}),
     ...(Array.isArray(payload['authorization_details'])
       ? { authorizationDetails: payload['authorization_details'] as Array<Record<string, unknown>> }
       : {}),

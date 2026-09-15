@@ -63,6 +63,12 @@ export function parseIntegerSetting(
   return parsed;
 }
 
+export function parseBooleanSetting(name: string, value: string): boolean {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  throw new Error(`${name} must be true or false`);
+}
+
 function integerSetting(name: string, fallback: string, min: number, max: number): number {
   return parseIntegerSetting(name, optional(name, fallback), min, max);
 }
@@ -122,6 +128,10 @@ export const config = {
   signingKeyStore: parseSigningKeyStore('SIGNING_KEY_STORE', optional('SIGNING_KEY_STORE', 'env')),
   // How long a retired stored key stays in the JWK Set. Must exceed the
   // longest token lifetime. Default 30 days.
+  // Legacy grant token claim aliases (agt, dev, grnt, scp, parentAgt,
+  // parentGrnt, delegationDepth, bdg) next to the standard claims. On by
+  // default for 0.6; the default flips to false in 0.7.
+  grantTokenLegacyClaims: parseBooleanSetting('GRANT_TOKEN_LEGACY_CLAIMS', optional('GRANT_TOKEN_LEGACY_CLAIMS', 'true')),
   signingKeyRetiredGraceSeconds: integerSetting('SIGNING_KEY_RETIRED_GRACE_SECONDS', '2592000', 3_600, 31_622_400),
   // How long a new signing key is published before it signs: postgres-store
   // rotations, and the legacy-kid transition after start. At least one key

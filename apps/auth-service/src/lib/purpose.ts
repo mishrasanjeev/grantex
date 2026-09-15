@@ -8,6 +8,8 @@
  */
 
 export const TOOLS_DETAIL_TYPE = 'urn:grantex:tools:v1';
+/** Tools on a connector that need a decision grant (spec/grant-token-0.6.md). */
+export const DECISION_DETAIL_TYPE = 'urn:grantex:decision:v1';
 
 /** The controlled purpose vocabulary. Private terms use `x-<org>.<term>`. */
 export const PURPOSE_VOCABULARY: ReadonlyMap<string, string> = new Map([
@@ -93,9 +95,11 @@ export function resolveRequestedPurpose(purpose: unknown, scopes: readonly strin
 }
 
 /**
- * The tools entries of a stored `authorization_details` value that apply to
- * `scopes`, for a delegated grant. Throws when the stored value is not an
- * array, so a corrupt parent never yields an unconstrained child.
+ * The tools entries, and decision references (`urn:grantex:decision:v1`), of a
+ * stored `authorization_details` value that apply to `scopes`, for a delegated
+ * grant: a child never sheds a decision requirement of a connector it keeps.
+ * Throws when the stored value is not an array, so a corrupt parent never
+ * yields an unconstrained child.
  */
 export function narrowToolsAuthorizationDetails(
   stored: unknown,
@@ -107,7 +111,8 @@ export function narrowToolsAuthorizationDetails(
   return stored.filter((entry): entry is Record<string, unknown> =>
     typeof entry === 'object'
     && entry !== null
-    && (entry as Record<string, unknown>)['type'] === TOOLS_DETAIL_TYPE
+    && ((entry as Record<string, unknown>)['type'] === TOOLS_DETAIL_TYPE
+      || (entry as Record<string, unknown>)['type'] === DECISION_DETAIL_TYPE)
     && connectors.has((entry as Record<string, unknown>)['connector'] as string));
 }
 

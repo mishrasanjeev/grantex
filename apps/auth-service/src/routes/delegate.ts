@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getSql, type TxSql } from '../db/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
+import { delegatedActorClaim } from '../lib/grant-token-claims.js';
 import { narrowToolsAuthorizationDetails, purposeOfToolsAuthorizationDetails } from '../lib/purpose.js';
 import { emitEvent } from '../lib/events.js';
 import { issueAgentGrantVC } from '../lib/vc.js';
@@ -167,6 +168,15 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ message: 'Invalid parentGrantToken claims', code: 'BAD_REQUEST', requestId: request.id });
     }
 
+    // RFC 8693 actor chain: the delegating agent, then the actors that
+    // delegated to it. Stored on the grant so a refreshed token keeps it.
+    let actorChain: Record<string, unknown>;
+    try {
+      actorChain = delegatedActorClaim(parentAgt, parentClaims.act) as Record<string, unknown>;
+    } catch {
+      return reply.status(400).send({ message: 'Invalid parentGrantToken claims', code: 'BAD_REQUEST', requestId: request.id });
+    }
+
     const grantId = newGrantId();
     const jti = newTokenId();
     const refreshId = newRefreshTokenId();
@@ -188,7 +198,7 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       ...(typeof subAgent['key_thumbprint'] === 'string'
         ? { cnf: { jkt: subAgent['key_thumbprint'] as string } }
         : {}),
-      act: { sub: parentAgt },
+      act: actorChain,
       ...(childDetails.length > 0 ? { authorizationDetails: childDetails } : {}),
       exp: expTimestamp,
       ...(parentAgt !== undefined ? { parentAgt } : {}),
@@ -220,7 +230,7 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
         INSERT INTO grants (
           id, agent_id, principal_id, developer_id, scopes, expires_at,
           audience, parent_grant_id, delegation_depth, agent_key_thumbprint,
-          purpose, authorization_details
+          actor_chain, purpose, authorization_details
         )
         VALUES (
           ${grantId},
@@ -233,6 +243,7 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
           ${parentGrnt},
           ${delegationDepth},
           ${subAgent['key_thumbprint'] as string | null},
+          ${tx.json(actorChain as never)},
           ${childPurpose ?? null},
           ${childDetails.length > 0 ? tx.json(childDetails as never) : null}
         )
