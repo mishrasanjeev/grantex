@@ -157,6 +157,9 @@ export function claimsToVerifiedGrant(payload: GrantTokenPayload): VerifiedGrant
     ...(payload.parentAgt !== undefined ? { parentAgentDid: payload.parentAgt } : {}),
     ...(payload.parentGrnt !== undefined ? { parentGrantId: payload.parentGrnt } : {}),
     ...(payload.delegationDepth !== undefined ? { delegationDepth: payload.delegationDepth } : {}),
+    ...(payload.authorization_details !== undefined
+      ? { authorizationDetails: payload.authorization_details }
+      : {}),
   };
 }
 

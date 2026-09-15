@@ -41,7 +41,21 @@ from .resources._passports import PassportsClient
 from .resources._dpdp import DpdpClient
 from .resources._commerce import CommerceClient
 from .prepaid_wallets import WalletSpendPoliciesClient
-from .manifest import ToolManifest, Permission, EnforceResult
+from .manifest import ManifestValidationError, ToolManifest, Permission, EnforceResult
+from .denials import (
+    CapSubReason,
+    DenialReason,
+    ManifestSubReason,
+    PurposeSubReason,
+    TokenSubReason,
+    ToolSubReason,
+)
+from ._authorization_details import (
+    AuthorizationDetailsError,
+    ToolsAuthorization,
+    parse_tools_authorization,
+)
+from .purpose import is_known_purpose, match_purpose
 from ._verify import verify_grant_token
 from ._types import VerifyGrantTokenOptions
 
@@ -239,56 +253,168 @@ class Grantex:
                 allowed=False, reason=f"Token verification failed: {e}",
                 grant_id=grant_id, agent_did=agent_did, scopes=scopes,
                 permission=permission, connector=connector, tool=tool,
+                reason_code=DenialReason.TOKEN_INVALID,
             ))
 
         grant_id = getattr(grant, "grant_id", "")
         agent_did = getattr(grant, "agent_did", "")
         scopes = list(getattr(grant, "scopes", []))
 
-        def _denied(reason: str) -> EnforceResult:
-            return EnforceResult(
+        result_purpose = ""
+
+        def _denied(
+            reason: str,
+            code: str,
+            sub_reason: str = "",
+            details: dict[str, Any] | None = None,
+        ) -> EnforceResult:
+            return self._apply_enforce_mode(EnforceResult(
                 allowed=False, reason=reason,
                 grant_id=grant_id, agent_did=agent_did, scopes=scopes,
                 permission=permission, connector=connector, tool=tool,
-            )
+                reason_code=code, sub_reason=sub_reason, details=dict(details or {}),
+                purpose=result_purpose,
+            ))
 
-        # 2. Look up manifest for the connector
+        # 2. Read the grant's tools authorization for this connector. A claim
+        #    that cannot be read unambiguously denies every call.
+        try:
+            tools_auth = parse_tools_authorization(
+                getattr(grant, "authorization_details", None)
+            )
+        except AuthorizationDetailsError as exc:
+            return _denied(
+                f"Grant token authorization_details cannot be used: {exc}.",
+                DenialReason.TOKEN_INVALID, TokenSubReason.MALFORMED_AUTHORIZATION_DETAILS,
+            )
+        entry: ToolsAuthorization | None = tools_auth.get(connector)
+        purpose = entry.purpose if entry is not None else None
+        result_purpose = purpose or ""
+
+        # 3. Look up manifest for the connector
         manifest = self._manifests.get(connector)
         if not manifest:
-            return self._apply_enforce_mode(_denied(f"No manifest loaded for connector '{connector}'. Load a manifest first."))
+            return _denied(
+                f"No manifest loaded for connector '{connector}'. Load a manifest first.",
+                DenialReason.MANIFEST_UNKNOWN_TOOL, ManifestSubReason.UNKNOWN_CONNECTOR,
+            )
 
-        # 3. Look up tool permission from manifest
+        # 4. Look up tool permission from manifest
         required_permission = manifest.get_permission(tool)
         if not required_permission:
-            return self._apply_enforce_mode(_denied(f"Unknown tool '{tool}' on connector '{connector}'. Tool not found in manifest."))
+            return _denied(
+                f"Unknown tool '{tool}' on connector '{connector}'. Tool not found in manifest.",
+                DenialReason.MANIFEST_UNKNOWN_TOOL, ManifestSubReason.UNKNOWN_TOOL,
+            )
         permission = required_permission
+        try:
+            spec = manifest.get_tool_spec(tool)
+        except ManifestValidationError as exc:
+            return _denied(
+                f"Tool '{tool}' on connector '{connector}' has an invalid declaration: {exc}",
+                DenialReason.MANIFEST_UNKNOWN_TOOL, ManifestSubReason.INVALID_DECLARATION,
+            )
+        if spec is None:
+            return _denied(
+                f"Unknown tool '{tool}' on connector '{connector}'. Tool not found in manifest.",
+                DenialReason.MANIFEST_UNKNOWN_TOOL, ManifestSubReason.UNKNOWN_TOOL,
+            )
 
-        # 4. Find the best matching scope for this connector
+        # 5. Find the best matching scope for this connector
         granted_permission = self._resolve_granted_permission(scopes, connector)
         if not granted_permission:
-            return self._apply_enforce_mode(_denied(f"No scope grants access to connector '{connector}'."))
+            return _denied(
+                f"No scope grants access to connector '{connector}'.",
+                DenialReason.TOOL_NOT_GRANTED,
+            )
 
-        # 5. Check permission hierarchy
+        # 6. Check permission hierarchy
         if not Permission.covers(granted_permission, required_permission):
-            return self._apply_enforce_mode(_denied(f"{granted_permission} scope does not permit {required_permission} operations on {connector}."))
+            return _denied(
+                f"{granted_permission} scope does not permit {required_permission} operations on {connector}.",
+                DenialReason.PERMISSION_INSUFFICIENT,
+            )
 
-        # 6. Check capped amount if provided
+        # 7. The grant's tools list, when it has one, must name the tool.
+        if entry is not None and not entry.allows_tool(tool):
+            return _denied(
+                f"Grant does not list tool '{tool}' on connector '{connector}'.",
+                DenialReason.TOOL_NOT_GRANTED, ToolSubReason.NOT_IN_AUTHORIZATION_DETAILS,
+            )
+
+        # 8. Purpose. A tool that declares allowed_purposes needs a grant whose
+        #    purpose is known and matches one of them.
+        if spec.allowed_purposes is not None:
+            allowed = list(spec.allowed_purposes)
+            if purpose is None:
+                return _denied(
+                    f"Tool '{tool}' on {connector} is restricted to purposes "
+                    f"{', '.join(allowed)}; the grant carries no purpose.",
+                    DenialReason.PURPOSE_NOT_ALLOWED, PurposeSubReason.MISSING,
+                    {"allowed_purposes": allowed},
+                )
+            if not is_known_purpose(purpose):
+                return _denied(
+                    f"Grant purpose {purpose!r} is not in the purpose vocabulary.",
+                    DenialReason.PURPOSE_NOT_ALLOWED, PurposeSubReason.UNKNOWN_PURPOSE,
+                    {"allowed_purposes": allowed, "purpose": purpose},
+                )
+            if match_purpose(allowed, purpose) is None:
+                return _denied(
+                    f"Grant purpose '{purpose}' is not allowed for tool '{tool}' on "
+                    f"{connector}; allowed purposes: {', '.join(allowed)}.",
+                    DenialReason.PURPOSE_NOT_ALLOWED, PurposeSubReason.NOT_MATCHED,
+                    {"allowed_purposes": allowed, "purpose": purpose},
+                )
+
+        # 9. Decision. Decision grants are not accepted yet, so a tool that
+        #    requires one is always denied.
+        if spec.requires_decision:
+            return _denied(
+                f"Tool '{tool}' on {connector} requires a decision grant.",
+                DenialReason.DECISION_REQUIRED,
+            )
+
+        # 10. Check capped amount if provided
         if amount is not None:
             if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount):
-                return self._apply_enforce_mode(_denied(f"Amount must be a finite number to enforce a budget cap on {connector}."))
+                return _denied(
+                    f"Amount must be a finite number to enforce a budget cap on {connector}.",
+                    DenialReason.CAP_EXCEEDED, CapSubReason.INVALID_AMOUNT,
+                )
             try:
                 cap = self._extract_cap(scopes, connector)
             except ValueError:
-                return self._apply_enforce_mode(_denied(
-                    f"A capped scope on {connector} carries a malformed cap; refusing to authorize amount {amount}."
-                ))
+                return _denied(
+                    f"A capped scope on {connector} carries a malformed cap; refusing to authorize amount {amount}.",
+                    DenialReason.CAP_EXCEEDED, CapSubReason.MALFORMED_CAP,
+                )
             if cap is not None and amount > cap:
-                return self._apply_enforce_mode(_denied(f"Amount {amount} exceeds budget cap of {cap} on {connector}."))
+                return _denied(
+                    f"Amount {amount} exceeds budget cap of {cap} on {connector}.",
+                    DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_CAP,
+                    {"limit": cap, "amount": amount},
+                )
+
+        # 11. Call caps and cost units (declared by the manifest or by the
+        #     grant) need a meter, which this SDK version does not provide:
+        #     fail closed rather than ignore them.
+        grant_caps = entry.caps if entry is not None else None
+        grant_caps_apply = grant_caps is not None and (
+            tool in grant_caps or (spec.cost_units is not None and "cost_units" in grant_caps)
+        )
+        if spec.caps is not None or spec.cost_units is not None or grant_caps_apply:
+            return _denied(
+                f"Tool '{tool}' on {connector} declares caps or cost units, which "
+                "this SDK version cannot meter.",
+                DenialReason.CAP_EXCEEDED, CapSubReason.METER_UNAVAILABLE,
+            )
 
         return EnforceResult(
             allowed=True, reason="",
             grant_id=grant_id, agent_did=agent_did, scopes=scopes,
             permission=permission, connector=connector, tool=tool,
+            purpose=result_purpose,
         )
 
     @staticmethod
@@ -353,6 +479,10 @@ class Grantex:
                 permission=result.permission,
                 connector=result.connector,
                 tool=result.tool,
+                reason_code=result.reason_code,
+                sub_reason=result.sub_reason,
+                details=result.details,
+                purpose=result.purpose,
             )
         return result
 
