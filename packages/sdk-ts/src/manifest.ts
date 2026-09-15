@@ -23,6 +23,8 @@
 
 import type { DenialReason } from './denials.js';
 import type { CapLimit, CapsMode, Reservation } from './caps/meter.js';
+import type { DecisionAction } from './decisions/action.js';
+import type { ConsumedDecision } from './resources/decisions.js';
 
 /* ------------------------------------------------------------------ */
 /*  Permission                                                         */
@@ -589,6 +591,8 @@ export interface EnforceResult {
   capsTenantId?: string;
   /** In caps warn mode, the cap denial that was not applied. */
   wouldDeny?: WouldDeny;
+  /** For a tool that requires a decision: the decision grants consumed for this call. */
+  decision?: ConsumedDecision;
 }
 
 /** A cap denial reported, not applied, in caps warn mode. Keys match the Python SDK. */
@@ -623,6 +627,19 @@ export interface EnforceOptions {
   capsMode?: CapsMode;
   /** Tenant of every counter of this call instead of the grant's developer. */
   capsTenantId?: string;
+  /**
+   * Decision grant tokens for a tool with `requires_decision` (one, or two for a decision in
+   * `four_eyes_on`). Without them the call is denied with `decision_required`.
+   */
+  decisionGrants?: readonly string[];
+  /** The action the grants must approve. Defaults to the action derived from `arguments`. */
+  decisionAction?: DecisionAction;
+  /** The call's arguments: `case_id`, `decision`, `subject` and `amount` are read from them. */
+  arguments?: Record<string, unknown>;
+  /** The case's current version, from the application's own case state. */
+  caseVersion?: string;
+  /** Overrides the client's decisions mode for this call. */
+  decisionsMode?: 'enforce' | 'warn';
 }
 
 /** Options for `grantex.wrapTool()`. */

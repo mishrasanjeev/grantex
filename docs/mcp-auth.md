@@ -471,6 +471,21 @@ export const decisionVerifier: DecisionVerifier = {
 };
 ```
 
+- **Grantex decision grants.** `grantexDecisionVerifier(options)` is the
+  reference `DecisionVerifier` for decision grants issued by the Grantex auth
+  service (`spec/decision-grant.md`). It reads one grant, or two
+  comma-separated grants for a decision in `four_eyes_on`, from the
+  `grantex-decision-grant` request header (`header` to change it); derives
+  the semantic action from the tool name and the call's `case_id`,
+  `decision`, `subject` and `amount`; asks `caseVersion(caseId, check)` for
+  the case's current version from your own case state; verifies the grants
+  with `verify` and consumes them with `consume`, answering `valid` only after
+  the issuer confirmed consumption (`consume_unavailable` otherwise). Pass
+  `verifyDecisionGrants` and `grantex.decisions.consume` from `@grantex/sdk`
+  0.6 or later; they are injected so this package does not depend on an
+  unreleased SDK. Refusals carry the SDK's sub-reason (`action_mismatch`,
+  `wrong_case`, `case_changed`, `expired`, `consumed`, `same_approver`,
+  `four_eyes_incomplete`, `malformed`, ...) in the `decision_invalid` body.
 - **Purpose-bound grants.** `grant.authorizeParams` returns extra parameters
   for the Grantex authorize call (for example `authorization_details` with
   purpose and region). It cannot override the agent, principal, scopes,

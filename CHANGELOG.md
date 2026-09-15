@@ -171,6 +171,43 @@ Breaking changes
   advertised `grantex_extensions.consent_ui` and `audit_stream` URLs, which had
   no routes.
 
+### Decision grants in the SDKs and mcp-auth
+- `enforce()` in both SDKs now accepts decision grants for tools whose
+  manifest entry has `requires_decision` (previously every such call was
+  denied): `decision_grants` / `decisionGrants` (one token, or two for a
+  decision in `four_eyes_on`), the action to compare them with
+  (`decision_action` / `decisionAction`, or derived from `arguments`) and
+  `case_version` / `caseVersion`. Grants are verified offline (typ
+  `decision+jwt`, signature by the issuer's JWKS, issuer, audience
+  `urn:grantex:decision`, developer, connector, action hash, case version,
+  expiry, four eyes with different `sub` and the second approval naming the
+  first) and then consumed at the auth service as the last step, after caps
+  are reserved; a failed consumption refunds the reservation. Without grants
+  the result is `decision_required` (with `details.decision_required`
+  `<connector>:<tool>`); otherwise `decision_invalid` with a sub-reason from
+  the new `DecisionSubReason` (`action_mismatch`, `wrong_case`,
+  `case_changed`, `expired`, `consumed`, `same_approver`,
+  `four_eyes_incomplete`, `malformed`, `unknown_grant`, `revoked`,
+  `consume_unavailable`). Offline verification alone never allows a call.
+  `EnforceResult.decision` records what was consumed.
+- `decisions_mode` / `decisionsMode` (client option and per call):
+  `enforce` (default) or `warn`, which allows the call, still consumes valid
+  grants, and reports the denial in `would_deny` / `wouldDeny`. Platforms map
+  their `decisions.required` flag to these modes. `decision_consumer` /
+  `decisionConsumer` replaces the auth-service consumer.
+- `grantex.decisions` / `Grantex.decisions`: `create_approver_session`,
+  `set_case_version`, `create_request`, `get_request`, `cancel_request`,
+  `approve`, `create_page_ticket`, `consume` (never retried; an unconfirmed
+  consumption raises `consume_unavailable`).
+- `verify_decision_grant(s)` / `verifyDecisionGrant(s)` for offline checks,
+  with shared cases in `spec/examples/decision-grant/verification.json`.
+- `@grantex/mcp-auth`: `grantexDecisionVerifier()` reference
+  `DecisionVerifier`, reading grants from the `grantex-decision-grant` header
+  and answering `valid` only after consumption.
+- Behaviour change (no API break): a call to a `requires_decision` tool that
+  carries a valid decision grant which the auth service consumes is now
+  allowed. Calls without one are denied exactly as before.
+
 ### Decision grants in the auth service
 Behind `DECISION_GRANTS_ENABLED` (default off; the endpoints answer 404
 `DECISION_GRANTS_DISABLED` until it is `true`). Profile in

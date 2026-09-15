@@ -4,7 +4,7 @@ import dataclasses
 import math
 import os
 import re
-from typing import Any, Callable
+from typing import Any, Callable, Mapping, Sequence
 
 import httpx
 
@@ -71,13 +71,33 @@ from .caps import (
     Reservation,
     build_cap_limits,
 )
-from ._verify import verify_grant_token
+from ._verify import _derive_issuer_from_jwks_uri, verify_grant_token
+from .denials import DecisionSubReason
+from .decisions import (
+    DECISIONS_MODES,
+    DECISIONS_WARN,
+    ActionValidationError,
+    ConsumedDecision,
+    DecisionAction,
+    DecisionConsumer,
+    DecisionGrantError,
+    DecisionGrantSet,
+    DecisionsClient,
+    verify_decision_grants,
+)
+from .decisions._client import _ClientConsumer
 from ._types import VerifyGrantTokenOptions
 
 _DEFAULT_BASE_URL = "https://api.grantex.dev"
 
 
 _CAP_RE = re.compile(r"^\d+(\.\d+)?$")
+
+
+def _check_decisions_mode(mode: object) -> str:
+    if mode not in DECISIONS_MODES:
+        raise ValueError(f"decisions_mode must be one of {', '.join(DECISIONS_MODES)}, not {mode!r}")
+    return str(mode)
 
 
 def _check_caps_mode(mode: object) -> str:
@@ -126,6 +146,7 @@ class Grantex:
     dpdp: DpdpClient
     commerce: CommerceClient
     wallet_spend_policies: WalletSpendPoliciesClient
+    decisions: DecisionsClient
 
     @property
     def last_rate_limit(self) -> RateLimit | None:
@@ -141,6 +162,8 @@ class Grantex:
         enforce_mode: str = "strict",
         caps_meter: CapsMeter | None = None,
         caps_mode: str = CAPS_ENFORCE,
+        decisions_mode: str = "enforce",
+        decision_consumer: DecisionConsumer | None = None,
     ) -> None:
         resolved_key = (api_key or os.environ.get("GRANTEX_API_KEY", "")).strip()
         if not resolved_key:
@@ -152,6 +175,7 @@ class Grantex:
         self._enforce_mode = enforce_mode
         self._caps_meter = caps_meter
         self._caps_mode = _check_caps_mode(caps_mode)
+        self._decisions_mode = _check_decisions_mode(decisions_mode)
 
         self._http = HttpClient(
             base_url=base_url,
@@ -183,6 +207,10 @@ class Grantex:
         self.dpdp = DpdpClient(self._http)
         self.commerce = CommerceClient(self._http)
         self.wallet_spend_policies = WalletSpendPoliciesClient(self._http)
+        self.decisions = DecisionsClient(self._http)
+        self._decision_consumer: DecisionConsumer = (
+            decision_consumer if decision_consumer is not None else _ClientConsumer(self.decisions)
+        )
         self._manifests: dict[str, ToolManifest] = {}
         self._jwks_uri = f"{base_url.rstrip('/')}/.well-known/jwks.json"
 
@@ -264,6 +292,11 @@ class Grantex:
         reserve: bool = True,
         caps_mode: str | None = None,
         caps_tenant_id: str | None = None,
+        decision_grants: Sequence[str] | None = None,
+        decision_action: DecisionAction | Mapping[str, Any] | None = None,
+        arguments: Mapping[str, Any] | None = None,
+        case_version: str | None = None,
+        decisions_mode: str | None = None,
     ) -> EnforceResult:
         """Enforce scope for a tool call.
 
@@ -287,6 +320,26 @@ class Grantex:
           skips caps.
         - ``caps_tenant_id`` replaces the grant's developer as the tenant of
           every counter of this call.
+
+        For a tool whose manifest entry has ``requires_decision`` (PRD G-3):
+
+        - ``decision_grants`` are the decision grant tokens for this call (one,
+          or two for a decision in ``four_eyes_on``). Without them the call is
+          denied with ``decision_required``.
+        - The action they must approve is ``decision_action``, or is derived
+          from the call's ``arguments`` (tool name plus ``case_id``,
+          ``decision``, ``subject``, ``amount``). ``case_version`` is the case's
+          current version from the application's own case state.
+        - The grants are verified offline (signature, issuer, audience, expiry,
+          developer, connector, action hash, case version, four eyes) and then
+          consumed at the auth service as the last step, after caps are
+          reserved; a failed consumption releases the reservation. Any failure
+          is ``decision_invalid`` with a ``DecisionSubReason``.
+          ``result.decision`` records what was consumed.
+        - ``decisions_mode`` overrides the client's mode: ``enforce`` denies;
+          ``warn`` allows the call, still consumes valid grants, and reports
+          the denial in ``result.would_deny``. Platforms map their
+          ``decisions.required`` flag to ``enforce`` (on) or ``warn`` (off).
 
         1. Verifies the grant token JWT locally using the issuer's JWKS
         2. Looks up the tool's required permission from loaded manifests
@@ -434,13 +487,39 @@ class Grantex:
                     {"allowed_purposes": allowed, "purpose": purpose},
                 )
 
-        # 9. Decision. Decision grants are not accepted yet, so a tool that
-        #    requires one is always denied.
+        # 9. Decision. A tool that requires a decision needs decision grants
+        #    that verify offline for this exact action; they are consumed at
+        #    the issuer as the last step, after caps are reserved.
+        decision_mode = self._decisions_mode if decisions_mode is None else _check_decisions_mode(decisions_mode)
+        decision_set: DecisionGrantSet | None = None
+        would_deny: dict[str, Any] | None = None
         if spec.requires_decision:
-            return _denied(
-                f"Tool '{tool}' on {connector} requires a decision grant.",
-                DenialReason.DECISION_REQUIRED,
-            )
+            requirement = {"decision_required": f"{connector}:{tool}"}
+            decision_denial: tuple[str, str, str] | None = None
+            try:
+                decision_set = self._verify_decision(
+                    grant, connector, tool, spec.four_eyes_on,
+                    decision_grants, decision_action, arguments, case_version,
+                )
+            except DecisionGrantError as exc:
+                if exc.sub_reason == DecisionSubReason.ABSENT:
+                    decision_denial = (
+                        DenialReason.DECISION_REQUIRED, "",
+                        f"Tool '{tool}' on {connector} requires a decision grant.",
+                    )
+                else:
+                    decision_denial = (
+                        DenialReason.DECISION_INVALID, exc.sub_reason,
+                        f"The decision grant for tool '{tool}' on {connector} is not valid: {exc}",
+                    )
+            if decision_denial is not None:
+                code, sub_reason, message = decision_denial
+                if decision_mode != DECISIONS_WARN:
+                    return _denied(message, code, sub_reason, requirement)
+                would_deny = {
+                    "reason_code": code, "sub_reason": sub_reason,
+                    "reason": message, "details": requirement,
+                }
 
         # 10. Check capped amount if provided
         if amount is not None:
@@ -474,7 +553,6 @@ class Grantex:
         reservation: Reservation | None = None
         cap_limits: tuple[CapLimit, ...] = ()
         caps_tenant = caps_tenant_id if caps_tenant_id is not None else getattr(grant, "developer_id", "")
-        would_deny: dict[str, Any] | None = None
         caps_declared = spec.caps is not None or spec.cost_units is not None or grant_caps_apply
         if caps_declared and mode != CAPS_OFF:
             # (reason, sub_reason, message, details) when the caps would deny.
@@ -528,10 +606,34 @@ class Grantex:
                 code, sub_reason, message, details = cap_denial
                 if mode != CAPS_WARN:
                     return _denied(message, code, sub_reason, details)
-                would_deny = {
-                    "reason_code": code, "sub_reason": sub_reason,
-                    "reason": message, "details": details,
-                }
+                if would_deny is None:
+                    would_deny = {
+                        "reason_code": code, "sub_reason": sub_reason,
+                        "reason": message, "details": details,
+                    }
+
+        # 12. Consume the decision grants at the issuer. Offline verification
+        #     alone never allows a call: one grant authorises one call.
+        consumed: ConsumedDecision | None = None
+        if decision_set is not None:
+            try:
+                consumed = self._decision_consumer.consume(decision_set, grant_id=grant_id or None)
+            except DecisionGrantError as exc:
+                if reservation is not None and self._caps_meter is not None:
+                    try:
+                        self._caps_meter.refund_unsent(reservation)
+                    except Exception:  # noqa: BLE001 - the call is refused either way
+                        pass
+                    reservation = None
+                message = f"The decision grant for tool '{tool}' on {connector} was not consumed: {exc}"
+                details = {"decision_required": f"{connector}:{tool}"}
+                if decision_mode != DECISIONS_WARN:
+                    return _denied(message, DenialReason.DECISION_INVALID, exc.sub_reason, details)
+                if would_deny is None:
+                    would_deny = {
+                        "reason_code": DenialReason.DECISION_INVALID, "sub_reason": exc.sub_reason,
+                        "reason": message, "details": details,
+                    }
 
         return EnforceResult(
             allowed=True, reason="",
@@ -539,7 +641,49 @@ class Grantex:
             permission=permission, connector=connector, tool=tool,
             purpose=result_purpose, reservation=reservation,
             cap_limits=cap_limits, caps_tenant_id=caps_tenant if cap_limits else "",
-            would_deny=would_deny,
+            would_deny=would_deny, decision=consumed,
+        )
+
+    def _verify_decision(
+        self,
+        grant: Any,
+        connector: str,
+        tool: str,
+        four_eyes_on: tuple[str, ...],
+        decision_grants: Sequence[str] | None,
+        decision_action: DecisionAction | Mapping[str, Any] | None,
+        arguments: Mapping[str, Any] | None,
+        case_version: str | None,
+    ) -> DecisionGrantSet:
+        """Offline checks of the decision grants for one call (see ``enforce``)."""
+        if decision_grants is None or len(decision_grants) == 0:
+            raise DecisionGrantError(DecisionSubReason.ABSENT, "no decision grant was presented")
+        try:
+            if decision_action is not None:
+                action = (
+                    decision_action if isinstance(decision_action, DecisionAction)
+                    else DecisionAction.from_dict(decision_action)
+                )
+            elif arguments is not None:
+                action = DecisionAction.from_tool_call(tool, arguments)
+            else:
+                raise DecisionGrantError(
+                    DecisionSubReason.MALFORMED,
+                    "enforce() needs decision_action or arguments to compare the decision grant with",
+                )
+        except ActionValidationError as exc:
+            raise DecisionGrantError(DecisionSubReason.MALFORMED, f"the call's action is invalid: {exc}") from exc
+        if action.action != tool:
+            raise DecisionGrantError(DecisionSubReason.ACTION_MISMATCH, "the decision action names another tool")
+        if not case_version:
+            raise DecisionGrantError(DecisionSubReason.MALFORMED, "enforce() needs case_version for a decision")
+        return verify_decision_grants(
+            decision_grants, action, case_version,
+            issuer=_derive_issuer_from_jwks_uri(self._jwks_uri),
+            approvals_required=2 if action.decision in four_eyes_on else 1,
+            jwks_uri=self._jwks_uri,
+            developer_id=getattr(grant, "developer_id", None),
+            connector=connector,
         )
 
     @staticmethod

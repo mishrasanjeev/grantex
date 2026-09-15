@@ -44,6 +44,10 @@ import {
 import { MALFORMED_GRANT_CAPS, buildCapLimits, type BuildCapLimitsOptions } from './caps/limits.js';
 import { ToolManifest, parseManifestJson, permissionCovers, type WouldDeny, type ToolSpec, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 import { verifyGrantToken } from './verify.js';
+import { DecisionSubReason } from './denials.js';
+import { ActionValidationError, decisionActionFromToolCall, parseDecisionAction, type DecisionAction } from './decisions/action.js';
+import { DecisionGrantError, verifyDecisionGrants, type DecisionGrantSet } from './decisions/verify.js';
+import { DecisionsClient, type ConsumedDecision, type DecisionConsumer } from './resources/decisions.js';
 import type {
   AuthorizationRequest,
   AuthorizeParams,
@@ -58,6 +62,13 @@ import type {
 } from './types.js';
 
 const DEFAULT_BASE_URL = 'https://api.grantex.dev';
+
+function checkDecisionsMode(mode: unknown): 'enforce' | 'warn' {
+  if (mode !== 'enforce' && mode !== 'warn') {
+    throw new Error(`decisionsMode must be one of enforce, warn, not ${JSON.stringify(mode)}`);
+  }
+  return mode;
+}
 
 function checkCapsMode(mode: unknown): CapsMode {
   if (!(CAPS_MODES as readonly unknown[]).includes(mode)) {
@@ -90,6 +101,8 @@ export class Grantex {
   #enforceMode: 'strict' | 'permissive';
   readonly #capsMeter: CapsMeter | undefined;
   readonly #capsMode: CapsMode;
+  readonly #decisionsMode: 'enforce' | 'warn';
+  readonly #decisionConsumer: DecisionConsumer;
 
   readonly agents: AgentsClient;
   readonly grants: GrantsClient;
@@ -113,6 +126,7 @@ export class Grantex {
   readonly passports: PassportsClient;
   readonly dpdp: DpdpClient;
   readonly commerce: CommerceClient;
+  readonly decisions: DecisionsClient;
 
   get lastRateLimit(): RateLimit | undefined {
     return this.#http.lastRateLimit;
@@ -164,6 +178,12 @@ export class Grantex {
     this.#enforceMode = (options as Record<string, unknown>)['enforceMode'] as 'strict' | 'permissive' ?? 'strict';
     this.#capsMeter = options.capsMeter;
     this.#capsMode = checkCapsMode(options.capsMode ?? 'enforce');
+    this.#decisionsMode = checkDecisionsMode(options.decisionsMode ?? 'enforce');
+    this.decisions = new DecisionsClient(this.#http);
+    const decisions = this.decisions;
+    this.#decisionConsumer = options.decisionConsumer ?? {
+      consume: (grants, consumeOptions) => decisions.consume(grants, consumeOptions ?? {}),
+    };
   }
 
   /**
@@ -279,6 +299,7 @@ export class Grantex {
   async enforce(options: EnforceOptions): Promise<EnforceResult> {
     const { grantToken, connector, tool, amount, caseId, costComponents, reserve = true, capsTenantId } = options;
     const capsMode = options.capsMode === undefined ? this.#capsMode : checkCapsMode(options.capsMode);
+    const decisionsMode = options.decisionsMode === undefined ? this.#decisionsMode : checkDecisionsMode(options.decisionsMode);
     const base: Omit<EnforceResult, 'allowed' | 'reason'> = {
       grantId: '',
       agentDid: '',
@@ -429,10 +450,33 @@ export class Grantex {
       }
     }
 
-    // 9. Decision. Decision grants are not accepted yet, so a tool that
-    //    requires one is always denied.
+    // 9. Decision. A tool that requires a decision needs decision grants that
+    //    verify offline for this exact action; they are consumed at the
+    //    issuer as the last step, after caps are reserved.
+    let decisionSet: DecisionGrantSet | undefined;
+    let wouldDeny: WouldDeny | undefined;
     if (spec.requiresDecision) {
-      return denied(`Tool '${tool}' on ${connector} requires a decision grant.`, DenialReason.DECISION_REQUIRED);
+      const requirement = { decision_required: `${connector}:${tool}` };
+      let decisionDenial: WouldDeny | undefined;
+      try {
+        decisionSet = await this.#verifyDecision(grant, connector, tool, spec.fourEyesOn, options);
+      } catch (err) {
+        if (!(err instanceof DecisionGrantError)) throw err;
+        decisionDenial = err.subReason === DecisionSubReason.ABSENT
+          ? { reason_code: DenialReason.DECISION_REQUIRED, sub_reason: '', reason: `Tool '${tool}' on ${connector} requires a decision grant.`, details: requirement }
+          : { reason_code: DenialReason.DECISION_INVALID, sub_reason: err.subReason, reason: `The decision grant for tool '${tool}' on ${connector} is not valid: ${err.message}`, details: requirement };
+      }
+      if (decisionDenial !== undefined) {
+        if (decisionsMode !== 'warn') {
+          return denied(
+            decisionDenial.reason,
+            decisionDenial.reason_code as DenialReason,
+            decisionDenial.sub_reason === '' ? undefined : decisionDenial.sub_reason,
+            decisionDenial.details,
+          );
+        }
+        wouldDeny = decisionDenial;
+      }
     }
 
     // 10. Check capped amount if provided
@@ -472,7 +516,6 @@ export class Grantex {
     let reservation: Reservation | undefined;
     let capLimits: CapLimit[] = [];
     const capsTenant = capsTenantId ?? grant.developerId;
-    let wouldDeny: WouldDeny | undefined;
     if ((spec.caps !== undefined || spec.costUnits !== undefined || grantCapsApply) && capsMode !== 'off') {
       let capDenial: WouldDeny | undefined;
       const meter = this.#capsMeter;
@@ -554,7 +597,26 @@ export class Grantex {
         if (capsMode !== 'warn') {
           return denied(capDenial.reason, capDenial.reason_code as DenialReason, capDenial.sub_reason, capDenial.details);
         }
-        wouldDeny = capDenial;
+        wouldDeny ??= capDenial;
+      }
+    }
+
+    // 12. Consume the decision grants at the issuer. Offline verification
+    //     alone never allows a call: one grant authorises one call.
+    let decision: ConsumedDecision | undefined;
+    if (decisionSet !== undefined) {
+      try {
+        decision = await this.#decisionConsumer.consume(decisionSet, grant.grantId ? { grantId: grant.grantId } : {});
+      } catch (err) {
+        const subReason = err instanceof DecisionGrantError ? err.subReason : DecisionSubReason.CONSUME_UNAVAILABLE;
+        if (reservation !== undefined && this.#capsMeter !== undefined) {
+          await this.#capsMeter.refundUnsent(reservation).catch(() => undefined);
+          reservation = undefined;
+        }
+        const message = `The decision grant for tool '${tool}' on ${connector} was not consumed: ${err instanceof Error ? err.message : 'consumption failed'}`;
+        const details = { decision_required: `${connector}:${tool}` };
+        if (decisionsMode !== 'warn') return denied(message, DenialReason.DECISION_INVALID, subReason, details);
+        wouldDeny ??= { reason_code: DenialReason.DECISION_INVALID, sub_reason: subReason, reason: message, details };
       }
     }
 
@@ -566,7 +628,59 @@ export class Grantex {
       ...(reservation !== undefined ? { reservation } : {}),
       ...(capLimits.length > 0 ? { capLimits, capsTenantId: capsTenant } : {}),
       ...(wouldDeny !== undefined ? { wouldDeny } : {}),
+      ...(decision !== undefined ? { decision } : {}),
     };
+  }
+
+  /** Offline checks of the decision grants for one call (see `enforce`). */
+  async #verifyDecision(
+    grant: VerifiedGrant,
+    connector: string,
+    tool: string,
+    fourEyesOn: readonly string[],
+    options: EnforceOptions,
+  ): Promise<DecisionGrantSet> {
+    const tokens = options.decisionGrants;
+    if (tokens === undefined || tokens.length === 0) {
+      throw new DecisionGrantError(DecisionSubReason.ABSENT, 'no decision grant was presented');
+    }
+    let action: DecisionAction;
+    try {
+      if (options.decisionAction !== undefined) {
+        action = parseDecisionAction(options.decisionAction);
+      } else if (options.arguments !== undefined) {
+        action = decisionActionFromToolCall(tool, options.arguments);
+      } else {
+        throw new DecisionGrantError(DecisionSubReason.MALFORMED, 'enforce() needs decisionAction or arguments to compare the decision grant with');
+      }
+    } catch (err) {
+      if (err instanceof ActionValidationError) {
+        throw new DecisionGrantError(DecisionSubReason.MALFORMED, `the call's action is invalid: ${err.message}`);
+      }
+      throw err;
+    }
+    if (action.action !== tool) {
+      throw new DecisionGrantError(DecisionSubReason.ACTION_MISMATCH, 'the decision action names another tool');
+    }
+    if (typeof options.caseVersion !== 'string' || options.caseVersion.length === 0) {
+      throw new DecisionGrantError(DecisionSubReason.MALFORMED, 'enforce() needs caseVersion for a decision');
+    }
+    return verifyDecisionGrants(tokens, action, options.caseVersion, {
+      issuer: this.#decisionIssuer(),
+      jwksUri: this.#jwksUri,
+      developerId: grant.developerId,
+      connector,
+      approvalsRequired: fourEyesOn.includes(action.decision) ? 2 : 1,
+    });
+  }
+
+  #decisionIssuer(): string {
+    if (this.#issuer !== undefined) return this.#issuer;
+    const url = new URL(this.#jwksUri);
+    if (url.href.replace(/\/$/, '') === 'https://api.grantex.dev/.well-known/jwks.json') return 'https://grantex.dev';
+    return url.pathname.endsWith('/.well-known/jwks.json')
+      ? `${url.origin}${url.pathname.slice(0, -'/.well-known/jwks.json'.length)}`
+      : `${url.origin}${url.pathname.replace(/\/$/, '')}`;
   }
 
   /**

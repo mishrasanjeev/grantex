@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple, Uni
 
 if TYPE_CHECKING:
     from .caps import CapLimit, Reservation
+    from .decisions import ConsumedDecision
 
 
 # ── Permission ──────────────────────────────────────────────────────────
@@ -609,5 +610,9 @@ class EnforceResult:
     """Tenant of ``cap_limits``; pass both to ``CapsMeter.reserve``."""
 
     would_deny: Optional[Dict[str, Any]] = None
-    """In caps warn mode, the cap denial that was not applied: ``reason_code``,
-    ``sub_reason``, ``reason`` and ``details``."""
+    """In caps or decisions warn mode, the first denial that was not applied:
+    ``reason_code``, ``sub_reason``, ``reason`` and ``details``."""
+
+    decision: Optional["ConsumedDecision"] = None
+    """For a tool that requires a decision: the decision grants consumed for
+    this call (request id, jtis, action hash, approvers)."""

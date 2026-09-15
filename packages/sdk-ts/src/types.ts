@@ -1,4 +1,5 @@
 import type { CapsMeter, CapsMode } from './caps/meter.js';
+import type { DecisionConsumer } from './resources/decisions.js';
 
 // ─── Rate Limits ─────────────────────────────────────────────────────────────
 
@@ -28,6 +29,14 @@ export interface GrantexClientOptions {
   capsMeter?: CapsMeter;
   /** `enforce` (default) denies over-cap calls, `warn` allows them and reports `wouldDeny`, `off` skips caps. */
   capsMode?: CapsMode;
+  /**
+   * `enforce` (default) denies a `requires_decision` call without a valid, consumed decision
+   * grant; `warn` allows it and reports `wouldDeny`. Platforms map their `decisions.required`
+   * flag to `enforce` (on) or `warn` (off).
+   */
+  decisionsMode?: 'enforce' | 'warn';
+  /** Consumes decision grants at their issuer. Defaults to `grantex.decisions` (the auth service). */
+  decisionConsumer?: DecisionConsumer;
 }
 
 // ─── Signup ─────────────────────────────────────────────────────────────────
