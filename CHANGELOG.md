@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Evidence package format
+- New specification of the per-case evidence package, format 1.0
+  (`spec/evidence-package.md`), JSON Schema
+  (`spec/evidence-package-1.0.schema.json`) and shared examples and test cases
+  (`spec/examples/evidence/`): grant chain, tool calls with keyed content
+  digests and upstream record references, run context, policy evaluations,
+  recommendations, screening dispositions, decisions and consumptions,
+  revocations and voids; every entry records who asserted it and when it was
+  recorded; hash chain, platform anchor and service signature over root and
+  anchor.
+- Private by default: identifiers, record references and content digests are
+  keyed per case, with operator-approved disclosure.
+- New concepts page `docs/concepts/evidence-and-verification.md`.
+
 ### Breaking changes from 0.5 (summary)
 `docs/migration-0.6.md` explains each item and what to do. Manifests,
 purpose-bound grants, caps, signing and claims each have their own entry
