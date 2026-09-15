@@ -1,16 +1,16 @@
 {
   "evidence-package-disclosed.json": {
-    "root": "sha256:c8a962fb62ac039f9069d2b467737f0d1413dce45317fc65953e14144ff87641",
-    "entry_count": 15
+    "root": "sha256:b79d4c3bd0633b77615abe1153e5d982da63ee6afa07e16ddd6c75c5222d5a99",
+    "entry_count": 18
   },
   "evidence-package-signed.json": {
-    "root": "sha256:e2f5dbf9add538342f753afe20c9ee4b90b63e8a6eb78740d95590022680765c",
-    "entry_count": 15,
-    "anchor_hash": "538b08d70d6c8d88cef16a4418d982b2b8b760bd72373ad8ba7edc6c43496c27"
+    "root": "sha256:fbc98bfa7f0c59cd400504ec838b159ba20fbbca31a64c3e50e7a848463deade",
+    "entry_count": 18,
+    "anchor_hash": "8f6af1cdf6fc68b4acdaef31e3bcf5b4ef0a4c41ebba6f7c559852df4b0ad04f"
   },
   "evidence-package.json": {
-    "root": "sha256:e2f5dbf9add538342f753afe20c9ee4b90b63e8a6eb78740d95590022680765c",
-    "entry_count": 15,
-    "anchor_hash": "538b08d70d6c8d88cef16a4418d982b2b8b760bd72373ad8ba7edc6c43496c27"
+    "root": "sha256:fbc98bfa7f0c59cd400504ec838b159ba20fbbca31a64c3e50e7a848463deade",
+    "entry_count": 18,
+    "anchor_hash": "8f6af1cdf6fc68b4acdaef31e3bcf5b4ef0a4c41ebba6f7c559852df4b0ad04f"
   }
 }

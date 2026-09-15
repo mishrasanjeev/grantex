@@ -6,8 +6,8 @@
       "kid": "evidence-example-es256",
       "kty": "EC",
       "use": "sig",
-      "x": "46E3qw76mX4ZT07xq0XZA8mBqoN6Ue3_GoEoQyfztYA",
-      "y": "QntD3We8qUv8rBnRdm209nwnKXKIlp0ifZQ-Q5kWYDE"
+      "x": "bzz8j7os8hAhovMmVKv4BlLyg8_yDQ38bQIXY4e6JK8",
+      "y": "B9895ZbwChnNZfRonPV_Wj__Vm-Y8I13WNVm7Ehwkzg"
     }
   ]
 }

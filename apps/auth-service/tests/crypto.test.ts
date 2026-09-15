@@ -79,10 +79,15 @@ describe('initKeys with RSA_PRIVATE_KEY', () => {
 });
 
 describe('buildJwks', () => {
-  it('returns a JWKS with one RSA key', async () => {
+  it('returns a JWKS with one RSA key, also published under its legacy grantex-YYYY-MM kids', async () => {
     const jwks = await buildJwks();
-    expect(jwks.keys).toHaveLength(1);
+    // One signing key (thumbprint kid), then the same public key under the
+    // 13 legacy kids that pre-0.6 tokens carry (JWT_LEGACY_KID_MONTHS).
+    expect(jwks.keys).toHaveLength(14);
+    expect(new Set(jwks.keys.map((k) => k['n'])).size).toBe(1);
+    expect(jwks.keys.slice(1).every((k) => /^grantex-\d{4}-\d{2}$/.test(String(k['kid'])))).toBe(true);
     const key = jwks.keys[0]!;
+    expect(key['kid']).toMatch(/^grantex-rs256-/);
     expect(key['kty']).toBe('RSA');
     expect(key['alg']).toBe('RS256');
     expect(key['use']).toBe('sig');
