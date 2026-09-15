@@ -43,6 +43,14 @@ export {
 export type { ChallengeParams } from './resource/challenge.js';
 export type { McpAuthStorage, RevocationChecker } from './storage/types.js';
 export type {
+  ConsentPageOptions,
+  ConsentRenderHelpers,
+  ConsentText,
+  ConsentViewModel,
+} from './consent/page.js';
+export type { ConsentTheme } from './consent/theme.js';
+export type { SafeHtml } from './consent/html.js';
+export type {
   McpAuthConfig,
   ClientRegistration,
   RegisterClientRequest,
@@ -53,6 +61,7 @@ export type {
   RefreshTokenBinding,
   ConsentRecord,
   RevocationRecord,
+  GrantOptions,
 } from './types.js';
 
 // Re-export middleware types (actual middleware in subpath exports)
