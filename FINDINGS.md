@@ -99,18 +99,3 @@ Remove an entry in the pull request that fixes it.
   core SDKs now do), and change the conformance check to "every platform
   signing key is RS256 or ES256 with `kid`, `alg` and `use: sig`", ignoring
   keys published for other purposes.
-
-## G-9 — The default RS256 `kid` changes when an instance restarts in a new month
-
-- **Found:** adding ES256 signing (2026-09-15).
-- **What:** the env-store RS256 key's `kid` is `grantex-YYYY-MM` of the process
-  start date (`legacyRsaKid` in `apps/auth-service/src/lib/signing-keys.ts`,
-  previously `buildKid` in `crypto.ts`). The same key gets a new `kid` after a
-  restart in a new month, and two instances started in different months
-  publish different `kid`s for one key. SDK verifiers select keys by `kid`, so
-  tokens signed before the restart, or by the other instance, fail
-  verification until they expire.
-- **Fix:** default the `kid` to the RFC 7638 thumbprint (as ES256 and stored
-  keys already do) in a release that announces the `kid` change, publishing
-  the old `kid` alongside for one token lifetime. Until then, set
-  `JWT_SIGNING_KID` (documented in `docs/self-hosting.md` Section 7).

@@ -11,19 +11,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   platform JWTs with ES256 (EC P-256) as well as RS256. `JWT_SIGNING_ALG`
   selects the algorithm per deployment and defaults to `RS256`, so existing
   deployments are unchanged. ES256 needs `EC_PRIVATE_KEY` (PKCS#8 PEM).
-- Key management: every platform signing key is published in
-  `/.well-known/jwks.json` with `kid`, `alg` and `use: "sig"`, together with
-  the keys kept for verification after a rotation. A configured key for the
-  algorithm that is not signing is published for verification only, so a new
-  key can be published before it signs; `JWT_RETIRED_PUBLIC_KEYS` keeps
-  retired public keys verifiable. `JWT_SIGNING_KID` fixes the `kid`.
-- `SIGNING_KEY_STORE=postgres` generates the key on first start and stores it
-  in `platform_signing_keys` (migration `096_platform_signing_keys.sql`),
-  encrypted with `VAULT_ENCRYPTION_KEY`. `node dist/cli/rotate-signing-key.js
-  [--alg ES256]` retires the active key, erasing its private key, and stores a
-  new one; retired keys stay published for
-  `SIGNING_KEY_RETIRED_GRACE_SECONDS` (default 30 days). Instances reload
-  keys every minute and when a token names an unknown `kid`.
+- **Key ids.** Every platform signing key is published in
+  `/.well-known/jwks.json` with `kid`, `alg` and `use: "sig"`.
+  - A key's `kid` is its RFC 7638 thumbprint (`grantex-rs256-…`,
+    `grantex-es256-…`), so all instances agree whenever they started.
+  - **Behaviour change:** the RS256 key's `kid` is no longer `grantex-YYYY-MM`
+    of the process start month. Tokens with that kid, or with none, still
+    verify in the auth service with the RSA key (`RSA_PRIVATE_KEY`, or
+    `JWT_LEGACY_KID_KEY`).
+  - The JWK Set also lists the RSA key under `grantex-YYYY-MM` for the last
+    `JWT_LEGACY_KID_MONTHS` (13) months, so SDK verifiers find it too.
+  - For `SIGNING_KEY_ACTIVATION_DELAY_SECONDS` after start, instances still
+    sign under the legacy kid.
+  - The JWK Set therefore has more entries than before.
+- **Env store.**
+  - A configured key for the algorithm that is not signing, and every key in
+    `JWT_VERIFICATION_PUBLIC_KEYS`, is published for verification only.
+    Rotation is publish-then-sign and never invalidates outstanding tokens.
+  - The same key listed twice counts as one key, so rotating RSA to RSA in the
+    same month raises no duplicate `kid`.
+- **`SIGNING_KEY_STORE=postgres`** (migration `096_platform_signing_keys.sql`).
+  - Keys are stored encrypted with `VAULT_ENCRYPTION_KEY` and bound to their
+    `kid` as authenticated data.
+  - The first start imports the configured env keys: the env signing key
+    becomes the stored active key with the same `kid`, and other keys are
+    stored as retired.
+  - `node dist/cli/rotate-signing-key.js [--alg ES256]` publishes a new pending
+    key, which signs after `SIGNING_KEY_ACTIVATION_DELAY_SECONDS` (default
+    900). The previous key is then retired with its private key erased, and
+    stays published for `SIGNING_KEY_RETIRED_GRACE_SECONDS` (default 30 days).
+  - Instances reload every minute and on an unknown `kid`. Periodic reloads do
+    not reset the unknown-kid cooldown.
+- `MAX_GRANT_LIFETIME_SECONDS` (unset by default) caps grant `expiresIn` at
+  authorization and delegation. With the postgres store, start-up refuses a
+  retired-key grace shorter than it, and warns when it is unset.
+- SSO state HMAC keys fall back to an HKDF of `VAULT_ENCRYPTION_KEY` when no
+  `SSO_STATE_SECRET` or private key is configured, so instances agree.
+  Production refuses to start without any of them.
 - Signing keys are validated at start: an RSA modulus of at least 2048 bits,
   EC keys on P-256 only, no private members in published keys, unique `kid`s.
 - Verification everywhere (auth service, Python, TypeScript and Go SDKs) uses

@@ -256,8 +256,12 @@ Response:
 `alg` is `RS256` (RSA, at least 2048 bits) or `ES256` (ECDSA on P-256). An
 implementation signs with one algorithm per deployment; RS256 is the default.
 `kid` names the signing key in the issuer's JWK Set, where every key carries
-`kid`, `alg` and `use: "sig"`. Keys that no longer sign stay in the JWK Set
-while tokens they signed can still be presented.
+`kid`, `alg` and `use: "sig"`. A `kid` MUST identify one key on every instance
+(the reference implementation uses the RFC 7638 thumbprint). Keys that no
+longer sign stay in the JWK Set while tokens they signed can still be
+presented, and a key that signed tokens under an earlier `kid` (such as the
+pre-0.6 `grantex-YYYY-MM`) MUST also be published under that `kid` for as long
+as those tokens are valid.
 
 ### 6.2 Payload
 
