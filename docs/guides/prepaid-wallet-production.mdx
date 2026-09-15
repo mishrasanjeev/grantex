@@ -13,7 +13,7 @@ recovery store, notification channel, or regulatory approval for the operator.
 
 The source checkout includes a specific [Base USDC adapter](/guides/base-usdc-custody).
 It requires migration `094`, operator-provisioned keys, a trusted Base RPC,
-verified funding and reconciliation monitoring. Python `0.5.0` and Go `v0.3.0`
+verified funding and reconciliation monitoring. Python `0.5.1` and Go `v0.3.0`
 publish the response and reconciliation APIs; published TypeScript `0.6.0` and
 x402 `0.4.0` support opt-in automatic Base payment retries. Other external
 providers still need their own adapter.
@@ -297,8 +297,9 @@ above succeed.
 
 ## Python and Go publication
 
-Python `0.5.0` passed source import, Ruff, strict Mypy, Pytest, distribution
-build, and Twine metadata checks before upload:
+Python `0.5.1` passed source import, Ruff, strict Mypy, Pytest (623 tests on
+Python 3.12 and 3.9), distribution build, and Twine metadata checks before
+upload:
 
 ```powershell
 $env:PYTHONPATH = (Resolve-Path packages/sdk-py/src).Path
@@ -310,8 +311,8 @@ python -m build packages/sdk-py
 python -m twine check packages/sdk-py/dist/*
 python -m twine upload packages/sdk-py/dist/*
 
-$PyPI = Invoke-RestMethod 'https://pypi.org/pypi/grantex/0.5.0/json'
-if ($PyPI.info.version -ne '0.5.0') { throw 'PyPI verification failed.' }
+$PyPI = Invoke-RestMethod 'https://pypi.org/pypi/grantex/0.5.1/json'
+if ($PyPI.info.version -ne '0.5.1') { throw 'PyPI verification failed.' }
 ```
 
 The Go module path is a separate repository,
@@ -321,8 +322,10 @@ the exact source, and pushing annotated tag `v0.3.0`. A tag in the Grantex
 monorepo does not publish that module.
 
 Python `0.5.0` and Go `v0.3.0` were published on 7 September 2026 and verified
-from clean public-registry consumers. The steps remain here as the release
-runbook; they are not instructions to overwrite those immutable versions.
+from clean public-registry consumers. Python `0.5.1` was published on
+15 September 2026; its installed PyPI wheel passed all 623 tests in a clean
+environment. The steps remain here as the release runbook; they are not
+instructions to overwrite those immutable versions.
 
 The guarded [Publish primary
 SDKs](https://github.com/mishrasanjeev/grantex/actions/workflows/publish-primary-sdks.yml)
@@ -351,7 +354,7 @@ the monorepo checkout:
 ```powershell
 npm view '@grantex/sdk@0.6.0' version dist.integrity --json
 npm view '@grantex/x402@0.4.0' version dist.integrity --json
-python -m pip download --no-deps --dest $env:TEMP 'grantex==0.5.0'
+python -m pip download --no-deps --dest $env:TEMP 'grantex==0.5.1'
 go list -m -json 'github.com/mishrasanjeev/grantex-go@v0.3.0'
 ```
 
