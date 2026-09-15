@@ -289,7 +289,7 @@ answers 404 until it is `true`). Profile in `spec/decision-grant.md`.
   `grantex_decision_grants_consumed_total`,
   `grantex_decision_grants_rejected_total{stage,reason}`,
   `grantex_decision_dwell_seconds{dwell_source}`.
-- **Migration** `098_decision_grants.sql`: new tables only.
+- **Migration** `097_decision_grants.sql`: new tables only.
 - No change to existing endpoints or tokens.
 
 ### Decision action hash: stricter inputs and extra decision fields
