@@ -1,9 +1,9 @@
 -- Decision grants (PRD G-3). A decision grant is a second credential that a
 -- named, step-up authenticated person mints for one semantic action on one
 -- case. Additive and safe on a live database: new tables only (CREATE ...
--- IF NOT EXISTS), no change to existing tables, rows or tokens. Numbered 098
--- after 096_platform_signing_keys.sql and 097_grant_actor_chain.sql; no table
--- here depends on them.
+-- IF NOT EXISTS), no change to existing tables, rows or tokens. Numbered 097,
+-- after 096_platform_signing_keys.sql and before 098_grant_actor_chain.sql; no
+-- table here depends on either.
 
 -- Identity providers whose users may approve decisions for a developer. Kept
 -- apart from sso_connections: only the service administrator can add one, so
