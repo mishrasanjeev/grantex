@@ -218,7 +218,7 @@ Behind `DECISION_GRANTS_ENABLED` (default off; the endpoints answer 404
   `grantex_decision_grants_consumed_total`,
   `grantex_decision_grants_rejected_total{stage,reason}` and the
   `grantex_decision_dwell_seconds` histogram.
-- Migration `097_decision_grants.sql`: new tables only (`decision_cases`,
+- Migration `098_decision_grants.sql`: new tables only (`decision_cases`,
   `decision_requests`, `decision_approver_sessions`, `decision_grants`,
   `decision_page_tickets`, `decision_page_views`).
 - No change to existing endpoints or tokens.
