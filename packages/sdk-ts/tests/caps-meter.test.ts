@@ -255,10 +255,10 @@ describe('buildCapLimits', () => {
 it('counter keys match the shared fixture', async () => {
   const fixture = JSON.parse(
     readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'spec', 'examples', 'caps-counters.json'), 'utf-8'),
-  ) as { cases: Array<{ tenant_id: string; parts: string[]; window: 'per_hour'; counter_id: string; key: string; tenant_hash: string }> };
+  ) as { cases: Array<{ tenant_id: string; parts: string[]; window: 'per_hour'; counter_id: string; counter_hash: string; tenant_hash: string }> };
   for (const c of fixture.cases) {
     expect(counterId(...c.parts)).toBe(c.counter_id);
-    expect(await counterKey(c.window, c.counter_id)).toBe(c.key);
+    expect(await counterKey(c.window, c.counter_id)).toBe(c.counter_hash);
     expect(await tenantHash(c.tenant_id)).toBe(c.tenant_hash);
   }
 });

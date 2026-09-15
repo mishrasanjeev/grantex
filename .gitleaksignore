@@ -154,3 +154,10 @@ f27a6ac33f2a0170e0d3e0869693dce179f869e9:docs/blog/mcp-server-oauth-authenticati
 f27a6ac33f2a0170e0d3e0869693dce179f869e9:docs/blog/mcp-server-oauth-authentication.mdx:generic-api-key:220
 f29f89d001f324c15b7e4f84fdb3326bc3249c18:packages/sdk-py/tests/test_passports.py:generic-api-key:27
 f2f89031f108977f1b2a00d03e78e0ea73e13f69:docs/reports/commerce-v1-option-a-smoke-evidence.md:generic-api-key:67
+# spec/examples/caps-counters.json (feat/caps-meter, 2026-09-15): SHA-256 counter
+# digests in a field then named "key"; not credentials. The field is now
+# "counter_hash", which the scanner does not flag.
+8a86568511149552d5270a203241c44f414fba82:spec/examples/caps-counters.json:generic-api-key:15
+8a86568511149552d5270a203241c44f414fba82:spec/examples/caps-counters.json:generic-api-key:34
+8a86568511149552d5270a203241c44f414fba82:spec/examples/caps-counters.json:generic-api-key:52
+8a86568511149552d5270a203241c44f414fba82:spec/examples/caps-counters.json:generic-api-key:72

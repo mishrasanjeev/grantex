@@ -260,7 +260,7 @@ def test_counter_keys_match_the_shared_fixture() -> None:
         cid = counter_id(*case["parts"])
         assert cid == case["counter_id"]
         limit = CapLimit(counter=cid, limit=1, window=case["window"])
-        assert limit.key() == case["key"]
+        assert limit.key() == case["counter_hash"]
         assert tenant_hash(case["tenant_id"]) == case["tenant_hash"]
 
 
