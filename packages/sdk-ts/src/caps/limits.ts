@@ -91,7 +91,18 @@ export function buildCapLimits(options: BuildCapLimitsOptions): CapLimit[] {
       INVALID_COST_COMPONENT,
     );
   }
+  if (costComponents !== undefined && Object.keys(declared).length > 0 && components.length === 0) {
+    // A call to a tool that declares cost units incurs at least one of them;
+    // an empty list would skip the budget entirely.
+    throw new CapsConfigurationError(
+      `tool ${JSON.stringify(tool)} declares cost units, so costComponents cannot be empty`,
+      INVALID_COST_COMPONENT,
+    );
+  }
   const cost = components.reduce((sum, c) => sum + (declared[c] as number), 0);
+  if (cost > MAX_COUNT) {
+    throw new CapsConfigurationError(`the cost of this call (${cost} units) exceeds ${MAX_COUNT}`, INVALID_COST_COMPONENT);
+  }
 
   const grant = parseGrantCaps(options.grantCaps);
   const limits: CapLimit[] = [];

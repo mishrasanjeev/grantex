@@ -133,6 +133,13 @@ describe('CapsMeter', () => {
     expect(await meter.usage('dev_01', [limit(10)])).toMatchObject([{ used: 10, remaining: 0 }]);
   });
 
+  it('reports the real usage when a single call exceeds the cap', async () => {
+    const meter = new CapsMeter(new InMemoryCapsBackend(), { clock: clock().fn });
+    await meter.reserve('dev_01', [limit(10, 'per_hour', 4)]);
+    const err = await rejects(meter.reserve('dev_01', [limit(10, 'per_hour', 11)]));
+    expect([err.used, err.requested, err.limit]).toEqual([4, 11, 10]);
+  });
+
   it('refundUnsent releases units and is idempotent', async () => {
     const meter = new CapsMeter(new InMemoryCapsBackend(), { clock: clock().fn });
     const reservation = await meter.reserve('dev_01', [limit(1)]);
@@ -226,7 +233,28 @@ describe('buildCapLimits', () => {
       return 'no error';
     };
     expect(run({ caseId: 'c1', costComponents: ['base', 'screening'] })).toBe('invalid_cost_component');
+    expect(run({ caseId: 'c1', costComponents: [], grantCaps: { cost_units: { per_day: 100 } } })).toBe('invalid_cost_component');
     expect(run({})).toBe('case_required');
+    expect(
+      buildCapLimits({
+        connector: 'acme_kyb',
+        tool: 'get_case',
+        spec: { permission: 'read' as ToolSpec['permission'], requiresDecision: false, fourEyesOn: [] },
+        grantId: 'grnt_01',
+        costComponents: [],
+      }),
+    ).toEqual([]);
+    try {
+      buildCapLimits({
+        connector: 'acme_kyb',
+        tool: 'verify_business',
+        spec: { ...spec, caps: undefined, costUnits: { base: 2147483647, ownership: 1 } } as unknown as ToolSpec,
+        grantId: 'grnt_01',
+      });
+      throw new Error('expected an error');
+    } catch (err) {
+      expect((err as CapsConfigurationError).subReason).toBe('invalid_cost_component');
+    }
   });
 
   const malformed: unknown[] = [

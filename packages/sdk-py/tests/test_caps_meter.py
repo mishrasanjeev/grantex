@@ -128,6 +128,13 @@ class TestCapsMeter:
         usage = meter.usage("dev_01", [_limit(10)])[0]
         assert (usage.used, usage.remaining) == (10, 0)
 
+    def test_a_single_call_above_the_cap_reports_the_real_usage(self) -> None:
+        meter = _meter()
+        meter.reserve("dev_01", [_limit(10, units=4)])
+        with pytest.raises(CapExceededError) as exc:
+            meter.reserve("dev_01", [_limit(10, units=11)])
+        assert (exc.value.used, exc.value.requested, exc.value.limit) == (4, 11, 10)
+
     def test_zero_unit_limits_are_not_recorded(self) -> None:
         meter = _meter()
         reservation = meter.reserve("dev_01", [_limit(1, units=0)])
@@ -228,6 +235,27 @@ class TestBuildCapLimits:
                 connector="acme_kyb", tool="verify_business", spec=self.SPEC, grant_id="grnt_01",
                 case_id="case_01", cost_components=["base", "screening"],
             )
+        assert exc.value.sub_reason == INVALID_COST_COMPONENT
+
+    def test_empty_cost_components_for_a_tool_with_cost_units_is_rejected(self) -> None:
+        with pytest.raises(CapsConfigurationError) as exc:
+            build_cap_limits(
+                connector="acme_kyb", tool="verify_business", spec=self.SPEC, grant_id="grnt_01",
+                grant_caps={"cost_units": {"per_day": 100}}, case_id="case_01", cost_components=[],
+            )
+        assert exc.value.sub_reason == INVALID_COST_COMPONENT
+
+    def test_empty_cost_components_for_a_tool_without_cost_units_is_allowed(self) -> None:
+        limits = build_cap_limits(
+            connector="acme_kyb", tool="get_case", spec=ToolSpec(permission="read"), grant_id="grnt_01",
+            cost_components=[],
+        )
+        assert limits == []
+
+    def test_a_cost_above_the_maximum_is_an_invalid_cost_component(self) -> None:
+        spec = ToolSpec(permission="read", cost_units={"base": 2147483647, "ownership": 1})
+        with pytest.raises(CapsConfigurationError) as exc:
+            build_cap_limits(connector="acme_kyb", tool="verify_business", spec=spec, grant_id="grnt_01")
         assert exc.value.sub_reason == INVALID_COST_COMPONENT
 
     def test_per_case_cap_needs_a_case(self) -> None:

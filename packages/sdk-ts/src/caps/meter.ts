@@ -198,10 +198,22 @@ export class CapsMeter {
   async reserve(tenantId: string, limits: readonly CapLimit[]): Promise<Reservation> {
     const applied = (await resolveLimits(tenantId, limits)).filter((l) => l.units > 0);
     for (const limit of applied) {
-      if (limit.units > limit.limit) {
-        // Includes a cap of zero: the tool is disabled, whatever the backend holds.
+      if (limit.limit === 0) {
+        // A cap of zero disables the tool, whatever the backend holds.
         throw new CapExceededError({
-          limit: limit.limit, window: limit.window, used: 0, requested: limit.units, scope: limit.scope, kind: limit.kind,
+          limit: 0, window: limit.window, used: 0, requested: limit.units, scope: limit.scope, kind: limit.kind,
+        });
+      }
+      if (limit.units > limit.limit) {
+        // This call alone exceeds the cap; report what the counter holds.
+        let used: number;
+        try {
+          used = await this.#backend.usage(tenantId, limit, this.#now());
+        } catch (err) {
+          throw unavailable(err);
+        }
+        throw new CapExceededError({
+          limit: limit.limit, window: limit.window, used, requested: limit.units, scope: limit.scope, kind: limit.kind,
         });
       }
     }
