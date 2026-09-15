@@ -244,6 +244,19 @@ jobs:
       - name: Test MCP auth against real Postgres and Redis (includes a server restart)
         working-directory: packages/mcp-auth
         run: npm run test:integration
+      - name: Install Chromium for the MCP auth consent-page tests
+        working-directory: packages/mcp-auth
+        run: npx playwright install --with-deps chromium
+      - name: Test the MCP auth consent page in Chromium (375 px layout, axe-core)
+        working-directory: packages/mcp-auth
+        run: npm run test:e2e
+      - name: Upload consent-page screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mcp-auth-consent-screenshots
+          path: packages/mcp-auth/test-results/
+          if-no-files-found: ignore
 
   compliance-packages:
     name: Compliance & Identity

@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### @grantex/mcp-auth 3.0 (unreleased): rendered consent page
+- `GET /authorize` renders a consent page and sends nothing to Grantex until
+  the Principal approves (MCP authorization, Confused Deputy Problem). It
+  shows the client, the redirect host (with a localhost warning), purpose,
+  data region, duration, the service, each covered tool with its caps and
+  decision requirement, and the scopes.
+- New `grant` option (`purpose`, `purposeDescription`, `dataRegion`,
+  `duration` sent as `expiresIn`, and `authorizeParams` as the extension
+  point for purpose-bound grants) and `consentPage` option (validated theme
+  with WCAG AA contrast, text, `lang`, `extraCss`, `renderDetails` using the
+  escaping `html` helper).
+- Strict CSP with no script and a hashed stylesheet; CSRF token plus a
+  per-consent `__Host-` SameSite=Strict binding cookie, both stored as hashes
+  in a single-use consent record; cross-site submissions refused.
+- Chromium tests at 375 px and axe-core (WCAG 2.x A/AA) run in CI.
+- **Breaking:** `GET /authorize` returns 200 HTML instead of a 302 to
+  Grantex; the flow continues with `POST /consent`, which answers 303.
+- **Breaking:** `consentUi.appLogo`, `privacyUrl` and `termsUrl` must be
+  https URLs.
+
 ### @grantex/mcp-auth 3.0 (unreleased): MCP authorization 2026-07-28 surface
 - Resource indicators (RFC 8707): new required `resource` option (or
   `allowedResources`). Grants are requested with the resource as audience;
