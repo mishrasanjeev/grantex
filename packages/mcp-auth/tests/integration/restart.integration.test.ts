@@ -122,8 +122,15 @@ async function consentPage(base: string, clientId: string, challenge: string, cl
   };
 }
 
-/** Approves a consent form; returns the state Grantex was given. */
-async function approve(base: string, form: ConsentForm): Promise<string> {
+interface Approval {
+  /** The state Grantex was given. */
+  state: string;
+  /** The callback-binding cookie set on the approving browser. */
+  cookie: string;
+}
+
+/** Approves a consent form. */
+async function approve(base: string, form: ConsentForm): Promise<Approval> {
   const response = await fetch(`${base}/consent`, {
     method: 'POST',
     redirect: 'manual',
@@ -133,18 +140,20 @@ async function approve(base: string, form: ConsentForm): Promise<string> {
   expect(response.status).toBe(303);
   const grantexState = new URL(response.headers.get('location')!).searchParams.get('state');
   expect(grantexState).toBeTruthy();
-  return grantexState!;
+  const cookie = response.headers.getSetCookie().map((c) => c.split(';')[0]!).find((c) => /mcp_auth_callback_\w/.test(c) && !c.endsWith('='));
+  expect(cookie).toBeTruthy();
+  return { state: grantexState!, cookie: cookie! };
 }
 
-async function authorize(base: string, clientId: string, challenge: string, clientState: string): Promise<string> {
+async function authorize(base: string, clientId: string, challenge: string, clientState: string): Promise<Approval> {
   return approve(base, await consentPage(base, clientId, challenge, clientState));
 }
 
 /** Completes upstream consent; returns the client's authorization code. */
-async function callback(base: string, grantexState: string, clientState: string): Promise<string> {
+async function callback(base: string, approval: Approval, clientState: string): Promise<string> {
   const response = await fetch(
-    `${base}/callback?${new URLSearchParams({ code: `upstream-${grantexState.slice(0, 8)}`, state: grantexState })}`,
-    { redirect: 'manual' },
+    `${base}/callback?${new URLSearchParams({ code: `upstream-${approval.state.slice(0, 8)}`, state: approval.state })}`,
+    { redirect: 'manual', headers: { cookie: approval.cookie } },
   );
   expect(response.status).toBe(302);
   const location = new URL(response.headers.get('location')!);

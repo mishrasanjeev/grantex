@@ -5,7 +5,7 @@ import { createMcpAuthServer } from '../src/server.js';
 import { InMemoryStorage } from '../src/storage/memory.js';
 import { hashClientSecret } from '../src/lib/verify.js';
 import type { McpAuthConfig } from '../src/types.js';
-import { TEST_RESOURCE, upstreamGrantToken, authorizeWithConsent } from './helpers.js';
+import { TEST_RESOURCE, upstreamGrantToken, authorizeWithConsent, callbackCookieFrom } from './helpers.js';
 
 function computeS256Challenge(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
@@ -240,11 +240,14 @@ describe('authorize endpoint', () => {
     });
     expect(authResponse.statusCode).toBe(303);
     const grantexState = (mockGrantex.authorize.mock.calls[0]![0] as { state: string }).state;
+    const cookie = callbackCookieFrom(authResponse);
 
-    // Grantex consent approved → redirect to our callback with its code.
+    // Grantex consent approved → redirect to our callback with its code, in
+    // the browser that approved the consent page.
     const callback = await app.inject({
       method: 'GET',
       url: '/callback',
+      headers: { cookie },
       query: { code: 'GRANTEX_LIVE_CODE', state: grantexState },
     });
     expect(callback.statusCode).toBe(302);
@@ -258,6 +261,7 @@ describe('authorize endpoint', () => {
     const replay = await app.inject({
       method: 'GET',
       url: '/callback',
+      headers: { cookie },
       query: { code: 'GRANTEX_LIVE_CODE', state: grantexState },
     });
     expect(replay.statusCode).toBe(400);
@@ -284,7 +288,7 @@ describe('authorize endpoint', () => {
   });
 
   it('consent callback with error redirects the client with access_denied and no code', async () => {
-    await authorizeWithConsent(app, {
+    const approved = await authorizeWithConsent(app, {
       method: 'GET',
       url: '/authorize',
       query: {
@@ -300,6 +304,7 @@ describe('authorize endpoint', () => {
     const callback = await app.inject({
       method: 'GET',
       url: '/callback',
+      headers: { cookie: callbackCookieFrom(approved) },
       query: { error: 'access_denied', state: grantexState },
     });
     expect(callback.statusCode).toBe(302);

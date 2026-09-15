@@ -166,3 +166,17 @@ export async function authorizeWithConsent(app: FastifyInstance, options: Inject
     payload: new URLSearchParams({ consent_id: consentId, csrf_token: csrfToken, decision: 'approve' }).toString(),
   });
 }
+
+/**
+ * The callback-binding cookie (`name=value`) that approving the consent page
+ * sets. `/callback` issues a code only when the browser presents it.
+ */
+export function callbackCookieFrom(response: { headers: Record<string, string | string[] | number | undefined> }): string {
+  const raw = response.headers['set-cookie'];
+  const cookies = Array.isArray(raw) ? raw : raw === undefined ? [] : [String(raw)];
+  const pair = cookies
+    .map((cookie) => cookie.split(';')[0]!)
+    .find((cookie) => /mcp_auth_callback_[A-Za-z0-9_-]{16}=[^;]+$/.test(cookie));
+  if (!pair) throw new Error('no callback-binding cookie was set');
+  return pair;
+}

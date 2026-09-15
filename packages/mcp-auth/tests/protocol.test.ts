@@ -13,6 +13,7 @@ import {
   TEST_VERIFIER,
   asGrantex,
   authorizeWithConsent,
+  callbackCookieFrom,
   clientRecord,
   mockGrantex,
   seededStorage,
@@ -279,11 +280,12 @@ describe('authorization responses carry iss (RFC 9207)', () => {
     expect(new URL(success.headers['location'] as string).searchParams.get('iss')).toBe(ISSUER);
 
     const live = await build({ sandboxAutoApprove: false }, mockGrantex());
-    await authorizeWithConsent(live.app, { method: 'GET', url: '/authorize', query: authorizeQuery({ state: 's2' }) });
+    const approved = await authorizeWithConsent(live.app, { method: 'GET', url: '/authorize', query: authorizeQuery({ state: 's2' }) });
     const grantexState = (live.grantex.authorize.mock.calls[0]![0] as { state: string }).state;
     const denied = await live.app.inject({
       method: 'GET',
       url: '/callback',
+      headers: { cookie: callbackCookieFrom(approved) },
       query: { error: '<script>alert(1)</script>', state: grantexState },
     });
     const location = new URL(denied.headers['location'] as string);
