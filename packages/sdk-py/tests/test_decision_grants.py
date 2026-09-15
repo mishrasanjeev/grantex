@@ -11,7 +11,7 @@ import base64
 import copy
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Set
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Set
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -468,6 +468,113 @@ def test_wrap_tool_carries_decision_grants(verify_grant: MagicMock) -> None:
     with pytest.raises(PermissionError):
         bare._run(**call_args())
     assert len(calls) == 1
+
+
+class _FakeRequest:
+    """The parts of a Starlette request the FastAPI enforcer reads."""
+
+    def __init__(self, headers: Dict[str, str], body: Any) -> None:
+        self.headers = {k.lower(): v for k, v in headers.items()}
+        self._body = body
+
+    async def json(self) -> Any:
+        if isinstance(self._body, Exception):
+            raise self._body
+        return self._body
+
+
+def _denial(exc: BaseException) -> Dict[str, Any]:
+    detail = getattr(exc, "detail", None)
+    return detail if isinstance(detail, dict) else {"message": str(exc)}
+
+
+def test_fastapi_enforcer_carries_decision_grants(verify_grant: MagicMock) -> None:
+    import asyncio
+
+    from grantex.fastapi import GrantexEnforcer
+
+    issuer = FakeIssuer()
+    versions: List[Optional[Mapping[str, Any]]] = []
+
+    async def case_version(_request: Any, arguments: Optional[Mapping[str, Any]]) -> str:
+        versions.append(arguments)
+        return "v7"
+
+    enforcer = GrantexEnforcer(client(issuer), case_version=case_version)
+    token = build_grant({})
+
+    def call(request: _FakeRequest) -> Any:
+        return asyncio.run(enforcer(connector="acme_kyb", tool="case_decision", authorization="Bearer t", request=request))
+
+    result = call(_FakeRequest({"Grantex-Decision-Grant": token}, call_args()))
+    assert result.allowed and result.decision is not None
+    assert versions == [call_args()] and len(issuer.calls) == 1
+
+    with pytest.raises(Exception) as replay:
+        call(_FakeRequest({"Grantex-Decision-Grant": token}, call_args()))
+    assert "already used" in str(_denial(replay.value).get("message"))
+
+    with pytest.raises(Exception) as absent:
+        call(_FakeRequest({}, call_args()))
+    assert "requires a decision grant" in str(_denial(absent.value).get("message"))
+
+    other = build_grant({"claims": {"jti": "dgnt_01K00000000000000000000008"}})
+    with pytest.raises(Exception) as mismatch:
+        call(_FakeRequest({"Grantex-Decision-Grant": other}, call_args(decision="decline")))
+    assert "not valid" in str(_denial(mismatch.value).get("message"))
+
+    with pytest.raises(Exception) as not_json:
+        call(_FakeRequest({"Grantex-Decision-Grant": other}, ValueError("not JSON")))
+    assert "not valid" in str(_denial(not_json.value).get("message"))
+    # Only the first call and the replay (refused by the issuer) reached consumption.
+    assert len(issuer.calls) == 2
+
+
+def test_fastapi_enforcer_without_case_version_refuses_decision_tools(verify_grant: MagicMock) -> None:
+    import asyncio
+
+    from grantex.fastapi import GrantexEnforcer
+
+    issuer = FakeIssuer()
+    enforcer = GrantexEnforcer(client(issuer))
+    request = _FakeRequest({"Grantex-Decision-Grant": build_grant({})}, call_args())
+    with pytest.raises(Exception) as refused:
+        asyncio.run(enforcer(connector="acme_kyb", tool="case_decision", authorization="Bearer t", request=request))
+    assert "not valid" in str(_denial(refused.value).get("message"))
+    assert issuer.calls == []
+    allowed = asyncio.run(enforcer(connector="acme_kyb", tool="get_case", authorization="Bearer t", request=request))
+    assert allowed.allowed and issuer.calls == []
+
+
+def test_fastapi_route_with_decision_grants(verify_grant: MagicMock) -> None:
+    fastapi = pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from grantex.manifest import EnforceResult as _EnforceResult
+    from grantex.fastapi import GrantexEnforcer
+
+    issuer = FakeIssuer()
+    enforcer = GrantexEnforcer(client(issuer), case_version=lambda _request, _arguments: "v7")
+    app = fastapi.FastAPI()
+    ran: List[Dict[str, Any]] = []
+
+    @app.post("/api/tools/{connector}/{tool}")
+    async def execute_tool(connector: str, tool: str, body: Dict[str, Any], auth: _EnforceResult = fastapi.Depends(enforcer)) -> Dict[str, Any]:
+        ran.append(body)
+        return {"allowed": auth.allowed}
+
+    http = TestClient(app)
+    token = build_grant({})
+    headers = {"Authorization": "Bearer t", "Grantex-Decision-Grant": token}
+    ok = http.post("/api/tools/acme_kyb/case_decision", headers=headers, json=call_args())
+    assert ok.status_code == 200, ok.text
+    replay = http.post("/api/tools/acme_kyb/case_decision", headers=headers, json=call_args())
+    assert replay.status_code == 403
+    assert replay.json()["detail"]["reason_code"] == DenialReason.DECISION_INVALID
+    assert replay.json()["detail"]["sub_reason"] == DecisionSubReason.CONSUMED
+    absent = http.post("/api/tools/acme_kyb/case_decision", headers={"Authorization": "Bearer t"}, json=call_args())
+    assert absent.status_code == 403 and absent.json()["detail"]["reason_code"] == DenialReason.DECISION_REQUIRED
+    assert ran == [call_args()]
 
 
 @respx.mock

@@ -393,6 +393,11 @@ Breaking changes
   action from the tool input; `enforceMiddleware` takes
   `extractDecisionGrants`, `extractArguments` and `extractCaseVersion`, and
   its 403 body now includes `reason` and `subReason`.
+- The FastAPI `GrantexEnforcer` passes decision grants to `enforce()`: grants
+  from the `Grantex-Decision-Grant` header (comma-separated), arguments from
+  the JSON body, and the case version from a required `case_version`
+  callback (server case state); each source can be replaced. Its 403 detail
+  adds `reason_code` and `sub_reason`.
 - `decisions_mode` / `decisionsMode` (client option and per call):
   `enforce` (default) denies. `warn` is for rollout only and is not a
   control: it does not deny a `requires_decision` call without a valid
