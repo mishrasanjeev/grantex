@@ -195,7 +195,7 @@ it('the Lua scripts are identical to the Python SDK', () => {
   const source = readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'sdk-py', 'src', 'grantex', 'caps', '_redis.py'),
     'utf-8',
-  );
+  ).replace(/\r\n/g, '\n'); // a Windows checkout may convert line endings
   for (const [name, script] of [
     ['RESERVE_SCRIPT', RESERVE_SCRIPT],
     ['REFUND_SCRIPT', REFUND_SCRIPT],
