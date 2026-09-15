@@ -1,7 +1,7 @@
 # Grantex Compatibility Matrix
 
-Last updated: 2026-09-07
-Release snapshot verified: 2026-09-07
+Last updated: 2026-09-15
+Release snapshot verified: 2026-09-15
 
 This repository uses package-specific versions; there is no monorepo-wide SDK or package release number. The protocol specification remains v1.0 Final, while repository metadata and package registries can move independently during a release.
 
@@ -11,7 +11,7 @@ This repository uses package-specific versions; there is no monorepo-wide SDK or
 | --- | --- | --- |
 | Repository changelog | v0.3.12 | Latest top-level release entry in `CHANGELOG.md`. |
 | TypeScript SDK | @grantex/sdk 0.6.0 published | Adds EVM payment responses and authenticated reconciliation, retaining bounded refresh recovery; npm integrity and clean-install verified. |
-| Python SDK | grantex 0.5.0 published | Adds EVM payment responses and principal/agent reconciliation, retaining bounded refresh recovery; PyPI clean-install and full-suite verified. No automatic x402 HTTP wrapper. |
+| Python SDK | grantex 0.5.1 published | Patch release: `enforce()` applies the tightest cap and denies malformed, negative or non-finite amounts; retains EVM payment responses, principal/agent reconciliation and bounded refresh recovery; PyPI hashes, clean-install and full-suite verified. No automatic x402 HTTP wrapper. |
 | Go SDK | github.com/mishrasanjeev/grantex-go v0.3.0 published | Adds typed EVM payment responses and principal/agent reconciliation, retaining bounded refresh recovery; public proxy and race-suite verified; Go 1.26.1 is required. No automatic x402 HTTP wrapper. |
 | x402 | @grantex/x402 0.4.0 published | Adds opt-in request-bound Base USDC 402/sign/retry to official x402 v2 and layered wallet governance; npm and fresh-install verified; custody and trusted RPC remain operator-provisioned. |
 | OpenAPI | 0.5.0 | Repository API contract including layered prepaid-wallet governance; independent of the deployed/public snapshot. |
@@ -25,7 +25,7 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 | # | Directory | Published name | Version | Status |
 | ---: | --- | --- | ---: | --- |
 | 1 | `packages/sdk-ts` | @grantex/sdk | 0.6.0 | Primary SDK (TypeScript); published and registry verified |
-| 2 | `packages/sdk-py` | grantex | 0.5.0 | Primary SDK (Python); published and registry verified |
+| 2 | `packages/sdk-py` | grantex | 0.5.1 | Primary SDK (Python); published and registry verified |
 | 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.3.0 (Go 1.26.1) | Primary SDK (Go); tag and public proxy verified |
 | 4 | `packages/cli` | @grantex/cli | 0.3.0 | Tooling; published with bundled Agent Skills |
 | 5 | `packages/mcp-auth` | @grantex/mcp-auth | 2.0.2 | Independently versioned |
@@ -77,7 +77,7 @@ Install the verified public releases needed by your application:
 ```bash
 npm install @grantex/sdk@0.6.0
 npm install @grantex/x402@0.4.0 @grantex/sdk@0.6.0
-pip install grantex==0.5.0
+pip install grantex==0.5.1
 go get github.com/mishrasanjeev/grantex-go@v0.3.0
 npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.6.0
 ```
