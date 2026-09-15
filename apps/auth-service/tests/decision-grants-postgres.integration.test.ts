@@ -521,7 +521,7 @@ describePostgres('decision grants against real Postgres', () => {
     await sql`UPDATE decision_page_views SET rendered_at = rendered_at - INTERVAL '5 seconds' WHERE id = ${viewId!}`;
     const refused = await app.inject({
       method: 'POST', url: `/decisions/${pending.requestId}`,
-      headers: { cookie: session.cookie!, 'content-type': 'application/x-www-form-urlencoded', origin: ORIGIN },
+      headers: { cookie: session.cookie!, 'content-type': 'application/x-www-form-urlencoded', origin: ORIGIN, 'sec-fetch-site': 'same-origin' },
       payload: new URLSearchParams({ view_id: viewId!, csrf_token: csrf!, action_hash: actionHash! }).toString(),
     });
     expect(refused.statusCode).toBe(409);
@@ -578,7 +578,7 @@ describePostgres('decision grants against real Postgres', () => {
     await sql`UPDATE decision_page_views SET rendered_at = rendered_at - INTERVAL '5 seconds' WHERE request_id = ${request.requestId}`;
     const responses = await Promise.all(pages.map((p, i) => app.inject({
       method: 'POST', url: `/decisions/${request.requestId}`,
-      headers: { cookie: sessions[i]!.cookie!, 'content-type': 'application/x-www-form-urlencoded', origin: ORIGIN },
+      headers: { cookie: sessions[i]!.cookie!, 'content-type': 'application/x-www-form-urlencoded', origin: ORIGIN, 'sec-fetch-site': 'same-origin' },
       payload: new URLSearchParams({ view_id: p.viewId!, csrf_token: p.csrf!, action_hash: p.actionHash! }).toString(),
     })));
     expect(responses.filter((r) => r.statusCode === 200)).toHaveLength(1);
