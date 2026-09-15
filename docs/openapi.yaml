@@ -1928,6 +1928,16 @@ paths:
                 codeChallengeMethod:
                   type: string
                   enum: [S256]
+                purpose:
+                  type: string
+                  maxLength: 128
+                  description: |
+                    Purpose the grant is bound to: one of `aml.cdd.onboarding`, `aml.cdd.ongoing`,
+                    `aml.screening`, `procurement.vendor_onboarding`, `payments.payout`, or a private
+                    term `x-<org>.<term>`. Requires at least one `tool:<connector>:<permission>` scope.
+                    Issued tokens carry it in `authorization_details` entries of type
+                    `urn:grantex:tools:v1`, one per connector. Rejected with `INVALID_PURPOSE`.
+                  example: aml.cdd.onboarding
               required: [agentId, principalId, scopes]
       responses:
         "201":
@@ -1955,6 +1965,9 @@ paths:
                   effect:
                     type: string
                     enum: [allow]
+                  purpose:
+                    type: string
+                    description: Present when the request carries a purpose
         "400":
           description: Validation error
           content:

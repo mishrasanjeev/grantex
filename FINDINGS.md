@@ -36,7 +36,39 @@ Remove an entry in the pull request that fixes it.
   `apps/auth-service`), then exclude it from the runtime install or prune it in
   the Dockerfile, and drop the ten entries from `.trivyignore.yaml`.
 
-## G-4 — mcp-auth uses the OAuth client id as the Grantex principal
+## G-4 — The OAuth agent-grants flow does not validate tools entries in `authorization_details`
+
+- **Found:** adding purpose-bound grants (2026-09-15).
+- **What:** `POST /oauth/par` in `apps/auth-service/src/routes/oauth.ts` accepts
+  any typed `authorization_details` objects from the client and copies them
+  into the consented grant and its access token. A `urn:grantex:tools:v1`
+  entry pushed there is not checked. It can carry a purpose outside the
+  vocabulary, an unknown key, or duplicate connectors, all of which
+  `POST /v1/authorize` refuses and the SDKs' `enforce()` denies. The consent
+  page shows such entries only as raw JSON, and `grants.purpose` is not set
+  for OAuth grants.
+- **Fix:** validate `urn:grantex:tools:v1` entries in the PAR handler with the
+  same rules as `apps/auth-service/src/lib/purpose.ts` and the SDK parsers
+  (known purpose, connector name, no unknown keys, one entry per connector,
+  well-formed `tools` and `caps`). Reject with `invalid_authorization_details`,
+  persist the purpose on the grant, and show it on the consent page.
+
+## G-5 — Duplicate keys in a manifest JSON file are silently accepted
+
+- **Found:** adding manifest schema 0.6 (2026-09-15).
+- **What:** `ToolManifest.from_file` (Python, `json.loads`) and
+  `ToolManifest.fromFile` (TypeScript, `JSON.parse`) keep the last value of a
+  repeated key. A manifest that declares the same tool twice, for example first
+  with `requires_decision: true` and then as `"read"`, loads as the second
+  declaration without any error. JSON Schema validators cannot see the
+  duplicate either, because they validate the parsed object.
+- **Fix:** reject duplicate keys while parsing manifest files: in Python an
+  `object_pairs_hook` that raises `ManifestValidationError`; in TypeScript a
+  duplicate-aware parse, for example a small tokenizer or a vetted
+  duplicate-detecting JSON parser. Add a shared invalid fixture that both
+  loaders must reject.
+
+## G-6 — mcp-auth uses the OAuth client id as the Grantex principal
 
 - **Found:** `@grantex/mcp-auth` 3.0 work (PRD G-7), 2026-09-15.
 - **What:** `startUpstreamAuthorization` in
@@ -52,7 +84,7 @@ Remove an entry in the pull request that fixes it.
   principal; change the revocation ownership check to use the grant's client
   binding rather than `sub`.
 
-## G-5 — mcp-auth `/revoke` hides upstream revocation failures
+## G-7 — mcp-auth `/revoke` hides upstream revocation failures
 
 - **Found:** `@grantex/mcp-auth` 3.0 work (PRD G-7), 2026-09-15.
 - **What:** `packages/mcp-auth/src/endpoints/revoke.ts` catches and ignores any

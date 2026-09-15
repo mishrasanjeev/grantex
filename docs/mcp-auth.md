@@ -474,9 +474,12 @@ export const decisionVerifier: DecisionVerifier = {
 - **Purpose-bound grants.** `grant.authorizeParams` returns extra parameters
   for the Grantex authorize call (for example `authorization_details` with
   purpose and region). It cannot override the agent, principal, scopes,
-  audience, redirect URI or state. Until the SDK carries purpose and region
-  in the grant, the values in `grant` are shown on the consent page but are
-  not enforced by the grant token.
+  audience, redirect URI or state. mcp-auth does not yet send `grant.purpose`
+  to Grantex itself (it is built against the published SDK); with a Grantex
+  deployment and SDK that accept a purpose, return it from `authorizeParams`
+  (for example `{ purpose: 'aml.cdd.onboarding' }`) so the grant carries
+  it. Until then the values in `grant` are shown on the consent page as
+  declared, not enforced by the grant token.
 
 ## Conformance
 
