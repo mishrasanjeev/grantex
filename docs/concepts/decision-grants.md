@@ -37,6 +37,11 @@ In the tool manifest (schema 0.6):
 decisions that need two approvers. `decision_fields` lists arguments, beyond
 the core action, that the decision must also bind.
 
+A grant can also require decisions: a tool listed in the grant token's
+`urn:grantex:decision:v1` entry needs a decision grant even when the manifest
+does not declare `requires_decision`, and a decision in either `four_eyes_on`
+list needs two approvers.
+
 ## What a decision grant approves
 
 Not the bytes of a tool call, but its **semantic action**:

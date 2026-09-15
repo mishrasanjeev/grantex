@@ -17,7 +17,8 @@ below.
   - `cost_units` is a reserved tool name.
   - `enforce()` denies calls it cannot evaluate: a tool with
     `allowed_purposes` needs a matching grant purpose, a tool with
-    `requires_decision` always returns `decision_required`, and a tool with
+    `requires_decision` needs decision grants (`decision_required` without
+    them), and a tool with
     caps needs a caps meter.
 - **Purpose-bound grants.**
   - `POST /v1/authorize` rejects an unknown `purpose`, or a purpose without a
@@ -128,9 +129,10 @@ below.
 - **Break (TypeScript types):** in `GrantTokenPayload`, `agt`, `dev` and
   `scp` are now optional and deprecated, and `scope`, `act`, `cnf`, `aud`
   and `urn:grantex:grant` are added.
-- **Decision references.** `enforce()` returns `decision_required` for a
-  tool listed in the grant's `urn:grantex:decision:v1` entry, even when the
-  manifest does not declare `requires_decision`. A malformed decision entry
+- **Decision references.** `enforce()` requires a decision grant for a tool
+  listed in the grant's `urn:grantex:decision:v1` entry (`decision_required`
+  without one), even when the manifest does not declare `requires_decision`;
+  a decision in the entry's `four_eyes_on` needs two approvers. A malformed decision entry
   denies every call with `malformed_authorization_details`. A delegated grant
   keeps the decision references of the connectors it keeps.
   `parse_decision_references` / `parseDecisionReferences` read them.
@@ -406,6 +408,9 @@ reviewers and integrators:
   pages are off unless `DECISION_GRANTS_ENABLED=true`. Approvals are possible
   only on the auth service's approval page, after signing in with an identity
   provider the service administrator allow-listed.
+- Auth service: decision grants are verified against the platform signing
+  key ring, so unconsumed grants survive a key rotation while the old key is
+  kept for verification.
 - No existing public API was removed or renamed.
 
 ### Decision grants in the SDKs and mcp-auth

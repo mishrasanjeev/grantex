@@ -7,9 +7,10 @@ SDK (`grantex.decisions`), the TypeScript SDK (`@grantex/sdk`) and
 
 A **decision grant** is a second credential, next to the agent's grant token,
 that a named person mints for **one semantic action** on **one case**. A tool
-whose manifest entry declares `"requires_decision": true` cannot be called
-without one; with `four_eyes_on` listing the decision it needs two, from
-different people.
+whose manifest entry declares `"requires_decision": true`, or that the agent's
+grant lists in its `urn:grantex:decision:v1` entry (`grant-token-0.6.md`),
+cannot be called without one; with the manifest's or that entry's
+`four_eyes_on` listing the decision it needs two, from different people.
 
 Keywords MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
@@ -51,7 +52,10 @@ argument.
 ## 3. Token
 
 A decision grant is a JWS compact JWT signed with the platform signing key
-that signs grant tokens.
+that signs grant tokens. The auth service verifies decision grants against
+its signing key ring (the active key and the keys it keeps for verification
+after a rotation), so a grant minted before a key rotation stays verifiable
+for its lifetime; SDKs verify against the published JWK Set.
 
 **Protected header**
 
@@ -152,7 +156,8 @@ The developer's SSO connections play no part.
 
 The platform creates a request (`POST /v1/decisions/requests`) with the action,
 the connector, the case version, the memo text and the policy score (a JSON
-object), and the manifest's `four_eyes_on`. The service stores the memo and
+object), and the tool's `four_eyes_on` (from the manifest and the grant's
+decision entry). The service stores the memo and
 policy score with their hashes. A request lives at most 24 hours. Request
 bodies with duplicate member names are refused.
 
@@ -225,7 +230,8 @@ An enforcer MUST, in this order:
    `memo_hash` and `policy_score_hash` present, `dev` equals the agent grant's
    developer (`unknown_grant`); then `wrong_case`, `action_mismatch` (hash or
    connector), `case_changed`, `expired`.
-3. For four eyes (the manifest lists the decision in `four_eyes_on`, **or**
+3. For four eyes (the manifest or the grant's decision entry lists the
+   decision in `four_eyes_on`, **or**
    any presented grant carries `four_eyes`): exactly two grants, different
    `jti` and `sub`, positions 1 and 2, the second naming the first's `jti` and
    `sub`, the same `decision_request` (`four_eyes_incomplete`,
