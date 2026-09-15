@@ -1,0 +1,500 @@
+{
+  "case": {
+    "case_id": "case_demo_0001",
+    "exported_at": "2026-09-14T10:30:00.000Z",
+    "issuer": "https://auth.example.com",
+    "state": "decided",
+    "subject": "gb:00000001",
+    "tenant_id": "dev_demo_0001"
+  },
+  "privacy": {
+    "disclosed": [],
+    "key_id": "example-key-1",
+    "key_seed": "grantex evidence example pseudonymisation key"
+  },
+  "entries": [
+    {
+      "type": "grant",
+      "at": "2026-09-14T09:00:00.000Z",
+      "source": {
+        "audit_entry_id": "alog_demo_0001",
+        "audit_hash": "701a24d10a6469e3e288c3df01318a1c3b5a5f59281b611ff3609062265277ef"
+      },
+      "data": {
+        "agent_id": "ag_demo_orchestrator",
+        "authorization_details": [
+          {
+            "type": "urn:grantex:tools:v1",
+            "connector": "acme_kyb",
+            "purpose": "aml.cdd.onboarding",
+            "data_region": "eu",
+            "tools": [
+              "resolve_business",
+              "verify_business",
+              "ownership",
+              "screen_*",
+              "case_decision"
+            ],
+            "caps": {
+              "verify_business": {
+                "per_hour": 50,
+                "per_case": 3
+              },
+              "cost_units": {
+                "per_day": 5000
+              }
+            }
+          }
+        ],
+        "depth": 0,
+        "expires_at": "2026-09-15T09:00:00.000Z",
+        "grant_id": "grnt_demo_root",
+        "issued_at": "2026-09-14T09:00:00.000Z",
+        "parent_grant_id": null,
+        "principal": "user:underwriting-team",
+        "purpose": "aml.cdd.onboarding",
+        "scopes": [
+          "tool:acme_kyb:read",
+          "tool:acme_kyb:write"
+        ],
+        "status": "active"
+      }
+    },
+    {
+      "type": "grant",
+      "at": "2026-09-14T09:01:00.000Z",
+      "data": {
+        "agent_id": "ag_demo_underwriter",
+        "authorization_details": [
+          {
+            "type": "urn:grantex:tools:v1",
+            "connector": "acme_kyb",
+            "purpose": "aml.cdd.onboarding",
+            "data_region": "eu",
+            "tools": [
+              "resolve_business",
+              "verify_business",
+              "ownership",
+              "screen_person",
+              "case_decision"
+            ],
+            "caps": {
+              "verify_business": {
+                "per_case": 3
+              },
+              "screen_person": {
+                "per_case": 25
+              }
+            }
+          }
+        ],
+        "depth": 1,
+        "expires_at": "2026-09-15T09:00:00.000Z",
+        "grant_id": "grnt_demo_leaf",
+        "issued_at": "2026-09-14T09:01:00.000Z",
+        "parent_grant_id": "grnt_demo_root",
+        "principal": "user:underwriting-team",
+        "purpose": "aml.cdd.onboarding",
+        "scopes": [
+          "tool:acme_kyb:read",
+          "tool:acme_kyb:write"
+        ],
+        "status": "revoked"
+      }
+    },
+    {
+      "type": "run_context",
+      "at": "2026-09-14T09:05:00.000Z",
+      "data": {
+        "agent_id": "ag_demo_underwriter",
+        "model": {
+          "name": "stub-model",
+          "provider": "model-stub",
+          "version": "2026-09-01"
+        },
+        "policies": [
+          {
+            "digest": "sha256:b994b820a36ae7332ab2633ec7f5d94f4ba04885907543dd5b49033272ec12b1",
+            "id": "business_onboarding_uk",
+            "version": "1.2.0"
+          }
+        ],
+        "prompts": [
+          {
+            "digest": "sha256:13fdcaa3ce5799c4f341cb98dc0176407e2a5c3e614813ee7cda874a463e661b",
+            "id": "business_underwriter",
+            "version": "1.0.0"
+          }
+        ],
+        "run_id": "run_demo_0001",
+        "schemas": [
+          {
+            "id": "policy_result",
+            "version": "1.0.0"
+          },
+          {
+            "id": "underwriting_memo",
+            "version": "1.0.0"
+          }
+        ]
+      }
+    },
+    {
+      "type": "tool_call",
+      "at": "2026-09-14T09:05:01.000Z",
+      "data": {
+        "call_id": "call_0001",
+        "connector": "acme_kyb",
+        "grant_id": "grnt_demo_leaf",
+        "input_hash": "sha256:3b9ec07de8ebdd90762745fcaef86f06a1da48da553af4af2dad31aa5347f118",
+        "outcome": "allowed",
+        "output_hash": "sha256:c5911f22f44c84f5f39ccd03b7ce1d33f01a66e6a1dbdad7fc06a02267feafae",
+        "provider": "mock",
+        "purpose": "aml.cdd.onboarding",
+        "run_id": "run_demo_0001",
+        "started_at": "2026-09-14T09:05:01.000Z",
+        "tool": "resolve_business",
+        "upstream_records": [
+          {
+            "record_id": "mock:registry:00000001",
+            "record_type": "registry_entry",
+            "retrieved_at": "2026-09-14T09:05:01.000Z"
+          }
+        ],
+        "completed_at": "2026-09-14T09:05:01.900Z",
+        "cost_units": 1
+      }
+    },
+    {
+      "type": "tool_call",
+      "at": "2026-09-14T09:05:03.000Z",
+      "data": {
+        "call_id": "call_0002",
+        "connector": "acme_kyb",
+        "grant_id": "grnt_demo_leaf",
+        "input_hash": "sha256:5903646e438e108ad7f1d6aa08e98af983da3c20b9b43bf55d71772fd7813c59",
+        "outcome": "allowed",
+        "output_hash": "sha256:26caf31491a3ae3d8ad9eb75de011447038c088ec0b440612be836757e80c5e5",
+        "provider": "mock",
+        "purpose": "aml.cdd.onboarding",
+        "run_id": "run_demo_0001",
+        "started_at": "2026-09-14T09:05:03.000Z",
+        "tool": "verify_business",
+        "upstream_records": [
+          {
+            "record_id": "mock:verification:v-0001",
+            "record_type": "business_verification",
+            "retrieved_at": "2026-09-14T09:05:03.000Z"
+          },
+          {
+            "record_id": "mock:officers:00000001",
+            "record_type": "officer_list",
+            "retrieved_at": "2026-09-14T09:05:03.000Z"
+          }
+        ],
+        "completed_at": "2026-09-14T09:05:03.900Z",
+        "cost_units": 5
+      }
+    },
+    {
+      "type": "tool_call",
+      "at": "2026-09-14T09:05:07.000Z",
+      "data": {
+        "call_id": "call_0003",
+        "connector": "acme_kyb",
+        "grant_id": "grnt_demo_leaf",
+        "input_hash": "sha256:4826faa134bb297776a5fb0e8216f1fd7bbbd763c0f8e922b00240c336f84147",
+        "outcome": "allowed",
+        "output_hash": "sha256:ae4ed8851815c5dc67871b85fcde67f52df221912f200a9d2c064c8ef516408f",
+        "provider": "mock",
+        "purpose": "aml.cdd.onboarding",
+        "run_id": "run_demo_0001",
+        "started_at": "2026-09-14T09:05:07.000Z",
+        "tool": "ownership",
+        "upstream_records": [
+          {
+            "record_id": "mock:ownership:g-0001",
+            "record_type": "ownership_graph",
+            "retrieved_at": "2026-09-14T09:05:07.000Z"
+          }
+        ],
+        "completed_at": "2026-09-14T09:05:07.900Z",
+        "cost_units": 10
+      }
+    },
+    {
+      "type": "tool_call",
+      "at": "2026-09-14T09:05:09.000Z",
+      "data": {
+        "call_id": "call_0004",
+        "connector": "acme_kyb",
+        "grant_id": "grnt_demo_leaf",
+        "input_hash": "sha256:dd23c0004e4cafc2a0d909873fd1502f5c399fcc9cb3c729ec14962e3ebc192c",
+        "outcome": "allowed",
+        "output_hash": "sha256:5ccde812f9a2faae7f451fb28a6ddc616f763fa93c1dc6e91e82a7c2f74044fb",
+        "provider": "mock",
+        "purpose": "aml.cdd.onboarding",
+        "run_id": "run_demo_0001",
+        "started_at": "2026-09-14T09:05:09.000Z",
+        "tool": "screen_person",
+        "upstream_records": [
+          {
+            "record_id": "mock:screening:hit-0001",
+            "record_type": "screening_hit",
+            "retrieved_at": "2026-09-14T09:05:09.000Z"
+          }
+        ],
+        "completed_at": "2026-09-14T09:05:09.900Z",
+        "cost_units": 2
+      }
+    },
+    {
+      "type": "policy_evaluation",
+      "at": "2026-09-14T09:05:10.000Z",
+      "data": {
+        "evaluation_id": "eval_0001",
+        "fired_rules": [
+          {
+            "reason": "Declared owners do not reconcile with the ownership graph",
+            "rule_id": "ownership_reconciled",
+            "tier": "medium"
+          }
+        ],
+        "inputs": [
+          {
+            "evidence": [
+              {
+                "call_id": "call_0002",
+                "field": "status",
+                "provider": "mock",
+                "record_id": "mock:verification:v-0001",
+                "retrieved_at": "2026-09-14T09:05:03.000Z"
+              }
+            ],
+            "path": "verification.status",
+            "value": "active"
+          },
+          {
+            "evidence": [
+              {
+                "call_id": "call_0003",
+                "field": "owners",
+                "provider": "mock",
+                "record_id": "mock:ownership:g-0001",
+                "retrieved_at": "2026-09-14T09:05:07.000Z"
+              }
+            ],
+            "path": "ownership.missing_owners",
+            "value": 1
+          },
+          {
+            "evidence": [
+              {
+                "call_id": "call_0004",
+                "field": "disposition",
+                "provider": "mock",
+                "record_id": "mock:screening:hit-0001",
+                "retrieved_at": "2026-09-14T09:05:09.000Z"
+              }
+            ],
+            "path": "screening.unresolved_true_matches",
+            "value": 0
+          }
+        ],
+        "policy": {
+          "digest": "sha256:b994b820a36ae7332ab2633ec7f5d94f4ba04885907543dd5b49033272ec12b1",
+          "id": "business_onboarding_uk",
+          "version": "1.2.0"
+        },
+        "run_id": "run_demo_0001",
+        "score": 40.5,
+        "tier": "medium"
+      }
+    },
+    {
+      "type": "recommendation",
+      "at": "2026-09-14T09:05:11.000Z",
+      "data": {
+        "evaluation_id": "eval_0001",
+        "memo_digest": "sha256:37cf3ec0864d50e59dc518d57861fc84a38db5b187ef04a1cf51d81249dfc22f",
+        "missing_items": [
+          "declared_owner_evidence"
+        ],
+        "outcome": "refer",
+        "recommendation_id": "rec_0001",
+        "sections": [
+          {
+            "evidence": [
+              {
+                "call_id": "call_0001",
+                "field": "status",
+                "provider": "mock",
+                "record_id": "mock:registry:00000001",
+                "retrieved_at": "2026-09-14T09:05:01.000Z"
+              }
+            ],
+            "section": "registry",
+            "status": "complete"
+          },
+          {
+            "evidence": [
+              {
+                "call_id": "call_0002",
+                "field": "officers",
+                "provider": "mock",
+                "record_id": "mock:officers:00000001",
+                "retrieved_at": "2026-09-14T09:05:03.000Z"
+              }
+            ],
+            "section": "verification",
+            "status": "complete"
+          },
+          {
+            "evidence": [
+              {
+                "call_id": "call_0003",
+                "field": "owners",
+                "provider": "mock",
+                "record_id": "mock:ownership:g-0001",
+                "retrieved_at": "2026-09-14T09:05:07.000Z"
+              }
+            ],
+            "section": "ownership",
+            "status": "issues_found"
+          },
+          {
+            "evidence": [
+              {
+                "call_id": "call_0004",
+                "field": "aliases",
+                "provider": "mock",
+                "record_id": "mock:screening:hit-0001",
+                "retrieved_at": "2026-09-14T09:05:09.000Z",
+                "excerpt_ref": "excerpt_0001"
+              }
+            ],
+            "section": "screening",
+            "status": "complete"
+          },
+          {
+            "evidence": [],
+            "section": "web_presence",
+            "status": "not_available"
+          }
+        ]
+      }
+    },
+    {
+      "type": "tool_call",
+      "at": "2026-09-14T09:06:00.000Z",
+      "data": {
+        "call_id": "call_0005",
+        "connector": "acme_kyb",
+        "grant_id": "grnt_demo_leaf",
+        "input_hash": "sha256:e6d965700f8d1af005dedd3f3c3efc2d09d4eb5acb37b85f06f04ec990ac753f",
+        "outcome": "denied",
+        "output_hash": null,
+        "provider": "mock",
+        "purpose": "aml.cdd.onboarding",
+        "run_id": "run_demo_0001",
+        "started_at": "2026-09-14T09:06:00.000Z",
+        "tool": "case_decision",
+        "upstream_records": [],
+        "denial": {
+          "reason": "decision_required"
+        }
+      }
+    },
+    {
+      "type": "decision",
+      "at": "2026-09-14T09:20:00.000Z",
+      "data": {
+        "action": {
+          "action": "case_decision",
+          "case_id": "case_demo_0001",
+          "decision": "decline",
+          "subject": "gb:00000001"
+        },
+        "action_hash": "sha256:n0N_vmI6x7OfVYocNEqun9J9zAb5eI26S-tK_62F1Bk",
+        "approval_position": 1,
+        "approvals_required": 2,
+        "approver": "user:approver-a",
+        "approver_auth": "sso+webauthn",
+        "dwell_ms": 61250,
+        "expires_at": "2026-09-15T09:20:00.000Z",
+        "issued_at": "2026-09-14T09:20:00.000Z",
+        "issuer": "https://auth.example.com",
+        "jti": "dgnt_demo_0001",
+        "request_id": "dreq_demo_0001"
+      }
+    },
+    {
+      "type": "decision",
+      "at": "2026-09-14T09:31:00.000Z",
+      "data": {
+        "action": {
+          "action": "case_decision",
+          "case_id": "case_demo_0001",
+          "decision": "decline",
+          "subject": "gb:00000001"
+        },
+        "action_hash": "sha256:n0N_vmI6x7OfVYocNEqun9J9zAb5eI26S-tK_62F1Bk",
+        "approval_position": 2,
+        "approvals_required": 2,
+        "approver": "user:approver-b",
+        "approver_auth": "sso+webauthn",
+        "dwell_ms": 48020,
+        "expires_at": "2026-09-15T09:31:00.000Z",
+        "first_jti": "dgnt_demo_0001",
+        "issued_at": "2026-09-14T09:31:00.000Z",
+        "issuer": "https://auth.example.com",
+        "jti": "dgnt_demo_0002",
+        "request_id": "dreq_demo_0001"
+      }
+    },
+    {
+      "type": "decision_consumption",
+      "at": "2026-09-14T09:31:05.000Z",
+      "data": {
+        "action_hash": "sha256:n0N_vmI6x7OfVYocNEqun9J9zAb5eI26S-tK_62F1Bk",
+        "call_id": "call_0006",
+        "consumed_at": "2026-09-14T09:31:05.000Z",
+        "jtis": [
+          "dgnt_demo_0001",
+          "dgnt_demo_0002"
+        ]
+      }
+    },
+    {
+      "type": "tool_call",
+      "at": "2026-09-14T09:31:05.000Z",
+      "data": {
+        "call_id": "call_0006",
+        "connector": "acme_kyb",
+        "grant_id": "grnt_demo_leaf",
+        "input_hash": "sha256:631c63d22bd6060c57223603a1cfbb67e1fc03c1f040a0ce68fe031c2785a577",
+        "outcome": "allowed",
+        "output_hash": "sha256:8aa8b6c9b666a9e4fefab07f31ea42cf468343d0ec7dbc17b1eb8b34e81b2be9",
+        "provider": "mock",
+        "purpose": "aml.cdd.onboarding",
+        "run_id": "run_demo_0001",
+        "started_at": "2026-09-14T09:31:05.000Z",
+        "tool": "case_decision",
+        "upstream_records": [],
+        "completed_at": "2026-09-14T09:31:05.900Z"
+      }
+    },
+    {
+      "type": "revocation",
+      "at": "2026-09-14T10:00:00.000Z",
+      "data": {
+        "cascade": false,
+        "event_id": "evt_demo_0001",
+        "grant_id": "grnt_demo_leaf",
+        "reason": "provider_event",
+        "revoked_at": "2026-09-14T10:00:00.000Z",
+        "trigger": "event"
+      }
+    }
+  ]
+}

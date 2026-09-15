@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Evidence package format
+- New specification of the per-case evidence package, format 1.0
+  (`spec/evidence-package.md`), with a JSON Schema
+  (`spec/evidence-package-1.0.schema.json`) and shared examples and test cases
+  (`spec/examples/evidence/`). A package holds the grant chain with purposes
+  and caps, tool calls with input/output hashes and upstream record
+  identifiers, run context versions, policy evaluations with cited inputs,
+  recommendations with cited sections, human decisions (approver,
+  authentication method, dwell time, decision grant `jti` and `action_hash`)
+  and revocations, in a hash chain whose root is anchored in the auth service
+  audit chain and may be signed (ES256 or RS256).
+- A package is valid only as its RFC 8785 canonical form; identifiers of
+  principals, approvers and case subjects are pseudonymised per case by
+  default, with a documented opt-out per identifier class.
+- New concepts page `docs/concepts/evidence-and-verification.md`.
+
 ### Caps meter
 - This is the metering library for spend caps. The consent-page and per-case
   display of caps and remaining budget, and the platform's per-tenant

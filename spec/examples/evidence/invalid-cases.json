@@ -1,0 +1,856 @@
+{
+  "description": "Mutations of the fixture packages and the failure every verifier must report. Apply 'mutations' in order to the parsed base package (raw_* operate on its canonical bytes), verify with the base package's root from expected.json unless 'options' overrides it, and compare 'expect'.",
+  "cases": [
+    {
+      "name": "missing trusted root",
+      "package": "package.json",
+      "options": {
+        "expected_root": null
+      },
+      "expect": {
+        "code": "missing_root",
+        "entry_index": null,
+        "field_path": null,
+        "expected": "sha256:<64 lower-case hex digits>",
+        "actual": null
+      }
+    },
+    {
+      "name": "wrong trusted root",
+      "package": "package.json",
+      "options": {
+        "expected_root": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      "expect": {
+        "code": "root_not_trusted",
+        "entry_index": null,
+        "field_path": "chain.root",
+        "expected": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "actual": "sha256:e2f5dbf9add538342f753afe20c9ee4b90b63e8a6eb78740d95590022680765c"
+      }
+    },
+    {
+      "name": "package larger than the limit",
+      "package": "package.json",
+      "options": {
+        "max_bytes": 1024
+      },
+      "expect": {
+        "code": "too_large",
+        "entry_index": null,
+        "field_path": null,
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "byte-order mark",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "raw_prefix",
+          "hex": "efbbbf"
+        }
+      ],
+      "expect": {
+        "code": "malformed_json",
+        "entry_index": null,
+        "field_path": null,
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "truncated",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "raw_truncate",
+          "length": 200
+        }
+      ],
+      "expect": {
+        "code": "malformed_json",
+        "entry_index": null,
+        "field_path": null,
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "duplicate member",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "raw_replace",
+          "find": "\"format\":\"grantex-evidence-package\"",
+          "replace": "\"format\":\"grantex-evidence-package\",\"format\":\"grantex-evidence-package\""
+        }
+      ],
+      "expect": {
+        "code": "duplicate_key",
+        "entry_index": null,
+        "field_path": null,
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "whitespace",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "raw_replace",
+          "find": "{\"anchor\"",
+          "replace": "{ \"anchor\""
+        }
+      ],
+      "expect": {
+        "code": "non_canonical_document",
+        "entry_index": null,
+        "field_path": null,
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "number spelled 61250.0",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "raw_replace",
+          "find": "\"dwell_ms\":61250",
+          "replace": "\"dwell_ms\":61250.0"
+        }
+      ],
+      "expect": {
+        "code": "non_canonical_number",
+        "entry_index": null,
+        "field_path": null,
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "number spelled 6.125e4",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "raw_replace",
+          "find": "\"dwell_ms\":61250",
+          "replace": "\"dwell_ms\":6.125e4"
+        }
+      ],
+      "expect": {
+        "code": "non_canonical_number",
+        "entry_index": null,
+        "field_path": null,
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "integer beyond 2^53",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "raw_replace",
+          "find": "\"dwell_ms\":61250",
+          "replace": "\"dwell_ms\":9007199254740993"
+        }
+      ],
+      "expect": {
+        "code": "non_canonical_number",
+        "entry_index": null,
+        "field_path": null,
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "unknown format",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "format"
+          ],
+          "value": "other-package"
+        }
+      ],
+      "expect": {
+        "code": "unsupported_format",
+        "entry_index": null,
+        "field_path": "format",
+        "expected": "grantex-evidence-package",
+        "actual": "other-package"
+      }
+    },
+    {
+      "name": "unknown version",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "version"
+          ],
+          "value": "1.1"
+        }
+      ],
+      "expect": {
+        "code": "unsupported_version",
+        "entry_index": null,
+        "field_path": "version",
+        "expected": "1.0",
+        "actual": "1.1"
+      }
+    },
+    {
+      "name": "unknown top-level member",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "extra"
+          ],
+          "value": true
+        }
+      ],
+      "expect": {
+        "code": "schema_violation",
+        "entry_index": null,
+        "field_path": "extra",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "missing chain root",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "delete",
+          "path": [
+            "chain",
+            "root"
+          ]
+        }
+      ],
+      "expect": {
+        "code": "schema_violation",
+        "entry_index": null,
+        "field_path": "chain.root",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "unknown tool call outcome",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            3,
+            "data",
+            "outcome"
+          ],
+          "value": "maybe"
+        }
+      ],
+      "expect": {
+        "code": "schema_violation",
+        "entry_index": 3,
+        "field_path": "entries[3].data.outcome",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "raw approver identifier while pseudonymised",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            10,
+            "data",
+            "approver"
+          ],
+          "value": "user:approver-a"
+        }
+      ],
+      "expect": {
+        "code": "privacy_violation",
+        "entry_index": 10,
+        "field_path": "entries[10].data.approver",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "header field edited",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "case",
+            "state"
+          ],
+          "value": "open"
+        }
+      ],
+      "expect": {
+        "code": "genesis_mismatch",
+        "entry_index": null,
+        "field_path": "chain.genesis",
+        "expected": "sha256:500917a340b2d37d10face6daa094dc1ff2c212e9fa1919957b6bb774e4c6544",
+        "actual": "sha256:02484c8fe8085159fd86266036fd5666d9aa02d4b8ddf0d57679cef08ccebc0a"
+      }
+    },
+    {
+      "name": "entry field edited",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            10,
+            "data",
+            "dwell_ms"
+          ],
+          "value": 61251
+        }
+      ],
+      "expect": {
+        "code": "entry_hash_mismatch",
+        "entry_index": 10,
+        "field_path": "entries[10].hash",
+        "expected": "sha256:9a3fbf81f77e5a1a545c0dc3429bb1f656888b1f886195dc9f594ef8f42582d5",
+        "actual": "sha256:1017aa91eef2e2bba9200ddff7a5608c42774f2859e4df51ed3e1363a1b16ccd"
+      }
+    },
+    {
+      "name": "entry field edited and its hash recomputed",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            10,
+            "data",
+            "dwell_ms"
+          ],
+          "value": 61251
+        },
+        {
+          "op": "rehash_entry",
+          "index": 10
+        }
+      ],
+      "expect": {
+        "code": "link_mismatch",
+        "entry_index": 11,
+        "field_path": "entries[11].prev",
+        "expected": "sha256:9a3fbf81f77e5a1a545c0dc3429bb1f656888b1f886195dc9f594ef8f42582d5",
+        "actual": "sha256:1017aa91eef2e2bba9200ddff7a5608c42774f2859e4df51ed3e1363a1b16ccd"
+      }
+    },
+    {
+      "name": "sequence number edited",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            4,
+            "seq"
+          ],
+          "value": 5
+        }
+      ],
+      "expect": {
+        "code": "sequence_mismatch",
+        "entry_index": 4,
+        "field_path": "entries[4].seq",
+        "expected": "4",
+        "actual": "5"
+      }
+    },
+    {
+      "name": "last entry edited and rehashed",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            14,
+            "data",
+            "reason"
+          ],
+          "value": "manual"
+        },
+        {
+          "op": "rehash_entry",
+          "index": 14
+        }
+      ],
+      "expect": {
+        "code": "head_mismatch",
+        "entry_index": null,
+        "field_path": "chain.head",
+        "expected": "sha256:7d6505fa3459e1540210141d8a4bb1b13526fa05ec78fef879047199d0d4a6e8",
+        "actual": "sha256:65403a102b770ae16d3d99baf5137a8f00c9f69784ed7b4ef9fa2321e7245c7c"
+      }
+    },
+    {
+      "name": "chain length edited",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "length"
+          ],
+          "value": 14
+        }
+      ],
+      "expect": {
+        "code": "length_mismatch",
+        "entry_index": null,
+        "field_path": "chain.length",
+        "expected": "15",
+        "actual": "14"
+      }
+    },
+    {
+      "name": "chain root edited",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "chain",
+            "root"
+          ],
+          "value": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "expect": {
+        "code": "root_mismatch",
+        "entry_index": null,
+        "field_path": "chain.root",
+        "expected": "sha256:e2f5dbf9add538342f753afe20c9ee4b90b63e8a6eb78740d95590022680765c",
+        "actual": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "name": "cost edited and whole chain rehashed",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            4,
+            "data",
+            "cost_units"
+          ],
+          "value": 0
+        },
+        {
+          "op": "rehash_chain"
+        }
+      ],
+      "expect": {
+        "code": "root_not_trusted",
+        "entry_index": null,
+        "field_path": "chain.root",
+        "expected": "sha256:e2f5dbf9add538342f753afe20c9ee4b90b63e8a6eb78740d95590022680765c",
+        "actual": "sha256:6a5972c9686c91bec7405c9d0f81f56cc1920fac1a18587dc70ce4f798c710c2"
+      }
+    },
+    {
+      "name": "cited upstream record removed and chain rehashed",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            5,
+            "data",
+            "upstream_records"
+          ],
+          "value": []
+        },
+        {
+          "op": "rehash_chain"
+        }
+      ],
+      "expect": {
+        "code": "dangling_reference",
+        "entry_index": 7,
+        "field_path": "entries[7].data.inputs[1].evidence[0].record_id",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "grant chain parent edited and rehashed",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            1,
+            "data",
+            "parent_grant_id"
+          ],
+          "value": "grnt_other"
+        },
+        {
+          "op": "rehash_chain"
+        }
+      ],
+      "expect": {
+        "code": "grant_chain_broken",
+        "entry_index": 1,
+        "field_path": "entries[1].data.parent_grant_id",
+        "expected": "grnt_demo_root",
+        "actual": "grnt_other"
+      }
+    },
+    {
+      "name": "entries reordered and rehashed",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            9,
+            "at"
+          ],
+          "value": "2026-09-14T09:05:00.500Z"
+        },
+        {
+          "op": "rehash_chain"
+        }
+      ],
+      "expect": {
+        "code": "entries_out_of_order",
+        "entry_index": 9,
+        "field_path": "entries[9].at",
+        "expected": "2026-09-14T09:05:11.000Z",
+        "actual": "2026-09-14T09:05:00.500Z"
+      }
+    },
+    {
+      "name": "second approver made the first and rehashed",
+      "package": "package-disclosed.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            11,
+            "data",
+            "approver"
+          ],
+          "value": "user:approver-a"
+        },
+        {
+          "op": "rehash_chain"
+        }
+      ],
+      "expect": {
+        "code": "decision_inconsistent",
+        "entry_index": 11,
+        "field_path": "entries[11].data.approver",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "decision action edited and rehashed",
+      "package": "package-disclosed.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            10,
+            "data",
+            "action",
+            "decision"
+          ],
+          "value": "approve"
+        },
+        {
+          "op": "rehash_chain"
+        }
+      ],
+      "expect": {
+        "code": "action_hash_mismatch",
+        "entry_index": 10,
+        "field_path": "entries[10].data.action_hash",
+        "expected": "sha256:EQyJEsHYx9_8OkuEY4v5j15j5LSInFWhIKY8vCXN798",
+        "actual": "sha256:n0N_vmI6x7OfVYocNEqun9J9zAb5eI26S-tK_62F1Bk"
+      }
+    },
+    {
+      "name": "decision for another case",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            10,
+            "data",
+            "action",
+            "case_id"
+          ],
+          "value": "case_other"
+        },
+        {
+          "op": "rehash_chain"
+        }
+      ],
+      "expect": {
+        "code": "case_mismatch",
+        "entry_index": 10,
+        "field_path": "entries[10].data.action.case_id",
+        "expected": "case_demo_0001",
+        "actual": "case_other"
+      }
+    },
+    {
+      "name": "denied call with output",
+      "package": "package-disclosed.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            9,
+            "data",
+            "output_hash"
+          ],
+          "value": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "op": "rehash_chain"
+        }
+      ],
+      "expect": {
+        "code": "tool_call_inconsistent",
+        "entry_index": 9,
+        "field_path": "entries[9].data.output_hash",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "duplicate call id",
+      "package": "package-disclosed.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "entries",
+            4,
+            "data",
+            "call_id"
+          ],
+          "value": "call_0001"
+        },
+        {
+          "op": "rehash_chain"
+        }
+      ],
+      "expect": {
+        "code": "duplicate_identifier",
+        "entry_index": 4,
+        "field_path": "entries[4].data.call_id",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "anchor audit entry edited",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "anchor",
+            "audit_entry",
+            "timestamp"
+          ],
+          "value": "2026-09-14T10:30:00.124Z"
+        }
+      ],
+      "expect": {
+        "code": "anchor_hash_mismatch",
+        "entry_index": null,
+        "field_path": "anchor.audit_entry.hash",
+        "expected": "b0d66ac63671a0c183c63911671332d36c28313cb7c15379a19be9f680bad344",
+        "actual": "538b08d70d6c8d88cef16a4418d982b2b8b760bd72373ad8ba7edc6c43496c27"
+      }
+    },
+    {
+      "name": "anchor records another root",
+      "package": "package.json",
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "anchor",
+            "audit_entry",
+            "metadata",
+            "package_root"
+          ],
+          "value": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        {
+          "op": "rehash_anchor"
+        }
+      ],
+      "expect": {
+        "code": "anchor_mismatch",
+        "entry_index": null,
+        "field_path": "anchor.audit_entry.metadata.package_root",
+        "expected": "sha256:e2f5dbf9add538342f753afe20c9ee4b90b63e8a6eb78740d95590022680765c",
+        "actual": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    {
+      "name": "untrusted anchor",
+      "package": "package.json",
+      "options": {
+        "expected_anchor_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "expect": {
+        "code": "anchor_not_trusted",
+        "entry_index": null,
+        "field_path": "anchor.audit_entry.hash",
+        "expected": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "actual": "538b08d70d6c8d88cef16a4418d982b2b8b760bd72373ad8ba7edc6c43496c27"
+      }
+    },
+    {
+      "name": "anchor required but absent",
+      "package": "package-disclosed.json",
+      "options": {
+        "require_anchor": true
+      },
+      "expect": {
+        "code": "anchor_missing",
+        "entry_index": null,
+        "field_path": "anchor",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "signature required but absent",
+      "package": "package.json",
+      "options": {
+        "require_signature": true
+      },
+      "expect": {
+        "code": "signature_missing",
+        "entry_index": null,
+        "field_path": "signature",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "signed package without a key set",
+      "package": "package-signed.json",
+      "expect": {
+        "code": "signature_unverified",
+        "entry_index": null,
+        "field_path": "signature",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "signature from another key set",
+      "package": "package-signed.json",
+      "options": {
+        "jwks": {
+          "keys": []
+        }
+      },
+      "expect": {
+        "code": "signature_key_unknown",
+        "entry_index": null,
+        "field_path": "signature.kid",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "signature kid edited",
+      "package": "package-signed.json",
+      "options": {
+        "jwks": "jwks.json"
+      },
+      "mutations": [
+        {
+          "op": "set",
+          "path": [
+            "signature",
+            "kid"
+          ],
+          "value": "other-kid"
+        }
+      ],
+      "expect": {
+        "code": "signature_invalid",
+        "entry_index": null,
+        "field_path": "signature.jws",
+        "expected": null,
+        "actual": null
+      }
+    },
+    {
+      "name": "signature bytes edited",
+      "package": "package-signed.json",
+      "options": {
+        "jwks": "jwks.json"
+      },
+      "mutations": [
+        {
+          "op": "raw_replace",
+          "find": "..",
+          "replace": "..A"
+        }
+      ],
+      "expect": {
+        "code": "signature_invalid",
+        "entry_index": null,
+        "field_path": "signature.jws",
+        "expected": null,
+        "actual": null
+      }
+    }
+  ]
+}
