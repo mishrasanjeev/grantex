@@ -3,10 +3,12 @@
  *
  *   node dist/cli/rotate-signing-key.js [--alg RS256|ES256]
  *
- * Retires the active key, erasing its private key, and stores a new active
- * key for `--alg` (default JWT_SIGNING_ALG). The retired key stays in the JWK
- * Set for SIGNING_KEY_RETIRED_GRACE_SECONDS. Running instances pick up the new
- * key within a minute. Exits non-zero, printing the reason, on any failure.
+ * Starts a publish-then-sign rotation: stores a new key for `--alg` (default
+ * JWT_SIGNING_ALG) as pending. Every instance publishes it within a minute; it
+ * becomes the signing key SIGNING_KEY_ACTIVATION_DELAY_SECONDS later, when the
+ * previous key is retired (its private key erased) and stays in the JWK Set
+ * for SIGNING_KEY_RETIRED_GRACE_SECONDS. Refuses while a rotation is pending.
+ * Exits non-zero, printing the reason, on any failure.
  */
 import { pathToFileURL } from 'node:url';
 import { config } from '../config.js';
@@ -39,7 +41,7 @@ async function main(): Promise<void> {
   const sql = getSql();
   try {
     await runMigrations(sql);
-    const result = await rotatePostgresSigningKey(sql, alg);
+    const result = await rotatePostgresSigningKey(sql, alg, config.signingKeyActivationDelaySeconds);
     console.log(JSON.stringify({ rotated: true, ...result }));
   } finally {
     await closeSql();

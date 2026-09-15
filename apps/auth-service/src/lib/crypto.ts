@@ -12,7 +12,11 @@ import { config } from '../config.js';
 import { logger } from './logger.js';
 import {
   getSigningKeyRing,
+  loadEnvKeys,
   loadEnvSigningKeyRing,
+  publishedSigningJwks,
+  setLegacyKidPolicy,
+  signingKid,
   loadPostgresSigningKeyRing,
   reloadPostgresSigningKeyRing,
   reloadSigningKeyRing,
@@ -109,14 +113,30 @@ export const SIGNING_KEY_RELOAD_INTERVAL_MS = 60_000;
  */
 export async function initKeys(): Promise<void> {
   stopKeyReload();
+  setLegacyKidPolicy({
+    months: config.jwtLegacyKidMonths,
+    transitionSeconds: config.signingKeyActivationDelaySeconds,
+  });
+  const envOptions = {
+    alg: config.jwtSigningAlg,
+    rsaPrivateKey: config.rsaPrivateKey,
+    ecPrivateKey: config.ecPrivateKey,
+    verificationPublicKeys: config.jwtVerificationPublicKeys,
+    legacyKidKey: config.jwtLegacyKidKey,
+  };
   if (config.signingKeyStore === 'postgres') {
     const { getSql } = await import('../db/client.js');
     const sql = getSql();
-    const ring = await loadPostgresSigningKeyRing(sql, {
+    const storeOptions = {
       alg: config.jwtSigningAlg,
       retiredGraceSeconds: config.signingKeyRetiredGraceSeconds,
-    });
-    setSigningKeyRing(ring, () => reloadPostgresSigningKeyRing(sql, config.signingKeyRetiredGraceSeconds));
+      // The legacy kid key stays published as long as its kid aliases are.
+      legacyRetentionSeconds: config.jwtLegacyKidMonths * 31 * 86_400,
+    };
+    // Keys still configured in the environment are imported, never generated.
+    const envKeys = await loadEnvKeys({ ...envOptions, autoGenerate: false });
+    const ring = await loadPostgresSigningKeyRing(sql, storeOptions, envKeys);
+    setSigningKeyRing(ring, () => reloadPostgresSigningKeyRing(sql, storeOptions));
     _reloadTimer = setInterval(() => {
       // A failed reload keeps the last good key set; verification of an
       // unknown kid still fails closed.
@@ -131,14 +151,7 @@ export async function initKeys(): Promise<void> {
     return;
   }
 
-  setSigningKeyRing(await loadEnvSigningKeyRing({
-    alg: config.jwtSigningAlg,
-    rsaPrivateKey: config.rsaPrivateKey,
-    ecPrivateKey: config.ecPrivateKey,
-    autoGenerate: config.autoGenerateKeys,
-    kid: config.jwtSigningKid,
-    retiredPublicKeys: config.jwtRetiredPublicKeys,
-  }));
+  setSigningKeyRing(await loadEnvSigningKeyRing({ ...envOptions, autoGenerate: config.autoGenerateKeys }));
 }
 
 export function stopKeyReload(): void {
@@ -148,10 +161,10 @@ export function stopKeyReload(): void {
   }
 }
 
-/** The active signing key. */
+/** The active signing key, with the kid to put in the header of a token signed now. */
 export function getKeyPair(): KeyPair {
   const { active } = getSigningKeyRing();
-  return { privateKey: active.privateKey, publicKey: active.publicKey, kid: active.kid, alg: active.alg };
+  return { privateKey: active.privateKey, publicKey: active.publicKey, kid: signingKid(), alg: active.alg };
 }
 
 /** The `algorithms` allowlist for every platform-token verification. */
@@ -403,11 +416,9 @@ export async function signWithEd25519(payload: Record<string, unknown>): Promise
 // ─── End Ed25519 ─────────────────────────────────────────────────────────────
 
 export async function buildJwks(): Promise<{ keys: Record<string, unknown>[] }> {
-  // Every platform signing key: the active key first, then keys kept for
-  // verification. Each carries kid, alg and use=sig.
-  const keys: Record<string, unknown>[] = getSigningKeyRing()
-    .keys()
-    .map((key) => ({ ...key.publicJwk }));
+  // Every platform signing key (active, pending, kept for verification), each
+  // with kid, alg and use=sig, then the legacy key's grantex-YYYY-MM aliases.
+  const keys: Record<string, unknown>[] = publishedSigningJwks();
 
   // Include Ed25519 key if initialized
   if (_edKeyPair) {
