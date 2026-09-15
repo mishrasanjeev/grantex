@@ -102,7 +102,7 @@ carries the same chain. OAuth token exchange preserves the subject token's
 | `type` | Members | Meaning |
 |---|---|---|
 | `urn:grantex:tools:v1` | `connector`, `purpose`, `data_region`, `tools`, `caps` | One per connector. Purpose binding (purpose-bound grants), the tools the grant may call (names or prefixes ending in `*`) and per-grant caps including a `cost_units` budget (caps and metering). |
-| `urn:grantex:decision:v1` | `connector`, `tools`, `four_eyes_on` | One per connector. The tools that need a decision grant before they run, and for each tool the decisions that need two approvers. `enforce()` returns `decision_required` for a listed tool whether or not the manifest declares `requires_decision`. A delegated grant keeps the entry for every connector it keeps. |
+| `urn:grantex:decision:v1` | `connector`, `tools`, `four_eyes_on` | One per connector. The tools that need a decision grant before they run, and for each tool the decisions that need two approvers. `enforce()` requires a valid decision grant for a listed tool whether or not the manifest declares `requires_decision` (`decision_required` without one), and a decision listed in either this entry's or the manifest's `four_eyes_on` needs two approvers. A delegated grant keeps the entry for every connector it keeps. |
 | `urn:grantex:params:oauth:authorization-details:budget` | `amount`, `currency` | The grant's remaining budget at issuance. |
 
 Readers ignore entry types they do not know. An entry of a known type with an

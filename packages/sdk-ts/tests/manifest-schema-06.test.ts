@@ -63,7 +63,7 @@ describe('manifest 0.6 acceptance criteria', () => {
     );
     await expect(ToolManifest.fromFile(file)).rejects.toThrow(
       new ManifestValidationError(
-        'ToolManifest: tools.verify_business: unknown key "max_calls" (allowed: permission, allowed_purposes, caps, cost_units, requires_decision, four_eyes_on)',
+        'ToolManifest: tools.verify_business: unknown key "max_calls" (allowed: permission, allowed_purposes, caps, cost_units, requires_decision, four_eyes_on, decision_fields)',
       ),
     );
   });
