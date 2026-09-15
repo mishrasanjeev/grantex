@@ -113,7 +113,8 @@ Instead of building from source you can run the published image,
 on every change to `main` (tags `main` and `sha-<commit>`) and on `v*` release
 tags, is vulnerability-scanned before it is pushed, and carries a build
 provenance attestation, an SBOM attestation and a keyless cosign signature.
-Pin it by digest, and verify the signature before first use:
+The package is public, so pulling it needs no registry login. Pin it by
+digest, and verify the signature and provenance before first use:
 
 ```bash
 cosign verify ghcr.io/mishrasanjeev/grantex-auth-service@sha256:<digest> \
@@ -123,6 +124,11 @@ cosign verify ghcr.io/mishrasanjeev/grantex-auth-service@sha256:<digest> \
 gh attestation verify oci://ghcr.io/mishrasanjeev/grantex-auth-service@sha256:<digest> \
   --owner mishrasanjeev
 ```
+
+The signature is stored in the Sigstore bundle format, so verification needs
+cosign 3.0 or later; cosign 2.x reports `no signatures found`. The SBOM is an
+SPDX attestation attached to the image index for each platform; read it with
+`docker buildx imagetools inspect <image>@sha256:<digest> --format '{{ json .SBOM }}'`.
 
 The image takes the same environment variables as a source deployment.
 
