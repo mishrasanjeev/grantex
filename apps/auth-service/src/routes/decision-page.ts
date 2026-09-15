@@ -170,12 +170,16 @@ function settingsOrPage(reply: FastifyReply): DecisionSettings | null {
   }
 }
 
-/** A form post from this service's own page: Origin required and equal; Sec-Fetch-Site, when sent, same-origin. */
+/**
+ * A form post from this service's own page. Both headers are required: Origin
+ * equal to the service origin and Sec-Fetch-Site `same-origin`. A request
+ * without either is refused (every current browser sends both on a form post;
+ * a client that omits them is not the approval page).
+ */
 function sameOriginSubmission(request: FastifyRequest, publicOrigin: string): boolean {
   const origin = request.headers.origin;
   if (typeof origin !== 'string' || origin !== publicOrigin) return false;
-  const fetchSite = request.headers['sec-fetch-site'];
-  return fetchSite === undefined || fetchSite === 'same-origin';
+  return request.headers['sec-fetch-site'] === 'same-origin';
 }
 
 function reviewSection(request: DecisionRequestRow): string {

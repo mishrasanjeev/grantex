@@ -376,10 +376,13 @@ describePostgres('decision grants against real Postgres', () => {
       expect(page.body).toContain(request.policyScoreHash);
     });
 
-    it('refuses a submission without Origin, from another site, with a bad CSRF token or of another action hash', async () => {
+    it('refuses a submission without Origin or Sec-Fetch-Site, from another site, with a bad CSRF token or of another action hash', async () => {
       const request = await createRequest(actionFor(newCase()));
       const session = await signIn(request.requestId, `csrf_${suffix}`);
       expect((await approve(request.requestId, session.cookie!, { headers: { origin: '', 'sec-fetch-site': '' } })).statusCode).toBe(403);
+      expect((await approve(request.requestId, session.cookie!, { headers: { origin: '' } })).statusCode).toBe(403);
+      expect((await approve(request.requestId, session.cookie!, { headers: { 'sec-fetch-site': '' } })).statusCode).toBe(403);
+      expect((await approve(request.requestId, session.cookie!, { headers: { 'sec-fetch-site': 'same-site' } })).statusCode).toBe(403);
       expect((await approve(request.requestId, session.cookie!, { headers: { 'sec-fetch-site': 'cross-site' } })).statusCode).toBe(403);
       expect((await approve(request.requestId, session.cookie!, { headers: { origin: 'https://console.example.com' } })).statusCode).toBe(403);
       expect((await approve(request.requestId, session.cookie!, { override: { csrf_token: 'x' } })).statusCode).toBe(403);
