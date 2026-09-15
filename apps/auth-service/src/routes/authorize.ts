@@ -74,6 +74,11 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     if (scopes.some(s => typeof s !== 'string' || s.length > 256 || s.trim().length === 0)) {
       return reply.status(400).send({ message: 'Invalid scope format', code: 'BAD_REQUEST', requestId: request.id });
     }
+    // Scopes are space-delimited in the token's `scope` claim. Existing grants
+    // with such scopes keep working; new requests cannot create them.
+    if (scopes.some((s) => /\s/.test(s))) {
+      return reply.status(400).send({ message: 'Scopes must not contain whitespace', code: 'INVALID_SCOPE', requestId: request.id });
+    }
     if (scopes.length > 100) {
       return reply.status(400).send({ message: 'Too many scopes (max 100)', code: 'BAD_REQUEST', requestId: request.id });
     }
@@ -245,11 +250,19 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     // `expiresIn` is the *grant* lifetime; it is validated here and applied
     // when the code is exchanged (token.ts). The auth request / authorization
     // code itself is short-lived (config.authRequestLifetimeSeconds).
+    let grantLifetimeSeconds: number;
     try {
-      parseExpiresIn(expiresIn);
+      grantLifetimeSeconds = parseExpiresIn(expiresIn);
     } catch {
       return reply.status(400).send({
         message: 'Invalid expiresIn format. Use e.g. "1h", "30m", "24h".',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    if (config.maxGrantLifetimeSeconds !== null && grantLifetimeSeconds > config.maxGrantLifetimeSeconds) {
+      return reply.status(400).send({
+        message: `expiresIn exceeds the maximum grant lifetime of ${config.maxGrantLifetimeSeconds} seconds`,
         code: 'BAD_REQUEST',
         requestId: request.id,
       });

@@ -237,6 +237,38 @@ type VerifiedGrant struct {
 	ParentAgentDID  *string  `json:"parentAgentDid,omitempty"`
 	ParentGrantID   *string  `json:"parentGrantId,omitempty"`
 	DelegationDepth *int     `json:"delegationDepth,omitempty"`
+	// AuthorizationDetails is the raw RFC 9396 authorization_details claim.
+	AuthorizationDetails []interface{} `json:"authorizationDetails,omitempty"`
+	// Act is the RFC 8693 act claim: the delegating actor, earlier actors nested.
+	Act *ActorClaim `json:"act,omitempty"`
+	// Cnf is the confirmation claim, e.g. {"jkt": ...} for a DPoP-bound token.
+	Cnf map[string]interface{} `json:"cnf,omitempty"`
+	// Audience is the aud claim, when the grant is bound to a resource.
+	Audience []string `json:"audience,omitempty"`
+	// LegacyClaimsUsed lists legacy claim aliases that were read because the
+	// token had no standard claim for them. Empty for 0.6 tokens.
+	LegacyClaimsUsed []string `json:"legacyClaimsUsed,omitempty"`
+}
+
+// ActorClaim is an RFC 8693 actor. Nested Act members are earlier actors.
+type ActorClaim struct {
+	Sub string      `json:"sub"`
+	Act *ActorClaim `json:"act,omitempty"`
+	// Members holds the actor's other members (for example iss), as issued.
+	Members map[string]interface{} `json:"-"`
+}
+
+// MarshalJSON writes the actor with its other members alongside sub and act.
+func (a ActorClaim) MarshalJSON() ([]byte, error) {
+	out := make(map[string]interface{}, len(a.Members)+2)
+	for name, value := range a.Members {
+		out[name] = value
+	}
+	out["sub"] = a.Sub
+	if a.Act != nil {
+		out["act"] = a.Act
+	}
+	return json.Marshal(out)
 }
 
 // --- Audit ---

@@ -126,7 +126,7 @@ a `reason_code` (`reasonCode` in TypeScript) and, where one applies, a
 | Scope permission covers the tool's permission | `permission_insufficient` | |
 | The grant's tools list (when present) names the tool | `tool_not_granted` | `not_in_authorization_details` |
 | `allowed_purposes` | `purpose_not_allowed` | `missing`, `unknown_purpose`, `not_matched` |
-| `requires_decision` | `decision_required` | |
+| `requires_decision`, or the tool is listed in the grant's `urn:grantex:decision:v1` entry | `decision_required` | |
 | `amount` within a `capped:N` scope | `cap_exceeded` | `invalid_amount`, `malformed_cap`, `amount_cap` |
 | `caps`, `cost_units` (manifest or grant), reserved last | `cap_exceeded` | `limit_reached` (E1008), `case_required`, `invalid_case_id`, `invalid_cost_component`, `meter_unavailable` |
 

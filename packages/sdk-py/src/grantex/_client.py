@@ -53,7 +53,9 @@ from .denials import (
 )
 from ._authorization_details import (
     AuthorizationDetailsError,
+    DecisionReference,
     ToolsAuthorization,
+    parse_decision_references,
     parse_tools_authorization,
 )
 from .purpose import is_known_purpose, match_purpose
@@ -161,6 +163,7 @@ class Grantex:
         max_retries: int = 3,
         enforce_mode: str = "strict",
         caps_meter: CapsMeter | None = None,
+        legacy_claims: bool = True,
         caps_mode: str = CAPS_ENFORCE,
         decisions_mode: str = "enforce",
         decision_consumer: DecisionConsumer | None = None,
@@ -175,6 +178,9 @@ class Grantex:
 
         self._enforce_mode = enforce_mode
         self._caps_meter = caps_meter
+        # Whether enforce() reads legacy grant token claim aliases; True in 0.6,
+        # False by default from 0.7.
+        self._legacy_claims = legacy_claims
         self._caps_mode = _check_caps_mode(caps_mode)
         self._decisions_mode = _check_decisions_mode(decisions_mode)
         if not decision_algorithms or any(a not in ("RS256", "ES256") for a in decision_algorithms):
@@ -376,7 +382,9 @@ class Grantex:
         try:
             grant = verify_grant_token(
                 grant_token,
-                VerifyGrantTokenOptions(jwks_uri=self._jwks_uri),
+                VerifyGrantTokenOptions(
+                    jwks_uri=self._jwks_uri, legacy_claims=self._legacy_claims
+                ),
             )
         except Exception as e:
             return self._apply_enforce_mode(EnforceResult(
@@ -412,12 +420,16 @@ class Grantex:
             tools_auth = parse_tools_authorization(
                 getattr(grant, "authorization_details", None)
             )
+            decision_refs = parse_decision_references(
+                getattr(grant, "authorization_details", None)
+            )
         except AuthorizationDetailsError as exc:
             return _denied(
                 f"Grant token authorization_details cannot be used: {exc}.",
                 DenialReason.TOKEN_INVALID, TokenSubReason.MALFORMED_AUTHORIZATION_DETAILS,
             )
         entry: ToolsAuthorization | None = tools_auth.get(connector)
+        decision_ref: DecisionReference | None = decision_refs.get(connector)
         purpose = entry.purpose if entry is not None else None
         result_purpose = purpose or ""
 
@@ -497,18 +509,25 @@ class Grantex:
                     {"allowed_purposes": allowed, "purpose": purpose},
                 )
 
-        # 9. Decision. A tool that requires a decision needs decision grants
-        #    that verify offline for this exact action; they are consumed at
-        #    the issuer as the last step, after caps are reserved.
+        # 9. Decision. A tool that requires a decision, in the manifest or in
+        #    the grant's decision references, needs decision grants that verify
+        #    offline for this exact action; they are consumed at the issuer as
+        #    the last step, after caps are reserved. A decision needs two
+        #    approvers if either the manifest or the grant says so.
         decision_mode = self._decisions_mode if decisions_mode is None else _check_decisions_mode(decisions_mode)
         decision_set: DecisionGrantSet | None = None
         would_deny: dict[str, Any] | None = None
-        if spec.requires_decision:
+        ref_tools = decision_ref.tools if decision_ref is not None else ()
+        if spec.requires_decision or tool in ref_tools:
+            four_eyes_on = tuple(spec.four_eyes_on) + tuple(
+                d for d in (decision_ref.four_eyes_on.get(tool, ()) if decision_ref is not None else ())
+                if d not in spec.four_eyes_on
+            )
             requirement = {"decision_required": f"{connector}:{tool}"}
             decision_denial: tuple[str, str, str] | None = None
             try:
                 decision_set = self._verify_decision(
-                    grant, connector, tool, spec.four_eyes_on, spec.decision_fields,
+                    grant, connector, tool, four_eyes_on, spec.decision_fields,
                     decision_grants, decision_action, arguments, case_version,
                 )
             except DecisionGrantError as exc:

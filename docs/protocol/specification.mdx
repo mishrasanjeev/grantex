@@ -76,7 +76,7 @@ The DID resolves to an identity document containing:
 
 ### 3.3 Key Management
 
-- Identity Services MUST use RS256 (RSA + SHA-256) for signing
+- Identity Services MUST sign with RS256 (RSA + SHA-256, at least 2048 bits) or ES256 (ECDSA P-256 + SHA-256)
 - Private keys MUST never leave the Identity Service
 - Public keys MUST be published at `/.well-known/jwks.json`
 - Key rotation MUST be supported without changing the DID
@@ -192,10 +192,13 @@ Content-Type: application/json
 ```json
 {
   "alg": "RS256",
-  "typ": "JWT",
+  "typ": "at+jwt",
   "kid": "grantex-2026-02"
 }
 ```
+
+`alg` is `RS256` or `ES256` (one per deployment; RS256 by default). Verifiers use an explicit
+allowlist of those two and select the JWK Set key by `kid`, of the key type the algorithm requires.
 
 ### 6.2 Payload
 
@@ -204,24 +207,47 @@ Content-Type: application/json
   "iss": "https://grantex.dev",
   "sub": "user_abc123",
   "aud": "https://api.targetservice.com",
+  "exp": 1709086400,
+  "iat": 1709000000,
+  "jti": "tok_01HXYZ987xyz",
+  "client_id": "ag_01HXYZ123abc",
+  "scope": "calendar:read payments:initiate:max_500",
+  "cnf": {"jkt": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"},
+  "authorization_details": [
+    {"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "purpose": "aml.cdd.onboarding"}
+  ],
+  "urn:grantex:grant": {
+    "grant_id": "grnt_01HXYZ...",
+    "agent_did": "did:grantex:ag_01HXYZ123abc",
+    "developer_id": "org_yourcompany"
+  },
   "agt": "did:grantex:ag_01HXYZ123abc",
   "dev": "org_yourcompany",
   "grnt": "grnt_01HXYZ...",
-  "scp": ["calendar:read", "payments:initiate:max_500"],
-  "iat": 1709000000,
-  "exp": 1709086400,
-  "jti": "tok_01HXYZ987xyz"
+  "scp": ["calendar:read", "payments:initiate:max_500"]
 }
 ```
 
-### 6.3 Custom Claims
+Standard claims: `iss`, `sub`, `aud` (when bound), `exp`, `iat`, `jti`, `client_id`, `scope`
+(space-delimited), `cnf.jkt` (when key-bound), `act` (RFC 8693 delegation chain) and
+`authorization_details` (RFC 9396: purpose, tools, caps, budget, decision references). Grant record
+fields are under `urn:grantex:grant`. The full profile is `spec/grant-token-0.6.md`.
 
-| Claim | Type | Description |
-|-------|------|-------------|
-| `agt` | string | Agent DID |
-| `dev` | string | Developer org ID |
-| `grnt` | string | Grant ID (for revocation lookup) |
-| `scp` | string[] | Granted scopes |
+### 6.3 Legacy Claim Aliases
+
+Issued next to the standard claims while `GRANT_TOKEN_LEGACY_CLAIMS` is on (default on in 0.6, off in 0.7).
+Verifiers prefer the standard claim and reject a token whose claim and alias disagree.
+
+| Alias | Standard claim |
+|-------|----------------|
+| `agt` | `urn:grantex:grant.agent_did` |
+| `dev` | `urn:grantex:grant.developer_id` |
+| `grnt` | `urn:grantex:grant.grant_id` |
+| `scp` | `scope` |
+| `parentAgt` | `act.sub` |
+| `parentGrnt` | `urn:grantex:grant.parent_grant_id` |
+| `delegationDepth` | `urn:grantex:grant.delegation_depth` |
+| `bdg` | budget `authorization_details` entry |
 
 ### 6.4 Validation Rules
 
@@ -230,7 +256,7 @@ Services receiving a Grant Token MUST verify:
 1. Signature using the JWKS at `iss/.well-known/jwks.json`
 2. `exp` has not passed
 3. `aud` matches the service's identifier (if set)
-4. `scp` contains the required scopes for the requested operation
+4. `scope` (space-delimited) contains the required scopes for the requested operation
 5. *(Online verification only)* Token has not been revoked
 
 ## 7. Revocation
@@ -353,7 +379,7 @@ Advisory-only runtime monitoring. Anomaly types: `unusual_scope_access`, `high_f
 
 ## 14. Security Considerations
 
-- Tokens MUST be signed with RS256. HS256 and `alg: none` MUST be rejected.
+- Tokens MUST be signed with RS256 or ES256. HS256 and `alg: none` MUST be rejected, and a key MUST NOT be used for an algorithm other than the one it is published for.
 - Token replay MUST be detectable via `jti` tracking.
 - Consent UIs MUST validate `state` to prevent CSRF.
 - Redirect URIs MUST be pre-registered and exactly matched.
