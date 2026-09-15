@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { vi } from 'vitest';
+import type { Mock } from 'vitest';
 import { InMemoryStorage } from '../src/storage/memory.js';
 import { hashClientSecret } from '../src/lib/verify.js';
 import type { ClientRegistration, McpAuthConfig } from '../src/types.js';
@@ -38,7 +39,12 @@ export async function seededStorage(...clients: ClientRegistration[]): Promise<I
   return storage;
 }
 
-export function mockGrantex(options: { sandboxCode?: string } = {}) {
+export interface MockGrantex {
+  authorize: Mock;
+  tokens: { exchange: Mock; refresh: Mock; revoke: Mock };
+}
+
+export function mockGrantex(options: { sandboxCode?: string } = {}): MockGrantex {
   return {
     authorize: vi.fn().mockResolvedValue({
       authRequestId: 'auth-req-1',
@@ -71,8 +77,6 @@ export function mockGrantex(options: { sandboxCode?: string } = {}) {
     },
   };
 }
-
-export type MockGrantex = ReturnType<typeof mockGrantex>;
 
 export function asGrantex(mock: MockGrantex): McpAuthConfig['grantex'] {
   return mock as unknown as McpAuthConfig['grantex'];
