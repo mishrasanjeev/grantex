@@ -253,10 +253,10 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
         },
       };
 
-      // Sign with RS256 (primary key), use Ed25519 if available for proof
-      const { privateKey, kid } = getKeyPair();
+      // Sign with the platform signing key, use Ed25519 if available for proof
+      const { privateKey, kid, alg } = getKeyPair();
       const vcJwt = await new SignJWT(vcPayload)
-        .setProtectedHeader({ alg: 'RS256', kid, typ: 'JWT' })
+        .setProtectedHeader({ alg, kid, typ: 'JWT' })
         .setIssuer(issuerDid)
         .setSubject(agentDid)
         .setJti(passportId)

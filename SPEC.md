@@ -82,9 +82,9 @@ The DID resolves to an identity document containing:
 
 ### 3.3 Key Management
 
-- Identity Services MUST use RS256 (RSA + SHA-256) for signing
+- Identity Services MUST sign with RS256 (RSA + SHA-256, at least 2048 bits) or ES256 (ECDSA P-256 + SHA-256)
 - Private keys MUST never leave the Identity Service
-- Public keys MUST be published at `/.well-known/jwks.json`
+- Public keys MUST be published at `/.well-known/jwks.json`, each with `kid`, `alg` and `use: "sig"`
 - Key rotation MUST be supported without changing the DID
 
 ---
@@ -248,46 +248,100 @@ Response:
 ```json
 {
   "alg": "RS256",
-  "typ": "JWT",
+  "typ": "at+jwt",
   "kid": "grantex-2026-02"
 }
 ```
 
+`alg` is `RS256` (RSA, at least 2048 bits) or `ES256` (ECDSA on P-256). An
+implementation signs with one algorithm per deployment; RS256 is the default.
+`kid` names the signing key in the issuer's JWK Set, where every key carries
+`kid`, `alg` and `use: "sig"`. A `kid` MUST identify one key on every instance
+(the reference implementation uses the RFC 7638 thumbprint). Keys that no
+longer sign stay in the JWK Set while tokens they signed can still be
+presented, and a key that signed tokens under an earlier `kid` (such as the
+pre-0.6 `grantex-YYYY-MM`) MUST also be published under that `kid` for as long
+as those tokens are valid.
+
 ### 6.2 Payload
+
+A Grant Token is a JWT access token as profiled by RFC 9068 and validates with
+any OAuth or JOSE library using standard semantics. The full profile, with the
+`authorization_details` entry types and the validation rules, is
+[`spec/grant-token-0.6.md`](spec/grant-token-0.6.md).
 
 ```json
 {
   "iss": "https://grantex.dev",
   "sub": "user_abc123",
   "aud": "https://api.targetservice.com",
+  "exp": 1709086400,
+  "iat": 1709000000,
+  "jti": "tok_01HXYZ987xyz",
+  "client_id": "ag_01HXYZ123abc",
+  "scope": "calendar:read payments:initiate:max_500",
+  "cnf": {"jkt": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"},
+  "authorization_details": [
+    {"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "purpose": "aml.cdd.onboarding"}
+  ],
+  "urn:grantex:grant": {
+    "grant_id": "grnt_01HXYZ...",
+    "agent_did": "did:grantex:ag_01HXYZ123abc",
+    "developer_id": "org_yourcompany"
+  },
   "agt": "did:grantex:ag_01HXYZ123abc",
   "dev": "org_yourcompany",
   "grnt": "grnt_01HXYZ...",
-  "scp": ["calendar:read", "payments:initiate:max_500"],
-  "iat": 1709000000,
-  "exp": 1709086400,
-  "jti": "tok_01HXYZ987xyz"
+  "scp": ["calendar:read", "payments:initiate:max_500"]
 }
 ```
 
-### 6.3 Custom Claims Reference
+The last four claims are legacy aliases (6.3).
 
 | Claim | Type | Description |
 |-------|------|-------------|
-| `agt` | string | Agent DID |
-| `dev` | string | Developer org ID |
-| `grnt` | string | Grant ID (for revocation lookup) |
-| `scp` | string[] | Granted scopes |
+| `iss`, `sub`, `aud`, `exp`, `iat`, `jti` | RFC 7519 | Issuer, principal, resource (when bound), expiry, issue time, token ID |
+| `client_id` | string | The agent's client identifier (RFC 9068) |
+| `scope` | string | Granted scopes, space-delimited (RFC 9068) |
+| `cnf` | object | `jkt`: thumbprint of the agent key that must prove possession (RFC 9449), when key-bound |
+| `act` | object | Delegation chain (RFC 8693 syntax): `act.sub` is the delegating agent, not the current actor (the current actor is `client_id`); nested `act` members are earlier delegators |
+| `authorization_details` | array | Purpose, tools, caps, budget and decision references (RFC 9396) |
+| `urn:grantex:grant` | object | `grant_id`, `agent_did`, `developer_id`, and for delegated grants `parent_grant_id` and `delegation_depth` |
+
+### 6.3 Legacy Claim Aliases
+
+The claims used before 0.6 are issued next to the standard claims, with the
+same values, while the authorization server's compatibility flag
+(`GRANT_TOKEN_LEGACY_CLAIMS`) is on. It is on by default in 0.6 and off by
+default in 0.7. Verifiers MUST prefer the standard claim, MUST reject a token
+whose standard claim and alias disagree, and SHOULD warn when they fall back to
+an alias.
+
+| Alias | Type | Standard claim |
+|-------|------|----------------|
+| `agt` | string | `urn:grantex:grant.agent_did` |
+| `dev` | string | `urn:grantex:grant.developer_id` |
+| `grnt` | string | `urn:grantex:grant.grant_id` |
+| `scp` | string[] | `scope` |
+| `parentAgt` | string | `act.sub` |
+| `parentGrnt` | string | `urn:grantex:grant.parent_grant_id` |
+| `delegationDepth` | number | `urn:grantex:grant.delegation_depth` |
+| `bdg` | number | the `urn:grantex:params:oauth:authorization-details:budget` entry |
 
 ### 6.4 Validation Rules
 
 Services receiving a Grant Token MUST verify:
 
-1. Signature using the JWKS at `iss/.well-known/jwks.json`
-2. `exp` has not passed
+1. Signature using the JWKS at `iss/.well-known/jwks.json`, with an explicit
+   algorithm allowlist of `RS256` and `ES256`. The key is the JWK Set entry named
+   by `kid` whose key type matches the algorithm (RSA for RS256, EC P-256 for
+   ES256) and whose `alg`, when present, equals the token's `alg`
+2. `typ` is `at+jwt`, `iss` is the expected issuer, and `exp` has not passed
 3. `aud` matches the service's identifier (if set)
-4. `scp` contains the required scopes for the requested operation
-5. *(Online verification only)* Token has not been revoked via the revocation endpoint
+4. `scope`, split on spaces, contains the required scopes for the requested operation
+5. When `cnf.jkt` is present, the caller proves possession of that key (RFC 9449)
+6. The grant's `authorization_details` permit the operation (purpose, tools, caps, decision references)
+7. *(Online verification only)* Token has not been revoked via the revocation endpoint
 
 ---
 
@@ -408,13 +462,21 @@ When Agent A spawns Agent B, B's Grant Token must chain back to the original Pri
 ```json
 {
   "sub": "user_abc123",
-  "agt": "did:grantex:ag_B_456",
-  "parentAgt": "did:grantex:ag_A_123",
-  "parentGrnt": "grnt_parentXYZ",
-  "scp": ["email:read"],
-  "delegationDepth": 1
+  "client_id": "ag_B_456",
+  "scope": "email:read",
+  "act": {"sub": "did:grantex:ag_A_123"},
+  "urn:grantex:grant": {
+    "agent_did": "did:grantex:ag_B_456",
+    "parent_grant_id": "grnt_parentXYZ",
+    "delegation_depth": 1
+  }
 }
 ```
+
+Each further delegation nests the previous chain (RFC 8693): a token delegated
+by B to C carries `"act": {"sub": "did:grantex:ag_B_456", "act": {"sub": "did:grantex:ag_A_123"}}`
+and `delegation_depth` 2. While legacy aliases are issued (§6.3) the token also
+carries `agt`, `parentAgt`, `parentGrnt`, `scp` and `delegationDepth`.
 
 Rules:
 - Sub-agent scopes MUST be a subset of the parent's scopes
@@ -455,7 +517,7 @@ Response `201`:
 }
 ```
 
-The issued `grantToken` carries `parentAgt`, `parentGrnt`, and `delegationDepth = parentDepth + 1`.
+The issued `grantToken` carries `act` (the parent's agent, with the parent token's `act` nested), `urn:grantex:grant.parent_grant_id`, and `urn:grantex:grant.delegation_depth = parentDepth + 1` (plus the legacy `parentAgt`, `parentGrnt` and `delegationDepth` while §6.3 aliases are issued).
 
 ### 9.2 Cascade Revocation
 
@@ -720,8 +782,9 @@ Content-Type: application/json
 
 ## 14. Security Considerations
 
-- Tokens MUST be signed with RS256. Symmetric algorithms (HS256) are NOT permitted.
+- Tokens MUST be signed with RS256 or ES256. Symmetric algorithms (HS256) are NOT permitted.
 - Implementations MUST explicitly reject JWTs with `alg: none`. Both `alg: none` and HS256 MUST be rejected by all verifiers.
+- Verifiers MUST NOT use a key for an algorithm other than the one it is published for, and MUST NOT fall back to another key when `kid` does not match: an RS256 token naming an EC key, or an ES256 token naming an RSA key, is rejected.
 - Token replay MUST be detectable via `jti` tracking.
 - Consent UIs MUST validate `state` parameter to prevent CSRF.
 - Redirect URIs MUST be pre-registered and exactly matched.

@@ -23,29 +23,20 @@ import {
 import { authenticateLdap, testLdapConnection, type LdapConfig } from '../lib/ldap.js';
 import { config } from '../config.js';
 import { getKeyPair } from '../lib/crypto.js';
+import { deriveSsoStateKey } from '../lib/sso-state-key.js';
 import { encrypt, decrypt } from '../lib/vault-crypto.js';
 import { assertValidRedirectUri, safeFetch, validateOutboundUrl } from '../lib/url-security.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 /**
- * Derive a deterministic HMAC key for SSO state signing.
- * Uses SSO_STATE_SECRET env var if set, otherwise derives from the RSA private key.
+ * The HMAC key for SSO state signing (lib/sso-state-key.ts). The fallback no
+ * longer hashes the public `kid`, which anyone could predict and forge state
+ * with.
  */
-// Used only when neither SSO_STATE_SECRET nor RSA_PRIVATE_KEY is configured
-// (auto-generated dev keys). The previous fallback hashed the public `kid`
-// (`grantex-YYYY-MM`), which anyone can predict and therefore forge state with.
-let ephemeralSsoStateSecret: string | null = null;
-
 function getSsoHmacKey(): string {
-  if (config.ssoStateSecret) return config.ssoStateSecret;
-  // Derive from RSA private key — stable across restarts as long as the key doesn't change.
-  if (config.rsaPrivateKey) {
-    return crypto.createHash('sha256').update(config.rsaPrivateKey).digest('hex');
-  }
   getKeyPair(); // fail loudly if keys were never initialized
-  ephemeralSsoStateSecret ??= crypto.randomBytes(32).toString('hex');
-  return ephemeralSsoStateSecret;
+  return deriveSsoStateKey(config, process.env['NODE_ENV']);
 }
 
 /** Create an HMAC-signed SSO state parameter. */

@@ -159,3 +159,89 @@ export function parseToolsAuthorization(claim: unknown): Map<string, ToolsAuthor
   });
   return entries;
 }
+
+export const DECISION_DETAIL_TYPE = 'urn:grantex:decision:v1';
+
+const DECISION_ENTRY_KEYS = new Set(['type', 'connector', 'tools', 'four_eyes_on']);
+const TOOL_NAME_RE = NAME_RE;
+const DECISION_RE = /^[a-z][a-z0-9_]{0,63}$/;
+
+/**
+ * One `urn:grantex:decision:v1` entry: tools on a connector that need a
+ * decision grant, and the decisions on each that need two approvers.
+ *
+ * ```json
+ * {"type": "urn:grantex:decision:v1", "connector": "acme_kyb",
+ *  "tools": ["case_decision"], "four_eyes_on": {"case_decision": ["decline"]}}
+ * ```
+ */
+export interface DecisionReference {
+  connector: string;
+  tools: readonly string[];
+  fourEyesOn: Readonly<Record<string, readonly string[]>>;
+}
+
+/**
+ * Return the decision references of an `authorization_details` claim by
+ * connector. `undefined` or `null` yields an empty map. Entries of other types
+ * are ignored.
+ *
+ * @throws {AuthorizationDetailsError} an entry is malformed: an unknown key, no
+ *   tools, a tool name that is not a name, `four_eyes_on` naming a tool not in
+ *   `tools`, or two entries for one connector.
+ */
+export function parseDecisionReferences(claim: unknown): Map<string, DecisionReference> {
+  const entries = new Map<string, DecisionReference>();
+  if (claim === undefined || claim === null) return entries;
+  if (!Array.isArray(claim)) throw new AuthorizationDetailsError('authorization_details must be an array');
+
+  claim.forEach((raw: unknown, index) => {
+    const where = `authorization_details[${index}]`;
+    if (!isPlainObject(raw)) throw new AuthorizationDetailsError(`${where} must be an object`);
+    const type = raw['type'];
+    if (typeof type !== 'string' || type.length === 0) {
+      throw new AuthorizationDetailsError(`${where}.type must be a non-empty string`);
+    }
+    if (type !== DECISION_DETAIL_TYPE) return;
+
+    const unknown = Object.keys(raw).filter((k) => !DECISION_ENTRY_KEYS.has(k)).sort();
+    if (unknown.length > 0) throw new AuthorizationDetailsError(`${where} has unknown key "${unknown[0]}"`);
+    const connector = raw['connector'];
+    if (typeof connector !== 'string' || !NAME_RE.test(connector)) {
+      throw new AuthorizationDetailsError(`${where}.connector must be a connector name`);
+    }
+    if (entries.has(connector)) {
+      throw new AuthorizationDetailsError(
+        `${where} repeats connector "${connector}"; a grant carries one decision entry per connector`,
+      );
+    }
+    const tools = raw['tools'];
+    if (!Array.isArray(tools) || tools.length === 0
+        || !tools.every((t) => typeof t === 'string' && TOOL_NAME_RE.test(t))) {
+      throw new AuthorizationDetailsError(`${where}.tools must be a non-empty array of tool names`);
+    }
+    const fourEyesOn: Record<string, readonly string[]> = {};
+    if ('four_eyes_on' in raw) {
+      const rawFourEyes = raw['four_eyes_on'];
+      if (!isPlainObject(rawFourEyes)) {
+        throw new AuthorizationDetailsError(`${where}.four_eyes_on must be an object`);
+      }
+      for (const [tool, decisions] of Object.entries(rawFourEyes)) {
+        if (!(tools as string[]).includes(tool)) {
+          throw new AuthorizationDetailsError(`${where}.four_eyes_on names "${tool}", which is not in tools`);
+        }
+        if (!Array.isArray(decisions) || decisions.length === 0
+            || !decisions.every((d) => typeof d === 'string' && DECISION_RE.test(d))) {
+          throw new AuthorizationDetailsError(`${where}.four_eyes_on.${tool} must be a non-empty array of decisions`);
+        }
+        fourEyesOn[tool] = Object.freeze([...(decisions as string[])]);
+      }
+    }
+    entries.set(connector, {
+      connector,
+      tools: Object.freeze([...(tools as string[])]),
+      fourEyesOn: Object.freeze(fourEyesOn),
+    });
+  });
+  return entries;
+}

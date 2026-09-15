@@ -2,7 +2,18 @@
 export { Grantex } from './client.js';
 
 // Standalone token verification (no Grantex account needed)
-export { verifyGrantToken } from './verify.js';
+export {
+  parseDecisionReferences,
+  DECISION_DETAIL_TYPE,
+} from './authorization-details.js';
+export type { DecisionReference } from './authorization-details.js';
+export {
+  verifyGrantToken,
+  GRANT_TOKEN_ALGORITHMS,
+  GRANT_CLAIM,
+  LEGACY_CLAIM_ALIASES,
+} from './verify.js';
+export type { GrantTokenAlgorithm } from './verify.js';
 export { parseScope, scopeMatches, hasScope, missingScopes, type ParsedScope } from './scopes.js';
 
 // Webhook signature verification
