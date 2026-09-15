@@ -28,6 +28,7 @@ import {
   GrantTokenClaimsError,
   LEGACY_GRANT_TOKEN_CLAIMS,
   delegatedActorClaim,
+  grantTokenClaimsStartupNotices,
   parseActorClaim,
 } from '../src/lib/grant-token-claims.js';
 import { parseBooleanSetting } from '../src/config.js';
@@ -218,7 +219,7 @@ describe('the auth service reads both claim forms and refuses disagreement', () 
   });
 
   it.each([
-    ['scope and scp', { scope: 'read write', scp: ['read'] }],
+    ['scope and scp', { [GRANT_CLAIM]: { agent_did: 'a', developer_id: 'd' }, scope: 'read write', scp: ['read'] }],
     ['agent_did and agt', { [GRANT_CLAIM]: { agent_did: 'did:grantex:ag_a', developer_id: 'dev' }, agt: 'did:grantex:ag_b', dev: 'dev', scope: 'read' }],
     ['grant_id and grnt', { [GRANT_CLAIM]: { agent_did: 'a', developer_id: 'd', grant_id: 'g1' }, grnt: 'g2', scope: 'read' }],
     ['act.sub and parentAgt', { [GRANT_CLAIM]: { agent_did: 'a', developer_id: 'd' }, scope: 'read', act: { sub: 'x' }, parentAgt: 'y' }],
@@ -242,8 +243,77 @@ describe('the auth service reads both claim forms and refuses disagreement', () 
     await expect(verifyGrantToken(await signRaw({ scope: 'read', dev: 'd' }))).rejects.toThrow('Missing required grant token claims');
   });
 
-  it('refuses to issue a scope that contains whitespace', async () => {
-    await expect(signGrantToken(fixtureInput({ scp: ['read files'], exp: exp() }))).rejects.toBeInstanceOf(GrantTokenClaimsError);
+});
+
+describe('grants whose scopes contain whitespace (pre-0.6) keep working', () => {
+  const exp = () => Math.floor(Date.now() / 1000) + 600;
+  const base = { sub: 'user_ws', agt: 'did:grantex:ag_ws', dev: 'dev_ws', jti: 'tok_ws', grnt: 'grnt_ws' };
+
+  it('issues their tokens without scope and with scp, whatever the compatibility flag', async () => {
+    for (const legacyClaims of [true, false]) {
+      const claims = decodeJwt(await signGrantToken({ ...base, scp: ['read files', 'write'], exp: exp() }, { legacyClaims }));
+      expect(claims).not.toHaveProperty('scope');
+      expect(claims['scp']).toEqual(['read files', 'write']);
+      await expect(verifyGrantToken(await signGrantToken({ ...base, scp: ['read files'], exp: exp() }, { legacyClaims })))
+        .resolves.toMatchObject({ scp: ['read files'] });
+    }
+  });
+
+  it('verifies a token issued before 0.6, whose scope is a lossy join of scp', async () => {
+    const { privateKey, kid, alg } = getKeyPair();
+    const token = await new SignJWT({ agt: 'did:grantex:ag_ws', dev: 'dev_ws', scp: ['read files', 'write'], scope: 'read files write', grnt: 'grnt_ws' })
+      .setProtectedHeader({ alg, kid, typ: 'at+jwt' })
+      .setIssuer(config.jwtIssuer).setSubject('user_ws').setJti('tok_ws_old').setIssuedAt().setExpirationTime(exp())
+      .sign(privateKey);
+    await expect(verifyGrantToken(token)).resolves.toMatchObject({ scp: ['read files', 'write'] });
+  });
+
+  it('refreshes such a grant instead of failing', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      refresh_id: 'ref_WS', grant_id: 'grnt_WS', is_used: false,
+      refresh_expires_at: new Date(Date.now() + 86400_000).toISOString(),
+      used_at: null, rotated_to_token_id: null, replay_expires_at: null, replay_request_hash: null,
+      replay_jti: null, replay_issued_at: null, replay_grant_token: null,
+      agent_id: TEST_AGENT.id, principal_id: 'user_123', developer_id: TEST_DEVELOPER.id, scopes: ['read files'],
+      grant_status: 'active', grant_expires_at: new Date(Date.now() + 86400_000).toISOString(),
+      agent_did: TEST_AGENT.did, agent_key_thumbprint: null,
+    }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'ref_WS' }]);
+    sqlMock.mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'POST', url: '/v1/token/refresh', headers: authHeader(),
+      payload: { refreshToken: 'ref_WS', agentId: TEST_AGENT.id },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(decodeJwt(res.json<{ grantToken: string }>().grantToken)['scp']).toEqual(['read files']);
+  });
+
+  it('refuses whitespace in scopes of new authorization requests', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST', url: '/v1/authorize', headers: authHeader(),
+      payload: { agentId: TEST_AGENT.id, principalId: 'user_123', scopes: ['read files'] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ code: string }>().code).toBe('INVALID_SCOPE');
+  });
+
+  it('a 0.6 token whose scope and scp disagree is still refused', async () => {
+    const { privateKey, kid, alg } = getKeyPair();
+    const token = await new SignJWT({ [GRANT_CLAIM]: { agent_did: 'a', developer_id: 'd' }, scp: ['read files'], scope: 'read files' })
+      .setProtectedHeader({ alg, kid, typ: 'at+jwt' })
+      .setIssuer(config.jwtIssuer).setSubject('u').setJti('t').setIssuedAt().setExpirationTime(exp())
+      .sign(privateKey);
+    await expect(verifyGrantToken(token)).rejects.toBeInstanceOf(GrantTokenClaimsError);
+  });
+});
+
+describe('start-up notice', () => {
+  it('warns while the legacy claim aliases are issued', () => {
+    expect(grantTokenClaimsStartupNotices({ grantTokenLegacyClaims: true })).toEqual([expect.stringContaining('The default becomes false in 0.7')]);
+    expect(grantTokenClaimsStartupNotices({ grantTokenLegacyClaims: false })).toEqual([]);
   });
 });
 

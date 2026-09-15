@@ -12,7 +12,7 @@ import { config } from '../config.js';
 import { logger } from './logger.js';
 import {
   buildGrantTokenClaims,
-  GrantTokenClaimsError,
+  hasUnrepresentableScope,
   normalizeGrantTokenClaims,
 } from './grant-token-claims.js';
 import {
@@ -183,10 +183,11 @@ export async function signGrantToken(
   payload: GrantTokenPayload,
   options: { legacyClaims?: boolean } = {},
 ): Promise<string> {
-  // `scope` is space-delimited, so a scope containing whitespace cannot be
-  // represented; refuse rather than issue a token whose scope reads differently.
-  if (payload.scp.some((scope) => /\s/.test(scope))) {
-    throw new GrantTokenClaimsError('A grant token scope must not contain whitespace');
+  // A scope containing whitespace cannot be put in the space-delimited
+  // `scope`; such grants predate 0.6 and keep working through `scp`
+  // (buildGrantTokenClaims). New authorization requests refuse them.
+  if (hasUnrepresentableScope(payload.scp)) {
+    logger.warn({ jti: payload.jti }, 'grant token issued without scope: a granted scope contains whitespace');
   }
   const { privateKey, kid, alg } = getKeyPair();
   const builder = new SignJWT(buildGrantTokenClaims(payload, {

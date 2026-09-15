@@ -21,9 +21,21 @@
  * `delegationDepth`, `bdg`) are added while `GRANT_TOKEN_LEGACY_CLAIMS` is on:
  * the default for 0.6, off from 0.7.
  *
- * Reading accepts both forms, prefers the standard claim, and refuses a token
- * whose standard claim and alias disagree.
+ * Reading accepts both forms, prefers the standard claim, and refuses a 0.6
+ * token (one with `urn:grantex:grant`) whose standard claim and alias
+ * disagree. A pre-0.6 token carries `scope` only as a lossy join of `scp`, so
+ * its `scp` is authoritative.
+ *
+ * A grant whose scopes contain whitespace (allowed before 0.6) cannot be
+ * expressed in the space-delimited `scope`: its tokens omit `scope` and always
+ * carry `scp`, so standard-only readers refuse them rather than read a
+ * different scope set.
  */
+
+/** Whether any scope contains whitespace and so cannot be put in `scope`. */
+export function hasUnrepresentableScope(scopes: readonly string[]): boolean {
+  return scopes.some((scope) => /\s/.test(scope));
+}
 
 export const GRANT_CLAIM = 'urn:grantex:grant';
 
@@ -85,15 +97,17 @@ export function buildGrantTokenClaims(
     ...(input.parentGrnt !== undefined ? { parent_grant_id: input.parentGrnt } : {}),
     ...(input.delegationDepth !== undefined ? { delegation_depth: input.delegationDepth } : {}),
   };
+  const unrepresentable = hasUnrepresentableScope(input.scp);
   return {
     ...(input.clientId !== undefined ? { client_id: input.clientId } : {}),
-    scope: input.scp.join(' '),
+    ...(unrepresentable ? {} : { scope: input.scp.join(' ') }),
     ...(input.cnf !== undefined ? { cnf: input.cnf } : {}),
     ...(input.act !== undefined ? { act: input.act } : {}),
     ...(input.authorizationDetails !== undefined
       ? { authorization_details: input.authorizationDetails }
       : {}),
     [GRANT_CLAIM]: grant,
+    ...(unrepresentable && !options.legacyClaims ? { scp: input.scp } : {}),
     ...(options.legacyClaims
       ? {
           agt: input.agt,
@@ -199,7 +213,10 @@ export function normalizeGrantTokenClaims(payload: Record<string, unknown>): Nor
   if (rawScp !== undefined && (!Array.isArray(rawScp) || rawScp.some((value) => typeof value !== 'string'))) {
     throw new GrantTokenClaimsError('scp must be an array of strings');
   }
-  const scp = agree('scope', scope, rawScp as string[] | undefined);
+  // A pre-0.6 token's scope is a lossy join of scp; only 0.6 tokens must agree.
+  const scp = rawGrant === undefined && rawScp !== undefined
+    ? rawScp as string[]
+    : agree('scope', scope, rawScp as string[] | undefined);
 
   const agt = agree('agent_did', optionalString(grant, 'agent_did', where), optionalString(payload, 'agt', ''));
   const dev = agree('developer_id', optionalString(grant, 'developer_id', where), optionalString(payload, 'dev', ''));
@@ -232,4 +249,13 @@ export function normalizeGrantTokenClaims(payload: Record<string, unknown>): Nor
     ...(delegationDepth !== undefined ? { delegationDepth } : {}),
     ...(act !== undefined ? { act } : {}),
   };
+}
+
+/** Start-up notices about grant token claims. */
+export function grantTokenClaimsStartupNotices(settings: { grantTokenLegacyClaims: boolean }): string[] {
+  return settings.grantTokenLegacyClaims
+    ? ['GRANT_TOKEN_LEGACY_CLAIMS=true: grant tokens also carry the deprecated claim aliases agt, dev, grnt, scp, '
+      + 'parentAgt, parentGrnt, delegationDepth and bdg. The default becomes false in 0.7; move resource servers '
+      + 'to the standard claims (docs/migration-0.6.md).']
+    : [];
 }

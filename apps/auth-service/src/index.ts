@@ -1,5 +1,6 @@
 import { initTracing } from './lib/tracing.js';
 import { config, signingKeyConfigWarnings, validateConfig } from './config.js';
+import { grantTokenClaimsStartupNotices } from './lib/grant-token-claims.js';
 import { initKeys, initEdKey } from './lib/crypto.js';
 import { getSql } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
@@ -31,7 +32,7 @@ async function main() {
   // Run migrations (idempotent — safe to re-run on every startup)
   await runMigrations(sql);
 
-  for (const warning of signingKeyConfigWarnings(config)) {
+  for (const warning of [...signingKeyConfigWarnings(config), ...grantTokenClaimsStartupNotices(config)]) {
     console.warn(`[config] Warning: ${warning}`);
   }
 
