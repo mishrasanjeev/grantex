@@ -1,6 +1,13 @@
 # grantex
 
-**New in 0.5.0:** agent and principal wallet clients expose
+**New in 0.5.1:** security and reliability fixes. `enforce()` applies the
+tightest budget cap and denies malformed, negative or non-finite amounts; the
+FastAPI enforcer reads the `Authorization` header; grant-token verification
+caches the JWKS and runs off the event loop; resource ids are percent-encoded;
+single-use authorization codes are never retried; and event streams bound
+connect time at 10 seconds.
+
+**0.5.0:** agent and principal wallet clients expose
 `reconcile_reservation()`. Authorization dictionaries preserve the server's
 additive `evmPayment` payload. Automatic x402 HTTP retries are currently provided
 by the TypeScript adapter, not this SDK. See [Base custody setup](https://docs.grantex.dev/guides/base-usdc-custody).
@@ -18,7 +25,7 @@ Grantex lets humans authorize AI agents with **verifiable, revocable, audited gr
 ## Install
 
 ```bash
-pip install grantex==0.5.0
+pip install grantex==0.5.1
 ```
 
 ## Quick start
