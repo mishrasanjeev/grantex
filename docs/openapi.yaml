@@ -138,6 +138,10 @@ components:
       type: http
       scheme: bearer
       description: SCIM provisioning token
+    adminAuth:
+      type: http
+      scheme: bearer
+      description: Service administrator credential (ADMIN_API_KEY); not a developer API key
 
   schemas:
     Error:
@@ -7121,45 +7125,6 @@ paths:
       responses:
         "200": { description: Verifiable presentation }
         "400": { description: Invalid presentation request }
-  /v1/decisions/approver-sessions:
-    post:
-      operationId: createDecisionApproverSession
-      tags: [Decision Grants]
-      summary: Exchange a step-up ID token for an approver session
-      description: |
-        The ID token must come from one of the developer's active OIDC SSO connections, have been issued within
-        DECISION_ID_TOKEN_MAX_AGE_SECONDS, carry `auth_time`, and show step-up (`acr` in DECISION_STEP_UP_ACR or an
-        `amr` in DECISION_STEP_UP_AMR) within DECISION_STEP_UP_MAX_AGE_SECONDS. Each ID token is exchanged once. The
-        session lasts until the step-up window ends.
-      security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [connectionId, idToken]
-              properties:
-                connectionId: { type: string }
-                idToken: { type: string }
-      responses:
-        "201": { description: "Approver session: sessionToken, sessionId, expiresAt, approver (sub, idp, email, name), approverAuth, acr, amr, authTime" }
-        "401": { description: "The ID token did not verify against the connection (APPROVER_AUTH_FAILED)" }
-        "403": { description: "Step-up missing or too old (subReason step_up_required)" }
-        "409": { description: "ID token already exchanged (subReason consumed)" }
-  /v1/decisions/approver-sessions/{id}:
-    delete:
-      operationId: revokeDecisionApproverSession
-      tags: [Decision Grants]
-      summary: End an approver session
-      security:
-        - bearerAuth: []
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: string } }
-      responses:
-        "204": { description: Revoked }
-        "404": { description: Not found }
   /v1/decisions/cases/{caseId}:
     put:
       operationId: setDecisionCaseVersion
@@ -7186,7 +7151,11 @@ paths:
       operationId: createDecisionRequest
       tags: [Decision Grants]
       summary: Ask a person to decide one semantic action
-      description: Idempotent per action hash and case version while the request is open (200 returns the open request).
+      description: |
+        Idempotent per action hash and case version while the request is open (200 returns the open request).
+        The memo and policy score are stored as supplied, shown verbatim on the approval page, and bound into
+        the decision grant by their hashes. Duplicate member names in the body are refused. A platform cannot
+        approve through this API: approval happens only on `approvalPage` in the approver's browser.
       security:
         - bearerAuth: []
       requestBody:
@@ -7195,7 +7164,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [action, connector, caseVersion]
+              required: [action, connector, caseVersion, memo, policyScore]
               properties:
                 action:
                   type: object
@@ -7207,19 +7176,32 @@ paths:
                     decision: { type: string }
                     subject: { type: string }
                     amount: { oneOf: [{ type: number }, { type: string }] }
+                    extra: { type: object, additionalProperties: { oneOf: [{ type: string }, { type: number }] } }
                 connector: { type: string }
                 caseVersion: { type: string }
+                memo:
+                  type: object
+                  required: [content]
+                  properties:
+                    content: { type: string, maxLength: 65536 }
+                    ref: { type: string }
+                    hash: { type: string, description: "Optional sha256:<base64url> of the UTF-8 content; must match" }
+                policyScore:
+                  type: object
+                  required: [content]
+                  properties:
+                    content: { type: object, description: JSON object or array (at most 32768 bytes canonical) }
+                    ref: { type: string }
+                    hash: { type: string, description: "Optional sha256:<base64url> of the RFC 8785 canonical JSON; must match" }
                 fourEyesOn: { type: array, items: { type: string }, description: "The manifest's four_eyes_on; two approvals are required when it lists the decision" }
                 approvalsRequired: { type: integer, enum: [1, 2] }
                 expiresInSeconds: { type: integer, minimum: 60, maximum: 86400 }
-                memoRef: { type: string }
-                policyScoreRef: { type: string }
                 agentId: { type: string }
                 grantId: { type: string }
       responses:
-        "201": { description: Created }
+        "201": { description: "Created; includes approvalPage, actionHash, memoHash and policyScoreHash" }
         "200": { description: An open request for the same action and case version already exists }
-        "400": { description: "Invalid action (INVALID_ACTION) or parameters" }
+        "400": { description: "Invalid action (INVALID_ACTION), review content or parameters" }
         "409": { description: "caseVersion is not the case's current version (subReason case_changed)" }
   /v1/decisions/requests/{id}:
     get:
@@ -7234,45 +7216,6 @@ paths:
       responses:
         "200": { description: Decision request }
         "404": { description: Not found }
-  /v1/decisions/requests/{id}/approvals:
-    post:
-      operationId: approveDecisionRequest
-      tags: [Decision Grants]
-      summary: Approve the exact action and mint a decision grant
-      security:
-        - bearerAuth: []
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: string } }
-        - { name: Grantex-Approver-Session, in: header, required: true, schema: { type: string } }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [actionHash, dwellMs]
-              properties:
-                actionHash: { type: string, description: The action hash the approval surface displayed }
-                dwellMs: { type: integer, description: Milliseconds from render to submit, measured by the approval surface }
-      responses:
-        "201": { description: "decisionGrant (typ decision+jwt), jti, sub, expiresAt, approvalsRequired, approvalsReceived, status" }
-        "400": { description: dwellMs out of range }
-        "401": { description: Approver session missing or invalid }
-        "403": { description: "Step-up expired (subReason step_up_required)" }
-        "409": { description: "Refused (subReason action_mismatch, same_approver, case_changed, consumed or closed)" }
-        "410": { description: "Request expired (subReason expired)" }
-  /v1/decisions/requests/{id}/page-tickets:
-    post:
-      operationId: createDecisionPageTicket
-      tags: [Decision Grants]
-      summary: One-time link to the server-rendered approval page
-      security:
-        - bearerAuth: []
-      parameters:
-        - { name: id, in: path, required: true, schema: { type: string } }
-        - { name: Grantex-Approver-Session, in: header, required: true, schema: { type: string } }
-      responses:
-        "201": { description: "url, expiresAt" }
   /v1/decisions/requests/{id}/cancel:
     post:
       operationId: cancelDecisionRequest
@@ -7290,7 +7233,10 @@ paths:
       operationId: consumeDecisionGrants
       tags: [Decision Grants]
       summary: Verify and atomically consume the decision grants for one action
-      description: One grant, or both grants of a four-eyes decision; either all are consumed or none is. Refusals of grants the developer holds are recorded in the audit chain.
+      description: |
+        One grant, or both grants of a four-eyes decision; either all are consumed or none is. Every refusal is
+        recorded in the audit chain with the attempted action and hash; if that record cannot be written the
+        answer is 503 DECISION_AUDIT_UNAVAILABLE (nothing is consumed).
       security:
         - bearerAuth: []
       requestBody:
@@ -7310,26 +7256,124 @@ paths:
         "200": { description: "consumed, requestId, jtis, approvers, actionHash" }
         "400": { description: "Malformed request or token (subReason malformed)" }
         "409": { description: "Refused (subReason action_mismatch, wrong_case, consumed, same_approver, case_changed, revoked, expired, four_eyes_incomplete or unknown_grant)" }
+        "503": { description: The refusal could not be recorded }
+  /v1/admin/developers/{developerId}/decision-approver-idps:
+    post:
+      operationId: addDecisionApproverIdp
+      tags: [Decision Grants]
+      summary: Allow-list an identity provider for a developer's approvers (service administrator only)
+      description: |
+        Requires ADMIN_API_KEY; a developer API key is refused. `actor` names the operator and is recorded in the
+        developer's audit chain. Register `redirectUri` from the response with the identity provider.
+      security:
+        - adminAuth: []
+      parameters:
+        - { name: developerId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issuer, clientId, displayName, actor]
+              properties:
+                issuer: { type: string, description: Must equal the discovery document's issuer exactly }
+                clientId: { type: string }
+                clientSecret: { type: string, description: Stored encrypted; omit for a public client }
+                acrValues: { type: array, items: { type: string } }
+                requireVerifiedEmail: { type: boolean }
+                displayName: { type: string }
+                actor: { type: string }
+      responses:
+        "201": { description: Added }
+        "401": { description: Not the administrator credential }
+    get:
+      operationId: listDecisionApproverIdps
+      tags: [Decision Grants]
+      summary: List a developer's approver identity providers (service administrator only)
+      security:
+        - adminAuth: []
+      parameters:
+        - { name: developerId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: approverIdps }
+  /v1/admin/developers/{developerId}/decision-approver-idps/{idpId}/disable:
+    post:
+      operationId: disableDecisionApproverIdp
+      tags: [Decision Grants]
+      summary: Disable an approver identity provider and end its sessions (service administrator only)
+      security:
+        - adminAuth: []
+      parameters:
+        - { name: developerId, in: path, required: true, schema: { type: string } }
+        - { name: idpId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actor]
+              properties:
+                actor: { type: string }
+      responses:
+        "200": { description: Disabled }
+        "404": { description: No active identity provider }
   /decisions/{id}:
     get:
       operationId: renderDecisionPage
       tags: [Decision Grants]
-      summary: Server-rendered approval page (HTML)
+      summary: Approval page (HTML)
+      description: Without an approver session, offers sign-in with the developer's approver identity providers. With one, shows the memo, policy score and exact action.
       security: []
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
-        - { name: ticket, in: query, required: false, schema: { type: string } }
       responses:
-        "200": { description: Page with the memo reference, policy score reference and exact action }
-        "303": { description: Ticket redeemed; approver session cookie set }
-        "401": { description: No approver session }
+        "200": { description: Review page with the approval form }
+        "401": { description: Sign-in page }
     post:
       operationId: submitDecisionPage
       tags: [Decision Grants]
-      summary: Approve from the rendered page (form post with CSRF token)
+      summary: Approve from the page (form post)
+      description: Requires the approver session cookie, the page's CSRF token and an Origin header of this service; Sec-Fetch-Site, when sent, must be same-origin. Dwell time is measured by the service.
       security: []
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         "200": { description: Approved }
-        "403": { description: Cross-site submission or invalid CSRF token }
+        "400": { description: "Approved faster than the minimum dwell time" }
+        "403": { description: Cross-site submission, invalid CSRF token or step-up expired }
+        "409": { description: "Refused (action_mismatch, same_approver, case_changed, closed)" }
+  /decisions/login:
+    get:
+      operationId: startDecisionApproverSignIn
+      tags: [Decision Grants]
+      summary: Start the approver's OpenID Connect sign-in (authorization code, PKCE, state, nonce)
+      security: []
+      parameters:
+        - { name: request, in: query, required: true, schema: { type: string } }
+        - { name: idp, in: query, required: true, schema: { type: string } }
+      responses:
+        "302": { description: Redirect to the identity provider; sets the browser-binding cookie }
+  /decisions/callback:
+    get:
+      operationId: completeDecisionApproverSignIn
+      tags: [Decision Grants]
+      summary: Identity provider redirect target
+      security: []
+      parameters:
+        - { name: code, in: query, required: false, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "303": { description: "Signed in; sets the __Host- approver session cookie and returns to the decision" }
+        "400": { description: Invalid, reused or foreign-browser state }
+        "401": { description: ID token verification failed }
+        "403": { description: Step-up missing or too old, or verified email required }
+  /decisions/logout:
+    post:
+      operationId: endDecisionApproverSession
+      tags: [Decision Grants]
+      summary: End the approver session in this browser
+      security: []
+      responses:
+        "200": { description: Signed out }

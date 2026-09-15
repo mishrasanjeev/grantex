@@ -7,12 +7,15 @@ export {
   ACTION_HASH_PREFIX,
   ActionValidationError,
   MAX_CASE_ID_LENGTH,
+  MAX_EXTRA_FIELDS,
   MAX_SUBJECT_LENGTH,
   canonicalActionJson,
   computeActionHash,
   decisionActionFromToolCall,
   isActionHash,
+  isInvisibleFormatCodePoint,
   parseDecisionAction,
+  parseDecisionActionJson,
 } from './action.js';
 export type { ActionValidationCode, DecisionAction } from './action.js';
 export {
@@ -30,7 +33,7 @@ export type {
   VerifyDecisionGrantOptions,
   VerifyDecisionGrantsOptions,
 } from './verify.js';
-export { APPROVER_SESSION_HEADER, DecisionsClient } from '../resources/decisions.js';
+export { DecisionsClient } from '../resources/decisions.js';
 export type {
   ConsumeDecisionParams,
   ConsumedDecision,

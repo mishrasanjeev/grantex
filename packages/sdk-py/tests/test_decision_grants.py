@@ -48,8 +48,14 @@ def _b64(data: bytes) -> str:
 
 
 def sign(claims: Dict[str, Any], header: Optional[Dict[str, Any]] = None, key: Any = KEY) -> str:
-    headers = {"typ": "decision+jwt", "kid": "test-key", **(header or {})}
-    return jwt.encode(claims, key, algorithm="RS256", headers=headers)
+    headers = {"typ": "decision+jwt", "kid": "test-key", "alg": "RS256", **(header or {})}
+    for name in [k for k, v in headers.items() if v is None]:
+        del headers[name]
+    token = jwt.encode(claims, key, algorithm="RS256", headers={"typ": "decision+jwt", "kid": "test-key"})
+    # Replace the protected header as written (the signature no longer matches
+    # a changed header, which the verifier must refuse before or at signature).
+    _head, payload, signature = token.split(".")
+    return ".".join([_b64(json.dumps(headers).encode()), payload, signature]) if header else token
 
 
 def build_grant(spec: Dict[str, Any]) -> str:
@@ -112,7 +118,10 @@ def test_none_algorithm_and_hmac_are_refused() -> None:
 
 def test_verified_grant_exposes_the_approval_record() -> None:
     grant = verify_decision_grant(build_grant({}), ACTION, "v7", issuer=ISSUER, key_resolver=resolver, now=NOW)
-    assert (grant.sub, grant.approver_auth, grant.amr, grant.dwell_ms) == ("user:approver-a", "sso+hwk+pwd", ("hwk", "pwd"), 61250)
+    assert (grant.sub, grant.approver_auth, grant.amr, grant.dwell_ms, grant.dwell_source) == (
+        FIXTURE["base_claims"]["sub"], "sso+hwk+pwd", ("hwk", "pwd"), 61250, "server"
+    )
+    assert grant.memo_hash == FIXTURE["base_claims"]["memo_hash"]
     assert grant.action == DecisionAction.from_dict(ACTION)
 
 
@@ -123,6 +132,7 @@ MANIFEST = ToolManifest.from_dict({
     "tools": {
         "case_decision": {"permission": "write", "requires_decision": True, "four_eyes_on": ["decline"]},
         "payout_release": {"permission": "write", "requires_decision": True, "caps": {"per_hour": 5}},
+        "payout_currency": {"permission": "write", "requires_decision": True, "decision_fields": ["currency"]},
         "get_case": "read",
     },
 })
@@ -337,18 +347,118 @@ def test_consume_network_failure_is_unavailable() -> None:
 @respx.mock
 def test_platform_calls_send_the_documented_bodies() -> None:
     requests = respx.post(f"{BASE}/v1/decisions/requests").mock(return_value=httpx.Response(201, json={"requestId": "dreq_1"}))
-    approvals = respx.post(f"{BASE}/v1/decisions/requests/dreq_1/approvals").mock(return_value=httpx.Response(201, json={"decisionGrant": "x"}))
-    sessions = respx.post(f"{BASE}/v1/decisions/approver-sessions").mock(return_value=httpx.Response(201, json={"sessionToken": "s"}))
     cases = respx.put(f"{BASE}/v1/decisions/cases/case_8841").mock(return_value=httpx.Response(200, json={"caseVersion": "v8"}))
     c = Grantex(api_key="test-key").decisions
-    c.create_request(ACTION, connector="acme_kyb", case_version="v7", four_eyes_on=["decline"], memo_ref="memo:1")
-    c.create_approver_session("sso_1", "id-token")
-    c.approve("dreq_1", approver_session="s", action_hash="sha256:x", dwell_ms=61250)
+    c.create_request(
+        ACTION, connector="acme_kyb", case_version="v7", four_eyes_on=["decline"],
+        memo="Registry active.", memo_ref="memo:1", policy_score={"tier": "low"},
+    )
     c.set_case_version("case_8841", "v8")
     assert json.loads(requests.calls[0].request.content) == {
-        "action": ACTION, "connector": "acme_kyb", "caseVersion": "v7", "fourEyesOn": ["decline"], "memoRef": "memo:1",
+        "action": ACTION, "connector": "acme_kyb", "caseVersion": "v7", "fourEyesOn": ["decline"],
+        "memo": {"content": "Registry active.", "ref": "memo:1"}, "policyScore": {"content": {"tier": "low"}},
     }
-    assert approvals.calls[0].request.headers["Grantex-Approver-Session"] == "s"
-    assert json.loads(approvals.calls[0].request.content) == {"actionHash": "sha256:x", "dwellMs": 61250}
-    assert json.loads(sessions.calls[0].request.content) == {"connectionId": "sso_1", "idToken": "id-token"}
     assert json.loads(cases.calls[0].request.content) == {"caseVersion": "v8"}
+
+
+def test_the_client_cannot_approve() -> None:
+    c = Grantex(api_key="test-key").decisions
+    for name in ("approve", "create_approver_session", "create_page_ticket"):
+        assert not hasattr(c, name)
+
+
+def test_decision_action_and_arguments_must_describe_the_same_action(verify_grant: MagicMock) -> None:
+    issuer = FakeIssuer()
+    token = build_grant({})
+    mismatch = client(issuer).enforce(
+        "t", "acme_kyb", "case_decision", decision_grants=[token],
+        decision_action=ACTION, arguments=call_args(decision="decline"), case_version="v7",
+    )
+    assert (mismatch.allowed, mismatch.sub_reason) == (False, DecisionSubReason.ACTION_MISMATCH)
+    assert issuer.calls == []
+    same = client(issuer).enforce(
+        "t", "acme_kyb", "case_decision", decision_grants=[token],
+        decision_action=ACTION, arguments=call_args(), case_version="v7",
+    )
+    assert same.allowed, same.reason
+
+
+class ExplodingIssuer:
+    def consume(self, grants: DecisionGrantSet, *, agent_id: Optional[str] = None, grant_id: Optional[str] = None) -> ConsumedDecision:
+        raise RuntimeError("socket closed")
+
+
+def test_any_consumer_failure_denies_and_refunds_caps(verify_grant: MagicMock) -> None:
+    meter = CapsMeter(InMemoryCapsBackend())
+    payout = {**ACTION, "action": "payout_release"}
+    token = build_grant({"claims": {"action": payout, "action_hash": DecisionAction.from_dict(payout).action_hash()}})
+    c = Grantex(api_key="test-key", decision_consumer=ExplodingIssuer(), caps_meter=meter)  # type: ignore[arg-type]
+    c.load_manifest(MANIFEST)
+    denied = c.enforce("t", "acme_kyb", "payout_release", decision_grants=[token], decision_action=payout, case_version="v7")
+    assert (denied.allowed, denied.reason_code, denied.sub_reason) == (False, DenialReason.DECISION_INVALID, DecisionSubReason.CONSUME_UNAVAILABLE)
+    probe = client(caps_meter=meter).enforce(
+        "t", "acme_kyb", "payout_release", decision_action=payout, case_version="v7", reserve=False, decisions_mode="warn",
+    )
+    assert all(u.used == 0 for u in meter.usage("dev_01", list(probe.cap_limits)))
+
+
+def test_declared_decision_fields_are_bound(verify_grant: MagicMock) -> None:
+    payout = {**ACTION, "action": "payout_currency", "extra": {"currency": "GBP"}}
+    token = build_grant({"claims": {"action": payout, "action_hash": DecisionAction.from_dict(payout).action_hash()}})
+    issuer = FakeIssuer()
+    ok = client(issuer).enforce("t", "acme_kyb", "payout_currency", decision_grants=[token], arguments=call_args(currency="GBP"), case_version="v7")
+    assert ok.allowed, ok.reason
+    other = client(FakeIssuer()).enforce("t", "acme_kyb", "payout_currency", decision_grants=[token], arguments=call_args(currency="EUR"), case_version="v7")
+    assert (other.allowed, other.sub_reason) == (False, DecisionSubReason.ACTION_MISMATCH)
+    missing = client(FakeIssuer()).enforce("t", "acme_kyb", "payout_currency", decision_grants=[token], arguments=call_args(), case_version="v7")
+    assert (missing.allowed, missing.sub_reason) == (False, DecisionSubReason.MALFORMED)
+    unbound = client(FakeIssuer()).enforce("t", "acme_kyb", "payout_currency", decision_grants=[token], decision_action={**ACTION, "action": "payout_currency"}, case_version="v7")
+    assert (unbound.allowed, unbound.sub_reason) == (False, DecisionSubReason.MALFORMED)
+
+
+def test_wrap_tool_carries_decision_grants(verify_grant: MagicMock) -> None:
+    issuer = FakeIssuer()
+    c = client(issuer)
+    calls: List[Dict[str, Any]] = []
+
+    class Tool:
+        def _run(self, **kwargs: Any) -> str:
+            calls.append(kwargs)
+            return "done"
+
+    token = build_grant({})
+    tool = c.wrap_tool(Tool(), connector="acme_kyb", tool_name="case_decision", grant_token="t",
+                       decision_grants=lambda: [token], case_version=lambda: "v7")
+    assert tool._run(**call_args()) == "done"
+    with pytest.raises(PermissionError):
+        tool._run(**call_args())  # the grant was consumed by the first call
+    bare = c.wrap_tool(Tool(), connector="acme_kyb", tool_name="case_decision", grant_token="t")
+    with pytest.raises(PermissionError):
+        bare._run(**call_args())
+    assert len(calls) == 1
+
+
+@respx.mock
+def test_default_key_resolver_supports_es256_and_rotated_kids() -> None:
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from jwt.algorithms import ECAlgorithm
+
+    from grantex._verify import clear_jwks_cache
+
+    clear_jwks_cache()
+    ec_key = ec.generate_private_key(ec.SECP256R1())
+    ec_jwk = json.loads(ECAlgorithm.to_jwk(ec_key.public_key()))
+    ec_jwk.update({"kid": "ec-1", "alg": "ES256"})
+    jwks = respx.get("https://auth.example.com/.well-known/jwks.json").mock(return_value=httpx.Response(200, json={"keys": [ec_jwk]}))
+    claims = {**FIXTURE["base_claims"], "iss": "https://auth.example.com"}
+    token = jwt.encode(claims, ec_key, algorithm="ES256", headers={"typ": "decision+jwt", "kid": "ec-1"})
+    grant = verify_decision_grant(token, ACTION, "v7", issuer="https://auth.example.com", jwks_uri="https://auth.example.com/.well-known/jwks.json", now=NOW)
+    assert grant.jti == FIXTURE["base_claims"]["jti"]
+    with pytest.raises(DecisionGrantError) as info:
+        verify_decision_grant(token, ACTION, "v7", issuer="https://auth.example.com", jwks_uri="https://auth.example.com/.well-known/jwks.json", now=NOW, algorithms=("RS256",))
+    assert info.value.sub_reason == DecisionSubReason.MALFORMED
+    rsa_labelled = jwt.encode(claims, KEY, algorithm="RS256", headers={"typ": "decision+jwt", "kid": "ec-1"})
+    with pytest.raises(DecisionGrantError):
+        verify_decision_grant(rsa_labelled, ACTION, "v7", issuer="https://auth.example.com", jwks_uri="https://auth.example.com/.well-known/jwks.json", now=NOW)
+    assert jwks.call_count >= 1
+    clear_jwks_cache()

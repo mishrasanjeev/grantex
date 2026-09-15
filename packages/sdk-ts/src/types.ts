@@ -37,6 +37,8 @@ export interface GrantexClientOptions {
   decisionsMode?: 'enforce' | 'warn';
   /** Consumes decision grants at their issuer. Defaults to `grantex.decisions` (the auth service). */
   decisionConsumer?: DecisionConsumer;
+  /** Algorithms accepted on decision grants, a subset of RS256 and ES256. Default both. */
+  decisionAlgorithms?: readonly ('RS256' | 'ES256')[];
 }
 
 // ─── Signup ─────────────────────────────────────────────────────────────────

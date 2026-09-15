@@ -7,7 +7,8 @@ action. This package holds:
 - offline verification of decision grants, including four eyes
   (:func:`verify_decision_grant`, :func:`verify_decision_grants`);
 - the auth-service client (``Grantex(...).decisions``) that creates decision
-  requests, records approvals and consumes grants atomically.
+  requests and consumes grants atomically (people approve on the auth
+  service's approval page, not through this client).
 
 ``Grantex.enforce()`` combines them for tools whose manifest entry has
 ``requires_decision``. The token profile is ``spec/decision-grant.md``.
@@ -24,7 +25,6 @@ from ._action import (
     is_action_hash,
 )
 from ._client import (
-    APPROVER_SESSION_HEADER,
     ConsumedDecision,
     DecisionConsumer,
     DecisionsClient,
@@ -49,7 +49,6 @@ DECISIONS_MODES = (DECISIONS_ENFORCE, DECISIONS_WARN)
 __all__ = [
     "ACTION_FIELDS",
     "ACTION_HASH_PREFIX",
-    "APPROVER_SESSION_HEADER",
     "ActionValidationError",
     "ConsumedDecision",
     "DECISIONS_ENFORCE",

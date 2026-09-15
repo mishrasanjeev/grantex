@@ -84,6 +84,9 @@ class DecisionGrant:
     decision_request: str
     iat: int
     exp: int
+    memo_hash: str
+    policy_score_hash: str
+    dwell_source: str = "server"
     acr: Optional[str] = None
     memo_ref: Optional[str] = None
     policy_score_ref: Optional[str] = None
@@ -120,12 +123,49 @@ def _as_action(value: Union[DecisionAction, Mapping[str, Any]]) -> DecisionActio
         ) from exc
 
 
+_KEY_TYPES = {"RS256": "RSA", "ES256": "EC"}
+_UNKNOWN_KID_COOLDOWN_SECONDS = 30.0
+
+
 def _default_key_resolver(jwks_uri: str) -> KeyResolver:
-    from .._verify import _fetch_signing_key
+    """Resolves the key named by ``kid`` in the issuer's JWKS, of the type the
+    algorithm needs (RSA for RS256, P-256 EC for ES256); an unknown ``kid``
+    refetches the set at most once per cooldown."""
+    from jwt.algorithms import ECAlgorithm, RSAAlgorithm
+
+    from .._verify import _get_jwks
 
     def resolve(header: Mapping[str, Any]) -> Any:
         kid = header.get("kid")
-        return _fetch_signing_key(jwks_uri, kid if isinstance(kid, str) else None)
+        alg = header.get("alg")
+        if not isinstance(kid, str) or not kid:
+            raise DecisionGrantError(DecisionSubReason.MALFORMED, "decision grant has no kid")
+        kty = _KEY_TYPES.get(alg) if isinstance(alg, str) else None
+        if kty is None:
+            raise DecisionGrantError(DecisionSubReason.MALFORMED, f"decision grant algorithm {alg!r} is not allowed")
+
+        def select(keys: Sequence[Mapping[str, Any]]) -> Optional[Mapping[str, Any]]:
+            matches = [k for k in keys if k.get("kid") == kid and k.get("kty") == kty]
+            if len(matches) > 1:
+                raise DecisionGrantError(DecisionSubReason.MALFORMED, f"JWKS has several keys with kid {kid!r}")
+            if matches and kty == "EC" and matches[0].get("crv") != "P-256":
+                return None
+            return matches[0] if matches else None
+
+        try:
+            entry = _get_jwks(jwks_uri)
+            matched = select(entry.keys)
+            if matched is None and time.monotonic() - entry.fetched_at >= _UNKNOWN_KID_COOLDOWN_SECONDS:
+                entry = _get_jwks(jwks_uri, force_refresh=True)
+                matched = select(entry.keys)
+        except GrantexTokenError as exc:
+            raise DecisionGrantError(DecisionSubReason.MALFORMED, f"issuer keys unavailable: {exc}") from exc
+        if matched is None:
+            raise DecisionGrantError(DecisionSubReason.MALFORMED, f"no {kty} key with kid {kid!r} in the issuer's JWKS")
+        try:
+            return (RSAAlgorithm if kty == "RSA" else ECAlgorithm).from_jwk(dict(matched))
+        except Exception as exc:  # noqa: BLE001 - an unusable key refuses the grant
+            raise DecisionGrantError(DecisionSubReason.MALFORMED, "issuer key cannot be used") from exc
 
     return resolve
 
@@ -171,7 +211,7 @@ def verify_decision_grant(
     key_resolver: Optional[KeyResolver] = None,
     developer_id: Optional[str] = None,
     connector: Optional[str] = None,
-    algorithms: Sequence[str] = ("RS256",),
+    algorithms: Sequence[str] = ("RS256", "ES256"),
     clock_tolerance: int = 0,
     now: Optional[int] = None,
 ) -> DecisionGrant:
@@ -207,10 +247,14 @@ def verify_decision_grant(
         raise DecisionGrantError(DecisionSubReason.MALFORMED, f"decision grant is not a JWT: {exc}") from exc
     if header.get("typ") != DECISION_GRANT_TYP:
         raise DecisionGrantError(DecisionSubReason.MALFORMED, f"decision grant typ must be {DECISION_GRANT_TYP}")
-    if header.get("alg") not in tuple(algorithms):
+    if not isinstance(header.get("kid"), str) or not header.get("kid"):
+        raise DecisionGrantError(DecisionSubReason.MALFORMED, "decision grant has no kid")
+    if header.get("alg") not in tuple(algorithms) or header.get("alg") not in _KEY_TYPES:
         raise DecisionGrantError(DecisionSubReason.MALFORMED, f"decision grant algorithm {header.get('alg')!r} is not allowed")
     try:
         key = key_resolver(header)
+    except DecisionGrantError:
+        raise
     except GrantexTokenError as exc:
         raise DecisionGrantError(DecisionSubReason.MALFORMED, f"no key to verify the decision grant: {exc}") from exc
 
@@ -248,6 +292,12 @@ def verify_decision_grant(
     acr = payload.get("acr")
     if acr is not None and not isinstance(acr, str):
         raise DecisionGrantError(DecisionSubReason.MALFORMED, "decision grant acr is invalid")
+    if payload.get("dwell_source") != "server":
+        raise DecisionGrantError(DecisionSubReason.MALFORMED, "decision grant dwell time was not measured by the issuer")
+    memo_hash = _claim_str(payload, "memo_hash")
+    policy_score_hash = _claim_str(payload, "policy_score_hash")
+    if not is_action_hash(memo_hash) or not is_action_hash(policy_score_hash):
+        raise DecisionGrantError(DecisionSubReason.MALFORMED, "decision grant memo or policy score hash is malformed")
     iat = _claim_int(payload, "iat")
     exp = _claim_int(payload, "exp")
     if exp <= iat or exp - iat > 86_400:
@@ -271,6 +321,8 @@ def verify_decision_grant(
         decision_request=_claim_str(payload, "decision_request"),
         iat=iat,
         exp=exp,
+        memo_hash=memo_hash,
+        policy_score_hash=policy_score_hash,
         acr=acr,
         memo_ref=payload.get("memo_ref") if isinstance(payload.get("memo_ref"), str) else None,
         policy_score_ref=payload.get("policy_score_ref") if isinstance(payload.get("policy_score_ref"), str) else None,
@@ -306,7 +358,7 @@ def verify_decision_grants(
     key_resolver: Optional[KeyResolver] = None,
     developer_id: Optional[str] = None,
     connector: Optional[str] = None,
-    algorithms: Sequence[str] = ("RS256",),
+    algorithms: Sequence[str] = ("RS256", "ES256"),
     clock_tolerance: int = 0,
     now: Optional[int] = None,
 ) -> DecisionGrantSet:

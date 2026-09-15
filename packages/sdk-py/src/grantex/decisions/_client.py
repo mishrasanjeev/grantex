@@ -13,13 +13,10 @@ from ._action import DecisionAction
 from ._verify import DecisionGrantError, DecisionGrantSet
 
 __all__ = [
-    "APPROVER_SESSION_HEADER",
     "ConsumedDecision",
     "DecisionConsumer",
     "DecisionsClient",
 ]
-
-APPROVER_SESSION_HEADER = "Grantex-Approver-Session"
 
 _KNOWN_SUB_REASONS = frozenset(
     v for k, v in vars(DecisionSubReason).items() if k.isupper() and isinstance(v, str)
@@ -53,27 +50,17 @@ def _action_dict(action: Union[DecisionAction, Mapping[str, Any]]) -> Dict[str, 
 
 
 class DecisionsClient:
-    """Decision requests, approvals and consumption on the Grantex auth service.
+    """Decision requests and consumption on the Grantex auth service.
 
-    The auth service must run with ``DECISION_GRANTS_ENABLED=true``.
+    A platform creates decision requests and consumes decision grants with its
+    API key. It cannot approve: a person approves on the auth service's
+    approval page (``approvalPage`` in the request) after signing in with an
+    identity provider the service administrator allow-listed. The auth service
+    must run with ``DECISION_GRANTS_ENABLED=true``.
     """
 
     def __init__(self, http: HttpClient) -> None:
         self._http = http
-
-    # ── Approvers ────────────────────────────────────────────────────────
-
-    def create_approver_session(self, connection_id: str, id_token: str) -> Dict[str, Any]:
-        """Exchange a step-up ID token (from an OIDC SSO connection) for an approver session."""
-        data: Dict[str, Any] = self._http.post(
-            "/v1/decisions/approver-sessions",
-            {"connectionId": connection_id, "idToken": id_token},
-            retry=False,
-        )
-        return data
-
-    def revoke_approver_session(self, session_id: str) -> None:
-        self._http.delete(f"/v1/decisions/approver-sessions/{quote(session_id, safe='')}")
 
     # ── Cases and requests ───────────────────────────────────────────────
 
@@ -90,6 +77,8 @@ class DecisionsClient:
         *,
         connector: str,
         case_version: str,
+        memo: str,
+        policy_score: Mapping[str, Any],
         four_eyes_on: Optional[Sequence[str]] = None,
         approvals_required: Optional[int] = None,
         expires_in_seconds: Optional[int] = None,
@@ -98,18 +87,24 @@ class DecisionsClient:
         agent_id: Optional[str] = None,
         grant_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Ask a person to decide one semantic action. Idempotent while the request is open."""
+        """Ask a person to decide one semantic action. Idempotent while the request is open.
+
+        ``memo`` (text) and ``policy_score`` (a JSON object) are what the
+        approver reviews; the auth service stores them with their hashes and
+        binds the hashes into the decision grant. The response carries
+        ``approvalPage``, the link to send the approver to.
+        """
         body: Dict[str, Any] = {
             "action": _action_dict(action),
             "connector": connector,
             "caseVersion": case_version,
+            "memo": {"content": memo, **({"ref": memo_ref} if memo_ref is not None else {})},
+            "policyScore": {"content": dict(policy_score), **({"ref": policy_score_ref} if policy_score_ref is not None else {})},
         }
         optional = {
             "fourEyesOn": list(four_eyes_on) if four_eyes_on is not None else None,
             "approvalsRequired": approvals_required,
             "expiresInSeconds": expires_in_seconds,
-            "memoRef": memo_ref,
-            "policyScoreRef": policy_score_ref,
             "agentId": agent_id,
             "grantId": grant_id,
         }
@@ -124,29 +119,6 @@ class DecisionsClient:
 
     def cancel_request(self, request_id: str) -> Dict[str, Any]:
         data: Dict[str, Any] = self._http.post(f"/v1/decisions/requests/{quote(request_id, safe='')}/cancel")
-        return data
-
-    def approve(self, request_id: str, *, approver_session: str, action_hash: str, dwell_ms: int) -> Dict[str, Any]:
-        """Approve the action the approver was shown; returns ``decisionGrant``.
-
-        ``action_hash`` must be the hash displayed to the approver and
-        ``dwell_ms`` the time from rendering the decision to the click.
-        """
-        data: Dict[str, Any] = self._http.post(
-            f"/v1/decisions/requests/{quote(request_id, safe='')}/approvals",
-            {"actionHash": action_hash, "dwellMs": dwell_ms},
-            headers={APPROVER_SESSION_HEADER: approver_session},
-            retry=False,
-        )
-        return data
-
-    def create_page_ticket(self, request_id: str, *, approver_session: str) -> Dict[str, Any]:
-        """One-time link to the auth service's approval page for this approver."""
-        data: Dict[str, Any] = self._http.post(
-            f"/v1/decisions/requests/{quote(request_id, safe='')}/page-tickets",
-            headers={APPROVER_SESSION_HEADER: approver_session},
-            retry=False,
-        )
         return data
 
     # ── Consumption ──────────────────────────────────────────────────────
@@ -167,6 +139,10 @@ class DecisionsClient:
         :class:`DecisionGrantError` with the issuer's sub-reason when refused,
         and ``consume_unavailable`` when the issuer cannot be reached or answers
         unexpectedly: an unconfirmed consumption is never treated as success.
+
+        Consumption spends the grants. If the response is lost after the auth
+        service consumed them, or the tool call fails afterwards, they stay
+        spent and a person has to approve again.
         """
         if isinstance(grants, DecisionGrantSet):
             tokens: List[str] = list(grants.tokens)

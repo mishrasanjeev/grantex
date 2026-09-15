@@ -13,6 +13,12 @@
  * `@grantex/sdk` version: pass `verifyDecisionGrants` and
  * `grantex.decisions.consume` from `@grantex/sdk` (0.6 or later), or your own
  * implementations of the same contract.
+ *
+ * The grant's developer (`dev`, from the access token) and the tool's
+ * connector (from a manifest-derived policy) are always checked; a call
+ * without either is refused. A tool's `decision_fields` are read from the
+ * arguments into the action. Consumption spends the grant: if the tool call
+ * fails afterwards, a person has to approve again.
  */
 import type { DecisionCheck, DecisionOutcome, DecisionVerifier } from './guard.js';
 
@@ -26,6 +32,7 @@ export interface SemanticAction {
   decision: string;
   subject: string;
   amount?: number | string;
+  extra?: Record<string, string | number>;
 }
 
 /** The subset of `@grantex/sdk`'s `DecisionGrantSet` this verifier needs. */
@@ -49,8 +56,8 @@ export interface GrantexDecisionVerifierOptions<Set extends VerifiedDecisionGran
     options: {
       issuer: string;
       jwksUri: string;
-      developerId?: string;
-      connector?: string;
+      developerId: string;
+      connector: string;
       approvalsRequired: 1 | 2;
     },
   ) => Promise<Set>;
@@ -84,12 +91,19 @@ function actionFrom(check: DecisionCheck): SemanticAction | undefined {
   const { case_id: caseId, decision, subject, amount } = a;
   if (typeof caseId !== 'string' || typeof decision !== 'string' || typeof subject !== 'string') return undefined;
   if (amount !== undefined && amount !== null && typeof amount !== 'number' && typeof amount !== 'string') return undefined;
+  const extra: Record<string, string | number> = {};
+  for (const name of check.requirement.decisionFields ?? []) {
+    const value = Object.prototype.hasOwnProperty.call(a, name) ? a[name] : undefined;
+    if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+    extra[name] = value;
+  }
   return {
     case_id: caseId,
     action: check.requirement.tool,
     decision,
     subject,
     ...(amount !== undefined && amount !== null ? { amount } : {}),
+    ...(Object.keys(extra).length > 0 ? { extra } : {}),
   };
 }
 
@@ -101,6 +115,12 @@ export function grantexDecisionVerifier<Set extends VerifiedDecisionGrants>(
   const jwksUri = options.jwksUri ?? `${options.issuer.replace(/\/$/, '')}/.well-known/jwks.json`;
   return {
     async verify(check: DecisionCheck): Promise<DecisionOutcome> {
+      // The grant must be checked against a tenant and a connector; a policy
+      // or token that cannot say which is refused rather than checked loosely.
+      if (typeof check.grant.developerId !== 'string' || check.grant.developerId.length === 0
+          || typeof check.requirement.connector !== 'string' || check.requirement.connector.length === 0) {
+        return { status: 'invalid', subReason: 'malformed' };
+      }
       const raw = check.header(headerName);
       if (raw === undefined || raw.trim() === '') return { status: 'absent' };
       const tokens = raw.split(',').map((t) => t.trim()).filter((t) => t.length > 0);
@@ -121,8 +141,8 @@ export function grantexDecisionVerifier<Set extends VerifiedDecisionGrants>(
         verified = await options.verify(tokens, action, caseVersion, {
           issuer: options.issuer,
           jwksUri,
-          ...(check.grant.developerId !== undefined ? { developerId: check.grant.developerId } : {}),
-          ...(check.requirement.connector !== undefined ? { connector: check.requirement.connector } : {}),
+          developerId: check.grant.developerId,
+          connector: check.requirement.connector,
           approvalsRequired,
         });
       } catch (err) {

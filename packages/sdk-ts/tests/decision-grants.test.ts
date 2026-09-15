@@ -75,10 +75,16 @@ beforeAll(async () => {
   otherPrivateKey = (await generateKeyPair('RS256')).privateKey;
 });
 
-async function sign(claims: Record<string, unknown>, header: Record<string, unknown> = {}, key: CryptoKey = privateKey): Promise<string> {
-  return new SignJWT(claims as JWTPayload)
-    .setProtectedHeader({ alg: 'RS256', typ: 'decision+jwt', kid: 'test-key', ...header })
+async function sign(claims: Record<string, unknown>, header?: Record<string, unknown>, key: CryptoKey = privateKey): Promise<string> {
+  const token = await new SignJWT(claims as JWTPayload)
+    .setProtectedHeader({ alg: 'RS256', typ: 'decision+jwt', kid: 'test-key' })
     .sign(key);
+  if (header === undefined) return token;
+  // Replace the protected header as written; the signature no longer matches.
+  const written: Record<string, unknown> = { alg: 'RS256', typ: 'decision+jwt', kid: 'test-key', ...header };
+  for (const [name, value] of Object.entries(written)) if (value === null) delete written[name];
+  const [, payload, signature] = token.split('.');
+  return [Buffer.from(JSON.stringify(written)).toString('base64url'), payload, signature].join('.');
 }
 
 async function buildGrant(spec: GrantSpec): Promise<string> {
@@ -132,6 +138,7 @@ const MANIFEST = ToolManifest.fromJSON({
   tools: {
     case_decision: { permission: 'write', requires_decision: true, four_eyes_on: ['decline'] },
     payout_release: { permission: 'write', requires_decision: true, caps: { per_hour: 5 } },
+    payout_currency: { permission: 'write', requires_decision: true, decision_fields: ['currency'] },
     get_case: 'read',
   },
 });
@@ -327,15 +334,90 @@ describe('grantex.decisions', () => {
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockImplementation(async () => json(201, {}));
     const d = new Grantex({ apiKey: 'test-key' }).decisions;
-    await d.createRequest({ action: FIXTURE.action, connector: 'acme_kyb', caseVersion: 'v7', fourEyesOn: ['decline'], memoRef: 'memo:1' });
-    await d.approve('dreq_1', { approverSession: 's', actionHash: 'sha256:x', dwellMs: 61250 });
-    await d.createApproverSession('sso_1', 'id-token');
+    await d.createRequest({
+      action: FIXTURE.action, connector: 'acme_kyb', caseVersion: 'v7', fourEyesOn: ['decline'],
+      memo: { content: 'Registry active.', ref: 'memo:1' }, policyScore: { content: { tier: 'low' } },
+    });
     await d.setCaseVersion('case_8841', 'v8');
     const calls = fetchMock.mock.calls as [string, RequestInit][];
-    expect(JSON.parse(String(calls[0]![1].body))).toEqual({ action: FIXTURE.action, connector: 'acme_kyb', caseVersion: 'v7', fourEyesOn: ['decline'], memoRef: 'memo:1' });
-    expect(new Headers(calls[1]![1].headers).get('grantex-approver-session')).toBe('s');
-    expect(JSON.parse(String(calls[1]![1].body))).toEqual({ actionHash: 'sha256:x', dwellMs: 61250 });
-    expect(JSON.parse(String(calls[2]![1].body))).toEqual({ connectionId: 'sso_1', idToken: 'id-token' });
-    expect(calls[3]![0]).toBe('https://api.grantex.dev/v1/decisions/cases/case_8841');
+    expect(JSON.parse(String(calls[0]![1].body))).toEqual({
+      action: FIXTURE.action, connector: 'acme_kyb', caseVersion: 'v7', fourEyesOn: ['decline'],
+      memo: { content: 'Registry active.', ref: 'memo:1' }, policyScore: { content: { tier: 'low' } },
+    });
+    expect(calls[1]![0]).toBe('https://api.grantex.dev/v1/decisions/cases/case_8841');
+  });
+
+  it('cannot approve', () => {
+    const d = new Grantex({ apiKey: 'test-key' }).decisions as unknown as Record<string, unknown>;
+    for (const name of ['approve', 'createApproverSession', 'createPageTicket']) expect(d[name]).toBeUndefined();
+  });
+});
+
+describe('review follow-ups', () => {
+  it('requires decisionAction and arguments to describe the same action', async () => {
+    const issuer = new FakeIssuer();
+    const token = await buildGrant({});
+    expect(await client(issuer).enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'case_decision', decisionGrants: [token], decisionAction: FIXTURE.action, arguments: args({ decision: 'decline' }), caseVersion: 'v7' }))
+      .toMatchObject({ allowed: false, subReason: 'action_mismatch' });
+    expect(issuer.calls).toBe(0);
+    vi.mocked(verifyGrantToken).mockResolvedValue(grantFor());
+    const same = await client(issuer).enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'case_decision', decisionGrants: [token], decisionAction: FIXTURE.action, arguments: args(), caseVersion: 'v7' });
+    expect(same.allowed, same.reason).toBe(true);
+  });
+
+  it('denies and refunds caps when the consumer throws anything', async () => {
+    const meter = new CapsMeter(new InMemoryCapsBackend());
+    const payout = { ...FIXTURE.action, action: 'payout_release' };
+    const token = await buildGrant({ claims: { action: payout, action_hash: computeActionHash(payout) } });
+    const exploding: DecisionConsumer = { consume: async () => { throw new TypeError('socket closed'); } };
+    expect(await client(exploding, { capsMeter: meter }).enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'payout_release', decisionGrants: [token], decisionAction: payout, caseVersion: 'v7' }))
+      .toMatchObject({ allowed: false, reasonCode: DenialReason.DECISION_INVALID, subReason: 'consume_unavailable' });
+    const probe = await client(new FakeIssuer(), { capsMeter: meter }).enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'payout_release', decisionAction: payout, caseVersion: 'v7', reserve: false, decisionsMode: 'warn' });
+    expect((await meter.usage('dev_01', probe.capLimits ?? [])).every((u) => u.used === 0)).toBe(true);
+  });
+
+  it('binds declared decision fields', async () => {
+    const payout = { ...FIXTURE.action, action: 'payout_currency', extra: { currency: 'GBP' } };
+    const token = await buildGrant({ claims: { action: payout, action_hash: computeActionHash(payout) } });
+    const ok = await client(new FakeIssuer()).enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'payout_currency', decisionGrants: [token], arguments: args({ currency: 'GBP' }), caseVersion: 'v7' });
+    expect(ok.allowed, ok.reason).toBe(true);
+    expect(await client(new FakeIssuer()).enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'payout_currency', decisionGrants: [token], arguments: args({ currency: 'EUR' }), caseVersion: 'v7' }))
+      .toMatchObject({ allowed: false, subReason: 'action_mismatch' });
+    expect(await client(new FakeIssuer()).enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'payout_currency', decisionGrants: [token], arguments: args(), caseVersion: 'v7' }))
+      .toMatchObject({ allowed: false, subReason: 'malformed' });
+    expect(await client(new FakeIssuer()).enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'payout_currency', decisionGrants: [token], decisionAction: { ...FIXTURE.action, action: 'payout_currency' }, caseVersion: 'v7' }))
+      .toMatchObject({ allowed: false, subReason: 'malformed' });
+  });
+
+  it('wrapTool and enforceMiddleware carry decision grants', async () => {
+    const issuer = new FakeIssuer();
+    const c = client(issuer);
+    const token = await buildGrant({});
+    const invoked: unknown[] = [];
+    const tool = { name: 'case_decision', description: 'd', invoke: async (input: unknown) => { invoked.push(input); return 'done'; } };
+    const wrapped = c.wrapTool(tool, { connector: 'acme_kyb', tool: 'case_decision', grantToken: 't', decisionGrants: () => [token], caseVersion: 'v7' });
+    expect(await wrapped.invoke(args())).toBe('done');
+    vi.mocked(verifyGrantToken).mockResolvedValue(grantFor());
+    await expect(wrapped.invoke(args())).rejects.toThrow(/consumed/);
+    expect(invoked).toHaveLength(1);
+
+    const second = await buildGrant({ claims: { jti: 'dgnt_01K8Z000000000000000000QB9' } });
+    vi.mocked(verifyGrantToken).mockResolvedValue(grantFor());
+    const middleware = c.enforceMiddleware({
+      extractToken: () => 't', extractConnector: () => 'acme_kyb', extractTool: () => 'case_decision',
+      extractDecisionGrants: () => [second], extractArguments: () => args(), extractCaseVersion: () => 'v7',
+    });
+    const next = vi.fn();
+    await new Promise<void>((resolve) => middleware({}, { status: () => ({ json: () => resolve() }) }, (err?: unknown) => { next(err); resolve(); }));
+    expect(next).toHaveBeenCalledWith(undefined);
+  });
+
+  it('accepts ES256 decision grants and refuses algorithms outside the allowlist', async () => {
+    const pair = await generateKeyPair('ES256');
+    const token = await new SignJWT(FIXTURE.base_claims as JWTPayload).setProtectedHeader({ alg: 'ES256', typ: 'decision+jwt', kid: 'ec-1' }).sign(pair.privateKey);
+    await expect(actualVerify.verifyDecisionGrant(token, FIXTURE.action, 'v7', { issuer: FIXTURE.issuer, key: pair.publicKey, now: FIXTURE.now })).resolves.toMatchObject({ dwellSource: 'server' });
+    await expect(actualVerify.verifyDecisionGrant(token, FIXTURE.action, 'v7', { issuer: FIXTURE.issuer, key: pair.publicKey, now: FIXTURE.now, algorithms: ['RS256'] }))
+      .rejects.toMatchObject({ subReason: 'malformed' });
+    expect(() => new Grantex({ apiKey: 'k', decisionAlgorithms: [] })).toThrow(/decisionAlgorithms/);
   });
 });

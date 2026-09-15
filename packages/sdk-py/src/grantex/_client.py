@@ -164,6 +164,7 @@ class Grantex:
         caps_mode: str = CAPS_ENFORCE,
         decisions_mode: str = "enforce",
         decision_consumer: DecisionConsumer | None = None,
+        decision_algorithms: Sequence[str] = ("RS256", "ES256"),
     ) -> None:
         resolved_key = (api_key or os.environ.get("GRANTEX_API_KEY", "")).strip()
         if not resolved_key:
@@ -176,6 +177,9 @@ class Grantex:
         self._caps_meter = caps_meter
         self._caps_mode = _check_caps_mode(caps_mode)
         self._decisions_mode = _check_decisions_mode(decisions_mode)
+        if not decision_algorithms or any(a not in ("RS256", "ES256") for a in decision_algorithms):
+            raise ValueError("decision_algorithms must be a non-empty subset of RS256, ES256")
+        self._decision_algorithms = tuple(decision_algorithms)
 
         self._http = HttpClient(
             base_url=base_url,
@@ -336,6 +340,12 @@ class Grantex:
           reserved; a failed consumption releases the reservation. Any failure
           is ``decision_invalid`` with a ``DecisionSubReason``.
           ``result.decision`` records what was consumed.
+        - A tool's ``decision_fields`` (manifest) are read from ``arguments``
+          into the action. When both ``decision_action`` and ``arguments`` are
+          given they must describe the same action (``action_mismatch``).
+        - Consumption spends the grant. If the consumption response is lost,
+          or the tool call fails after consumption, the grant is still spent
+          and the person must approve again.
         - ``decisions_mode`` overrides the client's mode: ``enforce`` denies;
           ``warn`` allows the call, still consumes valid grants, and reports
           the denial in ``result.would_deny``. Platforms map their
@@ -498,7 +508,7 @@ class Grantex:
             decision_denial: tuple[str, str, str] | None = None
             try:
                 decision_set = self._verify_decision(
-                    grant, connector, tool, spec.four_eyes_on,
+                    grant, connector, tool, spec.four_eyes_on, spec.decision_fields,
                     decision_grants, decision_action, arguments, case_version,
                 )
             except DecisionGrantError as exc:
@@ -618,7 +628,8 @@ class Grantex:
         if decision_set is not None:
             try:
                 consumed = self._decision_consumer.consume(decision_set, grant_id=grant_id or None)
-            except DecisionGrantError as exc:
+            except Exception as exc:  # noqa: BLE001 - any failure leaves the grant unconsumed: deny
+                sub_reason = exc.sub_reason if isinstance(exc, DecisionGrantError) else DecisionSubReason.CONSUME_UNAVAILABLE
                 if reservation is not None and self._caps_meter is not None:
                     try:
                         self._caps_meter.refund_unsent(reservation)
@@ -628,10 +639,10 @@ class Grantex:
                 message = f"The decision grant for tool '{tool}' on {connector} was not consumed: {exc}"
                 details = {"decision_required": f"{connector}:{tool}"}
                 if decision_mode != DECISIONS_WARN:
-                    return _denied(message, DenialReason.DECISION_INVALID, exc.sub_reason, details)
+                    return _denied(message, DenialReason.DECISION_INVALID, sub_reason, details)
                 if would_deny is None:
                     would_deny = {
-                        "reason_code": DenialReason.DECISION_INVALID, "sub_reason": exc.sub_reason,
+                        "reason_code": DenialReason.DECISION_INVALID, "sub_reason": sub_reason,
                         "reason": message, "details": details,
                     }
 
@@ -650,6 +661,7 @@ class Grantex:
         connector: str,
         tool: str,
         four_eyes_on: tuple[str, ...],
+        decision_fields: tuple[str, ...],
         decision_grants: Sequence[str] | None,
         decision_action: DecisionAction | Mapping[str, Any] | None,
         arguments: Mapping[str, Any] | None,
@@ -659,20 +671,34 @@ class Grantex:
         if decision_grants is None or len(decision_grants) == 0:
             raise DecisionGrantError(DecisionSubReason.ABSENT, "no decision grant was presented")
         try:
-            if decision_action is not None:
-                action = (
-                    decision_action if isinstance(decision_action, DecisionAction)
-                    else DecisionAction.from_dict(decision_action)
-                )
-            elif arguments is not None:
-                action = DecisionAction.from_tool_call(tool, arguments)
-            else:
-                raise DecisionGrantError(
-                    DecisionSubReason.MALFORMED,
-                    "enforce() needs decision_action or arguments to compare the decision grant with",
-                )
+            from_arguments = (
+                DecisionAction.from_tool_call(tool, arguments, decision_fields)
+                if arguments is not None else None
+            )
+            given = (
+                decision_action if isinstance(decision_action, DecisionAction)
+                else DecisionAction.from_dict(decision_action)
+            ) if decision_action is not None else None
         except ActionValidationError as exc:
             raise DecisionGrantError(DecisionSubReason.MALFORMED, f"the call's action is invalid: {exc}") from exc
+        if given is not None and from_arguments is not None and given.action_hash() != from_arguments.action_hash():
+            # The call would do something other than what the caller says it approves.
+            raise DecisionGrantError(
+                DecisionSubReason.ACTION_MISMATCH,
+                "decision_action does not match the action derived from the call's arguments",
+            )
+        action = given if given is not None else from_arguments
+        if action is None:
+            raise DecisionGrantError(
+                DecisionSubReason.MALFORMED,
+                "enforce() needs decision_action or arguments to compare the decision grant with",
+            )
+        missing_fields = [name for name in decision_fields if name not in action.extra]
+        if missing_fields:
+            raise DecisionGrantError(
+                DecisionSubReason.MALFORMED,
+                f"the action does not bind the declared decision fields: {', '.join(missing_fields)}",
+            )
         if action.action != tool:
             raise DecisionGrantError(DecisionSubReason.ACTION_MISMATCH, "the decision action names another tool")
         if not case_version:
@@ -684,6 +710,7 @@ class Grantex:
             jwks_uri=self._jwks_uri,
             developer_id=getattr(grant, "developer_id", None),
             connector=connector,
+            algorithms=self._decision_algorithms,
         )
 
     @staticmethod
@@ -751,6 +778,8 @@ class Grantex:
         grant_token: str | Callable[[], str],
         case_id: str | Callable[[], str | None] | None = None,
         cost_components: list[str] | Callable[[], list[str] | None] | None = None,
+        decision_grants: Sequence[str] | Callable[[], Sequence[str] | None] | None = None,
+        case_version: str | Callable[[], str | None] | None = None,
     ) -> Any:
         """Wrap a LangChain StructuredTool with automatic Grantex scope enforcement.
 
@@ -767,6 +796,11 @@ class Grantex:
             cost_components: Cost units the call incurs, or a callable returning them.
                 Both must come from the application, never from the tool's
                 (model-supplied) arguments.
+            decision_grants: For a tool that requires a decision, the decision
+                grant tokens (or a callable returning them per call). The action
+                is derived from the tool call's keyword arguments.
+            case_version: The case's current version (or a callable), from the
+                application's case state.
 
         Example::
 
@@ -785,13 +819,22 @@ class Grantex:
         def _get_token() -> str:
             return grant_token() if callable(grant_token) else grant_token
 
-        def _check() -> None:
+        def _check(call_arguments: Mapping[str, Any]) -> None:
             token = _get_token()
             call_case = case_id() if callable(case_id) else case_id
             call_costs = cost_components() if callable(cost_components) else cost_components
+            decision_kwargs: dict[str, Any] = {}
+            if decision_grants is not None or case_version is not None:
+                grants = decision_grants() if callable(decision_grants) else decision_grants
+                version = case_version() if callable(case_version) else case_version
+                decision_kwargs = {
+                    "decision_grants": list(grants) if grants is not None else None,
+                    "arguments": call_arguments,
+                    "case_version": version,
+                }
             result = grantex.enforce(
                 grant_token=token, connector=connector, tool=tool_name,
-                case_id=call_case, cost_components=call_costs,
+                case_id=call_case, cost_components=call_costs, **decision_kwargs,
             )
             # Retry once with refreshed token if expired and grant_token is callable.
             # An expired token is denied before caps are reserved, so the retry
@@ -800,7 +843,7 @@ class Grantex:
                 token = _get_token()
                 result = grantex.enforce(
                     grant_token=token, connector=connector, tool=tool_name,
-                    case_id=call_case, cost_components=call_costs,
+                    case_id=call_case, cost_components=call_costs, **decision_kwargs,
                 )
             if not result.allowed:
                 raise PermissionError(f"Grantex scope denied: {result.reason}")
@@ -808,14 +851,14 @@ class Grantex:
         if original_run:
             original = original_run
             def wrapped_run(*args: Any, **kwargs: Any) -> Any:
-                _check()
+                _check(kwargs)
                 return original(*args, **kwargs)
             tool._run = wrapped_run
 
         if original_arun:
             original_async = original_arun
             async def wrapped_arun(*args: Any, **kwargs: Any) -> Any:
-                _check()
+                _check(kwargs)
                 return await original_async(*args, **kwargs)
             tool._arun = wrapped_arun
 

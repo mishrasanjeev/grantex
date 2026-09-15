@@ -3,7 +3,7 @@
  * value fails the request that needs it (closed, with a reason) instead of
  * being silently defaulted.
  */
-import { parseIntegerSetting } from '../../config.js';
+import { config, parseIntegerSetting } from '../../config.js';
 import type { DwellPolicy, StepUpPolicy } from './policy.js';
 
 export class DecisionSettingsError extends Error {
@@ -17,7 +17,9 @@ export interface DecisionSettings {
   enabled: boolean;
   stepUp: StepUpPolicy;
   dwell: DwellPolicy;
-  pageTicketSeconds: number;
+  loginStateSeconds: number;
+  /** Browser origin of the approval page (from PUBLIC_BASE_URL). */
+  publicOrigin: string;
 }
 
 const METHOD_RE = /^[A-Za-z0-9_:.-]{1,255}$/;
@@ -50,10 +52,24 @@ export function decisionSettings(): DecisionSettings {
   if (acrValues.length === 0 && amrValues.length === 0) {
     throw new DecisionSettingsError('DECISION_STEP_UP_ACR and DECISION_STEP_UP_AMR cannot both be empty');
   }
-  const minMs = integer('DECISION_MIN_DWELL_MS', '0', 0, 3_600_000);
+  const minMs = integer('DECISION_MIN_DWELL_MS', '2000', 0, 3_600_000);
   const maxMs = integer('DECISION_MAX_DWELL_MS', '86400000', 1_000, 86_400_000);
   if (minMs > maxMs) {
     throw new DecisionSettingsError('DECISION_MIN_DWELL_MS must not exceed DECISION_MAX_DWELL_MS');
+  }
+  // Approver email hashes and names are protected with the vault key.
+  if (!config.vaultEncryptionKey) {
+    throw new DecisionSettingsError('VAULT_ENCRYPTION_KEY is required for decision grants');
+  }
+  let publicOrigin: string;
+  try {
+    const url = new URL(config.publicBaseUrl);
+    if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) {
+      throw new Error('insecure');
+    }
+    publicOrigin = url.origin;
+  } catch {
+    throw new DecisionSettingsError('PUBLIC_BASE_URL must be an https URL (or http on localhost) for decision grants');
   }
   return {
     enabled: decisionGrantsEnabled(),
@@ -64,6 +80,7 @@ export function decisionSettings(): DecisionSettings {
       idTokenMaxAgeSeconds: integer('DECISION_ID_TOKEN_MAX_AGE_SECONDS', '600', 30, 3_600),
     },
     dwell: { minMs, maxMs },
-    pageTicketSeconds: integer('DECISION_PAGE_TICKET_SECONDS', '300', 30, 900),
+    loginStateSeconds: integer('DECISION_LOGIN_STATE_SECONDS', '600', 60, 1_800),
+    publicOrigin,
   };
 }
