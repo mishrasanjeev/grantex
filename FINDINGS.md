@@ -67,3 +67,31 @@ Remove an entry in the pull request that fixes it.
   duplicate-aware parse, for example a small tokenizer or a vetted
   duplicate-detecting JSON parser. Add a shared invalid fixture that both
   loaders must reject.
+
+## G-6 — mcp-auth uses the OAuth client id as the Grantex principal
+
+- **Found:** `@grantex/mcp-auth` 3.0 work (PRD G-7), 2026-09-15.
+- **What:** `startUpstreamAuthorization` in
+  `packages/mcp-auth/src/endpoints/authorize.ts` calls `grantex.authorize`
+  with `userId: client_id` (unchanged from 2.x). Every person who authorizes
+  through one MCP client gets grants for the same principal, and a
+  metadata-document client's id is a public URL shared by every
+  installation. `/revoke` also relies on it (`sub` must equal the
+  authenticated client), and grant lists or audit by principal cannot tell
+  people apart.
+- **Fix:** establish the person's identity during the consent step (host
+  authentication hook or the Grantex consent result) and pass it as the
+  principal; change the revocation ownership check to use the grant's client
+  binding rather than `sub`.
+
+## G-7 — mcp-auth `/revoke` hides upstream revocation failures
+
+- **Found:** `@grantex/mcp-auth` 3.0 work (PRD G-7), 2026-09-15.
+- **What:** `packages/mcp-auth/src/endpoints/revoke.ts` catches and ignores any
+  error from `grantex.tokens.revoke` (RFC 7009 lets it answer 200). 3.0 records
+  the revocation in its own storage first, so this server and middleware
+  sharing that storage refuse the token, but Grantex and every other verifier
+  may still accept it, and nothing logs or counts the failure.
+- **Fix:** log the failure with the `jti` and a reason code, count it, and
+  retry the upstream revocation from a durable queue until it succeeds.
+

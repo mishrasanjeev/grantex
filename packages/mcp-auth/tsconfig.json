@@ -11,7 +11,30 @@
     "declarationMap": true,
     "sourceMap": true,
     "exactOptionalPropertyTypes": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "paths": {
+      "@grantex/mcp-auth": [
+        "./src/index.ts"
+      ],
+      "@grantex/mcp-auth/postgres": [
+        "./src/postgres.ts"
+      ],
+      "@grantex/mcp-auth/redis": [
+        "./src/redis.ts"
+      ],
+      "@grantex/mcp-auth/testing": [
+        "./src/testing.ts"
+      ],
+      "@grantex/mcp-auth/express": [
+        "./src/middleware/express.ts"
+      ],
+      "@grantex/mcp-auth/hono": [
+        "./src/middleware/hono.ts"
+      ]
+    }
   },
-  "include": ["src/**/*", "tests/**/*"]
+  "include": [
+    "src/**/*",
+    "tests/**/*"
+  ]
 }

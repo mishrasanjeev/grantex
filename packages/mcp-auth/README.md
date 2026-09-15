@@ -25,11 +25,12 @@ middleware.
 > current-status matrix.
 
 > [!NOTE]
-> The next major version (3.0, unreleased) is being built on `main`: all
-> authorization state goes through a pluggable `storage` (Postgres or Redis),
-> so it survives restarts and is shared by replicas. The examples marked
-> **3.0** below describe that unreleased code; `2.0.2` on npm does not have
-> them.
+> Version **3.0.0 is prepared in this repository but not published**; npm
+> still serves `2.0.2`. 3.0.0 adds Postgres/Redis state, the MCP authorization
+> specification (2026-07-28) surface, a rendered consent page and tool refusal
+> at the MCP server, with breaking changes. Sections marked **3.0** describe
+> it; see [the 3.0 deployment guide](../../docs/mcp-auth.md) for deployment,
+> consent-page customisation and migrating from 2.x.
 
 ## What 2.0.2 implements
 
@@ -223,7 +224,11 @@ repository.
 
 3.0 targets the MCP authorization specification dated 2026-07-28;
 `tests/conformance/mcp-authorization-2026-07-28.test.ts` maps each
-authorization-server and MCP-server MUST to a test.
+authorization-server and MCP-server MUST to a test (SEC-12, not forwarding
+the client's token upstream, is the host application's to meet), plus the
+Security Best Practices' confused-deputy requirements: consent and the
+callback are bound to the approving browser with cookies, and the consent
+form is CSRF-protected.
 
 - **Resource indicators (RFC 8707).** `resource` (the canonical URI of your
   MCP server, e.g. `https://mcp.example.com/mcp`) is required. Every grant is
