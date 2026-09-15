@@ -10,7 +10,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import * as jose from 'jose';
 import { requireMcpAuth } from '../src/middleware/express.js';
 import type { McpAuthRequest } from '../src/middleware/express.js';
-import { toolPolicyFromManifests } from '../src/resource/tool-policy.js';
+import { toolPolicyFromManifests, toolPolicyFromScopes } from '../src/resource/tool-policy.js';
 import { DECISION_GRANT_HEADER, grantexDecisionVerifier } from '../src/resource/grantex-decisions.js';
 import { verifyDecisionGrants, type DecisionGrantSet } from '../../sdk-ts/src/decisions/verify.js';
 import { computeActionHash } from '../../sdk-ts/src/decisions/action.js';
@@ -18,7 +18,10 @@ import { computeActionHash } from '../../sdk-ts/src/decisions/action.js';
 const RESOURCE = 'https://mcp.example.com/mcp';
 const tools = toolPolicyFromManifests([{
   connector: 'acme_kyb',
-  tools: { case_decision: { permission: 'write', requires_decision: true, four_eyes_on: ['decline'] } },
+  tools: {
+    case_decision: { permission: 'write', requires_decision: true, four_eyes_on: ['decline'] },
+    payout_release: { permission: 'write', requires_decision: true, decision_fields: ['currency'] },
+  },
 }]);
 
 let privateKey: jose.CryptoKey;
@@ -46,8 +49,8 @@ const ACTION = { case_id: 'case_8841', action: 'case_decision', decision: 'appro
 let jtiCounter = 0;
 const jti = () => `dgnt_01K8Z0000000000000000000${String(++jtiCounter).padStart(2, '0')}`.slice(0, 31);
 
-function grantToken(): Promise<string> {
-  return new jose.SignJWT({ scp: ['tool:acme_kyb:write'], aud: RESOURCE, dev: 'dev_01', grnt: 'grnt_01' })
+function grantToken(extra: Record<string, unknown> = { dev: 'dev_01' }): Promise<string> {
+  return new jose.SignJWT({ scp: ['tool:acme_kyb:write'], aud: RESOURCE, grnt: 'grnt_01', ...extra })
     .setProtectedHeader({ alg: 'RS256', kid: 'k1' })
     .setIssuer(issuer).setSubject('client-a').setJti('tok_1').setIssuedAt().setExpirationTime('1h')
     .sign(privateKey);
@@ -59,6 +62,7 @@ function decisionGrant(overrides: Record<string, unknown> = {}): Promise<string>
   return new jose.SignJWT({
     dev: 'dev_01', idp: 'https://idp.example.com', approver_auth: 'sso+hwk', amr: ['hwk'], auth_time: now - 60,
     action, action_hash: computeActionHash(action), connector: 'acme_kyb', case_version: 'v7', dwell_ms: 42000,
+    dwell_source: 'server', memo_hash: `sha256:${'M'.repeat(43)}`, policy_score_hash: `sha256:${'P'.repeat(43)}`,
     decision_request: 'dreq_01K8Z000000000000000000QR1', ...overrides,
   })
     .setProtectedHeader({ alg: 'RS256', kid: 'k1', typ: 'decision+jwt' })
@@ -67,8 +71,13 @@ function decisionGrant(overrides: Record<string, unknown> = {}): Promise<string>
     .sign(privateKey);
 }
 
-async function callTool(verifier: ReturnType<typeof grantexDecisionVerifier>, headers: Record<string, string>, args: Record<string, unknown>) {
-  const mw = requireMcpAuth({ issuer, audience: RESOURCE, tools, decisions: verifier, warn: () => {} });
+async function callTool(
+  verifier: ReturnType<typeof grantexDecisionVerifier>,
+  headers: Record<string, string>,
+  args: Record<string, unknown>,
+  options: { toolName?: string; policy?: typeof tools; grant?: Record<string, unknown> } = {},
+) {
+  const mw = requireMcpAuth({ issuer, audience: RESOURCE, tools: options.policy ?? tools, decisions: verifier, warn: () => {} });
   const server = createServer((raw: IncomingMessage, res: ServerResponse) => {
     const req = raw as McpAuthRequest;
     const chunks: Buffer[] = [];
@@ -88,8 +97,8 @@ async function callTool(verifier: ReturnType<typeof grantexDecisionVerifier>, he
   try {
     const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${await grantToken()}`, ...headers },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'case_decision', arguments: args } }),
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${await grantToken(options.grant)}`, ...headers },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: options.toolName ?? 'case_decision', arguments: args } }),
     });
     return { status: res.status, challenge: res.headers.get('www-authenticate'), body: (await res.json()) as Record<string, unknown> };
   } finally {
@@ -173,5 +182,27 @@ describe('grantexDecisionVerifier', () => {
     const token = await decisionGrant();
     expect((await callTool(verifier, { [DECISION_GRANT_HEADER]: [token, token, token].join(',') }, args)).body).toMatchObject({ sub_reason: 'malformed' });
     expect((await callTool(verifier, { [DECISION_GRANT_HEADER]: 'not a token' }, args)).body).toMatchObject({ sub_reason: 'malformed' });
+  });
+
+  it('fails closed without a developer in the grant or a connector in the policy', async () => {
+    const { verifier, consume } = verifierWithIssuer();
+    const token = await decisionGrant();
+    const noDeveloper = await callTool(verifier, { [DECISION_GRANT_HEADER]: token }, args, { grant: {} });
+    expect(noDeveloper.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'malformed' });
+    const scopesOnly = toolPolicyFromScopes({ case_decision: { scopes: ['tool:acme_kyb:write'], requiresDecision: true } });
+    const noConnector = await callTool(verifier, { [DECISION_GRANT_HEADER]: token }, args, { policy: scopesOnly });
+    expect(noConnector.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'malformed' });
+    expect(consume).not.toHaveBeenCalled();
+  });
+
+  it('binds the manifest decision_fields', async () => {
+    const payout = { ...ACTION, action: 'payout_release', extra: { currency: 'GBP' } };
+    const { verifier } = verifierWithIssuer();
+    const token = await decisionGrant({ action: payout });
+    const other = await callTool(verifier, { [DECISION_GRANT_HEADER]: token }, { ...args, currency: 'EUR' }, { toolName: 'payout_release' });
+    expect(other.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'action_mismatch' });
+    const missing = await callTool(verifier, { [DECISION_GRANT_HEADER]: token }, args, { toolName: 'payout_release' });
+    expect(missing.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'malformed' });
+    expect((await callTool(verifier, { [DECISION_GRANT_HEADER]: token }, { ...args, currency: 'GBP' }, { toolName: 'payout_release' })).status).toBe(200);
   });
 });

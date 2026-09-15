@@ -1,6 +1,11 @@
 /**
  * Auth-service API for decision grants (PRD G-3): `grantex.decisions`.
- * The auth service must run with `DECISION_GRANTS_ENABLED=true`.
+ *
+ * A platform creates decision requests and consumes decision grants with its
+ * API key. It cannot approve: a person approves on the auth service's approval
+ * page (`approvalPage` in the request) after signing in with an identity
+ * provider the service administrator allow-listed. The auth service must run
+ * with `DECISION_GRANTS_ENABLED=true`.
  */
 import { decodeJwt } from 'jose';
 import type { HttpClient } from '../http.js';
@@ -8,8 +13,6 @@ import { GrantexApiError, GrantexError } from '../errors.js';
 import { DecisionSubReason } from '../denials.js';
 import { parseDecisionAction, type DecisionAction } from '../decisions/action.js';
 import { DecisionGrantError, type DecisionGrantSet } from '../decisions/verify.js';
-
-export const APPROVER_SESSION_HEADER = 'Grantex-Approver-Session';
 
 const KNOWN_SUB_REASONS = new Set<string>(Object.values(DecisionSubReason));
 
@@ -31,11 +34,13 @@ export interface CreateDecisionRequestParams {
   connector: string;
   caseVersion: string;
   /** The manifest's `four_eyes_on`; two approvals are required when it lists the decision. */
+  /** The memo the approver reviews (text). Stored with its hash and bound into the grant. */
+  memo: { content: string; ref?: string };
+  /** The policy score the approver reviews (a JSON object). Stored with its hash and bound into the grant. */
+  policyScore: { content: Record<string, unknown>; ref?: string };
   fourEyesOn?: string[];
   approvalsRequired?: 1 | 2;
   expiresInSeconds?: number;
-  memoRef?: string;
-  policyScoreRef?: string;
   agentId?: string;
   grantId?: string;
 }
@@ -54,15 +59,6 @@ export class DecisionsClient {
 
   constructor(http: HttpClient) {
     this.#http = http;
-  }
-
-  /** Exchange a step-up ID token (from an OIDC SSO connection) for an approver session. */
-  createApproverSession(connectionId: string, idToken: string): Promise<Record<string, unknown>> {
-    return this.#http.post('/v1/decisions/approver-sessions', { connectionId, idToken }, { retry: false });
-  }
-
-  revokeApproverSession(sessionId: string): Promise<void> {
-    return this.#http.delete(`/v1/decisions/approver-sessions/${encodeURIComponent(sessionId)}`);
   }
 
   /** Register the case's current version; unconsumed grants for other versions are revoked. */
@@ -85,33 +81,15 @@ export class DecisionsClient {
   }
 
   /**
-   * Approve the action the approver was shown; returns `decisionGrant`.
-   * `actionHash` must be the hash displayed and `dwellMs` the time from
-   * rendering the decision to the click.
-   */
-  approve(requestId: string, params: { approverSession: string; actionHash: string; dwellMs: number }): Promise<Record<string, unknown>> {
-    return this.#http.post(
-      `/v1/decisions/requests/${encodeURIComponent(requestId)}/approvals`,
-      { actionHash: params.actionHash, dwellMs: params.dwellMs },
-      { headers: { [APPROVER_SESSION_HEADER]: params.approverSession }, retry: false },
-    );
-  }
-
-  /** One-time link to the auth service's approval page for this approver. */
-  createPageTicket(requestId: string, approverSession: string): Promise<Record<string, unknown>> {
-    return this.#http.post(
-      `/v1/decisions/requests/${encodeURIComponent(requestId)}/page-tickets`,
-      undefined,
-      { headers: { [APPROVER_SESSION_HEADER]: approverSession }, retry: false },
-    );
-  }
-
-  /**
    * Consume decision grants atomically at the auth service. Pass a verified
    * `DecisionGrantSet`, or the tokens with the action and case version.
    * Throws `DecisionGrantError` with the issuer's sub-reason when refused and
    * `consume_unavailable` when the issuer cannot be reached or answers
    * unexpectedly: an unconfirmed consumption is never treated as success.
+   *
+   * Consumption spends the grants. If the response is lost after the auth
+   * service consumed them, or the tool call fails afterwards, they stay spent
+   * and a person has to approve again.
    */
   async consume(
     grants: DecisionGrantSet | readonly string[],

@@ -45,7 +45,7 @@ import { MALFORMED_GRANT_CAPS, buildCapLimits, type BuildCapLimitsOptions } from
 import { ToolManifest, parseManifestJson, permissionCovers, type WouldDeny, type ToolSpec, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 import { verifyGrantToken } from './verify.js';
 import { DecisionSubReason } from './denials.js';
-import { ActionValidationError, decisionActionFromToolCall, parseDecisionAction, type DecisionAction } from './decisions/action.js';
+import { ActionValidationError, computeActionHash, decisionActionFromToolCall, parseDecisionAction, type DecisionAction } from './decisions/action.js';
 import { DecisionGrantError, verifyDecisionGrants, type DecisionGrantSet } from './decisions/verify.js';
 import { DecisionsClient, type ConsumedDecision, type DecisionConsumer } from './resources/decisions.js';
 import type {
@@ -103,6 +103,7 @@ export class Grantex {
   readonly #capsMode: CapsMode;
   readonly #decisionsMode: 'enforce' | 'warn';
   readonly #decisionConsumer: DecisionConsumer;
+  readonly #decisionAlgorithms: string[];
 
   readonly agents: AgentsClient;
   readonly grants: GrantsClient;
@@ -179,6 +180,11 @@ export class Grantex {
     this.#capsMeter = options.capsMeter;
     this.#capsMode = checkCapsMode(options.capsMode ?? 'enforce');
     this.#decisionsMode = checkDecisionsMode(options.decisionsMode ?? 'enforce');
+    const algorithms = [...(options.decisionAlgorithms ?? ['RS256', 'ES256'])];
+    if (algorithms.length === 0 || algorithms.some((a) => a !== 'RS256' && a !== 'ES256')) {
+      throw new Error('decisionAlgorithms must be a non-empty subset of RS256, ES256');
+    }
+    this.#decisionAlgorithms = algorithms;
     this.decisions = new DecisionsClient(this.#http);
     const decisions = this.decisions;
     this.#decisionConsumer = options.decisionConsumer ?? {
@@ -459,7 +465,7 @@ export class Grantex {
       const requirement = { decision_required: `${connector}:${tool}` };
       let decisionDenial: WouldDeny | undefined;
       try {
-        decisionSet = await this.#verifyDecision(grant, connector, tool, spec.fourEyesOn, options);
+        decisionSet = await this.#verifyDecision(grant, connector, tool, spec.fourEyesOn, spec.decisionFields ?? [], options);
       } catch (err) {
         if (!(err instanceof DecisionGrantError)) throw err;
         decisionDenial = err.subReason === DecisionSubReason.ABSENT
@@ -638,26 +644,35 @@ export class Grantex {
     connector: string,
     tool: string,
     fourEyesOn: readonly string[],
+    decisionFields: readonly string[],
     options: EnforceOptions,
   ): Promise<DecisionGrantSet> {
     const tokens = options.decisionGrants;
     if (tokens === undefined || tokens.length === 0) {
       throw new DecisionGrantError(DecisionSubReason.ABSENT, 'no decision grant was presented');
     }
-    let action: DecisionAction;
+    let given: DecisionAction | undefined;
+    let fromArguments: DecisionAction | undefined;
     try {
-      if (options.decisionAction !== undefined) {
-        action = parseDecisionAction(options.decisionAction);
-      } else if (options.arguments !== undefined) {
-        action = decisionActionFromToolCall(tool, options.arguments);
-      } else {
-        throw new DecisionGrantError(DecisionSubReason.MALFORMED, 'enforce() needs decisionAction or arguments to compare the decision grant with');
-      }
+      if (options.decisionAction !== undefined) given = parseDecisionAction(options.decisionAction);
+      if (options.arguments !== undefined) fromArguments = decisionActionFromToolCall(tool, options.arguments, decisionFields);
     } catch (err) {
       if (err instanceof ActionValidationError) {
         throw new DecisionGrantError(DecisionSubReason.MALFORMED, `the call's action is invalid: ${err.message}`);
       }
       throw err;
+    }
+    if (given !== undefined && fromArguments !== undefined && computeActionHash(given) !== computeActionHash(fromArguments)) {
+      // The call would do something other than what the caller says it approves.
+      throw new DecisionGrantError(DecisionSubReason.ACTION_MISMATCH, 'decisionAction does not match the action derived from the call arguments');
+    }
+    const action = given ?? fromArguments;
+    if (action === undefined) {
+      throw new DecisionGrantError(DecisionSubReason.MALFORMED, 'enforce() needs decisionAction or arguments to compare the decision grant with');
+    }
+    const missingFields = decisionFields.filter((name) => action.extra === undefined || !Object.prototype.hasOwnProperty.call(action.extra, name));
+    if (missingFields.length > 0) {
+      throw new DecisionGrantError(DecisionSubReason.MALFORMED, `the action does not bind the declared decision fields: ${missingFields.join(', ')}`);
     }
     if (action.action !== tool) {
       throw new DecisionGrantError(DecisionSubReason.ACTION_MISMATCH, 'the decision action names another tool');
@@ -671,6 +686,7 @@ export class Grantex {
       developerId: grant.developerId,
       connector,
       approvalsRequired: fourEyesOn.includes(action.decision) ? 2 : 1,
+      algorithms: this.#decisionAlgorithms,
     });
   }
 
@@ -778,11 +794,17 @@ export class Grantex {
       const getToken = () => typeof options.grantToken === 'function' ? options.grantToken() : options.grantToken;
       const caseId = typeof options.caseId === 'function' ? options.caseId() : options.caseId;
       const costComponents = typeof options.costComponents === 'function' ? options.costComponents() : options.costComponents;
+      const decisionGrants = typeof options.decisionGrants === 'function' ? options.decisionGrants() : options.decisionGrants;
+      const caseVersion = typeof options.caseVersion === 'function' ? options.caseVersion() : options.caseVersion;
+      const input = args[0];
       const callOptions = {
         connector: options.connector,
         tool: options.tool,
         ...(caseId !== undefined ? { caseId } : {}),
         ...(costComponents !== undefined ? { costComponents } : {}),
+        ...(decisionGrants !== undefined ? { decisionGrants } : {}),
+        ...(caseVersion !== undefined ? { caseVersion } : {}),
+        ...(typeof input === 'object' && input !== null && !Array.isArray(input) ? { arguments: input as Record<string, unknown> } : {}),
       };
 
       let result = await self.enforce({ grantToken: getToken(), ...callOptions });
@@ -835,19 +857,32 @@ export class Grantex {
 
       const caseId = options.extractCaseId?.(request);
       const costComponents = options.extractCostComponents?.(request);
+      const decisionGrants = options.extractDecisionGrants?.(request);
+      const callArguments = options.extractArguments?.(request);
+      const caseVersion = options.extractCaseVersion?.(request);
       self.enforce({
         grantToken: token,
         connector,
         tool,
         ...(caseId !== undefined ? { caseId } : {}),
         ...(costComponents !== undefined ? { costComponents } : {}),
+        ...(decisionGrants !== undefined ? { decisionGrants } : {}),
+        ...(callArguments !== undefined ? { arguments: callArguments } : {}),
+        ...(caseVersion !== undefined ? { caseVersion } : {}),
       })
         .then((result) => {
           if (!result.allowed) {
             const statusFn = response['status'] as (code: number) => Record<string, unknown>;
             const jsonFn = statusFn.call(response, 403)['json'] as (body: unknown) => void;
             jsonFn.call(statusFn.call(response, 403), {
-              error: { code: 'SCOPE_DENIED', message: result.reason, connector, tool },
+              error: {
+                code: 'SCOPE_DENIED',
+                message: result.reason,
+                connector,
+                tool,
+                ...(result.reasonCode !== undefined ? { reason: result.reasonCode } : {}),
+                ...(result.subReason !== undefined ? { subReason: result.subReason } : {}),
+              },
             });
             return;
           }

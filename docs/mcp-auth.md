@@ -477,7 +477,10 @@ export const decisionVerifier: DecisionVerifier = {
   comma-separated grants for a decision in `four_eyes_on`, from the
   `grantex-decision-grant` request header (`header` to change it); derives
   the semantic action from the tool name and the call's `case_id`,
-  `decision`, `subject` and `amount`; asks `caseVersion(caseId, check)` for
+  `decision`, `subject`, `amount` and the manifest's `decision_fields`;
+  requires the access token's developer (`dev`) and a connector from a
+  manifest-derived tool policy (a call without either is refused as
+  `malformed`); asks `caseVersion(caseId, check)` for
   the case's current version from your own case state; verifies the grants
   with `verify` and consumes them with `consume`, answering `valid` only after
   the issuer confirmed consumption (`consume_unavailable` otherwise). Pass
@@ -486,6 +489,8 @@ export const decisionVerifier: DecisionVerifier = {
   unreleased SDK. Refusals carry the SDK's sub-reason (`action_mismatch`,
   `wrong_case`, `case_changed`, `expired`, `consumed`, `same_approver`,
   `four_eyes_incomplete`, `malformed`, ...) in the `decision_invalid` body.
+  Consumption spends the grant: if the tool call fails afterwards, a person
+  has to approve again.
 - **Purpose-bound grants.** `grant.authorizeParams` returns extra parameters
   for the Grantex authorize call (for example `authorization_details` with
   purpose and region). It cannot override the agent, principal, scopes,

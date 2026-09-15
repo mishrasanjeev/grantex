@@ -189,21 +189,44 @@ Breaking changes
   `case_changed`, `expired`, `consumed`, `same_approver`,
   `four_eyes_incomplete`, `malformed`, `unknown_grant`, `revoked`,
   `consume_unavailable`). Offline verification alone never allows a call.
-  `EnforceResult.decision` records what was consumed.
+  `EnforceResult.decision` records what was consumed. Any consumer failure
+  denies the call and refunds the caps reservation. Consumption spends the
+  grant: a lost response or a tool failure afterwards needs a new approval.
+- When both `decision_action` and `arguments` are given they must hash
+  identically (`action_mismatch`). A tool's manifest `decision_fields` are
+  read from the arguments and must be bound by the grant.
+- Grants must carry a `kid`; keys are chosen by `kid` and type from the
+  issuer's JWKS; RS256 and ES256 are accepted (`decision_algorithms` /
+  `decisionAlgorithms` narrows the list). Grants must carry
+  `dwell_source: "server"`, `memo_hash` and `policy_score_hash`.
+- `wrap_tool` / `wrapTool` take `decision_grants` / `decisionGrants` and
+  `case_version` / `caseVersion` (values or per-call getters) and derive the
+  action from the tool input; `enforceMiddleware` takes
+  `extractDecisionGrants`, `extractArguments` and `extractCaseVersion`, and
+  its 403 body now includes `reason` and `subReason`.
 - `decisions_mode` / `decisionsMode` (client option and per call):
-  `enforce` (default) or `warn`, which allows the call, still consumes valid
-  grants, and reports the denial in `would_deny` / `wouldDeny`. Platforms map
-  their `decisions.required` flag to these modes. `decision_consumer` /
-  `decisionConsumer` replaces the auth-service consumer.
-- `grantex.decisions` / `Grantex.decisions`: `create_approver_session`,
-  `set_case_version`, `create_request`, `get_request`, `cancel_request`,
-  `approve`, `create_page_ticket`, `consume` (never retried; an unconfirmed
-  consumption raises `consume_unavailable`).
+  `enforce` (default) denies. `warn` is for rollout only and is not a
+  control: it does not deny a `requires_decision` call without a valid
+  decision grant; it lets the call through and reports what would have been
+  denied in `would_deny` / `wouldDeny`. Valid grants presented in warn mode
+  are still consumed. Platforms map their `decisions.required` flag to
+  `enforce` (on) or `warn` (off). `decision_consumer` / `decisionConsumer`
+  replaces the auth-service consumer.
+- `grantex.decisions` / `Grantex.decisions`: `set_case_version`,
+  `create_request` (with `memo` and `policy_score`), `get_request`,
+  `cancel_request`, `consume` (never retried; an unconfirmed consumption
+  raises `consume_unavailable`). There is no approval API: people approve on
+  the auth service's approval page.
+- Manifest 0.6: tools may declare `decision_fields` (requires
+  `requires_decision`). **Break:** the unknown-key error message now lists
+  `decision_fields` among the allowed keys.
 - `verify_decision_grant(s)` / `verifyDecisionGrant(s)` for offline checks,
   with shared cases in `spec/examples/decision-grant/verification.json`.
 - `@grantex/mcp-auth`: `grantexDecisionVerifier()` reference
-  `DecisionVerifier`, reading grants from the `grantex-decision-grant` header
-  and answering `valid` only after consumption.
+  `DecisionVerifier`, reading grants from the `grantex-decision-grant` header,
+  requiring the grant's developer and the tool's connector (refused as
+  `malformed` otherwise), binding manifest `decision_fields`, and answering
+  `valid` only after consumption. Tool policies carry `decisionFields`.
 - Behaviour change (no API break): a call to a `requires_decision` tool that
   carries a valid decision grant which the auth service consumes is now
   allowed. Calls without one are denied exactly as before.

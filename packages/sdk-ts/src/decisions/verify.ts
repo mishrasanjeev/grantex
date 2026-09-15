@@ -53,7 +53,11 @@ export interface DecisionGrant {
   connector: string;
   caseVersion: string;
   dwellMs: number;
+  /** Always `server`: the issuer measured the dwell time. */
+  dwellSource: 'server';
   decisionRequest: string;
+  memoHash: string;
+  policyScoreHash: string;
   iat: number;
   exp: number;
   memoRef?: string;
@@ -84,7 +88,7 @@ export interface VerifyDecisionGrantOptions {
   developerId?: string;
   /** The grant must be for this connector. */
   connector?: string;
-  /** Accepted algorithms. Default `['RS256']`. */
+  /** Accepted algorithms, a subset of RS256 and ES256. Default both. */
   algorithms?: string[];
   /** Seconds of clock tolerance. Default 0. */
   clockTolerance?: number;
@@ -181,7 +185,7 @@ export async function verifyDecisionGrant(
   if (typeof caseVersion !== 'string' || caseVersion.length === 0) {
     throw new DecisionGrantError(DecisionSubReason.MALFORMED, 'caseVersion is required');
   }
-  const algorithms = options.algorithms ?? ['RS256'];
+  const algorithms: string[] = (options.algorithms ?? ['RS256', 'ES256']).filter((a) => a === 'RS256' || a === 'ES256');
   let header;
   try {
     header = decodeProtectedHeader(token);
@@ -190,6 +194,9 @@ export async function verifyDecisionGrant(
   }
   if (header.typ !== DECISION_GRANT_TYP) {
     throw new DecisionGrantError(DecisionSubReason.MALFORMED, `decision grant typ must be ${DECISION_GRANT_TYP}`);
+  }
+  if (typeof header.kid !== 'string' || header.kid.length === 0) {
+    throw new DecisionGrantError(DecisionSubReason.MALFORMED, 'decision grant has no kid');
   }
   if (typeof header.alg !== 'string' || !algorithms.includes(header.alg)) {
     throw new DecisionGrantError(DecisionSubReason.MALFORMED, `decision grant algorithm ${String(header.alg)} is not allowed`);
@@ -238,6 +245,14 @@ export async function verifyDecisionGrant(
   if (acr !== undefined && typeof acr !== 'string') {
     throw new DecisionGrantError(DecisionSubReason.MALFORMED, 'decision grant acr is invalid');
   }
+  if (payload['dwell_source'] !== 'server') {
+    throw new DecisionGrantError(DecisionSubReason.MALFORMED, 'decision grant dwell time was not measured by the issuer');
+  }
+  const memoHash = claimString(payload, 'memo_hash');
+  const policyScoreHash = claimString(payload, 'policy_score_hash');
+  if (!isActionHash(memoHash) || !isActionHash(policyScoreHash)) {
+    throw new DecisionGrantError(DecisionSubReason.MALFORMED, 'decision grant memo or policy score hash is malformed');
+  }
   const iat = claimInt(payload, 'iat');
   const exp = claimInt(payload, 'exp');
   if (exp <= iat || exp - iat > 86_400) {
@@ -262,7 +277,10 @@ export async function verifyDecisionGrant(
     connector: claimString(payload, 'connector'),
     caseVersion: claimString(payload, 'case_version'),
     dwellMs: claimInt(payload, 'dwell_ms'),
+    dwellSource: 'server',
     decisionRequest: claimString(payload, 'decision_request'),
+    memoHash,
+    policyScoreHash,
     iat,
     exp,
     ...(typeof memoRef === 'string' ? { memoRef } : {}),

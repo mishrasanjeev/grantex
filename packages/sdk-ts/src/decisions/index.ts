@@ -33,7 +33,7 @@ export type {
   VerifyDecisionGrantOptions,
   VerifyDecisionGrantsOptions,
 } from './verify.js';
-export { APPROVER_SESSION_HEADER, DecisionsClient } from '../resources/decisions.js';
+export { DecisionsClient } from '../resources/decisions.js';
 export type {
   ConsumeDecisionParams,
   ConsumedDecision,
