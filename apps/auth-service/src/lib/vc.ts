@@ -1,7 +1,7 @@
 /**
  * W3C Verifiable Credentials (VC-JWT) issuance, verification, and StatusList2021.
  *
- * Uses the existing RS256 key pair from crypto.ts. VC-JWTs follow W3C VC Data
+ * Uses the platform signing key from crypto.ts. VC-JWTs follow W3C VC Data
  * Model v2.0 with the JWT encoding specified in the VC-JWT specification.
  */
 
@@ -10,6 +10,7 @@ import type postgres from 'postgres';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { getSql } from '../db/client.js';
 import { getKeyPair } from './crypto.js';
+import { resolvePlatformVerificationKey, SIGNING_ALGORITHMS } from './signing-keys.js';
 import { newVerifiableCredentialId, newStatusListId } from './ids.js';
 import { config } from '../config.js';
 
@@ -216,7 +217,7 @@ export async function issueAgentGrantVC(params: IssueVCParams): Promise<{
   } = params;
 
   const vcId = newVerifiableCredentialId();
-  const { privateKey, kid } = getKeyPair();
+  const { privateKey, kid, alg } = getKeyPair();
   const domain = config.didWebDomain;
   const issuerDid = `did:web:${domain}`;
 
@@ -268,7 +269,7 @@ export async function issueAgentGrantVC(params: IssueVCParams): Promise<{
 
   // Sign the VC-JWT
   const vcJwt = await new SignJWT({ vc: vcClaim })
-    .setProtectedHeader({ alg: 'RS256', kid, typ: 'JWT' })
+    .setProtectedHeader({ alg, kid, typ: 'JWT' })
     .setIssuer(issuerDid)
     .setSubject(agentDid)
     .setJti(vcId)
@@ -296,7 +297,6 @@ export async function issueAgentGrantVC(params: IssueVCParams): Promise<{
 // ── VC-JWT verification ─────────────────────────────────────────────────────
 
 export async function verifyAgentGrantVC(vcJwt: string): Promise<VerifyVCResult> {
-  const { publicKey } = getKeyPair();
 
   // Decode first to extract claims without full verification (for error reporting)
   let decoded: Record<string, unknown>;
@@ -311,8 +311,8 @@ export async function verifyAgentGrantVC(vcJwt: string): Promise<VerifyVCResult>
 
   // Verify signature and expiry
   try {
-    await jwtVerify(vcJwt, publicKey, {
-      algorithms: ['RS256'],
+    await jwtVerify(vcJwt, resolvePlatformVerificationKey, {
+      algorithms: [...SIGNING_ALGORITHMS],
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Verification failed';

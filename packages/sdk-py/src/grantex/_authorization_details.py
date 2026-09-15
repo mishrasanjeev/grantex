@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional, Tuple
 
 TOOLS_DETAIL_TYPE = "urn:grantex:tools:v1"
+DECISION_DETAIL_TYPE = "urn:grantex:decision:v1"
 
 _ENTRY_KEYS = frozenset({"type", "connector", "purpose", "data_region", "tools", "caps"})
 _NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}\Z")
@@ -166,5 +167,94 @@ def parse_tools_authorization(claim: Any) -> Dict[str, ToolsAuthorization]:
             data_region=data_region,
             tools=tools,
             caps=caps,
+        )
+    return entries
+
+
+_DECISION_ENTRY_KEYS = frozenset({"type", "connector", "tools", "four_eyes_on"})
+_DECISION_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}\Z")
+
+
+@dataclass(frozen=True)
+class DecisionReference:
+    """One ``urn:grantex:decision:v1`` entry.
+
+    Tools on a connector that need a decision grant, and the decisions on each
+    that need two approvers::
+
+        {"type": "urn:grantex:decision:v1", "connector": "acme_kyb",
+         "tools": ["case_decision"], "four_eyes_on": {"case_decision": ["decline"]}}
+    """
+
+    connector: str
+    tools: Tuple[str, ...]
+    four_eyes_on: Mapping[str, Tuple[str, ...]]
+
+
+def parse_decision_references(claim: Any) -> Dict[str, DecisionReference]:
+    """Return the decision references of an ``authorization_details`` claim by connector.
+
+    ``None`` yields an empty mapping. Entries of other types are ignored.
+
+    Raises:
+        AuthorizationDetailsError: an entry has an unknown key, no tools, a
+            tool that is not a name, ``four_eyes_on`` naming a tool not in
+            ``tools``, or repeats a connector.
+    """
+    if claim is None:
+        return {}
+    if not isinstance(claim, (list, tuple)):
+        raise AuthorizationDetailsError("authorization_details must be an array")
+
+    entries: Dict[str, DecisionReference] = {}
+    for index, raw in enumerate(claim):
+        where = f"authorization_details[{index}]"
+        if not isinstance(raw, Mapping):
+            raise AuthorizationDetailsError(f"{where} must be an object")
+        detail_type = raw.get("type")
+        if not isinstance(detail_type, str) or not detail_type:
+            raise AuthorizationDetailsError(f"{where}.type must be a non-empty string")
+        if detail_type != DECISION_DETAIL_TYPE:
+            continue
+
+        unknown = sorted(str(k) for k in raw if k not in _DECISION_ENTRY_KEYS)
+        if unknown:
+            raise AuthorizationDetailsError(f"{where} has unknown key {unknown[0]!r}")
+        connector = raw.get("connector")
+        if not isinstance(connector, str) or not _NAME_RE.match(connector):
+            raise AuthorizationDetailsError(f"{where}.connector must be a connector name")
+        if connector in entries:
+            raise AuthorizationDetailsError(
+                f"{where} repeats connector {connector!r}; a grant carries one decision entry per connector"
+            )
+        raw_tools = raw.get("tools")
+        if (
+            not isinstance(raw_tools, (list, tuple))
+            or not raw_tools
+            or not all(isinstance(t, str) and _NAME_RE.match(t) for t in raw_tools)
+        ):
+            raise AuthorizationDetailsError(f"{where}.tools must be a non-empty array of tool names")
+        tools = tuple(raw_tools)
+        four_eyes: Dict[str, Tuple[str, ...]] = {}
+        if "four_eyes_on" in raw:
+            raw_four_eyes = raw["four_eyes_on"]
+            if not isinstance(raw_four_eyes, Mapping):
+                raise AuthorizationDetailsError(f"{where}.four_eyes_on must be an object")
+            for tool, decisions in raw_four_eyes.items():
+                if tool not in tools:
+                    raise AuthorizationDetailsError(
+                        f"{where}.four_eyes_on names {tool!r}, which is not in tools"
+                    )
+                if (
+                    not isinstance(decisions, (list, tuple))
+                    or not decisions
+                    or not all(isinstance(d, str) and _DECISION_RE.match(d) for d in decisions)
+                ):
+                    raise AuthorizationDetailsError(
+                        f"{where}.four_eyes_on.{tool} must be a non-empty array of decisions"
+                    )
+                four_eyes[str(tool)] = tuple(decisions)
+        entries[connector] = DecisionReference(
+            connector=connector, tools=tools, four_eyes_on=four_eyes
         )
     return entries
