@@ -659,20 +659,21 @@ export class Grantex {
     const wrapped = Object.create(tool);
     wrapped.invoke = async function (...args: unknown[]): Promise<unknown> {
       const getToken = () => typeof options.grantToken === 'function' ? options.grantToken() : options.grantToken;
-
-      let result = await self.enforce({
-        grantToken: getToken(),
+      const caseId = typeof options.caseId === 'function' ? options.caseId() : options.caseId;
+      const costComponents = typeof options.costComponents === 'function' ? options.costComponents() : options.costComponents;
+      const callOptions = {
         connector: options.connector,
         tool: options.tool,
-      });
+        ...(caseId !== undefined ? { caseId } : {}),
+        ...(costComponents !== undefined ? { costComponents } : {}),
+      };
 
-      // Retry once with refreshed token if expired and grantToken is a getter
+      let result = await self.enforce({ grantToken: getToken(), ...callOptions });
+
+      // Retry once with refreshed token if expired and grantToken is a getter. An
+      // expired token is denied before caps are reserved, so this cannot reserve twice.
       if (!result.allowed && result.reason.includes('expired') && typeof options.grantToken === 'function') {
-        result = await self.enforce({
-          grantToken: getToken(),
-          connector: options.connector,
-          tool: options.tool,
-        });
+        result = await self.enforce({ grantToken: getToken(), ...callOptions });
       }
 
       if (!result.allowed) {
@@ -715,7 +716,15 @@ export class Grantex {
         return;
       }
 
-      self.enforce({ grantToken: token, connector, tool })
+      const caseId = options.extractCaseId?.(request);
+      const costComponents = options.extractCostComponents?.(request);
+      self.enforce({
+        grantToken: token,
+        connector,
+        tool,
+        ...(caseId !== undefined ? { caseId } : {}),
+        ...(costComponents !== undefined ? { costComponents } : {}),
+      })
         .then((result) => {
           if (!result.allowed) {
             const statusFn = response['status'] as (code: number) => Record<string, unknown>;

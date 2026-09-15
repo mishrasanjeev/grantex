@@ -605,17 +605,24 @@ class Grantex:
         connector: str,
         tool_name: str,
         grant_token: str | Callable[[], str],
+        case_id: str | Callable[[], str | None] | None = None,
+        cost_components: list[str] | Callable[[], list[str] | None] | None = None,
     ) -> Any:
         """Wrap a LangChain StructuredTool with automatic Grantex scope enforcement.
 
         Before each invocation, the grant token is verified and scopes are checked.
-        If denied, raises PermissionError instead of calling the tool.
+        If denied, raises PermissionError instead of calling the tool. When the
+        tool or grant declares caps, the call is reserved before the tool runs.
 
         Args:
             tool: A LangChain StructuredTool or compatible object with _run/_arun methods.
             connector: Connector name for scope lookup.
             tool_name: Tool name for manifest permission lookup.
             grant_token: Static token string or callable that returns the current token.
+            case_id: Case for per-case caps, or a callable returning it per call.
+            cost_components: Cost units the call incurs, or a callable returning them.
+                Both must come from the application, never from the tool's
+                (model-supplied) arguments.
 
         Example::
 
@@ -636,11 +643,21 @@ class Grantex:
 
         def _check() -> None:
             token = _get_token()
-            result = grantex.enforce(grant_token=token, connector=connector, tool=tool_name)
-            # Retry once with refreshed token if expired and grant_token is callable
+            call_case = case_id() if callable(case_id) else case_id
+            call_costs = cost_components() if callable(cost_components) else cost_components
+            result = grantex.enforce(
+                grant_token=token, connector=connector, tool=tool_name,
+                case_id=call_case, cost_components=call_costs,
+            )
+            # Retry once with refreshed token if expired and grant_token is callable.
+            # An expired token is denied before caps are reserved, so the retry
+            # cannot reserve twice.
             if not result.allowed and "expired" in result.reason.lower() and callable(grant_token):
                 token = _get_token()
-                result = grantex.enforce(grant_token=token, connector=connector, tool=tool_name)
+                result = grantex.enforce(
+                    grant_token=token, connector=connector, tool=tool_name,
+                    case_id=call_case, cost_components=call_costs,
+                )
             if not result.allowed:
                 raise PermissionError(f"Grantex scope denied: {result.reason}")
 

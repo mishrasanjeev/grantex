@@ -568,3 +568,44 @@ describe('check-only and caps modes', () => {
     expect([r.allowed, r.reasonCode, r.subReason]).toEqual([true, 'cap_exceeded', 'meter_unavailable']);
   });
 });
+
+describe('wrappers pass case and cost components', () => {
+  it('wrapTool', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(
+      grant([{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', caps: { cost_units: { per_day: 12 } } }]),
+    );
+    const c = client();
+    let n = 0;
+    const invoke = vi.fn().mockResolvedValue('ok');
+    const wrapped = c.wrapTool(
+      { name: 'verify_business', description: 'verify', invoke },
+      { connector: 'acme_kyb', tool: 'verify_business', grantToken: 't', caseId: () => `case_0${(n += 1)}`, costComponents: ['base'] },
+    );
+    expect(await wrapped.invoke()).toBe('ok');
+    expect(await wrapped.invoke()).toBe('ok');
+    await expect(wrapped.invoke()).rejects.toThrow('E1008');
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('enforceMiddleware', async () => {
+    const c = client();
+    const middleware = c.enforceMiddleware({
+      extractToken: () => 't',
+      extractConnector: () => 'acme_kyb',
+      extractTool: () => 'verify_business',
+      extractCaseId: (req) => req['caseId'] as string | undefined,
+      extractCostComponents: () => ['base'],
+    });
+    const run = (req: Record<string, unknown>) =>
+      new Promise<{ status?: number; next: boolean }>((resolve) => {
+        const res = {
+          status: (code: number) => ({ json: () => resolve({ status: code, next: false }) }),
+        };
+        middleware(req, res, () => resolve({ next: true }));
+      });
+    for (let i = 0; i < 3; i += 1) expect(await run({ caseId: 'case_01' })).toEqual({ next: true });
+    expect(await run({ caseId: 'case_01' })).toEqual({ status: 403, next: false });
+    expect(await run({})).toEqual({ status: 403, next: false });
+  });
+});
+

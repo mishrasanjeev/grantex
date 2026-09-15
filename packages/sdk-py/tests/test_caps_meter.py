@@ -553,3 +553,40 @@ class TestCheckOnlyAndCapsModes:
             warnings.simplefilter("ignore")
             result = client.enforce("t", "acme_kyb", "resolve_business")
         assert (result.allowed, result.reason_code, result.sub_reason) == (True, "cap_exceeded", "meter_unavailable")
+
+
+class TestWrapToolMetering:
+    def test_wrap_tool_passes_case_and_cost_components(self, verify: MagicMock) -> None:
+        verify.return_value = _grant(
+            [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"cost_units": {"per_day": 12}}}]
+        )
+        meter = _meter()
+        client = _client(meter)
+        cases = iter(["case_01", "case_02", "case_03"])
+
+        class FakeTool:
+            calls = 0
+
+            def _run(self, **kwargs: Any) -> str:
+                FakeTool.calls += 1
+                return "ok"
+
+        tool = client.wrap_tool(
+            FakeTool(), connector="acme_kyb", tool_name="verify_business", grant_token="t",
+            case_id=lambda: next(cases), cost_components=["base"],
+        )
+        assert tool._run() == "ok"
+        assert tool._run() == "ok"
+        with pytest.raises(PermissionError, match="E1008"):
+            tool._run()  # 5 + 5 used; another 5 exceeds the budget of 12
+        assert FakeTool.calls == 2
+
+    def test_wrap_tool_without_a_case_denies_a_per_case_cap(self, verify: MagicMock) -> None:
+        class FakeTool:
+            def _run(self, **kwargs: Any) -> str:
+                return "ok"
+
+        tool = _client().wrap_tool(FakeTool(), connector="acme_kyb", tool_name="verify_business", grant_token="t")
+        with pytest.raises(PermissionError, match="case"):
+            tool._run()
+

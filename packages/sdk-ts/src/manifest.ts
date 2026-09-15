@@ -583,6 +583,10 @@ export interface WrapToolOptions {
   tool: string;
   /** Grant token — static string or getter function for dynamic tokens. */
   grantToken: string | (() => string);
+  /** Case for per-case caps, or a getter evaluated per call. Never taken from the tool's (model-supplied) input. */
+  caseId?: string | (() => string | undefined);
+  /** Cost units the call incurs, or a getter evaluated per call. Never taken from the tool's input. */
+  costComponents?: readonly string[] | (() => readonly string[] | undefined);
 }
 
 /** Options for `grantex.enforceMiddleware()`. */
@@ -593,4 +597,8 @@ export interface EnforceMiddlewareOptions {
   extractConnector: (req: Record<string, unknown>) => string;
   /** Extract the tool name from the request. */
   extractTool: (req: Record<string, unknown>) => string;
+  /** Case for per-case caps, from trusted request context (not the agent's payload). */
+  extractCaseId?: (req: Record<string, unknown>) => string | undefined;
+  /** Cost units the call incurs, from trusted request context (not the agent's payload). */
+  extractCostComponents?: (req: Record<string, unknown>) => readonly string[] | undefined;
 }
