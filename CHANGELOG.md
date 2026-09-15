@@ -21,9 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `upstreamRecordsFor` list every upstream record behind a recommendation.
 - Both SDKs produce identical bytes and identical verification results for
   every case in `spec/examples/evidence/`.
-- The evidence modules carry a private copy of the RFC 8785 implementation
-  from the decision-grant work; it is replaced by the shared module once that
-  is released.
+- Canonicalisation uses the shared RFC 8785 implementation
+  (`grantex.canonical`, `canonical.ts`).
 
 ### Evidence package format
 - New specification of the per-case evidence package, format 1.0

@@ -70,7 +70,8 @@ def test_fixtures_are_current() -> None:
 
 
 def test_embedded_schema_is_the_published_schema() -> None:
-    assert EMBEDDED_SCHEMA.read_bytes() == SPEC_SCHEMA.read_bytes()
+    # Line endings may differ between checkouts; the content may not.
+    assert EMBEDDED_SCHEMA.read_bytes().replace(b"\r\n", b"\n") == SPEC_SCHEMA.read_bytes().replace(b"\r\n", b"\n")
 
 
 def test_published_schema_uses_only_interpreted_keywords() -> None:
@@ -115,7 +116,7 @@ def test_canonicalisation_matches_rfc8785_examples(source: str, canonical: str) 
 
 def test_canonicalisation_is_stable_under_reordering_and_whitespace() -> None:
     rng = random.Random(8785)
-    document = json.loads(_read("package.json"))
+    document = json.loads(_read("evidence-package.json"))
     reference = canonicalize(document)
     for _ in range(50):
         def shuffle(node: Any) -> Any:
@@ -133,7 +134,7 @@ def test_canonicalisation_is_stable_under_reordering_and_whitespace() -> None:
 
 def test_canonicalisation_agrees_with_grantex_canonical_when_available() -> None:
     canonical = pytest.importorskip("grantex.canonical")
-    for name in ("package.json", "case-input.json", "invalid-cases.json"):
+    for name in ("evidence-package.json", "case-input.json", "invalid-cases.json"):
         value = json.loads(_read(name))
         assert canonical.canonicalize(value) == canonicalize(value)
 
@@ -143,13 +144,13 @@ def test_canonicalisation_agrees_with_grantex_canonical_when_available() -> None
 
 def test_build_produces_the_shared_fixture_bytes() -> None:
     documents = fx.packages()
-    assert serialize_package(documents["package.json"]) == _read("package.json")
-    assert serialize_package(documents["package-disclosed.json"]) == _read("package-disclosed.json")
+    assert serialize_package(documents["evidence-package.json"]) == _read("evidence-package.json")
+    assert serialize_package(documents["evidence-package-disclosed.json"]) == _read("evidence-package-disclosed.json")
 
 
 def test_identifiers_are_pseudonymised_by_default() -> None:
-    document = json.loads(_read("package.json"))
-    raw = _read("package.json").decode("utf-8")
+    document = json.loads(_read("evidence-package.json"))
+    raw = _read("evidence-package.json").decode("utf-8")
     for secret in ("user:approver-a", "user:approver-b", "user:underwriting-team", "gb:00000001"):
         assert secret not in raw
     assert is_pseudonym(document["case"]["subject"])
@@ -208,7 +209,7 @@ def test_build_refuses_invalid_records_with_the_verifier_rules() -> None:
 # ── Verification ─────────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("name", ["package.json", "package-disclosed.json"])
+@pytest.mark.parametrize("name", ["evidence-package.json", "evidence-package-disclosed.json"])
 def test_fixture_packages_verify(name: str) -> None:
     expected = _expected()[name]
     result = verify_package(_read(name), expected_root=expected["root"])
@@ -218,9 +219,9 @@ def test_fixture_packages_verify(name: str) -> None:
 
 
 def test_anchor_is_checked_and_can_be_pinned() -> None:
-    expected = _expected()["package.json"]
+    expected = _expected()["evidence-package.json"]
     result = verify_package(
-        _read("package.json"),
+        _read("evidence-package.json"),
         expected_root=expected["root"],
         expected_anchor_hash=expected["anchor_hash"],
         require_anchor=True,
@@ -229,18 +230,18 @@ def test_anchor_is_checked_and_can_be_pinned() -> None:
 
 
 def test_signed_package_verifies_with_the_key_set() -> None:
-    expected = _expected()["package-signed.json"]
+    expected = _expected()["evidence-package-signed.json"]
     jwks = json.loads(_read("jwks.json"))
-    result = verify_package(_read("package-signed.json"), expected_root=expected["root"], jwks=jwks, require_signature=True)
+    result = verify_package(_read("evidence-package-signed.json"), expected_root=expected["root"], jwks=jwks, require_signature=True)
     assert result.ok and result.signature_checked
-    skipped = verify_package(_read("package-signed.json"), expected_root=expected["root"], allow_unverified_signature=True)
+    skipped = verify_package(_read("evidence-package-signed.json"), expected_root=expected["root"], allow_unverified_signature=True)
     assert skipped.ok and not skipped.signature_checked
 
 
 def test_trailing_line_feed_is_accepted_once() -> None:
-    root = _expected()["package.json"]["root"]
-    assert verify_package(_read("package.json") + b"\n", expected_root=root).ok
-    assert verify_package(_read("package.json") + b"\n\n", expected_root=root).code == "non_canonical_document"
+    root = _expected()["evidence-package.json"]["root"]
+    assert verify_package(_read("evidence-package.json") + b"\n", expected_root=root).ok
+    assert verify_package(_read("evidence-package.json") + b"\n\n", expected_root=root).code == "non_canonical_document"
 
 
 def _invalid_cases() -> List[Dict[str, Any]]:
@@ -295,7 +296,7 @@ def _set(document: Any, path: Tuple[Any, ...], value: Any) -> None:
 
 def test_tampering_with_any_field_fails_verification() -> None:
     """Change every leaf and delete every member, with and without rehashing."""
-    for name in ("package.json", "package-signed.json"):
+    for name in ("evidence-package.json", "evidence-package-signed.json"):
         data = _read(name)
         root = _expected()[name]["root"]
         jwks = json.loads(_read("jwks.json"))
@@ -334,7 +335,7 @@ def test_tampering_with_any_field_fails_verification() -> None:
                 expected_root=root,
                 jwks=jwks,
                 require_anchor=True,
-                require_signature=name == "package-signed.json",
+                require_signature=name == "evidence-package-signed.json",
             )
             assert not result.ok, (name, path, "deleted")
 
@@ -360,8 +361,8 @@ def test_changing_any_byte_of_a_package_fails_verification() -> None:
 
 def test_e2e_step8_export_verify_corrupt_one_byte_fails() -> None:
     """PRD 8.4 step 8: a verified package fails after corrupting one byte."""
-    data = _read("package.json")
-    root = _expected()["package.json"]["root"]
+    data = _read("evidence-package.json")
+    root = _expected()["evidence-package.json"]["root"]
     assert verify_package(data, expected_root=root).ok
     rng = random.Random(8)
     for _ in range(25):
@@ -372,8 +373,8 @@ def test_e2e_step8_export_verify_corrupt_one_byte_fails() -> None:
 
 
 def test_verification_refuses_a_malformed_trusted_root() -> None:
-    data = _read("package.json")
-    root = _expected()["package.json"]["root"]
+    data = _read("evidence-package.json")
+    root = _expected()["evidence-package.json"]["root"]
     for bad in ("", root.upper(), root[7:], root + "0"):
         assert verify_package(data, expected_root=bad).code == "missing_root"
 
@@ -382,8 +383,8 @@ def test_verification_refuses_a_malformed_trusted_root() -> None:
 
 
 def test_auditor_identifies_every_upstream_record_behind_a_recommendation_from_the_package_alone() -> None:
-    document = json.loads(_read("package.json"))
-    assert verify_package(_read("package.json"), expected_root=_expected()["package.json"]["root"]).ok
+    document = json.loads(_read("evidence-package.json"))
+    assert verify_package(_read("evidence-package.json"), expected_root=_expected()["evidence-package.json"]["root"]).ok
     records = upstream_records_for(document, "rec_0001")
     assert [(r["call_id"], r["tool"], r["provider"], r["record_id"]) for r in records] == [
         ("call_0001", "resolve_business", "mock", "mock:registry:00000001"),
@@ -433,8 +434,8 @@ def test_decision_action_hash_matches_the_decision_grant_profile() -> None:
 
 @pytest.mark.parametrize("kind", ["ES256", "RS256"])
 def test_detached_signature_round_trip(kind: str) -> None:
-    data = _read("package-disclosed.json")
-    root = _expected()["package-disclosed.json"]["root"]
+    data = _read("evidence-package-disclosed.json")
+    root = _expected()["evidence-package-disclosed.json"]["root"]
     document = json.loads(data)
     key: Any = ec.generate_private_key(ec.SECP256R1()) if kind == "ES256" else rsa.generate_private_key(65537, 2048)
     signature = sign_root(root, key, "kid-1")
@@ -458,9 +459,9 @@ def test_detached_signature_round_trip(kind: str) -> None:
 
 
 def test_non_canonical_base64_in_a_signature_is_refused() -> None:
-    data = _read("package-signed.json")
+    data = _read("evidence-package-signed.json")
     document = json.loads(data)
-    root = _expected()["package-signed.json"]["root"]
+    root = _expected()["evidence-package-signed.json"]["root"]
     jwks = json.loads(_read("jwks.json"))
     head, _, sig = document["signature"]["jws"].partition("..")
     last = sig[-1]
@@ -495,7 +496,7 @@ def test_structural_failures_agree_with_a_stock_json_schema_validator() -> None:
     assert structural
     for case in structural:
         assert list(validator.iter_errors(json.loads(fx.apply_case(case, files)))), case["name"]
-    for name in ("package.json", "package-disclosed.json", "package-signed.json"):
+    for name in ("evidence-package.json", "evidence-package-disclosed.json", "evidence-package-signed.json"):
         assert list(validator.iter_errors(json.loads(_read(name)))) == [], name
 
 
