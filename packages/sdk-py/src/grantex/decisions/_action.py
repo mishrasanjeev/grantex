@@ -89,7 +89,7 @@ class ActionValidationError(ValueError):
         self.field = field
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class DecisionAction:
     """The action a person approves.
 
@@ -139,6 +139,11 @@ class DecisionAction:
         _validate_extra(self.extra)
         # Keep a private copy so the action cannot change after validation.
         object.__setattr__(self, "extra", dict(self.extra))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, DecisionAction):
+            return NotImplemented
+        return self.canonical_json() == other.canonical_json()
 
     def __hash__(self) -> int:
         return hash(self.canonical_json())
