@@ -14,7 +14,9 @@
  * are not plain objects (such as `Date` or `Map`, whose `toJSON` is not
  * consulted); nesting deeper than `MAX_DEPTH`.
  *
- * The Python SDK implements the same rules in `grantex.canonical`; both are
+ * A copy of `packages/sdk-ts/src/canonical.ts`: the auth service does not
+ * depend on the SDK. The Python SDK implements the same rules in
+ * `grantex.canonical`; all three are
  * tested against the RFC 8785 test vectors and the shared fixtures in
  * `spec/examples/canonicalization/`. Python additionally refuses integers
  * whose digits are not the canonical form of a double (such as 2^53 + 1);
