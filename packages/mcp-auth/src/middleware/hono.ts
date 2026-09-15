@@ -1,53 +1,12 @@
-import * as jose from 'jose';
+import { createMcpResourceGuard } from '../resource/guard.js';
+import type { McpGrant, McpResourceGuardOptions } from '../resource/guard.js';
+import { buildProtectedResourceMetadata } from '../resource/metadata.js';
+import type { ProtectedResourceMetadataOptions } from '../resource/metadata.js';
 
-/**
- * Decoded Grantex MCP grant claims.
- */
-export interface McpGrant {
-  /** Subject (principal ID) */
-  sub: string;
-  /** Issuer */
-  iss: string;
-  /** Token ID (JTI) */
-  jti: string;
-  /** Scopes array */
-  scopes: string[];
-  /** Agent DID */
-  agentDid?: string;
-  /** Developer ID */
-  developerId?: string;
-  /** Grant ID */
-  grantId?: string;
-  /** Delegation depth */
-  delegationDepth?: number;
-  /** Token expiry (unix timestamp) */
-  exp: number;
-  /** Token issued at (unix timestamp) */
-  iat: number;
-  /** All raw JWT payload claims */
-  raw: jose.JWTPayload;
-}
+export type { McpGrant } from '../resource/guard.js';
 
-export interface RequireMcpAuthOptions {
-  /**
-   * Expected `iss` claim — the Grantex authorization server that signed the
-   * token (e.g. `https://grantex.dev`), NOT this MCP server's own URL. The
-   * JWKS is fetched from `{issuer}/.well-known/jwks.json` unless `jwksUri`
-   * is given. Tokens whose `iss` differs are rejected.
-   */
-  issuer: string;
-  /** Explicit JWKS URL (defaults to `{issuer}/.well-known/jwks.json`). */
-  jwksUri?: string;
-  /**
-   * Expected `aud` claim (this MCP server's resource identifier, RFC 8707).
-   * When set, tokens without a matching `aud` are rejected (SPEC §6.4).
-   */
-  audience?: string | string[];
-  /** Required scopes (all must be present). Optional. */
-  scopes?: string[];
-  /** Allowed algorithms. Defaults to ['RS256', 'ES256', 'PS256', 'EdDSA']. */
-  algorithms?: string[];
-}
+/** Options for {@link requireMcpAuth}; see `McpResourceGuardOptions`. */
+export type RequireMcpAuthOptions = McpResourceGuardOptions;
 
 /**
  * Generic Hono-compatible context and middleware types.
@@ -56,157 +15,55 @@ export interface RequireMcpAuthOptions {
 interface HonoContext {
   req: {
     header(name: string): string | undefined;
+    /** Read only when `tools` enforcement is configured. */
+    method?: string;
+    json?(): Promise<unknown>;
   };
   set(key: string, value: unknown): void;
-  json(data: unknown, status?: number): Response;
+  json(data: unknown, status?: number, headers?: Record<string, string>): Response;
 }
 
 type HonoNext = () => Promise<void>;
 
-// Module-level JWKS cache keyed by JWKS URL
-const jwksCache = new Map<string, ReturnType<typeof jose.createRemoteJWKSet>>();
-
-function getJwks(
-  options: RequireMcpAuthOptions,
-): ReturnType<typeof jose.createRemoteJWKSet> {
-  const issuerBase = options.issuer.endsWith('/') ? options.issuer.slice(0, -1) : options.issuer;
-  const jwksUrl = options.jwksUri ?? `${issuerBase}/.well-known/jwks.json`;
-  let jwks = jwksCache.get(jwksUrl);
-  if (!jwks) {
-    jwks = jose.createRemoteJWKSet(new URL(jwksUrl));
-    jwksCache.set(jwksUrl, jwks);
-  }
-  return jwks;
-}
-
 /**
- * Hono middleware that validates a Bearer token (Grantex MCP grant JWT).
+ * Hono middleware that validates a Bearer token (Grantex MCP grant JWT) and,
+ * when `tools` is configured, refuses any `tools/call` the grant does not
+ * cover.
  *
  * On success, sets `c.set('mcpGrant', grant)` with decoded claims.
- * On failure, responds with 401 or 403.
  */
 export function requireMcpAuth(
   options: RequireMcpAuthOptions,
 ): (c: HonoContext, next: HonoNext) => Promise<Response | void> {
-  const algorithms: string[] = options.algorithms ?? [
-    'RS256',
-    'ES256',
-    'PS256',
-    'EdDSA',
-  ];
-  const requiredScopes = options.scopes ?? [];
+  const guard = createMcpResourceGuard(options);
 
-  return async (c: HonoContext, next: HonoNext) => {
-    // Extract Bearer token
-    const header = c.req.header('authorization');
-    if (!header) {
-      return c.json(
-        {
-          error: 'unauthorized',
-          error_description: 'Missing Authorization header',
-        },
-        401,
-      );
-    }
-
-    const lowerHeader = header.toLowerCase();
-    if (!lowerHeader.startsWith('bearer ')) {
-      return c.json(
-        {
-          error: 'unauthorized',
-          error_description: 'Invalid Authorization header format',
-        },
-        401,
-      );
-    }
-
-    const token = header.slice(7).trim();
-    if (!token) {
-      return c.json(
-        {
-          error: 'unauthorized',
-          error_description: 'Invalid Authorization header format',
-        },
-        401,
-      );
-    }
-
-    try {
-      if (!options.issuer) {
-        // Fail closed: without a pinned issuer any JWKS-signed token would pass.
-        throw new Error('issuer is required');
+  return async (c, next) => {
+    const method = c.req.method ?? 'GET';
+    let body: unknown;
+    let bodyParsed = false;
+    if (options.tools && method.toUpperCase() === 'POST' && c.req.json) {
+      try {
+        body = await c.req.json();
+        bodyParsed = true;
+      } catch {
+        return c.json({ error: 'invalid_request', error_description: 'Request body is not valid JSON' }, 400);
       }
-      const jwks = getJwks(options);
-      const { payload } = await jose.jwtVerify(token, jwks, {
-        algorithms,
-        issuer: options.issuer.endsWith('/') ? [options.issuer, options.issuer.slice(0, -1)] : [options.issuer, `${options.issuer}/`],
-        ...(options.audience !== undefined ? { audience: options.audience } : {}),
-      });
-
-      // `scp` must be a string array, matching @grantex/sdk. A space-separated
-      // string (or a missing claim) marks a foreign token from the same issuer
-      // and is rejected rather than coerced into scopes it never carried.
-      const scp = payload['scp'];
-      if (!Array.isArray(scp) || !scp.every((s) => typeof s === 'string')) {
-        return c.json(
-          {
-            error: 'unauthorized',
-            error_description: 'Token scp claim must be an array of strings',
-          },
-          401,
-        );
-      }
-      const tokenScopes = scp as string[];
-
-      // Check required scopes
-      if (requiredScopes.length > 0) {
-        const missing = requiredScopes.filter(
-          (s) => !tokenScopes.includes(s),
-        );
-        if (missing.length > 0) {
-          return c.json(
-            {
-              error: 'insufficient_scope',
-              error_description: `Missing required scopes: ${missing.join(', ')}`,
-            },
-            403,
-          );
-        }
-      }
-
-      // Set decoded grant on context
-      const grant: McpGrant = {
-        sub: (payload.sub as string) ?? '',
-        iss: (payload.iss as string) ?? '',
-        jti: (payload.jti as string) ?? '',
-        scopes: tokenScopes,
-        ...(payload['agt'] !== undefined
-          ? { agentDid: payload['agt'] as string }
-          : {}),
-        ...(payload['dev'] !== undefined
-          ? { developerId: payload['dev'] as string }
-          : {}),
-        ...(payload['grnt'] !== undefined
-          ? { grantId: payload['grnt'] as string }
-          : {}),
-        ...(payload['delegationDepth'] !== undefined
-          ? { delegationDepth: payload['delegationDepth'] as number }
-          : {}),
-        exp: payload.exp as number,
-        iat: payload.iat as number,
-        raw: payload,
-      };
-
-      c.set('mcpGrant', grant);
-      await next();
-    } catch {
-      return c.json(
-        {
-          error: 'unauthorized',
-          error_description: 'Invalid or expired token',
-        },
-        401,
-      );
     }
+    const result = await guard({ header: (name) => c.req.header(name), method, body, bodyParsed });
+    if (!result.ok) {
+      return c.json(result.body, result.status, result.headers);
+    }
+    c.set('mcpGrant', result.grant as McpGrant);
+    // Outside any try/catch: an error thrown downstream propagates to Hono's
+    // error handler instead of turning into a 401.
+    await next();
   };
+}
+
+/** Hono handler serving RFC 9728 protected-resource metadata. */
+export function protectedResourceMetadataRoute(
+  options: ProtectedResourceMetadataOptions,
+): (c: HonoContext) => Response {
+  const document = buildProtectedResourceMetadata(options);
+  return (c) => c.json(document, 200, { 'Cache-Control': 'public, max-age=300' });
 }
