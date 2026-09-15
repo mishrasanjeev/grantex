@@ -130,7 +130,10 @@ function sendPage(reply: FastifyReply, status: number, title: string, body: stri
     .status(status)
     .header('Content-Security-Policy', PAGE_CSP)
     .header('X-Frame-Options', 'DENY')
-    .header('Referrer-Policy', 'no-referrer')
+    // same-origin, not no-referrer: under no-referrer browsers send
+    // `Origin: null` on the page's own form posts, which the required-Origin
+    // check refuses. same-origin still sends no Referer to other sites.
+    .header('Referrer-Policy', 'same-origin')
     .header('Cache-Control', 'no-store')
     .type('text/html; charset=utf-8')
     .send(layout(title, body));

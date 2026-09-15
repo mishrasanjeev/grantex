@@ -367,6 +367,8 @@ describePostgres('decision grants against real Postgres', () => {
       expect(page.statusCode).toBe(200);
       expect(page.headers['content-security-policy']).toContain("default-src 'none'");
       expect(page.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+      // A browser sends Origin: null on form posts from a no-referrer page, which the approval refuses.
+      expect(page.headers['referrer-policy']).toBe('same-origin');
       expect(page.body).not.toContain('<script>');
       expect(page.body).toContain('gb:&lt;script&gt;alert(1)&lt;/script&gt;');
       expect(page.body).toContain('Owner &quot;A&quot; &amp; &lt;b&gt;B&lt;/b&gt;');
