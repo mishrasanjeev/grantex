@@ -10,9 +10,9 @@ import { setJsonMode } from '../src/format.js';
 const here = dirname(fileURLToPath(import.meta.url));
 const EXAMPLES = join(here, '..', '..', '..', 'spec', 'examples', 'evidence');
 const expected = JSON.parse(readFileSync(join(EXAMPLES, 'expected.json'), 'utf8')) as Record<string, { root: string; anchor_hash?: string }>;
-const ROOT = expected['package.json']!.root;
-const ANCHOR = expected['package.json']!.anchor_hash!;
-const PACKAGE = join(EXAMPLES, 'package.json');
+const ROOT = expected['evidence-package.json']!.root;
+const ANCHOR = expected['evidence-package.json']!.anchor_hash!;
+const PACKAGE = join(EXAMPLES, 'evidence-package.json');
 const dir = mkdtempSync(join(tmpdir(), 'grantex-evidence-cli-'));
 
 class Exit extends Error {
@@ -90,7 +90,7 @@ describe('grantex evidence verify', () => {
   });
 
   it('needs keys or an explicit skip for a signed package', async () => {
-    const signed = join(EXAMPLES, 'package-signed.json');
+    const signed = join(EXAMPLES, 'evidence-package-signed.json');
     expect(await run('verify', signed, '--root', ROOT)).toBe(EXIT_FAILED);
     expect(errors.join('\n')).toContain('signature_unverified');
     expect(await run('verify', signed, '--root', ROOT, '--jwks', join(EXAMPLES, 'jwks.json'), '--require-signature')).toBe(0);
@@ -102,7 +102,7 @@ describe('grantex evidence verify', () => {
     expect(await run('verify', join(dir, 'missing.json'), '--root', ROOT)).toBe(EXIT_USAGE);
     const bad = join(dir, 'bad-jwks.json');
     writeFileSync(bad, '[]');
-    expect(await run('verify', join(EXAMPLES, 'package-signed.json'), '--root', ROOT, '--jwks', bad)).toBe(EXIT_USAGE);
+    expect(await run('verify', join(EXAMPLES, 'evidence-package-signed.json'), '--root', ROOT, '--jwks', bad)).toBe(EXIT_USAGE);
   });
 });
 

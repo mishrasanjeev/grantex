@@ -17,8 +17,8 @@ from grantex.evidence._client import EvidenceApiError, export_package, record_ev
 
 EXAMPLES = Path(__file__).resolve().parents[3] / "spec" / "examples" / "evidence"
 EXPECTED = json.loads((EXAMPLES / "expected.json").read_text(encoding="utf-8"))
-ROOT = EXPECTED["package.json"]["root"]
-ANCHOR = EXPECTED["package.json"]["anchor_hash"]
+ROOT = EXPECTED["evidence-package.json"]["root"]
+ANCHOR = EXPECTED["evidence-package.json"]["anchor_hash"]
 BASE = "https://auth.example.com"
 
 
@@ -29,14 +29,14 @@ def _run(*argv: str) -> Tuple[int, str, str]:
 
 
 def test_verify_exits_zero_for_a_valid_package() -> None:
-    code, out, err = _run("evidence", "verify", str(EXAMPLES / "package.json"), "--root", ROOT, "--anchor", ANCHOR)
+    code, out, err = _run("evidence", "verify", str(EXAMPLES / "evidence-package.json"), "--root", ROOT, "--anchor", ANCHOR)
     assert code == EXIT_OK, err
     assert out.startswith("verified: 15 entries") and "anchor" in out
 
 
 def test_e2e_step8_verify_then_corrupt_one_byte_fails_with_the_link(tmp_path: Path) -> None:
-    data = bytearray((EXAMPLES / "package.json").read_bytes())
-    assert _run("evidence", "verify", str(EXAMPLES / "package.json"), "--root", ROOT)[0] == EXIT_OK
+    data = bytearray((EXAMPLES / "evidence-package.json").read_bytes())
+    assert _run("evidence", "verify", str(EXAMPLES / "evidence-package.json"), "--root", ROOT)[0] == EXIT_OK
     data[data.index(b"61250") + 1] = ord("2")
     corrupted = tmp_path / "corrupted.json"
     corrupted.write_bytes(bytes(data))
@@ -49,21 +49,21 @@ def test_e2e_step8_verify_then_corrupt_one_byte_fails_with_the_link(tmp_path: Pa
 
 
 def test_verify_json_output_matches_the_library_result(tmp_path: Path) -> None:
-    code, out, _ = _run("evidence", "verify", str(EXAMPLES / "package.json"), "--root", "sha256:" + "0" * 64, "--json")
+    code, out, _ = _run("evidence", "verify", str(EXAMPLES / "evidence-package.json"), "--root", "sha256:" + "0" * 64, "--json")
     assert code == EXIT_FAILED
     body = json.loads(out)
     assert body["code"] == "root_not_trusted" and body["field_path"] == "chain.root" and body["ok"] is False
 
 
 def test_verify_requires_a_root() -> None:
-    code, _, _ = _run("evidence", "verify", str(EXAMPLES / "package.json"))
+    code, _, _ = _run("evidence", "verify", str(EXAMPLES / "evidence-package.json"))
     assert code == EXIT_USAGE
-    code, _, err = _run("evidence", "verify", str(EXAMPLES / "package.json"), "--root", "not-a-root")
+    code, _, err = _run("evidence", "verify", str(EXAMPLES / "evidence-package.json"), "--root", "not-a-root")
     assert code == EXIT_FAILED and err.startswith("FAILED missing_root")
 
 
 def test_verify_signed_package_needs_keys_or_explicit_skip() -> None:
-    signed = str(EXAMPLES / "package-signed.json")
+    signed = str(EXAMPLES / "evidence-package-signed.json")
     code, _, err = _run("evidence", "verify", signed, "--root", ROOT)
     assert code == EXIT_FAILED and "signature_unverified" in err
     code, out, _ = _run("evidence", "verify", signed, "--root", ROOT, "--jwks", str(EXAMPLES / "jwks.json"), "--require-signature")
@@ -76,17 +76,17 @@ def test_verify_input_errors_exit_2(tmp_path: Path) -> None:
     assert _run("evidence", "verify", str(tmp_path / "missing.json"), "--root", ROOT)[0] == EXIT_USAGE
     bad = tmp_path / "jwks.json"
     bad.write_text("[]", encoding="utf-8")
-    assert _run("evidence", "verify", str(EXAMPLES / "package-signed.json"), "--root", ROOT, "--jwks", str(bad))[0] == EXIT_USAGE
+    assert _run("evidence", "verify", str(EXAMPLES / "evidence-package-signed.json"), "--root", ROOT, "--jwks", str(bad))[0] == EXIT_USAGE
 
 
 def test_verify_reads_standard_input(monkeypatch: pytest.MonkeyPatch) -> None:
-    data = (EXAMPLES / "package.json").read_bytes()
+    data = (EXAMPLES / "evidence-package.json").read_bytes()
     monkeypatch.setattr("sys.stdin", io.TextIOWrapper(io.BytesIO(data)))
     assert _run("evidence", "verify", "-", "--root", ROOT)[0] == EXIT_OK
 
 
 def test_main_is_the_console_entry_point(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["evidence", "verify", str(EXAMPLES / "package.json"), "--root", ROOT]) == EXIT_OK
+    assert main(["evidence", "verify", str(EXAMPLES / "evidence-package.json"), "--root", ROOT]) == EXIT_OK
     assert "verified" in capsys.readouterr().out
 
 
@@ -97,14 +97,14 @@ def test_export_writes_a_verified_package(tmp_path: Path, monkeypatch: pytest.Mo
     route = respx.post(f"{BASE}/v1/evidence/cases/case_demo_0001/export").mock(
         return_value=httpx.Response(
             200,
-            content=(EXAMPLES / "package.json").read_bytes(),
+            content=(EXAMPLES / "evidence-package.json").read_bytes(),
             headers={"Grantex-Evidence-Root": ROOT, "Grantex-Evidence-Anchor": ANCHOR, "Content-Type": "application/json"},
         )
     )
     target = tmp_path / "out.json"
     code, out, err = _run("evidence", "export", "case_demo_0001", "--out", str(target), "--disclose", "approver")
     assert code == EXIT_OK, err
-    assert target.read_bytes() == (EXAMPLES / "package.json").read_bytes()
+    assert target.read_bytes() == (EXAMPLES / "evidence-package.json").read_bytes()
     assert f"--root {ROOT}" in out
     request = route.calls.last.request
     assert request.headers["Authorization"] == "Bearer placeholder-api-key"
@@ -115,7 +115,7 @@ def test_export_writes_a_verified_package(tmp_path: Path, monkeypatch: pytest.Mo
 def test_export_refuses_to_save_a_package_that_does_not_match_its_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GRANTEX_URL", BASE)
     monkeypatch.setenv("GRANTEX_KEY", "placeholder-api-key")
-    data = bytearray((EXAMPLES / "package.json").read_bytes())
+    data = bytearray((EXAMPLES / "evidence-package.json").read_bytes())
     data[data.index(b"61250") + 1] = ord("2")
     respx.post(f"{BASE}/v1/evidence/cases/case_demo_0001/export").mock(
         return_value=httpx.Response(200, content=bytes(data), headers={"Grantex-Evidence-Root": ROOT, "Grantex-Evidence-Anchor": ANCHOR})
@@ -152,7 +152,7 @@ def test_export_does_not_derive_a_path_from_an_unsafe_case_id(monkeypatch: pytes
     monkeypatch.setenv("GRANTEX_URL", BASE)
     monkeypatch.setenv("GRANTEX_KEY", "placeholder-api-key")
     route = respx.post(url__regex=rf"{BASE}/v1/evidence/cases/.*/export").mock(
-        return_value=httpx.Response(200, content=(EXAMPLES / "package.json").read_bytes(), headers={"Grantex-Evidence-Root": ROOT, "Grantex-Evidence-Anchor": ANCHOR})
+        return_value=httpx.Response(200, content=(EXAMPLES / "evidence-package.json").read_bytes(), headers={"Grantex-Evidence-Root": ROOT, "Grantex-Evidence-Anchor": ANCHOR})
     )
     code, _, err = _run("evidence", "export", "../case_demo_0001")
     assert code == EXIT_USAGE and "pass --out" in err
