@@ -4,6 +4,7 @@ import rateLimit from '@fastify/rate-limit';
 import { registerMetadataEndpoint } from './endpoints/metadata.js';
 import { registerRegisterEndpoint } from './endpoints/register.js';
 import { registerAuthorizeEndpoint } from './endpoints/authorize.js';
+import { registerConsentEndpoint } from './endpoints/consent.js';
 import { registerTokenEndpoint } from './endpoints/token.js';
 import { registerIntrospectEndpoint } from './endpoints/introspect.js';
 import { registerRevokeEndpoint } from './endpoints/revoke.js';
@@ -55,6 +56,7 @@ export async function createMcpAuthServer(
   registerMetadataEndpoint(app, ctx);
   registerRegisterEndpoint(app, ctx.storage);
   registerAuthorizeEndpoint(app, ctx);
+  registerConsentEndpoint(app, ctx);
   registerTokenEndpoint(app, ctx);
   registerIntrospectEndpoint(app, config);
   registerRevokeEndpoint(app, config);

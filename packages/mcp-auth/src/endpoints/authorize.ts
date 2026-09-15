@@ -4,6 +4,7 @@ import type { ServerContext } from '../context.js';
 import { generateCode } from '../lib/codes.js';
 import { ClientMetadataError } from '../lib/client-metadata.js';
 import { resolveRequestedResource } from '../lib/resource.js';
+import { renderConsent } from './consent.js';
 
 interface CallbackQuery {
   code?: string;
@@ -135,7 +136,7 @@ export async function validateAuthorizationRequest(
 }
 
 /** Appends RFC 9207 `iss` (and the client's state) to a client redirect. */
-function clientRedirect(ctx: ServerContext, redirectUri: string, params: Record<string, string | undefined>): string {
+export function clientRedirect(ctx: ServerContext, redirectUri: string, params: Record<string, string | undefined>): string {
   const url = new URL(redirectUri);
   for (const [name, value] of Object.entries(params)) {
     if (value !== undefined && value !== '') url.searchParams.set(name, value);
@@ -160,7 +161,7 @@ interface IssueCodeInput {
  * back to the client. Only called once the Grantex authorization request has
  * been approved (consent callback, or gated sandbox auto-approval).
  */
-async function issueCodeAndRedirect(ctx: ServerContext, reply: FastifyReply, input: IssueCodeInput): Promise<FastifyReply> {
+async function issueCodeAndRedirect(ctx: ServerContext, reply: FastifyReply, input: IssueCodeInput, status = 302): Promise<FastifyReply> {
   const code = generateCode();
   const codeExpiration = ctx.config.codeExpirationSeconds ?? 600;
   await ctx.storage.putAuthorizationCode(code, {
@@ -174,7 +175,7 @@ async function issueCodeAndRedirect(ctx: ServerContext, reply: FastifyReply, inp
     grantexCode: input.grantexCode,
     expiresAt: Date.now() + codeExpiration * 1000,
   });
-  return reply.redirect(clientRedirect(ctx, input.redirectUri, { code, state: input.clientState }));
+  return reply.redirect(clientRedirect(ctx, input.redirectUri, { code, state: input.clientState }), status);
 }
 
 /**
@@ -186,13 +187,25 @@ export async function startUpstreamAuthorization(
   ctx: ServerContext,
   reply: FastifyReply,
   request: ValidatedAuthorization,
+  status = 302,
 ): Promise<FastifyReply> {
   const { config } = ctx;
   const pendingId = generateCode();
   const codeExpiration = config.codeExpirationSeconds ?? 600;
   let grantexAuth;
   try {
+    const extra = config.grant?.authorizeParams?.({
+      clientId: request.client.clientId,
+      scopes: [...request.scopes],
+      resource: request.resource,
+    }) ?? {};
+    if (extra === null || typeof extra !== 'object' || Array.isArray(extra)) {
+      throw new Error('grant.authorizeParams must return an object');
+    }
     grantexAuth = await config.grantex.authorize({
+      // Extension parameters first: the fields below always win.
+      ...extra,
+      ...(config.grant?.duration !== undefined ? { expiresIn: config.grant.duration } : {}),
       agentId: config.agentId,
       userId: request.client.clientId, // Use client_id as principal for MCP flow
       scopes: request.scopes,
@@ -231,7 +244,7 @@ export async function startUpstreamAuthorization(
       ...(request.clientState !== undefined ? { clientState: request.clientState } : {}),
       grantexAuthRequestId: grantexAuth.authRequestId,
       grantexCode: inlineCode,
-    });
+    }, status);
   }
 
   const pending: PendingAuthorization = {
@@ -247,16 +260,18 @@ export async function startUpstreamAuthorization(
   };
   await ctx.storage.putPendingAuthorization(pendingId, pending);
 
-  return reply.redirect(grantexAuth.consentUrl);
+  return reply.redirect(grantexAuth.consentUrl, status);
 }
 
 export function registerAuthorizeEndpoint(app: FastifyInstance, ctx: ServerContext): void {
   const { config } = ctx;
 
+  // A valid request is shown to the Principal on the consent page before
+  // anything reaches Grantex; the page's form posts to /consent.
   app.get<{ Querystring: Record<string, unknown> }>('/authorize', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const validation = await validateAuthorizationRequest(ctx, request.query);
     if (!validation.ok) return reply.status(validation.status).send(validation.body);
-    return startUpstreamAuthorization(ctx, reply, validation.request);
+    return renderConsent(ctx, reply, validation.request);
   });
 
   // Consent callback: Grantex redirects here with `code` + `state` once the

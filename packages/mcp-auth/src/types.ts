@@ -2,6 +2,7 @@ import type { Grantex } from '@grantex/sdk';
 import type { McpAuthStorage } from './storage/types.js';
 import type { ClientIdMetadataDocumentOptions } from './lib/client-metadata.js';
 import type { LoadedManifest } from './resource/tool-policy.js';
+import type { ConsentPageOptions } from './consent/page.js';
 
 export interface TokenIssuedEvent {
   accessToken: string;
@@ -102,18 +103,52 @@ export interface McpAuthConfig {
   allowedResources?: string[];
   /** Code expiration in seconds (default: 600) */
   codeExpirationSeconds?: number;
-  /** Consent UI customization */
+  /**
+   * Branding and links shown on the consent page (and published in metadata
+   * as `grantex_extensions.consent_ui_config`). `appLogo`, `privacyUrl` and
+   * `termsUrl` must be https URLs.
+   */
   consentUi?: {
     appName?: string;
     appLogo?: string;
     privacyUrl?: string;
     termsUrl?: string;
   };
+  /**
+   * The rendered consent page every authorization request shows before
+   * anything is sent to Grantex (MCP authorization, Confused Deputy
+   * Problem). Theme, wording and the details section are customisable; the
+   * redirect host, warnings and the CSRF-protected form are not.
+   */
+  consentPage?: ConsentPageOptions;
+  /** What the grant is for, shown on the consent page. */
+  grant?: GrantOptions;
   /** Lifecycle hooks */
   hooks?: {
     onTokenIssued?: (event: TokenIssuedEvent) => Promise<void>;
     onRevocation?: (jti: string) => Promise<void>;
   };
+}
+
+export interface GrantOptions {
+  /**
+   * Purpose code from the controlled vocabulary, e.g. `aml.cdd.onboarding`,
+   * or a private term `x-<org>.<term>`. Shown on the consent page.
+   */
+  purpose?: string;
+  /** One-line explanation of the purpose, shown under the code. */
+  purposeDescription?: string;
+  /** Data region the grant is limited to, e.g. `eu`. Shown on the consent page. */
+  dataRegion?: string;
+  /** Grant lifetime such as `8h`, `30m` or `7d`: sent to Grantex as `expiresIn` and shown on the page. */
+  duration?: string;
+  /**
+   * Extension point for purpose-bound grants: extra parameters merged into
+   * the Grantex authorize call (for example `authorization_details` carrying
+   * purpose and region once the SDK accepts them). It cannot override the
+   * agent, principal, scopes, audience, redirect URI or state.
+   */
+  authorizeParams?: (request: { clientId: string; scopes: string[]; resource: string }) => Record<string, unknown>;
 }
 
 export type TokenEndpointAuthMethod = 'none' | 'client_secret_basic' | 'client_secret_post';
