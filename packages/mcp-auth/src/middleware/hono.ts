@@ -41,7 +41,7 @@ export function requireMcpAuth(
     const method = c.req.method ?? 'GET';
     let body: unknown;
     let bodyParsed = false;
-    if (options.tools && method.toUpperCase() === 'POST' && c.req.json) {
+    if (options.tools && !['GET', 'HEAD', 'DELETE', 'OPTIONS'].includes(method.toUpperCase()) && c.req.json) {
       try {
         body = await c.req.json();
         bodyParsed = true;

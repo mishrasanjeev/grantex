@@ -17,7 +17,8 @@ Added
   records, pending authorizations, authorization codes with their PKCE
   challenges, refresh-token bindings, revocations) goes through
   `McpAuthStorage`. `PostgresStorage` (`@grantex/mcp-auth/postgres`, migrations
-  in `migrations/`, `runMigrations()`, `purgeExpired()`) and `RedisStorage`
+  in `migrations/` recorded in a `mcp_auth_schema_migrations` ledger,
+  `runMigrations()`, `purgeExpired()`) and `RedisStorage`
   (`@grantex/mcp-auth/redis`, Redis 6.2+) survive restarts and serve replicas.
   Single-use records are consumed atomically; codes, refresh tokens and
   consent ids are stored only as SHA-256 keys and client secrets as hashes.
@@ -30,26 +31,39 @@ Added
   and `client_id_metadata_document_supported`; `iss` on every authorization
   response (RFC 9207); PKCE S256 only.
 - OAuth Client ID Metadata Documents with SSRF protections (public addresses
-  only with connection pinning, no redirects, size and time limits, TTL
-  cache, optional host trust policy), failing closed with a reason code.
+  only with connection pinning, port 443 unless `allowedPorts`, no
+  redirects, size and time limits, TTL cache, optional host trust policy),
+  failing closed with a reason code.
+- `/revoke` also revokes refresh tokens bound to the client (RFC 7009).
 - Rendered consent page before anything reaches Grantex, showing the client,
   redirect host, purpose, data region, duration, tools with caps and decision
-  requirements; strict CSP with no script, CSRF token plus a per-consent
-  `__Host-` SameSite=Strict cookie; customisable theme (WCAG AA contrast
-  enforced), text, `lang`, `extraCss` and `renderDetails`. New `grant` and
-  `consentPage` options.
+  requirements, labelled as declared by the service; strict CSP with no
+  script, CSRF token plus a per-consent `__Host-` SameSite=Strict cookie;
+  customisable theme (WCAG AA contrast enforced), text, `lang`, `extraCss`
+  and `renderDetails`. New `grant` and `consentPage` options.
+- Confused-deputy protection: approval sets a `__Host-` Secure HttpOnly
+  SameSite=Lax callback-binding cookie whose hash is stored on the pending
+  authorization, and `/callback` issues a code only to the browser that
+  presents it.
 - `manifests` option and `toolPolicyFromManifests()`: scopes derived from
   tool manifests in the 0.5 and 0.6 form.
 - Resource-server guard (`requireMcpAuth` for Express and Hono,
   `createMcpResourceGuard`): RFC 9728 challenges, revocation checks against
   the same storage, and refusal of any `tools/call` outside the grant with
   403. Tools marked `requires_decision` are refused with a `decision_required`
-  challenge unless a `DecisionVerifier` accepts the call (format:
-  `spec/mcp-auth-challenges.md`). `grant.authorizeParams` is the extension
-  point for purpose-bound grants.
+  challenge unless a `DecisionVerifier` accepts (and consumes) a decision
+  grant, and a batch with more than one such call is refused (format:
+  `spec/mcp-auth-challenges.md`). With a tools policy, a body that is not
+  parsed JSON-RPC 2.0 is refused (`body_not_parsed`). `onDenial` reports
+  refusals with low-cardinality reasons (`grant_revoked`, ...); a guard
+  without `revocations` warns at start-up. `grant.authorizeParams` is the
+  extension point for purpose-bound grants.
 - Tests: storage contract against memory, real Postgres and real Redis; a
   server-process restart test on both; a conformance suite mapping each
-  server-side MUST of the specification to a test; the consent page in
+  server-side MUST of the specification and the Security Best Practices'
+  state-binding and CSRF requirements to a test (SEC-12, not forwarding the
+  client's token upstream, is listed as the host's responsibility); the
+  consent page in
   Chromium at 375 px with axe-core; documentation examples compiled and run.
 
 Fixed
@@ -74,15 +88,26 @@ Breaking changes
 - `issuer` must be https (http only on localhost) with no query or fragment.
 - `GET /authorize` returns the consent page (200 HTML) instead of a 302 to
   Grantex; the flow continues with `POST /consent`, which answers 303.
+- `/callback` answers 403 unless the browser presents the callback-binding
+  cookie set when it approved consent.
 - `requireMcpAuth` requires `audience` and throws without it; its 401 and 403
   responses carry `WWW-Authenticate`.
 - Requested scopes outside `scopes_supported` are refused with
   `invalid_scope`.
-- `/register` refuses redirect URIs that are neither https nor loopback http.
+- `/register` refuses redirect URIs that are neither https nor loopback http,
+  a `client_name` that is not 1-200 characters, and `grant_types` other than
+  `authorization_code` with optional `refresh_token`.
 - A refresh that returns the same refresh token no longer hands it out
   again; the response omits `refresh_token`.
 - Upstream consent errors other than `access_denied` reach the client as
-  `server_error`; upstream error text is not forwarded.
+  `server_error`; upstream error text is not forwarded, including in
+  `error_description` from `/authorize` and `/token`.
+- Metadata documents are fetched only from port 443 unless
+  `clientIdMetadataDocuments.allowedPorts` allows another.
+- With a tools policy, `requireMcpAuth` refuses request bodies that are not
+  parsed JSON-RPC 2.0 messages with 400.
+- `consentPage.theme.fontFamily` allows only letters, digits, spaces, commas
+  and hyphens; `consentPage.expiresInSeconds` must be 60-3600.
 - `/introspect` reports a token without `jti` as inactive.
 - `consentUi.appLogo`, `privacyUrl` and `termsUrl` must be https URLs.
 - A URL-shaped `client_id` is resolved only as a metadata document.

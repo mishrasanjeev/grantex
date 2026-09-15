@@ -22,7 +22,7 @@ export interface ConsentTheme {
   borderColor?: string;
   /** Corner radius in px (0-24). */
   radiusPx?: number;
-  /** CSS font-family list, e.g. `"Inter", system-ui, sans-serif`. */
+  /** CSS font-family list, e.g. `Inter, system-ui, sans-serif` (letters, digits, spaces, commas, hyphens). */
   fontFamily?: string;
 }
 
@@ -37,11 +37,14 @@ export const DEFAULT_THEME: ResolvedTheme = {
   accentTextColor: '#ffffff',
   borderColor: '#9aa3af',
   radiusPx: 8,
-  fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif',
 };
 
 const HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
-const FONT_FAMILY = /^[A-Za-z0-9 ,"'-]{1,200}$/;
+// Letters, digits, spaces, commas and hyphens only: unquoted family names
+// (`Segoe UI`, `Helvetica Neue`) are valid CSS, and nothing here can end a
+// declaration or a rule.
+const FONT_FAMILY = /^[A-Za-z0-9 ,-]{1,200}$/;
 
 function channel(hex: string, index: number): number {
   const full = hex.length === 4 ? hex.slice(1).split('').map((c) => c + c).join('') : hex.slice(1);
@@ -70,7 +73,7 @@ export function resolveTheme(theme: ConsentTheme | undefined): ResolvedTheme {
     throw new Error('consentPage.theme.radiusPx must be an integer from 0 to 24');
   }
   if (typeof resolved.fontFamily !== 'string' || !FONT_FAMILY.test(resolved.fontFamily)) {
-    throw new Error('consentPage.theme.fontFamily may contain only letters, digits, spaces, commas, quotes and hyphens');
+    throw new Error('consentPage.theme.fontFamily may contain only letters, digits, spaces, commas and hyphens');
   }
   const pairs: Array<[keyof ResolvedTheme, keyof ResolvedTheme]> = [
     ['textColor', 'surfaceColor'],

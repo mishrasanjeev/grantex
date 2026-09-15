@@ -1,9 +1,15 @@
 -- @grantex/mcp-auth durable authorization state.
 --
--- Forward-only and idempotent: runMigrations() applies every file in name
--- order under an advisory lock, so re-running is safe. Secrets (codes,
+-- Forward-only and idempotent: runMigrations() applies each file once, in
+-- name order, under an advisory lock, and records it in
+-- mcp_auth_schema_migrations. Bearer secrets presented by clients (codes,
 -- refresh tokens, consent and pending-authorization ids) are stored only as
--- SHA-256 lookup keys; `record` holds the non-secret binding data.
+-- SHA-256 lookup keys, and client secrets only as hashes. `record` holds the
+-- binding data in clear JSON: client, redirect URI, PKCE challenge, scopes,
+-- resource and, for an issued authorization code, the upstream Grantex code
+-- (`grantexCode`) the server exchanges at /token. That upstream code is
+-- single use and lives at most codeExpirationSeconds, but it is a credential:
+-- restrict access to these tables and their backups accordingly.
 
 CREATE TABLE IF NOT EXISTS mcp_auth_clients (
   client_id    TEXT PRIMARY KEY,

@@ -1,8 +1,11 @@
 /**
  * Minimal auto-escaping HTML templating for the consent page. Every value
  * interpolated into `html` is escaped unless it is itself a {@link SafeHtml}
- * produced by `html`; arrays are joined. There is deliberately no public way
- * to mark an arbitrary string as safe.
+ * produced by `html`; arrays are joined. `html` must be used as a template
+ * tag: calling it as a function with an ordinary array is refused, so
+ * request data cannot be passed in as template text. (A caller that builds
+ * a frozen array with a frozen `raw` property can still forge one; that is
+ * code in the host application, not request data.)
  */
 
 const SAFE = Symbol('grantex.safeHtml');
@@ -43,6 +46,12 @@ function fragment(value: unknown): string {
 
 /** Tagged template: `html\`<p>${untrusted}</p>\`` escapes `untrusted`. */
 export function html(strings: TemplateStringsArray, ...values: unknown[]): SafeHtml {
+  // A real template strings array is frozen and carries a frozen `raw` copy.
+  const raw = (strings as { raw?: unknown }).raw;
+  if (!Array.isArray(strings) || !Object.isFrozen(strings) || !Array.isArray(raw) || !Object.isFrozen(raw)
+    || raw.length !== strings.length || values.length !== strings.length - 1) {
+    throw new TypeError('html must be used as a template literal tag: html`...`');
+  }
   let out = strings[0] ?? '';
   for (let i = 0; i < values.length; i += 1) {
     out += fragment(values[i]) + (strings[i + 1] ?? '');

@@ -132,7 +132,7 @@ describe('consent page in a real browser', () => {
     const context = await browser.newContext({ viewport: { width: 375, height: 812 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     try {
       const { page, cspViolations } = await open(context, authorizeUrl());
-      for (const text of ['Allow access?', 'Acme Underwriting Assistant', 'app.example.com', 'aml.cdd.onboarding', '8 hours', 'Acme KYB tools', 'verify_business', 'per case: at most 3 calls', 'Needs a person to approve each action']) {
+      for (const text of ['Allow access?', 'Acme Underwriting Assistant', 'app.example.com', 'aml.cdd.onboarding', '8 hours', 'Acme KYB tools', 'verify_business', 'declared limit per case: 3 calls', 'Needs a person to approve each action']) {
         await expect.poll(() => page.getByText(text, { exact: false }).first().isVisible()).toBe(true);
       }
       await expectFitsViewport(page);

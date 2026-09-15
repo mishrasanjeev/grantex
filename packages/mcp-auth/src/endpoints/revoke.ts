@@ -36,13 +36,6 @@ export function registerRevokeEndpoint(
       config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
-      if (!verifier.configured) {
-        return reply.status(503).send({
-          error: 'server_error',
-          error_description: 'grantexIssuer is not configured; token revocation is disabled',
-        });
-      }
-
       const body = request.body ?? {};
       const token = body.token;
 
@@ -90,6 +83,21 @@ export function registerRevokeEndpoint(
           error: 'invalid_client',
           error_description:
             'Client authentication is required. Provide Basic auth or client_id in body.',
+        });
+      }
+
+      // RFC 7009 §2.1: refresh tokens are revocable too. A refresh token this
+      // server bound to the authenticated client is deleted, so it can no
+      // longer be used here; one bound to another client is left alone.
+      if (body.token_type_hint !== 'access_token') {
+        const binding = await storage.takeRefreshTokenBinding(token, authenticatedClientId);
+        if (binding) return reply.status(200).send();
+      }
+
+      if (!verifier.configured) {
+        return reply.status(503).send({
+          error: 'server_error',
+          error_description: 'grantexIssuer is not configured; access-token revocation is disabled',
         });
       }
 

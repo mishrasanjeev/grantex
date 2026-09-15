@@ -6,11 +6,14 @@
  *
  * Every MUST / MUST NOT that applies to an authorization server or to an MCP
  * server (resource server) is listed in REQUIREMENTS and mapped to exactly
- * one test through `must(id, ...)`. Requirements on MCP clients are listed
- * too, marked `client`, with the reason they are out of scope for this
- * package. The last test fails if a server-side requirement has no test.
+ * one test through `must(id, ...)`. Requirements on MCP clients, and the one
+ * server requirement that only the host application can meet (SEC-12), are
+ * listed with the reason they are out of scope. The last test fails if any
+ * other requirement has no test.
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { createServer as createHttpsServer } from 'node:https';
+import selfsigned from 'selfsigned';
 import { createServer } from 'node:http';
 import type { Server, IncomingMessage, ServerResponse } from 'node:http';
 import * as jose from 'jose';
@@ -21,6 +24,20 @@ import type { McpAuthRequest, RequireMcpAuthOptions } from '../../src/middleware
 import { toolPolicyFromManifests } from '../../src/resource/tool-policy.js';
 import { parseClientMetadataDocument, ClientMetadataError, isAllowedRedirectUri } from '../../src/lib/client-metadata.js';
 import type { McpAuthConfig } from '../../src/types.js';
+import type { ClientMetadataInternals } from '../../src/lib/client-metadata.js';
+
+// Test seam for CIMD-02: lets one test point a metadata-document client id at
+// a local https server. Every other server in this file is created with the
+// production resolver (the seam is empty unless a test sets it).
+const cimd = vi.hoisted(() => ({ internals: {} as Record<string, unknown> }));
+vi.mock('../../src/lib/client-metadata.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/lib/client-metadata.js')>();
+  return {
+    ...actual,
+    createClientMetadataResolver: (options: Parameters<typeof actual.createClientMetadataResolver>[0], internals: ClientMetadataInternals = {}) =>
+      actual.createClientMetadataResolver(options, { ...(cimd.internals as ClientMetadataInternals), ...internals }),
+  };
+});
 import {
   TEST_CHALLENGE,
   TEST_CLIENT_ID,
@@ -43,7 +60,7 @@ interface Requirement {
   role: Role;
   section: string;
   text: string;
-  /** For client requirements: why this package does not test them. */
+  /** Why this package cannot demonstrate the requirement (client requirements, or ones the host application must meet). */
   outOfScope?: string;
 }
 
@@ -65,6 +82,8 @@ export const REQUIREMENTS: Requirement[] = [
   { id: 'CIMD-03', role: 'authorization-server', section: 'Client ID Metadata Documents', text: 'Authorization servers MUST validate the document structure is valid JSON and contains required fields.' },
   { id: 'CIMD-05', role: 'authorization-server', section: 'Localhost Redirect URI Risks', text: 'Authorization servers MUST clearly display the redirect URI hostname during authorization.' },
   { id: 'DEPUTY-01', role: 'authorization-server', section: 'Confused Deputy Problem', text: 'MCP proxy servers using static client IDs MUST obtain user consent for each dynamically registered client before forwarding to third-party authorization servers.' },
+  { id: 'DEPUTY-02', role: 'authorization-server', section: 'Security Best Practices: Confused Deputy Problem', text: 'MCP proxy servers MUST bind the consent decision and the authorization state to the user agent that gave consent (a secure, HttpOnly cookie), and verify it at the callback before issuing an authorization code.' },
+  { id: 'DEPUTY-03', role: 'authorization-server', section: 'Security Best Practices: Confused Deputy Problem', text: 'The consent form MUST be protected against CSRF.' },
   { id: 'CIMD-04', role: 'authorization-server', section: 'Client ID Metadata Document Security', text: 'Authorization servers MUST consider the security implications of fetching documents (SSRF).' },
   { id: 'RESP-01', role: 'authorization-server', section: 'Authorization Response Validation', text: 'Authorization servers that include iss MUST advertise authorization_response_iss_parameter_supported: true.' },
   { id: 'RESP-02', role: 'client', section: 'Authorization Response Validation', text: 'Clients MUST record the issuer and apply RFC 9207 validation before redeeming a code.', outOfScope: CLIENT_ONLY },
@@ -89,7 +108,7 @@ export const REQUIREMENTS: Requirement[] = [
   { id: 'SEC-09', role: 'client', section: 'Open Redirection', text: 'MCP clients MUST have redirect URIs registered with the authorization server.', outOfScope: CLIENT_ONLY },
   { id: 'SEC-10', role: 'resource-server', section: 'Access Token Privilege Restriction', text: 'MCP servers MUST validate access tokens before processing the request.' },
   { id: 'SEC-11', role: 'resource-server', section: 'Access Token Privilege Restriction', text: 'MCP servers MUST reject tokens that do not include them in the audience claim.' },
-  { id: 'SEC-12', role: 'authorization-server', section: 'Access Token Privilege Restriction', text: 'The MCP server MUST NOT pass through the token it received from the MCP client.' },
+  { id: 'SEC-12', role: 'resource-server', section: 'Access Token Privilege Restriction', text: 'The MCP server MUST NOT pass through the token it received from the MCP client.', outOfScope: 'A rule on the MCP server application\'s own upstream calls. requireMcpAuth makes no upstream calls with the client\'s token and exposes the verified grant, not a token to forward; whether the host forwards it cannot be tested here (documented in docs/mcp-auth.md).' },
 ];
 
 const covered = new Set<string>();
@@ -98,7 +117,7 @@ const covered = new Set<string>();
 function must(id: string, title: string, fn: () => Promise<void> | void): void {
   const requirement = REQUIREMENTS.find((r) => r.id === id);
   if (!requirement) throw new Error(`Unknown requirement ${id}`);
-  if (requirement.role === 'client') throw new Error(`${id} is a client requirement`);
+  if (requirement.outOfScope !== undefined) throw new Error(`${id} is out of scope: ${requirement.outOfScope}`);
   covered.add(id);
   it(`${id} [${requirement.section}] ${title}`, fn);
 }
@@ -273,12 +292,40 @@ describe('MCP authorization 2026-07-28: authorization server', () => {
       .toThrow(ClientMetadataError);
   });
 
-  must('CIMD-02', 'only redirect URIs listed in the document are accepted at /authorize', () => {
-    const url = 'https://app.example.com/client.json';
-    const client = parseClientMetadataDocument(url, { client_id: url, client_name: 'x', redirect_uris: ['https://app.example.com/cb'] }, 0);
-    // The authorization endpoint compares the requested redirect_uri with
-    // exactly this list (see SEC-07 for the exact-match check end to end).
-    expect(client.redirectUris).toEqual(['https://app.example.com/cb']);
+  must('CIMD-02', '/authorize accepts only a redirect URI listed in the fetched metadata document', async () => {
+    const pems = await selfsigned.generate([{ name: 'commonName', value: 'client.invalid' }], {
+      notAfterDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      keyType: 'ec',
+      extensions: [{ name: 'subjectAltName', altNames: [{ type: 2, value: 'client.invalid' }] }],
+    });
+    const server = createHttpsServer({ key: pems.private, cert: pems.cert }, (_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ client_id: clientId, client_name: 'Metadata client', redirect_uris: ['https://app.example.com/listed'] }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    const clientId = `https://client.invalid:${port}/client.json`;
+    cimd.internals = {
+      resolve: async () => [{ address: '127.0.0.1', family: 4 }],
+      isAddressAllowed: (a: string) => a === '127.0.0.1',
+      ca: pems.cert,
+    };
+    try {
+      const grantex = mockGrantex({ sandboxCode: 'UPSTREAM' });
+      const { app } = await authServer({ clientIdMetadataDocuments: { allowedPorts: [port] } }, grantex);
+      const unlisted = await authorize(app, { client_id: clientId, redirect_uri: 'https://app.example.com/unlisted' });
+      expect(unlisted.statusCode).toBe(400);
+      expect(unlisted.json().error_description).toMatch(/redirect_uri not registered/);
+      expect(grantex.authorize).not.toHaveBeenCalled();
+      const listed = await authorize(app, { client_id: clientId, redirect_uri: 'https://app.example.com/listed' });
+      expect([302, 303]).toContain(listed.statusCode);
+      expect(grantex.authorize).toHaveBeenCalledTimes(1);
+    } finally {
+      cimd.internals = {};
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 
   must('CIMD-03', 'rejects non-object JSON and documents missing client_name or redirect_uris', () => {
@@ -316,6 +363,41 @@ describe('MCP authorization 2026-07-28: authorization server', () => {
     const approved = await submitConsent(app, await consentPage(app, { client_id: registered.client_id }), 'approve', ISSUER);
     expect(approved.statusCode).toBe(303);
     expect(grantex.authorize).toHaveBeenCalledTimes(1);
+  });
+
+  must('DEPUTY-02', 'a code is issued only to the browser holding the callback-binding cookie set at approval', async () => {
+    const grantex = mockGrantex();
+    const { app } = await authServer({ sandboxAutoApprove: false }, grantex);
+    const approved = await submitConsent(app, await consentPage(app), 'approve', ISSUER);
+    const state = (grantex.authorize.mock.calls[0]![0] as { state: string }).state;
+    const bindingCookie = ([] as string[]).concat(approved.headers['set-cookie'] as string | string[])
+      .find((c) => c.startsWith('__Host-mcp_auth_callback_'))!;
+    expect(bindingCookie).toMatch(/HttpOnly; SameSite=Lax; .*Secure/);
+    const withoutCookie = await app.inject({ method: 'GET', url: '/callback', query: { code: 'UPSTREAM', state } });
+    expect(withoutCookie.statusCode).toBe(403);
+    expect(withoutCookie.headers['location']).toBeUndefined();
+
+    const second = await submitConsent(app, await consentPage(app), 'approve', ISSUER);
+    const secondState = (grantex.authorize.mock.calls[1]![0] as { state: string }).state;
+    const cookie = ([] as string[]).concat(second.headers['set-cookie'] as string | string[])
+      .find((c) => c.startsWith('__Host-mcp_auth_callback_'))!.split(';')[0]!;
+    const withCookie = await app.inject({ method: 'GET', url: '/callback', headers: { cookie }, query: { code: 'UPSTREAM', state: secondState } });
+    expect(withCookie.statusCode).toBe(302);
+    expect(new URL(String(withCookie.headers['location'])).searchParams.get('code')).toBeTruthy();
+  });
+
+  must('DEPUTY-03', 'the consent form needs its CSRF token and binding cookie, and refuses cross-site posts', async () => {
+    const grantex = mockGrantex();
+    const { app } = await authServer({ sandboxAutoApprove: false }, grantex);
+    const page = await consentPage(app);
+    const consentId = /name="consent_id" value="([^"]+)"/.exec(page.body)![1]!;
+    const csrfToken = /name="csrf_token" value="([^"]+)"/.exec(page.body)![1]!;
+    const form = new URLSearchParams({ consent_id: consentId, csrf_token: csrfToken, decision: 'approve' }).toString();
+    const crossSite = await app.inject({ method: 'POST', url: '/consent', headers: { 'content-type': 'application/x-www-form-urlencoded', 'sec-fetch-site': 'cross-site' }, payload: form });
+    expect(crossSite.statusCode).toBe(403);
+    const noCookie = await app.inject({ method: 'POST', url: '/consent', headers: { 'content-type': 'application/x-www-form-urlencoded', 'sec-fetch-site': 'same-origin' }, payload: form });
+    expect(noCookie.statusCode).toBe(403);
+    expect(grantex.authorize).not.toHaveBeenCalled();
   });
 
   must('RESP-01', 'includes iss in responses and advertises it', async () => {
@@ -408,17 +490,6 @@ describe('MCP authorization 2026-07-28: authorization server', () => {
       expect(response.headers['location']).toBeUndefined();
     }
   });
-
-  must('SEC-12', 'tokens reach clients only from the upstream exchange; the client\'s token is never forwarded upstream', async () => {
-    const { app, grantex } = await authServer();
-    const clientToken = await grantToken();
-    // A client presenting its access token to the authorization server's
-    // endpoints does not cause that token to be sent to Grantex.
-    await app.inject({ method: 'POST', url: '/token', headers: { authorization: `Bearer ${clientToken}` }, payload: { grant_type: 'client_credentials' } });
-    await authorizeWithConsent(app, { method: 'GET', url: '/authorize', headers: { authorization: `Bearer ${clientToken}` }, query: { response_type: 'code' } });
-    const upstreamArgs = JSON.stringify([...grantex.authorize.mock.calls, ...grantex.tokens.exchange.mock.calls, ...grantex.tokens.refresh.mock.calls]);
-    expect(upstreamArgs).not.toContain(clientToken);
-  });
 });
 
 // ── resource server ─────────────────────────────────────────────────────────
@@ -449,6 +520,7 @@ describe('MCP authorization 2026-07-28: MCP server (resource server)', () => {
     const forged = `${header}.${tampered}.${signature}`;
     expect((await mcp({}, `Bearer ${forged}`)).status).toBe(401);
     expect((await mcp({ issuer: 'https://other-issuer.example.com', jwksUri: `${grantexIssuer}/.well-known/jwks.json` }, `Bearer ${await grantToken()}`)).status).toBe(401);
+    expect((await mcp({}, `Bearer ${await grantToken({ exp: Math.floor(Date.now() / 1000) - 30 })}`)).status).toBe(401);
     expect((await mcp({}, `Bearer ${await grantToken()}`)).status).toBe(200);
   });
 
@@ -502,10 +574,12 @@ describe('MCP authorization 2026-07-28: MCP server (resource server)', () => {
 
 describe('requirement map', () => {
   it('every server-side MUST of the 2026-07-28 specification has a test', () => {
-    const missing = REQUIREMENTS.filter((r) => r.role !== 'client' && !covered.has(r.id)).map((r) => r.id);
+    const missing = REQUIREMENTS.filter((r) => r.outOfScope === undefined && !covered.has(r.id)).map((r) => r.id);
     expect(missing).toEqual([]);
     for (const requirement of REQUIREMENTS.filter((r) => r.role === 'client')) {
       expect(requirement.outOfScope).toBeTruthy();
     }
+    // Out-of-scope server requirements are few and each says why.
+    expect(REQUIREMENTS.filter((r) => r.role !== 'client' && r.outOfScope !== undefined).map((r) => r.id)).toEqual(['SEC-12']);
   });
 });

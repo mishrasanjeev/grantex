@@ -5,7 +5,8 @@ import * as jose from 'jose';
 import { requireMcpAuth, protectedResourceMetadataHandler } from '../src/middleware/express.js';
 import type { McpAuthRequest, RequireMcpAuthOptions } from '../src/middleware/express.js';
 import { requireMcpAuth as requireMcpAuthHono } from '../src/middleware/hono.js';
-import { filterToolsForGrant } from '../src/resource/guard.js';
+import { createMcpResourceGuard, filterToolsForGrant } from '../src/resource/guard.js';
+import type { GuardDenialEvent, GuardRequest } from '../src/resource/guard.js';
 import { toolPolicyFromManifests, toolPolicyFromScopes } from '../src/resource/tool-policy.js';
 import type { LoadedManifest } from '../src/resource/tool-policy.js';
 import { decisionRequiredChallenge, formatBearerChallenge } from '../src/resource/challenge.js';
@@ -204,8 +205,8 @@ describe('resource server: a tool outside the grant is refused, not hidden', () 
 
   it('fails closed when the host did not parse the body', async () => {
     const outcome = await express({ tools }, { authorization: `Bearer ${await token()}`, body: call('resolve_business'), parse: false });
-    expect(outcome.status).toBe(500);
-    expect(outcome.body).toMatchObject({ error: 'server_error' });
+    expect(outcome.status).toBe(400);
+    expect(outcome.body).toMatchObject({ error: 'invalid_request' });
   });
 
   it('works with an explicit scope map as well as manifests', async () => {
@@ -382,5 +383,127 @@ describe('protected resource metadata handler', () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
     expect(() => protectedResourceMetadataHandler({ resource: RESOURCE, authorizationServers: [] })).toThrow(/at least one/);
+  });
+});
+
+describe('resource server: tool enforcement fails closed on bodies it cannot read', () => {
+  const tools = toolPolicyFromManifests([ACME_KYB]);
+  const writeCall = call('monitor_enroll');
+
+  async function guardWith(extra: Record<string, unknown> = {}) {
+    const denials: GuardDenialEvent[] = [];
+    const guard = createMcpResourceGuard({
+      issuer,
+      audience: RESOURCE,
+      tools,
+      warn: () => {},
+      onDenial: (event) => denials.push(event),
+      ...extra,
+    });
+    return { guard, denials };
+  }
+
+  async function run(body: unknown, method = 'POST', bodyParsed = true, scp = ['tool:acme_kyb:read']) {
+    const { guard, denials } = await guardWith();
+    const authorization = `Bearer ${await token({ scp })}`;
+    const request: GuardRequest = { header: (name) => (name === 'authorization' ? authorization : undefined), method, body, bodyParsed };
+    return { result: await guard(request), denials };
+  }
+
+  // Each of these is how a write tools/call can reach a handler that parses
+  // the raw body itself while the middleware sees something else.
+  const unreadable: Array<[string, unknown]> = [
+    ['a JSON string', JSON.stringify(writeCall)],
+    ['a Buffer', Buffer.from(JSON.stringify(writeCall))],
+    ['an empty object (Express 4 when express.json skipped the content type)', {}],
+    ['an empty array', []],
+    ['an array with a non-message element', [call('resolve_business'), JSON.stringify(writeCall)]],
+    ['an array with a message missing jsonrpc', [call('resolve_business'), { method: 'tools/call', params: { name: 'monitor_enroll' } }]],
+    ['an object without jsonrpc 2.0', { jsonrpc: '1.0', method: 'tools/call', params: { name: 'monitor_enroll' } }],
+    ['an object whose method is not a string', { jsonrpc: '2.0', id: 1, method: ['tools/call'] }],
+    ['null', null],
+  ];
+  for (const [name, body] of unreadable) {
+    it(`refuses ${name} with a read-only token`, async () => {
+      const { result, denials } = await run(body);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.status).toBe(400);
+        expect(result.reason).toBe('body_not_parsed');
+      }
+      expect(denials).toEqual([{ reason: 'body_not_parsed', status: 400 }]);
+    });
+  }
+
+  it('refuses a POST whose body the host never read', async () => {
+    const { result } = await run(undefined, 'POST', false);
+    expect(result.ok).toBe(false);
+  });
+
+  it('lets GET (the SSE stream) through with no body or an empty one, but still enforces a body that carries messages', async () => {
+    for (const body of [undefined, {}, '', Buffer.alloc(0)]) {
+      expect((await run(body, 'GET')).result.ok).toBe(true);
+    }
+    const smuggled = await run(writeCall, 'GET');
+    expect(smuggled.result.ok).toBe(false);
+    if (!smuggled.result.ok) expect(smuggled.result.reason).toBe('tool_not_granted');
+    expect((await run('garbage', 'GET')).result.ok).toBe(false);
+  });
+
+  it('accepts JSON-RPC responses to server-initiated requests', async () => {
+    const { result } = await run([{ jsonrpc: '2.0', id: 'srv-1', result: { content: [] } }, { jsonrpc: '2.0', id: 'srv-2', error: { code: -1, message: 'x' } }]);
+    expect(result.ok).toBe(true);
+  });
+
+  it('refuses a batch with more than one call that needs a decision, before any verifier runs', async () => {
+    const verify = vi.fn().mockResolvedValue({ status: 'valid' });
+    const denials: GuardDenialEvent[] = [];
+    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, tools, decisions: { verify }, warn: () => {}, onDenial: (e) => denials.push(e) });
+    const authorization = `Bearer ${await token({ scp: ['tool:acme_kyb:write'] })}`;
+    const result = await guard({
+      header: (name) => (name === 'authorization' ? authorization : undefined),
+      method: 'POST',
+      bodyParsed: true,
+      body: [call('case_decision', 1), call('case_decision', 2)],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'multiple_decisions_in_batch' });
+    expect(verify).not.toHaveBeenCalled();
+    expect(denials).toEqual([{ reason: 'decision_invalid', status: 403 }]);
+  });
+
+  it('reports denials to onDenial with low-cardinality fields and survives a throwing hook', async () => {
+    const events: GuardDenialEvent[] = [];
+    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, tools, warn: () => {}, onDenial: (e) => events.push(e) });
+    const authorization = `Bearer ${await token()}`;
+    const header = (name: string) => (name === 'authorization' ? authorization : undefined);
+    await guard({ header, method: 'POST', bodyParsed: true, body: writeCall });
+    await guard({ header, method: 'POST', bodyParsed: true, body: call('attacker-chosen-name-12345') });
+    await guard({ header: () => undefined, method: 'POST', bodyParsed: true, body: writeCall });
+    expect(events).toEqual([
+      { reason: 'tool_not_granted', status: 403, connector: 'acme_kyb', tool: 'monitor_enroll' },
+      { reason: 'manifest_unknown_tool', status: 403 },
+      { reason: 'missing_token', status: 401 },
+    ]);
+    const throwing = createMcpResourceGuard({ issuer, audience: RESOURCE, tools, warn: () => {}, onDenial: () => { throw new Error('metrics down'); } });
+    const refused = await throwing({ header, method: 'POST', bodyParsed: true, body: writeCall });
+    expect(refused.ok).toBe(false);
+  });
+
+  it('names a revoked grant grant_revoked', async () => {
+    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, revocations: { isTokenRevoked: async () => true } });
+    const authorization = `Bearer ${await token()}`;
+    const result = await guard({ header: (name) => (name === 'authorization' ? authorization : undefined), method: 'GET', bodyParsed: false });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toBe('grant_revoked');
+  });
+
+  it('warns at start-up when revocations are not configured', () => {
+    const warn = vi.fn();
+    createMcpResourceGuard({ issuer, audience: RESOURCE, warn });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('`revocations` is not configured'));
+    const quiet = vi.fn();
+    createMcpResourceGuard({ issuer, audience: RESOURCE, revocations: { isTokenRevoked: async () => false }, warn: quiet });
+    expect(quiet).not.toHaveBeenCalled();
   });
 });

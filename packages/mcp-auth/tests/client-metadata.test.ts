@@ -44,6 +44,7 @@ describe('SSRF address policy', () => {
       '0.0.0.0', '224.0.0.1', '255.255.255.255', '192.0.2.10', '198.51.100.7', '203.0.113.9', '198.18.0.1',
       '::1', '::', 'fe80::1', 'fc00::1', 'fd12:3456::1', 'ff02::1', '::ffff:127.0.0.1', '::ffff:10.0.0.1',
       '64:ff9b::a00:1', '2001:db8::1', '2002:a00:1::1', '[::1]', 'fe80::1%eth0', 'localhost', 'example.com', '',
+      '192.31.196.1', '192.52.193.1', '192.175.48.1',
     ]) {
       expect(isPublicAddress(address), address).toBe(false);
     }
@@ -117,7 +118,7 @@ describe('fetching metadata documents (real https, local server)', () => {
     const pems = await selfsigned.generate([{ name: 'commonName', value: 'localhost' }], {
       notAfterDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
       keyType: 'ec',
-      extensions: [{ name: 'subjectAltName', altNames: [{ type: 2, value: 'localhost' }] }],
+      extensions: [{ name: 'subjectAltName', altNames: [{ type: 2, value: 'localhost' }, { type: 2, value: 'metadata.invalid' }] }],
     });
     ca = pems.cert;
     server = createServer({ key: pems.private, cert: pems.cert } as ServerOptions, (req, res) => {
@@ -140,7 +141,7 @@ describe('fetching metadata documents (real https, local server)', () => {
   // Test seams: resolve "localhost" to the local server and allow loopback
   // for this server only. Production uses real DNS and the public-address policy.
   function resolver(options: ClientIdMetadataDocumentOptions = {}, now?: () => number) {
-    return createClientMetadataResolver(options, {
+    return createClientMetadataResolver({ allowedPorts: [port], ...options }, {
       resolve: async () => [{ address: '127.0.0.1', family: 4 }],
       isAddressAllowed: (address) => address === '127.0.0.1',
       ca,
@@ -250,7 +251,7 @@ describe('fetching metadata documents (real https, local server)', () => {
 
   it('verifies the TLS certificate', async () => {
     handler = (_req, res) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end('{}'); };
-    const untrusted = createClientMetadataResolver({}, {
+    const untrusted = createClientMetadataResolver({ allowedPorts: [port] }, {
       resolve: async () => [{ address: '127.0.0.1', family: 4 }],
       isAddressAllowed: () => true,
     });
@@ -263,10 +264,44 @@ describe('fetching metadata documents (real https, local server)', () => {
       resolve: async () => [{ address: '93.184.215.14', family: 4 }, { address: '10.0.0.5', family: 4 }],
     });
     expect(await reason(r.resolve('https://app.example.com/client.json'))).toBe('address_not_allowed');
-    const literal = createClientMetadataResolver();
+    const literal = createClientMetadataResolver({ allowedPorts: [443, port] });
     expect(await reason(literal.resolve(`https://127.0.0.1:${port}/client.json`))).toBe('address_not_allowed');
     expect(await reason(literal.resolve('https://[::1]/client.json'))).toBe('address_not_allowed');
     expect(hits).toBe(0);
+  });
+
+  it('connects to the vetted address, never to a fresh DNS answer (a name DNS cannot resolve still works when pinned)', async () => {
+    handler = (_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(documentFor(`https://metadata.invalid:${port}/client.json`)));
+    };
+    let lookups = 0;
+    // `.invalid` never resolves in DNS (RFC 6761). The fetch can only succeed
+    // if the TLS connection uses the address vetted by the resolver below.
+    const r = createClientMetadataResolver({ allowedPorts: [port] }, {
+      resolve: async (hostname) => {
+        lookups += 1;
+        expect(hostname).toBe('metadata.invalid');
+        return [{ address: '127.0.0.1', family: 4 }];
+      },
+      isAddressAllowed: (address) => address === '127.0.0.1',
+      ca,
+    });
+    const client = await r.resolve(`https://metadata.invalid:${port}/client.json`);
+    expect(client.clientName).toBe('Local client');
+    expect(lookups).toBe(1);
+  });
+
+  it('fetches only from port 443 unless another port is allowed', async () => {
+    hits = 0;
+    const r = createClientMetadataResolver({}, {
+      resolve: async () => [{ address: '127.0.0.1', family: 4 }],
+      isAddressAllowed: () => true,
+      ca,
+    });
+    expect(await reason(r.resolve(clientId()))).toBe('port_not_allowed');
+    expect(hits).toBe(0);
+    expect(() => createClientMetadataResolver({ allowedPorts: [0] })).toThrow(/allowedPorts/);
   });
 
   it('applies the host trust policy and can be disabled', async () => {

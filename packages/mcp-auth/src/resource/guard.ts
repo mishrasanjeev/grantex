@@ -50,6 +50,12 @@ export type DecisionOutcome =
  * Extension point for decision grants (PRD G-3). Called for every
  * `tools/call` of a tool whose requirement has `requiresDecision`. Without a
  * verifier such calls are always refused with `decision_required`.
+ *
+ * A verifier that returns `valid` MUST consume the decision grant (mark its
+ * `jti` used, atomically) before returning, so one decision grant can never
+ * authorise two calls — whether they arrive as separate requests or in one
+ * JSON-RPC batch. The guard additionally refuses a batch containing more
+ * than one call that needs a decision.
  */
 export interface DecisionVerifier {
   verify(check: DecisionCheck): Promise<DecisionOutcome>;
@@ -87,22 +93,42 @@ export interface McpResourceGuardOptions {
   decisions?: DecisionVerifier;
   /** Advertised as `decision_uri` in `decision_required` challenges: where a decision can be requested. */
   decisionUri?: string;
+  /**
+   * Called for every refusal with a low-cardinality event (for metrics and
+   * logs): the reason, the HTTP status and, for tools the policy declares,
+   * the connector and tool. Never includes tokens, subjects or undeclared
+   * tool names. A throwing hook does not change the refusal.
+   */
+  onDenial?: (event: GuardDenialEvent) => void;
+  /** Receives start-up warnings (default `console.warn`). */
+  warn?: (message: string) => void;
+}
+
+export interface GuardDenialEvent {
+  reason: GuardDenialReason;
+  status: number;
+  connector?: string;
+  tool?: string;
 }
 
 export interface GuardRequest {
   /** Reads a request header, case-insensitively. */
   header(name: string): string | undefined;
   method: string;
-  /** Parsed JSON body, `undefined` when the request has none. */
+  /**
+   * The parsed JSON body. With a `tools` policy, a request that may carry
+   * messages must have an object or array of JSON-RPC 2.0 messages here;
+   * a string, Buffer, empty object or anything else is refused.
+   */
   body?: unknown;
-  /** Whether a body was read; `false` for a POST means the host did not parse it. */
+  /** Whether the host read a body at all. */
   bodyParsed: boolean;
 }
 
 export type GuardDenialReason =
   | 'missing_token'
   | 'invalid_token'
-  | 'token_revoked'
+  | 'grant_revoked'
   | 'revocation_unavailable'
   | 'insufficient_scope'
   | 'tool_not_granted'
@@ -141,12 +167,48 @@ interface ToolCall {
   arguments: unknown;
 }
 
-/** Extracts every `tools/call` from a JSON-RPC message or batch. */
-function toolCalls(body: unknown): ToolCall[] | 'malformed' {
-  const messages = Array.isArray(body) ? body : [body];
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) && !Buffer.isBuffer(value) && !ArrayBuffer.isView(value);
+}
+
+/**
+ * A JSON-RPC 2.0 request or notification (string `method`) or a response to
+ * a server-initiated request (`id` with `result` or `error`, no `method`).
+ */
+function isJsonRpcMessage(value: unknown): value is Record<string, unknown> {
+  if (!isPlainObject(value) || value['jsonrpc'] !== '2.0') return false;
+  if (typeof value['method'] === 'string') return true;
+  return value['method'] === undefined && 'id' in value && ('result' in value || 'error' in value);
+}
+
+/** Methods that carry no JSON-RPC messages in the MCP HTTP transport (SSE stream, session end). */
+const BODYLESS_METHODS = new Set(['GET', 'HEAD', 'DELETE', 'OPTIONS']);
+
+function isEmptyBody(body: unknown): boolean {
+  if (body === undefined || body === null || body === '') return true;
+  if (Buffer.isBuffer(body)) return body.length === 0;
+  return isPlainObject(body) && Object.keys(body).length === 0;
+}
+
+/**
+ * The JSON-RPC messages of a request, or undefined when the body cannot be
+ * trusted to be what the MCP handler will process. Fails closed: with a
+ * tools policy, only an object or a non-empty array of JSON-RPC messages
+ * passes. Bodyless methods may have no body (Express 4 sets `{}` when it
+ * skips parsing).
+ */
+function jsonRpcMessages(method: string, body: unknown): Array<Record<string, unknown>> | undefined {
+  if (BODYLESS_METHODS.has(method.toUpperCase()) && isEmptyBody(body)) return [];
+  if (Array.isArray(body)) {
+    return body.length > 0 && body.every(isJsonRpcMessage) ? body : undefined;
+  }
+  return isJsonRpcMessage(body) ? [body] : undefined;
+}
+
+/** Extracts every `tools/call` from validated JSON-RPC messages. */
+function toolCalls(messages: Array<Record<string, unknown>>): ToolCall[] | 'malformed' {
   const calls: ToolCall[] = [];
   for (const message of messages) {
-    if (message === null || typeof message !== 'object') continue;
     const { method, params } = message as { method?: unknown; params?: unknown };
     if (method !== 'tools/call') continue;
     if (params === null || typeof params !== 'object') return 'malformed';
@@ -169,6 +231,12 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
   if (resourceMetadataUrl === undefined && audiences.length === 1 && canonicalResource(audiences[0]) !== undefined) {
     resourceMetadataUrl = protectedResourceMetadataUrl(audiences[0]!);
   }
+  if (!options.revocations) {
+    (options.warn ?? console.warn)(
+      'requireMcpAuth: `revocations` is not configured, so a revoked token stays usable here until it expires. '
+      + 'Pass the authorization server\'s storage as `revocations`.',
+    );
+  }
   const algorithms = options.algorithms ?? DEFAULT_ALGORITHMS;
   const requiredScopes = options.scopes ?? [];
   const tools = options.tools;
@@ -178,13 +246,28 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
     reason: GuardDenialReason,
     challenge: string | undefined,
     body: Record<string, unknown>,
-  ): GuardResult => ({
-    ok: false,
-    status,
-    reason,
-    headers: challenge !== undefined ? { 'www-authenticate': challenge } : {},
-    body,
-  });
+    requirement?: ToolRequirement,
+  ): GuardResult => {
+    if (options.onDenial) {
+      try {
+        options.onDenial({
+          reason,
+          status,
+          ...(requirement?.connector !== undefined ? { connector: requirement.connector } : {}),
+          ...(requirement !== undefined ? { tool: requirement.tool } : {}),
+        });
+      } catch {
+        // Observability only: the request is refused either way.
+      }
+    }
+    return {
+      ok: false,
+      status,
+      reason,
+      headers: challenge !== undefined ? { 'www-authenticate': challenge } : {},
+      body,
+    };
+  };
 
   return async (request) => {
     const header = request.header('authorization');
@@ -246,7 +329,7 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
         });
       }
       if (revoked) {
-        return deny(401, 'token_revoked', invalidTokenChallenge('Token has been revoked', resourceMetadataUrl), {
+        return deny(401, 'grant_revoked', invalidTokenChallenge('Token has been revoked', resourceMetadataUrl), {
           error: 'unauthorized',
           error_description: 'Token has been revoked',
         });
@@ -278,17 +361,29 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
     };
 
     if (tools) {
-      if (request.method.toUpperCase() === 'POST' && !request.bodyParsed) {
-        return deny(500, 'body_not_parsed', undefined, {
-          error: 'server_error',
-          error_description: 'The request body must be parsed as JSON before requireMcpAuth can enforce tool grants',
+      const messages = jsonRpcMessages(request.method, request.bodyParsed ? request.body : undefined);
+      if (messages === undefined) {
+        return deny(400, 'body_not_parsed', undefined, {
+          error: 'invalid_request',
+          reason: 'body_not_parsed',
+          error_description: 'With tool enforcement, the request body must be parsed JSON-RPC 2.0 (an object or a non-empty array of messages)',
         });
       }
-      const calls = toolCalls(request.body);
+      const calls = toolCalls(messages);
       if (calls === 'malformed') {
         return deny(400, 'invalid_tool_call', undefined, {
           error: 'invalid_request',
           error_description: 'tools/call requires params with a tool name',
+        });
+      }
+      const decisionCalls = calls.filter((call) => typeof call.name === 'string' && tools.requirementFor(call.name)?.requiresDecision === true);
+      if (decisionCalls.length > 1) {
+        const description = 'A batch may contain at most one call that needs a decision grant';
+        return deny(403, 'decision_invalid', undefined, {
+          error: 'insufficient_authorization',
+          reason: 'decision_invalid',
+          sub_reason: 'multiple_decisions_in_batch',
+          error_description: description,
         });
       }
       for (const call of calls) {
@@ -319,7 +414,7 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
             tool: call.name,
             required_scopes: requirement.requiredScopes,
             error_description: description,
-          });
+          }, requirement);
         }
         if (requirement.requiresDecision) {
           let outcome: DecisionOutcome;
@@ -348,7 +443,7 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
               ...(invalid ? { sub_reason: subReason } : {}),
               tool: call.name,
               error_description: description,
-            });
+            }, requirement);
           }
         }
       }

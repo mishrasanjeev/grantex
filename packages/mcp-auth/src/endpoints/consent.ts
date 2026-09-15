@@ -1,5 +1,5 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { appendCookie, bindingCookie, bindingCookieName, hashesMatch, readCookie, sha256 } from '../lib/cookies.js';
 import type { ServerContext } from '../context.js';
 import type { ConsentRecord } from '../types.js';
 import { generateCode } from '../lib/codes.js';
@@ -20,55 +20,23 @@ import type { ValidatedAuthorization } from './authorize.js';
  * - the browser-binding cookie set with the page (again stored as a hash),
  *
  * and, when the browser sends them, `Sec-Fetch-Site: same-origin` and an
- * `Origin` equal to the issuer's. The record is taken atomically before any
- * check, so a page can be submitted once whatever the outcome. Only after an
- * approval does anything reach Grantex.
+ * `Origin` equal to the issuer's (checked first, without touching the
+ * record). The record is then taken atomically before the token and cookie
+ * are compared, so a page can be submitted once whatever the outcome. Only
+ * after an approval does anything reach Grantex, and the approving browser
+ * receives a callback-binding cookie that `/callback` requires.
  */
 
 export const CONSENT_PATH = '/consent';
 const DEFAULT_EXPIRY_SECONDS = 600;
 
-function sha256(value: string): string {
-  return createHash('sha256').update(value, 'utf8').digest('base64url');
-}
-
-function hashesMatch(expectedHash: string, presented: unknown): boolean {
-  if (typeof presented !== 'string' || presented.length === 0 || presented.length > 256) return false;
-  const a = Buffer.from(expectedHash);
-  const b = Buffer.from(sha256(presented));
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-function secureCookies(ctx: ServerContext): boolean {
-  return new URL(ctx.issuer).protocol === 'https:';
-}
-
-/** One cookie per consent, so two tabs do not overwrite each other's binding. */
 function cookieName(ctx: ServerContext, consentId: string): string {
-  const base = `mcp_auth_consent_${sha256(consentId).slice(0, 16)}`;
-  // `__Host-` pins the cookie to this exact host, https and path `/`.
-  return secureCookies(ctx) ? `__Host-${base}` : base;
+  // One cookie per consent, so two tabs do not overwrite each other's binding.
+  return bindingCookieName(ctx, 'consent', consentId);
 }
 
 function cookieHeader(ctx: ServerContext, name: string, value: string, maxAgeSeconds: number): string {
-  return [
-    `${name}=${value}`,
-    'Path=/',
-    'HttpOnly',
-    'SameSite=Strict',
-    `Max-Age=${maxAgeSeconds}`,
-    ...(secureCookies(ctx) ? ['Secure'] : []),
-  ].join('; ');
-}
-
-function readCookie(request: FastifyRequest, name: string): string | undefined {
-  const header = request.headers.cookie;
-  if (typeof header !== 'string') return undefined;
-  for (const part of header.split(';')) {
-    const index = part.indexOf('=');
-    if (index > 0 && part.slice(0, index).trim() === name) return part.slice(index + 1).trim();
-  }
-  return undefined;
+  return bindingCookie(ctx, name, value, maxAgeSeconds, 'Strict');
 }
 
 function sendMessage(ctx: ServerContext, reply: FastifyReply, status: number, title: string, message: string): FastifyReply {
@@ -189,7 +157,7 @@ export function registerConsentEndpoint(app: FastifyInstance, ctx: ServerContext
       const record = await ctx.storage.takeConsent(consentId);
       // Clear this consent's cookie whatever happens next.
       const name = cookieName(ctx, consentId);
-      reply.header('set-cookie', cookieHeader(ctx, name, '', 0));
+      appendCookie(reply, cookieHeader(ctx, name, '', 0));
       if (!record) {
         return sendMessage(ctx, reply, 400, 'This request has expired', 'Return to the application and start again.');
       }
