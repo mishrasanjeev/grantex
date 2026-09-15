@@ -15,7 +15,7 @@
  *   with no script (CSP) and no framing.
  * - Approval is a form post that must carry the session cookie, a CSRF token
  *   bound to the session, the request and this rendering, and an `Origin` of
- *   this service (`Sec-Fetch-Site`, when sent, must be `same-origin`). Dwell
+ *   this service and `Sec-Fetch-Site: same-origin` (both required). Dwell
  *   time is measured by the service from rendering to submission.
  *
  * The decision grant the service signs is the attestation: it binds the
