@@ -46,20 +46,25 @@ The delegated token includes additional JWT claims that trace the delegation cha
 {
   "iss": "https://grantex.dev",
   "sub": "user_abc123",
-  "agt": "did:grantex:ag_SUB_AGENT",
-  "scp": ["calendar:read"],
-  "parentAgt": "did:grantex:ag_ROOT_AGENT",
-  "parentGrnt": "grnt_01ROOT...",
-  "delegationDepth": 1,
+  "client_id": "ag_SUB_AGENT",
+  "scope": "calendar:read",
+  "act": {"sub": "did:grantex:ag_ROOT_AGENT"},
+  "urn:grantex:grant": {
+    "agent_did": "did:grantex:ag_SUB_AGENT",
+    "parent_grant_id": "grnt_01ROOT...",
+    "delegation_depth": 1
+  },
   ...
 }
 ```
 
 | Claim | Description |
 |-------|-------------|
-| `parentAgt` | DID of the parent agent that created this delegation |
-| `parentGrnt` | Grant ID of the parent grant |
-| `delegationDepth` | Number of hops from the root grant (root = 0, first child = 1) |
+| `act` | RFC 8693 actor chain. `act.sub` is the parent agent that created this delegation; a deeper delegation nests the parent token's `act` inside, so the chain reads from the most recent delegator to the first |
+| `urn:grantex:grant.parent_grant_id` | Grant ID of the parent grant |
+| `urn:grantex:grant.delegation_depth` | Number of hops from the root grant (root = 0, first child = 1) |
+
+While legacy claims are issued (the 0.6 default), the token also carries `parentAgt`, `parentGrnt` and `delegationDepth` with the same values. Refreshing a delegated token keeps its `act` chain.
 
 ## Protocol Constraints
 

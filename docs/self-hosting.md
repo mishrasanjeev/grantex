@@ -224,6 +224,7 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `SIGNING_KEY_STORE` | No | `env` | `env` (keys from the settings above) or `postgres` (generated and stored encrypted; needs `VAULT_ENCRYPTION_KEY`) |
 | `SIGNING_KEY_RETIRED_GRACE_SECONDS` | No | `2592000` | How long a retired stored key stays in the JWK Set; longer than your longest token lifetime |
 | `AUTO_GENERATE_KEYS` | No | `false` | Auto-generate the signing key at startup (dev only — invalidated on restart) |
+| `GRANT_TOKEN_LEGACY_CLAIMS` | No | `true` | Issue the pre-0.6 claim aliases (`agt`, `dev`, `grnt`, `scp`, `parentAgt`, `parentGrnt`, `delegationDepth`, `bdg`) next to the standard claims. Defaults to `false` in 0.7; see `docs/migration-0.6.md` |
 | `JWT_ISSUER` | Yes | `https://grantex.dev` | `iss` claim in every JWT; your public base URL |
 | `PORT` | No | `3001` | Port the auth service listens on |
 | `HOST` | No | `0.0.0.0` | Bind address |

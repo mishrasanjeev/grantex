@@ -102,3 +102,52 @@ Remove an entry in the pull request that fixes it.
   keys already do) in a release that announces the `kid` change, publishing
   the old `kid` alongside for one token lifetime. Until then, set
   `JWT_SIGNING_KID` (documented in `docs/self-hosting.md` Section 7).
+
+## G-8 — `POST /v1/authorize` cannot request caps or decision references
+
+- **Found:** aligning grant token claims with the OAuth profile (2026-09-15).
+- **What:** `authorization_details` in grant tokens can carry per-grant caps
+  (`caps` in `urn:grantex:tools:v1`) and decision references
+  (`urn:grantex:decision:v1`), and the SDKs enforce both. But
+  `POST /v1/authorize` only accepts `purpose`, and
+  `apps/auth-service/src/lib/purpose.ts` builds tools entries with
+  `connector` and `purpose` only. Tokens from the Grantex flow therefore never
+  carry them. The OAuth PAR flow copies client-supplied entries unchecked
+  (G-4).
+- **Fix:** accept and validate `caps`, `tools`, `data_region` and decision
+  references on the authorization request (the same rules as the SDK
+  parsers), show them on the consent page, store them on the grant, and cover
+  them in `spec/grant-token-0.6.md` issuance tests.
+
+## G-9 — Scopes containing whitespace are accepted at authorization
+
+- **Found:** aligning grant token claims with the OAuth profile (2026-09-15).
+- **What:** `POST /v1/authorize` (`apps/auth-service/src/routes/authorize.ts`)
+  only rejects blank scopes, so a scope such as `"read files"` can be approved.
+  Such a scope cannot be represented in the space-delimited `scope` claim, and
+  token issuance now refuses it, so the approved request fails at
+  `POST /v1/token` instead of at authorization. The same applies to agent
+  registration scopes and consent bundles.
+- **Fix:** validate scopes as RFC 6749 scope-tokens (printable ASCII, no
+  space, `"` or `\`) wherever they enter: authorization requests, agent
+  registration, delegation and consent bundles. Return `400 INVALID_SCOPE`.
+
+## G-10 — Integrations read legacy grant token claims directly
+
+- **Found:** aligning grant token claims with the OAuth profile (2026-09-15).
+- **What:** these read `agt`, `dev`, `grnt` or `scp` from decoded tokens
+  instead of the SDK's `VerifiedGrant`:
+  - `packages/a2a`, `packages/a2a-py`
+  - `packages/anthropic`, `packages/crewai`, `packages/google-adk`,
+    `packages/openai-agents`, `packages/strands`, `packages/strands-py`,
+    `packages/vercel-ai`
+  - `packages/cli` (`verify`)
+  - `packages/gemma`, `packages/gemma-py`
+  - `packages/mcp-auth` (`endpoints/introspect.ts` and the Express and Hono
+    middleware)
+
+  They keep working while `GRANT_TOKEN_LEGACY_CLAIMS=true`. They break against
+  a deployment that sets it to `false`, and by default from 0.7.
+- **Fix:** read `scope`, `client_id`, `act` and `urn:grantex:grant` (or use
+  the core SDK verifiers' `VerifiedGrant`) before 0.7. Coordinate the
+  `mcp-auth` change with the open 3.0 pull requests.

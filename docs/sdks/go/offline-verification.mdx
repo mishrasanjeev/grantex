@@ -33,6 +33,8 @@ fmt.Printf("Principal: %s, Scopes: %v\n", grant.PrincipalID, grant.Scopes)
 | `Issuer` | `string` | No | Expected `iss` claim. The hosted JWKS alias expects `https://grantex.dev`; custom JWKS URLs derive an issuer when omitted. |
 | `IssuerDID` | `string` | No | A `did:web` issuer used to derive the JWKS URL and expected issuer. An explicit `Issuer` takes precedence. |
 | `ClockTolerance` | `time.Duration` | No | Tolerance for clock skew |
+| `StandardClaimsOnly` | `bool` | No | Ignore legacy claim aliases and require `typ: at+jwt`. `false` in 0.6: an alias is read when the standard claim is absent. |
+| `OnLegacyClaim` | `func(alias, standard string)` | No | Called for each legacy alias a verification relied on; by default a deprecation message is logged once per alias. |
 | `Algorithms` | `[]string` | No | Narrow the accepted algorithms to a subset of `GrantTokenAlgorithms()` (`RS256`, `ES256`, the default). Any other value returns a `TokenError`. |
 
 Grant tokens are signed with RS256 or ES256. The key is the JWK Set entry named by
@@ -59,6 +61,11 @@ alias automatically.
 | `ParentAgentDID` | `*string` | Parent agent for delegated grants |
 | `ParentGrantID` | `*string` | Parent grant for delegated grants |
 | `DelegationDepth` | `*int` | Delegation depth (0 = root) |
+| `AuthorizationDetails` | `[]interface{}` | The `authorization_details` claim |
+| `Act` | `*ActorClaim` | RFC 8693 actor chain (delegated grants) |
+| `Cnf` | `map[string]interface{}` | Confirmation claim, e.g. `jkt` |
+| `Audience` | `[]string` | The `aud` claim |
+| `LegacyClaimsUsed` | `[]string` | Legacy aliases read because the standard claim was absent |
 
 ## Scope Checking
 
