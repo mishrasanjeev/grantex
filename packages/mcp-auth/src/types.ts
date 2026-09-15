@@ -1,5 +1,7 @@
 import type { Grantex } from '@grantex/sdk';
 import type { McpAuthStorage } from './storage/types.js';
+import type { ClientIdMetadataDocumentOptions } from './lib/client-metadata.js';
+import type { LoadedManifest } from './resource/tool-policy.js';
 
 export interface TokenIssuedEvent {
   accessToken: string;
@@ -14,10 +16,42 @@ export interface McpAuthConfig {
   grantex: Grantex;
   /** Agent ID to use for Grantex authorization */
   agentId: string;
-  /** Scopes to request from Grantex */
-  scopes: string[];
-  /** Base URL for this auth server (used in metadata) */
+  /**
+   * Scopes clients may request (`scopes_supported`). A request for any other
+   * scope is refused with `invalid_scope`. Optional when `manifests` is set:
+   * the scopes those manifests' tools need are added automatically.
+   */
+  scopes?: string[];
+  /**
+   * Tool manifests for the MCP server this authorization server protects.
+   * Scopes are derived from them (`tool:<connector>:<permission>` for each
+   * tool) and the consent page lists their tools. Accepts manifest JSON in
+   * the 0.5 (permission string) or 0.6 (tool object) form.
+   */
+  manifests?: LoadedManifest[];
+  /**
+   * Base URL for this auth server (used in metadata). Must be https (http is
+   * accepted only for localhost) with no query or fragment.
+   */
   issuer: string;
+  /**
+   * Canonical URI of the MCP server tokens are issued for (RFC 8707 resource
+   * indicator), e.g. `https://mcp.example.com/mcp`. Required unless
+   * `allowedResources` is set. Every issued token is audience-bound to the
+   * requested resource and a request for any other resource is refused with
+   * `invalid_target`.
+   */
+  resource?: string;
+  /** Human-readable name of the MCP server, published in protected-resource metadata. */
+  resourceName?: string;
+  /** Documentation URL of the MCP server, published in protected-resource metadata. */
+  resourceDocumentation?: string;
+  /**
+   * OAuth Client ID Metadata Documents: clients may use an https URL as
+   * `client_id`, and this server fetches and validates the document it
+   * serves. Enabled by default with SSRF protections; see the option type.
+   */
+  clientIdMetadataDocuments?: ClientIdMetadataDocumentOptions;
   /**
    * Where every piece of authorization state lives: client registrations,
    * authorizations awaiting consent, authorization codes (with their PKCE
@@ -40,9 +74,9 @@ export interface McpAuthConfig {
   /** JWKS URL (defaults to `${grantexIssuer}/.well-known/jwks.json`). */
   jwksUri?: string;
   /**
-   * Expected `aud` claim of introspected tokens (RFC 8707 resource
-   * identifier of the MCP server). Defaults to `allowedResources` when set;
-   * when neither is configured the `aud` claim is not checked.
+   * Expected `aud` claim of introspected and revoked tokens. Defaults to the
+   * accepted resources (`resource` and `allowedResources`); it is always
+   * checked.
    */
   audience?: string | string[];
   /**
@@ -60,9 +94,11 @@ export interface McpAuthConfig {
    * default: every authorization goes through the Grantex consent flow.
    */
   sandboxAutoApprove?: boolean;
-  /** Allowed redirect URIs (optional - if empty, all are allowed) */
-  allowedRedirectUris?: string[];
-  /** Allowed resource indicators (RFC 8707) */
+  /**
+   * Further resources (RFC 8707) tokens may be issued for, in addition to
+   * `resource`. With more than one accepted resource, clients must send the
+   * `resource` parameter.
+   */
   allowedResources?: string[];
   /** Code expiration in seconds (default: 600) */
   codeExpirationSeconds?: number;

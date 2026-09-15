@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ClientRegistration, RegisterClientRequest, TokenEndpointAuthMethod } from '../types.js';
 import type { McpAuthStorage } from '../storage/types.js';
 import { hashClientSecret } from '../lib/verify.js';
+import { isAllowedRedirectUri } from '../lib/client-metadata.js';
 
 export function registerRegisterEndpoint(app: FastifyInstance, storage: McpAuthStorage): void {
   app.post<{ Body: RegisterClientRequest }>('/register', async (request, reply) => {
@@ -12,6 +13,15 @@ export function registerRegisterEndpoint(app: FastifyInstance, storage: McpAuthS
       return reply.status(400).send({
         error: 'invalid_client_metadata',
         error_description: 'redirect_uris is required and must be a non-empty array',
+      });
+    }
+
+    // MCP authorization, Communication Security: redirect URIs are either
+    // localhost or https.
+    if (redirect_uris.length > 20 || !redirect_uris.every(isAllowedRedirectUri)) {
+      return reply.status(400).send({
+        error: 'invalid_redirect_uri',
+        error_description: 'Every redirect URI must be https, or http on localhost, without a fragment (at most 20)',
       });
     }
 

@@ -1,6 +1,9 @@
-import type { FastifyInstance } from 'fastify';
-import type { McpAuthConfig } from '../types.js';
-import type { McpAuthStorage } from '../storage/types.js';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import * as jose from 'jose';
+import type { ServerContext } from '../context.js';
+import { ClientMetadataError } from '../lib/client-metadata.js';
+import { canonicalResource } from '../lib/resource.js';
+import { resolveCallbackUrl } from './authorize.js';
 import { verifyCodeChallenge } from '../lib/pkce.js';
 import { isConfidentialClient, parseBasicAuth, secretMatches } from '../lib/verify.js';
 import type { ClientRegistration } from '../types.js';
@@ -39,26 +42,70 @@ interface TokenBody {
   client_secret?: string;
   code_verifier?: string;
   refresh_token?: string;
+  resource?: unknown;
 }
 
-export function registerTokenEndpoint(
-  app: FastifyInstance,
-  config: McpAuthConfig,
-  storage: McpAuthStorage,
-): void {
+/**
+ * RFC 8707 section 2.2: a `resource` sent to the token endpoint must name the
+ * resource the grant was bound to. Absent means "the bound resource".
+ */
+function resourceMatches(requested: unknown, bound: string): boolean {
+  if (requested === undefined || requested === '') return true;
+  if (typeof requested !== 'string') return false;
+  return canonicalResource(requested) === bound;
+}
+
+/**
+ * The grant token Grantex issued must be audience-bound to the resource the
+ * client asked for. Anything else (no `aud`, another audience, or a token
+ * that is not a JWT) is refused rather than handed to the client.
+ */
+function audienceBound(grantToken: unknown, resource: string): { ok: true } | { ok: false; jti?: string } {
+  if (typeof grantToken !== 'string') return { ok: false };
+  let claims: jose.JWTPayload;
+  try {
+    claims = jose.decodeJwt(grantToken);
+  } catch {
+    return { ok: false };
+  }
+  const audiences = Array.isArray(claims.aud) ? claims.aud : claims.aud !== undefined ? [claims.aud] : [];
+  if (audiences.some((aud) => canonicalResource(aud) === resource)) return { ok: true };
+  return { ok: false, ...(typeof claims.jti === 'string' ? { jti: claims.jti } : {}) };
+}
+
+export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext): void {
+  const { config, storage } = ctx;
+
+  async function lookupClient(clientId: string) {
+    try {
+      return await ctx.getClient(clientId);
+    } catch (err) {
+      if (err instanceof ClientMetadataError) return undefined;
+      throw err;
+    }
+  }
+
+  async function refuseUnboundToken(reply: FastifyReply, jti: string | undefined): Promise<FastifyReply> {
+    if (jti !== undefined) {
+      // Best effort: the token is never returned, so it cannot be used even
+      // if this upstream revocation fails.
+      await config.grantex.tokens.revoke(jti).catch(() => undefined);
+    }
+    return reply.status(502).send({
+      error: 'server_error',
+      error_description: 'Grantex issued a token that is not audience-bound to the requested resource; it was not returned',
+    });
+  }
+
   // A refresh token is bound to the client it was issued to (RFC 6749 §6,
   // OAuth 2.1 §4.3.1). Recording the binding on every issue path, and
   // re-recording it after rotation, is what lets the refresh_token grant
   // refuse a token presented by a different client_id.
-  async function bindRefreshToken(
-    refreshToken: string | undefined,
-    clientId: string,
-    resource: string | undefined,
-  ): Promise<void> {
+  async function bindRefreshToken(refreshToken: string | undefined, clientId: string, resource: string): Promise<void> {
     if (refreshToken === undefined) return;
     await storage.putRefreshTokenBinding(refreshToken, {
       clientId,
-      ...(resource !== undefined ? { resource } : {}),
+      resource,
       expiresAt: Date.now() + REFRESH_TOKEN_BINDING_TTL_MS,
     });
   }
@@ -79,7 +126,7 @@ export function registerTokenEndpoint(
       }
 
       // Validate client
-      const client = await storage.getClient(client_id);
+      const client = await lookupClient(client_id);
       if (!client) {
         return reply.status(401).send({
           error: 'invalid_client',
@@ -129,12 +176,28 @@ export function registerTokenEndpoint(
         });
       }
 
-      // Exchange with Grantex (use the stored auth code from Grantex)
+      if (authCode.resource === undefined || !resourceMatches(body.resource, authCode.resource)) {
+        return reply.status(400).send({
+          error: 'invalid_target',
+          error_description: 'resource does not match the resource this code was issued for',
+        });
+      }
+
+      if (authCode.grantexCode === undefined) {
+        return reply.status(400).send({
+          error: 'invalid_grant',
+          error_description: 'Authorization code has no approved upstream authorization',
+        });
+      }
+
+      // Exchange with Grantex. Grantex requires the redirect URI used in the
+      // upstream authorization request: our consent callback.
       let tokenResponse;
       try {
         tokenResponse = await config.grantex.tokens.exchange({
-          code: authCode.grantexCode ?? authCode.grantexAuthRequestId,
+          code: authCode.grantexCode,
           agentId: config.agentId,
+          redirectUri: resolveCallbackUrl(config),
         });
       } catch (err) {
         return reply.status(502).send({
@@ -142,6 +205,9 @@ export function registerTokenEndpoint(
           error_description: `Grantex token exchange failed: ${err instanceof Error ? err.message : String(err)}`,
         });
       }
+
+      const bound = audienceBound(tokenResponse.grantToken, authCode.resource);
+      if (!bound.ok) return refuseUnboundToken(reply, bound.jti);
 
       await bindRefreshToken(tokenResponse.refreshToken, client_id, authCode.resource);
 
@@ -166,7 +232,7 @@ export function registerTokenEndpoint(
         });
       }
 
-      const client = await storage.getClient(client_id);
+      const client = await lookupClient(client_id);
       if (!client) {
         return reply.status(401).send({
           error: 'invalid_client',
@@ -200,6 +266,14 @@ export function registerTokenEndpoint(
           error_description: 'Refresh token was not issued to this client',
         });
       }
+      if (binding.resource === undefined || !resourceMatches(body.resource, binding.resource)) {
+        await storage.putRefreshTokenBinding(refresh_token, binding);
+        return reply.status(400).send({
+          error: 'invalid_target',
+          error_description: 'resource does not match the resource this refresh token was issued for',
+        });
+      }
+      const boundResource = binding.resource;
 
       let tokenResponse;
       try {
@@ -218,8 +292,17 @@ export function registerTokenEndpoint(
         });
       }
 
-      // Rotation: the old binding is already spent; the new token inherits it.
-      await bindRefreshToken(tokenResponse.refreshToken, client.clientId, binding.resource);
+      const bound = audienceBound(tokenResponse.grantToken, boundResource);
+      if (!bound.ok) return refuseUnboundToken(reply, bound.jti);
+
+      // Rotation (required for public clients, MCP authorization "Token
+      // Theft"): the old binding is already spent and a refresh token is
+      // never handed out twice. If upstream returns the same token, the
+      // client gets the access token but no refresh token.
+      const rotated = tokenResponse.refreshToken !== undefined && tokenResponse.refreshToken !== refresh_token
+        ? tokenResponse.refreshToken
+        : undefined;
+      await bindRefreshToken(rotated, client.clientId, boundResource);
 
       return reply.send({
         access_token: tokenResponse.grantToken,
@@ -228,9 +311,7 @@ export function registerTokenEndpoint(
           (new Date(tokenResponse.expiresAt).getTime() - Date.now()) / 1000,
         ),
         scope: tokenResponse.scopes.join(' '),
-        ...(tokenResponse.refreshToken !== undefined
-          ? { refresh_token: tokenResponse.refreshToken }
-          : {}),
+        ...(rotated !== undefined ? { refresh_token: rotated } : {}),
       });
     }
 

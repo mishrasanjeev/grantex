@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import * as jose from 'jose';
 import { vi } from 'vitest';
 import type { Mock } from 'vitest';
 import { InMemoryStorage } from '../src/storage/memory.js';
@@ -10,6 +11,20 @@ export const TEST_CLIENT_SECRET = 'test-secret';
 export const TEST_REDIRECT_URI = 'https://app.example.com/callback';
 export const TEST_VERIFIER = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
 export const TEST_CHALLENGE = createHash('sha256').update(TEST_VERIFIER).digest('base64url');
+/** Canonical URI of the MCP server the test authorization server issues tokens for. */
+export const TEST_RESOURCE = 'https://mcp.example.com/mcp';
+
+/**
+ * An unsigned JWT shaped like a Grantex grant token. The authorization server
+ * only decodes the token it receives from Grantex (to check its audience), so
+ * the tests do not need to sign it.
+ */
+export function upstreamGrantToken(claims: Record<string, unknown> = {}): string {
+  return new jose.UnsecuredJWT({ aud: TEST_RESOURCE, jti: 'grnt_upstream', scp: ['read', 'write'], ...claims })
+    .setIssuedAt()
+    .setExpirationTime('1h')
+    .encode();
+}
 
 /**
  * A registration as the server stores it. Pass `clientSecret` to register a
@@ -60,14 +75,14 @@ export function mockGrantex(options: { sandboxCode?: string } = {}): MockGrantex
     }),
     tokens: {
       exchange: vi.fn().mockResolvedValue({
-        grantToken: 'gt_test_token',
+        grantToken: upstreamGrantToken({ jti: 'gt_test_token' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_test_refresh',
         grantId: 'grant-1',
       }),
       refresh: vi.fn().mockResolvedValue({
-        grantToken: 'gt_refreshed_token',
+        grantToken: upstreamGrantToken({ jti: 'gt_refreshed_token' }),
         expiresAt: new Date(Date.now() + 3600_000).toISOString(),
         scopes: ['read', 'write'],
         refreshToken: 'rt_new_refresh',
