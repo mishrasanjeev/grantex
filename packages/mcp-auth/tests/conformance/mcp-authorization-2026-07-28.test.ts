@@ -29,6 +29,8 @@ import {
   TEST_RESOURCE,
   TEST_VERIFIER,
   asGrantex,
+  authorizeWithConsent,
+  submitConsent,
   clientRecord,
   mockGrantex,
   seededStorage,
@@ -61,6 +63,8 @@ export const REQUIREMENTS: Requirement[] = [
   { id: 'CIMD-01', role: 'authorization-server', section: 'Client ID Metadata Documents', text: 'Authorization servers MUST validate that the fetched document\'s client_id matches the URL exactly.' },
   { id: 'CIMD-02', role: 'authorization-server', section: 'Client ID Metadata Documents', text: 'Authorization servers MUST validate redirect URIs presented in an authorization request against those in the metadata document.' },
   { id: 'CIMD-03', role: 'authorization-server', section: 'Client ID Metadata Documents', text: 'Authorization servers MUST validate the document structure is valid JSON and contains required fields.' },
+  { id: 'CIMD-05', role: 'authorization-server', section: 'Localhost Redirect URI Risks', text: 'Authorization servers MUST clearly display the redirect URI hostname during authorization.' },
+  { id: 'DEPUTY-01', role: 'authorization-server', section: 'Confused Deputy Problem', text: 'MCP proxy servers using static client IDs MUST obtain user consent for each dynamically registered client before forwarding to third-party authorization servers.' },
   { id: 'CIMD-04', role: 'authorization-server', section: 'Client ID Metadata Document Security', text: 'Authorization servers MUST consider the security implications of fetching documents (SSRF).' },
   { id: 'RESP-01', role: 'authorization-server', section: 'Authorization Response Validation', text: 'Authorization servers that include iss MUST advertise authorization_response_iss_parameter_supported: true.' },
   { id: 'RESP-02', role: 'client', section: 'Authorization Response Validation', text: 'Clients MUST record the issuer and apply RFC 9207 validation before redeeming a code.', outOfScope: CLIENT_ONLY },
@@ -143,6 +147,22 @@ async function authServer(overrides: Partial<McpAuthConfig> = {}, grantex = mock
 }
 
 function authorize(app: FastifyInstance, query: Record<string, string> = {}) {
+  return authorizeWithConsent(app, {
+    method: 'GET',
+    url: '/authorize',
+    query: {
+      response_type: 'code',
+      client_id: TEST_CLIENT_ID,
+      redirect_uri: TEST_REDIRECT_URI,
+      code_challenge: TEST_CHALLENGE,
+      code_challenge_method: 'S256',
+      ...query,
+    },
+  });
+}
+
+/** GET /authorize without approving: the consent page itself. */
+function consentPage(app: FastifyInstance, query: Record<string, string> = {}) {
   return app.inject({
     method: 'GET',
     url: '/authorize',
@@ -159,7 +179,7 @@ function authorize(app: FastifyInstance, query: Record<string, string> = {}) {
 
 async function issueCode(app: FastifyInstance, clientId = TEST_CLIENT_ID): Promise<string> {
   const response = await authorize(app, { client_id: clientId });
-  expect(response.statusCode).toBe(302);
+  expect(response.statusCode).toBe(303);
   return new URL(response.headers['location'] as string).searchParams.get('code')!;
 }
 
@@ -276,6 +296,28 @@ describe('MCP authorization 2026-07-28: authorization server', () => {
     expect(grantex.authorize).not.toHaveBeenCalled();
   });
 
+  must('CIMD-05', 'the consent page shows the redirect URI host prominently', async () => {
+    const { app } = await authServer();
+    const page = await consentPage(app);
+    expect(page.statusCode).toBe(200);
+    expect(page.body).toMatch(/<p class="redirect wrap">app\.example\.com<\/p>/);
+  });
+
+  must('DEPUTY-01', 'a dynamically registered client reaches Grantex only after the Principal approves on the consent page', async () => {
+    const grantex = mockGrantex();
+    const { app } = await authServer({ sandboxAutoApprove: false }, grantex);
+    const registered = (await app.inject({ method: 'POST', url: '/register', payload: { redirect_uris: [TEST_REDIRECT_URI], token_endpoint_auth_method: 'none' } })).json();
+    const page = await consentPage(app, { client_id: registered.client_id });
+    expect(page.statusCode).toBe(200);
+    expect(grantex.authorize).not.toHaveBeenCalled();
+    const denied = await submitConsent(app, page, 'deny', ISSUER);
+    expect(denied.statusCode).toBe(303);
+    expect(grantex.authorize).not.toHaveBeenCalled();
+    const approved = await submitConsent(app, await consentPage(app, { client_id: registered.client_id }), 'approve', ISSUER);
+    expect(approved.statusCode).toBe(303);
+    expect(grantex.authorize).toHaveBeenCalledTimes(1);
+  });
+
   must('RESP-01', 'includes iss in responses and advertises it', async () => {
     const { app } = await authServer();
     const metadata = (await app.inject({ method: 'GET', url: '/.well-known/oauth-authorization-server' })).json();
@@ -373,7 +415,7 @@ describe('MCP authorization 2026-07-28: authorization server', () => {
     // A client presenting its access token to the authorization server's
     // endpoints does not cause that token to be sent to Grantex.
     await app.inject({ method: 'POST', url: '/token', headers: { authorization: `Bearer ${clientToken}` }, payload: { grant_type: 'client_credentials' } });
-    await app.inject({ method: 'GET', url: '/authorize', headers: { authorization: `Bearer ${clientToken}` }, query: { response_type: 'code' } });
+    await authorizeWithConsent(app, { method: 'GET', url: '/authorize', headers: { authorization: `Bearer ${clientToken}` }, query: { response_type: 'code' } });
     const upstreamArgs = JSON.stringify([...grantex.authorize.mock.calls, ...grantex.tokens.exchange.mock.calls, ...grantex.tokens.refresh.mock.calls]);
     expect(upstreamArgs).not.toContain(clientToken);
   });
