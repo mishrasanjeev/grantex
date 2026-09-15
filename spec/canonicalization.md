@@ -41,8 +41,14 @@ to a double by the time it reaches the canonicaliser. Producers that need
 integers beyond 2^53 or exact decimals send them as strings.
 
 Duplicate member names cannot be represented once JSON is parsed into a
-dictionary or object. Canonicalise values that come from a parser you trust to
-refuse duplicates, or from your own data structures.
+dictionary or object, and most parsers keep the last value silently. Where the
+raw text is available, parse it with a parser that refuses duplicates:
+`parseJsonRejectingDuplicates` (TypeScript), `DecisionAction.from_json`
+(Python), which compare names after unescaping (`"a"` and `"\u0061"` are
+duplicates). The auth service parses decision request bodies this way.
+
+In Python, subclasses of `int`, `float` and `str` are canonicalised by their
+value: an overridden `__repr__` or `__str__` cannot change the output.
 
 ### Test vectors
 
@@ -71,10 +77,20 @@ members:
 | `decision` | string | yes | `^[a-z][a-z0-9_]{0,63}$`, the names `four_eyes_on` uses (`approve`, `decline`). |
 | `subject` | string | yes | What the decision is about, 1-512 code points, same character rules as `case_id`. |
 | `amount` | number or string | no | A finite number, or a canonical decimal string `^-?(0\|[1-9][0-9]*)(\.[0-9]*[1-9])?$` other than `-0`, at most 64 characters. Omit when not applicable; `null` is refused. |
+| `extra` | object | no | Extra semantic fields the manifest declares for the tool (`decision_fields`), for example `{"currency": "GBP"}`. Names `^[a-z][a-z0-9_]{0,63}$` other than the five above, at most 16; values strings (same rules as `subject`) or finite numbers. Omit when there are none; `null` and `{}` are refused. |
 
 Any other member is refused. Strings are compared exactly: no trimming, case
 folding or normalisation. `5` and `"5"` are different amounts; `5` and `5.0`
-are the same.
+are the same. Strings must not contain invisible Unicode format characters
+(general category Cf: soft hyphen, zero-width characters, bidirectional
+controls, tags; the exact code point list is in both SDKs and identical), so a
+subject cannot look identical on an approval screen while hashing differently.
+
+**Only these fields are bound.** Anything else a tool call means (a currency, a
+reason code, a destination account) is not approved by a decision grant unless
+the manifest lists it in the tool's `decision_fields`, which adds it to `extra`.
+A tool whose effect depends on an argument that is neither bound nor declared
+can be steered by that argument after approval; declare it.
 
 ```
 action_hash = "sha256:" || base64url( SHA-256( UTF-8( JCS(action) ) ) )
@@ -100,8 +116,9 @@ and hashes to `sha256:LNavJV0rVgyvR30A6d607Hw1lZFbHGxLk4GkLAAZAOA`.
 ### Deriving the action from a tool call
 
 The enforcing side derives the action from the call it is about to authorise:
-`action` is the tool name, and `case_id`, `decision`, `subject` and, when
-present and not null, `amount` are read from the call's arguments. Every other
+`action` is the tool name, and `case_id`, `decision`, `subject`, when present
+and not null `amount`, and every declared decision field (required, into
+`extra`) are read from the call's arguments. Every other
 argument is ignored. So a re-planned payload, a new timestamp, a trace id or a
 reordered object produce the same hash, while a different case, tool,
 decision, subject or amount produce a different one. The shared fixture lists
@@ -119,13 +136,15 @@ Validation errors carry a code and the field:
 | `missing_field` | `case_id`, `action`, `decision` or `subject` is absent. |
 | `invalid_type` | A member has the wrong JSON type, or `amount` is `null`. |
 | `invalid_value` | A member breaks its rule. |
+| `duplicate_key` | A member name repeats in the JSON text (parsing from text only). |
 
 ### APIs
 
 | | Python (`grantex.decisions`) | TypeScript (`@grantex/sdk`) |
 |---|---|---|
 | Validate an action object | `DecisionAction.from_dict(obj)` | `parseDecisionAction(obj)` |
-| Action from a tool call | `DecisionAction.from_tool_call(tool, arguments)` | `decisionActionFromToolCall(tool, args)` |
+| Action from text | `DecisionAction.from_json(text)` | `parseDecisionActionJson(text)` |
+| Action from a tool call | `DecisionAction.from_tool_call(tool, arguments, extra_fields)` | `decisionActionFromToolCall(tool, args, extraFields)` |
 | Canonical JSON | `action.canonical_json()` | `canonicalActionJson(action)` |
 | Hash | `action.action_hash()`, `compute_action_hash(obj)` | `computeActionHash(action)` |
 | Shape check | `is_action_hash(value)` | `isActionHash(value)` |

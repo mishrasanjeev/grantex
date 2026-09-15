@@ -107,7 +107,7 @@ export {
 } from './purpose.js';
 
 // RFC 8785 canonicalisation and decision grants (PRD G-3)
-export { CanonicalizationError, MAX_DEPTH as CANONICAL_MAX_DEPTH, canonicalize, canonicalizeToBytes, serializeNumber } from './canonical.js';
+export { CanonicalizationError, DuplicateKeyError, MAX_DEPTH as CANONICAL_MAX_DEPTH, canonicalize, canonicalizeToBytes, parseJsonRejectingDuplicates, serializeNumber } from './canonical.js';
 export * from './decisions/index.js';
 export { DecisionSubReason } from './denials.js';
 
