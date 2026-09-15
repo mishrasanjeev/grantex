@@ -46,7 +46,7 @@ export function requireMcpAuth(
       header: headerReader(req),
       method: req.method ?? 'GET',
       body: req.body,
-      bodyParsed: req.body !== undefined,
+      bodyParsed: 'body' in req,
     }).then(
       (result) => {
         if (!result.ok) {

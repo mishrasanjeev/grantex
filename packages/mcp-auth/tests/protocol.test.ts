@@ -336,3 +336,65 @@ describe('protected resource metadata (RFC 9728)', () => {
     }
   });
 });
+
+describe('revoking refresh tokens (RFC 7009) and upstream error text', () => {
+  it('revokes a refresh token bound to the client, and only for that client', async () => {
+    const storage = await seededStorage(
+      clientRecord({ grantTypes: ['authorization_code', 'refresh_token'] }),
+      clientRecord({ clientId: 'other-client', clientSecret: 'other-secret' }),
+    );
+    const grantex = mockGrantex({ sandboxCode: 'UPSTREAM' });
+    const { app } = await build({ storage }, grantex);
+    const issued = await redeem(app, await codeFor(app));
+    const refreshToken = issued.json().refresh_token as string;
+
+    const byOther = await app.inject({
+      method: 'POST',
+      url: '/revoke',
+      payload: { token: refreshToken, token_type_hint: 'refresh_token', client_id: 'other-client', client_secret: 'other-secret' },
+    });
+    expect(byOther.statusCode).toBe(503); // not bound to other-client; not a JWT either, and no grantexIssuer here
+    const refresh = () => app.inject({
+      method: 'POST',
+      url: '/token',
+      payload: { grant_type: 'refresh_token', refresh_token: refreshToken, client_id: TEST_CLIENT_ID, client_secret: TEST_CLIENT_SECRET },
+    });
+
+    const revoked = await app.inject({
+      method: 'POST',
+      url: '/revoke',
+      payload: { token: refreshToken, token_type_hint: 'refresh_token', client_id: TEST_CLIENT_ID, client_secret: TEST_CLIENT_SECRET },
+    });
+    expect(revoked.statusCode).toBe(200);
+    expect((await refresh()).statusCode).toBe(400);
+    expect(grantex.tokens.refresh).not.toHaveBeenCalled();
+  });
+
+  it('does not relay upstream error text from the token exchange, refresh or authorization', async () => {
+    const secretText = 'upstream internal detail 10.0.0.12 api key prefix';
+    const grantex = mockGrantex({ sandboxCode: 'UPSTREAM' });
+    grantex.tokens.exchange.mockRejectedValueOnce(new Error(secretText));
+    const { app } = await build({}, grantex);
+    const exchange = await redeem(app, await codeFor(app));
+    expect(exchange.statusCode).toBe(502);
+    expect(exchange.body).not.toContain(secretText);
+
+    const refreshing = mockGrantex({ sandboxCode: 'UPSTREAM' });
+    refreshing.tokens.refresh.mockRejectedValueOnce(new Error(secretText));
+    const second = await build({}, refreshing);
+    expect((await redeem(second.app, await codeFor(second.app))).statusCode).toBe(200);
+    const refreshed = await second.app.inject({
+      method: 'POST',
+      url: '/token',
+      payload: { grant_type: 'refresh_token', refresh_token: 'rt_test_refresh', client_id: TEST_CLIENT_ID, client_secret: TEST_CLIENT_SECRET },
+    });
+    expect(refreshed.statusCode).toBe(400);
+    expect(refreshed.body).not.toContain(secretText);
+
+    const failing = mockGrantex();
+    failing.authorize.mockRejectedValueOnce(new Error(secretText));
+    const third = await build({}, failing);
+    const authorizeResponse = await third.app.inject({ method: 'GET', url: '/authorize', query: authorizeQuery() });
+    expect(authorizeResponse.body).not.toContain(secretText);
+  });
+});

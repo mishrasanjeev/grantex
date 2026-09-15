@@ -39,16 +39,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `client_id_metadata_document_supported`; `iss` on every authorization
   response (RFC 9207).
 - OAuth Client ID Metadata Documents with SSRF protections (public addresses
-  only with connection pinning, no redirects, size/time limits, TTL cache,
-  optional host trust policy); failures refuse with `invalid_client` and a
-  reason code.
+  only with connection pinning, port 443 unless `allowedPorts` says
+  otherwise, no redirects, size/time limits, TTL cache, optional host trust
+  policy); failures refuse with `invalid_client` and a reason code.
+- `/revoke` also revokes refresh tokens (RFC 7009) by deleting the
+  client's binding.
 - `manifests` option: scopes derived from tool manifests (0.5 and 0.6 form).
 - Resource-server guard behind `requireMcpAuth` (Express, Hono) and
   `createMcpResourceGuard`: RFC 9728 challenges, optional revocation checks,
   and `tools` enforcement that refuses a `tools/call` outside the grant with
   403 (`tool_not_granted`, `manifest_unknown_tool`) and tools needing a
   decision grant with `decision_required` (format in
-  `spec/mcp-auth-challenges.md`; `DecisionVerifier` extension point).
+  `spec/mcp-auth-challenges.md`; `DecisionVerifier` extension point, which
+  must consume each decision grant; a batch with more than one such call is
+  refused). With `tools`, a body that is not parsed JSON-RPC 2.0 is refused
+  (`body_not_parsed`). `onDenial` reports refusals with low-cardinality
+  reasons (`grant_revoked`, `tool_not_granted`, ...); a guard without
+  `revocations` logs a start-up warning.
 - The token exchange now sends the consent callback as `redirectUri`, which
   Grantex requires; 2.x omitted it and live exchanges failed.
 - Conformance suite mapping each server-side MUST of the 2026-07-28
@@ -67,7 +74,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Breaking:** a refresh that returns the same refresh token no longer hands
   it out again; the response omits `refresh_token`.
 - **Breaking:** upstream consent errors other than `access_denied` reach the
-  client as `server_error`; upstream error text is not forwarded.
+  client as `server_error`; upstream error text is not forwarded, including
+  in `error_description` from `/authorize` and `/token`.
+- **Breaking:** metadata documents are fetched only from port 443 unless
+  `clientIdMetadataDocuments.allowedPorts` allows another.
 - **Breaking:** the undocumented, unenforced `allowedRedirectUris` option and
   the metadata's advertised `grantex_extensions.consent_ui` and
   `audit_stream` URLs (no such routes existed) are removed.

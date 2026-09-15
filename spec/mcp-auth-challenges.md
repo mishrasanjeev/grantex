@@ -41,6 +41,17 @@ manifest declares is refused the same way with `reason":"manifest_unknown_tool"`
 and no `scope` (no grant can cover it). In a JSON-RPC batch, one refused call
 refuses the whole request.
 
+## 400 — a body the guard cannot read
+
+With tool enforcement, a request that can carry messages must reach the
+guard as parsed JSON-RPC 2.0: an object, or a non-empty array whose every
+element is a message (`"jsonrpc": "2.0"` with a string `method`, or a
+response with `id` and `result` or `error`). A string, a Buffer, `{}`, `[]`
+or any other shape is refused with 400 and
+`{"error":"invalid_request","reason":"body_not_parsed"}` (also reported to
+`onDenial`), so a handler that parses the raw body
+itself can never see a tool call the guard did not check.
+
 ## 403 — `decision_required`
 
 A tool whose manifest entry has `"requires_decision": true` also needs a
@@ -92,6 +103,11 @@ changing this format.
 - `DecisionVerifier.verify({ grant, requirement, arguments, header })`
   returns `{ status: 'valid' }`, `{ status: 'absent' }` or
   `{ status: 'invalid', subReason }`. With no verifier configured, every call
-  to a `requires_decision` tool is refused with `decision_required`.
+  to a `requires_decision` tool is refused with `decision_required`. A
+  verifier that returns `valid` must consume the decision grant (its `jti`)
+  atomically first, so one grant never authorises two calls. A JSON-RPC
+  batch containing more than one call that needs a decision is refused with
+  `reason: "decision_invalid"`, `sub_reason: "multiple_decisions_in_batch"`
+  before any verifier runs.
 - `decisionRequiredChallenge({ tool, connector, resourceMetadataUrl, decisionUri, description })`
   builds the header above for servers that do not use the middleware.

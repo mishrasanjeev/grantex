@@ -209,6 +209,12 @@ export class PostgresStorage implements McpAuthStorage {
 }
 
 const MIGRATION_LOCK = "SELECT pg_advisory_xact_lock(hashtextextended('grantex:mcp-auth:migrations', 0));";
+const LEDGER = `CREATE TABLE IF NOT EXISTS mcp_auth_schema_migrations (
+  version    TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);`;
+const ALREADY_APPLIED = 'mcp_auth_migration_already_applied';
+const MIGRATION_FILE = /^\d{3}_[a-z0-9_]+\.sql$/;
 
 /** Directory holding the forward-only `NNN_name.sql` migrations shipped with the package. */
 export function migrationsDirectory(): string {
@@ -216,22 +222,41 @@ export function migrationsDirectory(): string {
 }
 
 /**
- * Applies the package's migrations in file-name order. Each file is
- * idempotent (`IF NOT EXISTS`) and runs as one implicit transaction holding
- * an advisory lock, so replicas starting together serialise and a failed
- * file leaves no partial change. Returns the file names applied.
+ * Applies the package's migrations in file-name order and records each in
+ * the `mcp_auth_schema_migrations` ledger. Each file runs as one implicit
+ * transaction that takes an advisory lock, checks the ledger, applies the
+ * file and records it, so replicas starting together serialise, a file is
+ * applied at most once, and a failed file leaves no partial change. Returns
+ * the migration files recorded in the ledger (applied now or earlier).
  */
 export async function runMigrations(db: PostgresQueryable): Promise<string[]> {
   const directory = migrationsDirectory();
-  const files = (await readdir(directory)).filter((file) => /^\d{3}_[a-z0-9_]+\.sql$/.test(file)).sort();
+  const files = (await readdir(directory)).filter((file) => MIGRATION_FILE.test(file)).sort();
   if (files.length === 0) {
     throw new Error(`No mcp-auth migrations found in ${directory}`);
   }
   for (const file of files) {
     const content = await readFile(new URL(file, new URL('../../migrations/', import.meta.url)), 'utf8');
     // No params: the driver sends a simple query, which Postgres runs as a
-    // single implicit transaction (the lock is released when it ends).
-    await db.query(`${MIGRATION_LOCK}\n${content}`);
+    // single implicit transaction (the lock is released when it ends). The
+    // guard aborts that transaction when another run already recorded the file.
+    const statement = [
+      MIGRATION_LOCK,
+      LEDGER,
+      `DO $guard$ BEGIN
+  IF EXISTS (SELECT 1 FROM mcp_auth_schema_migrations WHERE version = '${file}') THEN
+    RAISE EXCEPTION '${ALREADY_APPLIED}';
+  END IF;
+END $guard$;`,
+      content,
+      `INSERT INTO mcp_auth_schema_migrations (version) VALUES ('${file}');`,
+    ].join(String.fromCharCode(10));
+    try {
+      await db.query(statement);
+    } catch (err) {
+      if (!(err instanceof Error && err.message.includes(ALREADY_APPLIED))) throw err;
+    }
   }
-  return files;
+  const { rows } = await db.query('SELECT version FROM mcp_auth_schema_migrations ORDER BY version', []);
+  return rows.map((row) => String(row['version'])).filter((version) => files.includes(version));
 }

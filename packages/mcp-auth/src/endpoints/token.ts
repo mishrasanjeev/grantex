@@ -199,10 +199,11 @@ export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext):
           agentId: config.agentId,
           redirectUri: resolveCallbackUrl(config),
         });
-      } catch (err) {
+      } catch {
+        // Upstream error text is not relayed to the client.
         return reply.status(502).send({
           error: 'server_error',
-          error_description: `Grantex token exchange failed: ${err instanceof Error ? err.message : String(err)}`,
+          error_description: 'The upstream token exchange failed',
         });
       }
 
@@ -281,14 +282,15 @@ export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext):
           refreshToken: refresh_token,
           agentId: config.agentId,
         });
-      } catch (err) {
+      } catch {
         // Nothing was issued, so restore the binding: a transient upstream
         // failure must not strand a refresh token the client still holds.
         // Grantex remains the authority on whether the token is still valid.
+        // Upstream error text is not relayed to the client.
         await storage.putRefreshTokenBinding(refresh_token, binding);
         return reply.status(400).send({
           error: 'invalid_grant',
-          error_description: `Refresh failed: ${err instanceof Error ? err.message : String(err)}`,
+          error_description: 'The refresh token could not be refreshed',
         });
       }
 
