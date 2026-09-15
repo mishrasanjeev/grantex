@@ -77,6 +77,12 @@
 6b825376902d29c367933087a0433579c4f13382:docs/ietf-draft/draft-mishra-oauth-agent-grants-02.xml:generic-api-key:619
 6b825376902d29c367933087a0433579c4f13382:docs/ietf-draft/draft-mishra-oauth-agent-grants-02.xml:generic-api-key:747
 6b825376902d29c367933087a0433579c4f13382:docs/ietf-draft/draft-mishra-oauth-agent-grants-02.xml:generic-api-key:768
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:packages/go-sdk/testdata/signing-keys-legacy-kid.json:jwt:134
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:packages/go-sdk/testdata/signing-keys-legacy-kid.json:jwt:139
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:packages/go-sdk/testdata/signing-keys-legacy-kid.json:jwt:144
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:spec/examples/signing-keys-legacy-kid.json:jwt:134
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:spec/examples/signing-keys-legacy-kid.json:jwt:139
+6c19912e9ed708de3b5fe09f4c111c50eca0bbcf:spec/examples/signing-keys-legacy-kid.json:jwt:144
 6ed4b65ee443ec11e0005599de51fe3594154475:packages/sdk-py/tests/test_domains.py:generic-api-key:21
 6ed4b65ee443ec11e0005599de51fe3594154475:packages/sdk-py/tests/test_domains.py:generic-api-key:62
 77af32e6896485e2cee3d908aa76601ab470b560:packages/gemma/tests/consent.test.ts:generic-api-key:21
@@ -126,6 +132,7 @@ e0fc2d8dd5fc1d2544c34af4f0924cb812cb82ce:docs/ietf-draft/draft-mishra-oauth-agen
 e0fc2d8dd5fc1d2544c34af4f0924cb812cb82ce:docs/ietf-draft/draft-mishra-oauth-agent-grants-00.md:generic-api-key:432
 e0fc2d8dd5fc1d2544c34af4f0924cb812cb82ce:docs/ietf-draft/draft-mishra-oauth-agent-grants-00.md:generic-api-key:535
 e0fc2d8dd5fc1d2544c34af4f0924cb812cb82ce:docs/ietf-draft/draft-mishra-oauth-agent-grants-00.md:generic-api-key:554
+e2e6e9e773a565b329ba2b178023ec9c507d957c:apps/auth-service/tests/signing-keys-legacy-kid.test.ts:generic-api-key:220
 e5d8cad4b6565a9a43f86f024e7dccdfee8d001a:docs/guides/trust-registry-setup.mdx:generic-api-key:110
 e5d8cad4b6565a9a43f86f024e7dccdfee8d001a:docs/guides/trust-registry-setup.mdx:generic-api-key:73
 eb731517c0e6abba7072328cb82dee5d49d13f5e:docs/internal/commerce-v1/commerce-v1-oacp-final-launch-evidence.md:generic-api-key:14
