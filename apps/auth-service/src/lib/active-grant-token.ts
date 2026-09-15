@@ -1,5 +1,6 @@
 import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
+import { GrantTokenClaimsError } from './grant-token-claims.js';
 import {
   verifyOAuthAccessToken,
   verifyGrantToken,
@@ -35,7 +36,8 @@ export async function checkActiveGrantToken(
   try {
     claims = await verifyGrantToken(token);
   } catch (err) {
-    if (err instanceof Error && err.message === 'Missing required grant token claims') {
+    if (err instanceof GrantTokenClaimsError
+        || (err instanceof Error && err.message === 'Missing required grant token claims')) {
       return { ok: false, reason: 'invalid_claims' };
     }
     return { ok: false, reason: 'invalid' };

@@ -9,11 +9,33 @@ import {
   type CryptoKey as KeyLike,
 } from 'jose';
 import { config } from '../config.js';
+import { logger } from './logger.js';
+import {
+  buildGrantTokenClaims,
+  hasUnrepresentableScope,
+  normalizeGrantTokenClaims,
+} from './grant-token-claims.js';
+import {
+  getSigningKeyRing,
+  loadEnvKeys,
+  loadEnvSigningKeyRing,
+  publishedSigningJwks,
+  setLegacyKidPolicy,
+  signingKid,
+  loadPostgresSigningKeyRing,
+  reloadPostgresSigningKeyRing,
+  reloadSigningKeyRing,
+  resolvePlatformVerificationKey,
+  setSigningKeyRing,
+  SIGNING_ALGORITHMS,
+  type SigningAlgorithm,
+} from './signing-keys.js';
 
 export interface KeyPair {
   privateKey: KeyLike;
   publicKey: KeyLike;
   kid: string;
+  alg: SigningAlgorithm;
 }
 
 export interface GrantTokenPayload {
@@ -86,78 +108,92 @@ export interface VerifiedOAuthAccessTokenClaims {
   authorizationDetails?: Array<Record<string, unknown>>;
 }
 
-let _keyPair: KeyPair | null = null;
+let _reloadTimer: ReturnType<typeof setInterval> | null = null;
+export const SIGNING_KEY_RELOAD_INTERVAL_MS = 60_000;
 
-function buildKid(): string {
-  const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-  return `grantex-${year}-${month}`;
-}
-
+/**
+ * Load the platform signing keys (lib/signing-keys.ts) for the configured
+ * store. The postgres store reloads every minute so a rotation made by another
+ * instance is picked up; `stopKeyReload()` stops that timer.
+ */
 export async function initKeys(): Promise<void> {
-  if (config.rsaPrivateKey) {
-    const pem = config.rsaPrivateKey.replace(/\\n/g, '\n');
-    const privateKey = await importPKCS8(pem, 'RS256', { extractable: true });
-
-    // Extract public key by exporting the private key as JWK, then re-importing
-    // only the public components (n, e) via Node's crypto module + importSPKI
-    const privateJwk = await exportJWK(privateKey);
-    const { n, e } = privateJwk;
-    if (!n || !e) throw new Error('Cannot extract RSA public key components');
-
-    // Build a minimal public JWK for importSPKI workaround
-    const { createPublicKey } = await import('node:crypto');
-    const nodePk = createPublicKey({
-      key: { kty: 'RSA', n, e },
-      format: 'jwk',
-    });
-    const spkiPem = nodePk.export({ type: 'spki', format: 'pem' }) as string;
-    const publicKey = await importSPKI(spkiPem, 'RS256');
-
-    _keyPair = { privateKey, publicKey, kid: buildKid() };
+  stopKeyReload();
+  setLegacyKidPolicy({
+    months: config.jwtLegacyKidMonths,
+    transitionSeconds: config.signingKeyActivationDelaySeconds,
+  });
+  const envOptions = {
+    alg: config.jwtSigningAlg,
+    rsaPrivateKey: config.rsaPrivateKey,
+    ecPrivateKey: config.ecPrivateKey,
+    verificationPublicKeys: config.jwtVerificationPublicKeys,
+    legacyKidKey: config.jwtLegacyKidKey,
+  };
+  if (config.signingKeyStore === 'postgres') {
+    const { getSql } = await import('../db/client.js');
+    const sql = getSql();
+    const storeOptions = {
+      alg: config.jwtSigningAlg,
+      retiredGraceSeconds: config.signingKeyRetiredGraceSeconds,
+      // The legacy kid key stays published as long as its kid aliases are.
+      legacyRetentionSeconds: config.jwtLegacyKidMonths * 31 * 86_400,
+    };
+    // Keys still configured in the environment are imported, never generated.
+    const envKeys = await loadEnvKeys({ ...envOptions, autoGenerate: false });
+    const ring = await loadPostgresSigningKeyRing(sql, storeOptions, envKeys);
+    setSigningKeyRing(ring, () => reloadPostgresSigningKeyRing(sql, storeOptions));
+    _reloadTimer = setInterval(() => {
+      // A failed reload keeps the last good key set; verification of an
+      // unknown kid still fails closed.
+      reloadSigningKeyRing().catch((err: unknown) => {
+        logger.warn(
+          { err: err instanceof Error ? err.message : String(err), code: (err as { code?: unknown }).code },
+          'platform signing key reload failed; keeping the previous key set',
+        );
+      });
+    }, SIGNING_KEY_RELOAD_INTERVAL_MS);
+    _reloadTimer.unref();
     return;
   }
 
-  if (config.autoGenerateKeys) {
-    const { privateKey, publicKey } = await generateKeyPair('RS256', {
-      modulusLength: 2048,
-      extractable: true,
-    });
-    _keyPair = { privateKey, publicKey, kid: buildKid() };
-    return;
-  }
-
-  throw new Error('No RSA key configured');
+  setSigningKeyRing(await loadEnvSigningKeyRing({ ...envOptions, autoGenerate: config.autoGenerateKeys }));
 }
 
+export function stopKeyReload(): void {
+  if (_reloadTimer !== null) {
+    clearInterval(_reloadTimer);
+    _reloadTimer = null;
+  }
+}
+
+/** The active signing key, with the kid to put in the header of a token signed now. */
 export function getKeyPair(): KeyPair {
-  if (!_keyPair) throw new Error('Keys not initialized — call initKeys() first');
-  return _keyPair;
+  const { active } = getSigningKeyRing();
+  return { privateKey: active.privateKey, publicKey: active.publicKey, kid: signingKid(), alg: active.alg };
 }
 
+/** The `algorithms` allowlist for every platform-token verification. */
+const PLATFORM_ALGORITHMS: string[] = [...SIGNING_ALGORITHMS];
+
+/**
+ * Sign a `grantex-v1` grant token: standard claims always, legacy aliases
+ * while `GRANT_TOKEN_LEGACY_CLAIMS` is on (lib/grant-token-claims.ts).
+ */
 export async function signGrantToken(
   payload: GrantTokenPayload,
+  options: { legacyClaims?: boolean } = {},
 ): Promise<string> {
-  const { privateKey, kid } = getKeyPair();
-  const builder = new SignJWT({
-    agt: payload.agt,
-    dev: payload.dev,
-    ...(payload.clientId !== undefined ? { client_id: payload.clientId } : {}),
-    scp: payload.scp,
-    scope: payload.scp.join(' '),
-    ...(payload.cnf !== undefined ? { cnf: payload.cnf } : {}),
-    ...(payload.act !== undefined ? { act: payload.act } : {}),
-    ...(payload.authorizationDetails !== undefined
-      ? { authorization_details: payload.authorizationDetails }
-      : {}),
-    ...(payload.grnt !== undefined ? { grnt: payload.grnt } : {}),
-    ...(payload.parentAgt !== undefined ? { parentAgt: payload.parentAgt } : {}),
-    ...(payload.parentGrnt !== undefined ? { parentGrnt: payload.parentGrnt } : {}),
-    ...(payload.delegationDepth !== undefined ? { delegationDepth: payload.delegationDepth } : {}),
-    ...(payload.bdg !== undefined ? { bdg: payload.bdg } : {}),
-  })
-    .setProtectedHeader({ alg: 'RS256', kid, typ: 'at+jwt' })
+  // A scope containing whitespace cannot be put in the space-delimited
+  // `scope`; such grants predate 0.6 and keep working through `scp`
+  // (buildGrantTokenClaims). New authorization requests refuse them.
+  if (hasUnrepresentableScope(payload.scp)) {
+    logger.warn({ jti: payload.jti }, 'grant token issued without scope: a granted scope contains whitespace');
+  }
+  const { privateKey, kid, alg } = getKeyPair();
+  const builder = new SignJWT(buildGrantTokenClaims(payload, {
+    legacyClaims: options.legacyClaims ?? config.grantTokenLegacyClaims,
+  }))
+    .setProtectedHeader({ alg, kid, typ: 'at+jwt' })
     .setIssuer(config.jwtIssuer)
     .setSubject(payload.sub)
     .setJti(payload.jti)
@@ -174,7 +210,7 @@ export async function signGrantToken(
 export async function signOAuthAccessToken(
   payload: OAuthAccessTokenPayload,
 ): Promise<string> {
-  const { privateKey, kid } = getKeyPair();
+  const { privateKey, kid, alg } = getKeyPair();
   const builder = new SignJWT({
     client_id: payload.clientId,
     scope: payload.scopes.join(' '),
@@ -184,7 +220,7 @@ export async function signOAuthAccessToken(
       ? { authorization_details: payload.authorizationDetails }
       : {}),
   })
-    .setProtectedHeader({ alg: 'RS256', kid, typ: 'at+jwt' })
+    .setProtectedHeader({ alg, kid, typ: 'at+jwt' })
     .setIssuer(config.jwtIssuer)
     .setSubject(payload.sub)
     .setAudience(payload.aud)
@@ -198,10 +234,9 @@ export async function signOAuthAccessToken(
 export async function verifyOAuthAccessToken(
   token: string,
 ): Promise<VerifiedOAuthAccessTokenClaims> {
-  const { publicKey } = getKeyPair();
-  const { payload, protectedHeader } = await jwtVerify(token, publicKey, {
+  const { payload, protectedHeader } = await jwtVerify(token, resolvePlatformVerificationKey, {
     issuer: config.jwtIssuer,
-    algorithms: ['RS256'],
+    algorithms: PLATFORM_ALGORITHMS,
   });
   if (protectedHeader.typ !== 'at+jwt') {
     throw new Error('OAuth access token typ must be at+jwt');
@@ -259,7 +294,7 @@ export async function signAuditCheckpoint(payload: {
   entryCount: number;
   checkpointId: string;
 }): Promise<string> {
-  const { privateKey, kid } = getKeyPair();
+  const { privateKey, kid, alg } = getKeyPair();
   return new SignJWT({
     typ: 'grantex-audit-checkpoint+jwt',
     developer_id: payload.developerId,
@@ -267,7 +302,7 @@ export async function signAuditCheckpoint(payload: {
     head_hash: payload.headHash,
     entry_count: payload.entryCount,
   })
-    .setProtectedHeader({ alg: 'RS256', kid, typ: 'JWT' })
+    .setProtectedHeader({ alg, kid, typ: 'JWT' })
     .setIssuer(config.jwtIssuer)
     .setJti(payload.checkpointId)
     .setIssuedAt()
@@ -278,46 +313,42 @@ export async function signAuditCheckpoint(payload: {
 export async function verifyGrantToken(
   token: string,
 ): Promise<VerifiedGrantTokenClaims> {
-  const { publicKey } = getKeyPair();
-  const { payload } = await jwtVerify(token, publicKey, {
+  const { payload } = await jwtVerify(token, resolvePlatformVerificationKey, {
     issuer: config.jwtIssuer,
-    algorithms: ['RS256'],
+    algorithms: PLATFORM_ALGORITHMS,
   });
 
+  // Standard claims and legacy aliases are both read; they must agree.
+  const grant = normalizeGrantTokenClaims(payload);
   const sub = payload.sub;
-  const agt = payload['agt'] as string | undefined;
-  const dev = payload['dev'] as string | undefined;
-  const scp = payload['scp'] as string[] | undefined;
   const jti = payload.jti;
   const iat = payload.iat;
   const exp = payload.exp;
-  if (!sub || !agt || !dev || !scp || !jti || typeof iat !== 'number' || typeof exp !== 'number') {
+  if (!grant || !sub || !jti || typeof iat !== 'number' || typeof exp !== 'number') {
     throw new Error('Missing required grant token claims');
   }
 
   return {
     sub,
-    agt,
-    dev,
+    agt: grant.agt,
+    dev: grant.dev,
     ...(typeof payload['client_id'] === 'string' ? { clientId: payload['client_id'] } : {}),
-    scp,
+    scp: grant.scp,
     jti,
-    grnt: typeof payload['grnt'] === 'string' ? payload['grnt'] : jti,
+    grnt: grant.grnt ?? jti,
     iat,
     exp,
     ...(payload.aud !== undefined ? { aud: payload.aud as string | string[] } : {}),
     ...(payload.iss !== undefined ? { iss: payload.iss } : {}),
-    ...(payload['parentAgt'] !== undefined ? { parentAgt: payload['parentAgt'] as string } : {}),
-    ...(payload['parentGrnt'] !== undefined ? { parentGrnt: payload['parentGrnt'] as string } : {}),
-    ...(payload['delegationDepth'] !== undefined ? { delegationDepth: payload['delegationDepth'] as number } : {}),
+    ...(grant.parentAgt !== undefined ? { parentAgt: grant.parentAgt } : {}),
+    ...(grant.parentGrnt !== undefined ? { parentGrnt: grant.parentGrnt } : {}),
+    ...(grant.delegationDepth !== undefined ? { delegationDepth: grant.delegationDepth } : {}),
     ...(payload['bdg'] !== undefined ? { bdg: payload['bdg'] as number } : {}),
     ...(typeof payload['scope'] === 'string' ? { scope: payload['scope'] } : {}),
     ...(payload['cnf'] && typeof payload['cnf'] === 'object'
       ? { cnf: payload['cnf'] as { jkt: string } }
       : {}),
-    ...(payload['act'] && typeof payload['act'] === 'object'
-      ? { act: payload['act'] as Record<string, unknown> }
-      : {}),
+    ...(grant.act !== undefined ? { act: grant.act as Record<string, unknown> } : {}),
     ...(Array.isArray(payload['authorization_details'])
       ? { authorizationDetails: payload['authorization_details'] as Array<Record<string, unknown>> }
       : {}),
@@ -384,16 +415,9 @@ export async function signWithEd25519(payload: Record<string, unknown>): Promise
 // ─── End Ed25519 ─────────────────────────────────────────────────────────────
 
 export async function buildJwks(): Promise<{ keys: Record<string, unknown>[] }> {
-  const { publicKey, kid } = getKeyPair();
-  const jwk = await exportJWK(publicKey);
-  const keys: Record<string, unknown>[] = [
-    {
-      ...jwk,
-      alg: 'RS256',
-      use: 'sig',
-      kid,
-    },
-  ];
+  // Every platform signing key (active, pending, kept for verification), each
+  // with kid, alg and use=sig, then the legacy key's grantex-YYYY-MM aliases.
+  const keys: Record<string, unknown>[] = publishedSigningJwks();
 
   // Include Ed25519 key if initialized
   if (_edKeyPair) {
@@ -421,7 +445,7 @@ export async function buildJwks(): Promise<{ keys: Record<string, unknown>[] }> 
     }
   } catch {
     // Commerce keys are optional in the JWKS — if the DB is unavailable
-    // here we still serve the platform RS256/EdDSA keys. Log via the
+    // here we still serve the platform signing and EdDSA keys. Log via the
     // route layer (this lib should not depend on pino directly).
   }
 
@@ -463,12 +487,12 @@ export async function signPrincipalSessionToken(
   payload: PrincipalSessionPayload,
   expiresInSeconds: number,
 ): Promise<string> {
-  const { privateKey, kid } = getKeyPair();
+  const { privateKey, kid, alg } = getKeyPair();
   return new SignJWT({
     dev: payload.developerId,
     purpose: 'principal_dashboard',
   })
-    .setProtectedHeader({ alg: 'RS256', kid })
+    .setProtectedHeader({ alg, kid })
     .setIssuer(config.jwtIssuer)
     .setSubject(payload.principalId)
     .setIssuedAt()
@@ -479,10 +503,9 @@ export async function signPrincipalSessionToken(
 export async function verifyPrincipalSessionToken(
   token: string,
 ): Promise<PrincipalSessionPayload> {
-  const { publicKey } = getKeyPair();
-  const { payload } = await jwtVerify(token, publicKey, {
+  const { payload } = await jwtVerify(token, resolvePlatformVerificationKey, {
     issuer: config.jwtIssuer,
-    algorithms: ['RS256'],
+    algorithms: PLATFORM_ALGORITHMS,
   });
 
   if (payload['purpose'] !== 'principal_dashboard') {
@@ -528,7 +551,7 @@ export interface WalletAuthorizationPayload {
 export async function signWalletAuthorizationToken(
   authorization: WalletAuthorizationPayload,
 ): Promise<string> {
-  const { privateKey, kid } = getKeyPair();
+  const { privateKey, kid, alg } = getKeyPair();
   return new SignJWT({
     purpose: 'prepaid_wallet_payment',
     reservation_id: authorization.reservationId,
@@ -550,7 +573,7 @@ export async function signWalletAuthorizationToken(
     cost_center: authorization.costCenter ?? null,
     request_hash: authorization.requestHash,
   })
-    .setProtectedHeader({ alg: 'RS256', kid, typ: 'wallet-auth+jwt' })
+    .setProtectedHeader({ alg, kid, typ: 'wallet-auth+jwt' })
     .setIssuer(config.jwtIssuer)
     .setAudience(PREPAID_WALLET_AUDIENCE)
     .setSubject(authorization.agentId)
@@ -563,11 +586,10 @@ export async function signWalletAuthorizationToken(
 export async function verifyWalletAuthorizationToken(
   token: string,
 ): Promise<WalletAuthorizationPayload> {
-  const { publicKey } = getKeyPair();
-  const { payload, protectedHeader } = await jwtVerify(token, publicKey, {
+  const { payload, protectedHeader } = await jwtVerify(token, resolvePlatformVerificationKey, {
     issuer: config.jwtIssuer,
     audience: PREPAID_WALLET_AUDIENCE,
-    algorithms: ['RS256'],
+    algorithms: PLATFORM_ALGORITHMS,
   });
 
   if (protectedHeader.typ !== 'wallet-auth+jwt'

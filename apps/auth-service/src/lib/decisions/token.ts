@@ -6,9 +6,10 @@
  * tokens, so SDKs verify it with the same JWKS. The profile is specified in
  * spec/decision-grant.md.
  */
-import { SignJWT, createLocalJWKSet, decodeProtectedHeader, exportJWK, jwtVerify, type JWK, type JWTPayload } from 'jose';
+import { SignJWT, decodeProtectedHeader, jwtVerify, type JWTPayload } from 'jose';
 import { config } from '../../config.js';
 import { getKeyPair } from '../crypto.js';
+import { resolvePlatformVerificationKey } from '../signing-keys.js';
 import { isActionHash, parseDecisionAction, type DecisionAction } from './action.js';
 
 export const DECISION_GRANT_TYP = 'decision+jwt';
@@ -52,40 +53,12 @@ export interface DecisionGrantClaims {
   four_eyes?: FourEyesClaim;
 }
 
-interface PlatformKey {
-  privateKey: CryptoKey;
-  publicKey: CryptoKey;
-  kid: string;
-  alg: string;
-}
-
-function activeKey(): PlatformKey {
-  const pair = getKeyPair() as ReturnType<typeof getKeyPair> & { alg?: string };
-  return { privateKey: pair.privateKey, publicKey: pair.publicKey, kid: pair.kid, alg: pair.alg ?? 'RS256' };
-}
-
-let cachedKeySet: { kid: string; resolve: ReturnType<typeof createLocalJWKSet> } | undefined;
-
-/**
- * Resolves the verification key from the token's `kid` and `alg` in the
- * platform key set, never from the header alone. With one active key this is
- * a set of one; when the key ring with retired keys is available the set is
- * built from it (see the ES256 key-rotation change).
- */
-async function platformKeySet(): Promise<ReturnType<typeof createLocalJWKSet>> {
-  const key = activeKey();
-  if (cachedKeySet?.kid !== key.kid) {
-    const jwk: JWK = { ...(await exportJWK(key.publicKey)), kid: key.kid, alg: key.alg, use: 'sig' };
-    cachedKeySet = { kid: key.kid, resolve: createLocalJWKSet({ keys: [jwk] }) };
-  }
-  return cachedKeySet.resolve;
-}
-
 /** Signs a decision grant. `iss` and `aud` are always this service's; any given are ignored. */
 export async function signDecisionGrant(
   claims: Omit<DecisionGrantClaims, 'iss' | 'aud'> & { iss?: string; aud?: string },
 ): Promise<string> {
-  const { privateKey, kid, alg } = activeKey();
+  // The platform's active signing key and the kid it signs with now, as for grant tokens.
+  const { privateKey, kid, alg } = getKeyPair();
   const { sub, jti, iat, exp, iss: _iss, aud: _aud, ...rest } = claims;
   return new SignJWT({ ...rest })
     .setProtectedHeader({ alg, kid, typ: DECISION_GRANT_TYP })
@@ -109,8 +82,11 @@ const JTI_RE = /^dgnt_[0-9A-HJKMNP-TV-Z]{26}$/;
 const HASH_RE = /^sha256:[A-Za-z0-9_-]{43}$/;
 
 /**
- * Verifies a decision grant's signature (key chosen by `kid`, algorithm from
- * an allowlist), type, issuer and audience and returns its claims. Expiry is
+ * Verifies a decision grant's signature, type, issuer and audience and returns
+ * its claims. The key is chosen by `kid` from the platform signing key ring
+ * (active, pending and retired keys kept for verification, as for grant
+ * tokens), so a grant minted before a key rotation keeps verifying for its
+ * lifetime; the algorithm comes from an allowlist and must match the key. Expiry is
  * not checked here: the caller reports `expired` itself, after the signature
  * is known to be good.
  */
@@ -132,7 +108,7 @@ export async function verifyDecisionGrantSignature(token: string): Promise<Decis
   }
   let payload: JWTPayload;
   try {
-    ({ payload } = await jwtVerify(token, await platformKeySet(), {
+    ({ payload } = await jwtVerify(token, resolvePlatformVerificationKey, {
       issuer: config.jwtIssuer,
       audience: DECISION_GRANT_AUDIENCE,
       algorithms: [...DECISION_GRANT_ALGORITHMS],

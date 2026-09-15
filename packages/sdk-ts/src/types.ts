@@ -27,6 +27,11 @@ export interface GrantexClientOptions {
   maxRetries?: number;
   /** Meter for tools and grants that declare caps; without one such calls are denied. */
   capsMeter?: CapsMeter;
+  /**
+   * Whether `enforce()` reads legacy grant token claim aliases. Defaults to
+   * `true` in 0.6 and `false` from 0.7; see `VerifyGrantTokenOptions.legacyClaims`.
+   */
+  legacyClaims?: boolean;
   /** `enforce` (default) denies over-cap calls, `warn` allows them and reports `wouldDeny`, `off` skips caps. */
   capsMode?: CapsMode;
   /**
@@ -209,6 +214,25 @@ export interface VerifiedGrant {
   delegationDepth?: number;
   /** Raw `authorization_details` claim (RFC 9396), when present. */
   authorizationDetails?: unknown;
+  /** RFC 8693 `act` claim: the delegating actor, with earlier actors nested. */
+  act?: ActorClaim;
+  /** Confirmation claim (`cnf`), e.g. `{ jkt }` for a DPoP-bound token. */
+  cnf?: { jkt?: string; [member: string]: unknown };
+  /** Audience (`aud`), when the grant is bound to a resource. */
+  audience?: string | string[];
+  /**
+   * Legacy claim aliases this result was read from because the token had no
+   * standard claim for them (for example `scp` without `scope`). Empty for
+   * 0.6 tokens. Reading aliases is deprecated and off by default from 0.7.
+   */
+  legacyClaimsUsed?: string[];
+}
+
+/** RFC 8693 actor claim. Nested `act` members are earlier actors. */
+export interface ActorClaim {
+  sub: string;
+  act?: ActorClaim;
+  [member: string]: unknown;
 }
 
 export interface DelegateParams {
@@ -359,6 +383,27 @@ export interface VerifyGrantTokenOptions {
   issuerDid?: string;
   /** @internal override clock for testing */
   clockTolerance?: number;
+  /**
+   * Signature algorithms to accept, a subset of `['RS256', 'ES256']` (the
+   * default). Any other value is rejected.
+   */
+  algorithms?: Array<'RS256' | 'ES256'>;
+  /**
+   * Read legacy claim aliases (`agt`, `dev`, `grnt`, `scp`, `parentAgt`,
+   * `parentGrnt`, `delegationDepth`) when a token lacks the standard claim.
+   * Defaults to `true` in 0.6, with a deprecation warning when an alias is
+   * used; the default becomes `false` in 0.7. With `false`, only standard
+   * claims are read and the token must have `typ: at+jwt`.
+   */
+  legacyClaims?: boolean;
+  /**
+   * RFC 7638 thumbprint of the key the caller proved possession of (for
+   * example with a verified DPoP proof). When set, the token's `cnf.jkt` must
+   * equal it. The verifier does not check DPoP proofs itself.
+   */
+  proofJkt?: string;
+  /** Fail closed unless `proofJkt` is given and matches `cnf.jkt`. Without it, `cnf` is returned but not enforced. */
+  requireProofOfPossession?: boolean;
 }
 
 // ─── Raw JWT payload shape ────────────────────────────────────────────────────
@@ -366,19 +411,38 @@ export interface VerifyGrantTokenOptions {
 export interface GrantTokenPayload {
   iss: string;
   sub: string;
-  agt: string;
-  dev: string;
+  aud?: string | string[];
   client_id?: string;
-  scp: string[];
+  /** Granted scopes, space-delimited. */
+  scope?: string;
   iat: number;
   exp: number;
   jti: string;
-  /** Grant record ID embedded as a custom claim */
-  grnt?: string;
-  parentAgt?: string;
-  parentGrnt?: string;
-  delegationDepth?: number;
+  cnf?: { jkt?: string; [member: string]: unknown };
+  act?: ActorClaim;
   authorization_details?: unknown;
+  /** Grantex grant record fields (collision-resistant claim name). */
+  'urn:grantex:grant'?: {
+    grant_id?: string;
+    agent_did?: string;
+    developer_id?: string;
+    parent_grant_id?: string;
+    delegation_depth?: number;
+  };
+  /** @deprecated Legacy alias of `urn:grantex:grant.agent_did`; not issued from 0.7. */
+  agt?: string;
+  /** @deprecated Legacy alias of `urn:grantex:grant.developer_id`; not issued from 0.7. */
+  dev?: string;
+  /** @deprecated Legacy alias of `scope`; not issued from 0.7. */
+  scp?: string[];
+  /** @deprecated Legacy alias of `urn:grantex:grant.grant_id`; not issued from 0.7. */
+  grnt?: string;
+  /** @deprecated Legacy alias of `act.sub`; not issued from 0.7. */
+  parentAgt?: string;
+  /** @deprecated Legacy alias of `urn:grantex:grant.parent_grant_id`; not issued from 0.7. */
+  parentGrnt?: string;
+  /** @deprecated Legacy alias of `urn:grantex:grant.delegation_depth`; not issued from 0.7. */
+  delegationDepth?: number;
 }
 
 // ─── Billing ──────────────────────────────────────────────────────────────────

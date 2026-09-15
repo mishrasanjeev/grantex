@@ -287,6 +287,36 @@ describe('enforce() and decision grants', () => {
     expect(result.decision).toBeUndefined();
     expect(issuer.calls).toBe(0);
   });
+
+  it('a tool the grant references needs a decision grant, with four eyes from the grant', async () => {
+    // The manifest does not declare requiresDecision; the grant's decision
+    // reference does, with four eyes on decline.
+    const issuer = new FakeIssuer();
+    const c = new Grantex({ apiKey: 'test-key', decisionConsumer: issuer });
+    c.loadManifest(ToolManifest.fromJSON({ connector: 'acme_kyb', tools: { case_decision: 'write' } }));
+    const withReference = () => vi.mocked(verifyGrantToken).mockResolvedValue({
+      ...grantFor(),
+      authorizationDetails: [{ type: 'urn:grantex:decision:v1', connector: 'acme_kyb', tools: ['case_decision'], four_eyes_on: { case_decision: ['decline'] } }],
+    });
+    const call = (extra: Record<string, unknown>) => c.enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'case_decision', caseVersion: 'v7', ...extra });
+
+    withReference();
+    expect(await call({ arguments: args() })).toMatchObject({ allowed: false, reasonCode: DenialReason.DECISION_REQUIRED });
+
+    withReference();
+    const approved = await call({ arguments: args(), decisionGrants: [await buildGrant({})] });
+    expect(approved.allowed, approved.reason).toBe(true);
+
+    const decline = { ...FIXTURE.action, decision: 'decline' };
+    const singleDecline = await buildGrant({
+      claims: { action: decline, action_hash: computeActionHash(decline), jti: 'dgnt_01K00000000000000000000009' },
+      remove: ['four_eyes'],
+    });
+    withReference();
+    expect(await call({ arguments: args({ decision: 'decline' }), decisionGrants: [singleDecline] }))
+      .toMatchObject({ allowed: false, reasonCode: DenialReason.DECISION_INVALID, subReason: DecisionSubReason.FOUR_EYES_INCOMPLETE });
+    expect(issuer.calls).toBe(1);
+  });
 });
 
 // ── DecisionsClient over HTTP ────────────────────────────────────────────

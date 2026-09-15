@@ -292,6 +292,38 @@ def test_decision_check_does_not_apply_to_tools_without_requires_decision(verify
     assert result.allowed and result.decision is None and issuer.calls == []
 
 
+def test_a_tool_the_grant_references_needs_a_decision_grant_and_four_eyes(verify_grant: MagicMock) -> None:
+    # The manifest does not declare requires_decision; the grant's decision
+    # reference does, with four eyes on decline.
+    manifest = ToolManifest.from_dict({"connector": "acme_kyb", "tools": {"case_decision": "write"}})
+    verify_grant.return_value = VerifiedGrant(
+        token_id="tok_01", grant_id="grnt_01", principal_id="user_01", agent_did="did:grantex:ag_01",
+        developer_id="dev_01", scopes=("tool:acme_kyb:write",), issued_at=1, expires_at=9999999999,
+        authorization_details=[{
+            "type": "urn:grantex:decision:v1", "connector": "acme_kyb",
+            "tools": ["case_decision"], "four_eyes_on": {"case_decision": ["decline"]},
+        }],
+    )
+    issuer = FakeIssuer()
+    c = Grantex(api_key="test-key", decision_consumer=issuer)
+    c.load_manifest(manifest)
+
+    absent = c.enforce("t", "acme_kyb", "case_decision", arguments=call_args(), case_version="v7")
+    assert (absent.allowed, absent.reason_code) == (False, DenialReason.DECISION_REQUIRED)
+
+    approved = c.enforce("t", "acme_kyb", "case_decision", decision_grants=[build_grant({})], arguments=call_args(), case_version="v7")
+    assert approved.allowed, approved.reason
+
+    decline = {**ACTION, "decision": "decline"}
+    single_decline = build_grant({
+        "claims": {"action": decline, "action_hash": DecisionAction.from_dict(decline).action_hash(), "jti": "dgnt_01K00000000000000000000009"},
+        "remove": ["four_eyes"],
+    })
+    one = c.enforce("t", "acme_kyb", "case_decision", decision_grants=[single_decline], arguments=call_args(decision="decline"), case_version="v7")
+    assert (one.allowed, one.sub_reason) == (False, DecisionSubReason.FOUR_EYES_INCOMPLETE)
+    assert len(issuer.calls) == 1
+
+
 # ── DecisionsClient over HTTP ────────────────────────────────────────────
 
 BASE = "https://api.grantex.dev"
