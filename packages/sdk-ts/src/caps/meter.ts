@@ -7,6 +7,10 @@ export const CAP_ERROR_CODE = 'E1008';
 
 export type CapWindow = 'per_hour' | 'per_day' | 'per_case';
 
+/** `off` skips caps, `warn` allows over-cap calls and reports them, `enforce` denies them. */
+export type CapsMode = 'off' | 'warn' | 'enforce';
+export const CAPS_MODES: readonly CapsMode[] = ['off', 'warn', 'enforce'];
+
 /** Rolling window length per window name; `per_case` has no time window. */
 export const WINDOW_MS: Readonly<Record<CapWindow, number>> = {
   per_hour: 3_600_000,

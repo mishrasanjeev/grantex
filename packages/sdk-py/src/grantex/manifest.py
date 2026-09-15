@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Tuple, Union
 
 if TYPE_CHECKING:
-    from .caps import Reservation
+    from .caps import CapLimit, Reservation
 
 
 # ── Permission ──────────────────────────────────────────────────────────
@@ -570,3 +570,13 @@ class EnforceResult:
 
     reservation: Optional["Reservation"] = None
     """Caps reserved for this call, when the tool or grant declares caps."""
+
+    cap_limits: Tuple["CapLimit", ...] = ()
+    """Counters this call is metered against (also set when ``reserve=False``)."""
+
+    caps_tenant_id: str = ""
+    """Tenant of ``cap_limits``; pass both to ``CapsMeter.reserve``."""
+
+    would_deny: Optional[Dict[str, Any]] = None
+    """In caps warn mode, the cap denial that was not applied: ``reason_code``,
+    ``sub_reason``, ``reason`` and ``details``."""

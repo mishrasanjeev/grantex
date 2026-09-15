@@ -11,6 +11,14 @@ from typing import Callable, Dict, Optional, Protocol, Sequence, Tuple
 ERROR_CODE = "E1008"
 """Error code for an exceeded cap."""
 
+CAPS_OFF = "off"
+"""Caps are not evaluated."""
+CAPS_WARN = "warn"
+"""Caps are evaluated; a call they would deny is allowed and reported in ``would_deny``."""
+CAPS_ENFORCE = "enforce"
+"""Caps are evaluated and enforced (the default)."""
+CAPS_MODES = (CAPS_OFF, CAPS_WARN, CAPS_ENFORCE)
+
 PER_HOUR = "per_hour"
 PER_DAY = "per_day"
 PER_CASE = "per_case"

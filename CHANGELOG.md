@@ -42,6 +42,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Behaviour change:** `cost_units` is reserved and rejected as a manifest
   tool name, in both object-form and strings-only manifests, because grant
   caps use it for the cost-unit budget.
+- `enforce(..., reserve=False)` / `reserve: false` checks caps against
+  current usage without consuming anything, and returns `cap_limits` /
+  `capLimits` and `caps_tenant_id` / `capsTenantId` for a later
+  `CapsMeter.reserve()`. Check early (for example when validating scopes) and
+  reserve once, at the call that incurs cost.
+- `caps_mode` / `capsMode` on the client or per call: `enforce` (default)
+  denies, `warn` allows a call a cap would deny and reports it in
+  `would_deny` / `wouldDeny` (reserving only calls that fit), and `off`
+  skips caps. Malformed grant caps are denied in every mode.
+- `caps_tenant_id` / `capsTenantId` overrides the tenant of a call's counters
+  (default: the grant's developer).
 - CI's `make` job runs the caps integration tests against Redis and Postgres
   service containers.
 

@@ -22,7 +22,7 @@
  */
 
 import type { DenialReason } from './denials.js';
-import type { Reservation } from './caps/meter.js';
+import type { CapLimit, CapsMode, Reservation } from './caps/meter.js';
 
 /* ------------------------------------------------------------------ */
 /*  Permission                                                         */
@@ -533,6 +533,20 @@ export interface EnforceResult {
   purpose?: string;
   /** Caps reserved for this call, when the tool or grant declares caps. */
   reservation?: Reservation;
+  /** Counters this call is metered against (also set when `reserve: false`). */
+  capLimits?: readonly CapLimit[];
+  /** Tenant of `capLimits`; pass both to `CapsMeter.reserve`. */
+  capsTenantId?: string;
+  /** In caps warn mode, the cap denial that was not applied. */
+  wouldDeny?: WouldDeny;
+}
+
+/** A cap denial reported, not applied, in caps warn mode. Keys match the Python SDK. */
+export interface WouldDeny {
+  reason_code: string;
+  sub_reason: string;
+  reason: string;
+  details: Record<string, unknown>;
 }
 
 /** Options for `grantex.enforce()`. */
@@ -545,10 +559,20 @@ export interface EnforceOptions {
   tool: string;
   /** Amount for capped scope enforcement (optional). */
   amount?: number;
-  /** Case the call belongs to; required when a per-case cap applies. */
+  /** Case the call belongs to; required when a per-case cap applies. Set by the gateway, never the agent. */
   caseId?: string;
-  /** Manifest cost units the call incurs (default: all the tool declares). */
+  /** Manifest cost units the call incurs (default: all the tool declares). Set by the gateway, never the agent. */
   costComponents?: readonly string[];
+  /**
+   * `false` checks caps against current usage without consuming anything; reserve
+   * later with `CapsMeter.reserve(result.capsTenantId, result.capLimits)` or call
+   * `enforce()` again at the call that incurs cost. Default `true`.
+   */
+  reserve?: boolean;
+  /** Overrides the client's caps mode for this call. */
+  capsMode?: CapsMode;
+  /** Tenant of every counter of this call instead of the grant's developer. */
+  capsTenantId?: string;
 }
 
 /** Options for `grantex.wrapTool()`. */

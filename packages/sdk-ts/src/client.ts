@@ -31,9 +31,18 @@ import {
 } from './denials.js';
 import { AuthorizationDetailsError, parseToolsAuthorization, toolsAuthorizationAllows, type ToolsAuthorization } from './authorization-details.js';
 import { isKnownPurpose, matchPurpose } from './purpose.js';
-import { CapExceededError, CapsConfigurationError, MeterUnavailableError, type CapsMeter, type Reservation } from './caps/meter.js';
+import {
+  CAPS_MODES,
+  CapExceededError,
+  CapsConfigurationError,
+  MeterUnavailableError,
+  type CapLimit,
+  type CapsMeter,
+  type CapsMode,
+  type Reservation,
+} from './caps/meter.js';
 import { MALFORMED_GRANT_CAPS, buildCapLimits, type BuildCapLimitsOptions } from './caps/limits.js';
-import { ToolManifest, permissionCovers, type ToolSpec, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
+import { ToolManifest, permissionCovers, type WouldDeny, type ToolSpec, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 import { verifyGrantToken } from './verify.js';
 import type {
   AuthorizationRequest,
@@ -50,6 +59,29 @@ import type {
 
 const DEFAULT_BASE_URL = 'https://api.grantex.dev';
 
+function checkCapsMode(mode: unknown): CapsMode {
+  if (!(CAPS_MODES as readonly unknown[]).includes(mode)) {
+    throw new Error(`capsMode must be one of ${CAPS_MODES.join(', ')}, not ${JSON.stringify(mode)}`);
+  }
+  return mode as CapsMode;
+}
+
+/**
+ * Throw CapExceededError if reserving `limits` now would exceed a cap. A
+ * point-in-time check that consumes nothing: a concurrent call can still take
+ * the last unit before the reservation is made.
+ */
+async function checkCaps(meter: CapsMeter, tenantId: string, limits: readonly CapLimit[]): Promise<void> {
+  for (const usage of await meter.usage(tenantId, limits)) {
+    const limit = usage.limit;
+    if (limit.units > 0 && (limit.limit === 0 || usage.used + limit.units > limit.limit)) {
+      throw new CapExceededError({
+        limit: limit.limit, window: limit.window, used: usage.used, requested: limit.units, scope: limit.scope, kind: limit.kind,
+      });
+    }
+  }
+}
+
 export class Grantex {
   readonly #http: HttpClient;
   readonly #manifests: Map<string, ToolManifest> = new Map();
@@ -57,6 +89,7 @@ export class Grantex {
   #issuer: string | undefined;
   #enforceMode: 'strict' | 'permissive';
   readonly #capsMeter: CapsMeter | undefined;
+  readonly #capsMode: CapsMode;
 
   readonly agents: AgentsClient;
   readonly grants: GrantsClient;
@@ -130,6 +163,7 @@ export class Grantex {
     this.#issuer = options.issuer;
     this.#enforceMode = (options as Record<string, unknown>)['enforceMode'] as 'strict' | 'permissive' ?? 'strict';
     this.#capsMeter = options.capsMeter;
+    this.#capsMode = checkCapsMode(options.capsMode ?? 'enforce');
   }
 
   /**
@@ -240,7 +274,8 @@ export class Grantex {
    * ```
    */
   async enforce(options: EnforceOptions): Promise<EnforceResult> {
-    const { grantToken, connector, tool, amount, caseId, costComponents } = options;
+    const { grantToken, connector, tool, amount, caseId, costComponents, reserve = true, capsTenantId } = options;
+    const capsMode = options.capsMode === undefined ? this.#capsMode : checkCapsMode(options.capsMode);
     const base: Omit<EnforceResult, 'allowed' | 'reason'> = {
       grantId: '',
       agentDid: '',
@@ -432,61 +467,91 @@ export class Grantex {
       && (Object.prototype.hasOwnProperty.call(grantCaps, tool)
         || (spec.costUnits !== undefined && Object.prototype.hasOwnProperty.call(grantCaps, 'cost_units')));
     let reservation: Reservation | undefined;
-    if (spec.caps !== undefined || spec.costUnits !== undefined || grantCapsApply) {
+    let capLimits: CapLimit[] = [];
+    const capsTenant = capsTenantId ?? grant.developerId;
+    let wouldDeny: WouldDeny | undefined;
+    if ((spec.caps !== undefined || spec.costUnits !== undefined || grantCapsApply) && capsMode !== 'off') {
+      let capDenial: WouldDeny | undefined;
       const meter = this.#capsMeter;
       if (meter === undefined) {
-        return denied(
-          `Tool '${tool}' on ${connector} declares caps or cost units and no caps meter is configured.`,
-          DenialReason.CAP_EXCEEDED,
-          CapSubReason.METER_UNAVAILABLE,
-        );
-      }
-      let limits;
-      try {
-        const buildOptions: BuildCapLimitsOptions = {
-          connector,
-          tool,
-          spec,
-          grantId: grant.grantId,
-          ...(grantCaps !== undefined ? { grantCaps } : {}),
-          ...(caseId !== undefined ? { caseId } : {}),
-          ...(costComponents !== undefined ? { costComponents } : {}),
+        capDenial = {
+          reason_code: DenialReason.CAP_EXCEEDED,
+          sub_reason: CapSubReason.METER_UNAVAILABLE,
+          reason: `Tool '${tool}' on ${connector} declares caps or cost units and no caps meter is configured.`,
+          details: {},
         };
-        limits = buildCapLimits(buildOptions);
-      } catch (err) {
-        if (!(err instanceof CapsConfigurationError)) throw err;
-        if (err.subReason === MALFORMED_GRANT_CAPS) {
-          return denied(
-            `Grant token authorization_details cannot be used: ${err.message}.`,
-            DenialReason.TOKEN_INVALID,
-            TokenSubReason.MALFORMED_AUTHORIZATION_DETAILS,
-          );
+      } else {
+        try {
+          const buildOptions: BuildCapLimitsOptions = {
+            connector,
+            tool,
+            spec,
+            grantId: grant.grantId,
+            ...(grantCaps !== undefined ? { grantCaps } : {}),
+            ...(caseId !== undefined ? { caseId } : {}),
+            ...(costComponents !== undefined ? { costComponents } : {}),
+          };
+          capLimits = buildCapLimits(buildOptions);
+        } catch (err) {
+          if (!(err instanceof CapsConfigurationError)) throw err;
+          if (err.subReason === MALFORMED_GRANT_CAPS) {
+            // A token problem, not a cap decision: denied in every mode.
+            return denied(
+              `Grant token authorization_details cannot be used: ${err.message}.`,
+              DenialReason.TOKEN_INVALID,
+              TokenSubReason.MALFORMED_AUTHORIZATION_DETAILS,
+            );
+          }
+          capDenial = {
+            reason_code: DenialReason.CAP_EXCEEDED,
+            sub_reason: err.subReason,
+            reason: `Cannot meter tool '${tool}' on ${connector}: ${err.message}.`,
+            details: {},
+          };
         }
-        return denied(`Cannot meter tool '${tool}' on ${connector}: ${err.message}.`, DenialReason.CAP_EXCEEDED, err.subReason);
+        if (capDenial === undefined) {
+          try {
+            if (reserve) {
+              reservation = await meter.reserve(capsTenant, capLimits);
+            } else {
+              await checkCaps(meter, capsTenant, capLimits);
+            }
+          } catch (err) {
+            if (err instanceof CapExceededError) {
+              capDenial = {
+                reason_code: DenialReason.CAP_EXCEEDED,
+                sub_reason: CapSubReason.LIMIT_REACHED,
+                reason: `${err.message} on ${connector}.${tool}.`,
+                details: {
+                  code: err.code,
+                  limit: err.limit,
+                  window: err.window,
+                  used: err.used,
+                  requested: err.requested,
+                  scope: err.scope,
+                  kind: err.kind,
+                },
+              };
+            } else {
+              // Any other failure, including an invalid tenant, leaves the call unmetered.
+              const message = err instanceof MeterUnavailableError || err instanceof CapsConfigurationError
+                ? err.message
+                : 'caps meter failed';
+              capDenial = {
+                reason_code: DenialReason.CAP_EXCEEDED,
+                sub_reason: CapSubReason.METER_UNAVAILABLE,
+                reason: `Caps meter could not evaluate tool '${tool}' on ${connector}: ${message}.`,
+                details: {},
+              };
+            }
+          }
+        }
       }
-      try {
-        reservation = await meter.reserve(grant.developerId, limits);
-      } catch (err) {
-        if (err instanceof CapExceededError) {
-          return denied(`${err.message} on ${connector}.${tool}.`, DenialReason.CAP_EXCEEDED, CapSubReason.LIMIT_REACHED, {
-            code: err.code,
-            limit: err.limit,
-            window: err.window,
-            used: err.used,
-            requested: err.requested,
-            scope: err.scope,
-            kind: err.kind,
-          });
+      if (capDenial !== undefined) {
+        if (capsMode !== 'warn') {
+          return denied(capDenial.reason, capDenial.reason_code as DenialReason, capDenial.sub_reason, capDenial.details);
         }
-        // Any other failure, including an invalid tenant, leaves the call unmetered: deny.
-        const message = err instanceof MeterUnavailableError || err instanceof CapsConfigurationError
-          ? err.message
-          : 'caps meter failed';
-        return denied(
-          `Caps meter could not evaluate tool '${tool}' on ${connector}: ${message}.`,
-          DenialReason.CAP_EXCEEDED,
-          CapSubReason.METER_UNAVAILABLE,
-        );
+        wouldDeny = capDenial;
       }
     }
 
@@ -496,6 +561,8 @@ export class Grantex {
       reason: '',
       ...(purpose !== undefined ? { purpose } : {}),
       ...(reservation !== undefined ? { reservation } : {}),
+      ...(capLimits.length > 0 ? { capLimits, capsTenantId: capsTenant } : {}),
+      ...(wouldDeny !== undefined ? { wouldDeny } : {}),
     };
   }
 

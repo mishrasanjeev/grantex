@@ -469,3 +469,102 @@ describe('enforce() metering', () => {
     expect((await enforce(c, 'resolve_business')).allowed).toBe(true);
   });
 });
+
+describe('check-only and caps modes', () => {
+  it('reserve: false checks without consuming', async () => {
+    const meter = new CapsMeter(new InMemoryCapsBackend());
+    const c = client(meter);
+    let check;
+    for (let i = 0; i < 5; i += 1) {
+      check = await enforce(c, 'resolve_business', { reserve: false });
+      expect(check.allowed).toBe(true);
+      expect(check).not.toHaveProperty('reservation');
+    }
+    expect(check?.capsTenantId).toBe('dev_01');
+    expect((await meter.usage('dev_01', check!.capLimits!))[0]?.used).toBe(0);
+  });
+
+  it('check early, then reserve at the gateway, uses one unit', async () => {
+    const meter = new CapsMeter(new InMemoryCapsBackend());
+    const c = client(meter);
+    const check = await enforce(c, 'resolve_business', { reserve: false });
+    await meter.reserve(check.capsTenantId!, check.capLimits!);
+    expect((await enforce(c, 'resolve_business')).allowed).toBe(true);
+    const denied = await enforce(c, 'resolve_business', { reserve: false });
+    expect([denied.allowed, denied.subReason, denied.details?.['used'], denied.details?.['limit']]).toEqual([false, 'limit_reached', 2, 2]);
+  });
+
+  it('reserve: false still denies a disabled tool', async () => {
+    const r = await enforce(client(), 'screen_person', { reserve: false });
+    expect([r.allowed, r.details?.['limit']]).toEqual([false, 0]);
+  });
+
+  it('warn mode allows and reports what it would deny', async () => {
+    const meter = new CapsMeter(new InMemoryCapsBackend());
+    const c = new Grantex({ apiKey: 'test-key', capsMeter: meter, capsMode: 'warn' });
+    c.loadManifest(acmeKyb);
+    for (let i = 0; i < 2; i += 1) {
+      const r = await enforce(c, 'resolve_business');
+      expect([r.allowed, r.wouldDeny, r.reservation !== undefined]).toEqual([true, undefined, true]);
+    }
+    const over = await enforce(c, 'resolve_business');
+    expect([over.allowed, over.reservation, over.reasonCode]).toEqual([true, undefined, undefined]);
+    expect(over.wouldDeny).toMatchObject({ reason_code: 'cap_exceeded', sub_reason: 'limit_reached', details: { code: 'E1008' } });
+    expect((await meter.usage('dev_01', over.capLimits!))[0]?.used).toBe(2);
+  });
+
+  it('warn mode reports a missing meter', async () => {
+    const c = new Grantex({ apiKey: 'test-key', capsMode: 'warn' });
+    c.loadManifest(acmeKyb);
+    const r = await enforce(c, 'resolve_business');
+    expect([r.allowed, r.wouldDeny?.sub_reason]).toEqual([true, 'meter_unavailable']);
+  });
+
+  it('warn mode still denies malformed grant caps', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(
+      grant([{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', caps: { resolve_business: { per_week: 1 } } }]),
+    );
+    const c = new Grantex({ apiKey: 'test-key', capsMeter: new CapsMeter(new InMemoryCapsBackend()), capsMode: 'warn' });
+    c.loadManifest(acmeKyb);
+    expect((await enforce(c, 'resolve_business')).reasonCode).toBe('token_invalid');
+  });
+
+  it('off mode skips caps and the meter', async () => {
+    const backend = failingBackend(new Error('unused'));
+    const c = new Grantex({ apiKey: 'test-key', capsMeter: new CapsMeter(backend), capsMode: 'off' });
+    c.loadManifest(acmeKyb);
+    for (let i = 0; i < 3; i += 1) {
+      const r = await enforce(c, 'screen_person');
+      expect([r.allowed, r.reservation, r.wouldDeny]).toEqual([true, undefined, undefined]);
+    }
+    expect(backend.reserve).not.toHaveBeenCalled();
+  });
+
+  it('a per-call mode overrides the client', async () => {
+    const c = client();
+    expect((await enforce(c, 'screen_person', { capsMode: 'off' })).allowed).toBe(true);
+    expect((await enforce(c, 'screen_person')).allowed).toBe(false);
+  });
+
+  it('rejects an invalid mode', async () => {
+    expect(() => new Grantex({ apiKey: 'test-key', capsMode: 'audit' as 'warn' })).toThrow();
+    await expect(enforce(client(), 'resolve_business', { capsMode: 'audit' })).rejects.toThrow();
+  });
+
+  it('a tenant override scopes the counters', async () => {
+    const c = client();
+    for (let i = 0; i < 2; i += 1) expect((await enforce(c, 'resolve_business', { capsTenantId: 'tenant_a' })).allowed).toBe(true);
+    expect((await enforce(c, 'resolve_business', { capsTenantId: 'tenant_a' })).allowed).toBe(false);
+    const r = await enforce(c, 'resolve_business', { capsTenantId: 'tenant_b' });
+    expect([r.allowed, r.capsTenantId]).toEqual([true, 'tenant_b']);
+    expect((await enforce(c, 'resolve_business')).allowed).toBe(true);
+  });
+
+  it('permissive mode turns cap denials into allows', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const c = new Grantex({ apiKey: 'test-key', enforceMode: 'permissive' } as ConstructorParameters<typeof Grantex>[0]);
+    c.loadManifest(acmeKyb);
+    const r = await enforce(c, 'resolve_business');
+    expect([r.allowed, r.reasonCode, r.subReason]).toEqual([true, 'cap_exceeded', 'meter_unavailable']);
+  });
+});
