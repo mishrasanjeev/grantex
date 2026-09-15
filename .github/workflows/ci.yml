@@ -111,10 +111,32 @@ jobs:
           cache: npm
           cache-dependency-path: apps/auth-service/package-lock.json
       - run: npm ci
+      - name: Install TypeScript SDK dependencies (the decision-grant browser test imports the SDK source)
+        working-directory: packages/sdk-ts
+        run: npm ci
       - name: Typecheck
         run: npm run typecheck
       - name: Test
         run: npm test
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Install the Python SDK for the decision-grant browser test
+        working-directory: packages/sdk-py
+        run: pip install -e .
+      - name: Install Chromium for the decision-grant browser test
+        run: npx playwright install --with-deps chromium
+      - name: Test decision grants end to end in Chromium (browser sign-in and approval, SDK enforce())
+        env:
+          GRANTEX_E2E_PYTHON: python
+        run: npm run test:e2e
+      - name: Upload decision-grant browser screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: auth-service-decision-grant-screenshots
+          path: apps/auth-service/test-results/
+          if-no-files-found: ignore
 
   sdk-ts:
     name: TypeScript SDK
