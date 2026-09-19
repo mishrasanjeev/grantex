@@ -140,7 +140,9 @@ async function approve(base: string, form: ConsentForm): Promise<Approval> {
   expect(response.status).toBe(303);
   const grantexState = new URL(response.headers.get('location')!).searchParams.get('state');
   expect(grantexState).toBeTruthy();
-  const cookie = response.headers.getSetCookie().map((c) => c.split(';')[0]!).find((c) => /mcp_auth_callback_\w/.test(c) && !c.endsWith('='));
+  const cookie = response.headers.getSetCookie()
+    .map((c) => c.split(';')[0]!)
+    .find((c) => /^(?:__Host-)?mcp_auth_callback_[A-Za-z0-9_-]{16}=.+$/.test(c));
   expect(cookie).toBeTruthy();
   return { state: grantexState!, cookie: cookie! };
 }
