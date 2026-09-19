@@ -86,7 +86,7 @@ class EventsClient:
                             data = json.loads(line[6:])
                             yield GrantexEvent.from_dict(data)
                         except (json.JSONDecodeError, KeyError):
-                            pass
+                            continue
 
     def subscribe(
         self,
