@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,7 +14,6 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 from grantex_gemma import (
-    OfflineAuditLog,
     create_offline_audit_log,
     verify_chain,
 )
@@ -131,7 +129,7 @@ async def test_entries_written_to_jsonl(
     await log.append("action2", sample_grant, "denied")
 
     with open(tmp_log_path, "r", encoding="utf-8") as f:
-        lines = [l.strip() for l in f if l.strip()]
+        lines = [line.strip() for line in f if line.strip()]
 
     assert len(lines) == 2
 
