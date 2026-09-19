@@ -7,7 +7,7 @@ import json
 import pytest
 
 from grantex import verify_grant_token, GrantexTokenError
-from grantex._verify import _fetch_signing_key
+import grantex._verify as verify_module
 from grantex._types import VerifyGrantTokenOptions, VerifiedGrant
 from tests.conftest import MOCK_JWT_PAYLOAD
 
@@ -232,7 +232,7 @@ def test_fetch_signing_key_rejects_unknown_kid_without_fallback(
     )
 
     with pytest.raises(GrantexTokenError, match="kid='unknown-key'"):
-        _fetch_signing_key("https://keys.example/jwks.json", "unknown-key")
+        verify_module._fetch_signing_key("https://keys.example/jwks.json", "unknown-key")
 
     from_jwk.assert_not_called()
 
@@ -249,7 +249,7 @@ def test_fetch_signing_key_selects_exact_rsa_kid(
         "grantex._verify.RSAAlgorithm.from_jwk", return_value="resolved-key"
     )
 
-    assert _fetch_signing_key(
+    assert verify_module._fetch_signing_key(
         "https://keys.example/jwks.json", "selected"
     ) == "resolved-key"
     from_jwk.assert_called_once_with(selected)
@@ -267,7 +267,7 @@ def test_fetch_signing_key_rejects_duplicate_rsa_kid(
     )
 
     with pytest.raises(GrantexTokenError, match="multiple RSA keys"):
-        _fetch_signing_key("https://keys.example/jwks.json", "duplicate")
+        verify_module._fetch_signing_key("https://keys.example/jwks.json", "duplicate")
 
     from_jwk.assert_not_called()
 
@@ -281,7 +281,7 @@ def test_fetch_signing_key_rejects_missing_kid_with_multiple_rsa_keys(
     ])
 
     with pytest.raises(GrantexTokenError, match="missing kid"):
-        _fetch_signing_key("https://keys.example/jwks.json", None)
+        verify_module._fetch_signing_key("https://keys.example/jwks.json", None)
 
 
 def test_jwks_is_cached_across_verifications(
@@ -292,18 +292,15 @@ def test_jwks_is_cached_across_verifications(
     mocker.patch(  # type: ignore[attr-defined]
         "grantex._verify.RSAAlgorithm.from_jwk", return_value="resolved-key"
     )
-    import grantex._verify as verify_module
 
     for _ in range(3):
-        assert _fetch_signing_key("https://keys.example/jwks.json", "k1") == "resolved-key"
+        assert verify_module._fetch_signing_key("https://keys.example/jwks.json", "k1") == "resolved-key"
     assert verify_module.httpx.get.call_count == 1  # type: ignore[attr-defined]
 
 
 def test_unknown_kid_refreshes_jwks_after_cooldown_but_not_inside_it(
     mocker: pytest.FixtureRequest,
 ) -> None:
-    import grantex._verify as verify_module
-
     old = {"kid": "kid-old", "kty": "RSA", "n": "AQ", "e": "AQAB"}
     new = {"kid": "kid-new", "kty": "RSA", "n": "Ag", "e": "AQAB"}
     served = [old]
@@ -316,18 +313,18 @@ def test_unknown_kid_refreshes_jwks_after_cooldown_but_not_inside_it(
     )
 
     # Warm the cache with the old key, then rotate on the issuer side.
-    assert _fetch_signing_key("https://keys.example/jwks.json", "kid-old") == "kid-old"
+    assert verify_module._fetch_signing_key("https://keys.example/jwks.json", "kid-old") == "kid-old"
     served[:] = [new]
 
     # Inside the cooldown the unknown kid is rejected without a re-fetch.
     with pytest.raises(GrantexTokenError, match="kid='kid-new'"):
-        _fetch_signing_key("https://keys.example/jwks.json", "kid-new")
+        verify_module._fetch_signing_key("https://keys.example/jwks.json", "kid-new")
     assert get.call_count == 1
 
     # Past the cooldown one refresh happens and the rotated key resolves.
     entry = verify_module._jwks_cache["https://keys.example/jwks.json"]
     entry.fetched_at -= verify_module._JWKS_REFRESH_COOLDOWN_SECONDS + 1
-    assert _fetch_signing_key("https://keys.example/jwks.json", "kid-new") == "kid-new"
+    assert verify_module._fetch_signing_key("https://keys.example/jwks.json", "kid-new") == "kid-new"
     assert get.call_count == 2
 
 
@@ -340,7 +337,7 @@ def test_fetch_signing_key_allows_missing_kid_for_single_rsa_key(
         "grantex._verify.RSAAlgorithm.from_jwk", return_value="resolved-key"
     )
 
-    assert _fetch_signing_key(
+    assert verify_module._fetch_signing_key(
         "https://keys.example/jwks.json", None
     ) == "resolved-key"
     from_jwk.assert_called_once_with(only_key)
