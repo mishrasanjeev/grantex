@@ -41,7 +41,6 @@ vi.mock('../../src/lib/client-metadata.js', async (importOriginal) => {
 import {
   TEST_CHALLENGE,
   TEST_CLIENT_ID,
-  TEST_CLIENT_SECRET,
   TEST_REDIRECT_URI,
   TEST_RESOURCE,
   TEST_VERIFIER,
