@@ -17,7 +17,6 @@ from jwt.algorithms import RSAAlgorithm
 
 from grantex_gemma import (
     OfflineVerificationError,
-    OfflineVerifier,
     ScopeViolationError,
     TokenExpiredError,
     create_offline_verifier,
@@ -55,7 +54,6 @@ async def test_reject_mismatched_kid(
     other_private = rsa.generate_private_key(
         public_exponent=65537, key_size=2048
     )
-    other_public = other_private.public_key()
     now = int(time.time())
     token = pyjwt.encode(
         {
