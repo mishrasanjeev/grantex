@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import time
 from datetime import datetime, timezone
-from typing import Any, Generator
+from typing import Any
 
 import jwt as pyjwt
 import pytest
@@ -44,7 +43,7 @@ def rsa_jwk(
 ) -> dict[str, Any]:
     """Export the RSA public key as a JWK dict."""
     _, public_key = rsa_key_pair
-    pem = public_key.public_bytes(
+    public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
