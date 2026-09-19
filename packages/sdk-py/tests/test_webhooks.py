@@ -61,7 +61,8 @@ def test_delete_webhook() -> None:
         return_value=httpx.Response(204)
     )
     client = Grantex(api_key="test-key", base_url=BASE_URL)
-    assert client.webhooks.delete("wh_01") is None
+    result = client.webhooks.delete("wh_01")
+    assert result is None
 
 
 def test_verify_signature_valid() -> None:
