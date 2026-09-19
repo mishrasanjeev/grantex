@@ -68,7 +68,8 @@ def test_verify_signature_valid() -> None:
     payload = '{"id":"evt_01","type":"grant.created","data":{}}'
     secret = "my-webhook-secret"
     sig = _make_sig(payload, secret)
-    assert verify_webhook_signature(payload, sig, secret) is True
+    valid = verify_webhook_signature(payload, sig, secret)
+    assert valid is True
 
 
 def test_verify_signature_invalid() -> None:
