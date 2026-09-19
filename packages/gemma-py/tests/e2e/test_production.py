@@ -43,7 +43,6 @@ from grantex_gemma._types import (
     JWKSSnapshot,
     OfflineAuditKey,
     SignedAuditEntry,
-    VerifiedGrant,
 )
 
 # ---------------------------------------------------------------------------
