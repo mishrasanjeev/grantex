@@ -213,7 +213,7 @@ class Grantex:
             try:
                 body = response.json()
             except Exception:
-                pass
+                body = None
             message = (
                 body["message"]
                 if isinstance(body, dict) and isinstance(body.get("message"), str)

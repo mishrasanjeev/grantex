@@ -19,7 +19,6 @@ def client() -> Grantex:
 def _make_fake_jwt(payload: dict) -> str:
     """Build a minimal dot-separated fake JWT string for decode mocking."""
     import base64
-    import json
 
     header = base64.urlsafe_b64encode(
         json.dumps({"alg": "RS256", "typ": "JWT"}).encode()
