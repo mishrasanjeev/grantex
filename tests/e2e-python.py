@@ -293,7 +293,7 @@ def test_google_adk():
 
     # Missing scope
     try:
-        bad_tool = create_grantex_tool(
+        create_grantex_tool(
             name="admin",
             description="Admin",
             grant_token=token,
@@ -350,11 +350,12 @@ def test_python_negative():
     try:
         setup_agent(client, "for-session")
     except Exception:
+        # The setup grant may already exist when this script is rerun locally.
         pass
     try:
         session = client.principal_sessions.create(CreatePrincipalSessionParams(principal_id="py-test-user"))
         session_token = getval(session, "session_token", "sessionToken")
-        ok(bool(session_token), f"Principal session created")
+        ok(bool(session_token), "Principal session created")
     except Exception as e:
         ok(False, f"Principal session failed: {e}")
 
