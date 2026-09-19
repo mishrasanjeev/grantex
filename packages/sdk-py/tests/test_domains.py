@@ -60,8 +60,7 @@ def test_create_domain(client: Grantex) -> None:
     assert result.domain == "example.com"
     assert result.verified is False
     assert result.verification_token == "grantex-verify-abc123"
-    assert "TXT record" in result.instructions
-    assert "example.com" in result.instructions
+    assert result.instructions == MOCK_DOMAIN_CREATE["instructions"]
 
     body = json.loads(route.calls[0].request.content)
     assert body["domain"] == "example.com"
