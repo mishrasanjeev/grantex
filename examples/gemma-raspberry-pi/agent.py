@@ -22,15 +22,12 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import random
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 
 from grantex_gemma import (
-    ScopeViolationError,
     SignedAuditEntry,
     VerifiedGrant,
     create_offline_audit_log,
@@ -434,7 +431,7 @@ async def main() -> None:
     if entries:
         valid, broken_at = verify_chain(entries)
         if valid:
-            print(f"\nHash chain integrity: VALID")
+            print("\nHash chain integrity: VALID")
         else:
             print(f"\nHash chain integrity: BROKEN at entry #{broken_at}")
 
