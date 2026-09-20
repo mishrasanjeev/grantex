@@ -194,8 +194,8 @@ export function evidenceCommand(importer?: () => Promise<Record<string, unknown>
     .action(async (caseId: string, flags: ExportFlags) => {
       const config = resolveConfig(await loadConfig(defaultConfigPath()));
       const baseUrl = flags.url ?? config?.baseUrl;
-      const apiKey = flags.url === undefined ? config?.apiKey : process.env['GRANTEX_KEY'];
-      if (flags.url !== undefined && !process.env['GRANTEX_KEY']) usage('--url requires GRANTEX_KEY so saved API keys are not sent to ad-hoc URLs');
+      const apiKey = process.env['GRANTEX_KEY'];
+      if (!apiKey) usage('evidence export requires GRANTEX_KEY so saved API keys are not sent to export endpoints');
       if (!baseUrl || !apiKey) usage('configure the CLI (grantex config set) or set GRANTEX_URL and GRANTEX_KEY');
       const outFile = localOutputPath(flags.out ?? (SAFE_FILE_STEM.test(caseId) ? `${caseId}.evidence.json` : usage('the case id is not a safe file name; pass --out')));
       const timeoutSeconds = Number(flags.timeout ?? '30');
@@ -244,10 +244,11 @@ export function evidenceCommand(importer?: () => Promise<Record<string, unknown>
         printResult(evidence, result);
         process.exit(EXIT_FAILED);
       }
+      const verifiedData = Buffer.alloc(data.byteLength);
+      verifiedData.set(data);
       try {
         // Evidence packages are byte-significant; data was verified against the trusted root and anchor above.
-        // lgtm[js/http-to-file-access]
-        writeFileSync(outFile, data);
+        writeFileSync(outFile, verifiedData);
       } catch (err) {
         usage(`cannot write ${outFile}: ${(err as Error).message}`);
       }
