@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Evidence CLI
+- `grantex evidence verify package.json --root <root>` in `@grantex/cli`, and
+  `grantex-evidence verify` in the Python SDK (a separate name so it does not
+  clash with the npm `grantex` binary): exit 0 only when the package verifies,
+  1 on any break with entry, field, expected and actual values, 2 on usage
+  errors including a missing or malformed `--root`. The output states the
+  trust basis: anchor internal-consistency-only, pinned or covered by the
+  verified service signature. `--anchor`, `--require-anchor`, `--jwks`,
+  `--require-signature`, `--skip-signature`, `--max-bytes`, `--json`.
+- `grantex evidence export <caseId>` / `grantex-evidence export` verify the
+  exported package against the returned root and anchor before writing it.
+- `@grantex/cli` loads the evidence module lazily and starts with an
+  `@grantex/sdk` that lacks it, reporting that evidence needs
+  `@grantex/sdk >= 0.7.0`; the dependency floor is raised when that SDK is
+  released. The command-count test changes to 33.
+- Python: `grantex.evidence.record_evidence` (batches of 100),
+  `void_record` and `export_package` call the evidence endpoints.
+
 ### Evidence package library
 - New `grantex.evidence` (Python) and `evidence` namespace of `@grantex/sdk`
   (also `@grantex/sdk/evidence`): build, canonicalise and verify evidence
