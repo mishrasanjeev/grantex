@@ -235,11 +235,11 @@ Remove an entry in the pull request that fixes it.
   (SELECT 1 FROM information_schema.columns …) THEN … END IF`) so a no-op start
   takes no lock at all, and set a short `lock_timeout` around the real change
   (migration 100 already uses this pattern for its trigger).
-- **Mitigated, not fixed:** revocation transactions now retry on
+- **Mitigated, not fixed:** revocation transactions retry on
   `deadlock_detected` (`apps/auth-service/src/lib/revocation/retry.ts`) so a
   revocation is not lost to this, and the Postgres integration fixtures retry
   too (`apps/auth-service/tests/deadlock-retry.ts`). The migrations themselves
-  are unchanged. Reproduced in the Postgres log as: migration 095's
-  `ALTER TABLE … ADD COLUMN IF NOT EXISTS` waiting for `AccessExclusiveLock` on
+  are unchanged. Seen in the Postgres log as: migration 095's `ALTER TABLE …
+  ADD COLUMN IF NOT EXISTS` waiting for `AccessExclusiveLock` on
   `audit_entries` while a cascade transaction waited for `AccessShareLock` on
   `grants`.

@@ -1,6 +1,6 @@
 {
   "name": "@grantex/cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Agent-friendly CLI for Grantex delegated authorization",
   "author": {
     "name": "Sanjeev Kumar",
@@ -28,7 +28,7 @@
     "dev": "node --loader ts-node/esm src/index.ts"
   },
   "dependencies": {
-    "@grantex/sdk": ">=0.3.0",
+    "@grantex/sdk": ">=0.7.0",
     "chalk": "^6.0.0",
     "commander": "^15.0.0",
     "jose": "^6.2.3"

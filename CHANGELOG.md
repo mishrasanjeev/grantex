@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Release versions for the SDKs
+- `@grantex/sdk` 0.6.0 -> 0.7.0, `grantex` (Python) 0.5.1 -> 0.6.0, `@grantex/cli`
+  0.3.0 -> 0.4.0, `@grantex/x402` 0.4.0 -> 0.4.1 and the Go SDK 0.3.0 -> 0.4.0.
+  The published 0.6.0 and 0.5.1 packages predate decision grants and evidence
+  packages, so the code in this repository could not be released under those
+  numbers: npm and PyPI refuse to replace a published version.
+- `@grantex/cli` now requires `@grantex/sdk >= 0.7.0`, the first version with the
+  evidence module it loads. Publish the SDK before the CLI.
+- `Publish primary SDKs` reads every version from its manifest instead of
+  repeating literals in step names, assertions, artifact paths and the Go tag,
+  and refuses to start when a version is already on npm or PyPI, naming the
+  manifest to bump.
+
 ### Evidence export in the auth service
 - **Breaking:** `POST /v1/audit/log` now refuses actions starting with
   `evidence.`, `decision.` or `grantex.` (`400 AUDIT_ACTION_RESERVED`) and
@@ -140,6 +153,13 @@ below.
   upgrade order (verifiers first, then the auth service, then new features,
   then turning off legacy claims before 0.7), plus the database migrations,
   the new settings and a checklist.
+
+### Revocation reliability
+- Revocation transactions (cascade, suspend, resume and re-evaluation) retry on
+  `deadlock_detected`, `serialization_failure` and `lock_not_available` instead
+  of failing. A revocation competes with delegation, token refresh and — during
+  a rolling deploy — the startup migrations, and Postgres raises those errors
+  precisely because retrying is the right answer. See FINDINGS G-18.
 
 ### Event bridge: mapping rules and cascade revocation
 - Declarative mapping rules per developer (PRD G-6) turn a verified event into
