@@ -60,7 +60,7 @@ def _raise_for(response: httpx.Response) -> None:
             path = body.get("field_path")
             field_path = path if isinstance(path, str) else None
     except ValueError:
-        pass
+        message = response.text[:200] or message
     raise EvidenceApiError(response.status_code, code, message, field_path)
 
 

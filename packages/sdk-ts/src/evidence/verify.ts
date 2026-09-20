@@ -111,7 +111,7 @@ export function verifyPackage(data: Uint8Array | string, options: VerifyOptions)
   let anchorStatus: VerificationResult['anchorStatus'] = 'absent';
   let signatureStatus: VerificationResult['signatureStatus'] = 'absent';
   let signatureKid: string | null = null;
-  let summary: SemanticSummary = { unsourcedInputs: 0, lateEntries: 0, tenantAssertedEntries: 0 };
+  let summary: SemanticSummary;
   try {
     const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
     const expectedRoot = options.expectedRoot;

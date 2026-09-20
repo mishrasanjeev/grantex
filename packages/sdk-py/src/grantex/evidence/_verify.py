@@ -104,7 +104,7 @@ def verify_package(
     anchor_status = "absent"
     signature_status = "absent"
     signature_kid: Optional[str] = None
-    summary = SemanticSummary()
+    summary: SemanticSummary
     try:
         if not isinstance(data, (bytes, bytearray)):
             raise TypeError("package data must be bytes")

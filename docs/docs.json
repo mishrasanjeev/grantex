@@ -58,7 +58,8 @@
               "concepts/purpose-bound-grants",
               "concepts/decision-grants",
               "concepts/caps-and-metering",
-              "concepts/evidence-and-verification"
+              "concepts/evidence-and-verification",
+              "concepts/event-bridge-and-revocation"
             ]
           },
           {

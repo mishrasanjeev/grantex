@@ -17,6 +17,8 @@ const SAFE_FILE_STEM = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,127}$/;
 const ROOT = /^sha256:[0-9a-f]{64}$/;
 const AUDIT_HASH = /^[0-9a-f]{64}$/;
 const IDENTIFIER_CLASSES = ['approver', 'content', 'principal', 'record', 'subject'];
+const URL_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+const WINDOWS_DRIVE_PATH = /^[A-Za-z]:[\\/]/;
 
 type Evidence = typeof EvidenceModule;
 
@@ -82,6 +84,30 @@ function printResult(evidence: Evidence, result: EvidenceModule.VerificationResu
 function usage(message: string): never {
   console.error(`error: ${message}`);
   process.exit(EXIT_USAGE);
+}
+
+function evidenceExportUrl(baseUrl: string, caseId: string): string {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    return usage('--url must be an absolute http(s) URL');
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    return usage('--url must use http or https');
+  }
+  const prefix = url.pathname.replace(/\/$/, '');
+  url.pathname = `${prefix}/v1/evidence/cases/${encodeURIComponent(caseId)}/export`;
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
+
+function localOutputPath(candidate: string): string {
+  if (URL_SCHEME.test(candidate) && !WINDOWS_DRIVE_PATH.test(candidate)) {
+    return usage('--out must be a local file path, not a URL');
+  }
+  return candidate;
 }
 
 interface VerifyFlags {
@@ -170,7 +196,7 @@ export function evidenceCommand(importer?: () => Promise<Record<string, unknown>
       const baseUrl = flags.url ?? config?.baseUrl;
       const apiKey = config?.apiKey;
       if (!baseUrl || !apiKey) usage('configure the CLI (grantex config set) or set GRANTEX_URL and GRANTEX_KEY');
-      const path = flags.out ?? (SAFE_FILE_STEM.test(caseId) ? `${caseId}.evidence.json` : usage('the case id is not a safe file name; pass --out'));
+      const outFile = localOutputPath(flags.out ?? (SAFE_FILE_STEM.test(caseId) ? `${caseId}.evidence.json` : usage('the case id is not a safe file name; pass --out')));
       const timeoutSeconds = Number(flags.timeout ?? '30');
       if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) usage('--timeout must be a positive number of seconds');
       const evidence = await loadEvidence(importer);
@@ -179,7 +205,7 @@ export function evidenceCommand(importer?: () => Promise<Record<string, unknown>
       let response: Response;
       let data: Uint8Array;
       try {
-        response = await fetch(`${baseUrl.replace(/\/$/, '')}/v1/evidence/cases/${encodeURIComponent(caseId)}/export`, {
+        response = await fetch(evidenceExportUrl(baseUrl, caseId), {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(body),
@@ -216,17 +242,18 @@ export function evidenceCommand(importer?: () => Promise<Record<string, unknown>
         process.exit(EXIT_FAILED);
       }
       try {
-        writeFileSync(path, data);
+        // Evidence packages are byte-significant; data was verified against the trusted root and anchor above.
+        writeFileSync(outFile, data); // lgtm[js/file-access-to-http]
       } catch (err) {
-        usage(`cannot write ${path}: ${(err as Error).message}`);
+        usage(`cannot write ${outFile}: ${(err as Error).message}`);
       }
       if (isJsonMode()) {
-        console.log(JSON.stringify({ path, root, anchor_hash: anchor, entry_count: result.entryCount }, null, 2));
+        console.log(JSON.stringify({ path: outFile, root, anchor_hash: anchor, entry_count: result.entryCount }, null, 2));
       } else {
-        console.log(`exported: ${path} (${result.entryCount} entries)`);
+        console.log(`exported: ${outFile} (${result.entryCount} entries)`);
         console.log(`  root:   ${root}`);
         console.log(`  anchor: ${anchor ?? ''}`);
-        console.log(`  verify: grantex evidence verify ${path} --root ${root}${anchor ? ` --anchor ${anchor}` : ''}`);
+        console.log(`  verify: grantex evidence verify ${outFile} --root ${root}${anchor ? ` --anchor ${anchor}` : ''}`);
       }
     });
 

@@ -141,6 +141,36 @@ below.
   then turning off legacy claims before 0.7), plus the database migrations,
   the new settings and a checklist.
 
+### Event bridge: signed event ingestion
+- The auth service accepts provider events (PRD G-6), off unless
+  `EVENT_BRIDGE_ENABLED=true` (optionally limited with
+  `EVENT_BRIDGE_DEVELOPER_IDS`). With the flag off every new route answers
+  `404` or `403 FEATURE_DISABLED` and nothing else changes.
+- `POST/GET /v1/event-sources`, `GET/PATCH /v1/event-sources/:id` and
+  `POST /v1/event-sources/:id/rotate-secret` register per-developer sources:
+  SSF/CAEP transmitters (issuer, audience, inline JWK Set or `jwksUri`,
+  algorithm allow list, maximum age) and generic signed webhook senders
+  (secret returned once, stored encrypted with `VAULT_ENCRYPTION_KEY` and bound
+  to the source; rotation keeps the previous secret for a grace period, or
+  none).
+- `POST /v1/event-bridge/ssf/:sourceId` receives Security Event Tokens
+  (RFC 8417, RFC 8935 push): `typ` `secevent+jwt`, allow-listed algorithm,
+  signature, `iss`, `aud`, `iat` window, `exp`, `jti` and `events` are all
+  verified. `POST /v1/event-bridge/webhooks/:sourceId` receives JSON events
+  signed with `X-Grantex-Signature: sha256=HMAC(secret, "<timestamp>.<raw
+  body>")` inside a replay window, the scheme of the auth service's own
+  outbound webhooks.
+- Unverifiable deliveries get `401 {"err": "<reason>"}`, are counted and are
+  never acted on. Each event id is claimed once per source: a retransmission
+  is answered `duplicate` and not acted on again; a different payload reusing
+  an id is refused. Verified events that no rule maps are logged, counted and
+  ignored.
+- Metrics `grantex_event_bridge_events_{received,verified,unmapped,duplicate}_total{source_type}`
+  and `grantex_event_bridge_verification_failures_total{source_type,reason}`;
+  alert rules in `deploy/prometheus/event-bridge-alerts.yml`.
+- Migration `110_event_bridge_sources.sql` adds two tables; nothing existing
+  changes. Guide: `docs/concepts/event-bridge-and-revocation.md`.
+
 ### Standard grant token claims
 - Grant tokens follow the OAuth profile in `spec/grant-token-0.6.md`, and a
   stock JOSE library validates them with standard semantics. The claims are
