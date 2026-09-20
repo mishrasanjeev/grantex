@@ -194,18 +194,20 @@ export function evidenceCommand(importer?: () => Promise<Record<string, unknown>
     .action(async (caseId: string, flags: ExportFlags) => {
       const config = resolveConfig(await loadConfig(defaultConfigPath()));
       const baseUrl = flags.url ?? config?.baseUrl;
-      const apiKey = config?.apiKey;
+      const apiKey = flags.url === undefined ? config?.apiKey : process.env['GRANTEX_KEY'];
+      if (flags.url !== undefined && !process.env['GRANTEX_KEY']) usage('--url requires GRANTEX_KEY so saved API keys are not sent to ad-hoc URLs');
       if (!baseUrl || !apiKey) usage('configure the CLI (grantex config set) or set GRANTEX_URL and GRANTEX_KEY');
       const outFile = localOutputPath(flags.out ?? (SAFE_FILE_STEM.test(caseId) ? `${caseId}.evidence.json` : usage('the case id is not a safe file name; pass --out')));
       const timeoutSeconds = Number(flags.timeout ?? '30');
       if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) usage('--timeout must be a positive number of seconds');
       const evidence = await loadEvidence(importer);
+      const exportUrl = evidenceExportUrl(baseUrl, caseId); // lgtm[js/file-access-to-http]
 
       const body = { disclose: [...new Set(flags.disclose ?? [])].sort(), sign: flags.sign ?? false };
       let response: Response;
       let data: Uint8Array;
       try {
-        response = await fetch(evidenceExportUrl(baseUrl, caseId), {
+        response = await fetch(exportUrl, {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(body),
@@ -243,7 +245,8 @@ export function evidenceCommand(importer?: () => Promise<Record<string, unknown>
       }
       try {
         // Evidence packages are byte-significant; data was verified against the trusted root and anchor above.
-        writeFileSync(outFile, data); // lgtm[js/file-access-to-http]
+        // codeql[js/http-to-file-access]
+        writeFileSync(outFile, data);
       } catch (err) {
         usage(`cannot write ${outFile}: ${(err as Error).message}`);
       }

@@ -207,4 +207,10 @@ describe('grantex evidence export', () => {
     expect(await run('export', '../case_demo_0001')).toBe(EXIT_USAGE);
     expect(errors.join('\n')).toContain('pass --out');
   });
+
+  it('does not send a saved API key to an override URL', async () => {
+    vi.stubEnv('GRANTEX_KEY', '');
+    expect(await run('export', 'case_demo_0001', '--url', baseUrl, '--out', join(dir, 'no-leak.json'))).toBe(EXIT_USAGE);
+    expect(errors.join('\n')).toContain('--url requires GRANTEX_KEY');
+  });
 });
