@@ -191,9 +191,9 @@ describePostgres('evidence records and export against real Postgres', () => {
       expect((await voidEvidenceRecord(sql, developerId, caseId, { reason_code: 'recorded_in_error', target_id: 'call_260', target_type: 'tool_call' })).audit_entry_id).toBe(voided.audit_entry_id);
       await expectError(voidEvidenceRecord(sql, developerId, caseId, { reason_code: 'other', target_id: 'call_260', target_type: 'tool_call' }), 'EVIDENCE_RECORD_CONFLICT');
 
-      // Before the decision-grant store exists, exports carry no decisions.
+      // Before any case decision rows exist, the store is available but the case stays open.
       const undecided = await exportCasePackage(sql, { developerId, caseId, issuer: ISSUER, settings, options: {} });
-      expect(undecided.decisionsAvailable).toBe(false);
+      expect(undecided.decisionsAvailable).toBe(true);
       expect(JSON.parse(Buffer.from(undecided.data).toString('utf8'))['case']['state']).toBe('open');
 
       // Four-eyes decisions and their consumption, from the store only.
