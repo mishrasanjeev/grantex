@@ -383,6 +383,43 @@ Postgres and Redis, builds a delegation tree, revokes each parent and measures
 how long the child kept being authorised, through both SDKs. G-6 requires two
 seconds at the ninety-fifth percentile.
 
+## The emergency stop
+
+Cascade revocation is the documented emergency stop for the whole platform.
+One authenticated call halts every agent under a grant, an agent, a principal
+or a whole developer:
+
+```http
+POST /v1/emergency-stop
+Authorization: Bearer <developer API key>
+
+{
+  "scope": { "type": "agent", "id": "ag_01..." },
+  "reason": "incident 4102: provider credentials leaked",
+  "confirm": "stop agent:ag_01...",
+  "dryRun": false
+}
+```
+
+- `confirm` must be exactly `stop <type>:<id>`; anything else is refused with
+  `412 CONFIRMATION_REQUIRED` and the phrase it expected. Nothing is revoked
+  before that check passes.
+- `dryRun: true` reports how many grants the scope covers and revokes nothing.
+- A developer API key can only stop its own grants. The platform operator uses
+  `POST /v1/admin/emergency-stop` with `ADMIN_API_KEY` and a `developerId`.
+- `GET /v1/emergency-stops` lists what has been stopped, when, by whom and
+  why.
+- Underneath it is an ordinary cascade revocation per matched grant, so the
+  stop appears in the audit hash chain (one `grantex.grant.revoked` per grant
+  plus one `grantex.emergency_stop` summary) and on the revocation feed, and
+  agents following the feed are denied within seconds.
+- Off unless `EMERGENCY_STOP_ENABLED=true`. The revocations are irreversible:
+  principals have to authorise again.
+
+The runbook — rehearsing it, working out the blast radius, what to do when an
+agent keeps running, and what to do if the API itself is unreachable — is
+section 11 of `docs/self-hosting.md`.
+
 ## Observability
 
 | Metric | Labels |
@@ -401,6 +438,7 @@ seconds at the ninety-fifth percentile.
 | `grantex_revocation_feed_polls_total` | `outcome` |
 | `grantex_revocation_feed_subscribers` | — (live streams on this instance) |
 | `grantex_revocation_feed_stale_seconds` | — (since the last successful read) |
+| `grantex_emergency_stops_total` | `scope`, `outcome` (`applied`, `dry_run`, `refused`) |
 
 Every refused delivery also logs `alert: "event_bridge_verification_failure"`
 with the source id and reason, never the payload or signature. Alert rules are

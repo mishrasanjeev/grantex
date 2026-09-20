@@ -182,6 +182,37 @@ below.
 - Migration `111_event_mapping_rules.sql` adds two tables and two nullable
   columns on `grants`; nothing existing changes and nothing reads them with the
   flag off.
+### Revocation reliability
+- Revocation transactions (cascade, suspend, resume, re-evaluation and the
+  emergency stop summary) retry on `deadlock_detected`,
+  `serialization_failure` and `lock_not_available` instead of failing. A
+  revocation competes with delegation, token refresh and — during a rolling
+  deploy — the startup migrations, and Postgres raises those errors precisely
+  because retrying is the right answer. See FINDINGS G-18.
+
+### Emergency stop
+- `POST /v1/emergency-stop` (developer API key, own tenant) and
+  `POST /v1/admin/emergency-stop` (`ADMIN_API_KEY`, any tenant) halt every
+  agent under a grant, an agent, a principal or a whole developer (PRD G-6,
+  US-5). Off unless `EMERGENCY_STOP_ENABLED=true`.
+- `confirm` must repeat exactly `stop <type>:<id>`; anything else is refused
+  with `412 CONFIRMATION_REQUIRED` naming the phrase, before anything is
+  revoked. `dryRun: true` reports how many grants the scope covers and revokes
+  nothing. A developer key can only ever stop its own grants.
+- Underneath it is a cascade revocation per matched grant, so a stop appears in
+  the audit hash chain (one `grantex.grant.revoked` per grant with cause
+  `emergency_stop`, plus a `grantex.emergency_stop` summary) and on the
+  revocation feed, and SDKs in feed mode deny the agents' next calls.
+  `GET /v1/emergency-stops` lists what was stopped, when, by whom and why.
+- Release test: `tests/e2e/emergency-stop.test.ts` runs simulated agents under
+  a grant tree, stops them with one call and asserts every agent's next call is
+  denied within two seconds; `scripts/revocation-release-test.sh` runs it
+  beside the propagation measurement.
+- Runbook: section 11 of `docs/self-hosting.md` (rehearsal, blast radius, what
+  to do when an agent keeps running, and what to do if the API is
+  unreachable). Metric `grantex_emergency_stops_total{scope,outcome}` with an
+  alert rule; migration `113_emergency_stops.sql` adds one table.
+
 ### Revocation feed: SDKs see revocations within seconds
 - `enforce()` verifies a grant token offline, so a revoked grant's token stays
   valid until it expires. The revocation feed (PRD G-6) closes that gap, off

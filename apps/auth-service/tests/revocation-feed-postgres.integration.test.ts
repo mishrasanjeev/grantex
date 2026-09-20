@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { describe, expect, it, vi } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
+import { retryOnDeadlock } from './deadlock-retry.js';
 import { RevocationFeedHub } from '../src/lib/revocation-feed/hub.js';
 import {
   feedReady,
@@ -40,6 +41,10 @@ interface Fixture {
 }
 
 async function withFixture<T>(fn: (f: Fixture) => Promise<T>): Promise<T> {
+  return retryOnDeadlock(() => runFixture(fn));
+}
+
+async function runFixture<T>(fn: (f: Fixture) => Promise<T>): Promise<T> {
   const sql = postgres(databaseUrl!, { max: 8, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
   const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
   const dev = `dev_feed_${suffix}`;

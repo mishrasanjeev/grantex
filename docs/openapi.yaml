@@ -146,6 +146,42 @@ components:
       description: Service administrator credential (ADMIN_API_KEY); not a developer API key
 
   schemas:
+    EmergencyStopRequest:
+      type: object
+      required: [scope, reason, confirm]
+      properties:
+        scope:
+          type: object
+          required: [type, id]
+          properties:
+            type: { type: string, enum: [grant, agent, principal, developer] }
+            id: { type: string, maxLength: 256 }
+        reason: { type: string, maxLength: 500 }
+        confirm:
+          type: string
+          description: "Exactly `stop <type>:<id>`"
+        dryRun:
+          type: boolean
+          default: false
+          description: Report the blast radius without revoking anything
+    EmergencyStopResult:
+      type: object
+      properties:
+        stopId: { type: string }
+        developerId: { type: string }
+        scope:
+          type: object
+          properties:
+            type: { type: string }
+            id: { type: string }
+        dryRun: { type: boolean }
+        grantsMatched: { type: integer }
+        grantsRevoked: { type: integer, description: "Including everything delegated beneath each matched grant" }
+        agentsStopped: { type: array, items: { type: string } }
+        reason: { type: string }
+        requestedBy: { type: string }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
     EventMappingRuleInput:
       type: object
       additionalProperties: false
@@ -3445,6 +3481,92 @@ paths:
           description: Too many streams for this developer on this instance
         "503":
           description: The feed cannot be trusted on this deployment
+  /v1/emergency-stop:
+    post:
+      operationId: emergencyStop
+      tags: [Event Bridge]
+      summary: Halt every agent under a grant, agent, principal or this developer
+      description: |
+        Cascade-revokes every live grant the scope covers and everything delegated beneath it.
+        `confirm` must repeat exactly `stop <type>:<id>`, or the call is refused with 412 and
+        nothing is revoked; `dryRun: true` reports the blast radius and revokes nothing. A
+        developer API key can only stop its own grants. Revocations are irreversible. Requires
+        `EMERGENCY_STOP_ENABLED=true`. Runbook: section 11 of docs/self-hosting.md.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmergencyStopRequest"
+      responses:
+        "200":
+          description: What was stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmergencyStopResult"
+        "400":
+          description: Malformed scope, reason or dryRun
+        "403":
+          description: Not enabled, or an attempt to stop another developer
+        "412":
+          description: The confirmation phrase does not match; the response says what it should be
+  /v1/emergency-stops:
+    get:
+      operationId: listEmergencyStops
+      tags: [Event Bridge]
+      summary: What has been stopped, when, by whom and why
+      responses:
+        "200":
+          description: Recent stops
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stops:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EmergencyStopResult"
+        "403":
+          description: Not enabled
+  /v1/admin/emergency-stop:
+    post:
+      operationId: adminEmergencyStop
+      tags: [Event Bridge]
+      summary: Halt agents in any tenant (operator)
+      description: |
+        The same call for the platform operator, authenticated with `ADMIN_API_KEY`. `developerId`
+        names the tenant for a grant, agent or principal scope; a `developer` scope names it
+        itself.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/EmergencyStopRequest"
+                - type: object
+                  properties:
+                    developerId: { type: string }
+      responses:
+        "200":
+          description: What was stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmergencyStopResult"
+        "400":
+          description: Malformed request, or a missing developerId
+        "401":
+          description: Missing or wrong admin key
+        "404":
+          description: Not enabled
+        "412":
+          description: The confirmation phrase does not match
+        "503":
+          description: ADMIN_API_KEY is not configured
   /v1/webhooks:
     post:
       operationId: createWebhook
