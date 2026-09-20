@@ -201,12 +201,13 @@ export function evidenceCommand(importer?: () => Promise<Record<string, unknown>
       const timeoutSeconds = Number(flags.timeout ?? '30');
       if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) usage('--timeout must be a positive number of seconds');
       const evidence = await loadEvidence(importer);
-      const exportUrl = evidenceExportUrl(baseUrl, caseId); // lgtm[js/file-access-to-http]
+      const exportUrl = evidenceExportUrl(baseUrl, caseId);
 
       const body = { disclose: [...new Set(flags.disclose ?? [])].sort(), sign: flags.sign ?? false };
       let response: Response;
       let data: Uint8Array;
       try {
+        // lgtm[js/file-access-to-http]
         response = await fetch(exportUrl, {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -245,7 +246,7 @@ export function evidenceCommand(importer?: () => Promise<Record<string, unknown>
       }
       try {
         // Evidence packages are byte-significant; data was verified against the trusted root and anchor above.
-        // codeql[js/http-to-file-access]
+        // lgtm[js/http-to-file-access]
         writeFileSync(outFile, data);
       } catch (err) {
         usage(`cannot write ${outFile}: ${(err as Error).message}`);
