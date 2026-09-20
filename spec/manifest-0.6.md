@@ -126,14 +126,16 @@ a `reason_code` (`reasonCode` in TypeScript) and, where one applies, a
 | Scope permission covers the tool's permission | `permission_insufficient` | |
 | The grant's tools list (when present) names the tool | `tool_not_granted` | `not_in_authorization_details` |
 | `allowed_purposes` | `purpose_not_allowed` | `missing`, `unknown_purpose`, `not_matched` |
-| `requires_decision`, or the tool is listed in the grant's `urn:grantex:decision:v1` entry | `decision_required` | |
+| `requires_decision`, or the tool is listed in the grant's `urn:grantex:decision:v1` entry: decision grants verified offline (see `decision-grant.md`) | `decision_required` (none presented), `decision_invalid` | `action_mismatch`, `wrong_case`, `case_changed`, `expired`, `same_approver`, `four_eyes_incomplete`, `malformed`, `unknown_grant` |
 | `amount` within a `capped:N` scope | `cap_exceeded` | `invalid_amount`, `malformed_cap`, `amount_cap` |
 | `caps`, `cost_units` (manifest or grant), reserved last | `cap_exceeded` | `limit_reached` (E1008), `case_required`, `invalid_case_id`, `invalid_cost_component`, `meter_unavailable` |
+| The same decision grants, consumed at the issuer, after caps | `decision_invalid` | `consumed`, `revoked`, `consume_unavailable` and the above |
 
 The reason codes are the Grantex denial taxonomy: `purpose_not_allowed`,
 `tool_not_granted`, `permission_insufficient`, `cap_exceeded`,
 `decision_required`, `decision_invalid` (sub-reasons `action_mismatch`,
-`expired`, `consumed`, `same_approver`), `grant_revoked`, `region_mismatch`,
+`expired`, `consumed`, `same_approver`, and the further sub-reasons of
+`decision-grant.md`), `grant_revoked`, `region_mismatch`,
 `manifest_unknown_tool`, plus `token_invalid` for a token that fails
 verification before any grant is known. They are stable, low-cardinality
 values intended for audit records and metric labels; `reason` remains a
@@ -143,6 +145,7 @@ Declarations are enforced fail-closed: an SDK that cannot evaluate a declared
 constraint denies the call rather than ignoring the constraint. Purpose
 matching is specified in `docs/concepts/purpose-bound-grants.md` and caps in
 `docs/concepts/caps-and-metering.md`. A tool with caps or cost units is
-denied with `meter_unavailable` when the client has no caps meter. In this
-release a tool with `requires_decision` always returns `decision_required`.
+denied with `meter_unavailable` when the client has no caps meter. A tool with
+`requires_decision` needs decision grants (`docs/concepts/decision-grants.md`,
+`spec/decision-grant.md`); without them it returns `decision_required`.
 Tools declared with a permission only behave exactly as before.

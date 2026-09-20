@@ -17,7 +17,8 @@ below.
   - `cost_units` is a reserved tool name.
   - `enforce()` denies calls it cannot evaluate: a tool with
     `allowed_purposes` needs a matching grant purpose, a tool with
-    `requires_decision` always returns `decision_required`, and a tool with
+    `requires_decision` needs decision grants (`decision_required` without
+    them), and a tool with
     caps needs a caps meter.
 - **Purpose-bound grants.**
   - `POST /v1/authorize` rejects an unknown `purpose`, or a purpose without a
@@ -128,9 +129,10 @@ below.
 - **Break (TypeScript types):** in `GrantTokenPayload`, `agt`, `dev` and
   `scp` are now optional and deprecated, and `scope`, `act`, `cnf`, `aud`
   and `urn:grantex:grant` are added.
-- **Decision references.** `enforce()` returns `decision_required` for a
-  tool listed in the grant's `urn:grantex:decision:v1` entry, even when the
-  manifest does not declare `requires_decision`. A malformed decision entry
+- **Decision references.** `enforce()` requires a decision grant for a tool
+  listed in the grant's `urn:grantex:decision:v1` entry (`decision_required`
+  without one), even when the manifest does not declare `requires_decision`;
+  a decision in the entry's `four_eyes_on` needs two approvers. A malformed decision entry
   denies every call with `malformed_authorization_details`. A delegated grant
   keeps the decision references of the connectors it keeps.
   `parse_decision_references` / `parseDecisionReferences` read them.
@@ -360,6 +362,57 @@ Breaking changes
   advertised `grantex_extensions.consent_ui` and `audit_stream` URLs, which had
   no routes.
 
+### Decision grants: specification, concepts and breaking changes
+- `spec/decision-grant.md`: the decision-grant profile (roles and
+  credentials, semantic action, token header and claims, approver identity
+  providers, browser sign-in and step-up, decision requests, approval on the
+  auth service's page, audit, case-bound validity, verification and single
+  use, errors, threat model, APIs).
+- `docs/concepts/decision-grants.md`: who can approve and how, the four-eyes
+  model, validity, enforcing, refusals, rolling out with `decisions.required`,
+  operating, and what decision grants do and do not protect against. Its code
+  examples are files under `packages/sdk-py/tests/docs_examples` and
+  `packages/sdk-ts/tests/docs/examples`, run and checked verbatim in CI.
+- `spec/manifest-0.6.md` and `docs/concepts/tool-manifests.mdx` describe
+  `requires_decision` enforcement instead of the interim always-deny rule.
+
+Breaking and behaviour changes across the decision-grant series, for
+reviewers and integrators:
+- **Behaviour:** `enforce()` can now **allow** a call to a
+  `requires_decision` tool, when it carries decision grants that verify and
+  that the auth service consumes. Before, every such call was denied. Calls
+  without decision grants are denied as before.
+- **Behaviour:** `decision_required` denials now carry
+  `details: {"decision_required": "<connector>:<tool>"}` (previously empty
+  `details`).
+- **Rollout mode:** `decisions_mode="warn"` / `decisionsMode: 'warn'` does
+  not deny calls that lack a valid decision grant; it reports them in
+  `would_deny` / `wouldDeny`. It exists for measured rollout and must not be
+  used where decisions are required. The default is `enforce`.
+- **New dependency on the auth service at call time** for decision tools:
+  `enforce()` consumes grants online and refuses the call when the service
+  cannot confirm (`consume_unavailable`). Offline-only deployments cannot call
+  decision tools. A consumed grant stays spent if the response is lost or the
+  tool call fails.
+- **Break:** decision actions whose `case_id`, `subject` or extra values
+  contain invisible Unicode format characters are refused.
+- **Break:** the manifest unknown-key error message now lists
+  `decision_fields`.
+- `@grantex/mcp-auth`: `DecisionOutcome` sub-reasons include the new values
+  (`case_changed`, `wrong_case`, `four_eyes_incomplete`, `malformed`,
+  `revoked`, `unknown_grant`, `consume_unavailable`); the type was already a
+  string, so no type break. `grantexDecisionVerifier` refuses calls without
+  the grant's developer or the tool's connector.
+- Auth service: migration `097_decision_grants.sql` adds tables only (safe on
+  a live database, no effect on issued tokens); all decision endpoints and
+  pages are off unless `DECISION_GRANTS_ENABLED=true`. Approvals are possible
+  only on the auth service's approval page, after signing in with an identity
+  provider the service administrator allow-listed.
+- Auth service: decision grants are verified against the platform signing
+  key ring, so unconsumed grants survive a key rotation while the old key is
+  kept for verification.
+- No existing public API was removed or renamed.
+
 ### Decision grants in the SDKs and mcp-auth
 - `enforce()` in both SDKs now accepts decision grants for tools whose
   manifest entry has `requires_decision` (previously every such call was
@@ -463,7 +516,8 @@ answers 404 until it is `true`). Profile in `spec/decision-grant.md`.
   duplicate member names are refused.
 - **Approval** only by form post from the approval page: session cookie, CSRF
   token bound to session, request and rendering, `Origin` of the service
-  and `Sec-Fetch-Site: same-origin` both required, CSP without script,
+  and `Sec-Fetch-Site: same-origin` both required, `Referrer-Policy:
+  same-origin` (so the browser sends the real `Origin`), CSP without script,
   `frame-ancestors 'none'`. Dwell time is measured by the service from
   rendering to submission; approvals faster than `DECISION_MIN_DWELL_MS`
   (default 2000) are refused.
