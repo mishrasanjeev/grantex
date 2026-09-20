@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { describe, expect, it, vi } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
+import { retryOnDeadlock } from './deadlock-retry.js';
 import { matchStoredAuditHash } from '../src/lib/hash.js';
 import { cascadeGrantAction, resumeSuspendedGrants } from '../src/lib/revocation/cascade.js';
 import { mappingProcessor } from '../src/lib/event-bridge/actions.js';
@@ -39,6 +40,10 @@ interface Fixture {
 }
 
 async function withFixture<T>(fn: (f: Fixture) => Promise<T>): Promise<T> {
+  return retryOnDeadlock(() => runFixture(fn));
+}
+
+async function runFixture<T>(fn: (f: Fixture) => Promise<T>): Promise<T> {
   const sql = connect();
   const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
   const dev = `dev_casc_${suffix}`;

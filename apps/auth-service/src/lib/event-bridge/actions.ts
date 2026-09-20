@@ -11,6 +11,7 @@ import type postgres from 'postgres';
 import type { AppLogger } from '../logger.js';
 import { cascadeGrantAction, AUDIT_ACTIONS } from '../revocation/cascade.js';
 import { revocationPropagationSeconds } from '../revocation/metrics.js';
+import { withTransactionRetry } from '../revocation/retry.js';
 import { appendPlatformAuditEntries, lockAuditChain } from '../audit-chain.js';
 import { emitEvent } from '../events.js';
 import {
@@ -82,7 +83,7 @@ export async function requestReEvaluation(
   context: Record<string, unknown>,
 ): Promise<void> {
   if (grantIds.length === 0) return;
-  await sql.begin(async (raw) => {
+  await withTransactionRetry('re_evaluate', () => sql.begin(async (raw) => {
     const tx = raw as unknown as Sql;
     const head = await lockAuditChain(tx, developerId);
     await appendPlatformAuditEntries(tx, developerId, head, grantIds.map((grantId) => ({
@@ -90,7 +91,7 @@ export async function requestReEvaluation(
       grantId,
       metadata: { grant_id: grantId, ...context },
     })));
-  });
+  }));
   await emitEvent(developerId, 'grant.re_evaluation_requested', {
     grantIds: grantIds.slice(0, MAX_EVENT_GRANT_IDS),
     grantCount: grantIds.length,

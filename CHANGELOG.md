@@ -141,6 +141,13 @@ below.
   then turning off legacy claims before 0.7), plus the database migrations,
   the new settings and a checklist.
 
+### Revocation reliability
+- Revocation transactions (cascade, suspend, resume and re-evaluation) retry on
+  `deadlock_detected`, `serialization_failure` and `lock_not_available` instead
+  of failing. A revocation competes with delegation, token refresh and — during
+  a rolling deploy — the startup migrations, and Postgres raises those errors
+  precisely because retrying is the right answer. See FINDINGS G-18.
+
 ### Event bridge: mapping rules and cascade revocation
 - Declarative mapping rules per developer (PRD G-6) turn a verified event into
   one action: `POST/GET /v1/event-mapping-rules`, `GET/PATCH

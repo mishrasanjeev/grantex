@@ -18,6 +18,7 @@ import { grantsRevokedTotal } from '../metrics.js';
 import { releaseWalletReservationsForGrants } from '../prepaid-wallet.js';
 import { revokeVCsByGrantIds } from '../vc.js';
 import { grantRevocationsTotal } from './metrics.js';
+import { withTransactionRetry } from './retry.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -110,7 +111,7 @@ async function cascadeBatch(sql: Sql, input: CascadeInput, roots: string[]): Pro
   const { developerId } = input;
   let affected: AffectedRow[] = [];
 
-  await sql.begin(async (raw) => {
+  await withTransactionRetry('cascade', () => sql.begin(async (raw) => {
     const tx = raw as unknown as Sql;
     // The same lock delegation and DELETE /v1/grants/:id take: a child being
     // delegated while its parent is revoked either loses the race (the parent
@@ -195,7 +196,7 @@ async function cascadeBatch(sql: Sql, input: CascadeInput, roots: string[]): Pro
       },
     }));
     await appendPlatformAuditEntries(tx, developerId, head, entries);
-  });
+  }));
 
   return affected;
 }
@@ -257,7 +258,7 @@ export async function resumeSuspendedGrants(
 ): Promise<ResumeOutcome> {
   let outcome: ResumeOutcome = { status: 'not_suspended', grantIds: [] };
 
-  await sql.begin(async (raw) => {
+  await withTransactionRetry('resume', () => sql.begin(async (raw) => {
     const tx = raw as unknown as Sql;
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
 
@@ -310,7 +311,7 @@ export async function resumeSuspendedGrants(
       metadata: { grant_id: row.id, root_grant_id: rootGrantId, ...context },
     })));
     outcome = { status: 'resumed', grantIds: rows.map((row) => row.id) };
-  });
+  }));
 
   if (outcome.status === 'resumed') {
     grantRevocationsTotal.inc({ action: 'resumed', cause: 'api' }, outcome.grantIds.length);
