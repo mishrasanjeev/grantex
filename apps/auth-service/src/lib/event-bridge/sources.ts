@@ -117,6 +117,13 @@ function shortString(value: unknown, field: string, max: number, errors: Record<
   return value;
 }
 
+function rejectUnknownFields(body: Record<string, unknown>, allowed: ReadonlySet<string>, errors: Record<string, string>): void {
+  const unknown = Object.keys(body).filter((key) => !allowed.has(key));
+  if (unknown.length > 0) {
+    errors['body'] = `unknown field${unknown.length === 1 ? '' : 's'}: ${unknown.join(', ')}`;
+  }
+}
+
 interface SsfFields {
   issuer?: string;
   audience?: string;
@@ -186,7 +193,7 @@ export async function createEventSource(sql: Sql, developerId: string, body: unk
 
   if (kind === 'ssf') {
     const allowed = new Set(['kind', 'name', 'issuer', 'audience', 'jwksUri', 'jwks', 'algorithms', 'maxAgeSeconds']);
-    for (const key of Object.keys(body)) if (!allowed.has(key)) errors[key] = 'unknown field';
+    rejectUnknownFields(body, allowed, errors);
     const fields = parseSsfFields(body, errors);
     if (fields.issuer === undefined && errors['issuer'] === undefined) errors['issuer'] = 'required';
     if (!fields.jwksUri && !fields.jwks && errors['jwksUri'] === undefined && errors['jwks'] === undefined) {
@@ -207,7 +214,7 @@ export async function createEventSource(sql: Sql, developerId: string, body: unk
   }
 
   const allowed = new Set(['kind', 'name', 'toleranceSeconds']);
-  for (const key of Object.keys(body)) if (!allowed.has(key)) errors[key] = 'unknown field';
+  rejectUnknownFields(body, allowed, errors);
   const tolerance = boundedInt(body['toleranceSeconds'], 'toleranceSeconds', 30, 3_600, errors);
   if (Object.keys(errors).length > 0) throw new SourceValidationError(errors);
   if (!config.vaultEncryptionKey) throw new SourceSecretStorageUnavailableError();
@@ -256,7 +263,7 @@ export async function updateEventSource(
   const specific = existing.kind === 'ssf'
     ? new Set(['issuer', 'audience', 'jwksUri', 'jwks', 'algorithms', 'maxAgeSeconds'])
     : new Set(['toleranceSeconds']);
-  for (const key of Object.keys(body)) if (!common.has(key) && !specific.has(key)) errors[key] = 'unknown field';
+  rejectUnknownFields(body, new Set([...common, ...specific]), errors);
   const name = shortString(body['name'], 'name', 128, errors);
   const status = body['status'];
   if (status !== undefined && status !== 'active' && status !== 'disabled') errors['status'] = 'must be active or disabled';
@@ -312,7 +319,7 @@ export async function rotateWebhookSecret(
   const input = body === undefined || body === null ? {} : body;
   if (!isPlainObject(input)) throw new SourceValidationError({ body: 'must be a JSON object' });
   const errors: Record<string, string> = {};
-  for (const key of Object.keys(input)) if (key !== 'previousSecretTtlSeconds') errors[key] = 'unknown field';
+  rejectUnknownFields(input, new Set(['previousSecretTtlSeconds']), errors);
   const ttl = boundedInt(input['previousSecretTtlSeconds'], 'previousSecretTtlSeconds', 0, MAX_PREVIOUS_SECRET_TTL_SECONDS, errors)
     ?? DEFAULT_PREVIOUS_SECRET_TTL_SECONDS;
   if (Object.keys(errors).length > 0) throw new SourceValidationError(errors);

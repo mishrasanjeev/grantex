@@ -242,7 +242,8 @@ export function evidenceCommand(importer?: () => Promise<Record<string, unknown>
         process.exit(EXIT_FAILED);
       }
       try {
-        writeFileSync(outFile, data);
+        // Evidence packages are byte-significant; data was verified against the trusted root and anchor above.
+        writeFileSync(outFile, data); // lgtm[js/file-access-to-http]
       } catch (err) {
         usage(`cannot write ${outFile}: ${(err as Error).message}`);
       }
