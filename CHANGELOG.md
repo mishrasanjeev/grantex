@@ -360,6 +360,82 @@ Breaking changes
   advertised `grantex_extensions.consent_ui` and `audit_stream` URLs, which had
   no routes.
 
+### Decision grants in the auth service
+Behind `DECISION_GRANTS_ENABLED` (default off; every decision endpoint and page
+answers 404 until it is `true`). Profile in `spec/decision-grant.md`.
+
+- **Who can approve.** A person signed in on the service's approval page
+  (`/decisions/:id`) through an OpenID Connect authorization code flow with
+  PKCE, state bound to the browser and a nonce (`/decisions/login`,
+  `/decisions/callback`), with an identity provider the **service
+  administrator** allow-listed for the developer
+  (`POST /v1/admin/developers/:developerId/decision-approver-idps`,
+  `ADMIN_API_KEY`, the operator named and audited). A developer API key cannot
+  add an identity provider, sign an approver in or approve; `sso_connections`
+  are not used for approvals.
+- **ID token checks.** Discovery `issuer` equals the configured issuer; key by
+  `kid` from the provider's JWKS (refetched once for an unknown `kid`),
+  asymmetric algorithms only; `iss`, `aud`, `azp`, `exp`, `iat`, `nonce`;
+  step-up is an `acr` in `DECISION_STEP_UP_ACR` or an `amr` in
+  `DECISION_STEP_UP_AMR` (default `mfa,hwk`) with `auth_time` within
+  `DECISION_STEP_UP_MAX_AGE_SECONDS` (default 3600). A nonce is accepted once
+  per issuer and subject. An email counts only when `email_verified`; an
+  identity provider can require it.
+- **Session.** The secret is only in a `__Host-` HttpOnly Secure SameSite=Lax
+  cookie on the service's origin (only its hash is stored) and lasts until the
+  step-up window ends.
+- **Decision requests** (developer API key): `POST /v1/decisions/requests` with
+  the semantic action, connector, case version, `memo` and `policyScore`
+  (content stored with its SHA-256, shown verbatim, bound into the grant) and
+  `fourEyesOn`; `GET`, `cancel`; `PUT /v1/decisions/cases/:caseId` supersedes
+  open requests and revokes unconsumed grants (`case_changed`). Bodies with
+  duplicate member names are refused.
+- **Approval** only by form post from the approval page: session cookie, CSRF
+  token bound to session, request and rendering, `Origin` of the service
+  and `Sec-Fetch-Site: same-origin` both required, CSP without script,
+  `frame-ancestors 'none'`. Dwell time is measured by the service from
+  rendering to submission; approvals faster than `DECISION_MIN_DWELL_MS`
+  (default 2000) are refused.
+- **Token.** `typ: decision+jwt`, audience `urn:grantex:decision`, `kid`;
+  `sub` is `user:<issuer hash>:<idp sub>`; `approver_auth`, `acr`, `amr`,
+  `auth_time`, `action`, `action_hash`, `connector`, `case_version`,
+  `dwell_ms`, `dwell_source: "server"`, `memo_hash`, `policy_score_hash`,
+  `decision_request`, `jti`, expiry capped at 24 hours and at the request's
+  expiry; for four eyes the second grant names the first. The same approver
+  (namespaced subject) or the same verified email cannot approve twice.
+- **Consumption** (developer API key): `POST /v1/decisions/consume` verifies
+  (key chosen by `kid`, RS256 or ES256) and atomically consumes one grant or
+  both grants of a four-eyes decision. Refusals carry `reason:
+  decision_invalid` and a `subReason`. Every refusal is audited with the
+  attempted action and hash; if that record cannot be written the answer is
+  503 `DECISION_AUDIT_UNAVAILABLE`.
+- **Audit chain:** identity-provider changes, sign-ins, requests, approvals
+  (approver, identity provider, authentication method, dwell time and source,
+  action, memo and policy score hashes), consumptions, refusals, case changes
+  and cancellations, each in the transaction it records. Approver emails are
+  stored only as keyed hashes and names encrypted.
+- **Metrics:** `grantex_decision_grants_minted_total{approvals_required,position,dwell_source}`,
+  `grantex_decision_grants_consumed_total`,
+  `grantex_decision_grants_rejected_total{stage,reason}`,
+  `grantex_decision_dwell_seconds{dwell_source}`.
+- **Migration** `097_decision_grants.sql`: new tables only.
+- No change to existing endpoints or tokens.
+
+### Decision action hash: stricter inputs and extra decision fields
+- The semantic action may carry `extra`: further fields the manifest declares
+  for a tool (`decision_fields`, for example a currency), included in the
+  hash. `from_tool_call` / `decisionActionFromToolCall` take the declared
+  names and require them in the call. Hashes of actions without `extra` are
+  unchanged.
+- **Break:** `case_id`, `subject` and extra string values containing invisible
+  Unicode format characters (soft hyphen, zero-width, bidirectional controls,
+  tags) are now refused (`invalid_value`). Such actions hashed before.
+- `DecisionAction.from_json` (Python) and `parseDecisionActionJson`,
+  `parseJsonRejectingDuplicates` (TypeScript) refuse duplicate member names
+  (`duplicate_key`).
+- Python canonicalisation ignores overridden `__repr__` / `__str__` on
+  `float`, `int` and `str` subclasses.
+
 ### Canonicalisation and decision action hash
 - RFC 8785 JSON canonicalisation in both SDKs: `grantex.canonical`
   (`canonicalize`, `canonicalize_bytes`, `serialize_number`) and

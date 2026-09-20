@@ -14,7 +14,7 @@
  * (`extra`). The Python SDK (`grantex.decisions`) implements the same rules.
  */
 import { createHash } from 'node:crypto';
-import { DuplicateKeyError, canonicalize, parseJsonRejectingDuplicates } from '../canonical.js';
+import { DuplicateKeyError, canonicalize, parseJsonRejectingDuplicates } from './canonical.js';
 
 export const ACTION_HASH_PREFIX = 'sha256:';
 export const ACTION_FIELDS = ['case_id', 'action', 'decision', 'subject', 'amount', 'extra'] as const;
