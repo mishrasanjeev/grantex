@@ -18,3 +18,25 @@ export {
   parseDecisionActionJson,
 } from './action.js';
 export type { ActionValidationCode, DecisionAction } from './action.js';
+export {
+  DECISION_GRANT_AUDIENCE,
+  DECISION_GRANT_TYP,
+  DecisionGrantError,
+  verifyDecisionGrant,
+  verifyDecisionGrants,
+} from './verify.js';
+export type {
+  DecisionGrant,
+  DecisionGrantSet,
+  DecisionKey,
+  FourEyes,
+  VerifyDecisionGrantOptions,
+  VerifyDecisionGrantsOptions,
+} from './verify.js';
+export { DecisionsClient } from '../resources/decisions.js';
+export type {
+  ConsumeDecisionParams,
+  ConsumedDecision,
+  CreateDecisionRequestParams,
+  DecisionConsumer,
+} from '../resources/decisions.js';

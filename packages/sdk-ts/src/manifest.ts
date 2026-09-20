@@ -23,6 +23,8 @@
 
 import type { DenialReason } from './denials.js';
 import type { CapLimit, CapsMode, Reservation } from './caps/meter.js';
+import type { DecisionAction } from './decisions/action.js';
+import type { ConsumedDecision } from './resources/decisions.js';
 
 /* ------------------------------------------------------------------ */
 /*  Permission                                                         */
@@ -79,7 +81,11 @@ const TOOL_KEYS = [
   'cost_units',
   'requires_decision',
   'four_eyes_on',
+  'decision_fields',
 ] as const;
+const CORE_DECISION_FIELDS = ['case_id', 'action', 'decision', 'subject', 'amount', 'extra'];
+/** Most extra semantic fields a tool may declare for decision grants. */
+export const MAX_DECISION_FIELDS = 16;
 const CAP_KEYS = ['per_hour', 'per_day', 'per_case'] as const;
 
 const NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
@@ -115,6 +121,7 @@ export interface ManifestToolObject {
   cost_units?: Record<string, number>;
   requires_decision?: boolean;
   four_eyes_on?: string[];
+  decision_fields?: string[];
 }
 
 /** A tool value: a permission string or a manifest 0.6 object. */
@@ -139,6 +146,8 @@ export interface ToolSpec {
   costUnits?: Readonly<Record<string, number>>;
   requiresDecision: boolean;
   fourEyesOn: readonly string[];
+  /** Call arguments, beyond the core semantic action, that a decision grant binds (e.g. `currency`). */
+  decisionFields?: readonly string[];
 }
 
 function q(value: unknown): string {
@@ -280,11 +289,27 @@ export function parseToolDeclaration(tool: string, value: unknown): ToolSpec {
     spec.fourEyesOn = Object.freeze([...(raw as string[])]);
   }
 
+  if ('decision_fields' in value) {
+    const raw = value['decision_fields'];
+    const message = `${path}.decision_fields: must be a non-empty array of at most ${MAX_DECISION_FIELDS} unique field names`;
+    if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_DECISION_FIELDS) throw fail(message);
+    raw.forEach((name, index) => {
+      if (typeof name !== 'string' || !UNIT_RE.test(name) || CORE_DECISION_FIELDS.includes(name)) {
+        throw fail(`${path}.decision_fields[${index}]: invalid field name ${q(name)}`);
+      }
+    });
+    if (new Set(raw).size !== raw.length) throw fail(message);
+    spec.decisionFields = Object.freeze([...(raw as string[])]);
+  }
+
   if (spec.requiresDecision && permission === Permission.READ) {
     throw fail(`${path}: requires_decision is not allowed on a tool with read permission`);
   }
   if (spec.fourEyesOn.length > 0 && !spec.requiresDecision) {
     throw fail(`${path}.four_eyes_on: requires requires_decision: true`);
+  }
+  if (spec.decisionFields !== undefined && !spec.requiresDecision) {
+    throw fail(`${path}.decision_fields: requires requires_decision: true`);
   }
   return spec;
 }
@@ -345,6 +370,7 @@ export function toolSpecToObject(spec: ToolSpec): ManifestToolObject {
   if (spec.costUnits !== undefined) out.cost_units = { ...spec.costUnits };
   if (spec.requiresDecision) out.requires_decision = true;
   if (spec.fourEyesOn.length > 0) out.four_eyes_on = [...spec.fourEyesOn];
+  if (spec.decisionFields !== undefined) out.decision_fields = [...spec.decisionFields];
   return out;
 }
 
@@ -589,6 +615,8 @@ export interface EnforceResult {
   capsTenantId?: string;
   /** In caps warn mode, the cap denial that was not applied. */
   wouldDeny?: WouldDeny;
+  /** For a tool that requires a decision: the decision grants consumed for this call. */
+  decision?: ConsumedDecision;
 }
 
 /** A cap denial reported, not applied, in caps warn mode. Keys match the Python SDK. */
@@ -623,6 +651,19 @@ export interface EnforceOptions {
   capsMode?: CapsMode;
   /** Tenant of every counter of this call instead of the grant's developer. */
   capsTenantId?: string;
+  /**
+   * Decision grant tokens for a tool with `requires_decision` (one, or two for a decision in
+   * `four_eyes_on`). Without them the call is denied with `decision_required`.
+   */
+  decisionGrants?: readonly string[];
+  /** The action the grants must approve. Defaults to the action derived from `arguments`. */
+  decisionAction?: DecisionAction;
+  /** The call's arguments: `case_id`, `decision`, `subject` and `amount` are read from them. */
+  arguments?: Record<string, unknown>;
+  /** The case's current version, from the application's own case state. */
+  caseVersion?: string;
+  /** Overrides the client's decisions mode for this call. */
+  decisionsMode?: 'enforce' | 'warn';
 }
 
 /** Options for `grantex.wrapTool()`. */
@@ -635,6 +676,10 @@ export interface WrapToolOptions {
   grantToken: string | (() => string);
   /** Case for per-case caps, or a getter evaluated per call. Never taken from the tool's (model-supplied) input. */
   caseId?: string | (() => string | undefined);
+  /** For a tool that requires a decision: the decision grants, or a getter evaluated per call. The action is derived from the tool's input. */
+  decisionGrants?: readonly string[] | (() => readonly string[] | undefined);
+  /** The case's current version, or a getter, from the application's case state. */
+  caseVersion?: string | (() => string | undefined);
   /** Cost units the call incurs, or a getter evaluated per call. Never taken from the tool's input. */
   costComponents?: readonly string[] | (() => readonly string[] | undefined);
 }
@@ -651,4 +696,10 @@ export interface EnforceMiddlewareOptions {
   extractCaseId?: (req: Record<string, unknown>) => string | undefined;
   /** Cost units the call incurs, from trusted request context (not the agent's payload). */
   extractCostComponents?: (req: Record<string, unknown>) => readonly string[] | undefined;
+  /** Decision grants presented with the request (for example from a header). */
+  extractDecisionGrants?: (req: Record<string, unknown>) => readonly string[] | undefined;
+  /** The tool call's arguments, from which the decision action is derived. */
+  extractArguments?: (req: Record<string, unknown>) => Record<string, unknown> | undefined;
+  /** The case's current version, from trusted server-side case state. */
+  extractCaseVersion?: (req: Record<string, unknown>) => string | undefined;
 }

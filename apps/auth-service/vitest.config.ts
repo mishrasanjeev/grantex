@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 // Fresh per test process. The literal that used to live here ('test-admin-key-secret')
 // was a hardcoded credential that would surface in CI logs on any test-output dump.
@@ -12,6 +12,8 @@ export default defineConfig({
     environment: 'node',
     globals: false,
     setupFiles: ['./tests/setup.ts'],
+    // Browser end-to-end tests run with `npm run test:e2e` (vitest.e2e.config.ts).
+    exclude: [...configDefaults.exclude, 'tests/e2e/**'],
     // Every test file initializes an RSA key pair and a Fastify instance.
     // Letting Vitest fan out to the host CPU count causes those startup hooks
     // to exceed their timeouts under contention (while the same suites pass

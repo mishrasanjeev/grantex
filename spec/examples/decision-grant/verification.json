@@ -1,0 +1,594 @@
+{
+  "description": "Decision-grant verification cases shared by the Python and TypeScript SDKs. For each case, build each grant from base_claims with 'claims' merged over it (top-level keys replaced) and 'remove' keys deleted, sign it with RS256 and a test key, header {alg: RS256, typ: 'decision+jwt', kid} with 'header' merged over it (a null value removes the parameter; an alg other than RS256 is signed with RS256 but labelled as given); if 'tamper' is present, replace those claims in the signed payload without re-signing. Verify with issuer, developer_id and connector below, expected action = action with 'expected_action' merged, case version 'case_version' (default base case_version), approvals_required (default 1), at time 'now' (default below). 'expect' is 'valid', 'absent' (no grant: decision_required) or the decision_invalid sub-reason.",
+  "issuer": "https://grantex.dev",
+  "developer_id": "dev_01",
+  "connector": "acme_kyb",
+  "now": 1790000100,
+  "action": {
+    "case_id": "case_8841",
+    "action": "case_decision",
+    "decision": "approve",
+    "subject": "gb:00000001"
+  },
+  "base_claims": {
+    "iss": "https://grantex.dev",
+    "aud": "urn:grantex:decision",
+    "sub": "user:9qa0W3lRkB0c1jd_cSP-qg:approver-a",
+    "jti": "dgnt_01K8Z000000000000000000QA1",
+    "iat": 1790000000,
+    "exp": 1790086400,
+    "dev": "dev_01",
+    "idp": "https://idp.example.com",
+    "approver_auth": "sso+hwk+pwd",
+    "amr": [
+      "hwk",
+      "pwd"
+    ],
+    "auth_time": 1789999900,
+    "action": {
+      "case_id": "case_8841",
+      "action": "case_decision",
+      "decision": "approve",
+      "subject": "gb:00000001"
+    },
+    "action_hash": "sha256:LNavJV0rVgyvR30A6d607Hw1lZFbHGxLk4GkLAAZAOA",
+    "connector": "acme_kyb",
+    "case_version": "v7",
+    "dwell_ms": 61250,
+    "decision_request": "dreq_01K8Z000000000000000000QR1",
+    "dwell_source": "server",
+    "memo_hash": "sha256:MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
+    "policy_score_hash": "sha256:PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP"
+  },
+  "cases": [
+    {
+      "name": "valid single approval",
+      "grants": [
+        {}
+      ],
+      "expect": "valid"
+    },
+    {
+      "name": "valid with an amount",
+      "grants": [
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "payout_release",
+              "decision": "approve",
+              "subject": "gb:00000001",
+              "amount": "1250.5"
+            },
+            "action_hash": "sha256:ZG44iA-ZeC0SrJwOG1E7Dc2SNAZECHPLyrU54e_JY3A"
+          }
+        }
+      ],
+      "expected_action": {
+        "action": "payout_release",
+        "amount": "1250.5"
+      },
+      "expect": "valid"
+    },
+    {
+      "name": "replay with a different decision",
+      "grants": [
+        {}
+      ],
+      "expected_action": {
+        "decision": "decline"
+      },
+      "expect": "action_mismatch"
+    },
+    {
+      "name": "replay with a different subject",
+      "grants": [
+        {}
+      ],
+      "expected_action": {
+        "subject": "gb:00000002"
+      },
+      "expect": "action_mismatch"
+    },
+    {
+      "name": "replay with an amount added",
+      "grants": [
+        {}
+      ],
+      "expected_action": {
+        "amount": 1
+      },
+      "expect": "action_mismatch"
+    },
+    {
+      "name": "replay across cases",
+      "grants": [
+        {}
+      ],
+      "expected_action": {
+        "case_id": "case_8842"
+      },
+      "expect": "wrong_case"
+    },
+    {
+      "name": "connector differs",
+      "grants": [
+        {
+          "claims": {
+            "connector": "other_kyb"
+          }
+        }
+      ],
+      "expect": "action_mismatch"
+    },
+    {
+      "name": "case version changed",
+      "grants": [
+        {}
+      ],
+      "case_version": "v8",
+      "expect": "case_changed"
+    },
+    {
+      "name": "expired",
+      "grants": [
+        {}
+      ],
+      "now": 1790086400,
+      "expect": "expired"
+    },
+    {
+      "name": "issued to another developer",
+      "grants": [
+        {
+          "claims": {
+            "dev": "dev_02"
+          }
+        }
+      ],
+      "expect": "unknown_grant"
+    },
+    {
+      "name": "wrong typ header",
+      "grants": [
+        {
+          "header": {
+            "typ": "at+jwt"
+          }
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "wrong audience",
+      "grants": [
+        {
+          "claims": {
+            "aud": "urn:grantex:other"
+          }
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "wrong issuer",
+      "grants": [
+        {
+          "claims": {
+            "iss": "https://issuer.example.com"
+          }
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "payload tampered after signing",
+      "grants": [
+        {
+          "tamper": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA"
+          }
+        }
+      ],
+      "expected_action": {
+        "decision": "decline"
+      },
+      "expect": "malformed"
+    },
+    {
+      "name": "action_hash does not match action",
+      "grants": [
+        {
+          "claims": {
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA"
+          }
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "action claim has an unknown field",
+      "grants": [
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "approve",
+              "subject": "gb:00000001",
+              "requested_at": "2026-09-15T10:00:00Z"
+            }
+          }
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "missing approver_auth",
+      "grants": [
+        {
+          "remove": [
+            "approver_auth"
+          ]
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "malformed jti",
+      "grants": [
+        {
+          "claims": {
+            "jti": "not-a-decision-grant"
+          }
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "lifetime over 24 hours",
+      "grants": [
+        {
+          "claims": {
+            "exp": 1790086401
+          }
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "four eyes with two approvers",
+      "grants": [
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 1
+            }
+          }
+        },
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "sub": "user:9qa0W3lRkB0c1jd_cSP-qg:approver-b",
+            "jti": "dgnt_01K8Z000000000000000000QA2",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 2,
+              "first_jti": "dgnt_01K8Z000000000000000000QA1",
+              "first_sub": "user:9qa0W3lRkB0c1jd_cSP-qg:approver-a"
+            }
+          }
+        }
+      ],
+      "expected_action": {
+        "decision": "decline"
+      },
+      "approvals_required": 2,
+      "expect": "valid"
+    },
+    {
+      "name": "four eyes given in reverse order",
+      "grants": [
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "sub": "user:9qa0W3lRkB0c1jd_cSP-qg:approver-b",
+            "jti": "dgnt_01K8Z000000000000000000QA2",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 2,
+              "first_jti": "dgnt_01K8Z000000000000000000QA1",
+              "first_sub": "user:9qa0W3lRkB0c1jd_cSP-qg:approver-a"
+            }
+          }
+        },
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 1
+            }
+          }
+        }
+      ],
+      "expected_action": {
+        "decision": "decline"
+      },
+      "approvals_required": 2,
+      "expect": "valid"
+    },
+    {
+      "name": "four eyes with one grant",
+      "grants": [
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 1
+            }
+          }
+        }
+      ],
+      "expected_action": {
+        "decision": "decline"
+      },
+      "approvals_required": 2,
+      "expect": "four_eyes_incomplete"
+    },
+    {
+      "name": "four eyes required by the grant although the manifest does not ask",
+      "grants": [
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 1
+            }
+          }
+        }
+      ],
+      "expected_action": {
+        "decision": "decline"
+      },
+      "approvals_required": 1,
+      "expect": "four_eyes_incomplete"
+    },
+    {
+      "name": "four eyes with the same approver twice",
+      "grants": [
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 1
+            }
+          }
+        },
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "sub": "user:9qa0W3lRkB0c1jd_cSP-qg:approver-a",
+            "jti": "dgnt_01K8Z000000000000000000QA2",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 2,
+              "first_jti": "dgnt_01K8Z000000000000000000QA1",
+              "first_sub": "user:9qa0W3lRkB0c1jd_cSP-qg:approver-a"
+            }
+          }
+        }
+      ],
+      "expected_action": {
+        "decision": "decline"
+      },
+      "approvals_required": 2,
+      "expect": "same_approver"
+    },
+    {
+      "name": "four eyes with the same grant twice",
+      "grants": [
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 1
+            }
+          }
+        },
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 1
+            }
+          }
+        }
+      ],
+      "expected_action": {
+        "decision": "decline"
+      },
+      "approvals_required": 2,
+      "expect": "same_approver"
+    },
+    {
+      "name": "four eyes second approval names another first",
+      "grants": [
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 1
+            }
+          }
+        },
+        {
+          "claims": {
+            "action": {
+              "case_id": "case_8841",
+              "action": "case_decision",
+              "decision": "decline",
+              "subject": "gb:00000001"
+            },
+            "action_hash": "sha256:dnbcKyONTJuAkycPknHk_dBSG_aKy0gupjhKwfFtewA",
+            "sub": "user:9qa0W3lRkB0c1jd_cSP-qg:approver-b",
+            "jti": "dgnt_01K8Z000000000000000000QA2",
+            "four_eyes": {
+              "approvals_required": 2,
+              "position": 2,
+              "first_jti": "dgnt_01K8Z000000000000000000QA9",
+              "first_sub": "user:9qa0W3lRkB0c1jd_cSP-qg:approver-a"
+            }
+          }
+        }
+      ],
+      "expected_action": {
+        "decision": "decline"
+      },
+      "approvals_required": 2,
+      "expect": "malformed"
+    },
+    {
+      "name": "two grants for a single-approval decision",
+      "grants": [
+        {},
+        {
+          "claims": {
+            "jti": "dgnt_01K8Z000000000000000000QA2",
+            "sub": "user:9qa0W3lRkB0c1jd_cSP-qg:approver-b"
+          }
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "no grant",
+      "grants": [],
+      "expect": "absent"
+    },
+    {
+      "name": "dwell time not measured by the issuer",
+      "grants": [
+        {
+          "claims": {
+            "dwell_source": "reported"
+          }
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "missing memo hash",
+      "grants": [
+        {
+          "remove": [
+            "memo_hash"
+          ]
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "missing kid",
+      "grants": [
+        {
+          "header": {
+            "kid": null
+          }
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "algorithm not allowed",
+      "grants": [
+        {
+          "header": {
+            "alg": "PS256"
+          }
+        }
+      ],
+      "expect": "malformed"
+    }
+  ]
+}

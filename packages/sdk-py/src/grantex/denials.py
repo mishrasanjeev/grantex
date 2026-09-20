@@ -118,3 +118,38 @@ class TokenSubReason:
 
     MALFORMED_AUTHORIZATION_DETAILS = "malformed_authorization_details"
     """The ``authorization_details`` claim cannot be read unambiguously."""
+
+
+class DecisionSubReason:
+    """Sub-reasons for :attr:`DenialReason.DECISION_REQUIRED` and
+    :attr:`DenialReason.DECISION_INVALID` (PRD G-3; ``spec/decision-grant.md``).
+
+    The first four are PRD Appendix B's; the auth service uses the same values.
+    """
+
+    ACTION_MISMATCH = "action_mismatch"
+    """The grant approves a different action (tool, decision, subject, amount or connector)."""
+    EXPIRED = "expired"
+    """The grant is past its expiry."""
+    CONSUMED = "consumed"
+    """The grant has already been used."""
+    SAME_APPROVER = "same_approver"
+    """Both grants of a four-eyes decision name the same approver."""
+    CASE_CHANGED = "case_changed"
+    """The case changed (new case version) after the decision was approved."""
+    WRONG_CASE = "wrong_case"
+    """The grant approves an action on another case."""
+    STEP_UP_REQUIRED = "step_up_required"
+    """The approver's authentication was not step-up (auth service only)."""
+    REVOKED = "revoked"
+    """The decision request was cancelled and its grants revoked."""
+    UNKNOWN_GRANT = "unknown_grant"
+    """The issuer does not know the grant, or it belongs to another developer."""
+    MALFORMED = "malformed"
+    """The grant, or the action to compare it with, cannot be read."""
+    FOUR_EYES_INCOMPLETE = "four_eyes_incomplete"
+    """The decision needs two approvals and fewer were presented."""
+    CONSUME_UNAVAILABLE = "consume_unavailable"
+    """The grant could not be consumed at the issuer (network, server or configuration)."""
+    ABSENT = "absent"
+    """No decision grant was presented (reported as ``decision_required``)."""

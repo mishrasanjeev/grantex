@@ -23,6 +23,7 @@ export interface ManifestToolObject {
   cost_units?: Record<string, number>;
   requires_decision?: boolean;
   four_eyes_on?: string[];
+  decision_fields?: string[];
 }
 
 /** A manifest as loaded from JSON (string or object tool values). */
@@ -46,6 +47,8 @@ export interface ToolRequirement {
   allowedPurposes?: string[];
   caps?: ManifestToolObject['caps'];
   fourEyesOn?: string[];
+  /** Call arguments, beyond the core semantic action, a decision grant binds. */
+  decisionFields?: string[];
 }
 
 export interface ToolPolicy {
@@ -135,6 +138,7 @@ export function toolPolicyFromManifests(manifests: readonly LoadedManifest[], op
         ...(object?.allowed_purposes !== undefined ? { allowedPurposes: [...object.allowed_purposes] } : {}),
         ...(object?.caps !== undefined ? { caps: { ...object.caps } } : {}),
         ...(object?.four_eyes_on !== undefined ? { fourEyesOn: [...object.four_eyes_on] } : {}),
+        ...(object?.decision_fields !== undefined ? { decisionFields: [...object.decision_fields] } : {}),
       });
     }
   }

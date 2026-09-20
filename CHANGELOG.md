@@ -360,6 +360,77 @@ Breaking changes
   advertised `grantex_extensions.consent_ui` and `audit_stream` URLs, which had
   no routes.
 
+### Decision grants in the SDKs and mcp-auth
+- `enforce()` in both SDKs now accepts decision grants for tools whose
+  manifest entry has `requires_decision` (previously every such call was
+  denied): `decision_grants` / `decisionGrants` (one token, or two for a
+  decision in `four_eyes_on`), the action to compare them with
+  (`decision_action` / `decisionAction`, or derived from `arguments`) and
+  `case_version` / `caseVersion`. Grants are verified offline (typ
+  `decision+jwt`, signature by the issuer's JWKS, issuer, audience
+  `urn:grantex:decision`, developer, connector, action hash, case version,
+  expiry, four eyes with different `sub` and the second approval naming the
+  first) and then consumed at the auth service as the last step, after caps
+  are reserved; a failed consumption refunds the reservation. Without grants
+  the result is `decision_required` (with `details.decision_required`
+  `<connector>:<tool>`); otherwise `decision_invalid` with a sub-reason from
+  the new `DecisionSubReason` (`action_mismatch`, `wrong_case`,
+  `case_changed`, `expired`, `consumed`, `same_approver`,
+  `four_eyes_incomplete`, `malformed`, `unknown_grant`, `revoked`,
+  `consume_unavailable`). Offline verification alone never allows a call.
+  `EnforceResult.decision` records what was consumed. Any consumer failure
+  denies the call and refunds the caps reservation. Consumption spends the
+  grant: a lost response or a tool failure afterwards needs a new approval.
+- When both `decision_action` and `arguments` are given they must hash
+  identically (`action_mismatch`). A tool's manifest `decision_fields` are
+  read from the arguments and must be bound by the grant.
+- Grants must carry a `kid`; keys are chosen by `kid` and type from the
+  issuer's JWKS; RS256 and ES256 are accepted (`decision_algorithms` /
+  `decisionAlgorithms` narrows the list). Grants must carry
+  `dwell_source: "server"`, `memo_hash` and `policy_score_hash`.
+- `wrap_tool` / `wrapTool` take `decision_grants` / `decisionGrants` and
+  `case_version` / `caseVersion` (values or per-call getters) and derive the
+  action from the tool input; `enforceMiddleware` takes
+  `extractDecisionGrants`, `extractArguments` and `extractCaseVersion`, and
+  its 403 body now includes `reason` and `subReason`.
+- The FastAPI `GrantexEnforcer` passes decision grants to `enforce()`: grants
+  from the `Grantex-Decision-Grant` header (comma-separated), arguments from
+  the JSON body, and the case version from a required `case_version`
+  callback (server case state); each source can be replaced. Its 403 detail
+  adds `reason_code` and `sub_reason`.
+- `decisions_mode` / `decisionsMode` (client option and per call):
+  `enforce` (default) denies. `warn` is for rollout only and is not a
+  control: it does not deny a `requires_decision` call without a valid
+  decision grant; it lets the call through and reports what would have been
+  denied in `would_deny` / `wouldDeny`. Valid grants presented in warn mode
+  are still consumed. Platforms map their `decisions.required` flag to
+  `enforce` (on) or `warn` (off). `decision_consumer` / `decisionConsumer`
+  replaces the auth-service consumer.
+- `grantex.decisions` / `Grantex.decisions`: `set_case_version`,
+  `create_request` (with `memo` and `policy_score`), `get_request`,
+  `cancel_request`, `consume` (never retried; an unconfirmed consumption
+  raises `consume_unavailable`). There is no approval API: people approve on
+  the auth service's approval page.
+- Manifest 0.6: tools may declare `decision_fields` (requires
+  `requires_decision`). **Break:** the unknown-key error message now lists
+  `decision_fields` among the allowed keys.
+- `verify_decision_grant(s)` / `verifyDecisionGrant(s)` for offline checks,
+  with shared cases in `spec/examples/decision-grant/verification.json`.
+- `@grantex/mcp-auth`: `grantexDecisionVerifier()` reference
+  `DecisionVerifier`, reading grants from the `grantex-decision-grant` header,
+  requiring the grant's developer and the tool's connector (refused as
+  `malformed` otherwise), binding manifest `decision_fields`, and answering
+  `valid` only after consumption. Tool policies carry `decisionFields`.
+  The guard and the verifier apply the access token's
+  `urn:grantex:decision:v1` entries: a listed tool needs a decision grant,
+  the entry's `four_eyes_on` requires two approvers, and a token with a
+  malformed decision entry is refused for every `tools/call`
+  (`decision_invalid` / `malformed_authorization_details`). **Behaviour
+  change** for tokens that carry such entries.
+- Behaviour change (no API break): a call to a `requires_decision` tool that
+  carries a valid decision grant which the auth service consumes is now
+  allowed. Calls without one are denied exactly as before.
+
 ### Decision grants in the auth service
 Behind `DECISION_GRANTS_ENABLED` (default off; every decision endpoint and page
 answers 404 until it is `true`). Profile in `spec/decision-grant.md`.

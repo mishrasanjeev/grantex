@@ -185,6 +185,26 @@
       "name": "tools of the wrong type",
       "error": "ToolManifest: tools: must be an object mapping tool names to declarations",
       "manifest": {"connector": "acme_kyb", "tools": ["verify_business"]}
+    },
+    {
+      "name": "decision_fields without requires_decision",
+      "error": "ToolManifest: tools.payout_release.decision_fields: requires requires_decision: true",
+      "manifest": {"connector": "acme_kyb", "tools": {"payout_release": {"permission": "write", "decision_fields": ["currency"]}}}
+    },
+    {
+      "name": "empty decision_fields",
+      "error": "ToolManifest: tools.payout_release.decision_fields: must be a non-empty array of at most 16 unique field names",
+      "manifest": {"connector": "acme_kyb", "tools": {"payout_release": {"permission": "write", "requires_decision": true, "decision_fields": []}}}
+    },
+    {
+      "name": "decision_fields naming a core field",
+      "error": "ToolManifest: tools.payout_release.decision_fields[0]: invalid field name \"amount\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"payout_release": {"permission": "write", "requires_decision": true, "decision_fields": ["amount"]}}}
+    },
+    {
+      "name": "invalid decision_fields entry",
+      "error": "ToolManifest: tools.payout_release.decision_fields[0]: invalid field name \"Currency\"",
+      "manifest": {"connector": "acme_kyb", "tools": {"payout_release": {"permission": "write", "requires_decision": true, "decision_fields": ["Currency"]}}}
     }
   ]
 }
