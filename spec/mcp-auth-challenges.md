@@ -81,15 +81,19 @@ Content-Type: application/json
 When a decision grant is presented but is not valid for the call, the header
 is the same (a new decision is still needed) and the body says why:
 `"reason":"decision_invalid"` with `"sub_reason"` one of `action_mismatch`,
-`expired`, `consumed`, `same_approver` (PRD Appendix B) or
-`verification_failed` when the verifier itself failed. Scope is checked
+`expired`, `consumed`, `same_approver` (PRD Appendix B), the further
+decision-grant sub-reasons of `spec/decision-grant.md` (`case_changed`,
+`wrong_case`, `four_eyes_incomplete`, `malformed`, `revoked`,
+`unknown_grant`, `consume_unavailable`) or `verification_failed` when the
+verifier itself failed. Scope is checked
 first: a tool the grant does not cover is `tool_not_granted`, never
 `decision_required`.
 
 A client that receives `decision_required` must not retry automatically; it
 should surface the action to a person, obtain a decision grant through the
-deployment's approval flow and retry once with it. How the decision grant is
-carried on the retried request is defined by the decision-grant profile; the
+deployment's approval flow and retry once with it. The reference verifier (`grantexDecisionVerifier`) reads the decision
+grant from the `grantex-decision-grant` request header (two comma-separated
+grants for four eyes), as the decision-grant profile describes; the
 package passes the request's headers and the call's `arguments` to the
 configured `DecisionVerifier` so that profile can be implemented without
 changing this format.

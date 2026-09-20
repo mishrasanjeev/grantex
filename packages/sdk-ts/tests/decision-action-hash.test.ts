@@ -15,13 +15,15 @@ import {
   decisionActionFromToolCall,
   isActionHash,
   parseDecisionAction,
+  parseDecisionActionJson,
   type DecisionAction,
 } from '../src/decisions/index.js';
 import * as sdk from '../src/index.js';
 
 interface Fixtures {
   valid: { name: string; action: DecisionAction; canonical: string; action_hash: string }[];
-  equivalent_tool_calls: { tool: string; arguments: string[]; action_hash: string }[];
+  equivalent_tool_calls: { tool: string; arguments: string[]; action_hash: string; extra_fields?: string[] }[];
+  duplicate_keys: { name: string; action_json: string; code: string; field: string }[];
   invalid: { name: string; action?: unknown; action_json?: string; code: string; field: string }[];
 }
 const FIXTURES = JSON.parse(
@@ -58,7 +60,7 @@ describe('shared action hashes', () => {
 
   it.each(FIXTURES.equivalent_tool_calls.map((g) => [g.tool, g] as const))('equivalent %s calls share one hash', (_tool, group) => {
     for (const text of group.arguments) {
-      expect(computeActionHash(decisionActionFromToolCall(group.tool, JSON.parse(text)))).toBe(group.action_hash);
+      expect(computeActionHash(decisionActionFromToolCall(group.tool, JSON.parse(text), group.extra_fields ?? []))).toBe(group.action_hash);
     }
   });
 
@@ -112,7 +114,8 @@ describe('properties', () => {
   const text = (n: number): string => {
     let out = '';
     for (let i = 0; i < n; i++) {
-      const [lo, hi] = pick([[0x20, 0x7e], [0xa0, 0x24f], [0x1f600, 0x1f64f]] as const);
+      // U+00AD (soft hyphen) is an invisible format character, refused in actions.
+      const [lo, hi] = pick([[0x20, 0x7e], [0xae, 0x24f], [0x1f600, 0x1f64f]] as const);
       out += String.fromCodePoint(int(lo, hi));
     }
     return out;
@@ -189,6 +192,34 @@ describe('properties', () => {
         changed[field] = random() < 0.5 ? `${value}x` : chars.join('') + (last === 0x7f ? 'y' : String.fromCodePoint(last));
       }
       expect(computeActionHash(changed)).not.toBe(baseHash);
+    }
+  });
+});
+
+describe('follow-up rules', () => {
+  it.each(FIXTURES.duplicate_keys.map((c) => [c.name, c] as const))('refuses %s', (_name, c) => {
+    const err = thrown(() => parseDecisionActionJson(c.action_json));
+    expect([err.code, err.field]).toEqual([c.code, c.field]);
+  });
+
+  it('parses a valid action from text', () => {
+    expect(computeActionHash(parseDecisionActionJson(JSON.stringify(BASE)))).toBe(computeActionHash(BASE));
+  });
+
+  it('reads declared extra fields from the call', () => {
+    const args = { case_id: 'case_8841', decision: 'approve', subject: 'gb:00000001', currency: 'GBP' };
+    const withCurrency = decisionActionFromToolCall('payout_release', args, ['currency']);
+    expect(withCurrency.extra).toEqual({ currency: 'GBP' });
+    expect(computeActionHash(withCurrency)).not.toBe(computeActionHash(decisionActionFromToolCall('payout_release', args)));
+    const err = thrown(() => decisionActionFromToolCall('payout_release', { ...args, currency: null }, ['currency']));
+    expect([err.code, err.field]).toEqual(['missing_field', 'extra.currency']);
+    expect(() => decisionActionFromToolCall('payout_release', args, ['subject'])).toThrow(ActionValidationError);
+  });
+
+  it.each([0x00ad, 0x061c, 0x180e, 0x200b, 0x200d, 0x202e, 0x2066, 0x2069, 0xfeff, 0xe0041])('refuses format character U+%s', (codePoint) => {
+    for (const field of ['case_id', 'subject'] as const) {
+      const err = thrown(() => parseDecisionAction({ ...BASE, [field]: `a${String.fromCodePoint(codePoint)}b` }));
+      expect([err.code, err.field]).toEqual(['invalid_value', field]);
     }
   });
 });

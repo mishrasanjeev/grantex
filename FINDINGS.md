@@ -149,3 +149,31 @@ Remove an entry in the pull request that fixes it.
 - **Fix:** read `scope`, `client_id`, `act` and `urn:grantex:grant` (or use
   the core SDK verifiers' `VerifiedGrant`) before 0.7. Coordinate the
   `mcp-auth` change with the open 3.0 pull requests.
+
+## G-15 — SSO ID-token verification does not refresh the JWKS for an unknown `kid`
+
+- **Found:** decision grants (PRD G-3), 2026-09-15.
+- **What:** `verifyIdToken` in `apps/auth-service/src/lib/sso.ts` caches an
+  identity provider's JWKS for one hour and only refetches when the cache is
+  older than that. A token signed with a key the provider rotated in within
+  the hour fails verification until the cache expires, so SSO logins fail
+  (closed) after a provider key rotation. The decision-grant approver sign-in
+  has its own verification with a rate-limited refetch and is not affected.
+- **Fix:** on a `kid` not in the cached set, refetch once, rate-limited by a
+  cooldown (as `createRemoteJWKSet` and the Python SDK's JWKS cache do), and
+  add a test with a rotated provider key.
+
+## G-16 — SSO discovery does not check the issuer, and ID tokens are checked against the discovered issuer
+
+- **Found:** review of decision grants (PRD G-3), 2026-09-15.
+- **What:** `discoverOidcProvider` in `apps/auth-service/src/lib/sso.ts` accepts
+  any `issuer` in the discovery document fetched from an SSO connection's
+  `issuer_url`, and `verifyIdToken` then verifies `iss` against
+  `discovery.issuer` rather than the configured `issuer_url`. OpenID Connect
+  Discovery 1.0 section 4.3 requires the two to be identical. A discovery
+  document served from the configured host can therefore name another issuer
+  whose tokens SSO login accepts. Decision grants do not use this code (their
+  approver sign-in checks the issuer itself), but SSO login does.
+- **Fix:** refuse a discovery document whose `issuer` differs from the
+  configured `issuer_url`, verify `iss` against the configured value, and add
+  tests for both.
