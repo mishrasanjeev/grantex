@@ -70,3 +70,11 @@ groups:
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+
+## Evidence packages
+
+- `grantex_evidence_export_duration_seconds{outcome}` - evidence export duration (objective: p95 under 5 s for a decided case)
+- `grantex_evidence_records_total{outcome}` - evidence records accepted or rejected
+- `grantex_evidence_chain_verification_failures_total{source,code}` - a source audit entry or an assembled package failed verification
+
+Alert rules: `deploy/prometheus/evidence-alerts.yml`.

@@ -6,6 +6,84 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Evidence export in the auth service
+- **Breaking:** `POST /v1/audit/log` now refuses actions starting with
+  `evidence.`, `decision.` or `grantex.` (`400 AUDIT_ACTION_RESERVED`) and
+  metadata members starting with `grantex:` (`400 AUDIT_METADATA_RESERVED`).
+  Those names are written only by the platform; accepting them from tenants
+  would let a tenant forge an evidence anchor or a decision record.
+- New `POST /v1/evidence/cases/{caseId}/records` (run context, tool calls,
+  policy evaluations, recommendations, dispositions), off by default
+  (`EVIDENCE_EXPORT_ENABLED`). Records are validated completely when written,
+  including references to earlier records, the grant chain and grant
+  validity; idempotent on their ids (same content: no-op, different: `409`);
+  and stored as platform-authored audit entries in server recording order.
+  `POST /v1/evidence/cases/{caseId}/void` withdraws a record without deleting it.
+- New `POST /v1/evidence/cases/{caseId}/export`: re-verifies each source audit
+  entry's hash and link, takes decisions only from the decision-grant store,
+  marks records made after a consumption or export as late, derives the case
+  state, keys identifiers and content per case, anchors the root as a
+  platform audit entry (subject to plan limits), optionally signs root and
+  anchor with the platform key, and returns the root and anchor in headers.
+  Disclosure needs `EVIDENCE_DISCLOSURE_DEVELOPER_IDS`.
+- Tampered or unlinked source entries return `409
+  EVIDENCE_CHAIN_VERIFICATION_FAILED`, increment
+  `grantex_evidence_chain_verification_failures_total` and raise the alert
+  (`deploy/prometheus/evidence-alerts.yml`); export duration is
+  `grantex_evidence_export_duration_seconds`.
+- Migrations 099 and 100 add the `evidence_records`, `evidence_cases` and
+  `audit_entry_counters` tables and a counter trigger on `audit_entries`,
+  created with a two-second lock timeout so startup is never blocked. Invalid
+  evidence settings stop the service at startup.
+
+### Evidence CLI
+- `grantex evidence verify package.json --root <root>` in `@grantex/cli`, and
+  `grantex-evidence verify` in the Python SDK (a separate name so it does not
+  clash with the npm `grantex` binary): exit 0 only when the package verifies,
+  1 on any break with entry, field, expected and actual values, 2 on usage
+  errors including a missing or malformed `--root`. The output states the
+  trust basis: anchor internal-consistency-only, pinned or covered by the
+  verified service signature. `--anchor`, `--require-anchor`, `--jwks`,
+  `--require-signature`, `--skip-signature`, `--max-bytes`, `--json`.
+- `grantex evidence export <caseId>` / `grantex-evidence export` verify the
+  exported package against the returned root and anchor before writing it.
+- `@grantex/cli` loads the evidence module lazily and starts with an
+  `@grantex/sdk` that lacks it, reporting that evidence needs
+  `@grantex/sdk >= 0.7.0`; the dependency floor is raised when that SDK is
+  released. The command-count test changes to 33.
+- Python: `grantex.evidence.record_evidence` (batches of 100),
+  `void_record` and `export_package` call the evidence endpoints.
+
+### Evidence package library
+- New `grantex.evidence` (Python) and `evidence` namespace of `@grantex/sdk`
+  (also `@grantex/sdk/evidence`): build, canonicalise and verify evidence
+  packages (`spec/evidence-package.md`) with identical results in both
+  languages for every case in `spec/examples/evidence/`.
+- Verification requires a trusted root, fails closed and reports the exact
+  failing link; it enforces privacy keying, entry authority, recording order,
+  clock skew, grant and decision validity windows, complete single-use
+  consumptions, unsourced-input marking and void records, and reports the
+  anchor and signature trust status.
+- Builders key `principal`, `approver`, `subject`, `record` identifiers and
+  `content` digests per case (JCS-array HMAC derivations) and replace
+  `action_hash` with a keyed `action_ref` while the subject is pseudonymised.
+- Canonicalisation uses the shared RFC 8785 implementation
+  (`grantex.canonical`, `canonical.ts`).
+
+### Evidence package format
+- New specification of the per-case evidence package, format 1.0
+  (`spec/evidence-package.md`), JSON Schema
+  (`spec/evidence-package-1.0.schema.json`) and shared examples and test cases
+  (`spec/examples/evidence/`): grant chain, tool calls with keyed content
+  digests and upstream record references, run context, policy evaluations,
+  recommendations, screening dispositions, decisions and consumptions,
+  revocations and voids; every entry records who asserted it and when it was
+  recorded; hash chain, platform anchor and service signature over root and
+  anchor.
+- Private by default: identifiers, record references and content digests are
+  keyed per case, with operator-approved disclosure.
+- New concepts page `docs/concepts/evidence-and-verification.md`.
+
 ### Breaking changes from 0.5 (summary)
 `docs/migration-0.6.md` explains each item and what to do. Manifests,
 purpose-bound grants, caps, signing and claims each have their own entry
@@ -17,7 +95,8 @@ below.
   - `cost_units` is a reserved tool name.
   - `enforce()` denies calls it cannot evaluate: a tool with
     `allowed_purposes` needs a matching grant purpose, a tool with
-    `requires_decision` always returns `decision_required`, and a tool with
+    `requires_decision` needs decision grants (`decision_required` without
+    them), and a tool with
     caps needs a caps meter.
 - **Purpose-bound grants.**
   - `POST /v1/authorize` rejects an unknown `purpose`, or a purpose without a
@@ -158,9 +237,10 @@ below.
 - **Break (TypeScript types):** in `GrantTokenPayload`, `agt`, `dev` and
   `scp` are now optional and deprecated, and `scope`, `act`, `cnf`, `aud`
   and `urn:grantex:grant` are added.
-- **Decision references.** `enforce()` returns `decision_required` for a
-  tool listed in the grant's `urn:grantex:decision:v1` entry, even when the
-  manifest does not declare `requires_decision`. A malformed decision entry
+- **Decision references.** `enforce()` requires a decision grant for a tool
+  listed in the grant's `urn:grantex:decision:v1` entry (`decision_required`
+  without one), even when the manifest does not declare `requires_decision`;
+  a decision in the entry's `four_eyes_on` needs two approvers. A malformed decision entry
   denies every call with `malformed_authorization_details`. A delegated grant
   keeps the decision references of the connectors it keeps.
   `parse_decision_references` / `parseDecisionReferences` read them.
@@ -389,6 +469,205 @@ Breaking changes
 - Removed: the unenforced `allowedRedirectUris` option, and the metadata's
   advertised `grantex_extensions.consent_ui` and `audit_stream` URLs, which had
   no routes.
+
+### Decision grants: specification, concepts and breaking changes
+- `spec/decision-grant.md`: the decision-grant profile (roles and
+  credentials, semantic action, token header and claims, approver identity
+  providers, browser sign-in and step-up, decision requests, approval on the
+  auth service's page, audit, case-bound validity, verification and single
+  use, errors, threat model, APIs).
+- `docs/concepts/decision-grants.md`: who can approve and how, the four-eyes
+  model, validity, enforcing, refusals, rolling out with `decisions.required`,
+  operating, and what decision grants do and do not protect against. Its code
+  examples are files under `packages/sdk-py/tests/docs_examples` and
+  `packages/sdk-ts/tests/docs/examples`, run and checked verbatim in CI.
+- `spec/manifest-0.6.md` and `docs/concepts/tool-manifests.mdx` describe
+  `requires_decision` enforcement instead of the interim always-deny rule.
+
+Breaking and behaviour changes across the decision-grant series, for
+reviewers and integrators:
+- **Behaviour:** `enforce()` can now **allow** a call to a
+  `requires_decision` tool, when it carries decision grants that verify and
+  that the auth service consumes. Before, every such call was denied. Calls
+  without decision grants are denied as before.
+- **Behaviour:** `decision_required` denials now carry
+  `details: {"decision_required": "<connector>:<tool>"}` (previously empty
+  `details`).
+- **Rollout mode:** `decisions_mode="warn"` / `decisionsMode: 'warn'` does
+  not deny calls that lack a valid decision grant; it reports them in
+  `would_deny` / `wouldDeny`. It exists for measured rollout and must not be
+  used where decisions are required. The default is `enforce`.
+- **New dependency on the auth service at call time** for decision tools:
+  `enforce()` consumes grants online and refuses the call when the service
+  cannot confirm (`consume_unavailable`). Offline-only deployments cannot call
+  decision tools. A consumed grant stays spent if the response is lost or the
+  tool call fails.
+- **Break:** decision actions whose `case_id`, `subject` or extra values
+  contain invisible Unicode format characters are refused.
+- **Break:** the manifest unknown-key error message now lists
+  `decision_fields`.
+- `@grantex/mcp-auth`: `DecisionOutcome` sub-reasons include the new values
+  (`case_changed`, `wrong_case`, `four_eyes_incomplete`, `malformed`,
+  `revoked`, `unknown_grant`, `consume_unavailable`); the type was already a
+  string, so no type break. `grantexDecisionVerifier` refuses calls without
+  the grant's developer or the tool's connector.
+- Auth service: migration `097_decision_grants.sql` adds tables only (safe on
+  a live database, no effect on issued tokens); all decision endpoints and
+  pages are off unless `DECISION_GRANTS_ENABLED=true`. Approvals are possible
+  only on the auth service's approval page, after signing in with an identity
+  provider the service administrator allow-listed.
+- Auth service: decision grants are verified against the platform signing
+  key ring, so unconsumed grants survive a key rotation while the old key is
+  kept for verification.
+- No existing public API was removed or renamed.
+
+### Decision grants in the SDKs and mcp-auth
+- `enforce()` in both SDKs now accepts decision grants for tools whose
+  manifest entry has `requires_decision` (previously every such call was
+  denied): `decision_grants` / `decisionGrants` (one token, or two for a
+  decision in `four_eyes_on`), the action to compare them with
+  (`decision_action` / `decisionAction`, or derived from `arguments`) and
+  `case_version` / `caseVersion`. Grants are verified offline (typ
+  `decision+jwt`, signature by the issuer's JWKS, issuer, audience
+  `urn:grantex:decision`, developer, connector, action hash, case version,
+  expiry, four eyes with different `sub` and the second approval naming the
+  first) and then consumed at the auth service as the last step, after caps
+  are reserved; a failed consumption refunds the reservation. Without grants
+  the result is `decision_required` (with `details.decision_required`
+  `<connector>:<tool>`); otherwise `decision_invalid` with a sub-reason from
+  the new `DecisionSubReason` (`action_mismatch`, `wrong_case`,
+  `case_changed`, `expired`, `consumed`, `same_approver`,
+  `four_eyes_incomplete`, `malformed`, `unknown_grant`, `revoked`,
+  `consume_unavailable`). Offline verification alone never allows a call.
+  `EnforceResult.decision` records what was consumed. Any consumer failure
+  denies the call and refunds the caps reservation. Consumption spends the
+  grant: a lost response or a tool failure afterwards needs a new approval.
+- When both `decision_action` and `arguments` are given they must hash
+  identically (`action_mismatch`). A tool's manifest `decision_fields` are
+  read from the arguments and must be bound by the grant.
+- Grants must carry a `kid`; keys are chosen by `kid` and type from the
+  issuer's JWKS; RS256 and ES256 are accepted (`decision_algorithms` /
+  `decisionAlgorithms` narrows the list). Grants must carry
+  `dwell_source: "server"`, `memo_hash` and `policy_score_hash`.
+- `wrap_tool` / `wrapTool` take `decision_grants` / `decisionGrants` and
+  `case_version` / `caseVersion` (values or per-call getters) and derive the
+  action from the tool input; `enforceMiddleware` takes
+  `extractDecisionGrants`, `extractArguments` and `extractCaseVersion`, and
+  its 403 body now includes `reason` and `subReason`.
+- The FastAPI `GrantexEnforcer` passes decision grants to `enforce()`: grants
+  from the `Grantex-Decision-Grant` header (comma-separated), arguments from
+  the JSON body, and the case version from a required `case_version`
+  callback (server case state); each source can be replaced. Its 403 detail
+  adds `reason_code` and `sub_reason`.
+- `decisions_mode` / `decisionsMode` (client option and per call):
+  `enforce` (default) denies. `warn` is for rollout only and is not a
+  control: it does not deny a `requires_decision` call without a valid
+  decision grant; it lets the call through and reports what would have been
+  denied in `would_deny` / `wouldDeny`. Valid grants presented in warn mode
+  are still consumed. Platforms map their `decisions.required` flag to
+  `enforce` (on) or `warn` (off). `decision_consumer` / `decisionConsumer`
+  replaces the auth-service consumer.
+- `grantex.decisions` / `Grantex.decisions`: `set_case_version`,
+  `create_request` (with `memo` and `policy_score`), `get_request`,
+  `cancel_request`, `consume` (never retried; an unconfirmed consumption
+  raises `consume_unavailable`). There is no approval API: people approve on
+  the auth service's approval page.
+- Manifest 0.6: tools may declare `decision_fields` (requires
+  `requires_decision`). **Break:** the unknown-key error message now lists
+  `decision_fields` among the allowed keys.
+- `verify_decision_grant(s)` / `verifyDecisionGrant(s)` for offline checks,
+  with shared cases in `spec/examples/decision-grant/verification.json`.
+- `@grantex/mcp-auth`: `grantexDecisionVerifier()` reference
+  `DecisionVerifier`, reading grants from the `grantex-decision-grant` header,
+  requiring the grant's developer and the tool's connector (refused as
+  `malformed` otherwise), binding manifest `decision_fields`, and answering
+  `valid` only after consumption. Tool policies carry `decisionFields`.
+  The guard and the verifier apply the access token's
+  `urn:grantex:decision:v1` entries: a listed tool needs a decision grant,
+  the entry's `four_eyes_on` requires two approvers, and a token with a
+  malformed decision entry is refused for every `tools/call`
+  (`decision_invalid` / `malformed_authorization_details`). **Behaviour
+  change** for tokens that carry such entries.
+- Behaviour change (no API break): a call to a `requires_decision` tool that
+  carries a valid decision grant which the auth service consumes is now
+  allowed. Calls without one are denied exactly as before.
+
+### Decision grants in the auth service
+Behind `DECISION_GRANTS_ENABLED` (default off; every decision endpoint and page
+answers 404 until it is `true`). Profile in `spec/decision-grant.md`.
+
+- **Who can approve.** A person signed in on the service's approval page
+  (`/decisions/:id`) through an OpenID Connect authorization code flow with
+  PKCE, state bound to the browser and a nonce (`/decisions/login`,
+  `/decisions/callback`), with an identity provider the **service
+  administrator** allow-listed for the developer
+  (`POST /v1/admin/developers/:developerId/decision-approver-idps`,
+  `ADMIN_API_KEY`, the operator named and audited). A developer API key cannot
+  add an identity provider, sign an approver in or approve; `sso_connections`
+  are not used for approvals.
+- **ID token checks.** Discovery `issuer` equals the configured issuer; key by
+  `kid` from the provider's JWKS (refetched once for an unknown `kid`),
+  asymmetric algorithms only; `iss`, `aud`, `azp`, `exp`, `iat`, `nonce`;
+  step-up is an `acr` in `DECISION_STEP_UP_ACR` or an `amr` in
+  `DECISION_STEP_UP_AMR` (default `mfa,hwk`) with `auth_time` within
+  `DECISION_STEP_UP_MAX_AGE_SECONDS` (default 3600). A nonce is accepted once
+  per issuer and subject. An email counts only when `email_verified`; an
+  identity provider can require it.
+- **Session.** The secret is only in a `__Host-` HttpOnly Secure SameSite=Lax
+  cookie on the service's origin (only its hash is stored) and lasts until the
+  step-up window ends.
+- **Decision requests** (developer API key): `POST /v1/decisions/requests` with
+  the semantic action, connector, case version, `memo` and `policyScore`
+  (content stored with its SHA-256, shown verbatim, bound into the grant) and
+  `fourEyesOn`; `GET`, `cancel`; `PUT /v1/decisions/cases/:caseId` supersedes
+  open requests and revokes unconsumed grants (`case_changed`). Bodies with
+  duplicate member names are refused.
+- **Approval** only by form post from the approval page: session cookie, CSRF
+  token bound to session, request and rendering, `Origin` of the service
+  and `Sec-Fetch-Site: same-origin` both required, `Referrer-Policy:
+  same-origin` (so the browser sends the real `Origin`), CSP without script,
+  `frame-ancestors 'none'`. Dwell time is measured by the service from
+  rendering to submission; approvals faster than `DECISION_MIN_DWELL_MS`
+  (default 2000) are refused.
+- **Token.** `typ: decision+jwt`, audience `urn:grantex:decision`, `kid`;
+  `sub` is `user:<issuer hash>:<idp sub>`; `approver_auth`, `acr`, `amr`,
+  `auth_time`, `action`, `action_hash`, `connector`, `case_version`,
+  `dwell_ms`, `dwell_source: "server"`, `memo_hash`, `policy_score_hash`,
+  `decision_request`, `jti`, expiry capped at 24 hours and at the request's
+  expiry; for four eyes the second grant names the first. The same approver
+  (namespaced subject) or the same verified email cannot approve twice.
+- **Consumption** (developer API key): `POST /v1/decisions/consume` verifies
+  (key chosen by `kid`, RS256 or ES256) and atomically consumes one grant or
+  both grants of a four-eyes decision. Refusals carry `reason:
+  decision_invalid` and a `subReason`. Every refusal is audited with the
+  attempted action and hash; if that record cannot be written the answer is
+  503 `DECISION_AUDIT_UNAVAILABLE`.
+- **Audit chain:** identity-provider changes, sign-ins, requests, approvals
+  (approver, identity provider, authentication method, dwell time and source,
+  action, memo and policy score hashes), consumptions, refusals, case changes
+  and cancellations, each in the transaction it records. Approver emails are
+  stored only as keyed hashes and names encrypted.
+- **Metrics:** `grantex_decision_grants_minted_total{approvals_required,position,dwell_source}`,
+  `grantex_decision_grants_consumed_total`,
+  `grantex_decision_grants_rejected_total{stage,reason}`,
+  `grantex_decision_dwell_seconds{dwell_source}`.
+- **Migration** `097_decision_grants.sql`: new tables only.
+- No change to existing endpoints or tokens.
+
+### Decision action hash: stricter inputs and extra decision fields
+- The semantic action may carry `extra`: further fields the manifest declares
+  for a tool (`decision_fields`, for example a currency), included in the
+  hash. `from_tool_call` / `decisionActionFromToolCall` take the declared
+  names and require them in the call. Hashes of actions without `extra` are
+  unchanged.
+- **Break:** `case_id`, `subject` and extra string values containing invisible
+  Unicode format characters (soft hyphen, zero-width, bidirectional controls,
+  tags) are now refused (`invalid_value`). Such actions hashed before.
+- `DecisionAction.from_json` (Python) and `parseDecisionActionJson`,
+  `parseJsonRejectingDuplicates` (TypeScript) refuse duplicate member names
+  (`duplicate_key`).
+- Python canonicalisation ignores overridden `__repr__` / `__str__` on
+  `float`, `int` and `str` subclasses.
 
 ### Canonicalisation and decision action hash
 - RFC 8785 JSON canonicalisation in both SDKs: `grantex.canonical`

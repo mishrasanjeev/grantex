@@ -31,6 +31,9 @@ dependencies = [
     "cryptography>=48.0.1",
 ]
 
+[project.scripts]
+grantex-evidence = "grantex.cli.evidence:main"
+
 [project.urls]
 Homepage = "https://grantex.dev"
 Documentation = "https://docs.grantex.dev"

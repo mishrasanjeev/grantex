@@ -8,6 +8,7 @@ import {
   missingTokenChallenge,
 } from './challenge.js';
 import type { ToolPolicy, ToolRequirement } from './tool-policy.js';
+import { DecisionReferenceError, withGrantDecisionReference } from './decision-references.js';
 
 /**
  * Framework-neutral authorization for an MCP server (the resource server):
@@ -376,7 +377,25 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
           error_description: 'tools/call requires params with a tool name',
         });
       }
-      const decisionCalls = calls.filter((call) => typeof call.name === 'string' && tools.requirementFor(call.name)?.requiresDecision === true);
+      // A tool needs a decision when its manifest declares requires_decision or
+      // the grant's urn:grantex:decision:v1 entry lists it; four eyes comes
+      // from both. A decision entry that cannot be read refuses the call.
+      const authorizationDetails = payload['authorization_details'];
+      const requirementOf = (name: string): ToolRequirement | undefined | 'malformed' => {
+        const declared = tools.requirementFor(name);
+        if (declared === undefined) return undefined;
+        try {
+          return withGrantDecisionReference(declared, authorizationDetails);
+        } catch (err) {
+          if (err instanceof DecisionReferenceError) return 'malformed';
+          throw err;
+        }
+      };
+      const decisionCalls = calls.filter((call) => {
+        if (typeof call.name !== 'string') return false;
+        const requirement = requirementOf(call.name);
+        return requirement === 'malformed' || requirement?.requiresDecision === true;
+      });
       if (decisionCalls.length > 1) {
         const description = 'A batch may contain at most one call that needs a decision grant';
         return deny(403, 'decision_invalid', undefined, {
@@ -393,7 +412,17 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
             error_description: 'tools/call requires params.name',
           });
         }
-        const requirement = tools.requirementFor(call.name);
+        const requirement = requirementOf(call.name);
+        if (requirement === 'malformed') {
+          const description = 'The grant\'s decision references in authorization_details cannot be read';
+          return deny(403, 'decision_invalid', undefined, {
+            error: 'insufficient_authorization',
+            reason: 'decision_invalid',
+            sub_reason: 'malformed_authorization_details',
+            tool: call.name,
+            error_description: description,
+          }, tools.requirementFor(call.name));
+        }
         if (!requirement) {
           const description = `Tool "${call.name}" is not declared on this server, so no grant can cover it`;
           return deny(403, 'manifest_unknown_tool', insufficientScopeChallenge({
@@ -402,7 +431,8 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
             ...(resourceMetadataUrl !== undefined ? { resourceMetadataUrl } : {}),
           }), { error: 'insufficient_scope', reason: 'manifest_unknown_tool', tool: call.name, error_description: description });
         }
-        if (!tools.isSatisfied(requirement, grantedScopes)) {
+        // Scopes are checked against the declared requirement object, which the policy recognises.
+        if (!tools.isSatisfied(tools.requirementFor(call.name)!, grantedScopes)) {
           const description = `Tool "${call.name}" is not granted: it needs ${requirement.requiredScopes.join(' ')}`;
           return deny(403, 'tool_not_granted', insufficientScopeChallenge({
             scopes: requirement.requiredScopes,

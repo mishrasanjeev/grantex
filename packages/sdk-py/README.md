@@ -301,7 +301,7 @@ result = grantex.enforce(grant_token=token, connector="my-crm", tool="delete_acc
 **Features:**
 - `enforce()` — verify JWT + check tool permission via manifest, <1ms
 - `wrap_tool()` — auto-enforce on LangChain tools
-- `GrantexEnforcer` — FastAPI dependency for scope enforcement
+- `GrantexEnforcer` — FastAPI dependency for scope enforcement, including decision grants (`Grantex-Decision-Grant` header, JSON body arguments, `case_version` callback)
 - Define custom manifests for any connector: inline, from JSON, or auto-generated via CLI
 - 53 pre-built manifests included (Salesforce, HubSpot, Jira, Stripe, SAP, S3, and 47 more)
 - Permission hierarchy: `admin > delete > write > read`

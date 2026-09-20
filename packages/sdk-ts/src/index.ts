@@ -107,6 +107,8 @@ export {
   type EnforceMiddlewareOptions,
 } from './manifest.js';
 export * from './caps/index.js';
+// Evidence packages (namespaced; grantex.evidence in the Python SDK)
+export * as evidence from './evidence/index.js';
 export { DenialReason, CapSubReason, ManifestSubReason, PurposeSubReason, TokenSubReason, ToolSubReason } from './denials.js';
 export {
   PURPOSE_VOCABULARY,
@@ -118,8 +120,9 @@ export {
 } from './purpose.js';
 
 // RFC 8785 canonicalisation and decision grants (PRD G-3)
-export { CanonicalizationError, MAX_DEPTH as CANONICAL_MAX_DEPTH, canonicalize, canonicalizeToBytes, serializeNumber } from './canonical.js';
+export { CanonicalizationError, DuplicateKeyError, MAX_DEPTH as CANONICAL_MAX_DEPTH, canonicalize, canonicalizeToBytes, parseJsonRejectingDuplicates, serializeNumber } from './canonical.js';
 export * from './decisions/index.js';
+export { DecisionSubReason } from './denials.js';
 
 // DPDP Compliance
 export { DpdpClient } from './resources/dpdp.js';

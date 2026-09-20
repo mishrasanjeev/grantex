@@ -17,6 +17,10 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./evidence": {
+      "import": "./dist/evidence/index.js",
+      "types": "./dist/evidence/index.d.ts"
+    },
     "./manifests/*": {
       "import": "./dist/manifests/*.js",
       "types": "./dist/manifests/*.d.ts"

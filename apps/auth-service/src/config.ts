@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { isIP } from 'node:net';
+import { evidenceConfigErrors } from './lib/evidence-service/settings.js';
 import {
   parseSigningAlgorithm,
   parseSigningKeyStore,
@@ -322,6 +323,7 @@ export function validateConfig(): void {
     errors.push(`${signingKeySettingName()} is required in production; AUTO_GENERATE_KEYS is development-only`);
   }
   errors.push(...signingKeyConfigErrors(config, process.env['NODE_ENV']));
+  errors.push(...evidenceConfigErrors(process.env));
   if (process.env['NODE_ENV'] === 'production' && (config.seedApiKey || config.seedSandboxKey)) {
     errors.push('SEED_API_KEY and SEED_SANDBOX_KEY must not be configured in production');
   }

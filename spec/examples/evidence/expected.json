@@ -1,0 +1,16 @@
+{
+  "evidence-package-disclosed.json": {
+    "root": "sha256:b79d4c3bd0633b77615abe1153e5d982da63ee6afa07e16ddd6c75c5222d5a99",
+    "entry_count": 18
+  },
+  "evidence-package-signed.json": {
+    "root": "sha256:fbc98bfa7f0c59cd400504ec838b159ba20fbbca31a64c3e50e7a848463deade",
+    "entry_count": 18,
+    "anchor_hash": "8f6af1cdf6fc68b4acdaef31e3bcf5b4ef0a4c41ebba6f7c559852df4b0ad04f"
+  },
+  "evidence-package.json": {
+    "root": "sha256:fbc98bfa7f0c59cd400504ec838b159ba20fbbca31a64c3e50e7a848463deade",
+    "entry_count": 18,
+    "anchor_hash": "8f6af1cdf6fc68b4acdaef31e3bcf5b4ef0a4c41ebba6f7c559852df4b0ad04f"
+  }
+}

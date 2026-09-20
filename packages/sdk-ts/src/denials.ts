@@ -82,3 +82,38 @@ export const TokenSubReason = {
   /** The `authorization_details` claim cannot be read unambiguously. */
   MALFORMED_AUTHORIZATION_DETAILS: 'malformed_authorization_details',
 } as const;
+
+/**
+ * Sub-reasons for `decision_required` and `decision_invalid` (PRD G-3;
+ * `spec/decision-grant.md`). The first four are PRD Appendix B's; the auth
+ * service and the Python SDK use the same values.
+ */
+export const DecisionSubReason = {
+  /** The grant approves a different action (tool, decision, subject, amount or connector). */
+  ACTION_MISMATCH: 'action_mismatch',
+  /** The grant is past its expiry. */
+  EXPIRED: 'expired',
+  /** The grant has already been used. */
+  CONSUMED: 'consumed',
+  /** Both grants of a four-eyes decision name the same approver. */
+  SAME_APPROVER: 'same_approver',
+  /** The case changed (new case version) after the decision was approved. */
+  CASE_CHANGED: 'case_changed',
+  /** The grant approves an action on another case. */
+  WRONG_CASE: 'wrong_case',
+  /** The approver's authentication was not step-up (auth service only). */
+  STEP_UP_REQUIRED: 'step_up_required',
+  /** The decision request was cancelled and its grants revoked. */
+  REVOKED: 'revoked',
+  /** The issuer does not know the grant, or it belongs to another developer. */
+  UNKNOWN_GRANT: 'unknown_grant',
+  /** The grant, or the action to compare it with, cannot be read. */
+  MALFORMED: 'malformed',
+  /** The decision needs two approvals and fewer were presented. */
+  FOUR_EYES_INCOMPLETE: 'four_eyes_incomplete',
+  /** The grant could not be consumed at the issuer (network, server or configuration). */
+  CONSUME_UNAVAILABLE: 'consume_unavailable',
+  /** No decision grant was presented (reported as `decision_required`). */
+  ABSENT: 'absent',
+} as const;
+export type DecisionSubReason = (typeof DecisionSubReason)[keyof typeof DecisionSubReason];

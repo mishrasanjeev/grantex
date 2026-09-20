@@ -20,6 +20,7 @@ import { webhooksRoutes } from './routes/webhooks.js';
 import { billingRoutes } from './routes/billing.js';
 import { policiesRoutes } from './routes/policies.js';
 import { complianceRoutes } from './routes/compliance.js';
+import { evidenceRoutes } from './routes/evidence.js';
 import { anomaliesRoutes } from './routes/anomalies.js';
 import { scimRoutes } from './routes/scim.js';
 import { ssoRoutes } from './routes/sso.js';
@@ -55,6 +56,9 @@ import { oauthRoutes } from './routes/oauth.js';
 import { prepaidWalletRoutes } from './routes/prepaid-wallets.js';
 import { eventSourcesRoutes } from './routes/event-sources.js';
 import { eventBridgeIngestRoutes } from './routes/event-bridge-ingest.js';
+import { decisionsRoutes } from './routes/decisions.js';
+import { decisionPageRoutes } from './routes/decision-page.js';
+import { decisionAdminRoutes } from './routes/decision-admin.js';
 
 export type AppOptions = {
   logger?: boolean | object;
@@ -197,6 +201,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(billingRoutes);
   await app.register(policiesRoutes);
   await app.register(complianceRoutes);
+  await app.register(evidenceRoutes);
   await app.register(anomaliesRoutes);
   await app.register(scimRoutes);
   await app.register(ssoRoutes);
@@ -223,6 +228,13 @@ export async function buildApp(opts: AppOptions = {}) {
   // scope because signatures cover the raw request bytes.
   await app.register(eventSourcesRoutes);
   await app.register(eventBridgeIngestRoutes);
+
+  // Decision grants (PRD G-3): platform API (developer key), the approval page
+  // (approver browser session) and approver identity providers (admin key).
+  // All refuse unless DECISION_GRANTS_ENABLED=true.
+  await app.register(decisionsRoutes);
+  await app.register(decisionPageRoutes);
+  await app.register(decisionAdminRoutes);
 
   // Grantex Commerce V1 — registered with prefix so all commerce paths
   // share the spec §16 envelope via the sub-instance error handler.
