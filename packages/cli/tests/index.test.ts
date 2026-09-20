@@ -1,4 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+
+const packageVersion = (
+  JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
+).version;
 
 // Mock client so commands don't try to connect
 vi.mock('../src/client.js', () => ({
@@ -40,7 +45,7 @@ describe('createProgram()', () => {
 
   it('has the correct version', () => {
     const program = createProgram();
-    expect(program.version()).toBe('0.3.0');
+    expect(program.version()).toBe(packageVersion);
   });
 
   it('has a --json global option', () => {
