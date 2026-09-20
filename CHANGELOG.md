@@ -199,9 +199,9 @@ below.
   `grantex_grant_revocations_total{action,cause}` and
   `grantex_revocation_propagation_seconds{stage}`, with alert rules for slow
   event-driven revocation, unreadable targets and revocation bursts.
-- Migration `111_event_mapping_rules.sql` adds two tables and two nullable
-  columns on `grants`; nothing existing changes and nothing reads them with the
-  flag off.
+- Migration `111_event_mapping_rules.sql` adds three tables (mapping rules,
+  subject bindings and the suspension bookkeeping); it alters no existing
+  table, and nothing reads them with the flag off.
 
 ### Event bridge: signed event ingestion
 - The auth service accepts provider events (PRD G-6), off unless
