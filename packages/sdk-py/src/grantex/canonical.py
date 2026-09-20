@@ -89,7 +89,8 @@ def serialize_number(value: float) -> str:
     if value == 0.0:
         return "0"  # also -0.0
 
-    text = repr(value)
+    # float.__repr__, not repr(): a float subclass may override __repr__.
+    text = float.__repr__(value)
     sign = ""
     if text[0] == "-":
         sign, text = "-", text[1:]
@@ -126,13 +127,14 @@ def int_to_double(value: int) -> float:
     is; ``2**53 + 1`` and ``2**60`` are not): otherwise canonicalising would
     silently change the value, so it is refused.
     """
+    value = int.__int__(value)
     if -MAX_SAFE_INTEGER <= value <= MAX_SAFE_INTEGER:
         return float(value)
     try:
         converted = float(value)
     except OverflowError:
         raise CanonicalizationError("integer too large for a double") from None
-    if serialize_number(converted) != str(value):
+    if serialize_number(converted) != int.__repr__(value):
         raise CanonicalizationError(
             "integer not exactly representable as a double; write it as a string"
         )
@@ -147,11 +149,12 @@ def _write(value: Any, out: List[str], depth: int) -> None:
     elif value is False:
         out.append("false")
     elif isinstance(value, int):
-        out.append(serialize_number(int_to_double(value)))
+        # int.__int__ strips a subclass (IntEnum and the like) to its value.
+        out.append(serialize_number(int_to_double(int.__int__(value))))
     elif isinstance(value, float):
-        out.append(serialize_number(value))
+        out.append(serialize_number(float(float.__float__(value))))
     elif isinstance(value, str):
-        _write_string(value, out)
+        _write_string(str.__str__(value), out)
     elif isinstance(value, (list, tuple)):
         if depth >= MAX_DEPTH:
             raise CanonicalizationError(f"nesting deeper than {MAX_DEPTH} levels")

@@ -460,9 +460,9 @@ The exact challenge formats are specified in
 import type { DecisionVerifier } from '@grantex/mcp-auth';
 
 /**
- * Until decision grants are available, refuse every tool that declares
- * requires_decision. Replace the body with real verification (signature,
- * semantic action hash, single-use jti, case-bound expiry) when they are.
+ * Refuse every tool that declares requires_decision, for example on a
+ * server that must never perform decisions. For Grantex decision grants use
+ * grantexDecisionVerifier, which verifies and consumes them.
  */
 export const decisionVerifier: DecisionVerifier = {
   async verify() {
@@ -471,6 +471,32 @@ export const decisionVerifier: DecisionVerifier = {
 };
 ```
 
+- **Grantex decision grants.** `grantexDecisionVerifier(options)` is the
+  reference `DecisionVerifier` for decision grants issued by the Grantex auth
+  service (`spec/decision-grant.md`). It reads one grant, or two
+  comma-separated grants for a decision in `four_eyes_on` (the manifest's
+  or the grant's `urn:grantex:decision:v1` entry's), from the
+  `grantex-decision-grant` request header (`header` to change it); derives
+  the semantic action from the tool name and the call's `case_id`,
+  `decision`, `subject`, `amount` and the manifest's `decision_fields`;
+  requires the access token's developer (`dev`) and a connector from a
+  manifest-derived tool policy (a call without either is refused as
+  `malformed`); asks `caseVersion(caseId, check)` for
+  the case's current version from your own case state; verifies the grants
+  with `verify` and consumes them with `consume`, answering `valid` only after
+  the issuer confirmed consumption (`consume_unavailable` otherwise). Pass
+  `verifyDecisionGrants` and `grantex.decisions.consume` from `@grantex/sdk`
+  0.6 or later; they are injected so this package does not depend on an
+  unreleased SDK. Refusals carry the SDK's sub-reason (`action_mismatch`,
+  `wrong_case`, `case_changed`, `expired`, `consumed`, `same_approver`,
+  `four_eyes_incomplete`, `malformed`, ...) in the `decision_invalid` body.
+  Consumption spends the grant: if the tool call fails afterwards, a person
+  has to approve again.
+  The guard also reads the access token's `urn:grantex:decision:v1` entries
+  (`spec/grant-token-0.6.md`): a tool listed there needs a decision grant even
+  when its manifest does not declare `requires_decision`, and a token whose
+  decision entries cannot be read is refused for every `tools/call`
+  (`decision_invalid` / `malformed_authorization_details`).
 - **Purpose-bound grants.** `grant.authorizeParams` returns extra parameters
   for the Grantex authorize call (for example `authorization_details` with
   purpose and region). It cannot override the agent, principal, scopes,

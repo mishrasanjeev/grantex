@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple, Uni
 
 if TYPE_CHECKING:
     from .caps import CapLimit, Reservation
+    from .decisions import ConsumedDecision
 
 
 # ── Permission ──────────────────────────────────────────────────────────
@@ -98,7 +99,10 @@ _TOOL_KEYS = (
     "cost_units",
     "requires_decision",
     "four_eyes_on",
+    "decision_fields",
 )
+_CORE_DECISION_FIELDS = ("case_id", "action", "decision", "subject", "amount", "extra")
+MAX_DECISION_FIELDS = 16
 _CAP_KEYS = ("per_hour", "per_day", "per_case")
 
 _NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}\Z")
@@ -144,6 +148,9 @@ class ToolSpec:
     cost_units: Optional[Dict[str, int]] = None
     requires_decision: bool = False
     four_eyes_on: Tuple[str, ...] = ()
+    decision_fields: Tuple[str, ...] = ()
+    """Call arguments, beyond the core semantic action, that a decision grant binds
+    (for example ``currency``). Requires ``requires_decision``."""
 
 
 ToolDeclaration = Union[str, Mapping[str, Any], ToolSpec]
@@ -344,12 +351,32 @@ def parse_tool_declaration(tool: str, value: Any) -> ToolSpec:
             raise _fail(message)
         four_eyes_on = tuple(raw_eyes)
 
+    decision_fields: Tuple[str, ...] = ()
+    if "decision_fields" in value:
+        raw_fields = value["decision_fields"]
+        fields_message = (
+            f"{path}.decision_fields: must be a non-empty array of at most "
+            f"{MAX_DECISION_FIELDS} unique field names"
+        )
+        if not isinstance(raw_fields, list) or not raw_fields or len(raw_fields) > MAX_DECISION_FIELDS:
+            raise _fail(fields_message)
+        for index, name in enumerate(raw_fields):
+            if not isinstance(name, str) or not _UNIT_RE.match(name) or name in _CORE_DECISION_FIELDS:
+                raise _fail(
+                    f"{path}.decision_fields[{index}]: invalid field name {_q(name)}"
+                )
+        if not _unique_strings(raw_fields):
+            raise _fail(fields_message)
+        decision_fields = tuple(raw_fields)
+
     if requires_decision and permission == Permission.READ:
         raise _fail(
             f"{path}: requires_decision is not allowed on a tool with read permission"
         )
     if four_eyes_on and not requires_decision:
         raise _fail(f"{path}.four_eyes_on: requires requires_decision: true")
+    if decision_fields and not requires_decision:
+        raise _fail(f"{path}.decision_fields: requires requires_decision: true")
 
     return ToolSpec(
         permission=permission,
@@ -358,6 +385,7 @@ def parse_tool_declaration(tool: str, value: Any) -> ToolSpec:
         cost_units=cost_units,
         requires_decision=requires_decision,
         four_eyes_on=four_eyes_on,
+        decision_fields=decision_fields,
     )
 
 
@@ -378,6 +406,8 @@ def tool_spec_to_dict(spec: ToolSpec) -> Dict[str, Any]:
         out["requires_decision"] = True
     if spec.four_eyes_on:
         out["four_eyes_on"] = list(spec.four_eyes_on)
+    if spec.decision_fields:
+        out["decision_fields"] = list(spec.decision_fields)
     return out
 
 
@@ -609,5 +639,9 @@ class EnforceResult:
     """Tenant of ``cap_limits``; pass both to ``CapsMeter.reserve``."""
 
     would_deny: Optional[Dict[str, Any]] = None
-    """In caps warn mode, the cap denial that was not applied: ``reason_code``,
-    ``sub_reason``, ``reason`` and ``details``."""
+    """In caps or decisions warn mode, the first denial that was not applied:
+    ``reason_code``, ``sub_reason``, ``reason`` and ``details``."""
+
+    decision: Optional["ConsumedDecision"] = None
+    """For a tool that requires a decision: the decision grants consumed for
+    this call (request id, jtis, action hash, approvers)."""
