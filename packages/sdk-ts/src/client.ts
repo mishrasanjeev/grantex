@@ -24,6 +24,7 @@ import { CommerceClient } from './resources/commerce.js';
 import {
   CapSubReason,
   DenialReason,
+  RevocationSubReason,
   ManifestSubReason,
   PurposeSubReason,
   TokenSubReason,
@@ -51,6 +52,14 @@ import {
 import { MALFORMED_GRANT_CAPS, buildCapLimits, type BuildCapLimitsOptions } from './caps/limits.js';
 import { ToolManifest, parseManifestJson, permissionCovers, type WouldDeny, type ToolSpec, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 import { verifyGrantToken } from './verify.js';
+import {
+  RevocationFeed,
+  isRevocationCheckMode,
+  type CredentialRef,
+  type RevocationCheckMode,
+  type RevocationFeedOptions,
+  type RevocationFeedState,
+} from './revocations/index.js';
 import { DecisionSubReason } from './denials.js';
 import { ActionValidationError, computeActionHash, decisionActionFromToolCall, parseDecisionAction, type DecisionAction } from './decisions/action.js';
 import { DecisionGrantError, verifyDecisionGrants, type DecisionGrantSet } from './decisions/verify.js';
@@ -73,6 +82,13 @@ const DEFAULT_BASE_URL = 'https://api.grantex.dev';
 function checkDecisionsMode(mode: unknown): 'enforce' | 'warn' {
   if (mode !== 'enforce' && mode !== 'warn') {
     throw new Error(`decisionsMode must be one of enforce, warn, not ${JSON.stringify(mode)}`);
+  }
+  return mode;
+}
+
+function checkRevocationCheck(mode: unknown): RevocationCheckMode {
+  if (!isRevocationCheckMode(mode)) {
+    throw new Error(`revocationCheck must be offline, online or feed, not ${JSON.stringify(mode)}`);
   }
   return mode;
 }
@@ -109,6 +125,9 @@ export class Grantex {
   #enforceMode: 'strict' | 'permissive';
   readonly #capsMeter: CapsMeter | undefined;
   readonly #capsMode: CapsMode;
+  readonly #revocationCheck: RevocationCheckMode;
+  #revocationFeed: RevocationFeed | undefined;
+  readonly #revocationFeedOptions: RevocationFeedOptions;
   readonly #decisionsMode: 'enforce' | 'warn';
   readonly #decisionConsumer: DecisionConsumer;
   readonly #decisionAlgorithms: string[];
@@ -188,6 +207,9 @@ export class Grantex {
     this.#enforceMode = (options as Record<string, unknown>)['enforceMode'] as 'strict' | 'permissive' ?? 'strict';
     this.#capsMeter = options.capsMeter;
     this.#capsMode = checkCapsMode(options.capsMode ?? 'enforce');
+    this.#revocationCheck = checkRevocationCheck(options.revocationCheck ?? 'offline');
+    this.#revocationFeedOptions = options.revocationFeed ?? {};
+    if (this.#revocationCheck === 'feed') this.#feed().start();
     this.#decisionsMode = checkDecisionsMode(options.decisionsMode ?? 'enforce');
     const algorithms = [...(options.decisionAlgorithms ?? ['RS256', 'ES256'])];
     if (algorithms.length === 0 || algorithms.some((a) => a !== 'RS256' && a !== 'ES256')) {
@@ -311,6 +333,90 @@ export class Grantex {
    * if (!result.allowed) throw new Error(result.reason);
    * ```
    */
+  /**
+   * The revocation feed this client uses for `revocationCheck: 'feed'`,
+   * started on first use. Call `stopRevocationFeed()` to close it.
+   */
+  revocationFeed(): RevocationFeed {
+    return this.#feed();
+  }
+
+  /** What the revocation feed knows, and whether it is fresh enough to be trusted. */
+  revocationFeedState(): RevocationFeedState | undefined {
+    return this.#revocationFeed?.state();
+  }
+
+  /** Stop following the revocation feed and release its connection. */
+  async stopRevocationFeed(): Promise<void> {
+    await this.#revocationFeed?.stop();
+  }
+
+  #feed(): RevocationFeed {
+    if (!this.#revocationFeed) {
+      this.#revocationFeed = new RevocationFeed(this.#http, this.#revocationFeedOptions);
+    }
+    return this.#revocationFeed;
+  }
+
+  /**
+   * Why this grant must not be used, or undefined. `enforce()` calls this
+   * before any other check, because a revoked grant is not a question of
+   * scopes.
+   */
+  async #revocationDenial(
+    mode: Exclude<RevocationCheckMode, 'offline'>,
+    ref: CredentialRef,
+  ): Promise<{ reason: string; subReason: string } | undefined> {
+    if (mode === 'feed') {
+      const feed = this.#feed();
+      if (!await feed.ready()) {
+        const unavailable = feed.state().unavailable;
+        return unavailable === null
+          ? {
+            reason: `The revocation feed has not been reachable for more than ${feed.staleAfterMs} ms, `
+              + 'so revocations may not be known; denying rather than authorising on stale information.',
+            subReason: RevocationSubReason.FEED_STALE,
+          }
+          : {
+            reason: `The revocation feed is not usable (${unavailable}); denying rather than authorising `
+              + 'without a way to learn about revocations.',
+            subReason: RevocationSubReason.FEED_UNAVAILABLE,
+          };
+      }
+      const match = feed.match(ref);
+      if (!match) return undefined;
+      const subReason = match.kind === 'parent_grant'
+        ? RevocationSubReason.PARENT_REVOKED
+        : match.action === 'suspended' ? RevocationSubReason.SUSPENDED : RevocationSubReason.REVOKED;
+      return { reason: `Grant ${match.id} is ${match.action === 'suspended' ? 'suspended' : 'revoked'}.`, subReason };
+    }
+
+    const query = new URLSearchParams();
+    if (ref.grantId !== undefined) query.set('grantId', ref.grantId);
+    if (ref.tokenId !== undefined) query.set('jti', ref.tokenId);
+    let status: { status: string; revoked: boolean };
+    try {
+      status = await this.#http.get<{ status: string; revoked: boolean }>(`/v1/revocations/status?${query.toString()}`);
+    } catch (err) {
+      return {
+        reason: `The revocation status of this grant could not be checked (${err instanceof Error ? err.message : String(err)}); `
+          + 'denying rather than authorising without it.',
+        subReason: RevocationSubReason.STATUS_UNAVAILABLE,
+      };
+    }
+    if (!status.revoked) return undefined;
+    if (status.status === 'suspended') {
+      return { reason: 'This grant is suspended.', subReason: RevocationSubReason.SUSPENDED };
+    }
+    if (status.status === 'unknown') {
+      return {
+        reason: 'The auth service does not recognise this grant; denying rather than assuming it is live.',
+        subReason: RevocationSubReason.STATUS_UNAVAILABLE,
+      };
+    }
+    return { reason: `This grant is ${status.status}.`, subReason: RevocationSubReason.REVOKED };
+  }
+
   async enforce(options: EnforceOptions): Promise<EnforceResult> {
     const { grantToken, connector, tool, amount, caseId, costComponents, reserve = true, capsTenantId } = options;
     const capsMode = options.capsMode === undefined ? this.#capsMode : checkCapsMode(options.capsMode);
@@ -358,6 +464,20 @@ export class Grantex {
     base.grantId = grant.grantId;
     base.agentDid = grant.agentDid;
     base.scopes = grant.scopes;
+
+    // 1b. Revocation. The token verifies offline whether or not the grant
+    //     still stands, so this is the only place a revocation can be seen.
+    const revocationCheck = options.revocationCheck === undefined
+      ? this.#revocationCheck
+      : checkRevocationCheck(options.revocationCheck);
+    if (revocationCheck !== 'offline') {
+      const denial = await this.#revocationDenial(revocationCheck, {
+        grantId: grant.grantId,
+        tokenId: grant.tokenId,
+        parentGrantId: grant.parentGrantId,
+      });
+      if (denial) return denied(denial.reason, DenialReason.GRANT_REVOKED, denial.subReason);
+    }
 
     // 2. Read the grant's tools authorization for this connector. A claim that
     //    cannot be read unambiguously denies every call.

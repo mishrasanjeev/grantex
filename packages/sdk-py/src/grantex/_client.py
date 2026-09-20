@@ -7,6 +7,7 @@ import re
 from typing import Any, Callable, Mapping, Sequence
 
 import httpx
+from urllib.parse import quote
 
 from ._http import HttpClient
 from ._types import (
@@ -48,8 +49,14 @@ from .denials import (
     DenialReason,
     ManifestSubReason,
     PurposeSubReason,
+    RevocationSubReason,
     TokenSubReason,
     ToolSubReason,
+)
+from .revocations import (
+    REVOCATION_CHECK_MODES,
+    RevocationFeed,
+    RevocationFeedState,
 )
 from ._authorization_details import (
     AuthorizationDetailsError,
@@ -122,6 +129,15 @@ def _check_caps(meter: CapsMeter, tenant_id: str, limits: tuple[CapLimit, ...]) 
                 requested=limit.units, scope=limit.scope, kind=limit.kind,
             )
 
+def _check_revocation_check(mode: str) -> str:
+    if mode not in REVOCATION_CHECK_MODES:
+        raise ValueError(
+            "revocation_check must be one of "
+            f"{', '.join(REVOCATION_CHECK_MODES)}, not {mode!r}"
+        )
+    return mode
+
+
 class Grantex:
     """Main entry point for the Grantex SDK."""
 
@@ -165,6 +181,9 @@ class Grantex:
         caps_meter: CapsMeter | None = None,
         legacy_claims: bool = True,
         caps_mode: str = CAPS_ENFORCE,
+        revocation_check: str = "offline",
+        revocation_feed_stale_after: float = 5.0,
+        revocation_feed_transport: str = "stream",
         decisions_mode: str = "enforce",
         decision_consumer: DecisionConsumer | None = None,
         decision_algorithms: Sequence[str] = ("RS256", "ES256"),
@@ -182,6 +201,14 @@ class Grantex:
         # False by default from 0.7.
         self._legacy_claims = legacy_claims
         self._caps_mode = _check_caps_mode(caps_mode)
+        # How enforce() finds out about revocations (PRD G-6). "offline" (the
+        # default) does not check: a revoked grant's token stays valid until it
+        # expires. "feed" follows the revocation feed and fails closed when it
+        # goes stale; "online" asks the auth service about every call.
+        self._revocation_check = _check_revocation_check(revocation_check)
+        self._revocation_feed_stale_after = revocation_feed_stale_after
+        self._revocation_feed_transport = revocation_feed_transport
+        self._revocation_feed: RevocationFeed | None = None
         self._decisions_mode = _check_decisions_mode(decisions_mode)
         if not decision_algorithms or any(a not in ("RS256", "ES256") for a in decision_algorithms):
             raise ValueError("decision_algorithms must be a non-empty subset of RS256, ES256")
@@ -223,6 +250,10 @@ class Grantex:
         )
         self._manifests: dict[str, ToolManifest] = {}
         self._jwks_uri = f"{base_url.rstrip('/')}/.well-known/jwks.json"
+        self._revocation_base_url = base_url
+        self._revocation_api_key = resolved_key
+        if self._revocation_check == "feed":
+            self.revocation_feed().start()
 
     @staticmethod
     def signup(
@@ -290,6 +321,92 @@ class Grantex:
             if fname.endswith(".json"):
                 self.load_manifest(ToolManifest.from_file(os.path.join(dir_path, fname)))
 
+    def revocation_feed(self) -> RevocationFeed:
+        """The revocation feed used by ``revocation_check="feed"``, created on first use."""
+        if self._revocation_feed is None:
+            self._revocation_feed = RevocationFeed(
+                self._revocation_base_url,
+                self._revocation_api_key,
+                stale_after=self._revocation_feed_stale_after,
+                transport=self._revocation_feed_transport,  # type: ignore[arg-type]
+            )
+        return self._revocation_feed
+
+    def revocation_feed_state(self) -> RevocationFeedState | None:
+        """What the revocation feed knows, and whether it is fresh enough to be trusted."""
+        return self._revocation_feed.state() if self._revocation_feed is not None else None
+
+    def stop_revocation_feed(self) -> None:
+        """Stop following the revocation feed and release its connection."""
+        if self._revocation_feed is not None:
+            self._revocation_feed.stop()
+
+    def _revocation_denial(
+        self, mode: str, grant_id: str, token_id: str | None, parent_grant_id: str | None
+    ) -> tuple[str, str] | None:
+        """Why this grant must not be used, or ``None``.
+
+        ``enforce()`` calls this before any other check: a revoked grant is not
+        a question of scopes.
+        """
+        if mode == "feed":
+            feed = self.revocation_feed()
+            if not feed.ready():
+                unavailable = feed.state().unavailable
+                if unavailable is None:
+                    return (
+                        "The revocation feed has not been reachable for more than "
+                        f"{feed.stale_after} s, so revocations may not be known; denying "
+                        "rather than authorising on stale information.",
+                        RevocationSubReason.FEED_STALE,
+                    )
+                return (
+                    f"The revocation feed is not usable ({unavailable}); denying rather "
+                    "than authorising without a way to learn about revocations.",
+                    RevocationSubReason.FEED_UNAVAILABLE,
+                )
+            found = feed.match(
+                grant_id=grant_id or None,
+                token_id=token_id,
+                parent_grant_id=parent_grant_id,
+            )
+            if found is None:
+                return None
+            if found.kind == "parent_grant":
+                sub_reason = RevocationSubReason.PARENT_REVOKED
+            elif found.action == "suspended":
+                sub_reason = RevocationSubReason.SUSPENDED
+            else:
+                sub_reason = RevocationSubReason.REVOKED
+            state = "suspended" if found.action == "suspended" else "revoked"
+            return (f"Grant {found.id} is {state}.", sub_reason)
+
+        query: list[str] = []
+        if grant_id:
+            query.append(f"grantId={quote(grant_id, safe='')}")
+        if token_id:
+            query.append(f"jti={quote(token_id, safe='')}")
+        try:
+            status = self._http.get(f"/v1/revocations/status?{'&'.join(query)}")
+        except Exception as exc:  # noqa: BLE001 - any failure to check is a denial
+            return (
+                f"The revocation status of this grant could not be checked ({exc}); "
+                "denying rather than authorising without it.",
+                RevocationSubReason.STATUS_UNAVAILABLE,
+            )
+        if not isinstance(status, dict) or not status.get("revoked"):
+            return None
+        state = str(status.get("status", "revoked"))
+        if state == "suspended":
+            return ("This grant is suspended.", RevocationSubReason.SUSPENDED)
+        if state == "unknown":
+            return (
+                "The auth service does not recognise this grant; denying rather than "
+                "assuming it is live.",
+                RevocationSubReason.STATUS_UNAVAILABLE,
+            )
+        return (f"This grant is {state}.", RevocationSubReason.REVOKED)
+
     def enforce(
         self,
         grant_token: str,
@@ -307,6 +424,7 @@ class Grantex:
         arguments: Mapping[str, Any] | None = None,
         case_version: str | None = None,
         decisions_mode: str | None = None,
+        revocation_check: str | None = None,
     ) -> EnforceResult:
         """Enforce scope for a tool call.
 
@@ -399,6 +517,29 @@ class Grantex:
         scopes = list(getattr(grant, "scopes", []))
 
         result_purpose = ""
+
+        # 1b. Revocation. The token verifies offline whether or not the grant
+        #     still stands, so this is the only place a revocation can be seen.
+        revocation_mode = (
+            self._revocation_check
+            if revocation_check is None
+            else _check_revocation_check(revocation_check)
+        )
+        if revocation_mode != "offline":
+            denial = self._revocation_denial(
+                revocation_mode,
+                grant_id,
+                getattr(grant, "token_id", None),
+                getattr(grant, "parent_grant_id", None),
+            )
+            if denial is not None:
+                message, sub_reason = denial
+                return self._apply_enforce_mode(EnforceResult(
+                    allowed=False, reason=message,
+                    grant_id=grant_id, agent_did=agent_did, scopes=scopes,
+                    permission=permission, connector=connector, tool=tool,
+                    reason_code=DenialReason.GRANT_REVOKED, sub_reason=sub_reason,
+                ))
 
         def _denied(
             reason: str,

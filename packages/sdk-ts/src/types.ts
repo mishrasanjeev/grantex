@@ -1,4 +1,5 @@
 import type { CapsMeter, CapsMode } from './caps/meter.js';
+import type { RevocationCheckMode, RevocationFeedOptions } from './revocations/index.js';
 import type { DecisionConsumer } from './resources/decisions.js';
 
 // ─── Rate Limits ─────────────────────────────────────────────────────────────
@@ -34,6 +35,16 @@ export interface GrantexClientOptions {
   legacyClaims?: boolean;
   /** `enforce` (default) denies over-cap calls, `warn` allows them and reports `wouldDeny`, `off` skips caps. */
   capsMode?: CapsMode;
+  /**
+   * How `enforce()` finds out about revocations (PRD G-6). `offline` (the
+   * default) does not check: a revoked grant's token stays valid until it
+   * expires. `feed` follows the revocation feed and denies within seconds,
+   * failing closed when the feed goes stale. `online` asks the auth service
+   * about every call, and denies if it cannot.
+   */
+  revocationCheck?: RevocationCheckMode;
+  /** Settings for `revocationCheck: 'feed'`. */
+  revocationFeed?: RevocationFeedOptions;
   /**
    * `enforce` (default) denies a `requires_decision` call without a valid, consumed decision
    * grant; `warn` allows it and reports `wouldDeny`. Platforms map their `decisions.required`

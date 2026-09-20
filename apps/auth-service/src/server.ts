@@ -57,6 +57,7 @@ import { prepaidWalletRoutes } from './routes/prepaid-wallets.js';
 import { eventSourcesRoutes } from './routes/event-sources.js';
 import { eventBridgeIngestRoutes } from './routes/event-bridge-ingest.js';
 import { eventActionsRoutes } from './routes/event-actions.js';
+import { revocationRoutes } from './routes/revocations.js';
 import { decisionsRoutes } from './routes/decisions.js';
 import { decisionPageRoutes } from './routes/decision-page.js';
 import { decisionAdminRoutes } from './routes/decision-admin.js';
@@ -229,6 +230,8 @@ export async function buildApp(opts: AppOptions = {}) {
   // scope because signatures cover the raw request bytes.
   await app.register(eventSourcesRoutes);
   await app.register(eventActionsRoutes);
+  // Revocation feed (PRD G-6): how an SDK learns a grant stopped.
+  await app.register(revocationRoutes);
   await app.register(eventBridgeIngestRoutes);
 
   // Decision grants (PRD G-3): platform API (developer key), the approval page
