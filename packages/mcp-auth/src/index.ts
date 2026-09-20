@@ -19,6 +19,8 @@ export type {
   DecisionCheck,
   DecisionOutcome,
 } from './resource/guard.js';
+export { grantexDecisionVerifier, DECISION_GRANT_HEADER } from './resource/grantex-decisions.js';
+export type { GrantexDecisionVerifierOptions, SemanticAction, VerifiedDecisionGrants } from './resource/grantex-decisions.js';
 export {
   toolPolicyFromManifests,
   toolPolicyFromScopes,

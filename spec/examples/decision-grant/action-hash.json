@@ -1,5 +1,5 @@
 {
-  "description": "Decision-grant action_hash cases shared by the Python and TypeScript SDKs and the auth service. action_hash = 'sha256:' + unpadded base64url(SHA-256(RFC 8785 JCS of the action object, UTF-8)). 'equivalent_tool_calls' lists raw tool-call arguments (JSON text) that must all derive the same action and hash. 'invalid' actions (an object in 'action', or JSON text in 'action_json') must be refused with 'code' naming 'field'.",
+  "description": "Decision-grant action_hash cases shared by the Python and TypeScript SDKs and the auth service. action_hash = 'sha256:' + unpadded base64url(SHA-256(RFC 8785 JCS of the action object, UTF-8)). 'equivalent_tool_calls' lists raw tool-call arguments (JSON text) that must all derive the same action and hash (reading the manifest's decision_fields given in 'extra_fields', when present). 'invalid' actions (an object in 'action', or JSON text in 'action_json') must be refused with 'code' naming 'field'. 'duplicate_keys' are JSON texts that must be refused with duplicate_key when parsed from text.",
   "valid": [
     {
       "name": "approve without amount",
@@ -91,6 +91,36 @@
       },
       "canonical": "{\"action\":\"case_decision\",\"case_id\":\"case_8842\",\"decision\":\"approve\",\"subject\":\"gb:00000001\"}",
       "action_hash": "sha256:1hNfNVyyaFCOCVRE-PW2mcQ2-LA5lPeYMj3M5JQTqWg"
+    },
+    {
+      "name": "extra decision field",
+      "action": {
+        "case_id": "case_8841",
+        "action": "payout_release",
+        "decision": "approve",
+        "subject": "gb:00000001",
+        "amount": "1250.5",
+        "extra": {
+          "currency": "GBP"
+        }
+      },
+      "canonical": "{\"action\":\"payout_release\",\"amount\":\"1250.5\",\"case_id\":\"case_8841\",\"decision\":\"approve\",\"extra\":{\"currency\":\"GBP\"},\"subject\":\"gb:00000001\"}",
+      "action_hash": "sha256:UpQM9SpQPr5UbiMvlTumkg1ELCb564Z0ae65YQKzntc"
+    },
+    {
+      "name": "extra decision field with another value",
+      "action": {
+        "case_id": "case_8841",
+        "action": "payout_release",
+        "decision": "approve",
+        "subject": "gb:00000001",
+        "amount": "1250.5",
+        "extra": {
+          "currency": "EUR"
+        }
+      },
+      "canonical": "{\"action\":\"payout_release\",\"amount\":\"1250.5\",\"case_id\":\"case_8841\",\"decision\":\"approve\",\"extra\":{\"currency\":\"EUR\"},\"subject\":\"gb:00000001\"}",
+      "action_hash": "sha256:bgk6dGb1aYFijmlUYrCeAhsSEAHAPxoQZV0Jy15EQG0"
     }
   ],
   "equivalent_tool_calls": [
@@ -103,6 +133,17 @@
         "{\"note\":\"re-planned\",\"case_id\":\"case_8841\",\"subject\":\"gb:00000001\",\"decision\":\"approve\",\"requested_at\":\"2026-09-15T10:04:31Z\",\"amount\":null}"
       ],
       "action_hash": "sha256:LNavJV0rVgyvR30A6d607Hw1lZFbHGxLk4GkLAAZAOA"
+    },
+    {
+      "tool": "payout_release",
+      "arguments": [
+        "{\"case_id\":\"case_8841\",\"decision\":\"approve\",\"subject\":\"gb:00000001\",\"amount\":\"1250.5\",\"currency\":\"GBP\"}",
+        "{\"currency\":\"GBP\",\"note\":\"x\",\"amount\":\"1250.5\",\"subject\":\"gb:00000001\",\"decision\":\"approve\",\"case_id\":\"case_8841\"}"
+      ],
+      "action_hash": "sha256:UpQM9SpQPr5UbiMvlTumkg1ELCb564Z0ae65YQKzntc",
+      "extra_fields": [
+        "currency"
+      ]
     },
     {
       "tool": "payout_release",
@@ -355,6 +396,168 @@
       "field": "amount"
     },
     {
+      "name": "extra null",
+      "action": {
+        "case_id": "case_8841",
+        "action": "case_decision",
+        "decision": "approve",
+        "subject": "gb:00000001",
+        "extra": null
+      },
+      "code": "invalid_type",
+      "field": "extra"
+    },
+    {
+      "name": "extra empty",
+      "action": {
+        "case_id": "case_8841",
+        "action": "case_decision",
+        "decision": "approve",
+        "subject": "gb:00000001",
+        "extra": {}
+      },
+      "code": "invalid_value",
+      "field": "extra"
+    },
+    {
+      "name": "extra not an object",
+      "action": {
+        "case_id": "case_8841",
+        "action": "case_decision",
+        "decision": "approve",
+        "subject": "gb:00000001",
+        "extra": [
+          "GBP"
+        ]
+      },
+      "code": "invalid_type",
+      "field": "extra"
+    },
+    {
+      "name": "extra field name upper case",
+      "action": {
+        "case_id": "case_8841",
+        "action": "case_decision",
+        "decision": "approve",
+        "subject": "gb:00000001",
+        "extra": {
+          "Currency": "GBP"
+        }
+      },
+      "code": "invalid_value",
+      "field": "extra.Currency"
+    },
+    {
+      "name": "extra field shadows a core field",
+      "action": {
+        "case_id": "case_8841",
+        "action": "case_decision",
+        "decision": "approve",
+        "subject": "gb:00000001",
+        "extra": {
+          "amount": "1"
+        }
+      },
+      "code": "invalid_value",
+      "field": "extra.amount"
+    },
+    {
+      "name": "extra value boolean",
+      "action": {
+        "case_id": "case_8841",
+        "action": "case_decision",
+        "decision": "approve",
+        "subject": "gb:00000001",
+        "extra": {
+          "urgent": true
+        }
+      },
+      "code": "invalid_type",
+      "field": "extra.urgent"
+    },
+    {
+      "name": "extra value object",
+      "action": {
+        "case_id": "case_8841",
+        "action": "case_decision",
+        "decision": "approve",
+        "subject": "gb:00000001",
+        "extra": {
+          "currency": {
+            "code": "GBP"
+          }
+        }
+      },
+      "code": "invalid_type",
+      "field": "extra.currency"
+    },
+    {
+      "name": "too many extra fields",
+      "action": {
+        "case_id": "case_8841",
+        "action": "case_decision",
+        "decision": "approve",
+        "subject": "gb:00000001",
+        "extra": {
+          "f0": 0,
+          "f1": 1,
+          "f2": 2,
+          "f3": 3,
+          "f4": 4,
+          "f5": 5,
+          "f6": 6,
+          "f7": 7,
+          "f8": 8,
+          "f9": 9,
+          "f10": 10,
+          "f11": 11,
+          "f12": 12,
+          "f13": 13,
+          "f14": 14,
+          "f15": 15,
+          "f16": 16
+        }
+      },
+      "code": "invalid_value",
+      "field": "extra"
+    },
+    {
+      "name": "case_id with a zero-width space",
+      "action_json": "{\"case_id\":\"case\\u200b8841\",\"action\":\"case_decision\",\"decision\":\"approve\",\"subject\":\"gb:00000001\"}",
+      "code": "invalid_value",
+      "field": "case_id"
+    },
+    {
+      "name": "subject with a right-to-left override",
+      "action_json": "{\"case_id\":\"case_8841\",\"action\":\"case_decision\",\"decision\":\"approve\",\"subject\":\"gb:\\u202e10000000\"}",
+      "code": "invalid_value",
+      "field": "subject"
+    },
+    {
+      "name": "subject with a byte order mark",
+      "action_json": "{\"case_id\":\"case_8841\",\"action\":\"case_decision\",\"decision\":\"approve\",\"subject\":\"\\ufeffgb:00000001\"}",
+      "code": "invalid_value",
+      "field": "subject"
+    },
+    {
+      "name": "subject with a soft hyphen",
+      "action_json": "{\"case_id\":\"case_8841\",\"action\":\"case_decision\",\"decision\":\"approve\",\"subject\":\"gb:0000\\u00ad0001\"}",
+      "code": "invalid_value",
+      "field": "subject"
+    },
+    {
+      "name": "subject with a tag character",
+      "action_json": "{\"case_id\":\"case_8841\",\"action\":\"case_decision\",\"decision\":\"approve\",\"subject\":\"gb:00000001\\udb40\\udc41\"}",
+      "code": "invalid_value",
+      "field": "subject"
+    },
+    {
+      "name": "extra value with a left-to-right isolate",
+      "action_json": "{\"case_id\":\"case_8841\",\"action\":\"payout_release\",\"decision\":\"approve\",\"subject\":\"gb:00000001\",\"extra\":{\"currency\":\"\\u2066GBP\"}}",
+      "code": "invalid_value",
+      "field": "extra.currency"
+    },
+    {
       "name": "subject with an unpaired surrogate",
       "action_json": "{\"case_id\":\"case_8841\",\"action\":\"case_decision\",\"decision\":\"approve\",\"subject\":\"gb:\\ud800\"}",
       "code": "invalid_value",
@@ -365,6 +568,26 @@
       "action_json": "{\"case_id\":\"case_8841\",\"action\":\"payout_release\",\"decision\":\"approve\",\"subject\":\"gb:00000001\",\"amount\":1e400}",
       "code": "invalid_value",
       "field": "amount"
+    }
+  ],
+  "duplicate_keys": [
+    {
+      "name": "duplicate top-level member",
+      "action_json": "{\"case_id\":\"case_8841\",\"action\":\"case_decision\",\"decision\":\"approve\",\"decision\":\"decline\",\"subject\":\"gb:00000001\"}",
+      "code": "duplicate_key",
+      "field": "decision"
+    },
+    {
+      "name": "duplicate member spelled with an escape",
+      "action_json": "{\"case_id\":\"case_8841\",\"action\":\"case_decision\",\"decision\":\"approve\",\"\\u0064ecision\":\"decline\",\"subject\":\"gb:00000001\"}",
+      "code": "duplicate_key",
+      "field": "decision"
+    },
+    {
+      "name": "duplicate member inside extra",
+      "action_json": "{\"case_id\":\"case_8841\",\"action\":\"payout_release\",\"decision\":\"approve\",\"subject\":\"gb:00000001\",\"extra\":{\"currency\":\"GBP\",\"currency\":\"EUR\"}}",
+      "code": "duplicate_key",
+      "field": "currency"
     }
   ]
 }
