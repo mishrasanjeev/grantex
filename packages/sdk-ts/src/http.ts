@@ -83,12 +83,17 @@ export class HttpClient {
     return this.#request<T>('DELETE', path, undefined, options);
   }
 
-  async rawGet(path: string): Promise<Response> {
+  /**
+   * A raw GET, for responses read as a stream (event streams). `signal` lets
+   * the caller close a long-lived stream.
+   */
+  async rawGet(path: string, signal?: AbortSignal): Promise<Response> {
     const url = `${this.#baseUrl}${path}`;
     return fetch(url, {
       headers: {
         Authorization: `Bearer ${this.#apiKey}`,
       },
+      ...(signal !== undefined ? { signal } : {}),
     });
   }
 
