@@ -5,6 +5,9 @@ import { enqueueWebhookDeliveries } from './webhook.js';
 export type EventType =
   | 'grant.created'
   | 'grant.revoked'
+  | 'grant.suspended'
+  | 'grant.resumed'
+  | 'grant.re_evaluation_requested'
   | 'token.issued'
   | 'budget.threshold'
   | 'budget.exhausted'

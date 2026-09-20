@@ -206,3 +206,32 @@ Remove an entry in the pull request that fixes it.
 - **Fix:** refuse a discovery document whose `issuer` differs from the
   configured `issuer_url`, verify `iss` against the configured value, and add
   tests for both.
+
+## G-17 — The decision-grant migration test sees another test's tables
+
+- **Found:** event bridge cascade revocation work (PRD G-6), 2026-09-20.
+- **What:** `tests/decision-grants-postgres.integration.test.ts` asserts the
+  `decision_%` tables by querying `information_schema.tables` without a schema
+  predicate. `tests/evidence-postgres.integration.test.ts` creates its own
+  schema containing `decision_requests` and `decision_grants`, so when the two
+  files run at the same time against one database the assertion sees duplicate
+  names and fails. Both files are in `main`; the failure is timing-dependent
+  and unrelated to what either test is checking.
+- **Fix:** add `AND table_schema = 'public'` (or `current_schema()`) to the
+  query in the decision-grant test.
+
+## G-18 — Every startup re-runs `ALTER TABLE grants` against live traffic
+
+- **Found:** event bridge cascade revocation work (PRD G-6), 2026-09-20.
+- **What:** `runMigrations` re-applies every file on every start, including
+  `ALTER TABLE grants ADD COLUMN IF NOT EXISTS …` in migrations 002, 018, 061,
+  089, 090, 095 and 098. Even when the column exists, the statement takes a
+  brief `ACCESS EXCLUSIVE` lock on `grants`: during a rolling deploy it queues
+  behind in-flight transactions, blocks every reader and writer of `grants`
+  behind it, and can deadlock against a transaction that goes on to lock more
+  rows (reproduced in this repository's test suite when a migration run
+  overlapped a cascade-revocation transaction: `deadlock detected`).
+- **Fix:** guard each `ALTER TABLE` with a catalogue check (`IF NOT EXISTS
+  (SELECT 1 FROM information_schema.columns …) THEN … END IF`) so a no-op start
+  takes no lock at all, and set a short `lock_timeout` around the real change
+  (migration 100 already uses this pattern for its trigger).
