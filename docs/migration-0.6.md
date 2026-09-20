@@ -107,8 +107,9 @@ that name it.
 
 - A tool that declares `allowed_purposes` is denied (`purpose_not_allowed`)
   unless the grant carries a matching purpose.
-- A tool with `requires_decision` always returns `decision_required`, because
-  decision grants are not accepted yet.
+- A tool with `requires_decision` returns `decision_required` unless the
+  call carries decision grants that verify and that the auth service consumes
+  (`docs/concepts/decision-grants.md`).
 - A tool with `caps` or `cost_units` is denied with `cap_exceeded` /
   `meter_unavailable` unless the client has a caps meter.
 
@@ -460,9 +461,10 @@ an array. Tokens issued by the auth service never contain such values.
 - **Other entry points.** Agent registration and consent bundles still accept
   such scopes (FINDINGS G-11).
 
-**Behaviour change — decision references.** `enforce()` returns
-`decision_required` for a tool listed in the grant's `urn:grantex:decision:v1`
-entry, even when the manifest does not declare `requires_decision`. A
+**Behaviour change — decision references.** `enforce()` requires a decision
+grant for a tool listed in the grant's `urn:grantex:decision:v1` entry
+(`decision_required` without one), even when the manifest does not declare
+`requires_decision`. A
 malformed decision entry denies every call on the token. A delegated grant
 keeps the decision entries of the connectors it keeps.
 

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://grantex.dev/spec/manifest-0.6.schema.json",
+  "connector": "acme_kyb",
+  "version": "1.0.0",
+  "description": "A decision tool whose decision grant also binds the currency argument",
+  "tools": {
+    "get_payout": "read",
+    "payout_release": {"permission": "write", "requires_decision": true, "four_eyes_on": ["approve"], "decision_fields": ["currency"]}
+  }
+}

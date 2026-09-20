@@ -54,6 +54,8 @@ tags:
     description: Authorization request creation and approval
   - name: Consent
     description: End-user consent UI and approval flow
+  - name: Decision Grants
+    description: Decisions a named person approves for one semantic action (spec/decision-grant.md). Disabled unless DECISION_GRANTS_ENABLED=true.
   - name: Tokens
     description: Token exchange, verification, and revocation
   - name: OAuth Agent Grants
@@ -136,6 +138,10 @@ components:
       type: http
       scheme: bearer
       description: SCIM provisioning token
+    adminAuth:
+      type: http
+      scheme: bearer
+      description: Service administrator credential (ADMIN_API_KEY); not a developer API key
 
   schemas:
     Error:
@@ -7302,3 +7308,255 @@ paths:
       responses:
         "200": { description: Verifiable presentation }
         "400": { description: Invalid presentation request }
+  /v1/decisions/cases/{caseId}:
+    put:
+      operationId: setDecisionCaseVersion
+      tags: [Decision Grants]
+      summary: Register the current version of a case
+      description: A new version supersedes the case's open decision requests and revokes its unconsumed decision grants (case_changed).
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: caseId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [caseVersion]
+              properties:
+                caseVersion: { type: string, maxLength: 128 }
+      responses:
+        "200": { description: "caseId, caseVersion, previousVersion, supersededRequests, revokedGrants" }
+  /v1/decisions/requests:
+    post:
+      operationId: createDecisionRequest
+      tags: [Decision Grants]
+      summary: Ask a person to decide one semantic action
+      description: |
+        Idempotent per action hash and case version while the request is open (200 returns the open request).
+        The memo and policy score are stored as supplied, shown verbatim on the approval page, and bound into
+        the decision grant by their hashes. Duplicate member names in the body are refused. A platform cannot
+        approve through this API: approval happens only on `approvalPage` in the approver's browser.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, connector, caseVersion, memo, policyScore]
+              properties:
+                action:
+                  type: object
+                  required: [case_id, action, decision, subject]
+                  additionalProperties: false
+                  properties:
+                    case_id: { type: string }
+                    action: { type: string }
+                    decision: { type: string }
+                    subject: { type: string }
+                    amount: { oneOf: [{ type: number }, { type: string }] }
+                    extra: { type: object, additionalProperties: { oneOf: [{ type: string }, { type: number }] } }
+                connector: { type: string }
+                caseVersion: { type: string }
+                memo:
+                  type: object
+                  required: [content]
+                  properties:
+                    content: { type: string, maxLength: 65536 }
+                    ref: { type: string }
+                    hash: { type: string, description: "Optional sha256:<base64url> of the UTF-8 content; must match" }
+                policyScore:
+                  type: object
+                  required: [content]
+                  properties:
+                    content: { type: object, description: JSON object or array (at most 32768 bytes canonical) }
+                    ref: { type: string }
+                    hash: { type: string, description: "Optional sha256:<base64url> of the RFC 8785 canonical JSON; must match" }
+                fourEyesOn: { type: array, items: { type: string }, description: "The manifest's four_eyes_on; two approvals are required when it lists the decision" }
+                approvalsRequired: { type: integer, enum: [1, 2] }
+                expiresInSeconds: { type: integer, minimum: 60, maximum: 86400 }
+                agentId: { type: string }
+                grantId: { type: string }
+      responses:
+        "201": { description: "Created; includes approvalPage, actionHash, memoHash and policyScoreHash" }
+        "200": { description: An open request for the same action and case version already exists }
+        "400": { description: "Invalid action (INVALID_ACTION), review content or parameters" }
+        "409": { description: "caseVersion is not the case's current version (subReason case_changed)" }
+  /v1/decisions/requests/{id}:
+    get:
+      operationId: getDecisionRequest
+      tags: [Decision Grants]
+      summary: Status and approvals of a decision request
+      description: Includes `decisionGrants` (the tokens) only when the request is fully approved and no grant is consumed, revoked or expired.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Decision request }
+        "404": { description: Not found }
+  /v1/decisions/requests/{id}/cancel:
+    post:
+      operationId: cancelDecisionRequest
+      tags: [Decision Grants]
+      summary: Cancel a decision request and revoke its unconsumed decision grants
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Cancelled }
+        "404": { description: No open request }
+  /v1/decisions/consume:
+    post:
+      operationId: consumeDecisionGrants
+      tags: [Decision Grants]
+      summary: Verify and atomically consume the decision grants for one action
+      description: |
+        One grant, or both grants of a four-eyes decision; either all are consumed or none is. Every refusal is
+        recorded in the audit chain with the attempted action and hash; if that record cannot be written the
+        answer is 503 DECISION_AUDIT_UNAVAILABLE (nothing is consumed).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decisionGrants, action, caseVersion]
+              properties:
+                decisionGrants: { type: array, minItems: 1, maxItems: 2, items: { type: string } }
+                action: { type: object, description: The semantic action about to be performed }
+                caseVersion: { type: string }
+                agentId: { type: string }
+                grantId: { type: string }
+      responses:
+        "200": { description: "consumed, requestId, jtis, approvers, actionHash" }
+        "400": { description: "Malformed request or token (subReason malformed)" }
+        "409": { description: "Refused (subReason action_mismatch, wrong_case, consumed, same_approver, case_changed, revoked, expired, four_eyes_incomplete or unknown_grant)" }
+        "503": { description: The refusal could not be recorded }
+  /v1/admin/developers/{developerId}/decision-approver-idps:
+    post:
+      operationId: addDecisionApproverIdp
+      tags: [Decision Grants]
+      summary: Allow-list an identity provider for a developer's approvers (service administrator only)
+      description: |
+        Requires ADMIN_API_KEY; a developer API key is refused. `actor` names the operator and is recorded in the
+        developer's audit chain. Register `redirectUri` from the response with the identity provider.
+      security:
+        - adminAuth: []
+      parameters:
+        - { name: developerId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issuer, clientId, displayName, actor]
+              properties:
+                issuer: { type: string, description: Must equal the discovery document's issuer exactly }
+                clientId: { type: string }
+                clientSecret: { type: string, description: Stored encrypted; omit for a public client }
+                acrValues: { type: array, items: { type: string } }
+                requireVerifiedEmail: { type: boolean }
+                displayName: { type: string }
+                actor: { type: string }
+      responses:
+        "201": { description: Added }
+        "401": { description: Not the administrator credential }
+    get:
+      operationId: listDecisionApproverIdps
+      tags: [Decision Grants]
+      summary: List a developer's approver identity providers (service administrator only)
+      security:
+        - adminAuth: []
+      parameters:
+        - { name: developerId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: approverIdps }
+  /v1/admin/developers/{developerId}/decision-approver-idps/{idpId}/disable:
+    post:
+      operationId: disableDecisionApproverIdp
+      tags: [Decision Grants]
+      summary: Disable an approver identity provider and end its sessions (service administrator only)
+      security:
+        - adminAuth: []
+      parameters:
+        - { name: developerId, in: path, required: true, schema: { type: string } }
+        - { name: idpId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actor]
+              properties:
+                actor: { type: string }
+      responses:
+        "200": { description: Disabled }
+        "404": { description: No active identity provider }
+  /decisions/{id}:
+    get:
+      operationId: renderDecisionPage
+      tags: [Decision Grants]
+      summary: Approval page (HTML)
+      description: Without an approver session, offers sign-in with the developer's approver identity providers. With one, shows the memo, policy score and exact action.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Review page with the approval form }
+        "401": { description: Sign-in page }
+    post:
+      operationId: submitDecisionPage
+      tags: [Decision Grants]
+      summary: Approve from the page (form post)
+      description: Requires the approver session cookie, the page's CSRF token and an Origin header of this service and Sec-Fetch-Site same-origin (a request without either is refused). Dwell time is measured by the service.
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Approved }
+        "400": { description: "Approved faster than the minimum dwell time" }
+        "403": { description: Cross-site submission, invalid CSRF token or step-up expired }
+        "409": { description: "Refused (action_mismatch, same_approver, case_changed, closed)" }
+  /decisions/login:
+    get:
+      operationId: startDecisionApproverSignIn
+      tags: [Decision Grants]
+      summary: Start the approver's OpenID Connect sign-in (authorization code, PKCE, state, nonce)
+      security: []
+      parameters:
+        - { name: request, in: query, required: true, schema: { type: string } }
+        - { name: idp, in: query, required: true, schema: { type: string } }
+      responses:
+        "302": { description: Redirect to the identity provider; sets the browser-binding cookie }
+  /decisions/callback:
+    get:
+      operationId: completeDecisionApproverSignIn
+      tags: [Decision Grants]
+      summary: Identity provider redirect target
+      security: []
+      parameters:
+        - { name: code, in: query, required: false, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "303": { description: "Signed in; sets the __Host- approver session cookie and returns to the decision" }
+        "400": { description: Invalid, reused or foreign-browser state }
+        "401": { description: ID token verification failed }
+        "403": { description: Step-up missing or too old, or verified email required }
+  /decisions/logout:
+    post:
+      operationId: endDecisionApproverSession
+      tags: [Decision Grants]
+      summary: End the approver session in this browser
+      security: []
+      responses:
+        "200": { description: Signed out }

@@ -56,6 +56,7 @@
               "concepts/vs-oauth",
               "concepts/tool-manifests",
               "concepts/purpose-bound-grants",
+              "concepts/decision-grants",
               "concepts/caps-and-metering",
               "concepts/evidence-and-verification"
             ]
