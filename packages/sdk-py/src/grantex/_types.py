@@ -22,11 +22,15 @@ class RateLimit:
 class SignupParams:
     name: str
     email: str | None = None
+    mode: str | None = None
+    """``"live"`` (the default) or ``"sandbox"``, as in the TypeScript SDK."""
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {"name": self.name}
         if self.email is not None:
             body["email"] = self.email
+        if self.mode is not None:
+            body["mode"] = self.mode
         return body
 
 

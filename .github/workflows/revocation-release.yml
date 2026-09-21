@@ -1,0 +1,60 @@
+name: Revocation Release Test
+
+# The G-6 acceptance criterion, measured against a real auth service with
+# Postgres and Redis: revoke a parent grant and time how long a child grant
+# keeps being authorised, through both SDKs. Rehearsed before a production
+# release (see docs/operations in AgenticOrg and the emergency-stop runbook).
+on:
+  workflow_dispatch:
+    inputs:
+      trials:
+        description: Revocations to measure
+        required: false
+        default: "10"
+
+jobs:
+  measure:
+    name: Revocation propagation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+        env:
+          POSTGRES_USER: grantex_test
+          POSTGRES_PASSWORD: grantex_test
+          POSTGRES_DB: grantex_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grantex_test -d grantex_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+      - uses: actions/setup-python@e348410e00f449ee0e453ddc3a9d0f7e5f78f9fa # v6
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm --prefix packages/sdk-ts ci
+          pip install -e "packages/sdk-py[dev]"
+      - name: Measure revocation propagation
+        env:
+          RELEASE_DATABASE_URL: postgres://grantex_test:grantex_test@127.0.0.1:5432/grantex_test
+          RELEASE_REDIS_URL: redis://127.0.0.1:6379
+        run: bash scripts/revocation-release-test.sh "${{ inputs.trials || '10' }}"

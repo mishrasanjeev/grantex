@@ -191,6 +191,58 @@ below.
   then turning off legacy claims before 0.7), plus the database migrations,
   the new settings and a checklist.
 
+### Revocation feed: SDKs see revocations within seconds
+- `enforce()` verifies a grant token offline, so a revoked grant's token stays
+  valid until it expires. The revocation feed (PRD G-6) closes that gap, off
+  unless `REVOCATION_FEED_ENABLED=true` (optionally limited with
+  `REVOCATION_FEED_DEVELOPER_IDS`); with the flag off every route answers 404
+  and nothing else changes.
+- `GET /v1/revocations` serves a paged snapshot of everything currently revoked
+  or suspended with the cursor to stream from, or the changes after a cursor
+  (ETag, `304`, optional `wait` long-poll); `GET /v1/revocations/stream` is a
+  Server-Sent Events stream of `revocation` entries with a heartbeat every
+  second; `GET /v1/revocations/status` answers for one grant or token.
+- Both SDKs gain `revocationCheck` / `revocation_check`: `offline` (default,
+  unchanged behaviour), `feed` (an in-memory set kept current by the feed) and
+  `online` (a check per call), settable per client or per call.
+  `RevocationFeed`, `RevokedSet` and the feed state are exported from both.
+- **Failing closed is the point.** A feed that has not heard from the auth
+  service inside its staleness bound (`staleAfterMs` /
+  `revocation_feed_stale_after`, default 5 s) denies every call with
+  `grant_revoked` and sub-reason `feed_stale`; a deployment that does not serve
+  the feed gives `feed_unavailable`; an online check that cannot be completed
+  gives `status_unavailable`; a grant the auth service does not recognise is
+  refused. New `RevocationSubReason` in both SDKs (`revoked`, `suspended`,
+  `parent_revoked`, `feed_stale`, `feed_unavailable`, `status_unavailable`).
+- Feed entries are written by database triggers on `grants` and `grant_tokens`
+  — on status changes and on deletion — so every revocation path (API, cascade,
+  emergency stop, consent withdrawal, anomaly, DPDP erasure, OAuth revocation,
+  and the hard delete behind `DELETE /v1/agents/:id`) reaches the feed in the
+  same transaction as the revocation. `pg_notify` wakes receivers on commit and each
+  instance also polls, so a lost notification costs latency, not correctness.
+  When the triggers are missing the endpoints answer `503 FEED_UNAVAILABLE`
+  rather than an empty feed.
+- The cursor never advances past entries younger than
+  `REVOCATION_FEED_SETTLE_SECONDS` (default 15 s), so a transaction that
+  committed out of sequence order is still delivered, and never past the page a
+  response actually carried, so a client cannot skip the remainder of a large
+  cascade while believing itself up to date.
+- An hourly worker prunes feed entries once the credential they are about has
+  been expired longer than `REVOCATION_FEED_RETENTION_HOURS`.
+- `scripts/revocation-release-test.sh` measures the G-6 acceptance criterion
+  against a real auth service with Postgres and Redis: revoke a parent grant,
+  time how long the child keeps being authorised, through both SDKs.
+- Metrics `grantex_revocation_feed_delivery_seconds`,
+  `grantex_revocation_feed_entries_total{action}`,
+  `grantex_revocation_feed_polls_total{outcome}`,
+  `grantex_revocation_feed_subscribers` and
+  `grantex_revocation_feed_stale_seconds`, with alert rules in
+  `deploy/prometheus/revocation-feed-alerts.yml`.
+- Python `SignupParams` accepts `mode` (`live` or `sandbox`), matching the
+  TypeScript SDK.
+- Migration `112_revocation_feed.sql` adds one table and two triggers; no
+  existing table gains a column.
+
 ### Event bridge: signed event ingestion
 - The auth service accepts provider events (PRD G-6), off unless
   `EVENT_BRIDGE_ENABLED=true` (optionally limited with

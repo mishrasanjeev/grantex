@@ -1,0 +1,41 @@
+# Prometheus alerting rules for the revocation feed (PRD G-6, section 10).
+# Load with `rule_files`, or wrap the group in a PrometheusRule for the Prometheus Operator.
+#
+# The feed is how an SDK learns that a grant stopped. When it is not healthy,
+# clients using it fail closed — calls are denied — so these alerts are about
+# agents grinding to a halt as much as about revocations arriving late.
+groups:
+  - name: grantex-revocation-feed
+    rules:
+      - alert: GrantexRevocationFeedStale
+        expr: max(grantex_revocation_feed_stale_seconds) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: The revocation feed has not read the database for more than 5 seconds
+          description: >-
+            Live streams stop confirming they are up to date, so SDK clients in feed mode deny
+            every call (grant_revoked / feed_stale). Check the database and the auth service logs
+            (feed=revocation).
+      - alert: GrantexRevocationFeedPollFailures
+        expr: sum(increase(grantex_revocation_feed_polls_total{outcome="error"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Revocation feed polls are failing
+          description: >-
+            One or more instances could not read grant_revocation_events. Until they can, their
+            subscribers go stale and fail closed.
+      - alert: GrantexRevocationFeedDeliverySlow
+        expr: >-
+          histogram_quantile(0.95, sum by (le) (rate(grantex_revocation_feed_delivery_seconds_bucket[15m]))) > 1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Revocation feed delivery p95 is above one second
+          description: >-
+            Commit-to-delivery is most of the two second propagation budget in G-6. Check
+            REVOCATION_FEED_POLL_MS, database latency, and whether LISTEN notifications are
+            arriving (a lost notification leaves only the poll interval).

@@ -146,6 +146,127 @@ is refused before it reaches the replay store.
 - `5xx` when processing failed; the receipt is left `failed` so the sender's
   retry is processed again
 
+## How an agent finds out: the revocation feed
+
+`enforce()` verifies a grant token offline against the issuer's JWK Set. That
+is what makes it fast and what makes revocation invisible to it: a revoked
+grant's token stays cryptographically valid until it expires. Revoking a grant
+stops the auth service issuing anything new; it does not, on its own, stop an
+SDK that already holds a token.
+
+The revocation feed closes that gap. Three modes, chosen per client or per
+call:
+
+| `revocationCheck` / `revocation_check` | What `enforce()` does | Cost |
+|---|---|---|
+| `offline` (default) | nothing — unchanged behaviour | none |
+| `feed` | consults an in-memory set kept current by the feed | one long-lived connection per process |
+| `online` | asks the auth service about this grant | one request per call |
+
+```ts
+const grantex = new Grantex({
+  apiKey,
+  revocationCheck: 'feed',
+  revocationFeed: { staleAfterMs: 5_000 },
+});
+```
+
+```python
+grantex = Grantex(
+    api_key=api_key,
+    revocation_check="feed",
+    revocation_feed_stale_after=5.0,
+)
+```
+
+A denial carries `grant_revoked` with a sub-reason: `revoked`, `suspended`,
+`parent_revoked`, `feed_stale`, `feed_unavailable` or `status_unavailable`.
+
+### Failing closed
+
+The last three matter most. An agent whose feed has gone quiet does not know
+what has been revoked, so it stops authorising calls:
+
+- the feed records when it last heard from the auth service;
+- the stream sends a heartbeat every second, and only while the server has
+  read the database successfully;
+- if the client has heard nothing for longer than its staleness bound
+  (default 5 seconds), `enforce()` denies with `feed_stale`;
+- if the deployment does not serve the feed, or the feed is not ready, every
+  call is denied with `feed_unavailable`;
+- in `online` mode, a check that cannot be completed denies with
+  `status_unavailable`, and a grant the auth service does not recognise is
+  refused rather than assumed live.
+
+This is the opposite of a cache: it is a claim about freshness that expires.
+
+### The endpoints
+
+```http
+GET /v1/revocations                     # snapshot, plus the cursor to stream from
+GET /v1/revocations?since=<cursor>      # changes since a cursor (ETag, 304, optional wait=<seconds>)
+GET /v1/revocations/stream?since=<cursor>   # Server-Sent Events: revocation, heartbeat
+GET /v1/revocations/status?grantId=&jti=    # one credential, for online checks
+```
+
+A client starting cold reads the cursor and then pages the snapshot — every
+grant currently revoked or suspended and not yet expired, and every
+individually revoked token — then streams from the cursor. Because the cursor
+is read first, nothing that happens while it pages can fall between the two.
+
+Entries are `{seq, action, grantId, jti, expiresAt, at}` with `action` one of
+`revoked`, `suspended`, `resumed` or `token_revoked`. They are a set of
+identifiers, so a duplicate delivery changes nothing.
+
+**The cursor never advances past an entry that could still be overtaken.** A
+transaction that took its sequence number before another but committed after
+it would otherwise be skipped, so entries younger than the settle window
+(`REVOCATION_FEED_SETTLE_SECONDS`, default 15 s) are delivered but do not move
+the cursor. That costs a few repeated entries and removes a way to miss one.
+
+**And never past the page it returned.** A page is bounded by `limit` (1000 by
+default) while the settled maximum is not; a cursor taken from the larger
+number would skip everything in between while the client believed itself up to
+date. The cursor a response carries is therefore the lowest of the two — which
+matters exactly when there is a lot to deliver: a large cascade, an emergency
+stop, a sweep.
+
+Delivered entries are kept for `REVOCATION_FEED_RETENTION_HOURS` past the
+expiry of the credential they are about, and an hourly worker prunes the rest,
+so the table the snapshot reads does not grow without bound.
+
+### Where the entries come from
+
+Database triggers on `grants` and `grant_tokens`, not from each revocation
+path. Every way a grant stops — `DELETE /v1/grants/:id`, a cascade from a
+provider event, an emergency stop, a consent withdrawal, an anomaly, a DPDP
+erasure, OAuth revocation, and the hard delete behind `DELETE /v1/agents/:id`
+— writes a feed entry in the same transaction as the revocation itself. Four
+triggers cover it: two on status changes and two on deletion, since a deleted
+row can appear in no snapshot. `pg_notify` wakes the receivers on commit; each instance
+also polls (`REVOCATION_FEED_POLL_MS`, default 500 ms), so a lost notification
+costs latency and never correctness.
+
+If those triggers are missing (the migration could not take the lock at
+startup), the feed endpoints answer `503 FEED_UNAVAILABLE` rather than an
+empty feed, and clients fail closed.
+
+### Measured
+
+`scripts/revocation-release-test.sh` starts the auth service against real
+Postgres and Redis, builds a delegation tree, revokes each parent and measures
+how long the child kept being authorised, through both SDKs. G-6 requires two
+seconds at the ninety-fifth percentile.
+
+Two things make that number mean something. The TypeScript measurement runs in
+a plain Node process loading the build from the checkout, and the Python one
+refuses to start unless `grantex` was imported from the checkout — an ambient
+install would otherwise "prove" the criterion against code nobody reviewed.
+And the clock starts when the revocation is committed (when the API call
+returns), not when the call was made: a developer on the free plan is rate
+limited to 100 requests a minute, and the SDK waiting out a `Retry-After` is
+not propagation. That wait is reported separately.
+
 ## Observability
 
 | Metric | Labels |
@@ -155,6 +276,11 @@ is refused before it reaches the replay store.
 | `grantex_event_bridge_verification_failures_total` | `source_type`, `reason` |
 | `grantex_event_bridge_events_unmapped_total` | `source_type` |
 | `grantex_event_bridge_events_duplicate_total` | `source_type` |
+| `grantex_revocation_feed_delivery_seconds` | — (commit to delivery) |
+| `grantex_revocation_feed_entries_total` | `action` |
+| `grantex_revocation_feed_polls_total` | `outcome` |
+| `grantex_revocation_feed_subscribers` | — (live streams on this instance) |
+| `grantex_revocation_feed_stale_seconds` | — (since the last successful read) |
 
 Every refused delivery also logs `alert: "event_bridge_verification_failure"`
 with the source id and reason, never the payload or signature. Alert rules are
@@ -168,6 +294,13 @@ in `deploy/prometheus/event-bridge-alerts.yml`.
 | `EVENT_BRIDGE_DEVELOPER_IDS` | (all) | Comma-separated developers the bridge is limited to, for a staged rollout |
 | `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | `30000` | Ingestion requests per source and client address |
 | `VAULT_ENCRYPTION_KEY` | — | Required to register webhook sources |
+| `REVOCATION_FEED_ENABLED` | `false` | Serves the revocation feed endpoints |
+| `REVOCATION_FEED_DEVELOPER_IDS` | (all) | Developers the feed is limited to |
+| `REVOCATION_FEED_POLL_MS` | `500` | How often an instance looks for new revocations |
+| `REVOCATION_FEED_SETTLE_SECONDS` | `15` | How long an entry may still be uncommitted |
+| `REVOCATION_FEED_HEARTBEAT_MS` | `1000` | How often a stream confirms it is up to date |
+| `REVOCATION_FEED_MAX_CONNECTIONS` | `200` | Streams one developer may hold on one instance |
+| `REVOCATION_FEED_RETENTION_HOURS` | `48` | How long delivered entries are kept after they expire |
 
 ## What this does not defend against
 
@@ -178,3 +311,10 @@ in `deploy/prometheus/event-bridge-alerts.yml`.
   accepted event may be, not how late the sender is.
 - A disabled source's events are refused, not queued: re-enable it and have
   the sender retransmit.
+- The feed tells an SDK what the auth service knows. An agent that does not
+  use it (`revocationCheck: 'offline'`, the default) keeps calling until its
+  token expires, which is why short grant lifetimes still matter.
+- A revocation is bounded by the client's staleness bound, not by zero: an
+  agent can make calls in the window between the revocation and the entry
+  arriving. Lower `staleAfterMs` and the poll interval to narrow it; the
+  measured propagation on a local stack is well under 100 ms.
