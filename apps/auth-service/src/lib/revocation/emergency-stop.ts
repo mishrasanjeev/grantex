@@ -25,6 +25,7 @@ import { logger, type AppLogger } from '../logger.js';
 import { AUDIT_ACTIONS, cascadeGrantAction } from './cascade.js';
 import { emergencyStopsTotal } from './metrics.js';
 import { withTransactionRetry } from './retry.js';
+import type { TxSql } from '../../db/client.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -228,7 +229,7 @@ export async function emergencyStop(sql: Sql, input: EmergencyStopInput): Promis
     // that had in fact revoked everything.
     completedAt = new Date();
     await withTransactionRetry('emergency_stop_summary', () => sql.begin(async (raw) => {
-      const tx = raw as unknown as Sql;
+      const tx = raw as unknown as TxSql;
       const head = await lockAuditChain(tx, input.developerId);
       await appendPlatformAuditEntries(tx, input.developerId, head, [{
         action: AUDIT_ACTIONS.emergencyStop,
