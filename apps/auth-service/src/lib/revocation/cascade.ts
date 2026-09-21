@@ -239,7 +239,6 @@ async function cascadeBatch(sql: Sql, input: CascadeInput, rootsIn: string[]): P
 /** Everything that happens after the transaction commits: cache, credentials, events, metrics. */
 async function announce(input: CascadeInput, rows: AffectedRow[]): Promise<void> {
   if (rows.length === 0) return;
-  const ids = rows.map((row) => row.id);
 
   if (input.action === 'revoke') {
     // Redis accelerates the check; the database stays authoritative, so a
