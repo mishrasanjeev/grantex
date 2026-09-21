@@ -240,7 +240,8 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `STRIPE_PRICE_ENTERPRISE` | No | — | Stripe price ID for Enterprise tier |
 | `EVENT_BRIDGE_ENABLED` | No | `false` | Accept provider events (SSF/CAEP SETs, signed webhooks); see `docs/concepts/event-bridge-and-revocation.md` |
 | `EVENT_BRIDGE_DEVELOPER_IDS` | No | — | Limit the event bridge to these developers (comma separated) |
-| `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | No | `30000` | Event ingestion requests per source and client address |
+| `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | No | `30000` | Event ingestion requests per client address (read per request) |
+| `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS` | No | `48` | Floor for how long delivery receipts are kept; never shorter than the source's own replay window (twice its tolerance) |
 | `REVOCATION_FEED_ENABLED` | No | `false` | Serve the revocation feed SDKs follow to see revocations (`docs/concepts/event-bridge-and-revocation.md`) |
 | `REVOCATION_FEED_DEVELOPER_IDS` | No | — | Limit the feed to these developers (comma separated) |
 | `REVOCATION_FEED_POLL_MS` | No | `500` | How often an instance looks for new revocations when no notification arrives |
