@@ -208,6 +208,13 @@ class RevocationFeed:
     def _snapshot(self, client: httpx.Client) -> None:
         page_token: Optional[str] = None
         cursor = 0
+        # Collected first and swapped in once every page has arrived. A
+        # snapshot is the whole truth about what is revoked *now*, so applying
+        # it on top of what the set already held kept anything resumed while
+        # this client was disconnected — denied until it expired. Swapping only
+        # after the last page also means a failure part way through leaves the
+        # previous set intact rather than a half-built one.
+        entries: list[RevocationEntry] = []
         while True:
             params: dict[str, Any] = {}
             if page_token:
@@ -215,11 +222,12 @@ class RevocationFeed:
             response = client.get(f"{self._base_url}/v1/revocations", params=params)
             response.raise_for_status()
             page = response.json()
-            self._set.apply_all(RevocationEntry.from_dict(item) for item in page.get("entries", []))
+            entries.extend(RevocationEntry.from_dict(item) for item in page.get("entries", []))
             cursor = int(page.get("cursor", 0) or 0)
             page_token = page.get("nextPageToken")
             if not page_token:
                 break
+        self._set.replace_all(entries)
         self._set.prune()
         with self._lock:
             self._cursor = cursor

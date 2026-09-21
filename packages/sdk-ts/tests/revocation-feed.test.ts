@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ToolManifest, Permission } from '../src/manifest.js';
 import { DenialReason, RevocationSubReason } from '../src/denials.js';
-import { RevokedSet, type RevocationEntry } from '../src/revocations/index.js';
+import { RevocationFeed, RevokedSet, type RevocationEntry } from '../src/revocations/index.js';
+import { HttpClient } from '../src/http.js';
 import type { VerifiedGrant } from '../src/types.js';
 
 vi.mock('../src/verify.js', () => ({
@@ -105,6 +106,26 @@ describe('the revoked set', () => {
     set.apply(entry({ grantId: 'grnt_parent' }));
     expect(set.match({ grantId: 'grnt_child', parentGrantId: 'grnt_parent' }))
       .toMatchObject({ kind: 'parent_grant', id: 'grnt_parent' });
+  });
+
+  /**
+   * A snapshot is the complete list of what is revoked or suspended *now*.
+   * Applying one on top of what the set already holds keeps anything resumed
+   * in the meantime — a grant suspended, then resumed while the client was
+   * disconnected, stays denied until it expires, because the resume entry
+   * went past while nobody was listening and the snapshot never mentions it.
+   */
+  it('replaces what it knows when a snapshot arrives, so a resumed grant is not still denied', () => {
+    const set = new RevokedSet();
+    set.apply(entry({ action: 'suspended', grantId: 'grnt_b' }));
+    set.apply(entry({ seq: 2, grantId: 'grnt_a' }));
+    expect(set.match({ grantId: 'grnt_b' })).toMatchObject({ action: 'suspended' });
+
+    // Reconnected: the service says only grnt_a is revoked now.
+    set.replaceAll([entry({ seq: 9, grantId: 'grnt_a' })]);
+    expect(set.match({ grantId: 'grnt_a' })).toMatchObject({ action: 'revoked' });
+    expect(set.match({ grantId: 'grnt_b' })).toBeNull();
+    expect(set.size).toBe(1);
   });
 
   it('forgets entries whose credential has expired', () => {
@@ -280,6 +301,71 @@ data: {"cursor":5}
     const result = await grantex.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' });
     expect(result.allowed).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('reconnecting', () => {
+  /**
+   * The call site, not the set in isolation.
+   *
+   * A snapshot is the whole truth about what is revoked *now*, so applying one
+   * on top of what the feed already holds keeps anything resumed while it was
+   * disconnected: a grant suspended, then resumed during the outage, stays
+   * denied until it expires. Reverting `#snapshot` to `applyAll` passes every
+   * other test in this file, so this drives the real path — two snapshots
+   * either side of a dropped stream.
+   */
+  it('forgets a suspension that was lifted while the feed was disconnected', async () => {
+    const snapshots: RevocationEntry[][] = [
+      [entry({ action: 'suspended', grantId: 'grnt_child' })],
+      [],
+    ];
+    let snapshotCalls = 0;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/v1/revocations/stream')) {
+        // A stream that ends at once: the loop takes a fresh snapshot when it
+        // reconnects, which is the path under test.
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) { controller.close(); },
+        });
+        return {
+          ok: true, status: 200, headers: { get: (): string | null => null }, body: stream,
+          json: async (): Promise<unknown> => ({}), text: async (): Promise<string> => '',
+        };
+      }
+      const page = snapshots[Math.min(snapshotCalls, snapshots.length - 1)] ?? [];
+      snapshotCalls += 1;
+      const body = { entries: page, cursor: 5, nextPageToken: null, snapshot: true };
+      return {
+        ok: true, status: 200, headers: { get: (): string | null => null },
+        json: async (): Promise<unknown> => body, text: async (): Promise<string> => JSON.stringify(body),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const feed = new RevocationFeed(new HttpClient({ apiKey: 'test_key', baseUrl: 'https://auth.example.com' }), { reconnectDelayMs: 5 });
+    try {
+      feed.start();
+      expect(await feed.ready(5_000)).toBe(true);
+      // The first snapshot denies it.
+      expect(feed.match({ grantId: 'grnt_child' })).toMatchObject({ action: 'suspended' });
+
+      // Wait for the reconnect to take the second snapshot, which no longer
+      // mentions the grant because it has been resumed.
+      const deadline = Date.now() + 5_000;
+      while (snapshotCalls < 2 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(snapshotCalls).toBeGreaterThanOrEqual(2);
+      // Merging would keep the suspension here, for as long as the grant lives.
+      const deadline2 = Date.now() + 2_000;
+      while (feed.match({ grantId: 'grnt_child' }) !== null && Date.now() < deadline2) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(feed.match({ grantId: 'grnt_child' })).toBeNull();
+    } finally {
+      await feed.stop();
+    }
   });
 });
 

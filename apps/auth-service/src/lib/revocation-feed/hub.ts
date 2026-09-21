@@ -167,7 +167,26 @@ export class RevocationFeedHub {
           // delivered by the joining stream's own replay.
           feed.cursor = await settledCursor(this.#sql, developerId, 0, settings.settleSeconds);
         }
+
+        // Every query a page needs runs before any state changes.
+        //
+        // Marking an entry delivered is what stops it being delivered again,
+        // so doing it before the rest of the page could fail meant:
+        // `readSince` succeeds, the entries go into `delivered`,
+        // `settledCursor` throws, and nothing was ever sent to a subscriber.
+        // The next successful poll then filters those entries out as already
+        // delivered and can advance the cursor past them — the revocation
+        // reaches nobody, while heartbeats keep reporting the feed healthy,
+        // which is the one failure this feed must not have.
         const entries = await readSince(this.#sql, developerId, feed.cursor, MAX_PAGE);
+        // The cursor may never run ahead of what was read: a page is bounded
+        // by MAX_PAGE, the settled maximum is not, and advancing past the gap
+        // would silently skip every entry in it — exactly what a large
+        // cascade or an emergency stop produces.
+        const settled = await settledCursor(this.#sql, developerId, feed.cursor, settings.settleSeconds);
+
+        // From here to the subscriber loop nothing awaits, so a page commits
+        // all of its effects or none of them. Keep it that way.
         const fresh = entries.filter((entry) => !feed.delivered.has(entry.seq));
         feed.freshAt = Date.now();
         // One increment per poll, not per page, so the metric keeps the
@@ -175,18 +194,11 @@ export class RevocationFeedHub {
         if (page === 0) revocationFeedPollsTotal.inc({ outcome: 'ok' });
         revocationFeedStaleSeconds.set(0);
 
-        if (fresh.length > 0) {
-          for (const entry of fresh) {
-            feed.delivered.add(entry.seq);
-            revocationFeedEntriesTotal.inc({ action: entry.action });
-            revocationFeedDeliverySeconds.observe(Math.max(0, (Date.now() - new Date(entry.at).getTime()) / 1000));
-          }
+        for (const entry of fresh) {
+          feed.delivered.add(entry.seq);
+          revocationFeedEntriesTotal.inc({ action: entry.action });
+          revocationFeedDeliverySeconds.observe(Math.max(0, (Date.now() - new Date(entry.at).getTime()) / 1000));
         }
-        // The cursor may never run ahead of what was read: a page is bounded
-        // by MAX_PAGE, the settled maximum is not, and advancing past the gap
-        // would silently skip every entry in it — exactly what a large
-        // cascade or an emergency stop produces.
-        const settled = await settledCursor(this.#sql, developerId, feed.cursor, settings.settleSeconds);
         const highestRead = entries.reduce((highest, entry) => Math.max(highest, entry.seq), feed.cursor);
         const advanceTo = entries.length >= MAX_PAGE ? Math.min(settled, highestRead) : settled;
         const before = feed.cursor;
