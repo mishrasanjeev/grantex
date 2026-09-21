@@ -239,10 +239,15 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
         try {
           send(batch.entries);
         } catch (err) {
-          // A stream that cannot be written to is finished. Ending it makes
-          // the client reconnect and replay from its own cursor; leaving it
-          // attached would keep the hub feeding entries into a socket nobody
-          // reads, with heartbeats claiming all is well.
+          // Defence-in-depth, not the guard against a dead socket: measured
+          // under Node 24 against a destroyed peer, an ended response and a
+          // destroyed socket, `write()` returns false every time and never
+          // throws (FINDINGS G-28). A dead or slow peer shows up in the
+          // return value instead, which this route does not yet honour
+          // (FINDINGS G-29). What this covers is a future write path that
+          // does throw — a compression or framing layer, say — and then
+          // ending the stream is right: the client reconnects and replays
+          // from its own cursor.
           request.log.warn({ err, feed: 'revocation', developerId }, 'revocation stream write failed; closing it');
           closeStream();
           reply.raw.end();
