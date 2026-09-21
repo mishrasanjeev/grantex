@@ -207,6 +207,9 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
       });
 
       let cursor = since ?? 0;
+      // Assigned below, once the heartbeat it has to clear exists; the
+      // subscriber may need it before that.
+      let closeStream: () => void = () => {};
       const buffered: FeedEntry[] = [];
       let replayed = false;
       const write = (event: string, data: unknown): void => {
@@ -214,8 +217,14 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
       };
       const send = (entries: FeedEntry[]): void => {
         for (const entry of entries) {
-          if (entry.seq > cursor) cursor = entry.seq;
+          // Write first, advance after. The cursor is this stream's claim
+          // about what the client has been told, and it used to move before
+          // the write: a `reply.raw.write` that threw left the hub believing
+          // the entries were delivered and this cursor past entries nobody
+          // ever received, while the heartbeat went on reporting the stream
+          // healthy.
           write('revocation', entry);
+          if (entry.seq > cursor) cursor = entry.seq;
         }
       };
 
@@ -227,8 +236,46 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
           buffered.push(...batch.entries);
           return;
         }
-        send(batch.entries);
+        try {
+          send(batch.entries);
+        } catch (err) {
+          // Defence-in-depth, not the guard against a dead socket: measured
+          // under Node 24 against a destroyed peer, an ended response and a
+          // destroyed socket, `write()` returns false every time and never
+          // throws (FINDINGS G-28). A dead or slow peer shows up in the
+          // return value instead, which this route does not yet honour
+          // (FINDINGS G-29). What this covers is a future write path that
+          // does throw — a compression or framing layer, say — and then
+          // ending the stream is right: the client reconnects and replays
+          // from its own cursor.
+          request.log.warn({ err, feed: 'revocation', developerId }, 'revocation stream write failed; closing it');
+          closeStream();
+          reply.raw.end();
+        }
       });
+
+      // One place that lets a stream go, whichever way it ends: a failed
+      // replay, a closed socket, an error on the socket, or all three for the
+      // same connection. The replay failure used to do its own cleanup and
+      // leave `closed` false, so a later `close` event decremented the
+      // per-developer count a second time and the connection cap drifted
+      // upwards until it stopped meaning anything.
+      let closed = false;
+      let heartbeat: NodeJS.Timeout | null = null;
+      const close = (): void => {
+        closeStream();
+      };
+      closeStream = (): void => {
+        if (closed) return;
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        unsubscribe();
+        const count = (streamsPerDeveloper.get(developerId) ?? 1) - 1;
+        if (count <= 0) streamsPerDeveloper.delete(developerId);
+        else streamsPerDeveloper.set(developerId, count);
+      };
+      request.raw.on('close', close);
+      request.raw.on('error', close);
 
       try {
         // Replay this stream's own history, then flush anything the hub
@@ -247,8 +294,7 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
         write('ready', { cursor, serverTime: new Date().toISOString() });
       } catch (err) {
         request.log.error({ err, feed: 'revocation' }, 'revocation stream could not replay');
-        unsubscribe();
-        streamsPerDeveloper.set(developerId, (streamsPerDeveloper.get(developerId) ?? 1) - 1);
+        close();
         reply.raw.end();
         return reply;
       }
@@ -256,29 +302,15 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
       // A heartbeat says "the feed read the database this recently". It stops
       // when the feed cannot read, which is what makes a client fail closed.
       const staleAfter = settings.pollMs * 2 + 1_000;
-      const heartbeat = setInterval(() => {
+      heartbeat = setInterval(() => {
         const freshAt = hub.freshAt(developerId);
         if (freshAt > 0 && Date.now() - freshAt <= staleAfter) {
           write('heartbeat', { cursor, freshAt: new Date(freshAt).toISOString() });
         }
       }, settings.heartbeatMs);
       heartbeat.unref?.();
-
-      let closed = false;
-      const close = (): void => {
-        // `close` and `error` can both fire for one connection; without this
-        // the per-developer counter drifts down and the cap stops meaning
-        // anything.
-        if (closed) return;
-        closed = true;
-        clearInterval(heartbeat);
-        unsubscribe();
-        const count = (streamsPerDeveloper.get(developerId) ?? 1) - 1;
-        if (count <= 0) streamsPerDeveloper.delete(developerId);
-        else streamsPerDeveloper.set(developerId, count);
-      };
-      request.raw.on('close', close);
-      request.raw.on('error', close);
+      // The socket may already have gone while the replay was running.
+      if (closed) clearInterval(heartbeat);
       return reply;
     },
   );

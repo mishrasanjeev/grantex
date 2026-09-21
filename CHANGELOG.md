@@ -35,6 +35,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - FINDINGS **G-26** records that the settle window measures insert time rather
   than commit time.
 
+### Revocation feed: no revocation lost, no stale suspension after a reconnect
+- A poll that failed part way through could lose a revocation. `readSince`
+  succeeded, the entries were marked delivered, then `settledCursor` threw —
+  so nothing was sent, and the next successful poll filtered those entries out
+  as already delivered and could advance the cursor past them. Nobody was ever
+  told, while the stream's heartbeats kept reporting the feed healthy. Every
+  query a poll needs now runs before any state changes.
+- Both SDKs replace their in-memory set from a snapshot instead of applying it
+  on top. A snapshot is the complete list of what is revoked or suspended
+  *now*, so merging kept anything resumed while the client was disconnected: a
+  grant suspended, then resumed during the outage, stayed denied until it
+  expired. The new set is swapped in only after every page has arrived, so a
+  failure part way through leaves the previous one intact.
+- A revocation stream whose replay failed decremented the per-developer
+  connection count without marking itself closed, so a later `close` event
+  decremented it again and the cap drifted upwards. One cleanup path now
+  handles every way a stream ends.
+
 ### Release versions for the SDKs
 - `@grantex/sdk` 0.6.0 -> 0.7.0, `grantex` (Python) 0.5.1 -> 0.6.0, `@grantex/cli`
   0.3.0 -> 0.4.0, `@grantex/x402` 0.4.0 -> 0.4.1 and the Go SDK 0.3.0 -> 0.4.0.

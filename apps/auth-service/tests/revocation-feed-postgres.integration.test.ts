@@ -334,6 +334,60 @@ describePostgres('the revocation feed against real Postgres', () => {
     });
   }, 180_000);
 
+  /**
+   * A poll that fails halfway must not swallow the entries it had already
+   * read.
+   *
+   * `readSince` succeeded, the entries went into `delivered`, then
+   * `settledCursor` threw — so nothing was ever sent, and the next successful
+   * poll filtered those same entries out as "already delivered" and could
+   * advance the cursor past them. The revocation reached nobody, while the
+   * stream's heartbeats kept saying the feed was healthy.
+   */
+  it('delivers entries that a failed poll had already read', async () => {
+    await withFixture(async ({ sql, dev, grant }) => {
+      const id = await grant(dev, 'halfway');
+      await sql`UPDATE grants SET status = 'revoked', revoked_at = NOW() WHERE id = ${id}`;
+
+      // The first settled-cursor query belongs to the subscribe-time poll,
+      // which runs before anything has been read. The one that matters is the
+      // next: after `readSince` has returned the entry.
+      let settledCalls = 0;
+      const flaky = new Proxy(sql, {
+        apply(target, thisArg, args: [TemplateStringsArray, ...unknown[]]) {
+          const text = Array.isArray(args[0]) ? args[0].join('?') : String(args[0]);
+          if (text.includes('MAX(seq)') && text.includes('created_at <')) {
+            settledCalls += 1;
+            if (settledCalls === 2) {
+              throw Object.assign(new Error('connection reset'), { code: '08006' });
+            }
+          }
+          return Reflect.apply(target as never, thisArg, args);
+        },
+        get: (target, property) => Reflect.get(target, property),
+      }) as typeof sql;
+
+      const hub = new RevocationFeedHub(flaky, log);
+      const seen: FeedEntry[] = [];
+      const unsubscribe = hub.subscribe(dev, (batch) => { seen.push(...batch.entries); });
+      try {
+        // The first poll fails after reading. Before the fix this lost the
+        // entry for good.
+        await hub.pollNow(dev);
+        const deadline = Date.now() + 10_000;
+        while (seen.length === 0 && Date.now() < deadline) {
+          await hub.pollNow(dev);
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        expect(settledCalls).toBeGreaterThan(2); // the failure really happened
+        expect(seen.map((entry) => entry.grantId)).toEqual([id]);
+      } finally {
+        unsubscribe();
+        await hub.stop();
+      }
+    });
+  }, 180_000);
+
   it('records a grant and a token that are deleted, not revoked', async () => {
     await withFixture(async ({ sql, dev, grant, token }) => {
       // What DELETE /v1/agents/:id does: tokens first, then their grants.

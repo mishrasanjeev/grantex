@@ -19,6 +19,8 @@ from typing import Any
 
 import httpx
 
+# Both forms on purpose: the module object is needed for the `__file__` check
+# below, and the names are what the measurement uses.
 import grantex
 from grantex import DenialReason, Grantex, Permission, RevocationSubReason, ToolManifest
 from grantex._types import AuthorizeParams, ExchangeTokenParams, SignupParams
