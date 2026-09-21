@@ -16,6 +16,7 @@ from grantex import (
     Grantex,
     Permission,
     RevocationEntry,
+    RevocationFeed,
     RevocationSubReason,
     RevokedSet,
     ToolManifest,
@@ -157,6 +158,58 @@ def test_revoked_set_forgets_entries_whose_credential_expired() -> None:
     assert revoked.size == 1
     revoked.prune()
     assert revoked.size == 0
+
+
+
+@respx.mock
+def test_feed_forgets_a_suspension_lifted_while_it_was_disconnected() -> None:
+    """The call site, not the set in isolation.
+
+    A snapshot is the whole truth about what is revoked *now*, so applying one
+    on top of what the feed already holds keeps anything resumed while it was
+    disconnected: a grant suspended, then resumed during the outage, stays
+    denied until it expires. Reverting ``_snapshot`` to ``apply_all`` passes
+    every other test in this file, so this drives the real path — two
+    snapshots either side of a dropped stream.
+    """
+    snapshots = [
+        _snapshot([_entry(action="suspended", grantId="grnt_child")]),
+        _snapshot([]),
+    ]
+    calls = {"count": 0}
+
+    def _next_snapshot(request: httpx.Request) -> httpx.Response:
+        page = snapshots[min(calls["count"], len(snapshots) - 1)]
+        calls["count"] += 1
+        return httpx.Response(200, json=page)
+
+    respx.get(f"{BASE_URL}/v1/revocations").mock(side_effect=_next_snapshot)
+    # A stream that ends at once, so the loop reconnects and takes a fresh
+    # snapshot — which is the path under test.
+    respx.get(f"{BASE_URL}/v1/revocations/stream").mock(
+        return_value=httpx.Response(
+            200, headers={"content-type": "text/event-stream"}, content=b""
+        )
+    )
+
+    feed = RevocationFeed(BASE_URL, "test_key", reconnect_delay=0.01)
+    try:
+        feed.start()
+        assert feed.ready(5.0) is True
+        assert feed.match(grant_id="grnt_child") is not None
+
+        deadline = time.monotonic() + 5.0
+        while calls["count"] < 2 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert calls["count"] >= 2
+
+        # Merging would keep the suspension for as long as the grant lives.
+        deadline = time.monotonic() + 2.0
+        while feed.match(grant_id="grnt_child") is not None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert feed.match(grant_id="grnt_child") is None
+    finally:
+        feed.stop()
 
 
 # ── enforce(revocation_check="feed") ─────────────────────────────────────────

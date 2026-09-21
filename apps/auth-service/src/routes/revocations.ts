@@ -207,6 +207,9 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
       });
 
       let cursor = since ?? 0;
+      // Assigned below, once the heartbeat it has to clear exists; the
+      // subscriber may need it before that.
+      let closeStream: () => void = () => {};
       const buffered: FeedEntry[] = [];
       let replayed = false;
       const write = (event: string, data: unknown): void => {
@@ -214,8 +217,14 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
       };
       const send = (entries: FeedEntry[]): void => {
         for (const entry of entries) {
-          if (entry.seq > cursor) cursor = entry.seq;
+          // Write first, advance after. The cursor is this stream's claim
+          // about what the client has been told, and it used to move before
+          // the write: a `reply.raw.write` that threw left the hub believing
+          // the entries were delivered and this cursor past entries nobody
+          // ever received, while the heartbeat went on reporting the stream
+          // healthy.
           write('revocation', entry);
+          if (entry.seq > cursor) cursor = entry.seq;
         }
       };
 
@@ -227,7 +236,17 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
           buffered.push(...batch.entries);
           return;
         }
-        send(batch.entries);
+        try {
+          send(batch.entries);
+        } catch (err) {
+          // A stream that cannot be written to is finished. Ending it makes
+          // the client reconnect and replay from its own cursor; leaving it
+          // attached would keep the hub feeding entries into a socket nobody
+          // reads, with heartbeats claiming all is well.
+          request.log.warn({ err, feed: 'revocation', developerId }, 'revocation stream write failed; closing it');
+          closeStream();
+          reply.raw.end();
+        }
       });
 
       // One place that lets a stream go, whichever way it ends: a failed
@@ -239,6 +258,9 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
       let closed = false;
       let heartbeat: NodeJS.Timeout | null = null;
       const close = (): void => {
+        closeStream();
+      };
+      closeStream = (): void => {
         if (closed) return;
         closed = true;
         if (heartbeat) clearInterval(heartbeat);
