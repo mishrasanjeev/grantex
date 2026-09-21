@@ -441,11 +441,19 @@ function bareName(raw: string): string {
  * legitimate one. Missing an object makes the check weaker, never wrong.
  */
 export function expectedSchema(): SchemaExpectation {
+  return expectedSchemaOf(migrationFiles().map((file) => readFileSync(join(migrationsDir, file), 'utf-8')));
+}
+
+/**
+ * The same scan over SQL given directly, in file order, so the rules above can
+ * be tested on their own rather than only against the whole corpus.
+ */
+export function expectedSchemaOf(files: readonly string[]): SchemaExpectation {
   const tables = new Set<string>();
   const columns = new Map<string, Set<string>>();
 
-  for (const file of migrationFiles()) {
-    const sql = blankSqlNoise(readFileSync(join(migrationsDir, file), 'utf-8'));
+  for (const raw of files) {
+    const sql = blankSqlNoise(raw);
     for (const match of sql.matchAll(CREATE_TABLE)) tables.add(bareName(match[1]!));
     for (const match of sql.matchAll(DROP_TABLE)) {
       const table = bareName(match[1]!);

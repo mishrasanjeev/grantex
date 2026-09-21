@@ -37,17 +37,28 @@ async function main(): Promise<void> {
   try {
     const summary = await baselineMigrations(sql, { dryRun });
     console.log(summary.verdict);
-    console.log(JSON.stringify({
-      baselined: !dryRun,
-      dryRun,
-      atHead: summary.head.atHead,
-      objectsChecked: summary.head.checked,
-      missingTables: summary.head.missingTables,
-      missingColumns: summary.head.missingColumns.map((entry) => `${entry.table}.${entry.column}`),
-      recorded: summary.recorded.length,
-      alreadyRecorded: summary.alreadyRecorded,
-      files: summary.recorded,
-    }));
+    // On a database that is not at head, the count of files a baseline *would*
+    // record is the one number a reader latches onto, and it is the one thing
+    // that must not happen. It is left out entirely rather than printed
+    // beside the refusal.
+    console.log(JSON.stringify(summary.head.atHead
+      ? {
+        baselined: !dryRun,
+        dryRun,
+        atHead: true,
+        objectsChecked: summary.head.checked,
+        recorded: summary.recorded.length,
+        alreadyRecorded: summary.alreadyRecorded,
+        files: summary.recorded,
+      }
+      : {
+        baselined: false,
+        dryRun,
+        atHead: false,
+        objectsChecked: summary.head.checked,
+        missingTables: summary.head.missingTables,
+        missingColumns: summary.head.missingColumns.map((entry) => `${entry.table}.${entry.column}`),
+      }));
     if (dryRun && !summary.head.atHead) {
       // A dry run reports rather than throws, but it must not exit 0 on a
       // database a real run would refuse.

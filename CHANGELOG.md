@@ -129,7 +129,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   migrated database would leave the service on an incomplete schema for ever.
   `--dry-run` prints the verdict, writes nothing at all — not even the ledger
   table — and exits non-zero when the database is not at head, so it can gate
-  a deploy script.
+  a deploy script. On a database that is not at head it prints what is missing
+  and *not* the count of files a baseline would record, which is the number a
+  reader would otherwise latch onto.
 - The migration summary is logged and counted (`grantex_migrations_total`) by
   both callers instead of being discarded.
 - **Upgrade note:** on an existing database, run

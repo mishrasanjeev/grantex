@@ -32,7 +32,7 @@ Complete guide to deploying the Grantex authorization platform in your environme
 | `apps/auth-service/.env.example` | Baseline environment template; `src/config.ts` is authoritative |
 | `apps/auth-service/package.json` | Node.js dependencies |
 | `apps/auth-service/package-lock.json` | Pinned Node.js dependencies |
-| `apps/auth-service/src/db/migrations/` | Ordered SQL migrations (currently through `114`) |
+| `apps/auth-service/src/db/migrations/` | Ordered SQL migrations (the directory is the authoritative list) |
 | `packages/gateway/Dockerfile` | Gateway reverse proxy container |
 | `deploy/gcp/setup.sh` | Google Cloud Run setup |
 | `deploy/gcp/setup-wif.sh` | Workload Identity Federation setup |
@@ -289,9 +289,10 @@ separate migrate step to run. To apply them without serving traffic, run the ser
 in a one-off container against the same `DATABASE_URL` and stop it once it logs
 `Migrations: applied …`.
 
-The ordered migrations currently run from `001` through `114` and create the core, enterprise,
-offline, trust-registry, commerce, query-performance, event-bridge and revocation-feed data
-structures. Treat the migration directory—not a copied count in documentation—as authoritative.
+The ordered migrations create the core, enterprise, offline, trust-registry, commerce,
+query-performance, event-bridge and revocation-feed data structures. The migration directory of
+the release you deploy is the authoritative list — a range copied into this file goes stale on the
+next merge, so there is none here.
 
 ### Backup
 

@@ -298,6 +298,23 @@ describePostgres('the migration ledger against real Postgres', () => {
       expect(expectedObjects.tables).toContain('grants');
       expect(expectedObjects.tables).not.toContain('signing_keys'); // dropped by 030
       expect(check.checked).toBe(expectedObjects.tables.length + expectedObjects.columns.length);
+
+      // And the other direction, which is the one CI cannot otherwise see: a
+      // table the scanner *misses* is a table whose absence would be reported
+      // as "at head". A `CREATE TABLE IF NOT EXISTS` inside a `DO $$ … $$`
+      // block is idempotent, invisible to the scanner, and leaves the whole
+      // suite green — so every table the migrations actually build must
+      // appear in the expected list.
+      const built = await sql<{ table_name: string }[]>`
+        SELECT table_name FROM information_schema.tables
+         WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'
+         ORDER BY table_name`;
+      const unexpected = built
+        .map((row) => row.table_name)
+        // The ledger is written by the runner, not by a migration file.
+        .filter((name) => name !== 'schema_migrations')
+        .filter((name) => !expectedObjects.tables.includes(name));
+      expect(unexpected, 'tables the head check would never notice were missing').toEqual([]);
     } finally {
       await drop();
     }

@@ -307,3 +307,46 @@ Remove an entry in the pull request that fixes it.
   database, so replacing them means a new migration that rewrites the rows,
   plus checking nothing keys off those DIDs. Worth doing on its own.
 - **Impact:** presentational and legal, not functional.
+
+## G-27 — Helpers still widen a transaction handle back to the pool
+
+- **Found:** review of the `TxSql` typing fix (PRD G-6), 2026-09-21.
+- **What:** PR #1338 made `TxSql` the real transaction type, so `tx.begin(…)`
+  is a compile error — but a handful of call sites still widen a transaction
+  handle back to the pool type on the way into a helper, which puts `begin`
+  back within reach of anything that helper calls:
+  `vc.ts:119` (`claimIndexFromExistingList`),
+  `evidence-service/service.ts:417`, `:539`, `:773`,
+  `budget.ts:77`, `signing-keys.ts:499`, `:561`, `:610`,
+  and `event-actions.ts:134`.
+  Two related edges: `queries()` returns a `TxSql`, which advertises
+  `savepoint` — the pool does not have one at runtime, so a helper that took
+  the hint would fail — and `vc.ts:417` reaches for the pool without going
+  through `queries()`, which contradicts its "single place" claim.
+- **Why it matters:** this is the same bug class #1338 closed. A nested
+  transaction on a passed-in handle throws `sql.begin is not a function`,
+  aborts the caller's transaction and rolls its work back — which is how a
+  cascade revocation once left grants active while reporting success. None of
+  the sites above does it today; the type system simply stops objecting.
+- **Fix:** narrow each helper to `TxSql`, route the remaining pool use through
+  `queries()`, and give `queries()` a return type that does not promise
+  `savepoint`. Mechanical, but it touches four subsystems, so it belongs in
+  its own PR rather than in the one that changed the alias.
+
+## G-28 — The revocation stream advanced its cursor before writing
+
+- **Found:** automated review of the revocation feed (PRD G-6), 2026-09-21.
+- **What:** `routes/revocations.ts` moved the stream's cursor past an entry
+  before `reply.raw.write` had succeeded. A transient write failure on a
+  still-open socket therefore left the hub believing the entries were
+  delivered, the route's cursor past entries nobody received, and the
+  subscriber still attached — while heartbeats went on reporting the stream
+  healthy. The client never learned about those revocations.
+- **Fixed:** in PR #1337. The write happens first and the cursor advances
+  after it, and a throwing write ends the stream instead of being logged and
+  ignored, so the client reconnects and replays from its own cursor.
+- **Left:** there is no test for the throwing-write path — driving a failing
+  `reply.raw.write` through `app.inject` is not straightforward, and a test
+  that only looked like it exercised the path would be worse than none. The
+  ordering is visible in the code and the close-path is covered by the
+  existing stream tests.
