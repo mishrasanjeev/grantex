@@ -8,7 +8,7 @@
 import { SignJWT, jwtVerify, decodeJwt } from 'jose';
 import type postgres from 'postgres';
 import { gzipSync, gunzipSync } from 'node:zlib';
-import { getSql } from '../db/client.js';
+import { getSql, type TxSql } from '../db/client.js';
 import { getKeyPair } from './crypto.js';
 import { resolvePlatformVerificationKey, SIGNING_ALGORITHMS } from './signing-keys.js';
 import { newVerifiableCredentialId, newStatusListId } from './ids.js';
@@ -161,20 +161,29 @@ async function claimIndexFromExistingList(
 /**
  * Set revocation bits on one list.
  *
- * `SELECT ... FOR UPDATE` is required: the bitstring is gzipped in a text
- * column, so flipping a bit is a read-modify-write. Two unsynchronised
- * revocations would each decode the same snapshot and the second write would
- * discard the first one's bit, leaving a revoked credential valid.
+ * `SELECT ... FOR UPDATE` is what makes this safe: the bitstring is gzipped
+ * in a text column, so flipping a bit is a read-modify-write. Two
+ * unsynchronised revocations would each decode the same snapshot and the
+ * second write would discard the first one's bit, leaving a revoked
+ * credential valid. The row lock is held until the surrounding transaction
+ * commits, so the pair of statements is all that is needed.
+ *
+ * `sql` may be the pool or a transaction handle. A transaction handle has no
+ * `begin` — postgres.js exposes `savepoint` instead — so opening a nested
+ * transaction here threw `sql.begin is not a function` and rolled the
+ * caller's whole cascade back, leaving the grant active. Inside a
+ * transaction the statements therefore run directly, on the caller's
+ * transaction, which is also what makes "the credential cannot outlive the
+ * grant" true.
  */
 async function setRevocationBits(
-  sql: ReturnType<typeof postgres>,
+  sql: ReturnType<typeof postgres> | TxSql,
   listId: string,
   indices: number[],
 ): Promise<void> {
   if (indices.length === 0) return;
 
-  await sql.begin(async (_tx) => {
-    const tx = _tx as unknown as ReturnType<typeof postgres>;
+  const flip = async (tx: TxSql): Promise<void> => {
     const rows = await tx`
       SELECT encoded_list FROM vc_status_lists WHERE id = ${listId} FOR UPDATE
     `;
@@ -193,7 +202,16 @@ async function setRevocationBits(
       SET encoded_list = ${encodeBitstring(bitstring)}, updated_at = NOW()
       WHERE id = ${listId}
     `;
-  });
+  };
+
+  // `begin` exists on the pool and not on a transaction handle; that is the
+  // only difference that matters here.
+  const opensTransactions = typeof (sql as { begin?: unknown }).begin === 'function';
+  if (opensTransactions) {
+    await (sql as ReturnType<typeof postgres>).begin(async (_tx) => flip(_tx as unknown as TxSql));
+  } else {
+    await flip(sql as TxSql);
+  }
 }
 
 export { setRevocationBits };
@@ -373,8 +391,10 @@ export async function revokeVCsByGrantIds(
   /**
    * Run inside the caller's transaction, so a credential cannot stay
    * verifiable after the grant behind it was revoked. Defaults to the pool.
+   * Typed as a transaction handle on purpose: it is the caller's `tx`, and
+   * nothing reached from here may open a transaction of its own.
    */
-  tx?: ReturnType<typeof getSql>,
+  tx?: TxSql,
 ): Promise<void> {
   if (grantIds.length === 0) return;
 

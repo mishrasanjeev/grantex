@@ -1,3 +1,4 @@
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { describe, expect, it, vi } from 'vitest';
@@ -238,15 +239,29 @@ describePostgres('cascade revocation against real Postgres', () => {
     });
   }, 180_000);
 
-  it('revokes credentials issued for a grant in the same transaction', async () => {
+  /**
+   * The credential this covers is backed by a status list, because every
+   * credential `issueAgentGrantVC` writes is: it always fills in
+   * `status_list_id` and `status_list_idx`. A fixture without them skips
+   * `setRevocationBits` entirely, so the test would pass while the real path
+   * threw — which is exactly what happened once.
+   */
+  it('revokes credentials issued for a grant, and flips the status-list bit, in the same transaction', async () => {
     await withFixture(async ({ sql, dev, chain, suffix }) => {
       const ids = await chain(dev, 2, 'vc');
       const vcId = `vc_${suffix}`;
+      const listId = `vcsl_${suffix}`;
+      const index = 7;
+      const emptyList = gzipSync(Buffer.alloc(16384, 0)).toString('base64url');
+      await sql`
+        INSERT INTO vc_status_lists (id, developer_id, purpose, encoded_list, size, next_index)
+        VALUES (${listId}, ${dev}, 'revocation', ${emptyList}, 131072, ${index + 1})`;
       await sql`
         INSERT INTO verifiable_credentials
-          (id, grant_id, developer_id, principal_id, agent_did, credential_type, credential_jwt, status, expires_at)
+          (id, grant_id, developer_id, principal_id, agent_did, credential_type, credential_jwt, status,
+           status_list_id, status_list_idx, expires_at)
         VALUES (${vcId}, ${ids[1]!}, ${dev}, 'user_vc', 'did:grantex:agent', 'AgentGrantCredential',
-                'placeholder', 'active', NOW() + INTERVAL '1 hour')`;
+                'placeholder', 'active', ${listId}, ${index}, NOW() + INTERVAL '1 hour')`;
 
       await cascadeGrantAction(sql, { developerId: dev, rootGrantIds: [ids[0]!], action: 'revoke', cause: 'event' });
 
@@ -254,6 +269,15 @@ describePostgres('cascade revocation against real Postgres', () => {
       // Fire-and-forget would leave this 'active' whenever the call failed,
       // with every retry of the delivery a duplicate that never retries it.
       expect(row!.status).toBe('revoked');
+      // And the grant itself really is revoked: a throw inside the
+      // credential work rolls the whole cascade back, which is how this
+      // regression left grants active while reporting nothing.
+      expect(await statuses(sql, ids)).toEqual(['revoked', 'revoked']);
+
+      const [list] = await sql<{ encoded_list: string }[]>`
+        SELECT encoded_list FROM vc_status_lists WHERE id = ${listId}`;
+      const bits = gunzipSync(Buffer.from(list!.encoded_list, 'base64url'));
+      expect((bits[Math.floor(index / 8)]! >> (7 - (index % 8))) & 1).toBe(1);
     });
   }, 180_000);
 

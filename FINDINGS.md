@@ -243,3 +243,22 @@ Remove an entry in the pull request that fixes it.
   ADD COLUMN IF NOT EXISTS` waiting for `AccessExclusiveLock` on
   `audit_entries` while a cascade transaction waited for `AccessShareLock` on
   `grants`.
+
+## G-21 — Subject bindings are stored in plaintext
+
+- **Found:** event bridge mapping work (PRD G-6), 2026-09-20; confirmed open in review.
+- **What:** `grant_subject_refs.value` holds the identifier a developer binds a
+  grant to — a company registration number, a tax id, an account id at the
+  provider. It is stored as plaintext, so anyone with read access to the
+  database or a backup of it can enumerate which identifiers a developer is
+  operating on, and join them to principals and agents. Every other
+  developer-supplied secret in this service is encrypted with
+  `encryptWithContext`.
+- **Why not fixed here:** matching needs equality lookups (`by: subject_ref`
+  resolves a `kind`/value pair to grants on every delivery), so it wants a
+  keyed hash for lookup and an encrypted copy for display, plus a migration
+  that rewrites existing rows and a decision about what the API returns. That
+  is its own change.
+- **Impact:** confidentiality of the binding values, not authorization
+  correctness. The bridge never echoes a stored value back to an
+  unauthenticated caller.

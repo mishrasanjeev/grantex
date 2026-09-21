@@ -221,6 +221,14 @@ This restores exactly the grants that suspension suspended. It is refused with
 suspended, and it keeps working when the event bridge is turned off, so a
 suspension can always be undone.
 
+A grant is suspended once, under the first root that reached it. So
+suspending an ancestor of an already-suspended subtree reports **zero
+affected**: everything below it is already suspended, and each grant keeps
+the root it was suspended under, so resuming that original root still
+restores exactly what it suspended. Nothing is lost — the second call simply
+has nothing left to do — but do not read "0 affected" as "the suspension did
+not work".
+
 ### `re_evaluate` — hand the decision back
 
 Nothing about the grant changes. One audit entry per grant is written and a
