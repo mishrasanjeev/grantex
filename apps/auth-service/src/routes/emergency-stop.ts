@@ -102,6 +102,8 @@ function logStop(request: FastifyRequest, result: EmergencyStopResult): void {
     developerId: result.developerId,
     scopeType: result.scope.type,
     dryRun: result.dryRun,
+    status: result.status,
+    sweeps: result.sweeps,
     grantsMatched: result.grantsMatched,
     grantsRevoked: result.grantsRevoked,
   }, result.dryRun ? 'emergency stop rehearsed' : 'emergency stop applied');
@@ -140,6 +142,7 @@ export async function emergencyStopRoutes(app: FastifyInstance): Promise<void> {
       reason: parsed.reason,
       requestedBy: `developer:${request.developer.id}`,
       dryRun: parsed.dryRun,
+      log: request.log,
     });
     logStop(request, result);
     return reply.send(result);
@@ -205,6 +208,7 @@ export async function emergencyStopRoutes(app: FastifyInstance): Promise<void> {
         reason: parsed.reason,
         requestedBy: 'admin',
         dryRun: parsed.dryRun,
+        log: request.log,
       });
       logStop(request, result);
       return reply.send(result);

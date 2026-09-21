@@ -21,6 +21,7 @@ interface Fixture {
   sql: Sql;
   dev: string;
   other: string;
+  suffix: string;
   agents: { a: string; b: string; other: string };
   grant: (developerId: string, label: string, options?: { agent?: string; principal?: string; parent?: string }) => Promise<string>;
 }
@@ -63,7 +64,7 @@ async function runFixture<T>(fn: (f: Fixture) => Promise<T>): Promise<T> {
       return id;
     };
 
-    return await fn({ sql, dev, other, agents, grant });
+    return await fn({ sql, dev, other, suffix, agents, grant });
   } finally {
     await sql`DELETE FROM emergency_stops WHERE developer_id IN (${dev}, ${other})`.catch(() => undefined);
     await sql`DELETE FROM audit_entries WHERE developer_id IN (${dev}, ${other})`.catch(() => undefined);
@@ -128,6 +129,10 @@ describePostgres('the emergency stop against real Postgres', () => {
       expect(result.stopId).toMatch(/^stop_/);
       expect(result.grantsMatched).toBe(1);
       expect(result.grantsRevoked).toBe(3);
+      expect(result.status).toBe('completed');
+      expect(result.lockout).toBe(false);
+      // One sweep that found grants, and one that came back empty.
+      expect(result.sweeps).toBe(2);
       expect(result.agentsStopped.sort()).toEqual([agents.a, agents.b].sort());
       expect(await statuses(sql, [root, child, grandchild])).toEqual(['revoked', 'revoked', 'revoked']);
       // A grant of the same developer that the scope does not cover survives.
@@ -151,8 +156,80 @@ describePostgres('the emergency stop against real Postgres', () => {
 
       const stops = await listEmergencyStops(sql, dev);
       expect(stops).toHaveLength(1);
-      expect(stops[0]).toMatchObject({ scope_type: 'agent', grants_revoked: 3, dry_run: false });
+      expect(stops[0]).toMatchObject({
+        scope_type: 'agent', grants_revoked: 3, dry_run: false, status: 'completed', error: null,
+      });
       expect(stops[0]!.completed_at).not.toBeNull();
+    });
+  }, 180_000);
+
+  it('records what it revoked even when a later batch fails', async () => {
+    await withFixture(async ({ sql, dev, grant, agents }) => {
+      const root = await grant(dev, 'root', { agent: agents.a });
+      await grant(dev, 'child', { agent: agents.a, parent: root });
+
+      // A stop whose second sweep cannot read the scope: the row must still
+      // say what the first sweep revoked, not `grants_revoked = 0`.
+      let reads = 0;
+      const failing = new Proxy(sql, {
+        apply(target, thisArg, args: [TemplateStringsArray, ...unknown[]]) {
+          const text = Array.isArray(args[0]) ? args[0].join('?') : String(args[0]);
+          if (text.includes('SELECT id FROM grants') && text.includes('agent_id =')) {
+            reads += 1;
+            if (reads > 1) throw Object.assign(new Error('connection reset'), { code: '08006' });
+          }
+          return Reflect.apply(target as never, thisArg, args);
+        },
+        get: (target, property) => Reflect.get(target, property),
+      }) as typeof sql;
+
+      await expect(emergencyStop(failing, {
+        developerId: dev, scope: { type: 'agent', id: agents.a }, reason: 'incident', requestedBy: 'admin',
+      })).rejects.toThrow(/connection reset/);
+
+      const stops = await listEmergencyStops(sql, dev);
+      expect(stops[0]).toMatchObject({ status: 'failed', grants_revoked: 2 });
+      expect(stops[0]!.error).toContain('connection reset');
+      expect(stops[0]!.completed_at).not.toBeNull();
+      // And the grants really were revoked, which is what the row now says.
+      expect(await statuses(sql, [root])).toEqual(['revoked']);
+    });
+  }, 180_000);
+
+  it('sweeps again, so a grant delegated while it runs is caught', async () => {
+    await withFixture(async ({ sql, dev, grant, agents, suffix }) => {
+      const root = await grant(dev, 'root', { agent: agents.a });
+
+      // A grant that appears between the first sweep's read and the second.
+      let reads = 0;
+      const racing = new Proxy(sql, {
+        apply(target, thisArg, args: [TemplateStringsArray, ...unknown[]]) {
+          const text = Array.isArray(args[0]) ? args[0].join('?') : String(args[0]);
+          const result = Reflect.apply(target as never, thisArg, args) as Promise<unknown>;
+          if (text.includes('SELECT id FROM grants') && text.includes('agent_id =')) {
+            reads += 1;
+            if (reads === 1) {
+              return result.then(async (rows) => {
+                await sql`
+                  INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+                  VALUES (${`grnt_stop_late_${suffix}`}, ${agents.a}, 'user_1', ${dev},
+                          ${['tool:acme_kyb:read']}, NOW() + INTERVAL '1 hour')`;
+                return rows;
+              });
+            }
+          }
+          return result;
+        },
+        get: (target, property) => Reflect.get(target, property),
+      }) as typeof sql;
+
+      const result = await emergencyStop(racing, {
+        developerId: dev, scope: { type: 'agent', id: agents.a }, reason: 'incident', requestedBy: 'admin',
+      });
+      expect(result.status).toBe('completed');
+      expect(result.sweeps).toBeGreaterThanOrEqual(2);
+      expect(result.grantsRevoked).toBe(2);
+      expect(await statuses(sql, [root, `grnt_stop_late_${suffix}`])).toEqual(['revoked', 'revoked']);
     });
   }, 180_000);
 

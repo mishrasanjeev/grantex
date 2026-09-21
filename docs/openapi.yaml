@@ -169,6 +169,19 @@ components:
       properties:
         stopId: { type: string }
         developerId: { type: string }
+        status:
+          type: string
+          enum: [running, completed, incomplete, failed]
+          description: >-
+            `incomplete` means grants were still appearing under the scope after five sweeps;
+            `failed` means a batch did not finish, and the record says what was revoked.
+        sweeps: { type: integer, description: How many times the scope was read and revoked }
+        lockout:
+          type: boolean
+          description: >-
+            Always false. The stop revokes what exists; it does not prevent new grants being
+            issued afterwards. Rotate the credential first (see the runbook).
+        error: { type: string, description: Present when status is failed }
         scope:
           type: object
           properties:
@@ -3487,11 +3500,16 @@ paths:
       tags: [Event Bridge]
       summary: Halt every agent under a grant, agent, principal or this developer
       description: |
-        Cascade-revokes every live grant the scope covers and everything delegated beneath it.
+        Cascade-revokes every live grant the scope covers and everything delegated beneath it,
+        re-reading the scope until it comes back empty so a grant delegated mid-stop is caught.
         `confirm` must repeat exactly `stop <type>:<id>`, or the call is refused with 412 and
         nothing is revoked; `dryRun: true` reports the blast radius and revokes nothing. A
-        developer API key can only stop its own grants. Revocations are irreversible. Requires
-        `EMERGENCY_STOP_ENABLED=true`. Runbook: section 11 of docs/self-hosting.md.
+        developer API key can only stop its own grants. Revocations are irreversible.
+
+        It is a sweep, not a lockout: the same credential can mint a new grant immediately
+        afterwards (`lockout` is always false), so rotate the leaked credential first — the
+        runbook in section 11 of docs/self-hosting.md gives the order. Requires
+        `EMERGENCY_STOP_ENABLED=true`.
       requestBody:
         required: true
         content:

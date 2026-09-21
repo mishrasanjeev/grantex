@@ -213,14 +213,26 @@ below.
   with `412 CONFIRMATION_REQUIRED` naming the phrase, before anything is
   revoked. `dryRun: true` reports how many grants the scope covers and revokes
   nothing. A developer key can only ever stop its own grants.
+- The stop sweeps: it revokes what the scope covers, then re-reads the scope
+  until it comes back empty (up to five passes), so a grant delegated while it
+  runs is caught. It is **not** a lockout — the same credential can mint a new
+  grant immediately afterwards, the response says `lockout: false`, and the
+  runbook gives the order (rotate the credential, then stop).
+- The `emergency_stops` record is updated as each batch completes and carries a
+  `status` (`running`, `completed`, `incomplete`, `failed`), the number of
+  sweeps and the error, so a stop that failed part way through can never read
+  as though nothing happened.
 - Underneath it is a cascade revocation per matched grant, so a stop appears in
   the audit hash chain (one `grantex.grant.revoked` per grant with cause
   `emergency_stop`, plus a `grantex.emergency_stop` summary) and on the
   revocation feed, and SDKs in feed mode deny the agents' next calls.
   `GET /v1/emergency-stops` lists what was stopped, when, by whom and why.
-- Release test: `tests/e2e/emergency-stop.test.ts` runs simulated agents under
-  a grant tree, stops them with one call and asserts every agent's next call is
-  denied within two seconds; `scripts/revocation-release-test.sh` runs it
+- Release test: `tests/e2e/emergency-stop.test.ts` runs agents at three depths
+  of a delegation chain plus one that checks revocations `online` rather than
+  through the feed, stops them with one call, cross-checks the reported count
+  against the grants the API listed as live, asserts every agent's next call is
+  denied within two seconds, and asserts that a grant minted afterwards is
+  live — because the stop is a sweep, not a lockout; `scripts/revocation-release-test.sh` runs it
   beside the propagation measurement.
 - Runbook: section 11 of `docs/self-hosting.md` (rehearsal, blast radius, what
   to do when an agent keeps running, and what to do if the API is

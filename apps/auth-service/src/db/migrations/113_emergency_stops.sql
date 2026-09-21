@@ -14,11 +14,19 @@ CREATE TABLE IF NOT EXISTS emergency_stops (
   reason          TEXT NOT NULL,
   requested_by    TEXT NOT NULL,
   dry_run         BOOLEAN NOT NULL DEFAULT FALSE,
+  status          TEXT NOT NULL DEFAULT 'running',
+  sweeps          INTEGER NOT NULL DEFAULT 0,
   grants_matched  INTEGER NOT NULL DEFAULT 0,
   grants_revoked  INTEGER NOT NULL DEFAULT 0,
+  error           TEXT,
   started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at    TIMESTAMPTZ,
-  CONSTRAINT chk_emergency_stops_scope CHECK (scope_type IN ('grant', 'agent', 'principal', 'developer'))
+  CONSTRAINT chk_emergency_stops_scope CHECK (scope_type IN ('grant', 'agent', 'principal', 'developer')),
+  -- `running` while batches are still going; `failed` when one did not finish,
+  -- so the row can never read as if nothing happened when thousands of grants
+  -- were revoked. `incomplete` means the sweeps ran out with grants still
+  -- appearing under the scope.
+  CONSTRAINT chk_emergency_stops_status CHECK (status IN ('running', 'completed', 'incomplete', 'failed'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_emergency_stops_developer

@@ -437,6 +437,13 @@ Authorization: Bearer <developer API key>
   agents following the feed are denied within seconds.
 - Off unless `EMERGENCY_STOP_ENABLED=true`. The revocations are irreversible:
   principals have to authorise again.
+- **A sweep, not a lockout.** It revokes what exists, re-reading the scope
+  until it comes back empty so a grant delegated mid-stop is caught, and then
+  it is done: the same API key can mint a new grant immediately afterwards.
+  The response says `"lockout": false`, and `status` is `completed`,
+  `incomplete` (grants kept appearing) or `failed` (a batch did not finish —
+  the record says what was revoked, and the call can be repeated). Rotate the
+  leaked credential first; the runbook gives the order.
 
 The runbook — rehearsing it, working out the blast radius, what to do when an
 agent keeps running, and what to do if the API itself is unreachable — is

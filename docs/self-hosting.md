@@ -444,6 +444,31 @@ It is off unless `EMERGENCY_STOP_ENABLED=true`. Grants stopped this way are
 **revoked, not paused**: there is no undo, and the principals involved have to
 authorise again.
 
+### What it does not do
+
+**It is a sweep, not a lockout.** It revokes what exists — repeatedly, until
+the scope comes back empty, so a grant delegated while it runs is caught by a
+later sweep — and then it is finished. It does **not** prevent new grants from
+being issued a second later. Anyone still holding the developer's API key can
+call `POST /v1/authorize` and mint another one, and `POST /v1/agents` to
+register another agent.
+
+So an incident that starts with a leaked credential needs two actions, in this
+order:
+
+1. **Rotate or disable the leaked credential** — `POST /v1/keys/rotate` for a
+   developer API key, or remove the agent (`DELETE /v1/agents/:id`) so nothing
+   can be issued for it. The platform operator can also disable the developer.
+2. **Then run the emergency stop**, to revoke everything that credential
+   already issued.
+
+Run it the other way round and the stop will be clean while the attacker mints
+a fresh grant behind it. The response says `"lockout": false` for this reason,
+and `status` tells you how the sweep ended: `completed`, `incomplete` (grants
+were still appearing after five sweeps — something is still issuing them, go
+back to step 1) or `failed` (a batch did not finish; the row records what was
+revoked before it stopped, and the call is safe to repeat).
+
 ### Before the incident
 
 - Turn on `REVOCATION_FEED_ENABLED=true` and make sure the agents you need to
@@ -482,8 +507,9 @@ CONFIRMATION_REQUIRED` and the phrase it expected.
 | `principal` | Every live grant that principal authorised, and their subtrees |
 | `developer` | Every live grant of the developer |
 
-The response names the stop (`stopId`), how many grants matched and were
-revoked, and which agents were stopped.
+The response names the stop (`stopId`), its `status`, how many sweeps it took,
+how many grants matched and were revoked, which agents were stopped, and
+`lockout: false`.
 
 As the platform operator, use `POST /v1/admin/emergency-stop` with
 `ADMIN_API_KEY` and the same body plus `developerId` (not needed for a
@@ -493,8 +519,9 @@ stop its own grants.
 ### What happens
 
 1. Every matched grant and everything delegated beneath it is revoked in one
-   transaction per batch, with wallet reservations released and issued
-   credentials revoked.
+   transaction per batch, with wallet reservations released and credential
+   revocation started. The scope is then read again and swept until it comes
+   back empty, so a grant delegated mid-stop is caught.
 2. One audit entry per grant (`grantex.grant.revoked`, cause
    `emergency_stop`) plus a summary entry (`grantex.emergency_stop`) go on the
    developer's audit hash chain, and a row goes into `emergency_stops`.
@@ -511,6 +538,9 @@ stop its own grants.
 curl -sS "$BASE_URL/v1/emergency-stops" -H "Authorization: Bearer $DEVELOPER_API_KEY"
 ```
 
+- Check `status` in `GET /v1/emergency-stops`: anything other than
+  `completed` means the sweep did not finish cleanly, and the row says how far
+  it got.
 - Check that agents stopped: `grantex_revocation_feed_entries_total` and the
   agents' own denial logs (`grant_revoked`).
 - Any agent still running is one that is not watching the feed. Rotate or
