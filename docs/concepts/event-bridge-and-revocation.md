@@ -234,6 +234,8 @@ not work".
 Nothing about the grant changes. One audit entry per grant is written and a
 `grant.re_evaluation_requested` event is emitted to the developer's webhooks
 and event stream, carrying the grant ids, the event id and type, the rule id
+and the event's subject. The relying platform decides what to do.
+
 and a bounded copy of the event's subject (scalar members, short values, and
 `subject_truncated` when anything was dropped — the subject is
 provider-supplied).
@@ -450,7 +452,63 @@ install would otherwise "prove" the criterion against code nobody reviewed.
 And the clock starts when the revocation is committed (when the API call
 returns), not when the call was made: a developer on the free plan is rate
 limited to 100 requests a minute, and the SDK waiting out a `Retry-After` is
-not propagation. That wait is reported separately.
+not propagation. That wait is reported separately as `revoke_call_max_ms` —
+and it now has a budget of its own (10 s, `REVOCATION_REVOKE_CALL_BUDGET_MS`),
+because a release that prints a minute-long wait on the containment path and
+passes anyway is not telling you the truth. FINDINGS G-23 tracks the
+underlying problem: revoking shares the plan's rate-limit bucket with
+ordinary traffic.
+
+Any figure quoted from a run is **environment-specific**. The numbers depend
+on the machine, the container runtime, whether Postgres and Redis are local,
+and what else is running: an independent reviewer measured p95 100–506 ms and
+max 515–673 ms where this checkout's machine measured tens of milliseconds.
+What the release test asserts is the requirement — p95 within two seconds, no
+failed trial — not a particular number.
+
+## The emergency stop
+
+Cascade revocation is the documented emergency stop for the whole platform.
+One authenticated call halts every agent under a grant, an agent, a principal
+or a whole developer:
+
+```http
+POST /v1/emergency-stop
+Authorization: Bearer <developer API key>
+
+{
+  "scope": { "type": "agent", "id": "ag_01..." },
+  "reason": "incident 4102: provider credentials leaked",
+  "confirm": "stop agent:ag_01...",
+  "dryRun": false
+}
+```
+
+- `confirm` must be exactly `stop <type>:<id>`; anything else is refused with
+  `412 CONFIRMATION_REQUIRED` and the phrase it expected. Nothing is revoked
+  before that check passes.
+- `dryRun: true` reports how many grants the scope covers and revokes nothing.
+- A developer API key can only stop its own grants. The platform operator uses
+  `POST /v1/admin/emergency-stop` with `ADMIN_API_KEY` and a `developerId`.
+- `GET /v1/emergency-stops` lists what has been stopped, when, by whom and
+  why.
+- Underneath it is an ordinary cascade revocation per matched grant, so the
+  stop appears in the audit hash chain (one `grantex.grant.revoked` per grant
+  plus one `grantex.emergency_stop` summary) and on the revocation feed, and
+  agents following the feed are denied within seconds.
+- Off unless `EMERGENCY_STOP_ENABLED=true`. The revocations are irreversible:
+  principals have to authorise again.
+- **A sweep, not a lockout.** It revokes what exists, re-reading the scope
+  until it comes back empty so a grant delegated mid-stop is caught, and then
+  it is done: the same API key can mint a new grant immediately afterwards.
+  The response says `"lockout": false`, and `status` is `completed`,
+  `incomplete` (grants kept appearing) or `failed` (a batch did not finish —
+  the record says what was revoked, and the call can be repeated). Rotate the
+  leaked credential first; the runbook gives the order.
+
+The runbook — rehearsing it, working out the blast radius, what to do when an
+agent keeps running, and what to do if the API itself is unreachable — is
+section 11 of `docs/self-hosting.md`.
 
 ## Observability
 
@@ -470,6 +528,7 @@ not propagation. That wait is reported separately.
 | `grantex_revocation_feed_polls_total` | `outcome` |
 | `grantex_revocation_feed_subscribers` | — (live streams on this instance) |
 | `grantex_revocation_feed_stale_seconds` | — (since the last successful read) |
+| `grantex_emergency_stops_total` | `scope`, `outcome` (`applied`, `dry_run`, `refused`) |
 
 Every refused delivery also logs `alert: "event_bridge_verification_failure"`
 with the source id and reason, never the payload or signature. Alert rules are

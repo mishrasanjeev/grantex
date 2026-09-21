@@ -58,6 +58,7 @@ import { eventSourcesRoutes } from './routes/event-sources.js';
 import { eventBridgeIngestRoutes } from './routes/event-bridge-ingest.js';
 import { eventActionsRoutes } from './routes/event-actions.js';
 import { revocationRoutes } from './routes/revocations.js';
+import { emergencyStopRoutes } from './routes/emergency-stop.js';
 import { decisionsRoutes } from './routes/decisions.js';
 import { decisionPageRoutes } from './routes/decision-page.js';
 import { decisionAdminRoutes } from './routes/decision-admin.js';
@@ -232,6 +233,9 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(eventActionsRoutes);
   // Revocation feed (PRD G-6): how an SDK learns a grant stopped.
   await app.register(revocationRoutes);
+  // Emergency stop (PRD G-6): halt every agent under a grant, agent,
+  // principal or developer. Refuses unless EMERGENCY_STOP_ENABLED=true.
+  await app.register(emergencyStopRoutes);
   await app.register(eventBridgeIngestRoutes);
 
   // Decision grants (PRD G-3): platform API (developer key), the approval page

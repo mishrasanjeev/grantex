@@ -24,3 +24,10 @@ export const revocationPropagationSeconds = new Histogram({
   buckets: [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10],
   registers: [registry],
 });
+
+export const emergencyStopsTotal = new Counter({
+  name: 'grantex_emergency_stops_total',
+  help: 'Emergency stops by scope and outcome (applied, dry_run, refused)',
+  labelNames: ['scope', 'outcome'] as const,
+  registers: [registry],
+});

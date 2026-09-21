@@ -275,6 +275,52 @@ Remove an entry in the pull request that fixes it.
   correctness. The bridge never echoes a stored value back to an
   unauthenticated caller.
 
+## G-22 — The emergency stop cannot lock a tenant out
+
+- **Found:** emergency stop work (PRD G-6), 2026-09-20; accepted in review as
+  documented rather than closed.
+- **What:** the stop revokes every grant the scope covers, sweeping until the
+  scope comes back empty, and then it is finished. It does not prevent new
+  grants being issued a second later: whoever holds the developer's API key
+  can call `POST /v1/authorize` and mint another one. For the incident this
+  control exists for — a leaked credential — that means the containment
+  measure does not, by itself, contain anything unless the credential is
+  rotated first.
+- **Disclosed, not hidden:** the response says `lockout: false`, the runbook
+  has a "What it does not do" section giving the ordered rotate-then-stop
+  procedure, and the OpenAPI description, concepts page and changelog all say
+  the same. The release test asserts that a grant minted after a stop is
+  **live**, so the behaviour cannot drift away from the documentation
+  silently.
+- **Follow-up:** a real lockout — a tenant-level or credential-level freeze
+  that refuses issuance until an operator lifts it — is its own feature. It
+  needs a state the authorization path reads on every issuance, an
+  authenticated way to lift it, and a decision about what happens to agents
+  mid-task. Tracked here so "the incident control does not stop the incident"
+  stays visible.
+
+## G-23 — Revoking during an incident is rate-limited like ordinary traffic
+
+- **Found:** review of the propagation measurement (PRD G-6), 2026-09-21.
+- **What:** the plan limiter counts `DELETE /v1/grants/:id` and the emergency
+  stop in the same per-developer bucket as every other call (100 req/min on
+  the free plan), so containment competes with ordinary traffic for the
+  tenant's quota. The 26–58 s waits the harness saw came from *it* bursting
+  hundreds of revokes in a row, which no incident looks like — an emergency
+  stop is a single request that revokes a whole tree. The realistic case is
+  milder: a free-plan tenant already near its quota, or an operator scripting
+  revocations one grant at a time, waiting out `Retry-After` on the one path
+  that ends the incident.
+- **Proposal:** put containment calls in a bucket of their own —
+  `DELETE /v1/grants/:id`, `POST /v1/grants/:id/suspend`,
+  `POST /v1/emergency-stop` — sized for the shape of the work (a burst of a
+  few hundred, refilling slowly) and counted separately from the plan quota.
+  Revocation is idempotent and reduces load rather than creating it, so the
+  abuse case the plan limiter protects against does not apply. Keep a limit:
+  an unbounded revoke endpoint is still a way to make the database work.
+- **Impact:** slow containment, on the free plan only, and a misleading
+  propagation measurement if the limiter is not accounted for.
+
 ## G-24 — Postgres integration tests share one database, which flakes
 
 - **Found:** review of the migration ledger (PRD G-6), 2026-09-21.
@@ -319,6 +365,12 @@ Remove an entry in the pull request that fixes it.
   `evidence-service/service.ts:417`, `:539`, `:773`,
   `budget.ts:77`, `signing-keys.ts:499`, `:561`, `:610`,
   and `event-actions.ts:134`.
+  `revocation/emergency-stop.ts` had the same widening and was narrowed while
+  merging #1333, but the reason it survived the global fix is worth keeping in
+  view: it declares its **own** `type Sql = ReturnType<typeof postgres>`
+  locally, so changing the shared alias never reached it. Every file with a
+  private alias of that shape can drift the same way, and that is what this
+  cleanup should sweep for rather than the listed lines alone.
   Two related edges: `queries()` returns a `TxSql`, which advertises
   `savepoint` — the pool does not have one at runtime, so a helper that took
   the hint would fail — and `vc.ts:417` reaches for the pool without going
