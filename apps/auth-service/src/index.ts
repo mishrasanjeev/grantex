@@ -5,6 +5,7 @@ import { initKeys, initEdKey } from './lib/crypto.js';
 import { getSql } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { reportMigrationSummary } from './db/migration-report.js';
+import { eventBridgeSettings } from './lib/event-bridge/settings.js';
 import { revocationFeedSettings } from './lib/revocation-feed/settings.js';
 import { getRedis } from './redis/client.js';
 import { buildApp } from './server.js';
@@ -14,6 +15,10 @@ import { newUsageDailyId } from './lib/ids.js';
 import { startWebhookDeliveryWorker, stopWebhookDeliveryWorker } from './workers/webhookDelivery.js';
 import { startAnomalyDetectionWorker, stopAnomalyDetectionWorker } from './workers/anomalyDetection.js';
 import { startUsageRollupWorker } from './workers/usageRollup.js';
+import {
+  startEventBridgeReceiptPruneWorker,
+  stopEventBridgeReceiptPruneWorker,
+} from './workers/eventBridgeReceiptPrune.js';
 import {
   startRevocationFeedPruneWorker,
   stopRevocationFeedPruneWorker,
@@ -100,6 +105,9 @@ async function main() {
   const stopUsageRollup = config.usageMeteringEnabled
     ? startUsageRollupWorker(sql, redis, newUsageDailyId)
     : null;
+  // Only while the event bridge is on: it keeps the replay store bounded
+  // without removing a receipt whose delivery could still be replayed.
+  if (eventBridgeSettings().enabled) startEventBridgeReceiptPruneWorker(sql);
   // Only while the revocation feed is served: it keeps the append-only feed
   // table bounded (lib/revocation-feed/settings.ts).
   if (revocationFeedSettings().enabled) startRevocationFeedPruneWorker(sql);
@@ -116,6 +124,7 @@ async function main() {
     stopWebhookDeliveryWorker();
     stopAnomalyDetectionWorker();
     stopUsageRollup?.();
+    stopEventBridgeReceiptPruneWorker();
     stopRevocationFeedPruneWorker();
     stopCommercePaymentReconciliationWorker();
     await app.close();
