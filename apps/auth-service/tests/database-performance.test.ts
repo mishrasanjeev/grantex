@@ -106,9 +106,16 @@ describe('database performance migrations', () => {
     }
 
     const tagged = migrationSql.mock.calls.map((call) => (call[0] as string[]).join(''));
+    const statements = migrationSql.unsafe.mock.calls.map((call) => call[0] as string);
     expect(sql.reserve).toHaveBeenCalledOnce();
-    expect(tagged[0]).toContain('pg_advisory_lock');
-    expect(tagged[tagged.length - 1]).toContain('pg_advisory_unlock');
+    expect(statements[0]).toContain('pg_advisory_lock');
+    expect(statements[statements.length - 1]).toContain('pg_advisory_unlock');
+    // The session's lock_timeout is put back before the connection returns to
+    // the pool, so application statements do not inherit it and abort on a
+    // contended row instead of waiting.
+    expect(statements[statements.length - 2]).toBe('RESET lock_timeout');
+    expect(statements.indexOf('RESET lock_timeout'))
+      .toBeGreaterThan(statements.findIndex((statement) => statement.startsWith('SET lock_timeout')));
     expect(tagged.some((query) => query.includes('SELECT filename, checksum FROM schema_migrations'))).toBe(true);
     expect(migrationSql.release).toHaveBeenCalledOnce();
 
@@ -152,7 +159,16 @@ describe('database performance migrations', () => {
     // Only the ledger table is touched: no ALTER TABLE, no CREATE INDEX, and
     // so no lock request queued in front of live traffic (FINDINGS G-18).
     const executed = migrationSql.unsafe.mock.calls.map((call) => call[0] as string);
-    expect(executed).toHaveLength(1);
-    expect(executed[0]).toContain('CREATE TABLE IF NOT EXISTS schema_migrations');
+    expect(executed.filter((statement) => /ALTER TABLE|CREATE INDEX|CREATE TRIGGER/i.test(statement))).toEqual([]);
+    expect(executed.filter((statement) => /CREATE TABLE/i.test(statement))).toEqual([
+      expect.stringContaining('CREATE TABLE IF NOT EXISTS schema_migrations'),
+    ]);
+    // Nothing else runs at all: lock, ledger table, reset, unlock.
+    expect(executed).toHaveLength(4);
+    // With nothing pending the timeout is never set, so there is nothing to
+    // leak — but the reset runs anyway, because it is cheaper than reasoning
+    // about which path set it.
+    expect(executed.some((statement) => statement.startsWith('SET lock_timeout'))).toBe(false);
+    expect(executed).toContain('RESET lock_timeout');
   });
 });

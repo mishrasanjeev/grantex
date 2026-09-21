@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { isIP } from 'node:net';
 import { evidenceConfigErrors } from './lib/evidence-service/settings.js';
+import { migrationLockTimeoutError } from './db/migrate.js';
 import {
   parseSigningAlgorithm,
   parseSigningKeyStore,
@@ -322,6 +323,11 @@ export function validateConfig(): void {
   if (process.env['NODE_ENV'] === 'production' && config.signingKeyStore === 'env' && !hasEnvSigningKey()) {
     errors.push(`${signingKeySettingName()} is required in production; AUTO_GENERATE_KEYS is development-only`);
   }
+  const lockTimeoutProblem = migrationLockTimeoutError(process.env['MIGRATION_LOCK_TIMEOUT']);
+  // Checked here rather than in the migration runner, which only reads it when
+  // something is pending — a typo would otherwise sit unnoticed until the
+  // first deploy that carries a migration.
+  if (lockTimeoutProblem !== null) errors.push(lockTimeoutProblem);
   errors.push(...signingKeyConfigErrors(config, process.env['NODE_ENV']));
   errors.push(...evidenceConfigErrors(process.env));
   if (process.env['NODE_ENV'] === 'production' && (config.seedApiKey || config.seedSandboxKey)) {

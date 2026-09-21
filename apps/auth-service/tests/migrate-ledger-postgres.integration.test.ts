@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { describe, expect, it } from 'vitest';
-import { runMigrations } from '../src/db/migrate.js';
+import { baselineMigrations, runMigrations } from '../src/db/migrate.js';
 
 const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
 const ci = process.env['CI']?.trim().toLowerCase();
@@ -95,6 +95,155 @@ describePostgres('the migration ledger against real Postgres', () => {
         SELECT i.indisvalid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
          WHERE c.relname = ${index} AND c.relnamespace = current_schema()::regnamespace`;
       expect(valid[0]?.indisvalid).toBe(true);
+    } finally {
+      await drop();
+    }
+  }, 300_000);
+
+  /**
+   * The boot production will actually take: a database whose schema is at
+   * head but which has no ledger, because every previous version of this
+   * service re-applied all files on every start. Every other case here starts
+   * from an empty database, which is the easy one.
+   *
+   * The ledger is dropped after a full run rather than the schema being built
+   * by hand, so the schema really is at head, exactly as a live database is.
+   */
+  it('adopts a fully-migrated database that has no ledger, then applies nothing', async () => {
+    const { sql, drop } = await freshDatabase();
+    try {
+      const build = await runMigrations(sql);
+      await sql.unsafe('DROP TABLE schema_migrations');
+
+      // This is the transition boot: everything is pending again.
+      const transition = await runMigrations(sql);
+      expect(transition.applied).toEqual(build.applied);
+      expect(transition.skipped).toBe(0);
+      const ledger = await sql<{ count: string }[]>`SELECT COUNT(*)::text AS count FROM schema_migrations`;
+      expect(Number(ledger[0]!.count)).toBe(build.applied.length);
+
+      // And every boot after it is a no-op.
+      const steady = await runMigrations(sql);
+      expect(steady.applied).toEqual([]);
+      expect(steady.skipped).toBe(build.applied.length);
+    } finally {
+      await drop();
+    }
+  }, 600_000);
+
+  /**
+   * Why the baseline command exists. On a database at head with no ledger, a
+   * transaction holding a row in `grants` is enough to fail the transition
+   * boot — safely, before the server listens, but it is still a failed
+   * deploy. `baselineMigrations` removes that risk: it records the files
+   * without executing them, so it does not need the lock at all.
+   */
+  it('fails the no-ledger boot rather than queueing behind a held row lock, and baseline does not', async () => {
+    const { sql, url, drop } = await freshDatabase();
+    const holder = postgres(url, { max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let holding: Promise<unknown> = Promise.resolve();
+    try {
+      const build = await runMigrations(sql);
+      await sql`
+        INSERT INTO developers (id, api_key_hash, name) VALUES ('dev_base', 'hash_base', 'Baseline Test')`;
+      await sql`INSERT INTO agents (id, did, developer_id, name) VALUES ('ag_base', 'did:grantex:ag_base', 'dev_base', 'Agent')`;
+      await sql`
+        INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+        VALUES ('grnt_base', 'ag_base', 'user_1', 'dev_base', ${['tool:acme_kyb:read']}, NOW() + INTERVAL '1 hour')`;
+      await sql.unsafe('DROP TABLE schema_migrations');
+
+      holding = holder.begin(async (tx) => {
+        await tx`SELECT id FROM grants WHERE id = 'grnt_base' FOR UPDATE`;
+        await held;
+      }).catch(() => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // The transition boot wants ACCESS EXCLUSIVE on `grants`. It gives up
+      // instead of queueing, and says which file could not proceed.
+      await expect(runMigrations(sql)).rejects.toThrow(/could not|lock/i);
+      // Traffic is unaffected: the reader is not stuck behind a queued
+      // exclusive request, which is the whole point.
+      const reader = await sql<{ id: string }[]>`SELECT id FROM grants WHERE id = 'grnt_base'`;
+      expect(reader[0]?.id).toBe('grnt_base');
+
+      // The failure is consistent: the files that ran before the one that
+      // could not take its lock are recorded, and no others.
+      const [partial] = await sql<{ count: string }[]>`SELECT COUNT(*)::text AS count FROM schema_migrations`;
+      const recorded = Number(partial!.count);
+      expect(recorded).toBeGreaterThan(0);
+      expect(recorded).toBeLessThan(build.applied.length);
+
+      // The operator path: adopt the database instead. It executes nothing,
+      // so the held lock is irrelevant.
+      const dry = await baselineMigrations(sql, { dryRun: true });
+      expect(dry.recorded.length).toBe(build.applied.length - recorded);
+      expect(dry.alreadyRecorded).toBe(recorded);
+      const unchanged = await sql<{ count: string }[]>`SELECT COUNT(*)::text AS count FROM schema_migrations`;
+      expect(Number(unchanged[0]!.count)).toBe(recorded);
+
+      const baselined = await baselineMigrations(sql);
+      expect(baselined.recorded.length).toBe(build.applied.length - recorded);
+
+      // Now the deploy that was failing is a no-op, with the lock still held.
+      const boot = await runMigrations(sql);
+      expect(boot.applied).toEqual([]);
+      expect(boot.skipped).toBe(build.applied.length);
+    } finally {
+      release();
+      await holding;
+      await holder.end({ timeout: 5 }).catch(() => undefined);
+      await drop();
+    }
+  }, 600_000);
+
+  it('refuses to baseline a database that is not at head', async () => {
+    const { sql, drop } = await freshDatabase();
+    try {
+      await expect(baselineMigrations(sql)).rejects.toThrow(/not at head/i);
+    } finally {
+      await drop();
+    }
+  }, 300_000);
+
+  /**
+   * `lock_timeout` is a session setting and the migration connection goes
+   * back to the pool. If it is left set, an ordinary application statement
+   * that lands on that connection aborts with 55P03 instead of waiting for a
+   * contended row — on roughly one connection in `max`, until the pool
+   * recycles it. With `max: 1` the connection is necessarily the same one.
+   */
+  it('does not leave lock_timeout set on the pooled connection', async () => {
+    const { sql, url, drop } = await freshDatabase();
+    const single = postgres(url, { max: 1, idle_timeout: 20, connect_timeout: 10, onnotice: () => {} });
+    try {
+      const applied = await runMigrations(single);
+      expect(applied.applied.length).toBeGreaterThan(50);
+      const [after] = await single<{ lock_timeout: string }[]>`SHOW lock_timeout`;
+      expect(after?.lock_timeout).toBe('0');
+
+      // And on the path where nothing is pending, too.
+      await runMigrations(single);
+      const [steady] = await single<{ lock_timeout: string }[]>`SHOW lock_timeout`;
+      expect(steady?.lock_timeout).toBe('0');
+    } finally {
+      await single.end({ timeout: 5 }).catch(() => undefined);
+      await sql.end().catch(() => undefined);
+      await drop();
+    }
+  }, 600_000);
+
+  it('warns about a ledger row whose file is gone instead of silently re-applying it later', async () => {
+    const { sql, drop } = await freshDatabase();
+    try {
+      await runMigrations(sql);
+      await sql`
+        INSERT INTO schema_migrations (filename, checksum) VALUES ('099_renamed_away.sql', 'whatever')`;
+
+      const run = await runMigrations(sql);
+      expect(run.missing).toEqual(['099_renamed_away.sql']);
+      expect(run.applied).toEqual([]);
     } finally {
       await drop();
     }
