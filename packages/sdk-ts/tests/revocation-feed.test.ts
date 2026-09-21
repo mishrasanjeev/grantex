@@ -107,6 +107,26 @@ describe('the revoked set', () => {
       .toMatchObject({ kind: 'parent_grant', id: 'grnt_parent' });
   });
 
+  /**
+   * A snapshot is the complete list of what is revoked or suspended *now*.
+   * Applying one on top of what the set already holds keeps anything resumed
+   * in the meantime — a grant suspended, then resumed while the client was
+   * disconnected, stays denied until it expires, because the resume entry
+   * went past while nobody was listening and the snapshot never mentions it.
+   */
+  it('replaces what it knows when a snapshot arrives, so a resumed grant is not still denied', () => {
+    const set = new RevokedSet();
+    set.apply(entry({ action: 'suspended', grantId: 'grnt_b' }));
+    set.apply(entry({ seq: 2, grantId: 'grnt_a' }));
+    expect(set.match({ grantId: 'grnt_b' })).toMatchObject({ action: 'suspended' });
+
+    // Reconnected: the service says only grnt_a is revoked now.
+    set.replaceAll([entry({ seq: 9, grantId: 'grnt_a' })]);
+    expect(set.match({ grantId: 'grnt_a' })).toMatchObject({ action: 'revoked' });
+    expect(set.match({ grantId: 'grnt_b' })).toBeNull();
+    expect(set.size).toBe(1);
+  });
+
   it('forgets entries whose credential has expired', () => {
     const set = new RevokedSet();
     const expired = new Date(Date.now() - 1_000).toISOString();

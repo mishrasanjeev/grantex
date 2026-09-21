@@ -130,6 +130,25 @@ def test_revoked_set_denies_a_child_whose_parent_is_revoked() -> None:
     assert found.kind == "parent_grant"
 
 
+def test_revoked_set_replaces_its_contents_when_a_snapshot_arrives() -> None:
+    """A snapshot is the whole truth about what is revoked now.
+
+    Applying one on top of what the set already holds keeps anything resumed
+    in the meantime: a grant suspended, then resumed while this client was
+    disconnected, would stay denied until it expired, because the resume entry
+    went past while nobody was listening and the snapshot never mentions it.
+    """
+    revoked = RevokedSet()
+    revoked.apply(_entry(action="suspended", grantId="grnt_b"))
+    revoked.apply(_entry(seq=2, grantId="grnt_a"))
+    assert revoked.match(grant_id="grnt_b") is not None
+
+    revoked.replace_all([_entry(seq=9, grantId="grnt_a")])
+    assert revoked.match(grant_id="grnt_a") is not None
+    assert revoked.match(grant_id="grnt_b") is None
+    assert revoked.size == 1
+
+
 def test_revoked_set_forgets_entries_whose_credential_expired() -> None:
     revoked = RevokedSet()
     past = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()

@@ -230,6 +230,26 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
         send(batch.entries);
       });
 
+      // One place that lets a stream go, whichever way it ends: a failed
+      // replay, a closed socket, an error on the socket, or all three for the
+      // same connection. The replay failure used to do its own cleanup and
+      // leave `closed` false, so a later `close` event decremented the
+      // per-developer count a second time and the connection cap drifted
+      // upwards until it stopped meaning anything.
+      let closed = false;
+      let heartbeat: NodeJS.Timeout | null = null;
+      const close = (): void => {
+        if (closed) return;
+        closed = true;
+        if (heartbeat) clearInterval(heartbeat);
+        unsubscribe();
+        const count = (streamsPerDeveloper.get(developerId) ?? 1) - 1;
+        if (count <= 0) streamsPerDeveloper.delete(developerId);
+        else streamsPerDeveloper.set(developerId, count);
+      };
+      request.raw.on('close', close);
+      request.raw.on('error', close);
+
       try {
         // Replay this stream's own history, then flush anything the hub
         // delivered while we were reading it (duplicates are harmless: the
@@ -247,8 +267,7 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
         write('ready', { cursor, serverTime: new Date().toISOString() });
       } catch (err) {
         request.log.error({ err, feed: 'revocation' }, 'revocation stream could not replay');
-        unsubscribe();
-        streamsPerDeveloper.set(developerId, (streamsPerDeveloper.get(developerId) ?? 1) - 1);
+        close();
         reply.raw.end();
         return reply;
       }
@@ -256,29 +275,15 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
       // A heartbeat says "the feed read the database this recently". It stops
       // when the feed cannot read, which is what makes a client fail closed.
       const staleAfter = settings.pollMs * 2 + 1_000;
-      const heartbeat = setInterval(() => {
+      heartbeat = setInterval(() => {
         const freshAt = hub.freshAt(developerId);
         if (freshAt > 0 && Date.now() - freshAt <= staleAfter) {
           write('heartbeat', { cursor, freshAt: new Date(freshAt).toISOString() });
         }
       }, settings.heartbeatMs);
       heartbeat.unref?.();
-
-      let closed = false;
-      const close = (): void => {
-        // `close` and `error` can both fire for one connection; without this
-        // the per-developer counter drifts down and the cap stops meaning
-        // anything.
-        if (closed) return;
-        closed = true;
-        clearInterval(heartbeat);
-        unsubscribe();
-        const count = (streamsPerDeveloper.get(developerId) ?? 1) - 1;
-        if (count <= 0) streamsPerDeveloper.delete(developerId);
-        else streamsPerDeveloper.set(developerId, count);
-      };
-      request.raw.on('close', close);
-      request.raw.on('error', close);
+      // The socket may already have gone while the replay was running.
+      if (closed) clearInterval(heartbeat);
       return reply;
     },
   );
