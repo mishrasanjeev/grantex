@@ -220,6 +220,10 @@ describePostgres('the revocation feed against real Postgres', () => {
       const live = await grant(dev, 'deleted');
       const jti = await token(live, 'deleted');
       const alreadyRevoked = await grant(dev, 'revokedthendeleted');
+      // With a live token row, as a cascade leaves it: revoking a grant sets
+      // `grants.status` and does not touch `grant_tokens.is_revoked`, because
+      // the grant's status is what every authorisation check reads.
+      await token(alreadyRevoked, 'revokedthendeleted');
       await sql`UPDATE grants SET status = 'revoked', revoked_at = NOW() WHERE id = ${alreadyRevoked}`;
       const before = await readSince(sql, dev, 0);
 
@@ -231,7 +235,11 @@ describePostgres('the revocation feed against real Postgres', () => {
         ['token_revoked', live, jti],
         ['revoked', live, null],
       ]);
-      // The one already revoked had its entry; deleting the row is housekeeping.
+      // The one already revoked had its entry; deleting the rows is
+      // housekeeping. Its *token* used to produce a second entry here,
+      // because the sibling trigger only looked at `is_revoked` — so the feed
+      // re-inflated with revocations that had already been delivered, while
+      // the prune worker was trying to bound it.
       expect(after.some((entry) => entry.grantId === alreadyRevoked)).toBe(false);
     });
   }, 180_000);

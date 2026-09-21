@@ -28,6 +28,13 @@ type Sql = ReturnType<typeof postgres>;
 
 export const REVOCATION_CHANNEL = 'grantex_revocation';
 
+/**
+ * Pages drained in one poll before yielding. Large enough that an ordinary
+ * cascade is delivered in a single pass, small enough that a very long
+ * backlog cannot monopolise the event loop.
+ */
+const MAX_PAGES_PER_POLL = 20;
+
 export interface FeedBatch {
   entries: FeedEntry[];
   /** Everything up to this sequence number has been delivered and settled. */
@@ -141,50 +148,59 @@ export class RevocationFeedHub {
     feed.polling = true;
     const settings = this.#settings();
     try {
-      if (initial) {
-        // Start settled: entries older than the settle window are already
-        // delivered by the joining stream's own replay.
-        feed.cursor = await settledCursor(this.#sql, developerId, 0, settings.settleSeconds);
-      }
-      const entries = await readSince(this.#sql, developerId, feed.cursor, MAX_PAGE);
-      const fresh = entries.filter((entry) => !feed.delivered.has(entry.seq));
-      feed.freshAt = Date.now();
-      revocationFeedPollsTotal.inc({ outcome: 'ok' });
-      revocationFeedStaleSeconds.set(0);
+      // Pages are drained in a loop. A full page used to call this method
+      // again from inside itself, so a backlog of N entries nested N/MAX_PAGE
+      // promise frames — and a backlog is exactly what a large cascade or an
+      // emergency stop produces. The loop is bounded per call as well, so one
+      // developer's long backlog cannot hold the event loop: the remainder is
+      // picked up on a later turn.
+      for (let page = 0; ; page += 1) {
+        if (initial && page === 0) {
+          // Start settled: entries older than the settle window are already
+          // delivered by the joining stream's own replay.
+          feed.cursor = await settledCursor(this.#sql, developerId, 0, settings.settleSeconds);
+        }
+        const entries = await readSince(this.#sql, developerId, feed.cursor, MAX_PAGE);
+        const fresh = entries.filter((entry) => !feed.delivered.has(entry.seq));
+        feed.freshAt = Date.now();
+        revocationFeedPollsTotal.inc({ outcome: 'ok' });
+        revocationFeedStaleSeconds.set(0);
 
-      if (fresh.length > 0) {
-        for (const entry of fresh) {
-          feed.delivered.add(entry.seq);
-          revocationFeedEntriesTotal.inc({ action: entry.action });
-          revocationFeedDeliverySeconds.observe(Math.max(0, (Date.now() - new Date(entry.at).getTime()) / 1000));
+        if (fresh.length > 0) {
+          for (const entry of fresh) {
+            feed.delivered.add(entry.seq);
+            revocationFeedEntriesTotal.inc({ action: entry.action });
+            revocationFeedDeliverySeconds.observe(Math.max(0, (Date.now() - new Date(entry.at).getTime()) / 1000));
+          }
         }
-      }
-      // The cursor may never run ahead of what was read: a page is bounded by
-      // MAX_PAGE, the settled maximum is not, and advancing past the gap would
-      // silently skip every entry in it — exactly what a large cascade or an
-      // emergency stop produces.
-      const settled = await settledCursor(this.#sql, developerId, feed.cursor, settings.settleSeconds);
-      const highestRead = entries.reduce((highest, entry) => Math.max(highest, entry.seq), feed.cursor);
-      const advanceTo = entries.length >= MAX_PAGE ? Math.min(settled, highestRead) : settled;
-      if (advanceTo > feed.cursor) {
-        feed.cursor = advanceTo;
-        for (const seq of feed.delivered) if (seq <= advanceTo) feed.delivered.delete(seq);
-      }
-      const more = entries.length >= MAX_PAGE;
-      const batch: FeedBatch = { entries: fresh, cursor: feed.cursor, freshAt: feed.freshAt };
-      for (const subscriber of feed.subscribers) {
-        try {
-          subscriber(batch);
-        } catch (err) {
-          this.#log.warn({ err, feed: 'revocation' }, 'a revocation feed subscriber threw');
+        // The cursor may never run ahead of what was read: a page is bounded
+        // by MAX_PAGE, the settled maximum is not, and advancing past the gap
+        // would silently skip every entry in it — exactly what a large
+        // cascade or an emergency stop produces.
+        const settled = await settledCursor(this.#sql, developerId, feed.cursor, settings.settleSeconds);
+        const highestRead = entries.reduce((highest, entry) => Math.max(highest, entry.seq), feed.cursor);
+        const advanceTo = entries.length >= MAX_PAGE ? Math.min(settled, highestRead) : settled;
+        if (advanceTo > feed.cursor) {
+          feed.cursor = advanceTo;
+          for (const seq of feed.delivered) if (seq <= advanceTo) feed.delivered.delete(seq);
         }
-      }
-      if (more) {
-        // A full page means there is more behind it; keep reading rather than
-        // waiting for the next tick.
-        feed.polling = false;
-        await this.#poll(developerId);
-        return;
+        const more = entries.length >= MAX_PAGE;
+        const batch: FeedBatch = { entries: fresh, cursor: feed.cursor, freshAt: feed.freshAt };
+        for (const subscriber of feed.subscribers) {
+          try {
+            subscriber(batch);
+          } catch (err) {
+            this.#log.warn({ err, feed: 'revocation' }, 'a revocation feed subscriber threw');
+          }
+        }
+        if (!more) break;
+        if (page + 1 >= MAX_PAGES_PER_POLL) {
+          // Still behind. Come back on a fresh turn of the event loop rather
+          // than holding it, and without growing the stack.
+          const timer = setTimeout(() => void this.#poll(developerId), 0);
+          timer.unref?.();
+          break;
+        }
       }
     } catch (err) {
       revocationFeedPollsTotal.inc({ outcome: 'error' });
