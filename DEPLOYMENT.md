@@ -32,7 +32,7 @@ Complete guide to deploying the Grantex authorization platform in your environme
 | `apps/auth-service/.env.example` | Baseline environment template; `src/config.ts` is authoritative |
 | `apps/auth-service/package.json` | Node.js dependencies |
 | `apps/auth-service/package-lock.json` | Pinned Node.js dependencies |
-| `apps/auth-service/src/db/migrations/` | Ordered SQL migrations (currently through `086`) |
+| `apps/auth-service/src/db/migrations/` | Ordered SQL migrations (currently through `114`) |
 | `packages/gateway/Dockerfile` | Gateway reverse proxy container |
 | `deploy/gcp/setup.sh` | Google Cloud Run setup |
 | `deploy/gcp/setup-wif.sh` | Workload Identity Federation setup |
@@ -272,23 +272,26 @@ serving — and the deploy has to be retried. Baseline the database first, immed
 deploying the release that carries the ledger:
 
 ```bash
-cd apps/auth-service
-node dist/cli/migrate-baseline.js --dry-run   # what it would record
-node dist/cli/migrate-baseline.js             # record every file as applied, executing none
+# Inside the image you are deploying — dist/ does not exist in a source checkout
+docker compose -f docker-compose.prod.yml exec auth-service \
+  node dist/cli/migrate-baseline.js --dry-run   # the verdict; writes nothing, exits non-zero if not at head
+docker compose -f docker-compose.prod.yml exec auth-service \
+  node dist/cli/migrate-baseline.js             # record every file as applied, executing none
 ```
 
-Only do this on a database already at head; on one that is behind, it would skip real work. New
-databases need nothing — starting the service applies everything. See
-`docs/self-hosting.md` section 6.
+It checks the precondition itself: every table and column the migration files build must already
+exist, or it refuses and names what is missing. Recording a file as applied means no later start
+ever applies it, so a partly-migrated database must not be baselined. New databases need nothing —
+starting the service applies everything. See `docs/self-hosting.md` section 6.
 
-Migrations otherwise run automatically on first start, or manually:
+Migrations otherwise run automatically on startup, before the server listens; there is no
+separate migrate step to run. To apply them without serving traffic, run the service's entrypoint
+in a one-off container against the same `DATABASE_URL` and stop it once it logs
+`Migrations: applied …`.
 
-```bash
-cd apps/auth-service
-npm run migrate
-```
-
-The ordered migrations currently run from `001` through `086` and create the core, enterprise, offline, trust-registry, commerce, and query-performance data structures. Treat the migration directory—not a copied count in documentation—as authoritative.
+The ordered migrations currently run from `001` through `114` and create the core, enterprise,
+offline, trust-registry, commerce, query-performance, event-bridge and revocation-feed data
+structures. Treat the migration directory—not a copied count in documentation—as authoritative.
 
 ### Backup
 

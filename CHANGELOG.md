@@ -121,7 +121,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   matches such an index by name and would otherwise never rebuild it.
 - New `node dist/cli/migrate-baseline.js` records every migration file as
   applied **without executing any of them**, for a database already at head
-  that has no ledger. `--dry-run` prints what it would record.
+  that has no ledger. It verifies that precondition itself rather than trusting
+  the operator: every `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... ADD
+  COLUMN IF NOT EXISTS` in the migration files must already exist in the
+  database, or it refuses and names what is missing. Recording a file as
+  applied means no later start ever applies it, so baselining a partly
+  migrated database would leave the service on an incomplete schema for ever.
+  `--dry-run` prints the verdict, writes nothing at all — not even the ledger
+  table — and exits non-zero when the database is not at head, so it can gate
+  a deploy script.
 - The migration summary is logged and counted (`grantex_migrations_total`) by
   both callers instead of being discarded.
 - **Upgrade note:** on an existing database, run

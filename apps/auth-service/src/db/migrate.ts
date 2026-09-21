@@ -410,6 +410,131 @@ function warnAboutSummary(summary: MigrationSummary): void {
   }
 }
 
+export interface SchemaExpectation {
+  /** Every table the files create and do not drop. */
+  tables: string[];
+  /** Every column the files add and do not drop, on a table they keep. */
+  columns: Array<{ table: string; column: string }>;
+}
+
+const CREATE_TABLE = /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+([A-Za-z0-9_$."]+)/gi;
+const DROP_TABLE = /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([A-Za-z0-9_$."]+)/gi;
+const ADD_COLUMN =
+  /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?([A-Za-z0-9_$."]+)\s+ADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\s+([A-Za-z0-9_$."]+)/gi;
+const DROP_COLUMN =
+  /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?([A-Za-z0-9_$."]+)\s+DROP\s+COLUMN\s+(?:IF\s+EXISTS\s+)?([A-Za-z0-9_$."]+)/gi;
+
+/** `public."Thing"` becomes `thing`: the name as `information_schema` reports it. */
+function bareName(raw: string): string {
+  const last = raw.split('.').pop() ?? raw;
+  return last.startsWith('"') ? last.slice(1, -1).replace(/""/g, '"') : last.toLowerCase();
+}
+
+/**
+ * What a database at head must contain, read from the migration files
+ * themselves.
+ *
+ * Only statements that are plainly visible count: comments, string literals
+ * and dollar-quoted bodies are blanked first, so a `CREATE TABLE` inside a
+ * `DO ... $$ ... $$` block is not expected. That is deliberate — this list is
+ * used to *refuse* a baseline, and a false expectation would block a
+ * legitimate one. Missing an object makes the check weaker, never wrong.
+ */
+export function expectedSchema(): SchemaExpectation {
+  const tables = new Set<string>();
+  const columns = new Map<string, Set<string>>();
+
+  for (const file of migrationFiles()) {
+    const sql = blankSqlNoise(readFileSync(join(migrationsDir, file), 'utf-8'));
+    for (const match of sql.matchAll(CREATE_TABLE)) tables.add(bareName(match[1]!));
+    for (const match of sql.matchAll(DROP_TABLE)) {
+      const table = bareName(match[1]!);
+      tables.delete(table);
+      columns.delete(table);
+    }
+    for (const match of sql.matchAll(ADD_COLUMN)) {
+      const table = bareName(match[1]!);
+      const set = columns.get(table) ?? new Set<string>();
+      set.add(bareName(match[2]!));
+      columns.set(table, set);
+    }
+    for (const match of sql.matchAll(DROP_COLUMN)) {
+      columns.get(bareName(match[1]!))?.delete(bareName(match[2]!));
+    }
+  }
+
+  return {
+    tables: [...tables].sort(),
+    // A column on a table nothing creates any more is not expected either.
+    columns: [...columns]
+      .flatMap(([table, set]) => (tables.has(table) ? [...set].map((column) => ({ table, column })) : []))
+      .sort((a, b) => (a.table === b.table ? a.column.localeCompare(b.column) : a.table.localeCompare(b.table))),
+  };
+}
+
+export interface HeadCheck {
+  atHead: boolean;
+  /** Tables the files build that this database does not have. */
+  missingTables: string[];
+  /** Columns the files add that this database does not have. */
+  missingColumns: Array<{ table: string; column: string }>;
+  /** How many objects were compared, so "nothing missing" can be read as real. */
+  checked: number;
+}
+
+/** The verdict as a sentence, whichever way it went. */
+export function describeHeadCheck(check: HeadCheck): string {
+  if (check.atHead) {
+    return `this database is at head: all ${check.checked} tables and columns the migration files build are present`;
+  }
+  const missing = [
+    ...check.missingTables.map((table) => `table ${table}`),
+    ...check.missingColumns.map((entry) => `${entry.table}.${entry.column}`),
+  ];
+  const shown = missing.slice(0, 20).join(', ');
+  const rest = missing.length > 20 ? `, and ${missing.length - 20} more` : '';
+  return `this database is NOT at head: ${missing.length} of ${check.checked} objects are missing (${shown}${rest})`;
+}
+
+/**
+ * Compare this database against what the migration files build.
+ *
+ * `to_regclass('grants') IS NOT NULL` used to be the whole test, and `grants`
+ * comes from `001_initial.sql` — so a database that had run a single
+ * migration passed, and baselining it recorded every file as applied. The
+ * next boot then applied nothing, for ever, on a schema missing dozens of
+ * migrations, with `changed: []`, `missing: []` and no warning anywhere. This
+ * is what makes the precondition in the runbook something the command can
+ * check instead of something the operator has to promise.
+ */
+export async function checkAtHead(sql: ReturnType<typeof postgres>): Promise<HeadCheck> {
+  const expected = expectedSchema();
+
+  const presentTables = new Set(
+    (await sql<{ table_name: string }[]>`
+      SELECT table_name FROM information_schema.tables
+       WHERE table_schema = current_schema()`).map((row) => row.table_name),
+  );
+  const presentColumns = new Set(
+    (await sql<{ table_name: string; column_name: string }[]>`
+      SELECT table_name, column_name FROM information_schema.columns
+       WHERE table_schema = current_schema()`).map((row) => `${row.table_name}.${row.column_name}`),
+  );
+
+  const missingTables = expected.tables.filter((table) => !presentTables.has(table));
+  // A column is only reported when its table exists; otherwise the missing
+  // table already says it, several times over.
+  const missingColumns = expected.columns.filter((entry) =>
+    presentTables.has(entry.table) && !presentColumns.has(`${entry.table}.${entry.column}`));
+
+  return {
+    atHead: missingTables.length === 0 && missingColumns.length === 0,
+    missingTables,
+    missingColumns,
+    checked: expected.tables.length + expected.columns.length,
+  };
+}
+
 export interface BaselineSummary {
   /** Files recorded by this run without being executed. */
   recorded: string[];
@@ -417,6 +542,10 @@ export interface BaselineSummary {
   alreadyRecorded: number;
   /** True when nothing was written. */
   dryRun: boolean;
+  /** What this database was compared against, and how it did. */
+  head: HeadCheck;
+  /** That verdict as a sentence. */
+  verdict: string;
 }
 
 /**
@@ -445,32 +574,38 @@ export async function baselineMigrations(
   const dryRun = options.dryRun === true;
 
   return withMigrationSession(sql, async (migrationSql) => {
-    const [head] = await migrationSql<{ present: boolean }[]>`
-      SELECT to_regclass('grants') IS NOT NULL AS present`;
-    if (head?.present !== true) {
+    const head = await checkAtHead(migrationSql);
+    const verdict = describeHeadCheck(head);
+    if (!head.atHead && !dryRun) {
       throw new Error(
-        'Refusing to baseline: this database has no `grants` table, so it is not at head. '
-        + 'Start the service normally and it will apply the migrations.',
+        `Refusing to baseline: ${verdict}. Recording these files as applied would mark work as done `
+        + 'that was never done, and no later start would ever do it. Start the service normally — it '
+        + 'applies whatever is missing — and baseline only a database that is already at head.',
       );
     }
 
-    await migrationSql.unsafe(LEDGER_DDL);
-    const existing = new Set(
-      (await migrationSql<{ filename: string }[]>`SELECT filename FROM schema_migrations`)
-        .map((row) => row.filename),
-    );
+    const ledgerExists = (await migrationSql<{ present: boolean }[]>`
+      SELECT to_regclass('schema_migrations') IS NOT NULL AS present`)[0]?.present === true;
+    const existing = new Set(ledgerExists
+      ? (await migrationSql<{ filename: string }[]>`SELECT filename FROM schema_migrations`)
+        .map((row) => row.filename)
+      : []);
 
-    const recorded: string[] = [];
-    for (const file of files) {
-      if (existing.has(file)) continue;
-      recorded.push(file);
-      if (dryRun) continue;
+    const recorded = files.filter((file) => !existing.has(file));
+    if (dryRun) {
+      // Nothing is written at all, not even the ledger table: a dry run that
+      // leaves an empty `schema_migrations` behind is not writing nothing.
+      return { recorded, alreadyRecorded: files.length - recorded.length, dryRun, head, verdict };
+    }
+
+    await migrationSql.unsafe(LEDGER_DDL);
+    for (const file of recorded) {
       const checksum = checksumOf(readFileSync(join(migrationsDir, file), 'utf-8'));
       await migrationSql`
         INSERT INTO schema_migrations (filename, checksum) VALUES (${file}, ${checksum})
         ON CONFLICT (filename) DO NOTHING`;
     }
 
-    return { recorded, alreadyRecorded: files.length - recorded.length, dryRun };
+    return { recorded, alreadyRecorded: files.length - recorded.length, dryRun, head, verdict };
   });
 }

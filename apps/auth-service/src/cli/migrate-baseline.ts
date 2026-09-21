@@ -1,20 +1,22 @@
 /**
  * Adopt an existing database into the migration ledger.
  *
- *   node dist/cli/migrate-baseline.js [--dry-run]
+ *   node dist/cli/migrate-baseline.js --dry-run     # the verdict, writes nothing
+ *   node dist/cli/migrate-baseline.js               # record, if it is at head
  *
  * Records every migration file as applied **without executing any of them**,
  * for a database that is already at head but has no `schema_migrations` table
  * because it was migrated by the versions of this service that re-applied all
  * files on every start.
  *
- * Run it once, against a database known to be at head, immediately before the
- * first deploy that carries the ledger. After it, that deploy's boot applies
+ * Run it once, against the production database, immediately before the first
+ * deploy that carries the ledger. After it, that deploy's boot applies
  * nothing, like every boot after it.
  *
- * Do not run it against a database that is behind: it would record work that
- * was never done. It refuses outright where there is no schema at all.
- * `--dry-run` prints what it would record and writes nothing.
+ * It refuses a database that is **not** at head — recording work that was
+ * never done would mean no later boot ever does it — by comparing the
+ * database against every table and column the migration files build.
+ * `--dry-run` prints that comparison and writes nothing at all.
  */
 import { pathToFileURL } from 'node:url';
 import { closeSql, getSql } from '../db/client.js';
@@ -34,13 +36,26 @@ async function main(): Promise<void> {
   const sql = getSql();
   try {
     const summary = await baselineMigrations(sql, { dryRun });
+    console.log(summary.verdict);
     console.log(JSON.stringify({
       baselined: !dryRun,
       dryRun,
+      atHead: summary.head.atHead,
+      objectsChecked: summary.head.checked,
+      missingTables: summary.head.missingTables,
+      missingColumns: summary.head.missingColumns.map((entry) => `${entry.table}.${entry.column}`),
       recorded: summary.recorded.length,
       alreadyRecorded: summary.alreadyRecorded,
       files: summary.recorded,
     }));
+    if (dryRun && !summary.head.atHead) {
+      // A dry run reports rather than throws, but it must not exit 0 on a
+      // database a real run would refuse.
+      console.error(
+        'Baselining this database would be wrong: start the service instead, and it applies what is missing.',
+      );
+      process.exitCode = 1;
+    }
   } finally {
     await closeSql();
   }

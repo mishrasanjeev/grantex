@@ -290,27 +290,60 @@ is broken and has to be retried.
 Baselining removes that risk. It records every file as applied **without executing any of them**,
 so the upgrade's first start is a no-op like every start after it:
 
+The command runs from the built service, so run it inside the image you are about to deploy
+rather than from a source checkout (`dist/` does not exist until `npm run build`). It needs the
+same `DATABASE_URL` as the service and nothing else:
+
 ```bash
-# On a database you know is at head, immediately before deploying the release
-# that carries the ledger. Same DATABASE_URL as the service.
-cd apps/auth-service
-node dist/cli/migrate-baseline.js --dry-run   # prints what it would record, writes nothing
-node dist/cli/migrate-baseline.js             # records them
+# Against the running container (Docker Compose)
+docker compose -f docker-compose.prod.yml exec auth-service \
+  node dist/cli/migrate-baseline.js --dry-run
+
+# Or a one-off container on the release you are deploying
+docker run --rm -e DATABASE_URL="$DATABASE_URL" ghcr.io/<org>/grantex-auth-service:<tag> \
+  node dist/cli/migrate-baseline.js --dry-run
+
+# Kubernetes
+kubectl exec -n grantex deploy/grantex -- node dist/cli/migrate-baseline.js --dry-run
+
+# From a built checkout
+cd apps/auth-service && npm run build && node dist/cli/migrate-baseline.js --dry-run
 ```
 
-Then deploy. The new instance logs `applied 0` and takes no lock on any table.
+`--dry-run` writes nothing at all — not even the ledger table — and prints the verdict:
+
+```
+this database is at head: all 183 tables and columns the migration files build are present
+{"baselined":false,"dryRun":true,"atHead":true,"objectsChecked":183,...,"recorded":103}
+```
+
+Drop `--dry-run` to record. Then deploy: the new instance logs `applied 0` and takes no lock on
+any table.
+
+**It checks the precondition itself.** Before recording anything it reads every
+`CREATE TABLE IF NOT EXISTS` and `ALTER TABLE … ADD COLUMN IF NOT EXISTS` out of the migration
+files and confirms each object exists in the database. A database that is behind is refused, with
+the missing objects named:
+
+```
+this database is NOT at head: 44 of 183 objects are missing (table evidence_records, …)
+```
+
+That matters because recording a file as applied means **no later start will ever apply it**. A
+partly-migrated database that was baselined would run on an incomplete schema indefinitely, and
+the only way back is editing `schema_migrations` by hand. `--dry-run` exits non-zero on such a
+database, so it can be used as a pre-deploy check in a script.
 
 Rules:
 
-- Run it **only** against a database whose schema is already at head. On a database that is
-  behind, it would mark work as done that was never done, and those migrations would never run.
-  It refuses outright where there is no `grants` table at all.
+- Run it **only** against a database whose schema is already at head — and let the command
+  confirm that rather than taking it on trust.
 - It is not needed for a new database. Start the service and it applies everything itself.
 - It is safe to repeat: files already in the ledger are left alone.
 - If you skip it, the upgrade still works — retry the deploy at a quieter moment, or during a
   short maintenance window.
 
-The repository currently contains ordered migrations through `113`, covering core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, MCP certification-state integrity, query-performance indexes, agent prepaid wallets, and layered wallet spend controls. Index builds use `CREATE INDEX CONCURRENTLY`, and the runner serializes migrations across service instances with a PostgreSQL advisory lock. An index a cancelled concurrent build left `INVALID` is dropped before the file that creates it is retried, because `CREATE INDEX CONCURRENTLY IF NOT EXISTS` matches such an index by name and would otherwise skip it forever. Inspect the migration directory in the exact release you deploy rather than relying on a copied file count.
+The repository currently contains ordered migrations through `114`, covering core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, MCP certification-state integrity, query-performance indexes, agent prepaid wallets, and layered wallet spend controls. Index builds use `CREATE INDEX CONCURRENTLY`, and the runner serializes migrations across service instances with a PostgreSQL advisory lock. An index a cancelled concurrent build left `INVALID` is dropped before the file that creates it is retried, because `CREATE INDEX CONCURRENTLY IF NOT EXISTS` matches such an index by name and would otherwise skip it forever. Inspect the migration directory in the exact release you deploy rather than relying on a copied file count.
 
 **Upgrade procedure** — just restart the service:
 

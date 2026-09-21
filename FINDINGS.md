@@ -269,7 +269,10 @@ Remove an entry in the pull request that fixes it.
 - **Not fixed here:** giving each integration file its own database — as
   `tests/migrate-ledger-postgres.integration.test.ts` already does with
   `CREATE DATABASE` — would remove the class of flake entirely. It touches
-  every integration file, so it does not belong in this PR.
+  every integration file, so it does not belong in this PR. **Next after this
+  stack lands:** branch protection requires green CI, so a flake at this rate
+  teaches everyone to re-run without reading the failure, which is how a real
+  failure gets waved through.
 - **Impact:** an occasional red CI run that is green on re-run.
 
 ## G-20 — A migration seeds real third-party company DIDs

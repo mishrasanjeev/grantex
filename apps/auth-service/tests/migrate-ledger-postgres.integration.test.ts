@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import { describe, expect, it } from 'vitest';
-import { baselineMigrations, runMigrations } from '../src/db/migrate.js';
+import { baselineMigrations, checkAtHead, expectedSchema, runMigrations } from '../src/db/migrate.js';
 
 const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
 const ci = process.env['CI']?.trim().toLowerCase();
@@ -36,6 +39,23 @@ async function freshDatabase(): Promise<{ sql: Sql; url: string; drop: () => Pro
       await admin.end();
     },
   };
+}
+
+/**
+ * Apply the migration files up to and including the one whose name starts
+ * with `lastPrefix`, directly and with no ledger — what an older deployment's
+ * database looks like.
+ */
+async function applyMigrationFilesUpTo(sql: Sql, lastPrefix: string): Promise<number> {
+  const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'db', 'migrations');
+  const files = readdirSync(dir).filter((file) => file.endsWith('.sql')).sort();
+  let applied = 0;
+  for (const file of files) {
+    await sql.unsafe(readFileSync(join(dir, file), 'utf-8'));
+    applied += 1;
+    if (file.startsWith(lastPrefix)) break;
+  }
+  return applied;
 }
 
 describePostgres('the migration ledger against real Postgres', () => {
@@ -198,7 +218,57 @@ describePostgres('the migration ledger against real Postgres', () => {
     }
   }, 600_000);
 
-  it('refuses to baseline a database that is not at head', async () => {
+  /**
+   * The case that actually bites: a database that is *partly* migrated. It
+   * has `grants`, so the old check (`to_regclass('grants') IS NOT NULL`)
+   * passed, every file was recorded as applied, and the next boot applied
+   * nothing — for ever — on a schema missing dozens of migrations, with no
+   * warning anywhere and no way back except editing the ledger by hand.
+   *
+   * The empty-database case below is the easy one; this is the one the
+   * command has to refuse.
+   */
+  it('refuses to baseline a database that is only partly migrated, and says what is missing', async () => {
+    const { sql, drop } = await freshDatabase();
+    try {
+      // Applied through 060 only, which is what an older deployment looks
+      // like: `grants` exists, and 43 later files do not.
+      const files = await applyMigrationFilesUpTo(sql, '060');
+      expect(files).toBeGreaterThan(50);
+      const [grants] = await sql<{ count: string }[]>`
+        SELECT COUNT(*)::text AS count FROM information_schema.columns
+         WHERE table_schema = current_schema() AND table_name = 'grants'`;
+      expect(Number(grants!.count)).toBeGreaterThan(5);
+
+      const check = await checkAtHead(sql);
+      expect(check.atHead).toBe(false);
+      expect(check.missingTables).toContain('evidence_records');
+
+      await expect(baselineMigrations(sql)).rejects.toThrow(/not at head/i);
+      // And it refused before writing anything at all.
+      const [ledger] = await sql<{ present: boolean }[]>`
+        SELECT to_regclass('schema_migrations') IS NOT NULL AS present`;
+      expect(ledger!.present).toBe(false);
+
+      // A dry run answers the question the operator was asked to promise,
+      // instead of printing the same count either way.
+      const dry = await baselineMigrations(sql, { dryRun: true });
+      expect(dry.head.atHead).toBe(false);
+      expect(dry.verdict).toMatch(/NOT at head/);
+      expect(dry.verdict).toMatch(/evidence_records/);
+
+      // Starting the service normally is the way out, and then it is fine.
+      await runMigrations(sql);
+      await sql.unsafe('DROP TABLE schema_migrations');
+      const after = await baselineMigrations(sql, { dryRun: true });
+      expect(after.head.atHead).toBe(true);
+      expect(after.verdict).toMatch(/is at head/);
+    } finally {
+      await drop();
+    }
+  }, 600_000);
+
+  it('refuses to baseline an empty database', async () => {
     const { sql, drop } = await freshDatabase();
     try {
       await expect(baselineMigrations(sql)).rejects.toThrow(/not at head/i);
@@ -206,6 +276,48 @@ describePostgres('the migration ledger against real Postgres', () => {
       await drop();
     }
   }, 300_000);
+
+  /**
+   * The head check refuses a baseline, so a wrong expectation is worse than a
+   * missing one: it would block an operator who is doing exactly the right
+   * thing. Against a database the migrations themselves built, nothing may be
+   * reported missing.
+   */
+  it('expects nothing a full migration run does not build', async () => {
+    const { sql, drop } = await freshDatabase();
+    try {
+      await runMigrations(sql);
+      const check = await checkAtHead(sql);
+      expect(check.missingTables).toEqual([]);
+      expect(check.missingColumns).toEqual([]);
+      expect(check.atHead).toBe(true);
+      // And it is comparing a real list, not an empty one.
+      const expectedObjects = expectedSchema();
+      expect(expectedObjects.tables.length).toBeGreaterThan(50);
+      expect(expectedObjects.columns.length).toBeGreaterThan(20);
+      expect(expectedObjects.tables).toContain('grants');
+      expect(expectedObjects.tables).not.toContain('signing_keys'); // dropped by 030
+      expect(check.checked).toBe(expectedObjects.tables.length + expectedObjects.columns.length);
+    } finally {
+      await drop();
+    }
+  }, 600_000);
+
+  it('writes nothing at all on a dry run, not even the ledger table', async () => {
+    const { sql, drop } = await freshDatabase();
+    try {
+      await runMigrations(sql);
+      await sql.unsafe('DROP TABLE schema_migrations');
+
+      const dry = await baselineMigrations(sql, { dryRun: true });
+      expect(dry.recorded.length).toBeGreaterThan(50);
+      const [ledger] = await sql<{ present: boolean }[]>`
+        SELECT to_regclass('schema_migrations') IS NOT NULL AS present`;
+      expect(ledger!.present).toBe(false);
+    } finally {
+      await drop();
+    }
+  }, 600_000);
 
   /**
    * `lock_timeout` is a session setting and the migration connection goes
