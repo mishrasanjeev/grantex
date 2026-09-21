@@ -5,6 +5,7 @@ import { runMigrations } from '../src/db/migrate.js';
 import { RevocationFeedHub } from '../src/lib/revocation-feed/hub.js';
 import { pruneRevocationFeedOnce } from '../src/workers/revocationFeedPrune.js';
 import {
+  MAX_PAGE,
   feedReady,
   headSeq,
   pruneFeed,
@@ -215,6 +216,125 @@ describePostgres('the revocation feed against real Postgres', () => {
   }, 180_000);
 
   /**
+   * A full page means "there is more behind it", so the hub reads again. What
+   * it must not do is read again when the cursor did not move.
+   *
+   * `settledCursor` only advances past entries older than the settle window,
+   * so a large cascade or an emergency stop — every entry brand new — leaves
+   * the cursor exactly where it was while the page stays full. Draining on
+   * that re-reads the same thousand rows for the whole settle window: 1779
+   * pages and 3558 round-trips over 15 s was measured for one developer with
+   * a 2500-entry backlog, on the path that has to deliver revocations within
+   * two seconds.
+   *
+   * The backlog here is MAX_PAGE + 1 entries, all unsettled, which is the
+   * only shape that reproduces it.
+   */
+  it('reads a full page of unsettled entries once, instead of spinning on it', async () => {
+    await withFixture(async ({ sql, dev, grant }) => {
+      const parent = await grant(dev, 'backlog');
+      const rows = Array.from({ length: MAX_PAGE + 1 }, (_, index) => index);
+      // Straight into the feed table: a cascade of this size would take
+      // minutes to build through the triggers, and the hub cannot tell the
+      // difference.
+      await sql`
+        INSERT INTO grant_revocation_events ${sql(rows.map((index) => ({
+          developer_id: dev,
+          grant_id: parent,
+          jti: `tok_backlog_${index}`,
+          action: 'token_revoked',
+          cause: 'api',
+          expires_at: new Date(Date.now() + 3_600_000),
+        })))}`;
+
+      let reads = 0;
+      const counting = new Proxy(sql, {
+        apply(target, thisArg, args: [TemplateStringsArray, ...unknown[]]) {
+          const text = Array.isArray(args[0]) ? args[0].join('?') : String(args[0]);
+          if (text.includes('FROM grant_revocation_events') && text.includes('ORDER BY seq')) reads += 1;
+          return Reflect.apply(target as never, thisArg, args);
+        },
+        get: (target, property) => Reflect.get(target, property),
+      }) as typeof sql;
+
+      const hub = new RevocationFeedHub(counting, log);
+      const seen: FeedEntry[] = [];
+      const unsubscribe = hub.subscribe(dev, (batch) => { seen.push(...batch.entries); });
+      try {
+        await hub.pollNow(dev);
+        // Whatever the deferred continuation does, give it several turns of
+        // the event loop to do it.
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        // One page delivered, and at most a couple of reads to establish
+        // that nothing settled. Before the fix this was 20 reads per poll,
+        // re-entered on a zero-delay timer for the whole settle window.
+        expect(seen.length).toBe(MAX_PAGE);
+        expect(reads).toBeLessThanOrEqual(3);
+      } finally {
+        unsubscribe();
+        await hub.stop();
+      }
+    });
+  }, 180_000);
+
+  /**
+   * And the drain still works when the cursor *can* move: once the entries
+   * are older than the settle window, a backlog larger than one page is
+   * delivered in full rather than a page at a time per interval.
+   */
+  it('drains a backlog larger than one page in a single poll once entries settle', async () => {
+    await withFixture(async ({ sql, dev, grant }) => {
+      const parent = await grant(dev, 'drain');
+      const rows = Array.from({ length: MAX_PAGE + 25 }, (_, index) => index);
+      await sql`
+        INSERT INTO grant_revocation_events ${sql(rows.map((index) => ({
+          developer_id: dev,
+          grant_id: parent,
+          jti: `tok_drain_${index}`,
+          action: 'token_revoked',
+          cause: 'api',
+          expires_at: new Date(Date.now() + 3_600_000),
+        })))}`;
+
+      // One second, the shortest the setting allows, so the backlog settles
+      // during the test rather than at the end of the default 15 s window.
+      vi.stubEnv('REVOCATION_FEED_SETTLE_SECONDS', '1');
+
+      let pages = 0;
+      const counting = new Proxy(sql, {
+        apply(target, thisArg, args: [TemplateStringsArray, ...unknown[]]) {
+          const text = Array.isArray(args[0]) ? args[0].join('?') : String(args[0]);
+          if (text.includes('FROM grant_revocation_events') && text.includes('ORDER BY seq')) pages += 1;
+          return Reflect.apply(target as never, thisArg, args);
+        },
+        get: (target, property) => Reflect.get(target, property),
+      }) as typeof sql;
+
+      const hub = new RevocationFeedHub(counting, log);
+      const seen: FeedEntry[] = [];
+      const unsubscribe = hub.subscribe(dev, (batch) => { seen.push(...batch.entries); });
+      try {
+        const deadline = Date.now() + 30_000;
+        while (seen.length < MAX_PAGE + 25 && Date.now() < deadline) {
+          await hub.pollNow(dev);
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        expect(seen.length).toBe(MAX_PAGE + 25);
+        // Two pages of entries, a handful of polls that found nothing settled
+        // yet, and nothing else. Counting is what makes this test fail if the
+        // guard is removed: the unsettled second or so would then be spent
+        // re-reading the same page twenty times per poll.
+        expect(pages).toBeLessThanOrEqual(30);
+      } finally {
+        unsubscribe();
+        await hub.stop();
+        vi.unstubAllEnvs();
+      }
+    });
+  }, 180_000);
+
+  /**
    * A poll that fails halfway must not swallow the entries it had already
    * read.
    *
@@ -274,6 +394,10 @@ describePostgres('the revocation feed against real Postgres', () => {
       const live = await grant(dev, 'deleted');
       const jti = await token(live, 'deleted');
       const alreadyRevoked = await grant(dev, 'revokedthendeleted');
+      // With a live token row, as a cascade leaves it: revoking a grant sets
+      // `grants.status` and does not touch `grant_tokens.is_revoked`, because
+      // the grant's status is what every authorisation check reads.
+      await token(alreadyRevoked, 'revokedthendeleted');
       await sql`UPDATE grants SET status = 'revoked', revoked_at = NOW() WHERE id = ${alreadyRevoked}`;
       const before = await readSince(sql, dev, 0);
 
@@ -285,7 +409,11 @@ describePostgres('the revocation feed against real Postgres', () => {
         ['token_revoked', live, jti],
         ['revoked', live, null],
       ]);
-      // The one already revoked had its entry; deleting the row is housekeeping.
+      // The one already revoked had its entry; deleting the rows is
+      // housekeeping. Its *token* used to produce a second entry here,
+      // because the sibling trigger only looked at `is_revoked` — so the feed
+      // re-inflated with revocations that had already been delivered, while
+      // the prune worker was trying to bound it.
       expect(after.some((entry) => entry.grantId === alreadyRevoked)).toBe(false);
     });
   }, 180_000);

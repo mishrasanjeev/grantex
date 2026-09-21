@@ -308,3 +308,27 @@ Remove an entry in the pull request that fixes it.
   an unbounded revoke endpoint is still a way to make the database work.
 - **Impact:** slow containment, on the free plan only, and a misleading
   propagation measurement if the limiter is not accounted for.
+
+## G-26 — The feed's settle window measures insert time, not commit time
+
+- **Found:** review of the revocation feed (PRD G-6), 2026-09-21.
+- **What:** `settledCursor` holds the cursor back from entries younger than
+  `REVOCATION_FEED_SETTLE_SECONDS`, so a transaction still in flight cannot
+  have its entry skipped. It measures that with `created_at`, which is set
+  when the row is **inserted**, not when its transaction **commits**. A
+  transaction that inserts a feed row and then runs for longer than the settle
+  window would have its entry passed over: the cursor advances past a sequence
+  number that was not yet visible.
+- **Why it has not bitten:** the entries are written by AFTER triggers on
+  `grants` and `grant_tokens`, at the end of revocation transactions that are
+  short by construction (the cascade batches at 200 roots), and the default
+  window is 15 s. The sequence numbers also come from a sequence, so a gap is
+  visible in principle but nothing reads it that way yet.
+- **The real fix:** compare against `pg_xact_commit_timestamp(xmin)` (requires
+  `track_commit_timestamp = on`), or track the oldest in-progress transaction
+  id with `pg_snapshot_xmin(pg_current_snapshot())` and hold the cursor behind
+  it. Either is a change to how the feed reasons about visibility, not a
+  tweak, so it wants its own PR and its own test.
+- **Impact:** a revocation could be missed by streaming clients under a very
+  long revocation transaction. Snapshot readers (`GET /v1/revocations`) are
+  unaffected, and a client that reconnects re-reads the snapshot.
