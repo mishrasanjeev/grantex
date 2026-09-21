@@ -243,6 +243,45 @@ Remove an entry in the pull request that fixes it.
   matches such an index by name and would otherwise skip it forever.
   Revocation transactions also retry on `deadlock_detected`
   (`lib/revocation/retry.ts`).
-- **Left:** the first start on an existing database still applies every file
-  once — that is what fills the ledger — so treat that one deploy as a
-  migration window.
+- **Also fixed after review:** `lock_timeout` is a *session* setting and the
+  migration connection returns to the pool, so it leaked onto one pooled
+  connection for the life of the process — roughly one statement in `max`
+  would abort with `55P03` instead of waiting for a contended row, on the
+  revocation, wallet-reservation, refresh-rotation and audit-trigger paths. It
+  is now reset before the connection is released, on every path.
+- **Left:** nothing, once the database is baselined. The first start on a
+  database that predates the ledger still applies every file (that is what
+  fills it), which is safe but fails the boot if a transaction holds a `grants`
+  row past `MIGRATION_LOCK_TIMEOUT`. `node dist/cli/migrate-baseline.js`
+  records the files without executing them, so run it on an at-head database
+  immediately before that deploy; see `docs/self-hosting.md` section 6.
+
+## G-19 — Postgres integration tests share one database, which flakes
+
+- **Found:** review of the migration ledger (PRD G-6), 2026-09-21.
+- **What:** every `*-postgres.integration.test.ts` file runs against the same
+  database, and several call `runMigrations` in their setup. Concurrent runs
+  can deadlock inside the runner: the reviewer saw
+  `PostgresError: deadlock detected` inside `runMigrations` once in two full
+  suite runs, and the file passed in isolation. The ledger makes this much
+  rarer (a repeat run issues no DDL) but does not remove it, because the first
+  file to reach the ledger still applies everything.
+- **Not fixed here:** giving each integration file its own database — as
+  `tests/migrate-ledger-postgres.integration.test.ts` already does with
+  `CREATE DATABASE` — would remove the class of flake entirely. It touches
+  every integration file, so it does not belong in this PR.
+- **Impact:** an occasional red CI run that is green on re-run.
+
+## G-20 — A migration seeds real third-party company DIDs
+
+- **Found:** review of the migration ledger (PRD G-6), 2026-09-21.
+- **What:** `062_trust_registry_verification_token.sql` hardcodes
+  `did:web:shopify.com`, `did:web:doordash.com` and `did:web:pinelabs.com` in
+  its seed data. These are real companies that have no relationship with this
+  project, and the rows are indistinguishable from a real trust-registry
+  entry — exactly what the "no data that could be mistaken for real" rule
+  exists to prevent. Pre-existing, unrelated to this PR.
+- **Not fixed here:** the values are already applied in every existing
+  database, so replacing them means a new migration that rewrites the rows,
+  plus checking nothing keys off those DIDs. Worth doing on its own.
+- **Impact:** presentational and legal, not functional.

@@ -259,12 +259,49 @@ whatever transaction is touching `grants` — and every reader arriving after it
 queued request, including `/v1/authorize`, token exchange and delegation on the instance that is
 still serving traffic. With the ledger a repeat start issues no DDL, so it cannot stall anything.
 
-The first start after upgrading to a release with the ledger still applies every file once (that
-is what fills the ledger) and is safe because every file is idempotent; plan it like any other
-migration window. While applying, the runner sets `lock_timeout` (`MIGRATION_LOCK_TIMEOUT`,
-default 2 s) and retries a few times, so a migration that cannot take its lock fails the boot
-loudly instead of stalling the table. A file whose content changed after it was applied is
-reported as a warning and never re-applied — ship a new migration instead.
+While applying, the runner sets `lock_timeout` (`MIGRATION_LOCK_TIMEOUT`, default 2 s) and retries
+a few times, so a migration that cannot take its lock fails the boot loudly instead of stalling
+the table. The setting is reset before the connection returns to the pool, so no application
+statement inherits it. A file whose content changed after it was applied is reported as a warning
+and **never re-applied** — ship a new migration instead. That is a warning and not a failure on
+purpose: the edit has already had no effect on this database, and refusing to boot over it would
+take the service down for nothing. The same applies to a ledger row whose file is no longer on
+disk: it is warned about, because a renamed migration counts as a new pending file and its
+statements run again.
+
+### Adopting a database that is already at head
+
+A database migrated by a release **before** the ledger existed has the full schema and no
+`schema_migrations` table, so the first start after the upgrade treats all files as pending and
+re-executes them. That is safe — every file is idempotent — and against ordinary traffic it takes
+a few seconds. But if a single transaction is holding a row in `grants` for longer than
+`MIGRATION_LOCK_TIMEOUT`, the `ALTER TABLE grants` files cannot take their lock and **the boot
+fails**. Nothing is corrupted and no traffic is affected (migrations run before the server
+listens, so the new instance never becomes ready and the old one keeps serving), but the deploy
+is broken and has to be retried.
+
+Baselining removes that risk. It records every file as applied **without executing any of them**,
+so the upgrade's first start is a no-op like every start after it:
+
+```bash
+# On a database you know is at head, immediately before deploying the release
+# that carries the ledger. Same DATABASE_URL as the service.
+cd apps/auth-service
+node dist/cli/migrate-baseline.js --dry-run   # prints what it would record, writes nothing
+node dist/cli/migrate-baseline.js             # records them
+```
+
+Then deploy. The new instance logs `applied 0` and takes no lock on any table.
+
+Rules:
+
+- Run it **only** against a database whose schema is already at head. On a database that is
+  behind, it would mark work as done that was never done, and those migrations would never run.
+  It refuses outright where there is no `grants` table at all.
+- It is not needed for a new database. Start the service and it applies everything itself.
+- It is safe to repeat: files already in the ledger are left alone.
+- If you skip it, the upgrade still works — retry the deploy at a quieter moment, or during a
+  short maintenance window.
 
 The repository currently contains ordered migrations through `113`, covering core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, MCP certification-state integrity, query-performance indexes, agent prepaid wallets, and layered wallet spend controls. Index builds use `CREATE INDEX CONCURRENTLY`, and the runner serializes migrations across service instances with a PostgreSQL advisory lock. An index a cancelled concurrent build left `INVALID` is dropped before the file that creates it is retried, because `CREATE INDEX CONCURRENTLY IF NOT EXISTS` matches such an index by name and would otherwise skip it forever. Inspect the migration directory in the exact release you deploy rather than relying on a copied file count.
 

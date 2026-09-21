@@ -110,14 +110,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   issues no DDL at all. FINDINGS G-18.
 - The applying session sets `lock_timeout` (`MIGRATION_LOCK_TIMEOUT`, default
   `2s`) and retries a few times, so a boot that cannot take a lock fails
-  loudly instead of stalling a table. A file whose content changed after it was
-  applied is reported and never re-applied.
+  loudly instead of stalling a table, then resets it before the connection
+  returns to the pool so no application statement inherits it. The value is
+  validated at startup rather than on the first boot with something pending.
+  A file whose content changed after it was applied is reported and never
+  re-applied; so is a ledger row whose file is no longer on disk, because a
+  renamed migration counts as pending and runs again.
 - An index a cancelled `CREATE INDEX CONCURRENTLY` left `INVALID` is dropped
   before its migration is retried; `CREATE INDEX CONCURRENTLY IF NOT EXISTS`
   matches such an index by name and would otherwise never rebuild it.
-- **Upgrade note:** the first start on an existing database applies every file
-  once more (that is what fills the ledger, and every file is idempotent);
-  treat that one deploy as a migration window. Starts after it apply nothing.
+- New `node dist/cli/migrate-baseline.js` records every migration file as
+  applied **without executing any of them**, for a database already at head
+  that has no ledger. `--dry-run` prints what it would record.
+- The migration summary is logged and counted (`grantex_migrations_total`) by
+  both callers instead of being discarded.
+- **Upgrade note:** on an existing database, run
+  `node dist/cli/migrate-baseline.js` against it immediately before deploying
+  this release; the deploy's first start then applies nothing. Without it that
+  first start applies every file once (that is what fills the ledger, and all
+  files are idempotent) — safe, but it fails the boot if a transaction is
+  holding a row in `grants` past `MIGRATION_LOCK_TIMEOUT`, which means a
+  retried deploy. See `docs/self-hosting.md` section 6.
 - `runMigrations` now returns a summary (`applied`, `skipped`, `changed`,
   `repairedIndexes`) instead of `void`.
 

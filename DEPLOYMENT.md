@@ -260,7 +260,28 @@ The auth service uses connection pooling:
 
 ### Migrations
 
-Migrations run automatically on first start, or manually:
+Each migration file is applied at most once per database and recorded in the `schema_migrations`
+ledger, so a restart with nothing pending issues no DDL and cannot queue a lock in front of live
+traffic.
+
+**Upgrading a database that predates the ledger:** it has the full schema but no ledger, so the
+first start treats every file as pending and re-runs them. That is safe (all files are
+idempotent), but if a transaction is holding a row in `grants` past `MIGRATION_LOCK_TIMEOUT`
+(default 2 s) the boot fails — safely, before the service listens, leaving the old instance
+serving — and the deploy has to be retried. Baseline the database first, immediately before
+deploying the release that carries the ledger:
+
+```bash
+cd apps/auth-service
+node dist/cli/migrate-baseline.js --dry-run   # what it would record
+node dist/cli/migrate-baseline.js             # record every file as applied, executing none
+```
+
+Only do this on a database already at head; on one that is behind, it would skip real work. New
+databases need nothing — starting the service applies everything. See
+`docs/self-hosting.md` section 6.
+
+Migrations otherwise run automatically on first start, or manually:
 
 ```bash
 cd apps/auth-service

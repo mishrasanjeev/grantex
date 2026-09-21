@@ -4,6 +4,7 @@ import { grantTokenClaimsStartupNotices } from './lib/grant-token-claims.js';
 import { initKeys, initEdKey } from './lib/crypto.js';
 import { getSql } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
+import { reportMigrationSummary } from './db/migration-report.js';
 import { getRedis } from './redis/client.js';
 import { buildApp } from './server.js';
 import { hashApiKey } from './lib/hash.js';
@@ -29,8 +30,10 @@ async function main() {
   // Initialize DB connection
   const sql = getSql();
 
-  // Run migrations (idempotent — safe to re-run on every startup)
-  await runMigrations(sql);
+  // Apply anything this database has not seen (at most once per file), then
+  // say what happened: a deploy can fail here, so the summary is logged and
+  // counted rather than discarded.
+  reportMigrationSummary(await runMigrations(sql), 'startup');
 
   for (const warning of [...signingKeyConfigWarnings(config), ...grantTokenClaimsStartupNotices(config)]) {
     console.warn(`[config] Warning: ${warning}`);

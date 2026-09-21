@@ -25,6 +25,13 @@ export const authorizeTotal = new Counter({
   registers: [registry],
 });
 
+export const migrationsTotal = new Counter({
+  name: 'grantex_migrations_total',
+  help: 'Migration files handled at startup, by outcome (applied, changed, missing, repaired_index)',
+  labelNames: ['outcome'] as const,
+  registers: [registry],
+});
+
 export const grantsRevokedTotal = new Counter({
   name: 'grantex_grants_revoked_total',
   help: 'Total grants revoked',
