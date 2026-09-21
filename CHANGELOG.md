@@ -97,6 +97,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   keyed per case, with operator-approved disclosure.
 - New concepts page `docs/concepts/evidence-and-verification.md`.
 
+### Migrations are applied once per database
+- `runMigrations` keeps a `schema_migrations` ledger (filename, checksum,
+  applied-at) and applies each file at most once. Until now every process start
+  re-executed all migration files; they are idempotent, so the result was
+  correct, but ten of them are `ALTER TABLE grants ADD COLUMN IF NOT EXISTS …`
+  and Postgres takes the `ACCESS EXCLUSIVE` lock **before** evaluating
+  `IF NOT EXISTS` — a no-op statement still queued behind any in-flight
+  transaction on `grants`, and every reader arriving after it queued behind
+  that request. On a rolling deploy the starting instance could stall the
+  running instance's authorization path. A start with nothing to apply now
+  issues no DDL at all. FINDINGS G-18.
+- The applying session sets `lock_timeout` (`MIGRATION_LOCK_TIMEOUT`, default
+  `2s`) and retries a few times, so a boot that cannot take a lock fails
+  loudly instead of stalling a table. A file whose content changed after it was
+  applied is reported and never re-applied.
+- An index a cancelled `CREATE INDEX CONCURRENTLY` left `INVALID` is dropped
+  before its migration is retried; `CREATE INDEX CONCURRENTLY IF NOT EXISTS`
+  matches such an index by name and would otherwise never rebuild it.
+- **Upgrade note:** the first start on an existing database applies every file
+  once more (that is what fills the ledger, and every file is idempotent);
+  treat that one deploy as a migration window. Starts after it apply nothing.
+- `runMigrations` now returns a summary (`applied`, `skipped`, `changed`,
+  `repairedIndexes`) instead of `void`.
+
 ### Breaking changes from 0.5 (summary)
 `docs/migration-0.6.md` explains each item and what to do. Manifests,
 purpose-bound grants, caps, signing and claims each have their own entry

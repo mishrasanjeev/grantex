@@ -235,7 +235,9 @@ describePostgres('decision grants against real Postgres', () => {
 
   it('migrates additively and idempotently', async () => {
     const tables = await sql<{ table_name: string }[]>`
-      SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'decision_%' ORDER BY table_name`;
+      SELECT table_name FROM information_schema.tables
+       WHERE table_name LIKE 'decision_%' AND table_schema = current_schema()
+       ORDER BY table_name`;
     expect(tables.map((t) => t.table_name)).toEqual([
       'decision_approver_idps', 'decision_approver_sessions', 'decision_cases', 'decision_grants', 'decision_login_states', 'decision_page_views', 'decision_requests',
     ]);

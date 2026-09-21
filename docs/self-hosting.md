@@ -238,6 +238,7 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `STRIPE_WEBHOOK_SECRET` | No | — | Stripe webhook signature validation |
 | `STRIPE_PRICE_PRO` | No | — | Stripe price ID for Pro tier |
 | `STRIPE_PRICE_ENTERPRISE` | No | — | Stripe price ID for Enterprise tier |
+| `MIGRATION_LOCK_TIMEOUT` | No | `2s` | How long a migration statement waits for a lock before the boot fails loudly (section 6) |
 | `EVENT_BRIDGE_ENABLED` | No | `false` | Accept provider events (SSF/CAEP SETs, signed webhooks); see `docs/concepts/event-bridge-and-revocation.md` |
 | `EVENT_BRIDGE_DEVELOPER_IDS` | No | — | Limit the event bridge to these developers (comma separated) |
 | `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | No | `30000` | Event ingestion requests per source and client address |
@@ -246,12 +247,26 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 
 ## 6. Database Migrations
 
-Migrations run **automatically on every startup**. The auth service includes a built-in migration
-runner (`src/db/migrate.ts`) that reads all `*.sql` files from the `migrations/` directory in
-alphabetical order and executes each one. All statements use idempotent DDL (`CREATE TABLE IF NOT EXISTS`,
-`ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`), so re-running is safe.
+Migrations run **automatically on every startup**, and each file is applied **once per database**.
+The built-in runner (`src/db/migrate.ts`) reads all `*.sql` files from the `migrations/` directory in
+alphabetical order, applies the ones this database has not seen, and records them in the
+`schema_migrations` ledger (filename, checksum, applied-at). A start that has nothing to apply
+touches no table at all.
 
-The repository currently contains ordered migrations through `092`, covering core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, MCP certification-state integrity, query-performance indexes, agent prepaid wallets, and layered wallet spend controls. Index builds use `CREATE INDEX CONCURRENTLY`, and the runner serializes migrations across service instances with a PostgreSQL advisory lock. Inspect the migration directory in the exact release you deploy rather than relying on a copied file count.
+That matters during a rolling deploy. Postgres takes an `ACCESS EXCLUSIVE` lock **before** it
+evaluates `ADD COLUMN IF NOT EXISTS`, so a no-op `ALTER TABLE grants …` still queues behind
+whatever transaction is touching `grants` — and every reader arriving after it waits behind that
+queued request, including `/v1/authorize`, token exchange and delegation on the instance that is
+still serving traffic. With the ledger a repeat start issues no DDL, so it cannot stall anything.
+
+The first start after upgrading to a release with the ledger still applies every file once (that
+is what fills the ledger) and is safe because every file is idempotent; plan it like any other
+migration window. While applying, the runner sets `lock_timeout` (`MIGRATION_LOCK_TIMEOUT`,
+default 2 s) and retries a few times, so a migration that cannot take its lock fails the boot
+loudly instead of stalling the table. A file whose content changed after it was applied is
+reported as a warning and never re-applied — ship a new migration instead.
+
+The repository currently contains ordered migrations through `113`, covering core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, MCP certification-state integrity, query-performance indexes, agent prepaid wallets, and layered wallet spend controls. Index builds use `CREATE INDEX CONCURRENTLY`, and the runner serializes migrations across service instances with a PostgreSQL advisory lock. An index a cancelled concurrent build left `INVALID` is dropped before the file that creates it is retried, because `CREATE INDEX CONCURRENTLY IF NOT EXISTS` matches such an index by name and would otherwise skip it forever. Inspect the migration directory in the exact release you deploy rather than relying on a copied file count.
 
 **Upgrade procedure** — just restart the service:
 

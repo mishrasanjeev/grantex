@@ -206,3 +206,43 @@ Remove an entry in the pull request that fixes it.
 - **Fix:** refuse a discovery document whose `issuer` differs from the
   configured `issuer_url`, verify `iss` against the configured value, and add
   tests for both.
+
+## G-17 — The decision-grant migration test sees another test's tables (fixed)
+
+- **Found:** event bridge cascade revocation work (PRD G-6), 2026-09-20.
+- **What:** `tests/decision-grants-postgres.integration.test.ts` asserted the
+  `decision_%` tables by querying `information_schema.tables` without a schema
+  predicate. `tests/evidence-postgres.integration.test.ts` creates its own
+  schema containing `decision_requests` and `decision_grants`, so when the two
+  files ran at the same time against one database the assertion saw duplicate
+  names and failed.
+- **Fixed:** the query is now scoped with `AND table_schema = current_schema()`.
+
+## G-18 — Every startup re-ran `ALTER TABLE grants` against live traffic (fixed)
+
+- **Found:** event bridge cascade revocation work (PRD G-6), 2026-09-20;
+  reproduced independently on merged `main`.
+- **What:** `runMigrations` had no ledger and re-executed all migration files on
+  every process start, ten of them `ALTER TABLE grants ADD COLUMN IF NOT
+  EXISTS …`. Postgres takes the `ACCESS EXCLUSIVE` lock **before** evaluating
+  `IF NOT EXISTS`, so a no-op statement still queued behind any in-flight
+  transaction on `grants`, and every reader arriving afterwards queued behind
+  that request — `/v1/authorize`, token exchange, delegation and every enforce
+  path. No `lock_timeout` was set, so the stall was unbounded. On each merge to
+  `main` the starting instance could stall the running one's live traffic.
+  Seen in the Postgres log as migration 095's `ALTER TABLE …` waiting for
+  `AccessExclusiveLock` on `audit_entries` while a cascade transaction waited
+  for `AccessShareLock` on `grants` (a deadlock, the visible tip of the same
+  hazard).
+- **Fixed:** a `schema_migrations` ledger (filename, checksum, applied-at)
+  applies each file once per database, so a repeat start issues no DDL at all;
+  the applying session sets `lock_timeout` (`MIGRATION_LOCK_TIMEOUT`, default
+  2 s) and retries, so a boot that cannot take a lock fails loudly instead of
+  stalling a table; an index a cancelled `CREATE INDEX CONCURRENTLY` left
+  `INVALID` is dropped before its file is retried, since `IF NOT EXISTS`
+  matches such an index by name and would otherwise skip it forever.
+  Revocation transactions also retry on `deadlock_detected`
+  (`lib/revocation/retry.ts`).
+- **Left:** the first start on an existing database still applies every file
+  once — that is what fills the ledger — so treat that one deploy as a
+  migration window.
