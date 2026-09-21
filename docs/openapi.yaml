@@ -649,7 +649,10 @@ components:
           type: array
           items:
             type: string
-            enum: [grant.created, grant.revoked, token.issued]
+            description: >-
+              Any event type the platform publishes (apps/auth-service/src/lib/events.ts),
+              including grant.created, grant.revoked, grant.suspended, grant.resumed,
+              grant.re_evaluation_requested and token.issued.
         secret:
           type: string
           description: Only returned on creation
@@ -3358,7 +3361,10 @@ paths:
                   type: array
                   items:
                     type: string
-                    enum: [grant.created, grant.revoked, token.issued]
+                    description: >-
+              Any event type the platform publishes (apps/auth-service/src/lib/events.ts),
+              including grant.created, grant.revoked, grant.suspended, grant.resumed,
+              grant.re_evaluation_requested and token.issued.
                   minItems: 1
               required: [url, events]
       responses:

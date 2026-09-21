@@ -126,12 +126,18 @@ export async function eventActionsRoutes(app: FastifyInstance): Promise<void> {
     }
     const sql = getSql();
     const developerId = request.developer.id;
-    const grants = await sql<{ id: string }[]>`
-      SELECT id FROM grants WHERE id = ${request.params.id} AND developer_id = ${developerId}`;
-    if (!grants[0]) return notFound(request, reply, 'Grant');
-
+    // The grant is checked inside the transaction that writes the bindings,
+    // holding the row: a grant deleted or revoked concurrently cannot end up
+    // with bindings that outlive the check.
+    let found = false;
     await sql.begin(async (raw) => {
       const tx = raw as unknown as ReturnType<typeof getSql>;
+      const grants = await tx<{ id: string }[]>`
+        SELECT id FROM grants
+         WHERE id = ${request.params.id} AND developer_id = ${developerId}
+         FOR UPDATE`;
+      if (!grants[0]) return;
+      found = true;
       await tx`DELETE FROM grant_subject_refs WHERE grant_id = ${request.params.id} AND developer_id = ${developerId}`;
       for (const ref of refs) {
         await tx`
@@ -140,6 +146,7 @@ export async function eventActionsRoutes(app: FastifyInstance): Promise<void> {
           ON CONFLICT DO NOTHING`;
       }
     });
+    if (!found) return notFound(request, reply, 'Grant');
     return reply.send({ grantId: request.params.id, refs });
   });
 

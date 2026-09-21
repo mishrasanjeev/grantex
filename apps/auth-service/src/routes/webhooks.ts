@@ -5,8 +5,12 @@ import { newWebhookId } from '../lib/ids.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 import { config } from '../config.js';
 import { validateOutboundUrl } from '../lib/url-security.js';
+import { EVENT_TYPES } from '../lib/events.js';
 
-const VALID_EVENTS = new Set(['grant.created', 'grant.revoked', 'token.issued']);
+// Derived from what the platform actually publishes, so a developer can
+// subscribe to every event that can be delivered — and cannot subscribe to one
+// that will never arrive.
+const VALID_EVENTS: ReadonlySet<string> = new Set(EVENT_TYPES);
 const VALID_DELIVERY_STATUSES = new Set(['pending', 'delivered', 'failed']);
 
 interface CreateWebhookBody {
@@ -53,7 +57,7 @@ export async function webhooksRoutes(app: FastifyInstance): Promise<void> {
     const invalid = events.filter(e => !VALID_EVENTS.has(e));
     if (invalid.length > 0) {
       return reply.status(400).send({
-        message: `Invalid event types: ${invalid.join(', ')}. Valid: grant.created, grant.revoked, token.issued`,
+        message: `Invalid event types: ${invalid.join(', ')}. Valid: ${[...VALID_EVENTS].join(', ')}`,
         code: 'BAD_REQUEST',
         requestId: request.id,
       });

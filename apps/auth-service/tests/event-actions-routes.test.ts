@@ -107,7 +107,7 @@ describe('mapping rule routes', () => {
 
 describe('grant subject bindings', () => {
   it('replaces the bindings of a grant this developer owns', async () => {
-    state.handlers.push([/SELECT id FROM grants WHERE id =/, [{ id: 'grnt_1' }]]);
+    state.handlers.push([/SELECT id FROM grants\s+WHERE id =/, [{ id: 'grnt_1' }]]);
     const res = await app.inject({
       method: 'PUT', url: '/v1/grants/grnt_1/subject-refs', headers: authHeader(),
       payload: { refs: [{ kind: 'business_ref', value: 'gb:00000001' }, { kind: 'case_id', value: 'case_0001' }] },
@@ -115,6 +115,8 @@ describe('grant subject bindings', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ grantId: 'grnt_1', refs: [{ kind: 'business_ref' }, { kind: 'case_id' }] });
     expect(state.statements.some((s) => s.includes('DELETE FROM grant_subject_refs'))).toBe(true);
+    // The grant is held while the bindings are written.
+    expect(state.statements.some((s) => s.includes('FOR UPDATE'))).toBe(true);
   });
 
   it('answers 404 for a grant of another developer, without writing a binding', async () => {
@@ -127,7 +129,7 @@ describe('grant subject bindings', () => {
   });
 
   it('refuses malformed bindings', async () => {
-    state.handlers.push([/SELECT id FROM grants WHERE id =/, [{ id: 'grnt_1' }]]);
+    state.handlers.push([/SELECT id FROM grants\s+WHERE id =/, [{ id: 'grnt_1' }]]);
     for (const payload of [
       { refs: 'business_ref' },
       { refs: [{ kind: 'Business Ref', value: 'gb:00000001' }] },

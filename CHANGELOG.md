@@ -161,6 +161,38 @@ below.
   a rolling deploy — the startup migrations, and Postgres raises those errors
   precisely because retrying is the right answer. See FINDINGS G-18.
 
+### Event bridge: review fixes
+- Credentials issued for a grant are revoked **in the same transaction** as the
+  grant. Fire-and-forget left a status-list bit and a credential row untouched
+  whenever the call failed, and because the delivery that caused it was already
+  finalised, every retry was a duplicate — the credential stayed verifiable
+  after its grant was revoked.
+- A target that resolves a parent and its delegated children (a principal or an
+  agent) now makes **one** suspension rooted at the top-most grant, instead of
+  one per grant; resuming the top-level grant restores the whole subtree. A
+  grant already held by an earlier suspension is never moved into a later one,
+  so resuming the later one cannot resurrect it.
+- Every action carries the context of the event that matched it. A Security
+  Event Token carrying several events used to label every revocation with the
+  first member's type, and re-evaluation entries inherited that type while
+  carrying another event's subject.
+- Re-evaluation is at most once per source, event and rule
+  (`event_bridge_rule_actions`, migration 115, claimed in the same transaction
+  as the audit entries). Revoking and suspending are idempotent; asking the
+  relying platform to look again was not, so a retried delivery asked twice.
+- The subject copied into the audit chain and the outbound event is bounded:
+  scalar members with plain keys, values truncated at 256 characters, at most
+  20 members, and `subject_truncated` when anything was dropped. It is
+  provider-supplied and was written verbatim.
+- Webhook subscriptions accept every event type the platform publishes. The
+  route's list was three hardcoded values, so a developer could not subscribe
+  to `grant.suspended`, `grant.resumed` or `grant.re_evaluation_requested`
+  although they are delivered; both the validation and the error message are
+  now derived from `EVENT_TYPES`, with a test that every publishable type is
+  subscribable.
+- `PUT /v1/grants/:id/subject-refs` checks the grant inside the transaction
+  that writes the bindings, holding the row.
+
 ### Event bridge: mapping rules and cascade revocation
 - Declarative mapping rules per developer (PRD G-6) turn a verified event into
   one action: `POST/GET /v1/event-mapping-rules`, `GET/PATCH

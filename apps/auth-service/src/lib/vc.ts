@@ -370,10 +370,15 @@ export async function verifyAgentGrantVC(vcJwt: string): Promise<VerifyVCResult>
 export async function revokeVCsByGrantIds(
   grantIds: string[],
   developerId: string,
+  /**
+   * Run inside the caller's transaction, so a credential cannot stay
+   * verifiable after the grant behind it was revoked. Defaults to the pool.
+   */
+  tx?: ReturnType<typeof getSql>,
 ): Promise<void> {
   if (grantIds.length === 0) return;
 
-  const sql = getSql();
+  const sql = tx ?? getSql();
 
   // Find all active VCs for these grants
   const vcRows = await sql`
