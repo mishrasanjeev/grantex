@@ -50,6 +50,8 @@ interface DeveloperFeed {
   cursor: number;
   delivered: Set<number>;
   timer: NodeJS.Timeout | null;
+  /** A deferred continuation of a drain that has more pages to read. */
+  deferred: NodeJS.Timeout | null;
   polling: boolean;
   freshAt: number;
 }
@@ -77,7 +79,10 @@ export class RevocationFeedHub {
   subscribe(developerId: string, onBatch: FeedSubscriber): () => void {
     let feed = this.#feeds.get(developerId);
     if (!feed) {
-      feed = { subscribers: new Set(), cursor: 0, delivered: new Set(), timer: null, polling: false, freshAt: 0 };
+      feed = {
+        subscribers: new Set(), cursor: 0, delivered: new Set(),
+        timer: null, deferred: null, polling: false, freshAt: 0,
+      };
       this.#feeds.set(developerId, feed);
       // Start from the present: a joining stream replays its own history from
       // the database, so the hub only has to carry what happens from now on.
@@ -95,6 +100,7 @@ export class RevocationFeedHub {
       revocationFeedSubscribers.dec();
       if (current.subscribers.size === 0) {
         if (current.timer) clearInterval(current.timer);
+        if (current.deferred) clearTimeout(current.deferred);
         this.#feeds.delete(developerId);
       }
     };
@@ -118,6 +124,7 @@ export class RevocationFeedHub {
   async stop(): Promise<void> {
     for (const [developerId, feed] of this.#feeds) {
       if (feed.timer) clearInterval(feed.timer);
+      if (feed.deferred) clearTimeout(feed.deferred);
       revocationFeedSubscribers.dec(feed.subscribers.size);
       this.#feeds.delete(developerId);
     }
@@ -163,7 +170,9 @@ export class RevocationFeedHub {
         const entries = await readSince(this.#sql, developerId, feed.cursor, MAX_PAGE);
         const fresh = entries.filter((entry) => !feed.delivered.has(entry.seq));
         feed.freshAt = Date.now();
-        revocationFeedPollsTotal.inc({ outcome: 'ok' });
+        // One increment per poll, not per page, so the metric keeps the
+        // meaning it had before draining became a loop.
+        if (page === 0) revocationFeedPollsTotal.inc({ outcome: 'ok' });
         revocationFeedStaleSeconds.set(0);
 
         if (fresh.length > 0) {
@@ -180,6 +189,7 @@ export class RevocationFeedHub {
         const settled = await settledCursor(this.#sql, developerId, feed.cursor, settings.settleSeconds);
         const highestRead = entries.reduce((highest, entry) => Math.max(highest, entry.seq), feed.cursor);
         const advanceTo = entries.length >= MAX_PAGE ? Math.min(settled, highestRead) : settled;
+        const before = feed.cursor;
         if (advanceTo > feed.cursor) {
           feed.cursor = advanceTo;
           for (const seq of feed.delivered) if (seq <= advanceTo) feed.delivered.delete(seq);
@@ -193,12 +203,26 @@ export class RevocationFeedHub {
             this.#log.warn({ err, feed: 'revocation' }, 'a revocation feed subscriber threw');
           }
         }
-        if (!more) break;
+        // Reading again is only worth it when the cursor actually moved.
+        // `settledCursor` ignores entries younger than the settle window, so
+        // a large cascade or an emergency stop — every entry brand new —
+        // leaves the cursor exactly where it was while the page stays full.
+        // Looping on that re-reads the same thousand rows until the window
+        // passes: measured at 1779 pages and 3558 round-trips over 15 s for
+        // one developer with a 2500-entry backlog, on the path that has to
+        // deliver revocations within two seconds. When nothing settled, the
+        // ordinary poll interval owns the retry.
+        if (!more || advanceTo <= before) break;
         if (page + 1 >= MAX_PAGES_PER_POLL) {
-          // Still behind. Come back on a fresh turn of the event loop rather
-          // than holding it, and without growing the stack.
-          const timer = setTimeout(() => void this.#poll(developerId), 0);
-          timer.unref?.();
+          // Genuinely behind, and making progress. Come back on a fresh turn
+          // of the event loop rather than holding it, and without growing the
+          // stack. Tracked so `stop()` can clear it.
+          feed.deferred = setTimeout(() => {
+            const current = this.#feeds.get(developerId);
+            if (current) current.deferred = null;
+            void this.#poll(developerId);
+          }, 0);
+          feed.deferred.unref?.();
           break;
         }
       }
