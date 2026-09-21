@@ -403,7 +403,19 @@ install would otherwise "prove" the criterion against code nobody reviewed.
 And the clock starts when the revocation is committed (when the API call
 returns), not when the call was made: a developer on the free plan is rate
 limited to 100 requests a minute, and the SDK waiting out a `Retry-After` is
-not propagation. That wait is reported separately.
+not propagation. That wait is reported separately as `revoke_call_max_ms` —
+and it now has a budget of its own (10 s, `REVOCATION_REVOKE_CALL_BUDGET_MS`),
+because a release that prints a minute-long wait on the containment path and
+passes anyway is not telling you the truth. FINDINGS G-23 tracks the
+underlying problem: revoking shares the plan's rate-limit bucket with
+ordinary traffic.
+
+Any figure quoted from a run is **environment-specific**. The numbers depend
+on the machine, the container runtime, whether Postgres and Redis are local,
+and what else is running: an independent reviewer measured p95 100–506 ms and
+max 515–673 ms where this checkout's machine measured tens of milliseconds.
+What the release test asserts is the requirement — p95 within two seconds, no
+failed trial — not a particular number.
 
 ## The emergency stop
 

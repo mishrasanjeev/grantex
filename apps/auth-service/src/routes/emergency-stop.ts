@@ -80,8 +80,14 @@ export function parseStopRequest(body: unknown): ParsedStop {
   const parsed: StopScope = { type: scope['type'] as StopScopeType, id: scope['id'] };
   const phrase = confirmationPhrase(parsed);
   if (typeof confirm !== 'string' || confirm !== phrase) {
+    // The expected phrase is deliberately not echoed. Handing it back turns
+    // the endpoint into a phrase generator: a caller who has the scope wrong,
+    // or who was told what to paste by someone else, can copy the answer and
+    // repeat the call, which is the one thing the confirmation exists to
+    // prevent. The format is documented, and the caller already knows what it
+    // meant to stop.
     throw new StopRequestError(412, 'CONFIRMATION_REQUIRED',
-      'confirm must repeat exactly what will be stopped', { expected: phrase });
+      'confirm must be exactly "stop <scope type>:<scope id>" for the scope in this request');
   }
   return { scope: parsed, reason, dryRun: dryRun === true };
 }
@@ -106,6 +112,8 @@ function logStop(request: FastifyRequest, result: EmergencyStopResult): void {
     sweeps: result.sweeps,
     grantsMatched: result.grantsMatched,
     grantsRevoked: result.grantsRevoked,
+    agentsStopped: result.agentsStoppedTotal,
+    agentsStoppedTruncated: result.agentsStoppedTruncated,
   }, result.dryRun ? 'emergency stop rehearsed' : 'emergency stop applied');
 }
 
@@ -206,7 +214,9 @@ export async function emergencyStopRoutes(app: FastifyInstance): Promise<void> {
         developerId,
         scope: parsed.scope,
         reason: parsed.reason,
-        requestedBy: 'admin',
+        // Which operator address made the call, so the record is not just
+      // "admin". The key itself is never recorded, hashed or otherwise.
+      requestedBy: `admin:${request.ip}`,
         dryRun: parsed.dryRun,
         log: request.log,
       });

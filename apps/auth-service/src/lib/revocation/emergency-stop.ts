@@ -71,6 +71,10 @@ export interface EmergencyStopResult {
   grantsMatched: number;
   grantsRevoked: number;
   agentsStopped: string[];
+  /** True when more agents were stopped than the list above names. */
+  agentsStoppedTruncated: boolean;
+  /** How many distinct agents were stopped, whatever the list length. */
+  agentsStoppedTotal: number;
   /** Always false: revoking what exists does not stop new grants being issued. */
   lockout: false;
   startedAt: string;
@@ -128,6 +132,17 @@ export async function emergencyStop(sql: Sql, input: EmergencyStopInput): Promis
 
   if (dryRun) {
     const roots = await rootsFor(sql, input.developerId, input.scope);
+    const finishedAt = new Date();
+    // Recorded like a real stop, with dry_run = TRUE. A rehearsal used to
+    // leave no trace at all, so `GET /v1/emergency-stops` could not answer
+    // "who has been probing the blast radius of this tenant, and when" — and
+    // the `dry_run` column existed with nothing ever setting it.
+    await sql`
+      INSERT INTO emergency_stops
+        (id, developer_id, scope_type, scope_id, reason, requested_by, dry_run, status,
+         sweeps, grants_matched, grants_revoked, started_at, completed_at)
+      VALUES (${stopId}, ${input.developerId}, ${input.scope.type}, ${input.scope.id}, ${input.reason},
+              ${input.requestedBy}, TRUE, 'completed', 0, ${roots.length}, 0, ${startedAt}, ${finishedAt})`;
     emergencyStopsTotal.inc({ scope: input.scope.type, outcome: 'dry_run' });
     return {
       stopId,
@@ -139,9 +154,11 @@ export async function emergencyStop(sql: Sql, input: EmergencyStopInput): Promis
       grantsMatched: roots.length,
       grantsRevoked: 0,
       agentsStopped: [],
+      agentsStoppedTruncated: false,
+      agentsStoppedTotal: 0,
       lockout: false,
       startedAt: startedAt.toISOString(),
-      completedAt: new Date().toISOString(),
+      completedAt: finishedAt.toISOString(),
     };
   }
 
@@ -155,6 +172,7 @@ export async function emergencyStop(sql: Sql, input: EmergencyStopInput): Promis
   let revoked = 0;
   let sweeps = 0;
   let status: StopStatus = 'completed';
+  let completedAt = startedAt;
 
   const record = async (final: StopStatus | null, error?: string): Promise<void> => {
     await sql`
@@ -204,6 +222,36 @@ export async function emergencyStop(sql: Sql, input: EmergencyStopInput): Promis
         alert: 'emergency_stop', stopId, developerId: input.developerId, scopeType: input.scope.type,
       }, 'emergency stop finished with grants still appearing under the scope');
     }
+    // The summary entry belongs inside this try. It used to sit after the row
+    // had already been marked `completed`, so exhausting the retries left a
+    // row claiming success with no summary on the chain and a 500 for a stop
+    // that had in fact revoked everything.
+    completedAt = new Date();
+    await withTransactionRetry('emergency_stop_summary', () => sql.begin(async (raw) => {
+      const tx = raw as unknown as Sql;
+      const head = await lockAuditChain(tx, input.developerId);
+      await appendPlatformAuditEntries(tx, input.developerId, head, [{
+        action: AUDIT_ACTIONS.emergencyStop,
+        metadata: {
+          stop_id: stopId,
+          scope_type: input.scope.type,
+          scope_id: input.scope.id,
+          reason: input.reason,
+          requested_by: input.requestedBy,
+          status,
+          sweeps,
+          grants_matched: matched,
+          grants_revoked: revoked,
+          agents_stopped: Math.min(agents.size, MAX_REPORTED_AGENTS),
+          // The audit chain is permanent, so it says when the list was cut
+          // rather than leaving a capped number that reads as the true one.
+          agents_stopped_truncated: agents.size > MAX_REPORTED_AGENTS,
+          agents_stopped_total: agents.size,
+          started_at: startedAt.toISOString(),
+          completed_at: completedAt.toISOString(),
+        },
+      }]);
+    }));
   } catch (err) {
     await record('failed', err instanceof Error ? err.message : String(err)).catch(() => {
       /* the original error is the one to report */
@@ -212,31 +260,7 @@ export async function emergencyStop(sql: Sql, input: EmergencyStopInput): Promis
     throw err;
   }
 
-  const completedAt = new Date();
   await record(status);
-
-  // One summary entry on the chain, beside the per-grant revocation entries.
-  await withTransactionRetry('emergency_stop_summary', () => sql.begin(async (raw) => {
-    const tx = raw as unknown as Sql;
-    const head = await lockAuditChain(tx, input.developerId);
-    await appendPlatformAuditEntries(tx, input.developerId, head, [{
-      action: AUDIT_ACTIONS.emergencyStop,
-      metadata: {
-        stop_id: stopId,
-        scope_type: input.scope.type,
-        scope_id: input.scope.id,
-        reason: input.reason,
-        requested_by: input.requestedBy,
-        status,
-        sweeps,
-        grants_matched: matched,
-        grants_revoked: revoked,
-        agents_stopped: Math.min(agents.size, MAX_REPORTED_AGENTS),
-        started_at: startedAt.toISOString(),
-        completed_at: completedAt.toISOString(),
-      },
-    }]);
-  }));
 
   emergencyStopsTotal.inc({ scope: input.scope.type, outcome: status === 'completed' ? 'applied' : status });
   return {
@@ -249,6 +273,8 @@ export async function emergencyStop(sql: Sql, input: EmergencyStopInput): Promis
     grantsMatched: matched,
     grantsRevoked: revoked,
     agentsStopped: [...agents].slice(0, MAX_REPORTED_AGENTS),
+    agentsStoppedTruncated: agents.size > MAX_REPORTED_AGENTS,
+    agentsStoppedTotal: agents.size,
     lockout: false,
     startedAt: startedAt.toISOString(),
     completedAt: completedAt.toISOString(),

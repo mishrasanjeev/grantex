@@ -483,8 +483,10 @@ revoked before it stopped, and the call is safe to repeat).
 
 ### Stopping
 
-Work out the blast radius first — same call, `dryRun: true`, nothing is
-revoked and nothing is recorded:
+Work out the blast radius first — same call, `dryRun: true`. Nothing is
+revoked; the rehearsal itself **is** recorded, as a row with `dryRun: true`,
+so `GET /v1/emergency-stops` shows who has been measuring the blast radius of
+a tenant and when:
 
 ```bash
 curl -sS -X POST "$BASE_URL/v1/emergency-stop" \
@@ -497,8 +499,10 @@ curl -sS -X POST "$BASE_URL/v1/emergency-stop" \
 ```
 
 Then run it for real by dropping `dryRun`. `confirm` must be exactly
-`stop <type>:<id>`; anything else is refused with `412
-CONFIRMATION_REQUIRED` and the phrase it expected.
+`stop <type>:<id>` — `stop agent:ag_01...` for the call above. Anything else
+is refused with `412 CONFIRMATION_REQUIRED`. The expected phrase is **not**
+echoed back: the point of the confirmation is that the caller knows what they
+are stopping, which is lost if the endpoint hands them the answer to paste.
 
 | `scope.type` | Stops |
 |---|---|
@@ -509,7 +513,16 @@ CONFIRMATION_REQUIRED` and the phrase it expected.
 
 The response names the stop (`stopId`), its `status`, how many sweeps it took,
 how many grants matched and were revoked, which agents were stopped, and
-`lockout: false`.
+`lockout: false`. `agentsStopped` lists at most 100 ids; when more were
+stopped, `agentsStoppedTruncated` is true and `agentsStoppedTotal` gives the
+real number.
+
+**Suspended grants are swept up too.** A suspension is reversible; a stop is
+not. Every grant the scope covers with status `active` *or* `suspended` is
+revoked permanently, and the suspension bookkeeping that `POST
+/v1/grants/:id/resume` needs goes with it. If a subtree is suspended pending
+an investigation and you stop its scope, that investigation's subject cannot
+be resumed afterwards — the principals must authorise again.
 
 As the platform operator, use `POST /v1/admin/emergency-stop` with
 `ADMIN_API_KEY` and the same body plus `developerId` (not needed for a
@@ -549,6 +562,26 @@ curl -sS "$BASE_URL/v1/emergency-stops" -H "Authorization: Bearer $DEVELOPER_API
   cannot come back.
 - Keep the `stopId`: the audit entries, the `emergency_stops` row and the
   feed entries all carry it.
+
+### What the stop cannot see
+
+It revokes grants. Anything already handed out and cached elsewhere is
+outside its reach:
+
+- **Decision grants and passports already issued** keep verifying until they
+  expire; they are signed artefacts, not rows the sweep reads. Whatever
+  consumes them has to check revocation itself.
+- **Work already in flight** — a tool call the agent has already made, a
+  payment already authorised downstream — is not recalled. The stop denies
+  the *next* call.
+- **An agent that checks neither the feed nor the status endpoint** keeps
+  using the token it holds until that token expires.
+- **Anything below the depth your rehearsal covered.** The release test
+  exercises three levels of delegation; deeper chains are handled by the same
+  recursive query, but they are not measured.
+- **Agents beyond the hundredth**: the response and the audit summary name at
+  most 100. The summary also carries `agents_stopped_total`, so the true
+  number is written down, but the list is not.
 
 ### If the stop itself fails
 

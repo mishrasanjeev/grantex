@@ -77,11 +77,15 @@ describe('the emergency stop flag', () => {
 });
 
 describe('POST /v1/emergency-stop', () => {
-  it('refuses without the exact confirmation phrase, and says what it should be', async () => {
+  it('refuses without the exact confirmation phrase, without handing the phrase over', async () => {
     for (const payload of [body({ confirm: undefined }), body({ confirm: 'yes' }), body({ confirm: 'stop agent:other' })]) {
       const res = await app.inject({ method: 'POST', url: '/v1/emergency-stop', headers: authHeader(), payload });
       expect(res.statusCode).toBe(412);
-      expect(res.json()).toMatchObject({ code: 'CONFIRMATION_REQUIRED', expected: confirmationPhrase(SCOPE) });
+      expect(res.json()).toMatchObject({ code: 'CONFIRMATION_REQUIRED' });
+      // The expected phrase is not echoed: a caller who could copy it out of
+      // the refusal and repeat the call has not confirmed anything.
+      expect(res.json()).not.toHaveProperty('expected');
+      expect(res.payload).not.toContain(confirmationPhrase(SCOPE));
     }
     expect(state.statements.some((s) => s.includes('UPDATE grants'))).toBe(false);
   });
@@ -122,7 +126,9 @@ describe('POST /v1/emergency-stop', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ dryRun: true, grantsMatched: 2, grantsRevoked: 0 });
-    expect(state.statements.some((s) => s.includes('INSERT INTO emergency_stops'))).toBe(false);
+    // Recorded, so `GET /v1/emergency-stops` can answer who rehearsed a stop
+    // against this tenant and when — but nothing is revoked.
+    expect(state.statements.some((s) => s.includes('INSERT INTO emergency_stops'))).toBe(true);
     expect(state.statements.some((s) => s.includes('UPDATE grants'))).toBe(false);
   });
 

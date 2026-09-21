@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import { describe, expect, it } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
@@ -233,6 +236,77 @@ describePostgres('the emergency stop against real Postgres', () => {
     });
   }, 180_000);
 
+  /**
+   * The migration has to be additive on a database that already has an
+   * earlier version of this table, which is every database that ran a release
+   * carrying the first version of the file. `CREATE TABLE IF NOT EXISTS` is
+   * skipped whole there, so columns added inside it never appear and the
+   * first `INSERT … status` fails with `column "status" does not exist`. A
+   * fresh container never shows it, so the old shape is built here on
+   * purpose, in a schema of its own.
+   */
+  it('adds its later columns to a table an earlier release already created', async () => {
+    const sql = postgres(databaseUrl!, { max: 2, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
+    const schema = `stop_migrate_${randomUUID().replace(/-/g, '').slice(0, 10)}`;
+    try {
+      await sql.unsafe(`CREATE SCHEMA ${schema}`);
+      const scoped = postgres(databaseUrl!, {
+        max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {},
+        connection: { search_path: schema },
+      });
+      try {
+        // Developers is referenced by the table's foreign key.
+        await scoped.unsafe(`CREATE TABLE developers (id TEXT PRIMARY KEY)`);
+        // The shape the first release shipped: no status, sweeps or error.
+        await scoped.unsafe(`
+          CREATE TABLE emergency_stops (
+            id TEXT PRIMARY KEY,
+            developer_id TEXT NOT NULL REFERENCES developers(id) ON DELETE CASCADE,
+            scope_type TEXT NOT NULL,
+            scope_id TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            requested_by TEXT NOT NULL,
+            dry_run BOOLEAN NOT NULL DEFAULT FALSE,
+            grants_matched INTEGER NOT NULL DEFAULT 0,
+            grants_revoked INTEGER NOT NULL DEFAULT 0,
+            started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            completed_at TIMESTAMPTZ
+          )`);
+
+        const file = join(
+          dirname(fileURLToPath(import.meta.url)),
+          '..', 'src', 'db', 'migrations', '113_emergency_stops.sql',
+        );
+        await scoped.unsafe(readFileSync(file, 'utf-8'));
+
+        const columns = await scoped<{ column_name: string }[]>`
+          SELECT column_name FROM information_schema.columns
+           WHERE table_schema = ${schema} AND table_name = 'emergency_stops'
+             AND column_name IN ('status', 'sweeps', 'error')
+           ORDER BY column_name`;
+        expect(columns.map((row) => row.column_name)).toEqual(['error', 'status', 'sweeps']);
+
+        // And the row the service writes first actually inserts.
+        await scoped.unsafe(`INSERT INTO developers (id) VALUES ('dev_x')`);
+        await scoped.unsafe(`
+          INSERT INTO emergency_stops (id, developer_id, scope_type, scope_id, reason, requested_by, status)
+          VALUES ('stop_x', 'dev_x', 'developer', 'dev_x', 'testing', 'admin', 'running')`);
+        await expect(scoped.unsafe(`
+          INSERT INTO emergency_stops (id, developer_id, scope_type, scope_id, reason, requested_by, status)
+          VALUES ('stop_y', 'dev_x', 'developer', 'dev_x', 'testing', 'admin', 'not-a-status')`))
+          .rejects.toThrow();
+
+        // Applying it twice changes nothing.
+        await scoped.unsafe(readFileSync(file, 'utf-8'));
+      } finally {
+        await scoped.end({ timeout: 5 }).catch(() => undefined);
+      }
+    } finally {
+      await sql.unsafe(`DROP SCHEMA IF EXISTS ${schema} CASCADE`).catch(() => undefined);
+      await sql.end({ timeout: 5 }).catch(() => undefined);
+    }
+  }, 120_000);
+
   it('rehearses without revoking anything', async () => {
     await withFixture(async ({ sql, dev, grant, agents }) => {
       const root = await grant(dev, 'root', { agent: agents.a });
@@ -249,7 +323,14 @@ describePostgres('the emergency stop against real Postgres', () => {
       expect(rehearsal.grantsMatched).toBe(2);
       expect(rehearsal.grantsRevoked).toBe(0);
       expect(await statuses(sql, [root, child])).toEqual(['active', 'active']);
-      expect(await listEmergencyStops(sql, dev)).toHaveLength(0);
+      // The rehearsal is recorded — a probe of a tenant's blast radius is
+      // worth knowing about — but it revokes nothing and writes nothing to
+      // the audit chain, which is reserved for what actually happened.
+      const recorded = await listEmergencyStops(sql, dev);
+      expect(recorded).toHaveLength(1);
+      expect(recorded[0]).toMatchObject({
+        id: rehearsal.stopId, dry_run: true, status: 'completed', grants_matched: 2, grants_revoked: 0,
+      });
       expect(await verifyChain(sql, dev)).toHaveLength(0);
     });
   }, 180_000);

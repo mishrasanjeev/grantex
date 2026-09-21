@@ -220,7 +220,12 @@ describeRelease('the emergency stop halts every agent under a grant tree', () =>
     };
     expect(stop.status).toBe('completed');
     expect(stop.lockout).toBe(false);
-    expect(stop.sweeps).toBeGreaterThanOrEqual(2);
+    // Nothing was delegated during this stop, so one pass that found grants
+    // and one that found none is the whole story. `sweeps >= 2` used to be
+    // asserted here and could not fail: the counter increments before the
+    // empty check, so a stop that swept exactly once still reported 2. What
+    // sweeping is actually for is covered by the next test.
+    expect(stop.sweeps).toBe(2);
     // Cross-checked against what the API said was live, not a lower bound.
     expect(stop.grantsRevoked).toBe(liveBefore);
     expect(await liveGrantCount()).toBe(0);
@@ -273,5 +278,70 @@ describeRelease('the emergency stop halts every agent under a grant tree', () =>
     if (REPORT) writeFileSync(REPORT, `${JSON.stringify(report, null, 2)}\n`);
 
     expect(report.max_ms).toBeLessThanOrEqual(BUDGET_MS);
+  }, 300_000);
+
+  /**
+   * What sweeping is for: a grant delegated **while the stop is running**.
+   * The first pass cannot have seen it, so only a later pass catches it —
+   * and if the sweep loop were removed, this grant would survive the stop
+   * with a live parent chain behind it.
+   *
+   * The delegations race a real stop, so some of them are expected to be
+   * refused once their parent is revoked. That is fine: what must hold is
+   * that nothing this developer owns is live afterwards.
+   */
+  it('catches a grant delegated while the stop is running', async () => {
+    const stamp = Date.now();
+    const parentAgent = await admin.agents.register({ name: `race-parent-${stamp}`, scopes: SCOPES });
+    const childAgent = await admin.agents.register({ name: `race-child-${stamp}`, scopes: SCOPES });
+
+    const auth = await admin.authorize({ agentId: parentAgent.agentId, userId: `race-user-${stamp}`, scopes: SCOPES });
+    const code = 'code' in auth && typeof (auth as unknown as Record<string, unknown>)['code'] === 'string'
+      ? (auth as unknown as Record<string, unknown>)['code'] as string
+      : await approve(auth.authRequestId);
+    const root = await admin.tokens.exchange({ code, agentId: parentAgent.agentId });
+    expect(await liveGrantCount()).toBeGreaterThan(0);
+
+    // Delegations fired alongside the stop, not before it.
+    const delegated: string[] = [];
+    let racing = true;
+    const race = (async () => {
+      while (racing) {
+        try {
+          const child = await admin.grants.delegate({
+            parentGrantToken: root.grantToken, subAgentId: childAgent.agentId, scopes: SCOPES, expiresIn: '1h',
+          });
+          delegated.push(child.grantId);
+        } catch {
+          // Expected once the parent is revoked.
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    })();
+
+    const response = await fetch(`${BASE_URL}/v1/emergency-stop`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        scope: { type: 'developer', id: developerId },
+        reason: 'release rehearsal: delegation racing the stop',
+        confirm: `stop developer:${developerId}`,
+      }),
+    });
+    racing = false;
+    await race;
+
+    const text = await response.text();
+    expect(response.status, text).toBe(200);
+    const stop = JSON.parse(text) as { status: string; sweeps: number; grantsRevoked: number };
+    expect(stop.status).toBe('completed');
+
+    // Whatever was delegated during the stop, nothing is left running. A
+    // single-pass stop leaves the grants created after its one read.
+    expect(await liveGrantCount()).toBe(0);
+    // eslint-disable-next-line no-console
+    console.log(`emergency stop race: ${JSON.stringify({
+      delegated_during_stop: delegated.length, sweeps: stop.sweeps, grants_revoked: stop.grantsRevoked,
+    })}`);
   }, 300_000);
 });

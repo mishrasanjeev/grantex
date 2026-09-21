@@ -190,7 +190,16 @@ components:
         dryRun: { type: boolean }
         grantsMatched: { type: integer }
         grantsRevoked: { type: integer, description: "Including everything delegated beneath each matched grant" }
-        agentsStopped: { type: array, items: { type: string } }
+        agentsStopped:
+          type: array
+          items: { type: string }
+          description: At most 100 agent ids; see agentsStoppedTruncated
+        agentsStoppedTruncated:
+          type: boolean
+          description: True when more agents were stopped than the list names
+        agentsStoppedTotal:
+          type: integer
+          description: How many distinct agents were stopped, whatever the list length
         reason: { type: string }
         requestedBy: { type: string }
         startedAt: { type: string, format: date-time }
@@ -3557,7 +3566,8 @@ paths:
         The same call for the platform operator, authenticated with `ADMIN_API_KEY`. `developerId`
         names the tenant for a grant, agent or principal scope; a `developer` scope names it
         itself.
-      security: []
+      security:
+        - adminAuth: []
       requestBody:
         required: true
         content:

@@ -243,3 +243,46 @@ Remove an entry in the pull request that fixes it.
   ADD COLUMN IF NOT EXISTS` waiting for `AccessExclusiveLock` on
   `audit_entries` while a cascade transaction waited for `AccessShareLock` on
   `grants`.
+
+## G-22 — The emergency stop cannot lock a tenant out
+
+- **Found:** emergency stop work (PRD G-6), 2026-09-20; accepted in review as
+  documented rather than closed.
+- **What:** the stop revokes every grant the scope covers, sweeping until the
+  scope comes back empty, and then it is finished. It does not prevent new
+  grants being issued a second later: whoever holds the developer's API key
+  can call `POST /v1/authorize` and mint another one. For the incident this
+  control exists for — a leaked credential — that means the containment
+  measure does not, by itself, contain anything unless the credential is
+  rotated first.
+- **Disclosed, not hidden:** the response says `lockout: false`, the runbook
+  has a "What it does not do" section giving the ordered rotate-then-stop
+  procedure, and the OpenAPI description, concepts page and changelog all say
+  the same. The release test asserts that a grant minted after a stop is
+  **live**, so the behaviour cannot drift away from the documentation
+  silently.
+- **Follow-up:** a real lockout — a tenant-level or credential-level freeze
+  that refuses issuance until an operator lifts it — is its own feature. It
+  needs a state the authorization path reads on every issuance, an
+  authenticated way to lift it, and a decision about what happens to agents
+  mid-task. Tracked here so "the incident control does not stop the incident"
+  stays visible.
+
+## G-23 — Revoking during an incident is rate-limited like ordinary traffic
+
+- **Found:** review of the propagation measurement (PRD G-6), 2026-09-21.
+- **What:** the plan limiter counts `DELETE /v1/grants/:id` and the emergency
+  stop in the same per-developer bucket as every other call (100 req/min on
+  the free plan). A tenant revoking grants during an incident is therefore
+  throttled on the containment path; the measurement harness saw 26–58 s waits
+  while the SDK honoured `Retry-After`. The slowest thing in an incident
+  should not be the thing that ends it.
+- **Proposal:** put containment calls in a bucket of their own —
+  `DELETE /v1/grants/:id`, `POST /v1/grants/:id/suspend`,
+  `POST /v1/emergency-stop` — sized for the shape of the work (a burst of a
+  few hundred, refilling slowly) and counted separately from the plan quota.
+  Revocation is idempotent and reduces load rather than creating it, so the
+  abuse case the plan limiter protects against does not apply. Keep a limit:
+  an unbounded revoke endpoint is still a way to make the database work.
+- **Impact:** slow containment, on the free plan only, and a misleading
+  propagation measurement if the limiter is not accounted for.
