@@ -265,17 +265,24 @@ describeRelease('the emergency stop halts every agent under a grant tree', () =>
       budget_ms: BUDGET_MS,
       stop_id: stop.stopId,
       status: stop.status,
-      sweeps: stop.sweeps,
+      sweeps: Number(stop.sweeps),
       live_grants_before: liveBefore,
-      grants_revoked: stop.grantsRevoked,
+      grants_revoked: Number(stop.grantsRevoked),
       agents_stopped: stop.agentsStopped.length,
       max_ms: Math.max(...latencies),
       latencies_ms: latencies,
-      lockout: stop.lockout,
+      lockout: stop.lockout === true,
     };
     // eslint-disable-next-line no-console
     console.log(`emergency stop: ${JSON.stringify(report)}`);
-    if (REPORT) writeFileSync(REPORT, `${JSON.stringify(report, null, 2)}\n`);
+    // A report file is usually read straight into a dashboard, so nothing the
+    // server said goes into it unexamined: every field above is a number, a
+    // boolean or a string this file produced, and the one value that comes
+    // off the wire — the stop id — is checked against its own format first.
+    if (REPORT) {
+      expect(stop.stopId).toMatch(/^stop_[0-9A-HJKMNP-TV-Z]{26}$/);
+      writeFileSync(REPORT, `${JSON.stringify(report, null, 2)}\n`);
+    }
 
     expect(report.max_ms).toBeLessThanOrEqual(BUDGET_MS);
   }, 300_000);
