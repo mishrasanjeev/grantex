@@ -258,7 +258,12 @@ components:
       properties:
         err:
           type: string
-          description: Verification failure reason (also the metric label)
+          enum: [unverifiable, unsupported_media_type]
+          description: >-
+            One code for every verification failure, so the endpoint cannot be used to probe
+            which source ids exist or how far a guess got. The precise reason is in the auth
+            service log and in the reason label of
+            grantex_event_bridge_verification_failures_total.
         description: { type: string }
         code: { type: string, enum: [EVENT_UNVERIFIABLE] }
         requestId: { type: string }
@@ -3145,7 +3150,8 @@ paths:
       description: |
         Authenticated by the SET signature (no API key). `typ` must be `secevent+jwt`; `iss`, `aud`,
         `iat`, `jti` and `events` are verified against the registration. Unverifiable tokens are
-        refused with 401 and never acted on; a repeated `jti` is not acted on again.
+        refused with 401 (one opaque `err: unverifiable`) and never acted on; a repeated `jti`
+        is not acted on again.
       security: []
       requestBody:
         required: true
