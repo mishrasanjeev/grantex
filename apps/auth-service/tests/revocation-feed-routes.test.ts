@@ -97,7 +97,7 @@ describe('GET /v1/revocations', () => {
     });
     expect(again.statusCode).toBe(304);
 
-    state.handlers.push([/FROM grant_revocation_events\s+WHERE developer_id = \? AND seq > \?/, [
+    state.handlers.push([/FROM grant_revocation_events[\s\S]*ORDER BY seq/, [
       { seq: '8', developer_id: TEST_DEVELOPER.id, grant_id: 'grnt_9', jti: null, action: 'revoked', expires_at: new Date(), created_at: new Date() },
     ]]);
     const fresh = await app.inject({
@@ -112,6 +112,43 @@ describe('GET /v1/revocations', () => {
       const res = await app.inject({ method: 'GET', url: `/v1/revocations?${query}`, headers: authHeader() });
       expect(res.statusCode).toBe(400);
     }
+  });
+});
+
+describe('who may read the feed', () => {
+  it('refuses a request with no API key', async () => {
+    for (const url of ['/v1/revocations', '/v1/revocations/status?grantId=grnt_1', '/v1/revocations/stream']) {
+      const res = await app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(401);
+    }
+    expect(state.statements.some((s) => s.includes('grant_revocation_events'))).toBe(false);
+  });
+
+  it('scopes every read to the calling developer', async () => {
+    await app.inject({ method: 'GET', url: '/v1/revocations', headers: authHeader() });
+    await app.inject({ method: 'GET', url: '/v1/revocations?since=3', headers: authHeader() });
+    await app.inject({ method: 'GET', url: '/v1/revocations/status?grantId=grnt_theirs', headers: authHeader() });
+    const reads = state.statements.filter((s) =>
+      s.includes('FROM grant_revocation_events') || s.includes('FROM grants') || s.includes('FROM grant_tokens'));
+    expect(reads.length).toBeGreaterThan(0);
+    expect(reads.every((s) => s.includes('developer_id ='))).toBe(true);
+  });
+});
+
+describe('GET /v1/revocations', () => {
+  it('never returns a cursor ahead of the entries it sent', async () => {
+    state.handlers.push([/FROM grant_revocation_events[\s\S]*ORDER BY seq/, [
+      { seq: '8', developer_id: TEST_DEVELOPER.id, grant_id: 'grnt_8', jti: null, action: 'revoked', expires_at: new Date(), created_at: new Date() },
+      { seq: '9', developer_id: TEST_DEVELOPER.id, grant_id: 'grnt_9', jti: null, action: 'revoked', expires_at: new Date(), created_at: new Date() },
+    ]]);
+    // Far more is settled than this page carried.
+    state.handlers.push([/SELECT MAX\(seq\)/, [{ cursor: '2500' }]]);
+
+    const res = await app.inject({ method: 'GET', url: '/v1/revocations?since=7&limit=2', headers: authHeader() });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ entries: Array<{ seq: number }>; cursor: number }>();
+    expect(body.entries.map((entry) => entry.seq)).toEqual([8, 9]);
+    expect(body.cursor).toBe(9);
   });
 });
 

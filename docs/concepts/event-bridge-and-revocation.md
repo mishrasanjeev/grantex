@@ -224,13 +224,26 @@ it would otherwise be skipped, so entries younger than the settle window
 (`REVOCATION_FEED_SETTLE_SECONDS`, default 15 s) are delivered but do not move
 the cursor. That costs a few repeated entries and removes a way to miss one.
 
+**And never past the page it returned.** A page is bounded by `limit` (1000 by
+default) while the settled maximum is not; a cursor taken from the larger
+number would skip everything in between while the client believed itself up to
+date. The cursor a response carries is therefore the lowest of the two — which
+matters exactly when there is a lot to deliver: a large cascade, an emergency
+stop, a sweep.
+
+Delivered entries are kept for `REVOCATION_FEED_RETENTION_HOURS` past the
+expiry of the credential they are about, and an hourly worker prunes the rest,
+so the table the snapshot reads does not grow without bound.
+
 ### Where the entries come from
 
 Database triggers on `grants` and `grant_tokens`, not from each revocation
 path. Every way a grant stops — `DELETE /v1/grants/:id`, a cascade from a
 provider event, an emergency stop, a consent withdrawal, an anomaly, a DPDP
-erasure, OAuth revocation — writes a feed entry in the same transaction as the
-revocation itself. `pg_notify` wakes the receivers on commit; each instance
+erasure, OAuth revocation, and the hard delete behind `DELETE /v1/agents/:id`
+— writes a feed entry in the same transaction as the revocation itself. Four
+triggers cover it: two on status changes and two on deletion, since a deleted
+row can appear in no snapshot. `pg_notify` wakes the receivers on commit; each instance
 also polls (`REVOCATION_FEED_POLL_MS`, default 500 ms), so a lost notification
 costs latency and never correctness.
 
@@ -244,6 +257,15 @@ empty feed, and clients fail closed.
 Postgres and Redis, builds a delegation tree, revokes each parent and measures
 how long the child kept being authorised, through both SDKs. G-6 requires two
 seconds at the ninety-fifth percentile.
+
+Two things make that number mean something. The TypeScript measurement runs in
+a plain Node process loading the build from the checkout, and the Python one
+refuses to start unless `grantex` was imported from the checkout — an ambient
+install would otherwise "prove" the criterion against code nobody reviewed.
+And the clock starts when the revocation is committed (when the API call
+returns), not when the call was made: a developer on the free plan is rate
+limited to 100 requests a minute, and the SDK waiting out a `Retry-After` is
+not propagation. That wait is reported separately.
 
 ## Observability
 

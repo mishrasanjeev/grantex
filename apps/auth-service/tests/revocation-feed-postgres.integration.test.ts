@@ -3,6 +3,7 @@ import postgres from 'postgres';
 import { describe, expect, it, vi } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
 import { RevocationFeedHub } from '../src/lib/revocation-feed/hub.js';
+import { pruneRevocationFeedOnce } from '../src/workers/revocationFeedPrune.js';
 import {
   feedReady,
   headSeq,
@@ -189,18 +190,68 @@ describePostgres('the revocation feed against real Postgres', () => {
         await hub.pollNow(dev);
         const id = await grant(dev, 'live');
         await sql`UPDATE grants SET status = 'revoked', revoked_at = NOW() WHERE id = ${id}`;
-        await hub.pollNow(dev);
 
+        // `pollNow` is a no-op while the hub's own interval poll is in
+        // flight, so wait for the delivery rather than assume one poll.
+        const deadline = Date.now() + 10_000;
+        while (seen.length === 0 && Date.now() < deadline) {
+          await hub.pollNow(dev);
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
         expect(seen.map((entry) => entry.grantId)).toEqual([id]);
         expect(Date.now() - lastFresh).toBeLessThan(5_000);
 
-        // The same entry is not delivered twice.
-        await hub.pollNow(dev);
+        // The same entry is not delivered twice, however often it is polled.
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          await hub.pollNow(dev);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
         expect(seen).toHaveLength(1);
       } finally {
         unsubscribe();
         await hub.stop();
       }
+    });
+  }, 180_000);
+
+  it('records a grant and a token that are deleted, not revoked', async () => {
+    await withFixture(async ({ sql, dev, grant, token }) => {
+      // What DELETE /v1/agents/:id does: tokens first, then their grants.
+      const live = await grant(dev, 'deleted');
+      const jti = await token(live, 'deleted');
+      const alreadyRevoked = await grant(dev, 'revokedthendeleted');
+      await sql`UPDATE grants SET status = 'revoked', revoked_at = NOW() WHERE id = ${alreadyRevoked}`;
+      const before = await readSince(sql, dev, 0);
+
+      await sql`DELETE FROM grant_tokens WHERE grant_id IN (${live}, ${alreadyRevoked})`;
+      await sql`DELETE FROM grants WHERE id IN (${live}, ${alreadyRevoked})`;
+
+      const after = (await readSince(sql, dev, 0)).slice(before.length);
+      expect(after.map((entry) => [entry.action, entry.grantId, entry.jti])).toEqual([
+        ['token_revoked', live, jti],
+        ['revoked', live, null],
+      ]);
+      // The one already revoked had its entry; deleting the row is housekeeping.
+      expect(after.some((entry) => entry.grantId === alreadyRevoked)).toBe(false);
+    });
+  }, 180_000);
+
+  it('never advances the cursor past the page it returned', async () => {
+    await withFixture(async ({ sql, dev, grant }) => {
+      const ids: string[] = [];
+      for (let index = 0; index < 5; index += 1) ids.push(await grant(dev, `page${index}`));
+      await sql`UPDATE grants SET status = 'revoked', revoked_at = NOW() WHERE id = ANY(${ids})`;
+
+      // A page smaller than what is settled: the cursor a client adopts must
+      // be the last entry it actually received, or the rest are skipped.
+      const page = await readSince(sql, dev, 0, 2);
+      expect(page).toHaveLength(2);
+      const settled = await settledCursor(sql, dev, 0, 0);
+      expect(settled).toBeGreaterThan(page[1]!.seq);
+      const cursor = Math.min(settled, page[1]!.seq);
+      const next = await readSince(sql, dev, cursor, 10);
+      expect(next).toHaveLength(3);
+      expect(new Set([...page, ...next].map((entry) => entry.grantId)).size).toBe(5);
     });
   }, 180_000);
 
@@ -215,6 +266,16 @@ describePostgres('the revocation feed against real Postgres', () => {
       expect(await pruneFeed(sql, 48)).toBe(1);
       const left = await readSince(sql, dev, 0);
       expect(left.map((entry) => entry.grantId)).toEqual([recent]);
+
+      // And the worker that calls it only runs while the feed is served.
+      await sql`
+        INSERT INTO grant_revocation_events (developer_id, grant_id, action, expires_at, created_at)
+        VALUES (${dev}, 'grnt_ancient_2', 'revoked', NOW() - INTERVAL '30 days', NOW() - INTERVAL '30 days')`;
+      vi.stubEnv('REVOCATION_FEED_ENABLED', 'false');
+      expect(await pruneRevocationFeedOnce(sql, log)).toBe(0);
+      vi.stubEnv('REVOCATION_FEED_ENABLED', 'true');
+      expect(await pruneRevocationFeedOnce(sql, log)).toBe(1);
+      vi.unstubAllEnvs();
     });
   }, 180_000);
 });

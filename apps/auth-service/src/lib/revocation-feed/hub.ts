@@ -21,7 +21,7 @@ import {
   revocationFeedStaleSeconds,
   revocationFeedSubscribers,
 } from './metrics.js';
-import { readSince, settledCursor, type FeedEntry } from './store.js';
+import { MAX_PAGE, readSince, settledCursor, type FeedEntry } from './store.js';
 import { revocationFeedSettings, type RevocationFeedSettings } from './settings.js';
 
 type Sql = ReturnType<typeof postgres>;
@@ -146,7 +146,7 @@ export class RevocationFeedHub {
         // delivered by the joining stream's own replay.
         feed.cursor = await settledCursor(this.#sql, developerId, 0, settings.settleSeconds);
       }
-      const entries = await readSince(this.#sql, developerId, feed.cursor);
+      const entries = await readSince(this.#sql, developerId, feed.cursor, MAX_PAGE);
       const fresh = entries.filter((entry) => !feed.delivered.has(entry.seq));
       feed.freshAt = Date.now();
       revocationFeedPollsTotal.inc({ outcome: 'ok' });
@@ -159,11 +159,18 @@ export class RevocationFeedHub {
           revocationFeedDeliverySeconds.observe(Math.max(0, (Date.now() - new Date(entry.at).getTime()) / 1000));
         }
       }
+      // The cursor may never run ahead of what was read: a page is bounded by
+      // MAX_PAGE, the settled maximum is not, and advancing past the gap would
+      // silently skip every entry in it — exactly what a large cascade or an
+      // emergency stop produces.
       const settled = await settledCursor(this.#sql, developerId, feed.cursor, settings.settleSeconds);
-      if (settled > feed.cursor) {
-        feed.cursor = settled;
-        for (const seq of feed.delivered) if (seq <= settled) feed.delivered.delete(seq);
+      const highestRead = entries.reduce((highest, entry) => Math.max(highest, entry.seq), feed.cursor);
+      const advanceTo = entries.length >= MAX_PAGE ? Math.min(settled, highestRead) : settled;
+      if (advanceTo > feed.cursor) {
+        feed.cursor = advanceTo;
+        for (const seq of feed.delivered) if (seq <= advanceTo) feed.delivered.delete(seq);
       }
+      const more = entries.length >= MAX_PAGE;
       const batch: FeedBatch = { entries: fresh, cursor: feed.cursor, freshAt: feed.freshAt };
       for (const subscriber of feed.subscribers) {
         try {
@@ -171,6 +178,13 @@ export class RevocationFeedHub {
         } catch (err) {
           this.#log.warn({ err, feed: 'revocation' }, 'a revocation feed subscriber threw');
         }
+      }
+      if (more) {
+        // A full page means there is more behind it; keep reading rather than
+        // waiting for the next tick.
+        feed.polling = false;
+        await this.#poll(developerId);
+        return;
       }
     } catch (err) {
       revocationFeedPollsTotal.inc({ outcome: 'error' });

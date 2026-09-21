@@ -15,7 +15,7 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-trials="${1:-${REVOCATION_RELEASE_TRIALS:-10}}"
+trials="${1:-${REVOCATION_RELEASE_TRIALS:-40}}"
 port="${RELEASE_PORT:-3199}"
 pg_container="g6-release-pg"
 redis_container="g6-release-redis"
@@ -89,14 +89,24 @@ if [[ "$ready" != "1" ]]; then
 fi
 
 log "measuring with the TypeScript SDK (${trials} trials)"
+npm --prefix "$root/packages/sdk-ts" ci --no-audit --no-fund >/dev/null
 npm --prefix "$root/packages/sdk-ts" run build >/dev/null
+# A plain Node process, the way an agent runs the SDK, loading the build from
+# this checkout rather than whatever a global install happens to provide.
 REVOCATION_RELEASE_BASE_URL="http://127.0.0.1:${port}" \
 REVOCATION_RELEASE_TRIALS="$trials" \
 REVOCATION_RELEASE_REPORT="${report_dir}/typescript.json" \
+  node "$root/scripts/revocation-propagation.mjs"
+
+log "checking the same path through vitest"
+REVOCATION_RELEASE_BASE_URL="http://127.0.0.1:${port}" \
   npx --prefix "$root" vitest run --root "$root" tests/e2e/revocation-propagation.test.ts
 
 if [[ "${RELEASE_SKIP_PYTHON:-0}" != "1" ]]; then
   log "measuring with the Python SDK (${trials} trials)"
+  # PYTHONPATH pins the SDK to this checkout; the harness refuses to run if it
+  # imported `grantex` from anywhere else.
+  PYTHONPATH="$root/packages/sdk-py/src${PYTHONPATH:+:$PYTHONPATH}" \
   REVOCATION_RELEASE_BASE_URL="http://127.0.0.1:${port}" \
   REVOCATION_RELEASE_TRIALS="$trials" \
   REVOCATION_RELEASE_REPORT_PY="${report_dir}/python.json" \

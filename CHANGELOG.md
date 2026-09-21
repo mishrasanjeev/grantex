@@ -177,16 +177,21 @@ below.
   gives `status_unavailable`; a grant the auth service does not recognise is
   refused. New `RevocationSubReason` in both SDKs (`revoked`, `suspended`,
   `parent_revoked`, `feed_stale`, `feed_unavailable`, `status_unavailable`).
-- Feed entries are written by database triggers on `grants` and `grant_tokens`,
-  so every revocation path (API, cascade, emergency stop, consent withdrawal,
-  anomaly, DPDP erasure, OAuth revocation) reaches the feed in the same
-  transaction as the revocation. `pg_notify` wakes receivers on commit and each
+- Feed entries are written by database triggers on `grants` and `grant_tokens`
+  — on status changes and on deletion — so every revocation path (API, cascade,
+  emergency stop, consent withdrawal, anomaly, DPDP erasure, OAuth revocation,
+  and the hard delete behind `DELETE /v1/agents/:id`) reaches the feed in the
+  same transaction as the revocation. `pg_notify` wakes receivers on commit and each
   instance also polls, so a lost notification costs latency, not correctness.
   When the triggers are missing the endpoints answer `503 FEED_UNAVAILABLE`
   rather than an empty feed.
 - The cursor never advances past entries younger than
   `REVOCATION_FEED_SETTLE_SECONDS` (default 15 s), so a transaction that
-  committed out of sequence order is still delivered.
+  committed out of sequence order is still delivered, and never past the page a
+  response actually carried, so a client cannot skip the remainder of a large
+  cascade while believing itself up to date.
+- An hourly worker prunes feed entries once the credential they are about has
+  been expired longer than `REVOCATION_FEED_RETENTION_HOURS`.
 - `scripts/revocation-release-test.sh` measures the G-6 acceptance criterion
   against a real auth service with Postgres and Redis: revoke a parent grant,
   time how long the child keeps being authorised, through both SDKs.

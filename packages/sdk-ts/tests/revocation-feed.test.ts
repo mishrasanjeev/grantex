@@ -238,6 +238,39 @@ describe('enforce() with revocationCheck: feed', () => {
     }
   });
 
+  it('denies once a synced feed has gone quiet, even though it is still connected', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(grant());
+    // A stream that says `ready` and then never speaks again: connected,
+    // synced, and no longer trustworthy.
+    vi.stubGlobal('fetch', feedFetch({ streamEvents: [`event: ready
+data: {"cursor":5}
+
+`] }));
+    const grantex = new Grantex({
+      apiKey: 'test_key', revocationCheck: 'feed', revocationFeed: { staleAfterMs: 150 },
+    });
+    grantex.loadManifest(manifest);
+    try {
+      const feed = grantex.revocationFeed();
+      expect(await feed.ready(2_000)).toBe(true);
+      expect(await grantex.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' }))
+        .toMatchObject({ allowed: true });
+
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const state = feed.state();
+      expect(state.synced).toBe(true);
+      expect(state.unavailable).toBeNull();
+      expect(feed.isFresh()).toBe(false);
+
+      const result = await grantex.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' });
+      expect(result.allowed).toBe(false);
+      expect(result.reasonCode).toBe(DenialReason.GRANT_REVOKED);
+      expect(result.subReason).toBe(RevocationSubReason.FEED_STALE);
+    } finally {
+      await grantex.stopRevocationFeed();
+    }
+  });
+
   it('is off by default: the same client without the option allows the call', async () => {
     vi.mocked(verifyGrantToken).mockResolvedValue(grant());
     const fetchMock = feedFetch({ snapshot: [entry()] });

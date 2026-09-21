@@ -30,7 +30,10 @@ export type FeedUnavailableReason = 'disabled' | 'not_ready' | 'unauthorized' | 
 export interface RevocationFeedState {
   /** A snapshot has been read at least once. */
   synced: boolean;
-  /** When the feed last heard from the auth service (epoch ms, 0 if never). */
+  /**
+   * When the feed last heard from the auth service, on a monotonic clock
+   * (0 if never). Comparable with `performance.now()`, not with `Date.now()`.
+   */
   freshAt: number;
   /** Feed position of the last entry applied. */
   cursor: number;
@@ -47,9 +50,17 @@ interface FeedPage {
   snapshot?: boolean;
 }
 
+/**
+ * Freshness is measured on a monotonic clock: a wall-clock jump backwards
+ * must not make a stale feed look current.
+ */
+const monotonicNow = (): number =>
+  (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now());
+
 const DEFAULT_STALE_AFTER_MS = 5_000;
 const DEFAULT_RECONNECT_DELAY_MS = 500;
 const MAX_RECONNECT_DELAY_MS = 30_000;
+const PRUNE_INTERVAL_MS = 60_000;
 
 export class RevocationFeed {
   readonly #http: HttpClient;
@@ -66,6 +77,7 @@ export class RevocationFeed {
   #controller: AbortController | null = null;
   #loop: Promise<void> | null = null;
   #reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  #prunedAt = 0;
   #waiters: Array<() => void> = [];
 
   constructor(http: HttpClient, options: RevocationFeedOptions = {}) {
@@ -90,7 +102,7 @@ export class RevocationFeed {
   }
 
   /** Synced recently enough to be trusted. */
-  isFresh(now: number = Date.now()): boolean {
+  isFresh(now: number = monotonicNow()): boolean {
     return this.#synced && this.#unavailable === null && now - this.#freshAt <= this.#staleAfterMs;
   }
 
@@ -129,12 +141,12 @@ export class RevocationFeed {
    */
   async ready(timeoutMs: number = this.#staleAfterMs): Promise<boolean> {
     this.start();
-    const deadline = Date.now() + timeoutMs;
+    const deadline = monotonicNow() + timeoutMs;
     for (;;) {
       if (this.isFresh()) return true;
-      if (this.#unavailable !== null || Date.now() >= deadline) return this.isFresh();
+      if (this.#unavailable !== null || monotonicNow() >= deadline) return this.isFresh();
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, Math.min(50, Math.max(1, deadline - Date.now())));
+        const timer = setTimeout(resolve, Math.min(50, Math.max(1, deadline - monotonicNow())));
         timer.unref?.();
         this.#waiters.push(() => {
           clearTimeout(timer);
@@ -151,7 +163,13 @@ export class RevocationFeed {
   }
 
   #touch(): void {
-    this.#freshAt = Date.now();
+    this.#freshAt = monotonicNow();
+    // Entries whose credential has expired can no longer be used; dropping
+    // them here bounds the set without a timer of its own.
+    if (this.#freshAt - this.#prunedAt > PRUNE_INTERVAL_MS) {
+      this.#set.prune();
+      this.#prunedAt = this.#freshAt;
+    }
     this.#unavailable = null;
     this.#wake();
   }
@@ -165,6 +183,9 @@ export class RevocationFeed {
         if (this.#transport === 'stream') {
           const streamed = await this.#stream();
           if (!streamed) await this.#poll();
+          // A stream that ended cleanly (a server restart, a proxy timeout)
+          // must not be reconnected in a tight loop.
+          else if (this.#running) await sleep(this.#reconnectDelayMs, this.#controller?.signal);
         } else {
           await this.#poll();
         }
@@ -207,10 +228,19 @@ export class RevocationFeed {
     this.#reader = reader;
     const decoder = new TextDecoder();
     let buffer = '';
+    // A half-open socket delivers nothing and never ends. Heartbeats are due
+    // every second, so silence for twice the staleness bound means the
+    // connection is gone: drop it and let the loop reconnect.
+    const silenceLimit = Math.max(2 * this.#staleAfterMs, 1_000);
+    let watchdog = setTimeout(() => void reader.cancel().catch(() => { /* already closed */ }), silenceLimit);
+    watchdog.unref?.();
     try {
       while (this.#running) {
         const { done, value } = await reader.read();
         if (done) break;
+        clearTimeout(watchdog);
+        watchdog = setTimeout(() => void reader.cancel().catch(() => { /* already closed */ }), silenceLimit);
+        watchdog.unref?.();
         buffer += decoder.decode(value, { stream: true });
         let index = buffer.indexOf('\n\n');
         while (index !== -1) {
@@ -220,6 +250,7 @@ export class RevocationFeed {
         }
       }
     } finally {
+      clearTimeout(watchdog);
       this.#reader = null;
       reader.releaseLock();
       await response.body.cancel().catch(() => { /* already closed */ });

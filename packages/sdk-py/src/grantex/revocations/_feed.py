@@ -25,11 +25,14 @@ from ._set import RevocationEntry, RevocationMatch, RevokedSet
 FeedUnavailableReason = Literal["disabled", "not_ready", "unauthorized", "network"]
 
 DEFAULT_STALE_AFTER = 5.0
+_PRUNE_INTERVAL = 60.0
 DEFAULT_RECONNECT_DELAY = 0.5
 _MAX_RECONNECT_DELAY = 30.0
-# The stream may sit idle between revocations, but heartbeats arrive often;
-# connecting and sending must not hang.
-_STREAM_TIMEOUT = httpx.Timeout(connect=10.0, read=None, write=10.0, pool=10.0)
+def _stream_timeout(stale_after: float) -> httpx.Timeout:
+    """Heartbeats arrive every second, so silence for longer than the staleness
+    bound means a half-open socket: read with a timeout so the loop reconnects
+    instead of waiting forever on a dead connection."""
+    return httpx.Timeout(connect=10.0, read=max(2 * stale_after, 1.0), write=10.0, pool=10.0)
 _REQUEST_TIMEOUT = httpx.Timeout(10.0)
 
 
@@ -39,6 +42,8 @@ class RevocationFeedState:
 
     synced: bool
     fresh_at: float
+    """When the feed last heard from the auth service, on ``time.monotonic()``
+    (0.0 if never). Comparable with ``time.monotonic()``, not with wall time."""
     cursor: int
     known: int
     unavailable: Optional[FeedUnavailableReason]
@@ -71,6 +76,7 @@ class RevocationFeed:
         self._cursor = 0
         self._unavailable: Optional[FeedUnavailableReason] = None
         self._response: Optional[httpx.Response] = None
+        self._pruned_at = 0.0
 
     # ── state ────────────────────────────────────────────────────────────────
 
@@ -85,8 +91,12 @@ class RevocationFeed:
             )
 
     def is_fresh(self, now: Optional[float] = None) -> bool:
-        """Synced recently enough to be trusted."""
-        moment = now if now is not None else time.time()
+        """Synced recently enough to be trusted.
+
+        Measured on a monotonic clock: a wall-clock jump backwards must not
+        make a stale feed look current.
+        """
+        moment = now if now is not None else time.monotonic()
         with self._lock:
             return (
                 self._synced
@@ -142,14 +152,14 @@ class RevocationFeed:
         Returns whether it is fresh: ``False`` means callers must fail closed.
         """
         self.start()
-        deadline = time.time() + (timeout if timeout is not None else self.stale_after)
+        deadline = time.monotonic() + (timeout if timeout is not None else self.stale_after)
         while True:
             if self.is_fresh():
                 return True
             with self._lock:
                 if self._unavailable is not None:
                     return False
-                remaining = deadline - time.time()
+                remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     break
                 self._changed.wait(min(remaining, 0.05))
@@ -159,9 +169,16 @@ class RevocationFeed:
 
     def _touch(self) -> None:
         with self._lock:
-            self._fresh_at = time.time()
+            self._fresh_at = time.monotonic()
             self._unavailable = None
+            prune = self._fresh_at - self._pruned_at > _PRUNE_INTERVAL
+            if prune:
+                self._pruned_at = self._fresh_at
             self._changed.notify_all()
+        if prune:
+            # Entries whose credential has expired can no longer be used;
+            # dropping them here bounds the set without a timer of its own.
+            self._set.prune()
 
     def _fail(self, reason: FeedUnavailableReason) -> None:
         with self._lock:
@@ -178,6 +195,9 @@ class RevocationFeed:
                     delay = self._reconnect_delay
                     if self._transport == "stream":
                         self._stream(client)
+                        # A stream that ended cleanly (a server restart, a proxy
+                        # timeout) must not be reconnected in a tight loop.
+                        self._stop.wait(self._reconnect_delay)
                     else:
                         self._poll(client)
                 except Exception as exc:  # noqa: BLE001 - every failure is a reason to fail closed
@@ -213,7 +233,7 @@ class RevocationFeed:
             "GET",
             f"{self._base_url}/v1/revocations/stream",
             params={"since": cursor},
-            timeout=_STREAM_TIMEOUT,
+            timeout=_stream_timeout(self.stale_after),
         ) as response:
             response.raise_for_status()
             with self._lock:

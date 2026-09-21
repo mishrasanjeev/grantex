@@ -236,6 +236,37 @@ def test_feed_fails_closed_when_it_cannot_be_reached() -> None:
 
 
 @respx.mock
+def test_feed_denies_once_a_synced_feed_has_gone_quiet() -> None:
+    """A connected feed that stops hearing from the auth service fails closed."""
+    respx.get(f"{BASE_URL}/v1/revocations").mock(
+        return_value=httpx.Response(200, json=_snapshot([]))
+    )
+    grantex = _client(revocation_check="feed", revocation_feed_stale_after=0.2)
+    feed = grantex.revocation_feed()
+    # A stream that stays connected and says nothing: the loop snapshots once
+    # and then sits in the stream, exactly as it does against a quiet server.
+    feed._stream = lambda client: feed._stop.wait(5)  # type: ignore[assignment,method-assign]
+    try:
+        assert feed.ready(timeout=2.0) is True
+        with patch("grantex._client.verify_grant_token", return_value=_grant()):
+            assert grantex.enforce("jwt", "acme_kyb", "resolve_business").allowed is True
+
+        time.sleep(0.5)
+        state = feed.state()
+        assert state.synced is True
+        assert state.unavailable is None
+        assert feed.is_fresh() is False
+
+        with patch("grantex._client.verify_grant_token", return_value=_grant()):
+            result = grantex.enforce("jwt", "acme_kyb", "resolve_business")
+        assert result.allowed is False
+        assert result.reason_code == DenialReason.GRANT_REVOKED
+        assert result.sub_reason == RevocationSubReason.FEED_STALE
+    finally:
+        grantex.stop_revocation_feed()
+
+
+@respx.mock
 def test_revocation_checking_is_off_by_default() -> None:
     route = respx.get(f"{BASE_URL}/v1/revocations").mock(
         return_value=httpx.Response(200, json=_snapshot([_entry()]))
