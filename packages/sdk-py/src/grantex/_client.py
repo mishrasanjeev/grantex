@@ -394,7 +394,13 @@ class Grantex:
                 "denying rather than authorising without it.",
                 RevocationSubReason.STATUS_UNAVAILABLE,
             )
-        if not isinstance(status, dict) or not status.get("revoked"):
+        if not isinstance(status, dict) or not isinstance(status.get("revoked"), bool):
+            return (
+                "The revocation status endpoint returned something this client cannot "
+                "read; denying rather than assuming the grant is live.",
+                RevocationSubReason.STATUS_UNAVAILABLE,
+            )
+        if not status["revoked"]:
             return None
         state = str(status.get("status", "revoked"))
         if state == "suspended":

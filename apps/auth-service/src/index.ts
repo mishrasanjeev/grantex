@@ -4,6 +4,7 @@ import { grantTokenClaimsStartupNotices } from './lib/grant-token-claims.js';
 import { initKeys, initEdKey } from './lib/crypto.js';
 import { getSql } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
+import { revocationFeedSettings } from './lib/revocation-feed/settings.js';
 import { getRedis } from './redis/client.js';
 import { buildApp } from './server.js';
 import { hashApiKey } from './lib/hash.js';
@@ -12,6 +13,10 @@ import { newUsageDailyId } from './lib/ids.js';
 import { startWebhookDeliveryWorker, stopWebhookDeliveryWorker } from './workers/webhookDelivery.js';
 import { startAnomalyDetectionWorker, stopAnomalyDetectionWorker } from './workers/anomalyDetection.js';
 import { startUsageRollupWorker } from './workers/usageRollup.js';
+import {
+  startRevocationFeedPruneWorker,
+  stopRevocationFeedPruneWorker,
+} from './workers/revocationFeedPrune.js';
 import {
   startCommercePaymentReconciliationWorker,
   stopCommercePaymentReconciliationWorker,
@@ -92,6 +97,9 @@ async function main() {
   const stopUsageRollup = config.usageMeteringEnabled
     ? startUsageRollupWorker(sql, redis, newUsageDailyId)
     : null;
+  // Only while the revocation feed is served: it keeps the append-only feed
+  // table bounded (lib/revocation-feed/settings.ts).
+  if (revocationFeedSettings().enabled) startRevocationFeedPruneWorker(sql);
   if (config.commerceReconciliationWorkerEnabled) {
     startCommercePaymentReconciliationWorker(sql, {
       intervalMs: config.commerceReconciliationIntervalMs,
@@ -105,6 +113,7 @@ async function main() {
     stopWebhookDeliveryWorker();
     stopAnomalyDetectionWorker();
     stopUsageRollup?.();
+    stopRevocationFeedPruneWorker();
     stopCommercePaymentReconciliationWorker();
     await app.close();
     await closeRedis();

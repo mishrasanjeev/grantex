@@ -59,16 +59,24 @@ function toEntry(row: FeedRow): FeedEntry {
 
 let triggersPresent = false;
 
+/** Every trigger that has to exist for the feed to see every way a grant stops. */
+export const FEED_TRIGGERS = [
+  'grant_revocation_event_trg',
+  'grant_token_revocation_event_trg',
+  'grant_deletion_event_trg',
+  'grant_token_deletion_event_trg',
+] as const;
+
 /**
- * Is the feed trustworthy? Both triggers must exist, or entries would be
+ * Is the feed trustworthy? Every trigger must exist, or entries would be
  * missing and a client could believe a revoked grant is live. Cached once it
  * is true (a trigger is never dropped at run time).
  */
 export async function feedReady(sql: Sql): Promise<boolean> {
   if (triggersPresent) return true;
   const rows = await sql<{ present: boolean }[]>`
-    SELECT COUNT(*) = 2 AS present FROM pg_trigger
-     WHERE tgname IN ('grant_revocation_event_trg', 'grant_token_revocation_event_trg')`;
+    SELECT COUNT(*) = ${FEED_TRIGGERS.length} AS present FROM pg_trigger
+     WHERE tgname = ANY(${FEED_TRIGGERS as unknown as string[]})`;
   triggersPresent = rows[0]?.present === true;
   return triggersPresent;
 }

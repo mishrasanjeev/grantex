@@ -394,13 +394,20 @@ export class Grantex {
     const query = new URLSearchParams();
     if (ref.grantId !== undefined) query.set('grantId', ref.grantId);
     if (ref.tokenId !== undefined) query.set('jti', ref.tokenId);
-    let status: { status: string; revoked: boolean };
+    let status: { status?: unknown; revoked?: unknown };
     try {
-      status = await this.#http.get<{ status: string; revoked: boolean }>(`/v1/revocations/status?${query.toString()}`);
+      status = await this.#http.get<{ status?: unknown; revoked?: unknown }>(`/v1/revocations/status?${query.toString()}`);
     } catch (err) {
       return {
         reason: `The revocation status of this grant could not be checked (${err instanceof Error ? err.message : String(err)}); `
           + 'denying rather than authorising without it.',
+        subReason: RevocationSubReason.STATUS_UNAVAILABLE,
+      };
+    }
+    if (typeof status !== 'object' || status === null || typeof status.revoked !== 'boolean') {
+      return {
+        reason: 'The revocation status endpoint returned something this client cannot read; '
+          + 'denying rather than assuming the grant is live.',
         subReason: RevocationSubReason.STATUS_UNAVAILABLE,
       };
     }

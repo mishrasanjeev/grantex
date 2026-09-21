@@ -14,7 +14,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getSql } from '../db/client.js';
-import { getRevocationFeedHub, type FeedBatch } from '../lib/revocation-feed/hub.js';
+import { getRevocationFeedHub, resetRevocationFeedHub, type FeedBatch } from '../lib/revocation-feed/hub.js';
 import { revocationFeedEnabledFor, revocationFeedSettings } from '../lib/revocation-feed/settings.js';
 import {
   feedReady,
@@ -68,6 +68,13 @@ function integerParam(value: string | undefined, name: string, min: number, max:
 }
 
 export async function revocationRoutes(app: FastifyInstance): Promise<void> {
+  // The hub owns timers and a LISTEN connection; a closed server must not
+  // leave them running (tests build and close many servers).
+  app.addHook('onClose', async () => {
+    streamsPerDeveloper.clear();
+    await resetRevocationFeedHub();
+  });
+
   app.get<{ Querystring: FeedQuery }>(
     '/v1/revocations',
     { config: { rateLimit: { max: 600, timeWindow: '1 minute' } } },
@@ -115,9 +122,13 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
       if (entries.length === 0 && wait !== null && wait > 0) {
         entries = await waitForEntries(developerId, since, wait);
       }
-      const cursor = entries.length > 0
-        ? Math.max(since, await settledCursor(sql, developerId, since, settings.settleSeconds))
-        : await settledCursor(sql, developerId, since, settings.settleSeconds);
+      // The cursor may never run ahead of what this response carried: a page
+      // is bounded by `limit`, the settled maximum is not, and a client that
+      // adopted the larger number would skip everything in between and still
+      // believe itself up to date.
+      const settled = await settledCursor(sql, developerId, since, settings.settleSeconds);
+      const delivered = entries.reduce((highest, entry) => Math.max(highest, entry.seq), since);
+      const cursor = entries.length > 0 ? Math.min(settled, delivered) : settled;
 
       const etag = `W/"r${cursor}-${entries.length}"`;
       if (entries.length === 0 && request.headers['if-none-match'] === etag) {
@@ -208,7 +219,9 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
         }
       };
 
-      const hub = getRevocationFeedHub(sql, request.log);
+      // The hub outlives this request, so it keeps the service logger rather
+      // than a request-scoped child.
+      const hub = getRevocationFeedHub(sql);
       const unsubscribe = hub.subscribe(developerId, (batch: FeedBatch) => {
         if (!replayed) {
           buffered.push(...batch.entries);
@@ -251,7 +264,13 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
       }, settings.heartbeatMs);
       heartbeat.unref?.();
 
+      let closed = false;
       const close = (): void => {
+        // `close` and `error` can both fire for one connection; without this
+        // the per-developer counter drifts down and the cap stops meaning
+        // anything.
+        if (closed) return;
+        closed = true;
         clearInterval(heartbeat);
         unsubscribe();
         const count = (streamsPerDeveloper.get(developerId) ?? 1) - 1;
