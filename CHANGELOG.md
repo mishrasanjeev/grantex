@@ -172,6 +172,33 @@ below.
   then turning off legacy claims before 0.7), plus the database migrations,
   the new settings and a checklist.
 
+### Event bridge: ingestion hardening
+- Every unverifiable delivery now answers one opaque `401 {"err":
+  "unverifiable"}`, including a source whose developer is outside
+  `EVENT_BRIDGE_DEVELOPER_IDS`, which used to answer `404` and so was a
+  source-existence oracle in exactly the staged rollout the docs recommend.
+  Distinguishing an unknown source from a bad signature from a stale timestamp
+  told anyone who could reach the endpoint which source ids exist and how far a
+  guess had got. The precise reason stays in the log and in the `reason` label
+  of the failure counter. The response *body* is what is indistinguishable: a
+  real id still costs more time than an invented one, which the concepts page
+  now says. **Break:** a sender that matched on the previous `err` values sees
+  `unverifiable` instead.
+- Ingestion rate limiting is keyed on the client address alone. Including the
+  source id let an attacker mint a fresh bucket per made-up id — the bypass the
+  default limiter already documents for bearer tokens — and
+  `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` is now read per request rather than once
+  at boot, as its documentation said.
+- An hourly worker prunes `event_bridge_receipts`, but only once a receipt is
+  older than the window in which its own source would still accept that
+  delivery, and never sooner than `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS`
+  (default 48): pruning earlier would re-open the replay window the receipt
+  exists to close. That window is **twice** `toleranceSeconds` — the webhook
+  timestamp check is two-sided, so a delivery timestamped in the future stays
+  acceptable until `received_at + 2 × tolerance` — or `maxAgeSeconds` plus
+  twice the clock skew for a SET. Raising a source's tolerance later widens the
+  window only for new deliveries; rotate its secret at the same time, because
+  receipts already pruned cannot come back.
 ### Revocation reliability
 - Revocation transactions (cascade, suspend, resume and re-evaluation) retry on
   `deadlock_detected`, `serialization_failure` and `lock_not_available` instead
@@ -252,6 +279,82 @@ below.
 - Migration `111_event_mapping_rules.sql` adds three tables (mapping rules,
   subject bindings and the suspension bookkeeping); it alters no existing
   table, and nothing reads them with the flag off.
+
+### Revocation reliability
+- Revocation transactions (cascade, suspend, resume, re-evaluation and the
+  emergency stop summary) retry on `deadlock_detected`,
+  `serialization_failure` and `lock_not_available` instead of failing. A
+  revocation competes with delegation, token refresh and — during a rolling
+  deploy — the startup migrations, and Postgres raises those errors precisely
+  because retrying is the right answer. See FINDINGS G-18.
+
+### Emergency stop
+- `POST /v1/emergency-stop` (developer API key, own tenant) and
+  `POST /v1/admin/emergency-stop` (`ADMIN_API_KEY`, any tenant) halt every
+  agent under a grant, an agent, a principal or a whole developer (PRD G-6,
+  US-5). Off unless `EMERGENCY_STOP_ENABLED=true`.
+- `confirm` must repeat exactly `stop <type>:<id>`; anything else is refused
+  with `412 CONFIRMATION_REQUIRED` before anything is revoked. The expected
+  phrase is not echoed back — handing it over defeats the confirmation.
+  `dryRun: true` reports how many grants the scope covers and revokes nothing,
+  and the rehearsal is itself recorded with `dry_run = TRUE`, so
+  `GET /v1/emergency-stops` shows who measured a tenant's blast radius and
+  when. A developer key can only ever stop its own grants; an operator call
+  records the address it came from, never the key.
+- The stop sweeps: it revokes what the scope covers, then re-reads the scope
+  until it comes back empty (up to five passes), so a grant delegated while it
+  runs is caught. It is **not** a lockout — the same credential can mint a new
+  grant immediately afterwards, the response says `lockout: false`, and the
+  runbook gives the order (rotate the credential, then stop).
+- The `emergency_stops` record is updated as each batch completes and carries a
+  `status` (`running`, `completed`, `incomplete`, `failed`), the number of
+  sweeps and the error, so a stop that failed part way through can never read
+  as though nothing happened.
+- Underneath it is a cascade revocation per matched grant, so a stop appears in
+  the audit hash chain (one `grantex.grant.revoked` per grant with cause
+  `emergency_stop`, plus a `grantex.emergency_stop` summary) and on the
+  revocation feed, and SDKs in feed mode deny the agents' next calls.
+  `GET /v1/emergency-stops` lists what was stopped, when, by whom and why.
+  `agentsStopped` names at most 100 agents; `agentsStoppedTruncated` and
+  `agentsStoppedTotal` say when that list was cut and how many there really
+  were, in the response and in the permanent audit summary.
+- Every grant the scope covers is revoked, including **suspended** ones, and
+  the bookkeeping a resume needs goes with them: a suspension pending an
+  investigation cannot be resumed after a stop over its scope. The runbook
+  says so, alongside what a stop cannot reach at all (decision grants and
+  passports already issued, work already in flight, agents watching neither
+  the feed nor the status endpoint).
+- Release test: `tests/e2e/emergency-stop.test.ts` runs agents at three depths
+  of a delegation chain plus one that checks revocations `online` rather than
+  through the feed, stops them with one call, cross-checks the reported count
+  against the grants the API listed as live, asserts every agent's next call is
+  denied within two seconds, and asserts that a grant minted afterwards is
+  live — because the stop is a sweep, not a lockout; `scripts/revocation-release-test.sh` runs it
+  beside the propagation measurement. A second case delegates grants **while**
+  a stop is running and asserts nothing is left live, which is the property
+  sweeping exists for.
+- The revocation retry backs off with full jitter, so two transactions that
+  deadlocked against each other do not collide again on the retry.
+- The propagation harnesses now fail when the revoke call *itself* takes more
+  than `REVOCATION_REVOKE_CALL_BUDGET_MS` (default 10 s). Propagation is timed
+  from when that call returns, so a throttled call used to be printed and
+  passed over — on the containment path (FINDINGS G-23). Any latency figure
+  from a run is environment-specific: an independent reviewer measured p95
+  100–506 ms where this checkout's machine measured tens of milliseconds. The
+  release test asserts the requirement, not a number.
+- Runbook: section 11 of `docs/self-hosting.md` (rehearsal, blast radius, what
+  to do when an agent keeps running, and what to do if the API is
+  unreachable). Metric `grantex_emergency_stops_total{scope,outcome}` with an
+  alert rule; migration `113_emergency_stops.sql` adds one table, and adds its
+  later columns with `ALTER TABLE … ADD COLUMN IF NOT EXISTS` rather than
+  inside the `CREATE TABLE IF NOT EXISTS`, which a database that already had
+  an earlier version of the table would skip whole.
+- FINDINGS **G-22** records the lockout gap as a tracked follow-up: the stop
+  revokes what exists and does not stop new grants being issued, which is
+  disclosed everywhere but is still a design gap. FINDINGS **G-23** records
+  that `DELETE /v1/grants/:id` and the stop share the plan rate-limit bucket,
+  so containment is throttled like ordinary traffic on the free plan.
+
 ### Revocation feed: SDKs see revocations within seconds
 - `enforce()` verifies a grant token offline, so a revoked grant's token stays
   valid until it expires. The revocation feed (PRD G-6) closes that gap, off

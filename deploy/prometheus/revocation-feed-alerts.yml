@@ -39,3 +39,14 @@ groups:
             Commit-to-delivery is most of the two second propagation budget in G-6. Check
             REVOCATION_FEED_POLL_MS, database latency, and whether LISTEN notifications are
             arriving (a lost notification leaves only the poll interval).
+      - alert: GrantexEmergencyStopApplied
+        expr: sum by (scope) (increase(grantex_emergency_stops_total{outcome="applied"}[5m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "An emergency stop was applied ({{ $labels.scope }} scope)"
+          description: >-
+            Every agent under that scope has been halted and its grants revoked irreversibly.
+            Expected during a rehearsal or an incident; otherwise find the stop in the auth
+            service logs (alert=emergency_stop) and in GET /v1/emergency-stops, and page the
+            on-call owner.

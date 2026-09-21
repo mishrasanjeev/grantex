@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { SignJWT } from 'jose';
-import { getSql } from '../db/client.js';
+import { getSql, queries } from '../db/client.js';
 import { getKeyPair, getEdKeyPair, parseExpiresIn } from '../lib/crypto.js';
 import { allocateStatusListIndex, setRevocationBits } from '../lib/vc.js';
 import { emitEvent } from '../lib/events.js';
@@ -462,7 +462,7 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
       const statusListId = passport['status_list_id'] as string | null;
       const statusListIdx = Number(passport['status_list_idx']);
       if (statusListId && Number.isInteger(statusListIdx)) {
-        await setRevocationBits(sql, statusListId, [statusListIdx]);
+        await setRevocationBits(queries(sql), statusListId, [statusListIdx]);
       }
 
       // Mark as revoked in mpp_passports
