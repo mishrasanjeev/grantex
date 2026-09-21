@@ -397,8 +397,46 @@ Remove an entry in the pull request that fixes it.
 - **Fixed:** in PR #1337. The write happens first and the cursor advances
   after it, and a throwing write ends the stream instead of being logged and
   ignored, so the client reconnects and replays from its own cursor.
-- **Left:** there is no test for the throwing-write path — driving a failing
-  `reply.raw.write` through `app.inject` is not straightforward, and a test
-  that only looked like it exercised the path would be worse than none. The
-  ordering is visible in the code and the close-path is covered by the
-  existing stream tests.
+- **Left: nothing, and the reason is measured.** There is no test for the
+  throwing-write path because **there is no throwing-write path**. Against a
+  real HTTP server on an ephemeral port under Node 24, with the peer
+  destroyed, with `res.end()` already called, and with the socket destroyed,
+  `res.write()` returned `false` every time and never threw; with no `'error'`
+  listener — which is how this route is written — there was no uncaught
+  exception either, and the peer disconnect fired `request.raw.on('close')` so
+  cleanup ran normally. Node signals a dead-socket write by returning `false`
+  and reporting asynchronously, not by throwing. A test built on "destroy the
+  socket and expect a throw" would therefore have gone green while proving
+  nothing.
+  The `catch` around the subscriber's `send()` stays as defence-in-depth: it
+  costs nothing, and it covers a future write path that does throw
+  (a compression or framing layer, say). It is not the guard against a dead
+  socket. **A writer seam to make the branch testable was considered and
+  rejected**: five lines of production surface for a branch neither reviewer
+  could construct is the wrong trade.
+- **The real exposure is next door:** see G-29.
+
+## G-29 — The revocation stream ignores what `write()` tells it
+
+- **Found:** measurement of the stream's failure modes (PRD G-6), 2026-09-21.
+- **What:** `res.write()` returns `false` when the socket's buffer is full,
+  and that is how Node reports a dead or slow peer — it does not throw (see
+  G-28). `routes/revocations.ts` discards the return value on both the data
+  path and the heartbeat, so a client that has stopped reading, or one behind
+  a stalled proxy, accumulates entries in the process's memory for as long as
+  the connection is held open. Nothing sheds load, nothing logs it, and the
+  heartbeat keeps writing into the same buffer every second.
+- **Why it matters:** this is the live failure mode in this area, and the only
+  one left: the throwing-write branch does not exist, and a slow reader does.
+  One developer's stuck stream is bounded by the connection cap, but each
+  stalled connection holds whatever the feed produces while it is stuck —
+  which during a large cascade or an emergency stop is exactly when memory
+  matters.
+- **Fix:** honour the return value — stop writing while it is `false` and
+  resume on `'drain'`, with a bound on how far behind a stream may fall before
+  it is closed and told to reconnect (the client replays from its own cursor,
+  so closing costs nothing but a reconnect).
+- **Also, asymmetric today:** the heartbeat's `write` sits outside the
+  try/catch that the data path has (`revocations.ts:300-305`), and the
+  heartbeat writes far more often. Harmless while nothing throws, but it
+  should be both or neither, with a comment saying which and why.
