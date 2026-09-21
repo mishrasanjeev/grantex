@@ -113,6 +113,28 @@ class ToolSubReason:
     """The grant's tools entry for the connector does not list the tool."""
 
 
+class RevocationSubReason:
+    """Sub-reasons for :attr:`DenialReason.GRANT_REVOKED` (PRD G-6).
+
+    A call is denied both when the grant is known to be revoked and when the
+    client cannot tell: an SDK that has lost the revocation feed must not keep
+    authorising calls.
+    """
+
+    REVOKED = "revoked"
+    """The auth service says this grant or token is revoked."""
+    SUSPENDED = "suspended"
+    """The grant is suspended: revoked reversibly, pending a decision."""
+    PARENT_REVOKED = "parent_revoked"
+    """A grant above this one in the delegation chain is revoked or suspended."""
+    FEED_STALE = "feed_stale"
+    """The revocation feed has not heard from the auth service inside its bound."""
+    FEED_UNAVAILABLE = "feed_unavailable"
+    """The deployment does not serve the revocation feed, or it is not ready."""
+    STATUS_UNAVAILABLE = "status_unavailable"
+    """An online revocation check could not be completed."""
+
+
 class TokenSubReason:
     """Sub-reasons for :attr:`DenialReason.TOKEN_INVALID`."""
 

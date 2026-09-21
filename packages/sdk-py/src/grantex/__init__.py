@@ -162,8 +162,18 @@ from .denials import (
     DenialReason,
     ManifestSubReason,
     PurposeSubReason,
+    RevocationSubReason,
     TokenSubReason,
     ToolSubReason,
+)
+from .revocations import (
+    REVOCATION_CHECK_MODES,
+    RevocationEntry,
+    RevocationFeed,
+    RevocationFeedState,
+    RevocationMatch,
+    RevokedSet,
+    is_revocation_check_mode,
 )
 from .manifest import (
     EnforceResult,
@@ -373,6 +383,14 @@ __all__ = [
     "CapSubReason",
     "ManifestSubReason",
     "PurposeSubReason",
+    "REVOCATION_CHECK_MODES",
+    "RevocationEntry",
+    "RevocationFeed",
+    "RevocationFeedState",
+    "RevocationMatch",
+    "RevocationSubReason",
+    "RevokedSet",
+    "is_revocation_check_mode",
     "TokenSubReason",
     "ToolSubReason",
     # FastAPI Integration
