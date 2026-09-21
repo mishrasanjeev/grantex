@@ -256,7 +256,26 @@ Remove an entry in the pull request that fixes it.
   records the files without executing them, so run it on an at-head database
   immediately before that deploy; see `docs/self-hosting.md` section 6.
 
-## G-19 — Postgres integration tests share one database, which flakes
+## G-21 — Subject bindings are stored in plaintext
+
+- **Found:** event bridge mapping work (PRD G-6), 2026-09-20; confirmed open in review.
+- **What:** `grant_subject_refs.value` holds the identifier a developer binds a
+  grant to — a company registration number, a tax id, an account id at the
+  provider. It is stored as plaintext, so anyone with read access to the
+  database or a backup of it can enumerate which identifiers a developer is
+  operating on, and join them to principals and agents. Every other
+  developer-supplied secret in this service is encrypted with
+  `encryptWithContext`.
+- **Why not fixed here:** matching needs equality lookups (`by: subject_ref`
+  resolves a `kind`/value pair to grants on every delivery), so it wants a
+  keyed hash for lookup and an encrypted copy for display, plus a migration
+  that rewrites existing rows and a decision about what the API returns. That
+  is its own change.
+- **Impact:** confidentiality of the binding values, not authorization
+  correctness. The bridge never echoes a stored value back to an
+  unauthenticated caller.
+
+## G-24 — Postgres integration tests share one database, which flakes
 
 - **Found:** review of the migration ledger (PRD G-6), 2026-09-21.
 - **What:** every `*-postgres.integration.test.ts` file runs against the same
@@ -275,7 +294,7 @@ Remove an entry in the pull request that fixes it.
   failure gets waved through.
 - **Impact:** an occasional red CI run that is green on re-run.
 
-## G-20 — A migration seeds real third-party company DIDs
+## G-25 — A migration seeds real third-party company DIDs
 
 - **Found:** review of the migration ledger (PRD G-6), 2026-09-21.
 - **What:** `062_trust_registry_verification_token.sql` hardcodes
