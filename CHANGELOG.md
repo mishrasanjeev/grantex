@@ -154,6 +154,86 @@ below.
   then turning off legacy claims before 0.7), plus the database migrations,
   the new settings and a checklist.
 
+### Revocation reliability
+- Revocation transactions (cascade, suspend, resume and re-evaluation) retry on
+  `deadlock_detected`, `serialization_failure` and `lock_not_available` instead
+  of failing. A revocation competes with delegation, token refresh and — during
+  a rolling deploy — the startup migrations, and Postgres raises those errors
+  precisely because retrying is the right answer. See FINDINGS G-18.
+
+### Event bridge: review fixes
+- Credentials issued for a grant are revoked **in the same transaction** as the
+  grant. Fire-and-forget left a status-list bit and a credential row untouched
+  whenever the call failed, and because the delivery that caused it was already
+  finalised, every retry was a duplicate — the credential stayed verifiable
+  after its grant was revoked.
+- A target that resolves a parent and its delegated children (a principal or an
+  agent) now makes **one** suspension rooted at the top-most grant, instead of
+  one per grant; resuming the top-level grant restores the whole subtree. A
+  grant already held by an earlier suspension is never moved into a later one,
+  so resuming the later one cannot resurrect it.
+- Every action carries the context of the event that matched it. A Security
+  Event Token carrying several events used to label every revocation with the
+  first member's type, and re-evaluation entries inherited that type while
+  carrying another event's subject.
+- Re-evaluation is at most once per source, event and rule
+  (`event_bridge_rule_actions`, migration 115, claimed in the same transaction
+  as the audit entries). Revoking and suspending are idempotent; asking the
+  relying platform to look again was not, so a retried delivery asked twice.
+- The subject copied into the audit chain and the outbound event is bounded:
+  scalar members with plain keys, values truncated at 256 characters, at most
+  20 members, and `subject_truncated` when anything was dropped. It is
+  provider-supplied and was written verbatim.
+- Webhook subscriptions accept every event type the platform publishes. The
+  route's list was three hardcoded values, so a developer could not subscribe
+  to `grant.suspended`, `grant.resumed` or `grant.re_evaluation_requested`
+  although they are delivered; both the validation and the error message are
+  now derived from `EVENT_TYPES`, with a test that every publishable type is
+  subscribable.
+- `PUT /v1/grants/:id/subject-refs` checks the grant inside the transaction
+  that writes the bindings, holding the row.
+
+### Event bridge: mapping rules and cascade revocation
+- Declarative mapping rules per developer (PRD G-6) turn a verified event into
+  one action: `POST/GET /v1/event-mapping-rules`, `GET/PATCH
+  /v1/event-mapping-rules/:id`. A rule names an event type (exact or a `*`
+  prefix), up to ten conditions over paths inside the event, a target
+  (`grant_id`, `principal_id`, `agent_id` or a `subject_ref` binding) and one
+  action: `suspend`, `revoke` or `re_evaluate`. `mode: observe` records what a
+  rule would have done and changes nothing.
+- `PUT/GET /v1/grants/:id/subject-refs` binds the identifiers a grant was
+  issued for (business reference, case id) so events about a subject resolve to
+  it. Bindings on a parent grant cover everything delegated beneath it.
+- `revoke` cascades: the grant and every grant delegated beneath it, to any
+  depth, are revoked in one transaction, wallet reservations released,
+  credentials revoked, one audit entry per grant appended to the developer's
+  hash chain, and `grant.revoked` emitted. It takes the same per-developer lock
+  as delegation, so a child delegated during a cascade is either included or
+  never created.
+- `suspend` is reversible revocation (new grant status `suspended`, which every
+  authorisation check treats as inactive); `POST /v1/grants/:id/resume`
+  restores exactly the grants one suspension suspended, refuses while an
+  ancestor is revoked or suspended, and keeps working when the event bridge is
+  off. `re_evaluate` changes nothing and emits
+  `grant.re_evaluation_requested` to the relying platform.
+- Actions of one developer can never reach another developer's grants: every
+  resolution and update is scoped by `developer_id`, and a rule may only name
+  an event source of its own developer.
+- Audit actions `grantex.grant.revoked`, `grantex.grant.suspended`,
+  `grantex.grant.resumed` and `grantex.grant.re_evaluation_requested` carry the
+  cause, the trigger in the evidence-package vocabulary, the root grant and the
+  depth. The `grantex.` prefix and the `grantex:platform` marker stay refused on
+  `POST /v1/audit/log`, so a tenant cannot forge one.
+- New events `grant.suspended`, `grant.resumed` and
+  `grant.re_evaluation_requested` for webhooks and the event stream.
+- Metrics `grantex_event_bridge_rule_matches_total{action,mode}`,
+  `grantex_event_bridge_actions_total{action,outcome}`,
+  `grantex_grant_revocations_total{action,cause}` and
+  `grantex_revocation_propagation_seconds{stage}`, with alert rules for slow
+  event-driven revocation, unreadable targets and revocation bursts.
+- Migration `111_event_mapping_rules.sql` adds three tables (mapping rules,
+  subject bindings and the suspension bookkeeping); it alters no existing
+  table, and nothing reads them with the flag off.
 ### Revocation feed: SDKs see revocations within seconds
 - `enforce()` verifies a grant token offline, so a revoked grant's token stays
   valid until it expires. The revocation feed (PRD G-6) closes that gap, off

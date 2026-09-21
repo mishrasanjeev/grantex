@@ -56,6 +56,7 @@ import { oauthRoutes } from './routes/oauth.js';
 import { prepaidWalletRoutes } from './routes/prepaid-wallets.js';
 import { eventSourcesRoutes } from './routes/event-sources.js';
 import { eventBridgeIngestRoutes } from './routes/event-bridge-ingest.js';
+import { eventActionsRoutes } from './routes/event-actions.js';
 import { revocationRoutes } from './routes/revocations.js';
 import { decisionsRoutes } from './routes/decisions.js';
 import { decisionPageRoutes } from './routes/decision-page.js';
@@ -228,6 +229,7 @@ export async function buildApp(opts: AppOptions = {}) {
   // Event bridge (PRD G-6): source registration, and ingestion in its own
   // scope because signatures cover the raw request bytes.
   await app.register(eventSourcesRoutes);
+  await app.register(eventActionsRoutes);
   // Revocation feed (PRD G-6): how an SDK learns a grant stopped.
   await app.register(revocationRoutes);
   await app.register(eventBridgeIngestRoutes);
