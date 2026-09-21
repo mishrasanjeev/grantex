@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Release test for cascade revocation (PRD G-6): start the auth service against
-# a real Postgres and Redis with the revocation feed on, then measure how long
-# a child grant keeps being authorised after its parent is revoked, through
-# both SDKs.
+# Release test for cascade revocation and the emergency stop (PRD G-6): start
+# the auth service against a real Postgres and Redis with the revocation feed
+# on, measure how long a child grant keeps being authorised after its parent is
+# revoked through both SDKs, then rehearse the emergency stop against running
+# agents.
 #
 #   scripts/revocation-release-test.sh [trials]
 #
@@ -71,7 +72,7 @@ log "starting the auth service on port ${port}"
   PUBLIC_BASE_URL="http://127.0.0.1:${port}" \
   VAULT_ENCRYPTION_KEY="$(node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))')" \
   ADMIN_API_KEY="$(node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))')" \
-  REVOCATION_FEED_ENABLED=true \
+  REVOCATION_FEED_ENABLED=true   EMERGENCY_STOP_ENABLED=true \
   LOG_LEVEL=warn \
   node dist/index.js
 ) &
@@ -101,6 +102,9 @@ REVOCATION_RELEASE_REPORT="${report_dir}/typescript.json" \
 log "checking the same path through vitest"
 REVOCATION_RELEASE_BASE_URL="http://127.0.0.1:${port}" \
   npx --prefix "$root" vitest run --root "$root" tests/e2e/revocation-propagation.test.ts
+
+log "rehearsing the emergency stop"
+REVOCATION_RELEASE_BASE_URL="http://127.0.0.1:${port}" EMERGENCY_STOP_REPORT="${report_dir}/emergency-stop.json"   npx --prefix "$root" vitest run --root "$root" tests/e2e/emergency-stop.test.ts
 
 if [[ "${RELEASE_SKIP_PYTHON:-0}" != "1" ]]; then
   log "measuring with the Python SDK (${trials} trials)"

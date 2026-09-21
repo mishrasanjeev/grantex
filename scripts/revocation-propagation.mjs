@@ -186,3 +186,18 @@ if (report.p95_ms > BUDGET_MS || report.max_ms > 4 * BUDGET_MS) {
   console.error(`p95 ${report.p95_ms} ms / max ${report.max_ms} ms is outside the ${BUDGET_MS} ms budget`);
   process.exit(1);
 }
+// The measurement starts when the revoke call returns, because the rate
+// limiter can throttle that call and that wait is not propagation. Printing
+// it and passing anyway hid a containment problem behind a green run: on the
+// free plan the harness has seen tens of seconds here (FINDINGS G-23). It is
+// a separate budget, generous enough not to fail on an ordinary limiter
+// pause, tight enough that a minute-long wait stops the release.
+const REVOKE_CALL_BUDGET_MS = Number(process.env['REVOCATION_REVOKE_CALL_BUDGET_MS'] ?? 10_000);
+if (report.revoke_call_max_ms > REVOKE_CALL_BUDGET_MS) {
+  console.error(
+    `the revoke call itself took up to ${report.revoke_call_max_ms} ms (budget ${REVOKE_CALL_BUDGET_MS} ms). `
+    + 'Propagation is within budget, but issuing the revocation is not: this is the containment path, '
+    + 'and on a rate-limited plan it is throttled like ordinary traffic (FINDINGS G-23).',
+  );
+  process.exit(1);
+}
