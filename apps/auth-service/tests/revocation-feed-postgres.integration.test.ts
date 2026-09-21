@@ -300,7 +300,18 @@ describePostgres('the revocation feed against real Postgres', () => {
       // One second, the shortest the setting allows, so the backlog settles
       // during the test rather than at the end of the default 15 s window.
       vi.stubEnv('REVOCATION_FEED_SETTLE_SECONDS', '1');
-      const hub = new RevocationFeedHub(sql, log);
+
+      let pages = 0;
+      const counting = new Proxy(sql, {
+        apply(target, thisArg, args: [TemplateStringsArray, ...unknown[]]) {
+          const text = Array.isArray(args[0]) ? args[0].join('?') : String(args[0]);
+          if (text.includes('FROM grant_revocation_events') && text.includes('ORDER BY seq')) pages += 1;
+          return Reflect.apply(target as never, thisArg, args);
+        },
+        get: (target, property) => Reflect.get(target, property),
+      }) as typeof sql;
+
+      const hub = new RevocationFeedHub(counting, log);
       const seen: FeedEntry[] = [];
       const unsubscribe = hub.subscribe(dev, (batch) => { seen.push(...batch.entries); });
       try {
@@ -310,6 +321,11 @@ describePostgres('the revocation feed against real Postgres', () => {
           await new Promise((resolve) => setTimeout(resolve, 50));
         }
         expect(seen.length).toBe(MAX_PAGE + 25);
+        // Two pages of entries, a handful of polls that found nothing settled
+        // yet, and nothing else. Counting is what makes this test fail if the
+        // guard is removed: the unsettled second or so would then be spent
+        // re-reading the same page twenty times per poll.
+        expect(pages).toBeLessThanOrEqual(30);
       } finally {
         unsubscribe();
         await hub.stop();
