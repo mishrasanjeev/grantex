@@ -77,6 +77,28 @@ export const ToolSubReason = {
   NOT_IN_AUTHORIZATION_DETAILS: 'not_in_authorization_details',
 } as const;
 
+/**
+ * Sub-reasons for `grant_revoked` (PRD G-6). A call is denied both when the
+ * grant is known to be revoked and when the client cannot tell: an SDK that
+ * has lost the revocation feed must not keep authorising calls.
+ */
+export const RevocationSubReason = {
+  /** The auth service says this grant or token is revoked. */
+  REVOKED: 'revoked',
+  /** The grant is suspended: revoked reversibly, pending a decision. */
+  SUSPENDED: 'suspended',
+  /** A grant above this one in the delegation chain is revoked or suspended. */
+  PARENT_REVOKED: 'parent_revoked',
+  /** The revocation feed has not heard from the auth service inside its staleness bound. */
+  FEED_STALE: 'feed_stale',
+  /** The deployment does not serve the revocation feed, or it is not ready. */
+  FEED_UNAVAILABLE: 'feed_unavailable',
+  /** An online revocation check could not be completed. */
+  STATUS_UNAVAILABLE: 'status_unavailable',
+} as const;
+
+export type RevocationSubReason = (typeof RevocationSubReason)[keyof typeof RevocationSubReason];
+
 /** Sub-reasons for `token_invalid`. */
 export const TokenSubReason = {
   /** The `authorization_details` claim cannot be read unambiguously. */

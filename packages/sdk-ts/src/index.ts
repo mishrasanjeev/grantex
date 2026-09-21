@@ -16,6 +16,25 @@ export {
 export type { GrantTokenAlgorithm } from './verify.js';
 export { parseScope, scopeMatches, hasScope, missingScopes, type ParsedScope } from './scopes.js';
 
+// Revocation checking (PRD G-6): the feed an SDK follows so enforce() can see
+// a revocation the grant token cannot show.
+export {
+  RevocationFeed,
+  RevokedSet,
+  REVOCATION_CHECK_MODES,
+  isRevocationCheckMode,
+} from './revocations/index.js';
+export type {
+  CredentialRef,
+  FeedUnavailableReason,
+  RevocationAction,
+  RevocationCheckMode,
+  RevocationEntry,
+  RevocationFeedOptions,
+  RevocationFeedState,
+  RevocationMatch,
+} from './revocations/index.js';
+
 // Webhook signature verification
 export { verifyWebhookSignature, verifyWebhook, type VerifyWebhookOptions } from './webhook.js';
 
@@ -109,7 +128,7 @@ export {
 export * from './caps/index.js';
 // Evidence packages (namespaced; grantex.evidence in the Python SDK)
 export * as evidence from './evidence/index.js';
-export { DenialReason, CapSubReason, ManifestSubReason, PurposeSubReason, TokenSubReason, ToolSubReason } from './denials.js';
+export { DenialReason, CapSubReason, ManifestSubReason, PurposeSubReason, RevocationSubReason, TokenSubReason, ToolSubReason } from './denials.js';
 export {
   PURPOSE_VOCABULARY,
   PRIVATE_PURPOSE_PREFIX,

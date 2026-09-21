@@ -5,6 +5,7 @@ import { initKeys, initEdKey } from './lib/crypto.js';
 import { getSql } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { eventBridgeSettings } from './lib/event-bridge/settings.js';
+import { revocationFeedSettings } from './lib/revocation-feed/settings.js';
 import { getRedis } from './redis/client.js';
 import { buildApp } from './server.js';
 import { hashApiKey } from './lib/hash.js';
@@ -17,6 +18,10 @@ import {
   startEventBridgeReceiptPruneWorker,
   stopEventBridgeReceiptPruneWorker,
 } from './workers/eventBridgeReceiptPrune.js';
+import {
+  startRevocationFeedPruneWorker,
+  stopRevocationFeedPruneWorker,
+} from './workers/revocationFeedPrune.js';
 import {
   startCommercePaymentReconciliationWorker,
   stopCommercePaymentReconciliationWorker,
@@ -100,6 +105,9 @@ async function main() {
   // Only while the event bridge is on: it keeps the replay store bounded
   // without removing a receipt whose delivery could still be replayed.
   if (eventBridgeSettings().enabled) startEventBridgeReceiptPruneWorker(sql);
+  // Only while the revocation feed is served: it keeps the append-only feed
+  // table bounded (lib/revocation-feed/settings.ts).
+  if (revocationFeedSettings().enabled) startRevocationFeedPruneWorker(sql);
   if (config.commerceReconciliationWorkerEnabled) {
     startCommercePaymentReconciliationWorker(sql, {
       intervalMs: config.commerceReconciliationIntervalMs,
@@ -114,6 +122,7 @@ async function main() {
     stopAnomalyDetectionWorker();
     stopUsageRollup?.();
     stopEventBridgeReceiptPruneWorker();
+    stopRevocationFeedPruneWorker();
     stopCommercePaymentReconciliationWorker();
     await app.close();
     await closeRedis();
