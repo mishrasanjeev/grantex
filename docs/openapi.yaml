@@ -199,6 +199,35 @@ components:
             properties:
               kind: { type: string }
               value: { type: string }
+    RevocationFeedEntry:
+      type: object
+      properties:
+        seq: { type: integer, description: "Feed position; 0 in a snapshot" }
+        action: { type: string, enum: [revoked, suspended, resumed, token_revoked] }
+        grantId: { type: [string, "null"] }
+        jti: { type: [string, "null"] }
+        expiresAt: { type: [string, "null"], format: date-time }
+        at: { type: string, format: date-time }
+    RevocationFeedPage:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevocationFeedEntry"
+        cursor: { type: integer }
+        nextPageToken: { type: [string, "null"] }
+        snapshot: { type: boolean }
+        serverTime: { type: string, format: date-time }
+    RevocationStatus:
+      type: object
+      properties:
+        status: { type: string, enum: [active, revoked, suspended, expired, unknown] }
+        revoked: { type: boolean, description: "True for anything an agent must not act on" }
+        grantId: { type: [string, "null"] }
+        jti: { type: [string, "null"] }
+        expiresAt: { type: [string, "null"], format: date-time }
+        checkedAt: { type: string, format: date-time }
     EventSource:
       type: object
       properties:
@@ -3338,6 +3367,87 @@ paths:
           description: Not the root of a suspension, or not this developer's grant
         "409":
           description: A grant above this one is revoked or suspended
+  /v1/revocations:
+    get:
+      operationId: listRevocations
+      tags: [Event Bridge]
+      summary: Snapshot of, or changes to, what is revoked
+      description: |
+        Without `since`, a paged snapshot of every grant currently revoked or suspended and not
+        yet expired, plus every individually revoked token, and the `cursor` to stream from (read
+        before the page, so nothing that happens while paging falls between the two). With
+        `since`, the entries after that cursor; `wait` long-polls for up to 25 seconds. The cursor
+        never advances past entries that could still be overtaken by a transaction committing out
+        of order. Requires `REVOCATION_FEED_ENABLED=true`; answers 503 rather than an empty feed
+        when the triggers that fill it are missing.
+      parameters:
+        - { name: since, in: query, schema: { type: integer, minimum: 0 }, description: Feed cursor }
+        - { name: pageToken, in: query, schema: { type: string }, description: Snapshot page cursor }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000 } }
+        - { name: wait, in: query, schema: { type: integer, minimum: 0, maximum: 25 }, description: Long-poll seconds }
+      responses:
+        "200":
+          description: Entries, with the cursor to continue from
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevocationFeedPage"
+        "304":
+          description: Nothing new since the ETag
+        "400":
+          description: Malformed cursor, limit or wait
+        "404":
+          description: The revocation feed is not enabled
+        "503":
+          description: The feed cannot be trusted on this deployment
+  /v1/revocations/status:
+    get:
+      operationId: getRevocationStatus
+      tags: [Event Bridge]
+      summary: Whether one grant or token may still be used
+      description: |
+        Fails closed: a credential this developer does not have reads as `unknown` with
+        `revoked: true`, and so do expired and suspended ones.
+      parameters:
+        - { name: grantId, in: query, schema: { type: string } }
+        - { name: jti, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevocationStatus"
+        "304":
+          description: Unchanged since the ETag
+        "400":
+          description: Neither grantId nor jti was given
+        "404":
+          description: The revocation feed is not enabled
+  /v1/revocations/stream:
+    get:
+      operationId: streamRevocations
+      tags: [Event Bridge]
+      summary: Live revocations as Server-Sent Events
+      description: |
+        Replays from `since`, then sends `revocation` events as they happen and a `heartbeat`
+        every second while the server is reading the database successfully. A client that stops
+        receiving heartbeats must fail closed.
+      parameters:
+        - { name: since, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: An event stream of `ready`, `revocation` and `heartbeat` events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "404":
+          description: The revocation feed is not enabled
+        "429":
+          description: Too many streams for this developer on this instance
+        "503":
+          description: The feed cannot be trusted on this deployment
   /v1/webhooks:
     post:
       operationId: createWebhook
