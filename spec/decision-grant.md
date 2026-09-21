@@ -240,7 +240,11 @@ An enforcer MUST, in this order:
    `same_approver`, `malformed`).
 4. **Consume** every presented grant at the issuer
    (`POST /v1/decisions/consume`), all or none, and allow the call only if the
-   issuer confirmed exactly the presented `jti`s.
+   issuer confirmed exactly the presented `jti`s. The issuer answers with
+   `requestId`, `actionHash`, `jtis` and one `approvers` entry per consumed
+   grant (`sub`, `approver_auth`, `dwell_ms`, `dwell_source`, and the `jti` of
+   the grant it came from), so a platform recording who decided pairs each
+   approver with their own grant rather than by array position.
 
 Offline verification alone MUST NOT allow a call. The issuer consumes with a
 conditional update in one transaction, re-checking the action, case version,

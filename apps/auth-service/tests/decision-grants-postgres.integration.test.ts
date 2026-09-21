@@ -459,7 +459,13 @@ describePostgres('decision grants against real Postgres', () => {
 
     const ok = await consume([token!], action);
     expect(ok.statusCode, ok.body).toBe(200);
-    expect(ok.json()).toMatchObject({ consumed: true, approvers: [{ sub: `user:${namespace}:${sub}`, dwell_source: 'server' }] });
+    // Each approver names the grant they approved with, so a platform
+    // recording who decided never has to line two arrays up by position.
+    expect(ok.json()).toMatchObject({
+      consumed: true,
+      jtis: [claims.jti],
+      approvers: [{ sub: `user:${namespace}:${sub}`, dwell_source: 'server', jti: claims.jti }],
+    });
   });
 
   it('refuses a request without memo or policy score, with a hash that does not match, or with duplicate member names', async () => {
@@ -558,7 +564,14 @@ describePostgres('decision grants against real Postgres', () => {
 
     expect((await consume([tokens[0]!], action)).json()).toMatchObject({ subReason: 'four_eyes_incomplete' });
     expect((await consume([tokens[0]!, tokens[0]!], action)).json()).toMatchObject({ subReason: 'same_approver' });
-    expect((await consume(tokens, action)).statusCode).toBe(200);
+    const consumed = await consume(tokens, action);
+    expect(consumed.statusCode).toBe(200);
+    // Two approvers, each paired with their own grant: position 1 with the
+    // first jti, position 2 with the second.
+    expect(consumed.json()).toMatchObject({
+      jtis: [first!.jti, last!.jti],
+      approvers: [{ sub: first!.sub, jti: first!.jti }, { sub: last!.sub, jti: last!.jti }],
+    });
     expect((await consume(tokens, action)).json()).toMatchObject({ subReason: 'consumed' });
   });
 

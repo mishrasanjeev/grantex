@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Decision grants
+- `POST /v1/decisions/consume` now returns the grant identifier alongside each
+  approver (`approvers[].jti`), so a platform recording who decided pairs the
+  approver with the grant they approved with instead of assuming that the
+  separate `approvers` and `jtis` arrays line up by position. The audit entry
+  already recorded the pair; only the API response omitted it. Additive:
+  existing fields are unchanged.
+
 ### Release versions for the SDKs
 - `@grantex/sdk` 0.6.0 -> 0.7.0, `grantex` (Python) 0.5.1 -> 0.6.0, `@grantex/cli`
   0.3.0 -> 0.4.0, `@grantex/x402` 0.4.0 -> 0.4.1 and the Go SDK 0.3.0 -> 0.4.0.
