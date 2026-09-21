@@ -28,3 +28,35 @@ groups:
             Over half of the deliveries received in 15 minutes were refused. Legitimate provider
             events (for example a dissolution that should revoke grants) are not being acted on.
             Check the transmitter's keys and audience, or the webhook secret rotation.
+      - alert: GrantexEventBridgeTargetInvalid
+        expr: sum by (action) (increase(grantex_event_bridge_actions_total{outcome="target_invalid"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "A mapping rule matched but could not read its target ({{ $labels.action }})"
+          description: >-
+            The event carried no usable identifier at the rule's target path, so the rule acted on
+            nothing. Either the transmitter changed its payload shape or the rule's path is wrong.
+            The auth service logs the rule id (event_bridge=target_invalid).
+      - alert: GrantexRevocationPropagationSlow
+        expr: >-
+          histogram_quantile(0.95, sum by (le) (rate(grantex_revocation_propagation_seconds_bucket{stage="event_to_commit"}[15m]))) > 2
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: Event-driven revocation is taking more than 2 seconds at p95
+          description: >-
+            G-6 requires a mapped event to revoke dependent grants within two seconds at the
+            ninety-fifth percentile. Check database latency and the size of the delegation trees
+            being revoked.
+      - alert: GrantexRevocationBurst
+        expr: sum by (cause) (increase(grantex_grant_revocations_total{action="revoked"}[5m])) > 100
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusual number of revocations ({{ $labels.cause }})"
+          description: >-
+            More than 100 grants were revoked in 5 minutes. Expected during an emergency stop;
+            otherwise check the mapping rules and the events arriving. Tune the threshold to the
+            deployment's normal volume.

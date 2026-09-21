@@ -22,7 +22,8 @@ import {
   reportVerificationFailure,
 } from '../lib/event-bridge/metrics.js';
 import type { EventSourceKind, NormalizedEvent } from '../lib/event-bridge/normalize.js';
-import { handleVerifiedDelivery, unmappedProcessor } from '../lib/event-bridge/pipeline.js';
+import { mappingProcessor } from '../lib/event-bridge/actions.js';
+import { handleVerifiedDelivery } from '../lib/event-bridge/pipeline.js';
 import type { EventProcessor } from '../lib/event-bridge/receipts.js';
 import { eventBridgeEnabledFor, eventBridgeSettings } from '../lib/event-bridge/settings.js';
 import { verifySecurityEventToken } from '../lib/event-bridge/set-verify.js';
@@ -112,6 +113,7 @@ export async function eventBridgeIngestRoutes(app: FastifyInstance, options: Eve
     reply: FastifyReply,
     kind: EventSourceKind,
   ): Promise<FastifyReply> {
+    const receivedAt = Date.now();
     const settings = eventBridgeSettings();
     if (!settings.enabled) {
       return reply.status(404).send({ message: 'Not found', code: 'NOT_FOUND', requestId: request.id });
@@ -185,7 +187,12 @@ export async function eventBridgeIngestRoutes(app: FastifyInstance, options: Eve
     }
     eventBridgeEventsVerifiedTotal.inc({ source_type: kind });
 
-    const processor = options.processorFor?.(request, source) ?? unmappedProcessor(request.log);
+    const processor = options.processorFor?.(request, source)
+      ?? mappingProcessor(sql, request.log, {
+        developerId: source.developer_id,
+        sourceId: source.id,
+        receivedAt,
+      });
     try {
       const outcome = await handleVerifiedDelivery(sql, {
         sourceKind: kind,

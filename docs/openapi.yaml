@@ -146,6 +146,59 @@ components:
       description: Service administrator credential (ADMIN_API_KEY); not a developer API key
 
   schemas:
+    EventMappingRuleInput:
+      type: object
+      additionalProperties: false
+      required: [name, eventType, target, action]
+      properties:
+        name: { type: string, maxLength: 128 }
+        sourceId:
+          type: [string, "null"]
+          description: Only events from this source, or null for any source of this developer
+        eventType:
+          type: string
+          description: Exact event type, or a prefix ending in *
+        conditions:
+          type: array
+          maxItems: 10
+          description: All must hold; each has exactly one of equals, in or exists
+          items:
+            type: object
+            required: [path]
+            properties:
+              path: { type: string, description: "type, subject.* or data.*" }
+              equals: {}
+              in: { type: array, maxItems: 50 }
+              exists: { type: boolean }
+        target:
+          type: object
+          required: [by, path]
+          properties:
+            by: { type: string, enum: [grant_id, principal_id, agent_id, subject_ref] }
+            path: { type: string }
+            kind: { type: string, description: "Binding kind, required for subject_ref" }
+        action: { type: string, enum: [suspend, revoke, re_evaluate] }
+        mode: { type: string, enum: [enforce, observe], default: enforce }
+        status: { type: string, enum: [active, disabled], default: active }
+    EventMappingRule:
+      allOf:
+        - $ref: "#/components/schemas/EventMappingRuleInput"
+        - type: object
+          properties:
+            id: { type: string }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    GrantSubjectRefs:
+      type: object
+      properties:
+        grantId: { type: string }
+        refs:
+          type: array
+          items:
+            type: object
+            properties:
+              kind: { type: string }
+              value: { type: string }
     RevocationFeedEntry:
       type: object
       properties:
@@ -630,7 +683,10 @@ components:
           type: array
           items:
             type: string
-            enum: [grant.created, grant.revoked, token.issued]
+            description: >-
+              Any event type the platform publishes (apps/auth-service/src/lib/events.ts),
+              including grant.created, grant.revoked, grant.suspended, grant.resumed,
+              grant.re_evaluation_requested and token.issued.
         secret:
           type: string
           description: Only returned on creation
@@ -3164,6 +3220,159 @@ paths:
           description: Event bridge not enabled
         "415":
           description: Content-Type is not application/json
+  /v1/event-mapping-rules:
+    post:
+      operationId: createEventMappingRule
+      tags: [Event Bridge]
+      summary: Declare what a provider event does to grants
+      description: |
+        Map an event type and a subject matcher to one action — `suspend`, `revoke` or
+        `re_evaluate`. Rules resolve only this developer's grants. Requires
+        `EVENT_BRIDGE_ENABLED=true`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventMappingRuleInput"
+      responses:
+        "201":
+          description: Rule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventMappingRule"
+        "403":
+          description: Event bridge not enabled
+        "422":
+          description: Validation failed (including a source of another developer)
+    get:
+      operationId: listEventMappingRules
+      tags: [Event Bridge]
+      summary: List mapping rules
+      responses:
+        "200":
+          description: Rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EventMappingRule"
+  /v1/event-mapping-rules/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getEventMappingRule
+      tags: [Event Bridge]
+      summary: Get a mapping rule
+      responses:
+        "200":
+          description: Rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventMappingRule"
+        "404":
+          description: Not found (including rules of another developer)
+    patch:
+      operationId: updateEventMappingRule
+      tags: [Event Bridge]
+      summary: Update, disable or switch a rule to observe mode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventMappingRuleInput"
+      responses:
+        "200":
+          description: Updated rule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventMappingRule"
+        "404":
+          description: Not found
+        "422":
+          description: Validation failed
+  /v1/grants/{id}/subject-refs:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: putGrantSubjectRefs
+      tags: [Event Bridge]
+      summary: Bind subject identifiers to a grant
+      description: |
+        Replace the identifiers (business reference, case id, order id — the developer's own
+        vocabulary) that `subject_ref` mapping rules resolve to this grant. Bindings on a parent
+        grant are enough: actions cascade to everything delegated beneath it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refs]
+              properties:
+                refs:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: object
+                    required: [kind, value]
+                    properties:
+                      kind: { type: string, maxLength: 64 }
+                      value: { type: string, maxLength: 256 }
+      responses:
+        "200":
+          description: Bindings replaced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrantSubjectRefs"
+        "404":
+          description: No such grant for this developer
+        "422":
+          description: Validation failed
+    get:
+      operationId: getGrantSubjectRefs
+      tags: [Event Bridge]
+      summary: List a grant's subject bindings
+      responses:
+        "200":
+          description: Bindings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GrantSubjectRefs"
+  /v1/grants/{id}/resume:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, description: "Root of the suspension" } }
+    post:
+      operationId: resumeSuspendedGrant
+      tags: [Event Bridge]
+      summary: Undo a suspension
+      description: |
+        Restore exactly the grants one suspension suspended. Available whether or not the event
+        bridge is enabled, so a suspension can always be undone.
+      responses:
+        "200":
+          description: Resumed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  grantId: { type: string }
+                  resumedGrantIds: { type: array, items: { type: string } }
+        "404":
+          description: Not the root of a suspension, or not this developer's grant
+        "409":
+          description: A grant above this one is revoked or suspended
   /v1/revocations:
     get:
       operationId: listRevocations
@@ -3268,7 +3477,10 @@ paths:
                   type: array
                   items:
                     type: string
-                    enum: [grant.created, grant.revoked, token.issued]
+                    description: >-
+                      Any event type the platform publishes (apps/auth-service/src/lib/events.ts),
+                      including grant.created, grant.revoked, grant.suspended, grant.resumed,
+                      grant.re_evaluation_requested and token.issued.
                   minItems: 1
               required: [url, events]
       responses:

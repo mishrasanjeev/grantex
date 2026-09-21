@@ -120,6 +120,159 @@ secret. The previous one keeps verifying for `previousSecretTtlSeconds`
 (default one day, at most seven). Pass `0` for a leaked secret so it stops
 immediately.
 
+## Mapping an event to an action
+
+A verified event does nothing until a rule says what it means. A rule is data:
+
+```http
+POST /v1/event-mapping-rules
+Authorization: Bearer <developer API key>
+Content-Type: application/json
+
+{
+  "name": "dissolution revokes onboarding grants",
+  "sourceId": null,
+  "eventType": "business.*",
+  "conditions": [{ "path": "data.status", "equals": "dissolved" }],
+  "target": { "by": "subject_ref", "path": "subject.business_ref", "kind": "business_ref" },
+  "action": "revoke",
+  "mode": "enforce"
+}
+```
+
+| Member | Meaning |
+|---|---|
+| `sourceId` | Only events from this source, or `null` for any source of this developer |
+| `eventType` | Exact type, or a prefix ending in `*` (`business.*` matches `business.dissolved`, not `businessx.dissolved`) |
+| `conditions` | Up to 10 tests over paths in the event; **all** must hold. Each is one of `equals` (a string, number, boolean or null — no type coercion), `in` (up to 50 values) or `exists` |
+| `target` | Which grants the event is about (below) |
+| `action` | `suspend`, `revoke` or `re_evaluate` |
+| `mode` | `enforce` acts; `observe` records what it would have done and changes nothing |
+| `status` | `active` or `disabled` |
+
+Paths start at `type`, `subject` or `data` and address members and array
+elements: `subject.business_ref`, `data.filing.parties.0`. Inherited
+JavaScript members are not event data and never match.
+
+### Targets
+
+| `by` | Resolves to |
+|---|---|
+| `grant_id` | The grants with those ids |
+| `principal_id` | Every live grant of those principals |
+| `agent_id` | Every live grant of those agents |
+| `subject_ref` | Every grant bound to that `kind`/value pair (below) |
+
+The path may hold one identifier or a list of up to 50. Anything else — a
+number, an object, an absent path — records `target_invalid`: the rule acts on
+nothing.
+
+**Every resolution is scoped to the rule's developer.** A rule that names a
+grant, principal or agent of another developer resolves to nothing and records
+`no_target`; no grant of theirs is ever touched, and a rule may only name an
+event source of its own developer.
+
+### Binding a subject to a grant
+
+Provider events talk about businesses and cases, not grant ids. Bind the
+identifiers a grant was issued for:
+
+```http
+PUT /v1/grants/grnt_01.../subject-refs
+{ "refs": [{ "kind": "business_ref", "value": "gb:00000001" },
+           { "kind": "case_id", "value": "case_0001" }] }
+```
+
+`kind` is the developer's own vocabulary (lower case, up to 64 characters);
+values are opaque, up to 50 per grant. Bindings on a parent grant are enough:
+actions cascade to everything delegated beneath it.
+
+## What the actions do
+
+### `revoke` — cascade revocation
+
+The grant and **every grant delegated beneath it, to any depth** are revoked in
+one transaction: their status changes, wallet reservations are released,
+credentials issued for them are revoked, the developer's audit hash chain gets
+one entry per grant, and a `grant.revoked` event is emitted. The Redis
+revocation key is written after the commit as an accelerator; the database
+stays authoritative, so a cache outage cannot undo a committed revocation.
+
+Revocation is irreversible and reaches suspended grants too, so a suspended
+subtree can never be resumed under a revoked ancestor.
+
+Cascade revocation takes the same per-developer lock as delegation, so a child
+being delegated while its parent is revoked either loses the race (the parent
+is gone when it commits) or is included in the cascade. No active grant is ever
+left under a revoked one.
+
+### `suspend` — reversible revocation
+
+The grant and its subtree move to `suspended`. Every authorisation check
+requires `status = 'active'`, so a suspended grant authorises nothing, and its
+tokens stop verifying. Undo it with:
+
+```http
+POST /v1/grants/<root of the suspension>/resume
+```
+
+This restores exactly the grants that suspension suspended. It is refused with
+`409 ANCESTOR_INACTIVE` while any grant above the root is revoked or
+suspended, and it keeps working when the event bridge is turned off, so a
+suspension can always be undone.
+
+A grant is suspended once, under the first root that reached it. So
+suspending an ancestor of an already-suspended subtree reports **zero
+affected**: everything below it is already suspended, and each grant keeps
+the root it was suspended under, so resuming that original root still
+restores exactly what it suspended. Nothing is lost — the second call simply
+has nothing left to do — but do not read "0 affected" as "the suspension did
+not work".
+
+### `re_evaluate` — hand the decision back
+
+Nothing about the grant changes. One audit entry per grant is written and a
+`grant.re_evaluation_requested` event is emitted to the developer's webhooks
+and event stream, carrying the grant ids, the event id and type, the rule id
+and a bounded copy of the event's subject (scalar members, short values, and
+`subject_truncated` when anything was dropped — the subject is
+provider-supplied).
+
+Revoking and suspending are idempotent, so a retried delivery costs nothing.
+Asking the platform to look again is not, so it is claimed per source, event
+and rule and happens at most once however often the delivery is retried.
+
+## Audit records
+
+Every action writes an entry to the developer's audit hash chain:
+
+| Action | Audit action | Metadata |
+|---|---|---|
+| Revoke | `grantex.grant.revoked` | `grant_id`, `root_grant_id`, `depth`, `cascade`, `cause`, `trigger`, `reason?`, `event_id?`, `rule_id?`, `source_id?` |
+| Suspend | `grantex.grant.suspended` | as above |
+| — | — | A set carrying several events labels each action with the event that matched its rule, not the first one |
+| Resume | `grantex.grant.resumed` | `grant_id`, `root_grant_id` |
+| Re-evaluate | `grantex.grant.re_evaluation_requested` | `grant_id`, `event_id`, `rule_id`, `source_id` |
+
+`trigger` uses the evidence-package vocabulary (`api`, `event`, `admin`,
+`cascade`), so an evidence export names why a grant stopped. The `grantex.`
+prefix and the `grantex:platform` marker are reserved: `POST /v1/audit/log`
+refuses them, so a tenant cannot forge a revocation record. These entries are
+written whatever the plan's audit limit — a security record a full plan could
+suppress would be worthless.
+
+## Delivery outcomes
+
+The receipt for each delivery records what the rules did, and the response
+carries the same status:
+
+| Status | Meaning |
+|---|---|
+| `unmapped` | No rule matched. Logged, counted, ignored |
+| `observed` | Only observe-mode rules matched. Nothing changed |
+| `applied` | At least one enforce-mode rule matched; the receipt records per rule whether it was `applied`, `no_target` or `target_invalid` |
+| `duplicate` | This event id was already processed |
+
 ## Replay protection
 
 Each verified delivery claims `(source, event id)` — the SET `jti` or the
@@ -308,6 +461,10 @@ not propagation. That wait is reported separately.
 | `grantex_event_bridge_verification_failures_total` | `source_type`, `reason` |
 | `grantex_event_bridge_events_unmapped_total` | `source_type` |
 | `grantex_event_bridge_events_duplicate_total` | `source_type` |
+| `grantex_event_bridge_rule_matches_total` | `action`, `mode` |
+| `grantex_event_bridge_actions_total` | `action`, `outcome` (`applied`, `observed`, `no_target`, `target_invalid`) |
+| `grantex_grant_revocations_total` | `action` (`revoked`, `suspended`, `resumed`), `cause` (`api`, `event`, `emergency_stop`) |
+| `grantex_revocation_propagation_seconds` | `stage` (`event_to_commit`) |
 | `grantex_revocation_feed_delivery_seconds` | — (commit to delivery) |
 | `grantex_revocation_feed_entries_total` | `action` |
 | `grantex_revocation_feed_polls_total` | `outcome` |
@@ -344,6 +501,12 @@ in `deploy/prometheus/event-bridge-alerts.yml`.
   accepted event may be, not how late the sender is.
 - A disabled source's events are refused, not queued: re-enable it and have
   the sender retransmit.
+- A rule is only as good as the bindings behind it. A grant with no
+  `subject_ref` binding is not reached by a rule that targets one; the
+  delivery records `no_target` and says so in the metrics.
+- Revocation stops new authorisation decisions. An SDK holding a verified
+  token still needs to learn about it; see the revocation feed for how
+  quickly, and what happens when it cannot.
 - The feed tells an SDK what the auth service knows. An agent that does not
   use it (`revocationCheck: 'offline'`, the default) keeps calling until its
   token expires, which is why short grant lifetimes still matter.

@@ -45,6 +45,20 @@ export const eventBridgeEventsDuplicateTotal = new Counter({
   registers: [registry],
 });
 
+export const eventBridgeRuleMatchesTotal = new Counter({
+  name: 'grantex_event_bridge_rule_matches_total',
+  help: 'Mapping rules matched by a verified event',
+  labelNames: ['action', 'mode'] as const,
+  registers: [registry],
+});
+
+export const eventBridgeActionsTotal = new Counter({
+  name: 'grantex_event_bridge_actions_total',
+  help: 'Outcome of each matched mapping rule',
+  labelNames: ['action', 'outcome'] as const,
+  registers: [registry],
+});
+
 export interface VerificationFailure {
   sourceType: SourceType;
   reason: EventVerificationReason;
