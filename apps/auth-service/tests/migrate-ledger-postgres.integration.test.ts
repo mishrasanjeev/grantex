@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { baselineMigrations, checkAtHead, expectedSchema, runMigrations } from '../src/db/migrate.js';
 
 const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
@@ -228,6 +228,95 @@ describePostgres('the migration ledger against real Postgres', () => {
    * The empty-database case below is the easy one; this is the one the
    * command has to refuse.
    */
+  /**
+   * A `CREATE INDEX CONCURRENTLY` that times out leaves the index behind,
+   * invalid — Postgres creates the catalog entry before it waits.
+   *
+   * That is what the repair pass is for, but the pass used to run once,
+   * before the pending loop, over names collected from the pending files. So
+   * this sequence went wrong: the attempt times out and leaves an invalid
+   * index, the retry re-runs the same `IF NOT EXISTS` statement, which
+   * matches the invalid index by name and skips, and the ledger row is
+   * written over the top. The file is never pending again, so the pass never
+   * looks at it again, and the index stays invalid for good — unusable for
+   * reads, still maintained on every write, reported nowhere.
+   *
+   * The contending transaction here holds a row in `grants`, which is enough
+   * to block a concurrent index build on that table.
+   */
+  it('does not record a file whose concurrent index was left invalid, and repairs it on the next boot', async () => {
+    const { sql, url, drop } = await freshDatabase();
+    const holder = postgres(url, { max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    let holding: Promise<unknown> = Promise.resolve();
+    try {
+      await runMigrations(sql);
+
+      // Put one CONCURRENTLY file back in the pending set, with its index
+      // gone, so the next run has to build it again.
+      const file = '069_grants_parent_index.sql';
+      const index = 'idx_grants_parent';
+      await sql.unsafe(`DROP INDEX IF EXISTS ${index}`);
+      await sql`DELETE FROM schema_migrations WHERE filename = ${file}`;
+
+      await sql`
+        INSERT INTO developers (id, api_key_hash, name) VALUES ('dev_cic', 'hash_cic', 'Concurrent Index Test')`;
+      await sql`INSERT INTO agents (id, did, developer_id, name)
+                VALUES ('ag_cic', 'did:grantex:ag_cic', 'dev_cic', 'Agent')`;
+      await sql`
+        INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+        VALUES ('grnt_cic', 'ag_cic', 'user_1', 'dev_cic', ${['tool:acme_kyb:read']}, NOW() + INTERVAL '1 hour')`;
+
+      // An open transaction that has touched `grants`: a concurrent build
+      // waits for it, and with a short lock_timeout gives up part way.
+      holding = holder.begin(async (tx) => {
+        await tx`SELECT id FROM grants WHERE id = 'grnt_cic' FOR UPDATE`;
+        await held;
+      }).catch(() => undefined);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      vi.stubEnv('MIGRATION_LOCK_TIMEOUT', '400ms');
+      await expect(runMigrations(sql)).rejects.toThrow(new RegExp(file));
+
+      // Whatever state the index is in, the file must not be recorded — a
+      // recorded file is never run again.
+      const [recorded] = await sql<{ count: string }[]>`
+        SELECT COUNT(*)::text AS count FROM schema_migrations WHERE filename = ${file}`;
+      expect(Number(recorded!.count)).toBe(0);
+
+      // And it really did get as far as leaving something invalid, or there
+      // is nothing there at all; both are states the next boot can recover
+      // from, and neither may be "valid index recorded as applied".
+      const [before] = await sql<{ valid: boolean | null }[]>`
+        SELECT i.indisvalid AS valid FROM pg_index i
+          JOIN pg_class c ON c.oid = i.indexrelid
+         WHERE c.relname = ${index} AND c.relnamespace = current_schema()::regnamespace`;
+      expect(before?.valid ?? false).toBe(false);
+
+      release();
+      await holding;
+
+      // The next boot repairs whatever was left and builds the index for real.
+      const repaired = await runMigrations(sql);
+      expect(repaired.applied).toContain(file);
+      const [after] = await sql<{ valid: boolean }[]>`
+        SELECT i.indisvalid AS valid FROM pg_index i
+          JOIN pg_class c ON c.oid = i.indexrelid
+         WHERE c.relname = ${index} AND c.relnamespace = current_schema()::regnamespace`;
+      expect(after?.valid).toBe(true);
+      const [ledger] = await sql<{ count: string }[]>`
+        SELECT COUNT(*)::text AS count FROM schema_migrations WHERE filename = ${file}`;
+      expect(Number(ledger!.count)).toBe(1);
+    } finally {
+      vi.unstubAllEnvs();
+      release();
+      await holding;
+      await holder.end({ timeout: 5 }).catch(() => undefined);
+      await drop();
+    }
+  }, 600_000);
+
   it('refuses to baseline a database that is only partly migrated, and says what is missing', async () => {
     const { sql, drop } = await freshDatabase();
     try {

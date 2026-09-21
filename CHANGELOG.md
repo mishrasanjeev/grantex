@@ -174,7 +174,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   renamed migration counts as pending and runs again.
 - An index a cancelled `CREATE INDEX CONCURRENTLY` left `INVALID` is dropped
   before its migration is retried; `CREATE INDEX CONCURRENTLY IF NOT EXISTS`
-  matches such an index by name and would otherwise never rebuild it.
+  matches such an index by name and would otherwise never rebuild it. The
+  repair runs per file and on every attempt, and a file is **not** recorded in
+  the ledger while one of its indexes is invalid — otherwise a build that
+  timed out mid-attempt would be skipped by its own retry, recorded as
+  applied, and never looked at again, leaving an index unusable for reads and
+  still maintained on every write.
 - New `node dist/cli/migrate-baseline.js` records every migration file as
   applied **without executing any of them**, for a database already at head
   that has no ledger. It verifies that precondition itself rather than trusting

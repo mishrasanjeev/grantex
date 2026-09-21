@@ -176,6 +176,26 @@ function isLockTimeout(err: unknown): boolean {
 }
 
 /**
+ * A `CREATE INDEX CONCURRENTLY` that timed out after Postgres had created the
+ * catalog entry leaves the index behind, invalid. Retrying is the right
+ * answer — the next attempt drops it and builds again — so this is marked
+ * retryable in the same way a lock timeout is.
+ */
+class InvalidIndexError extends Error {
+  readonly retryable = true;
+
+  constructor(readonly file: string, readonly indexes: readonly string[]) {
+    super(`${file} left ${indexes.length === 1 ? 'an invalid index' : 'invalid indexes'}: ${indexes.join(', ')}`);
+    this.name = 'InvalidIndexError';
+  }
+}
+
+function isRetryable(err: unknown): boolean {
+  if (isLockTimeout(err)) return true;
+  return typeof err === 'object' && err !== null && (err as { retryable?: unknown }).retryable === true;
+}
+
+/**
  * Run one piece of migration work, retrying while it is only the lock that is
  * busy, and naming what failed when it gives up.
  */
@@ -184,8 +204,8 @@ async function withLockRetry<T>(what: string, lockTimeout: string, run: () => Pr
     try {
       return await run();
     } catch (err) {
-      if (!isLockTimeout(err) || attempt >= LOCK_ATTEMPTS) {
-        const waited = isLockTimeout(err)
+      if (!isRetryable(err) || attempt >= LOCK_ATTEMPTS) {
+        const waited = isRetryable(err)
           ? ` after ${attempt} attempts waiting for a lock (lock_timeout=${lockTimeout})`
           : '';
         throw new Error(
@@ -197,6 +217,24 @@ async function withLockRetry<T>(what: string, lockTimeout: string, run: () => Pr
       await sleep(LOCK_RETRY_BASE_MS * 2 ** (attempt - 1));
     }
   }
+}
+
+/** Which of `names` exist in this schema and are marked invalid. */
+async function invalidIndexes(
+  sql: ReturnType<typeof postgres>,
+  names: readonly string[],
+): Promise<string[]> {
+  if (names.length === 0) return [];
+  const rows = await sql<{ indexname: string }[]>`
+    SELECT c.relname AS indexname
+      FROM pg_index i
+      JOIN pg_class c ON c.oid = i.indexrelid
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE NOT i.indisvalid
+       AND n.nspname = current_schema()
+       AND c.relname = ANY(${names as string[]})
+     ORDER BY c.relname`;
+  return rows.map((row) => row.indexname);
 }
 
 /**
@@ -212,15 +250,7 @@ async function repairInvalidIndexes(
   names: readonly string[],
   lockTimeout: string,
 ): Promise<string[]> {
-  if (names.length === 0) return [];
-  const rows = await sql<{ indexname: string }[]>`
-    SELECT c.relname AS indexname
-      FROM pg_index i
-      JOIN pg_class c ON c.oid = i.indexrelid
-      JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE NOT i.indisvalid
-       AND n.nspname = current_schema()
-       AND c.relname = ANY(${names as string[]})`;
+  const rows = (await invalidIndexes(sql, names)).map((indexname) => ({ indexname }));
   const repaired: string[] = [];
   for (const row of rows) {
     // Dropping concurrently keeps the repair from taking the lock the
@@ -339,14 +369,6 @@ export async function runMigrations(sql: ReturnType<typeof postgres>): Promise<M
     // before the connection goes back to the pool.
     await migrationSql.unsafe(`SET lock_timeout = '${lockTimeout}'`);
 
-    const indexNames = new Set<string>();
-    for (const file of pending) {
-      for (const name of concurrentIndexNames(readFileSync(join(migrationsDir, file), 'utf-8'))) {
-        indexNames.add(name);
-      }
-    }
-    summary.repairedIndexes = await repairInvalidIndexes(migrationSql, [...indexNames], lockTimeout);
-
     for (const file of pending) {
       const content = readFileSync(join(migrationsDir, file), 'utf-8');
       const checksum = checksumOf(content);
@@ -354,8 +376,20 @@ export async function runMigrations(sql: ReturnType<typeof postgres>): Promise<M
       // files record their ledger row immediately after they succeed; every
       // other file commits its statements and its ledger row together.
       const transactional = !runsConcurrently(content);
+      const indexNames = transactional ? [] : concurrentIndexNames(content);
 
       await withLockRetry(file, lockTimeout, async () => {
+        // Per file, and per attempt. A single pass before the loop could not
+        // see an index that this run's own retry left invalid: the attempt
+        // times out after Postgres has created the catalog entry, the retry
+        // re-runs the same `IF NOT EXISTS` statement, which matches the
+        // invalid index by name and skips — and the ledger row is written
+        // over the top of it. The file is then never pending again, so the
+        // pass never looks at it again either, and the index stays invalid
+        // for good: unusable for reads, still maintained on every write, and
+        // reported nowhere.
+        summary.repairedIndexes.push(...await repairInvalidIndexes(migrationSql, indexNames, lockTimeout));
+
         if (transactional) {
           // A reserved connection has no `begin()` helper; it is one session,
           // so the transaction is explicit.
@@ -372,6 +406,10 @@ export async function runMigrations(sql: ReturnType<typeof postgres>): Promise<M
           }
         } else {
           await migrationSql.unsafe(content);
+          // Before the ledger row, not after it. A file recorded as applied
+          // is never re-run, so an index left invalid here would be permanent.
+          const invalid = await invalidIndexes(migrationSql, indexNames);
+          if (invalid.length > 0) throw new InvalidIndexError(file, invalid);
           await migrationSql`
             INSERT INTO schema_migrations (filename, checksum) VALUES (${file}, ${checksum})
             ON CONFLICT (filename) DO NOTHING`;
