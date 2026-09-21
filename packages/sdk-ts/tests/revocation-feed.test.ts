@@ -328,14 +328,17 @@ describe('reconnecting', () => {
         const stream = new ReadableStream<Uint8Array>({
           start(controller) { controller.close(); },
         });
-        return { ok: true, status: 200, headers: { get: () => null }, body: stream, json: async () => ({}), text: async () => '' };
+        return {
+          ok: true, status: 200, headers: { get: (): string | null => null }, body: stream,
+          json: async (): Promise<unknown> => ({}), text: async (): Promise<string> => '',
+        };
       }
       const page = snapshots[Math.min(snapshotCalls, snapshots.length - 1)] ?? [];
       snapshotCalls += 1;
       const body = { entries: page, cursor: 5, nextPageToken: null, snapshot: true };
       return {
-        ok: true, status: 200, headers: { get: () => null },
-        json: async () => body, text: async () => JSON.stringify(body),
+        ok: true, status: 200, headers: { get: (): string | null => null },
+        json: async (): Promise<unknown> => body, text: async (): Promise<string> => JSON.stringify(body),
       };
     });
     vi.stubGlobal('fetch', fetchMock);
