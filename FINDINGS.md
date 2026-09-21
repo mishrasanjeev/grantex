@@ -206,3 +206,59 @@ Remove an entry in the pull request that fixes it.
 - **Fix:** refuse a discovery document whose `issuer` differs from the
   configured `issuer_url`, verify `iss` against the configured value, and add
   tests for both.
+
+## G-17 — The decision-grant migration test sees another test's tables
+
+- **Found:** event bridge cascade revocation work (PRD G-6), 2026-09-20.
+- **What:** `tests/decision-grants-postgres.integration.test.ts` asserts the
+  `decision_%` tables by querying `information_schema.tables` without a schema
+  predicate. `tests/evidence-postgres.integration.test.ts` creates its own
+  schema containing `decision_requests` and `decision_grants`, so when the two
+  files run at the same time against one database the assertion sees duplicate
+  names and fails. Both files are in `main`; the failure is timing-dependent
+  and unrelated to what either test is checking.
+- **Fix:** add `AND table_schema = 'public'` (or `current_schema()`) to the
+  query in the decision-grant test.
+
+## G-18 — Every startup re-runs `ALTER TABLE grants` against live traffic
+
+- **Found:** event bridge cascade revocation work (PRD G-6), 2026-09-20.
+- **What:** `runMigrations` re-applies every file on every start, including
+  `ALTER TABLE grants ADD COLUMN IF NOT EXISTS …` in migrations 002, 018, 061,
+  089, 090, 095 and 098. Even when the column exists, the statement takes a
+  brief `ACCESS EXCLUSIVE` lock on `grants`: during a rolling deploy it queues
+  behind in-flight transactions, blocks every reader and writer of `grants`
+  behind it, and can deadlock against a transaction that goes on to lock more
+  rows (reproduced in this repository's test suite when a migration run
+  overlapped a cascade-revocation transaction: `deadlock detected`).
+- **Fix:** guard each `ALTER TABLE` with a catalogue check (`IF NOT EXISTS
+  (SELECT 1 FROM information_schema.columns …) THEN … END IF`) so a no-op start
+  takes no lock at all, and set a short `lock_timeout` around the real change
+  (migration 100 already uses this pattern for its trigger).
+- **Mitigated, not fixed:** revocation transactions retry on
+  `deadlock_detected` (`apps/auth-service/src/lib/revocation/retry.ts`) so a
+  revocation is not lost to this, and the Postgres integration fixtures retry
+  too (`apps/auth-service/tests/deadlock-retry.ts`). The migrations themselves
+  are unchanged. Seen in the Postgres log as: migration 095's `ALTER TABLE …
+  ADD COLUMN IF NOT EXISTS` waiting for `AccessExclusiveLock` on
+  `audit_entries` while a cascade transaction waited for `AccessShareLock` on
+  `grants`.
+
+## G-21 — Subject bindings are stored in plaintext
+
+- **Found:** event bridge mapping work (PRD G-6), 2026-09-20; confirmed open in review.
+- **What:** `grant_subject_refs.value` holds the identifier a developer binds a
+  grant to — a company registration number, a tax id, an account id at the
+  provider. It is stored as plaintext, so anyone with read access to the
+  database or a backup of it can enumerate which identifiers a developer is
+  operating on, and join them to principals and agents. Every other
+  developer-supplied secret in this service is encrypted with
+  `encryptWithContext`.
+- **Why not fixed here:** matching needs equality lookups (`by: subject_ref`
+  resolves a `kind`/value pair to grants on every delivery), so it wants a
+  keyed hash for lookup and an encrypted copy for display, plus a migration
+  that rewrites existing rows and a decision about what the API returns. That
+  is its own change.
+- **Impact:** confidentiality of the binding values, not authorization
+  correctness. The bridge never echoes a stored value back to an
+  unauthenticated caller.
