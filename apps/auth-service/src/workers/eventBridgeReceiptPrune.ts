@@ -5,9 +5,18 @@
  * is in it, a replay of that delivery is refused. Deleting a receipt too early
  * therefore makes an old delivery acceptable again — so a receipt is only
  * removed once it is older than the window in which its own source would still
- * accept the delivery at all (`tolerance_seconds` for a signed webhook,
- * `max_age_seconds` for a SET), plus the clock skew the verifier allows, and
- * never sooner than `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS`.
+ * accept the delivery at all, and never sooner than
+ * `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS`.
+ *
+ * That window is measured from `received_at`, and it is **twice** the
+ * verifier's tolerance, not once. A webhook's timestamp check is two-sided
+ * (`|now - timestamp| > tolerance`), so a delivery may arrive with a
+ * timestamp up to `tolerance` in the future and stays acceptable until
+ * `timestamp + tolerance` — that is `received_at + 2 × tolerance`. A SET is
+ * accepted while `now - iat <= max_age + skew` and its `iat` may be up to
+ * `skew` ahead, so its horizon is `received_at + max_age + 2 × skew`.
+ * Deleting a receipt before its horizon makes the delivery replayable with a
+ * signature that still verifies.
  *
  * Runs only while the event bridge is enabled.
  */
@@ -38,7 +47,10 @@ export async function pruneEventBridgeReceiptsOnce(
            AND r.received_at < NOW()
              - GREATEST(
                  make_interval(hours => ${settings.receiptRetentionHours}),
-                 make_interval(secs => GREATEST(s.tolerance_seconds, s.max_age_seconds) + ${CLOCK_SKEW_SECONDS})
+                 make_interval(secs => GREATEST(
+                   2 * s.tolerance_seconds,
+                   s.max_age_seconds + 2 * ${CLOCK_SKEW_SECONDS}
+                 ))
                )
         RETURNING r.event_id
       )

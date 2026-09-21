@@ -148,9 +148,13 @@ describePostgres('event bridge sources and replay store against real Postgres', 
         SELECT event_id FROM event_bridge_receipts WHERE source_id = ${row.id} ORDER BY event_id`;
       expect(left.map((entry) => entry.event_id)).toEqual(['evt_fresh']);
 
-      // A source with a long window keeps its receipts for at least that long,
-      // whatever the retention setting says: removing one earlier would let the
-      // delivery it records be replayed.
+      // A source's own window, not the retention setting, is the floor —
+      // and that window is TWICE its tolerance. The webhook timestamp check
+      // is two-sided (`|now - timestamp| > tolerance`), so a delivery may
+      // arrive timestamped up to `tolerance` in the future and stays
+      // acceptable until `received_at + 2 × tolerance`. A receipt deleted at
+      // `tolerance + skew` — which is what this used to do — leaves an hour
+      // in which the delivery replays with a signature that still verifies.
       const longWindow = await createEventSource(sql, dev, {
         kind: 'webhook', name: 'slow sender', toleranceSeconds: 3_600,
       });
@@ -158,9 +162,32 @@ describePostgres('event bridge sources and replay store against real Postgres', 
         INSERT INTO event_bridge_receipts
           (source_id, event_id, developer_id, body_sha256, event_types, status, received_at)
         VALUES (${longWindow.row.id}, 'evt_window', ${dev}, ${'b'.repeat(64)}, ${['x']}, 'applied',
-                NOW() - INTERVAL '30 minutes')`;
+                NOW() - INTERVAL '90 minutes')`;
       vi.stubEnv('EVENT_BRIDGE_RECEIPT_RETENTION_HOURS', '1');
       expect(await pruneEventBridgeReceiptsOnce(sql, log)).toBe(0);
+      // Past 2 × tolerance it can go: nothing would accept the delivery now.
+      await sql`
+        UPDATE event_bridge_receipts SET received_at = NOW() - INTERVAL '121 minutes'
+         WHERE source_id = ${longWindow.row.id}`;
+      expect(await pruneEventBridgeReceiptsOnce(sql, log)).toBe(1);
+
+      // A SET source is bounded by `max_age_seconds` plus twice the 60 s
+      // clock skew, because `iat` may itself be up to a skew in the future.
+      const ssf = await createEventSource(sql, dev, {
+        kind: 'ssf', name: 'transmitter', issuer: 'https://issuer.example.com',
+        jwks: { keys: [{ kty: 'EC', crv: 'P-256', x: 'f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU', y: 'x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0' }] },
+        maxAgeSeconds: 7_200,
+      });
+      await sql`
+        INSERT INTO event_bridge_receipts
+          (source_id, event_id, developer_id, body_sha256, event_types, status, received_at)
+        VALUES (${ssf.row.id}, 'evt_set', ${dev}, ${'c'.repeat(64)}, ${['x']}, 'applied',
+                NOW() - make_interval(secs => 7290))`;
+      expect(await pruneEventBridgeReceiptsOnce(sql, log)).toBe(0);
+      await sql`
+        UPDATE event_bridge_receipts SET received_at = NOW() - make_interval(secs => 7400)
+         WHERE source_id = ${ssf.row.id}`;
+      expect(await pruneEventBridgeReceiptsOnce(sql, log)).toBe(1);
       vi.unstubAllEnvs();
     });
   }, 120_000);

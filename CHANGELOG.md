@@ -156,11 +156,16 @@ below.
 
 ### Event bridge: ingestion hardening
 - Every unverifiable delivery now answers one opaque `401 {"err":
-  "unverifiable"}`. Distinguishing an unknown source from a bad signature from
-  a stale timestamp told anyone who could reach the endpoint which source ids
-  exist and how far a guess had got. The precise reason stays in the log and in
-  the `reason` label of the failure counter. **Break:** a sender that matched
-  on the previous `err` values sees `unverifiable` instead.
+  "unverifiable"}`, including a source whose developer is outside
+  `EVENT_BRIDGE_DEVELOPER_IDS`, which used to answer `404` and so was a
+  source-existence oracle in exactly the staged rollout the docs recommend.
+  Distinguishing an unknown source from a bad signature from a stale timestamp
+  told anyone who could reach the endpoint which source ids exist and how far a
+  guess had got. The precise reason stays in the log and in the `reason` label
+  of the failure counter. The response *body* is what is indistinguishable: a
+  real id still costs more time than an invented one, which the concepts page
+  now says. **Break:** a sender that matched on the previous `err` values sees
+  `unverifiable` instead.
 - Ingestion rate limiting is keyed on the client address alone. Including the
   source id let an attacker mint a fresh bucket per made-up id — the bypass the
   default limiter already documents for bearer tokens — and
@@ -168,9 +173,14 @@ below.
   at boot, as its documentation said.
 - An hourly worker prunes `event_bridge_receipts`, but only once a receipt is
   older than the window in which its own source would still accept that
-  delivery (`toleranceSeconds` / `maxAgeSeconds` plus clock skew) and never
-  sooner than `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS` (default 48): pruning
-  earlier would re-open the replay window the receipt exists to close.
+  delivery, and never sooner than `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS`
+  (default 48): pruning earlier would re-open the replay window the receipt
+  exists to close. That window is **twice** `toleranceSeconds` — the webhook
+  timestamp check is two-sided, so a delivery timestamped in the future stays
+  acceptable until `received_at + 2 × tolerance` — or `maxAgeSeconds` plus
+  twice the clock skew for a SET. Raising a source's tolerance later widens the
+  window only for new deliveries; rotate its secret at the same time, because
+  receipts already pruned cannot come back.
 
 ### Event bridge: signed event ingestion
 - The auth service accepts provider events (PRD G-6), off unless

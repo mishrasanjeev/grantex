@@ -111,12 +111,22 @@ describe('event bridge flag', () => {
     expect(list.json()).toMatchObject({ code: 'FEATURE_DISABLED' });
   });
 
-  it('treats a developer outside EVENT_BRIDGE_DEVELOPER_IDS as not enabled', async () => {
+  it('treats a developer outside EVENT_BRIDGE_DEVELOPER_IDS exactly like an unknown source', async () => {
     vi.stubEnv('EVENT_BRIDGE_DEVELOPER_IDS', 'dev_SOMEONE_ELSE');
     const delivery = signedWebhook(webhookEvent);
     const res = await app.inject({ method: 'POST', url: `/v1/event-bridge/webhooks/${WEBHOOK_ID}`, ...delivery });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(401);
     expect(state.statements.some((s) => s.includes('event_bridge_receipts'))).toBe(false);
+
+    // A real id outside the rollout allowlist used to answer 404 while an
+    // invented id answered 401, which is a reliable source-existence oracle
+    // in precisely the staged-rollout configuration the docs recommend.
+    state.source = null;
+    const invented = await app.inject({
+      method: 'POST', url: `/v1/event-bridge/webhooks/${WEBHOOK_ID}`, ...signedWebhook(webhookEvent),
+    });
+    expect(invented.statusCode).toBe(401);
+    expect(res.json()).toEqual({ ...invented.json(), requestId: res.json<{ requestId: string }>().requestId });
   });
 });
 

@@ -136,23 +136,45 @@ A replay outside the webhook window, or of a SET older than `maxAgeSeconds`,
 is refused before it reaches the replay store.
 
 Receipts are pruned hourly, but only once they are older than the window in
-which their own source would still accept the delivery (`toleranceSeconds` or
-`maxAgeSeconds`, plus the clock skew), and never sooner than
+which their own source would still accept the delivery, and never sooner than
 `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS`. Removing one earlier would make an old
 delivery acceptable again.
+
+That window is **twice** the tolerance, measured from when the delivery
+arrived. A webhook's timestamp check is two-sided, so a delivery may arrive
+timestamped up to `toleranceSeconds` in the *future* and stays acceptable
+until `received_at + 2 × toleranceSeconds`. A SET is bounded by
+`maxAgeSeconds` plus twice the 60 s clock skew, because its `iat` may also be
+ahead of the receiver's clock.
+
+Raising a source's tolerance widens this for future deliveries only. Receipts
+already pruned under the old, narrower window cannot come back, so for the
+length of the new window there are old deliveries that would verify again and
+have no receipt to refuse them. If you raise a tolerance materially, rotate
+the source's secret at the same time: that invalidates every old signature and
+closes the gap immediately.
 
 ## Responses
 
 - `202 {"status": "unmapped" | "applied" | "observed" | "duplicate"}`
 - `401 {"err": "unverifiable", "code": "EVENT_UNVERIFIABLE"}` for every
-  verification failure, including an unknown or disabled source. One code for
-  all of them, on purpose: a sender that could tell "no such source" from "bad
-  signature" from "stale timestamp" could probe for source ids and for how far
-  a guess had got. The precise reason is in the structured log
+  verification failure: an unknown source, a disabled one, a source whose
+  developer is outside `EVENT_BRIDGE_DEVELOPER_IDS`, a bad signature, a stale
+  timestamp, a reused event id. One code for all of them, on purpose: a sender
+  that could tell them apart could probe for source ids and for how far a
+  guess had got. The precise reason is in the structured log
   (`alert: event_bridge_verification_failure`) and in the `reason` label of
-  `grantex_event_bridge_verification_failures_total`
+  `grantex_event_bridge_verification_failures_total`.
+
+  The **response body** is what is indistinguishable, not the work behind it.
+  A real source id proceeds to secret decryption and HMAC comparison, so it
+  takes measurably longer than an unknown one — around 1.4 ms in the
+  reviewer's measurement, over 400 samples each. For an SSF source with a
+  `jwksUri` the difference can be far larger, because a real id can trigger an
+  outbound key fetch. Treat the endpoint as resistant to *reading* which ids
+  exist, not to a patient attacker timing it
 - `415` for the wrong media type
-- `404` when the bridge is off for the source's developer
+- `404` when the bridge is off entirely
 - `5xx` when processing failed; the receipt is left `failed` so the sender's
   retry is processed again
 

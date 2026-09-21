@@ -131,7 +131,11 @@ export async function eventBridgeIngestRoutes(app: FastifyInstance, options: Eve
       return unverifiable(request, reply, kind, sourceId, 'source_unknown', 'unknown event source');
     }
     if (!eventBridgeEnabledFor(settings, source.developer_id)) {
-      return reply.status(404).send({ message: 'Not found', code: 'NOT_FOUND', requestId: request.id });
+      // The same opaque refusal as an unknown id. A 404 here would tell an
+      // unauthenticated caller that the id is real and merely outside the
+      // rollout allowlist — a reliable source-existence oracle in exactly the
+      // staged-rollout configuration the docs recommend.
+      return unverifiable(request, reply, kind, sourceId, 'source_unknown', 'unknown event source');
     }
     if (source.status !== 'active') {
       return unverifiable(request, reply, kind, sourceId, 'source_disabled', 'event source is disabled', source.developer_id);
