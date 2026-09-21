@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Revocation feed: fewer entries, and a poll that does not nest
+- Deleting an already-revoked grant's tokens no longer writes a second feed
+  entry. Cascade revocation sets `grants.status` and leaves
+  `grant_tokens.is_revoked` alone, so when `DELETE /v1/agents/:id` later
+  removed the rows, the grant trigger correctly skipped the grant while the
+  token trigger wrote a `token_revoked`/`deleted` entry for a credential the
+  feed had already reported. Clients were told twice about something already
+  revoked, and the feed re-inflated exactly while the prune worker was trying
+  to bound it. Migration `116_revocation_feed_deletion_skip.sql` replaces the
+  trigger function; it touches no table.
+- The hub drains a backlog in a loop instead of calling itself. A full page
+  used to re-enter the poll from inside itself, so a backlog of N entries
+  nested N/`MAX_PAGE` promise frames — and a backlog is what a large cascade
+  or an emergency stop produces. It is also bounded per call, so one
+  developer's backlog cannot hold the event loop; the remainder is picked up
+  on a later turn, on a timer the hub tracks and `stop()` clears.
+- The drain only reads again when the cursor actually moved. `settledCursor`
+  ignores entries younger than the settle window, so a large cascade — every
+  entry brand new — left the cursor where it was while the page stayed full,
+  and the loop re-read the same thousand rows for the whole window (1779 pages
+  and 3558 round-trips over 15 s for one developer with a 2500-entry backlog,
+  measured). The 500 ms poll interval owns that retry now. Delivery was always
+  correct; the cost was load, on the path that has to deliver revocations
+  within two seconds.
+- `grantex_revocation_feed_polls_total` still counts polls, not pages, now
+  that a poll can read several pages.
+- FINDINGS **G-26** records that the settle window measures insert time rather
+  than commit time.
+
 ### Release versions for the SDKs
 - `@grantex/sdk` 0.6.0 -> 0.7.0, `grantex` (Python) 0.5.1 -> 0.6.0, `@grantex/cli`
   0.3.0 -> 0.4.0, `@grantex/x402` 0.4.0 -> 0.4.1 and the Go SDK 0.3.0 -> 0.4.0.
