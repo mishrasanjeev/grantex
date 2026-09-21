@@ -9,6 +9,14 @@ import {
 
 type Sql = ReturnType<typeof postgres>;
 
+/**
+ * These helpers only ever run queries, which the pool and a transaction
+ * handle do identically. They take the narrower type, so nothing reached from
+ * them can open a transaction — a nested one throws at runtime and rolls the
+ * caller's work back.
+ */
+type AnySql = TxSql;
+
 export type WalletPolicyScope = 'assignment' | 'wallet' | 'agent' | 'group' | 'principal' | 'developer';
 export type WalletPolicyEffect = 'limit' | 'deny' | 'require_approval';
 export type WalletPolicyWindow = 'per_authorization' | 'rolling' | 'calendar_day' | 'calendar_week' | 'calendar_month' | 'lifetime';
@@ -235,7 +243,7 @@ function mapPolicy(row: Record<string, unknown>) {
   };
 }
 
-async function assertScopeOwned(sql: Sql | TxSql, developerId: string, principalId: string | null, scopeType: WalletPolicyScope, scopeId: string | null) {
+async function assertScopeOwned(sql: AnySql, developerId: string, principalId: string | null, scopeType: WalletPolicyScope, scopeId: string | null) {
   if (scopeType === 'developer') {
     if (principalId !== null) throw new WalletSpendPolicyError(403, 'SPEND_POLICY_SCOPE_FORBIDDEN', 'Principal sessions cannot create developer-wide policies');
     return;
@@ -264,7 +272,7 @@ async function assertScopeOwned(sql: Sql | TxSql, developerId: string, principal
 }
 
 export async function createWalletSpendPolicy(
-  sql: Sql | TxSql,
+  sql: AnySql,
   actor: { developerId: string; principalId: string | null },
   input: WalletSpendPolicyInput,
 ) {
@@ -305,7 +313,7 @@ export async function listWalletSpendPolicies(sql: Sql, actor: { developerId: st
 }
 
 export async function setWalletSpendPolicyStatus(
-  sql: Sql | TxSql,
+  sql: AnySql,
   actor: { developerId: string; principalId: string | null },
   policyId: string,
   status: WalletPolicyStatus,
@@ -493,7 +501,7 @@ export async function evaluateWalletSpendPolicies(
 }
 
 export async function recordWalletPolicyDecision(
-  sql: Sql | TxSql,
+  sql: AnySql,
   context: WalletPaymentPolicyContext,
   result: WalletPolicyEvaluationResult,
   references: { reservationId?: string; approvalRequestId?: string } = {},

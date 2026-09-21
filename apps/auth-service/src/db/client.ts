@@ -6,7 +6,34 @@ import { config } from '../config.js';
  * `extends Omit<Sql, ...>`. This helper type restores it for use in transaction
  * callbacks: `sql.begin(async (tx: TxSql) => { await tx\`...\`; })`
  */
-export type TxSql = ReturnType<typeof postgres>;
+/**
+ * A handle that is already inside a transaction, for use in `begin`
+ * callbacks: `sql.begin(async (tx: TxSql) => { await tx`...`; })`.
+ *
+ * This used to alias the **pool** type, which has `begin` on it — so a
+ * parameter typed `TxSql` gave no protection at all, and a helper handed a
+ * caller's transaction could open a nested one. postgres.js has no `begin` on
+ * a transaction handle (it exposes `savepoint`), so that throws
+ * `sql.begin is not a function`, aborts the caller's transaction and rolls
+ * back everything it had done. Cascade revocation hit exactly that and left
+ * grants active while reporting success.
+ *
+ * `TransactionSql` is the real type: tagged templates and `${}` interpolation
+ * still compile, `savepoint` compiles, and `tx.begin(...)` is a compile error.
+ */
+export type TxSql = postgres.TransactionSql<Record<string, unknown>>;
+
+/**
+ * Present the pool where a *query-only* handle is wanted.
+ *
+ * Helpers that run queries and nothing else take `TxSql`, so that they cannot
+ * open a transaction — inside a caller's transaction that throws and rolls the
+ * caller's work back. The pool runs exactly the same queries, so this is the
+ * one place that says so, rather than a cast scattered over every call site.
+ */
+export function queries(sql: ReturnType<typeof postgres>): TxSql {
+  return sql as unknown as TxSql;
+}
 
 let _sql: ReturnType<typeof postgres> | null = null;
 
