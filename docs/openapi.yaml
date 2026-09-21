@@ -146,6 +146,64 @@ components:
       description: Service administrator credential (ADMIN_API_KEY); not a developer API key
 
   schemas:
+    EmergencyStopRequest:
+      type: object
+      required: [scope, reason, confirm]
+      properties:
+        scope:
+          type: object
+          required: [type, id]
+          properties:
+            type: { type: string, enum: [grant, agent, principal, developer] }
+            id: { type: string, maxLength: 256 }
+        reason: { type: string, maxLength: 500 }
+        confirm:
+          type: string
+          description: "Exactly `stop <type>:<id>`"
+        dryRun:
+          type: boolean
+          default: false
+          description: Report the blast radius without revoking anything
+    EmergencyStopResult:
+      type: object
+      properties:
+        stopId: { type: string }
+        developerId: { type: string }
+        status:
+          type: string
+          enum: [running, completed, incomplete, failed]
+          description: >-
+            `incomplete` means grants were still appearing under the scope after five sweeps;
+            `failed` means a batch did not finish, and the record says what was revoked.
+        sweeps: { type: integer, description: How many times the scope was read and revoked }
+        lockout:
+          type: boolean
+          description: >-
+            Always false. The stop revokes what exists; it does not prevent new grants being
+            issued afterwards. Rotate the credential first (see the runbook).
+        error: { type: string, description: Present when status is failed }
+        scope:
+          type: object
+          properties:
+            type: { type: string }
+            id: { type: string }
+        dryRun: { type: boolean }
+        grantsMatched: { type: integer }
+        grantsRevoked: { type: integer, description: "Including everything delegated beneath each matched grant" }
+        agentsStopped:
+          type: array
+          items: { type: string }
+          description: At most 100 agent ids; see agentsStoppedTruncated
+        agentsStoppedTruncated:
+          type: boolean
+          description: True when more agents were stopped than the list names
+        agentsStoppedTotal:
+          type: integer
+          description: How many distinct agents were stopped, whatever the list length
+        reason: { type: string }
+        requestedBy: { type: string }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
     EventMappingRuleInput:
       type: object
       additionalProperties: false
@@ -258,7 +316,12 @@ components:
       properties:
         err:
           type: string
-          description: Verification failure reason (also the metric label)
+          enum: [unverifiable, unsupported_media_type]
+          description: >-
+            One code for every verification failure, so the endpoint cannot be used to probe
+            which source ids exist or how far a guess got. The precise reason is in the auth
+            service log and in the reason label of
+            grantex_event_bridge_verification_failures_total.
         description: { type: string }
         code: { type: string, enum: [EVENT_UNVERIFIABLE] }
         requestId: { type: string }
@@ -3145,7 +3208,8 @@ paths:
       description: |
         Authenticated by the SET signature (no API key). `typ` must be `secevent+jwt`; `iss`, `aud`,
         `iat`, `jti` and `events` are verified against the registration. Unverifiable tokens are
-        refused with 401 and never acted on; a repeated `jti` is not acted on again.
+        refused with 401 (one opaque `err: unverifiable`) and never acted on; a repeated `jti`
+        is not acted on again.
       security: []
       requestBody:
         required: true
@@ -3448,6 +3512,98 @@ paths:
           description: Too many streams for this developer on this instance
         "503":
           description: The feed cannot be trusted on this deployment
+  /v1/emergency-stop:
+    post:
+      operationId: emergencyStop
+      tags: [Event Bridge]
+      summary: Halt every agent under a grant, agent, principal or this developer
+      description: |
+        Cascade-revokes every live grant the scope covers and everything delegated beneath it,
+        re-reading the scope until it comes back empty so a grant delegated mid-stop is caught.
+        `confirm` must repeat exactly `stop <type>:<id>`, or the call is refused with 412 and
+        nothing is revoked; `dryRun: true` reports the blast radius and revokes nothing. A
+        developer API key can only stop its own grants. Revocations are irreversible.
+
+        It is a sweep, not a lockout: the same credential can mint a new grant immediately
+        afterwards (`lockout` is always false), so rotate the leaked credential first — the
+        runbook in section 11 of docs/self-hosting.md gives the order. Requires
+        `EMERGENCY_STOP_ENABLED=true`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmergencyStopRequest"
+      responses:
+        "200":
+          description: What was stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmergencyStopResult"
+        "400":
+          description: Malformed scope, reason or dryRun
+        "403":
+          description: Not enabled, or an attempt to stop another developer
+        "412":
+          description: The confirmation phrase does not match; the response says what it should be
+  /v1/emergency-stops:
+    get:
+      operationId: listEmergencyStops
+      tags: [Event Bridge]
+      summary: What has been stopped, when, by whom and why
+      responses:
+        "200":
+          description: Recent stops
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stops:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/EmergencyStopResult"
+        "403":
+          description: Not enabled
+  /v1/admin/emergency-stop:
+    post:
+      operationId: adminEmergencyStop
+      tags: [Event Bridge]
+      summary: Halt agents in any tenant (operator)
+      description: |
+        The same call for the platform operator, authenticated with `ADMIN_API_KEY`. `developerId`
+        names the tenant for a grant, agent or principal scope; a `developer` scope names it
+        itself.
+      security:
+        - adminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/EmergencyStopRequest"
+                - type: object
+                  properties:
+                    developerId: { type: string }
+      responses:
+        "200":
+          description: What was stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmergencyStopResult"
+        "400":
+          description: Malformed request, or a missing developerId
+        "401":
+          description: Missing or wrong admin key
+        "404":
+          description: Not enabled
+        "412":
+          description: The confirmation phrase does not match
+        "503":
+          description: ADMIN_API_KEY is not configured
   /v1/webhooks:
     post:
       operationId: createWebhook

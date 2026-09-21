@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getSql, type TxSql } from '../db/client.js';
+import { getSql, type TxSql, queries } from '../db/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
 import { parseActorClaim } from '../lib/grant-token-claims.js';
@@ -75,9 +75,9 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
   let replaySweep: ReturnType<typeof setInterval> | undefined;
   if (process.env['NODE_ENV'] !== 'test') {
     app.addHook('onReady', async () => {
-      await clearExpiredRefreshReplayState(getSql());
+      await clearExpiredRefreshReplayState(queries(getSql()));
       replaySweep = setInterval(() => {
-        clearExpiredRefreshReplayState(getSql()).catch((error: unknown) => {
+        clearExpiredRefreshReplayState(queries(getSql())).catch((error: unknown) => {
           app.log.error({ err: error }, 'refresh replay-state sweep failed');
         });
       }, 60_000);

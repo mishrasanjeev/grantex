@@ -20,6 +20,8 @@ import { revokeVCsByGrantIds } from '../vc.js';
 import { grantRevocationsTotal } from './metrics.js';
 import { withTransactionRetry } from './retry.js';
 
+import type { TxSql } from '../../db/client.js';
+
 type Sql = ReturnType<typeof postgres>;
 
 export type RevocationCause = 'api' | 'event' | 'emergency_stop';
@@ -113,7 +115,7 @@ export async function cascadeGrantAction(sql: Sql, input: CascadeInput): Promise
  * restore only that grant and leave the subtree suspended. Keeping only the
  * highest supplied ancestor makes one suspension out of one action.
  */
-async function dropCoveredRoots(tx: Sql, developerId: string, roots: string[]): Promise<string[]> {
+async function dropCoveredRoots(tx: TxSql, developerId: string, roots: string[]): Promise<string[]> {
   if (roots.length < 2) return roots;
   const covered = await tx<{ root_id: string }[]>`
     WITH RECURSIVE supplied(id) AS (SELECT unnest(${roots}::text[])),
@@ -139,7 +141,7 @@ async function cascadeBatch(sql: Sql, input: CascadeInput, rootsIn: string[]): P
   let affected: AffectedRow[] = [];
 
   await withTransactionRetry('cascade', () => sql.begin(async (raw) => {
-    const tx = raw as unknown as Sql;
+    const tx = raw as unknown as TxSql;
     // The same lock delegation and DELETE /v1/grants/:id take: a child being
     // delegated while its parent is revoked either loses the race (the parent
     // is gone when it commits) or is included in this cascade.
@@ -292,7 +294,7 @@ export async function resumeSuspendedGrants(
   let outcome: ResumeOutcome = { status: 'not_suspended', grantIds: [] };
 
   await withTransactionRetry('resume', () => sql.begin(async (raw) => {
-    const tx = raw as unknown as Sql;
+    const tx = raw as unknown as TxSql;
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
 
     const roots = await tx<{ id: string; parent_grant_id: string | null }[]>`

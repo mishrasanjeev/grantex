@@ -35,7 +35,11 @@ export async function withTransactionRetry<T>(
     } catch (err) {
       attempt += 1;
       if (attempt >= MAX_ATTEMPTS || !isRetryable(err)) throw err;
-      const delay = BASE_DELAY_MS * 2 ** (attempt - 1);
+      // Full jitter. Two transactions that deadlocked against each other
+      // back off by the same amount without it, so they collide again on the
+      // retry — which is how a two-party deadlock becomes a four-party one
+      // under load.
+      const delay = Math.round(Math.random() * BASE_DELAY_MS * 2 ** (attempt - 1));
       log.warn(
         { err, retry: what, attempt, delayMs: delay },
         'database asked for a retry; retrying rather than failing a revocation',

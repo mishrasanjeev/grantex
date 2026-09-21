@@ -240,7 +240,8 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `STRIPE_PRICE_ENTERPRISE` | No | — | Stripe price ID for Enterprise tier |
 | `EVENT_BRIDGE_ENABLED` | No | `false` | Accept provider events (SSF/CAEP SETs, signed webhooks); see `docs/concepts/event-bridge-and-revocation.md` |
 | `EVENT_BRIDGE_DEVELOPER_IDS` | No | — | Limit the event bridge to these developers (comma separated) |
-| `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | No | `30000` | Event ingestion requests per source and client address |
+| `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | No | `30000` | Event ingestion requests per client address (read per request) |
+| `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS` | No | `48` | Floor for how long delivery receipts are kept; never shorter than the source's own replay window (twice its tolerance) |
 | `REVOCATION_FEED_ENABLED` | No | `false` | Serve the revocation feed SDKs follow to see revocations (`docs/concepts/event-bridge-and-revocation.md`) |
 | `REVOCATION_FEED_DEVELOPER_IDS` | No | — | Limit the feed to these developers (comma separated) |
 | `REVOCATION_FEED_POLL_MS` | No | `500` | How often an instance looks for new revocations when no notification arrives |
@@ -248,6 +249,7 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `REVOCATION_FEED_HEARTBEAT_MS` | No | `1000` | How often a live stream confirms it is up to date; must stay well below a client's staleness bound |
 | `REVOCATION_FEED_MAX_CONNECTIONS` | No | `200` | Revocation streams one developer may hold on one instance |
 | `REVOCATION_FEED_RETENTION_HOURS` | No | `48` | How long delivered feed entries are kept after the credential expires |
+| `EMERGENCY_STOP_ENABLED` | No | `false` | Serve the emergency stop (section 11); revocations are irreversible |
 
 ---
 
@@ -432,6 +434,167 @@ Before going live, verify each item:
 - [ ] Health checks are wired into your load balancer or uptime monitor
 - [ ] CPU and memory limits are set to prevent runaway containers
 - [ ] Log forwarding is configured (stdout → your observability stack)
+
+## 11. Emergency Stop (Runbook)
+
+One call halts every agent under a grant, an agent, a principal or a whole
+developer. Use it when an agent is doing damage, a provider credential has
+leaked, or a tenant must be stopped now and questions asked afterwards.
+
+It is off unless `EMERGENCY_STOP_ENABLED=true`. Grants stopped this way are
+**revoked, not paused**: there is no undo, and the principals involved have to
+authorise again.
+
+### What it does not do
+
+**It is a sweep, not a lockout.** It revokes what exists — repeatedly, until
+the scope comes back empty, so a grant delegated while it runs is caught by a
+later sweep — and then it is finished. It does **not** prevent new grants from
+being issued a second later. Anyone still holding the developer's API key can
+call `POST /v1/authorize` and mint another one, and `POST /v1/agents` to
+register another agent.
+
+So an incident that starts with a leaked credential needs two actions, in this
+order:
+
+1. **Rotate or disable the leaked credential** — `POST /v1/keys/rotate` for a
+   developer API key, or remove the agent (`DELETE /v1/agents/:id`) so nothing
+   can be issued for it. The platform operator can also disable the developer.
+2. **Then run the emergency stop**, to revoke everything that credential
+   already issued.
+
+Run it the other way round and the stop will be clean while the attacker mints
+a fresh grant behind it. The response says `"lockout": false` for this reason,
+and `status` tells you how the sweep ended: `completed`, `incomplete` (grants
+were still appearing after five sweeps — something is still issuing them, go
+back to step 1) or `failed` (a batch did not finish; the row records what was
+revoked before it stopped, and the call is safe to repeat).
+
+### Before the incident
+
+- Turn on `REVOCATION_FEED_ENABLED=true` and make sure the agents you need to
+  stop use `revocationCheck: 'feed'` (or `online`). An agent checking neither
+  keeps working with the token it already holds until that token expires — the
+  stop revokes the grant, but nothing tells that agent.
+- Keep grant lifetimes short enough that the tokens of an agent you cannot
+  reach expire in a time you can live with.
+- Rehearse it: `scripts/revocation-release-test.sh` runs agents under a grant
+  tree, stops them and measures how long each kept working. Every production
+  release should have rehearsed it (PRD section 10).
+
+### Stopping
+
+Work out the blast radius first — same call, `dryRun: true`. Nothing is
+revoked; the rehearsal itself **is** recorded, as a row with `dryRun: true`,
+so `GET /v1/emergency-stops` shows who has been measuring the blast radius of
+a tenant and when:
+
+```bash
+curl -sS -X POST "$BASE_URL/v1/emergency-stop" \
+  -H "Authorization: Bearer $DEVELOPER_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"scope": {"type": "agent", "id": "ag_01..."},
+       "reason": "incident 4102: provider credentials leaked",
+       "confirm": "stop agent:ag_01...",
+       "dryRun": true}'
+```
+
+Then run it for real by dropping `dryRun`. `confirm` must be exactly
+`stop <type>:<id>` — `stop agent:ag_01...` for the call above. Anything else
+is refused with `412 CONFIRMATION_REQUIRED`. The expected phrase is **not**
+echoed back: the point of the confirmation is that the caller knows what they
+are stopping, which is lost if the endpoint hands them the answer to paste.
+
+| `scope.type` | Stops |
+|---|---|
+| `grant` | That grant and everything delegated beneath it |
+| `agent` | Every live grant of that agent, and their subtrees |
+| `principal` | Every live grant that principal authorised, and their subtrees |
+| `developer` | Every live grant of the developer |
+
+The response names the stop (`stopId`), its `status`, how many sweeps it took,
+how many grants matched and were revoked, which agents were stopped, and
+`lockout: false`. `agentsStopped` lists at most 100 ids; when more were
+stopped, `agentsStoppedTruncated` is true and `agentsStoppedTotal` gives the
+real number.
+
+**Suspended grants are swept up too.** A suspension is reversible; a stop is
+not. Every grant the scope covers with status `active` *or* `suspended` is
+revoked permanently, and the suspension bookkeeping that `POST
+/v1/grants/:id/resume` needs goes with it. If a subtree is suspended pending
+an investigation and you stop its scope, that investigation's subject cannot
+be resumed afterwards — the principals must authorise again.
+
+As the platform operator, use `POST /v1/admin/emergency-stop` with
+`ADMIN_API_KEY` and the same body plus `developerId` (not needed for a
+`developer` scope, where the scope names it). A developer API key can only ever
+stop its own grants.
+
+### What happens
+
+1. Every matched grant and everything delegated beneath it is revoked in one
+   transaction per batch, with wallet reservations released and credential
+   revocation started. The scope is then read again and swept until it comes
+   back empty, so a grant delegated mid-stop is caught.
+2. One audit entry per grant (`grantex.grant.revoked`, cause
+   `emergency_stop`) plus a summary entry (`grantex.emergency_stop`) go on the
+   developer's audit hash chain, and a row goes into `emergency_stops`.
+3. Each revocation reaches the revocation feed in the same transaction, so
+   SDKs in feed mode deny the agents' next calls — measured in well under a
+   second on a local stack, with two seconds as the requirement.
+4. The auth service logs `alert: "emergency_stop"`, and
+   `grantex_emergency_stops_total{scope,outcome}` and
+   `grantex_grant_revocations_total{cause="emergency_stop"}` move.
+
+### Afterwards
+
+```bash
+curl -sS "$BASE_URL/v1/emergency-stops" -H "Authorization: Bearer $DEVELOPER_API_KEY"
+```
+
+- Check `status` in `GET /v1/emergency-stops`: anything other than
+  `completed` means the sweep did not finish cleanly, and the row says how far
+  it got.
+- Check that agents stopped: `grantex_revocation_feed_entries_total` and the
+  agents' own denial logs (`grant_revoked`).
+- Any agent still running is one that is not watching the feed. Rotate or
+  block its credentials, or wait out the token lifetime.
+- To restore service, the principals authorise again; the revoked grants
+  cannot come back.
+- Keep the `stopId`: the audit entries, the `emergency_stops` row and the
+  feed entries all carry it.
+
+### What the stop cannot see
+
+It revokes grants. Anything already handed out and cached elsewhere is
+outside its reach:
+
+- **Decision grants and passports already issued** keep verifying until they
+  expire; they are signed artefacts, not rows the sweep reads. Whatever
+  consumes them has to check revocation itself.
+- **Work already in flight** — a tool call the agent has already made, a
+  payment already authorised downstream — is not recalled. The stop denies
+  the *next* call.
+- **An agent that checks neither the feed nor the status endpoint** keeps
+  using the token it holds until that token expires.
+- **Anything below the depth your rehearsal covered.** The release test
+  exercises three levels of delegation; deeper chains are handled by the same
+  recursive query, but they are not measured.
+- **Agents beyond the hundredth**: the response and the audit summary name at
+  most 100. The summary also carries `agents_stopped_total`, so the true
+  number is written down, but the list is not.
+
+### If the stop itself fails
+
+- `403 FEATURE_DISABLED` / `404`: `EMERGENCY_STOP_ENABLED` is not `true` on
+  the instance you reached.
+- `412 CONFIRMATION_REQUIRED`: the `confirm` phrase does not match.
+- A 5xx: the stop is idempotent — run it again. Grants already revoked are
+  left alone, and a partly finished stop finishes on the retry.
+- If the API cannot be reached at all, revoke at the database
+  (`UPDATE grants SET status = 'revoked', revoked_at = NOW() WHERE …`): the
+  feed triggers fire on that too, so agents still find out. The audit chain
+  will not record it, so write it up.
 
 ## Ownership
 

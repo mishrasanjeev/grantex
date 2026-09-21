@@ -234,6 +234,8 @@ not work".
 Nothing about the grant changes. One audit entry per grant is written and a
 `grant.re_evaluation_requested` event is emitted to the developer's webhooks
 and event stream, carrying the grant ids, the event id and type, the rule id
+and the event's subject. The relying platform decides what to do.
+
 and a bounded copy of the event's subject (scalar members, short values, and
 `subject_truncated` when anything was dropped — the subject is
 provider-supplied).
@@ -282,20 +284,52 @@ webhook `id` — before it is processed:
 |---|---|---|
 | First delivery | `202 {"status": …}` | Yes, once |
 | Same bytes again (a retransmission, or a replay inside the window) | `202 {"status": "duplicate"}` | No |
-| Same id, different payload | `401 {"err": "event_id_reused"}` | No |
+| Same id, different payload | `401 {"err": "unverifiable"}` (reason `event_id_reused` in the log) | No |
 | Earlier delivery failed while processing | processed again | Yes (actions are idempotent) |
 
 A replay outside the webhook window, or of a SET older than `maxAgeSeconds`,
 is refused before it reaches the replay store.
 
+Receipts are pruned hourly, but only once they are older than the window in
+which their own source would still accept the delivery, and never sooner than
+`EVENT_BRIDGE_RECEIPT_RETENTION_HOURS`. Removing one earlier would make an old
+delivery acceptable again.
+
+That window is **twice** the tolerance, measured from when the delivery
+arrived. A webhook's timestamp check is two-sided, so a delivery may arrive
+timestamped up to `toleranceSeconds` in the *future* and stays acceptable
+until `received_at + 2 × toleranceSeconds`. A SET is bounded by
+`maxAgeSeconds` plus twice the 60 s clock skew, because its `iat` may also be
+ahead of the receiver's clock.
+
+Raising a source's tolerance widens this for future deliveries only. Receipts
+already pruned under the old, narrower window cannot come back, so for the
+length of the new window there are old deliveries that would verify again and
+have no receipt to refuse them. If you raise a tolerance materially, rotate
+the source's secret at the same time: that invalidates every old signature and
+closes the gap immediately.
+
 ## Responses
 
 - `202 {"status": "unmapped" | "applied" | "observed" | "duplicate"}`
-- `401 {"err": "<reason>", "description": "…", "code": "EVENT_UNVERIFIABLE"}` for
-  every verification failure, including an unknown or disabled source (so
-  source ids cannot be probed)
+- `401 {"err": "unverifiable", "code": "EVENT_UNVERIFIABLE"}` for every
+  verification failure: an unknown source, a disabled one, a source whose
+  developer is outside `EVENT_BRIDGE_DEVELOPER_IDS`, a bad signature, a stale
+  timestamp, a reused event id. One code for all of them, on purpose: a sender
+  that could tell them apart could probe for source ids and for how far a
+  guess had got. The precise reason is in the structured log
+  (`alert: event_bridge_verification_failure`) and in the `reason` label of
+  `grantex_event_bridge_verification_failures_total`.
+
+  The **response body** is what is indistinguishable, not the work behind it.
+  A real source id proceeds to secret decryption and HMAC comparison, so it
+  takes measurably longer than an unknown one — around 1.4 ms in the
+  reviewer's measurement, over 400 samples each. For an SSF source with a
+  `jwksUri` the difference can be far larger, because a real id can trigger an
+  outbound key fetch. Treat the endpoint as resistant to *reading* which ids
+  exist, not to a patient attacker timing it
 - `415` for the wrong media type
-- `404` when the bridge is off for the source's developer
+- `404` when the bridge is off entirely
 - `5xx` when processing failed; the receipt is left `failed` so the sender's
   retry is processed again
 
@@ -418,7 +452,63 @@ install would otherwise "prove" the criterion against code nobody reviewed.
 And the clock starts when the revocation is committed (when the API call
 returns), not when the call was made: a developer on the free plan is rate
 limited to 100 requests a minute, and the SDK waiting out a `Retry-After` is
-not propagation. That wait is reported separately.
+not propagation. That wait is reported separately as `revoke_call_max_ms` —
+and it now has a budget of its own (10 s, `REVOCATION_REVOKE_CALL_BUDGET_MS`),
+because a release that prints a minute-long wait on the containment path and
+passes anyway is not telling you the truth. FINDINGS G-23 tracks the
+underlying problem: revoking shares the plan's rate-limit bucket with
+ordinary traffic.
+
+Any figure quoted from a run is **environment-specific**. The numbers depend
+on the machine, the container runtime, whether Postgres and Redis are local,
+and what else is running: an independent reviewer measured p95 100–506 ms and
+max 515–673 ms where this checkout's machine measured tens of milliseconds.
+What the release test asserts is the requirement — p95 within two seconds, no
+failed trial — not a particular number.
+
+## The emergency stop
+
+Cascade revocation is the documented emergency stop for the whole platform.
+One authenticated call halts every agent under a grant, an agent, a principal
+or a whole developer:
+
+```http
+POST /v1/emergency-stop
+Authorization: Bearer <developer API key>
+
+{
+  "scope": { "type": "agent", "id": "ag_01..." },
+  "reason": "incident 4102: provider credentials leaked",
+  "confirm": "stop agent:ag_01...",
+  "dryRun": false
+}
+```
+
+- `confirm` must be exactly `stop <type>:<id>`; anything else is refused with
+  `412 CONFIRMATION_REQUIRED` and the phrase it expected. Nothing is revoked
+  before that check passes.
+- `dryRun: true` reports how many grants the scope covers and revokes nothing.
+- A developer API key can only stop its own grants. The platform operator uses
+  `POST /v1/admin/emergency-stop` with `ADMIN_API_KEY` and a `developerId`.
+- `GET /v1/emergency-stops` lists what has been stopped, when, by whom and
+  why.
+- Underneath it is an ordinary cascade revocation per matched grant, so the
+  stop appears in the audit hash chain (one `grantex.grant.revoked` per grant
+  plus one `grantex.emergency_stop` summary) and on the revocation feed, and
+  agents following the feed are denied within seconds.
+- Off unless `EMERGENCY_STOP_ENABLED=true`. The revocations are irreversible:
+  principals have to authorise again.
+- **A sweep, not a lockout.** It revokes what exists, re-reading the scope
+  until it comes back empty so a grant delegated mid-stop is caught, and then
+  it is done: the same API key can mint a new grant immediately afterwards.
+  The response says `"lockout": false`, and `status` is `completed`,
+  `incomplete` (grants kept appearing) or `failed` (a batch did not finish —
+  the record says what was revoked, and the call can be repeated). Rotate the
+  leaked credential first; the runbook gives the order.
+
+The runbook — rehearsing it, working out the blast radius, what to do when an
+agent keeps running, and what to do if the API itself is unreachable — is
+section 11 of `docs/self-hosting.md`.
 
 ## Observability
 
@@ -438,6 +528,7 @@ not propagation. That wait is reported separately.
 | `grantex_revocation_feed_polls_total` | `outcome` |
 | `grantex_revocation_feed_subscribers` | — (live streams on this instance) |
 | `grantex_revocation_feed_stale_seconds` | — (since the last successful read) |
+| `grantex_emergency_stops_total` | `scope`, `outcome` (`applied`, `dry_run`, `refused`) |
 
 Every refused delivery also logs `alert: "event_bridge_verification_failure"`
 with the source id and reason, never the payload or signature. Alert rules are
@@ -449,7 +540,8 @@ in `deploy/prometheus/event-bridge-alerts.yml`.
 |---|---|---|
 | `EVENT_BRIDGE_ENABLED` | `false` | Turns on registration and ingestion |
 | `EVENT_BRIDGE_DEVELOPER_IDS` | (all) | Comma-separated developers the bridge is limited to, for a staged rollout |
-| `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | `30000` | Ingestion requests per source and client address |
+| `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | `30000` | Ingestion requests per client address, read per request |
+| `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS` | `48` | Floor for how long a delivery receipt is kept; never shorter than the window in which its source would still accept the delivery |
 | `VAULT_ENCRYPTION_KEY` | — | Required to register webhook sources |
 | `REVOCATION_FEED_ENABLED` | `false` | Serves the revocation feed endpoints |
 | `REVOCATION_FEED_DEVELOPER_IDS` | (all) | Developers the feed is limited to |

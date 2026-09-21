@@ -6,7 +6,8 @@
  * 095, 098). Those statements take a brief `ACCESS EXCLUSIVE` lock, so a test
  * file doing ordinary work on those tables can be chosen as the victim when
  * another file's migration run overlaps it — the same hazard a rolling deploy
- * has in production, recorded as FINDINGS G-17/G-18.
+ * has in production, recorded as FINDINGS G-18. (G-17 is a different thing:
+ * a catalogue query that saw another test's schema.)
  *
  * The product code retries these itself (`lib/revocation/retry.ts`); this is
  * the same courtesy for the test's own queries, so the suite measures the

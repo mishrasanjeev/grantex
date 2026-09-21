@@ -181,6 +181,18 @@ def main() -> int:
     if report["p95_ms"] > BUDGET_MS:
         print(f"p95 {report['p95_ms']:.0f} ms is above the {BUDGET_MS:.0f} ms budget", file=sys.stderr)
         return 1
+    # The revoke call itself is measured separately, because propagation is
+    # timed from when it returns. Printing a long wait and passing anyway hid
+    # a containment problem: on a rate-limited plan this call is throttled
+    # like ordinary traffic (FINDINGS G-23).
+    revoke_budget_ms = float(os.environ.get("REVOCATION_REVOKE_CALL_BUDGET_MS", "10000"))
+    if report["revoke_call_max_ms"] > revoke_budget_ms:
+        print(
+            f"the revoke call itself took up to {report['revoke_call_max_ms']:.0f} ms "
+            f"(budget {revoke_budget_ms:.0f} ms); propagation is fine, issuing the revocation is not",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
