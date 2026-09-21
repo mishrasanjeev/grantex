@@ -267,6 +267,15 @@ export async function safeFetch(
 
   const body = normalizeRequestBody(init.body);
   const headers = normalizeHeaders(init.headers);
+  // Frame the body by length. Without Content-Length, node sends it with
+  // Transfer-Encoding: chunked, which is valid HTTP/1.1 but which plenty of
+  // servers, gateways and filtering proxies refuse on a POST - an OpenID
+  // Connect token endpoint among them. The length is always known here,
+  // because normalizeRequestBody has already materialised the body.
+  // normalizeHeaders returns lower-case names (Headers.forEach does).
+  if (body !== undefined && headers['content-length'] === undefined && headers['transfer-encoding'] === undefined) {
+    headers['content-length'] = String(typeof body === 'string' ? Buffer.byteLength(body) : body.byteLength);
+  }
   const requestImpl = target.url.protocol === 'https:' ? https.request : http.request;
   const lookup = createPinnedLookup(target);
 

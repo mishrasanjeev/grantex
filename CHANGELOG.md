@@ -6,13 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Outbound HTTP
+- `safeFetch` frames a request body with `Content-Length`. Without it node
+  sends the body with `Transfer-Encoding: chunked`, which is valid HTTP/1.1 but
+  which plenty of servers, gateways and filtering proxies refuse on a POST - an
+  OpenID Connect token endpoint among them, so an approver's sign-in for a
+  decision grant could fail at the token exchange against such a provider. The
+  length is always known, because the body is materialised before the request
+  is made; an explicit `Content-Length` or `Transfer-Encoding` is left alone.
+
 ### Decision grants
-- `POST /v1/decisions/consume` now returns the grant identifier alongside each
-  approver (`approvers[].jti`), so a platform recording who decided pairs the
-  approver with the grant they approved with instead of assuming that the
-  separate `approvers` and `jtis` arrays line up by position. The audit entry
-  already recorded the pair; only the API response omitted it. Additive:
-  existing fields are unchanged.
+- **`POST /v1/decisions/consume` now returns the grant identifier alongside
+  each approver (`approvers[].jti`).** A platform that records who decided
+  needs the pair, and the response gave it two arrays it could only line up by
+  position - which is not safe: `jtis` is in the order the caller presented the
+  tokens, while `approvers` is ordered by approval position, so for a four-eyes
+  decision the two can genuinely disagree and a platform pairing them by index
+  can attribute a grant to the wrong approver. The audit entry written in the
+  same transaction already recorded the pair; the response was the same
+  projection minus `jti`, and is now identical to it. Additive: every existing
+  field is unchanged.
 
 ### Revocation feed: fewer entries, and a poll that does not nest
 - Deleting an already-revoked grant's tokens no longer writes a second feed
