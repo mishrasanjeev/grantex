@@ -564,12 +564,14 @@ describePostgres('decision grants against real Postgres', () => {
 
     expect((await consume([tokens[0]!], action)).json()).toMatchObject({ subReason: 'four_eyes_incomplete' });
     expect((await consume([tokens[0]!, tokens[0]!], action)).json()).toMatchObject({ subReason: 'same_approver' });
-    const consumed = await consume(tokens, action);
-    expect(consumed.statusCode).toBe(200);
-    // Two approvers, each paired with their own grant: position 1 with the
-    // first jti, position 2 with the second.
+    // Presented second grant first, so the two arrays disagree: `jtis` follows
+    // the presentation order and `approvers` follows the approval order. A
+    // caller pairing them by index would attribute each grant to the other
+    // approver, which is why each approver names its own.
+    const consumed = await consume([tokens[1]!, tokens[0]!], action);
+    expect(consumed.statusCode, consumed.body).toBe(200);
     expect(consumed.json()).toMatchObject({
-      jtis: [first!.jti, last!.jti],
+      jtis: [last!.jti, first!.jti],
       approvers: [{ sub: first!.sub, jti: first!.jti }, { sub: last!.sub, jti: last!.jti }],
     });
     expect((await consume(tokens, action)).json()).toMatchObject({ subReason: 'consumed' });

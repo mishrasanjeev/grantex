@@ -8161,7 +8161,40 @@ paths:
                 agentId: { type: string }
                 grantId: { type: string }
       responses:
-        "200": { description: "consumed, requestId, jtis, approvers, actionHash" }
+        "200":
+          description: |
+            Every presented grant was consumed. Each `approvers` entry names the grant it came from, so a
+            platform recording who decided pairs the two without assuming that `approvers` and `jtis` line up:
+            `jtis` is in the order the grants were presented, `approvers` is in approval order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [consumed, requestId, jtis, approvers, actionHash]
+                properties:
+                  consumed: { type: boolean, enum: [true] }
+                  requestId: { type: string, description: The decision request the grants belong to }
+                  jtis:
+                    type: array
+                    minItems: 1
+                    maxItems: 2
+                    items: { type: string }
+                    description: The consumed grant identifiers, in the order they were presented
+                  approvers:
+                    type: array
+                    minItems: 1
+                    maxItems: 2
+                    description: One entry per consumed grant, in approval order
+                    items:
+                      type: object
+                      required: [sub, approver_auth, dwell_ms, dwell_source, jti]
+                      properties:
+                        sub: { type: string, description: "The approver, `user:<ns>:<sub>`" }
+                        approver_auth: { type: string, description: "How they authenticated, e.g. `sso+hwk+pwd`" }
+                        dwell_ms: { type: integer, description: Milliseconds the service measured on the approval page }
+                        dwell_source: { type: string, enum: [server] }
+                        jti: { type: string, description: The grant this approver spent }
+                  actionHash: { type: string }
         "400": { description: "Malformed request or token (subReason malformed)" }
         "409": { description: "Refused (subReason action_mismatch, wrong_case, consumed, same_approver, case_changed, revoked, expired, four_eyes_incomplete or unknown_grant)" }
         "503": { description: The refusal could not be recorded }
