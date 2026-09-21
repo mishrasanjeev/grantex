@@ -98,6 +98,25 @@ class RevokedSet:
         for entry in entries:
             self.apply(entry)
 
+    def replace_all(self, entries: Iterable[RevocationEntry]) -> None:
+        """Replace everything this set knows with ``entries``.
+
+        A snapshot is the complete list of what is revoked or suspended *now*,
+        so applying one on top of an existing set keeps anything that has since
+        been resumed: a grant suspended and then resumed while this client was
+        disconnected would go on being denied until it expired, because the
+        resume entry passed by while nobody was listening and the snapshot
+        never mentions it.
+
+        The swap happens under the set's own lock, so a concurrent ``match``
+        sees the old contents or the new ones, never an empty set.
+        """
+        materialised = list(entries)
+        with self._lock:
+            self._grants.clear()
+            self._tokens.clear()
+        self.apply_all(materialised)
+
     def match(
         self,
         *,

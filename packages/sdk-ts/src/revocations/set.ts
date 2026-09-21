@@ -62,6 +62,24 @@ export class RevokedSet {
     for (const entry of entries) this.apply(entry);
   }
 
+  /**
+   * Replace everything this set knows with `entries`.
+   *
+   * A snapshot is the complete list of what is revoked or suspended *now*, so
+   * applying one on top of an existing set keeps anything that has since been
+   * resumed. A grant suspended, then resumed while the client was
+   * disconnected, would go on being denied until it expired: the resume
+   * entry passed by while nobody was listening, and the snapshot that
+   * replaced the stream never mentions it.
+   *
+   * Nothing awaits between clearing and refilling, so no caller can observe
+   * an empty set.
+   */
+  replaceAll(entries: readonly RevocationEntry[]): void {
+    this.clear();
+    this.applyAll(entries);
+  }
+
   /** Why this credential must not be used, or `null` if this set knows nothing against it. */
   match(ref: CredentialRef, now: number = Date.now()): RevocationMatch | null {
     const grant = ref.grantId === undefined ? undefined : this.#grants.get(ref.grantId);
