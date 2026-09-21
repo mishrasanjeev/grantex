@@ -159,6 +159,20 @@ async function claimIndexFromExistingList(
 }
 
 /**
+ * The pool, if that is what this handle really is.
+ *
+ * Both the pool and a transaction handle run queries the same way, so these
+ * helpers take the narrower type — a transaction handle, which cannot open a
+ * transaction of its own. Only the code that genuinely needs to *start* one
+ * asks, and only when it was handed the pool.
+ */
+function asPool(sql: TxSql): ReturnType<typeof postgres> | null {
+  return typeof (sql as { begin?: unknown }).begin === 'function'
+    ? (sql as unknown as ReturnType<typeof postgres>)
+    : null;
+}
+
+/**
  * Set revocation bits on one list.
  *
  * `SELECT ... FOR UPDATE` is what makes this safe: the bitstring is gzipped
@@ -177,7 +191,7 @@ async function claimIndexFromExistingList(
  * grant" true.
  */
 async function setRevocationBits(
-  sql: ReturnType<typeof postgres> | TxSql,
+  sql: TxSql,
   listId: string,
   indices: number[],
 ): Promise<void> {
@@ -206,11 +220,11 @@ async function setRevocationBits(
 
   // `begin` exists on the pool and not on a transaction handle; that is the
   // only difference that matters here.
-  const opensTransactions = typeof (sql as { begin?: unknown }).begin === 'function';
-  if (opensTransactions) {
-    await (sql as ReturnType<typeof postgres>).begin(async (_tx) => flip(_tx as unknown as TxSql));
+  const pool = asPool(sql);
+  if (pool) {
+    await pool.begin(async (tx) => flip(tx as unknown as TxSql));
   } else {
-    await flip(sql as TxSql);
+    await flip(sql);
   }
 }
 
@@ -398,7 +412,9 @@ export async function revokeVCsByGrantIds(
 ): Promise<void> {
   if (grantIds.length === 0) return;
 
-  const sql = tx ?? getSql();
+  // The pool runs the same queries a transaction handle does; it is typed as
+  // one here so nothing reached from this function can open a transaction.
+  const sql: TxSql = tx ?? (getSql() as unknown as TxSql);
 
   // Find all active VCs for these grants
   const vcRows = await sql`

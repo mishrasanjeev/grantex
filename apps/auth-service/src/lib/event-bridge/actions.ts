@@ -8,6 +8,7 @@
  * delivery records `no_target` and no grant anywhere changes.
  */
 import type postgres from 'postgres';
+import type { TxSql } from '../../db/client.js';
 import type { AppLogger } from '../logger.js';
 import { cascadeGrantAction, AUDIT_ACTIONS } from '../revocation/cascade.js';
 import { revocationPropagationSeconds } from '../revocation/metrics.js';
@@ -136,7 +137,7 @@ export async function requestReEvaluation(
   if (grantIds.length === 0) return false;
   let claimed = false;
   await withTransactionRetry('re_evaluate', () => sql.begin(async (raw) => {
-    const tx = raw as unknown as Sql;
+    const tx = raw as unknown as TxSql;
     const rows = await tx<{ rule_id: string }[]>`
       INSERT INTO event_bridge_rule_actions
         (source_id, event_id, event_index, rule_id, developer_id, action, grants)

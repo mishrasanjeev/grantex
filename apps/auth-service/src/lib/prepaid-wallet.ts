@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type postgres from 'postgres';
-import type { TxSql } from '../db/client.js';
+import { queries, type TxSql } from '../db/client.js';
 import {
   newPrepaidWalletId,
   newWalletAssignmentId,
@@ -1381,7 +1381,7 @@ export async function reserveWalletPayment(
         expiresAt: new Date(approval.expiresAt as string).toISOString(),
       };
     }
-    await recordWalletPolicyDecision(sql, decisionError.context, decisionError.result);
+    await recordWalletPolicyDecision(queries(sql), decisionError.context, decisionError.result);
     await safeEvent(identity.developerId, 'wallet.payment.denied', {
       walletId: decisionError.context.walletId,
       agentId: identity.agentId,
