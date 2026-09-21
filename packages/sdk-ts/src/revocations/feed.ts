@@ -202,13 +202,24 @@ export class RevocationFeed {
   async #snapshot(): Promise<void> {
     let pageToken: string | null | undefined;
     let cursor = 0;
+    // Collected first and swapped in once every page has arrived. A snapshot
+    // is the whole truth about what is revoked *now*, so applying it on top
+    // of what the set already held kept anything resumed while this client
+    // was disconnected — denied until it expired. Swapping only after the
+    // last page means a failure part way through leaves the previous set
+    // intact rather than a half-built one.
+    const entries: RevocationEntry[] = [];
     do {
-      const query = pageToken === undefined || pageToken === null ? '' : `?pageToken=${encodeURIComponent(pageToken)}`;
+      // `pageToken` is empty only on the first pass; the loop condition ends
+      // it otherwise. The previous null/undefined pair was half redundant,
+      // which is what the static analysis was pointing at.
+      const query = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : '';
       const page = await this.#http.get<FeedPage>(`/v1/revocations${query}`);
-      this.#set.applyAll(page.entries);
+      entries.push(...page.entries);
       cursor = page.cursor;
       pageToken = page.nextPageToken;
-    } while (pageToken !== undefined && pageToken !== null);
+    } while (pageToken);
+    this.#set.replaceAll(entries);
     this.#set.prune();
     this.#cursor = cursor;
     this.#synced = true;
