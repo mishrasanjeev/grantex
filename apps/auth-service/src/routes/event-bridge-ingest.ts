@@ -54,6 +54,16 @@ function mediaType(request: FastifyRequest): string {
   return (typeof header === 'string' ? header : '').split(';')[0]!.trim().toLowerCase();
 }
 
+/**
+ * Every rejection looks the same to the sender.
+ *
+ * Distinguishing "no such source" from "bad signature" from "stale timestamp"
+ * told anyone who could reach the endpoint which source ids exist and how far
+ * they had got — an oracle for guessing them. The precise reason stays in the
+ * structured log (`alert: event_bridge_verification_failure`) and in the
+ * `reason` label of the failure counter, where the operator can see it and the
+ * sender cannot.
+ */
 function unverifiable(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -65,7 +75,12 @@ function unverifiable(
 ): FastifyReply {
   reportVerificationFailure({ sourceType, reason, sourceId, ...(developerId !== undefined ? { developerId } : {}) }, request.log);
   const status = reason === 'unsupported_media_type' ? 415 : 401;
-  return reply.status(status).send({ err: reason, description, code: 'EVENT_UNVERIFIABLE', requestId: request.id });
+  return reply.status(status).send({
+    err: status === 415 ? 'unsupported_media_type' : 'unverifiable',
+    description: status === 415 ? description : 'the delivery could not be verified',
+    code: 'EVENT_UNVERIFIABLE',
+    requestId: request.id,
+  });
 }
 
 export async function eventBridgeIngestRoutes(app: FastifyInstance, options: EventBridgeIngestOptions = {}): Promise<void> {
@@ -75,21 +90,22 @@ export async function eventBridgeIngestRoutes(app: FastifyInstance, options: Eve
     done(null, body);
   });
 
-  const routeOptions = () => {
-    const settings = eventBridgeSettings();
-    return {
-      bodyLimit: MAX_BODY_BYTES,
-      config: {
-        skipAuth: true,
-        rateLimit: {
-          max: settings.rateLimitPerMinute,
-          timeWindow: '1 minute',
-          keyGenerator: (request: FastifyRequest) =>
-            `event-bridge:${(request.params as Partial<SourceParams>).sourceId ?? ''}:${request.ip}`,
-        },
+  // Keyed on the client address alone. Including the source id let an
+  // attacker mint a fresh bucket per made-up id — the same bypass the default
+  // limiter documents for bearer tokens. `max` is a function, so
+  // EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE is read per request, as its
+  // documentation says.
+  const routeOptions = () => ({
+    bodyLimit: MAX_BODY_BYTES,
+    config: {
+      skipAuth: true,
+      rateLimit: {
+        max: () => eventBridgeSettings().rateLimitPerMinute,
+        timeWindow: '1 minute',
+        keyGenerator: (request: FastifyRequest) => `event-bridge:${request.ip}`,
       },
-    };
-  };
+    },
+  });
 
   async function ingest(
     request: FastifyRequest<{ Params: SourceParams }>,

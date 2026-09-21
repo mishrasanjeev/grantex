@@ -135,7 +135,8 @@ describe('POST /v1/event-bridge/webhooks/:sourceId', () => {
     const delivery = signedWebhook(webhookEvent, 'gxevs_attacker_guess');
     const res = await app.inject({ method: 'POST', url: `/v1/event-bridge/webhooks/${WEBHOOK_ID}`, ...delivery });
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toMatchObject({ err: 'signature_invalid', code: 'EVENT_UNVERIFIABLE' });
+    // One opaque code for the sender; the reason is in the counter and the log.
+    expect(res.json()).toMatchObject({ err: 'unverifiable', code: 'EVENT_UNVERIFIABLE' });
     expect(eventBridgeVerificationFailuresTotal.inc).toHaveBeenCalledWith({ source_type: 'webhook', reason: 'signature_invalid' });
     expect(state.statements.some((s) => s.includes('event_bridge_receipts'))).toBe(false);
   });
@@ -144,7 +145,9 @@ describe('POST /v1/event-bridge/webhooks/:sourceId', () => {
     const delivery = signedWebhook(webhookEvent, SECRET, Math.floor(Date.now() / 1000) - 3_600);
     const res = await app.inject({ method: 'POST', url: `/v1/event-bridge/webhooks/${WEBHOOK_ID}`, ...delivery });
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toMatchObject({ err: 'timestamp_out_of_window' });
+    expect(res.json()).toMatchObject({ err: 'unverifiable' });
+    expect(eventBridgeVerificationFailuresTotal.inc)
+      .toHaveBeenCalledWith({ source_type: 'webhook', reason: 'timestamp_out_of_window' });
   });
 
   it('does not act again on a replayed delivery inside the window (duplicate)', async () => {
@@ -163,19 +166,27 @@ describe('POST /v1/event-bridge/webhooks/:sourceId', () => {
     state.existingHash = 'f'.repeat(64);
     const res = await app.inject({ method: 'POST', url: `/v1/event-bridge/webhooks/${WEBHOOK_ID}`, ...signedWebhook(webhookEvent) });
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toMatchObject({ err: 'event_id_reused' });
+    expect(res.json()).toMatchObject({ err: 'unverifiable' });
+    expect(eventBridgeVerificationFailuresTotal.inc)
+      .toHaveBeenCalledWith({ source_type: 'webhook', reason: 'event_id_reused' });
   });
 
   it('refuses unknown and disabled sources with 401 and a wrong media type with 415', async () => {
     state.source = null;
     const unknown = await app.inject({ method: 'POST', url: `/v1/event-bridge/webhooks/${WEBHOOK_ID}`, ...signedWebhook(webhookEvent) });
     expect(unknown.statusCode).toBe(401);
-    expect(unknown.json()).toMatchObject({ err: 'source_unknown' });
 
     state.source = webhookRow({ status: 'disabled' });
     const disabled = await app.inject({ method: 'POST', url: `/v1/event-bridge/webhooks/${WEBHOOK_ID}`, ...signedWebhook(webhookEvent) });
     expect(disabled.statusCode).toBe(401);
-    expect(disabled.json()).toMatchObject({ err: 'source_disabled' });
+
+    // An unknown source and a disabled one are indistinguishable to the
+    // sender: the endpoint is not an oracle for which source ids exist.
+    expect(unknown.json()).toEqual({ ...disabled.json(), requestId: unknown.json<{ requestId: string }>().requestId });
+    expect(eventBridgeVerificationFailuresTotal.inc)
+      .toHaveBeenCalledWith({ source_type: 'webhook', reason: 'source_unknown' });
+    expect(eventBridgeVerificationFailuresTotal.inc)
+      .toHaveBeenCalledWith({ source_type: 'webhook', reason: 'source_disabled' });
 
     state.source = webhookRow();
     const delivery = signedWebhook(webhookEvent);
@@ -190,7 +201,7 @@ describe('POST /v1/event-bridge/webhooks/:sourceId', () => {
     state.source = ssfRow;
     const res = await app.inject({ method: 'POST', url: `/v1/event-bridge/webhooks/${SSF_ID}`, ...signedWebhook(webhookEvent) });
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toMatchObject({ err: 'source_unknown' });
+    expect(res.json()).toMatchObject({ err: 'unverifiable' });
   });
 
   it('answers 5xx and leaves a failed receipt when processing throws, so a retransmission is retried', async () => {
@@ -226,13 +237,14 @@ describe('POST /v1/event-bridge/ssf/:sourceId', () => {
       [await signedSet({ aud: 'https://another-receiver.example.com' }), 'audience_mismatch'],
       [await signedSet({ iat: Math.floor(Date.now() / 1000) - 3_600 }), 'stale'],
     ];
-    for (const [token, err] of cases) {
+    for (const [token, reason] of cases) {
       const res = await app.inject({
         method: 'POST', url: `/v1/event-bridge/ssf/${SSF_ID}`,
         headers: { 'content-type': 'application/secevent+jwt' }, payload: token,
       });
       expect(res.statusCode).toBe(401);
-      expect(res.json()).toMatchObject({ err });
+      expect(res.json()).toMatchObject({ err: 'unverifiable' });
+      expect(eventBridgeVerificationFailuresTotal.inc).toHaveBeenCalledWith({ source_type: 'ssf', reason });
     }
     expect(state.statements.some((s) => s.includes('event_bridge_receipts'))).toBe(false);
   });
@@ -275,6 +287,28 @@ describe('/v1/event-sources', () => {
     ]) {
       const res = await app.inject({ method: 'POST', url: '/v1/event-sources', headers: authHeader(), payload });
       expect(res.statusCode).toBe(422);
+    }
+  });
+});
+
+describe('ingestion rate limiting', () => {
+  it('is keyed on the client address, so varying the source id mints no new budget', async () => {
+    vi.stubEnv('EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE', '2');
+    const limited = await buildTestApp();
+    try {
+      const responses: number[] = [];
+      for (const suffix of ['AAAA', 'BBBB', 'CCCC']) {
+        const id = `evsrc_01K5${suffix}AAAAAAAAAAAAAAAAAA`.slice(0, 32);
+        const res = await limited.inject({
+          method: 'POST', url: `/v1/event-bridge/webhooks/${id}`, ...signedWebhook(webhookEvent),
+        });
+        responses.push(res.statusCode);
+      }
+      // Three deliveries from one address, three different source ids: the
+      // third is refused rather than getting a bucket of its own.
+      expect(responses[2]).toBe(429);
+    } finally {
+      await limited.close();
     }
   });
 });

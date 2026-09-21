@@ -129,18 +129,28 @@ webhook `id` — before it is processed:
 |---|---|---|
 | First delivery | `202 {"status": …}` | Yes, once |
 | Same bytes again (a retransmission, or a replay inside the window) | `202 {"status": "duplicate"}` | No |
-| Same id, different payload | `401 {"err": "event_id_reused"}` | No |
+| Same id, different payload | `401 {"err": "unverifiable"}` (reason `event_id_reused` in the log) | No |
 | Earlier delivery failed while processing | processed again | Yes (actions are idempotent) |
 
 A replay outside the webhook window, or of a SET older than `maxAgeSeconds`,
 is refused before it reaches the replay store.
 
+Receipts are pruned hourly, but only once they are older than the window in
+which their own source would still accept the delivery (`toleranceSeconds` or
+`maxAgeSeconds`, plus the clock skew), and never sooner than
+`EVENT_BRIDGE_RECEIPT_RETENTION_HOURS`. Removing one earlier would make an old
+delivery acceptable again.
+
 ## Responses
 
 - `202 {"status": "unmapped" | "applied" | "observed" | "duplicate"}`
-- `401 {"err": "<reason>", "description": "…", "code": "EVENT_UNVERIFIABLE"}` for
-  every verification failure, including an unknown or disabled source (so
-  source ids cannot be probed)
+- `401 {"err": "unverifiable", "code": "EVENT_UNVERIFIABLE"}` for every
+  verification failure, including an unknown or disabled source. One code for
+  all of them, on purpose: a sender that could tell "no such source" from "bad
+  signature" from "stale timestamp" could probe for source ids and for how far
+  a guess had got. The precise reason is in the structured log
+  (`alert: event_bridge_verification_failure`) and in the `reason` label of
+  `grantex_event_bridge_verification_failures_total`
 - `415` for the wrong media type
 - `404` when the bridge is off for the source's developer
 - `5xx` when processing failed; the receipt is left `failed` so the sender's
@@ -166,7 +176,8 @@ in `deploy/prometheus/event-bridge-alerts.yml`.
 |---|---|---|
 | `EVENT_BRIDGE_ENABLED` | `false` | Turns on registration and ingestion |
 | `EVENT_BRIDGE_DEVELOPER_IDS` | (all) | Comma-separated developers the bridge is limited to, for a staged rollout |
-| `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | `30000` | Ingestion requests per source and client address |
+| `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | `30000` | Ingestion requests per client address, read per request |
+| `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS` | `48` | Floor for how long a delivery receipt is kept; never shorter than the window in which its source would still accept the delivery |
 | `VAULT_ENCRYPTION_KEY` | — | Required to register webhook sources |
 
 ## What this does not defend against

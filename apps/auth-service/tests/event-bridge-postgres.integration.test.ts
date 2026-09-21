@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
 import { claimReceipt, finaliseReceipt } from '../src/lib/event-bridge/receipts.js';
+import { pruneEventBridgeReceiptsOnce } from '../src/workers/eventBridgeReceiptPrune.js';
 import {
   acceptedWebhookSecrets,
   createEventSource,
@@ -116,6 +117,51 @@ describePostgres('event bridge sources and replay store against real Postgres', 
       // The same event id from a different source is a different event.
       const { row: otherSource } = await createEventSource(sql, dev, { kind: 'webhook', name: 'other sender' });
       expect(await claimReceipt(sql, { ...input, sourceId: otherSource.id })).toBe('new');
+    });
+  }, 120_000);
+
+  it('keeps a receipt while its delivery could still be replayed, and no longer', async () => {
+    await withDevelopers(async (sql, dev) => {
+      const { row } = await createEventSource(sql, dev, {
+        kind: 'webhook', name: 'provider events', toleranceSeconds: 3_600,
+      });
+      const insert = async (eventId: string, ageHours: number): Promise<void> => {
+        await sql`
+          INSERT INTO event_bridge_receipts
+            (source_id, event_id, developer_id, body_sha256, event_types, status, received_at)
+          VALUES (${row.id}, ${eventId}, ${dev}, ${'a'.repeat(64)}, ${['business.dissolved']}, 'applied',
+                  NOW() - make_interval(hours => ${ageHours}))`;
+      };
+      await insert('evt_fresh', 0);
+      await insert('evt_day', 30);
+      await insert('evt_ancient', 24 * 30);
+
+      const log = { info: () => {}, error: () => {}, warn: () => {}, debug: () => {}, fatal: () => {}, child: () => log };
+      // Off: nothing is pruned, whatever its age.
+      vi.stubEnv('EVENT_BRIDGE_ENABLED', 'false');
+      expect(await pruneEventBridgeReceiptsOnce(sql, log)).toBe(0);
+
+      vi.stubEnv('EVENT_BRIDGE_ENABLED', 'true');
+      vi.stubEnv('EVENT_BRIDGE_RECEIPT_RETENTION_HOURS', '24');
+      expect(await pruneEventBridgeReceiptsOnce(sql, log)).toBe(2);
+      const left = await sql<{ event_id: string }[]>`
+        SELECT event_id FROM event_bridge_receipts WHERE source_id = ${row.id} ORDER BY event_id`;
+      expect(left.map((entry) => entry.event_id)).toEqual(['evt_fresh']);
+
+      // A source with a long window keeps its receipts for at least that long,
+      // whatever the retention setting says: removing one earlier would let the
+      // delivery it records be replayed.
+      const longWindow = await createEventSource(sql, dev, {
+        kind: 'webhook', name: 'slow sender', toleranceSeconds: 3_600,
+      });
+      await sql`
+        INSERT INTO event_bridge_receipts
+          (source_id, event_id, developer_id, body_sha256, event_types, status, received_at)
+        VALUES (${longWindow.row.id}, 'evt_window', ${dev}, ${'b'.repeat(64)}, ${['x']}, 'applied',
+                NOW() - INTERVAL '30 minutes')`;
+      vi.stubEnv('EVENT_BRIDGE_RECEIPT_RETENTION_HOURS', '1');
+      expect(await pruneEventBridgeReceiptsOnce(sql, log)).toBe(0);
+      vi.unstubAllEnvs();
     });
   }, 120_000);
 });

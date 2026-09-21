@@ -154,6 +154,24 @@ below.
   then turning off legacy claims before 0.7), plus the database migrations,
   the new settings and a checklist.
 
+### Event bridge: ingestion hardening
+- Every unverifiable delivery now answers one opaque `401 {"err":
+  "unverifiable"}`. Distinguishing an unknown source from a bad signature from
+  a stale timestamp told anyone who could reach the endpoint which source ids
+  exist and how far a guess had got. The precise reason stays in the log and in
+  the `reason` label of the failure counter. **Break:** a sender that matched
+  on the previous `err` values sees `unverifiable` instead.
+- Ingestion rate limiting is keyed on the client address alone. Including the
+  source id let an attacker mint a fresh bucket per made-up id — the bypass the
+  default limiter already documents for bearer tokens — and
+  `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` is now read per request rather than once
+  at boot, as its documentation said.
+- An hourly worker prunes `event_bridge_receipts`, but only once a receipt is
+  older than the window in which its own source would still accept that
+  delivery (`toleranceSeconds` / `maxAgeSeconds` plus clock skew) and never
+  sooner than `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS` (default 48): pruning
+  earlier would re-open the replay window the receipt exists to close.
+
 ### Event bridge: signed event ingestion
 - The auth service accepts provider events (PRD G-6), off unless
   `EVENT_BRIDGE_ENABLED=true` (optionally limited with
