@@ -328,6 +328,8 @@ describeRelease('the emergency stop halts every agent under a grant tree', () =>
         confirm: `stop developer:${developerId}`,
       }),
     });
+    // The stop takes longer than one 25 ms delegation cycle, but stop racing
+    // only after it returns so the overlap is not a matter of luck.
     racing = false;
     await race;
 
@@ -336,9 +338,19 @@ describeRelease('the emergency stop halts every agent under a grant tree', () =>
     const stop = JSON.parse(text) as { status: string; sweeps: number; grantsRevoked: number };
     expect(stop.status).toBe('completed');
 
-    // Whatever was delegated during the stop, nothing is left running. A
-    // single-pass stop leaves the grants created after its one read.
+    // The race has to have happened for the assertion below to mean
+    // anything: without a delegation landing during the stop, "nothing is
+    // live afterwards" is true of any stop at all.
+    expect(delegated.length, 'no grant was delegated while the stop ran').toBeGreaterThan(0);
+
+    // And nothing is left running. A single-pass stop leaves whatever was
+    // created after its one read.
     expect(await liveGrantCount()).toBe(0);
+    const survivors = await Promise.all(delegated.map(async (grantId) => {
+      const grant = await admin.grants.get(grantId).catch(() => null);
+      return grant && grant.status === 'active' ? grantId : null;
+    }));
+    expect(survivors.filter(Boolean)).toEqual([]);
     // eslint-disable-next-line no-console
     console.log(`emergency stop race: ${JSON.stringify({
       delegated_during_stop: delegated.length, sweeps: stop.sweeps, grants_revoked: stop.grantsRevoked,

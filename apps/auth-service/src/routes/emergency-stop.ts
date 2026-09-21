@@ -148,7 +148,10 @@ export async function emergencyStopRoutes(app: FastifyInstance): Promise<void> {
       developerId: request.developer.id,
       scope: parsed.scope,
       reason: parsed.reason,
-      requestedBy: `developer:${request.developer.id}`,
+      // The tenant and the address it came from, so a stop can be traced to a
+      // caller rather than just to the tenant that owns the key. The key
+      // itself is never recorded, hashed or otherwise.
+      requestedBy: `developer:${request.developer.id}@${request.ip}`,
       dryRun: parsed.dryRun,
       log: request.log,
     });

@@ -199,6 +199,64 @@ describePostgres('the emergency stop against real Postgres', () => {
     });
   }, 180_000);
 
+  /**
+   * The summary entry used to be appended *after* the row was marked
+   * `completed`, and outside the try. Exhausting its retries therefore left a
+   * row claiming success, no summary on the developer's chain, and a 500 for
+   * a stop that had in fact revoked everything — the state an operator is
+   * least able to reason about during an incident.
+   *
+   * Here the audit append fails every time. The stop must fail loudly, and
+   * the row must say `failed`, not `completed`.
+   */
+  it('records failed, not completed, when the summary entry cannot be written', async () => {
+    await withFixture(async ({ sql, dev, grant, agents }) => {
+      const root = await grant(dev, 'root', { agent: agents.a });
+      await grant(dev, 'child', { agent: agents.a, parent: root });
+
+      // Only the summary's transaction is broken: the cascade's own audit
+      // writes go through, so the grants really are revoked first.
+      let cascadesDone = 0;
+      const failingSummary = new Proxy(sql, {
+        apply(target, thisArg, args: [TemplateStringsArray, ...unknown[]]) {
+          return Reflect.apply(target as never, thisArg, args);
+        },
+        get: (target, property) => {
+          if (property === 'begin') {
+            return async (fn: (tx: unknown) => Promise<unknown>) => {
+              cascadesDone += 1;
+              // The cascade runs first; the summary is the transaction after it.
+              if (cascadesDone > 1) {
+                throw Object.assign(new Error('audit chain unavailable'), { code: '08006' });
+              }
+              return (Reflect.get(target, property) as (callback: unknown) => Promise<unknown>)
+                .call(target, fn);
+            };
+          }
+          return Reflect.get(target, property);
+        },
+      }) as typeof sql;
+
+      await expect(emergencyStop(failingSummary, {
+        developerId: dev, scope: { type: 'agent', id: agents.a }, reason: 'incident', requestedBy: 'admin',
+      })).rejects.toThrow(/audit chain unavailable/);
+
+      const stops = await listEmergencyStops(sql, dev);
+      expect(stops).toHaveLength(1);
+      // The regression this guards: `completed` here, with no summary entry.
+      expect(stops[0]!.status).toBe('failed');
+      expect(stops[0]!.error).toContain('audit chain unavailable');
+      expect(stops[0]!.grants_revoked).toBe(2);
+
+      // The revocations themselves stand — they committed before the summary.
+      expect(await statuses(sql, [root])).toEqual(['revoked']);
+      const summary = await sql<{ action: string }[]>`
+        SELECT action FROM audit_entries
+         WHERE developer_id = ${dev} AND action = 'grantex.emergency_stop'`;
+      expect(summary).toHaveLength(0);
+    });
+  }, 180_000);
+
   it('sweeps again, so a grant delegated while it runs is caught', async () => {
     await withFixture(async ({ sql, dev, grant, agents, suffix }) => {
       const root = await grant(dev, 'root', { agent: agents.a });

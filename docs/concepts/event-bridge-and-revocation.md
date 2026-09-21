@@ -221,12 +221,28 @@ This restores exactly the grants that suspension suspended. It is refused with
 suspended, and it keeps working when the event bridge is turned off, so a
 suspension can always be undone.
 
+A grant is suspended once, under the first root that reached it. So
+suspending an ancestor of an already-suspended subtree reports **zero
+affected**: everything below it is already suspended, and each grant keeps
+the root it was suspended under, so resuming that original root still
+restores exactly what it suspended. Nothing is lost — the second call simply
+has nothing left to do — but do not read "0 affected" as "the suspension did
+not work".
+
 ### `re_evaluate` — hand the decision back
 
 Nothing about the grant changes. One audit entry per grant is written and a
 `grant.re_evaluation_requested` event is emitted to the developer's webhooks
 and event stream, carrying the grant ids, the event id and type, the rule id
 and the event's subject. The relying platform decides what to do.
+
+and a bounded copy of the event's subject (scalar members, short values, and
+`subject_truncated` when anything was dropped — the subject is
+provider-supplied).
+
+Revoking and suspending are idempotent, so a retried delivery costs nothing.
+Asking the platform to look again is not, so it is claimed per source, event
+and rule and happens at most once however often the delivery is retried.
 
 ## Audit records
 
@@ -236,6 +252,7 @@ Every action writes an entry to the developer's audit hash chain:
 |---|---|---|
 | Revoke | `grantex.grant.revoked` | `grant_id`, `root_grant_id`, `depth`, `cascade`, `cause`, `trigger`, `reason?`, `event_id?`, `rule_id?`, `source_id?` |
 | Suspend | `grantex.grant.suspended` | as above |
+| — | — | A set carrying several events labels each action with the event that matched its rule, not the first one |
 | Resume | `grantex.grant.resumed` | `grant_id`, `root_grant_id` |
 | Re-evaluate | `grantex.grant.re_evaluation_requested` | `grant_id`, `event_id`, `rule_id`, `source_id` |
 

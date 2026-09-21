@@ -104,7 +104,34 @@ export async function cascadeGrantAction(sql: Sql, input: CascadeInput): Promise
   return outcome;
 }
 
-async function cascadeBatch(sql: Sql, input: CascadeInput, roots: string[]): Promise<AffectedRow[]> {
+/**
+ * Drop roots that another root already covers.
+ *
+ * A target like "every grant of this principal" hands us a parent and its
+ * delegated children at once. Every one of them would enter the tree at depth
+ * 0 and become its own suspension root, so resuming the top-level grant would
+ * restore only that grant and leave the subtree suspended. Keeping only the
+ * highest supplied ancestor makes one suspension out of one action.
+ */
+async function dropCoveredRoots(tx: Sql, developerId: string, roots: string[]): Promise<string[]> {
+  if (roots.length < 2) return roots;
+  const covered = await tx<{ root_id: string }[]>`
+    WITH RECURSIVE supplied(id) AS (SELECT unnest(${roots}::text[])),
+    ancestors AS (
+      SELECT s.id AS root_id, g.parent_grant_id AS ancestor_id, 0 AS hops
+        FROM supplied s JOIN grants g ON g.id = s.id AND g.developer_id = ${developerId}
+      UNION ALL
+      SELECT a.root_id, p.parent_grant_id, a.hops + 1
+        FROM ancestors a JOIN grants p ON p.id = a.ancestor_id AND p.developer_id = ${developerId}
+       WHERE a.ancestor_id IS NOT NULL AND a.hops < ${MAX_CASCADE_DEPTH}
+    )
+    SELECT DISTINCT root_id FROM ancestors WHERE ancestor_id IN (SELECT id FROM supplied)`;
+  if (covered.length === 0) return roots;
+  const remove = new Set(covered.map((row) => row.root_id));
+  return roots.filter((id) => !remove.has(id));
+}
+
+async function cascadeBatch(sql: Sql, input: CascadeInput, rootsIn: string[]): Promise<AffectedRow[]> {
   // A revocation reaches suspended grants too, so a suspended subtree cannot
   // be resumed under a revoked ancestor. A suspension only touches active ones.
   const actOn = input.action === 'revoke' ? ['active', 'suspended'] : ['active'];
@@ -117,6 +144,7 @@ async function cascadeBatch(sql: Sql, input: CascadeInput, roots: string[]): Pro
     // delegated while its parent is revoked either loses the race (the parent
     // is gone when it commits) or is included in this cascade.
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
+    const roots = await dropCoveredRoots(tx, developerId, rootsIn);
 
     const rows = input.action === 'revoke'
       ? await tx<AffectedRow[]>`
@@ -167,6 +195,11 @@ async function cascadeBatch(sql: Sql, input: CascadeInput, roots: string[]): Pro
     const ids = rows.map((row) => row.id);
     if (input.action === 'revoke') {
       await releaseWalletReservationsForGrants(tx, developerId, ids);
+      // Credentials issued for these grants are revoked in the same
+      // transaction. Fire-and-forget would let a status-list bit survive the
+      // revocation: the delivery that caused it is finalised, every retry is
+      // a duplicate, and the credential stays verifiable.
+      await revokeVCsByGrantIds(ids, developerId, tx);
       // A revoked grant is never resumable.
       await tx`DELETE FROM grant_suspensions WHERE developer_id = ${developerId} AND grant_id = ANY(${ids})`;
     } else {
@@ -174,7 +207,9 @@ async function cascadeBatch(sql: Sql, input: CascadeInput, roots: string[]): Pro
         await tx`
           INSERT INTO grant_suspensions (grant_id, developer_id, root_grant_id, cause)
           VALUES (${row.id}, ${developerId}, ${row.root_id}, ${input.cause})
-          ON CONFLICT (grant_id) DO UPDATE SET root_grant_id = EXCLUDED.root_grant_id, cause = EXCLUDED.cause, suspended_at = NOW()`;
+          -- Never move a grant to a different suspension: the one that
+          -- suspended it first is the one whose resume restores it.
+          ON CONFLICT (grant_id) DO NOTHING`;
       }
     }
 
@@ -204,7 +239,6 @@ async function cascadeBatch(sql: Sql, input: CascadeInput, roots: string[]): Pro
 /** Everything that happens after the transaction commits: cache, credentials, events, metrics. */
 async function announce(input: CascadeInput, rows: AffectedRow[]): Promise<void> {
   if (rows.length === 0) return;
-  const ids = rows.map((row) => row.id);
 
   if (input.action === 'revoke') {
     // Redis accelerates the check; the database stays authoritative, so a
@@ -214,7 +248,6 @@ async function announce(input: CascadeInput, rows: AffectedRow[]): Promise<void>
       const ttl = Math.max(1, Math.floor((new Date(row.expires_at).getTime() - Date.now()) / 1000));
       await redis.set(`revoked:grant:${row.id}`, '1', 'EX', ttl);
     }));
-    revokeVCsByGrantIds(ids, input.developerId).catch(() => { /* best effort */ });
     grantsRevokedTotal.inc(rows.length);
   }
 

@@ -244,6 +244,25 @@ Remove an entry in the pull request that fixes it.
   `audit_entries` while a cascade transaction waited for `AccessShareLock` on
   `grants`.
 
+## G-21 — Subject bindings are stored in plaintext
+
+- **Found:** event bridge mapping work (PRD G-6), 2026-09-20; confirmed open in review.
+- **What:** `grant_subject_refs.value` holds the identifier a developer binds a
+  grant to — a company registration number, a tax id, an account id at the
+  provider. It is stored as plaintext, so anyone with read access to the
+  database or a backup of it can enumerate which identifiers a developer is
+  operating on, and join them to principals and agents. Every other
+  developer-supplied secret in this service is encrypted with
+  `encryptWithContext`.
+- **Why not fixed here:** matching needs equality lookups (`by: subject_ref`
+  resolves a `kind`/value pair to grants on every delivery), so it wants a
+  keyed hash for lookup and an encrypted copy for display, plus a migration
+  that rewrites existing rows and a decision about what the API returns. That
+  is its own change.
+- **Impact:** confidentiality of the binding values, not authorization
+  correctness. The bridge never echoes a stored value back to an
+  unauthenticated caller.
+
 ## G-22 — The emergency stop cannot lock a tenant out
 
 - **Found:** emergency stop work (PRD G-6), 2026-09-20; accepted in review as
@@ -273,10 +292,13 @@ Remove an entry in the pull request that fixes it.
 - **Found:** review of the propagation measurement (PRD G-6), 2026-09-21.
 - **What:** the plan limiter counts `DELETE /v1/grants/:id` and the emergency
   stop in the same per-developer bucket as every other call (100 req/min on
-  the free plan). A tenant revoking grants during an incident is therefore
-  throttled on the containment path; the measurement harness saw 26–58 s waits
-  while the SDK honoured `Retry-After`. The slowest thing in an incident
-  should not be the thing that ends it.
+  the free plan), so containment competes with ordinary traffic for the
+  tenant's quota. The 26–58 s waits the harness saw came from *it* bursting
+  hundreds of revokes in a row, which no incident looks like — an emergency
+  stop is a single request that revokes a whole tree. The realistic case is
+  milder: a free-plan tenant already near its quota, or an operator scripting
+  revocations one grant at a time, waiting out `Retry-After` on the one path
+  that ends the incident.
 - **Proposal:** put containment calls in a bucket of their own —
   `DELETE /v1/grants/:id`, `POST /v1/grants/:id/suspend`,
   `POST /v1/emergency-stop` — sized for the shape of the work (a burst of a

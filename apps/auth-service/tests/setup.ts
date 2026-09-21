@@ -121,9 +121,13 @@ vi.mock('ioredis', () => {
 
 // Mock event bus — prevents emitEvent from consuming SQL mock slots / Redis
 // in route tests. Event bus is tested separately in events.test.ts.
-vi.mock('../src/lib/events.js', () => ({
-  emitEvent: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock('../src/lib/events.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/events.js')>();
+  return {
+    ...actual,
+    emitEvent: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 // Mock webhook delivery — keeps signWebhookPayload and enqueueWebhookDeliveries
 // available for webhook-specific tests.

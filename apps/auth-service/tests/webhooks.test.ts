@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { buildTestApp, authHeader, seedAuth, sqlMock } from './helpers.js';
+import { EVENT_TYPES } from '../src/lib/events.js';
 
 let app: FastifyInstance;
 
@@ -207,5 +208,38 @@ describe('DELETE /v1/webhooks/:id', () => {
     });
 
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('subscribable events', () => {
+  it('accepts every event type the platform publishes', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);               // advisory lock
+    sqlMock.mockResolvedValueOnce([]);               // subscription lookup
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]); // webhook count
+    sqlMock.mockResolvedValueOnce([]);               // INSERT
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webhooks',
+      headers: authHeader(),
+      payload: { url: 'https://example.com/hooks', events: [...EVENT_TYPES] },
+    });
+
+    // A type that can be delivered but not subscribed to is a webhook that
+    // silently never fires: the route's list is derived from this one.
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('still refuses an event type that is not published', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/webhooks',
+      headers: authHeader(),
+      payload: { url: 'https://example.com/hooks', events: ['grant.invented'] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ message: string }>().message).toContain('grant.invented');
   });
 });

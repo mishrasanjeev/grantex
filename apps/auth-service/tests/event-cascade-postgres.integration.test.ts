@@ -1,3 +1,4 @@
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { describe, expect, it, vi } from 'vitest';
@@ -7,6 +8,7 @@ import { matchStoredAuditHash } from '../src/lib/hash.js';
 import { cascadeGrantAction, resumeSuspendedGrants } from '../src/lib/revocation/cascade.js';
 import { mappingProcessor } from '../src/lib/event-bridge/actions.js';
 import { createMappingRule } from '../src/lib/event-bridge/rules-store.js';
+import { createEventSource } from '../src/lib/event-bridge/sources.js';
 import type { NormalizedEvent } from '../src/lib/event-bridge/normalize.js';
 
 const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
@@ -83,7 +85,9 @@ async function runFixture<T>(fn: (f: Fixture) => Promise<T>): Promise<T> {
     await sql`DELETE FROM audit_entries WHERE developer_id IN (${dev}, ${other})`.catch(() => undefined);
     await sql`DELETE FROM grant_subject_refs WHERE developer_id IN (${dev}, ${other})`.catch(() => undefined);
     await sql`DELETE FROM grant_suspensions WHERE developer_id IN (${dev}, ${other})`.catch(() => undefined);
+    await sql`DELETE FROM verifiable_credentials WHERE developer_id IN (${dev}, ${other})`.catch(() => undefined);
     await sql`DELETE FROM event_mapping_rules WHERE developer_id IN (${dev}, ${other})`.catch(() => undefined);
+    await sql`DELETE FROM event_bridge_sources WHERE developer_id IN (${dev}, ${other})`.catch(() => undefined);
     await sql`DELETE FROM grants WHERE developer_id IN (${dev}, ${other})`.catch(() => undefined);
     await sql`DELETE FROM agents WHERE developer_id IN (${dev}, ${other})`.catch(() => undefined);
     await sql`DELETE FROM audit_entry_counters WHERE developer_id IN (${dev}, ${other})`.catch(() => undefined);
@@ -190,6 +194,93 @@ describePostgres('cascade revocation against real Postgres', () => {
     });
   }, 180_000);
 
+  it('keeps one suspension per action when a target resolves a parent and its children', async () => {
+    await withFixture(async ({ sql, dev, chain }) => {
+      const ids = await chain(dev, 3, 'nested');
+      // A principal target resolves all three grants at once.
+      const outcome = await cascadeGrantAction(sql, {
+        developerId: dev, rootGrantIds: [...ids], action: 'suspend', cause: 'event',
+      });
+      expect(outcome.affected).toHaveLength(3);
+      const rows = await sql<{ grant_id: string; root_grant_id: string }[]>`
+        SELECT grant_id, root_grant_id FROM grant_suspensions WHERE developer_id = ${dev}`;
+      // One suspension, rooted at the top-most grant the action named — not
+      // three suspensions each rooted at itself.
+      expect(new Set(rows.map((row) => row.root_grant_id))).toEqual(new Set([ids[0]]));
+
+      const resumed = await resumeSuspendedGrants(sql, dev, ids[0]!);
+      expect(resumed.status).toBe('resumed');
+      expect(resumed.grantIds.sort()).toEqual([...ids].sort());
+      expect(await statuses(sql, ids)).toEqual(['active', 'active', 'active']);
+    });
+  }, 180_000);
+
+  it('does not move a grant into a later suspension', async () => {
+    await withFixture(async ({ sql, dev, chain }) => {
+      const ids = await chain(dev, 3, 'steal');
+      // The child is suspended on its own first.
+      await cascadeGrantAction(sql, { developerId: dev, rootGrantIds: [ids[1]!], action: 'suspend', cause: 'event' });
+      // Then an ancestor is suspended: the child keeps the suspension that
+      // already held it, so resuming the ancestor cannot resurrect it.
+      await cascadeGrantAction(sql, { developerId: dev, rootGrantIds: [ids[0]!], action: 'suspend', cause: 'event' });
+
+      const rows = await sql<{ grant_id: string; root_grant_id: string }[]>`
+        SELECT grant_id, root_grant_id FROM grant_suspensions WHERE developer_id = ${dev} ORDER BY grant_id`;
+      const byGrant = new Map(rows.map((row) => [row.grant_id, row.root_grant_id]));
+      expect(byGrant.get(ids[1]!)).toBe(ids[1]);
+      expect(byGrant.get(ids[2]!)).toBe(ids[1]);
+      expect(byGrant.get(ids[0]!)).toBe(ids[0]);
+
+      const resumed = await resumeSuspendedGrants(sql, dev, ids[0]!);
+      expect(resumed.grantIds).toEqual([ids[0]]);
+      expect(await statuses(sql, ids)).toEqual(['active', 'suspended', 'suspended']);
+      expect((await resumeSuspendedGrants(sql, dev, ids[1]!)).status).toBe('resumed');
+      expect(await statuses(sql, ids)).toEqual(['active', 'active', 'active']);
+    });
+  }, 180_000);
+
+  /**
+   * The credential this covers is backed by a status list, because every
+   * credential `issueAgentGrantVC` writes is: it always fills in
+   * `status_list_id` and `status_list_idx`. A fixture without them skips
+   * `setRevocationBits` entirely, so the test would pass while the real path
+   * threw — which is exactly what happened once.
+   */
+  it('revokes credentials issued for a grant, and flips the status-list bit, in the same transaction', async () => {
+    await withFixture(async ({ sql, dev, chain, suffix }) => {
+      const ids = await chain(dev, 2, 'vc');
+      const vcId = `vc_${suffix}`;
+      const listId = `vcsl_${suffix}`;
+      const index = 7;
+      const emptyList = gzipSync(Buffer.alloc(16384, 0)).toString('base64url');
+      await sql`
+        INSERT INTO vc_status_lists (id, developer_id, purpose, encoded_list, size, next_index)
+        VALUES (${listId}, ${dev}, 'revocation', ${emptyList}, 131072, ${index + 1})`;
+      await sql`
+        INSERT INTO verifiable_credentials
+          (id, grant_id, developer_id, principal_id, agent_did, credential_type, credential_jwt, status,
+           status_list_id, status_list_idx, expires_at)
+        VALUES (${vcId}, ${ids[1]!}, ${dev}, 'user_vc', 'did:grantex:agent', 'AgentGrantCredential',
+                'placeholder', 'active', ${listId}, ${index}, NOW() + INTERVAL '1 hour')`;
+
+      await cascadeGrantAction(sql, { developerId: dev, rootGrantIds: [ids[0]!], action: 'revoke', cause: 'event' });
+
+      const [row] = await sql<{ status: string }[]>`SELECT status FROM verifiable_credentials WHERE id = ${vcId}`;
+      // Fire-and-forget would leave this 'active' whenever the call failed,
+      // with every retry of the delivery a duplicate that never retries it.
+      expect(row!.status).toBe('revoked');
+      // And the grant itself really is revoked: a throw inside the
+      // credential work rolls the whole cascade back, which is how this
+      // regression left grants active while reporting nothing.
+      expect(await statuses(sql, ids)).toEqual(['revoked', 'revoked']);
+
+      const [list] = await sql<{ encoded_list: string }[]>`
+        SELECT encoded_list FROM vc_status_lists WHERE id = ${listId}`;
+      const bits = gunzipSync(Buffer.from(list!.encoded_list, 'base64url'));
+      expect((bits[Math.floor(index / 8)]! >> (7 - (index % 8))) & 1).toBe(1);
+    });
+  }, 180_000);
+
   it('suspends and resumes a subtree, and refuses a resume under an inactive ancestor', async () => {
     await withFixture(async ({ sql, dev, chain }) => {
       const ids = await chain(dev, 3, 'susp');
@@ -278,8 +369,16 @@ describePostgres('cascade revocation against real Postgres', () => {
 });
 
 describePostgres('mapping rules acting on verified events', () => {
-  async function process(sql: Sql, developerId: string, sourceId: string, event: NormalizedEvent) {
-    return mappingProcessor(sql, log, { developerId, sourceId, receivedAt: Date.now() })([event]);
+  async function process(sql: Sql, developerId: string, sourceId: string, events: NormalizedEvent | NormalizedEvent[]) {
+    return mappingProcessor(sql, log, { developerId, sourceId, receivedAt: Date.now() })(
+      Array.isArray(events) ? events : [events],
+    );
+  }
+
+  /** A real source: actions are recorded against it, so it has to exist. */
+  async function source(sql: Sql, developerId: string): Promise<string> {
+    const created = await createEventSource(sql, developerId, { kind: 'webhook', name: 'provider events' });
+    return created.row.id;
   }
 
   function dissolution(overrides: Partial<NormalizedEvent> = {}): NormalizedEvent {
@@ -307,7 +406,7 @@ describePostgres('mapping rules acting on verified events', () => {
         action: 'revoke',
       });
 
-      const outcome = await process(sql, dev, 'evsrc_mapping', dissolution());
+      const outcome = await process(sql, dev, await source(sql, dev), dissolution());
       expect(outcome.status).toBe('applied');
       expect(outcome.result['revoked']).toBe(3);
       expect(await statuses(sql, ours)).toEqual(['revoked', 'revoked', 'revoked']);
@@ -328,9 +427,10 @@ describePostgres('mapping rules acting on verified events', () => {
         action: 'revoke', mode: 'observe',
       });
 
-      const unmapped = await process(sql, dev, 'evsrc_mapping', dissolution({ type: 'business.renamed' }));
+      const sourceId = await source(sql, dev);
+      const unmapped = await process(sql, dev, sourceId, dissolution({ type: 'business.renamed' }));
       expect(unmapped.status).toBe('unmapped');
-      const observed = await process(sql, dev, 'evsrc_mapping', dissolution());
+      const observed = await process(sql, dev, sourceId, dissolution());
       expect(observed.status).toBe('observed');
       expect(await statuses(sql, ids)).toEqual(['active', 'active']);
       expect(await verifyChain(sql, dev)).toHaveLength(0);
@@ -345,13 +445,14 @@ describePostgres('mapping rules acting on verified events', () => {
         target: { by: 'grant_id', path: 'subject.grant_id' }, action: 'revoke',
       });
 
-      const invalid = await process(sql, dev, 'evsrc_mapping', dissolution({
+      const sourceId = await source(sql, dev);
+      const invalid = await process(sql, dev, sourceId, dissolution({
         type: 'session.revoked', subject: { grant_id: { id: theirs[0] } },
       }));
       expect(invalid.status).toBe('applied');
       expect((invalid.result['events'] as Array<{ rules: Array<{ outcome: string }> }>)[0]!.rules[0]!.outcome).toBe('target_invalid');
 
-      const crossTenant = await process(sql, dev, 'evsrc_mapping', dissolution({
+      const crossTenant = await process(sql, dev, sourceId, dissolution({
         eventId: 'evt_2', type: 'session.revoked', subject: { grant_id: theirs[0] },
       }));
       expect((crossTenant.result['events'] as Array<{ rules: Array<{ outcome: string }> }>)[0]!.rules[0]!.outcome).toBe('no_target');
@@ -374,7 +475,8 @@ describePostgres('mapping rules acting on verified events', () => {
         target: { by: 'subject_ref', path: 'subject.case_id', kind: 'case_id' }, action: 're_evaluate',
       });
 
-      const outcome = await process(sql, dev, 'evsrc_mapping', dissolution({
+      const sourceId = await source(sql, dev);
+      const outcome = await process(sql, dev, sourceId, dissolution({
         type: 'risk.raised', subject: { case_id: 'case_0001' },
       }));
       expect(outcome.status).toBe('applied');
@@ -386,6 +488,96 @@ describePostgres('mapping rules acting on verified events', () => {
       expect(entries.map((e) => e.action).sort()).toEqual([
         'grantex.grant.re_evaluation_requested', 'grantex.grant.suspended', 'grantex.grant.suspended',
       ]);
+    });
+  }, 180_000);
+
+  it('labels each action with the event that matched, in a set carrying several', async () => {
+    await withFixture(async ({ sql, dev, chain }) => {
+      const dissolved = await chain(dev, 1, 'multi_a');
+      const risky = await chain(dev, 1, 'multi_b');
+      await sql`INSERT INTO grant_subject_refs (developer_id, grant_id, kind, value) VALUES
+        (${dev}, ${dissolved[0]!}, 'business_ref', 'gb:00000001'),
+        (${dev}, ${risky[0]!}, 'case_id', 'case_0002')`;
+      await createMappingRule(sql, dev, {
+        name: 'dissolution revokes', eventType: 'business.dissolved',
+        target: { by: 'subject_ref', path: 'subject.business_ref', kind: 'business_ref' }, action: 'revoke',
+      });
+      await createMappingRule(sql, dev, {
+        name: 'risk suspends', eventType: 'risk.raised',
+        target: { by: 'subject_ref', path: 'subject.case_id', kind: 'case_id' }, action: 'suspend',
+      });
+
+      const sourceId = await source(sql, dev);
+      const outcome = await process(sql, dev, sourceId, [
+        dissolution({ eventId: 'set_multi' }),
+        dissolution({ eventId: 'set_multi', type: 'risk.raised', subject: { case_id: 'case_0002' } }),
+      ]);
+      expect(outcome.status).toBe('applied');
+      expect(await statuses(sql, [dissolved[0]!, risky[0]!])).toEqual(['revoked', 'suspended']);
+
+      const entries = await verifyChain(sql, dev);
+      const revocation = entries.find((entry) => entry.grant_id === dissolved[0]!)!;
+      const suspension = entries.find((entry) => entry.grant_id === risky[0]!)!;
+      // Each entry names the event that actually matched its rule, not the
+      // first member of the set.
+      expect(revocation.metadata).toMatchObject({ event_type: 'business.dissolved', event_index: 0 });
+      expect(suspension.metadata).toMatchObject({ event_type: 'risk.raised', event_index: 1 });
+    });
+  }, 180_000);
+
+  it('asks for re-evaluation once, however often the delivery is retried', async () => {
+    await withFixture(async ({ sql, dev, chain }) => {
+      const ids = await chain(dev, 1, 'reeval');
+      await sql`INSERT INTO grant_subject_refs (developer_id, grant_id, kind, value)
+        VALUES (${dev}, ${ids[0]!}, 'case_id', 'case_0003')`;
+      await createMappingRule(sql, dev, {
+        name: 're-evaluate on risk', eventType: 'risk.raised',
+        target: { by: 'subject_ref', path: 'subject.case_id', kind: 'case_id' }, action: 're_evaluate',
+      });
+
+      const sourceId = await source(sql, dev);
+      const event = dissolution({ eventId: 'evt_retry', type: 'risk.raised', subject: { case_id: 'case_0003' } });
+      const first = await process(sql, dev, sourceId, event);
+      expect(first.result['re_evaluated']).toBe(1);
+      // The same delivery again: a later rule failing, or the receipt not
+      // being finalised, must not ask the platform twice.
+      const second = await process(sql, dev, sourceId, event);
+      expect(second.result['re_evaluated']).toBe(0);
+
+      const entries = await verifyChain(sql, dev);
+      expect(entries.filter((entry) => entry.action === 'grantex.grant.re_evaluation_requested')).toHaveLength(1);
+    });
+  }, 180_000);
+
+  it('keeps a subject that is large or oddly shaped out of the audit chain', async () => {
+    await withFixture(async ({ sql, dev, chain }) => {
+      const ids = await chain(dev, 1, 'subj');
+      await sql`INSERT INTO grant_subject_refs (developer_id, grant_id, kind, value)
+        VALUES (${dev}, ${ids[0]!}, 'case_id', 'case_0004')`;
+      await createMappingRule(sql, dev, {
+        name: 're-evaluate', eventType: 'risk.raised',
+        target: { by: 'subject_ref', path: 'subject.case_id', kind: 'case_id' }, action: 're_evaluate',
+      });
+
+      const sourceId = await source(sql, dev);
+      await process(sql, dev, sourceId, dissolution({
+        eventId: 'evt_subject', type: 'risk.raised',
+        subject: {
+          case_id: 'case_0004',
+          long: 'x'.repeat(5_000),
+          nested: { anything: 'here' },
+          'not a key': 'dropped',
+        },
+      }));
+
+      const entry = (await verifyChain(sql, dev))
+        .find((row) => row.action === 'grantex.grant.re_evaluation_requested')!;
+      const subject = entry.metadata['subject'] as Record<string, unknown>;
+      expect(subject['case_id']).toBe('case_0004');
+      expect(String(subject['long']).length).toBeLessThanOrEqual(257);
+      expect(subject).not.toHaveProperty('nested');
+      expect(subject).not.toHaveProperty('not a key');
+      expect(subject['subject_truncated']).toBe(true);
     });
   }, 180_000);
 });

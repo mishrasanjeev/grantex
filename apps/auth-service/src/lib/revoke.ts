@@ -58,11 +58,13 @@ export async function revokeGrantCascade(
         AND developer_id = ${developerId}
       RETURNING id, expires_at
     `;
-    await releaseWalletReservationsForGrants(
-      tx,
-      developerId,
-      [grantId, ...descendantRows.map((row) => row['id'] as string)],
-    );
+    const revokedIds = [grantId, ...descendantRows.map((row) => row['id'] as string)];
+    await releaseWalletReservationsForGrants(tx, developerId, revokedIds);
+    // In the same transaction as the grants themselves. This used to be
+    // fire-and-forget after the commit, so a failure left a credential that
+    // still verified against a grant that no longer existed — and nothing
+    // reported it, because the promise's rejection was swallowed.
+    await revokeVCsByGrantIds(revokedIds, developerId, tx);
   });
 
   if (!grant) {
@@ -79,10 +81,6 @@ export async function revokeGrantCascade(
     const ttlSeconds = Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
     await redis.set(`revoked:grant:${row['id'] as string}`, '1', 'EX', ttlSeconds);
   }));
-
-  // Revoke associated VCs (best-effort, non-blocking)
-  const allRevokedIds = revokedRows.map(r => r['id'] as string);
-  revokeVCsByGrantIds(allRevokedIds, developerId).catch(() => {});
 
   // Emit event (best-effort, non-blocking)
   emitEvent(developerId, 'grant.revoked', {
