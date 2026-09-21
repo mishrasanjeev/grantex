@@ -133,7 +133,9 @@ describePostgres('evidence records and export against real Postgres', () => {
     const agentId = `ag_evidence_${suffix}`;
     try {
       await runMigrations(admin);
-      await runMigrations(admin); // every start re-applies all files
+      // A repeat start applies nothing now that the ledger exists; it used to
+      // re-apply every file, which is what the second call here was for.
+      expect((await runMigrations(admin)).applied).toEqual([]);
       resetCounterTriggerCache();
       const [trigger] = await admin`SELECT COUNT(*)::int AS n FROM pg_trigger WHERE tgname = 'audit_entry_counter_trg'`;
       expect(trigger!['n']).toBe(1);

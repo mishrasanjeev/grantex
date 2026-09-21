@@ -156,7 +156,6 @@ describePostgres('decision grants against real Postgres', () => {
   beforeAll(async () => {
     sql = postgres(databaseUrl!, { max: 12, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
     await runMigrations(sql);
-    await runMigrations(sql);
     const pair = await generateKeyPair('ES256');
     signingKey = pair.privateKey;
     jwk = { ...(await exportJWK(pair.publicKey)), kid: 'idp-1', alg: 'ES256', use: 'sig' };
@@ -233,7 +232,17 @@ describePostgres('decision grants against real Postgres', () => {
     }
   });
 
-  it('migrates additively and idempotently', async () => {
+  // The second `runMigrations` this used to make is now a no-op — with the
+  // ledger a file is applied at most once per database — so it proved nothing
+  // about idempotency and has been replaced by an assertion of what the runner
+  // now guarantees. Re-executing every file against a database already at head
+  // is covered by the transition case in
+  // tests/migrate-ledger-postgres.integration.test.ts.
+  it('migrates additively, and a repeat start applies nothing', async () => {
+    const repeat = await runMigrations(sql);
+    expect(repeat.applied).toEqual([]);
+    expect(repeat.skipped).toBeGreaterThan(50);
+
     const tables = await sql<{ table_name: string }[]>`
       SELECT table_name FROM information_schema.tables
        WHERE table_name LIKE 'decision_%' AND table_schema = current_schema()
