@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Outbound HTTP
+- `safeFetch` frames a request body with `Content-Length`. Without it node
+  sends the body with `Transfer-Encoding: chunked`, which is valid HTTP/1.1 but
+  which plenty of servers, gateways and filtering proxies refuse on a POST - an
+  OpenID Connect token endpoint among them, so an approver's sign-in for a
+  decision grant could fail at the token exchange against such a provider. The
+  length is always known, because the body is materialised before the request
+  is made; an explicit `Content-Length` or `Transfer-Encoding` is left alone.
+
 ### Revocation feed: fewer entries, and a poll that does not nest
 - Deleting an already-revoked grant's tokens no longer writes a second feed
   entry. Cascade revocation sets `grants.status` and leaves

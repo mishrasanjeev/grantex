@@ -84,3 +84,57 @@ describe('safeFetch response limits', () => {
     expect(await response.text()).toBe('ok');
   });
 });
+
+describe('safeFetch request framing', () => {
+  /** Records how the server saw one request. */
+  async function echoRequest(init: Parameters<typeof safeFetch>[1]): Promise<{ headers: http.IncomingHttpHeaders; body: string }> {
+    let seen: { headers: http.IncomingHttpHeaders; body: string } | undefined;
+    const { port } = await startServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk: Buffer) => chunks.push(chunk));
+      req.on('end', () => {
+        seen = { headers: req.headers, body: Buffer.concat(chunks).toString('utf-8') };
+        res.end('ok');
+      });
+    });
+    await safeFetch(`http://outbound.test:${port}/echo`, init, localPolicy, localResolver);
+    if (!seen) throw new Error('the server did not see the request');
+    return seen;
+  }
+
+  // Without this, node frames the body with Transfer-Encoding: chunked, which
+  // is valid HTTP/1.1 but which plenty of servers and gateways refuse on a
+  // POST - an OpenID Connect token endpoint among them.
+  it('frames a request body by length, not chunked', async () => {
+    const body = new URLSearchParams({ grant_type: 'authorization_code', code: 'abc' }).toString();
+    const seen = await echoRequest({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    expect(seen.headers['content-length']).toBe(String(Buffer.byteLength(body)));
+    expect(seen.headers['transfer-encoding']).toBeUndefined();
+    expect(seen.body).toBe(body);
+  });
+
+  it('counts bytes, not characters, and leaves an explicit framing alone', async () => {
+    const body = 'reason=stra\u00dfe\u00a0\u20ac';
+    const seen = await echoRequest({ method: 'POST', body });
+    expect(seen.headers['content-length']).toBe(String(Buffer.byteLength(body)));
+    expect(seen.body).toBe(body);
+
+    const explicit = await echoRequest({
+      method: 'POST',
+      headers: { 'Content-Length': String(Buffer.byteLength('a=1')) },
+      body: 'a=1',
+    });
+    expect(explicit.headers['content-length']).toBe('3');
+  });
+
+  it('sends no framing headers when there is no body', async () => {
+    const seen = await echoRequest({ method: 'GET' });
+    expect(seen.headers['content-length']).toBeUndefined();
+    expect(seen.headers['transfer-encoding']).toBeUndefined();
+  });
+});
