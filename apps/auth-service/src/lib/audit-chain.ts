@@ -13,6 +13,7 @@
  * that a full plan could suppress would be worthless.
  */
 import type postgres from 'postgres';
+import type { TxSql } from '../db/client.js';
 import { computeAuditHash } from './hash.js';
 import { PLATFORM_MARKER } from './evidence/hashing.js';
 import { nextStamp } from './evidence-service/service.js';
@@ -26,7 +27,7 @@ export interface AuditChainHead {
 }
 
 /** Take the developer's audit lock for the rest of the transaction and read the chain head. */
-export async function lockAuditChain(tx: Sql, developerId: string): Promise<AuditChainHead> {
+export async function lockAuditChain(tx: TxSql, developerId: string): Promise<AuditChainHead> {
   await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 0))`;
   const rows = await tx<{ id: string; hash: string; timestamp: Date | string }[]>`
     SELECT id, hash, timestamp FROM audit_entries WHERE developer_id = ${developerId}
@@ -57,7 +58,7 @@ export interface AppendedAuditEntry {
  * `lockAuditChain` must already have been called for this developer.
  */
 export async function appendPlatformAuditEntries(
-  tx: Sql,
+  tx: TxSql,
   developerId: string,
   head: AuditChainHead,
   entries: readonly PlatformAuditEntry[],
