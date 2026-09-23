@@ -22,7 +22,6 @@ const describePostgres = adminDatabaseUrl ? describe : describe.skip;
 beforeAll(async () => {
   if (!adminDatabaseUrl) return;
   const db = await createTestDatabase('audit');
-  await db.sql.end();
   databaseUrl = db.url;
   dropTestDatabase = db.drop;
 }, 60_000);

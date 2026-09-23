@@ -125,7 +125,6 @@ async function createDecisionStore(sql: postgres.Sql, schema: string): Promise<v
 beforeAll(async () => {
   if (!adminDatabaseUrl) return;
   const db = await createTestDatabase('evidence');
-  await db.sql.end();
   databaseUrl = db.url;
   dropTestDatabase = db.drop;
 }, 60_000);

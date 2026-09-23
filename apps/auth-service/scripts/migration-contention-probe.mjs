@@ -17,8 +17,13 @@
  * re-run says less. This reproduces the mechanism directly instead, so a fix
  * can be measured rather than hoped at.
  *
- *   node migration-contention-probe.mjs --mode shared    [--workers 6] [--rounds 4]
- *   node migration-contention-probe.mjs --mode per-file  [--workers 6] [--rounds 4]
+ *   npm run probe:migrations -- --mode shared    [--workers 6] [--rounds 4]
+ *   npm run probe:migrations -- --mode per-file  [--workers 6] [--rounds 4]
+ *
+ * It imports the service's TypeScript directly, so it needs a loader that
+ * understands it: plain `node` fails on Node 24 with
+ * ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX. The npm script passes
+ * --experimental-transform-types, which needs no extra dependency.
  *
  *   --mode shared     every worker migrates the same database (the old shape)
  *   --mode per-file   every worker migrates a database of its own (the fix)

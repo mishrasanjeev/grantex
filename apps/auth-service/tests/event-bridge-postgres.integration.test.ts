@@ -52,7 +52,6 @@ async function withDevelopers<T>(fn: (sql: ReturnType<typeof postgres>, dev: str
 beforeAll(async () => {
   if (!adminDatabaseUrl) return;
   const db = await createTestDatabase('event-bridge');
-  await db.sql.end();
   databaseUrl = db.url;
   dropTestDatabase = db.drop;
 }, 60_000);

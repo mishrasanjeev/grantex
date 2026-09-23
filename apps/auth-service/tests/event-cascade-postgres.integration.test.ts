@@ -145,7 +145,6 @@ async function verifyChain(sql: Sql, developerId: string): Promise<Array<{ actio
 beforeAll(async () => {
   if (!adminDatabaseUrl) return;
   const db = await createTestDatabase('event-cascade');
-  await db.sql.end();
   databaseUrl = db.url;
   dropTestDatabase = db.drop;
 }, 60_000);

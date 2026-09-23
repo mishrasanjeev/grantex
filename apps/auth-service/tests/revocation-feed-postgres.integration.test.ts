@@ -97,7 +97,6 @@ async function withFixture<T>(fn: (f: Fixture) => Promise<T>): Promise<T> {
 beforeAll(async () => {
   if (!adminDatabaseUrl) return;
   const db = await createTestDatabase('revocation-feed');
-  await db.sql.end();
   databaseUrl = db.url;
   dropTestDatabase = db.drop;
 }, 60_000);

@@ -1,7 +1,7 @@
 {
   "name": "@grantex/auth-service",
   "version": "0.1.0",
-  "description": "Grantex auth service — issues RS256 grant tokens",
+  "description": "Grantex auth service \u2014 issues RS256 grant tokens",
   "author": {
     "name": "Sanjeev Kumar",
     "email": "sanjeev@orchestrum.in"
@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "vitest run -c vitest.e2e.config.ts"
+    "test:e2e": "vitest run -c vitest.e2e.config.ts",
+    "probe:migrations": "node --experimental-transform-types scripts/migration-contention-probe.mjs"
   },
   "overrides": {
     "esbuild": ">=0.25.0",

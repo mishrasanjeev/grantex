@@ -43,7 +43,6 @@ interface PendingCode { sub: string; claims: Record<string, unknown>; nonce: str
 beforeAll(async () => {
   if (!adminDatabaseUrl) return;
   const db = await createTestDatabase('decision-grants');
-  await db.sql.end();
   databaseUrl = db.url;
   dropTestDatabase = db.drop;
 }, 60_000);

@@ -122,7 +122,6 @@ async function verifyChain(sql: Sql, developerId: string): Promise<Array<Record<
 beforeAll(async () => {
   if (!adminDatabaseUrl) return;
   const db = await createTestDatabase('emergency-stop');
-  await db.sql.end();
   databaseUrl = db.url;
   dropTestDatabase = db.drop;
 }, 60_000);

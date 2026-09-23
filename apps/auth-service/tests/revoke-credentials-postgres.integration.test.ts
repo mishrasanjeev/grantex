@@ -45,7 +45,6 @@ let dropTestDatabase: (() => Promise<void>) | undefined;
 beforeAll(async () => {
   if (!adminDatabaseUrl) return;
   const db = await createTestDatabase('revoke_credentials');
-  await db.sql.end();
   state.pool = postgres(db.url, { max: 4, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
   dropTestDatabase = db.drop;
 }, 60_000);

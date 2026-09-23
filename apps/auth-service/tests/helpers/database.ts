@@ -19,9 +19,12 @@ const adminUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
  * through it: nothing another file does can be seen, let alone locked against.
  * It also means extensions, which are database-wide, cannot leak between
  * files the way a shared-database schema would allow.
+ *
+ * Each file opens its own pool against the database it is handed. With
+ * `maxWorkers: 2` at most two files run at once, so the peak is a couple of
+ * dozen backends; raising `maxWorkers` raises that in step.
  */
 export async function createTestDatabase(label: string): Promise<{
-  sql: Sql;
   url: string;
   name: string;
   drop: () => Promise<void>;
@@ -36,11 +39,17 @@ export async function createTestDatabase(label: string): Promise<{
   const url = new URL(adminUrl);
   url.pathname = `/${name}`;
   return {
-    sql: postgres(url.toString(), { max: 12, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} }),
     url: url.toString(),
     name,
     drop: async () => {
-      await admin.unsafe(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`).catch(() => undefined);
+      // A failure here leaks a database on a CI worker; say so rather than
+      // swallowing it, but never fail a green run over cleanup.
+      await admin
+        .unsafe(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`)
+        .catch((err: unknown) => {
+          process.stderr.write(`could not drop test database ${name}: ${String(err)}
+`);
+        });
       await admin.end();
     },
   };
