@@ -1,7 +1,11 @@
 -- Replay responses contain bearer access tokens. Discard any legacy plaintext
 -- cache exactly once before requiring AES-256-GCM envelopes for future writes.
--- Grantex deliberately reruns migration files on startup, so an explicit
--- sentinel is required to avoid erasing valid encrypted recovery state later.
+-- The sentinel below is what makes that "exactly once" true. It predates the
+-- schema_migrations ledger, which now applies each file at most once per
+-- database, and it is kept because a database migrated before the ledger
+-- existed ran this file on every start — the marker is the only record that
+-- the one-time discard already happened, and without it a re-run would erase
+-- valid encrypted recovery state.
 CREATE TABLE IF NOT EXISTS grantex_migration_markers (
   name TEXT PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

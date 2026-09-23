@@ -44,9 +44,12 @@ async function withDevelopers<T>(fn: (sql: ReturnType<typeof postgres>, dev: str
 }
 
 describePostgres('event bridge sources and replay store against real Postgres', () => {
-  it('migrates idempotently and stores webhook secrets encrypted and bound to the source', async () => {
+  it('applies nothing on a repeat start and stores webhook secrets encrypted and bound to the source', async () => {
     await withDevelopers(async (sql, dev, other) => {
-      await runMigrations(sql); // every start re-applies all files
+      // `withDevelopers` has already migrated this database. Before the ledger
+      // this second call re-applied every file; it is now a no-op, which is
+      // what is asserted instead.
+      expect((await runMigrations(sql)).applied).toEqual([]);
       const created = await createEventSource(sql, dev, { kind: 'webhook', name: 'provider events', toleranceSeconds: 120 });
       expect(created.secret).toMatch(/^gxevs_/);
       const [raw] = await sql`SELECT encrypted_secret FROM event_bridge_sources WHERE id = ${created.row.id}`;

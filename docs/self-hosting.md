@@ -238,6 +238,7 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `STRIPE_WEBHOOK_SECRET` | No | — | Stripe webhook signature validation |
 | `STRIPE_PRICE_PRO` | No | — | Stripe price ID for Pro tier |
 | `STRIPE_PRICE_ENTERPRISE` | No | — | Stripe price ID for Enterprise tier |
+| `MIGRATION_LOCK_TIMEOUT` | No | `2s` | How long a migration statement waits for a lock before the boot fails loudly (section 6) |
 | `EVENT_BRIDGE_ENABLED` | No | `false` | Accept provider events (SSF/CAEP SETs, signed webhooks); see `docs/concepts/event-bridge-and-revocation.md` |
 | `EVENT_BRIDGE_DEVELOPER_IDS` | No | — | Limit the event bridge to these developers (comma separated) |
 | `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | No | `30000` | Event ingestion requests per client address (read per request) |
@@ -255,12 +256,96 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 
 ## 6. Database Migrations
 
-Migrations run **automatically on every startup**. The auth service includes a built-in migration
-runner (`src/db/migrate.ts`) that reads all `*.sql` files from the `migrations/` directory in
-alphabetical order and executes each one. All statements use idempotent DDL (`CREATE TABLE IF NOT EXISTS`,
-`ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`), so re-running is safe.
+Migrations run **automatically on every startup**, and each file is applied **once per database**.
+The built-in runner (`src/db/migrate.ts`) reads all `*.sql` files from the `migrations/` directory in
+alphabetical order, applies the ones this database has not seen, and records them in the
+`schema_migrations` ledger (filename, checksum, applied-at). A start that has nothing to apply
+touches no table at all.
 
-The repository currently contains ordered migrations through `092`, covering core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, MCP certification-state integrity, query-performance indexes, agent prepaid wallets, and layered wallet spend controls. Index builds use `CREATE INDEX CONCURRENTLY`, and the runner serializes migrations across service instances with a PostgreSQL advisory lock. Inspect the migration directory in the exact release you deploy rather than relying on a copied file count.
+That matters during a rolling deploy. Postgres takes an `ACCESS EXCLUSIVE` lock **before** it
+evaluates `ADD COLUMN IF NOT EXISTS`, so a no-op `ALTER TABLE grants …` still queues behind
+whatever transaction is touching `grants` — and every reader arriving after it waits behind that
+queued request, including `/v1/authorize`, token exchange and delegation on the instance that is
+still serving traffic. With the ledger a repeat start issues no DDL, so it cannot stall anything.
+
+While applying, the runner sets `lock_timeout` (`MIGRATION_LOCK_TIMEOUT`, default 2 s) and retries
+a few times, so a migration that cannot take its lock fails the boot loudly instead of stalling
+the table. The setting is reset before the connection returns to the pool, so no application
+statement inherits it. A file whose content changed after it was applied is reported as a warning
+and **never re-applied** — ship a new migration instead. That is a warning and not a failure on
+purpose: the edit has already had no effect on this database, and refusing to boot over it would
+take the service down for nothing. The same applies to a ledger row whose file is no longer on
+disk: it is warned about, because a renamed migration counts as a new pending file and its
+statements run again.
+
+### Adopting a database that is already at head
+
+A database migrated by a release **before** the ledger existed has the full schema and no
+`schema_migrations` table, so the first start after the upgrade treats all files as pending and
+re-executes them. That is safe — every file is idempotent — and against ordinary traffic it takes
+a few seconds. But if a single transaction is holding a row in `grants` for longer than
+`MIGRATION_LOCK_TIMEOUT`, the `ALTER TABLE grants` files cannot take their lock and **the boot
+fails**. Nothing is corrupted and no traffic is affected (migrations run before the server
+listens, so the new instance never becomes ready and the old one keeps serving), but the deploy
+is broken and has to be retried.
+
+Baselining removes that risk. It records every file as applied **without executing any of them**,
+so the upgrade's first start is a no-op like every start after it:
+
+The command runs from the built service, so run it inside the image you are about to deploy
+rather than from a source checkout (`dist/` does not exist until `npm run build`). It needs the
+same `DATABASE_URL` as the service and nothing else:
+
+```bash
+# Against the running container (Docker Compose)
+docker compose -f docker-compose.prod.yml exec auth-service \
+  node dist/cli/migrate-baseline.js --dry-run
+
+# Or a one-off container on the release you are deploying
+docker run --rm -e DATABASE_URL="$DATABASE_URL" ghcr.io/<org>/grantex-auth-service:<tag> \
+  node dist/cli/migrate-baseline.js --dry-run
+
+# Kubernetes
+kubectl exec -n grantex deploy/grantex -- node dist/cli/migrate-baseline.js --dry-run
+
+# From a built checkout
+cd apps/auth-service && npm run build && node dist/cli/migrate-baseline.js --dry-run
+```
+
+`--dry-run` writes nothing at all — not even the ledger table — and prints the verdict:
+
+```
+this database is at head: all 183 tables and columns the migration files build are present
+{"baselined":false,"dryRun":true,"atHead":true,"objectsChecked":183,...,"recorded":103}
+```
+
+Drop `--dry-run` to record. Then deploy: the new instance logs `applied 0` and takes no lock on
+any table.
+
+**It checks the precondition itself.** Before recording anything it reads every
+`CREATE TABLE IF NOT EXISTS` and `ALTER TABLE … ADD COLUMN IF NOT EXISTS` out of the migration
+files and confirms each object exists in the database. A database that is behind is refused, with
+the missing objects named:
+
+```
+this database is NOT at head: 44 of 183 objects are missing (table evidence_records, …)
+```
+
+That matters because recording a file as applied means **no later start will ever apply it**. A
+partly-migrated database that was baselined would run on an incomplete schema indefinitely, and
+the only way back is editing `schema_migrations` by hand. `--dry-run` exits non-zero on such a
+database, so it can be used as a pre-deploy check in a script.
+
+Rules:
+
+- Run it **only** against a database whose schema is already at head — and let the command
+  confirm that rather than taking it on trust.
+- It is not needed for a new database. Start the service and it applies everything itself.
+- It is safe to repeat: files already in the ledger are left alone.
+- If you skip it, the upgrade still works — retry the deploy at a quieter moment, or during a
+  short maintenance window.
+
+The `migrations/` directory of the release you are deploying is the only authoritative list of what will be applied; a number copied into this page goes stale on the next merge, so there is none here. The files cover core authorization, webhooks, policy, enterprise identity, credentials, budgets, offline operation, trust registry, DPDP, commerce, MCP certification-state integrity, query-performance indexes, agent prepaid wallets, layered wallet spend controls, the event bridge and the revocation feed. Index builds use `CREATE INDEX CONCURRENTLY`, and the runner serializes migrations across service instances with a PostgreSQL advisory lock. An index a cancelled concurrent build left `INVALID` is dropped before the file that creates it is retried, because `CREATE INDEX CONCURRENTLY IF NOT EXISTS` matches such an index by name and would otherwise skip it forever.
 
 **Upgrade procedure** — just restart the service:
 

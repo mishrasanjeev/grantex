@@ -14,6 +14,7 @@ import { pathToFileURL } from 'node:url';
 import { config } from '../config.js';
 import { closeSql, getSql } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
+import { reportMigrationSummary } from '../db/migration-report.js';
 import { parseSigningAlgorithm } from '../lib/signing-algorithms.js';
 import { rotatePostgresSigningKey } from '../lib/signing-keys.js';
 
@@ -40,7 +41,7 @@ async function main(): Promise<void> {
   const { alg } = parseRotateArgs(process.argv.slice(2), config.jwtSigningAlg);
   const sql = getSql();
   try {
-    await runMigrations(sql);
+    reportMigrationSummary(await runMigrations(sql), 'rotate-signing-key');
     const result = await rotatePostgresSigningKey(sql, alg, config.signingKeyActivationDelaySeconds);
     console.log(JSON.stringify({ rotated: true, ...result }));
   } finally {

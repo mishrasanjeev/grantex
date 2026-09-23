@@ -165,6 +165,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   keyed per case, with operator-approved disclosure.
 - New concepts page `docs/concepts/evidence-and-verification.md`.
 
+### Migrations are applied once per database
+- `runMigrations` keeps a `schema_migrations` ledger (filename, checksum,
+  applied-at) and applies each file at most once. Until now every process start
+  re-executed all migration files; they are idempotent, so the result was
+  correct, but ten of them are `ALTER TABLE grants ADD COLUMN IF NOT EXISTS …`
+  and Postgres takes the `ACCESS EXCLUSIVE` lock **before** evaluating
+  `IF NOT EXISTS` — a no-op statement still queued behind any in-flight
+  transaction on `grants`, and every reader arriving after it queued behind
+  that request. On a rolling deploy the starting instance could stall the
+  running instance's authorization path. A start with nothing to apply now
+  issues no DDL at all. FINDINGS G-18.
+- The applying session sets `lock_timeout` (`MIGRATION_LOCK_TIMEOUT`, default
+  `2s`) and retries a few times, so a boot that cannot take a lock fails
+  loudly instead of stalling a table, then resets it before the connection
+  returns to the pool so no application statement inherits it. The value is
+  validated at startup rather than on the first boot with something pending.
+  A file whose content changed after it was applied is reported and never
+  re-applied; so is a ledger row whose file is no longer on disk, because a
+  renamed migration counts as pending and runs again.
+- An index a cancelled `CREATE INDEX CONCURRENTLY` left `INVALID` is dropped
+  before its migration is retried; `CREATE INDEX CONCURRENTLY IF NOT EXISTS`
+  matches such an index by name and would otherwise never rebuild it. The
+  repair runs per file and on every attempt, and a file is **not** recorded in
+  the ledger while one of its indexes is invalid — otherwise a build that
+  timed out mid-attempt would be skipped by its own retry, recorded as
+  applied, and never looked at again, leaving an index unusable for reads and
+  still maintained on every write.
+- New `node dist/cli/migrate-baseline.js` records every migration file as
+  applied **without executing any of them**, for a database already at head
+  that has no ledger. It verifies that precondition itself rather than trusting
+  the operator: every `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... ADD
+  COLUMN IF NOT EXISTS` in the migration files must already exist in the
+  database, or it refuses and names what is missing. Recording a file as
+  applied means no later start ever applies it, so baselining a partly
+  migrated database would leave the service on an incomplete schema for ever.
+  `--dry-run` prints the verdict, writes nothing at all — not even the ledger
+  table — and exits non-zero when the database is not at head, so it can gate
+  a deploy script. On a database that is not at head it prints what is missing
+  and *not* the count of files a baseline would record, which is the number a
+  reader would otherwise latch onto.
+- The migration summary is logged and counted (`grantex_migrations_total`) by
+  both callers instead of being discarded.
+- **Upgrade note:** on an existing database, run
+  `node dist/cli/migrate-baseline.js` against it immediately before deploying
+  this release; the deploy's first start then applies nothing. Without it that
+  first start applies every file once (that is what fills the ledger, and all
+  files are idempotent) — safe, but it fails the boot if a transaction is
+  holding a row in `grants` past `MIGRATION_LOCK_TIMEOUT`, which means a
+  retried deploy. See `docs/self-hosting.md` section 6.
+- `runMigrations` now returns a summary (`applied`, `skipped`, `changed`,
+  `repairedIndexes`) instead of `void`.
+
 ### Breaking changes from 0.5 (summary)
 `docs/migration-0.6.md` explains each item and what to do. Manifests,
 purpose-bound grants, caps, signing and claims each have their own entry

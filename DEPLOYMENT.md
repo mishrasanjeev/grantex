@@ -32,7 +32,7 @@ Complete guide to deploying the Grantex authorization platform in your environme
 | `apps/auth-service/.env.example` | Baseline environment template; `src/config.ts` is authoritative |
 | `apps/auth-service/package.json` | Node.js dependencies |
 | `apps/auth-service/package-lock.json` | Pinned Node.js dependencies |
-| `apps/auth-service/src/db/migrations/` | Ordered SQL migrations (currently through `086`) |
+| `apps/auth-service/src/db/migrations/` | Ordered SQL migrations (the directory is the authoritative list) |
 | `packages/gateway/Dockerfile` | Gateway reverse proxy container |
 | `deploy/gcp/setup.sh` | Google Cloud Run setup |
 | `deploy/gcp/setup-wif.sh` | Workload Identity Federation setup |
@@ -260,14 +260,39 @@ The auth service uses connection pooling:
 
 ### Migrations
 
-Migrations run automatically on first start, or manually:
+Each migration file is applied at most once per database and recorded in the `schema_migrations`
+ledger, so a restart with nothing pending issues no DDL and cannot queue a lock in front of live
+traffic.
+
+**Upgrading a database that predates the ledger:** it has the full schema but no ledger, so the
+first start treats every file as pending and re-runs them. That is safe (all files are
+idempotent), but if a transaction is holding a row in `grants` past `MIGRATION_LOCK_TIMEOUT`
+(default 2 s) the boot fails — safely, before the service listens, leaving the old instance
+serving — and the deploy has to be retried. Baseline the database first, immediately before
+deploying the release that carries the ledger:
 
 ```bash
-cd apps/auth-service
-npm run migrate
+# Inside the image you are deploying — dist/ does not exist in a source checkout
+docker compose -f docker-compose.prod.yml exec auth-service \
+  node dist/cli/migrate-baseline.js --dry-run   # the verdict; writes nothing, exits non-zero if not at head
+docker compose -f docker-compose.prod.yml exec auth-service \
+  node dist/cli/migrate-baseline.js             # record every file as applied, executing none
 ```
 
-The ordered migrations currently run from `001` through `086` and create the core, enterprise, offline, trust-registry, commerce, and query-performance data structures. Treat the migration directory—not a copied count in documentation—as authoritative.
+It checks the precondition itself: every table and column the migration files build must already
+exist, or it refuses and names what is missing. Recording a file as applied means no later start
+ever applies it, so a partly-migrated database must not be baselined. New databases need nothing —
+starting the service applies everything. See `docs/self-hosting.md` section 6.
+
+Migrations otherwise run automatically on startup, before the server listens; there is no
+separate migrate step to run. To apply them without serving traffic, run the service's entrypoint
+in a one-off container against the same `DATABASE_URL` and stop it once it logs
+`Migrations: applied …`.
+
+The ordered migrations create the core, enterprise, offline, trust-registry, commerce,
+query-performance, event-bridge and revocation-feed data structures. The migration directory of
+the release you deploy is the authoritative list — a range copied into this file goes stale on the
+next merge, so there is none here.
 
 ### Backup
 

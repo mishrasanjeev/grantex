@@ -4,6 +4,21 @@ Defects found while doing other work and deliberately left out of that change.
 Each entry says where it was found, what is wrong and what fixing it involves.
 Remove an entry in the pull request that fixes it.
 
+Numbers are permanent: they appear in commit messages, changelog entries and
+code comments (`FINDINGS G-17` and `FINDINGS G-18` are cited in source today,
+and the release harnesses cite `FINDINGS G-23`), so a fixed or withdrawn
+finding leaves its number behind rather than having it reused. **Retired:
+G-5, G-9** (fixed and removed before this file was kept under review) and
+**G-19, G-20** (renumbered to G-24 and G-25 while three branches were open at
+once, before either had merged — no other branch or commit ever referred to
+them).
+
+Cite a finding as **`FINDINGS G-nn`**, never as a bare `G-nn`: `G-3`, `G-5`
+and `G-6` are also PRD section numbers, and "PRD G-6" appears in source dozens
+of times, so a bare citation cannot be grepped for reliably. An entry that
+lives on an unmerged branch is not citable from code yet — put the entry in
+the pull request that references it.
+
 ## G-1 — OpenSSL in the auth-service base image has a fixable HIGH advisory
 
 - **Found:** container scan of `apps/auth-service` (2026-09-14).
@@ -207,42 +222,54 @@ Remove an entry in the pull request that fixes it.
   configured `issuer_url`, verify `iss` against the configured value, and add
   tests for both.
 
-## G-17 — The decision-grant migration test sees another test's tables
+## G-17 — The decision-grant migration test sees another test's tables (fixed)
 
 - **Found:** event bridge cascade revocation work (PRD G-6), 2026-09-20.
-- **What:** `tests/decision-grants-postgres.integration.test.ts` asserts the
+- **What:** `tests/decision-grants-postgres.integration.test.ts` asserted the
   `decision_%` tables by querying `information_schema.tables` without a schema
   predicate. `tests/evidence-postgres.integration.test.ts` creates its own
   schema containing `decision_requests` and `decision_grants`, so when the two
-  files run at the same time against one database the assertion sees duplicate
-  names and fails. Both files are in `main`; the failure is timing-dependent
-  and unrelated to what either test is checking.
-- **Fix:** add `AND table_schema = 'public'` (or `current_schema()`) to the
-  query in the decision-grant test.
+  files ran at the same time against one database the assertion saw duplicate
+  names and failed.
+- **Fixed:** the query is now scoped with `AND table_schema = current_schema()`.
 
-## G-18 — Every startup re-runs `ALTER TABLE grants` against live traffic
+## G-18 — Every startup re-ran `ALTER TABLE grants` against live traffic (fixed)
 
-- **Found:** event bridge cascade revocation work (PRD G-6), 2026-09-20.
-- **What:** `runMigrations` re-applies every file on every start, including
-  `ALTER TABLE grants ADD COLUMN IF NOT EXISTS …` in migrations 002, 018, 061,
-  089, 090, 095 and 098. Even when the column exists, the statement takes a
-  brief `ACCESS EXCLUSIVE` lock on `grants`: during a rolling deploy it queues
-  behind in-flight transactions, blocks every reader and writer of `grants`
-  behind it, and can deadlock against a transaction that goes on to lock more
-  rows (reproduced in this repository's test suite when a migration run
-  overlapped a cascade-revocation transaction: `deadlock detected`).
-- **Fix:** guard each `ALTER TABLE` with a catalogue check (`IF NOT EXISTS
-  (SELECT 1 FROM information_schema.columns …) THEN … END IF`) so a no-op start
-  takes no lock at all, and set a short `lock_timeout` around the real change
-  (migration 100 already uses this pattern for its trigger).
-- **Mitigated, not fixed:** revocation transactions retry on
-  `deadlock_detected` (`apps/auth-service/src/lib/revocation/retry.ts`) so a
-  revocation is not lost to this, and the Postgres integration fixtures retry
-  too (`apps/auth-service/tests/deadlock-retry.ts`). The migrations themselves
-  are unchanged. Seen in the Postgres log as: migration 095's `ALTER TABLE …
-  ADD COLUMN IF NOT EXISTS` waiting for `AccessExclusiveLock` on
-  `audit_entries` while a cascade transaction waited for `AccessShareLock` on
-  `grants`.
+- **Found:** event bridge cascade revocation work (PRD G-6), 2026-09-20;
+  reproduced independently on merged `main`.
+- **What:** `runMigrations` had no ledger and re-executed all migration files on
+  every process start, ten of them `ALTER TABLE grants ADD COLUMN IF NOT
+  EXISTS …`. Postgres takes the `ACCESS EXCLUSIVE` lock **before** evaluating
+  `IF NOT EXISTS`, so a no-op statement still queued behind any in-flight
+  transaction on `grants`, and every reader arriving afterwards queued behind
+  that request — `/v1/authorize`, token exchange, delegation and every enforce
+  path. No `lock_timeout` was set, so the stall was unbounded. On each merge to
+  `main` the starting instance could stall the running one's live traffic.
+  Seen in the Postgres log as migration 095's `ALTER TABLE …` waiting for
+  `AccessExclusiveLock` on `audit_entries` while a cascade transaction waited
+  for `AccessShareLock` on `grants` (a deadlock, the visible tip of the same
+  hazard).
+- **Fixed:** a `schema_migrations` ledger (filename, checksum, applied-at)
+  applies each file once per database, so a repeat start issues no DDL at all;
+  the applying session sets `lock_timeout` (`MIGRATION_LOCK_TIMEOUT`, default
+  2 s) and retries, so a boot that cannot take a lock fails loudly instead of
+  stalling a table; an index a cancelled `CREATE INDEX CONCURRENTLY` left
+  `INVALID` is dropped before its file is retried, since `IF NOT EXISTS`
+  matches such an index by name and would otherwise skip it forever.
+  Revocation transactions also retry on `deadlock_detected`
+  (`lib/revocation/retry.ts`).
+- **Also fixed after review:** `lock_timeout` is a *session* setting and the
+  migration connection returns to the pool, so it leaked onto one pooled
+  connection for the life of the process — roughly one statement in `max`
+  would abort with `55P03` instead of waiting for a contended row, on the
+  revocation, wallet-reservation, refresh-rotation and audit-trigger paths. It
+  is now reset before the connection is released, on every path.
+- **Left:** nothing, once the database is baselined. The first start on a
+  database that predates the ledger still applies every file (that is what
+  fills it), which is safe but fails the boot if a transaction holds a `grants`
+  row past `MIGRATION_LOCK_TIMEOUT`. `node dist/cli/migrate-baseline.js`
+  records the files without executing them, so run it on an at-head database
+  immediately before that deploy; see `docs/self-hosting.md` section 6.
 
 ## G-21 — Subject bindings are stored in plaintext
 
@@ -309,6 +336,39 @@ Remove an entry in the pull request that fixes it.
 - **Impact:** slow containment, on the free plan only, and a misleading
   propagation measurement if the limiter is not accounted for.
 
+## G-24 — Postgres integration tests share one database, which flakes
+
+- **Found:** review of the migration ledger (PRD G-6), 2026-09-21.
+- **What:** every `*-postgres.integration.test.ts` file runs against the same
+  database, and several call `runMigrations` in their setup. Concurrent runs
+  can deadlock inside the runner: the reviewer saw
+  `PostgresError: deadlock detected` inside `runMigrations` once in two full
+  suite runs, and the file passed in isolation. The ledger makes this much
+  rarer (a repeat run issues no DDL) but does not remove it, because the first
+  file to reach the ledger still applies everything.
+- **Not fixed here:** giving each integration file its own database — as
+  `tests/migrate-ledger-postgres.integration.test.ts` already does with
+  `CREATE DATABASE` — would remove the class of flake entirely. It touches
+  every integration file, so it does not belong in this PR. **Next after this
+  stack lands:** branch protection requires green CI, so a flake at this rate
+  teaches everyone to re-run without reading the failure, which is how a real
+  failure gets waved through.
+- **Impact:** an occasional red CI run that is green on re-run.
+
+## G-25 — A migration seeds real third-party company DIDs
+
+- **Found:** review of the migration ledger (PRD G-6), 2026-09-21.
+- **What:** `062_trust_registry_verification_token.sql` hardcodes
+  `did:web:shopify.com`, `did:web:doordash.com` and `did:web:pinelabs.com` in
+  its seed data. These are real companies that have no relationship with this
+  project, and the rows are indistinguishable from a real trust-registry
+  entry — exactly what the "no data that could be mistaken for real" rule
+  exists to prevent. Pre-existing, unrelated to this PR.
+- **Not fixed here:** the values are already applied in every existing
+  database, so replacing them means a new migration that rewrites the rows,
+  plus checking nothing keys off those DIDs. Worth doing on its own.
+- **Impact:** presentational and legal, not functional.
+
 ## G-26 — The feed's settle window measures insert time, not commit time
 
 - **Found:** review of the revocation feed (PRD G-6), 2026-09-21.
@@ -332,6 +392,37 @@ Remove an entry in the pull request that fixes it.
 - **Impact:** a revocation could be missed by streaming clients under a very
   long revocation transaction. Snapshot readers (`GET /v1/revocations`) are
   unaffected, and a client that reconnects re-reads the snapshot.
+
+## G-27 — Helpers still widen a transaction handle back to the pool
+
+- **Found:** review of the `TxSql` typing fix (PRD G-6), 2026-09-21.
+- **What:** PR #1338 made `TxSql` the real transaction type, so `tx.begin(…)`
+  is a compile error — but a handful of call sites still widen a transaction
+  handle back to the pool type on the way into a helper, which puts `begin`
+  back within reach of anything that helper calls:
+  `vc.ts:119` (`claimIndexFromExistingList`),
+  `evidence-service/service.ts:417`, `:539`, `:773`,
+  `budget.ts:77`, `signing-keys.ts:499`, `:561`, `:610`,
+  and `event-actions.ts:134`.
+  `revocation/emergency-stop.ts` had the same widening and was narrowed while
+  merging #1333, but the reason it survived the global fix is worth keeping in
+  view: it declares its **own** `type Sql = ReturnType<typeof postgres>`
+  locally, so changing the shared alias never reached it. Every file with a
+  private alias of that shape can drift the same way, and that is what this
+  cleanup should sweep for rather than the listed lines alone.
+  Two related edges: `queries()` returns a `TxSql`, which advertises
+  `savepoint` — the pool does not have one at runtime, so a helper that took
+  the hint would fail — and `vc.ts:417` reaches for the pool without going
+  through `queries()`, which contradicts its "single place" claim.
+- **Why it matters:** this is the same bug class #1338 closed. A nested
+  transaction on a passed-in handle throws `sql.begin is not a function`,
+  aborts the caller's transaction and rolls its work back — which is how a
+  cascade revocation once left grants active while reporting success. None of
+  the sites above does it today; the type system simply stops objecting.
+- **Fix:** narrow each helper to `TxSql`, route the remaining pool use through
+  `queries()`, and give `queries()` a return type that does not promise
+  `savepoint`. Mechanical, but it touches four subsystems, so it belongs in
+  its own PR rather than in the one that changed the alias.
 
 ## G-28 — The revocation stream advanced its cursor before writing
 

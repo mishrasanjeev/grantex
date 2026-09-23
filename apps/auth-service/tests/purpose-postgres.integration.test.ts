@@ -23,7 +23,9 @@ describePostgres('purpose-bound grants against real Postgres', () => {
     const details = [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', purpose: 'aml.cdd.onboarding' }];
     try {
       await runMigrations(sql);
-      await runMigrations(sql); // every start re-applies all files
+      // A repeat start applies nothing now that the ledger exists; it used to
+      // re-apply every file, which is what the second call here was for.
+      expect((await runMigrations(sql)).applied).toEqual([]);
 
       const columns = await sql<{ table_name: string; is_nullable: string }[]>`
         SELECT table_name, is_nullable FROM information_schema.columns

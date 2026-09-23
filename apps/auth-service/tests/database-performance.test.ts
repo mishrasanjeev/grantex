@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,7 +90,7 @@ describe('database performance migrations', () => {
     expect(sql).not.toContain('CREATE UNIQUE INDEX');
   });
 
-  it('holds the migration lock while every file runs and releases the connection', async () => {
+  it('holds the migration lock while pending files run, and releases the connection', async () => {
     const migrationSql = Object.assign(vi.fn().mockResolvedValue([]), {
       unsafe: vi.fn().mockResolvedValue([]),
       release: vi.fn(),
@@ -97,20 +98,142 @@ describe('database performance migrations', () => {
     const sql = { reserve: vi.fn().mockResolvedValue(migrationSql) };
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
+    let summary;
     try {
-      await runMigrations(sql as never);
+      summary = await runMigrations(sql as never);
     } finally {
       log.mockRestore();
     }
 
+    const tagged = migrationSql.mock.calls.map((call) => (call[0] as string[]).join(''));
+    const statements = migrationSql.unsafe.mock.calls.map((call) => call[0] as string);
     expect(sql.reserve).toHaveBeenCalledOnce();
-    expect(migrationSql.mock.calls).toHaveLength(2);
-    expect((migrationSql.mock.calls[0]?.[0] as string[]).join('')).toContain('pg_advisory_lock');
-    expect((migrationSql.mock.calls[1]?.[0] as string[]).join('')).toContain('pg_advisory_unlock');
-    // Derived from the directory rather than hardcoded — a literal count turns
-    // every new migration into an unrelated test failure.
-    const migrationCount = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql')).length;
-    expect(migrationSql.unsafe).toHaveBeenCalledTimes(migrationCount);
+    expect(statements[0]).toContain('pg_advisory_lock');
+    expect(statements[statements.length - 1]).toContain('pg_advisory_unlock');
+    // The session's lock_timeout is put back before the connection returns to
+    // the pool, so application statements do not inherit it and abort on a
+    // contended row instead of waiting.
+    expect(statements[statements.length - 2]).toBe('RESET lock_timeout');
+    expect(statements.indexOf('RESET lock_timeout'))
+      .toBeGreaterThan(statements.findIndex((statement) => statement.startsWith('SET lock_timeout')));
+    expect(tagged.some((query) => query.includes('SELECT filename, checksum FROM schema_migrations'))).toBe(true);
     expect(migrationSql.release).toHaveBeenCalledOnce();
+
+    // An empty ledger means every file is pending, and each one is recorded.
+    const files = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql'));
+    const executed = migrationSql.unsafe.mock.calls.map((call) => call[0] as string);
+    expect(executed.some((statement) => statement.includes('CREATE TABLE IF NOT EXISTS schema_migrations'))).toBe(true);
+    expect(executed.some((statement) => statement.startsWith('SET lock_timeout'))).toBe(true);
+    expect(summary.applied).toEqual(files);
+    expect(
+      tagged.filter((query) => query.includes('INSERT INTO schema_migrations')),
+    ).toHaveLength(files.length);
+  });
+
+  /**
+   * A `CREATE INDEX CONCURRENTLY` file must not get a ledger row while one of
+   * its indexes is invalid.
+   *
+   * Postgres creates the catalog entry before it waits, so a timed-out build
+   * leaves the index behind, invalid. The retry re-runs the same
+   * `IF NOT EXISTS` statement, which matches that index by name and skips —
+   * so the statement "succeeds" and, before this guard, the ledger row went
+   * in on top. The file is never pending again, so nothing ever repairs it:
+   * the index stays unusable for reads and maintained on every write, for
+   * good.
+   *
+   * Here the file runs cleanly and the catalogue still reports its index
+   * invalid, which is that state exactly.
+   */
+  it('refuses to record a concurrent-index file while its index is invalid', async () => {
+    const files = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql'));
+    const concurrent = files.find((f) => f.includes('grants_parent_index'))!;
+    const indexName = 'idx_grants_parent';
+    // Everything applied except the one concurrent file.
+    const ledger = files.filter((f) => f !== concurrent).map((filename) => ({
+      filename,
+      checksum: createHash('sha256')
+        .update(readFileSync(join(migrationsDir, filename), 'utf8'), 'utf8')
+        .digest('hex'),
+    }));
+
+    const migrationSql = Object.assign(
+      vi.fn().mockImplementation(async (strings: TemplateStringsArray) => {
+        const query = strings.join('');
+        if (query.includes('FROM schema_migrations')) return ledger;
+        // The catalogue says the index this file builds is invalid — the
+        // state a timed-out build leaves behind.
+        if (query.includes('NOT i.indisvalid')) return [{ indexname: indexName }];
+        return [];
+      }),
+      { unsafe: vi.fn().mockResolvedValue([]), release: vi.fn() },
+    );
+    const sql = { reserve: vi.fn().mockResolvedValue(migrationSql) };
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      await expect(runMigrations(sql as never)).rejects.toThrow(new RegExp(concurrent));
+    } finally {
+      log.mockRestore();
+      warn.mockRestore();
+    }
+
+    const tagged = migrationSql.mock.calls.map((call) => (call[0] as string[]).join(''));
+    const statements = migrationSql.unsafe.mock.calls.map((call) => call[0] as string);
+    // No ledger row for it: a recorded file is never run again, so this is
+    // the difference between a bad boot and a permanently invalid index.
+    expect(tagged.some((query) => query.includes('INSERT INTO schema_migrations'))).toBe(false);
+    // It tried to repair it first, and on every attempt rather than once
+    // before the loop — the pass used to run once, over the pending files,
+    // and so could not see an index this run's own retry had invalidated.
+    const repairs = statements.filter((statement) => statement.startsWith('DROP INDEX CONCURRENTLY'));
+    expect(repairs.length).toBeGreaterThan(1);
+    expect(repairs[0]).toContain(indexName);
+    // And the session is still put back before the connection is released.
+    expect(statements).toContain('RESET lock_timeout');
+    expect(migrationSql.release).toHaveBeenCalledOnce();
+  });
+
+  it('runs no migration file, and takes no lock on a table, when the ledger has them all', async () => {
+    const files = readdirSync(migrationsDir).filter((f) => f.endsWith('.sql'));
+    const ledger = files.map((filename) => ({
+      filename,
+      checksum: createHash('sha256')
+        .update(readFileSync(join(migrationsDir, filename), 'utf8'), 'utf8')
+        .digest('hex'),
+    }));
+    const migrationSql = Object.assign(
+      vi.fn().mockImplementation(async (strings: TemplateStringsArray) =>
+        (strings.join('').includes('FROM schema_migrations') ? ledger : [])),
+      { unsafe: vi.fn().mockResolvedValue([]), release: vi.fn() },
+    );
+    const sql = { reserve: vi.fn().mockResolvedValue(migrationSql) };
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    let summary;
+    try {
+      summary = await runMigrations(sql as never);
+    } finally {
+      log.mockRestore();
+    }
+
+    expect(summary.applied).toEqual([]);
+    expect(summary.skipped).toBe(files.length);
+    expect(summary.changed).toEqual([]);
+    // Only the ledger table is touched: no ALTER TABLE, no CREATE INDEX, and
+    // so no lock request queued in front of live traffic (FINDINGS G-18).
+    const executed = migrationSql.unsafe.mock.calls.map((call) => call[0] as string);
+    expect(executed.filter((statement) => /ALTER TABLE|CREATE INDEX|CREATE TRIGGER/i.test(statement))).toEqual([]);
+    expect(executed.filter((statement) => /CREATE TABLE/i.test(statement))).toEqual([
+      expect.stringContaining('CREATE TABLE IF NOT EXISTS schema_migrations'),
+    ]);
+    // Nothing else runs at all: lock, ledger table, reset, unlock.
+    expect(executed).toHaveLength(4);
+    // With nothing pending the timeout is never set, so there is nothing to
+    // leak — but the reset runs anyway, because it is cheaper than reasoning
+    // about which path set it.
+    expect(executed.some((statement) => statement.startsWith('SET lock_timeout'))).toBe(false);
+    expect(executed).toContain('RESET lock_timeout');
   });
 });
