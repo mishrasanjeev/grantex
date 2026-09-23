@@ -12,7 +12,7 @@
  * restore grants an event suspended while it was on.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { getSql } from '../db/client.js';
+import { getSql, type TxSql } from '../db/client.js';
 import { isPlainObject } from '../lib/event-bridge/normalize.js';
 import { RuleValidationError } from '../lib/event-bridge/mapping.js';
 import {
@@ -131,7 +131,7 @@ export async function eventActionsRoutes(app: FastifyInstance): Promise<void> {
     // with bindings that outlive the check.
     let found = false;
     await sql.begin(async (raw) => {
-      const tx = raw as unknown as ReturnType<typeof getSql>;
+      const tx = raw as unknown as TxSql;
       const grants = await tx<{ id: string }[]>`
         SELECT id FROM grants
          WHERE id = ${request.params.id} AND developer_id = ${developerId}

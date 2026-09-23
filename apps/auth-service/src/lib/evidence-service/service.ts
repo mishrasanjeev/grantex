@@ -15,6 +15,8 @@
  *   orders entries by server recording time.
  */
 import { KeyObject, type webcrypto } from 'node:crypto';
+import { queries } from '../../db/client.js';
+import type { TxSql } from '../../db/client.js';
 import { CompactSign } from 'jose';
 import type postgres from 'postgres';
 import { incrementBase32 } from 'ulid';
@@ -155,7 +157,7 @@ interface Head {
   id: string | null;
 }
 
-async function lockAndHead(tx: Sql, developerId: string): Promise<Head> {
+async function lockAndHead(tx: TxSql, developerId: string): Promise<Head> {
   await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 0))`;
   const rows = await tx<{ id: string; hash: string; timestamp: Date | string }[]>`
     SELECT id, hash, timestamp FROM audit_entries WHERE developer_id = ${developerId}
@@ -181,7 +183,7 @@ export function nextStamp(head: Head, now: Date): { id: string; timestamp: strin
 let counterTriggerPresent = false;
 
 /** Current audit entry count for plan limits, from the counter table when its trigger exists. */
-async function auditEntryCount(tx: Sql, developerId: string): Promise<number> {
+async function auditEntryCount(tx: TxSql, developerId: string): Promise<number> {
   if (!counterTriggerPresent) {
     const rows = await tx<{ present: boolean }[]>`SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'audit_entry_counter_trg') AS present`;
     counterTriggerPresent = rows[0]?.present === true;
@@ -210,7 +212,7 @@ async function planLimit(sql: Sql, developerId: string): Promise<number> {
   return PLAN_LIMITS[isPlanName(planName) ? planName : 'free'].auditEntries;
 }
 
-async function insertPlatformAudit(tx: Sql, fields: {
+async function insertPlatformAudit(tx: TxSql, fields: {
   id: string; developerId: string; action: string; metadata: Json; timestamp: string; prevHash: string | null; agentId?: string; agentDid?: string; grantId?: string;
 }): Promise<string> {
   const row = {
@@ -242,7 +244,7 @@ export interface GrantRow {
 }
 
 /** The grant and its ancestors, root first (tenant scoped, bounded depth). */
-async function loadGrantChain(sql: Sql, developerId: string, grantId: string): Promise<GrantRow[]> {
+async function loadGrantChain(sql: TxSql, developerId: string, grantId: string): Promise<GrantRow[]> {
   const rows = await sql<Array<GrantRow & { hops: number }>>`
     WITH RECURSIVE chain AS (
       SELECT g.id, g.agent_id, g.principal_id, g.scopes, g.status, g.issued_at, g.expires_at, g.revoked_at,
@@ -292,7 +294,7 @@ interface DecisionRow {
  * a tenant could have written. Until that store exists (or if its shape is
  * not the one this code knows), no decisions are included.
  */
-async function loadDecisions(sql: Sql, developerId: string, caseId: string): Promise<{ available: boolean; rows: DecisionRow[] }> {
+async function loadDecisions(sql: TxSql, developerId: string, caseId: string): Promise<{ available: boolean; rows: DecisionRow[] }> {
   try {
     const columns = await sql<{ table_name: string; column_name: string }[]>`
       SELECT table_name, column_name FROM information_schema.columns
@@ -377,7 +379,7 @@ interface StoredRecord {
 
 const recordKeyOf = (type: string, key: string): string => `${type}\n${key}`;
 
-async function caseState(tx: Sql, developerId: string, caseId: string): Promise<{ grantLeafId: string | null; firstExportedAt: Date | null }> {
+async function caseState(tx: TxSql, developerId: string, caseId: string): Promise<{ grantLeafId: string | null; firstExportedAt: Date | null }> {
   await tx`INSERT INTO evidence_cases (developer_id, case_id) VALUES (${developerId}, ${caseId}) ON CONFLICT DO NOTHING`;
   const rows = await tx<{ grant_leaf_id: string | null; first_exported_at: Date | string | null }[]>`
     SELECT grant_leaf_id, first_exported_at FROM evidence_cases WHERE developer_id = ${developerId} AND case_id = ${caseId} FOR UPDATE`;
@@ -385,7 +387,7 @@ async function caseState(tx: Sql, developerId: string, caseId: string): Promise<
   return { grantLeafId: row?.grant_leaf_id ?? null, firstExportedAt: row?.first_exported_at ? new Date(row.first_exported_at) : null };
 }
 
-async function loadStoredRecords(tx: Sql, developerId: string, caseId: string, keys: Array<[string, string]>): Promise<Map<string, StoredRecord>> {
+async function loadStoredRecords(tx: TxSql, developerId: string, caseId: string, keys: Array<[string, string]>): Promise<Map<string, StoredRecord>> {
   const map = new Map<string, StoredRecord>();
   if (keys.length === 0) return map;
   const types = [...new Set(keys.map(([type]) => type))];
@@ -414,7 +416,7 @@ export async function appendEvidenceRecords(sql: Sql, developerId: string, caseI
   const appended: AppendedRecord[] = [];
   try {
     await sql.begin(async (raw) => {
-      const tx = raw as unknown as Sql;
+      const tx = raw as unknown as TxSql;
       let head = await lockAndHead(tx, developerId);
       const state = await caseState(tx, developerId, caseId);
       const referenced: Array<[string, string]> = [];
@@ -521,7 +523,7 @@ export async function appendEvidenceRecords(sql: Sql, developerId: string, caseI
   return appended;
 }
 
-async function caseConsumed(tx: Sql, developerId: string, caseId: string): Promise<boolean> {
+async function caseConsumed(tx: TxSql, developerId: string, caseId: string): Promise<boolean> {
   const decisions = await loadDecisions(tx, developerId, caseId);
   return decisions.rows.some((row) => row.consumed_at !== null);
 }
@@ -536,7 +538,7 @@ export async function voidEvidenceRecord(sql: Sql, developerId: string, caseId: 
   const limit = await planLimit(sql, developerId);
   let result: AppendedRecord | undefined;
   await sql.begin(async (raw) => {
-    const tx = raw as unknown as Sql;
+    const tx = raw as unknown as TxSql;
     const head = await lockAndHead(tx, developerId);
     await caseState(tx, developerId, caseId);
     const key = `${b['target_type'] as string}:${b['target_id'] as string}`;
@@ -703,9 +705,9 @@ async function exportInner(sql: Sql, input: Parameters<typeof exportCasePackage>
     SELECT grant_leaf_id, first_exported_at FROM evidence_cases WHERE developer_id = ${developerId} AND case_id = ${caseId}`;
   const leaf = caseRows[0]?.grant_leaf_id ?? null;
   if (leaf === null) throw new EvidenceServiceError(422, 'EVIDENCE_INCOMPLETE', 'no tool call in this case names a grant');
-  const chain = await loadGrantChain(sql, developerId, leaf);
+  const chain = await loadGrantChain(queries(sql), developerId, leaf);
   if (chain.length === 0) throw new EvidenceServiceError(422, 'EVIDENCE_GRANT_CHAIN_INVALID', 'the grant the case used no longer exists');
-  const decisions = await loadDecisions(sql, developerId, caseId);
+  const decisions = await loadDecisions(queries(sql), developerId, caseId);
   const platform = decisionRecords(decisions.rows, caseId, issuer);
   const consumptionMs = platform.filter((p) => p.record['type'] === 'decision_consumption').map((p) => p.recordedMs);
   const firstConsumption = consumptionMs.length ? Math.min(...consumptionMs) : null;
@@ -770,7 +772,7 @@ async function exportInner(sql: Sql, input: Parameters<typeof exportCasePackage>
   const limit = await planLimit(sql, developerId);
   let anchor: Json | undefined;
   await sql.begin(async (raw) => {
-    const tx = raw as unknown as Sql;
+    const tx = raw as unknown as TxSql;
     const head = await lockAndHead(tx, developerId);
     if ((await auditEntryCount(tx, developerId)) + 1 > limit) {
       throw new EvidenceServiceError(402, 'PLAN_LIMIT_EXCEEDED', `Plan limit reached: the plan allows ${limit} audit entries`);

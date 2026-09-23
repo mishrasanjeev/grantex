@@ -1,4 +1,5 @@
 import type postgres from 'postgres';
+import type { TxSql } from '../db/client.js';
 import { newBudgetAllocationId, newBudgetTransactionId } from './ids.js';
 import { emitEvent } from './events.js';
 
@@ -74,7 +75,7 @@ export async function debitBudget(
   // The balance update and its ledger row are one unit. Without a transaction,
   // an INSERT failure permanently reduced the balance with no audit trail.
   await sql.begin(async (_tx) => {
-    const tx = _tx as unknown as ReturnType<typeof postgres>;
+    const tx = _tx as unknown as TxSql;
     const rows = await tx`
       UPDATE budget_allocations ba
       SET remaining_budget = remaining_budget - ${amount},

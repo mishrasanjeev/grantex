@@ -50,6 +50,7 @@ import {
   type JWTHeaderParameters,
 } from 'jose';
 import type postgres from 'postgres';
+import type { TxSql } from '../db/client.js';
 import { decryptWithContext, encryptWithContext } from './vault-crypto.js';
 import {
   isSigningAlgorithm,
@@ -461,7 +462,7 @@ async function rowToKey(row: KeyRow): Promise<SigningKey> {
 }
 
 async function insertKey(
-  tx: Sql,
+  tx: TxSql,
   key: { kid: string; alg: SigningAlgorithm; publicJwk: JWK; privateKey: KeyLike | null; legacyKidAlias: boolean },
   status: SigningKeyStatus,
   activationDelaySeconds = 0,
@@ -496,7 +497,7 @@ async function generateKey(alg: SigningAlgorithm): Promise<{ kid: string; alg: S
 export async function promoteDuePendingKey(sql: Sql): Promise<string | null> {
   let promoted: string | null = null;
   await sql.begin(async (tx) => {
-    const t = tx as unknown as Sql;
+    const t = tx as unknown as TxSql;
     await t`SELECT pg_advisory_xact_lock(hashtextextended(${KEY_TABLE_LOCK}, 0))`;
     const due = await t<{ kid: string }[]>`
       SELECT kid FROM platform_signing_keys WHERE status = 'pending' AND activates_at <= NOW()
@@ -558,7 +559,7 @@ export async function loadPostgresSigningKeyRing(
   envKeys: { signing: ActiveSigningKey | null; others: SigningKey[] } = { signing: null, others: [] },
 ): Promise<SigningKeyRing> {
   await sql.begin(async (tx) => {
-    const t = tx as unknown as Sql;
+    const t = tx as unknown as TxSql;
     await t`SELECT pg_advisory_xact_lock(hashtextextended(${KEY_TABLE_LOCK}, 0))`;
     const stored = await t<{ kid: string; status: string; legacy_kid_alias: boolean }[]>`
       SELECT kid, status, legacy_kid_alias FROM platform_signing_keys
@@ -607,7 +608,7 @@ export async function rotatePostgresSigningKey(
   let kid = '';
   let activatesAt = '';
   await sql.begin(async (tx) => {
-    const t = tx as unknown as Sql;
+    const t = tx as unknown as TxSql;
     await t`SELECT pg_advisory_xact_lock(hashtextextended(${KEY_TABLE_LOCK}, 0))`;
     const pending = await t<{ kid: string }[]>`SELECT kid FROM platform_signing_keys WHERE status = 'pending'`;
     if (pending[0]) {

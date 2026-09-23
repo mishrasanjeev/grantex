@@ -8,7 +8,7 @@
 import { SignJWT, jwtVerify, decodeJwt } from 'jose';
 import type postgres from 'postgres';
 import { gzipSync, gunzipSync } from 'node:zlib';
-import { getSql, type TxSql } from '../db/client.js';
+import { getSql, type TxSql, queries } from '../db/client.js';
 import { getKeyPair } from './crypto.js';
 import { resolvePlatformVerificationKey, SIGNING_ALGORITHMS } from './signing-keys.js';
 import { newVerifiableCredentialId, newStatusListId } from './ids.js';
@@ -110,13 +110,13 @@ export async function allocateStatusListIndex(
 ): Promise<AllocatedStatusIndex> {
   const sql = getSql();
 
-  const claimed = await claimIndexFromExistingList(sql, developerId);
+  const claimed = await claimIndexFromExistingList(queries(sql), developerId);
   if (claimed) return claimed;
 
   // No list yet, or the newest one is full. Serialise creation per developer so
   // a burst of concurrent issuance produces one new list rather than N.
   return await sql.begin(async (_tx) => {
-    const tx = _tx as unknown as ReturnType<typeof postgres>;
+    const tx = _tx as unknown as TxSql;
     await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`vcsl:${developerId}`}, 0))`;
 
     const raced = await claimIndexFromExistingList(tx, developerId);
@@ -133,7 +133,7 @@ export async function allocateStatusListIndex(
 }
 
 async function claimIndexFromExistingList(
-  sql: ReturnType<typeof postgres>,
+  sql: TxSql,
   developerId: string,
 ): Promise<AllocatedStatusIndex | null> {
   const rows = await sql`
@@ -412,9 +412,9 @@ export async function revokeVCsByGrantIds(
 ): Promise<void> {
   if (grantIds.length === 0) return;
 
-  // The pool runs the same queries a transaction handle does; it is typed as
-  // one here so nothing reached from this function can open a transaction.
-  const sql: TxSql = tx ?? (getSql() as unknown as TxSql);
+  // `queries()` is the one place that says the pool runs these same queries;
+  // going around it with a cast is what this sweep is removing.
+  const sql: TxSql = tx ?? queries(getSql());
 
   // Find all active VCs for these grants
   const vcRows = await sql`

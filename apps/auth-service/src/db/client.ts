@@ -24,15 +24,34 @@ import { config } from '../config.js';
 export type TxSql = postgres.TransactionSql<Record<string, unknown>>;
 
 /**
- * Present the pool where a *query-only* handle is wanted.
+ * Present the pool where a query-only handle is wanted.
  *
  * Helpers that run queries and nothing else take `TxSql`, so that they cannot
- * open a transaction — inside a caller's transaction that throws and rolls the
- * caller's work back. The pool runs exactly the same queries, so this is the
- * one place that says so, rather than a cast scattered over every call site.
+ * open a transaction — inside a caller's transaction that would throw and roll
+ * the caller's work back. The pool runs exactly the same queries, so this is
+ * the one place that says so, rather than a cast scattered over every call
+ * site.
+ *
+ * `TxSql` promises one thing the pool does not have: `savepoint`. The type
+ * system cannot take it away again without also losing the tagged-template
+ * call signature the whole type exists for — an intersection with
+ * `{ savepoint?: never }` makes the value uncallable — so the value says it
+ * instead. Reaching for `savepoint` on the pool fails at the point of the
+ * mistake, with a message naming it, rather than as a `TypeError` from inside
+ * postgres.js.
  */
 export function queries(sql: ReturnType<typeof postgres>): TxSql {
-  return sql as unknown as TxSql;
+  return new Proxy(sql as unknown as TxSql, {
+    get(target, property, receiver) {
+      if (property === 'savepoint') {
+        throw new Error(
+          'queries(sql) is the connection pool presented as a query-only handle: it has no savepoint. '
+          + 'Take the transaction you meant to be inside, or use sql.begin() to start one.',
+        );
+      }
+      return Reflect.get(target, property, receiver) as unknown;
+    },
+  });
 }
 
 let _sql: ReturnType<typeof postgres> | null = null;
