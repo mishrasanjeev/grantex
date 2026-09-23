@@ -137,4 +137,26 @@ describe('safeFetch request framing', () => {
     expect(seen.headers['content-length']).toBeUndefined();
     expect(seen.headers['transfer-encoding']).toBeUndefined();
   });
+
+  // An empty string is a body, not the absence of one: a POST with no
+  // Content-Length at all is what a strict server answers 411 to.
+  it('frames an empty body as length zero', async () => {
+    const seen = await echoRequest({ method: 'POST', body: '' });
+    expect(seen.headers['content-length']).toBe('0');
+    expect(seen.headers['transfer-encoding']).toBeUndefined();
+    expect(seen.body).toBe('');
+  });
+
+  // A caller that asks for chunked still gets it: the streaming callers that
+  // want it must not be silently switched to a length they did not compute.
+  it('leaves a caller who asked for chunked framing alone', async () => {
+    const seen = await echoRequest({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Transfer-Encoding': 'chunked' },
+      body: '{"a":1}',
+    });
+    expect(seen.headers['transfer-encoding']).toBe('chunked');
+    expect(seen.headers['content-length']).toBeUndefined();
+    expect(seen.body).toBe('{"a":1}');
+  });
 });

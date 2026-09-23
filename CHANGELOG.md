@@ -15,6 +15,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   length is always known, because the body is materialised before the request
   is made; an explicit `Content-Length` or `Transfer-Encoding` is left alone.
 
+### Decision grants
+- **`POST /v1/decisions/consume` now returns the grant identifier alongside
+  each approver (`approvers[].jti`).** A platform that records who decided
+  needs the pair, and the response gave it two arrays it could only line up by
+  position - which is not safe: `jtis` is in the order the caller presented the
+  tokens, while `approvers` is ordered by approval position, so for a four-eyes
+  decision the two can genuinely disagree and a platform pairing them by index
+  can attribute a grant to the wrong approver. The audit entry written in the
+  same transaction already recorded the pair; the response was the same
+  projection minus `jti`, and is now identical to it. Additive: every existing
+  field is unchanged.
+
 ### Revocation feed: fewer entries, and a poll that does not nest
 - Deleting an already-revoked grant's tokens no longer writes a second feed
   entry. Cascade revocation sets `grants.status` and leaves
