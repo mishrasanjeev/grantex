@@ -15,16 +15,18 @@
 import { randomUUID } from 'node:crypto';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import postgres from 'postgres';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { createTestDatabase } from './helpers/database.js';
 
-const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+// A database of its own; see FINDINGS G-24.
+const adminDatabaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
 const ci = process.env['CI']?.trim().toLowerCase();
-if ((ci === 'true' || ci === '1') && !databaseUrl) {
+if ((ci === 'true' || ci === '1') && !adminDatabaseUrl) {
   throw new Error(
     'AUDIT_INTEGRATION_DATABASE_URL must be set in CI; refusing to skip the revocation credential tests',
   );
 }
-const describePostgres = databaseUrl ? describe : describe.skip;
+const describePostgres = adminDatabaseUrl ? describe : describe.skip;
 
 // `revokeGrantCascade` reaches for the pool itself, so this file points
 // `getSql` at the real database instead of the shared mock. The pool is built
@@ -36,17 +38,30 @@ vi.mock('../src/db/client.js', () => ({
   closeSql: vi.fn(),
 }));
 
-const pool = databaseUrl
-  ? postgres(databaseUrl, { max: 4, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} })
-  : null;
-state.pool = pool;
+// The pool is created in `beforeAll` so this file can own its database:
+// `getSql` reads `state.pool` at call time, so assigning it later is enough.
+let dropTestDatabase: (() => Promise<void>) | undefined;
+
+beforeAll(async () => {
+  if (!adminDatabaseUrl) return;
+  const db = await createTestDatabase('revoke_credentials');
+  await db.sql.end();
+  state.pool = postgres(db.url, { max: 4, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
+  dropTestDatabase = db.drop;
+}, 60_000);
+
+afterAll(async () => {
+  await state.pool?.end();
+  state.pool = null;
+  await dropTestDatabase?.();
+}, 60_000);
 
 const { revokeGrantCascade } = await import('../src/lib/revoke.js');
 const { runMigrations } = await import('../src/db/migrate.js');
 
 describePostgres('revoking a grant revokes its credentials in the same transaction', () => {
   it('marks the credential revoked and flips its status-list bit', async () => {
-    const sql = pool!;
+    const sql = state.pool!;
     const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
     const dev = `dev_rvc_${suffix}`;
     const agent = `ag_rvc_${suffix}`;

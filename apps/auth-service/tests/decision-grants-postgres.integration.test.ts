@@ -20,19 +20,37 @@ import { clearApproverIdpCaches } from '../src/lib/decisions/approver-oidc.js';
 import { computeActionHash, type DecisionAction } from '../src/lib/decisions/action.js';
 import { consumeDecisionGrants, createApproverSession, type ApproverIdpRow } from '../src/lib/decisions/store.js';
 import { buildTestApp, sqlMock, TEST_ADMIN_API_KEY } from './helpers.js';
+import { createTestDatabase } from './helpers/database.js';
 
-const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+// This file runs against a database of its own. Sharing one database across
+// the Postgres integration files let `CREATE INDEX CONCURRENTLY` in one file
+// deadlock against another file's migration run (FINDINGS G-24).
+const adminDatabaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+let databaseUrl = adminDatabaseUrl;
+let dropTestDatabase: (() => Promise<void>) | undefined;
 const ci = process.env['CI']?.trim().toLowerCase();
 if ((ci === 'true' || ci === '1') && !databaseUrl) {
   throw new Error('AUDIT_INTEGRATION_DATABASE_URL must be set in CI; refusing to skip the real-Postgres decision-grant tests');
 }
-const describePostgres = databaseUrl ? describe : describe.skip;
+const describePostgres = adminDatabaseUrl ? describe : describe.skip;
 
 const ORIGIN = 'https://grantex.dev';
 const ISSUER = 'https://idp.example.com';
 const OTHER_ISSUER = 'https://idp-two.example.com';
 
 interface PendingCode { sub: string; claims: Record<string, unknown>; nonce: string; challenge: string; clientId: string; issuer: string }
+
+beforeAll(async () => {
+  if (!adminDatabaseUrl) return;
+  const db = await createTestDatabase('decision-grants');
+  await db.sql.end();
+  databaseUrl = db.url;
+  dropTestDatabase = db.drop;
+}, 60_000);
+
+afterAll(async () => {
+  await dropTestDatabase?.();
+}, 60_000);
 
 describePostgres('decision grants against real Postgres', () => {
   const suffix = randomUUID().replace(/-/g, '').slice(0, 12);

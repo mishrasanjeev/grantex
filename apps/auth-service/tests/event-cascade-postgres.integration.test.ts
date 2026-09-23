@@ -1,7 +1,7 @@
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { randomUUID } from 'node:crypto';
 import postgres from 'postgres';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
 import { retryOnDeadlock } from './deadlock-retry.js';
 import { matchStoredAuditHash } from '../src/lib/hash.js';
@@ -10,15 +10,21 @@ import { mappingProcessor } from '../src/lib/event-bridge/actions.js';
 import { createMappingRule } from '../src/lib/event-bridge/rules-store.js';
 import { createEventSource } from '../src/lib/event-bridge/sources.js';
 import type { NormalizedEvent } from '../src/lib/event-bridge/normalize.js';
+import { createTestDatabase } from './helpers/database.js';
 
-const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+// This file runs against a database of its own. Sharing one database across
+// the Postgres integration files let `CREATE INDEX CONCURRENTLY` in one file
+// deadlock against another file's migration run (FINDINGS G-24).
+const adminDatabaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+let databaseUrl = adminDatabaseUrl;
+let dropTestDatabase: (() => Promise<void>) | undefined;
 const ci = process.env['CI']?.trim().toLowerCase();
 if ((ci === 'true' || ci === '1') && !databaseUrl) {
   throw new Error(
     'AUDIT_INTEGRATION_DATABASE_URL must be set in CI; refusing to skip the real-Postgres cascade revocation tests',
   );
 }
-const describePostgres = databaseUrl ? describe : describe.skip;
+const describePostgres = adminDatabaseUrl ? describe : describe.skip;
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -135,6 +141,18 @@ async function verifyChain(sql: Sql, developerId: string): Promise<Array<{ actio
     grant_id: row['grant_id'] as string,
   }));
 }
+
+beforeAll(async () => {
+  if (!adminDatabaseUrl) return;
+  const db = await createTestDatabase('event-cascade');
+  await db.sql.end();
+  databaseUrl = db.url;
+  dropTestDatabase = db.drop;
+}, 60_000);
+
+afterAll(async () => {
+  await dropTestDatabase?.();
+}, 60_000);
 
 describePostgres('cascade revocation against real Postgres', () => {
   it('revokes a depth-4 delegation tree in one call and records an unbroken audit chain', async () => {
