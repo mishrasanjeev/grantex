@@ -99,6 +99,10 @@ export const mockStripe: {
 vi.mock('../src/db/client.js', () => ({
   getSql: () => sqlMock,
   closeSql: vi.fn(),
+  // The pool presented to query-only helpers. The real one refuses
+  // `savepoint`, which the pool does not have; here it is the mock itself, so
+  // a test that asserts on `sqlMock` still sees every query.
+  queries: (sql: unknown) => sql,
 }));
 
 vi.mock('../src/redis/client.js', () => ({
