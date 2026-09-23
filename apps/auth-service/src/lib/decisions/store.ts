@@ -879,7 +879,13 @@ export interface ConsumeInput {
 export interface ConsumeResult {
   requestId: string;
   jtis: string[];
-  approvers: { sub: string; approver_auth: string; dwell_ms: number; dwell_source: string }[];
+  /**
+   * One entry per consumed grant, each naming the grant it came from. `jtis`
+   * carries the same identifiers without the approvers; a platform recording
+   * who decided needs the pair, and must not have to assume that two separate
+   * arrays line up.
+   */
+  approvers: { sub: string; approver_auth: string; dwell_ms: number; dwell_source: string; jti: string }[];
   actionHash: string;
 }
 
@@ -1036,7 +1042,7 @@ export async function consumeDecisionGrants(sql: Sql, input: ConsumeInput): Prom
     return {
       requestId: request.id,
       jtis,
-      approvers: rows.map((r) => ({ sub: r.approver_sub, approver_auth: r.approver_auth, dwell_ms: r.dwell_ms, dwell_source: r.dwell_source })),
+      approvers: rows.map((r) => ({ sub: r.approver_sub, approver_auth: r.approver_auth, dwell_ms: r.dwell_ms, dwell_source: r.dwell_source, jti: r.jti })),
       actionHash: request.action_hash,
     };
   }) as Promise<ConsumeResult>;
