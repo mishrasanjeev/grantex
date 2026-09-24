@@ -57,6 +57,10 @@ afterAll(async () => {
 }, 60_000);
 
 describePostgres('platform signing keys against real Postgres', () => {
+  // This test migrates the file's database from empty, which takes seconds
+  // and more on a loaded machine; the suite's 10s default is too tight. A
+  // timeout here leaves the migration running, and the next test's run then
+  // deadlocks against it (FINDINGS G-32).
   it('bridges from the env store without changing the signing kid or losing legacy tokens', async () => {
     const sql = connect();
     try {
@@ -102,7 +106,7 @@ describePostgres('platform signing keys against real Postgres', () => {
       await sql`DELETE FROM platform_signing_keys`.catch(() => {});
       await sql.end();
     }
-  });
+  }, 120_000);
 
   it('rotates publish-then-sign and keeps the retired key verifiable for the grace window', async () => {
     const sql = connect();

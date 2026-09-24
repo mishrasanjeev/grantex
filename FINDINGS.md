@@ -559,3 +559,21 @@ the pull request that references it.
   is one drop path and it reports a failure. Shown by making the drop fail:
   the run writes `could not drop test database t_migrate_…` to stderr, where
   before it said nothing.
+
+## G-32 — The signing-key test migrated a fresh database under a 10s limit (fixed)
+
+- **Found:** a full local run during #1352, 2026-09-24.
+- **What:** since G-24, `signing-keys-postgres.integration.test.ts` has a
+  database of its own, and its first test migrates it from empty under the
+  suite's 10-second `testTimeout`. Before G-24 it migrated a shared database
+  already at head, which took almost no time. Locally the first test took
+  between 1.8 and 10 seconds and once timed out. On a timeout the migration
+  kept running, the next test's migration deadlocked against it (`40P01`),
+  and the abandoned connection then threw an unhandled
+  `Cannot read properties of null (reading 'write')`. Every other test that
+  migrates a fresh database already had a limit of a minute or more.
+- **Fixed:** the first test has a 120-second limit, like the other files that
+  migrate from empty. The other two re-run migrations that apply nothing and
+  take well under a second. Shown by forcing a 1-second global limit: before
+  the fix all three tests fail with the deadlock and the unhandled error;
+  after it all three pass, the first in about 1.6 seconds on its own limit.
