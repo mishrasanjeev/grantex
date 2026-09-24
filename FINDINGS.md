@@ -532,7 +532,24 @@ the pull request that references it.
 
   The migrations always create tables, so the regression it exists for is
   caught; a test doing only one of the others would not be. None does so to
-  the shared database today. Each integration file does create and drop a
-  database of its own through the shared connection (by design, G-24), and
-  one left behind by a failed drop is reported only on stderr, not by the
-  guard.
+  the shared database today. The integration files do create and drop
+  databases through the shared connection, by design (G-24): one per file
+  through `createTestDatabase`, and one per test in
+  `migrate-ledger-postgres.integration.test.ts`. The guard sees neither. A
+  database left behind by a failed drop is reported on stderr by
+  `createTestDatabase`, and not at all by the migrate-ledger file, which
+  ignores the failure (G-31).
+
+## G-31 — The migrate-ledger test drops its databases silently
+
+- **Found:** review of the G-30 wording, 2026-09-24.
+- **What:** `tests/migrate-ledger-postgres.integration.test.ts` creates a
+  database per test through its own `freshDatabase()` and drops it with
+  `.catch(() => undefined)` (line 38). A drop that fails leaves the database
+  on the Postgres server with nothing said. `createTestDatabase`, which every
+  other integration file uses, writes the same failure to stderr.
+- **Impact:** a leaked database per failure on a developer's machine; none on
+  CI, whose Postgres is discarded after the job. The shared-database guard
+  (G-30) does not see databases, so it cannot catch this either.
+- **Fix:** log the failure the way `createTestDatabase` does, or build
+  `freshDatabase` on it.
