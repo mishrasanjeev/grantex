@@ -13,9 +13,12 @@ G-5, G-9** (fixed and removed before this file was kept under review) and
 once, before either had merged — no other branch or commit ever referred to
 them).
 
-Cite a finding as **`FINDINGS G-nn`**, never as a bare `G-nn`: `G-3`, `G-5`
-and `G-6` are also PRD section numbers, and "PRD G-6" appears in source dozens
-of times, so a bare citation cannot be grepped for reliably. An entry that
+Outside this file, cite a finding as **`FINDINGS G-nn`**, never as a bare
+`G-nn`: `G-3`, `G-5` and `G-6` are also PRD section numbers, and "PRD G-6"
+appears in source dozens of times, so a bare citation cannot be grepped for
+reliably. Inside this file, entries cite each other as a bare `G-nn`, and a
+PRD section is always written `PRD G-n`, so a bare number here is always a
+finding. An entry that
 lives on an unmerged branch is not citable from code yet — put the entry in
 the pull request that references it.
 
