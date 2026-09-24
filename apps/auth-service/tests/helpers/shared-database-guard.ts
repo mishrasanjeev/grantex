@@ -19,15 +19,17 @@ export interface SharedDatabaseSnapshot {
 const LEDGER = 'schema_migrations';
 
 async function inspect<T>(url: string, read: (sql: ReturnType<typeof postgres>) => Promise<T>): Promise<T> {
-  const sql = postgres(url, { max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
+  let sql: ReturnType<typeof postgres> | undefined;
   try {
+    // Inside the try: a malformed URL throws here, and must say why too.
+    sql = postgres(url, { max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
     return await read(sql);
   } catch (err) {
     throw new Error(
       `The shared-database guard could not inspect the shared database, so it cannot tell whether a test file migrated it: ${String(err)}`,
     );
   } finally {
-    await sql.end({ timeout: 5 });
+    await sql?.end({ timeout: 5 });
   }
 }
 
