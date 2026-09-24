@@ -21,6 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Integration test clean-up drops each database even when closing its pool
   throws, and the database helper closes its admin connection when
   `CREATE DATABASE` itself fails.
+- The signing-key integration test that migrates its database from empty has
+  a two-minute limit instead of the suite's ten seconds, which it could
+  exceed on a loaded machine and then deadlock the next test. FINDINGS G-32.
 - Test-only; no product change, no schema change, nothing behind a flag.
 
 ### Transaction handles stay transaction handles
