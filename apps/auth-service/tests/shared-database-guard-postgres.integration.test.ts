@@ -13,12 +13,22 @@ const dropAfter: Array<() => Promise<void>> = [];
 async function scratch(): Promise<{ url: string; sql: ReturnType<typeof postgres> }> {
   const db = await createTestDatabase('guard');
   const sql = postgres(db.url, { max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
-  dropAfter.push(async () => { await sql.end(); await db.drop(); });
+  dropAfter.push(async () => {
+    try {
+      await sql.end();
+    } finally {
+      await db.drop();
+    }
+  });
   return { url: db.url, sql };
 }
 
 afterAll(async () => {
-  for (const drop of dropAfter) await drop();
+  // Every database goes even if one clean-up throws; the first failure is
+  // still reported.
+  const results = await Promise.allSettled(dropAfter.map((drop) => drop()));
+  const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  if (failed) throw failed.reason;
 }, 60_000);
 
 describePostgres('shared-database guard', () => {

@@ -35,7 +35,13 @@ export async function createTestDatabase(label: string): Promise<{
   const safeLabel = label.replace(/[^a-z0-9]+/gi, '_').toLowerCase().slice(0, 20);
   const name = `t_${safeLabel}_${randomUUID().replace(/-/g, '').slice(0, 10)}`;
   const admin = postgres(adminUrl, { max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
-  await admin.unsafe(`CREATE DATABASE ${name}`);
+  try {
+    await admin.unsafe(`CREATE DATABASE ${name}`);
+  } catch (err) {
+    // Nothing will call `drop`, so nothing else would close this connection.
+    await admin.end();
+    throw err;
+  }
   const url = new URL(adminUrl);
   url.pathname = `/${name}`;
   return {

@@ -32,8 +32,12 @@ async function freshDatabase(): Promise<{ sql: Sql; url: string; drop: () => Pro
     sql,
     url: db.url,
     drop: async () => {
-      await sql.end();
-      await db.drop();
+      // The database goes even if closing the pool throws.
+      try {
+        await sql.end();
+      } finally {
+        await db.drop();
+      }
     },
   };
 }

@@ -50,9 +50,13 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await state.pool?.end();
-  state.pool = null;
-  await dropTestDatabase?.();
+  // The database goes even if closing the pool throws.
+  try {
+    await state.pool?.end();
+  } finally {
+    state.pool = null;
+    await dropTestDatabase?.();
+  }
 }, 60_000);
 
 const { revokeGrantCascade } = await import('../src/lib/revoke.js');
