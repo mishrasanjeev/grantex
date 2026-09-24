@@ -2,7 +2,9 @@
 
 Defects found while doing other work and deliberately left out of that change.
 Each entry says where it was found, what is wrong and what fixing it involves.
-Remove an entry in the pull request that fixes it.
+The pull request that fixes an entry keeps it, adds "(fixed)" to its heading
+and a **Fixed:** line saying what changed and how it was shown, so the record
+of what went wrong and why stays next to the fix.
 
 Numbers are permanent: they appear in commit messages, changelog entries and
 code comments (`FINDINGS G-17` and `FINDINGS G-18` are cited in source today,
@@ -437,7 +439,7 @@ the pull request that references it.
   accepted where a transaction is wanted, and a runtime case for the
   `savepoint` refusal.
 
-## G-28 — The revocation stream advanced its cursor before writing
+## G-28 — The revocation stream advanced its cursor before writing (fixed)
 
 - **Found:** automated review of the revocation feed (PRD G-6), 2026-09-21.
 - **What:** `routes/revocations.ts` moved the stream's cursor past an entry
