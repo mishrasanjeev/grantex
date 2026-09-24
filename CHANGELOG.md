@@ -18,6 +18,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - The migration-ledger test creates its per-test databases through the same
   helper, so a database it fails to drop is reported instead of left behind
   unsaid. FINDINGS G-31.
+- Integration test clean-up drops each database even when closing its pool
+  throws, and the database helper closes its admin connection when
+  `CREATE DATABASE` itself fails.
 - Test-only; no product change, no schema change, nothing behind a flag.
 
 ### Transaction handles stay transaction handles
