@@ -56,4 +56,8 @@ describePostgres('shared-database guard', () => {
     await expect(checkSharedDatabase(unreachable.toString(), { tables: new Set() }))
       .rejects.toThrow(/could not inspect the shared database/);
   }, 60_000);
+
+  it('fails closed, with its own explanation, when the shared database URL is malformed', async () => {
+    await expect(snapshotSharedDatabase('not a database url')).rejects.toThrow(/could not inspect the shared database/);
+  });
 });

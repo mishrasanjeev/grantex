@@ -326,29 +326,20 @@ describeE2e('decision grants in a real browser against a live auth service', () 
   });
 
   afterAll(async () => {
-    await browser?.close();
-    await new Promise<void>((resolve) => (idpServer ? idpServer.close(() => resolve()) : resolve()));
-    if (tlsDir) rmSync(tlsDir, { recursive: true, force: true });
-    await app?.close();
-    setSafeFetchForTests(null);
-    Object.assign(config as { publicBaseUrl: string; jwtIssuer: string }, savedConfig);
-    for (const key of Object.keys(process.env)) if (!(key in savedEnv)) delete process.env[key];
-    Object.assign(process.env, savedEnv);
-    if (sql) {
-      const dev = developerId;
-      await sql`DELETE FROM decision_page_views WHERE request_id IN (SELECT id FROM decision_requests WHERE developer_id = ${dev})`.catch(() => undefined);
-      await sql`UPDATE decision_grants SET first_jti = NULL WHERE developer_id = ${dev}`.catch(() => undefined);
-      await sql`DELETE FROM decision_grants WHERE developer_id = ${dev}`.catch(() => undefined);
-      await sql`DELETE FROM decision_login_states WHERE developer_id = ${dev}`.catch(() => undefined);
-      await sql`DELETE FROM decision_approver_sessions WHERE developer_id = ${dev}`.catch(() => undefined);
-      await sql`DELETE FROM decision_requests WHERE developer_id = ${dev}`.catch(() => undefined);
-      await sql`DELETE FROM decision_approver_idps WHERE developer_id = ${dev}`.catch(() => undefined);
-      await sql`DELETE FROM decision_cases WHERE developer_id = ${dev}`.catch(() => undefined);
-      await sql`DELETE FROM audit_entries WHERE developer_id = ${dev}`.catch(() => undefined);
-      await sql`DELETE FROM developers WHERE id = ${dev}`.catch(() => undefined);
-      await sql.end();
+    try {
+      await browser?.close();
+      await new Promise<void>((resolve) => (idpServer ? idpServer.close(() => resolve()) : resolve()));
+      if (tlsDir) rmSync(tlsDir, { recursive: true, force: true });
+      await app?.close();
+      setSafeFetchForTests(null);
+      Object.assign(config as { publicBaseUrl: string; jwtIssuer: string }, savedConfig);
+      for (const key of Object.keys(process.env)) if (!(key in savedEnv)) delete process.env[key];
+      Object.assign(process.env, savedEnv);
+      await sql?.end();
+    } finally {
+      // Rows need no cleanup: the whole database goes, even if a step above threw.
+      await dropTestDatabase?.();
     }
-    await dropTestDatabase?.();
   });
 
   it('request, step-up sign-in and approval in the browser, consume in enforce(): allowed once, replay refused', async () => {
