@@ -439,7 +439,7 @@ the pull request that references it.
   accepted where a transaction is wanted, and a runtime case for the
   `savepoint` refusal.
 
-## G-28 — The revocation stream advanced its cursor before writing
+## G-28 — The revocation stream advanced its cursor before writing (fixed)
 
 - **Found:** automated review of the revocation feed (PRD G-6), 2026-09-21.
 - **What:** `routes/revocations.ts` moved the stream's cursor past an entry
