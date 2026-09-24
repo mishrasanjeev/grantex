@@ -508,6 +508,11 @@ the pull request that references it.
   migration into it would then add nothing and a regression would pass unseen.
   It fails closed if it cannot reach the database. With no shared database
   configured it does nothing.
+- **Also caught on its first CI run:** the Chromium decision-grant test
+  (`tests/e2e/decision-grants-browser.e2e.test.ts`, run by `npm run test:e2e`,
+  whose config inherits the guard) migrated the shared database. It ran alone,
+  so it never deadlocked, but it left a ledger behind that would make the next
+  local `npm test` refuse to start. It now uses `createTestDatabase` too.
 - **Proved:** with one file pointed back at the shared database, every test
   passes and the run now exits 1 with the ledger named first.
 - **Limit:** it checks for new tables, not for DDL on existing ones. A test
