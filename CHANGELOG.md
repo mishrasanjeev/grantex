@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Transaction handles stay transaction handles
+- Every `sql.begin(...)` callback in the auth service types its handle as a
+  transaction, and the query-only helpers those callbacks reach take that type
+  rather than the pool's. Widening a transaction back to the pool type put
+  `begin` within reach again, and a nested transaction throws
+  `sql.begin is not a function`, aborts the caller's transaction and rolls its
+  work back — which is how a cascade revocation once left grants active while
+  reporting success. FINDINGS G-27.
+- `queries()`, which presents the pool to those helpers, no longer offers a
+  `savepoint` the pool does not have: reaching for it throws where the mistake
+  is made rather than inside postgres.js.
+- Types and one wrapper; no behaviour change, no schema change, nothing behind
+  a flag.
+
 ### Outbound HTTP
 - `safeFetch` frames a request body with `Content-Length`. Without it node
   sends the body with `Transfer-Encoding: chunked`, which is valid HTTP/1.1 but
