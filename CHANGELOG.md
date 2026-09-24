@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   naming the tables and `createTestDatabase`. The per-file databases that
   removed the migration deadlock were a convention; this enforces it.
   FINDINGS G-30.
+- The Chromium decision-grant test (`npm run test:e2e`), which the guard
+  caught migrating the shared database, now uses a database of its own too.
 - Test-only; no product change, no schema change, nothing behind a flag.
 
 ### Transaction handles stay transaction handles

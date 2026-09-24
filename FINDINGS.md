@@ -515,6 +515,9 @@ the pull request that references it.
   local `npm test` refuse to start. It now uses `createTestDatabase` too.
 - **Proved:** with one file pointed back at the shared database, every test
   passes and the run now exits 1 with the ledger named first.
-- **Limit:** it checks for new tables, not for DDL on existing ones. A test
-  that altered a table already in the shared database would not be caught;
-  none does today.
+- **Limit:** it compares the tables (and views) present before and after the
+  run, nothing else. It does not see DDL on a table that was already there,
+  rows written to existing tables, a table created and dropped within the run,
+  or new schemas, extensions, sequences, functions or types. The migrations
+  always create tables, so the regression it exists for is caught; a test
+  doing only one of the others would not be. None does today.
