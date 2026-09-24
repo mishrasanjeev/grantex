@@ -57,10 +57,12 @@ are the implementation and operations sources of truth.
 
 ## SDK and MCP boundary
 
-The AgenticOrg Python and TypeScript SDK source exposes machine-safe submit,
-list, read and investigation-scheduling calls. Those methods are newer than
-their currently published `0.3.0` client packages; use the matching source
-checkout for evaluation until a newer client is released. Scheduling an
+Machine-safe submit, list, read and investigation-scheduling methods for the
+AgenticOrg Python and TypeScript SDKs are proposed in
+[AgenticOrg PR #1401](https://github.com/mishrasanjeev/agentic-org/pull/1401).
+At this guide's September 24, 2026 check, they are not in AgenticOrg `main` or
+its published `0.3.0` client packages. Evaluate them from that PR's source
+branch until it is merged, released and verified separately. Scheduling an
 investigation is not proof it succeeded; inspect the later case state.
 
 AgenticOrg's MCP server advertises general agents-as-tools, not the governed
