@@ -167,6 +167,7 @@ curl http://localhost:3001/health
 |----------|---------|-------------|
 | `PORT` | `3001` | HTTP port |
 | `HOST` | `0.0.0.0` | Bind address |
+| `DATABASE_POOL_MAX` | `3` | Maximum PostgreSQL connections per auth-service instance (1-20); budget across all replicas and rollout overlap |
 | `TRUST_PROXY` | `false` | Trusted proxy hop count (`1`-`16`) or comma-separated IP/CIDR allowlist used to derive the client IP |
 | `CORS_ALLOWED_ORIGINS` | `https://grantex.dev,https://portal.grantex.dev,http://localhost:5173` | Comma-separated exact browser origins allowed to call the API; use an empty value to disable cross-origin browser access |
 | `NODE_ENV` | `development` | `production` enables optimizations |
@@ -253,10 +254,19 @@ The auth service uses connection pooling:
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| `max` | 20 | Maximum connections |
+| `max` | `DATABASE_POOL_MAX` (default 3) | Maximum connections per instance |
 | `idle_timeout` | 30s | Close idle connections after 30 seconds |
 | `connect_timeout` | 10s | Fail fast on connection issues |
 | `max_lifetime` | 30min | Recycle connections every 30 minutes |
+
+Size the pool against the database's actual `max_connections`, not one instance's
+traffic. Allow room for migrations, maintenance clients, other services and two
+revisions during a rolling deploy. The bundled Cloud Run deployment caps at
+five instances: at the default pool size that is 15 connections per revision,
+or 30 while old and new revisions overlap. The previous settings allowed
+10 instances with pools of 20, a theoretical 200 connections before rollout
+overlap against a small shared-core Cloud SQL instance. Query
+`SHOW max_connections` and monitor active connections before raising either limit.
 
 ### Migrations
 

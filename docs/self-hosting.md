@@ -215,6 +215,7 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `DATABASE_POOL_MAX` | No | `3` | Maximum PostgreSQL connections per auth-service replica (1-20); multiply by maximum replicas and leave headroom for other clients and rolling deploys |
 | `REDIS_URL` | Yes | — | Redis connection string (include password if set) |
 | `JWT_SIGNING_ALG` | No | `RS256` | Signing algorithm: `RS256` or `ES256` |
 | `RSA_PRIVATE_KEY` | Yes* | — | PKCS#8 PEM RSA private key (RS256). *Required for `JWT_SIGNING_ALG=RS256` with the env key store, unless `AUTO_GENERATE_KEYS=true` (dev only). When `JWT_SIGNING_ALG=ES256`, a configured RSA key is published for verification only |

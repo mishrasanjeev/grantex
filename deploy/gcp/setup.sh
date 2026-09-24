@@ -235,7 +235,7 @@ gcloud run deploy "${CR_SERVICE}" \
   --cpu=1 \
   --memory=256Mi \
   --min-instances=0 \
-  --max-instances=10 \
+  --max-instances=5 \
   --concurrency=80 \
   --service-account="${SA_EMAIL}" \
   --vpc-connector="${CONNECTOR_NAME}" \

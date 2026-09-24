@@ -71,7 +71,7 @@ the package; the storage classes accept any compatible client.
 
 ## Deploying with Postgres
 
-<!-- snippet: packages/mcp-auth/tests/docs/examples/postgres-storage.ts -->
+{/* snippet: packages/mcp-auth/tests/docs/examples/postgres-storage.ts */}
 ```typescript
 import pg from 'pg';
 import { PostgresStorage, runMigrations } from '@grantex/mcp-auth/postgres';
@@ -122,7 +122,7 @@ export async function openPostgresStorage(databaseUrl: string) {
 
 ## Deploying with Redis
 
-<!-- snippet: packages/mcp-auth/tests/docs/examples/redis-storage.ts -->
+{/* snippet: packages/mcp-auth/tests/docs/examples/redis-storage.ts */}
 ```typescript
 import { Redis } from 'ioredis';
 import { RedisStorage, fromIoredis } from '@grantex/mcp-auth/redis';
@@ -169,7 +169,7 @@ export function openRedisStorage(redisUrl: string, keyPrefix = 'grantex:mcp-auth
 
 ## Configuring the authorization server
 
-<!-- snippet: packages/mcp-auth/tests/docs/examples/auth-server.ts -->
+{/* snippet: packages/mcp-auth/tests/docs/examples/auth-server.ts */}
 ```typescript
 import type { Grantex } from '@grantex/sdk';
 import { createMcpAuthServer } from '@grantex/mcp-auth';
@@ -315,7 +315,7 @@ WCAG 2.0, 2.1 and 2.2 A/AA rules at mobile and desktop widths.
 
 ### Customising it
 
-<!-- snippet: packages/mcp-auth/tests/docs/examples/consent-details.ts -->
+{/* snippet: packages/mcp-auth/tests/docs/examples/consent-details.ts */}
 ```typescript
 import type { ConsentPageOptions } from '@grantex/mcp-auth';
 
@@ -357,7 +357,7 @@ export const consentPage: ConsentPageOptions = {
 
 ## Protecting the MCP server
 
-<!-- snippet: packages/mcp-auth/tests/docs/examples/mcp-server.ts -->
+{/* snippet: packages/mcp-auth/tests/docs/examples/mcp-server.ts */}
 ```typescript
 import express from 'express';
 import { toolPolicyFromManifests } from '@grantex/mcp-auth';
@@ -455,7 +455,7 @@ The exact challenge formats are specified in
   with more than one such call is refused before any verifier runs. Without
   a verifier, such calls are refused:
 
-<!-- snippet: packages/mcp-auth/tests/docs/examples/decision-verifier.ts -->
+{/* snippet: packages/mcp-auth/tests/docs/examples/decision-verifier.ts */}
 ```typescript
 import type { DecisionVerifier } from '@grantex/mcp-auth';
 

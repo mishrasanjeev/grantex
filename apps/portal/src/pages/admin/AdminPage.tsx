@@ -133,7 +133,12 @@ export function AdminPage() {
 
       {error && (
         <Card className="mb-4 border-gx-danger/50">
-          <p className="text-sm text-gx-danger">{error}</p>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-gx-danger">{error}</p>
+            <Button variant="secondary" size="sm" onClick={() => void loadData(page)}>
+              Retry
+            </Button>
+          </div>
         </Card>
       )}
 

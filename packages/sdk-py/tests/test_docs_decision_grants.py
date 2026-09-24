@@ -26,7 +26,7 @@ def _read(path: Path) -> str:
 
 def test_the_example_is_embedded_verbatim() -> None:
     doc = _read(ROOT / "docs" / "concepts" / "decision-grants.md")
-    match = re.search(rf"<!-- snippet: {re.escape(EXAMPLE)} -->\n```python\n([\s\S]*?)\n```", doc)
+    match = re.search(rf"\{{/\* snippet: {re.escape(EXAMPLE)} \*/\}}\n```python\n([\s\S]*?)\n```", doc)
     assert match is not None
     assert match.group(1) == _read(ROOT / EXAMPLE).rstrip("\n")
 

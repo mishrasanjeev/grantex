@@ -1,7 +1,35 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import crypto from 'node:crypto';
+import type postgres from 'postgres';
 import { getSql } from '../db/client.js';
 import { config } from '../config.js';
+
+export async function loadAdminStats(sql: ReturnType<typeof postgres>) {
+  const [stats] = await sql`
+    SELECT
+      COUNT(*)::int AS total_developers,
+      COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours')::int AS last_24h,
+      COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int AS last_7d,
+      COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')::int AS last_30d,
+      COALESCE((
+        SELECT jsonb_object_agg(mode, count)
+        FROM (SELECT mode, COUNT(*)::int AS count FROM developers GROUP BY mode) modes
+      ), '{}'::jsonb) AS by_mode,
+      (SELECT COUNT(*)::int FROM agents) AS total_agents,
+      (SELECT COUNT(*)::int FROM grants) AS total_grants
+    FROM developers
+  `;
+
+  return {
+    totalDevelopers: stats!['total_developers'],
+    last24h: stats!['last_24h'],
+    last7d: stats!['last_7d'],
+    last30d: stats!['last_30d'],
+    byMode: stats!['by_mode'] as Record<string, number>,
+    totalAgents: stats!['total_agents'],
+    totalGrants: stats!['total_grants'],
+  };
+}
 
 export async function adminRoutes(app: FastifyInstance): Promise<void> {
   const adminKey = config.adminApiKey;
@@ -28,32 +56,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       if (!checkAdmin(request, reply)) return;
 
-      const sql = getSql();
-
-      const [devTotal, dev24h, dev7d, dev30d, modeRows, agentTotal, grantTotal] = await Promise.all([
-        sql`SELECT COUNT(*)::int AS count FROM developers`,
-        sql`SELECT COUNT(*)::int AS count FROM developers WHERE created_at > NOW() - INTERVAL '24 hours'`,
-        sql`SELECT COUNT(*)::int AS count FROM developers WHERE created_at > NOW() - INTERVAL '7 days'`,
-        sql`SELECT COUNT(*)::int AS count FROM developers WHERE created_at > NOW() - INTERVAL '30 days'`,
-        sql`SELECT mode, COUNT(*)::int AS count FROM developers GROUP BY mode`,
-        sql`SELECT COUNT(*)::int AS count FROM agents`,
-        sql`SELECT COUNT(*)::int AS count FROM grants`,
-      ]);
-
-      const byMode: Record<string, number> = {};
-      for (const row of modeRows) {
-        byMode[row.mode as string] = row.count as number;
-      }
-
-      return reply.send({
-        totalDevelopers: devTotal[0]!['count'],
-        last24h: dev24h[0]!['count'],
-        last7d: dev7d[0]!['count'],
-        last30d: dev30d[0]!['count'],
-        byMode,
-        totalAgents: agentTotal[0]!['count'],
-        totalGrants: grantTotal[0]!['count'],
-      });
+      return reply.send(await loadAdminStats(getSql()));
     },
   );
 

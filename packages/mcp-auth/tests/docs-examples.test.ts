@@ -37,7 +37,7 @@ describe('docs/mcp-auth.md examples', () => {
   // Compare with LF line endings whatever the checkout's autocrlf setting.
   const read = (path: string) => readFileSync(path, 'utf8').split(String.fromCharCode(13)).join('');
   const doc = read(`${repoRoot}docs/mcp-auth.md`);
-  const snippets = [...doc.matchAll(/<!-- snippet: (\S+) -->\n```typescript\n([\s\S]*?)\n```/g)];
+  const snippets = [...doc.matchAll(/\{\/\* snippet: (\S+) \*\/\}\n```typescript\n([\s\S]*?)\n```/g)];
 
   it('embeds every example file verbatim', () => {
     const files = readdirSync(examplesDir).filter((f) => f.endsWith('.ts')).sort();
