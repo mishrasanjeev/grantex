@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Integration tests keep off the shared database
+- The auth-service suite fails if any test file created tables in the shared
+  integration database (`AUDIT_INTEGRATION_DATABASE_URL`) rather than a
+  database of its own. Every test can pass while the run fails, with a message
+  naming the tables and `createTestDatabase`. The per-file databases that
+  removed the migration deadlock were a convention; this enforces it.
+  FINDINGS G-30.
+- Test-only; no product change, no schema change, nothing behind a flag.
+
 ### Transaction handles stay transaction handles
 - Every `sql.begin(...)` callback in the auth service types its handle as a
   transaction, and the query-only helpers those callbacks reach take that type

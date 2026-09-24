@@ -44,6 +44,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { config } from '../../src/config.js';
 import { runMigrations } from '../../src/db/migrate.js';
+import { createTestDatabase } from '../helpers/database.js';
 import { signGrantToken } from '../../src/lib/crypto.js';
 import { hashApiKey } from '../../src/lib/hash.js';
 import { setSafeFetchForTests } from '../../src/lib/url-security.js';
@@ -58,6 +59,8 @@ if ((ci === 'true' || ci === '1') && !databaseUrl) {
   throw new Error('AUDIT_INTEGRATION_DATABASE_URL must be set in CI; refusing to skip the decision-grant browser test');
 }
 const describeE2e = databaseUrl ? describe : describe.skip;
+// A database of its own, like every integration file; see FINDINGS G-24 and G-30.
+let dropTestDatabase: (() => Promise<void>) | undefined;
 const python = process.env['GRANTEX_E2E_PYTHON'];
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -242,7 +245,9 @@ describeE2e('decision grants in a real browser against a live auth service', () 
 
   beforeAll(async () => {
     mkdirSync(SCREENSHOTS, { recursive: true });
-    sql = postgres(databaseUrl!, { max: 10, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
+    const db = await createTestDatabase('decision_e2e');
+    dropTestDatabase = db.drop;
+    sql = postgres(db.url, { max: 10, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
     await runMigrations(sql);
     await sql`INSERT INTO developers (id, api_key_hash, name) VALUES (${developerId}, ${hashApiKey(apiKey)}, 'Decision E2E')`;
     await provider.init();
@@ -343,6 +348,7 @@ describeE2e('decision grants in a real browser against a live auth service', () 
       await sql`DELETE FROM developers WHERE id = ${dev}`.catch(() => undefined);
       await sql.end();
     }
+    await dropTestDatabase?.();
   });
 
   it('request, step-up sign-in and approval in the browser, consume in enforce(): allowed once, replay refused', async () => {
