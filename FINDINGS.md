@@ -537,14 +537,11 @@ the pull request that references it.
   the shared database today. The integration files do create and drop
   databases through the shared connection, by design (G-24): through
   `createTestDatabase`, which most files call once and the guard's own test
-  file calls in each test that needs one, and through `freshDatabase`, once
-  per test, in
-  `migrate-ledger-postgres.integration.test.ts`. The guard sees neither. A
-  database left behind by a failed drop is reported on stderr by
-  `createTestDatabase`, and not at all by the migrate-ledger file, which
-  ignores the failure (G-31).
+  file and `migrate-ledger-postgres.integration.test.ts` call in each test
+  that needs one. The guard does not see them. A database left behind by a
+  failed drop is reported on stderr by `createTestDatabase` (G-31).
 
-## G-31 — The migrate-ledger test drops its databases silently
+## G-31 — The migrate-ledger test drops its databases silently (fixed)
 
 - **Found:** review of the G-30 wording, 2026-09-24.
 - **What:** `tests/migrate-ledger-postgres.integration.test.ts` creates a
@@ -555,5 +552,7 @@ the pull request that references it.
 - **Impact:** a leaked database per failure on a developer's machine; none on
   CI, whose Postgres is discarded after the job. The shared-database guard
   (G-30) does not see databases, so it cannot catch this either.
-- **Fix:** log the failure the way `createTestDatabase` does, or build
-  `freshDatabase` on it.
+- **Fixed:** `freshDatabase` is now built on `createTestDatabase`, so there
+  is one drop path and it reports a failure. Shown by making the drop fail:
+  the run writes `could not drop test database t_migrate_…` to stderr, where
+  before it said nothing.
