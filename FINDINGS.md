@@ -515,9 +515,18 @@ the pull request that references it.
   local `npm test` refuse to start. It now uses `createTestDatabase` too.
 - **Proved:** with one file pointed back at the shared database, every test
   passes and the run now exits 1 with the ledger named first.
-- **Limit:** it compares the tables (and views) present before and after the
-  run, nothing else. It does not see DDL on a table that was already there,
-  rows written to existing tables, a table created and dropped within the run,
-  or new schemas, extensions, sequences, functions or types. The migrations
-  always create tables, so the regression it exists for is caught; a test
-  doing only one of the others would not be. None does today.
+- **Limit:** it compares what `information_schema.tables` lists before and
+  after the run, nothing else. That covers ordinary, unlogged, partitioned
+  and foreign tables, partitions and views, in any schema, so a table in a
+  newly created schema is caught. It does not see:
+  - DDL on a table that was already there, or rows written to one;
+  - a table created and dropped within the run;
+  - materialized views, sequences, types, functions, extensions, foreign
+    servers, or a schema left empty;
+  - anything outside the shared database, such as roles or other databases;
+  - tables the guard's connection has no privilege on, because
+    `information_schema` hides them. CI connects as a superuser, so this
+    matters only for a local run as a less privileged role.
+
+  The migrations always create tables, so the regression it exists for is
+  caught; a test doing only one of the others would not be. None does today.
