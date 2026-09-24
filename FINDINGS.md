@@ -336,7 +336,7 @@ the pull request that references it.
 - **Impact:** slow containment, on the free plan only, and a misleading
   propagation measurement if the limiter is not accounted for.
 
-## G-24 — Postgres integration tests share one database, which flakes
+## G-24 — Postgres integration tests share one database, which flakes (fixed)
 
 - **Found:** review of the migration ledger (PRD G-6), 2026-09-21.
 - **What:** every `*-postgres.integration.test.ts` file runs against the same
@@ -354,6 +354,11 @@ the pull request that references it.
   teaches everyone to re-run without reading the failure, which is how a real
   failure gets waved through.
 - **Impact:** an occasional red CI run that is green on re-run.
+- **Fixed:** every integration file now creates a database of its own
+  (`createTestDatabase` in `tests/helpers/database.ts`, #1343).
+  `scripts/migration-contention-probe.mjs` (`npm run probe:migrations`)
+  reproduces the deadlock in the shared shape and not in the per-file one.
+  Keeping it fixed is G-30.
 
 ## G-25 — A migration seeds real third-party company DIDs
 
@@ -487,3 +492,24 @@ the pull request that references it.
   try/catch that the data path has (`revocations.ts:300-305`), and the
   heartbeat writes far more often. Harmless while nothing throws, but it
   should be both or neither, with a comment saying which and why.
+
+## G-30 — Nothing stopped a test file from migrating the shared database again (fixed)
+
+- **Found:** review of the G-24 fix, 2026-09-24.
+- **What:** the G-24 fix gives each integration file its own database, but
+  only by convention. The tenth file was missed in the first pass, and a
+  reviewer who pointed it back at the shared database found that it still
+  passed: nothing in the suite noticed. Any new file written the old way would
+  have brought the deadlock back, one CI run in several.
+- **Fixed:** a Vitest `globalSetup` (`tests/global-setup.ts`) records the
+  shared database's tables before the run and fails the run afterwards if any
+  were added, naming them and `createTestDatabase`. It refuses to start if the
+  shared database already holds a `schema_migrations` ledger, because a
+  migration into it would then add nothing and a regression would pass unseen.
+  It fails closed if it cannot reach the database. With no shared database
+  configured it does nothing.
+- **Proved:** with one file pointed back at the shared database, every test
+  passes and the run now exits 1 with the ledger named first.
+- **Limit:** it checks for new tables, not for DDL on existing ones. A test
+  that altered a table already in the shared database would not be caught;
+  none does today.

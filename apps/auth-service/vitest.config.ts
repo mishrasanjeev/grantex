@@ -12,6 +12,9 @@ export default defineConfig({
     environment: 'node',
     globals: false,
     setupFiles: ['./tests/setup.ts'],
+    // Fails the run if a test file migrated the shared integration database
+    // instead of one of its own (FINDINGS G-30).
+    globalSetup: ['./tests/global-setup.ts'],
     // Browser end-to-end tests run with `npm run test:e2e` (vitest.e2e.config.ts).
     exclude: [...configDefaults.exclude, 'tests/e2e/**'],
     // Every test file initializes an RSA key pair and a Fastify instance.
