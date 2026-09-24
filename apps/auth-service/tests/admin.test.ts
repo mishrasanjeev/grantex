@@ -44,17 +44,15 @@ describe('GET /v1/admin/stats', () => {
   });
 
   it('returns stats with correct admin key', async () => {
-    // 7 parallel SQL queries: devTotal, dev24h, dev7d, dev30d, modeRows, agentTotal, grantTotal
-    sqlMock.mockResolvedValueOnce([{ count: 42 }]);   // devTotal
-    sqlMock.mockResolvedValueOnce([{ count: 3 }]);    // dev24h
-    sqlMock.mockResolvedValueOnce([{ count: 10 }]);   // dev7d
-    sqlMock.mockResolvedValueOnce([{ count: 25 }]);   // dev30d
-    sqlMock.mockResolvedValueOnce([                    // modeRows
-      { mode: 'live', count: 30 },
-      { mode: 'sandbox', count: 12 },
-    ]);
-    sqlMock.mockResolvedValueOnce([{ count: 100 }]);  // agentTotal
-    sqlMock.mockResolvedValueOnce([{ count: 500 }]);  // grantTotal
+    sqlMock.mockResolvedValueOnce([{
+      total_developers: 42,
+      last_24h: 3,
+      last_7d: 10,
+      last_30d: 25,
+      by_mode: { live: 30, sandbox: 12 },
+      total_agents: 100,
+      total_grants: 500,
+    }]);
 
     const res = await app.inject({
       method: 'GET',
@@ -71,6 +69,7 @@ describe('GET /v1/admin/stats', () => {
     expect(body.byMode).toEqual({ live: 30, sandbox: 12 });
     expect(body.totalAgents).toBe(100);
     expect(body.totalGrants).toBe(500);
+    expect(sqlMock).toHaveBeenCalledTimes(1);
   });
 });
 

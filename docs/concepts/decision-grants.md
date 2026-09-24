@@ -95,7 +95,7 @@ the rubber-stamping this feature exists to prevent.
 
 Asking for a four-eyes decline from a platform:
 
-<!-- snippet: packages/sdk-ts/tests/docs/examples/decision-request.ts -->
+{/* snippet: packages/sdk-ts/tests/docs/examples/decision-request.ts */}
 ```ts
 import type { Grantex } from '@grantex/sdk';
 
@@ -158,7 +158,7 @@ idempotent per decision request.
 
 Python:
 
-<!-- snippet: packages/sdk-py/tests/docs_examples/decision_enforce.py -->
+{/* snippet: packages/sdk-py/tests/docs_examples/decision_enforce.py */}
 ```python
 from typing import Any, Dict, List
 
@@ -189,7 +189,7 @@ def call_case_decision(
 
 TypeScript:
 
-<!-- snippet: packages/sdk-ts/tests/docs/examples/decision-enforce.ts -->
+{/* snippet: packages/sdk-ts/tests/docs/examples/decision-enforce.ts */}
 ```ts
 import type { Grantex } from '@grantex/sdk';
 

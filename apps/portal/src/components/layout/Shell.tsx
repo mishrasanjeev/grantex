@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { Suspense, useState, useCallback } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { ToastContainer } from '../ui/Toast';
+import { Spinner } from '../ui/Spinner';
 
 export function Shell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -15,7 +16,9 @@ export function Shell() {
       <div className="lg:ml-56">
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
         <main className="p-6">
-          <Outlet />
+          <Suspense fallback={<div className="flex min-h-40 items-center justify-center"><Spinner className="h-8 w-8" /></div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       <ToastContainer />

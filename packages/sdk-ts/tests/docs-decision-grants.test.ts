@@ -51,7 +51,7 @@ describe('docs/concepts/decision-grants.md TypeScript examples', () => {
     const doc = read(join(repoRoot, 'docs', 'concepts', 'decision-grants.md'));
     for (const file of ['decision-enforce.ts', 'decision-request.ts']) {
       const path = `packages/sdk-ts/tests/docs/examples/${file}`;
-      const opening = `<!-- snippet: ${path} -->\n\`\`\`ts\n`;
+      const opening = `{/* snippet: ${path} */}\n\`\`\`ts\n`;
       const start = doc.indexOf(opening);
       expect(start, path).toBeGreaterThanOrEqual(0);
       const body = doc.slice(start + opening.length);

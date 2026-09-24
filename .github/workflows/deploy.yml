@@ -79,7 +79,7 @@ jobs:
           # service; production configuration rejects them at startup.
           # These are Secret Manager-backed variables on the existing service,
           # so --remove-env-vars alone cannot remove them.
-          flags: '--remove-env-vars=SEED_API_KEY,SEED_SANDBOX_KEY --remove-secrets=SEED_API_KEY,SEED_SANDBOX_KEY'
+          flags: '--max-instances=5 --remove-env-vars=SEED_API_KEY,SEED_SANDBOX_KEY --remove-secrets=SEED_API_KEY,SEED_SANDBOX_KEY'
 
       - name: Print deployed URL
         run: |

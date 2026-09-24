@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import { compile } from '@mdx-js/mdx';
 import { validateSeoAeo } from './check-seo-aeo.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -87,8 +88,16 @@ async function validateNavigation(routes, docFiles) {
       path.join(docsRoot, page, 'index.mdx'),
       path.join(docsRoot, page, 'index.md'),
     ];
-    if (!(await Promise.all(candidates.map(exists))).some(Boolean)) {
+    const available = await Promise.all(candidates.map(exists));
+    const source = candidates[available.findIndex(Boolean)];
+    if (!source) {
       failures.push('Navigation page has no source file: ' + page);
+      continue;
+    }
+    try {
+      await compile(await fs.readFile(source, 'utf8'));
+    } catch (error) {
+      failures.push('Navigation page cannot be published as MDX: ' + page + ': ' + error.message);
     }
   }
 
@@ -129,6 +138,7 @@ async function validateNavigation(routes, docFiles) {
       }
     }
   }
+  return pages;
 }
 
 async function validatePublicReferences(routes, docFiles) {
@@ -849,23 +859,27 @@ async function validatePublishedVersions(releaseSnapshot) {
   }
 }
 
-async function validateLiveUrls(publicContent) {
-  const urls = new Set();
+async function validateLiveUrls(publicContent, navigationPages) {
+  const urls = new Map();
   const pattern = /https:\/\/(?:docs\.)?grantex\.dev[^\s"',<>)]*/g;
   for (const { text } of publicContent) {
     for (const match of text.matchAll(pattern)) {
       const url = match[0]
         .replace(/[.,;:]$/, '')
         .replace(new RegExp(String.fromCharCode(96) + '+$'), '');
-      if (!/[{}*]/.test(url)) urls.add(url);
+      if (!/[{}*]/.test(url)) urls.set(url, 'GET');
     }
+  }
+  for (const page of navigationPages) {
+    const url = 'https://docs.grantex.dev/' + page;
+    if (!urls.has(url)) urls.set(url, 'HEAD');
   }
   const queue = [...urls];
   const workers = Array.from({ length: 10 }, async () => {
     while (queue.length) {
-      const url = queue.shift();
+      const [url, method] = queue.shift();
       try {
-        const response = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(15000) });
+        const response = await fetch(url, { method, redirect: 'follow', signal: AbortSignal.timeout(15000) });
         if (response.status === 404 || response.status >= 500) {
           failures.push('Live public URL returned ' + response.status + ': ' + url);
         }
@@ -884,7 +898,7 @@ for (const file of docFiles) {
   addRouteAliases(routes, route);
 }
 
-await validateNavigation(routes, docFiles);
+const navigationPages = await validateNavigation(routes, docFiles);
 const publicContent = await validatePublicReferences(routes, docFiles);
 await validatePublicHtmlLinks();
 await validateLocks();
@@ -895,7 +909,7 @@ failures.push(...await validateSeoAeo({ root, docsRoot, webRoot }));
 const releaseSnapshot = await validateReleaseCopy();
 if (live) {
   await validatePublishedVersions(releaseSnapshot);
-  await validateLiveUrls(publicContent);
+  await validateLiveUrls(publicContent, navigationPages);
   if (warnings.length) {
     failures.push('Live checks were incomplete because ' + warnings.length + ' network verification warning(s) occurred');
   }

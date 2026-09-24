@@ -59,7 +59,7 @@ let _sql: ReturnType<typeof postgres> | null = null;
 export function getSql(): ReturnType<typeof postgres> {
   if (!_sql) {
     _sql = postgres(config.databaseUrl, {
-      max: 20,                    // connection pool size
+      max: config.databasePoolMax,
       idle_timeout: 30,           // close idle connections after 30s
       connect_timeout: 10,        // fail if connection takes > 10s
       max_lifetime: 60 * 30,      // recycle connections every 30 minutes

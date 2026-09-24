@@ -109,6 +109,20 @@ describe('AdminPage', () => {
     expect(screen.getByText('Invalid API key')).toBeInTheDocument();
   });
 
+  it('retries a transient server error without clearing the admin key', async () => {
+    mockGetAdminKey.mockReturnValue('admin_key');
+    mockFetchStats.mockRejectedValueOnce(new Error('Internal Server Error'));
+    const user = userEvent.setup();
+    render(<AdminPage />);
+
+    await waitFor(() => expect(screen.getByText('Internal Server Error')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(screen.getByText('Total Developers')).toBeInTheDocument());
+    expect(mockFetchStats).toHaveBeenCalledTimes(2);
+    expect(mockClearAdminKey).not.toHaveBeenCalled();
+  });
+
   it('shows mode badges', async () => {
     mockGetAdminKey.mockReturnValue('admin_key');
     render(<AdminPage />);

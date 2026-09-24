@@ -108,6 +108,7 @@ export const config = {
   host: optional('HOST', '0.0.0.0'),
   trustProxy: parseTrustProxySetting(process.env['TRUST_PROXY']),
   databaseUrl: required('DATABASE_URL'),
+  databasePoolMax: integerSetting('DATABASE_POOL_MAX', '3', 1, 20),
   redisUrl: required('REDIS_URL'),
   rsaPrivateKey: process.env['RSA_PRIVATE_KEY'] ?? null,
   // EC P-256 private key (PKCS#8 PEM) for ES256 signing.
