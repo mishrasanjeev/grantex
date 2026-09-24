@@ -1,0 +1,77 @@
+---
+title: "Grantex and AgenticOrg Governed Cases"
+sidebarTitle: "AgenticOrg Governed Cases"
+description: "What Grantex verifies for AgenticOrg business onboarding cases, what AgenticOrg enforces locally, and which purpose and cap controls are not yet active in the published Python SDK."
+keywords: ["AgenticOrg governed cases", "Grantex agent authorization", "business onboarding grant", "case purpose", "human decision"]
+---
+
+## Direct answer
+
+Grantex supplies verifiable, delegated tool authority for AgenticOrg's governed
+business cases. The AgenticOrg source runtime requires one active tenant role
+agent, a registered provider read-tool manifest, an exact local case-purpose
+allowlist, and a valid delegated grant before every provider call. A missing or
+denied check stops the provider call. Case decisions and analyst review remain
+human actions in AgenticOrg; an agent grant does not approve a case.
+
+This describes repository source, **not an assertion that a particular hosted
+tenant has the feature enabled or that the latest main commit is deployed**.
+Check the deployed revision and the tenant's `governed_cases.enabled` flag.
+
+## Responsibility boundary
+
+| Control | Current owner | What to verify |
+|---|---|---|
+| Tenant, case state and human actor | AgenticOrg | Tenant isolation, enabled flag, state transition and a signed-in person for decisions or reviews |
+| Case-purpose allowlist | AgenticOrg | Exact `case_purposes` on the selected active role; this is local configuration, not a token claim |
+| Delegated tool authority | Grantex grant, checked by AgenticOrg through the published Python SDK | Token signature, expiry, registered agent identity, connector, tool and permission |
+| Provider response and evidence | Provider and AgenticOrg | Provider access, cited response, policy version, case record and hand-off |
+| Token-level purpose, case-bound cap | Not active in this integration | Do not represent the local allowlist or a general budget as either control |
+
+The current published Python dependency is `grantex==0.5.1`. It does not
+enforce token-level purpose or per-case caps for this flow. A pooled run token
+is not bound to one case. Newer Python `0.6.0` and TypeScript `0.7.0` source
+trees include general purpose and decision-aware APIs, but they are not the
+published SDKs at this guide's registry check on September 24, 2026, and
+AgenticOrg has not wired their case context into enforcement. Source presence
+alone is not a production control. See [Release Status](/release-status).
+
+## Operator setup
+
+1. Review the selected provider's manifest and allow only the read tools the
+   business-underwriter and screening-disposition roles need.
+2. Register exactly one active, shared tenant agent for each role in AgenticOrg.
+   Verify each stored Grantex agent ID and derived scope set.
+3. Set each role's exact `case_purposes` list and provision a root grant that
+   covers the registered tools. Keep credentials in a secret manager.
+4. Configure a reviewed case policy and provider. The bundled mock provider is
+   for local and test environments, not production verification.
+5. Run denied-path tests for missing role, wrong purpose, missing grant, revoked
+   grant, undeclared tool and provider failure before enabling the tenant flag.
+6. Confirm the deployed SHA and operator logs before describing the flow as
+   available to users.
+
+AgenticOrg's [case lifecycle](https://github.com/mishrasanjeev/agentic-org/blob/main/docs/governance/case-lifecycle.md)
+and [grant-enforcement runbook](https://github.com/mishrasanjeev/agentic-org/blob/main/docs/operations/grant-enforcement.md)
+are the implementation and operations sources of truth.
+
+## SDK and MCP boundary
+
+The AgenticOrg Python and TypeScript SDK source exposes machine-safe submit,
+list, read and investigation-scheduling calls. Those methods are newer than
+their currently published `0.3.0` client packages; use the matching source
+checkout for evaluation until a newer client is released. Scheduling an
+investigation is not proof it succeeded; inspect the later case state.
+
+AgenticOrg's MCP server advertises general agents-as-tools, not the governed
+case roles. Grantex MCP transport authorization and tool authorization are
+separate from AgenticOrg's human case-decision path. Neither MCP discovery nor
+an agent token can stand in for a signed-in person or a verified decision grant.
+
+## Future integration gate
+
+Token-level purpose, decision and cap features should be enabled only after a
+published SDK is installed, its API is pinned, AgenticOrg passes the case
+context to enforcement, and cross-tenant, replay, expiry, revocation, and
+per-case budget tests pass. Do not infer those guarantees from a dependency
+version bump alone.

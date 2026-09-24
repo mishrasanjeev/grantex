@@ -9,6 +9,11 @@ keywords: ["Grantex CLI version", "Grantex SDK versions", "AI agent authorizatio
 
 Last verified: **September 15, 2026**
 
+The TypeScript SDK, Python SDK and MCP Auth npm/PyPI versions below were
+rechecked against their public registries on **September 24, 2026**. Source
+versions are not installable registry releases until separately published and
+verified.
+
 Grantex packages are versioned independently. There is no single version number
 that represents every SDK, integration, service, and protocol artifact in this
 repository.
@@ -16,11 +21,11 @@ repository.
 | Surface | Published baseline | Prepared candidate | Status | Runtime requirement |
 |---|---:|---:|---|---|
 | CLI | `@grantex/cli@0.3.0` | - | Published to npm with bundled Agent Skills | Node.js 18+; ESM |
-| TypeScript SDK | `@grantex/sdk@0.6.0` | - | Published; npm integrity and clean-install verified | Node.js 18+; ESM |
+| TypeScript SDK | `@grantex/sdk@0.6.0` | Source `0.7.0`, unpublished | Published; npm integrity and clean-install verified | Node.js 18+; ESM |
 | x402 Payment Protocol | `@grantex/x402@0.4.0` | - | Published; opt-in Base 402/sign/retry; npm integrity and clean-install verified | Node.js 20+; ESM |
-| Python SDK | `grantex==0.5.1` | - | Published to PyPI; distribution hashes and fresh-install full suite verified | Python 3.9+ |
+| Python SDK | `grantex==0.5.1` | Source `0.6.0`, unpublished | Published to PyPI; distribution hashes and fresh-install full suite verified | Python 3.9+ |
 | Go SDK | `github.com/mishrasanjeev/grantex-go@v0.3.0` | - | Tagged, public Go-proxy verified, and fresh-install verified | Go 1.26.1+ |
-| MCP Auth server | `@grantex/mcp-auth@2.0.2` | - | Published with known limitations | Node.js 18+; ESM |
+| MCP Auth server | `@grantex/mcp-auth@2.0.2` | Source `3.0.0`, unpublished | Published with known limitations | Node.js 18+; ESM |
 | OpenAPI contract | `0.5.0` | - | Repository contract with layered prepaid-wallet governance | Independent of public SDK versions |
 | Terraform provider | Not available in the public registry at verification | Source only | Registry lookup returned 404 on September 7, 2026; [local evaluation](/guides/terraform) only | Go toolchain declared by the provider module |
 
@@ -86,6 +91,7 @@ Custody](/guides/base-usdc-custody) for the custody and RPC prerequisites.
 - **MCP HTTP transport authorization:** use an established MCP-compatible authorization server and maintained MCP SDK that implement the current MCP authorization specification.
 - **Agent-specific MCP tool enforcement:** after transport authorization, use a primary Grantex SDK or direct JWKS validation at each tool boundary. Treat `@grantex/mcp-auth@2.0.2` as single-process evaluation software.
 - **Current revocation:** local JWT verification is insufficient by itself; perform an online state check or synchronize revocation data.
+- **AgenticOrg governed cases:** see [the integration boundary](/guides/agenticorg-governed-cases); published Python `0.5.1` does not enforce token-level case purpose or per-case caps.
 
 ## Known limitations in the current published artifacts
 

@@ -46,6 +46,7 @@ For MCP HTTP transport authorization, use an established MCP-compatible authoriz
 - [Vercel AI SDK Authorization](https://grantex.dev/for/vercel-ai): TypeScript tool authorization.
 - [AutoGen Multi-Agent Authorization](https://grantex.dev/for/autogen): Identity, scoped functions, and delegation for AutoGen agents.
 - [MCP Authorization](https://grantex.dev/for/mcp): Grantex MCP tool server and MCP authorization boundaries.
+- [AgenticOrg Governed Cases](https://docs.grantex.dev/guides/agenticorg-governed-cases): Delegated provider-tool grants, local case-purpose checks, human decision boundary, and published SDK limits.
 - [Express.js Enforcement](https://grantex.dev/for/express): JWT verification and per-route scope middleware.
 - [FastAPI Enforcement](https://grantex.dev/for/fastapi): Typed dependency-based authorization.
 - [Strands Agents](https://docs.grantex.dev/integrations/strands): TypeScript and Python scope-enforcement helpers.
