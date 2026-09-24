@@ -57,10 +57,11 @@ afterAll(async () => {
 }, 60_000);
 
 describePostgres('platform signing keys against real Postgres', () => {
-  // This test migrates the file's database from empty, which takes seconds
-  // and more on a loaded machine; the suite's 10s default is too tight. A
-  // timeout here leaves the migration running, and the next test's run then
-  // deadlocks against it (FINDINGS G-32).
+  // This test migrates the file's database from empty, which can take well
+  // over the suite's 10s default on a loaded machine. A timeout here leaves
+  // the migration running: the next test's migration can deadlock against
+  // it, or, if it finishes, this test's `finally` deletes the next test's
+  // keys (FINDINGS G-32).
   it('bridges from the env store without changing the signing kid or losing legacy tokens', async () => {
     const sql = connect();
     try {

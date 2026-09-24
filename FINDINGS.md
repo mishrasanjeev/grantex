@@ -565,15 +565,27 @@ the pull request that references it.
 - **Found:** a full local run during #1352, 2026-09-24.
 - **What:** since G-24, `signing-keys-postgres.integration.test.ts` has a
   database of its own, and its first test migrates it from empty under the
-  suite's 10-second `testTimeout`. Before G-24 it migrated a shared database
-  already at head, which took almost no time. Locally the first test took
-  between 1.8 and 10 seconds and once timed out. On a timeout the migration
-  kept running, the next test's migration deadlocked against it (`40P01`),
-  and the abandoned connection then threw an unhandled
-  `Cannot read properties of null (reading 'write')`. Every other test that
-  migrates a fresh database already had a limit of a minute or more.
+  suite's 10-second `testTimeout`. Before G-24 it usually found the shared
+  database already migrated by another file, which took almost no time. On
+  loaded local machines the first test took from under 2 to about 25
+  seconds: it went past 10 seconds in several runs, and one of those timed
+  out before this fix. A timeout leaves the migration
+  running, and one of two things follows:
+  - the next test's migration deadlocks against it. `40P01` appears in the
+    Postgres server log; the test output shows timeouts and an unhandled
+    `Cannot read properties of null (reading 'write')` from the abandoned
+    connection;
+  - or the migration finishes, the abandoned test body's `finally` deletes
+    the signing keys, and the next test fails with
+    `No active platform signing key is stored`.
+
+  Every other test that migrates a fresh database already had a limit of a
+  minute or more.
 - **Fixed:** the first test has a 120-second limit, like the other files that
   migrate from empty. The other two re-run migrations that apply nothing and
-  take well under a second. Shown by forcing a 1-second global limit: before
-  the fix all three tests fail with the deadlock and the unhandled error;
-  after it all three pass, the first in about 1.6 seconds on its own limit.
+  take under three seconds even under load. Shown by forcing a short global
+  limit: before the fix, at 1 second all three tests time out with the
+  unhandled error and a deadlock in the server log, and at 2 seconds the
+  second test loses its keys; after it all three pass at both limits, the
+  first on its own limit. A failure in the first test that is not a timeout
+  does not leave a migration running, so it cannot cause either.
