@@ -1,10 +1,10 @@
-import { randomUUID } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postgres from 'postgres';
 import { describe, expect, it, vi } from 'vitest';
 import { baselineMigrations, checkAtHead, expectedSchema, runMigrations } from '../src/db/migrate.js';
+import { createTestDatabase } from './helpers/database.js';
 
 const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
 const ci = process.env['CI']?.trim().toLowerCase();
@@ -24,19 +24,16 @@ type Sql = ReturnType<typeof postgres>;
  * one installed elsewhere and then fail to see its operator classes.
  */
 async function freshDatabase(): Promise<{ sql: Sql; url: string; drop: () => Promise<void> }> {
-  const name = `migrate_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
-  const admin = postgres(databaseUrl!, { max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
-  await admin.unsafe(`CREATE DATABASE ${name}`);
-  const url = new URL(databaseUrl!);
-  url.pathname = `/${name}`;
-  const sql = postgres(url.toString(), { max: 4, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
+  // One per test, through the shared helper, so a failed drop is reported
+  // rather than leaving a database behind unsaid (FINDINGS G-31).
+  const db = await createTestDatabase('migrate');
+  const sql = postgres(db.url, { max: 4, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
   return {
     sql,
-    url: url.toString(),
+    url: db.url,
     drop: async () => {
       await sql.end();
-      await admin.unsafe(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`).catch(() => undefined);
-      await admin.end();
+      await db.drop();
     },
   };
 }
