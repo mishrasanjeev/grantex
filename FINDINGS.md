@@ -533,8 +533,10 @@ the pull request that references it.
   The migrations always create tables, so the regression it exists for is
   caught; a test doing only one of the others would not be. None does so to
   the shared database today. The integration files do create and drop
-  databases through the shared connection, by design (G-24): one per file
-  through `createTestDatabase`, and one per test in
+  databases through the shared connection, by design (G-24): through
+  `createTestDatabase`, which most files call once and the guard's own test
+  file calls in each test that needs one, and through `freshDatabase`, once
+  per test, in
   `migrate-ledger-postgres.integration.test.ts`. The guard sees neither. A
   database left behind by a failed drop is reported on stderr by
   `createTestDatabase`, and not at all by the migrate-ledger file, which
