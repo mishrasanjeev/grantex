@@ -84,7 +84,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   within two seconds.
 - `grantex_revocation_feed_polls_total` still counts polls, not pages, now
   that a poll can read several pages.
-- FINDINGS **G-26** records that the settle window measures insert time rather
+- **FINDINGS G-26** records that the settle window measures insert time rather
   than commit time.
 
 ### Revocation feed: no revocation lost, no stale suspension after a reconnect
@@ -482,9 +482,9 @@ below.
   later columns with `ALTER TABLE … ADD COLUMN IF NOT EXISTS` rather than
   inside the `CREATE TABLE IF NOT EXISTS`, which a database that already had
   an earlier version of the table would skip whole.
-- FINDINGS **G-22** records the lockout gap as a tracked follow-up: the stop
+- **FINDINGS G-22** records the lockout gap as a tracked follow-up: the stop
   revokes what exists and does not stop new grants being issued, which is
-  disclosed everywhere but is still a design gap. FINDINGS **G-23** records
+  disclosed everywhere but is still a design gap. **FINDINGS G-23** records
   that `DELETE /v1/grants/:id` and the stop share the plan rate-limit bucket,
   so containment is throttled like ordinary traffic on the free plan.
 
