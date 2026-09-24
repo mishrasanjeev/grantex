@@ -8,80 +8,80 @@ vulnerabilities:
   - id: CVE-2026-14456
     purls:
       - "pkg:apk/alpine/libcrypto3@3.5.7-r0?arch=x86_64&distro=3.24.1"
-    statement: "Alpine OpenSSL in the node:26-alpine base image; fixed by moving the pinned base image digest to a build with openssl 3.5.8-r0. FINDINGS.md G-1."
+    statement: "Alpine OpenSSL in the node:26-alpine base image; fixed by moving the pinned base image digest to a build with openssl 3.5.8-r0. FINDINGS G-1."
     expired_at: 2026-10-14
   - id: CVE-2026-14456
     purls:
       - "pkg:apk/alpine/libssl3@3.5.7-r0?arch=x86_64&distro=3.24.1"
-    statement: "Alpine OpenSSL in the node:26-alpine base image; fixed by moving the pinned base image digest to a build with openssl 3.5.8-r0. FINDINGS.md G-1."
+    statement: "Alpine OpenSSL in the node:26-alpine base image; fixed by moving the pinned base image digest to a build with openssl 3.5.8-r0. FINDINGS G-1."
     expired_at: 2026-10-14
   - id: CVE-2026-14257
     purls:
       - "pkg:npm/brace-expansion@5.0.7"
-    statement: "npm's own bundled dependencies in the node:26-alpine base image, not the auth service's dependency tree; fixed by a newer base image or removing npm from the runtime stage. FINDINGS.md G-2."
+    statement: "npm's own bundled dependencies in the node:26-alpine base image, not the auth service's dependency tree; fixed by a newer base image or removing npm from the runtime stage. FINDINGS G-2."
     expired_at: 2026-10-14
   - id: CVE-2026-69152
     purls:
       - "pkg:npm/brace-expansion@5.0.7"
-    statement: "npm's own bundled dependencies in the node:26-alpine base image, not the auth service's dependency tree; fixed by a newer base image or removing npm from the runtime stage. FINDINGS.md G-2."
+    statement: "npm's own bundled dependencies in the node:26-alpine base image, not the auth service's dependency tree; fixed by a newer base image or removing npm from the runtime stage. FINDINGS G-2."
     expired_at: 2026-10-14
   - id: CVE-2026-69192
     purls:
       - "pkg:npm/ip-address@10.2.0"
-    statement: "npm's own bundled dependencies in the node:26-alpine base image, not the auth service's dependency tree; fixed by a newer base image or removing npm from the runtime stage. FINDINGS.md G-2."
+    statement: "npm's own bundled dependencies in the node:26-alpine base image, not the auth service's dependency tree; fixed by a newer base image or removing npm from the runtime stage. FINDINGS G-2."
     expired_at: 2026-10-14
   - id: CVE-2026-73566
     purls:
       - "pkg:npm/tar@7.5.19"
-    statement: "npm's own bundled dependencies in the node:26-alpine base image, not the auth service's dependency tree; fixed by a newer base image or removing npm from the runtime stage. FINDINGS.md G-2."
+    statement: "npm's own bundled dependencies in the node:26-alpine base image, not the auth service's dependency tree; fixed by a newer base image or removing npm from the runtime stage. FINDINGS G-2."
     expired_at: 2026-10-14
   - id: CVE-2026-56852
     purls:
       - "pkg:golang/golang.org/x/text@v0.38.0"
-    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS.md G-3."
+    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS G-3."
     expired_at: 2026-10-14
   - id: CVE-2026-33818
     purls:
       - "pkg:golang/stdlib@v1.26.4"
-    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS.md G-3."
+    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS G-3."
     expired_at: 2026-10-14
   - id: CVE-2026-39821
     purls:
       - "pkg:golang/stdlib@v1.26.4"
-    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS.md G-3."
+    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS G-3."
     expired_at: 2026-10-14
   - id: CVE-2026-39822
     purls:
       - "pkg:golang/stdlib@v1.26.4"
-    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS.md G-3."
+    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS G-3."
     expired_at: 2026-10-14
   - id: CVE-2026-46600
     purls:
       - "pkg:golang/stdlib@v1.26.4"
-    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS.md G-3."
+    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS G-3."
     expired_at: 2026-10-14
   - id: CVE-2026-56853
     purls:
       - "pkg:golang/stdlib@v1.26.4"
-    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS.md G-3."
+    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS G-3."
     expired_at: 2026-10-14
   - id: CVE-2026-56858
     purls:
       - "pkg:golang/stdlib@v1.26.4"
-    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS.md G-3."
+    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS G-3."
     expired_at: 2026-10-14
   - id: CVE-2026-56859
     purls:
       - "pkg:golang/stdlib@v1.26.4"
-    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS.md G-3."
+    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS G-3."
     expired_at: 2026-10-14
   - id: CVE-2026-56860
     purls:
       - "pkg:golang/stdlib@v1.26.4"
-    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS.md G-3."
+    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS G-3."
     expired_at: 2026-10-14
   - id: CVE-2026-56862
     purls:
       - "pkg:golang/stdlib@v1.26.4"
-    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS.md G-3."
+    statement: "Go-built native TypeScript compiler binary present in the production image's node_modules; the runtime does not need it. FINDINGS G-3."
     expired_at: 2026-10-14
