@@ -1,6 +1,7 @@
 import postgres from 'postgres';
 import { SignJWT, exportPKCS8, generateKeyPair, jwtVerify, type CryptoKey } from 'jose';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createTestDatabase } from './helpers/database.js';
 import { runMigrations } from '../src/db/migrate.js';
 import {
   loadEnvKeys,
@@ -14,14 +15,17 @@ import {
   type SigningKeyRing,
 } from '../src/lib/signing-keys.js';
 
-const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+// A database of its own; see FINDINGS G-24.
+const adminDatabaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+let databaseUrl = adminDatabaseUrl;
+let dropTestDatabase: (() => Promise<void>) | undefined;
 const ci = process.env['CI']?.trim().toLowerCase();
 if ((ci === 'true' || ci === '1') && !databaseUrl) {
   throw new Error(
     'AUDIT_INTEGRATION_DATABASE_URL must be set in CI; refusing to skip the real-Postgres signing key integration tests',
   );
 }
-const describePostgres = databaseUrl ? describe : describe.skip;
+const describePostgres = adminDatabaseUrl ? describe : describe.skip;
 const OPTIONS: PostgresKeyRingOptions = { alg: 'RS256', retiredGraceSeconds: 86_400, legacyRetentionSeconds: 13 * 31 * 86_400 };
 const algorithms = [...SIGNING_ALGORITHMS];
 
@@ -40,6 +44,17 @@ async function verifies(sql: ReturnType<typeof postgres>, token: string): Promis
 function connect(): ReturnType<typeof postgres> {
   return postgres(databaseUrl!, { max: 4, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
 }
+
+beforeAll(async () => {
+  if (!adminDatabaseUrl) return;
+  const db = await createTestDatabase('signing_keys');
+  databaseUrl = db.url;
+  dropTestDatabase = db.drop;
+}, 60_000);
+
+afterAll(async () => {
+  await dropTestDatabase?.();
+}, 60_000);
 
 describePostgres('platform signing keys against real Postgres', () => {
   it('bridges from the env store without changing the signing kid or losing legacy tokens', async () => {

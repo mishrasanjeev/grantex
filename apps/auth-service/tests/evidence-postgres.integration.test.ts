@@ -7,20 +7,24 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import postgres from 'postgres';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
 import { computeAuditHash } from '../src/lib/hash.js';
 import { decisionActionHash } from '../src/lib/evidence/hashing.js';
 import { verifyPackage } from '../src/lib/evidence/verify.js';
 import { appendEvidenceRecords, exportCasePackage, resetCounterTriggerCache, voidEvidenceRecord } from '../src/lib/evidence-service/service.js';
 import { evidenceSettings } from '../src/lib/evidence-service/settings.js';
+import { createTestDatabase } from './helpers/database.js';
 
-const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+// A database of its own; see FINDINGS G-24.
+const adminDatabaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+let databaseUrl = adminDatabaseUrl;
+let dropTestDatabase: (() => Promise<void>) | undefined;
 const ci = process.env['CI']?.trim().toLowerCase();
 if ((ci === 'true' || ci === '1') && !databaseUrl) {
   throw new Error('AUDIT_INTEGRATION_DATABASE_URL must be set in CI; refusing to skip the real-Postgres evidence integration tests');
 }
-const describePostgres = databaseUrl ? describe : describe.skip;
+const describePostgres = adminDatabaseUrl ? describe : describe.skip;
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -117,6 +121,17 @@ async function createDecisionStore(sql: postgres.Sql, schema: string): Promise<v
     dwell_ms INTEGER NOT NULL, case_id TEXT NOT NULL, action_hash TEXT NOT NULL, approval_position SMALLINT NOT NULL, first_jti TEXT,
     claims JSONB NOT NULL, issued_at TIMESTAMPTZ NOT NULL, expires_at TIMESTAMPTZ NOT NULL, consumed_at TIMESTAMPTZ)`);
 }
+
+beforeAll(async () => {
+  if (!adminDatabaseUrl) return;
+  const db = await createTestDatabase('evidence');
+  databaseUrl = db.url;
+  dropTestDatabase = db.drop;
+}, 60_000);
+
+afterAll(async () => {
+  await dropTestDatabase?.();
+}, 60_000);
 
 describePostgres('evidence records and export against real Postgres', () => {
   it('records idempotently, validates references at write time, anchors, isolates tenants, detects tampering and meets the p95 budget', async () => {

@@ -1,17 +1,34 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import postgres from 'postgres';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { computeAuditHash, matchStoredAuditHash } from '../src/lib/hash.js';
+import { createTestDatabase } from './helpers/database.js';
 
-const databaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+// This file runs against a database of its own. Sharing one database across
+// the Postgres integration files let `CREATE INDEX CONCURRENTLY` in one file
+// deadlock against another file's migration run (FINDINGS G-24).
+const adminDatabaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
+let databaseUrl = adminDatabaseUrl;
+let dropTestDatabase: (() => Promise<void>) | undefined;
 const ci = process.env['CI']?.trim().toLowerCase();
 if ((ci === 'true' || ci === '1') && !databaseUrl) {
   throw new Error(
     'AUDIT_INTEGRATION_DATABASE_URL must be set in CI; refusing to skip the real-Postgres audit integration tests',
   );
 }
-const describePostgres = databaseUrl ? describe : describe.skip;
+const describePostgres = adminDatabaseUrl ? describe : describe.skip;
+
+beforeAll(async () => {
+  if (!adminDatabaseUrl) return;
+  const db = await createTestDatabase('audit');
+  databaseUrl = db.url;
+  dropTestDatabase = db.drop;
+}, 60_000);
+
+afterAll(async () => {
+  await dropTestDatabase?.();
+}, 60_000);
 
 describePostgres('audit metadata write/read integration (Postgres)', () => {
   it('stores sql.json as an object and verifies both new and legacy rows', async () => {
