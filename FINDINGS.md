@@ -568,8 +568,9 @@ the pull request that references it.
   suite's 10-second `testTimeout`. Before G-24 it usually found the shared
   database already migrated by another file, which took almost no time. On
   loaded local machines the first test took from under 2 to about 25
-  seconds: it went past 10 seconds in several runs, and one of those timed
-  out before this fix. A timeout leaves the migration
+  seconds: one run before this fix took 10.02 seconds and timed out, and
+  three runs with it went past 10 seconds and passed. A timeout leaves the
+  migration
   running, and one of two things follows:
   - the next test's migration deadlocks against it. `40P01` appears in the
     Postgres server log; the test output shows timeouts and an unhandled
@@ -586,6 +587,7 @@ the pull request that references it.
   take under three seconds even under load. Shown by forcing a short global
   limit: before the fix, at 1 second all three tests time out with the
   unhandled error and a deadlock in the server log, and at 2 seconds the
-  second test loses its keys; after it all three pass at both limits, the
+  second test usually loses its keys; after it all three pass at both
+  limits, the
   first on its own limit. A failure in the first test that is not a timeout
   does not leave a migration running, so it cannot cause either.
