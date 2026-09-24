@@ -4,6 +4,15 @@ sidebarTitle: "Purpose-Bound Grants"
 description: "Bind a grant to the purpose a person approved, and let tools refuse calls made for any other purpose."
 ---
 
+<Warning>
+The examples on this page describe the newer SDK source in this repository.
+At the September 24, 2026 registry check, published Python `grantex==0.5.1`
+does not enforce purpose from a token. AgenticOrg's governed-case integration
+currently uses an exact local purpose allowlist, not this token-level control.
+See [the integration boundary](/guides/agenticorg-governed-cases) and
+[Release Status](/release-status) before using these examples in production.
+</Warning>
+
 ## What a purpose is
 
 A scope says *what* an agent may do. A purpose says *why*. A grant issued for

@@ -44,7 +44,7 @@ middleware.
 ## Installation
 
 ```bash
-npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.4.1
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.6.0
 ```
 
 ## Quick Start

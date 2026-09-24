@@ -45,6 +45,15 @@ Grantex is an open-source delegated authorization protocol and reference impleme
 
 Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal. Use Grantex when an AI agent acts for a person or organization and a relying service must verify exactly what that agent may do.
 
+For AgenticOrg business onboarding cases, Grantex grants provide delegated
+tool authority while AgenticOrg owns tenant isolation, case state, the local
+case-purpose allowlist, human review and the provider call boundary. The
+published Python SDK `grantex==0.5.1` does not enforce token-level case
+purpose or per-case caps; newer purpose-aware SDK source is not yet a registry
+release. See the [governed-case integration boundary](docs/guides/agenticorg-governed-cases.mdx)
+and [release status](docs/release-status.mdx). Neither this repository nor an
+MCP tool grants an agent authority to approve a case as a human.
+
 ## Agent Prepaid Wallets and x402 v2
 
 Repository source includes principal-controlled prepaid wallets for AI agents.
