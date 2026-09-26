@@ -12,6 +12,10 @@ vi.mock('../../api/dpdp', () => ({
 }));
 vi.mock('../../store/toast', () => ({ useToast: () => ({ show: mockShow }) }));
 
+// jsdom 30.1 throws from URL.createObjectURL for a Blob; the download is not under test here.
+URL.createObjectURL = vi.fn(() => 'blob:mock');
+URL.revokeObjectURL = vi.fn();
+
 function r() { return render(<MemoryRouter><ExportPage /></MemoryRouter>); }
 
 describe('ExportPage', () => {
