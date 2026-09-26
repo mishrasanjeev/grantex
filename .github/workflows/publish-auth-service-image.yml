@@ -65,7 +65,7 @@ jobs:
 
       # Scan the image that will be published before anything is pushed.
       - name: Build amd64 image for scanning
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: apps/auth-service
           platforms: linux/amd64
@@ -95,7 +95,7 @@ jobs:
 
       - name: Build multi-arch image (push on main and tags)
         id: build
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
         with:
           context: apps/auth-service
           platforms: linux/amd64,linux/arm64

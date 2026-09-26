@@ -12,10 +12,10 @@
     "@grantex/sdk": "^0.6.0",
     "@grantex/x402": "^0.4.0",
     "jose": "^6.2.12",
-    "tsx": "^4.21.0"
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
-    "@types/node": "^26.5.1",
+    "@types/node": "^26.6.2",
     "typescript": "^7.0.2"
   },
   "author": {

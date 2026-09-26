@@ -9,11 +9,11 @@
   "dependencies": {
     "@grantex/langchain": "^0.1.7",
     "@grantex/sdk": "^0.6.0",
-    "@langchain/core": "^1.2.11"
+    "@langchain/core": "^1.2.12"
   },
   "devDependencies": {
-    "@types/node": "^26.5.1",
-    "tsx": "^4.23.12",
+    "@types/node": "^26.6.2",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
   "author": {
