@@ -15,8 +15,9 @@ export default defineConfig({
     // Fails the run if a test file migrated the shared integration database
     // instead of one of its own (FINDINGS G-30).
     globalSetup: ['./tests/global-setup.ts'],
-    // Browser end-to-end tests run with `npm run test:e2e` (vitest.e2e.config.ts).
-    exclude: [...configDefaults.exclude, 'tests/e2e/**'],
+    // Browser and production tests have explicit configs; ordinary unit runs
+    // must never call the production API.
+    exclude: [...configDefaults.exclude, 'tests/e2e/**', 'tests/production/**'],
     // Every test file initializes an RSA key pair and a Fastify instance.
     // Letting Vitest fan out to the host CPU count causes those startup hooks
     // to exceed their timeouts under contention (while the same suites pass
