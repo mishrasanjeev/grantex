@@ -1,0 +1,7 @@
+---
+openapi: get /v1/irregularities/response-policy
+---
+
+Use `PATCH /v1/irregularities/response-policy` with `{"mode":"alert_only"}` or
+`{"mode":"revoke_agent_grants"}` to change this account-wide setting. It affects
+the legacy detector only. The server rollout flag is off by default.

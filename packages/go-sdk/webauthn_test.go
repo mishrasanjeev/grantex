@@ -21,7 +21,7 @@ func TestWebAuthnRegisterOptions(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(WebAuthnRegistrationOptions{
 			ChallengeID: "challenge-1",
-			Options: map[string]interface{}{
+			PublicKey: map[string]interface{}{
 				"rp": map[string]interface{}{
 					"name": "Grantex",
 				},
@@ -40,6 +40,12 @@ func TestWebAuthnRegisterOptions(t *testing.T) {
 	if opts.ChallengeID != "challenge-1" {
 		t.Errorf("expected challenge-1, got %s", opts.ChallengeID)
 	}
+	if opts.PublicKey["rp"] == nil {
+		t.Error("expected publicKey registration options")
+	}
+	if opts.Options["rp"] == nil {
+		t.Error("expected compatibility options alias")
+	}
 }
 
 func TestWebAuthnRegisterVerify(t *testing.T) {
@@ -49,12 +55,10 @@ func TestWebAuthnRegisterVerify(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(WebAuthnCredential{
-			ID:           "cred-1",
-			CredentialID: "cred-id-abc",
-			PublicKey:    "pk-xyz",
-			Counter:      0,
-			Transports:   []string{"usb", "ble"},
-			CreatedAt:    "2026-03-01T00:00:00Z",
+			ID:          "cred-1",
+			PrincipalID: "user-1",
+			Transports:  []string{"usb", "ble"},
+			CreatedAt:   "2026-03-01T00:00:00Z",
 		})
 	}))
 	defer server.Close()
@@ -70,8 +74,8 @@ func TestWebAuthnRegisterVerify(t *testing.T) {
 	if cred.ID != "cred-1" {
 		t.Errorf("expected cred-1, got %s", cred.ID)
 	}
-	if cred.CredentialID != "cred-id-abc" {
-		t.Errorf("expected cred-id-abc, got %s", cred.CredentialID)
+	if cred.PrincipalID != "user-1" {
+		t.Errorf("expected user-1, got %s", cred.PrincipalID)
 	}
 }
 
@@ -91,8 +95,8 @@ func TestWebAuthnListCredentials(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(listWebAuthnCredentialsResponse{
 			Credentials: []WebAuthnCredential{
-				{ID: "cred-1", CredentialID: "cred-id-1"},
-				{ID: "cred-2", CredentialID: "cred-id-2"},
+				{ID: "cred-1", PrincipalID: principalID},
+				{ID: "cred-2", PrincipalID: principalID},
 			},
 		})
 	}))
@@ -105,6 +109,28 @@ func TestWebAuthnListCredentials(t *testing.T) {
 	}
 	if len(creds) != 2 {
 		t.Errorf("expected 2 credentials, got %d", len(creds))
+	}
+}
+
+func TestWebAuthnCreateEnrollmentSession(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/webauthn/enrollment-sessions" {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		var params WebAuthnEnrollmentSessionParams
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+			t.Fatal(err)
+		}
+		if params.PrincipalID != "user-1" || params.AuthRequestID != "areq-1" {
+			t.Errorf("unexpected parameters: %+v", params)
+		}
+		json.NewEncoder(w).Encode(WebAuthnEnrollmentSession{EnrollmentURL: "https://example.com/passkey-enroll#ticket=secret", ExpiresAt: "2026-03-01T00:00:00Z"})
+	}))
+	defer server.Close()
+	client := NewClient("test-key", WithBaseURL(server.URL))
+	result, err := client.WebAuthn.CreateEnrollmentSession(context.Background(), WebAuthnEnrollmentSessionParams{PrincipalID: "user-1", AuthRequestID: "areq-1"})
+	if err != nil || result.EnrollmentURL == "" {
+		t.Fatalf("unexpected result: %+v, %v", result, err)
 	}
 }
 

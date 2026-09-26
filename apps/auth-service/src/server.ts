@@ -39,6 +39,7 @@ import { domainsRoutes } from './routes/domains.js';
 import { policySyncRoutes } from './routes/policy-sync.js';
 import { didRoutes } from './routes/did.js';
 import { webauthnRoutes } from './routes/webauthn.js';
+import { webauthnEnrollmentRoutes } from './routes/webauthn-enrollment.js';
 import { credentialsRoutes } from './routes/credentials.js';
 import { passportRoutes } from './routes/passport.js';
 import { trustRegistryRoutes } from './routes/trust-registry.js';
@@ -221,6 +222,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(domainsRoutes);
   await app.register(policySyncRoutes);
   await app.register(webauthnRoutes);
+  await app.register(webauthnEnrollmentRoutes);
   await app.register(credentialsRoutes);
   await app.register(passportRoutes);
   await app.register(trustRegistryRoutes);

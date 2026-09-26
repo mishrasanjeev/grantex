@@ -4,6 +4,7 @@ import type {
   WebAuthnRegistrationVerifyParams,
   WebAuthnCredential,
   ListWebAuthnCredentialsResponse,
+  WebAuthnEnrollmentSession,
 } from '../types.js';
 
 export class WebAuthnClient {
@@ -11,6 +12,11 @@ export class WebAuthnClient {
 
   constructor(http: HttpClient) {
     this.#http = http;
+  }
+
+  /** Issue a one-use hosted enrollment link after authenticating the principal in your application. */
+  createEnrollmentSession(params: { principalId: string; authRequestId?: string }): Promise<WebAuthnEnrollmentSession> {
+    return this.#http.post<WebAuthnEnrollmentSession>('/v1/webauthn/enrollment-sessions', params);
   }
 
   registerOptions(params: { principalId: string }): Promise<WebAuthnRegistrationOptions> {

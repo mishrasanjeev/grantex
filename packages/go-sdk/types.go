@@ -561,9 +561,11 @@ type Anomaly struct {
 
 // DetectAnomaliesResponse is the response from anomaly detection.
 type DetectAnomaliesResponse struct {
-	DetectedAt string    `json:"detectedAt"`
-	Total      int       `json:"total"`
-	Anomalies  []Anomaly `json:"anomalies"`
+	DetectedAt        string    `json:"detectedAt"`
+	Total             int       `json:"total"`
+	Anomalies         []Anomaly `json:"anomalies"`
+	ResponseMode      string    `json:"responseMode"`
+	AutoRevokedGrants int       `json:"autoRevokedGrants"`
 }
 
 // ListAnomaliesParams are the parameters for listing anomalies.

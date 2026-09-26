@@ -3838,6 +3838,52 @@ paths:
                 $ref: "#/components/schemas/Error"
 
   # ── Anomalies ────────────────────────────────────────────────────────
+  /v1/irregularities/response-policy:
+    get:
+      operationId: getIrregularityResponsePolicy
+      tags: [Anomalies]
+      summary: Read the account irregularity response policy
+      description: Available only when IRREGULARITY_RESPONSE_POLICY_ENABLED=true. Returns 404 otherwise.
+      responses:
+        "200":
+          description: Account-wide response to high and critical findings from the legacy detector
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mode]
+                properties:
+                  mode:
+                    type: string
+                    enum: [alert_only, revoke_agent_grants]
+    patch:
+      operationId: setIrregularityResponsePolicy
+      tags: [Anomalies]
+      summary: Set the account irregularity response policy
+      description: Alert-only retains findings and events but skips the legacy detector's agent-wide automatic revocation. Other controls remain active. Requires developer authentication and the rollout flag.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode:
+                  type: string
+                  enum: [alert_only, revoke_agent_grants]
+      responses:
+        "200":
+          description: Updated account policy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mode]
+                properties:
+                  mode:
+                    type: string
+                    enum: [alert_only, revoke_agent_grants]
   /v1/anomalies/detect:
     post:
       operationId: detectAnomalies
@@ -3845,7 +3891,8 @@ paths:
       summary: Run anomaly detection
       description: |
         Scans recent activity for anomalous patterns: rate spikes, high failure rates,
-        new principals, and off-hours activity.
+        new principals, and off-hours activity. With the response-policy rollout enabled,
+        alert_only suppresses this detector's automatic agent-grant revocation.
       responses:
         "200":
           description: Detection results
@@ -3858,6 +3905,11 @@ paths:
                     type: string
                     format: date-time
                   total:
+                    type: integer
+                  responseMode:
+                    type: string
+                    enum: [alert_only, revoke_agent_grants]
+                  autoRevokedGrants:
                     type: integer
                   anomalies:
                     type: array
@@ -5576,6 +5628,99 @@ paths:
                 type: string
 
   # ── WebAuthn / FIDO ──────────────────────────────────────────────────
+  /v1/webauthn/enrollment-sessions:
+    post:
+      operationId: createWebAuthnEnrollmentSession
+      tags: [WebAuthn]
+      summary: Issue a one-use hosted passkey enrollment link
+      description: |
+        Authenticate the customer in your application before calling this developer-authenticated
+        endpoint. A ticket is bound to the developer and principal, lasts ten minutes and is
+        consumed by one successful registration. Optional authRequestId must identify a pending
+        authorization request for the same account and principal. Requires PASSKEY_ENROLLMENT_ENABLED=true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [principalId]
+              properties:
+                principalId:
+                  type: string
+                authRequestId:
+                  type: string
+      responses:
+        "201":
+          description: One-use enrollment link; treat it as a bearer secret
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enrollmentUrl, expiresAt]
+                properties:
+                  enrollmentUrl:
+                    type: string
+                    format: uri
+                  expiresAt:
+                    type: string
+                    format: date-time
+  /passkey-enroll:
+    get:
+      operationId: hostedPasskeyEnrollment
+      tags: [WebAuthn]
+      summary: Hosted passkey enrollment page
+      description: Public browser page. Requires a one-use ticket in the URL fragment and the enrollment rollout flag.
+      security: []
+      responses:
+        "200":
+          description: Browser enrollment page
+          content:
+            text/html:
+              schema:
+                type: string
+  /v1/webauthn/enroll/options:
+    post:
+      operationId: hostedWebAuthnEnrollmentOptions
+      tags: [WebAuthn]
+      summary: Get registration options for a one-use ticket
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticket]
+              properties:
+                ticket:
+                  type: string
+      responses:
+        "200":
+          description: Challenge and publicKey registration options
+  /v1/webauthn/enroll/verify:
+    post:
+      operationId: hostedWebAuthnEnrollmentVerify
+      tags: [WebAuthn]
+      summary: Verify passkey and consume enrollment ticket
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticket, challengeId, response]
+              properties:
+                ticket:
+                  type: string
+                challengeId:
+                  type: string
+                response:
+                  type: object
+      responses:
+        "201":
+          description: Registered credential ID and optional relative consent return path
   /v1/webauthn/register/options:
     post:
       operationId: webauthnRegisterOptions

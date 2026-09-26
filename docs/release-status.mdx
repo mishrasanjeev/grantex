@@ -7,12 +7,22 @@ keywords: ["Grantex CLI version", "Grantex SDK versions", "AI agent authorizatio
 
 ## Current releases and prepared candidates
 
-Last verified: **September 15, 2026**
+Registry versions last verified: **September 24, 2026**. Server feature
+availability is deployment-specific; confirm the rollout with the authenticated
+policy endpoint and an enrollment test on the public origin.
 
 The TypeScript SDK, Python SDK and MCP Auth npm/PyPI versions below were
 rechecked against their public registries on **September 24, 2026**. Source
 versions are not installable registry releases until separately published and
 verified.
+
+Repository-source clients now include hosted passkey enrollment and the
+account irregularity response policy. Their server routes are default-off
+(`PASSKEY_ENROLLMENT_ENABLED` and `IRREGULARITY_RESPONSE_POLICY_ENABLED`), and
+the methods are not part of the published baselines in the table below. A
+deployed server may enable these flags before any SDK registry release; use the
+documented REST APIs or this repository's source clients until the packages
+are separately published and verified.
 
 Grantex packages are versioned independently. There is no single version number
 that represents every SDK, integration, service, and protocol artifact in this
@@ -24,7 +34,7 @@ repository.
 | TypeScript SDK | `@grantex/sdk@0.6.0` | Source `0.7.0`, unpublished | Published; npm integrity and clean-install verified | Node.js 18+; ESM |
 | x402 Payment Protocol | `@grantex/x402@0.4.0` | - | Published; opt-in Base 402/sign/retry; npm integrity and clean-install verified | Node.js 20+; ESM |
 | Python SDK | `grantex==0.5.1` | Source `0.6.0`, unpublished | Published to PyPI; distribution hashes and fresh-install full suite verified | Python 3.9+ |
-| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.3.0` | - | Tagged, public Go-proxy verified, and fresh-install verified | Go 1.26.1+ |
+| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.3.0` | Source additions, untagged | Published baseline is Go-proxy verified; new helpers require a separate tag and proxy verification | Go 1.26.1+ |
 | MCP Auth server | `@grantex/mcp-auth@2.0.2` | Source `3.0.0`, unpublished | Published with known limitations | Node.js 18+; ESM |
 | OpenAPI contract | `0.5.0` | - | Repository contract with layered prepaid-wallet governance | Independent of public SDK versions |
 | Terraform provider | Not available in the public registry at verification | Source only | Registry lookup returned 404 on September 7, 2026; [local evaluation](/guides/terraform) only | Go toolchain declared by the provider module |

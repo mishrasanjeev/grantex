@@ -3,6 +3,8 @@ import type {
   Anomaly,
   DetectAnomaliesResponse,
   ListAnomaliesResponse,
+  IrregularityResponsePolicy,
+  IrregularityResponseMode,
 } from '../types.js';
 
 export class AnomaliesClient {
@@ -10,6 +12,14 @@ export class AnomaliesClient {
 
   constructor(http: HttpClient) {
     this.#http = http;
+  }
+
+  getResponsePolicy(): Promise<IrregularityResponsePolicy> {
+    return this.#http.get<IrregularityResponsePolicy>('/v1/irregularities/response-policy');
+  }
+
+  setResponsePolicy(mode: IrregularityResponseMode): Promise<IrregularityResponsePolicy> {
+    return this.#http.patch<IrregularityResponsePolicy>('/v1/irregularities/response-policy', { mode });
   }
 
   /** Run anomaly detection across all agents and return detected anomalies. */

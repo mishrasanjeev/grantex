@@ -1,6 +1,8 @@
 """Tests for AnomaliesClient."""
 from __future__ import annotations
 
+import json
+
 import pytest
 import respx
 import httpx
@@ -26,11 +28,28 @@ def client() -> Grantex:
 
 
 @respx.mock
+def test_response_policy(client: Grantex) -> None:
+    get_route = respx.get("https://api.grantex.dev/v1/irregularities/response-policy").mock(
+        return_value=httpx.Response(200, json={"mode": "alert_only"})
+    )
+    patch_route = respx.patch("https://api.grantex.dev/v1/irregularities/response-policy").mock(
+        return_value=httpx.Response(200, json={"mode": "alert_only"})
+    )
+    assert client.anomalies.get_response_policy() == "alert_only"
+    assert client.anomalies.set_response_policy("alert_only") == "alert_only"
+    assert get_route.called
+    assert json.loads(patch_route.calls[0].request.content) == {"mode": "alert_only"}
+    with pytest.raises(ValueError):
+        client.anomalies.set_response_policy("invalid")
+
+
+@respx.mock
 def test_detect(client: Grantex) -> None:
     respx.post("https://api.grantex.dev/v1/anomalies/detect").mock(
         return_value=httpx.Response(
             200,
-            json={"detectedAt": "2026-02-26T00:00:00Z", "total": 1, "anomalies": [MOCK_ANOMALY]},
+            json={"detectedAt": "2026-02-26T00:00:00Z", "total": 1,
+                  "responseMode": "alert_only", "autoRevokedGrants": 0, "anomalies": [MOCK_ANOMALY]},
         )
     )
     result = client.anomalies.detect()
@@ -38,6 +57,8 @@ def test_detect(client: Grantex) -> None:
     assert result.total == 1
     assert result.anomalies[0].type == "rate_spike"
     assert result.anomalies[0].severity == "high"
+    assert result.response_mode == "alert_only"
+    assert result.auto_revoked_grants == 0
     assert result.anomalies[0].agent_id == "ag_01"
     assert result.anomalies[0].principal_id is None
     assert result.anomalies[0].acknowledged_at is None

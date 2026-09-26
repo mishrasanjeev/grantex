@@ -8,7 +8,9 @@ description: "Passkey-based human presence verification for agent authorization.
 
 Grantex supports FIDO2/WebAuthn passkeys as a human presence verification mechanism during the consent flow. When enabled, end-users authenticate with a biometric, security key, or platform authenticator before a grant is issued. This raises the assurance level from "user clicked approve" to "user was cryptographically verified by their device."
 
-FIDO is opt-in per developer. When `fidoRequired` is set to `true`, all authorization requests for that developer require a WebAuthn assertion before the grant is approved.
+Live-mode consent requires an existing passkey for the principal. Sandbox-mode accounts can also require one with `fidoRequired: true`. A consent link alone cannot register a passkey because it does not authenticate the principal.
+
+Hosted passkey enrollment is available when the server operator enables `PASSKEY_ENROLLMENT_ENABLED=true` and configures `FIDO_RP_ID` and `FIDO_ORIGIN` for the public HTTPS origin. The feature is off by default; do not enable live mode for customers until they can complete an enrollment test on that origin.
 
 ## Why FIDO for Agents?
 
@@ -56,14 +58,35 @@ curl -X PATCH https://api.grantex.dev/v1/me \
 </CodeGroup>
 
 <ParamField body="fidoRequired" type="boolean" default="false">
-  When `true`, all authorization requests for this developer require a WebAuthn assertion before the grant is approved.
+  When `true`, sandbox-mode authorization requests also require a WebAuthn assertion. Live mode already requires one regardless of this setting.
 </ParamField>
 
 <ParamField body="fidoRpName" type="string">
   The Relying Party name displayed in the browser's passkey prompt. Typically your application name.
 </ParamField>
 
-## Registration Ceremony
+## Hosted Enrollment For End Customers
+
+Your application must first authenticate the end customer and bind that session to the exact `principalId` it uses in Grantex. From your **server**, issue a short-lived, one-use enrollment link and deliver it to that customer through the authenticated session. Never expose your developer API key in browser code. The enrollment link itself is a bearer secret: do not log it, put it in analytics, or send it to another customer.
+
+```typescript
+const { enrollmentUrl, expiresAt } = await grantex.webauthn.createEnrollmentSession({
+  principalId: authenticatedCustomer.grantexPrincipalId,
+  // Optional: link back to a pending consent request for the same principal.
+  authRequestId,
+});
+// Show enrollmentUrl only to authenticatedCustomer. It expires after 10 minutes.
+```
+
+The customer opens the link at `/passkey-enroll`, uses their device's passkey prompt, and returns to consent when the link was bound to an authorization request. The browser registration challenge expires after five minutes and must be restarted if it expires. The registration requires device user verification. An enrollment ticket can register only one credential and cannot be reused. To add another device, create another link.
+
+The developer portal's **Passkeys** page can also issue a link for a principal. Operators must establish the customer's identity before sharing it. There is deliberately no unauthenticated "register" button on the consent page: anyone holding a consent URL could otherwise enroll their own passkey as the principal.
+
+If enrollment is disabled (404) or the customer cannot use a passkey-capable browser, live-mode approval remains blocked. Sandbox mode can be used for integration testing, but it is not an alternative live-mode approval path.
+
+For production rollout, deploy the auth service and the `/passkey-enroll` public-hosting rewrite first. Confirm `FIDO_ORIGIN` is the exact public HTTPS origin and `FIDO_RP_ID` is its valid relying-party domain, then enable `PASSKEY_ENROLLMENT_ENABLED=true`. Test registration and live approval on that origin before sending links to customers. The repository includes `apps/auth-service/tests/production/passkey-policy.test.ts` and the manual `Production Passkey and Irregularity E2E` GitHub Actions workflow. That test creates an isolated production account, passkey, grant and audit records; it must not use a customer account.
+
+## Server-Driven Registration Ceremony
 
 Before a user can authenticate with FIDO, they must register a passkey. This is a one-time process per user per device.
 
@@ -93,17 +116,16 @@ const options = await grantex.webauthn.registerOptions({
 
 // options contains:
 // - challengeId: string (server-side reference)
-// - rp: { name, id }
-// - user: { id, name, displayName }
-// - pubKeyCredParams: [{ type: 'public-key', alg: -7 }, ...]
-// - authenticatorSelection: { userVerification: 'required' }
-// - timeout: 60000
-// - challenge: base64url-encoded
+// - publicKey: { rp, user, challenge, pubKeyCredParams, ... }
+// - publicKey.pubKeyCredParams: [{ type: 'public-key', alg: -7 }, ...]
+// - publicKey.authenticatorSelection: { userVerification: 'preferred' } on legacy API
+// - publicKey.timeout: browser timeout
+// - publicKey.challenge: base64url-encoded
 ```
 
 ```python Python
 options = client.webauthn.register_options(principal_id="user_abc123")
-# Returns WebAuthnRegisterOptions with challengeId, rp, user, etc.
+# Returns challengeId and publicKey registration options.
 ```
 </CodeGroup>
 
@@ -115,16 +137,15 @@ Pass the options to the browser's WebAuthn API:
 // In the browser
 const credential = await navigator.credentials.create({
   publicKey: {
-    challenge: base64urlToBuffer(options.challenge),
-    rp: options.rp,
+    ...options.publicKey,
+    challenge: base64urlToBuffer(options.publicKey.challenge),
     user: {
-      id: base64urlToBuffer(options.user.id),
-      name: options.user.name,
-      displayName: options.user.displayName,
+      ...options.publicKey.user,
+      id: base64urlToBuffer(options.publicKey.user.id),
     },
-    pubKeyCredParams: options.pubKeyCredParams,
-    authenticatorSelection: options.authenticatorSelection,
-    timeout: options.timeout,
+    excludeCredentials: (options.publicKey.excludeCredentials || []).map((item) => ({
+      ...item, id: base64urlToBuffer(item.id),
+    })),
   },
 });
 ```
@@ -145,12 +166,15 @@ await grantex.webauthn.registerVerify({
       clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
       attestationObject: bufferToBase64url(credential.response.attestationObject),
     },
+    clientExtensionResults: credential.getClientExtensionResults(),
   },
 });
 ```
 
 ```python Python
-client.webauthn.register_verify(
+from grantex import WebAuthnRegistrationVerifyParams
+
+client.webauthn.register_verify(WebAuthnRegistrationVerifyParams(
     challenge_id=options.challenge_id,
     response={
         "id": credential_id,
@@ -161,7 +185,7 @@ client.webauthn.register_verify(
             "attestationObject": attestation_b64,
         },
     },
-)
+))
 ```
 </CodeGroup>
 
@@ -299,6 +323,10 @@ This evidence is also embedded in Verifiable Credentials when `credentialFormat:
 |--------|----------|-------------|
 | `POST` | `/v1/webauthn/register/options` | Generate passkey registration options |
 | `POST` | `/v1/webauthn/register/verify` | Verify registration and store credential |
+| `POST` | `/v1/webauthn/enrollment-sessions` | Issue an authenticated one-use enrollment link |
+| `GET` | `/passkey-enroll` | Hosted browser enrollment page |
+| `POST` | `/v1/webauthn/enroll/options` | Exchange a valid enrollment ticket for registration options |
+| `POST` | `/v1/webauthn/enroll/verify` | Verify the passkey and consume the ticket |
 | `GET` | `/v1/webauthn/credentials` | List WebAuthn credentials for a principal |
 | `DELETE` | `/v1/webauthn/credentials/:id` | Delete a credential |
 | `POST` | `/v1/webauthn/assert/options` | Generate assertion options for consent |
@@ -307,11 +335,11 @@ This evidence is also embedded in Verifiable Credentials when `credentialFormat:
 
 ## Security Considerations
 
-- **User verification required**: All FIDO operations set `userVerification: "required"`, ensuring the authenticator performs biometric or PIN verification. `"discouraged"` or `"preferred"` are not accepted.
+- **User verification**: Hosted enrollment requires `userVerification: "required"` and verifies it on the server. With enrollment enabled, consent assertions also require it. The legacy developer-authenticated registration API requests `"preferred"`; do not treat those older ceremonies as proof of user verification.
 - **Challenge expiry**: Registration and assertion challenges expire after 5 minutes. Replaying an expired challenge returns a 400 error.
 - **Credential binding**: Each credential is bound to a specific principal and developer. A credential registered for one developer's consent flow cannot be used for another.
 - **Attestation**: Grantex accepts `"none"`, `"indirect"`, and `"direct"` attestation conveyance. Attestation statements are stored but not currently used for trust decisions.
-- **Fallback behavior**: If FIDO is enabled but the user has no registered credentials, the consent flow prompts them to register a passkey before proceeding.
+- **Missing credential**: Consent cannot be approved until the application issues an authenticated enrollment link and the customer registers a passkey. There is no weaker live-mode fallback.
 
 ## Next Steps
 

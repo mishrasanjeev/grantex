@@ -8,6 +8,15 @@ description: "Detect, list, and acknowledge anomalous agent behavior patterns."
 
 The `anomalies` sub-client provides automated anomaly detection for agent activity. It identifies unusual patterns such as rate spikes, high failure rates, new principals, and off-hours activity.
 
+Detection runs when `detect()` is called; listing a built-in rule is not proof of continuous monitoring. With the server's default-off `IRREGULARITY_RESPONSE_POLICY_ENABLED=true` rollout, repository-source SDK clients can select an account-wide response:
+
+```typescript
+const current = await grantex.anomalies.getResponsePolicy();
+await grantex.anomalies.setResponsePolicy('alert_only');
+```
+
+The default `revoke_agent_grants` mode revokes active grants for an implicated agent on a high/critical finding. `alert_only` persists findings without this detector's automatic revocation; it does not disable other controls. Check the installed SDK version before using these source-only methods.
+
 ```typescript
 const result = await grantex.anomalies.detect();
 console.log(result.total);     // 3
@@ -45,6 +54,14 @@ for (const anomaly of result.anomalies) {
 
 <ResponseField name="total" type="number">
   Number of anomalies detected.
+</ResponseField>
+
+<ResponseField name="responseMode" type="string">
+  Account response mode used for this detection run.
+</ResponseField>
+
+<ResponseField name="autoRevokedGrants" type="number">
+  Number of active grants revoked by this detector during the run.
 </ResponseField>
 
 <ResponseField name="anomalies" type="Anomaly[]">

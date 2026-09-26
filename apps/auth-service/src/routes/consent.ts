@@ -61,6 +61,7 @@ const CONSENT_HTML = `<!DOCTYPE html>
   .spinner { border: 3px solid #f0f0f0; border-top-color: #111; border-radius: 50%; width: 32px; height: 32px; animation: spin 0.7s linear infinite; margin: 40px auto; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .error-msg { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 14px; color: #991b1b; font-size: 14px; text-align: center; margin-top: 16px; }
+  .enroll-note { margin: 16px 0 0; color: #555; font-size: 13px; text-align: center; }
 </style>
 </head>
 <body>
@@ -83,7 +84,8 @@ const CONSENT_HTML = `<!DOCTYPE html>
   }
 
   function showError(msg) {
-    el.innerHTML = '<div class="error-msg">' + esc(msg) + '</div>';
+    el.innerHTML = '<div class="error-msg">' + esc(msg) + '</div>' +
+      '<p class="enroll-note">No passkey yet? Ask your application for a one-use enrollment link, then return to this request.</p>';
   }
 
   function showStatus(title, msg) {

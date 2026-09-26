@@ -26,6 +26,7 @@ export async function generateRegOptions(
   principalId: string,
   rpName: string,
   existingCredentials: StoredCredential[],
+  requireUserVerification = false,
 ): Promise<GeneratedWebAuthnOptions> {
   return await generateRegistrationOptions({
     rpName,
@@ -35,7 +36,7 @@ export async function generateRegOptions(
     attestationType: 'direct',
     authenticatorSelection: {
       residentKey: 'preferred',
-      userVerification: 'preferred',
+      userVerification: requireUserVerification ? 'required' : 'preferred',
     },
     excludeCredentials: existingCredentials.map((c) => ({
       id: c.credentialId,
@@ -47,12 +48,14 @@ export async function generateRegOptions(
 export async function verifyRegResponse(
   response: RegistrationResponseJSON,
   expectedChallenge: string,
+  requireUserVerification = false,
 ) {
   return verifyRegistrationResponse({
     response,
     expectedChallenge,
     expectedOrigin: config.fidoOrigin,
     expectedRPID: config.fidoRpId,
+    requireUserVerification,
   });
 }
 
@@ -65,7 +68,7 @@ export async function generateAuthOptions(
       id: c.credentialId,
       transports: c.transports as AuthenticatorTransport[],
     })),
-    userVerification: 'preferred',
+    userVerification: config.passkeyEnrollmentEnabled ? 'required' : 'preferred',
   });
 }
 
@@ -80,6 +83,7 @@ export async function verifyAuthResponse(
     expectedChallenge,
     expectedOrigin: config.fidoOrigin,
     expectedRPID: config.fidoRpId,
+    requireUserVerification: config.passkeyEnrollmentEnabled,
     credential: {
       id: credential.credentialId,
       publicKey: uint8Key,

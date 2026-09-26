@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
-import { newAnomalyId, newAnomalyRuleId, newAnomalyChannelId } from '../lib/ids.js';
+import { newAnomalyId, newAnomalyRuleId, newAnomalyChannelId, newIrregularityPolicyChangeId } from '../lib/ids.js';
 import { emitEvent } from '../lib/events.js';
+import { config } from '../config.js';
 
 type AnomalyType = 'rate_spike' | 'high_failure_rate' | 'new_principal' | 'off_hours_activity';
 type AnomalySeverity = 'low' | 'medium' | 'high' | 'critical';
@@ -72,6 +73,61 @@ const VALID_CHANNEL_TYPES = ['slack', 'webhook', 'email'];
 const VALID_WINDOWS = ['1h', '6h', '24h'];
 
 export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
+  app.get('/v1/irregularities/response-policy', async (request, reply) => {
+    if (!config.irregularityResponsePolicyEnabled) {
+      return reply.status(404).send({ code: 'NOT_FOUND', message: 'Response policy is not enabled' });
+    }
+    const sql = getSql();
+    const rows = await sql`
+      SELECT irregularity_response_mode FROM developers WHERE id = ${request.developer.id}
+    `;
+    const mode = rows[0]?.['irregularity_response_mode'];
+    if (mode !== 'alert_only' && mode !== 'revoke_agent_grants') {
+      return reply.status(503).send({ code: 'POLICY_UNAVAILABLE', message: 'Response policy is unavailable' });
+    }
+    return reply.send({ mode });
+  });
+
+  app.patch<{ Body: { mode?: string } }>(
+    '/v1/irregularities/response-policy',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      if (!config.irregularityResponsePolicyEnabled) {
+        return reply.status(404).send({ code: 'NOT_FOUND', message: 'Response policy is not enabled' });
+      }
+      const mode = request.body?.mode;
+      if (mode !== 'alert_only' && mode !== 'revoke_agent_grants') {
+        return reply.status(400).send({ code: 'BAD_REQUEST', message: 'mode must be alert_only or revoke_agent_grants' });
+      }
+      const sql = getSql();
+      const outcome = await sql.begin(async (tx) => {
+        const rows = await tx`
+          SELECT irregularity_response_mode FROM developers
+          WHERE id = ${request.developer.id} FOR UPDATE
+        `;
+        const previousMode = rows[0]?.['irregularity_response_mode'];
+        if (previousMode !== 'alert_only' && previousMode !== 'revoke_agent_grants') return null;
+        if (previousMode === mode) return { previousMode, changed: false };
+        await tx`
+          UPDATE developers SET irregularity_response_mode = ${mode}
+          WHERE id = ${request.developer.id}
+        `;
+        await tx`
+          INSERT INTO irregularity_policy_changes (id, developer_id, previous_mode, next_mode)
+          VALUES (${newIrregularityPolicyChangeId()}, ${request.developer.id}, ${previousMode}, ${mode})
+        `;
+        return { previousMode, changed: true };
+      });
+      if (!outcome) return reply.status(503).send({ code: 'POLICY_UNAVAILABLE', message: 'Response policy is unavailable' });
+      if (outcome.changed) {
+        emitEvent(request.developer.id, 'irregularity.policy.updated', {
+          previousMode: outcome.previousMode, mode,
+        }).catch((error: unknown) => request.log.warn({ err: error }, 'Irregularity policy event delivery failed'));
+      }
+      return reply.send({ mode });
+    },
+  );
+
   // ═════════════════════════════════════════════════════════════════════════════
   // Legacy endpoints (backward compatible)
   // ═════════════════════════════════════════════════════════════════════════════
@@ -80,6 +136,17 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
   app.post('/v1/anomalies/detect', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const sql = getSql();
     const developerId = request.developer.id;
+    let responseMode: 'alert_only' | 'revoke_agent_grants' = 'revoke_agent_grants';
+    if (config.irregularityResponsePolicyEnabled) {
+      const rows = await sql`
+        SELECT irregularity_response_mode FROM developers WHERE id = ${developerId}
+      `;
+      const configuredMode = rows[0]?.['irregularity_response_mode'];
+      if (configuredMode !== 'alert_only' && configuredMode !== 'revoke_agent_grants') {
+        return reply.status(503).send({ code: 'POLICY_UNAVAILABLE', message: 'Response policy is unavailable' });
+      }
+      responseMode = configuredMode;
+    }
 
     const [rateSpikeRows, highFailureRows, newPrincipalRows, offHoursRows] = await Promise.all([
       // rate_spike: >50 actions per agent in last 1 hour
@@ -214,27 +281,37 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
           (${a.id}, ${a.developer_id}, ${a.type}, ${a.severity},
            ${a.agent_id}, ${a.principal_id}, ${a.description}, ${JSON.stringify(a.metadata)})
       `;
+      if (config.irregularityResponsePolicyEnabled) {
+        await emitEvent(developerId, 'anomaly.detected', {
+          alertId: a.id,
+          ruleName: a.type,
+          severity: a.severity,
+          agentId: a.agent_id,
+          principalId: a.principal_id,
+          description: a.description,
+          context: a.metadata,
+        }).catch((error: unknown) => request.log.warn({ err: error }, 'Irregularity event delivery failed'));
+      }
     }
 
     // Auto-revoke grants for critical/high severity anomalies if configured
     const autoRevoked: string[] = [];
     for (const a of anomalies) {
-      if ((a.severity === 'critical' || a.severity === 'high') && a.agent_id) {
-        const activeGrants = await sql`
-          SELECT id FROM grants
+      if (responseMode === 'revoke_agent_grants'
+          && (a.severity === 'critical' || a.severity === 'high') && a.agent_id) {
+        const revoked = await sql`
+          UPDATE grants SET status = 'revoked', revoked_at = NOW()
           WHERE agent_id = ${a.agent_id}
             AND developer_id = ${developerId}
             AND status = 'active'
             AND expires_at > NOW()
+            AND (${!config.irregularityResponsePolicyEnabled} OR EXISTS (
+              SELECT 1 FROM developers
+              WHERE id = ${developerId} AND irregularity_response_mode = 'revoke_agent_grants'
+            ))
+          RETURNING id
         `;
-        for (const g of activeGrants as Array<Record<string, unknown>>) {
-          const grantId = g['id'] as string;
-          await sql`
-            UPDATE grants SET status = 'revoked', revoked_at = NOW()
-            WHERE id = ${grantId}
-          `;
-          autoRevoked.push(grantId);
-        }
+        autoRevoked.push(...revoked.map((row) => row['id'] as string));
       }
     }
 
@@ -247,6 +324,7 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({
       detectedAt: now,
+      responseMode,
       total: anomalies.length,
       autoRevokedGrants: autoRevoked.length,
       anomalies: anomalies.map((a) => ({

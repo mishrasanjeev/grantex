@@ -107,6 +107,7 @@ from ._types import (
     ExchangeCredentialResponse,
     # WebAuthn / FIDO
     WebAuthnRegistrationOptions,
+    WebAuthnEnrollmentSession,
     WebAuthnRegistrationVerifyParams,
     WebAuthnCredential,
     ListWebAuthnCredentialsResponse,
@@ -329,6 +330,7 @@ __all__ = [
     "ExchangeCredentialResponse",
     # WebAuthn / FIDO
     "WebAuthnRegistrationOptions",
+    "WebAuthnEnrollmentSession",
     "WebAuthnRegistrationVerifyParams",
     "WebAuthnCredential",
     "ListWebAuthnCredentialsResponse",

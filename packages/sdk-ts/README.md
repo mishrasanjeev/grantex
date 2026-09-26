@@ -713,6 +713,22 @@ console.log(pack.policies);
 
 ### Anomaly Detection
 
+In repository source, `grantex.anomalies.getResponsePolicy()` and
+`grantex.anomalies.setResponsePolicy('alert_only')` control the account-wide
+response of the legacy detector when the server operator enables
+`IRREGULARITY_RESPONSE_POLICY_ENABLED=true`. Default behavior revokes active
+grants for a high/critical finding's agent. Alert-only retains findings and
+events without that automatic revocation. This setting does not disable other
+security controls. Check the installed SDK version before using these methods.
+
+The repository source also supports
+`grantex.webauthn.createEnrollmentSession({ principalId, authRequestId? })`.
+Call it only on your server after authenticating the customer. Deliver the
+returned one-use hosted link to that exact customer; never expose the API key
+or log the link. Hosted enrollment requires the server's default-off
+`PASSKEY_ENROLLMENT_ENABLED=true` setting. Live consent has no password or
+sandbox fallback.
+
 #### `grantex.anomalies.detect()`
 
 Run anomaly detection across all agents.

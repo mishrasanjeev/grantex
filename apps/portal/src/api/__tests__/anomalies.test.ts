@@ -21,6 +21,8 @@ function err(status: number, code: string, msg: string) {
 }
 
 import {
+  getIrregularityResponsePolicy,
+  setIrregularityResponsePolicy,
   listAnomalies,
   detectAnomalies,
   acknowledgeAnomaly,
@@ -41,6 +43,17 @@ import {
 describe('anomalies', () => {
   beforeEach(() => {
     mockFetch.mockReset();
+  });
+
+  it('reads and updates the account response policy', async () => {
+    ok({ mode: 'revoke_agent_grants' });
+    expect(await getIrregularityResponsePolicy()).toEqual({ mode: 'revoke_agent_grants' });
+    ok({ mode: 'alert_only' });
+    expect(await setIrregularityResponsePolicy('alert_only')).toEqual({ mode: 'alert_only' });
+    expect(mockFetch.mock.calls[1]![0]).toBe('http://localhost:3000/v1/irregularities/response-policy');
+    expect(mockFetch.mock.calls[1]![1]).toEqual(expect.objectContaining({
+      method: 'PATCH', body: JSON.stringify({ mode: 'alert_only' }),
+    }));
   });
 
   // ── Legacy: listAnomalies ─────────────────────────────────────────────

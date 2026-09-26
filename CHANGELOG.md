@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Hosted passkey enrollment and account irregularity response
+- Added a default-off hosted passkey enrollment flow with authenticated,
+  tenant-bound, one-use links, required user verification, and a browser page.
+  Live consent still requires a verified passkey and has no weaker fallback.
+- Added a default-off account response policy for the legacy irregularity
+  detector: alert-only or automatic revocation of all active grants for a
+  high/critical finding's agent. Existing accounts retain automatic revocation.
+  Policy changes are recorded in a database history table in the same transaction.
+- When the response-policy rollout is enabled, explicit detector runs now emit
+  `anomaly.detected` via the existing event/webhook bus. Channel records do not
+  independently dispatch notifications.
+- Added repository-source TypeScript, Python and Go SDK methods, portal controls,
+  migrations and tests. Deployment and registry publishing are tracked
+  separately; the package methods are not claims about registry releases.
+
 ### One engineering guide for every contributor
 - `AGENTS.md` is the repository's engineering guide, and the other guide file
   in the root carries the same text. It sets out the hard rules (no tool

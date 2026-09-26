@@ -33,6 +33,23 @@ function makeFetch(status: number, body: unknown) {
 describe('WebAuthnClient', () => {
   afterEach(() => { vi.unstubAllGlobals(); });
 
+  it('createEnrollmentSession() sends the principal and bound authorization request', async () => {
+    const mockFetch = makeFetch(201, {
+      enrollmentUrl: 'https://grantex.dev/passkey-enroll#ticket=secret',
+      expiresAt: '2026-03-01T00:10:00Z',
+    });
+    vi.stubGlobal('fetch', mockFetch);
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const result = await grantex.webauthn.createEnrollmentSession({
+      principalId: 'user_abc123', authRequestId: 'areq_01',
+    });
+    expect(result.enrollmentUrl).toContain('#ticket=');
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/v1\/webauthn\/enrollment-sessions$/);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ principalId: 'user_abc123', authRequestId: 'areq_01' });
+  });
+
   it('registerOptions() POSTs to /v1/webauthn/register/options', async () => {
     const mockFetch = makeFetch(200, MOCK_REGISTRATION_OPTIONS);
     vi.stubGlobal('fetch', mockFetch);

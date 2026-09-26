@@ -29,8 +29,24 @@ describe('AnomaliesClient', () => {
     vi.clearAllMocks();
   });
 
+  it('reads and updates the account response policy', async () => {
+    const mockFetch = makeFetch(200, { mode: 'alert_only' });
+    vi.stubGlobal('fetch', mockFetch);
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    expect((await grantex.anomalies.getResponsePolicy()).mode).toBe('alert_only');
+    expect((await grantex.anomalies.setResponsePolicy('alert_only')).mode).toBe('alert_only');
+    const [getUrl, getInit] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(getUrl).toMatch(/\/v1\/irregularities\/response-policy$/);
+    expect(getInit.method).toBe('GET');
+    const [patchUrl, patchInit] = mockFetch.mock.calls[1] as [string, RequestInit];
+    expect(patchUrl).toMatch(/\/v1\/irregularities\/response-policy$/);
+    expect(patchInit.method).toBe('PATCH');
+    expect(JSON.parse(patchInit.body as string)).toEqual({ mode: 'alert_only' });
+  });
+
   it('detect() POSTs to /v1/anomalies/detect', async () => {
-    const mockResponse = { detectedAt: '2026-02-26T00:00:00Z', total: 1, anomalies: [MOCK_ANOMALY] };
+    const mockResponse = { detectedAt: '2026-02-26T00:00:00Z', total: 1,
+      responseMode: 'alert_only', autoRevokedGrants: 0, anomalies: [MOCK_ANOMALY] };
     const mockFetch = makeFetch(200, mockResponse);
     vi.stubGlobal('fetch', mockFetch);
 
@@ -40,6 +56,8 @@ describe('AnomaliesClient', () => {
     expect(result.total).toBe(1);
     expect(result.anomalies[0]!.type).toBe('rate_spike');
     expect(result.anomalies[0]!.severity).toBe('high');
+    expect(result.responseMode).toBe('alert_only');
+    expect(result.autoRevokedGrants).toBe(0);
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/v1\/anomalies\/detect$/);
     expect(init.method).toBe('POST');

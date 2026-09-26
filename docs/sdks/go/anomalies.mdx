@@ -5,11 +5,18 @@ description: "Detect and manage security anomalies"
 
 ## Detect
 
+Repository source includes `client.Anomalies.GetResponsePolicy(ctx)` and
+`SetResponsePolicy(ctx, "alert_only")`. These are account-wide and require the
+default-off server setting `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`;
+check your installed Go module version before calling them. Alert-only stops
+automatic revocation by this detector, not independent controls.
+
 Trigger anomaly detection and get results.
 
 ```go
 result, err := client.Anomalies.Detect(ctx)
 fmt.Printf("Found %d anomalies\n", result.Total)
+fmt.Printf("Mode %s, revoked %d grants\n", result.ResponseMode, result.AutoRevokedGrants)
 for _, a := range result.Anomalies {
     fmt.Printf("[%s] %s: %s\n", a.Severity, a.Type, a.Description)
 }

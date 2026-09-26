@@ -10,6 +10,13 @@ The `anomalies` client provides automated anomaly detection for your authorizati
 
 Access the anomalies client via `client.anomalies`.
 
+Repository source adds `get_response_policy()` and
+`set_response_policy("alert_only")` for the account-wide response to findings
+from `detect()`. The server must enable `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`;
+published PyPI baselines may not include these methods yet. Alert-only retains
+findings but skips this detector's automatic agent-grant revocation. It does
+not bypass other security controls.
+
 ## Detect
 
 Run anomaly detection across all agents and return any detected anomalies:
@@ -32,6 +39,8 @@ with Grantex(api_key="gx_live_...") as client:
 |---------------|----------------------|-----------------------------------------|
 | `detected_at` | `str`                | ISO 8601 timestamp of the detection run.|
 | `total`       | `int`                | Number of anomalies detected.           |
+| `response_mode` | `str`              | Account response mode for this run.     |
+| `auto_revoked_grants` | `int`         | Grants revoked by this detector.        |
 | `anomalies`   | `tuple[Anomaly, ...]`| The detected anomalies.                 |
 
 ## List

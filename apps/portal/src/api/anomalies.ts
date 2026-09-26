@@ -1,6 +1,16 @@
 import { api } from './client';
 import type { Anomaly } from './types';
 
+export type IrregularityResponseMode = 'alert_only' | 'revoke_agent_grants';
+
+export function getIrregularityResponsePolicy(): Promise<{ mode: IrregularityResponseMode }> {
+  return api.get('/v1/irregularities/response-policy');
+}
+
+export function setIrregularityResponsePolicy(mode: IrregularityResponseMode): Promise<{ mode: IrregularityResponseMode }> {
+  return api.patch('/v1/irregularities/response-policy', { mode });
+}
+
 // ── Alert types ─────────────────────────────────────────────────────────────
 
 export interface AnomalyAlert {

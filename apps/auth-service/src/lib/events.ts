@@ -54,6 +54,8 @@ export const EVENT_TYPES = [
   'dpdp.grievance.filed',
   'dpdp.erasure.completed',
   'anomaly.auto_revoked',
+  'anomaly.detected',
+  'irregularity.policy.updated',
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];
