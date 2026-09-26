@@ -8,6 +8,8 @@ const mockListAlerts = vi.fn();
 const mockGetMetrics = vi.fn();
 const mockAcknowledgeAlert = vi.fn();
 const mockResolveAlert = vi.fn();
+const mockGetResponsePolicy = vi.fn();
+const mockSetResponsePolicy = vi.fn();
 const mockRevokeGrant = vi.fn();
 const mockShow = vi.fn();
 const mockNavigate = vi.fn();
@@ -17,6 +19,8 @@ vi.mock('../../api/anomalies', () => ({
   getMetrics: () => mockGetMetrics(),
   acknowledgeAlert: (...a: unknown[]) => mockAcknowledgeAlert(...a),
   resolveAlert: (...a: unknown[]) => mockResolveAlert(...a),
+  getIrregularityResponsePolicy: () => mockGetResponsePolicy(),
+  setIrregularityResponsePolicy: (...a: unknown[]) => mockSetResponsePolicy(...a),
 }));
 vi.mock('../../api/grants', () => ({ revokeGrant: (...a: unknown[]) => mockRevokeGrant(...a) }));
 vi.mock('../../store/toast', () => ({ useToast: () => ({ show: mockShow }) }));
@@ -43,12 +47,24 @@ describe('AnomalyList', () => {
     vi.clearAllMocks();
     mockListAlerts.mockResolvedValue(alerts);
     mockGetMetrics.mockResolvedValue(metrics);
+    mockGetResponsePolicy.mockResolvedValue({ mode: 'revoke_agent_grants' });
+    mockSetResponsePolicy.mockResolvedValue({ mode: 'alert_only' });
   });
 
   it('renders alert cards', async () => {
     r();
     await waitFor(() => expect(screen.getByText('High rate detected')).toBeInTheDocument());
     expect(screen.getByText('Off hours activity')).toBeInTheDocument();
+  });
+
+  it('changes the account response only after confirmation', async () => {
+    const user = userEvent.setup();
+    r();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Alert only' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Alert only' }));
+    expect(mockSetResponsePolicy).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Change policy' }));
+    await waitFor(() => expect(mockSetResponsePolicy).toHaveBeenCalledWith('alert_only'));
   });
 
   it('displays severity badges', async () => {

@@ -99,7 +99,16 @@ client := grantex.NewClient("api-key",
 | `client.Events` | Stream |
 | `client.Usage` | Current, History |
 | `client.Domains` | Create, List, Verify, Delete |
-| `client.WebAuthn` | RegisterOptions, RegisterVerify, ListCredentials, DeleteCredential |
+| `client.WebAuthn` | CreateEnrollmentSession, RegisterOptions, RegisterVerify, ListCredentials, DeleteCredential |
+
+`client.WebAuthn.CreateEnrollmentSession` and
+`client.Anomalies.GetResponsePolicy` / `SetResponsePolicy` are available in
+repository source, not yet asserted as published in the Go proxy. Hosted
+enrollment requires `PASSKEY_ENROLLMENT_ENABLED=true` on the server and must be
+issued after your application authenticates the principal. The account-wide
+irregularity response requires `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`;
+`alert_only` stops this detector's automatic agent-grant revocation but not
+other security controls.
 | `client.Credentials` | Get, List, Verify, Present |
 | `client.Passports` | Issue, Get, List, Revoke |
 | `client.Vault` | Store, List, Get, Delete, Exchange |

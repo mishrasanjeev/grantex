@@ -1,0 +1,7 @@
+---
+openapi: get /passkey-enroll
+---
+
+The browser page uses `POST /v1/webauthn/enroll/options` and
+`POST /v1/webauthn/enroll/verify` to register one passkey with a valid ticket.
+The ticket is supplied in the URL fragment and removed from browser history.

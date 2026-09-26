@@ -251,6 +251,8 @@ export type {
   AnomalySeverity,
   Anomaly,
   DetectAnomaliesResponse,
+  IrregularityResponseMode,
+  IrregularityResponsePolicy,
   ListAnomaliesResponse,
   // SCIM
   ScimEmail,
@@ -304,6 +306,7 @@ export type {
   VerifyDomainResponse,
   // WebAuthn / FIDO
   WebAuthnRegistrationOptions,
+  WebAuthnEnrollmentSession,
   WebAuthnRegistrationVerifyParams,
   WebAuthnCredential,
   ListWebAuthnCredentialsResponse,

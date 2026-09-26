@@ -617,6 +617,14 @@ export interface DetectAnomaliesResponse {
   detectedAt: string;
   total: number;
   anomalies: Anomaly[];
+  responseMode?: 'alert_only' | 'revoke_agent_grants';
+  autoRevokedGrants?: number;
+}
+
+export type IrregularityResponseMode = 'alert_only' | 'revoke_agent_grants';
+
+export interface IrregularityResponsePolicy {
+  mode: IrregularityResponseMode;
 }
 
 export interface ListAnomaliesResponse {
@@ -1043,6 +1051,11 @@ export interface VerifyDomainResponse {
 export interface WebAuthnRegistrationOptions {
   challengeId: string;
   publicKey: Record<string, unknown>;
+}
+
+export interface WebAuthnEnrollmentSession {
+  enrollmentUrl: string;
+  expiresAt: string;
 }
 
 export interface WebAuthnRegistrationVerifyParams {

@@ -20,11 +20,19 @@ function err(status: number, code: string, msg: string) {
   });
 }
 
-import { listWebAuthnCredentials, deleteWebAuthnCredential } from '../webauthn';
+import { createEnrollmentSession, listWebAuthnCredentials, deleteWebAuthnCredential } from '../webauthn';
 
 describe('webauthn', () => {
   beforeEach(() => {
     mockFetch.mockReset();
+  });
+
+  it('creates a short-lived enrollment link using developer authentication', async () => {
+    ok({ enrollmentUrl: 'https://grantex.dev/passkey-enroll#ticket=example', expiresAt: '2026-09-26T12:00:00Z' }, 201);
+    const result = await createEnrollmentSession('person_1', 'areq_123');
+    expect(result.enrollmentUrl).toContain('/passkey-enroll#ticket=');
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/webauthn/enrollment-sessions',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ principalId: 'person_1', authRequestId: 'areq_123' }) }));
   });
 
   // ── listWebAuthnCredentials ───────────────────────────────────────────

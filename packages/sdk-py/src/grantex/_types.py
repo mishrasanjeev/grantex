@@ -952,6 +952,8 @@ class DetectAnomaliesResponse:
     detected_at: str
     total: int
     anomalies: tuple[Anomaly, ...]
+    response_mode: str = "revoke_agent_grants"
+    auto_revoked_grants: int = 0
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "DetectAnomaliesResponse":
@@ -959,6 +961,8 @@ class DetectAnomaliesResponse:
             detected_at=data["detectedAt"],
             total=data["total"],
             anomalies=tuple(Anomaly.from_dict(a) for a in data.get("anomalies", [])),
+            response_mode=data.get("responseMode", "revoke_agent_grants"),
+            auto_revoked_grants=data.get("autoRevokedGrants", 0),
         )
 
 
@@ -1845,6 +1849,15 @@ class GrantexStreamEvent:
 
 
 # ─── WebAuthn / FIDO ─────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class WebAuthnEnrollmentSession:
+    enrollment_url: str
+    expires_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "WebAuthnEnrollmentSession":
+        return cls(enrollment_url=data["enrollmentUrl"], expires_at=data["expiresAt"])
 
 
 @dataclass(frozen=True)

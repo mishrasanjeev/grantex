@@ -35,6 +35,23 @@ def client() -> Grantex:
 
 
 @respx.mock
+def test_create_enrollment_session(client: Grantex) -> None:
+    route = respx.post("https://api.grantex.dev/v1/webauthn/enrollment-sessions").mock(
+        return_value=httpx.Response(201, json={
+            "enrollmentUrl": "https://grantex.dev/passkey-enroll#ticket=secret",
+            "expiresAt": "2026-03-01T00:10:00Z",
+        })
+    )
+    result = client.webauthn.create_enrollment_session(
+        principal_id="user_abc123", auth_request_id="areq_01"
+    )
+    assert result.enrollment_url.endswith("#ticket=secret")
+    assert json.loads(route.calls[0].request.content) == {
+        "principalId": "user_abc123", "authRequestId": "areq_01"
+    }
+
+
+@respx.mock
 def test_register_options(client: Grantex) -> None:
     route = respx.post("https://api.grantex.dev/v1/webauthn/register/options").mock(
         return_value=httpx.Response(200, json=MOCK_REGISTRATION_OPTIONS)

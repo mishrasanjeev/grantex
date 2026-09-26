@@ -195,6 +195,8 @@ export const config = {
   fidoRpId: optional('FIDO_RP_ID', 'grantex.dev'),
   fidoRpName: optional('FIDO_RP_NAME', 'Grantex'),
   fidoOrigin: optional('FIDO_ORIGIN', 'https://grantex.dev'),
+  get passkeyEnrollmentEnabled() { return process.env['PASSKEY_ENROLLMENT_ENABLED'] === 'true'; },
+  get irregularityResponsePolicyEnabled() { return process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'] === 'true'; },
   // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
   ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
   // CORS: comma-separated list of browser origins allowed to call the API
@@ -343,6 +345,10 @@ export function validateConfig(): void {
   if (config.policyBackend === 'cedar' && (!config.cedarUrl || !isHttpUrl(config.cedarUrl))) {
     errors.push('CEDAR_URL must be a valid HTTP or HTTPS URL when POLICY_BACKEND=cedar');
   }
+  if (config.passkeyEnrollmentEnabled) {
+    const problem = passkeyOriginConfigError(config.fidoOrigin, config.fidoRpId, process.env['NODE_ENV'] === 'production');
+    if (problem) errors.push(problem);
+  }
 
   if (errors.length > 0) {
     console.error(
@@ -350,4 +356,21 @@ export function validateConfig(): void {
     );
     process.exit(1);
   }
+}
+
+export function passkeyOriginConfigError(origin: string, rpId: string, production: boolean): string | null {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return 'FIDO_ORIGIN must be a canonical HTTP(S) origin';
+  }
+  if (origin !== url.origin || url.username || url.password ||
+      (url.protocol !== 'https:' && !(url.protocol === 'http:' && url.hostname === 'localhost' && !production))) {
+    return 'FIDO_ORIGIN must be a canonical HTTPS origin (HTTP localhost is development-only)';
+  }
+  if (!rpId || (url.hostname !== rpId && !url.hostname.endsWith(`.${rpId}`))) {
+    return 'FIDO_RP_ID must equal FIDO_ORIGIN host or be its parent DNS suffix';
+  }
+  return null;
 }

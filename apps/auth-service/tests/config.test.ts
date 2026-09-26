@@ -2,10 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   parseIntegerSetting,
   parsePolicyBackend,
+  passkeyOriginConfigError,
   parseTrustProxySetting,
 } from '../src/config.js';
 
 describe('configuration parsing', () => {
+  it('validates the hosted passkey origin and relying-party binding', () => {
+    expect(passkeyOriginConfigError('https://grantex.dev', 'grantex.dev', true)).toBeNull();
+    expect(passkeyOriginConfigError('https://login.example.com', 'example.com', true)).toBeNull();
+    expect(passkeyOriginConfigError('http://localhost:3001', 'localhost', false)).toBeNull();
+    expect(passkeyOriginConfigError('http://localhost:3001', 'localhost', true)).toMatch(/HTTPS/);
+    expect(passkeyOriginConfigError('https://example.com/consent', 'example.com', true)).toMatch(/canonical/);
+    expect(passkeyOriginConfigError('https://example.com', 'evil.example', true)).toMatch(/FIDO_RP_ID/);
+  });
   it('accepts bounded integer settings', () => {
     expect(parseIntegerSetting('PORT', '3001', 1, 65_535)).toBe(3001);
     expect(parseIntegerSetting('LIMIT', '1', 1, 100)).toBe(1);

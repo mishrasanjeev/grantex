@@ -15,8 +15,10 @@ func TestAnomaliesDetect(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(DetectAnomaliesResponse{
-			DetectedAt: "2026-03-01T00:00:00Z",
-			Total:      1,
+			DetectedAt:        "2026-03-01T00:00:00Z",
+			Total:             1,
+			ResponseMode:      "alert_only",
+			AutoRevokedGrants: 0,
 			Anomalies: []Anomaly{{
 				ID:          "anom-1",
 				Type:        "rate_spike",
@@ -38,6 +40,9 @@ func TestAnomaliesDetect(t *testing.T) {
 	}
 	if result.Anomalies[0].Type != "rate_spike" {
 		t.Errorf("expected rate_spike, got %s", result.Anomalies[0].Type)
+	}
+	if result.ResponseMode != "alert_only" || result.AutoRevokedGrants != 0 {
+		t.Errorf("unexpected response policy result: %+v", result)
 	}
 }
 
@@ -111,5 +116,36 @@ func TestAnomaliesAcknowledge(t *testing.T) {
 	}
 	if anom.AcknowledgedAt == nil {
 		t.Error("expected acknowledgedAt to be set")
+	}
+}
+
+func TestIrregularityResponsePolicy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/irregularities/response-policy" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method == http.MethodPatch {
+			var body map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body["mode"] != "alert_only" {
+				t.Errorf("unexpected mode: %s", body["mode"])
+			}
+		}
+		json.NewEncoder(w).Encode(IrregularityResponsePolicy{Mode: "alert_only"})
+	}))
+	defer server.Close()
+	client := NewClient("test-key", WithBaseURL(server.URL))
+	policy, err := client.Anomalies.SetResponsePolicy(context.Background(), "alert_only")
+	if err != nil || policy.Mode != "alert_only" {
+		t.Fatalf("unexpected policy: %+v, %v", policy, err)
+	}
+	policy, err = client.Anomalies.GetResponsePolicy(context.Background())
+	if err != nil || policy.Mode != "alert_only" {
+		t.Fatalf("unexpected policy: %+v, %v", policy, err)
+	}
+	if _, err := client.Anomalies.SetResponsePolicy(context.Background(), "invalid"); err == nil {
+		t.Fatal("expected invalid mode to fail")
 	}
 }

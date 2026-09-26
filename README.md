@@ -698,12 +698,12 @@ grantex sso enforce --enable
 
 ## FIDO2 / WebAuthn
 
-Grantex supports passkey-based human presence verification using the FIDO2/WebAuthn standard. When enabled, end-users prove they are physically present during the consent flow by authenticating with a passkey (biometric, security key, or platform authenticator). This raises the assurance level of every grant from "user clicked approve" to "user was cryptographically verified."
+Grantex supports passkey-based human presence verification using FIDO2/WebAuthn. Live-mode consent requires a passkey assertion; sandbox-mode accounts can opt in with `fidoRequired: true`. The assertion confirms use of a registered credential during the consent flow.
 
 ### How It Works
 
-1. **Developer enables FIDO** — Set `fidoRequired: true` on your developer profile via `PATCH /v1/me`
-2. **User registers a passkey** — During the first consent flow, the user registers a FIDO2 credential (fingerprint, Face ID, YubiKey, etc.)
+1. **Developer configures FIDO** — Live mode already requires it; set `fidoRequired: true` via `PATCH /v1/me` to require it in sandbox mode too.
+2. **Application enrolls the customer** — After authenticating the customer, the application issues a one-use hosted enrollment link for their exact principal ID. The consent URL alone cannot register a passkey.
 3. **User authenticates on consent** — On subsequent authorization requests, the user completes a WebAuthn assertion challenge instead of a simple button click
 4. **FIDO evidence embedded in grants** — The assertion result is recorded in the grant and can be embedded in Verifiable Credentials as cryptographic proof of human presence
 
@@ -713,11 +713,11 @@ Grantex supports passkey-based human presence verification using the FIDO2/WebAu
 // Enable FIDO for your developer account
 await grantex.updateSettings({ fidoRequired: true, fidoRpName: 'My App' });
 
-// Register a passkey for an end-user (called from the browser)
-const options = await grantex.webauthn.registerOptions({ principalId: 'user_abc123' });
-// Pass options to navigator.credentials.create() in the browser
-const credential = await navigator.credentials.create({ publicKey: options });
-await grantex.webauthn.registerVerify({ challengeId: options.challengeId, response: credential });
+// Server-side, after authenticating the end customer:
+const { enrollmentUrl } = await grantex.webauthn.createEnrollmentSession({
+  principalId: authenticatedCustomer.grantexPrincipalId,
+});
+// Show the one-use link only to that customer. The hosted page handles WebAuthn.
 
 // List and manage credentials
 const creds = await grantex.webauthn.listCredentials('user_abc123');
@@ -726,20 +726,16 @@ await grantex.webauthn.deleteCredential(credentialId);
 
 ```python
 # Enable FIDO for your developer account
-from grantex import UpdateDeveloperSettingsParams, WebAuthnRegistrationVerifyParams
+from grantex import UpdateDeveloperSettingsParams
 
 client.update_settings(UpdateDeveloperSettingsParams(
     fido_required=True,
     fido_rp_name="My App",
 ))
 
-# Register a passkey (server-side portion)
-options = client.webauthn.register_options(principal_id="user_abc123")
-# Browser performs navigator.credentials.create() and sends response back
-result = client.webauthn.register_verify(WebAuthnRegistrationVerifyParams(
-    challenge_id=options.challenge_id,
-    response=credential_response,
-))
+# After your app authenticates the customer, issue a one-use hosted link.
+session = client.webauthn.create_enrollment_session(principal_id="user_abc123")
+enrollment_url = session.enrollment_url
 
 # List and manage credentials
 creds = client.webauthn.list_credentials("user_abc123")
@@ -752,11 +748,19 @@ client.webauthn.delete_credential(credential_id)
 |--------|----------|-------------|
 | `POST` | `/v1/webauthn/register/options` | Generate passkey registration options |
 | `POST` | `/v1/webauthn/register/verify` | Verify registration and store credential |
+| `POST` | `/v1/webauthn/enrollment-sessions` | Issue a one-use hosted enrollment link (authenticated) |
+| `GET` | `/passkey-enroll` | Hosted browser enrollment (feature-gated) |
+| `POST` | `/v1/webauthn/enroll/options` | Ticket-bound hosted registration options |
+| `POST` | `/v1/webauthn/enroll/verify` | Verify the passkey and consume the ticket |
 | `GET` | `/v1/webauthn/credentials` | List WebAuthn credentials for a principal |
 | `DELETE` | `/v1/webauthn/credentials/:id` | Delete a credential |
 | `POST` | `/v1/webauthn/assert/options` | Generate assertion options for consent |
 | `POST` | `/v1/webauthn/assert/verify` | Verify assertion during consent |
 | `PATCH` | `/v1/me` | Update developer settings (FIDO config) |
+
+Hosted enrollment requires `PASSKEY_ENROLLMENT_ENABLED=true` and a correctly configured HTTPS `FIDO_ORIGIN`/`FIDO_RP_ID`; the server feature is off by default. Live-mode consent requires an existing passkey, with no weaker fallback. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) for the customer identity-binding and one-use link requirements. SDK methods shown above describe repository source; verify your installed package version includes them before use.
+
+For a production rollout, deploy the auth service and the `/passkey-enroll` hosting rewrite before enabling the flag. Then run `Production Passkey and Irregularity E2E` from GitHub Actions. That test creates an isolated live account, enrolls a virtual passkey, approves consent, records 51 audit entries, verifies alert-only does not revoke its grant, and verifies the revoke mode does. It leaves the test account and audit records in production; do not run it against a customer account.
 
 </details>
 
@@ -1539,6 +1543,8 @@ curl -s -X POST http://localhost:3001/v1/token \
 ```
 
 **Developer portal** is available at [grantex.dev/dashboard](https://grantex.dev/dashboard) — sign up or enter an API key to manage agents, grants, policies, anomalies, compliance exports, and billing from the browser.
+
+**Account settings for live consent and irregularities:** The Billing page shows your account's actual plan. The source limits are 1,000 active grants on Free, 50,000 on Pro, and unlimited on Enterprise, counted across the developer account rather than per agent. Check the deployed account with authenticated `GET /v1/billing/subscription`; an agent ID alone cannot reveal its plan. The Irregularities page offers an account-wide `alert_only` response to findings from `POST /v1/anomalies/detect` when `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`. Without that server flag, the detector retains its existing agent-wide revocation of active grants on high/critical findings. Alert-only preserves alerts and does not bypass manual revocation or independent security gates. See the [setup guide](https://docs.grantex.dev/guides/anomaly-detection-setup). Server availability depends on deployment and rollout flags; the new SDK methods remain repository-source additions until separately published to their registries.
 
 For local development, the auth service also serves a lightweight dashboard at `http://localhost:3001/dashboard`.
 

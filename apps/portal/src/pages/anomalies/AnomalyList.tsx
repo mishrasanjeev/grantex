@@ -3,12 +3,16 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   listAlerts,
   getMetrics,
+  getIrregularityResponsePolicy,
+  setIrregularityResponsePolicy,
+  type IrregularityResponseMode,
   acknowledgeAlert,
   resolveAlert,
   type AnomalyAlert,
   type AnomalyMetrics,
 } from '../../api/anomalies';
 import { revokeGrant } from '../../api/grants';
+import { ApiError } from '../../api/client';
 import { useToast } from '../../store/toast';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -46,6 +50,9 @@ export function AnomalyList() {
   const [severityFilter, setSeverityFilter] = useState<string>('');
   const [revokeTarget, setRevokeTarget] = useState<AnomalyAlert | null>(null);
   const [revoking, setRevoking] = useState(false);
+  const [responseMode, setResponseMode] = useState<IrregularityResponseMode | null>(null);
+  const [pendingMode, setPendingMode] = useState<IrregularityResponseMode | null>(null);
+  const [policyBusy, setPolicyBusy] = useState(false);
   const { show } = useToast();
   const navigate = useNavigate();
 
@@ -71,6 +78,27 @@ export function AnomalyList() {
     setLoading(true);
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    getIrregularityResponsePolicy().then(({ mode }) => setResponseMode(mode)).catch((error: unknown) => {
+      if (!(error instanceof ApiError && error.status === 404)) show('Could not load response policy', 'error');
+    });
+  }, [show]);
+
+  async function applyPolicy() {
+    if (!pendingMode) return;
+    setPolicyBusy(true);
+    try {
+      const { mode } = await setIrregularityResponsePolicy(pendingMode);
+      setResponseMode(mode);
+      setPendingMode(null);
+      show('Response policy updated', 'success');
+    } catch {
+      show('Could not update response policy', 'error');
+    } finally {
+      setPolicyBusy(false);
+    }
+  }
 
   async function handleAcknowledge(alert: AnomalyAlert) {
     try {
@@ -145,6 +173,22 @@ export function AnomalyList() {
       </div>
 
       {/* Metrics row */}
+      {responseMode && (
+        <section className="border-y border-gx-border py-4 mb-5" aria-label="Irregularity response policy">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-gx-text">Response to high-severity irregularities</h2>
+              <p className="text-xs text-gx-muted mt-1">Automatic revocation affects every active grant for the implicated agent.</p>
+            </div>
+            <div className="flex gap-2" role="group" aria-label="Response mode">
+              <Button size="sm" variant={responseMode === 'alert_only' ? 'primary' : 'secondary'}
+                onClick={() => setPendingMode('alert_only')} disabled={policyBusy}>Alert only</Button>
+              <Button size="sm" variant={responseMode === 'revoke_agent_grants' ? 'primary' : 'secondary'}
+                onClick={() => setPendingMode('revoke_agent_grants')} disabled={policyBusy}>Revoke agent grants</Button>
+            </div>
+          </div>
+        </section>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         {/* Severity counts */}
         <Card className="col-span-1">
@@ -345,6 +389,12 @@ export function AnomalyList() {
         variant="danger"
         loading={revoking}
       />
+      <ConfirmDialog open={pendingMode !== null} onClose={() => setPendingMode(null)}
+        onConfirm={applyPolicy} loading={policyBusy} title="Change response policy"
+        message={pendingMode === 'alert_only'
+          ? 'High-severity irregularities will raise alerts but will no longer automatically revoke grants.'
+          : 'A high-severity irregularity will automatically revoke every active grant for its agent.'}
+        confirmLabel="Change policy" variant="primary" />
     </div>
   );
 }

@@ -587,6 +587,7 @@
             "group": "Anomalies",
             "pages": [
               "api-reference/anomalies/run-anomaly-detection",
+              "api-reference/anomalies/response-policy",
               "api-reference/anomalies/list-detected-anomalies",
               "api-reference/anomalies/acknowledge-an-anomaly",
               "api-reference/anomalies/list-alerts",
@@ -668,6 +669,8 @@
             "group": "WebAuthn / FIDO",
             "pages": [
               "api-reference/webauthn/generate-registration-options",
+              "api-reference/webauthn/create-enrollment-session",
+              "api-reference/webauthn/hosted-enrollment",
               "api-reference/webauthn/verify-registration",
               "api-reference/webauthn/list-credentials",
               "api-reference/webauthn/delete-credential",

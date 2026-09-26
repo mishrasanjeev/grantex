@@ -111,7 +111,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/auth-service/package-lock.json
       - run: npm ci
-      - name: Install TypeScript SDK dependencies (the decision-grant browser test imports the SDK source)
+      - name: Install TypeScript SDK dependencies for browser E2E
         working-directory: packages/sdk-ts
         run: npm ci
       - name: Typecheck
@@ -124,9 +124,9 @@ jobs:
       - name: Install the Python SDK for the decision-grant browser test
         working-directory: packages/sdk-py
         run: pip install -e .
-      - name: Install Chromium for the decision-grant browser test
+      - name: Install Chromium for browser E2E
         run: npx playwright install --with-deps chromium
-      - name: Test decision grants end to end in Chromium (browser sign-in and approval, SDK enforce())
+      - name: Test decision grants and passkey enrollment end to end in Chromium
         env:
           GRANTEX_E2E_PYTHON: python
         run: npm run test:e2e
