@@ -76,8 +76,11 @@ in CI and the owner has approved the runbook for turning it on.
 
 ## Changes and verification
 
+- Work on a branch off `main`, never on `main` itself, with one pull request per concern.
+- Write commit messages as [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `spec:`, `build:`), as `CONTRIBUTING.md` asks.
+- Changes to `SPEC.md` follow the RFC process in `CONTRIBUTING.md`.
 - Add a forward-only database migration for every auth-service schema change, with a rollout and backfill path.
 - Test denial paths, tenant isolation, replay, concurrency, and token expiry when changing authority behavior.
 - Run the affected package's typecheck and tests. Run `make check` and `make test` for shared protocol changes; use a disposable Postgres instance for database integration tests.
-- Keep code examples backed by executable tests and document user-visible changes in the changelog.
+- Keep code examples backed by executable tests, and add a `CHANGELOG.md` entry under `Unreleased` for user-visible changes.
 - Keep `release-status.json` and the READMEs describing what is published, not what is in the tree.

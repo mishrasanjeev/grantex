@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### One engineering guide for every contributor
+- `AGENTS.md` is the repository's engineering guide, and the other guide file
+  in the root carries the same text. It sets out the hard rules (no tool
+  attribution in commits, branches or docs; vendor-neutral provider
+  interfaces; house terminology; no new public exposure; synthetic data;
+  placeholder secrets; standards cited from their current text; new
+  behaviour behind default-off flags, since a merge to `main` deploys the
+  auth service) next to the existing security and verification conventions,
+  branch-per-change and Conventional Commits.
+
 ### Integration tests keep off the shared database
 - The auth-service suite fails if any test file created tables in the shared
   integration database (`AUDIT_INTEGRATION_DATABASE_URL`) rather than a
