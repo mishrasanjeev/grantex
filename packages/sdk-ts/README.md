@@ -9,6 +9,13 @@ TypeScript SDK for the [Grantex](https://grantex.dev) delegated authorization pr
 
 ## Installation
 
+**Version 0.7.1:** exposes the signed WebAuthn evidence reference on verified
+grants and the `webauthnVerified` VC attestation response. A reference is not
+the raw assertion or a current revocation check; verify the issuer, RP ID,
+origin, evidence digest, and current credential status. The server controls
+issuance separately with `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED`; see the
+[passkey guide](https://docs.grantex.dev/features/fido-webauthn).
+
 **Version 0.7.0:** adds hosted passkey enrollment sessions and
 account-level irregularity response policy methods. The server must enable the
 corresponding feature flags; this SDK does not register a passkey without an
@@ -19,15 +26,8 @@ the automatic 402/payment/retry flow. Confirm the published SDK version in
 [Release Status](https://docs.grantex.dev/release-status) before installing.
 See [Base custody setup](https://docs.grantex.dev/guides/base-usdc-custody).
 
-The repository source includes a typed signed WebAuthn evidence reference on
-verified grants and the `webauthnVerified` VC attestation field. Published
-`0.7.0` predates these types. The server controls issuance separately with
-`PORTABLE_WEBAUTHN_EVIDENCE_ENABLED`; a signed grant reference is not the raw
-assertion, and online status or a fresh VC status list is still needed for
-revocation. See the [passkey guide](https://docs.grantex.dev/features/fido-webauthn).
-
 ```bash
-npm install @grantex/sdk@0.7.0
+npm install @grantex/sdk@0.7.1
 ```
 
 ## Quick Start
@@ -502,8 +502,7 @@ expose a compact `webauthnEvidence` reference. Request
 `{ valid, vcId?, payload?, revoked?, expired?, error?, webauthnVerified? }`.
 Verify the issuer and revocation status, pin the expected RP ID/origin, and
 match the evidence digest to the grant reference. The raw credential public
-key can correlate VC presentations. This source capability is not in the
-currently published SDK until a subsequent release.
+key can correlate VC presentations.
 
 Refresh tokens are single-use and rotate on every accepted refresh. If a response is lost after commit, retry the same previous refresh token and idempotency key. The SDK retains an omitted key for five minutes in the current process; persist an explicit `idempotencyKey` with the old token when recovery must survive restart or failover. Grantex returns the already-rotated pair without extending `expiresAt`; after grant expiry, re-authorize.
 

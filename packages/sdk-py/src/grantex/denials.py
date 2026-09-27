@@ -167,6 +167,9 @@ class DecisionSubReason:
     """The case changed (new case version) after the decision was approved."""
     WRONG_CASE = "wrong_case"
     """The grant approves an action on another case."""
+    WRONG_AGENT = "wrong_agent"
+    """The decision was requested for another agent or grant, or the caller did
+    not say which agent and grant it acts for (auth service only)."""
     STEP_UP_REQUIRED = "step_up_required"
     """The approver's authentication was not step-up (auth service only)."""
     REVOKED = "revoked"
