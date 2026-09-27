@@ -50,3 +50,22 @@ groups:
             Expected during a rehearsal or an incident; otherwise find the stop in the auth
             service logs (alert=emergency_stop) and in GET /v1/emergency-stops, and page the
             on-call owner.
+      - alert: GrantexContainmentLimiterFailingOpen
+        expr: sum(increase(grantex_rate_limit_decisions_total{bucket="containment",outcome=~"local_.*"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Revocations are being rate limited per instance because Redis is unreachable
+          description: >-
+            Revoking and the emergency stop are still served, counted in each instance's memory
+            against the containment ceiling instead of the shared Redis counter. Every other
+            standard API-key route is answering 503 RATE_LIMIT_UNAVAILABLE. Restore Redis.
+      - alert: GrantexRevocationStatusLimiterUnavailable
+        expr: sum(increase(grantex_rate_limit_decisions_total{bucket="status",outcome="unavailable"}[5m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: Revocation feed and status reads are refused because the rate limiter is unavailable
+          description: >-
+            The feed and status endpoints answer 503 RATE_LIMIT_UNAVAILABLE, so SDK clients in
+            feed or online mode fail closed and deny calls. Check Redis.

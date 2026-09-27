@@ -67,7 +67,9 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // DELETE /v1/grants/:id  (revoke)
-  app.delete<{ Params: { id: string } }>('/v1/grants/:id', async (request, reply) => {
+  // Containment: counted apart from the plan, and not refused by a limiter
+  // outage (plugins/dynamicRateLimit.ts).
+  app.delete<{ Params: { id: string } }>('/v1/grants/:id', { config: { rateLimitClass: 'containment' } }, async (request, reply) => {
     const result = await revokeGrantCascade(request.params.id, request.developer.id);
 
     if (!result.revoked) {

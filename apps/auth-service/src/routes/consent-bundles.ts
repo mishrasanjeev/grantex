@@ -593,10 +593,12 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
     },
   );
 
-  // GET /v1/consent-bundles/:bundleId/revocation-status — Check revocation status
+  // GET /v1/consent-bundles/:bundleId/revocation-status — Check revocation status.
+  // Counted in the revocation-status bucket, not the plan
+  // (plugins/dynamicRateLimit.ts).
   app.get<{ Params: { bundleId: string } }>(
     '/v1/consent-bundles/:bundleId/revocation-status',
-    { config: { rateLimit: { max: 100, timeWindow: '1 minute' } } },
+    { config: { rateLimit: { max: 100, timeWindow: '1 minute' }, rateLimitClass: 'status' } },
     async (request, reply) => {
       const { bundleId } = request.params;
       const developerId = request.developer.id;
@@ -839,10 +841,12 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
     },
   );
 
-  // POST /v1/consent-bundles/:bundleId/revoke — Revoke a bundle
+  // POST /v1/consent-bundles/:bundleId/revoke — Revoke a bundle. Containment:
+  // counted apart from the plan, and not refused by a limiter outage
+  // (plugins/dynamicRateLimit.ts).
   app.post<{ Params: { bundleId: string }; Body: { revokeGrant?: boolean } }>(
     '/v1/consent-bundles/:bundleId/revoke',
-    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { config: { rateLimit: { max: 20, timeWindow: '1 minute' }, rateLimitClass: 'containment' } },
     async (request, reply) => {
       const { bundleId } = request.params;
       const revokeGrant = request.body?.revokeGrant ?? false;

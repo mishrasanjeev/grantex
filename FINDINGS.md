@@ -324,7 +324,7 @@ the pull request that references it.
   mid-task. Tracked here so "the incident control does not stop the incident"
   stays visible.
 
-## G-23 — Revoking during an incident is rate-limited like ordinary traffic
+## G-23 — Revoking during an incident is rate-limited like ordinary traffic (fixed)
 
 - **Found:** review of the propagation measurement (PRD G-6), 2026-09-21.
 - **What:** the plan limiter counts `DELETE /v1/grants/:id` and the emergency
@@ -345,6 +345,45 @@ the pull request that references it.
   an unbounded revoke endpoint is still a way to make the database work.
 - **Impact:** slow containment, on the free plan only, and a misleading
   propagation measurement if the limiter is not accounted for.
+- **Fixed:** in the `fix/containment-rate-limits` change. Routes now declare
+  which per-developer bucket they draw on (`config.rateLimitClass`, read by
+  `plugins/dynamicRateLimit.ts`). Containment routes — `DELETE
+  /v1/grants/:id`, `POST /v1/tokens/revoke`, `POST /v1/emergency-stop`,
+  `POST /v1/passport/:id/revoke` and `POST /v1/consent-bundles/:id/revoke` —
+  share a bucket of 2,000 a minute on every plan, counted apart from the plan
+  quota. When Redis fails, or does not answer within 500 ms, they fail open
+  to an in-process count of the same size instead of the plan limiter's 503,
+  so a cache outage cannot block a revocation and the endpoint still has a
+  ceiling on each instance. Against a stopped Redis container a revoke
+  through the plugin was let through in 505 ms; without the 500 ms bound it
+  took 73.8 s for the counter to fail (see G-46). The revocation feed and
+  status reads (`/v1/revocations`, `/status`, `/stream` and a consent
+  bundle's `revocation-status`) moved to a status bucket of 6,000 a minute,
+  keep their per-address limits, and still fail closed. Every other route is
+  unchanged, including the 503. `grantex_rate_limit_decisions_total{bucket,
+  outcome}` counts each decision, and two alert rules watch it.
+  `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false` restores the old behaviour. There
+  is no `POST /v1/grants/:id/suspend`: suspension comes only from the event
+  bridge. DPDP consent withdrawal (with `revokeGrant: true`) and erasure
+  also mark grants revoked, and stay in the plan bucket, failing closed, on
+  purpose: they are compliance operations rather than the incident path,
+  they revoke only the grants their records name without the cascade (see
+  G-49), and erasure rewrites the principal's audit entries, a write that
+  should not run on a per-instance count during an outage. The guides send
+  an operator containing an incident to `DELETE /v1/grants/:id` and the
+  emergency stop.
+- **Shown by** `tests/containment-rate-limits.test.ts`, against the real
+  routes: a revoke with the plan exhausted, with the limiter down and with a
+  limiter that never answers; every containment route off the plan bucket;
+  feed and status reads off it; the containment ceiling. On the old code
+  those failed — 429 and 503 where a revoke now answers 204, and the plan
+  bucket counted where the containment or status bucket now is. The tests
+  that an ordinary route still answers 503, that resuming still uses the
+  plan, and that the feed keeps its per-address limits passed before and
+  after. Two more pin what the change leaves alone: DPDP withdrawal and
+  erasure still draw on the plan bucket and still answer 503.
+  `tests/dynamicRateLimit.test.ts` covers the plugin on its own, including
+  the in-process ceiling and the opt-out.
 
 ## G-24 — Postgres integration tests share one database, which flakes (fixed)
 
@@ -840,6 +879,116 @@ the pull request that references it.
 - **Fix:** require `agt` and `dev` on a pre-0.6 token too, in the 3.0 break
   list, after moving those tests and examples to tokens shaped like the auth
   service's (`spec/examples/grant-token-0.6.issued.json`).
+
+## G-45 — `DELETE /v1/grants/:id` cannot revoke a suspended grant
+
+- **Found:** containment rate-limit work (G-23), 2026-09-27.
+- **What:** `revokeGrantCascade` (`lib/revoke.ts`) updates only rows with
+  `status = 'active'`, for the root and for every descendant it walks. A grant
+  the event bridge suspended therefore cannot be revoked through the API:
+  `DELETE /v1/grants/:id` answers `404 Grant not found or already revoked`
+  and the grant stays `suspended`. A later `POST /v1/grants/:id/resume`
+  restores it — and everything suspended with it — to `active`. The same
+  walk stops at a suspended descendant, so revoking an active parent leaves a
+  suspended subtree beneath it suspended rather than revoked; that subtree
+  cannot be resumed while its parent is revoked (`ANCESTOR_INACTIVE`), so the
+  exposure is the grant revoked directly. The emergency stop does revoke
+  suspended grants, and says so in its runbook.
+- **Why it matters:** an operator who revokes a grant that is suspended
+  pending an investigation gets a 404 that reads like success ("already
+  revoked"), and the decision to end the grant is undone by the next resume.
+  Revoking is the irreversible action; it should win over a reversible one.
+- **Fix:** revoke `active` or `suspended` in both statements, drop the
+  grant's `grant_suspensions` bookkeeping in the same transaction (as the
+  emergency stop does), and answer 404 only when the grant does not exist or
+  is already revoked. It changes what an existing endpoint does, so it wants
+  its own flag and tests: revoke a suspended grant, revoke a parent over a
+  suspended child, and resume after either.
+
+## G-46 — A Redis outage holds requests for minutes instead of failing them
+
+- **Found:** containment rate-limit work (G-23), 2026-09-27, against a local
+  Redis container that was stopped mid-run.
+- **What:** `redis/client.ts` creates the client with ioredis defaults: an
+  offline queue, 20 retries per command and no command timeout. A stopped or
+  unreachable Redis does not refuse a command; the client queues it and
+  retries. Measured through the rate-limit plugin: an ordinary route took
+  107 s to reach its `503 RATE_LIMIT_UNAVAILABLE`, and a revocation took
+  73.8 s to reach the fail-open path, before G-23 bounded that one path at
+  500 ms. Every standard API-key request waits the same way, and so does the
+  response of every revocation, because `lib/revoke.ts`,
+  `lib/revocation/cascade.ts` and `POST /v1/tokens/revoke` await their
+  post-commit cache writes. The revocation is committed and on the feed
+  before that wait, so containment takes effect; the caller just does not
+  hear about it for minutes, and may retry.
+- **Fix:** give the client a command timeout and a bounded retry count (or
+  `enableOfflineQueue: false`) so an outage fails in well under a second,
+  and do not await best-effort cache writes on the response path. Both
+  change failure timing on every route, so they want their own change, a
+  flag, and a test against a stopped Redis.
+- **Impact:** availability during a Redis outage: requests pile up in
+  memory and hold connections instead of failing fast.
+
+## G-47 — A migration-runner unit test runs close to the 10s limit
+
+- **Found:** full auth-service runs during containment rate-limit work
+  (G-23), 2026-09-27, on a machine shared with other test stacks.
+- **What:** `tests/database-performance.test.ts` › "refuses to record a
+  concurrent-index file while its index is invalid" drives `runMigrations`
+  through all five lock-retry attempts, which sleep 3.75 s between them by
+  design (`LOCK_RETRY_BASE_MS` 250, doubling), on top of reading and hashing
+  every migration file. It has the suite's default 10-second limit. Across
+  seven runs it passed twice and timed out (10.0 s) five times, including a
+  run of that file alone on an unmodified checkout of `main`; with a
+  120-second limit the test alone took 20.5 s there.
+- **Fix:** give the test its own limit, as G-32 did for the signing-key
+  test, or make the backoff injectable so the test does not sleep for real.
+- **Impact:** a red run that says nothing about the change under test.
+
+## G-48 — A revocation-feed hub test gives the hub a fixed 300 ms
+
+- **Found:** full auth-service runs during containment rate-limit work
+  (G-23), 2026-09-27.
+- **What:** `tests/revocation-feed-postgres.integration.test.ts` › "reads a
+  full page of unsettled entries once, instead of spinning on it" subscribes,
+  calls `hub.pollNow`, then sleeps 300 ms and expects the page delivered.
+  `subscribe` starts the hub's first poll without awaiting it, and `pollNow`
+  returns at once while that poll is in flight (`feed.polling`), so the page
+  arrives only when the first poll finishes. On a loaded machine its queries
+  over the 1,001-entry backlog take longer than 300 ms and the test fails
+  with `expected +0 to be 1000`. It failed in two full runs on the G-23
+  change and passed in a full run on the unmodified base and when the file
+  runs alone (11/11); it uses neither HTTP nor the rate limiter.
+- **Fix:** wait for the page (`vi.waitFor` on `seen.length`, with a bound
+  well inside the test's 180 s limit) and keep the read-count assertion, or
+  have `pollNow` await a poll already in flight. A separate change.
+- **Impact:** a red full run that says nothing about the change under test.
+
+## G-49 — DPDP withdrawal and erasure revoke a grant without the cascade
+
+- **Found:** containment rate-limit work (G-23), 2026-09-27, by reading
+  `routes/dpdp.ts` beside `lib/revoke.ts`.
+- **What:** `POST /v1/dpdp/consent-records/:recordId/withdraw` with
+  `revokeGrant: true` and `POST /v1/dpdp/data-principals/:principalId/erasure`
+  revoke with a bare `UPDATE grants SET status = 'revoked'` on the grants
+  their consent records name. `revokeGrantCascade`, which `DELETE
+  /v1/grants/:id` uses, also revokes every delegated descendant in the same
+  transaction, revokes the credentials issued for those grants, releases
+  their wallet reservations, writes the revocation cache and emits
+  `grant.revoked`. The DPDP routes do none of that. The named grant stops
+  verifying, because token checks read its status from Postgres, and the
+  feed triggers record it; but a grant delegated from it keeps its own
+  `active` status and its tokens keep verifying, and a verifiable credential
+  bound to it is not revoked.
+- **Why it matters:** a data principal who withdraws consent, or asks for
+  erasure, expects every agent acting under that consent to stop, including
+  sub-agents it delegated to.
+- **Fix:** revoke through `revokeGrantCascade` (or the same statements in the
+  route's transaction) for each grant, and add tests that a delegated grant
+  and a bound credential are revoked by both routes. It changes what existing
+  endpoints do, so it wants its own flag.
+- **Impact:** delegated grants and credentials outlive a consent withdrawal
+  or erasure until they expire or are revoked directly.
 
 ## G-60 — The FastAPI enforcer and the Python Strands tool cannot pass an amount
 
