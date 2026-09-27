@@ -93,6 +93,53 @@ function checkRevocationCheck(mode: unknown): RevocationCheckMode {
   return mode;
 }
 
+function checkAudienceCheck(mode: unknown): 'on' | 'off' {
+  if (mode !== 'on' && mode !== 'off') {
+    throw new Error(`audienceCheck must be one of on, off, not ${JSON.stringify(mode)}`);
+  }
+  return mode;
+}
+
+function checkExpectedAudience(audience: unknown, audienceCheck: 'on' | 'off'): string | undefined {
+  if (audience === undefined) return undefined;
+  if (typeof audience !== 'string' || audience === '') {
+    throw new Error(`audience must be a non-empty string, not ${JSON.stringify(audience)}`);
+  }
+  // The check is off, so the audience would be ignored and tokens for other
+  // relying parties accepted: refuse the contradiction instead.
+  if (audienceCheck === 'off') throw new Error("audience cannot be set with audienceCheck: 'off'");
+  return audience;
+}
+
+/**
+ * The audience denial for a verified token, if any (RFC 7519 section 4.1.3).
+ * `aud` is a string or an array of strings (the verifier refuses anything
+ * else); the expected audience matches when it equals one of them exactly.
+ */
+function audienceDenial(
+  tokenAudience: string | string[] | undefined,
+  expected: string | undefined,
+): { reason: string; subReason: string; details: Record<string, unknown> } | undefined {
+  const audiences = tokenAudience === undefined ? [] : typeof tokenAudience === 'string' ? [tokenAudience] : [...tokenAudience];
+  if (expected === undefined) {
+    if (tokenAudience === undefined) return undefined;
+    // A token that names an audience is only for that relying party. A client
+    // that does not know its own audience cannot tell whether it is one of
+    // them, so it denies rather than accept a token meant elsewhere.
+    return {
+      reason: "The grant token is for a specific audience and this client has no expected audience; set audience (or audienceCheck: 'off').",
+      subReason: TokenSubReason.AUDIENCE_UNCONFIGURED,
+      details: { token_audience: audiences },
+    };
+  }
+  if (audiences.includes(expected)) return undefined;
+  return {
+    reason: `The grant token's audience does not include ${JSON.stringify(expected)}.`,
+    subReason: TokenSubReason.AUDIENCE_MISMATCH,
+    details: { expected_audience: expected, token_audience: audiences },
+  };
+}
+
 function checkCapsMode(mode: unknown): CapsMode {
   if (!(CAPS_MODES as readonly unknown[]).includes(mode)) {
     throw new Error(`capsMode must be one of ${CAPS_MODES.join(', ')}, not ${JSON.stringify(mode)}`);
@@ -131,6 +178,8 @@ export class Grantex {
   readonly #decisionsMode: 'enforce' | 'warn';
   readonly #decisionConsumer: DecisionConsumer;
   readonly #decisionAlgorithms: string[];
+  readonly #audienceCheck: 'on' | 'off';
+  readonly #audience: string | undefined;
 
   readonly agents: AgentsClient;
   readonly grants: GrantsClient;
@@ -216,6 +265,12 @@ export class Grantex {
       throw new Error('decisionAlgorithms must be a non-empty subset of RS256, ES256');
     }
     this.#decisionAlgorithms = algorithms;
+    // The grant token audience enforce() expects (RFC 7519 section 4.1.3). With
+    // audienceCheck 'on' (the default) a token that carries aud is denied unless
+    // its aud contains this value; 'off' ignores aud, as releases before the
+    // audience check did.
+    this.#audienceCheck = checkAudienceCheck(options.audienceCheck === undefined ? 'on' : options.audienceCheck);
+    this.#audience = checkExpectedAudience(options.audience, this.#audienceCheck);
     this.decisions = new DecisionsClient(this.#http);
     const decisions = this.decisions;
     this.#decisionConsumer = options.decisionConsumer ?? {
@@ -428,6 +483,9 @@ export class Grantex {
     const { grantToken, connector, tool, amount, caseId, costComponents, reserve = true, capsTenantId } = options;
     const capsMode = options.capsMode === undefined ? this.#capsMode : checkCapsMode(options.capsMode);
     const decisionsMode = options.decisionsMode === undefined ? this.#decisionsMode : checkDecisionsMode(options.decisionsMode);
+    const expectedAudience = options.audience === undefined
+      ? this.#audience
+      : checkExpectedAudience(options.audience, this.#audienceCheck);
     const base: Omit<EnforceResult, 'allowed' | 'reason'> = {
       grantId: '',
       agentDid: '',
@@ -471,6 +529,13 @@ export class Grantex {
     base.grantId = grant.grantId;
     base.agentDid = grant.agentDid;
     base.scopes = grant.scopes;
+
+    // 1a. Audience. Checked before revocation: a token meant for another
+    //     relying party is refused without asking the auth service about it.
+    if (this.#audienceCheck === 'on') {
+      const denial = audienceDenial(grant.audience, expectedAudience);
+      if (denial) return denied(denial.reason, DenialReason.TOKEN_INVALID, denial.subReason, denial.details);
+    }
 
     // 1b. Revocation. The token verifies offline whether or not the grant
     //     still stands, so this is the only place a revocation can be seen.

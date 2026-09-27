@@ -20,6 +20,7 @@ import { verifyGrantToken, GrantexTokenError } from '@grantex/sdk';
 import { proxyRequest } from '../src/proxy.js';
 import { createGatewayServer } from '../src/server.js';
 import type { GatewayConfig } from '../src/types.js';
+import { GRANT_TOKEN } from './tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -123,7 +124,7 @@ describe('createGatewayServer', () => {
     const response = await server.inject({
       method: 'POST',
       url: '/payments/intents',
-      headers: { authorization: 'Bearer token-without-payments' },
+      headers: { authorization: `Bearer ${GRANT_TOKEN}` },
     });
 
     expect(response.statusCode).toBe(403);
@@ -136,10 +137,10 @@ describe('createGatewayServer', () => {
     const response = await server.inject({
       method: 'GET',
       url: '/calendar/events',
-      headers: { authorization: 'Bearer valid-grant-token' },
+      headers: { authorization: `Bearer ${GRANT_TOKEN}` },
     });
 
-    expect(verifyGrantToken).toHaveBeenCalledWith('valid-grant-token', {
+    expect(verifyGrantToken).toHaveBeenCalledWith(GRANT_TOKEN, {
       jwksUri: CONFIG.jwksUri,
       requiredScopes: ['calendar:read'],
     });
@@ -153,13 +154,13 @@ describe('createGatewayServer', () => {
       method: 'POST',
       url: '/calendar/events',
       headers: {
-        authorization: 'Bearer valid-grant-token',
+        authorization: `Bearer ${GRANT_TOKEN}`,
         'content-type': 'application/json',
       },
       payload: { summary: 'Meeting' },
     });
 
-    expect(verifyGrantToken).toHaveBeenCalledWith('valid-grant-token', {
+    expect(verifyGrantToken).toHaveBeenCalledWith(GRANT_TOKEN, {
       jwksUri: CONFIG.jwksUri,
       requiredScopes: ['calendar:write'],
     });
@@ -171,7 +172,7 @@ describe('createGatewayServer', () => {
     const response = await server.inject({
       method: 'GET',
       url: '/calendar/events',
-      headers: { authorization: 'Bearer token' },
+      headers: { authorization: `Bearer ${GRANT_TOKEN}` },
     });
 
     expect(response.statusCode).toBe(500);
@@ -182,7 +183,7 @@ describe('createGatewayServer', () => {
     const response = await server.inject({
       method: 'DELETE',
       url: '/calendar/events/123',
-      headers: { authorization: 'Bearer token' },
+      headers: { authorization: `Bearer ${GRANT_TOKEN}` },
     });
 
     // No DELETE route configured for /calendar/**
@@ -216,7 +217,7 @@ describe('path handling', () => {
     const response = await server.inject({
       method: 'GET',
       url: '/calendar/events/report.v2.json',
-      headers: { authorization: 'Bearer token' },
+      headers: { authorization: `Bearer ${GRANT_TOKEN}` },
     });
 
     expect(response.statusCode).not.toBe(400);
@@ -252,7 +253,7 @@ describe('request body handling', () => {
       method: 'POST',
       url: '/calendar/events',
       headers: {
-        authorization: 'Bearer token',
+        authorization: `Bearer ${GRANT_TOKEN}`,
         'content-type': 'application/octet-stream',
       },
       payload: binary,
@@ -272,7 +273,7 @@ describe('request body handling', () => {
     await server.inject({
       method: 'POST',
       url: '/calendar/events',
-      headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${GRANT_TOKEN}`, 'content-type': 'application/json' },
       payload: raw,
     });
 
@@ -288,7 +289,7 @@ describe('request body handling', () => {
       method: 'POST',
       url: '/calendar/events',
       headers: {
-        authorization: 'Bearer token',
+        authorization: `Bearer ${GRANT_TOKEN}`,
         'content-type': 'application/x-www-form-urlencoded',
       },
       payload: raw,
@@ -302,7 +303,7 @@ describe('request body handling', () => {
     const response = await server.inject({
       method: 'POST',
       url: '/calendar/events',
-      headers: { authorization: 'Bearer token', 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${GRANT_TOKEN}`, 'content-type': 'application/json' },
       payload: '{not valid json',
     });
 

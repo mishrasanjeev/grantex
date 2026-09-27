@@ -773,3 +773,50 @@ the pull request that references it.
   publish a set the new default refuses. Owner: the TypeScript and Python SDK
   maintainers. Exit criterion: that major release ships with the default
   flipped, the explicit opt-out, and tests of both settings in both SDKs.
+
+## G-55 — Other grant token verifiers accept any `aud` when no audience is set
+
+- **Found:** adding the audience check to `enforce()`, `@grantex/gateway` and
+  `@grantex/adapters` (2026-09-27).
+- **What:** with no audience configured, these still accept a token that
+  carries `aud`, however it is set: `packages/express/src/middleware.ts`
+  (`audience` "leave undefined to skip audience check"),
+  `packages/fastapi/src/grantex_fastapi/_middleware.py`, and the standalone
+  `verifyGrantToken` / `verify_grant_token` in both SDKs (which pass
+  `verify_aud: False` or no `audience` to the JOSE library). A token requested
+  for one relying party is therefore accepted by every relying party that
+  uses these paths without an audience, while `enforce()`, the gateway and
+  the adapters now deny it (`audience_unconfigured`).
+- **Fix:** give each verifier the same `audience` / `audienceCheck` semantics
+  as `enforce()` (deny `aud` without a configured audience; exact match of one
+  value; `'off'` as the explicit opt-out), as a breaking change recorded in
+  `CHANGELOG.md`, and run `spec/examples/enforce-audience.json` against each.
+
+## G-56 — The gateway classifies token errors by substrings of their message
+
+- **Found:** reading `packages/gateway/src/server.ts` while adding the
+  audience check (2026-09-27).
+- **What:** a `GrantexTokenError` whose message contains `exp` anywhere
+  (for example "expected", "unexpected") is answered `TOKEN_EXPIRED`, and one
+  whose message contains `scope` anywhere (for example "Grant token claim
+  scope must be a string") is answered 403 `SCOPE_INSUFFICIENT` instead of 401
+  `TOKEN_INVALID`. `packages/express/src/middleware.ts` and
+  `packages/fastapi/src/grantex_fastapi/_middleware.py` use the same `exp`
+  test. The status stays a denial, but the code and status tell the client
+  the wrong remedy.
+- **Fix:** have the SDK verifiers raise typed errors (or a stable `code` on
+  `GrantexTokenError`) for expiry and missing scopes, and map those instead of
+  the message text.
+
+## G-57 — `grantex enforce test` cannot set the expected audience
+
+- **Found:** checking the callers of `enforce()` for the audience check
+  (2026-09-27).
+- **What:** `packages/cli/src/commands/enforce.ts` builds its client with only
+  `baseUrl` and `apiKey`. Once the CLI runs on an SDK release with the
+  audience check, every token that carries `aud` is reported as denied with
+  `audience_unconfigured`, and there is no flag to pass the audience or turn
+  the check off.
+- **Fix:** add `--audience <value>` (passed to `enforce()`) and
+  `--audience-check <on|off>` (passed to the client) to `grantex enforce test`,
+  with tests, and require an `@grantex/sdk` peer range that has the options.

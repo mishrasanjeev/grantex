@@ -8,6 +8,7 @@ vi.mock('@grantex/sdk', () => ({
 import { verifyGrantToken } from '@grantex/sdk';
 import { SalesforceAdapter } from '../../src/adapters/salesforce.js';
 import { GrantexAdapterError } from '../../src/errors.js';
+import { GRANT_TOKEN } from '../tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -36,7 +37,7 @@ describe('SalesforceAdapter', () => {
         ok: true, json: () => Promise.resolve(records),
       }));
 
-      const result = await adapter.queryRecords('grant-token', {
+      const result = await adapter.queryRecords(GRANT_TOKEN, {
         query: 'SELECT Id, Name FROM Account LIMIT 10',
       });
 
@@ -61,7 +62,7 @@ describe('SalesforceAdapter', () => {
         ok: true, json: () => Promise.resolve({ totalSize: 0, records: [] }),
       }));
 
-      await adapterSlash.queryRecords('grant-token', { query: 'SELECT Id FROM Account' });
+      await adapterSlash.queryRecords(GRANT_TOKEN, { query: 'SELECT Id FROM Account' });
 
       const url = vi.mocked(fetch).mock.calls[0]![0] as string;
       expect(url).not.toContain('.com//');
@@ -73,7 +74,7 @@ describe('SalesforceAdapter', () => {
         scopes: ['email:read'],
       });
 
-      await expect(adapter.queryRecords('token', { query: 'SELECT Id FROM Account' }))
+      await expect(adapter.queryRecords(GRANT_TOKEN, { query: 'SELECT Id FROM Account' }))
         .rejects.toThrow(GrantexAdapterError);
     });
 
@@ -94,7 +95,7 @@ describe('SalesforceAdapter', () => {
       }));
 
       try {
-        await adapter.queryRecords('token', { query: 'INVALID' });
+        await adapter.queryRecords(GRANT_TOKEN, { query: 'INVALID' });
         expect.fail('should throw');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('UPSTREAM_ERROR');
@@ -109,7 +110,7 @@ describe('SalesforceAdapter', () => {
         ok: true, json: () => Promise.resolve(created),
       }));
 
-      const result = await adapter.createRecord('token', {
+      const result = await adapter.createRecord(GRANT_TOKEN, {
         sobject: 'Account',
         fields: { Name: 'New Corp', Industry: 'Technology' },
       });
@@ -130,7 +131,7 @@ describe('SalesforceAdapter', () => {
         scopes: ['crm:read'],
       });
 
-      await expect(adapter.createRecord('token', {
+      await expect(adapter.createRecord(GRANT_TOKEN, {
         sobject: 'Account',
         fields: { Name: 'Test' },
       })).rejects.toThrow(GrantexAdapterError);

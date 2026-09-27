@@ -8,6 +8,7 @@ vi.mock('@grantex/sdk', () => ({
 import { verifyGrantToken } from '@grantex/sdk';
 import { GoogleDriveAdapter } from '../../src/adapters/google-drive.js';
 import { GrantexAdapterError } from '../../src/errors.js';
+import { GRANT_TOKEN } from '../tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -35,7 +36,7 @@ describe('GoogleDriveAdapter', () => {
         ok: true, json: () => Promise.resolve(files),
       }));
 
-      const result = await adapter.listFiles('grant-token');
+      const result = await adapter.listFiles(GRANT_TOKEN);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(files);
@@ -50,7 +51,7 @@ describe('GoogleDriveAdapter', () => {
         ok: true, json: () => Promise.resolve({ files: [] }),
       }));
 
-      await adapter.listFiles('grant-token', {
+      await adapter.listFiles(GRANT_TOKEN, {
         q: 'name contains "report"',
         pageSize: 25,
         fields: 'files(id,name)',
@@ -68,7 +69,7 @@ describe('GoogleDriveAdapter', () => {
         scopes: ['email:read'],
       });
 
-      await expect(adapter.listFiles('token'))
+      await expect(adapter.listFiles(GRANT_TOKEN))
         .rejects.toThrow(GrantexAdapterError);
     });
 
@@ -89,7 +90,7 @@ describe('GoogleDriveAdapter', () => {
       }));
 
       try {
-        await adapter.listFiles('token');
+        await adapter.listFiles(GRANT_TOKEN);
         expect.fail('should throw');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('UPSTREAM_ERROR');
@@ -104,7 +105,7 @@ describe('GoogleDriveAdapter', () => {
         ok: true, json: () => Promise.resolve(created),
       }));
 
-      const result = await adapter.uploadFile('token', {
+      const result = await adapter.uploadFile(GRANT_TOKEN, {
         name: 'upload.txt',
         mimeType: 'text/plain',
         content: 'Hello world',
@@ -123,7 +124,7 @@ describe('GoogleDriveAdapter', () => {
         ok: true, json: () => Promise.resolve({ id: 'f2' }),
       }));
 
-      await adapter.uploadFile('token', {
+      await adapter.uploadFile(GRANT_TOKEN, {
         name: 'report.pdf',
         mimeType: 'application/pdf',
         content: 'pdf-content',
@@ -142,7 +143,7 @@ describe('GoogleDriveAdapter', () => {
         scopes: ['files:read'],
       });
 
-      await expect(adapter.uploadFile('token', {
+      await expect(adapter.uploadFile(GRANT_TOKEN, {
         name: 'test.txt',
         mimeType: 'text/plain',
         content: 'data',

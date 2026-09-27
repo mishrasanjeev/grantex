@@ -186,7 +186,16 @@ A resource server validating a grant token MUST:
    algorithms, an unknown `kid` and a key of the other type are rejected.
 2. Check `typ` is `at+jwt`, `iss` is the configured issuer, and `exp` and
    `iat`.
-3. Check `aud` against its own identifier when it has one.
+3. Check `aud` against its own identifier when it has one. From the next
+   release, `enforce()` in the Python and TypeScript SDKs, `@grantex/gateway`
+   and `@grantex/adapters` do this by default: a token whose `aud` does not
+   contain the configured audience (or that has no `aud`) is denied with
+   `audience_mismatch`, and a token that carries `aud` when no audience is
+   configured is denied with `audience_unconfigured`. `aud` matches when the
+   expected audience equals one of its values exactly. `audience_check="off"`
+   / `audienceCheck: 'off'` restores the earlier behaviour, which ignored
+   `aud`. The shared cases are in
+   [`examples/enforce-audience.json`](examples/enforce-audience.json).
 4. Compare required scopes against `scope` split on spaces, exactly.
 5. When `cnf.jkt` is present, verify proof of possession of that key (RFC 9449).
    The SDK verifiers do not verify DPoP proofs. Verify the proof yourself and

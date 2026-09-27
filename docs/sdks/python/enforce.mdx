@@ -37,6 +37,19 @@ def enforce(
     connector: str,
     tool: str,
     amount: float | None = None,
+    *,  # the keyword-only arguments are from the next release
+    case_id: str | None = None,
+    cost_components: list[str] | None = None,
+    reserve: bool = True,
+    caps_mode: str | None = None,
+    caps_tenant_id: str | None = None,
+    decision_grants: Sequence[str] | None = None,
+    decision_action: DecisionAction | Mapping[str, Any] | None = None,
+    arguments: Mapping[str, Any] | None = None,
+    case_version: str | None = None,
+    decisions_mode: str | None = None,
+    revocation_check: str | None = None,
+    audience: str | None = None,
 ) -> EnforceResult
 ```
 
@@ -48,6 +61,7 @@ def enforce(
 | `connector` | `str` | Yes | The connector name to check against (e.g., `"salesforce"`, `"s3"`). Must match a loaded manifest. |
 | `tool` | `str` | Yes | The tool name to check (e.g., `"delete_contact"`, `"create_lead"`). Must be declared in the connector's manifest. |
 | `amount` | `float \| None` | No | Optional amount for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap. |
+| `audience` | `str \| None` | No | The grant token audience this call expects; overrides the client's `audience`. See [Grant token audience](#grant-token-audience). From the next release. |
 
 ### Response: `EnforceResult`
 
@@ -93,6 +107,57 @@ result = grantex.enforce(
 # result.allowed = False
 # result.reason = "amount 750 exceeds cap of 500 on tool:stripe:write:*:capped:500"
 ```
+
+### Grant token audience
+
+<Warning>
+  From the next release (not in `grantex` 0.6.0). This is a breaking change:
+  a grant token that carries an `aud` claim is denied unless the client
+  expects that audience. Tokens issued without an audience are unaffected.
+</Warning>
+
+A grant token requested with an `audience` carries it in the `aud` claim
+([RFC 7519 section 4.1.3](https://www.rfc-editor.org/rfc/rfc7519#section-4.1.3)):
+the token is only for that relying party. `enforce()` checks `aud` right after
+the signature, before revocation and scopes:
+
+| Token `aud` | Expected audience | Result |
+|---|---|---|
+| none | none | checked as before |
+| a string or an array of strings | none | denied: `token_invalid` / `audience_unconfigured` |
+| contains the expected audience | set | checked as before |
+| does not contain it, or no `aud` | set | denied: `token_invalid` / `audience_mismatch` |
+
+`aud` may be a string or an array of strings; it matches when the expected
+audience is one of its values, compared as exact strings (no case folding, no
+trailing-slash or prefix matching). The denial's `details` carry
+`token_audience` (a list) and, for `audience_mismatch`, `expected_audience`.
+
+Set the audience on the client, and override it for one call:
+
+```python
+grantex = Grantex(api_key="gx_...", audience="https://api.merchant.example")
+
+result = grantex.enforce(grant_token=token, connector="acme_kyb", tool="get_case")
+if result.sub_reason == "audience_mismatch":
+    print(result.details["token_audience"])
+
+# A tool served under a second audience
+result = grantex.enforce(
+    grant_token=token,
+    connector="acme_kyb",
+    tool="get_case",
+    audience="https://tools.merchant.example",
+)
+```
+
+| Client option | Type | Default | Description |
+|---|---|---|---|
+| `audience` | `str \| None` | `None` | The audience `enforce()` expects. A non-empty string. |
+| `audience_check` | `str` | `"on"` | `"on"` applies the check above. `"off"` ignores `aud`, as earlier releases did, and cannot be combined with `audience`. Any other value raises `ValueError`. |
+
+To keep the earlier behaviour while you find each service's audience, create
+the client with `audience_check="off"`; remove it once `audience` is set.
 
 ---
 

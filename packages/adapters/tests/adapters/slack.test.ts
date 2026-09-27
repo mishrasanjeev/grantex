@@ -8,6 +8,7 @@ vi.mock('@grantex/sdk', () => ({
 import { verifyGrantToken } from '@grantex/sdk';
 import { SlackAdapter } from '../../src/adapters/slack.js';
 import { GrantexAdapterError } from '../../src/errors.js';
+import { GRANT_TOKEN } from '../tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -35,7 +36,7 @@ describe('SlackAdapter', () => {
         ok: true, json: () => Promise.resolve(slackResp),
       }));
 
-      const result = await adapter.sendMessage('token', {
+      const result = await adapter.sendMessage(GRANT_TOKEN, {
         channel: 'C123',
         text: 'Hello from agent!',
       });
@@ -55,7 +56,7 @@ describe('SlackAdapter', () => {
         ok: true, json: () => Promise.resolve({ ok: true }),
       }));
 
-      await adapter.sendMessage('token', {
+      await adapter.sendMessage(GRANT_TOKEN, {
         channel: 'C123',
         text: 'Thread reply',
         thread_ts: '1234567890.123456',
@@ -71,7 +72,7 @@ describe('SlackAdapter', () => {
       }));
 
       try {
-        await adapter.sendMessage('token', { channel: 'C999', text: 'test' });
+        await adapter.sendMessage(GRANT_TOKEN, { channel: 'C999', text: 'test' });
         expect.fail('should throw');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('UPSTREAM_ERROR');
@@ -84,7 +85,7 @@ describe('SlackAdapter', () => {
         ...MOCK_GRANT, scopes: ['notifications:read'],
       });
 
-      await expect(adapter.sendMessage('token', {
+      await expect(adapter.sendMessage(GRANT_TOKEN, {
         channel: 'C123', text: 'test',
       })).rejects.toThrow(GrantexAdapterError);
     });
@@ -108,7 +109,7 @@ describe('SlackAdapter', () => {
         ok: true, json: () => Promise.resolve(slackResp),
       }));
 
-      const result = await adapter.listMessages('token', { channel: 'C123' });
+      const result = await adapter.listMessages(GRANT_TOKEN, { channel: 'C123' });
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(slackResp);
@@ -123,7 +124,7 @@ describe('SlackAdapter', () => {
         ok: true, json: () => Promise.resolve({ ok: true, messages: [] }),
       }));
 
-      await adapter.listMessages('token', {
+      await adapter.listMessages(GRANT_TOKEN, {
         channel: 'C123',
         limit: 20,
         oldest: '1000000000.000000',
@@ -142,7 +143,7 @@ describe('SlackAdapter', () => {
       }));
 
       try {
-        await adapter.listMessages('token', { channel: 'C123' });
+        await adapter.listMessages(GRANT_TOKEN, { channel: 'C123' });
         expect.fail('should throw');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('UPSTREAM_ERROR');
@@ -155,7 +156,7 @@ describe('SlackAdapter', () => {
         ...MOCK_GRANT, scopes: ['notifications:send'],
       });
 
-      await expect(adapter.listMessages('token', { channel: 'C123' }))
+      await expect(adapter.listMessages(GRANT_TOKEN, { channel: 'C123' }))
         .rejects.toThrow(GrantexAdapterError);
     });
   });
