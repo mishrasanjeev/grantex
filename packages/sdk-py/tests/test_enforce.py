@@ -366,15 +366,25 @@ class TestEnforceCappedScopes:
         assert result.allowed is True
 
     @patch("grantex._client.verify_grant_token")
-    def test_no_amount_skips_cap_check(
+    def test_no_amount_denies_amount_missing(
         self, mock_verify: object, client: Grantex
     ) -> None:
+        # A capped scope used to pass when no amount was given, so a call that
+        # never reported its amount was never capped. It now fails closed;
+        # caps_mode="warn" is the opt-out.
         mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
             scopes=("tool:salesforce:write:capped:100",)
         )
         result = client.enforce("fake.jwt.token", "salesforce", "create_lead")
 
-        assert result.allowed is True
+        assert result.allowed is False
+        assert result.reason_code == "cap_exceeded"
+        assert result.sub_reason == "amount_missing"
+
+        warned = client.enforce("fake.jwt.token", "salesforce", "create_lead", caps_mode="warn")
+        assert warned.allowed is True
+        assert warned.would_deny is not None
+        assert warned.would_deny["sub_reason"] == "amount_missing"
 
     @patch("grantex._client.verify_grant_token")
     def test_no_cap_in_scope_ignores_amount(

@@ -14,7 +14,7 @@ ERROR_CODE = "E1008"
 CAPS_OFF = "off"
 """Caps are not evaluated."""
 CAPS_WARN = "warn"
-"""Caps are evaluated; a call they would deny is allowed and reported in ``would_deny``."""
+"""Caps are evaluated; a call they would deny is allowed and reported in ``would_deny`` (the first) and ``would_deny_all`` (every one)."""
 CAPS_ENFORCE = "enforce"
 """Caps are evaluated and enforced (the default)."""
 CAPS_MODES = (CAPS_OFF, CAPS_WARN, CAPS_ENFORCE)

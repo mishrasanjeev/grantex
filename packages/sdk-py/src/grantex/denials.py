@@ -76,8 +76,14 @@ class CapSubReason:
 
     AMOUNT_CAP = "amount_cap"
     """``amount`` is above a ``capped:N`` scope."""
+    AMOUNT_MISSING = "amount_missing"
+    """A ``capped:N`` scope covers the connector and the call gave no
+    ``amount`` (or the wrapper has no amount extractor). ``details`` carries
+    ``limit``. With ``caps_mode="warn"`` the call is allowed and this is
+    reported in ``would_deny``."""
     INVALID_AMOUNT = "invalid_amount"
-    """``amount`` is not a finite number."""
+    """``amount`` is not a finite number, or a wrapper's amount extractor
+    raised."""
     MALFORMED_CAP = "malformed_cap"
     """A ``capped:N`` scope carries a malformed cap."""
     METER_UNAVAILABLE = "meter_unavailable"

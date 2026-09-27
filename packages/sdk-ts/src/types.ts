@@ -33,7 +33,7 @@ export interface GrantexClientOptions {
    * `true` in 0.6 and `false` from 0.7; see `VerifyGrantTokenOptions.legacyClaims`.
    */
   legacyClaims?: boolean;
-  /** `enforce` (default) denies over-cap calls, `warn` allows them and reports `wouldDeny`, `off` skips caps. */
+  /** `enforce` (default) denies over-cap calls, `warn` allows them and reports `wouldDeny` / `wouldDenyAll`, `off` skips caps. */
   capsMode?: CapsMode;
   /**
    * How `enforce()` finds out about revocations (PRD G-6). `online` (the
@@ -47,7 +47,7 @@ export interface GrantexClientOptions {
   revocationFeed?: RevocationFeedOptions;
   /**
    * `enforce` (default) denies a `requires_decision` call without a valid, consumed decision
-   * grant; `warn` allows it and reports `wouldDeny`. Platforms map their `decisions.required`
+   * grant; `warn` allows it and reports `wouldDeny` / `wouldDenyAll`. Platforms map their `decisions.required`
    * flag to `enforce` (on) or `warn` (off).
    */
   decisionsMode?: 'enforce' | 'warn';
