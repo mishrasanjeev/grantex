@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Vendor denylist gate
+- A new **Vendor Denylist** workflow fails a pull request that names a
+  denylisted identity-verification, KYB/KYC, AML or screening vendor in its
+  added lines, file paths, commit messages, branch name, title or description,
+  and fails when any tracked file does. The check is
+  `scripts/check_denylist.py`: only a salt and the salted SHA-256 hashes of the
+  terms are committed (`security/denylist.sha256`), and a failure gives the
+  location and word number, not the matched line. It fails closed when git,
+  the hash file or a tracked file it has to read misbehaves, and when a path
+  given to the audit matches no tracked file.
+- The same check prints a warning, with the location and the house term, for
+  each term the house terminology in `AGENTS.md` replaces (kill switch,
+  white-label, anomaly, trust provider, verification partner, verification
+  result). Warnings never change the result. The existing uses, most of them
+  the published `/v1/anomalies` API and its documentation, are recorded in
+  `FINDINGS.md`; renaming them is a separate product decision.
+- `make check` runs the audit over every tracked file (`make check-denylist`)
+  and `make test` runs the check's own tests (`make test-scripts`); the
+  Python 3.9 SDK CI job runs those tests too. The check needs only Python 3.9
+  or later and git. See "Vendor-neutral names" in `CONTRIBUTING.md`.
+- Two existing lines the audit flagged were reworded without changing their
+  meaning: a portal test title and one sentence of the draft privacy policy.
+- CI and documentation only; no product change, nothing behind a flag.
 ### Portable WebAuthn assertion evidence (default off)
 - Added `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED` (default `false`). When enabled,
   verified consent assertions are retained, bound to new grants, referenced by
