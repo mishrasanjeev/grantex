@@ -81,7 +81,7 @@ The standard developer API-key plan and revocation-status limiters fail closed w
 
 This response uses `503 Service Unavailable`, not `429`. Retry it as a transient service failure; do not treat it as proof that the request reached the protected handler.
 
-Containment routes fail open instead: a revocation is written to Postgres, which is authoritative, so an outage of the limiter's cache does not refuse it. When the Redis counter fails, or does not answer within 500 ms, each auth-service instance counts containment calls in its own memory against the same 2,000/min ceiling, so the ceiling holds per instance until Redis returns. The response carries the usual `X-RateLimit-*` headers from that count.
+Containment routes fail open instead: a revocation is written to Postgres, which is authoritative, so an outage of the limiter's cache does not refuse it. When the Redis counter fails, or does not answer within 500 ms, each auth-service instance counts containment calls in its own memory against the same 2,000/min ceiling, so the ceiling holds per instance until Redis returns. The response carries the usual `X-RateLimit-*` headers from that count. Each instance holds at most 10,000 of these counters; past that, the least recently used counter is dropped, so the call is still served and counted and memory stays bounded.
 
 ## Reading Rate Limits from SDKs
 

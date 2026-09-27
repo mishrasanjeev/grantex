@@ -55,9 +55,20 @@ export async function checkRateLimit(
   };
 }
 
-/** Above this many counters, expired ones are dropped before another is added. */
-const LOCAL_COUNTER_SWEEP_THRESHOLD = 10_000;
+/**
+ * The most counters `checkLocalRateLimit` holds at once. A hard cap, enforced
+ * before a counter is added; see the function for what happens at it.
+ */
+export const LOCAL_COUNTER_CAPACITY = 10_000;
+
+/**
+ * Counters in least-recently-used order: every call moves its key to the end,
+ * so the first key is the one idle longest. Deleting it is O(1).
+ */
 const localCounters = new Map<string, { windowEndSeconds: number; count: number }>();
+/** No counter kept by the last sweep expires before this; 0 means none has run. */
+let nextSweepAtSeconds = 0;
+let sweepCount = 0;
 
 /**
  * The same fixed-window count as `checkRateLimit`, held in this process.
@@ -67,6 +78,18 @@ const localCounters = new Map<string, { windowEndSeconds: number; count: number 
  * instance, so across N instances the ceiling is N times `max`: looser than
  * the shared counter, never absent. Identifiers are authenticated developer
  * ids, so the map holds at most one entry per developer seen in a window.
+ *
+ * Memory is bounded by LOCAL_COUNTER_CAPACITY at O(1) amortised cost per call.
+ * When a new key arrives at the cap, expired counters are swept, but at most
+ * once until the earliest counter kept by the previous sweep expires (once
+ * per window), never a full scan per call. If the map is still full, the
+ * least recently used counter is evicted and the new key is tracked. The
+ * call is never refused because the map is full: the limiter holds no
+ * authority (Postgres does), and a revocation must stay available, so it
+ * fails open for the key that loses its counter — that developer starts
+ * again from one — rather than for the caller. Refusing to track the new key
+ * instead would leave every developer first seen at the cap uncounted, while
+ * eviction keeps counting the ones actively calling.
  */
 export function checkLocalRateLimit(
   identifier: string,
@@ -79,9 +102,13 @@ export function checkLocalRateLimit(
 
   const current = localCounters.get(key);
   const count = current && current.windowEndSeconds === windowEndSeconds ? current.count + 1 : 1;
-  if (!current && localCounters.size >= LOCAL_COUNTER_SWEEP_THRESHOLD) {
-    for (const [staleKey, counter] of localCounters) {
-      if (counter.windowEndSeconds <= nowSeconds) localCounters.delete(staleKey);
+  if (current) {
+    localCounters.delete(key);
+  } else if (localCounters.size >= LOCAL_COUNTER_CAPACITY) {
+    if (nowSeconds >= nextSweepAtSeconds) sweepExpiredCounters(nowSeconds, windowEndSeconds);
+    if (localCounters.size >= LOCAL_COUNTER_CAPACITY) {
+      const oldest = localCounters.keys().next().value;
+      if (oldest !== undefined) localCounters.delete(oldest);
     }
   }
   localCounters.set(key, { windowEndSeconds, count });
@@ -93,7 +120,25 @@ export function checkLocalRateLimit(
   };
 }
 
+/** `insertingEndSeconds`: the window end of the counter about to be added, which is kept too. */
+function sweepExpiredCounters(nowSeconds: number, insertingEndSeconds: number): void {
+  sweepCount += 1;
+  let earliestKeptEnd = insertingEndSeconds;
+  for (const [staleKey, counter] of localCounters) {
+    if (counter.windowEndSeconds <= nowSeconds) localCounters.delete(staleKey);
+    else earliestKeptEnd = Math.min(earliestKeptEnd, counter.windowEndSeconds);
+  }
+  nextSweepAtSeconds = earliestKeptEnd;
+}
+
 /** Forget every in-process counter. Tests only. */
 export function resetLocalRateLimits(): void {
   localCounters.clear();
+  nextSweepAtSeconds = 0;
+  sweepCount = 0;
+}
+
+/** How many counters are held and how many sweeps have run. Tests only. */
+export function localRateLimitState(): { size: number; sweeps: number } {
+  return { size: localCounters.size, sweeps: sweepCount };
 }

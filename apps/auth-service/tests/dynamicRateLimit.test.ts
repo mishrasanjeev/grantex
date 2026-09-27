@@ -9,7 +9,12 @@ import {
   PLAN_RATE_LIMIT_WINDOW_SECONDS,
   STATUS_RATE_LIMIT,
 } from '../src/plugins/dynamicRateLimit.js';
-import { checkLocalRateLimit, resetLocalRateLimits } from '../src/lib/rate-limit.js';
+import {
+  checkLocalRateLimit,
+  LOCAL_COUNTER_CAPACITY,
+  localRateLimitState,
+  resetLocalRateLimits,
+} from '../src/lib/rate-limit.js';
 import { rateLimitDecisionsTotal } from '../src/lib/metrics.js';
 import { mockRedis } from './helpers.js';
 
@@ -321,5 +326,54 @@ describe('checkLocalRateLimit', () => {
     for (let index = 0; index < 3; index += 1) checkLocalRateLimit('developer:a:containment', 2, 60);
     vi.setSystemTime(new Date('2026-01-01T00:01:00Z'));
     expect(checkLocalRateLimit('developer:a:containment', 2, 60)).toEqual({ allowed: true, remaining: 1, resetSeconds: 60 });
+  });
+
+  it('never holds more counters than LOCAL_COUNTER_CAPACITY within one window', () => {
+    let largest = 0;
+    for (let index = 0; index < LOCAL_COUNTER_CAPACITY + 500; index += 1) {
+      checkLocalRateLimit(`developer:${index}:containment`, 2, 60);
+      largest = Math.max(largest, localRateLimitState().size);
+    }
+    expect(largest).toBe(LOCAL_COUNTER_CAPACITY);
+  });
+
+  it('serves and counts a developer first seen once the counters are full', () => {
+    for (let index = 0; index < LOCAL_COUNTER_CAPACITY; index += 1) {
+      checkLocalRateLimit(`developer:${index}:containment`, 2, 60);
+    }
+    expect(checkLocalRateLimit('developer:late:containment', 2, 60)).toMatchObject({ allowed: true, remaining: 1 });
+    expect(checkLocalRateLimit('developer:late:containment', 2, 60)).toMatchObject({ allowed: true, remaining: 0 });
+    expect(checkLocalRateLimit('developer:late:containment', 2, 60)).toMatchObject({ allowed: false, remaining: 0 });
+    expect(localRateLimitState().size).toBe(LOCAL_COUNTER_CAPACITY);
+  });
+
+  it('keeps the ceiling for a developer already tracked while new developers arrive past the cap', () => {
+    for (let index = 0; index < LOCAL_COUNTER_CAPACITY - 1; index += 1) {
+      checkLocalRateLimit(`developer:${index}:containment`, 2, 60);
+    }
+    for (let call = 0; call < 3; call += 1) checkLocalRateLimit('developer:busy:containment', 2, 60);
+    for (let index = 0; index < 1_000; index += 1) {
+      checkLocalRateLimit(`developer:new-${index}:containment`, 2, 60);
+      // Still calling: a counter in use is the last one evicted.
+      expect(checkLocalRateLimit('developer:busy:containment', 2, 60)).toMatchObject({ allowed: false });
+    }
+    expect(localRateLimitState().size).toBe(LOCAL_COUNTER_CAPACITY);
+  });
+
+  it('sweeps expired counters at most once per window, not on every insertion', () => {
+    for (let index = 0; index < 50_000; index += 1) {
+      checkLocalRateLimit(`developer:${index}:containment`, 2, 60);
+    }
+    expect(localRateLimitState().sweeps).toBeLessThanOrEqual(1);
+    expect(localRateLimitState().size).toBe(LOCAL_COUNTER_CAPACITY);
+
+    vi.setSystemTime(new Date('2026-01-01T00:01:00Z'));
+    const sweepsBefore = localRateLimitState().sweeps;
+    for (let index = 0; index < 50_000; index += 1) {
+      checkLocalRateLimit(`developer:next-${index}:containment`, 2, 60);
+      if (index === 0) expect(localRateLimitState().size).toBe(1);
+    }
+    expect(localRateLimitState().sweeps).toBe(sweepsBefore + 1);
+    expect(localRateLimitState().size).toBe(LOCAL_COUNTER_CAPACITY);
   });
 });
