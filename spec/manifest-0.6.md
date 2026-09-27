@@ -130,7 +130,7 @@ a `reason_code` (`reasonCode` in TypeScript) and, where one applies, a
 | `requires_decision`, or the tool is listed in the grant's `urn:grantex:decision:v1` entry: decision grants verified offline (see `decision-grant.md`) | `decision_required` (none presented), `decision_invalid` | `action_mismatch`, `wrong_case`, `case_changed`, `expired`, `same_approver`, `four_eyes_incomplete`, `malformed`, `unknown_grant` |
 | `amount` within a `capped:N` scope | `cap_exceeded` | `invalid_amount`, `malformed_cap`, `amount_cap` |
 | `caps`, `cost_units` (manifest or grant), reserved last | `cap_exceeded` | `limit_reached` (E1008), `case_required`, `invalid_case_id`, `invalid_cost_component`, `meter_unavailable` |
-| The same decision grants, consumed at the issuer, after caps | `decision_invalid` | `consumed`, `revoked`, `consume_unavailable` and the above |
+| The same decision grants, consumed at the issuer, after caps | `decision_invalid` | `consumed`, `revoked`, `wrong_agent` (an issuer that binds decision grants to the requesting agent), `consume_unavailable` and the above |
 
 The reason codes are the Grantex denial taxonomy: `purpose_not_allowed`,
 `tool_not_granted`, `permission_insufficient`, `cap_exceeded`,

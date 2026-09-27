@@ -75,7 +75,7 @@ async function callTool(
   verifier: ReturnType<typeof grantexDecisionVerifier>,
   headers: Record<string, string>,
   args: Record<string, unknown>,
-  options: { toolName?: string; policy?: typeof tools; grant?: Record<string, unknown> } = {},
+  options: { toolName?: string; policy?: typeof tools; grant?: Record<string, unknown>; accessToken?: string } = {},
 ) {
   const mw = requireMcpAuth({ issuer, audience: RESOURCE, tools: options.policy ?? tools, decisions: verifier, warn: () => {} });
   const server = createServer((raw: IncomingMessage, res: ServerResponse) => {
@@ -94,13 +94,14 @@ async function callTool(
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const address = server.address();
   const port = typeof address === 'object' && address ? address.port : 0;
+  const bearer = options.accessToken ?? await grantToken(options.grant);
   try {
     const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${await grantToken(options.grant)}`, ...headers },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${bearer}`, ...headers },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: options.toolName ?? 'case_decision', arguments: args } }),
     });
-    return { status: res.status, challenge: res.headers.get('www-authenticate'), body: (await res.json()) as Record<string, unknown> };
+    return { status: res.status, challenge: res.headers.get('www-authenticate'), body: (await res.json()) as Record<string, unknown>, bearer };
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
@@ -145,6 +146,41 @@ describe('grantexDecisionVerifier', () => {
     expect(replay.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'consumed' });
     expect(replay.challenge).toContain('decision_required="acme_kyb:case_decision"');
     expect(consume).toHaveBeenCalledTimes(2);
+  });
+
+  it("consumes as the agent and grant of the caller's access token", async () => {
+    const { verifier, consume } = verifierWithIssuer();
+    const outcome = await callTool(verifier, { [DECISION_GRANT_HEADER]: await decisionGrant() }, args, { grant: { dev: 'dev_01', agt: 'did:grantex:ag_01' } });
+    expect(outcome.status).toBe(200);
+    // An issuer that binds decisions to the requesting agent refuses one
+    // requested for another agent or grant (wrong_agent). The DID travels as
+    // agentDid, never agentId: an @grantex/sdk from before agentDid existed
+    // drops it rather than sending a DID where an issuer expects an agent id.
+    // The access token itself goes with them, for such an issuer to verify.
+    expect(consume).toHaveBeenCalledWith(expect.anything(), { agentDid: 'did:grantex:ag_01', grantId: 'grnt_01', grantToken: outcome.bearer });
+  });
+
+  it('hands consumption the access token the guard verified, so an issuer that binds decisions can establish the agent from it', async () => {
+    const { verifier, consume } = verifierWithIssuer();
+    const outcome = await callTool(verifier, { [DECISION_GRANT_HEADER]: await decisionGrant() }, args);
+    expect(outcome.status).toBe(200);
+    const context = (consume.mock.calls[0] as unknown[])[1] as { grantToken?: string };
+    expect(context.grantToken).toBe(outcome.bearer);
+    expect(jose.decodeJwt(context.grantToken!)).toMatchObject({ iss: issuer, aud: RESOURCE, grnt: 'grnt_01', dev: 'dev_01' });
+  });
+
+  it('consumes without a grant token when the verifier is called directly without one', async () => {
+    const { verifier, consume } = verifierWithIssuer();
+    const token = await decisionGrant();
+    const outcome = await verifier.verify({
+      grant: { sub: 'client-a', iss: issuer, jti: 'tok_1', scopes: ['tool:acme_kyb:write'], developerId: 'dev_01', grantId: 'grnt_01', exp: 0, iat: 0, raw: {} },
+      requirement: tools.requirementFor('case_decision')!,
+      arguments: args,
+      header: (name) => (name === DECISION_GRANT_HEADER ? token : undefined),
+    });
+    expect(outcome).toEqual({ status: 'valid' });
+    // An issuer that binds decisions refuses then one requested for an agent (wrong_agent).
+    expect((consume.mock.calls[0] as unknown[])[1]).toEqual({ grantId: 'grnt_01' });
   });
 
   it.each([
@@ -193,6 +229,29 @@ describe('grantexDecisionVerifier', () => {
     const noConnector = await callTool(verifier, { [DECISION_GRANT_HEADER]: token }, args, { policy: scopesOnly });
     expect(noConnector.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'malformed' });
     expect(consume).not.toHaveBeenCalled();
+  });
+
+  it('reads the developer and grant from urn:grantex:grant when the token has no legacy claims', async () => {
+    // What the auth service issues with GRANT_TOKEN_LEGACY_CLAIMS=false (the
+    // 0.7 default): no scp, dev or grnt.
+    const standardOnly = (developerId: string) => new jose.SignJWT({
+      aud: RESOURCE,
+      client_id: 'shopper-01',
+      scope: 'tool:acme_kyb:write',
+      'urn:grantex:grant': { grant_id: 'grnt_01', agent_did: 'did:grantex:shopper-01', developer_id: developerId },
+    })
+      .setProtectedHeader({ alg: 'RS256', kid: 'k1', typ: 'at+jwt' })
+      .setIssuer(issuer).setSubject('client-a').setJti('tok_1').setIssuedAt().setExpirationTime('1h')
+      .sign(privateKey);
+    const { verifier, consume } = verifierWithIssuer();
+    const outcome = await callTool(verifier, { [DECISION_GRANT_HEADER]: await decisionGrant() }, args, { accessToken: await standardOnly('dev_01') });
+    expect(outcome.status).toBe(200);
+    expect(consume).toHaveBeenCalledTimes(1);
+    expect(consume).toHaveBeenCalledWith(expect.anything(), { agentDid: 'did:grantex:shopper-01', grantId: 'grnt_01', grantToken: outcome.bearer });
+    // The developer is still checked: a decision grant for another developer is refused.
+    const other = await callTool(verifier, { [DECISION_GRANT_HEADER]: await decisionGrant() }, args, { accessToken: await standardOnly('dev_02') });
+    expect(other.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'unknown_grant' });
+    expect(consume).toHaveBeenCalledTimes(1);
   });
 
   it('binds the manifest decision_fields', async () => {

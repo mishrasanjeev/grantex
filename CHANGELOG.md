@@ -62,6 +62,109 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `spec/examples/enforce-audience.json`. Documented in the SDK enforce pages,
   the gateway and adapters pages, `spec/grant-token-0.6.md` (Validation) and
   `spec/manifest-0.6.md`.
+### Portable WebAuthn SDK patch candidates
+- Prepared `@grantex/sdk@0.7.1`, Python `grantex==0.6.1`, and Go SDK
+  `v0.4.1` to ship the typed signed grant-evidence reference and VC
+  `webauthnVerified` response already tested in source. These version bumps
+  are not registry publication; verify all three public artifacts before
+  updating release-status claims.
+
+### mcp-auth resource guard: grant token algorithms, `typ` and standard claims
+Part of the unpublished `@grantex/mcp-auth` 3.0.0.
+- **Breaking:** `requireMcpAuth` (Express and Hono) and
+  `createMcpResourceGuard` accept only RS256 and ES256 grant tokens, as
+  `spec/grant-token-0.6.md` requires, and refuse PS256 and EdDSA tokens with
+  `401 invalid_token`. The default `algorithms` is `['RS256', 'ES256']`; an
+  `algorithms` list naming any other algorithm throws when the middleware is
+  created instead of being honoured. `/introspect` and `/revoke` verify with
+  the same two algorithms. The auth service signs grant tokens only with
+  RS256 or ES256, so its tokens are unaffected; an MCP server that verifies
+  PS256 or EdDSA tokens from another issuer with this package must move that
+  issuer to RS256 or ES256 first. There is no opt-out.
+- **Breaking:** the guard, `/introspect` and `/revoke` require `typ: at+jwt`
+  (or `application/at+jwt`, RFC 9068 §4). The auth service sets it on every
+  grant token. Only a pre-0.6 token (no `urn:grantex:grant`, with `scp`) may
+  omit it, so grant tokens issued before the auth service set `typ` keep
+  working until they expire; another JWT signed with the same key, such as a
+  decision grant, is refused.
+- The guard reads the space-delimited `scope` claim first and falls back to
+  `scp`; a pre-0.6 token is still read from `scp`, since its `scope` could
+  split a scope containing whitespace. `agentDid`, `developerId`, `grantId`
+  and `delegationDepth` come from `urn:grantex:grant`, then from `agt`, `dev`,
+  `grnt` and `delegationDepth`. MCP servers behind the guard, including the
+  developer check in `grantexDecisionVerifier`, keep working when the auth
+  service sets `GRANT_TOKEN_LEGACY_CLAIMS=false` (the 0.7 default); before,
+  they refused every such token. A token with neither `urn:grantex:grant` nor
+  `scp`, such as an access token from the auth service's OAuth profile, is
+  still refused: it is not a grant token, and the guard does not check the
+  `cnf.jkt` such a token carries.
+- **Breaking:** like the SDK verifiers, the guard refuses with
+  `401 invalid_token` a 0.6 token whose standard claim and legacy alias
+  disagree, a 0.6 token with no agent or developer in either form, a
+  `urn:grantex:grant` that is not an object or has a `null` or mistyped
+  member, a legacy `agt`, `dev`, `grnt` or `delegationDepth` that is `null` or
+  mistyped (before, it was skipped), and a `scope` that is not a string. The
+  auth service has never issued such a token.
+
+### Decision grants are bound to the requesting agent
+- Added `DECISION_GRANT_AGENT_BINDING` to the auth service, off by default.
+  Only `true` and `false` are accepted; any other value makes the decision
+  endpoints answer 503 rather than leave the binding silently off. **Off,
+  request creation, `GET /v1/decisions/requests/{id}` and
+  `POST /v1/decisions/consume` answer exactly as before**: GET returns
+  `decisionGrants` to the developer API key once a request is approved, and
+  consumption records `agentId` and `grantId` without comparing them and
+  does not read `agentDid` or `grantToken`.
+- **Breaking when turned on:** the developer API key alone never receives a
+  decision grant. GET answers `decisionGrantsReady` and the approvals by
+  `jti`, never `decisionGrants`. `POST /v1/decisions/consume` establishes
+  the calling agent from its grant token (`grantToken`, verified as the
+  release endpoint verifies it: signature, expiry, revocation, grant status
+  and developer), never from `agentDid`, `agentId` or `grantId`, which, when
+  sent, must be that token's agent and grant. It consumes the grants of a
+  request that names an agent or a grant only with a live grant token of that
+  agent and grant; no token, one that is not live, or another agent's or
+  grant's is refused. A request that names no agent is consumed without a
+  token, as before; a token sent with it must be live. New sub-reason
+  `wrong_agent` (403), checked once the request row is locked and before any
+  stored state of its grants is examined, and audited like every refusal,
+  with why no agent was established (`token_check`) and the body's claims
+  apart. A repeated request for the same action and case version while one
+  is open for another agent or grant is refused (`wrong_agent`, 409) instead
+  of answered with that request; a repeat for the same agent and grant
+  answers the open request with its approvals as they stand.
+- New endpoints, available whether or not the binding is on:
+  `POST /v1/decisions/requests/{id}/grants` releases a request's grants only
+  to a live grant token (signature, expiry, revocation and grant status
+  checked) of the agent and grant it names, and records every hand-out
+  (`decision.grants_released`) and refusal (`decision.release_refused`) in
+  the audit chain, releasing nothing when the record cannot be written.
+  `POST /v1/decisions/requests/{id}/consume` consumes the grants of a request
+  that names no agent by its id, so a platform's own decision never leaves
+  the auth service; a request that names an agent is refused.
+- `enforce()` in both SDKs and `grantexDecisionVerifier` in `@grantex/mcp-auth`
+  consume with the grant token they verified as `grantToken`, its agent DID
+  as `agentDid` and its grant as `grantId` (`consume` takes `grantToken` /
+  `grant_token`; the MCP guard hands the verified access token to the
+  verifier). The DID never goes in `agentId`: an auth service from before
+  this change accepts only a Grantex agent id there and ignores members it
+  does not know, and one with the binding off reads neither `grantToken` nor
+  `agentDid`, so the new SDKs consume against every version. A Python
+  `DecisionConsumer` whose `consume` does not take `agent_did` or
+  `grant_token` is called without them. New SDK methods `getGrants` /
+  `get_grants` and `consumeRequest` / `consume_request`; both SDKs map
+  `wrong_agent`.
+- *Action before turning the binding on:* move every platform off reading
+  `decisionGrants` from `GET /v1/decisions/requests/{id}`. A platform's own
+  decision (its request names no agent) is consumed by request id; a decision
+  for an agent names it on the request (`agentId`, `grantId`), is fetched with
+  that agent's grant token and consumed with the same token. Map a 403 that
+  carries a `subReason` as a refusal, not an authentication failure. SDKs from
+  before this change send no grant token: with the binding on they cannot
+  consume a decision that names an agent, and report it as
+  `consume_unavailable` (still a denial). AgenticOrg governed cases read
+  `decisionGrants` from GET today; the changes it needs first are listed in
+  `docs/guides/agenticorg-governed-cases.mdx`.
 
 ### Bounded JWKS fetch and validated `did:web` issuers (TypeScript and Python SDKs, default off)
 - Added an opt-in option, default `false`: `boundedJwksFetch` on

@@ -1,16 +1,18 @@
 # Grantex Go SDK
 
+**Version v0.4.1:** exposes the signed WebAuthn evidence reference on grants
+and the VC attestation field. A signed reference is not the raw assertion or
+a current revocation check; verify the issuer, enrollment, RP ID, origin,
+digest, and status. See the
+[passkey guide](https://docs.grantex.dev/features/fido-webauthn).
+
 **Version v0.4.0:** adds hosted passkey enrollment sessions and account-level
 irregularity response policy methods. Both require the server's corresponding
 feature flags and an authenticated customer handoff for enrollment. Confirm
 the published version in [Release Status](https://docs.grantex.dev/release-status)
 before installing.
 
-Repository source exposes the signed WebAuthn grant evidence reference and
-VC attestation field; published `v0.4.0` predates those types. Server-side
-portable issuance requires an explicit rollout. A signed reference alone is
-not the raw assertion or a current revocation check; see the
-[passkey guide](https://docs.grantex.dev/features/fido-webauthn).
+Server-side portable issuance requires an explicit rollout.
 
 **v0.3.0:** wallet responses include typed
 `EVMPayment`/`EVMAuthorization` fields and agent/principal clients expose
@@ -22,7 +24,7 @@ Official Go SDK for the [Grantex](https://grantex.dev) delegated authorization p
 ## Installation
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.4.0
+go get github.com/mishrasanjeev/grantex-go@v0.4.1
 ```
 
 Requires Go 1.26.1 or newer, matching the module's `go.mod` directive.
@@ -132,8 +134,7 @@ raw assertion evidence. `client.Credentials.Verify` sends `credential` and
 returns `Valid`, `VCID`, `Payload`, `Revoked`, `Expired`, `Error`, and
 `WebAuthnVerified`. Verifiers must trust the issuer and enrollment, check
 revocation, pin the RP ID/origin, and compare the VC digest to the grant
-reference. Raw public keys can correlate presentations. These changes are in
-this checkout, not the currently published Go module tag.
+reference. Raw public keys can correlate presentations.
 
 ## Agent prepaid wallets (v0.2.0+)
 
