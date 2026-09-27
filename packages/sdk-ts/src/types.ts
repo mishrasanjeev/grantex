@@ -55,6 +55,20 @@ export interface GrantexClientOptions {
   decisionConsumer?: DecisionConsumer;
   /** Algorithms accepted on decision grants, a subset of RS256 and ES256. Default both. */
   decisionAlgorithms?: readonly ('RS256' | 'ES256')[];
+  /**
+   * The grant token audience `enforce()` expects (RFC 7519 section 4.1.3). A token
+   * whose `aud` does not contain it, or that has no `aud`, is denied with
+   * `token_invalid` / `audience_mismatch`. `enforce({ audience })` overrides it per call.
+   */
+  audience?: string;
+  /**
+   * `on` (default) checks the grant token's `aud` in `enforce()`: without an expected
+   * audience, a token that carries `aud` is denied with `token_invalid` /
+   * `audience_unconfigured`. `off` ignores `aud`, as releases before the check did,
+   * and cannot be combined with `audience`. Audience denials are not relaxed by
+   * `enforceMode: 'permissive'`: they stay `allowed: false` in every enforce mode.
+   */
+  audienceCheck?: 'on' | 'off';
 }
 
 // ─── Signup ─────────────────────────────────────────────────────────────────

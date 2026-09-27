@@ -1126,6 +1126,83 @@ the pull request that references it.
   those developers, with a stop that also revokes the tenant's live commerce
   passports.
 
+## G-55 — Other grant token verifiers accept any `aud` when no audience is set
+
+- **Found:** adding the audience check to `enforce()`, `@grantex/gateway` and
+  `@grantex/adapters` (2026-09-27).
+- **What:** with no audience configured, these still accept a token that
+  carries `aud`, however it is set: `packages/express/src/middleware.ts`
+  (`audience` "leave undefined to skip audience check"),
+  `packages/fastapi/src/grantex_fastapi/_middleware.py`, and the standalone
+  `verifyGrantToken` / `verify_grant_token` in both SDKs (which pass
+  `verify_aud: False` or no `audience` to the JOSE library). A token requested
+  for one relying party is therefore accepted by every relying party that
+  uses these paths without an audience, while `enforce()`, the gateway and
+  the adapters now deny it (`audience_unconfigured`).
+- **Fix:** give each verifier the same `audience` / `audienceCheck` semantics
+  as `enforce()` (deny `aud` without a configured audience; exact match of one
+  value; `'off'` as the explicit opt-out), as a breaking change recorded in
+  `CHANGELOG.md`, and run `spec/examples/enforce-audience.json` against each.
+
+## G-56 — The gateway classifies token errors by substrings of their message
+
+- **Found:** reading `packages/gateway/src/server.ts` while adding the
+  audience check (2026-09-27).
+- **What:** a `GrantexTokenError` whose message contains `exp` anywhere
+  (for example "expected", "unexpected") is answered `TOKEN_EXPIRED`, and one
+  whose message contains `scope` anywhere (for example "Grant token claim
+  scope must be a string") is answered 403 `SCOPE_INSUFFICIENT` instead of 401
+  `TOKEN_INVALID`. `packages/express/src/middleware.ts` and
+  `packages/fastapi/src/grantex_fastapi/_middleware.py` use the same `exp`
+  test. The status stays a denial, but the code and status tell the client
+  the wrong remedy.
+- **Fix:** have the SDK verifiers raise typed errors (or a stable `code` on
+  `GrantexTokenError`) for expiry and missing scopes, and map those instead of
+  the message text.
+
+## G-57 — `grantex enforce test` cannot set the expected audience (fixed)
+
+- **Found:** checking the callers of `enforce()` for the audience check
+  (2026-09-27).
+- **What:** `packages/cli/src/commands/enforce.ts` builds its client with only
+  `baseUrl` and `apiKey`. Once the CLI runs on an SDK release with the
+  audience check, every token that carries `aud` is reported as denied with
+  `audience_unconfigured`, and there is no flag to pass the audience or turn
+  the check off.
+- **Fix:** add `--audience <value>` (passed to `enforce()`) and
+  `--audience-check <on|off>` (passed to the client) to `grantex enforce test`,
+  with tests, and require an `@grantex/sdk` peer range that has the options.
+- **Fixed:** in the `fix/enforce-audience` change. `grantex enforce test`
+  takes `--audience` (passed to `enforce()` as the per-call audience) and
+  `--audience-check <on|off>` (passed to the client through `requireClient`);
+  other `--audience-check` values, an empty `--audience` and `--audience` with
+  `--audience-check off` are refused. No `@grantex/sdk` release has the
+  options yet, so instead of a version range the command checks that the
+  installed SDK exports the audience sub-reasons and refuses both options
+  when it does not, rather than ignoring them. Shown by
+  `packages/cli/tests/enforce.test.ts`, `packages/cli/tests/client.test.ts`
+  and `packages/cli/tests/enforce-older-sdk.test.ts`, which fail without the
+  change.
+
+## G-58 — Permissive enforce mode allows a token that fails verification
+
+- **Found:** making the audience denials fail closed in permissive mode
+  (2026-09-28).
+- **What:** with `enforceMode: 'permissive'` (TypeScript) or
+  `enforce_mode="permissive"` (Python), `enforce()` passes every denial
+  through the permissive conversion, including `token_invalid` for a token
+  whose signature, issuer, expiry or claims fail verification, and
+  `grant_revoked`. A forged, expired or revoked token is therefore reported
+  `allowed: true` with a warning (`packages/sdk-ts/src/client.ts`, `denied()`
+  and `#applyEnforceMode`; `packages/sdk-py/src/grantex/_client.py`,
+  `_apply_enforce_mode`). Permissive mode is documented as development only
+  and meant to relax scope and manifest checks while a manifest is written,
+  not to accept tokens nobody issued. The audience denials already bypass the
+  conversion.
+- **Fix:** have token verification and revocation denials fail closed in
+  every enforce mode, as the audience denials do, as a breaking change
+  recorded in `CHANGELOG.md`, with tests in both SDKs.
+
 ## G-65 — Default online revocation checks share a 1,200-per-minute limit (fixed)
 
 - **Found:** turning revocation checking on by default in both SDKs

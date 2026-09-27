@@ -657,6 +657,8 @@ export interface EnforceOptions {
    * `enforce()` reject before anything is checked.
    */
   revocationCheck?: 'offline' | 'online' | 'feed';
+  /** Overrides the client's expected grant token audience for this call. */
+  audience?: string;
   /**
    * Decision grant tokens for a tool with `requires_decision` (one, or two for a decision in
    * `four_eyes_on`). Without them the call is denied with `decision_required`.

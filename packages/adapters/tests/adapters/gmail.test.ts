@@ -8,6 +8,7 @@ vi.mock('@grantex/sdk', () => ({
 import { verifyGrantToken } from '@grantex/sdk';
 import { GmailAdapter } from '../../src/adapters/gmail.js';
 import { GrantexAdapterError } from '../../src/errors.js';
+import { GRANT_TOKEN } from '../tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -35,7 +36,7 @@ describe('GmailAdapter', () => {
         ok: true, json: () => Promise.resolve(messages),
       }));
 
-      const result = await adapter.listMessages('token');
+      const result = await adapter.listMessages(GRANT_TOKEN);
       expect(result.success).toBe(true);
       expect(result.data).toEqual(messages);
 
@@ -48,7 +49,7 @@ describe('GmailAdapter', () => {
         ok: true, json: () => Promise.resolve({ messages: [] }),
       }));
 
-      await adapter.listMessages('token', {
+      await adapter.listMessages(GRANT_TOKEN, {
         q: 'from:alice',
         maxResults: 5,
         labelIds: ['INBOX', 'UNREAD'],
@@ -66,7 +67,7 @@ describe('GmailAdapter', () => {
         ...MOCK_GRANT, scopes: ['email:send'],
       });
 
-      await expect(adapter.listMessages('token'))
+      await expect(adapter.listMessages(GRANT_TOKEN))
         .rejects.toThrow(GrantexAdapterError);
     });
 
@@ -76,7 +77,7 @@ describe('GmailAdapter', () => {
       }));
 
       try {
-        await adapter.listMessages('token');
+        await adapter.listMessages(GRANT_TOKEN);
         expect.fail('should throw');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('UPSTREAM_ERROR');
@@ -91,7 +92,7 @@ describe('GmailAdapter', () => {
         ok: true, json: () => Promise.resolve(sent),
       }));
 
-      const result = await adapter.sendMessage('token', {
+      const result = await adapter.sendMessage(GRANT_TOKEN, {
         to: 'bob@example.com',
         subject: 'Hello',
         body: 'Hi Bob!',
@@ -112,7 +113,7 @@ describe('GmailAdapter', () => {
         ok: true, json: () => Promise.resolve({ id: 'msg_2' }),
       }));
 
-      await adapter.sendMessage('token', {
+      await adapter.sendMessage(GRANT_TOKEN, {
         to: 'bob@example.com',
         subject: 'Test',
         body: 'Hello',
@@ -131,7 +132,7 @@ describe('GmailAdapter', () => {
         ...MOCK_GRANT, scopes: ['email:read'],
       });
 
-      await expect(adapter.sendMessage('token', {
+      await expect(adapter.sendMessage(GRANT_TOKEN, {
         to: 'bob@example.com', subject: 'Test', body: 'Hi',
       })).rejects.toThrow(GrantexAdapterError);
     });
