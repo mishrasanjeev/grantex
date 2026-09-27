@@ -68,6 +68,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `grantex_issuance_refusals_total{path,reason}`. Alert rules:
   `GrantexIssuanceLockoutPlaced` and `GrantexIssuanceFreezeStateUnreadable`.
   The runbook is section 11 of `docs/self-hosting.md`.
+### Portable WebAuthn SDK patch candidates
+- Prepared `@grantex/sdk@0.7.1`, Python `grantex==0.6.1`, and Go SDK
+  `v0.4.1` to ship the typed signed grant-evidence reference and VC
+  `webauthnVerified` response already tested in source. These version bumps
+  are not registry publication; verify all three public artifacts before
+  updating release-status claims.
+
 ### mcp-auth resource guard: grant token algorithms, `typ` and standard claims
 Part of the unpublished `@grantex/mcp-auth` 3.0.0.
 - **Breaking:** `requireMcpAuth` (Express and Hono) and
@@ -104,6 +111,7 @@ Part of the unpublished `@grantex/mcp-auth` 3.0.0.
   member, a legacy `agt`, `dev`, `grnt` or `delegationDepth` that is `null` or
   mistyped (before, it was skipped), and a `scope` that is not a string. The
   auth service has never issued such a token.
+
 ### Decision grants are bound to the requesting agent
 - Added `DECISION_GRANT_AGENT_BINDING` to the auth service, off by default.
   Only `true` and `false` are accepted; any other value makes the decision
@@ -163,6 +171,7 @@ Part of the unpublished `@grantex/mcp-auth` 3.0.0.
   `consume_unavailable` (still a denial). AgenticOrg governed cases read
   `decisionGrants` from GET today; the changes it needs first are listed in
   `docs/guides/agenticorg-governed-cases.mdx`.
+
 ### Bounded JWKS fetch and validated `did:web` issuers (TypeScript and Python SDKs, default off)
 - Added an opt-in option, default `false`: `boundedJwksFetch` on
   `verifyGrantToken`'s options and on `verifyDecisionGrant` /

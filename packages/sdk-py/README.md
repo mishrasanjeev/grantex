@@ -1,16 +1,18 @@
 # grantex
 
+**Version 0.6.1:** exposes the signed WebAuthn grant evidence reference and
+`webauthn_verified` VC attestation field. An evidence reference is not the raw
+assertion or a current revocation check. Verify issuer, enrollment, RP ID,
+origin, digest, and current status; see the
+[passkey guide](https://docs.grantex.dev/features/fido-webauthn).
+
 **Version 0.6.0:** adds hosted passkey enrollment sessions and account-level
 irregularity response policy methods. Both require the server's corresponding
 feature flags and an authenticated customer handoff for enrollment. Confirm
 the published version in [Release Status](https://docs.grantex.dev/release-status)
 before installing.
 
-Repository source exposes the signed WebAuthn grant evidence reference and
-`webauthn_verified` VC attestation field; published `0.6.0` predates those
-types. Server-side portable issuance requires an explicit rollout. A signed
-reference alone is not the raw assertion or a current revocation check; see
-the [passkey guide](https://docs.grantex.dev/features/fido-webauthn).
+Server-side portable issuance requires an explicit rollout.
 
 **0.5.1:** security and reliability fixes. `enforce()` applies the
 tightest budget cap and denies malformed, negative or non-finite amounts; the
@@ -37,7 +39,7 @@ Grantex lets humans authorize AI agents with **verifiable, revocable, audited gr
 ## Install
 
 ```bash
-pip install grantex==0.6.0
+pip install grantex==0.6.1
 ```
 
 ## Quick start
@@ -103,8 +105,7 @@ exchange to request an opt-in VC containing the full assertion, then inspect
 `client.credentials.verify(vc_jwt).webauthn_verified`. Independently trust
 the issuer and enrollment, check revocation, pin the RP ID and origin, and
 compare the VC evidence digest with the grant reference. Raw credential public
-keys can correlate presentations. These additions are in this checkout and
-require a future PyPI release for registry consumers.
+keys can correlate presentations.
 
 ## PKCE Support
 
