@@ -667,6 +667,18 @@ components:
           type: string
         delegationDepth:
           type: integer
+        webauthnEvidence:
+          type: object
+          description: Signed-reference summary for a verified passkey assertion; no raw credential key or signature
+          properties:
+            type: { type: string, enum: [GrantexWebAuthnAssertion] }
+            version: { type: integer, enum: [1] }
+            authRequestId: { type: string }
+            rpId: { type: string }
+            origin: { type: string }
+            userVerified: { type: boolean }
+            assertedAt: { type: string, format: date-time }
+            digest: { type: string, pattern: '^[a-f0-9]{64}$' }
 
     AuditEntry:
       type: object
@@ -2429,10 +2441,13 @@ paths:
                   description: PKCE code verifier (required if code_challenge was used)
                 credentialFormat:
                   type: string
-                  enum: [vc-jwt]
+                  enum: [jwt, vc-jwt, sd-jwt, both, agent-passport]
                   description: |
-                    When set to "vc-jwt", a W3C Verifiable Credential (VC-JWT) is issued alongside the
-                    standard grant token. The VC is a portable, tamper-proof proof of authorization.
+                    With "vc-jwt" or "both", a VC-JWT is requested alongside the grant token.
+                    Issuance is atomic when portable WebAuthn evidence is enabled or already present.
+                    With PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true, passkey-approved requests
+                    carry verified WebAuthn evidence in the VC array.
+                    The grant token carries a signed digest reference, not the raw assertion.
               required: [code, agentId]
       responses:
         "201":
@@ -2458,9 +2473,9 @@ paths:
                     type: string
                   verifiableCredential:
                     type: string
-                    description: W3C VC-JWT (present when credentialFormat is "vc-jwt")
+                    description: VC-JWT or SD-JWT when the corresponding credential format is requested
         "400":
-          description: Invalid code, not approved, expired, or PKCE mismatch
+          description: Invalid code, not approved, expired, PKCE mismatch, or PASSKEY_EVIDENCE_REQUIRED after portable-evidence activation
           content:
             application/json:
               schema:
@@ -5727,8 +5742,10 @@ paths:
       tags: [WebAuthn]
       summary: Generate registration options
       description: |
-        Generate FIDO2/WebAuthn registration options for a principal. Returns a challenge and
-        PublicKeyCredentialCreationOptions that the browser passes to navigator.credentials.create().
+        Generate developer-authenticated WebAuthn registration options for a principal.
+        The publicKey object is passed to navigator.credentials.create() after decoding
+        its base64url fields. This legacy ceremony requests user verification as preferred;
+        use hosted enrollment for required user verification.
       requestBody:
         required: true
         content:
@@ -5752,42 +5769,10 @@ paths:
                   challengeId:
                     type: string
                     description: Server-side challenge reference
-                  challenge:
-                    type: string
-                    description: Base64url-encoded challenge
-                  rp:
+                  publicKey:
                     type: object
-                    properties:
-                      name:
-                        type: string
-                      id:
-                        type: string
-                  user:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                      name:
-                        type: string
-                      displayName:
-                        type: string
-                  pubKeyCredParams:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        type:
-                          type: string
-                        alg:
-                          type: integer
-                  authenticatorSelection:
-                    type: object
-                    properties:
-                      userVerification:
-                        type: string
-                        enum: [required]
-                  timeout:
-                    type: integer
+                    description: PublicKeyCredentialCreationOptionsJSON including challenge, rp, user, pubKeyCredParams, and authenticatorSelection
+                    additionalProperties: true
         "400":
           description: Missing principalId
           content:
@@ -5838,8 +5823,19 @@ paths:
               schema:
                 type: object
                 properties:
-                  credentialId:
+                  id:
                     type: string
+                  principalId:
+                    type: string
+                  deviceName:
+                    type: string
+                    nullable: true
+                  backedUp:
+                    type: boolean
+                  transports:
+                    type: array
+                    items:
+                      type: string
                   createdAt:
                     type: string
                     format: date-time
@@ -5869,22 +5865,33 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: string
-                    principalId:
-                      type: string
-                    authenticatorType:
-                      type: string
-                    createdAt:
-                      type: string
-                      format: date-time
-                    lastUsedAt:
-                      type: string
-                      format: date-time
+                type: object
+                properties:
+                  credentials:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        principalId:
+                          type: string
+                        deviceName:
+                          type: string
+                          nullable: true
+                        backedUp:
+                          type: boolean
+                        transports:
+                          type: array
+                          items:
+                            type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        lastUsedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
 
   /v1/webauthn/credentials/{id}:
     delete:
@@ -5923,11 +5930,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [principalId, authRequestId]
+              required: [authRequestId]
               properties:
                 principalId:
                   type: string
-                  description: The end-user's principal ID
+                  description: Required when the pending request has no bound principal; otherwise must match it
                 authRequestId:
                   type: string
                   description: The authorization request ID this assertion is for
@@ -5941,22 +5948,10 @@ paths:
                 properties:
                   challengeId:
                     type: string
-                  challenge:
-                    type: string
-                  allowCredentials:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                        type:
-                          type: string
-                  userVerification:
-                    type: string
-                    enum: [required]
-                  timeout:
-                    type: integer
+                  publicKey:
+                    type: object
+                    description: PublicKeyCredentialRequestOptionsJSON including challenge and allowCredentials
+                    additionalProperties: true
         "400":
           description: Missing parameters
           content:
@@ -5976,8 +5971,11 @@ paths:
       tags: [WebAuthn]
       summary: Verify assertion
       description: |
-        Verify the assertion response from navigator.credentials.get(). On success, the associated
-        authorization request is approved with FIDO evidence attached to the grant.
+        Verify the assertion response from navigator.credentials.get(). On success, the pending
+        authorization request is marked FIDO-verified. With
+        PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true its assertion evidence is stored.
+        A separate POST to /v1/consent/{id}/approve or /deny is required. Token exchange
+        binds the evidence to the grant; an opt-in VC exports the raw assertion.
       requestBody:
         required: true
         content:
@@ -6008,7 +6006,7 @@ paths:
                           type: string
       responses:
         "200":
-          description: Assertion verified, grant approved
+          description: Assertion verified; authorization request remains pending
           content:
             application/json:
               schema:
@@ -6016,20 +6014,6 @@ paths:
                 properties:
                   verified:
                     type: boolean
-                  grantId:
-                    type: string
-                  fidoEvidence:
-                    type: object
-                    properties:
-                      credentialId:
-                        type: string
-                      authenticatorType:
-                        type: string
-                      userVerified:
-                        type: boolean
-                      assertedAt:
-                        type: string
-                        format: date-time
         "400":
           description: Invalid assertion
           content:
@@ -6142,17 +6126,19 @@ paths:
       tags: [Verifiable Credentials]
       summary: Verify a VC-JWT
       description: |
-        Verify a Verifiable Credential JWT. Checks the signature against the issuer's DID document,
-        validates expiry, and checks the StatusList2021 revocation status.
+        Verify a Verifiable Credential JWT. Checks the signature against configured issuer
+        signing keys, validates expiry and StatusList2021 revocation, and re-verifies
+        embedded WebAuthn assertions against this server's RP ID and origin. Independent
+        verifiers must pin their own trusted issuer, RP ID, and origin.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [vcJwt]
+              required: [credential]
               properties:
-                vcJwt:
+                credential:
                   type: string
                   description: The VC-JWT to verify
       responses:
@@ -6165,14 +6151,18 @@ paths:
                 properties:
                   valid:
                     type: boolean
-                  issuer:
+                  vcId:
                     type: string
-                  credentialSubject:
+                  payload:
                     type: object
-                  status:
-                    type: string
-                    enum: [active, revoked]
-                  reason:
+                  revoked:
+                    type: boolean
+                  expired:
+                    type: boolean
+                  webauthnVerified:
+                    type: boolean
+                    description: Present and true when a VC's WebAuthn assertion is cryptographically verified
+                  error:
                     type: string
                     description: Present when valid is false
 

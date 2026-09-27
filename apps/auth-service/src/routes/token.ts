@@ -11,6 +11,13 @@ import { GRANTEX_AGENT_ID, GRANTEX_GRANT_ID, GRANTEX_PRINCIPAL_ID, GRANTEX_SCOPE
 import { isValidPkceVerifier, verifyPkceChallenge } from '../lib/pkce.js';
 import { incrementUsage } from '../lib/usage.js';
 import { issueAgentGrantVC } from '../lib/vc.js';
+import { config } from '../config.js';
+import {
+  grantWebAuthnEvidence,
+  parseWebAuthnEvidence,
+  verifyPortableWebAuthnEvidence,
+  type WebAuthnAssertionEvidence,
+} from '../lib/webauthn-evidence.js';
 import { issueSDJWT } from '../lib/sd-jwt.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
@@ -123,6 +130,9 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     let expiresAt!: Date;
     let expTimestamp!: number;
     let jwt!: string;
+    let webAuthnEvidence: WebAuthnAssertionEvidence | undefined;
+    let verifiableCredential: string | undefined;
+    let verifiableCredentialId: string | undefined;
     const grantId = newGrantId();
     const jti = newTokenId();
     const refreshId = newRefreshTokenId();
@@ -135,9 +145,11 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
                  ar.scopes, ar.expires_in, ar.expires_at, ar.status,
                  ar.audience, ar.redirect_uri, ar.code_challenge,
                  ar.agent_key_thumbprint, ar.purpose, ar.authorization_details,
+                 ar.fido_verified, ar.fido_evidence, d.mode, d.fido_required,
                  a.did AS agent_did
           FROM auth_requests ar
           JOIN agents a ON a.id = ar.agent_id
+          JOIN developers d ON d.id = ar.developer_id
           WHERE ar.code = ${code}
             AND ar.agent_id = ${agentId}
             AND ar.developer_id = ${developerId}
@@ -152,6 +164,26 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         }
         if (new Date(authReq['expires_at'] as string) < new Date()) {
           routeError(400, 'Auth request expired');
+        }
+        const requiresPasskey = authReq['mode'] === 'live' || authReq['fido_required'] === true;
+        if ((config.portableWebAuthnEvidenceEnabled
+              && (requiresPasskey || authReq['fido_verified'] === true))
+            || authReq['fido_evidence'] != null) {
+          if (authReq['fido_verified'] !== true || authReq['fido_evidence'] == null) {
+            routeError(400, 'A new passkey consent is required for portable evidence', 'PASSKEY_EVIDENCE_REQUIRED');
+          }
+          try {
+            webAuthnEvidence = parseWebAuthnEvidence(authReq['fido_evidence']);
+          } catch {
+            routeError(500, 'Stored passkey evidence is invalid', 'INTERNAL_ERROR');
+          }
+          if (webAuthnEvidence.authRequestId !== authReq['id']
+              || !await verifyPortableWebAuthnEvidence(webAuthnEvidence, {
+                rpId: config.fidoRpId,
+                origin: config.fidoOrigin,
+              })) {
+            routeError(500, 'Stored passkey evidence does not match the authorization request', 'INTERNAL_ERROR');
+          }
         }
 
         const registeredRedirectUri = authReq['redirect_uri'];
@@ -221,7 +253,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         await tx`
           INSERT INTO grants (
             id, agent_id, principal_id, developer_id, scopes, expires_at,
-            audience, agent_key_thumbprint, purpose, authorization_details
+            audience, agent_key_thumbprint, purpose, authorization_details,
+            fido_verified, fido_credential_id, fido_evidence
           )
           VALUES (
             ${grantId},
@@ -233,7 +266,10 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             ${authReq['audience'] as string | null},
             ${authReq['agent_key_thumbprint'] as string | null},
             ${approvedPurpose as string | null},
-            ${grantAuthorizationDetails === null ? null : tx.json(grantAuthorizationDetails as never)}
+            ${grantAuthorizationDetails === null ? null : tx.json(grantAuthorizationDetails as never)},
+            ${webAuthnEvidence !== undefined},
+            ${webAuthnEvidence?.credentialId ?? null},
+            ${webAuthnEvidence ? tx.json(webAuthnEvidence as never) : null}
           )
         `;
 
@@ -267,6 +303,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             ? { cnf: { jkt: authReq['agent_key_thumbprint'] } }
             : {}),
           ...(grantAuthorizationDetails !== null ? { authorizationDetails: grantAuthorizationDetails } : {}),
+          ...(webAuthnEvidence ? { webauthnEvidence: grantWebAuthnEvidence(webAuthnEvidence) } : {}),
           exp: expTimestamp,
         }));
 
@@ -279,6 +316,21 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           INSERT INTO refresh_tokens (id, grant_id, expires_at)
           VALUES (${refreshId}, ${grantId}, ${refreshExpiresAt})
         `;
+
+        if ((credentialFormat === 'vc-jwt' || credentialFormat === 'both')
+            && (config.portableWebAuthnEvidenceEnabled || webAuthnEvidence)) {
+          const vcResult = await issueAgentGrantVC({
+            grantId,
+            agentDid: authReq['agent_did'] as string,
+            principalId: authReq['principal_id'] as string,
+            developerId,
+            scopes: authReq['scopes'] as string[],
+            expiresAt,
+            ...(webAuthnEvidence ? { fidoEvidence: webAuthnEvidence } : {}),
+          }, tx);
+          verifiableCredential = vcResult.vcJwt;
+          verifiableCredentialId = vcResult.vcId;
+        }
 
         await tx`
           UPDATE auth_requests
@@ -297,9 +349,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       throw err;
     }
 
-    // VC-JWT issuance (optional)
-    let verifiableCredential: string | undefined;
-    if (credentialFormat === 'vc-jwt' || credentialFormat === 'both') {
+    if ((credentialFormat === 'vc-jwt' || credentialFormat === 'both')
+        && !config.portableWebAuthnEvidenceEnabled && !webAuthnEvidence) {
       try {
         const vcResult = await issueAgentGrantVC({
           grantId,
@@ -310,10 +361,13 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           expiresAt,
         });
         verifiableCredential = vcResult.vcJwt;
-        emitEvent(developerId, 'vc.issued', { vcId: vcResult.vcId, grantId }).catch(() => {});
+        verifiableCredentialId = vcResult.vcId;
       } catch {
-        // Best-effort — don't fail the token exchange if VC issuance fails
+        // Preserve the pre-rollout best-effort behavior while the flag is off.
       }
+    }
+    if (verifiableCredentialId) {
+      emitEvent(developerId, 'vc.issued', { vcId: verifiableCredentialId, grantId }).catch(() => {});
     }
 
     // SD-JWT issuance (optional)
@@ -432,6 +486,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
                  g.agent_id, g.principal_id, g.developer_id, g.scopes, g.status AS grant_status,
                   g.expires_at AS grant_expires_at, g.audience, g.agent_key_thumbprint,
                   g.authorization_details AS grant_authorization_details,
+                  g.fido_evidence,
                  g.parent_grant_id, g.delegation_depth, g.actor_chain,
                  a.did AS agent_did, parent_agent.did AS parent_agent_did,
                   ba.remaining_budget, ba.currency AS budget_currency
@@ -535,6 +590,9 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             : {}),
           ...(budgetAmount !== undefined ? { bdg: budgetAmount } : {}),
           ...(refreshedDetails.length > 0 ? { authorizationDetails: refreshedDetails } : {}),
+          ...(row['fido_evidence'] != null
+            ? { webauthnEvidence: grantWebAuthnEvidence(parseWebAuthnEvidence(row['fido_evidence'])) }
+            : {}),
           ...(parentAgt ? { parentAgt } : {}),
           ...(parentGrnt ? { parentGrnt } : {}),
           ...(refreshedAct !== undefined ? { act: refreshedAct } : {}),

@@ -178,16 +178,17 @@ type VerifyTokenResponse struct {
 
 // Grant represents an authorization grant.
 type Grant struct {
-	ID          string   `json:"grantId"`
-	AgentID     string   `json:"agentId"`
-	AgentDID    string   `json:"agentDid"`
-	PrincipalID string   `json:"principalId"`
-	DeveloperID string   `json:"developerId"`
-	Scopes      []string `json:"scopes"`
-	Status      string   `json:"status"`
-	IssuedAt    string   `json:"issuedAt"`
-	ExpiresAt   string   `json:"expiresAt"`
-	RevokedAt   *string  `json:"revokedAt,omitempty"`
+	ID               string                 `json:"grantId"`
+	AgentID          string                 `json:"agentId"`
+	AgentDID         string                 `json:"agentDid"`
+	PrincipalID      string                 `json:"principalId"`
+	DeveloperID      string                 `json:"developerId"`
+	Scopes           []string               `json:"scopes"`
+	Status           string                 `json:"status"`
+	IssuedAt         string                 `json:"issuedAt"`
+	ExpiresAt        string                 `json:"expiresAt"`
+	RevokedAt        *string                `json:"revokedAt,omitempty"`
+	WebAuthnEvidence *WebAuthnGrantEvidence `json:"webauthnEvidence,omitempty"`
 }
 
 // ListGrantsParams are the parameters for listing grants.
@@ -223,6 +224,18 @@ type DelegateResponse struct {
 	GrantID    string   `json:"grantId"`
 }
 
+// WebAuthnGrantEvidence is a signed reference to assertion material in an opt-in VC.
+type WebAuthnGrantEvidence struct {
+	Type          string `json:"type"`
+	Version       int    `json:"version"`
+	AuthRequestID string `json:"authRequestId"`
+	RPID          string `json:"rpId"`
+	Origin        string `json:"origin"`
+	UserVerified  bool   `json:"userVerified"`
+	AssertedAt    string `json:"assertedAt"`
+	Digest        string `json:"digest"`
+}
+
 // VerifiedGrant represents a verified JWT grant token's claims.
 type VerifiedGrant struct {
 	TokenID         string   `json:"tokenId"`
@@ -245,6 +258,8 @@ type VerifiedGrant struct {
 	Cnf map[string]interface{} `json:"cnf,omitempty"`
 	// Audience is the aud claim, when the grant is bound to a resource.
 	Audience []string `json:"audience,omitempty"`
+	// WebAuthnEvidence is an issuer-signed reference, not the raw assertion.
+	WebAuthnEvidence *WebAuthnGrantEvidence `json:"webauthnEvidence,omitempty"`
 	// LegacyClaimsUsed lists legacy claim aliases that were read because the
 	// token had no standard claim for them. Empty for 0.6 tokens.
 	LegacyClaimsUsed []string `json:"legacyClaimsUsed,omitempty"`

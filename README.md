@@ -74,7 +74,7 @@ can verify funding and settlement. The source checkout now includes opt-in
 Base native USDC EIP-3009 payments with policy-gated signing, verified funding,
 durable signature retries and finalized-chain reconciliation. Python `0.6.0`
 and Go `v0.4.0` publish the EVM response and reconciliation APIs; neither adds
-an automatic HTTP payment wrapper. Published TypeScript `0.6.0` and x402 `0.4.0`
+an automatic HTTP payment wrapper. Published TypeScript `0.7.0` and x402 `0.4.1`
 include the opt-in automatic Base 402/sign/retry flow. All four releases are
 registry verified. See the
 [Base USDC custody guide](docs/guides/base-usdc-custody.mdx), including the limit
@@ -122,8 +122,8 @@ See [Agent Wallet Governance](docs/guides/agent-wallet-governance.mdx) for the
 complete responsibility matrix, policy composition, exact approval protocol,
 and honest residual gap list.
 
-The managed clients are implemented in registry-verified `@grantex/sdk@0.6.0`,
-`@grantex/x402@0.4.0`, Python `grantex==0.6.0`, and Go `v0.4.0`. External
+The managed clients are implemented in registry-verified `@grantex/sdk@0.7.0`,
+`@grantex/x402@0.4.1`, Python `grantex==0.6.0`, and Go `v0.4.0`. External
 custody, principal notification delivery, and
 merchant result idempotency remain operator responsibilities.
 See the [x402 integration
@@ -198,7 +198,7 @@ and 255 tests across 23 sequential Docker E2E files. This is self-assessed evide
 the tested Grantex configuration, not independent interoperability
 certification, OAuth Working Group adoption, or IETF endorsement. The
 updated `OAuthAgentClient` is published in registry-verified
-`@grantex/sdk@0.6.0`.
+`@grantex/sdk@0.7.0`.
 
 Revision `-02` remains the current Datatracker publication. Candidate `-03`
 must not be uploaded before 2026-09-09 and requires a fresh explicit approval
@@ -238,11 +238,11 @@ Current public releases and repository versions, verified 2026-09-27:
 
 | Component | Published version | Repository version | Reproducible install |
 | --- | ---: | ---: | --- |
-| TypeScript SDK | `@grantex/sdk` `0.6.0` | `0.7.0` | `npm install @grantex/sdk@0.6.0` |
-| x402 Payment Protocol | `@grantex/x402` `0.4.0` | `0.4.1` | `npm install @grantex/x402@0.4.0 @grantex/sdk@0.6.0` |
+| TypeScript SDK | `@grantex/sdk` `0.7.0` | `0.7.0` | `npm install @grantex/sdk@0.7.0` |
+| x402 Payment Protocol | `@grantex/x402` `0.4.1` | `0.4.1` | `npm install @grantex/x402@0.4.1 @grantex/sdk@0.7.0` |
 | Python SDK | `grantex` `0.6.0` | - | `python -m pip install grantex==0.6.0` |
 | Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.4.0` (Go 1.26.1+) | - | `go get github.com/mishrasanjeev/grantex-go@v0.4.0` |
-| MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | - | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.6.0` |
+| MCP Authorization Server | `@grantex/mcp-auth` `2.0.2` | - | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.0` |
 
 > **Known published-package limits:** MCP Auth `2.0.2` keeps authorization codes
 > in process memory, does not render consent,
@@ -271,7 +271,7 @@ Omit a version pin to install the registry's current latest release. See the [re
 ## SDK quickstart
 
 ```bash
-npm install @grantex/sdk@0.6.0
+npm install @grantex/sdk@0.7.0
 ```
 
 ```typescript
@@ -309,7 +309,7 @@ if (!auth.code) {
 ```bash
 python -m pip install grantex==0.6.0               # Python SDK
 go get github.com/mishrasanjeev/grantex-go@v0.4.0 # Go SDK (Go 1.26.1+)
-npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.6.0 # MCP endpoint evaluation
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.0 # MCP endpoint evaluation
 npm install -g @grantex/cli@0.3.0                   # Optional CLI tooling
 ```
 
@@ -706,9 +706,13 @@ Grantex supports passkey-based human presence verification using FIDO2/WebAuthn.
 1. **Developer configures FIDO** — Live mode already requires it; set `fidoRequired: true` via `PATCH /v1/me` to require it in sandbox mode too.
 2. **Application enrolls the customer** — After authenticating the customer, the application issues a one-use hosted enrollment link for their exact principal ID. The consent URL alone cannot register a passkey.
 3. **User authenticates on consent** — On subsequent authorization requests, the user completes a WebAuthn assertion challenge instead of a simple button click
-4. **FIDO evidence embedded in grants** — The assertion result is recorded in the grant and can be embedded in Verifiable Credentials as cryptographic proof of human presence
+4. **Consent requires verified presence** — With portable evidence enabled, Grantex stores the verified assertion on the pending request, binds it to the grant, and puts a signed digest reference in the grant token. An opt-in VC carries the assertion verification inputs.
 
 ### SDK Usage
+
+Hosted enrollment is included in published `@grantex/sdk@0.7.0`,
+`grantex==0.6.0`, and `github.com/mishrasanjeev/grantex-go@v0.4.0`.
+Publishing an SDK does not enable the server-side enrollment flag.
 
 ```typescript
 // Enable FIDO for your developer account
@@ -721,7 +725,7 @@ const { enrollmentUrl } = await grantex.webauthn.createEnrollmentSession({
 // Show the one-use link only to that customer. The hosted page handles WebAuthn.
 
 // List and manage credentials
-const creds = await grantex.webauthn.listCredentials('user_abc123');
+const { credentials: creds } = await grantex.webauthn.listCredentials('user_abc123');
 await grantex.webauthn.deleteCredential(credentialId);
 ```
 
@@ -739,7 +743,7 @@ session = client.webauthn.create_enrollment_session(principal_id="user_abc123")
 enrollment_url = session.enrollment_url
 
 # List and manage credentials
-creds = client.webauthn.list_credentials("user_abc123")
+creds = client.webauthn.list_credentials("user_abc123").credentials
 client.webauthn.delete_credential(credential_id)
 ```
 
@@ -759,7 +763,7 @@ client.webauthn.delete_credential(credential_id)
 | `POST` | `/v1/webauthn/assert/verify` | Verify assertion during consent |
 | `PATCH` | `/v1/me` | Update developer settings (FIDO config) |
 
-Hosted enrollment requires `PASSKEY_ENROLLMENT_ENABLED=true` and a correctly configured HTTPS `FIDO_ORIGIN`/`FIDO_RP_ID`; the server feature is off by default. Live-mode consent requires an existing passkey, with no weaker fallback. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) for the customer identity-binding and one-use link requirements. SDK methods shown above describe repository source; verify your installed package version includes them before use.
+Hosted enrollment requires `PASSKEY_ENROLLMENT_ENABLED=true` and a correctly configured HTTPS `FIDO_ORIGIN`/`FIDO_RP_ID`; the server feature is off by default. Live-mode consent requires an existing passkey, with no weaker fallback. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) for the customer identity-binding and one-use link requirements. The guide also distinguishes the hosted SDK methods from the REST-only custom assertion ceremony.
 
 For a production rollout, deploy the auth service and the `/passkey-enroll` hosting rewrite before enabling the flag. Then run `Production Passkey and Irregularity E2E` from GitHub Actions. That test creates an isolated live account, enrolls a virtual passkey, approves consent, records 51 audit entries, verifies alert-only does not revoke its grant, and verifies the revoke mode does. It leaves the test account and audit records in production; do not run it against a customer account.
 
@@ -839,9 +843,11 @@ const { credentials } = await grantex.credentials.list({
 });
 ```
 
-### FIDO Evidence in VCs
+### Portable Passkey Evidence
 
-When FIDO is enabled and the user completes a WebAuthn assertion during consent, the VC includes a `fidoEvidence` field that cryptographically proves human presence at the time of authorization. This is compatible with the Mastercard Verifiable Intent specification for agentic commerce.
+Live consent requires a passkey assertion. With `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true` (default off), newly issued grants and grant tokens carry a signed `webauthnEvidence` summary with the assertion digest. Request `credentialFormat: 'vc-jwt'` (or `'both'`) at token exchange to receive a signed VC with the raw assertion, public key, challenge, RP ID, origin, and prior counter in `vc.evidence`. With this rollout enabled or evidence already present, the VC is issued atomically with the grant. Delegated grants inherit this original-ceremony evidence, not a new human approval. Historical grants without captured evidence cannot be upgraded retroactively; the principal must complete a new consent ceremony after activation.
+
+Verify the VC signature, expiry and revocation; require your trusted RP ID and origin; reverify the WebAuthn assertion; and compare its digest to the grant-token reference. The authenticator signs a challenge, not the grant's scopes. Grantex's issuer signature supplies that binding and attests its credential enrollment; a verifier must decide whether to trust that issuer and enrollment process. Raw evidence contains a stable credential public key and is opt-in because it can correlate presentations. No payment-network certification is implied. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) and [VC guide](https://docs.grantex.dev/features/verifiable-credentials).
 
 ### DID Infrastructure
 
@@ -1545,7 +1551,7 @@ curl -s -X POST http://localhost:3001/v1/token \
 
 **Developer portal** is available at [grantex.dev/dashboard](https://grantex.dev/dashboard) — sign up or enter an API key to manage agents, grants, policies, anomalies, compliance exports, and billing from the browser.
 
-**Account settings for live consent and irregularities:** The Billing page shows your account's actual plan. The source limits are 1,000 active grants on Free, 50,000 on Pro, and unlimited on Enterprise, counted across the developer account rather than per agent. Check the deployed account with authenticated `GET /v1/billing/subscription`; an agent ID alone cannot reveal its plan. The Irregularities page offers an account-wide `alert_only` response to findings from `POST /v1/anomalies/detect` when `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`. Without that server flag, the detector retains its existing agent-wide revocation of active grants on high/critical findings. Alert-only preserves alerts and does not bypass manual revocation or independent security gates. See the [setup guide](https://docs.grantex.dev/guides/anomaly-detection-setup). Server availability depends on deployment and rollout flags. Python `grantex==0.6.0` and Go `v0.4.0` publish the new client methods; TypeScript `0.7.0` is still awaiting npm publication.
+**Account settings for live consent and irregularities:** The Billing page shows your account's actual plan. The source limits are 1,000 active grants on Free, 50,000 on Pro, and unlimited on Enterprise, counted across the developer account rather than per agent. Check the deployed account with authenticated `GET /v1/billing/subscription`; an agent ID alone cannot reveal its plan. The Irregularities page offers an account-wide `alert_only` response to findings from `POST /v1/anomalies/detect` when `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`. Without that server flag, the detector retains its existing agent-wide revocation of active grants on high/critical findings. Alert-only preserves alerts and does not bypass manual revocation or independent security gates. See the [setup guide](https://docs.grantex.dev/guides/anomaly-detection-setup). Server availability depends on deployment and rollout flags. TypeScript `@grantex/sdk@0.7.0`, Python `grantex==0.6.0`, and Go `v0.4.0` publish the new client methods.
 
 For local development, the auth service also serves a lightweight dashboard at `http://localhost:3001/dashboard`.
 
@@ -1598,7 +1604,7 @@ check its registry page and compatibility notes before choosing a version.
 | **DPDP Compliance** | `@grantex/dpdp` | `npm install @grantex/dpdp` | Published package |
 | **Adapters** | `@grantex/adapters` | `npm install @grantex/adapters` | Published package |
 | **MCP Tool Server** | `@grantex/mcp` (`0.1.10`) | `npm install @grantex/mcp` | Published package |
-| **MCP Authorization Server** | `@grantex/mcp-auth` (`2.0.2`) | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.6.0` | Published; single-process evaluation only |
+| **MCP Authorization Server** | `@grantex/mcp-auth` (`2.0.2`) | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.0` | Published; single-process evaluation only |
 | **Gateway** | `@grantex/gateway` | `npm install @grantex/gateway` | Published package |
 | **Express.js** | `@grantex/express` | `npm install @grantex/express` | Published package |
 | **FastAPI** | `grantex-fastapi` | `pip install grantex-fastapi` | Published package |
@@ -1611,7 +1617,7 @@ check its registry page and compatibility notes before choosing a version.
 | **Strands Agents SDK (Python)** | `grantex-strands` | `pip install grantex-strands` | Published package |
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | Published package |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | Published package |
-| **TypeScript SDK** | `@grantex/sdk` (`0.6.0`) | `npm install @grantex/sdk@0.6.0` | Registry-verified published package |
+| **TypeScript SDK** | `@grantex/sdk` (`0.7.0`) | `npm install @grantex/sdk@0.7.0` | Registry-verified published package |
 | **Python SDK** | `grantex` (`0.6.0`) | `python -m pip install grantex==0.6.0` | Registry-verified published package |
 | **Go SDK** | `grantex-go` (`v0.4.0`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.4.0` | Tag and public Go-proxy verified |
 | **CLI** | `@grantex/cli` (`0.3.0`) | `npm install -g @grantex/cli@0.3.0` | Registry-verified published package |
@@ -1623,7 +1629,7 @@ check its registry page and compatibility notes before choosing a version.
 | **A2A Bridge (Py)** | `grantex-a2a` | `pip install grantex-a2a` | Published package |
 | **Event Destinations** | `@grantex/destinations` | `npm install @grantex/destinations` | Published package |
 | **Terraform Provider** | `terraform-provider-grantex` | [Source-build evaluation](https://docs.grantex.dev/guides/terraform) | Source only; public registry lookup returned 404 on September 7, 2026 |
-| **x402 Payment Protocol** | `@grantex/x402` (`0.4.0`) | `npm install @grantex/x402@0.4.0 @grantex/sdk@0.6.0` | Registry-verified layered x402 v2 release; external custody remains operator-supplied |
+| **x402 Payment Protocol** | `@grantex/x402` (`0.4.1`) | `npm install @grantex/x402@0.4.1 @grantex/sdk@0.7.0` | Registry-verified layered x402 v2 release; external custody remains operator-supplied |
 
 The guarded `publish-primary-sdks.yml` workflow builds and tests each prepared
 version once, then publishes those immutable artifacts. Before it can publish, a

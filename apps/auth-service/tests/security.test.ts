@@ -189,7 +189,7 @@ describe('WebAuthn Security', () => {
   });
 
   describe('Assertion with null auth_request_id', () => {
-    it('skips auth request update when auth_request_id is null', async () => {
+    it('rejects an unbound assertion before touching the credential', async () => {
       // Challenge lookup — valid but no auth_request_id
       sqlMock.mockResolvedValueOnce([{
         challenge: 'valid-challenge',
@@ -197,18 +197,6 @@ describe('WebAuthn Security', () => {
         developer_id: 'dev_TEST',
         auth_request_id: null,
       }]);
-      // Credential lookup
-      sqlMock.mockResolvedValueOnce([{
-        id: 'cred_1',
-        credential_id: 'bW9jay1jcmVk',
-        public_key: 'AQIDBA',
-        counter: 5,
-        transports: ['internal'],
-      }]);
-      // Update counter
-      sqlMock.mockResolvedValueOnce([{ id: 'cred_1' }]);
-      // Note: no auth request update expected since auth_request_id is null
-
       const res = await app.inject({
         method: 'POST',
         url: '/v1/webauthn/assert/verify',
@@ -222,10 +210,9 @@ describe('WebAuthn Security', () => {
         },
       });
 
-      expect(res.statusCode).toBe(200);
-      expect(res.json().verified).toBe(true);
-      // Only 3 SQL calls (no separate consume or auth request update)
-      expect(sqlMock).toHaveBeenCalledTimes(3);
+      expect(res.statusCode).toBe(400);
+      expect(res.json().message).toContain('not bound');
+      expect(sqlMock).toHaveBeenCalledTimes(1);
     });
   });
 });

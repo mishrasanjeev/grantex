@@ -101,9 +101,11 @@ export const PASSKEY_ENROLLMENT_HTML = `<!doctype html>
       const result = await post('/v1/webauthn/enroll/verify', {
         ticket, challengeId: options.challengeId, response,
       });
-      setStatus('Passkey registered. Returning to consent...', false);
       if (result.returnTo && result.returnTo.startsWith('/consent?req=')) {
+        setStatus('Passkey registered. Returning to consent...', false);
         location.assign(result.returnTo);
+      } else {
+        setStatus('Passkey registered.', false);
       }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Passkey registration failed.', true);
