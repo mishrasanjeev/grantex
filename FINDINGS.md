@@ -773,3 +773,43 @@ the pull request that references it.
   publish a set the new default refuses. Owner: the TypeScript and Python SDK
   maintainers. Exit criterion: that major release ships with the default
   flipped, the explicit opt-out, and tests of both settings in both SDKs.
+
+## G-60 — The FastAPI enforcer and the Python Strands tool cannot pass an amount
+
+- **Found:** making a `capped:N` scope deny a call without an amount
+  (`amount_missing`) in both SDKs and adding amount extractors to
+  `wrap_tool`, `wrapTool` and `enforceMiddleware` (2026-09-27).
+- **What:** `grantex.fastapi.GrantexEnforcer`
+  (`packages/sdk-py/src/grantex/_fastapi.py`) and `grantex_strands`'s online
+  mode (`packages/strands-py/src/grantex_strands/_tool.py`) call `enforce()`
+  with no `amount` and have no way to supply one. Under a capped grant every
+  call through them is now denied with `amount_missing`; the only ways through
+  are calling `enforce()` directly or `caps_mode="warn"`. The TypeScript
+  Strands tool takes only a fixed `amount` per tool, not one per call.
+- **Fix:** give `GrantexEnforcer` an `amount(request, arguments)` callable
+  (plain or async, like `case_version`) and the Strands tools a per-call
+  amount extractor, passing the value to `enforce()` and refusing the call
+  when the extractor raises, as `wrap_tool` does. Owner: the Python SDK and
+  Strands integration maintainers. Exit criterion: a capped grant used
+  through each integration is allowed with an amount within the cap, denied
+  above it, and denied `amount_missing` without an extractor, with tests.
+  Schedule it before, or in, the release that ships the `amount_missing`
+  change, so these integrations are not left with only the opt-out.
+
+## G-61 — mcp-auth's tool guard ignores `capped:N` scopes
+
+- **Found:** looking for other places that read `capped:N` scopes while
+  making the SDKs deny a capped call without an amount (2026-09-27).
+- **What:** `grantedPermission` in
+  `packages/mcp-auth/src/resource/tool-policy.ts` reads a
+  `tool:<connector>:<permission>` scope "with any trailing resource or cap
+  segments" and the guard admits a `tools/call` on permission alone. A grant
+  of `tool:merchant:write:*:capped:50` therefore authorizes any amount through
+  an mcp-auth protected resource, the fail-open the SDKs no longer allow.
+- **Fix:** decide whether the guard enforces amount caps (it would need an
+  amount extractor over the JSON-RPC arguments, and `amount_missing` and
+  `amount_cap` denials) or refuses capped scopes it cannot evaluate; document
+  the choice in `docs/mcp-auth.md`. Ship the behaviour change behind an
+  option that defaults off, or as a recorded breaking change in the next
+  major. Owner: the mcp-auth maintainers. Exit criterion: a capped grant is
+  either capped or refused by the guard, with tests of both outcomes.

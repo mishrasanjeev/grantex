@@ -43,7 +43,13 @@ export const ManifestSubReason = {
 export const CapSubReason = {
   /** `amount` is above a `capped:N` scope. */
   AMOUNT_CAP: 'amount_cap',
-  /** `amount` is not a finite number. */
+  /**
+   * A `capped:N` scope covers the connector and the call gave no `amount` (or the
+   * wrapper has no amount extractor). `details` carries `limit`. In caps mode
+   * `warn` the call is allowed and this is reported in `wouldDeny`.
+   */
+  AMOUNT_MISSING: 'amount_missing',
+  /** `amount` is not a finite number, or a wrapper's amount extractor threw. */
   INVALID_AMOUNT: 'invalid_amount',
   /** A `capped:N` scope carries a malformed cap. */
   MALFORMED_CAP: 'malformed_cap',

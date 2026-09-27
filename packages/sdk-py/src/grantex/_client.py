@@ -448,10 +448,19 @@ class Grantex:
           ``result.caps_tenant_id`` can then be reserved with
           ``CapsMeter.reserve`` at the call that incurs cost, or call
           ``enforce()`` again there with ``reserve=True``.
+        - ``amount`` is the call's amount for a ``capped:N`` scope. When such
+          a scope covers the connector (on any permission: the cap applies
+          to every tool of the connector, read tools included), a call
+          without ``amount`` is denied with ``amount_missing``; an amount
+          above the cap with ``amount_cap``.
         - ``caps_mode`` overrides the client's mode: ``enforce`` denies,
           ``warn`` allows a call a cap would deny and reports it in
           ``result.would_deny`` (reserving only calls that fit), ``off``
-          skips caps.
+          skips caps. For ``capped:N`` scopes, ``warn`` allows (and reports)
+          and ``off`` skips only a call without an amount, whether the cap is
+          well formed (``amount_missing``) or not (``malformed_cap``); an
+          amount above the cap, a non-finite amount and a malformed cap with
+          an amount are denied in every mode.
         - ``caps_tenant_id`` replaces the grant's developer as the tenant of
           every counter of this call.
 
@@ -697,31 +706,67 @@ class Grantex:
                     "reason": message, "details": requirement,
                 }
 
-        # 10. Check capped amount if provided
-        if amount is not None:
-            if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount):
+        # 10. Amount caps. A ``capped:N`` scope on the connector bounds every
+        #     call's amount, so a call with no amount is denied: it used to
+        #     pass, and a caller that never reported an amount was never
+        #     capped. ``caps_mode`` "warn" allows it and reports the denial in
+        #     would_deny; "off" skips it. The cap is connector-wide: the
+        #     tightest ``capped:N`` on the connector applies to every tool on
+        #     it, read tools included. A malformed cap with no amount follows
+        #     the same modes (it used to pass too); a malformed amount, a
+        #     malformed cap with an amount, or an amount above the cap is
+        #     denied in every mode.
+        mode = self._caps_mode if caps_mode is None else _check_caps_mode(caps_mode)
+        if amount is not None and (
+            isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount)
+        ):
+            return _denied(
+                f"Amount must be a finite number to enforce a budget cap on {connector}.",
+                DenialReason.CAP_EXCEEDED, CapSubReason.INVALID_AMOUNT,
+            )
+        try:
+            cap = self._extract_cap(scopes, connector)
+        except ValueError:
+            # The cap cannot be read, so no amount (or its absence) can be
+            # judged against it: deny rather than guess. Without an amount the
+            # call used to pass, so caps_mode "warn" reports the denial and
+            # "off" skips it, the same opt-out as amount_missing below.
+            subject = "the call" if amount is None else f"amount {amount}"
+            malformed = f"A capped scope on {connector} carries a malformed cap; refusing to authorize {subject}."
+            if amount is not None or mode == CAPS_ENFORCE:
+                return _denied(malformed, DenialReason.CAP_EXCEEDED, CapSubReason.MALFORMED_CAP)
+            cap = None
+            if mode == CAPS_WARN and would_deny is None:
+                would_deny = {
+                    "reason_code": DenialReason.CAP_EXCEEDED,
+                    "sub_reason": CapSubReason.MALFORMED_CAP,
+                    "reason": malformed, "details": {},
+                }
+        if cap is not None and amount is None and mode != CAPS_OFF:
+            message = (
+                f"A capped scope on {connector} limits the amount to {cap} and the call "
+                "gave no amount; pass amount to enforce() or an amount extractor to the wrapper."
+            )
+            if mode != CAPS_WARN:
                 return _denied(
-                    f"Amount must be a finite number to enforce a budget cap on {connector}.",
-                    DenialReason.CAP_EXCEEDED, CapSubReason.INVALID_AMOUNT,
+                    message, DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_MISSING, {"limit": cap},
                 )
-            try:
-                cap = self._extract_cap(scopes, connector)
-            except ValueError:
-                return _denied(
-                    f"A capped scope on {connector} carries a malformed cap; refusing to authorize amount {amount}.",
-                    DenialReason.CAP_EXCEEDED, CapSubReason.MALFORMED_CAP,
-                )
-            if cap is not None and amount > cap:
-                return _denied(
-                    f"Amount {amount} exceeds budget cap of {cap} on {connector}.",
-                    DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_CAP,
-                    {"limit": cap, "amount": amount},
-                )
+            if would_deny is None:
+                would_deny = {
+                    "reason_code": DenialReason.CAP_EXCEEDED,
+                    "sub_reason": CapSubReason.AMOUNT_MISSING,
+                    "reason": message, "details": {"limit": cap},
+                }
+        if cap is not None and amount is not None and amount > cap:
+            return _denied(
+                f"Amount {amount} exceeds budget cap of {cap} on {connector}.",
+                DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_CAP,
+                {"limit": cap, "amount": amount},
+            )
 
         # 11. Call caps and cost units (declared by the manifest or by the
         #     grant). Reserving is the last step, so a denied call never
         #     consumes a cap; without a meter the call is denied.
-        mode = self._caps_mode if caps_mode is None else _check_caps_mode(caps_mode)
         grant_caps = entry.caps if entry is not None else None
         grant_caps_apply = grant_caps is not None and (
             tool in grant_caps or (spec.cost_units is not None and "cost_units" in grant_caps)
@@ -946,6 +991,7 @@ class Grantex:
         cost_components: list[str] | Callable[[], list[str] | None] | None = None,
         decision_grants: Sequence[str] | Callable[[], Sequence[str] | None] | None = None,
         case_version: str | Callable[[], str | None] | None = None,
+        extract_amount: Callable[[Mapping[str, Any]], Any] | None = None,
     ) -> Any:
         """Wrap a LangChain StructuredTool with automatic Grantex scope enforcement.
 
@@ -967,6 +1013,12 @@ class Grantex:
                 is derived from the tool call's keyword arguments.
             case_version: The case's current version (or a callable), from the
                 application's case state.
+            extract_amount: For a grant with a ``capped:N`` scope, a function
+                from the tool call's keyword arguments to the call's amount,
+                passed to ``enforce()``. Without it, or when it returns
+                ``None``, a capped scope denies the call with
+                ``amount_missing``. If it raises the call is refused; a value
+                that is not a finite number is denied with ``invalid_amount``.
 
         Example::
 
@@ -975,6 +1027,7 @@ class Grantex:
                 connector="salesforce",
                 tool_name="create_lead",
                 grant_token=lambda: state["grant_token"],
+                extract_amount=lambda arguments: arguments["amount"],
             )
         """
         grantex = self
@@ -985,7 +1038,21 @@ class Grantex:
         def _get_token() -> str:
             return grant_token() if callable(grant_token) else grant_token
 
+        def _amount(call_arguments: Mapping[str, Any]) -> Any:
+            if extract_amount is None:
+                return None
+            try:
+                return extract_amount(call_arguments)
+            except Exception as exc:
+                # An amount the application cannot work out is not "no
+                # amount": refuse the call rather than let it through uncapped.
+                raise PermissionError(
+                    f"Grantex scope denied: the amount extractor for {connector}.{tool_name} "
+                    f"raised {type(exc).__name__}; refusing the call without an amount."
+                ) from exc
+
         def _check(call_arguments: Mapping[str, Any]) -> None:
+            call_amount = _amount(call_arguments)
             token = _get_token()
             call_case = case_id() if callable(case_id) else case_id
             call_costs = cost_components() if callable(cost_components) else cost_components
@@ -999,7 +1066,7 @@ class Grantex:
                     "case_version": version,
                 }
             result = grantex.enforce(
-                grant_token=token, connector=connector, tool=tool_name,
+                grant_token=token, connector=connector, tool=tool_name, amount=call_amount,
                 case_id=call_case, cost_components=call_costs, **decision_kwargs,
             )
             # Retry once with refreshed token if expired and grant_token is callable.
@@ -1008,7 +1075,7 @@ class Grantex:
             if not result.allowed and "expired" in result.reason.lower() and callable(grant_token):
                 token = _get_token()
                 result = grantex.enforce(
-                    grant_token=token, connector=connector, tool=tool_name,
+                    grant_token=token, connector=connector, tool=tool_name, amount=call_amount,
                     case_id=call_case, cost_components=call_costs, **decision_kwargs,
                 )
             if not result.allowed:

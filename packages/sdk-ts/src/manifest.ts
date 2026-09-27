@@ -635,7 +635,14 @@ export interface EnforceOptions {
   connector: string;
   /** Tool name (e.g., "delete_contact"). */
   tool: string;
-  /** Amount for capped scope enforcement (optional). */
+  /**
+   * The call's amount, for a `capped:N` scope. When such a scope covers the
+   * connector (on any permission: the cap applies to every tool of the
+   * connector, read tools included), a call without an amount is denied with
+   * `amount_missing`, or `malformed_cap` when the cap cannot be read (in caps
+   * mode `warn` it is allowed and reported in `wouldDeny`; `off` skips it), and
+   * an amount above the cap with `amount_cap` in every mode.
+   */
   amount?: number;
   /** Case the call belongs to; required when a per-case cap applies. Set by the gateway, never the agent. */
   caseId?: string;
@@ -684,6 +691,13 @@ export interface WrapToolOptions {
   caseVersion?: string | (() => string | undefined);
   /** Cost units the call incurs, or a getter evaluated per call. Never taken from the tool's input. */
   costComponents?: readonly string[] | (() => readonly string[] | undefined);
+  /**
+   * For a grant with a `capped:N` scope: the call's amount, from the tool's input
+   * (plain or async). Without it, or when it returns `undefined` or `null`, a
+   * capped scope denies the call with `amount_missing`. If it throws the call is
+   * refused; a value that is not a finite number is denied with `invalid_amount`.
+   */
+  extractAmount?: (input: unknown) => number | undefined | null | Promise<number | undefined | null>;
 }
 
 /** Options for `grantex.enforceMiddleware()`. */
@@ -704,4 +718,11 @@ export interface EnforceMiddlewareOptions {
   extractArguments?: (req: Record<string, unknown>) => Record<string, unknown> | undefined;
   /** The case's current version, from trusted server-side case state. */
   extractCaseVersion?: (req: Record<string, unknown>) => string | undefined;
+  /**
+   * For a grant with a `capped:N` scope: the call's amount (plain or async).
+   * Without it, or when it returns `undefined` or `null`, a capped scope denies
+   * the request with `amount_missing`. If it throws, or returns something that is
+   * not a finite number, the request is refused with 403 `invalid_amount`.
+   */
+  extractAmount?: (req: Record<string, unknown>) => number | undefined | null | Promise<number | undefined | null>;
 }

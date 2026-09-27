@@ -142,8 +142,8 @@ that counts.
 | Mode | Behaviour |
 |---|---|
 | `enforce` (default) | Calls a cap would deny are denied |
-| `warn` | Calls a cap, a missing meter or an unavailable backend would deny are **allowed**; `result.would_deny` / `wouldDeny` carries the `reason_code`, `sub_reason`, `reason` and `details` they would have got. Calls that fit are reserved as in `enforce`; calls over a cap reserve nothing, so counters show what enforcement would have allowed |
-| `off` | Caps are not evaluated and no meter is needed |
+| `warn` | Calls a cap, a missing meter or an unavailable backend would deny are **allowed**; `result.would_deny` / `wouldDeny` carries the `reason_code`, `sub_reason`, `reason` and `details` they would have got. Calls that fit are reserved as in `enforce`; calls over a cap reserve nothing, so counters show what enforcement would have allowed. From the next release, a call with no amount under a `capped:N` scope is also allowed and reported here (`amount_missing`, or `malformed_cap` when the cap cannot be read) |
+| `off` | Caps are not evaluated and no meter is needed. From the next release, a missing amount under a `capped:N` scope is not evaluated either |
 
 Set it on the client (`Grantex(caps_mode="warn")`, `new Grantex({ capsMode: 'warn' })`)
 or per call. Malformed grant caps are a token problem and are denied in every
@@ -177,6 +177,71 @@ Other `cap_exceeded` sub-reasons:
 | `meter_unavailable` | No meter is configured, or its backend failed |
 
 Malformed grant caps deny as `token_invalid` / `malformed_authorization_details`.
+
+### Amount caps
+
+A scope such as `tool:merchant:write:*:capped:50` caps the amount of every
+call on that connector (the tightest `capped:N` on the connector wins),
+whatever permission the scope names: with `tool:merchant:read:*` and
+`tool:merchant:write:*:capped:50`, a read tool such as `get_order` is capped
+too. The
+call's amount is passed as `amount`; the SDK does not read it from the tool's
+arguments on its own.
+
+| `sub_reason` | Cause | Denied in `warn` / `off` |
+|---|---|---|
+| `amount_cap` | `amount` is above the cap; `details` carries `limit` and `amount` | Yes |
+| `invalid_amount` | `amount` is not a finite number, or a wrapper's amount extractor raised | Yes |
+| `malformed_cap` | A `capped:N` scope on the connector cannot be read | Yes when an amount is given. From the next release, a call with no amount is denied too, and `warn` allows it and reports it in `would_deny` / `wouldDeny`; `off` skips it (the current release allows it) |
+| `amount_missing` (from the next release) | A `capped:N` scope covers the connector and the call gave no amount; `details` carries `limit` | No: `warn` allows the call and reports it in `would_deny` / `wouldDeny`; `off` skips it |
+
+**From the next release (breaking):** a call with no amount under a
+`capped:N` scope is denied with `cap_exceeded` / `amount_missing`, and a
+malformed cap is denied whether or not an amount is given. In the current
+release such a call is allowed and the cap is never checked. Because the cap
+is connector-wide, this includes read-only tools with no monetary amount on a
+connector that carries a capped scope: give them an amount (an extractor may
+return `0`). To keep the old behaviour while you add amounts, set
+`caps_mode="warn"` / `capsMode: 'warn'` and log `would_deny`; it covers both
+`amount_missing` and a malformed cap on a call without an amount.
+
+From the next release, the wrappers take an amount extractor, a function from
+the call to its amount:
+
+```python
+protected = grantex.wrap_tool(
+    place_order_tool,
+    connector="merchant",
+    tool_name="place_order",
+    grant_token=lambda: state["grant_token"],
+    extract_amount=lambda arguments: arguments["total"],  # the tool's keyword arguments
+)
+```
+
+```typescript
+const protectedTool = grantex.wrapTool(placeOrderTool, {
+  connector: 'merchant',
+  tool: 'place_order',
+  grantToken: () => state.grantToken,
+  extractAmount: (input) => (input as { total: number }).total, // the tool's input
+});
+
+app.use('/api/tools/:connector/:tool', grantex.enforceMiddleware({
+  extractToken: (req) => (req.headers as Record<string, string>).authorization?.replace('Bearer ', ''),
+  extractConnector: (req) => (req.params as Record<string, string>).connector!,
+  extractTool: (req) => (req.params as Record<string, string>).tool!,
+  extractAmount: (req) => (req.body as { total: number }).total, // the request
+}));
+```
+
+Without an extractor, or when it returns `None` / `undefined` / `null`, a
+capped scope denies the call with `amount_missing`. An extractor that raises
+refuses the call before `enforce()` runs, whatever the grant says: `wrap_tool`
+raises `PermissionError`, `wrapTool` throws, and `enforceMiddleware` answers
+403 with `cap_exceeded` / `invalid_amount`. A value that is not a finite number
+(a string, a boolean, `NaN`) is passed on and denied with `invalid_amount`.
+Read the amount the tool will actually spend, from the same arguments the tool
+receives, so the cap bounds what the call does.
 
 ### Failed calls are not refunded
 

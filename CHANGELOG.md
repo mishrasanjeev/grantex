@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Capped scopes need an amount (TypeScript and Python SDKs)
+- **Breaking:** `enforce()` denies a call under a `capped:N` scope that gives
+  no `amount`, with `reason_code` / `reasonCode` `cap_exceeded` and the new
+  `sub_reason` / `subReason` `amount_missing` (`details` carries `limit`).
+  Before, such a call was allowed and the cap was never checked, and
+  `wrap_tool` / `wrapTool` / `enforceMiddleware` never passed an amount, so a
+  capped grant used through them was not capped at all. The cap is
+  connector-wide, as it already was for amounts: the tightest `capped:N` on
+  the connector applies to every tool of the connector, whatever permission
+  the capped scope names, so read-only tools on such a connector need an
+  amount too. A `capped:N` scope with a malformed cap is now denied
+  (`malformed_cap`) whether or not an amount is given.
+- **Opt-out:** `caps_mode="warn"` / `capsMode: 'warn'`, on the client or per
+  call, keeps allowing a call without an amount (`amount_missing`, or
+  `malformed_cap` when the cap cannot be read) and reports the denial in
+  `result.would_deny` / `wouldDeny`, as warn mode already does for call caps;
+  it does not print or log anything itself. `caps_mode="off"` skips the check.
+  An amount above the cap, a non-finite amount and a malformed cap with an
+  amount are denied in every mode, as before.
+- New amount extractor on the wrappers: `wrap_tool(extract_amount=...)`
+  (receives the tool call's keyword arguments), `wrapTool({ extractAmount })`
+  (receives the tool's input) and `enforceMiddleware({ extractAmount })`
+  (receives the request); the TypeScript extractors may be async. The value
+  is passed to `enforce()` as `amount`. `None` / `undefined` / `null` means no
+  amount. An extractor that raises refuses the call before `enforce()` runs
+  (`PermissionError` in Python, a thrown `Error` from `wrapTool`, a 403 with
+  `cap_exceeded` / `invalid_amount` from the middleware), whatever the grant
+  says and in every caps mode; a value that is not a finite number is denied
+  with `invalid_amount`.
+- Migration: for every grant that carries a `capped:N` scope, pass `amount`
+  to `enforce()`, or give the wrapper an amount extractor, for every tool of
+  that connector, including read-only tools with no monetary amount (pass
+  `0`, or an extractor that returns `0`). To roll out
+  gradually, set `caps_mode="warn"` / `capsMode: 'warn'`, log `would_deny`,
+  add amounts until no `amount_missing` appears, then return to `enforce`.
+  Grants without a capped scope are unaffected. The FastAPI `GrantexEnforcer`
+  and the Python Strands integration take no amount yet; where they meet
+  capped grants, call `enforce()` with `amount` directly or use the opt-out.
+  Documented in `docs/concepts/caps-and-metering.md` ("Amount caps") and
+  `spec/manifest-0.6.md`.
+
 ### Bounded JWKS fetch and validated `did:web` issuers (TypeScript and Python SDKs, default off)
 - Added an opt-in option, default `false`: `boundedJwksFetch` on
   `verifyGrantToken`'s options and on `verifyDecisionGrant` /

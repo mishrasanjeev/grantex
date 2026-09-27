@@ -127,7 +127,7 @@ a `reason_code` (`reasonCode` in TypeScript) and, where one applies, a
 | The grant's tools list (when present) names the tool | `tool_not_granted` | `not_in_authorization_details` |
 | `allowed_purposes` | `purpose_not_allowed` | `missing`, `unknown_purpose`, `not_matched` |
 | `requires_decision`, or the tool is listed in the grant's `urn:grantex:decision:v1` entry: decision grants verified offline (see `decision-grant.md`) | `decision_required` (none presented), `decision_invalid` | `action_mismatch`, `wrong_case`, `case_changed`, `expired`, `same_approver`, `four_eyes_incomplete`, `malformed`, `unknown_grant` |
-| `amount` within a `capped:N` scope | `cap_exceeded` | `invalid_amount`, `malformed_cap`, `amount_cap` |
+| `amount` present, finite and within every `capped:N` scope on the connector (any permission) | `cap_exceeded` | `invalid_amount`, `malformed_cap`, `amount_missing`, `amount_cap` |
 | `caps`, `cost_units` (manifest or grant), reserved last | `cap_exceeded` | `limit_reached` (E1008), `case_required`, `invalid_case_id`, `invalid_cost_component`, `meter_unavailable` |
 | The same decision grants, consumed at the issuer, after caps | `decision_invalid` | `consumed`, `revoked`, `consume_unavailable` and the above |
 
@@ -142,7 +142,11 @@ values intended for audit records and metric labels; `reason` remains a
 human-readable sentence and may change.
 
 Declarations are enforced fail-closed: an SDK that cannot evaluate a declared
-constraint denies the call rather than ignoring the constraint. Purpose
+constraint denies the call rather than ignoring the constraint. A `capped:N` scope is
+such a constraint: from the next SDK release a call that gives no `amount`
+under one is denied with `amount_missing` (caps mode `warn` allows it and
+reports the denial; `off` skips it), where earlier releases allowed it
+unchecked. Purpose
 matching is specified in `docs/concepts/purpose-bound-grants.md` and caps in
 `docs/concepts/caps-and-metering.md`. A tool with caps or cost units is
 denied with `meter_unavailable` when the client has no caps meter. A tool with

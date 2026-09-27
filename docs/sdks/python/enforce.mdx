@@ -47,7 +47,7 @@ def enforce(
 | `grant_token` | `str` | Yes | The JWT grant token issued by Grantex. Decoded and verified inline. |
 | `connector` | `str` | Yes | The connector name to check against (e.g., `"salesforce"`, `"s3"`). Must match a loaded manifest. |
 | `tool` | `str` | Yes | The tool name to check (e.g., `"delete_contact"`, `"create_lead"`). Must be declared in the connector's manifest. |
-| `amount` | `float \| None` | No | Optional amount for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap. |
+| `amount` | `float \| None` | No | The call's amount, for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap. From the next release a capped scope denies a call without it (`amount_missing`). |
 
 ### Response: `EnforceResult`
 
@@ -91,8 +91,17 @@ result = grantex.enforce(
 )
 # If token scope is tool:stripe:write:*:capped:500
 # result.allowed = False
-# result.reason = "amount 750 exceeds cap of 500 on tool:stripe:write:*:capped:500"
+# result.reason_code = "cap_exceeded", result.sub_reason = "amount_cap"
 ```
+
+**From the next release (breaking):** a call without `amount` under a capped
+scope is denied with `reason_code` `cap_exceeded` and `sub_reason`
+`amount_missing` (`details` carries `limit`). In the current release it is
+allowed and the cap is not checked. `caps_mode="warn"` (on the client or per
+call) keeps allowing it and reports the denial in `result.would_deny`;
+`caps_mode="off"` skips it. The cap covers every tool of the connector, read
+tools included, so pass an amount (`0` when there is none) for those too. See
+[Amount caps](/concepts/caps-and-metering#amount-caps).
 
 ---
 
@@ -295,8 +304,16 @@ def wrap_tool(
     connector: str,
     tool_name: str,
     grant_token: str | Callable[[], str],
+    extract_amount: Callable[[Mapping[str, Any]], float | None] | None = None,
 ) -> StructuredTool
 ```
+
+`extract_amount` (from the next release) receives the tool call's keyword
+arguments and returns the call's amount, which is passed to `enforce()` as
+`amount`. Under a capped scope, a wrapper without it (or an extractor returning
+`None`) denies every call with `amount_missing`. An extractor that raises
+refuses the call with `PermissionError` before `enforce()` runs; a value that
+is not a finite number is denied with `invalid_amount`.
 
 ### Example
 
@@ -304,8 +321,9 @@ def wrap_tool(
 protected_tool = grantex.wrap_tool(
     my_langchain_tool,
     connector="salesforce",
-    tool="create_lead",
+    tool_name="create_lead",
     grant_token=lambda: current_state["grant_token"],
+    extract_amount=lambda arguments: arguments["amount"],
 )
 
 # Use protected_tool in your LangChain agent chain.
