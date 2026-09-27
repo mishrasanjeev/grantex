@@ -1636,7 +1636,9 @@
           Python 0.6.0, Go v0.4.0, and x402 0.4.1 are registry-verified.
           The three primary SDKs include hosted passkey enrollment and
           account-level irregularity response controls; both server features
-          require operator rollout. External custody remains operator-supplied.
+          require operator rollout. Portable passkey evidence is live on the
+          Grantex-hosted service; typed SDK evidence fields await new package
+          releases. External custody remains operator-supplied.
         </p>
       </div>
       <div class="release-links" aria-label="Release resources">
@@ -3413,7 +3415,7 @@ grantex agent install --dir /path/to/skills</pre>
             <span class="check">&#x2713;</span>
             <div>
               <h4><a href="https://docs.grantex.dev/features/fido-webauthn" style="color:inherit;text-decoration:none;">FIDO2 / WebAuthn</a></h4>
-              <p>Live consent requires a registered passkey. Authenticated, one-use customer enrollment is available in the published TypeScript 0.7.0, Python 0.6.0, and Go v0.4.0 SDKs; operators must enable hosted enrollment on the public origin.</p>
+              <p>Live consent uses passkeys. Hosted Grantex carries assertion evidence into new grant tokens and opt-in credentials, including refresh, delegation, and revocation checks. Published SDKs support enrollment; evidence typings await new releases. Self-hosted operators enable this separately.</p>
             </div>
           </div>
           <div class="enterprise-feature">
