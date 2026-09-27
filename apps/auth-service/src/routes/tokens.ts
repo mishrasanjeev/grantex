@@ -38,7 +38,9 @@ export async function tokensRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // POST /v1/tokens/revoke
-  app.post<{ Body: { jti: string } }>('/v1/tokens/revoke', async (request, reply) => {
+  // Containment: counted apart from the plan, and not refused by a limiter
+  // outage (plugins/dynamicRateLimit.ts).
+  app.post<{ Body: { jti: string } }>('/v1/tokens/revoke', { config: { rateLimitClass: 'containment' } }, async (request, reply) => {
     const body = request.body;
     const jti = typeof body === 'object' && body !== null && !Array.isArray(body)
       ? body.jti

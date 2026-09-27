@@ -236,9 +236,15 @@ async function unfreeze(
 }
 
 export async function emergencyStopRoutes(app: FastifyInstance): Promise<void> {
-  const limited = { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } };
+  // The developer stop is containment: besides its per-address limit it is
+  // counted apart from the plan, and a limiter outage does not refuse it
+  // (plugins/dynamicRateLimit.ts). The operator route below skips standard
+  // auth, so no per-developer bucket applies to it.
+  const containment = {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' }, rateLimitClass: 'containment' as const },
+  };
 
-  app.post('/v1/emergency-stop', limited, async (request, reply) => {
+  app.post('/v1/emergency-stop', containment, async (request, reply) => {
     if (!emergencyStopEnabled()) {
       return reply.status(403).send({
         message: 'The emergency stop is not enabled', code: 'FEATURE_DISABLED', requestId: request.id,

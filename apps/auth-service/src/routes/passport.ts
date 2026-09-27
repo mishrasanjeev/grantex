@@ -522,9 +522,12 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // POST /v1/passport/:id/revoke — Revoke a passport
+  // POST /v1/passport/:id/revoke — Revoke a passport. Containment: counted
+  // apart from the plan, and not refused by a limiter outage
+  // (plugins/dynamicRateLimit.ts).
   app.post<{ Params: { id: string } }>(
     '/v1/passport/:id/revoke',
+    { config: { rateLimitClass: 'containment' } },
     async (request, reply) => {
       const { id } = request.params;
       const developerId = request.developer.id;

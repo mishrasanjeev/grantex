@@ -47,6 +47,8 @@ The auth service applies fixed-window limits. Fastify enforces either its 5,000 
 | **Standard API-key - Free plan** | 100 req | 1 minute |
 | **Standard API-key - Pro plan** | 500 req | 1 minute |
 | **Standard API-key - Enterprise plan** | 2,000 req | 1 minute |
+| **Containment** (revoking a grant, token, passport or consent bundle; `POST /v1/emergency-stop`) | 2,000 req per developer, every plan | 1 minute |
+| **Revocation status** (`/v1/revocations`, `/status`, `/stream`; a consent bundle's `revocation-status`) | 6,000 req per developer, every plan | 1 minute |
 | `POST /v1/authorize` | 10 req | 1 minute |
 | `POST /v1/token` | 20 req | 1 minute |
 | `POST /v1/token/refresh` | 20 req | 1 minute |
@@ -56,7 +58,7 @@ A route-specific Fastify `config.rateLimit` replaces the 5,000 req/min Fastify d
 
 Commerce, the SCIM Bearer data-plane routes under `/scim/v2/*`, admin, and other custom-auth routes remain outside the standard developer plan bucket. Their active Fastify policy still applies. The standard API-key-authenticated `/v1/scim/tokens` management routes do consume the plan bucket.
 
-When a client exceeds its limit, the API returns `429 Too Many Requests`; `Retry-After` gives the minimum seconds to wait. Rate-limited responses expose `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). If Redis cannot complete the standard developer plan transaction, the request fails closed with `503` and `RATE_LIMIT_UNAVAILABLE`. The allow-listed JWKS endpoint is exempt and need not include those headers.
+When a client exceeds its limit, the API returns `429 Too Many Requests`; `Retry-After` gives the minimum seconds to wait. Rate-limited responses expose `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` (seconds until reset). If Redis cannot complete the standard developer plan or revocation-status transaction, the request fails closed with `503` and `RATE_LIMIT_UNAVAILABLE`. Containment routes draw on their own budget instead of the plan and fail open when Redis is unavailable, counted per instance against the same ceiling, so a cache outage cannot block a revocation. The allow-listed JWKS endpoint is exempt and need not include those headers.
 
 See the full [Rate Limits guide](/guides/rate-limits) for SDK integration examples and retry strategies.
 

@@ -11,6 +11,11 @@
  * Off unless REVOCATION_FEED_ENABLED=true, when every route answers 404. When
  * the feed cannot be trusted — the triggers that fill it are missing — the
  * endpoints answer 503 rather than a feed that might miss a revocation.
+ *
+ * Each route keeps its per-address limit and draws on the developer's
+ * revocation-status bucket rather than the plan, so learning about a
+ * revocation does not compete with the tenant's other calls
+ * (plugins/dynamicRateLimit.ts).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getSql } from '../db/client.js';
@@ -77,7 +82,7 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Querystring: FeedQuery }>(
     '/v1/revocations',
-    { config: { rateLimit: { max: 600, timeWindow: '1 minute' } } },
+    { config: { rateLimit: { max: 600, timeWindow: '1 minute' }, rateLimitClass: 'status' } },
     async (request, reply) => {
       const settings = revocationFeedSettings();
       if (!revocationFeedEnabledFor(settings, request.developer.id)) return notFound(request, reply);
@@ -147,7 +152,7 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Querystring: StatusQuery }>(
     '/v1/revocations/status',
-    { config: { rateLimit: { max: 1_200, timeWindow: '1 minute' } } },
+    { config: { rateLimit: { max: 1_200, timeWindow: '1 minute' }, rateLimitClass: 'status' } },
     async (request, reply) => {
       const settings = revocationFeedSettings();
       if (!revocationFeedEnabledFor(settings, request.developer.id)) return notFound(request, reply);
@@ -173,7 +178,7 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
   // integration and release tests rather than by inject().
   app.get<{ Querystring: { since?: string } }>(
     '/v1/revocations/stream',
-    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' }, rateLimitClass: 'status' } },
     async (request, reply) => {
       const settings = revocationFeedSettings();
       if (!revocationFeedEnabledFor(settings, request.developer.id)) return notFound(request, reply);
