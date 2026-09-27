@@ -4,6 +4,7 @@ import { getSql, type TxSql } from '../db/client.js';
 import { signGrantToken, buildJwks, parseExpiresIn } from '../lib/crypto.js';
 import { newConsentBundleId, newGrantId, newTokenId, newOfflineAuditEntryId } from '../lib/ids.js';
 import { emitEvent } from '../lib/events.js';
+import { assertIssuanceOpen, issuanceRefusal } from '../lib/revocation/issuance-freeze.js';
 import { config } from '../config.js';
 import {
   computeOfflineAuditEntryHash,
@@ -222,8 +223,16 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
       // Persist the grant, its issued token, and the bundle atomically. Earlier
       // versions omitted grant_tokens entirely, so the returned JWT was validly
       // signed but always failed active-token verification as not_found.
+      // A refusal from the lockout check rolls the transaction back and is
+      // answered below; anything else propagates as it always did.
+      let refused = null as ReturnType<typeof issuanceRefusal>;
       await sql.begin(async (_tx) => {
         const tx = _tx as unknown as TxSql;
+        // An emergency stop's lockout, in the transaction that writes the
+        // bundle's grant.
+        await assertIssuanceOpen(tx, {
+          developerId, agentIds: [agentId], principalIds: [userId],
+        }, { path: 'consent_bundle', inTransaction: true, log: request.log });
         await tx`
           INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
           VALUES (
@@ -252,7 +261,13 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
             ${offlineTTL}, ${offlineExpiresAt}, ${now}, 'active'
           )
         `;
+      }).catch((err: unknown) => {
+        refused = issuanceRefusal(err);
+        if (refused === null) throw err;
       });
+      if (refused !== null) {
+        return reply.status(refused.statusCode).send({ ...refused.body, requestId: request.id });
+      }
 
       // Emit event
       emitEvent(developerId, 'consent_bundle.created', {
@@ -777,6 +792,14 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
       try {
         await sql.begin(async (_tx) => {
           const tx = _tx as unknown as TxSql;
+          // An emergency stop's lockout covering the bundle's grant, its
+          // agent or its principal refuses the new token.
+          await assertIssuanceOpen(tx, {
+            developerId,
+            agentIds: [bundle['agent_id'] as string],
+            principalIds: [bundle['user_id'] as string],
+            grantIds: [grantId],
+          }, { path: 'consent_bundle_refresh', inTransaction: true, log: request.log });
           // Re-check current state as guarded writes inside the transaction.
           // A revoke racing the earlier lookup must not be followed by a new
           // token/key being committed for the now-inactive bundle.
@@ -813,6 +836,8 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
           `;
         });
       } catch (error) {
+        const refusal = issuanceRefusal(error);
+        if (refusal) return reply.status(refusal.statusCode).send({ ...refusal.body, requestId: request.id });
         if (error instanceof BundleRefreshRaceError) {
           return reply.status(409).send({
             message: error.reason === 'GRANT_INACTIVE'

@@ -11,8 +11,11 @@
  *   feed that silently stopped delivering could not hide it;
  * - the number of grants the stop reports is cross-checked against the live
  *   grants the API lists before it runs;
- * - a grant minted after the stop is asserted to be **live**, because the stop
- *   is a sweep and not a lockout, and the runbook says so.
+ * - a grant minted after the stop is asserted to be **live**, because a stop
+ *   that does not ask for a lockout is a sweep, and the runbook says so;
+ * - and a stop that does ask for one (`lockout: true`) is asserted to refuse
+ *   new grants, including one from a code approved before it, until the
+ *   lockout is lifted.
  *
  * It runs against a real auth service with Postgres and Redis behind it (see
  * scripts/revocation-release-test.sh), never against production: the base URL
@@ -244,7 +247,7 @@ describeRelease('the emergency stop halts every agent under a grant tree', () =>
       return agent.deniedAt! - stopAt;
     });
 
-    // The stop is a sweep, not a lockout: the same key can mint a new grant
+    // Without `lockout` the stop is a sweep: the same key can mint a new grant
     // straight afterwards, and the runbook says to rotate it. If this ever
     // starts failing, the behaviour changed and the runbook is now wrong.
     const auth = await admin.authorize({
@@ -362,5 +365,58 @@ describeRelease('the emergency stop halts every agent under a grant tree', () =>
     console.log(`emergency stop race: ${JSON.stringify({
       delegated_during_stop: delegated.length, sweeps: stop.sweeps, grants_revoked: stop.grantsRevoked,
     })}`);
+  }, 300_000);
+
+  /**
+   * The same stop with `lockout: true`. Where the sweep above left the key
+   * free to mint a grant straight afterwards, a lockout refuses it — and a
+   * code approved before the stop — until the lockout is lifted, and the
+   * same code works once it is.
+   */
+  it('with a lockout, refuses new grants until the lockout is lifted', async () => {
+    const stamp = Date.now();
+    const agent = await admin.agents.register({ name: `lockout-${stamp}`, scopes: SCOPES });
+    const principalId = `lockout-user-${stamp}`;
+    const pending = await admin.authorize({ agentId: agent.agentId, userId: principalId, scopes: SCOPES });
+    const pendingCode = 'code' in pending && typeof (pending as unknown as Record<string, unknown>)['code'] === 'string'
+      ? (pending as unknown as Record<string, unknown>)['code'] as string
+      : await approve(pending.authRequestId);
+
+    const post = (path: string, body: Record<string, unknown>) => fetch(`${BASE_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify(body),
+    });
+    const scope = { type: 'developer', id: developerId };
+
+    const stopped = await post('/v1/emergency-stop', {
+      scope, reason: 'release rehearsal of the lockout', confirm: `stop developer:${developerId}`, lockout: true,
+    });
+    const stopText = await stopped.text();
+    expect(stopped.status, stopText).toBe(200);
+    const stop = JSON.parse(stopText) as { status: string; lockout: boolean; freezeId?: string };
+    expect(stop.status).toBe('completed');
+    expect(stop.lockout).toBe(true);
+    expect(stop.freezeId).toMatch(/^frz_[0-9A-HJKMNP-TV-Z]{26}$/);
+
+    const refusedAuthorize = await post('/v1/authorize', { agentId: agent.agentId, principalId, scopes: SCOPES });
+    expect(refusedAuthorize.status).toBe(403);
+    expect(((await refusedAuthorize.json()) as { code: string }).code).toBe('ISSUANCE_FROZEN');
+    const refusedExchange = await post('/v1/token', { code: pendingCode, agentId: agent.agentId });
+    expect(refusedExchange.status).toBe(403);
+    expect(((await refusedExchange.json()) as { code: string }).code).toBe('ISSUANCE_FROZEN');
+    expect(await liveGrantCount()).toBe(0);
+
+    const lifted = await post('/v1/emergency-stop/unfreeze', {
+      scope, reason: 'release rehearsal: lockout lifted', confirm: `unfreeze developer:${developerId}`,
+    });
+    const liftedText = await lifted.text();
+    expect(lifted.status, liftedText).toBe(200);
+    expect((JSON.parse(liftedText) as { freezeId: string }).freezeId).toBe(stop.freezeId);
+
+    // The code refused under the lockout was not consumed.
+    const afterwards = await admin.tokens.exchange({ code: pendingCode, agentId: agent.agentId });
+    expect(afterwards.grantToken).toBeTruthy();
+    expect(await liveGrantCount()).toBe(1);
   }, 300_000);
 });
