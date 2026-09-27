@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import type { Browser, BrowserContext, Page } from 'playwright';
 import { AxeBuilder } from '@axe-core/playwright';
+import { GrantexApiError } from '@grantex/sdk';
 import type { FastifyInstance } from 'fastify';
 import { createMcpAuthServer } from '../../src/server.js';
 import type { McpAuthConfig } from '../../src/types.js';
@@ -28,6 +29,8 @@ let app: FastifyInstance;
 let base: string;
 let browser: Browser;
 const grantex = mockGrantex();
+/** What the server reported to the operator (`warn`). */
+const operatorWarnings: string[] = [];
 
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -65,9 +68,10 @@ beforeAll(async () => {
         case_decision: { permission: 'write', requires_decision: true },
       },
     }],
-    grant: { purpose: 'aml.cdd.onboarding', purposeDescription: 'Business onboarding checks for new applicants', dataRegion: 'eu', duration: '8h' },
+    grant: { purpose: 'aml.cdd.onboarding', purposeDescription: 'Business onboarding checks for new applicants', duration: '8h' },
     consentUi: { appName: 'Acme Compliance', privacyUrl: 'https://acme.example.com/privacy', termsUrl: 'https://acme.example.com/terms' },
     storage,
+    warn: (message: string) => { operatorWarnings.push(message); },
   } as McpAuthConfig);
   await app.listen({ port, host: '127.0.0.1' });
   browser = await chromium.launch();
@@ -234,6 +238,33 @@ describe('consent page in a real browser', () => {
       expect(request.url()).toBe('https://grantex.example.com/consent');
       expect((await consentPost).status()).toBe(303);
       expect(grantex.authorize.mock.calls.length).toBe(calls + 1);
+      expect(grantex.authorize.mock.calls[calls]![0]).toMatchObject({ purpose: 'aml.cdd.onboarding' });
+      expect(cspViolations).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('Allow, when Grantex refuses the purpose, returns to the client with invalid_scope', async () => {
+    const context = await browser.newContext();
+    try {
+      grantex.authorize.mockRejectedValueOnce(
+        new GrantexApiError('purpose requires at least one tool:<connector>:<permission> scope', 400, {}, 'req_e2e', 'INVALID_PURPOSE'),
+      );
+      const { page, cspViolations } = await open(context, authorizeUrl());
+      const [request] = await Promise.all([
+        page.waitForRequest((r) => r.url().startsWith(TEST_REDIRECT_URI)),
+        page.getByRole('button', { name: 'Allow', exact: true }).click(),
+      ]);
+      const url = new URL(request.url());
+      expect(url.searchParams.get('error')).toBe('invalid_scope');
+      expect(url.searchParams.get('error_description')).toContain('aml.cdd.onboarding');
+      expect(url.searchParams.get('state')).toBe('e2e-state');
+      expect(url.searchParams.get('iss')).toBe(base);
+      // Grantex's reason reaches the operator, not the browser.
+      expect(url.searchParams.get('error_description')).not.toContain('req_e2e');
+      expect(operatorWarnings.at(-1)).toContain('purpose requires at least one tool:<connector>:<permission> scope');
+      expect(operatorWarnings.at(-1)).toContain('request req_e2e');
       expect(cspViolations).toEqual([]);
     } finally {
       await context.close();

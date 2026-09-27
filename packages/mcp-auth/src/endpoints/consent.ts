@@ -96,7 +96,8 @@ export async function renderConsent(ctx: ServerContext, reply: FastifyReply, req
     ...(grant.purpose !== undefined
       ? { purpose: { code: grant.purpose, ...(grant.purposeDescription !== undefined ? { description: grant.purposeDescription } : {}) } }
       : {}),
-    ...(grant.dataRegion !== undefined ? { dataRegion: grant.dataRegion } : {}),
+    // No dataRegion: createMcpAuthServer refuses grant.dataRegion, because
+    // POST /v1/authorize takes no data region for the grant to carry.
     ...(duration !== undefined ? { duration } : {}),
     tools: toolsForScopes(ctx.toolPolicy, request.scopes),
     consentId,

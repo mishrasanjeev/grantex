@@ -32,25 +32,40 @@ export interface ServerContext {
 const contexts = new WeakMap<McpAuthConfig, ServerContext>();
 
 const PURPOSE = /^(?:[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)*|x-[a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z][a-z0-9_]*)+)$/;
-const REGION = /^[A-Za-z0-9][A-Za-z0-9-]{0,31}$/;
 const DURATION = /^\d{1,6}[smhd]$/;
 
 function assertGrantAndBranding(config: McpAuthConfig): void {
   const grant = config.grant ?? {};
+  // Syntax only. Whether Grantex accepts the term is for Grantex to decide,
+  // and it does not publish its purpose vocabulary in its metadata; a copy
+  // here could drift from the server's. A well-formed term Grantex does not
+  // accept is refused at each authorization and reported through `warn`.
   if (grant.purpose !== undefined && (typeof grant.purpose !== 'string' || grant.purpose.length > 128 || !PURPOSE.test(grant.purpose))) {
     throw new Error('createMcpAuthServer: grant.purpose must be a purpose code such as aml.cdd.onboarding or x-<org>.<term>');
   }
   if (grant.purposeDescription !== undefined && (typeof grant.purposeDescription !== 'string' || grant.purposeDescription.length > 300)) {
     throw new Error('createMcpAuthServer: grant.purposeDescription must be a string of at most 300 characters');
   }
-  if (grant.dataRegion !== undefined && (typeof grant.dataRegion !== 'string' || !REGION.test(grant.dataRegion))) {
-    throw new Error('createMcpAuthServer: grant.dataRegion must be a short region code such as eu or us-east');
+  // POST /v1/authorize takes no data region: it builds the grant's
+  // authorization_details from the purpose and scopes alone and ignores
+  // any other field. A region shown on the consent page would be a
+  // restriction the grant does not carry, so refuse to start rather than
+  // show it.
+  if (grant.dataRegion !== undefined) {
+    throw new Error(
+      'createMcpAuthServer: grant.dataRegion is not supported: POST /v1/authorize, which this server calls, '
+      + 'takes no data region, so a grant made through it cannot carry one and the consent page cannot promise one. '
+      + 'Remove grant.dataRegion.',
+    );
   }
   if (grant.duration !== undefined && (typeof grant.duration !== 'string' || !DURATION.test(grant.duration))) {
     throw new Error('createMcpAuthServer: grant.duration must look like 30m, 8h or 7d');
   }
   if (grant.authorizeParams !== undefined && typeof grant.authorizeParams !== 'function') {
     throw new Error('createMcpAuthServer: grant.authorizeParams must be a function');
+  }
+  if (config.warn !== undefined && typeof config.warn !== 'function') {
+    throw new Error('createMcpAuthServer: warn must be a function');
   }
   for (const key of ['appLogo', 'privacyUrl', 'termsUrl'] as const) {
     const value = config.consentUi?.[key];
