@@ -6,6 +6,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rsa"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -434,6 +435,38 @@ func sameValue(a, b interface{}) bool {
 	return errLeft == nil && errRight == nil && string(left) == string(right)
 }
 
+func parseWebAuthnGrantEvidence(raw interface{}) (*WebAuthnGrantEvidence, error) {
+	invalid := func() (*WebAuthnGrantEvidence, error) {
+		return nil, claimError("grant token claim %s.webauthn must be a valid evidence reference", GrantClaim)
+	}
+	object, ok := raw.(map[string]interface{})
+	if !ok || object["type"] != "GrantexWebAuthnAssertion" {
+		return invalid()
+	}
+	version, ok := object["version"].(float64)
+	if !ok || version != 1 {
+		return invalid()
+	}
+	text := func(key string) string {
+		value, _ := object[key].(string)
+		return value
+	}
+	verified, ok := object["userVerified"].(bool)
+	digest := text("digest")
+	if !ok || text("authRequestId") == "" || text("rpId") == "" || text("origin") == "" || text("assertedAt") == "" ||
+		len(digest) != 64 || strings.ToLower(digest) != digest {
+		return invalid()
+	}
+	if _, err := hex.DecodeString(digest); err != nil {
+		return invalid()
+	}
+	return &WebAuthnGrantEvidence{
+		Type: "GrantexWebAuthnAssertion", Version: 1,
+		AuthRequestID: text("authRequestId"), RPID: text("rpId"), Origin: text("origin"),
+		UserVerified: verified, AssertedAt: text("assertedAt"), Digest: digest,
+	}, nil
+}
+
 // normalizeGrantClaims reads grant claims: standard claims first, legacy
 // aliases where the standard claim is absent (when legacy is true). A
 // standard claim and an alias that disagree are refused.
@@ -467,6 +500,14 @@ func normalizeGrantClaims(claims jwt.MapClaims, legacy bool) (*VerifiedGrant, er
 			return nil, claimError("grant token claim %s must be an object", GrantClaim)
 		}
 		grantRecord = record
+	}
+	var webauthnEvidence *WebAuthnGrantEvidence
+	if raw, present := grantRecord["webauthn"]; present {
+		var err error
+		webauthnEvidence, err = parseWebAuthnGrantEvidence(raw)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// scope / scp
@@ -640,6 +681,7 @@ func normalizeGrantClaims(claims jwt.MapClaims, legacy bool) (*VerifiedGrant, er
 		ParentGrantID:    parentGrantID,
 		DelegationDepth:  depth,
 		Act:              act,
+		WebAuthnEvidence: webauthnEvidence,
 		LegacyClaimsUsed: used,
 	}
 	if grantID != nil {

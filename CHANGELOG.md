@@ -47,8 +47,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Not behind a flag: 3.0.0 is unpublished, and a purpose is sent only when
   `grant.purpose` is configured (leave it unset to send none). No
   auth-service or SDK change. Documented in `docs/mcp-auth.md` ("Purpose").
+### Portable WebAuthn assertion evidence (default off)
+- Added `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED` (default `false`). When enabled,
+  verified consent assertions are retained, bound to new grants, referenced by
+  signed grant tokens and opt-in VCs, and inherited by delegated grants.
+  Requested VCs commit atomically with root and delegated grants when the
+  feature is enabled or their parent already carries assertion evidence.
+- Existing grants do not acquire historical assertion evidence. Once enabled,
+  a previously approved live authorization request without captured evidence
+  returns `PASSKEY_EVIDENCE_REQUIRED` at token exchange; the principal must
+  complete new passkey consent. Deploy migration 119 and review the
+  [WebAuthn rollout guide](docs/features/fido-webauthn.mdx) before enabling.
+- TypeScript, Python, and Go SDK source now exposes the signed grant evidence
+  reference and the corrected VC verification response. These source changes
+  are not present in the previously published SDK versions until released.
 
 ### Primary SDK registry releases (2026-09-27)
+- Published `@grantex/sdk@0.7.0` and `@grantex/x402@0.4.1` to npm from the
+  verified main-branch artifacts. The registry SHA-512 integrity values match
+  the tested tarballs exactly; a clean consumer installed both and resolved
+  the hosted passkey, account irregularity policy, and x402 public APIs.
 - Published Python `grantex==0.6.0` to PyPI from the verified main-branch
   artifact. The wheel SHA-256 is
   `3d4df0aef712945aaa89762b75403f9ca26460ff5a01f9cf69da4db71c8e7b76`;
@@ -59,10 +77,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `cd3322e0bc8dd3a8a2afdbab729e6c68f0cb1a26`. The public Go proxy
   resolved the tag and its downloaded module passed `go test ./...`; the
   synced source also passed `go vet` and `go test -race`.
-- TypeScript `@grantex/sdk@0.7.0` and x402 `@grantex/x402@0.4.1` remain
-  release candidates until the npm registry serves their exact versions.
-  The release workflow verified both tarballs, but automated publication
-  needs npm/PyPI trusted publisher setup and a Go release credential.
+- The release workflow verified all four distributions, but automated
+  publication still needs npm/PyPI trusted publisher setup and a Go release
+  credential. These releases used the maintainer's authenticated npm/Twine
+  CLIs and a tested Go repository tag.
 
 ### Hosted passkey enrollment and account irregularity response
 - Added a default-off hosted passkey enrollment flow with authenticated,

@@ -306,7 +306,7 @@ describe('POST /v1/consent/:id/approve', () => {
       transports: ['internal'],
     }]);
     sqlMock.mockResolvedValueOnce([{ id: 'cred_DB' }]);
-    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ id: 'areq_TEST01' }]);
 
     const verify = await app.inject({
       method: 'POST',

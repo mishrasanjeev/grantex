@@ -203,6 +203,20 @@ describe('legacy claim aliases behind the compatibility flag', () => {
     expect(() => claimsToVerifiedGrant({ ...base, act: chain })).toThrow('act chain is deeper than 10');
     expect(() => claimsToVerifiedGrant({ ...base, cnf: 'jkt' })).toThrow('cnf must be an object');
   });
+
+  it('exposes a signed WebAuthn evidence reference and rejects malformed references', () => {
+    const base = claims();
+    const grant = base[GRANT_CLAIM] as Record<string, unknown>;
+    const webauthn = {
+      type: 'GrantexWebAuthnAssertion', version: 1, authRequestId: 'areq_test',
+      rpId: 'grantex.dev', origin: 'https://grantex.dev', userVerified: true,
+      assertedAt: '2026-09-27T00:00:00.000Z', digest: 'a'.repeat(64),
+    };
+    expect(claimsToVerifiedGrant({ ...base, [GRANT_CLAIM]: { ...grant, webauthn } }).webauthnEvidence)
+      .toEqual(webauthn);
+    expect(() => claimsToVerifiedGrant({ ...base, [GRANT_CLAIM]: { ...grant, webauthn: { ...webauthn, digest: 'bad' } } }))
+      .toThrow('webauthn must be a valid evidence reference');
+  });
 });
 
 describe('decision references in authorization_details', () => {

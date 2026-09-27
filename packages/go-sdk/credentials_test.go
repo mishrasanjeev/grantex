@@ -103,13 +103,16 @@ func TestCredentialsVerify(t *testing.T) {
 		if r.URL.Path != "/v1/credentials/verify" || r.Method != http.MethodPost {
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 		}
+		var body map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body["credential"] != "eyJ..." {
+			t.Errorf("expected credential request body, got %v: %v", body, err)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(VCVerificationResult{
-			Valid: true,
-			CredentialSubject: map[string]interface{}{
-				"grantId": "grant-1",
-			},
-			Issuer: "did:web:grantex.dev",
+			Valid:            true,
+			VCID:             "vc-1",
+			Payload:          map[string]interface{}{"iss": "did:web:grantex.dev"},
+			WebAuthnVerified: true,
 		})
 	}))
 	defer server.Close()
@@ -122,8 +125,8 @@ func TestCredentialsVerify(t *testing.T) {
 	if !result.Valid {
 		t.Error("expected credential to be valid")
 	}
-	if result.Issuer != "did:web:grantex.dev" {
-		t.Errorf("expected did:web:grantex.dev, got %s", result.Issuer)
+	if result.Payload["iss"] != "did:web:grantex.dev" || !result.WebAuthnVerified {
+		t.Errorf("expected verified assertion and issuer, got %+v", result)
 	}
 }
 

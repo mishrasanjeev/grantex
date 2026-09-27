@@ -122,6 +122,12 @@ Grantex's grant record fields, under a collision-resistant name (RFC 7519
 | `developer_id` | always | The developer organisation. |
 | `parent_grant_id` | delegated grants | The grant this one was delegated from. |
 | `delegation_depth` | delegated grants | Hops from the root grant (1 for a first delegation). |
+| `webauthn` | grants issued after a verified passkey ceremony | Versioned assertion reference (`authRequestId`, `rpId`, `origin`, `userVerified`, `assertedAt`, SHA-256 `digest`). Raw evidence is only in an opt-in VC. This post-0.6 extension is optional for older and sandbox grants. |
+
+The authenticator signs the WebAuthn challenge, not the grant scopes. The token
+signature binds the compact reference to this grant. Verifiers that require
+portable evidence must also verify the matching VC, its status, the raw assertion
+against a trusted RP ID and origin, and the assertion digest.
 
 ## Legacy claim aliases
 

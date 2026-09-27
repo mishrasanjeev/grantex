@@ -158,7 +158,7 @@ describe('POST /v1/token carries purpose into the grant and token', () => {
     expect(claims['authorization_details']).toEqual(DETAILS);
     const insert = sqlCall('INSERT INTO grants');
     expect((insert![0] as string[]).join('?')).toContain('purpose, authorization_details');
-    expect(insert!.slice(-2)).toEqual(['aml.cdd.onboarding', DETAILS]);
+    expect(insert!.slice(-5, -3)).toEqual(['aml.cdd.onboarding', DETAILS]);
   });
 
   it('issues no authorization_details for a request without purpose', async () => {
@@ -298,21 +298,21 @@ describe('POST /v1/grants/delegate inherits the purpose', () => {
     expect(res.statusCode).toBe(201);
     expect(decodeJwt(res.json<{ grantToken: string }>().grantToken)['authorization_details']).toEqual([parentDetails[0]]);
     const insert = sqlCall('INSERT INTO grants');
-    expect(insert!.slice(-2)).toEqual(['aml.screening', [parentDetails[0]]]);
+    expect(insert!.slice(-5, -3)).toEqual(['aml.screening', [parentDetails[0]]]);
   });
 
   it('records the parent purpose even when no delegated scope names a connector', async () => {
     const res = await delegate(parentDetails, ['files:read']);
     expect(res.statusCode).toBe(201);
     expect(decodeJwt(res.json<{ grantToken: string }>().grantToken)).not.toHaveProperty('authorization_details');
-    expect(sqlCall('INSERT INTO grants')!.slice(-2)).toEqual(['aml.screening', null]);
+    expect(sqlCall('INSERT INTO grants')!.slice(-5, -3)).toEqual(['aml.screening', null]);
   });
 
   it('a parent without purpose yields a child without purpose', async () => {
     const res = await delegate(undefined, ['tool:acme_kyb:read']);
     expect(res.statusCode).toBe(201);
     expect(decodeJwt(res.json<{ grantToken: string }>().grantToken)).not.toHaveProperty('authorization_details');
-    expect(sqlCall('INSERT INTO grants')!.slice(-2)).toEqual([null, null]);
+    expect(sqlCall('INSERT INTO grants')!.slice(-5, -3)).toEqual([null, null]);
   });
 
   it('rejects a parent whose tools entries disagree on purpose', async () => {
