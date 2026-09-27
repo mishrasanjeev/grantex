@@ -212,6 +212,7 @@ export type {
   ListGrantsParams,
   ListGrantsResponse,
   VerifiedGrant,
+  WebAuthnGrantEvidence,
   DelegateParams,
   // Tokens
   ExchangeTokenParams,

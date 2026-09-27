@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initKeys, getKeyPair } from '../src/lib/crypto.js';
 import { sqlMock } from './setup.js';
+import { createWebAuthnEvidence } from '../src/lib/webauthn-evidence.js';
 
 // Import after mocks are set up by setup.ts
 import {
@@ -131,7 +132,14 @@ describe('issueAgentGrantVC', () => {
       developerId: 'dev_TEST',
       scopes: ['read'],
       expiresAt: new Date(Date.now() + 86400_000),
-      fidoEvidence: { aaguid: '00000000-0000-0000-0000-000000000000' },
+      fidoEvidence: createWebAuthnEvidence({
+        authRequestId: 'areq_TEST2', credentialId: 'cred_TEST2',
+        credentialPublicKey: 'AQIDBA', previousCounter: 0,
+        rpId: 'grantex.dev', origin: 'https://grantex.dev', challenge: 'challenge',
+        clientDataJSON: 'client-data', authenticatorData: 'auth-data',
+        signature: 'signature', userVerified: true,
+        assertedAt: '2026-09-27T00:00:00.000Z',
+      }),
     });
 
     const { decodeJwt } = await import('jose');
@@ -140,8 +148,9 @@ describe('issueAgentGrantVC', () => {
     const evidence = vc['evidence'] as Record<string, unknown>[];
 
     expect(evidence).toHaveLength(1);
-    expect(evidence[0]!['type']).toBe('FidoAttestation');
-    expect(evidence[0]!['aaguid']).toBe('00000000-0000-0000-0000-000000000000');
+    expect(evidence[0]!['type']).toBe('GrantexWebAuthnAssertion');
+    expect(evidence[0]!['authRequestId']).toBe('areq_TEST2');
+    expect(evidence[0]!['digest']).toMatch(/^[a-f0-9]{64}$/);
   });
 });
 

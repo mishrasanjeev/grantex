@@ -33,6 +33,8 @@
  */
 
 /** Whether any scope contains whitespace and so cannot be put in `scope`. */
+import { parseGrantWebAuthnEvidence, type GrantWebAuthnEvidence } from './webauthn-evidence.js';
+
 export function hasUnrepresentableScope(scopes: readonly string[]): boolean {
   return scopes.some((scope) => /\s/.test(scope));
 }
@@ -80,6 +82,7 @@ export interface GrantTokenClaimsInput {
   parentGrnt?: string;
   delegationDepth?: number;
   bdg?: number;
+  webauthnEvidence?: GrantWebAuthnEvidence;
 }
 
 /**
@@ -96,6 +99,7 @@ export function buildGrantTokenClaims(
     developer_id: input.dev,
     ...(input.parentGrnt !== undefined ? { parent_grant_id: input.parentGrnt } : {}),
     ...(input.delegationDepth !== undefined ? { delegation_depth: input.delegationDepth } : {}),
+    ...(input.webauthnEvidence !== undefined ? { webauthn: input.webauthnEvidence } : {}),
   };
   const unrepresentable = hasUnrepresentableScope(input.scp);
   return {
@@ -189,6 +193,7 @@ export interface NormalizedGrantTokenClaims {
   parentGrnt?: string;
   delegationDepth?: number;
   act?: ActorClaim;
+  webauthnEvidence?: GrantWebAuthnEvidence;
 }
 
 /**
@@ -237,6 +242,14 @@ export function normalizeGrantTokenClaims(payload: Record<string, unknown>): Nor
     throw new GrantTokenClaimsError('Grant token claim act.sub disagrees with its legacy alias');
   }
   const parentAgt = legacyParentAgt ?? (parentGrnt !== undefined ? act?.sub : undefined);
+  let webauthnEvidence: GrantWebAuthnEvidence | undefined;
+  if (grant['webauthn'] !== undefined) {
+    try {
+      webauthnEvidence = parseGrantWebAuthnEvidence(grant['webauthn']);
+    } catch {
+      throw new GrantTokenClaimsError(`${GRANT_CLAIM}.webauthn must be a valid evidence reference`);
+    }
+  }
 
   if (agt === undefined || dev === undefined || scp === undefined) return null;
   return {
@@ -248,6 +261,7 @@ export function normalizeGrantTokenClaims(payload: Record<string, unknown>): Nor
     ...(parentGrnt !== undefined ? { parentGrnt } : {}),
     ...(delegationDepth !== undefined ? { delegationDepth } : {}),
     ...(act !== undefined ? { act } : {}),
+    ...(webauthnEvidence !== undefined ? { webauthnEvidence } : {}),
   };
 }
 

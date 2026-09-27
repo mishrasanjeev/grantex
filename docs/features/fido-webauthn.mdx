@@ -1,7 +1,7 @@
 ---
 title: "FIDO2 / WebAuthn"
 sidebarTitle: "FIDO2 / WebAuthn"
-description: "Enroll customer passkeys and verify live-mode agent consent with WebAuthn. Published SDK versions, rollout requirements, and evidence limitations."
+description: "Enroll customer passkeys, verify live consent, and export opt-in portable WebAuthn assertion evidence."
 keywords: ["Grantex passkey enrollment", "WebAuthn agent consent", "FIDO2 live-mode consent", "passkey SDK"]
 ---
 
@@ -15,6 +15,8 @@ Hosted passkey enrollment is available when the server operator enables `PASSKEY
 
 The hosted enrollment client is published in `@grantex/sdk@0.7.0`, `grantex==0.6.0`, and `github.com/mishrasanjeev/grantex-go@v0.4.0`. These are independently versioned packages; installation does not turn on the server feature. Check [Release Status](/release-status) for current registry evidence and rollout limitations.
 
+Portable evidence is a separate, default-off server rollout: `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true`. The current published SDK versions do not expose the new typed evidence reference or updated VC attestation; use the REST responses or build from this source until new SDK releases are verified.
+
 ## Why FIDO for Agents?
 
 Standard consent flows rely on a button click in a browser. A verified WebAuthn assertion establishes that:
@@ -23,7 +25,7 @@ Standard consent flows rely on a button click in a browser. A verified WebAuthn 
 2. User verification was performed when the hosted-enrollment policy requires it; the legacy developer registration path only requests it as preferred
 3. The assertion is bound to the specific challenge issued by Grantex
 
-For high-value operations, use hosted enrollment with required user verification and your own customer identity-binding controls. No payment-network certification or portable assertion evidence is implied by this consent gate.
+For high-value operations, use hosted enrollment with required user verification and your own customer identity-binding controls. Portable evidence is available only for new ceremonies with an opt-in VC; the consent gate alone is not payment-network certification.
 
 ## Developer Setup
 
@@ -91,6 +93,8 @@ The developer portal's **Passkeys** page can also issue a link for a principal. 
 If enrollment is disabled (404) or the customer cannot use a passkey-capable browser, live-mode approval remains blocked. Sandbox mode can be used for integration testing, but it is not an alternative live-mode approval path.
 
 For production rollout, deploy the auth service and the `/passkey-enroll` public-hosting rewrite first. Confirm `FIDO_ORIGIN` is the exact public HTTPS origin and `FIDO_RP_ID` is its valid relying-party domain, then enable `PASSKEY_ENROLLMENT_ENABLED=true`. Test registration and live approval on that origin before sending links to customers. The repository includes `apps/auth-service/tests/production/passkey-policy.test.ts` and the manual `Production Passkey and Irregularity E2E` GitHub Actions workflow. That test creates an isolated production account, passkey, grant and audit records; it must not use a customer account.
+
+To enable portable evidence, first deploy migration `119_webauthn_evidence.sql` and confirm the enabled Docker/Chromium E2E suite and all CI checks are green. Test the deployed RP ID/origin with an isolated account, then set `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true` on the auth service. New assertions will carry evidence; existing grants do not gain it retroactively. Approved live requests that predate activation have no captured assertion and fail token exchange with `PASSKEY_EVIDENCE_REQUIRED`; restart consent for those customers. Turning the flag off stops new evidence capture and restores legacy exchange for old no-evidence requests, while previously captured evidence remains verifiable and propagates on refresh/delegation. Keep the opt-in VCs' stable public keys only as long as necessary.
 
 For local verification, start a disposable Postgres instance, set `AUDIT_INTEGRATION_DATABASE_URL`, install Chromium with `npx playwright install chromium`, and run `npm run test:e2e` from `apps/auth-service`. The browser suite uses a virtual authenticator and a real local Postgres database; it cannot by itself prove that a hosted production origin, routing rewrite, or customer device is configured correctly.
 
@@ -250,9 +254,11 @@ client.webauthn.delete_credential("cred_01HXYZ...")
 ```
 </CodeGroup>
 
-## FIDO Evidence Boundary
+## Portable Assertion Evidence
 
-On successful assertion verification, Grantex sets `fido_verified` on the pending authorization request and emits a `fido.assertion` event. Approval or denial is a separate operation. The current token-exchange path does not copy credential ID, authenticator type, or assertion time into the grant or issued VC. A VC alone is therefore **not** portable proof of the passkey ceremony. See [Verifiable Credentials](/features/verifiable-credentials) for the fields that are currently issued.
+With portable evidence enabled, successful assertion verification stores the raw assertion, challenge, credential public key, prior counter, RP ID, origin, and assertion time on the pending authorization request. Approval or denial remains a separate operation. Token exchange rechecks the assertion, binds it to the grant, and places a compact `webauthnEvidence` digest reference in the signed grant token and grant API response. Refresh preserves this reference. An approved live request from before evidence capture cannot be exchanged without new passkey consent while the flag is enabled.
+
+Request `credentialFormat: "vc-jwt"` or `"both"` at token exchange to obtain a VC with the complete `GrantexWebAuthnAssertion` in `vc.evidence`. The public credential key in this opt-in export is stable and can correlate presentations; minimize sharing and retention. Independent verifiers must check the VC's issuer signature, expiry and revocation, pin a trusted RP ID and origin, reverify the assertion signature/challenge/counter, and compare its digest with the grant reference. The authenticator did not sign the scopes or independently prove the customer's legal identity: the issuer signature and your enrollment identity checks supply those bindings. See [Verifiable Credentials](/features/verifiable-credentials). No payment-network certification is claimed.
 
 ## API Reference
 
@@ -280,7 +286,7 @@ On successful assertion verification, Grantex sets `fido_verified` on the pendin
 
 ## Next Steps
 
-- [Verifiable Credentials](/features/verifiable-credentials) -- current VC claims and evidence limits
+- [Verifiable Credentials](/features/verifiable-credentials) -- assertion export and independent verification
 - [DID Infrastructure](/features/did-infrastructure) -- how verifiers resolve Grantex's signing keys
 - [End-User Permissions](/guides/end-user-permissions) -- user-facing permission dashboard
 
