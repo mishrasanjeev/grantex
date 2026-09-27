@@ -1,5 +1,6 @@
 import { createServer } from 'node:net';
 import { randomUUID } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
 import postgres from 'postgres';
 import { chromium, type Browser } from 'playwright';
 import { ulid } from 'ulid';
@@ -151,6 +152,90 @@ async function freePort(): Promise<number> {
       await context.close();
     }
   }, 60_000);
+
+  it('shows missing, invalid and expired enrollment-link errors in Chromium', async () => {
+    const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
+    try {
+      const page = await context.newPage();
+      await page.goto(`${base}/passkey-enroll`);
+      expect(await page.getByRole('button', { name: 'Register passkey' }).isDisabled()).toBe(true);
+      expect(await page.getByRole('status').textContent()).toContain('fresh enrollment link');
+      expect(await page.evaluate('document.documentElement.scrollWidth <= innerWidth')).toBe(true);
+      await mkdir('test-results', { recursive: true });
+      await page.screenshot({ path: 'test-results/passkey-missing-link-mobile.png' });
+
+      const invalidPage = await context.newPage();
+      await invalidPage.goto(`${base}/passkey-enroll#ticket=invalid`);
+      await invalidPage.waitForURL(`${base}/passkey-enroll`);
+      await invalidPage.getByRole('button', { name: 'Register passkey' }).click();
+      await invalidPage.getByText('Enrollment link is invalid or expired').waitFor();
+
+      const expiredPrincipal = `person_expired_${suffix}`;
+      const enrollment = await client.webauthn.createEnrollmentSession({ principalId: expiredPrincipal });
+      const ticketId = new URLSearchParams(new URL(enrollment.enrollmentUrl).hash.slice(1))
+        .get('ticket')?.split('.')[0];
+      expect(ticketId).toBeTruthy();
+      await sql`UPDATE webauthn_challenges SET expires_at = NOW() - INTERVAL '1 second'
+        WHERE id = ${ticketId!}`;
+      const expiredPage = await context.newPage();
+      await expiredPage.goto(enrollment.enrollmentUrl);
+      await expiredPage.getByRole('button', { name: 'Register passkey' }).click();
+      await expiredPage.getByText('Enrollment link is invalid or expired').waitFor();
+      expect((await client.webauthn.listCredentials(expiredPrincipal)).credentials).toHaveLength(0);
+    } finally {
+      await context.close();
+    }
+  }, 60_000);
+
+  it('registers two devices, lists and deletes them, then blocks consent without a passkey', async () => {
+    const multiPrincipal = `person_multi_${suffix}`;
+    const contexts = [] as Awaited<ReturnType<Browser['newContext']>>[];
+    try {
+      for (let device = 0; device < 2; device++) {
+        const enrollment = await client.webauthn.createEnrollmentSession({ principalId: multiPrincipal });
+        const context = await browser.newContext();
+        contexts.push(context);
+        const page = await context.newPage();
+        const cdp = await context.newCDPSession(page);
+        await cdp.send('WebAuthn.enable');
+        await cdp.send('WebAuthn.addVirtualAuthenticator', {
+          options: {
+            protocol: 'ctap2', transport: 'internal', hasResidentKey: true,
+            hasUserVerification: true, isUserVerified: true,
+          },
+        });
+        await page.goto(enrollment.enrollmentUrl);
+        await page.getByRole('button', { name: 'Register passkey' }).click();
+        await page.getByText('Passkey registered.', { exact: true }).waitFor({ timeout: 20_000 });
+        expect(page.url()).toBe(`${base}/passkey-enroll`);
+        expect((await client.webauthn.listCredentials(multiPrincipal)).credentials).toHaveLength(device + 1);
+        if (device === 0) {
+          await mkdir('test-results', { recursive: true });
+          await page.screenshot({ path: 'test-results/passkey-registered.png' });
+        }
+      }
+
+      const { credentials } = await client.webauthn.listCredentials(multiPrincipal);
+      expect(new Set(credentials.map((credential) => credential.id)).size).toBe(2);
+      await client.webauthn.deleteCredential(credentials[0]!.id);
+      expect((await client.webauthn.listCredentials(multiPrincipal)).credentials).toHaveLength(1);
+      await client.webauthn.deleteCredential(credentials[1]!.id);
+      expect((await client.webauthn.listCredentials(multiPrincipal)).credentials).toHaveLength(0);
+
+      const pendingRequestId = `areq_${ulid()}`;
+      await sql`INSERT INTO auth_requests (id, agent_id, principal_id, developer_id, scopes, expires_at)
+        VALUES (${pendingRequestId}, ${agentId}, ${multiPrincipal}, ${developerId}, ${['read']}, NOW() + INTERVAL '10 minutes')`;
+      const assertion = await fetch(`${base}/v1/webauthn/assert/options`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authRequestId: pendingRequestId, principalId: multiPrincipal }),
+      });
+      expect(assertion.status).toBe(400);
+      const approval = await fetch(`${base}/v1/consent/${pendingRequestId}/approve`, { method: 'POST' });
+      expect(approval.status).toBe(403);
+    } finally {
+      await Promise.all(contexts.map((context) => context.close()));
+    }
+  }, 90_000);
 
   it('retains grants in alert-only mode and revokes only the finding agent in revoke mode', async () => {
     const grantOne = `grnt_passkey_${suffix}`;

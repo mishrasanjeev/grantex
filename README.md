@@ -710,6 +710,10 @@ Grantex supports passkey-based human presence verification using FIDO2/WebAuthn.
 
 ### SDK Usage
 
+Hosted enrollment is included in published `@grantex/sdk@0.7.0`,
+`grantex==0.6.0`, and `github.com/mishrasanjeev/grantex-go@v0.4.0`.
+Publishing an SDK does not enable the server-side enrollment flag.
+
 ```typescript
 // Enable FIDO for your developer account
 await grantex.updateSettings({ fidoRequired: true, fidoRpName: 'My App' });
@@ -721,7 +725,7 @@ const { enrollmentUrl } = await grantex.webauthn.createEnrollmentSession({
 // Show the one-use link only to that customer. The hosted page handles WebAuthn.
 
 // List and manage credentials
-const creds = await grantex.webauthn.listCredentials('user_abc123');
+const { credentials: creds } = await grantex.webauthn.listCredentials('user_abc123');
 await grantex.webauthn.deleteCredential(credentialId);
 ```
 
@@ -739,7 +743,7 @@ session = client.webauthn.create_enrollment_session(principal_id="user_abc123")
 enrollment_url = session.enrollment_url
 
 # List and manage credentials
-creds = client.webauthn.list_credentials("user_abc123")
+creds = client.webauthn.list_credentials("user_abc123").credentials
 client.webauthn.delete_credential(credential_id)
 ```
 
@@ -759,7 +763,7 @@ client.webauthn.delete_credential(credential_id)
 | `POST` | `/v1/webauthn/assert/verify` | Verify assertion during consent |
 | `PATCH` | `/v1/me` | Update developer settings (FIDO config) |
 
-Hosted enrollment requires `PASSKEY_ENROLLMENT_ENABLED=true` and a correctly configured HTTPS `FIDO_ORIGIN`/`FIDO_RP_ID`; the server feature is off by default. Live-mode consent requires an existing passkey, with no weaker fallback. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) for the customer identity-binding and one-use link requirements. SDK methods shown above describe repository source; verify your installed package version includes them before use.
+Hosted enrollment requires `PASSKEY_ENROLLMENT_ENABLED=true` and a correctly configured HTTPS `FIDO_ORIGIN`/`FIDO_RP_ID`; the server feature is off by default. Live-mode consent requires an existing passkey, with no weaker fallback. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) for the customer identity-binding and one-use link requirements. The guide also distinguishes the hosted SDK methods from the REST-only custom assertion ceremony.
 
 For a production rollout, deploy the auth service and the `/passkey-enroll` hosting rewrite before enabling the flag. Then run `Production Passkey and Irregularity E2E` from GitHub Actions. That test creates an isolated live account, enrolls a virtual passkey, approves consent, records 51 audit entries, verifies alert-only does not revoke its grant, and verifies the revoke mode does. It leaves the test account and audit records in production; do not run it against a customer account.
 

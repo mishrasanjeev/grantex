@@ -1634,7 +1634,9 @@
         <p class="release-intro">
           Release snapshot verified on 27 September 2026. TypeScript 0.7.0,
           Python 0.6.0, Go v0.4.0, and x402 0.4.1 are registry-verified.
-          External custody remains operator-supplied.
+          The three primary SDKs include hosted passkey enrollment and
+          account-level irregularity response controls; both server features
+          require operator rollout. External custody remains operator-supplied.
         </p>
       </div>
       <div class="release-links" aria-label="Release resources">
@@ -1656,7 +1658,7 @@
         <span class="release-language">TypeScript SDK</span>
         <span class="release-name">@grantex/sdk</span>
         <strong class="release-version">0.7.0</strong>
-        <span class="release-meta">npm &middot; current published release</span>
+        <span class="release-meta">npm &middot; hosted passkeys &amp; response policy</span>
       </a>
       <a class="release-card" href="https://www.npmjs.com/package/@grantex/x402/v/0.4.1">
         <span class="release-language">x402 Payment Protocol</span>
@@ -1668,13 +1670,13 @@
         <span class="release-language">Python SDK</span>
         <span class="release-name">grantex</span>
         <strong class="release-version">0.6.0</strong>
-        <span class="release-meta">PyPI &middot; current published release</span>
+        <span class="release-meta">PyPI &middot; hosted passkeys &amp; response policy</span>
       </a>
       <a class="release-card" href="https://pkg.go.dev/github.com/mishrasanjeev/grantex-go@v0.4.0">
         <span class="release-language">Go SDK</span>
         <span class="release-name">github.com/mishrasanjeev/grantex-go</span>
         <strong class="release-version">v0.4.0</strong>
-        <span class="release-meta">Go module &middot; current proxy-verified release</span>
+        <span class="release-meta">Go proxy &middot; hosted passkeys &amp; response policy</span>
       </a>
       <a class="release-card" href="https://www.npmjs.com/package/@grantex/mcp-auth/v/2.0.2">
         <span class="release-language">MCP Auth</span>
@@ -2266,7 +2268,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <span class="install-copy">Copy</span>
       </button>
       <button type="button" class="install-cmd" onclick="copyInstall('go get github.com/mishrasanjeev/grantex-go@v0.4.0', this)"
-              aria-label="Copy the Go SDK version 0.3.0 install command">
+              aria-label="Copy the Go SDK version 0.4.0 install command">
         <span class="install-label">Go</span>
         <code>go get github.com/mishrasanjeev/grantex-go@v0.4.0</code>
         <span class="install-copy">Copy</span>
@@ -3411,7 +3413,7 @@ grantex agent install --dir /path/to/skills</pre>
             <span class="check">&#x2713;</span>
             <div>
               <h4><a href="https://docs.grantex.dev/features/fido-webauthn" style="color:inherit;text-decoration:none;">FIDO2 / WebAuthn</a></h4>
-              <p>Cryptographic human presence verification via passkeys. Biometric, security key, or platform authenticator — embedded as evidence in Verifiable Credentials.</p>
+              <p>Live consent requires a registered passkey. Authenticated, one-use customer enrollment is available in the published TypeScript 0.7.0, Python 0.6.0, and Go v0.4.0 SDKs; operators must enable hosted enrollment on the public origin.</p>
             </div>
           </div>
           <div class="enterprise-feature">
