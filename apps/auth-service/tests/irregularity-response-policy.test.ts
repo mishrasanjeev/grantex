@@ -111,6 +111,7 @@ describe('account irregularity response policy', () => {
 
   it('preserves agent-grant revocation when the account selects that policy', async () => {
     vi.stubEnv('IRREGULARITY_RESPONSE_POLICY_ENABLED', 'true');
+    vi.stubEnv('IRREGULARITY_CASCADE_REVOCATION_ENABLED', 'false');
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ irregularity_response_mode: 'revoke_agent_grants' }]);
     sqlMock.mockResolvedValueOnce([{ agent_id: 'ag_TEST', count: '75' }]);
