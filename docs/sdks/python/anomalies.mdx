@@ -10,10 +10,10 @@ The `anomalies` client provides automated anomaly detection for your authorizati
 
 Access the anomalies client via `client.anomalies`.
 
-Repository source adds `get_response_policy()` and
+Published `grantex==0.6.0` includes `get_response_policy()` and
 `set_response_policy("alert_only")` for the account-wide response to findings
 from `detect()`. The server must enable `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`;
-published PyPI baselines may not include these methods yet. Alert-only retains
+older PyPI versions do not include these methods. Alert-only retains
 findings but skips this detector's automatic agent-grant revocation. It does
 not bypass other security controls.
 

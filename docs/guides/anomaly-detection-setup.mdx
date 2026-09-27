@@ -54,4 +54,4 @@ This detector currently evaluates rate spikes, high failure rates, new principal
 
 With the response-policy flag enabled, each persisted finding emits `anomaly.detected` through the existing event bus. Register a standard Grantex webhook subscription for that type, or consume the event stream. Filter by severity in your consumer and route the event to your own review queue. Event delivery is best-effort, so reconcile with `GET /v1/anomalies` after failures or outages. A record created under `/v1/anomaly/channels` alone does not send a notification.
 
-New response-policy methods in the TypeScript, Python, and Go SDK source require a future package release before they appear in registries. The REST calls above work with a deployment that has enabled the flag. See [Release Status](/release-status).
+Response-policy methods are published in Python `grantex==0.6.0` and Go `v0.4.0`. TypeScript `0.7.0` remains in repository source until npm publication. The REST calls above work with a deployment that has enabled the flag. See [Release Status](/release-status).

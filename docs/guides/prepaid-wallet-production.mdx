@@ -13,7 +13,7 @@ recovery store, notification channel, or regulatory approval for the operator.
 
 The source checkout includes a specific [Base USDC adapter](/guides/base-usdc-custody).
 It requires migration `094`, operator-provisioned keys, a trusted Base RPC,
-verified funding and reconciliation monitoring. Python `0.5.1` and Go `v0.3.0`
+verified funding and reconciliation monitoring. Python `0.6.0` and Go `v0.4.0`
 publish the response and reconciliation APIs; published TypeScript `0.6.0` and
 x402 `0.4.0` support opt-in automatic Base payment retries. Other external
 providers still need their own adapter.
@@ -316,10 +316,10 @@ if ($PyPI.info.version -ne '0.5.1') { throw 'PyPI verification failed.' }
 ```
 
 The Go module path is a separate repository,
-`github.com/mishrasanjeev/grantex-go`. Publishing requires copying the reviewed
-`packages/go-sdk` tree to that repository, rerunning `go test ./...`, committing
-the exact source, and pushing annotated tag `v0.3.0`. A tag in the Grantex
-monorepo does not publish that module.
+`github.com/mishrasanjeev/grantex-go`. Publishing a future version requires
+copying the reviewed `packages/go-sdk` tree to that repository, rerunning
+`go test ./...`, committing the exact source, and pushing an annotated new
+version tag. A tag in the Grantex monorepo does not publish that module.
 
 Python `0.5.0` and Go `v0.3.0` were published on 7 September 2026 and verified
 from clean public-registry consumers. Python `0.5.1` was published on
@@ -351,14 +351,15 @@ select only the packages with new, unpublished versions. The workflow fails
 closed when trusted publishing or the Go credential is absent; a version bump
 is not evidence that a registry release exists.
 
-After publication, verify from empty temporary projects rather than importing
+Python `0.6.0` and Go `v0.4.0` were separately published and verified on
+September 27, 2026. After publication, verify from empty temporary projects rather than importing
 the monorepo checkout:
 
 ```powershell
 npm view '@grantex/sdk@0.6.0' version dist.integrity --json
 npm view '@grantex/x402@0.4.0' version dist.integrity --json
-python -m pip download --no-deps --dest $env:TEMP 'grantex==0.5.1'
-go list -m -json 'github.com/mishrasanjeev/grantex-go@v0.3.0'
+python -m pip download --index-url https://pypi.org/simple --no-deps --dest $env:TEMP 'grantex==0.6.0'
+go list -m -json 'github.com/mishrasanjeev/grantex-go@v0.4.0'
 ```
 
 The workflow uses npm trusted publishing with OIDC and provenance instead of a

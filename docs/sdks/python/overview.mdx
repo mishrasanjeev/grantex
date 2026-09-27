@@ -6,11 +6,12 @@ description: "Install and configure the Grantex Python SDK for delegated authori
 
 ## Installation
 
-Published release: **`grantex==0.5.1`**. PyPI metadata, distribution contents,
-and a clean public-index install were verified before this page was updated.
+Published release: **`grantex==0.6.0`**. The published wheel and sdist hashes
+match the tested artifacts; a clean public-index install was verified on
+September 27, 2026.
 
 ```bash
-python -m pip install grantex==0.5.1
+python -m pip install grantex==0.6.0
 ```
 
 The unpinned `python -m pip install grantex` command follows PyPI's current
@@ -24,6 +25,13 @@ release. Keep the exact version above in reproducible builds. See
 - [PyJWT](https://pyjwt.readthedocs.io/) >= 2.8 with [cryptography](https://cryptography.io/) (for offline token verification)
 
 All dependencies are installed automatically with the SDK.
+
+Version `0.6.0` adds `client.webauthn.create_enrollment_session()` for
+principal-authenticated hosted passkey registration and
+`client.anomalies.get_response_policy()` / `set_response_policy()` for the
+account-level irregularity response mode. Both server capabilities are
+default-off and require explicit operator rollout; an SDK install alone does
+not enable them.
 
 <Note>
   Version `0.5.1` is a patch release. `enforce()` applies the tightest budget

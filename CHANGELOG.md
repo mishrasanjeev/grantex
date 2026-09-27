@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Primary SDK registry releases (2026-09-27)
+- Published Python `grantex==0.6.0` to PyPI from the verified main-branch
+  artifact. The wheel SHA-256 is
+  `3d4df0aef712945aaa89762b75403f9ca26460ff5a01f9cf69da4db71c8e7b76`;
+  the sdist SHA-256 is
+  `a4c0852cd5da812f520a596b063a1ae678079fbae365afd822c1972ea6f117c5`.
+  A clean install from the public PyPI index succeeded.
+- Published Go `github.com/mishrasanjeev/grantex-go@v0.4.0` from
+  `cd3322e0bc8dd3a8a2afdbab729e6c68f0cb1a26`. The public Go proxy
+  resolved the tag and its downloaded module passed `go test ./...`; the
+  synced source also passed `go vet` and `go test -race`.
+- TypeScript `@grantex/sdk@0.7.0` and x402 `@grantex/x402@0.4.1` remain
+  release candidates until the npm registry serves their exact versions.
+  The release workflow verified both tarballs, but automated publication
+  needs npm/PyPI trusted publisher setup and a Go release credential.
+
 ### Hosted passkey enrollment and account irregularity response
 - Added a default-off hosted passkey enrollment flow with authenticated,
   tenant-bound, one-use links, required user verification, and a browser page.
@@ -17,9 +33,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - When the response-policy rollout is enabled, explicit detector runs now emit
   `anomaly.detected` via the existing event/webhook bus. Channel records do not
   independently dispatch notifications.
-- Added repository-source TypeScript, Python and Go SDK methods, portal controls,
-  migrations and tests. Deployment and registry publishing are tracked
-  separately; the package methods are not claims about registry releases.
+- Added TypeScript, Python and Go SDK methods, portal controls, migrations and
+  tests. Deployment and registry publishing are tracked separately; consult
+  the release matrix for the independently verified package versions.
 
 ### One engineering guide for every contributor
 - `AGENTS.md` is the repository's engineering guide, and the other guide file
