@@ -23,7 +23,7 @@ import { hashApiKey, computeAuditHash } from '../src/lib/hash.js';
 import { setSafeFetchForTests } from '../src/lib/url-security.js';
 import { clearApproverIdpCaches } from '../src/lib/decisions/approver-oidc.js';
 import { computeActionHash, type DecisionAction } from '../src/lib/decisions/action.js';
-import { consumeDecisionGrants, createApproverSession, type ApproverIdpRow } from '../src/lib/decisions/store.js';
+import { consumePresentedDecisionGrants, createApproverSession, type ApproverIdpRow } from '../src/lib/decisions/store.js';
 import { signDecisionGrant, type DecisionGrantClaims } from '../src/lib/decisions/token.js';
 import { signGrantToken } from '../src/lib/crypto.js';
 import { buildTestApp, sqlMock, TEST_ADMIN_API_KEY } from './helpers.js';
@@ -619,7 +619,7 @@ describePostgres('decision grants against real Postgres', () => {
   it('two parallel consumes of one jti yield exactly one success', async () => {
     const action = actionFor(newCase());
     const { token } = await approvedGrant(action);
-    const results = await Promise.allSettled([1, 2].map(() => consumeDecisionGrants(sql, { developerId, tokens: [token], action, caseVersion: 'v1' })));
+    const results = await Promise.allSettled([1, 2].map(() => consumePresentedDecisionGrants(sql, { developerId, tokens: [token], action, caseVersion: 'v1' })));
     expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
     expect((results.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason).toMatchObject({ subReason: 'consumed' });
 
@@ -865,6 +865,28 @@ describePostgres('decision grants against real Postgres', () => {
           expect(refused.statusCode).toBe(403);
           expect(refused.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
           expect(await consumedAt(boundRequest.requestId)).toEqual([null]);
+        } finally {
+          delete process.env['DECISION_GRANT_AGENT_BINDING'];
+        }
+      });
+
+      it(`is not consumed by a request id in the body of POST /v1/decisions/consume (DECISION_GRANT_AGENT_BINDING ${binding ?? 'unset'})`, async () => {
+        if (binding === undefined) delete process.env['DECISION_GRANT_AGENT_BINDING'];
+        else process.env['DECISION_GRANT_AGENT_BINDING'] = binding;
+        try {
+          const action = actionFor(newCase());
+          const request = await createRequest(action);
+          await approveOnce(request.requestId);
+          // That endpoint consumes only presented grants; without them the body is malformed.
+          for (const member of ['decisionRequest', 'requestId']) {
+            const res = await app.inject({ method: 'POST', url: '/v1/decisions/consume', headers: auth(), payload: { [member]: request.requestId, action, caseVersion: 'v1' } });
+            expect(res.statusCode, member).toBe(400);
+            expect(res.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'malformed' });
+          }
+          expect(await consumedAt(request.requestId)).toEqual([null]);
+          // The request is still there to consume by its id, on its own endpoint.
+          const consumed = await consumeById(request.requestId, { action });
+          expect(consumed.statusCode, consumed.body).toBe(200);
         } finally {
           delete process.env['DECISION_GRANT_AGENT_BINDING'];
         }

@@ -41,15 +41,19 @@ import {
   auditConsumeRefusal,
   auditGrantRelease,
   cancelDecisionRequest,
-  consumeDecisionGrants,
+  consumePlatformDecisionRequest,
+  consumePresentedDecisionGrants,
   createDecisionRequest,
   getDecisionRequest,
   reviewContent,
   setCaseVersion,
-  type ConsumeInput,
+  type ConsumePlatformRequestInput,
+  type ConsumePresentedInput,
+  type ConsumeResult,
   type DecisionGrantRow,
   type DecisionRequestRow,
   type GrantRelease,
+  type Sql,
 } from '../lib/decisions/store.js';
 import { signDecisionGrant, verifyDecisionGrantSignature } from '../lib/decisions/token.js';
 
@@ -186,43 +190,50 @@ function requestResponse(
   };
 }
 
+/** What a refused consumption is recorded with (`auditConsumeRefusal`). */
+type ConsumeAttempt = Parameters<typeof auditConsumeRefusal>[3];
+
 /**
- * Consumes and answers. Every refusal is recorded with what was attempted; if
- * the record cannot be written the request fails with 503 and nothing is
- * consumed (it is refused either way).
+ * The jtis of the presented decision grants whose signature verifies and that
+ * belong to this developer, for the record of a refused consumption.
+ */
+async function verifiedJtis(tokens: unknown, developerId: string): Promise<string[]> {
+  const jtis: string[] = [];
+  for (const token of Array.isArray(tokens) ? tokens.slice(0, 2) : []) {
+    try {
+      const claims = await verifyDecisionGrantSignature(token as string);
+      if (claims.dev === developerId) jtis.push(claims.jti);
+    } catch {
+      // Unverifiable tokens contribute no jti.
+    }
+  }
+  return jtis;
+}
+
+/**
+ * Consumes and answers. Each consume endpoint passes the one consumption it
+ * performs (`consume`) and what a refusal of it records (`attempted`, built
+ * only on refusal). Every refusal is recorded; if the record cannot be written
+ * the request fails with 503 and nothing is consumed (it is refused either
+ * way).
  */
 async function consumeAndReply(
   request: FastifyRequest,
   reply: FastifyReply,
-  input: ConsumeInput,
+  developerId: string,
+  consume: (sql: Sql) => Promise<ConsumeResult>,
+  attempted: () => Promise<ConsumeAttempt>,
 ): Promise<FastifyReply> {
   const sql = getSql();
-  const { developerId } = input;
   try {
-    const result = await consumeDecisionGrants(sql, input);
+    const result = await consume(sql);
     decisionGrantsConsumedTotal.inc(result.jtis.length);
     return reply.send({ consumed: true, ...result });
   } catch (err) {
     if (!(err instanceof DecisionError)) throw err;
-    const jtis: string[] = [];
-    for (const token of Array.isArray(input.tokens) ? input.tokens.slice(0, 2) : []) {
-      try {
-        const claims = await verifyDecisionGrantSignature(token as string);
-        if (claims.dev === developerId) jtis.push(claims.jti);
-      } catch {
-        // Unverifiable tokens contribute no jti.
-      }
-    }
+    const attempt = await attempted();
     try {
-      await auditConsumeRefusal(sql, developerId, err.subReason, {
-        jtis,
-        action: input.action,
-        caseVersion: input.caseVersion,
-        ...(input.requestId !== undefined ? { requestId: input.requestId } : {}),
-        ...(input.agentId !== undefined ? { agentId: input.agentId } : {}),
-        ...(input.agentDid !== undefined ? { agentDid: input.agentDid } : {}),
-        ...(input.grantId !== undefined ? { grantId: input.grantId } : {}),
-      });
+      await auditConsumeRefusal(sql, developerId, err.subReason, attempt);
     } catch (auditErr) {
       request.log.error({ err: auditErr }, 'failed to audit a refused decision-grant consumption');
       decisionGrantsRejectedTotal.labels('consume', 'audit_unavailable').inc();
@@ -464,24 +475,34 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/decisions/requests/:id/consume — consume the grants of a request
   // that names no agent, for one action, without the platform ever holding
   // them. A request that names an agent or a grant is refused (`wrong_agent`):
-  // only the grants its agent presents spend it.
+  // only the grants its agent presents spend it. Only this endpoint consumes
+  // by request id.
   app.post<{ Params: { id: string } }>('/v1/decisions/requests/:id/consume', { config: { rateLimit: { max: 600, timeWindow: '1 minute' } } }, async (request, reply) => {
     if (!(await decisionGuard(request, reply))) return reply;
     const body = request.body;
     if (!isRecord(body)) return badRequest(reply, request, 'Request body must be a JSON object');
-    return consumeAndReply(request, reply, {
+    const input: ConsumePlatformRequestInput = {
       developerId: request.developer.id,
       requestId: request.params.id,
       action: body['action'],
       caseVersion: body['caseVersion'],
-    });
+    };
+    return consumeAndReply(
+      request,
+      reply,
+      input.developerId,
+      (sql) => consumePlatformDecisionRequest(sql, input),
+      async () => ({ jtis: [], action: input.action, caseVersion: input.caseVersion, requestId: input.requestId }),
+    );
   });
 
   // POST /v1/decisions/consume — verify and atomically consume the decision
   // grants presented for one action. With the binding, the grants of a request
   // that names an agent or a grant are consumed only when `agentDid` (the DID
   // the enforcer read from the calling agent's grant token) or `agentId`, and
-  // `grantId`, name them.
+  // `grantId`, name them. This endpoint only ever consumes presented grants:
+  // the body has no request id member, and one without `decisionGrants` is
+  // refused (malformed, 400).
   app.post('/v1/decisions/consume', { config: { rateLimit: { max: 600, timeWindow: '1 minute' } } }, async (request, reply) => {
     const settings = await decisionGuard(request, reply);
     if (!settings) return reply;
@@ -489,13 +510,25 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
     if (!isRecord(body)) return badRequest(reply, request, 'Request body must be a JSON object');
     const context = requesterFields(body, settings.agentBinding);
     if (typeof context === 'string') return badRequest(reply, request, `${context} is malformed`);
-    return consumeAndReply(request, reply, {
+    const input: ConsumePresentedInput = {
       developerId: request.developer.id,
       tokens: body['decisionGrants'],
       action: body['action'],
       caseVersion: body['caseVersion'],
       ...context,
       bindAgent: settings.agentBinding,
-    });
+    };
+    return consumeAndReply(
+      request,
+      reply,
+      input.developerId,
+      (sql) => consumePresentedDecisionGrants(sql, input),
+      async () => ({
+        jtis: await verifiedJtis(input.tokens, input.developerId),
+        action: input.action,
+        caseVersion: input.caseVersion,
+        ...context,
+      }),
+    );
   });
 }
