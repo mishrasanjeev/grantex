@@ -14,11 +14,9 @@ const MOCK_VC_RECORD = {
 
 const MOCK_VERIFY_RESULT = {
   valid: true,
-  credentialType: 'GrantCredential',
-  issuer: 'did:web:grantex.dev',
-  subject: { principalId: 'user_abc123', agentDid: 'did:grantex:ag_01' },
-  expiresAt: '2026-03-02T00:00:00Z',
-  revoked: false,
+  vcId: 'vc_01',
+  payload: { iss: 'did:web:grantex.dev', vc: { credentialSubject: { principalId: 'user_abc123' } } },
+  webauthnVerified: true,
 };
 
 function makeFetch(status: number, body: unknown) {
@@ -81,8 +79,8 @@ describe('CredentialsClient', () => {
     const result = await grantex.credentials.verify('eyJ...');
 
     expect(result.valid).toBe(true);
-    expect(result.credentialType).toBe('GrantCredential');
-    expect(result.issuer).toBe('did:web:grantex.dev');
+    expect(result.payload?.['iss']).toBe('did:web:grantex.dev');
+    expect(result.webauthnVerified).toBe(true);
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/v1\/credentials\/verify$/);
     expect(init.method).toBe('POST');

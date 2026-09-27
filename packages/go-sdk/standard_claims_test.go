@@ -264,6 +264,30 @@ func TestVerifyGrantTokenReadsStandardClaimsOnly(t *testing.T) {
 	}
 }
 
+func TestVerifyGrantTokenWebAuthnEvidenceReference(t *testing.T) {
+	fixture := loadGrantTokenFixture(t)
+	evidence := map[string]interface{}{
+		"type": "GrantexWebAuthnAssertion", "version": 1,
+		"authRequestId": "areq_test", "rpId": "grantex.dev",
+		"origin": "https://grantex.dev", "userVerified": true,
+		"assertedAt": "2026-09-27T00:00:00.000Z", "digest": strings.Repeat("a", 64),
+	}
+	base := fixture.Standard[GrantClaim].(map[string]interface{})
+	grantRecord := make(map[string]interface{}, len(base)+1)
+	for key, value := range base {
+		grantRecord[key] = value
+	}
+	grantRecord["webauthn"] = evidence
+	signed, opts := signFixture(t, fixtureClaims(fixture.Standard, "", map[string]interface{}{GrantClaim: grantRecord}), "at+jwt")
+	grant, err := VerifyGrantToken(context.Background(), signed, *opts)
+	if err != nil || grant.WebAuthnEvidence == nil || grant.WebAuthnEvidence.AuthRequestID != "areq_test" {
+		t.Fatalf("evidence = %+v, error = %v", grant, err)
+	}
+	evidence["digest"] = "bad"
+	signed, opts = signFixture(t, fixtureClaims(fixture.Standard, "", map[string]interface{}{GrantClaim: grantRecord}), "at+jwt")
+	expectRejected(t, signed, *opts)
+}
+
 func TestVerifyGrantTokenStandardClaimsOnlyRefusesLegacyTokensAndOtherTyp(t *testing.T) {
 	fixture := loadGrantTokenFixture(t)
 	legacyOnly := fixtureClaims(fixture.LegacyAliases, "", map[string]interface{}{"sub": "user-1", "jti": "tok-old"})

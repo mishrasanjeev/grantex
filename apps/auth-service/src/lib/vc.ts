@@ -13,6 +13,10 @@ import { getKeyPair } from './crypto.js';
 import { resolvePlatformVerificationKey, SIGNING_ALGORITHMS } from './signing-keys.js';
 import { newVerifiableCredentialId, newStatusListId } from './ids.js';
 import { config } from '../config.js';
+import {
+  verifyPortableWebAuthnEvidence,
+  type WebAuthnAssertionEvidence,
+} from './webauthn-evidence.js';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -24,7 +28,7 @@ export interface IssueVCParams {
   scopes: string[];
   expiresAt: Date;
   delegationDepth?: number;
-  fidoEvidence?: Record<string, unknown>;
+  fidoEvidence?: WebAuthnAssertionEvidence;
 }
 
 export interface VCPayload {
@@ -49,6 +53,7 @@ export interface VerifyVCResult {
   revoked?: boolean;
   expired?: boolean;
   error?: string;
+  webauthnVerified?: boolean;
 }
 
 // ── StatusList2021 helpers ──────────────────────────────────────────────────
@@ -107,29 +112,31 @@ export interface AllocatedStatusIndex {
  */
 export async function allocateStatusListIndex(
   developerId: string,
+  tx?: TxSql,
 ): Promise<AllocatedStatusIndex> {
-  const sql = getSql();
+  const sql = tx ?? queries(getSql());
 
-  const claimed = await claimIndexFromExistingList(queries(sql), developerId);
+  const claimed = await claimIndexFromExistingList(sql, developerId);
   if (claimed) return claimed;
 
   // No list yet, or the newest one is full. Serialise creation per developer so
   // a burst of concurrent issuance produces one new list rather than N.
-  return await sql.begin(async (_tx) => {
-    const tx = _tx as unknown as TxSql;
-    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`vcsl:${developerId}`}, 0))`;
+  const createList = async (locked: TxSql): Promise<AllocatedStatusIndex> => {
+    await locked`SELECT pg_advisory_xact_lock(hashtextextended(${`vcsl:${developerId}`}, 0))`;
 
-    const raced = await claimIndexFromExistingList(tx, developerId);
+    const raced = await claimIndexFromExistingList(locked, developerId);
     if (raced) return raced;
 
     const listId = newStatusListId();
     const encoded = encodeBitstring(createEmptyBitstring());
-    await tx`
+    await locked`
       INSERT INTO vc_status_lists (id, developer_id, purpose, encoded_list, size, next_index)
       VALUES (${listId}, ${developerId}, 'revocation', ${encoded}, ${STATUS_LIST_SIZE}, 1)
     `;
     return { listId, index: 0 };
-  }) as AllocatedStatusIndex;
+  };
+  if (tx) return createList(tx);
+  return await getSql().begin(async (locked) => createList(locked as unknown as TxSql));
 }
 
 async function claimIndexFromExistingList(
@@ -232,7 +239,7 @@ export { setRevocationBits };
 
 // ── VC-JWT issuance ─────────────────────────────────────────────────────────
 
-export async function issueAgentGrantVC(params: IssueVCParams): Promise<{
+export async function issueAgentGrantVC(params: IssueVCParams, tx?: TxSql): Promise<{
   vcId: string;
   vcJwt: string;
   statusListIdx: number;
@@ -255,8 +262,8 @@ export async function issueAgentGrantVC(params: IssueVCParams): Promise<{
 
   // Claim a revocation slot (atomic; rolls onto a new list when one fills up)
   const { listId: statusListId, index: statusListIdx } =
-    await allocateStatusListIndex(developerId);
-  const sql = getSql();
+    await allocateStatusListIndex(developerId, tx);
+  const sql = tx ?? queries(getSql());
 
   // Build VC payload
   const now = Math.floor(Date.now() / 1000);
@@ -282,10 +289,7 @@ export async function issueAgentGrantVC(params: IssueVCParams): Promise<{
 
   const evidence: Record<string, unknown>[] = [];
   if (fidoEvidence) {
-    evidence.push({
-      type: 'FidoAttestation',
-      ...fidoEvidence,
-    });
+    evidence.push({ ...fidoEvidence });
   }
 
   const vcClaim: VCPayload['vc'] = {
@@ -360,6 +364,30 @@ export async function verifyAgentGrantVC(vcJwt: string): Promise<VerifyVCResult>
     return { valid: false, ...vcIdFields, error: 'Missing vc claim' };
   }
 
+  let webauthnVerified = false;
+  const evidence = vc['evidence'];
+  if (evidence !== undefined) {
+    if (!Array.isArray(evidence)) {
+      return { valid: false, ...vcIdFields, error: 'Invalid credential evidence' };
+    }
+    for (const entry of evidence) {
+      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+        return { valid: false, ...vcIdFields, error: 'Invalid credential evidence' };
+      }
+      const assertion = entry as Record<string, unknown>;
+      if (assertion['type'] !== 'GrantexWebAuthnAssertion') continue;
+      if (webauthnVerified
+          || typeof assertion['rpId'] !== 'string'
+          || typeof assertion['origin'] !== 'string'
+          || !await verifyPortableWebAuthnEvidence(assertion, {
+            rpId: config.fidoRpId, origin: config.fidoOrigin,
+          })) {
+        return { valid: false, ...vcIdFields, error: 'Invalid WebAuthn assertion evidence' };
+      }
+      webauthnVerified = true;
+    }
+  }
+
   // Check revocation via status list
   const credentialStatus = vc['credentialStatus'] as Record<string, unknown> | undefined;
   if (credentialStatus) {
@@ -394,6 +422,7 @@ export async function verifyAgentGrantVC(vcJwt: string): Promise<VerifyVCResult>
     valid: true,
     ...vcIdFields,
     payload: decoded as unknown as VCPayload,
+    ...(webauthnVerified ? { webauthnVerified } : {}),
   };
 }
 

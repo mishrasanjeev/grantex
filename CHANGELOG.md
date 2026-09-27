@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Portable WebAuthn assertion evidence (default off)
+- Added `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED` (default `false`). When enabled,
+  verified consent assertions are retained, bound to new grants, referenced by
+  signed grant tokens and opt-in VCs, and inherited by delegated grants.
+  Requested VCs commit atomically with root and delegated grants when the
+  feature is enabled or their parent already carries assertion evidence.
+- Existing grants do not acquire historical assertion evidence. Once enabled,
+  a previously approved live authorization request without captured evidence
+  returns `PASSKEY_EVIDENCE_REQUIRED` at token exchange; the principal must
+  complete new passkey consent. Deploy migration 119 and review the
+  [WebAuthn rollout guide](docs/features/fido-webauthn.mdx) before enabling.
+- TypeScript, Python, and Go SDK source now exposes the signed grant evidence
+  reference and the corrected VC verification response. These source changes
+  are not present in the previously published SDK versions until released.
+
 ### Primary SDK registry releases (2026-09-27)
 - Published `@grantex/sdk@0.7.0` and `@grantex/x402@0.4.1` to npm from the
   verified main-branch artifacts. The registry SHA-512 integrity values match

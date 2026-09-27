@@ -25,6 +25,25 @@ const validAuthRequest = {
 };
 
 describe('POST /v1/token', () => {
+  it('preserves legacy live exchange when portable evidence is disabled', async () => {
+    vi.stubEnv('PORTABLE_WEBAUTHN_EVIDENCE_ENABLED', 'false');
+    try {
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([{
+        ...validAuthRequest, mode: 'live', fido_verified: true, fido_evidence: null,
+      }]);
+      const res = await app.inject({
+        method: 'POST', url: '/v1/token', headers: authHeader(),
+        payload: { code: 'legacy-live-code', agentId: TEST_AGENT.id },
+      });
+      expect(res.statusCode).toBe(201);
+      const token = res.json<{ grantToken: string }>().grantToken;
+      expect((decodeJwt(token)['urn:grantex:grant'] as Record<string, unknown>)['webauthn']).toBeUndefined();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('exchanges a valid code for a signed JWT', async () => {
     seedAuth();
     // Auth request lookup
@@ -218,17 +237,17 @@ describe('POST /v1/token', () => {
       .toEqual({ jkt: 'agent-jwk-thumbprint' });
   });
 
-  it('succeeds without verifiableCredential when VC issuance fails (best-effort)', async () => {
+  it('fails the exchange without consuming the code when requested VC issuance fails', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([validAuthRequest]);  // Auth request lookup
     sqlMock.mockResolvedValueOnce([]);  // INSERT grants
     sqlMock.mockResolvedValueOnce([]);  // INSERT grant_tokens
     sqlMock.mockResolvedValueOnce([]);  // INSERT refresh_tokens
-    sqlMock.mockResolvedValueOnce([]);  // UPDATE auth_requests
+    sqlMock.mockResolvedValueOnce([]);  // issuance query
     sqlMock.mockResolvedValueOnce([]);  // Budget check (no allocation)
     sqlMock.mockResolvedValueOnce([]);  // Additional transactional issuance query
     sqlMock.mockResolvedValueOnce([]);  // Additional transactional issuance query
-    // VC issuance: getOrCreateStatusList SQL fails → catch block swallows error
+    // VC status-list allocation fails inside the issuance transaction.
     sqlMock.mockRejectedValueOnce(new Error('VC status list query failed'));
 
     const res = await app.inject({
@@ -238,10 +257,11 @@ describe('POST /v1/token', () => {
       payload: { code: 'code-vc-fail', agentId: TEST_AGENT.id, credentialFormat: 'vc-jwt' },
     });
 
-    expect(res.statusCode).toBe(201);
-    const body = res.json();
-    expect(body.grantToken).toBeDefined();
-    expect(body.verifiableCredential).toBeUndefined();
+    expect(res.statusCode).toBe(500);
+    const sqlText = sqlMock.mock.calls
+      .map(([strings]) => Array.isArray(strings) ? strings.join('?') : String(strings))
+      .join('\n');
+    expect(sqlText).not.toContain('UPDATE auth_requests');
   });
 
 });

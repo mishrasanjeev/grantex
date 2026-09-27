@@ -4,6 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import postgres from 'postgres';
 import { chromium, type Browser } from 'playwright';
 import { ulid } from 'ulid';
+import { decodeJwt } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.unmock('../../src/lib/webauthn.js');
@@ -15,6 +16,7 @@ import type { FastifyInstance } from 'fastify';
 import { config } from '../../src/config.js';
 import { runMigrations } from '../../src/db/migrate.js';
 import { hashApiKey } from '../../src/lib/hash.js';
+import { createWebAuthnEvidence, verifyPortableWebAuthnEvidence } from '../../src/lib/webauthn-evidence.js';
 import { createTestDatabase } from '../helpers/database.js';
 import { buildTestApp, sqlMock } from '../helpers.js';
 import { Grantex } from '../../../../packages/sdk-ts/src/client.js';
@@ -146,12 +148,141 @@ async function freePort(): Promise<number> {
 
       await page.getByRole('button', { name: 'Approve' }).click();
       await page.getByRole('heading', { name: 'Approved' }).waitFor({ timeout: 20_000 });
-      const approved = await sql`SELECT status, fido_verified FROM auth_requests WHERE id = ${authRequestId}`;
+      const approved = await sql`SELECT status, code, fido_verified, fido_evidence FROM auth_requests WHERE id = ${authRequestId}`;
       expect(approved[0]).toMatchObject({ status: 'approved', fido_verified: true });
+      const evidence = approved[0]?.['fido_evidence'];
+      expect(await verifyPortableWebAuthnEvidence(evidence, { rpId: 'localhost', origin: base })).toBe(true);
+      expect(await verifyPortableWebAuthnEvidence(evidence, { rpId: 'other.example', origin: base })).toBe(false);
+
+      const exchanged = await fetch(`${base}/v1/token`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: approved[0]?.['code'], agentId, credentialFormat: 'vc-jwt' }),
+      });
+      expect(exchanged.status, await exchanged.clone().text()).toBe(201);
+      const issued = await exchanged.json() as {
+        grantToken: string; verifiableCredential: string; refreshToken: string; grantId: string;
+      };
+      expect(issued.verifiableCredential).toBeTruthy();
+      const grantClaim = decodeJwt(issued.grantToken)['urn:grantex:grant'] as Record<string, unknown>;
+      const summary = grantClaim['webauthn'] as Record<string, unknown>;
+      const vc = decodeJwt(issued.verifiableCredential)['vc'] as Record<string, unknown>;
+      const vcEvidence = (vc['evidence'] as Record<string, unknown>[])[0]!;
+      expect(summary['digest']).toBe(vcEvidence['digest']);
+      expect(summary['authRequestId']).toBe(authRequestId);
+      expect(summary['userVerified']).toBe(true);
+      expect(vcEvidence['type']).toBe('GrantexWebAuthnAssertion');
+      expect(vcEvidence['credentialPublicKey']).toBeTruthy();
+      expect(await verifyPortableWebAuthnEvidence(vcEvidence, { rpId: 'localhost', origin: base })).toBe(true);
+      expect(await verifyPortableWebAuthnEvidence({ ...vcEvidence, signature: 'forged' }, { rpId: 'localhost', origin: base })).toBe(false);
+      const storedGrant = await sql`SELECT fido_verified, fido_credential_id, fido_evidence
+        FROM grants WHERE id = ${issued.grantId}`;
+      expect(storedGrant[0]?.['fido_verified']).toBe(true);
+      expect(storedGrant[0]?.['fido_credential_id']).toBe(vcEvidence['credentialId']);
+      expect((storedGrant[0]?.['fido_evidence'] as Record<string, unknown>)['digest']).toBe(summary['digest']);
+      const grantResponse = await fetch(`${base}/v1/grants/${issued.grantId}`, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      expect(grantResponse.status).toBe(200);
+      expect((await grantResponse.json() as { webauthnEvidence: Record<string, unknown> }).webauthnEvidence)
+        .toEqual(summary);
+
+      const refreshed = await fetch(`${base}/v1/token/refresh`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: issued.refreshToken, agentId }),
+      });
+      expect(refreshed.status, await refreshed.clone().text()).toBe(201);
+      const next = await refreshed.json() as { grantToken: string };
+      expect((decodeJwt(next.grantToken)['urn:grantex:grant'] as Record<string, unknown>)['webauthn'])
+        .toEqual(summary);
+
+      const delegated = await fetch(`${base}/v1/grants/delegate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parentGrantToken: issued.grantToken, subAgentId: otherAgentId,
+          scopes: ['read'], credentialFormat: 'vc-jwt',
+        }),
+      });
+      expect(delegated.status, await delegated.clone().text()).toBe(201);
+      const child = await delegated.json() as {
+        grantToken: string; refreshToken: string; verifiableCredential: string; grantId: string;
+      };
+      expect((decodeJwt(child.grantToken)['urn:grantex:grant'] as Record<string, unknown>)['webauthn'])
+        .toEqual(summary);
+      const childVc = decodeJwt(child.verifiableCredential)['vc'] as Record<string, unknown>;
+      expect((childVc['evidence'] as Record<string, unknown>[])[0]?.['digest']).toBe(summary['digest']);
+      expect((await sql`SELECT fido_evidence FROM grants WHERE id = ${child.grantId}`)[0]?.['fido_evidence'])
+        .toMatchObject({ digest: summary['digest'] });
+      const childRefresh = await fetch(`${base}/v1/token/refresh`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: child.refreshToken, agentId: otherAgentId }),
+      });
+      expect(childRefresh.status, await childRefresh.clone().text()).toBe(201);
+      const refreshedChild = await childRefresh.json() as { grantToken: string };
+      const refreshedChildClaim = decodeJwt(refreshedChild.grantToken)['urn:grantex:grant'] as Record<string, unknown>;
+      expect(refreshedChildClaim['webauthn']).toEqual(summary);
+      const childVerified = await fetch(`${base}/v1/credentials/verify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: child.verifiableCredential }),
+      });
+      expect(await childVerified.json()).toMatchObject({ valid: true, webauthnVerified: true });
+
+      const verifyVc = () => fetch(`${base}/v1/credentials/verify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: issued.verifiableCredential }),
+      });
+      expect(await (await verifyVc()).json()).toMatchObject({ valid: true, webauthnVerified: true });
+      const revoked = await fetch(`${base}/v1/grants/${issued.grantId}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      expect(revoked.status).toBe(204);
+      expect(await (await verifyVc()).json()).toMatchObject({ valid: false, revoked: true });
+      const revokedChild = await fetch(`${base}/v1/credentials/verify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: child.verifiableCredential }),
+      });
+      expect(await revokedChild.json()).toMatchObject({ valid: false, revoked: true });
     } finally {
       await context.close();
     }
   }, 60_000);
+
+  it('refuses legacy or mismatched evidence on a live authorization code', async () => {
+    const code = `code_${ulid()}`;
+    const missingId = `areq_${ulid()}`;
+    await sql`INSERT INTO auth_requests
+      (id, agent_id, principal_id, developer_id, scopes, expires_at, status, code, fido_verified)
+      VALUES (${missingId}, ${agentId}, ${principalId}, ${developerId}, ${['read']},
+        NOW() + INTERVAL '10 minutes', 'approved', ${code}, TRUE)`;
+    const exchange = (authorizationCode: string) => fetch(`${base}/v1/token`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: authorizationCode, agentId, credentialFormat: 'vc-jwt' }),
+    });
+    const missing = await exchange(code);
+    expect(missing.status).toBe(400);
+    expect((await missing.json() as { code: string }).code).toBe('PASSKEY_EVIDENCE_REQUIRED');
+    expect((await sql`SELECT status FROM auth_requests WHERE id = ${missingId}`)[0]?.['status']).toBe('approved');
+
+    const oldEvidence = createWebAuthnEvidence({
+      authRequestId: missingId, credentialId: 'old-credential', credentialPublicKey: 'AQIDBA',
+      previousCounter: 0, rpId: 'localhost', origin: base, challenge: 'old-challenge',
+      clientDataJSON: 'old-client', authenticatorData: 'old-authenticator',
+      signature: 'old-signature', userVerified: true, assertedAt: new Date().toISOString(),
+    });
+    const copiedId = `areq_${ulid()}`;
+    const copiedCode = `code_${ulid()}`;
+    await sql`INSERT INTO auth_requests
+      (id, agent_id, principal_id, developer_id, scopes, expires_at, status, code, fido_verified, fido_evidence)
+      VALUES (${copiedId}, ${agentId}, ${principalId}, ${developerId}, ${['read']},
+        NOW() + INTERVAL '10 minutes', 'approved', ${copiedCode}, TRUE, ${sql.json(oldEvidence as never)})`;
+    const copied = await exchange(copiedCode);
+    expect(copied.status).toBe(500);
+    expect((await sql`SELECT status FROM auth_requests WHERE id = ${copiedId}`)[0]?.['status']).toBe('approved');
+  });
 
   it('shows missing, invalid and expired enrollment-link errors in Chromium', async () => {
     const context = await browser.newContext({ viewport: { width: 375, height: 812 } });

@@ -3,6 +3,7 @@ import { getSql } from '../db/client.js';
 import { revokeGrantCascade } from '../lib/revoke.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
 import { incrementUsage } from '../lib/usage.js';
+import { grantWebAuthnEvidence, parseWebAuthnEvidence } from '../lib/webauthn-evidence.js';
 
 export async function grantsRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/grants
@@ -41,7 +42,7 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const rows = await sql.unsafe(`
-      SELECT id, agent_id, principal_id, developer_id, scopes, status, issued_at, expires_at, revoked_at, purpose
+      SELECT id, agent_id, principal_id, developer_id, scopes, status, issued_at, expires_at, revoked_at, purpose, fido_evidence
       FROM grants
       WHERE ${predicates.join(' AND ')}
       ORDER BY issued_at DESC
@@ -54,7 +55,7 @@ export async function grantsRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { id: string } }>('/v1/grants/:id', async (request, reply) => {
     const sql = getSql();
     const rows = await sql`
-      SELECT id, agent_id, principal_id, developer_id, scopes, status, issued_at, expires_at, revoked_at, purpose
+      SELECT id, agent_id, principal_id, developer_id, scopes, status, issued_at, expires_at, revoked_at, purpose, fido_evidence
       FROM grants
       WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
     `;
@@ -111,6 +112,9 @@ function toGrantResponse(row: Record<string, unknown>) {
     developerId: row['developer_id'],
     scopes: row['scopes'],
     ...(typeof row['purpose'] === 'string' ? { purpose: row['purpose'] } : {}),
+    ...(row['fido_evidence'] != null
+      ? { webauthnEvidence: grantWebAuthnEvidence(parseWebAuthnEvidence(row['fido_evidence'])) }
+      : {}),
     status: row['status'],
     issuedAt: row['issued_at'],
     expiresAt: row['expires_at'],

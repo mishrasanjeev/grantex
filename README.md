@@ -706,7 +706,7 @@ Grantex supports passkey-based human presence verification using FIDO2/WebAuthn.
 1. **Developer configures FIDO** — Live mode already requires it; set `fidoRequired: true` via `PATCH /v1/me` to require it in sandbox mode too.
 2. **Application enrolls the customer** — After authenticating the customer, the application issues a one-use hosted enrollment link for their exact principal ID. The consent URL alone cannot register a passkey.
 3. **User authenticates on consent** — On subsequent authorization requests, the user completes a WebAuthn assertion challenge instead of a simple button click
-4. **Consent requires verified presence** — The pending authorization request records successful assertion verification before approval or denial. Issued grants and VCs do not currently carry the assertion details.
+4. **Consent requires verified presence** — With portable evidence enabled, Grantex stores the verified assertion on the pending request, binds it to the grant, and puts a signed digest reference in the grant token. An opt-in VC carries the assertion verification inputs.
 
 ### SDK Usage
 
@@ -843,9 +843,11 @@ const { credentials } = await grantex.credentials.list({
 });
 ```
 
-### FIDO Evidence Boundary
+### Portable Passkey Evidence
 
-The hosted consent flow requires a passkey assertion before a live request can be approved or denied. The current token-exchange path does not attach `fidoEvidence` to the issued grant or VC. Do not present a Grantex VC alone as portable proof of the WebAuthn ceremony or as certified payment-network intent evidence.
+Live consent requires a passkey assertion. With `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true` (default off), newly issued grants and grant tokens carry a signed `webauthnEvidence` summary with the assertion digest. Request `credentialFormat: 'vc-jwt'` (or `'both'`) at token exchange to receive a signed VC with the raw assertion, public key, challenge, RP ID, origin, and prior counter in `vc.evidence`. With this rollout enabled or evidence already present, the VC is issued atomically with the grant. Delegated grants inherit this original-ceremony evidence, not a new human approval. Historical grants without captured evidence cannot be upgraded retroactively; the principal must complete a new consent ceremony after activation.
+
+Verify the VC signature, expiry and revocation; require your trusted RP ID and origin; reverify the WebAuthn assertion; and compare its digest to the grant-token reference. The authenticator signs a challenge, not the grant's scopes. Grantex's issuer signature supplies that binding and attests its credential enrollment; a verifier must decide whether to trust that issuer and enrollment process. Raw evidence contains a stable credential public key and is opt-in because it can correlate presentations. No payment-network certification is implied. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) and [VC guide](https://docs.grantex.dev/features/verifiable-credentials).
 
 ### DID Infrastructure
 
