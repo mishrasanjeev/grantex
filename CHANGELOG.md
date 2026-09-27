@@ -78,6 +78,68 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `spec/examples/enforce-audience.json`. Documented in the SDK enforce pages,
   the gateway and adapters pages, `spec/grant-token-0.6.md` (Validation) and
   `spec/manifest-0.6.md`.
+### Emergency stop lockout
+- The emergency stop can now freeze issuance as well as revoke. `lockout: true`
+  on `POST /v1/emergency-stop` or `POST /v1/admin/emergency-stop` records a
+  freeze over the stop's scope (grant, agent, principal or developer). The
+  freeze is written before the first sweep, in the same transaction as the
+  stop's record, and the response says `lockout: true` with a `freezeId`. A
+  stop without the option is unchanged: it revokes what exists, says
+  `lockout: false`, and the same key can mint a new grant straight afterwards.
+- While a freeze is in force, every issuance path under its scope refuses with
+  `403 ISSUANCE_FROZEN`: `POST /v1/authorize`, `POST /v1/token`,
+  `POST /v1/token/refresh`, `POST /v1/grants/delegate`,
+  `POST /v1/consent-bundles` and its refresh, and `POST /v1/passport/issue`.
+  The OAuth profile's `POST /oauth/par` and `POST /oauth/token` (authorization
+  code, refresh token and token exchange) answer `403 access_denied`. A freeze
+  covers what a stop over the same scope would revoke, so a refresh,
+  delegation, exchange or passport is checked against every grant above the
+  one it acts on. If the freeze state cannot be read, issuance fails closed
+  with `503 FREEZE_STATE_UNAVAILABLE` (`503 temporarily_unavailable` on the
+  OAuth endpoints). A refused code is not consumed and a refused refresh token
+  is not rotated, so both work once the freeze is lifted.
+- New endpoints: `POST /v1/emergency-stop/unfreeze` (developer API key) and
+  `POST /v1/admin/emergency-stop/unfreeze` (`ADMIN_API_KEY`) lift a freeze.
+  Each must repeat `confirm: "unfreeze <type>:<id>"`. A freeze the operator
+  placed, or reaffirmed, can only be lifted by the operator, because the
+  tenant's own key may be the leaked credential. Placing and lifting both go
+  on the audit hash chain (`grantex.issuance_frozen`,
+  `grantex.issuance_unfrozen`), and `GET /v1/emergency-stops` now also lists
+  the freezes in force, under `freezes`, oldest first and paged with `page`
+  and `pageSize` (default 50, at most 200) as the other paged lists are, with
+  `freezesTotal` giving how many are in force in all.
+- Freezing and issuing share a per-developer advisory lock, so a grant written
+  while a freeze lands is either found by the sweep or refused. The same holds
+  for a passport: `POST /v1/passport/issue` now writes the passport and its
+  credential in one transaction that takes the lock and reads the grant
+  again, locked. A passport being written as a lockout lands is waited for,
+  and the sweep sets its status bit. One whose grant a stop revoked while it
+  was being issued is refused with `400 INVALID_GRANT`.
+- The verifiable credential a code exchange or a delegation issues after its
+  grant is committed (`credentialFormat: "vc-jwt"` or `"both"`, without
+  portable passkey evidence) is written in a transaction of its own that
+  reads the grant, locked, and the freeze again under the same lock. A lockout
+  that lands between the grant and its credential either waits for the
+  credential and sets its status bit, or, if it committed first, the call is
+  refused with `403 ISSUANCE_FROZEN` and no credential is written. A grant
+  revoked in between gets no credential, and the call returns without one, as
+  when best-effort issuance fails.
+- A lockout does not cover commerce passports
+  (`POST /v1/commerce/passports/exchange`) or decision grants, which are not
+  issued from grants. The runbook says how to contain commerce passports:
+  disable the commerce tenant, and revoke those already issued.
+- Off with the rest of the emergency stop. Unless `EMERGENCY_STOP_ENABLED=true`,
+  the issuance paths do not read the freeze state and behave exactly as
+  before: the passport route writes its two rows separately and the
+  post-commit credential is issued as it was. Turning the flag off stops enforcing any freeze still in
+  force; the runbook says to lift freezes first.
+- Migration `120_emergency_stop_lockout.sql` adds the `issuance_freezes`
+  table and an `emergency_stops.lockout` column with a constant default, so
+  there is no table rewrite and existing stops read as sweeps. Metrics:
+  `grantex_issuance_freeze_changes_total{action,scope}` and
+  `grantex_issuance_refusals_total{path,reason}`. Alert rules:
+  `GrantexIssuanceLockoutPlaced` and `GrantexIssuanceFreezeStateUnreadable`.
+  The runbook is section 11 of `docs/self-hosting.md`.
 ### Revoking is no longer rate limited like ordinary traffic (default on)
 - **Breaking (default flip):** while the Redis rate-limit counter is
   unavailable, revoking and the emergency stop are now served, counted per

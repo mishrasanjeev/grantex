@@ -300,7 +300,7 @@ the pull request that references it.
   correctness. The bridge never echoes a stored value back to an
   unauthenticated caller.
 
-## G-22 — The emergency stop cannot lock a tenant out
+## G-22 — The emergency stop cannot lock a tenant out (fixed)
 
 - **Found:** emergency stop work (PRD G-6), 2026-09-20; accepted in review as
   documented rather than closed.
@@ -323,6 +323,39 @@ the pull request that references it.
   authenticated way to lift it, and a decision about what happens to agents
   mid-task. Tracked here so "the incident control does not stop the incident"
   stays visible.
+- **Fixed:** a stop can now ask for a lockout, `lockout: true` on
+  `POST /v1/emergency-stop` and on the operator's
+  `POST /v1/admin/emergency-stop`. It records a freeze (`issuance_freezes`,
+  migration `120_emergency_stop_lockout.sql`) in the same transaction as the
+  stop's own row, before the first sweep, and every issuance path reads it and
+  answers `403 ISSUANCE_FROZEN`: `POST /v1/authorize`, the code exchange,
+  refresh and delegation, the OAuth profile's pushed request and its
+  authorization-code, refresh and token-exchange grants, consent bundles and
+  passports. A freeze covers what a stop over the same scope would revoke, so
+  a refresh or delegation is checked against the lineage of its grant. If the
+  freeze state cannot be read, issuance is refused with
+  `503 FREEZE_STATE_UNAVAILABLE`. Freezing and issuing meet on a per-developer
+  advisory lock, so a grant or a passport written while a freeze lands is
+  either swept or refused; a passport's two rows are written in one
+  transaction that takes the lock. `POST /v1/emergency-stop/unfreeze` and
+  `POST /v1/admin/emergency-stop/unfreeze` lift it, and both the freeze and
+  the lifting go on the audit chain (`grantex.issuance_frozen`,
+  `grantex.issuance_unfrozen`). A freeze the operator placed cannot be lifted
+  with the tenant's key, which may be the leaked one. Agents mid-task: nothing
+  changes for tokens already held. The sweep revokes their grants as before,
+  and the lockout only refuses new issuance. A stop without the option is
+  unchanged: it says `lockout: false`, and the release test still asserts that
+  a grant minted afterwards is live. It is off with the rest of the stop unless
+  `EMERGENCY_STOP_ENABLED=true`. Shown against real Postgres by
+  `tests/emergency-stop-lockout-postgres.integration.test.ts`, which failed on
+  the code before the change and passes after it. It covers: every path
+  refused under a lockout and open again once it is lifted; a lockout whose
+  sweep failed still refusing refresh and delegation of the grants it had not
+  reached; issuance refused while the freeze state cannot be read; exchanges
+  racing a lockout leaving nothing live; a passport held mid-write while a
+  lockout lands ending with its status bit set; a passport whose grant a stop
+  revoked mid-issue being refused; and the migration applied forward onto a
+  database at the previous head.
 
 ## G-23 — Revoking during an incident is rate-limited like ordinary traffic (fixed)
 
@@ -990,6 +1023,109 @@ the pull request that references it.
 - **Impact:** delegated grants and credentials outlive a consent withdrawal
   or erasure until they expire or are revoked directly.
 
+## G-50 — A lockout does not refuse resuming a suspended grant
+
+- **Found:** emergency stop lockout work (G-22), 2026-09-27.
+- **What:** `POST /v1/grants/:id/resume`, and the event bridge's resume
+  action, make a suspended grant tree active again without reading the
+  issuance freeze. After a stop that completed there is nothing to resume
+  under its scope, because the sweep revokes suspended grants as well as
+  active ones. But a lockout whose sweep failed or came back `incomplete`
+  can leave suspended grants under the frozen scope, and resuming one brings
+  authority back under a scope that is meant to issue nothing.
+- **Impact:** narrow. It needs a stop that did not finish and a resume of a
+  subtree it had not reached. Repeating the stop, which the runbook says to do
+  for any status other than `completed`, revokes that subtree.
+- **Proposal:** read the freeze in `resumeSuspendedGrants`
+  (`lib/revocation/cascade.ts`). Do it inside its transaction, after the
+  delegation lock, with the root grant as the subject so its lineage is
+  covered. Refuse with a new outcome that the route answers as
+  `403 ISSUANCE_FROZEN` and the event bridge records as refused.
+
+## G-51 — The release test's mid-stop delegation case usually has nothing to catch
+
+- **Found:** emergency stop lockout work (G-22), 2026-09-27, running
+  `tests/e2e/emergency-stop.test.ts` against a local service with Postgres
+  and Redis.
+- **What:** "catches a grant delegated while the stop is running" needs at
+  least one delegation to succeed while the stop request is in flight, and
+  asserts `delegated.length > 0` before checking that nothing is left live.
+  The delegation and the stop's first cascade both take the per-developer
+  revocation lock. Before asking for it, the delegation checks the parent
+  token, looks up the sub-agent and signs; the stop only writes its own record
+  and reads the scope once. Reading the code, that is why the stop usually
+  gets there first. The first delegation then finds its parent revoked, and
+  so does every later one. On unmodified `main` the case failed 3 runs out of 3 here
+  with `no grant was delegated while the stop ran: expected 0 to be greater
+  than 0`, and with the lockout change it failed 2 out of 3. The stop itself
+  was correct every time: nothing was left live.
+- **Impact:** the release rehearsal in `scripts/revocation-release-test.sh`
+  fails on a timing race rather than on the property it is meant to check.
+  The property is proven deterministically elsewhere: the Postgres test
+  "sweeps again, so a grant delegated while it runs is caught" injects the
+  late grant between two sweeps.
+- **Proposal:** make the race deterministic rather than waiting for it. For
+  example, let the harness hold a delegation inside its transaction until the
+  stop's first sweep has read the scope. Or give the stop a subtree large
+  enough that its first sweep takes measurably longer than one delegation.
+
+## G-52 — Revoking a grant leaves its passports' own rows reading active
+
+- **Found:** emergency stop lockout work (G-22), 2026-09-27, in review of the
+  passport path.
+- **What:** revoking a grant (`POST /v1/grants/:id/revoke`, the cascade, an
+  emergency stop) sets the status-list bit of every credential issued from it
+  and marks its `verifiable_credentials` rows revoked, through
+  `revokeVCsByGrantIds` (`lib/vc.ts`). Nothing updates `mpp_passports`: the
+  only write to `mpp_passports.status` is `POST /v1/passport/:id/revoke`. So
+  after a grant is revoked, `GET /v1/passport/:id` and `GET /v1/passports`
+  still report its passports as `active`.
+- **Impact:** reporting, not authority. A verifier checks the status list,
+  which does say revoked. But an operator confirming after an incident that
+  nothing is left live, from the passport endpoints, is told the opposite.
+- **Proposal:** in `revokeVCsByGrantIds`, in the same transaction, mark the
+  `mpp_passports` rows whose ids it revoked (`status = 'revoked'`,
+  `revoked_at`), behind a flag since it changes what every revoke reports.
+  A one-off backfill can then correct passports of grants already revoked.
+
+## G-53 — With the emergency stop off, a passport can be written under a grant revoked mid-issue
+
+- **Found:** emergency stop lockout work (G-22), 2026-09-27.
+- **What:** `POST /v1/passport/issue` reads the grant, allocates a status-list
+  index and signs, then writes. With `EMERGENCY_STOP_ENABLED=true` the write's
+  transaction reads the grant again with `FOR SHARE`: a revocation that
+  committed first refuses the passport, and one that comes later waits for it
+  and then sets its status bit. With the flag off that re-read is not made,
+  because the flag keeps the path as it was. A revocation that commits
+  between the first read and the write then leaves a passport whose
+  credential no revocation found, and which verifies offline until it expires
+  (up to `MPP_PASSPORT_MAX_EXPIRY_HOURS`, capped at the grant's own expiry).
+- **Impact:** narrow. It needs a revocation of the grant inside a window of a
+  few milliseconds of an issuance from it. Revoking the passport itself
+  (`POST /v1/passport/:id/revoke`) still works.
+- **Proposal:** make the locked re-read unconditional. It only refuses a
+  passport whose grant is no longer active, which the route already means to
+  refuse.
+
+## G-54 — A lockout does not cover commerce passports
+
+- **Found:** emergency stop lockout work (G-22), 2026-09-27, in review.
+- **What:** commerce passports (`POST /v1/commerce/passports/exchange`,
+  signed by `signCommercePassport` in `lib/commerce/passport.ts`) are minted
+  for a commerce tenant's agent from a consent the shopper approved, not from
+  a grant. The issuance freeze does not read them, and the emergency stop
+  does not sweep them. A leaked commerce agent credential can keep exchanging
+  approved consents for passports under a `developer` lockout.
+- **Impact:** a lockout is not the control for commerce; the runbook says so
+  and names the one that is. Disabling the commerce tenant
+  (`PATCH /v1/commerce/tenants/:tenant_id`, `status: "disabled"`) refuses new
+  exchanges, and `POST /v1/commerce/passports/revoke` revokes those issued.
+- **Proposal:** decide whether an emergency stop should reach commerce at
+  all. If so, map a commerce tenant to the developers bound to it
+  (`commerce_developer_tenants`) and have the exchange read the freeze of
+  those developers, with a stop that also revokes the tenant's live commerce
+  passports.
+
 ## G-55 — Other grant token verifiers accept any `aud` when no audience is set
 
 - **Found:** adding the audience check to `enforce()`, `@grantex/gateway` and
@@ -1066,3 +1202,66 @@ the pull request that references it.
 - **Fix:** have token verification and revocation denials fail closed in
   every enforce mode, as the audience denials do, as a breaking change
   recorded in `CHANGELOG.md`, with tests in both SDKs.
+
+## G-70 — With the emergency stop off, a failed passport credential insert leaves the passport behind
+
+- **Found:** emergency stop lockout work (G-22), 2026-09-27, in review.
+- **What:** `POST /v1/passport/issue` writes its `mpp_passports` row and its
+  `verifiable_credentials` row as two separate statements on the pool. If the
+  second fails, the route answers 500 but the passport row stays, reading
+  `active`, with no credential row. A revocation of the grant finds
+  credentials through `verifiable_credentials`, so it never sets that
+  passport's status bit. With `EMERGENCY_STOP_ENABLED=true` the two rows are
+  written in one transaction, because the lockout needs the credential row
+  committed with the passport. With the flag off the route keeps the original
+  two writes, since every behaviour change on an existing path ships behind a
+  flag that defaults off; the Postgres test "keeps the passport writes as they
+  were while the stop is off, and atomic while it is on" pins both.
+- **Impact:** narrow. It needs the second insert to fail after the first
+  succeeded (a dropped connection, a constraint on the credential row). The
+  caller gets a 500 and no credential, so nothing was presented; what is
+  wrong is the record, and `GET /v1/passports` lists a passport that was
+  never issued.
+- **Proposal:** write the two rows in one transaction unconditionally, under
+  its own flag or once the emergency stop is on by default. It only changes
+  what a failed issuance leaves behind.
+
+## G-71 — With the emergency stop off, a best-effort credential can outlive a revocation of its grant
+
+- **Found:** emergency stop lockout work (G-22), 2026-09-27, in review.
+- **What:** with `credentialFormat` `vc-jwt` or `both` and portable passkey
+  evidence off, `POST /v1/token` and `POST /v1/grants/delegate` issue the
+  grant's verifiable credential after the grant's transaction commits. A
+  revocation of the grant that commits in that gap sets the status bits of
+  the credentials it finds, which do not yet include this one, and the
+  credential is then written with a clear bit under a revoked grant. No later
+  revocation starts from a revoked grant, so it verifies until it expires.
+  With `EMERGENCY_STOP_ENABLED=true` the credential is written in a
+  transaction that re-reads the grant `FOR SHARE` and the lockout under its
+  lock (`issueForCommittedGrant` in `lib/revocation/issuance-freeze.ts`),
+  which closes the gap for stops and ordinary revocations alike. With the
+  flag off the original path is kept.
+- **Impact:** narrow: a revocation within milliseconds of an exchange or a
+  delegation that asked for a credential.
+- **Proposal:** make the same re-read the path with the flag off too, under
+  its own flag. It only withholds a credential from a grant that is no longer
+  active.
+
+## G-72 — SD-JWT credentials from the code exchange carry no revocation status
+
+- **Found:** emergency stop lockout work (G-22), 2026-09-27, checking every
+  issuance path for credentials issued after the grant commits.
+- **What:** `POST /v1/token` with `credentialFormat: "sd-jwt"` signs an SD-JWT
+  (`issueSDJWT` in `lib/sd-jwt.ts`) after the grant's transaction commits. It
+  has no `credentialStatus` and is not stored, and `verifySDJWT` checks only
+  the signature, the disclosures and expiry. No revocation, emergency stop or
+  lockout can reach one: revoking its grant leaves it verifying until it
+  expires, whether it was issued before the stop or in the gap after the
+  grant committed. The lockout change leaves it as it was, because gating its
+  issuance would not make one issued a moment earlier revocable.
+- **Impact:** an SD-JWT is only as revocable as its expiry. A verifier that
+  also checks the grant token, or the grant online, is not affected.
+- **Proposal:** give SD-JWTs a status-list entry and a `verifiable_credentials`
+  row, issued the way the VC-JWT is (in the grant's transaction, or through
+  `issueForCommittedGrant` while the stop is on), so a revocation sets their
+  bit, and have `verifySDJWT` check it.

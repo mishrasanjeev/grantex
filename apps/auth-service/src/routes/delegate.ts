@@ -7,6 +7,13 @@ import { narrowToolsAuthorizationDetails, purposeOfToolsAuthorizationDetails } f
 import { emitEvent } from '../lib/events.js';
 import { issueAgentGrantVC } from '../lib/vc.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
+import {
+  IssuanceFrozenError,
+  assertIssuanceOpen,
+  issuanceFreezeEnforced,
+  issuanceRefusal,
+  issueForCommittedGrant,
+} from '../lib/revocation/issuance-freeze.js';
 import { config } from '../config.js';
 import {
   grantWebAuthnEvidence,
@@ -235,6 +242,9 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
     let parentStillActive = false;
     let verifiableCredential: string | undefined;
     let verifiableCredentialId: string | undefined;
+    // A refusal from the lockout check rolls the transaction back and is
+    // answered below; anything else propagates as it always did.
+    let refused = null as ReturnType<typeof issuanceRefusal>;
     await sql.begin(async (_tx) => {
       const tx = _tx as unknown as TxSql;
       await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
@@ -254,6 +264,17 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       `;
       if (!lockedParent[0]) return;
       parentStillActive = true;
+
+      // An emergency stop's lockout. The child is a new grant for the
+      // sub-agent, made under the parent's authority, so a freeze on either
+      // agent, the principal, or the parent grant or anything above it refuses
+      // it. After the parent's lock, like the insert it guards.
+      await assertIssuanceOpen(tx, {
+        developerId,
+        agentIds: [subAgentId],
+        principalIds: [parentClaims.sub],
+        grantIds: [parentGrnt],
+      }, { path: 'delegate', inTransaction: true, log: request.log });
 
       await tx`
         INSERT INTO grants (
@@ -304,7 +325,13 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
         verifiableCredential = vcResult.vcJwt;
         verifiableCredentialId = vcResult.vcId;
       }
+    }).catch((err: unknown) => {
+      refused = issuanceRefusal(err);
+      if (refused === null) throw err;
     });
+    if (refused !== null) {
+      return reply.status(refused.statusCode).send({ ...refused.body, requestId: request.id });
+    }
     if (!parentStillActive) {
       return reply.status(400).send({
         message: 'Parent grant is no longer active',
@@ -315,20 +342,65 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
 
     if ((body.credentialFormat === 'vc-jwt' || body.credentialFormat === 'both')
         && !config.portableWebAuthnEvidenceEnabled && !inheritedEvidence) {
-      try {
-        const vcResult = await issueAgentGrantVC({
-          grantId,
-          agentDid: subAgent['did'] as string,
-          principalId: parentClaims.sub,
-          developerId,
-          scopes,
-          expiresAt,
-          delegationDepth,
-        });
-        verifiableCredential = vcResult.vcJwt;
-        verifiableCredentialId = vcResult.vcId;
-      } catch {
-        // Preserve the pre-rollout best-effort behavior while the flag is off.
+      if (issuanceFreezeEnforced()) {
+        // The delegation's transaction has committed and released the
+        // lockout's lock, so a lockout could land before this credential is
+        // written: it would revoke the child, sweep its credentials, and
+        // never see this one. The credential is written in a transaction of
+        // its own that re-reads the child grant and the freeze under the same
+        // lock; the child's lineage brings in the parent and everything above.
+        try {
+          const vcResult = await issueForCommittedGrant(sql, {
+            subject: {
+              developerId,
+              grantId,
+              agentIds: [subAgentId],
+              principalIds: [parentClaims.sub],
+            },
+            path: 'delegate',
+            log: request.log,
+          }, (tx) => issueAgentGrantVC({
+            grantId,
+            agentDid: subAgent['did'] as string,
+            principalId: parentClaims.sub,
+            developerId,
+            scopes,
+            expiresAt,
+            delegationDepth,
+          }, tx));
+          if (vcResult !== null) {
+            verifiableCredential = vcResult.vcJwt;
+            verifiableCredentialId = vcResult.vcId;
+          }
+        } catch (err) {
+          // A lockout now covers the child, and its stop revokes it: refused
+          // like every other issuance under a lockout, rather than answered
+          // with a token the stop is taking away.
+          if (err instanceof IssuanceFrozenError) {
+            const refusal = issuanceRefusal(err)!;
+            return reply.status(refusal.statusCode).send({ ...refusal.body, requestId: request.id });
+          }
+          // Anything else, a lockout state that cannot be read included,
+          // leaves the credential out, as a failed best-effort issuance
+          // always has. Its transaction rolled back, so nothing was written:
+          // closed, not open.
+        }
+      } else {
+        try {
+          const vcResult = await issueAgentGrantVC({
+            grantId,
+            agentDid: subAgent['did'] as string,
+            principalId: parentClaims.sub,
+            developerId,
+            scopes,
+            expiresAt,
+            delegationDepth,
+          });
+          verifiableCredential = vcResult.vcJwt;
+          verifiableCredentialId = vcResult.vcId;
+        } catch {
+          // Preserve the pre-rollout best-effort behavior while the flag is off.
+        }
       }
     }
     if (verifiableCredentialId) {
