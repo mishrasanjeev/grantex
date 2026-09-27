@@ -35,8 +35,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   high/critical irregularity responses revoke the affected agent's grants,
   descendants, wallet reservations, VCs, and status-list bits in one database
   transaction. Portable evidence requires this flag at startup.
-- Evidence-bearing VC verification also checks the issuer's stored credential
-  and grant ancestry. An explicit, idempotent reconciliation command repairs
+- Added `PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED` (default `false`).
+  When enabled, issuer verification checks evidence-bearing VCs against the
+  stored credential and complete grant ancestry, rejecting broken and cyclic
+  chains. Enable it before evidence issuance and keep it on during an issuance
+  rollback; startup rejects issuance without this and cascade revocation.
+  An explicit, idempotent reconciliation command repairs
   active descendants and VCs left behind by historical grant-only revocations,
   including public status-list bits. Local Postgres and Chromium regressions
   cover both paths.

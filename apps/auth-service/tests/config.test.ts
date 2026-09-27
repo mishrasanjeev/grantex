@@ -17,10 +17,11 @@ describe('configuration parsing', () => {
     expect(passkeyOriginConfigError('https://example.com', 'evil.example', true)).toMatch(/FIDO_RP_ID/);
   });
   it('requires cascade revocation when portable evidence is enabled', () => {
-    expect(portableEvidenceCascadeConfigError(false, false)).toBeNull();
-    expect(portableEvidenceCascadeConfigError(false, true)).toBeNull();
-    expect(portableEvidenceCascadeConfigError(true, true)).toBeNull();
-    expect(portableEvidenceCascadeConfigError(true, false)).toMatch(/IRREGULARITY_CASCADE_REVOCATION_ENABLED/);
+    expect(portableEvidenceCascadeConfigError(false, false, false)).toBeNull();
+    expect(portableEvidenceCascadeConfigError(false, true, false)).toBeNull();
+    expect(portableEvidenceCascadeConfigError(true, true, true)).toBeNull();
+    expect(portableEvidenceCascadeConfigError(true, false, true)).toMatch(/IRREGULARITY_CASCADE_REVOCATION_ENABLED/);
+    expect(portableEvidenceCascadeConfigError(true, true, false)).toMatch(/PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED/);
   });
   it('accepts bounded integer settings', () => {
     expect(parseIntegerSetting('PORT', '3001', 1, 65_535)).toBe(3001);

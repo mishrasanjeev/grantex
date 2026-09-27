@@ -388,7 +388,7 @@ export async function verifyAgentGrantVC(vcJwt: string): Promise<VerifyVCResult>
     }
   }
 
-  if (webauthnVerified) {
+  if (webauthnVerified && config.portableWebAuthnEvidenceStatusCheckEnabled) {
     const sql = getSql();
     const rows = await sql`
       SELECT c.status AS credential_status, g.status AS grant_status,
@@ -407,19 +407,25 @@ export async function verifyAgentGrantVC(vcJwt: string): Promise<VerifyVCResult>
     }
     const parentGrantId = rows[0]['parent_grant_id'] as string | null;
     if (parentGrantId) {
-      const ancestors = await sql<{ status: string }[]>`
+      const ancestors = await sql<{ status: string; parent_grant_id: string | null; cycle: boolean }[]>`
         WITH RECURSIVE ancestry AS (
-          SELECT id, parent_grant_id, status, developer_id FROM grants
+          SELECT id, parent_grant_id, status, developer_id,
+                 ARRAY[id] AS path, false AS cycle FROM grants
           WHERE id = ${parentGrantId} AND developer_id = ${rows[0]['developer_id'] as string}
-          UNION
-          SELECT parent.id, parent.parent_grant_id, parent.status, parent.developer_id
+          UNION ALL
+          SELECT parent.id, parent.parent_grant_id, parent.status, parent.developer_id,
+                 child.path || parent.id, parent.id = ANY(child.path)
           FROM grants parent
           JOIN ancestry child ON parent.id = child.parent_grant_id
             AND parent.developer_id = child.developer_id
+          WHERE NOT child.cycle
         )
-        SELECT status FROM ancestry
+        SELECT status, parent_grant_id, cycle FROM ancestry
+        ORDER BY cardinality(path) DESC
       `;
-      if (ancestors.length === 0 || ancestors.some((ancestor) => ancestor.status !== 'active')) {
+      if (ancestors.length === 0
+          || ancestors[0]?.parent_grant_id !== null
+          || ancestors.some((ancestor) => ancestor.status !== 'active' || ancestor.cycle)) {
         return { valid: false, ...vcIdFields, revoked: true, error: 'Credential ancestor grant has been revoked' };
       }
     }
