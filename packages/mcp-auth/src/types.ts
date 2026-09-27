@@ -121,32 +121,68 @@ export interface McpAuthConfig {
    * redirect host, warnings and the CSRF-protected form are not.
    */
   consentPage?: ConsentPageOptions;
-  /** What the grant is for, shown on the consent page. */
+  /**
+   * What the grant is for: shown on the consent page, with the purpose and
+   * duration also sent to Grantex.
+   */
   grant?: GrantOptions;
   /** Lifecycle hooks */
   hooks?: {
     onTokenIssued?: (event: TokenIssuedEvent) => Promise<void>;
     onRevocation?: (jti: string) => Promise<void>;
   };
+  /**
+   * Receives operator warnings (default `console.warn`): Grantex refusing
+   * `grant.purpose` (with Grantex's reason, error code and request id), or
+   * answering without confirming it. Each points at a configuration
+   * problem (a purpose Grantex does not accept, a client that requests no
+   * connector scope, or a Grantex server that predates purpose-bound
+   * grants) that keeps refusing authorizations until it is fixed. Messages
+   * carry the purpose and requested scopes, never tokens, codes, secrets or
+   * client ids. A throwing function does not change the response.
+   */
+  warn?: (message: string) => void;
 }
 
 export interface GrantOptions {
   /**
    * Purpose code from the controlled vocabulary, e.g. `aml.cdd.onboarding`,
-   * or a private term `x-<org>.<term>`. Shown on the consent page.
+   * or a private term `x-<org>.<term>`. Shown on the consent page and sent
+   * to Grantex as the authorization request's `purpose`, which binds the
+   * grant to it: Grantex records it on the grant and in the grant token's
+   * `authorization_details`, where `enforce()` checks it against each tool's
+   * `allowed_purposes`.
+   *
+   * `createMcpAuthServer` checks only the syntax: Grantex does not publish
+   * its vocabulary in its metadata. Grantex refuses a purpose outside its
+   * vocabulary, and a request whose scopes name no connector (no
+   * `tool:<connector>:<permission>` scope). The client is then redirected
+   * with `invalid_scope` after the Principal approves the consent page, and
+   * Grantex's reason goes to `warn`. A term outside the vocabulary therefore
+   * fails every authorization. If Grantex answers without confirming the
+   * purpose, as a server that predates purpose-bound grants does, the
+   * authorization fails with `502 server_error`.
    */
   purpose?: string;
   /** One-line explanation of the purpose, shown under the code. */
   purposeDescription?: string;
-  /** Data region the grant is limited to, e.g. `eu`. Shown on the consent page. */
+  /**
+   * Not supported: `createMcpAuthServer` throws when this is set.
+   * `POST /v1/authorize`, which this server calls, takes no data region, so
+   * a grant made through it cannot carry one and the consent page cannot
+   * show one as a restriction.
+   */
   dataRegion?: string;
   /** Grant lifetime such as `8h`, `30m` or `7d`: sent to Grantex as `expiresIn` and shown on the page. */
   duration?: string;
   /**
-   * Extension point for purpose-bound grants: extra parameters merged into
-   * the Grantex authorize call (for example `authorization_details` carrying
-   * purpose and region once the SDK accepts them). It cannot override the
-   * agent, principal, scopes, audience, redirect URI or state.
+   * Extension point: extra parameters merged into the Grantex authorize
+   * call, for parameters a newer Grantex server accepts. It cannot override
+   * the agent, principal, scopes, audience, redirect URI, state or purpose.
+   * It may repeat `grant.purpose`, but returning any other `purpose` (or one
+   * when `grant.purpose` is unset) refuses the authorization with
+   * `500 server_error` before Grantex is called: the purpose sent is always
+   * the one the consent page showed.
    */
   authorizeParams?: (request: { clientId: string; scopes: string[]; resource: string }) => Record<string, unknown>;
 }

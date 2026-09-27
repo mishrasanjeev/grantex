@@ -27,7 +27,14 @@ export interface ConsentViewModel {
   };
   resource: { uri: string; name?: string };
   scopes: string[];
+  /** `grant.purpose`, which is also sent to Grantex and recorded on the grant. */
   purpose?: { code: string; description?: string };
+  /**
+   * Never set: `POST /v1/authorize`, which this server calls, takes no data
+   * region, so a grant made through it cannot carry one and
+   * `createMcpAuthServer` refuses `grant.dataRegion`. Kept so that
+   * `renderDetails` functions reading it still compile.
+   */
   dataRegion?: string;
   /** Human-readable grant lifetime, e.g. "8 hours". */
   duration?: string;
@@ -51,7 +58,10 @@ export interface ConsentText {
   localhostWarning: string;
   metadataDocumentNote: string;
   detailsHeading: string;
+  /** Note above the details when `grant.purpose` is set: the purpose is recorded on the grant. */
   declaredNote: string;
+  /** Note above the details when no purpose is configured: only call limits are described. */
+  noPurposeNote: string;
   purposeLabel: string;
   noPurpose: string;
   regionLabel: string;
@@ -77,7 +87,8 @@ export const DEFAULT_TEXT: ConsentText = {
   localhostWarning: 'This application runs on your own device (localhost). Only continue if you started this sign-in yourself.',
   metadataDocumentNote: 'This application identified itself with a published metadata document; its name was not verified by this server.',
   detailsHeading: 'What you are granting',
-  declaredNote: 'The purpose, data region and call limits below are declared by this service. They are enforced only where your grant and the service apply them.',
+  declaredNote: 'Grantex records the purpose below on your grant; tools limited to other purposes refuse it wherever the service checks. Call limits are declared by this service and enforced only where the service applies them.',
+  noPurposeNote: 'Call limits are declared by this service and enforced only where the service applies them.',
   purposeLabel: 'Declared purpose',
   noPurpose: 'No purpose declared',
   regionLabel: 'Declared data region',
@@ -195,7 +206,7 @@ function defaultDetails(model: ConsentViewModel, { text }: ConsentRenderHelpers)
   return html`
     <section aria-labelledby="details-heading">
       <h2 id="details-heading">${text.detailsHeading}</h2>
-      <p class="muted">${text.declaredNote}</p>
+      <p class="muted">${model.purpose ? text.declaredNote : text.noPurposeNote}</p>
       <dl>
         <dt>${text.purposeLabel}</dt>
         <dd>${model.purpose
