@@ -22,6 +22,6 @@ export const consentPage: ConsentPageOptions = {
       <ul>
         ${model.tools.map((tool) => html`<li>${tool.name}${tool.requiresDecision ? ' (needs approval per action)' : ''}</li>`)}
       </ul>
-      <p>Data stays in ${model.dataRegion ?? 'any region'} for ${model.duration ?? 'the default duration'}.</p>
+      <p>Access lasts ${model.duration ?? 'the default duration'}.</p>
     </section>`,
 };
