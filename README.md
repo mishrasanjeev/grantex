@@ -706,7 +706,7 @@ Grantex supports passkey-based human presence verification using FIDO2/WebAuthn.
 1. **Developer configures FIDO** — Live mode already requires it; set `fidoRequired: true` via `PATCH /v1/me` to require it in sandbox mode too.
 2. **Application enrolls the customer** — After authenticating the customer, the application issues a one-use hosted enrollment link for their exact principal ID. The consent URL alone cannot register a passkey.
 3. **User authenticates on consent** — On subsequent authorization requests, the user completes a WebAuthn assertion challenge instead of a simple button click
-4. **FIDO evidence embedded in grants** — The assertion result is recorded in the grant and can be embedded in Verifiable Credentials as cryptographic proof of human presence
+4. **Consent requires verified presence** — The pending authorization request records successful assertion verification before approval or denial. Issued grants and VCs do not currently carry the assertion details.
 
 ### SDK Usage
 
@@ -843,9 +843,9 @@ const { credentials } = await grantex.credentials.list({
 });
 ```
 
-### FIDO Evidence in VCs
+### FIDO Evidence Boundary
 
-When FIDO is enabled and the user completes a WebAuthn assertion during consent, the VC includes a `fidoEvidence` field that cryptographically proves human presence at the time of authorization. This is compatible with the Mastercard Verifiable Intent specification for agentic commerce.
+The hosted consent flow requires a passkey assertion before a live request can be approved or denied. The current token-exchange path does not attach `fidoEvidence` to the issued grant or VC. Do not present a Grantex VC alone as portable proof of the WebAuthn ceremony or as certified payment-network intent evidence.
 
 ### DID Infrastructure
 

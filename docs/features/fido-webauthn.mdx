@@ -1,13 +1,13 @@
 ---
 title: "FIDO2 / WebAuthn"
 sidebarTitle: "FIDO2 / WebAuthn"
-description: "Enroll customer passkeys and verify live-mode agent consent with WebAuthn. Published SDK versions, rollout requirements, and browser ceremony examples."
+description: "Enroll customer passkeys and verify live-mode agent consent with WebAuthn. Published SDK versions, rollout requirements, and evidence limitations."
 keywords: ["Grantex passkey enrollment", "WebAuthn agent consent", "FIDO2 live-mode consent", "passkey SDK"]
 ---
 
 ## Overview
 
-Grantex supports FIDO2/WebAuthn passkeys as a human presence verification mechanism during the consent flow. When enabled, end-users authenticate with a biometric, security key, or platform authenticator before a grant is issued. This raises the assurance level from "user clicked approve" to "user was cryptographically verified by their device."
+Grantex supports FIDO2/WebAuthn passkeys during consent. A valid assertion proves use of a credential bound to the principal and to Grantex's challenge. When hosted enrollment is enabled, the server also requires WebAuthn user verification during registration and assertion; this may be a device PIN, biometric, or other authenticator-supported method. The server does not learn which method the customer used.
 
 Live-mode consent requires an existing passkey for the principal. Sandbox-mode accounts can also require one with `fidoRequired: true`. A consent link alone cannot register a passkey because it does not authenticate the principal.
 
@@ -17,13 +17,13 @@ The hosted enrollment client is published in `@grantex/sdk@0.7.0`, `grantex==0.6
 
 ## Why FIDO for Agents?
 
-Standard consent flows rely on a button click in a browser. This is vulnerable to session hijacking, UI redressing, and automated approval. A FIDO assertion proves that:
+Standard consent flows rely on a button click in a browser. A verified WebAuthn assertion establishes that:
 
 1. The specific device registered by the user is present
-2. The user completed a biometric or physical authentication
+2. User verification was performed when the hosted-enrollment policy requires it; the legacy developer registration path only requests it as preferred
 3. The assertion is bound to the specific challenge issued by Grantex
 
-For high-value agent operations (payments, data access, contract signing), this level of assurance is required by emerging standards like the Mastercard Verifiable Intent specification.
+For high-value operations, use hosted enrollment with required user verification and your own customer identity-binding controls. No payment-network certification or portable assertion evidence is implied by this consent gate.
 
 ## Developer Setup
 
@@ -250,23 +250,9 @@ client.webauthn.delete_credential("cred_01HXYZ...")
 ```
 </CodeGroup>
 
-## FIDO Evidence in Grants
+## FIDO Evidence Boundary
 
-When a grant is approved via FIDO assertion, the grant record includes FIDO evidence metadata:
-
-```json
-{
-  "grantId": "grnt_01HXYZ...",
-  "fidoEvidence": {
-    "credentialId": "cred_01HXYZ...",
-    "authenticatorType": "platform",
-    "userVerified": true,
-    "assertedAt": "2026-03-08T12:00:00Z"
-  }
-}
-```
-
-This evidence is also embedded in Verifiable Credentials when `credentialFormat: "vc-jwt"` is used during token exchange. See [Verifiable Credentials](/features/verifiable-credentials) for details.
+On successful assertion verification, Grantex sets `fido_verified` on the pending authorization request and emits a `fido.assertion` event. Approval or denial is a separate operation. The current token-exchange path does not copy credential ID, authenticator type, or assertion time into the grant or issued VC. A VC alone is therefore **not** portable proof of the passkey ceremony. See [Verifiable Credentials](/features/verifiable-credentials) for the fields that are currently issued.
 
 ## API Reference
 
@@ -294,7 +280,7 @@ This evidence is also embedded in Verifiable Credentials when `credentialFormat:
 
 ## Next Steps
 
-- [Verifiable Credentials](/features/verifiable-credentials) -- FIDO evidence embedded in W3C VCs
+- [Verifiable Credentials](/features/verifiable-credentials) -- current VC claims and evidence limits
 - [DID Infrastructure](/features/did-infrastructure) -- how verifiers resolve Grantex's signing keys
 - [End-User Permissions](/guides/end-user-permissions) -- user-facing permission dashboard
 
