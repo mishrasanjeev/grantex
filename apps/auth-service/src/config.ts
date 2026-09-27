@@ -196,6 +196,7 @@ export const config = {
   fidoRpName: optional('FIDO_RP_NAME', 'Grantex'),
   fidoOrigin: optional('FIDO_ORIGIN', 'https://grantex.dev'),
   get passkeyEnrollmentEnabled() { return process.env['PASSKEY_ENROLLMENT_ENABLED'] === 'true'; },
+  get portableWebAuthnEvidenceEnabled() { return process.env['PORTABLE_WEBAUTHN_EVIDENCE_ENABLED'] === 'true'; },
   get irregularityResponsePolicyEnabled() { return process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'] === 'true'; },
   // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
   ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
@@ -345,7 +346,7 @@ export function validateConfig(): void {
   if (config.policyBackend === 'cedar' && (!config.cedarUrl || !isHttpUrl(config.cedarUrl))) {
     errors.push('CEDAR_URL must be a valid HTTP or HTTPS URL when POLICY_BACKEND=cedar');
   }
-  if (config.passkeyEnrollmentEnabled) {
+  if (config.passkeyEnrollmentEnabled || config.portableWebAuthnEvidenceEnabled) {
     const problem = passkeyOriginConfigError(config.fidoOrigin, config.fidoRpId, process.env['NODE_ENV'] === 'production');
     if (problem) errors.push(problem);
   }

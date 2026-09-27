@@ -2,7 +2,7 @@ import { jwtVerify, decodeJwt, type RemoteJWKSet } from 'jose';
 import { createBoundedRemoteJWKSet, resolveDidWebIssuer } from './jwks.js';
 import { missingScopes } from './scopes.js';
 import { GrantexTokenError } from './errors.js';
-import type { ActorClaim, VerifiedGrant, VerifyGrantTokenOptions, GrantTokenPayload } from './types.js';
+import type { ActorClaim, VerifiedGrant, VerifyGrantTokenOptions, GrantTokenPayload, WebAuthnGrantEvidence } from './types.js';
 
 /** Claim holding Grantex's grant record fields (spec/grant-token-0.6.md). */
 export const GRANT_CLAIM = 'urn:grantex:grant';
@@ -258,6 +258,18 @@ function depthClaim(record: Record<string, unknown>, name: string, label: string
   return value;
 }
 
+function webauthnClaim(value: unknown): WebAuthnGrantEvidence {
+  if (!isPlainObject(value)
+      || value['type'] !== 'GrantexWebAuthnAssertion' || value['version'] !== 1
+      || !['authRequestId', 'rpId', 'origin', 'assertedAt'].every(
+        (key) => typeof value[key] === 'string' && (value[key] as string).length > 0)
+      || typeof value['userVerified'] !== 'boolean'
+      || typeof value['digest'] !== 'string' || !/^[a-f0-9]{64}$/.test(value['digest'])) {
+    throw new GrantexTokenError(`Grant token claim ${GRANT_CLAIM}.webauthn must be a valid evidence reference`);
+  }
+  return value as unknown as WebAuthnGrantEvidence;
+}
+
 function checkProofOfPossession(grant: VerifiedGrant, options: VerifyGrantTokenOptions): void {
   if (options.requireProofOfPossession === true && options.proofJkt === undefined) {
     throw new GrantexTokenError('Proof of possession is required but no proof key thumbprint (proofJkt) was given');
@@ -300,6 +312,7 @@ function normalizeGrantClaims(payload: Record<string, unknown>, legacyClaims: bo
     throw new GrantexTokenError(`Grant token claim ${GRANT_CLAIM} must be an object`);
   }
   const grant = rawGrant ?? {};
+  const webauthnEvidence = grant['webauthn'] === undefined ? undefined : webauthnClaim(grant['webauthn']);
 
   const rawScope = payload['scope'];
   if (rawScope !== undefined && typeof rawScope !== 'string') {
@@ -380,6 +393,7 @@ function normalizeGrantClaims(payload: Record<string, unknown>, legacyClaims: bo
     ...(act !== undefined ? { act } : {}),
     ...(cnf !== undefined ? { cnf: cnf as { jkt?: string } } : {}),
     ...(typeof aud === 'string' || Array.isArray(aud) ? { audience: aud as string | string[] } : {}),
+    ...(webauthnEvidence !== undefined ? { webauthnEvidence } : {}),
     ...(used.length > 0 ? { legacyClaimsUsed: used } : {}),
   };
 }

@@ -120,6 +120,15 @@ and `SetResponsePolicy` require `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`;
 `alert_only` stops this detector's automatic agent-grant revocation but not
 other security controls.
 
+New passkey-approved grants expose a compact `WebAuthnEvidence` reference on
+`VerifiedGrant` and `Grant`. Request an opt-in VC during token exchange for
+raw assertion evidence. `client.Credentials.Verify` sends `credential` and
+returns `Valid`, `VCID`, `Payload`, `Revoked`, `Expired`, `Error`, and
+`WebAuthnVerified`. Verifiers must trust the issuer and enrollment, check
+revocation, pin the RP ID/origin, and compare the VC digest to the grant
+reference. Raw public keys can correlate presentations. These changes are in
+this checkout, not the currently published Go module tag.
+
 ## Agent prepaid wallets (v0.2.0+)
 
 ```go

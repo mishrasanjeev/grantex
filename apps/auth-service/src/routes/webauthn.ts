@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
+import { config } from '../config.js';
 import { newWebAuthnCredentialId, newWebAuthnChallengeId } from '../lib/ids.js';
 import { generateRegOptions, verifyRegResponse, generateAuthOptions, verifyAuthResponse } from '../lib/webauthn.js';
+import { createWebAuthnEvidence } from '../lib/webauthn-evidence.js';
 import { emitEvent } from '../lib/events.js';
 import { isoBase64URL } from '@simplewebauthn/server/helpers';
 import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
@@ -276,6 +278,10 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
       if (!challengeRow) {
         return reply.status(400).send({ message: 'Invalid or expired challenge', code: 'BAD_REQUEST', requestId: request.id });
       }
+      const authRequestId = challengeRow['auth_request_id'] as string | null;
+      if (config.portableWebAuthnEvidenceEnabled && !authRequestId) {
+        return reply.status(400).send({ message: 'Assertion is not bound to an authorization request', code: 'BAD_REQUEST', requestId: request.id });
+      }
 
       // Find the credential being used
       const credentialId = response.id;
@@ -319,17 +325,42 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      // Mark auth request as FIDO verified
-      const authRequestId = challengeRow['auth_request_id'] as string;
-      if (authRequestId) {
-        await sql`
+      // Keep the verified assertion so token exchange can bind it to the grant.
+      const evidence = config.portableWebAuthnEvidenceEnabled && authRequestId ? createWebAuthnEvidence({
+        authRequestId,
+        credentialId,
+        credentialPublicKey: storedCred.publicKey,
+        previousCounter: storedCred.counter,
+        rpId: config.fidoRpId,
+        origin: config.fidoOrigin,
+        challenge: challengeRow['challenge'] as string,
+        clientDataJSON: response.response.clientDataJSON,
+        authenticatorData: response.response.authenticatorData,
+        signature: response.response.signature,
+        userVerified: verification.authenticationInfo.userVerified,
+        assertedAt: new Date().toISOString(),
+      }) : undefined;
+      if (evidence) {
+        const verifiedRows = await sql`
           UPDATE auth_requests
-          SET fido_verified = TRUE
+          SET fido_verified = TRUE, fido_evidence = ${sql.json(evidence as never)}
           WHERE id = ${authRequestId}
             AND principal_id = ${challengeRow['principal_id'] as string}
             AND developer_id = ${challengeRow['developer_id'] as string}
             AND status = 'pending'
             AND expires_at > NOW()
+          RETURNING id
+        `;
+        if (!verifiedRows[0]) {
+          return reply.status(410).send({ message: 'Authorization request expired or already processed', code: 'GONE', requestId: request.id });
+        }
+      } else if (authRequestId) {
+        await sql`
+          UPDATE auth_requests SET fido_verified = TRUE
+          WHERE id = ${authRequestId}
+            AND principal_id = ${challengeRow['principal_id'] as string}
+            AND developer_id = ${challengeRow['developer_id'] as string}
+            AND status = 'pending' AND expires_at > NOW()
         `;
       }
 

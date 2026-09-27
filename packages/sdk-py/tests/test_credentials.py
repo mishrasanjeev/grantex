@@ -22,11 +22,9 @@ MOCK_VC_RECORD = {
 
 MOCK_VERIFY_RESULT = {
     "valid": True,
-    "credentialType": "GrantCredential",
-    "issuer": "did:web:grantex.dev",
-    "subject": {"principalId": "user_abc123", "agentDid": "did:grantex:ag_01"},
-    "expiresAt": "2026-03-02T00:00:00Z",
-    "revoked": False,
+    "vcId": "vc_01",
+    "payload": {"iss": "did:web:grantex.dev", "vc": {"credentialSubject": {"principalId": "user_abc123"}}},
+    "webauthnVerified": True,
 }
 
 
@@ -78,9 +76,8 @@ def test_verify_credential(client: Grantex) -> None:
     result = client.credentials.verify("eyJ...")
 
     assert result.valid is True
-    assert result.credential_type == "GrantCredential"
-    assert result.issuer == "did:web:grantex.dev"
-    assert result.revoked is False
+    assert result.payload is not None and result.payload["iss"] == "did:web:grantex.dev"
+    assert result.webauthn_verified is True
 
     body = json.loads(route.calls[0].request.content)
     assert body == {"credential": "eyJ..."}

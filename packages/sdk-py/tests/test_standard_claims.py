@@ -253,6 +253,22 @@ def test_malformed_standard_claims_are_refused(extra: Dict[str, Any], message: s
         _verify(_sign(_claims(extra)))
 
 
+def test_signed_webauthn_evidence_reference_is_exposed_and_validated() -> None:
+    evidence = {
+        "type": "GrantexWebAuthnAssertion", "version": 1,
+        "authRequestId": "areq_test", "rpId": "grantex.dev",
+        "origin": "https://grantex.dev", "userVerified": True,
+        "assertedAt": "2026-09-27T00:00:00.000Z", "digest": "a" * 64,
+    }
+    claim = {**STANDARD[GRANT_CLAIM], "webauthn": evidence}
+    grant = _verify(_sign(_claims({GRANT_CLAIM: claim})))
+    assert grant.webauthn_evidence is not None
+    assert grant.webauthn_evidence.auth_request_id == "areq_test"
+    assert grant.webauthn_evidence.digest == "a" * 64
+    with pytest.raises(GrantexTokenError, match="webauthn must be a valid evidence reference"):
+        _verify(_sign(_claims({GRANT_CLAIM: {**claim, "webauthn": {**evidence, "digest": "bad"}}})))
+
+
 def test_an_act_chain_deeper_than_ten_is_refused() -> None:
     chain: Dict[str, Any] = {"sub": "did:grantex:ag_0"}
     for i in range(1, 11):

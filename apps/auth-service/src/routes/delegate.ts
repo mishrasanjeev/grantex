@@ -8,6 +8,12 @@ import { emitEvent } from '../lib/events.js';
 import { issueAgentGrantVC } from '../lib/vc.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
 import { config } from '../config.js';
+import {
+  grantWebAuthnEvidence,
+  parseWebAuthnEvidence,
+  verifyPortableWebAuthnEvidence,
+  type WebAuthnAssertionEvidence,
+} from '../lib/webauthn-evidence.js';
 
 interface DelegateBody {
   parentGrantToken: string;
@@ -111,6 +117,26 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
 
     const sql = getSql();
     const developerId = request.developer.id;
+    let inheritedEvidence: WebAuthnAssertionEvidence | undefined;
+    if (parentClaims.webauthnEvidence) {
+      const rows = await sql`
+        SELECT fido_evidence FROM grants
+        WHERE id = ${parentGrnt} AND developer_id = ${developerId}
+      `;
+      try {
+        inheritedEvidence = parseWebAuthnEvidence(rows[0]?.['fido_evidence']);
+        if (inheritedEvidence.digest !== parentClaims.webauthnEvidence.digest
+            || !await verifyPortableWebAuthnEvidence(inheritedEvidence, {
+              rpId: config.fidoRpId, origin: config.fidoOrigin,
+            })) {
+          throw new Error('Parent passkey evidence does not match its signed reference');
+        }
+      } catch {
+        return reply.status(400).send({
+          message: 'Parent grant has invalid passkey evidence', code: 'BAD_REQUEST', requestId: request.id,
+        });
+      }
+    }
 
     // Look up sub-agent
     const agentRows = await sql`
@@ -200,12 +226,15 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
         : {}),
       act: actorChain,
       ...(childDetails.length > 0 ? { authorizationDetails: childDetails } : {}),
+      ...(inheritedEvidence ? { webauthnEvidence: grantWebAuthnEvidence(inheritedEvidence) } : {}),
       exp: expTimestamp,
       ...(parentAgt !== undefined ? { parentAgt } : {}),
       parentGrnt,
       delegationDepth,
     });
     let parentStillActive = false;
+    let verifiableCredential: string | undefined;
+    let verifiableCredentialId: string | undefined;
     await sql.begin(async (_tx) => {
       const tx = _tx as unknown as TxSql;
       await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
@@ -230,7 +259,8 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
         INSERT INTO grants (
           id, agent_id, principal_id, developer_id, scopes, expires_at,
           audience, parent_grant_id, delegation_depth, agent_key_thumbprint,
-          actor_chain, purpose, authorization_details
+          actor_chain, purpose, authorization_details,
+          fido_verified, fido_credential_id, fido_evidence
         )
         VALUES (
           ${grantId},
@@ -245,7 +275,10 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
           ${subAgent['key_thumbprint'] as string | null},
           ${tx.json(actorChain as never)},
           ${childPurpose ?? null},
-          ${childDetails.length > 0 ? tx.json(childDetails as never) : null}
+          ${childDetails.length > 0 ? tx.json(childDetails as never) : null},
+          ${inheritedEvidence !== undefined},
+          ${inheritedEvidence?.credentialId ?? null},
+          ${inheritedEvidence ? tx.json(inheritedEvidence as never) : null}
         )
       `;
       await tx`
@@ -256,6 +289,21 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
         INSERT INTO refresh_tokens (id, grant_id, expires_at)
         VALUES (${refreshId}, ${grantId}, ${refreshExpiresAt})
       `;
+      if ((body.credentialFormat === 'vc-jwt' || body.credentialFormat === 'both')
+          && (config.portableWebAuthnEvidenceEnabled || inheritedEvidence)) {
+        const vcResult = await issueAgentGrantVC({
+          grantId,
+          agentDid: subAgent['did'] as string,
+          principalId: parentClaims.sub,
+          developerId,
+          scopes,
+          expiresAt,
+          delegationDepth,
+          ...(inheritedEvidence ? { fidoEvidence: inheritedEvidence } : {}),
+        }, tx);
+        verifiableCredential = vcResult.vcJwt;
+        verifiableCredentialId = vcResult.vcId;
+      }
     });
     if (!parentStillActive) {
       return reply.status(400).send({
@@ -265,10 +313,8 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    // VC-JWT issuance (optional)
-    let verifiableCredential: string | undefined;
-    const { credentialFormat } = body;
-    if (credentialFormat === 'vc-jwt' || credentialFormat === 'both') {
+    if ((body.credentialFormat === 'vc-jwt' || body.credentialFormat === 'both')
+        && !config.portableWebAuthnEvidenceEnabled && !inheritedEvidence) {
       try {
         const vcResult = await issueAgentGrantVC({
           grantId,
@@ -280,10 +326,13 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
           delegationDepth,
         });
         verifiableCredential = vcResult.vcJwt;
-        emitEvent(developerId, 'vc.issued', { vcId: vcResult.vcId, grantId }).catch(() => {});
+        verifiableCredentialId = vcResult.vcId;
       } catch {
-        // Best-effort — don't fail delegation if VC issuance fails
+        // Preserve the pre-rollout best-effort behavior while the flag is off.
       }
+    }
+    if (verifiableCredentialId) {
+      emitEvent(developerId, 'vc.issued', { vcId: verifiableCredentialId, grantId }).catch(() => {});
     }
 
     // Emit events (best-effort, non-blocking)

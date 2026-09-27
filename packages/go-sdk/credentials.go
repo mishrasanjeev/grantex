@@ -31,10 +31,16 @@ type ListCredentialsParams struct {
 
 // VCVerificationResult is the result of verifying a Verifiable Credential.
 type VCVerificationResult struct {
-	Valid             bool                   `json:"valid"`
-	CredentialSubject map[string]interface{} `json:"credentialSubject"`
-	Issuer            string                 `json:"issuer"`
-	Error             string                 `json:"error,omitempty"`
+	Valid            bool                   `json:"valid"`
+	VCID             string                 `json:"vcId,omitempty"`
+	Payload          map[string]interface{} `json:"payload,omitempty"`
+	Revoked          bool                   `json:"revoked,omitempty"`
+	Expired          bool                   `json:"expired,omitempty"`
+	Error            string                 `json:"error,omitempty"`
+	WebAuthnVerified bool                   `json:"webauthnVerified,omitempty"`
+	// Deprecated: current API values are under Payload.
+	CredentialSubject map[string]interface{} `json:"credentialSubject,omitempty"`
+	Issuer            string                 `json:"issuer,omitempty"`
 }
 
 // SDJWTPresentParams contains the parameters for creating an SD-JWT presentation.
@@ -81,7 +87,7 @@ func (s *CredentialsService) List(ctx context.Context, params *ListCredentialsPa
 
 // Verify verifies a VC-JWT.
 func (s *CredentialsService) Verify(ctx context.Context, vcJWT string) (*VCVerificationResult, error) {
-	return unmarshal[VCVerificationResult](s.http.post(ctx, "/v1/credentials/verify", map[string]string{"vcJwt": vcJWT}))
+	return unmarshal[VCVerificationResult](s.http.post(ctx, "/v1/credentials/verify", map[string]string{"credential": vcJWT}))
 }
 
 // Present creates an SD-JWT presentation with selective disclosure.

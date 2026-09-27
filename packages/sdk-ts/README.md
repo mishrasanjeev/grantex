@@ -488,6 +488,16 @@ console.log(token.refreshToken); // for token refresh
 | `expiresAt` | `string` | Underlying grant expiry (ISO 8601) |
 | `refreshToken` | `string` | Refresh token for rotating credentials while the grant remains active |
 
+For a new passkey-approved grant, `verifyGrantToken()` and grant API responses
+expose a compact `webauthnEvidence` reference. Request
+`credentialFormat: 'vc-jwt'` to receive an opt-in VC with the full assertion in
+`vc.evidence`; `grantex.credentials.verify(vcJwt)` returns
+`{ valid, vcId?, payload?, revoked?, expired?, error?, webauthnVerified? }`.
+Verify the issuer and revocation status, pin the expected RP ID/origin, and
+match the evidence digest to the grant reference. The raw credential public
+key can correlate VC presentations. This source capability is not in the
+currently published SDK until a subsequent release.
+
 Refresh tokens are single-use and rotate on every accepted refresh. If a response is lost after commit, retry the same previous refresh token and idempotency key. The SDK retains an omitted key for five minutes in the current process; persist an explicit `idempotencyKey` with the old token when recovery must survive restart or failover. Grantex returns the already-rotated pair without extending `expiresAt`; after grant expiry, re-authorize.
 
 ---

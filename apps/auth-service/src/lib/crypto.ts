@@ -15,6 +15,7 @@ import {
   hasUnrepresentableScope,
   normalizeGrantTokenClaims,
 } from './grant-token-claims.js';
+import type { GrantWebAuthnEvidence } from './webauthn-evidence.js';
 import {
   getSigningKeyRing,
   loadEnvKeys,
@@ -56,6 +57,7 @@ export interface GrantTokenPayload {
   parentGrnt?: string;
   delegationDepth?: number;
   bdg?: number;
+  webauthnEvidence?: GrantWebAuthnEvidence;
 }
 
 export interface VerifiedGrantTokenClaims {
@@ -74,6 +76,7 @@ export interface VerifiedGrantTokenClaims {
   parentGrnt?: string;
   delegationDepth?: number;
   bdg?: number;
+  webauthnEvidence?: GrantWebAuthnEvidence;
   scope?: string;
   cnf?: { jkt: string };
   act?: Record<string, unknown>;
@@ -349,6 +352,7 @@ export async function verifyGrantToken(
       ? { cnf: payload['cnf'] as { jkt: string } }
       : {}),
     ...(grant.act !== undefined ? { act: grant.act as Record<string, unknown> } : {}),
+    ...(grant.webauthnEvidence !== undefined ? { webauthnEvidence: grant.webauthnEvidence } : {}),
     ...(Array.isArray(payload['authorization_details'])
       ? { authorizationDetails: payload['authorization_details'] as Array<Record<string, unknown>> }
       : {}),

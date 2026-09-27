@@ -212,6 +212,7 @@ class Grant:
     expires_at: str
     revoked_at: str | None
     purpose: str | None = None
+    webauthn_evidence: WebAuthnGrantEvidence | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Grant:
@@ -227,6 +228,10 @@ class Grant:
             expires_at=data.get("expiresAt", ""),
             revoked_at=data.get("revokedAt"),
             purpose=data.get("purpose"),
+            webauthn_evidence=(
+                WebAuthnGrantEvidence.from_dict(data["webauthnEvidence"])
+                if data.get("webauthnEvidence") else None
+            ),
         )
 
 
@@ -265,6 +270,26 @@ class ListGrantsResponse:
 
 
 @dataclass(frozen=True)
+class WebAuthnGrantEvidence:
+    """Signed grant-token reference; raw assertion material is in an opt-in VC."""
+
+    auth_request_id: str
+    rp_id: str
+    origin: str
+    user_verified: bool
+    asserted_at: str
+    digest: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> WebAuthnGrantEvidence:
+        return cls(
+            auth_request_id=data["authRequestId"], rp_id=data["rpId"],
+            origin=data["origin"], user_verified=data["userVerified"],
+            asserted_at=data["assertedAt"], digest=data["digest"],
+        )
+
+
+@dataclass(frozen=True)
 class VerifiedGrant:
     token_id: str
     grant_id: str
@@ -286,6 +311,7 @@ class VerifiedGrant:
     """The confirmation claim (``cnf``), e.g. ``{"jkt": ...}`` for a DPoP-bound token."""
     audience: Any = None
     """The ``aud`` claim, when the grant is bound to a resource."""
+    webauthn_evidence: WebAuthnGrantEvidence | None = None
     legacy_claims_used: tuple[str, ...] = ()
     """Legacy claim aliases read because the token had no standard claim for
     them (for example ``scp`` without ``scope``). Empty for 0.6 tokens. Reading
@@ -584,6 +610,7 @@ class GrantTokenPayload:
     act: Any = None
     cnf: Any = None
     aud: Any = None
+    webauthn_evidence: WebAuthnGrantEvidence | None = None
     legacy_claims_used: tuple[str, ...] = ()
 
 
@@ -1998,21 +2025,32 @@ class ListCredentialsResponse:
 @dataclass(frozen=True)
 class VCVerificationResult:
     valid: bool
+    vc_id: str | None = None
+    payload: dict[str, Any] | None = None
+    revoked: bool | None = None
+    expired: bool | None = None
+    error: str | None = None
+    webauthn_verified: bool | None = None
+    # Deprecated compatibility fields; current API values live under payload.
     credential_type: str | None = None
     issuer: str | None = None
     subject: dict[str, Any] | None = None
     expires_at: str | None = None
-    revoked: bool | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "VCVerificationResult":
         return cls(
             valid=data["valid"],
+            vc_id=data.get("vcId"),
+            payload=data.get("payload"),
+            revoked=data.get("revoked"),
+            expired=data.get("expired"),
+            error=data.get("error"),
+            webauthn_verified=data.get("webauthnVerified"),
             credential_type=data.get("credentialType"),
             issuer=data.get("issuer"),
             subject=data.get("subject"),
             expires_at=data.get("expiresAt"),
-            revoked=data.get("revoked"),
         )
 
 

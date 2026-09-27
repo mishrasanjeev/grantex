@@ -14,7 +14,7 @@ import jwt
 from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 
 from ._errors import GrantexTokenError
-from ._types import GrantTokenPayload, VerifiedGrant, VerifyGrantTokenOptions
+from ._types import GrantTokenPayload, VerifiedGrant, VerifyGrantTokenOptions, WebAuthnGrantEvidence
 
 
 GRANT_TOKEN_ALGORITHMS: tuple[str, ...] = ("RS256", "ES256")
@@ -617,6 +617,26 @@ def _build_payload(data: dict[str, Any], *, legacy_claims: bool = True) -> Grant
     if raw_grant is not None and not isinstance(raw_grant, Mapping):
         raise GrantexTokenError(f"Grant token claim {GRANT_CLAIM} must be an object")
     grant: Mapping[str, Any] = raw_grant or {}
+    webauthn_evidence = None
+    if "webauthn" in grant:
+        value = grant["webauthn"]
+        if (
+            not isinstance(value, Mapping)
+            or value.get("type") != "GrantexWebAuthnAssertion"
+            or value.get("version") != 1
+            or any(not isinstance(value.get(key), str) or not value[key]
+                   for key in ("authRequestId", "rpId", "origin", "assertedAt"))
+            or not isinstance(value.get("userVerified"), bool)
+            or not isinstance(value.get("digest"), str)
+            or len(value["digest"]) != 64
+            or any(char not in "0123456789abcdef" for char in value["digest"])
+        ):
+            raise GrantexTokenError(f"Grant token claim {GRANT_CLAIM}.webauthn must be a valid evidence reference")
+        webauthn_evidence = WebAuthnGrantEvidence(
+            auth_request_id=value["authRequestId"], rp_id=value["rpId"],
+            origin=value["origin"], user_verified=value["userVerified"],
+            asserted_at=value["assertedAt"], digest=value["digest"],
+        )
 
     raw_scope = data.get("scope")
     if raw_scope is not None and not isinstance(raw_scope, str):
@@ -720,6 +740,7 @@ def _build_payload(data: dict[str, Any], *, legacy_claims: bool = True) -> Grant
         act=act,
         cnf=cnf,
         aud=aud,
+        webauthn_evidence=webauthn_evidence,
         legacy_claims_used=tuple(used),
     )
 
@@ -742,5 +763,6 @@ def _payload_to_verified_grant(payload: GrantTokenPayload) -> VerifiedGrant:
         act=payload.act,
         cnf=payload.cnf,
         audience=payload.aud,
+        webauthn_evidence=payload.webauthn_evidence,
         legacy_claims_used=payload.legacy_claims_used,
     )

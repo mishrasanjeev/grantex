@@ -184,6 +184,7 @@ export interface Grant {
   revokedAt?: string;
   /** Purpose the grant is bound to, when it has one. */
   purpose?: string;
+  webauthnEvidence?: WebAuthnGrantEvidence;
 }
 
 export interface ListGrantsParams {
@@ -196,6 +197,18 @@ export interface ListGrantsParams {
 
 export interface ListGrantsResponse {
   grants: Grant[];
+}
+
+/** Issuer-signed reference to the WebAuthn assertion evidence in an opt-in VC. */
+export interface WebAuthnGrantEvidence {
+  type: 'GrantexWebAuthnAssertion';
+  version: 1;
+  authRequestId: string;
+  rpId: string;
+  origin: string;
+  userVerified: boolean;
+  assertedAt: string;
+  digest: string;
 }
 
 export interface VerifiedGrant {
@@ -231,6 +244,8 @@ export interface VerifiedGrant {
   cnf?: { jkt?: string; [member: string]: unknown };
   /** Audience (`aud`), when the grant is bound to a resource. */
   audience?: string | string[];
+  /** A signed evidence reference, not the raw assertion. Match digest to a VC and verify both. */
+  webauthnEvidence?: WebAuthnGrantEvidence;
   /**
    * Legacy claim aliases this result was read from because the token had no
    * standard claim for them (for example `scp` without `scope`). Empty for
@@ -449,6 +464,7 @@ export interface GrantTokenPayload {
     developer_id?: string;
     parent_grant_id?: string;
     delegation_depth?: number;
+    webauthn?: WebAuthnGrantEvidence;
   };
   /** @deprecated Legacy alias of `urn:grantex:grant.agent_did`; not issued from 0.7. */
   agt?: string;
@@ -1113,11 +1129,21 @@ export interface ListCredentialsResponse {
 
 export interface VCVerificationResult {
   valid: boolean;
-  credentialType?: string;
-  issuer?: string;
-  subject?: Record<string, unknown>;
-  expiresAt?: string;
+  vcId?: string;
+  payload?: Record<string, unknown>;
   revoked?: boolean;
+  expired?: boolean;
+  error?: string;
+  /** True only when the embedded WebAuthn assertion was cryptographically verified. */
+  webauthnVerified?: boolean;
+  /** @deprecated The service returns issuer under payload.iss. */
+  issuer?: string;
+  /** @deprecated The service returns subject under payload.vc.credentialSubject. */
+  subject?: Record<string, unknown>;
+  /** @deprecated The service returns types under payload.vc.type. */
+  credentialType?: string;
+  /** @deprecated The service returns expiry under payload.exp. */
+  expiresAt?: string;
 }
 
 export interface SDJWTPresentParams {

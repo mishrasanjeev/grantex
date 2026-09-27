@@ -97,6 +97,15 @@ and 128 keys, 5 seconds for the whole fetch), and `issuer_did` must be a
 `did:web` identifier for a public, fully qualified domain. See
 [JWKS fetch limits](https://docs.grantex.dev/sdks/python/offline-verification#jwks-fetch-limits).
 
+For a new passkey-approved grant, `verified.webauthn_evidence` contains the
+signed assertion digest reference. Pass `credential_format="vc-jwt"` during
+exchange to request an opt-in VC containing the full assertion, then inspect
+`client.credentials.verify(vc_jwt).webauthn_verified`. Independently trust
+the issuer and enrollment, check revocation, pin the RP ID and origin, and
+compare the VC evidence digest with the grant reference. Raw credential public
+keys can correlate presentations. These additions are in this checkout and
+require a future PyPI release for registry consumers.
+
 ## PKCE Support
 
 The SDK includes built-in PKCE (Proof Key for Code Exchange) support using the S256 method:
