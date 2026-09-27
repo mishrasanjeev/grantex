@@ -1,4 +1,5 @@
 import { closeSql, getSql } from '../db/client.js';
+import { closeRedis } from '../redis/client.js';
 import { reconcileRevokedGrantDescendants, reconcileRevokedGrantVCs } from '../lib/vc-reconciliation.js';
 
 async function main(): Promise<void> {
@@ -32,4 +33,6 @@ main()
     process.stderr.write(`VC reconciliation failed: ${error instanceof Error ? error.message : 'unknown error'}\n`);
     process.exitCode = 1;
   })
-  .finally(() => closeSql());
+  .finally(async () => {
+    await Promise.allSettled([closeRedis(), closeSql()]);
+  });
