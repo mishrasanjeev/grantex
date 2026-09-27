@@ -6,6 +6,12 @@ feature flags and an authenticated customer handoff for enrollment. Confirm
 the published version in [Release Status](https://docs.grantex.dev/release-status)
 before installing.
 
+Repository source exposes the signed WebAuthn grant evidence reference and
+VC attestation field; published `v0.4.0` predates those types. Server-side
+portable issuance requires an explicit rollout. A signed reference alone is
+not the raw assertion or a current revocation check; see the
+[passkey guide](https://docs.grantex.dev/features/fido-webauthn).
+
 **v0.3.0:** wallet responses include typed
 `EVMPayment`/`EVMAuthorization` fields and agent/principal clients expose
 `ReconcileReservation`. Automatic x402 HTTP retries are currently provided by
