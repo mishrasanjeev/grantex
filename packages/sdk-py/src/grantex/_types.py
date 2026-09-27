@@ -559,6 +559,20 @@ class VerifyGrantTokenOptions:
     clock_tolerance: int = 0
     audience: str | None = None
     issuer_did: str | None = None
+    """A ``did:web`` issuer. When set, the JWK Set is read from
+    ``https://<host>[:<port>][/<path>]/.well-known/jwks.json`` instead of
+    ``jwks_uri``, and the expected issuer defaults to that location without
+    the suffix. ``None`` means no DID, as ``null`` or leaving it out does in
+    the TypeScript SDK.
+
+    With ``bounded_jwks_fetch=True`` it must name a fully qualified public
+    domain, written in ASCII (an internationalized name in its ``xn--``
+    form): an IP address, a local or private name (``localhost``, ``.local``,
+    ``.home.arpa``, ``.internal``), a single label, user information, a
+    non-ASCII character or another DID method is refused with
+    :class:`GrantexTokenError`. Without it, a value that does not start with
+    ``did:web:`` is ignored and the rest of the identifier is used as
+    written, with each ``:`` read as ``/``."""
     issuer: str | None = None
     algorithms: list[str] | None = None
     """Signature algorithms to accept: a subset of ``["RS256", "ES256"]`` (the
@@ -576,6 +590,18 @@ class VerifyGrantTokenOptions:
     require_proof_of_possession: bool = False
     """Fail closed unless ``proof_jkt`` is given and matches ``cnf.jkt``. Without
     it, a token's ``cnf`` is returned but not enforced."""
+    bounded_jwks_fetch: bool = False
+    """Fetch the JWK Set within fixed bounds and check ``issuer_did`` against
+    the did:web method before anything is fetched. The response must be an
+    HTTP 200 (redirects are not followed) served as ``application/json`` or
+    ``application/jwk-set+json`` without a content encoding, at most 64 KiB,
+    with at most 128 keys, within one 5-second deadline for the whole
+    exchange; otherwise verification fails with :class:`GrantexTokenError`
+    and nothing is cached.
+
+    ``False`` by default: a later major release makes ``True`` the default,
+    with ``False`` as the opt-out. The last field, so that options built
+    positionally keep their meaning."""
 
 
 # ─── Raw JWT payload shape ────────────────────────────────────────────────────
