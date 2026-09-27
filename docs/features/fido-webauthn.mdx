@@ -7,6 +7,12 @@ keywords: ["Grantex passkey enrollment", "WebAuthn agent consent", "FIDO2 live-m
 
 ## Overview
 
+The Grantex-hosted service enabled portable WebAuthn evidence on September 27,
+2026. Production browser E2E verified enrollment, live approval, assertion
+evidence, refresh, delegation, account response policy, and public VC
+revocation status. Self-hosted deployments still default to off and must
+follow the rollout below.
+
 Grantex supports FIDO2/WebAuthn passkeys during consent. A valid assertion proves use of a credential bound to the principal and to Grantex's challenge. When hosted enrollment is enabled, the server also requires WebAuthn user verification during registration and assertion; this may be a device PIN, biometric, or other authenticator-supported method. The server does not learn which method the customer used.
 
 Live-mode consent requires an existing passkey for the principal. Sandbox-mode accounts can also require one with `fidoRequired: true`. A consent link alone cannot register a passkey because it does not authenticate the principal.
@@ -15,7 +21,7 @@ Hosted passkey enrollment is available when the server operator enables `PASSKEY
 
 The hosted enrollment client is published in `@grantex/sdk@0.7.0`, `grantex==0.6.0`, and `github.com/mishrasanjeev/grantex-go@v0.4.0`. These are independently versioned packages; installation does not turn on the server feature. Check [Release Status](/release-status) for current registry evidence and rollout limitations.
 
-Portable evidence is a separate, default-off server rollout: `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true`. The current published SDK versions do not expose the new typed evidence reference or updated VC attestation; use the REST responses or build from this source until new SDK releases are verified.
+Portable evidence is a separate, default-off source rollout: `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true`. It requires `IRREGULARITY_CASCADE_REVOCATION_ENABLED=true` so automatic grant revocation also updates VCs and public status lists, and `PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED=true` so issuer verification checks stored grant and ancestor status. Keep both safety flags enabled if issuance is rolled back. A hosted deployment can enable these independently of SDK publication. The current published SDK versions do not expose the new typed evidence reference or updated VC attestation; use REST responses or build from this source until new SDK releases are verified.
 
 ## Why FIDO for Agents?
 
@@ -94,7 +100,11 @@ If enrollment is disabled (404) or the customer cannot use a passkey-capable bro
 
 For production rollout, deploy the auth service and the `/passkey-enroll` public-hosting rewrite first. Confirm `FIDO_ORIGIN` is the exact public HTTPS origin and `FIDO_RP_ID` is its valid relying-party domain, then enable `PASSKEY_ENROLLMENT_ENABLED=true`. Test registration and live approval on that origin before sending links to customers. The repository includes `apps/auth-service/tests/production/passkey-policy.test.ts` and the manual `Production Passkey and Irregularity E2E` GitHub Actions workflow. That test creates an isolated production account, passkey, grant and audit records; it must not use a customer account.
 
-To enable portable evidence, first deploy migration `119_webauthn_evidence.sql` and confirm the enabled Docker/Chromium E2E suite and all CI checks are green. Test the deployed RP ID/origin with an isolated account, then set `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true` on the auth service. New assertions will carry evidence; existing grants do not gain it retroactively. Approved live requests that predate activation have no captured assertion and fail token exchange with `PASSKEY_EVIDENCE_REQUIRED`; restart consent for those customers. Turning the flag off stops new evidence capture and restores legacy exchange for old no-evidence requests, while previously captured evidence remains verifiable and propagates on refresh/delegation. Keep the opt-in VCs' stable public keys only as long as necessary.
+## Portable Evidence Rollout
+
+To enable portable evidence, first deploy migration `119_webauthn_evidence.sql` and confirm the enabled Docker/Chromium E2E suite and all CI checks are green. Test the deployed RP ID/origin with an isolated account. Enable `IRREGULARITY_CASCADE_REVOCATION_ENABLED=true` and `PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED=true`, then reconcile historical revoked grants and credentials using `node dist/scripts/reconcile-revoked-vcs.js` (dry run) followed by `--apply` on an authorized maintenance worker. Only then enable `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true` on the auth service; startup rejects the portable flag without both safety flags. Run the `Production Passkey and Irregularity E2E` workflow after activation. New assertions will carry evidence; existing grants do not gain it retroactively. Approved live requests that predate activation have no captured assertion and fail token exchange with `PASSKEY_EVIDENCE_REQUIRED`; restart consent for those customers. To stop new issuance, disable only `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED`; leave the two safety flags on for already-issued credentials.
+
+Before trusting old VCs' public status lists, reconcile active child grants and credentials left behind by historical grant-only irregularity revocations. From an auth-service build with database access, run `node dist/scripts/reconcile-revoked-vcs.js` for counts, then `node dist/scripts/reconcile-revoked-vcs.js --apply` to cascade the old revocations and update VC rows and status-list bits. This command is idempotent and prints counts, not credential data. Keep cascade revocation and evidence status checks enabled even if portable issuance is rolled back: turning off only `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED` stops new capture and restores legacy exchange for old no-evidence requests, while previously captured evidence remains verifiable and propagates on refresh/delegation. Keep the opt-in VCs' stable public keys only as long as necessary.
 
 For local verification, start a disposable Postgres instance, set `AUDIT_INTEGRATION_DATABASE_URL`, install Chromium with `npx playwright install chromium`, and run `npm run test:e2e` from `apps/auth-service`. The browser suite uses a virtual authenticator and a real local Postgres database; it cannot by itself prove that a hosted production origin, routing rewrite, or customer device is configured correctly.
 

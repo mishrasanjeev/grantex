@@ -62,7 +62,9 @@ export interface MockGrantex {
 
 export function mockGrantex(options: { sandboxCode?: string } = {}): MockGrantex {
   return {
-    authorize: vi.fn().mockResolvedValue({
+    // Like POST /v1/authorize, the answer echoes the purpose the request was
+    // bound to, when it carried one.
+    authorize: vi.fn().mockImplementation(async (params: { purpose?: string }) => ({
       authRequestId: 'auth-req-1',
       consentUrl: 'https://grantex.example.com/consent',
       agentId: 'agent-1',
@@ -73,7 +75,8 @@ export function mockGrantex(options: { sandboxCode?: string } = {}): MockGrantex
       status: options.sandboxCode ? ('approved' as const) : ('pending' as const),
       createdAt: new Date().toISOString(),
       ...(options.sandboxCode ? { sandbox: true, code: options.sandboxCode } : {}),
-    }),
+      ...(params.purpose !== undefined ? { purpose: params.purpose } : {}),
+    })),
     tokens: {
       exchange: vi.fn().mockResolvedValue({
         grantToken: upstreamGrantToken({ jti: 'gt_test_token' }),

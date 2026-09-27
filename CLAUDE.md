@@ -33,13 +33,17 @@ provider examples; commercial adapters belong in separate packages. The mock iss
 does not belong in the interface. Public payments and identity standards and their
 publishers (AP2, Verifiable Intent, ACP, UCP, Stripe Shared Payment Tokens, Visa Trusted
 Agent Protocol, Web Bot Auth, OpenID Federation, IETF and W3C documents) may be named,
-because this work renders into them.
+because this work renders into them. `scripts/check_denylist.py` enforces the vendor list;
+it must pass on every pull request.
 
 **House terminology.** Use the left term, never the right: *registry*, not directory;
 *operator override*, not kill switch; *issuer-branded*, not white-label; *irregularity*, not
 anomaly; *attestation*, not verification result; *accredited issuer*, not trust provider or
 verification partner; *relying party*, not consumer; `software_name` / `software_version`,
-not name / version; *Agent Passport* for the credential, *grant* for the delegation.
+not name / version; *Agent Passport* for the credential, *grant* for the delegation. The
+vendor denylist check prints a warning for each of the right-hand terms it finds (kill
+switch, white-label, anomaly, trust provider, verification partner, verification result);
+a warning does not fail the check.
 
 **No new public exposure.** No internal planning documents, customer or partner names, real
 individuals' names, local filesystem paths, commercial terms or real secret values in this
@@ -82,5 +86,6 @@ in CI and the owner has approved the runbook for turning it on.
 - Add a forward-only database migration for every auth-service schema change, with a rollout and backfill path.
 - Test denial paths, tenant isolation, replay, concurrency, and token expiry when changing authority behavior.
 - Run the affected package's typecheck and tests. Run `make check` and `make test` for shared protocol changes; use a disposable Postgres instance for database integration tests.
+- Before pushing, run `python scripts/check_denylist.py scan --base origin/main --head HEAD` (what CI runs over a pull request's added lines, paths, commit messages and branch name). `make check` runs its `audit` over every tracked file; see "Vendor-neutral names" in `CONTRIBUTING.md`.
 - Keep code examples backed by executable tests, and add a `CHANGELOG.md` entry under `Unreleased` for user-visible changes.
 - Keep `release-status.json` and the READMEs describing what is published, not what is in the tree.

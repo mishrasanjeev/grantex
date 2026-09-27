@@ -45,7 +45,7 @@ async function build(overrides: Overrides = {}, grantex: MockGrantex = mockGrant
     resource: TEST_RESOURCE,
     resourceName: 'Acme KYB tools',
     manifests: [ACME_KYB],
-    grant: { purpose: 'aml.cdd.onboarding', purposeDescription: 'Business onboarding checks', dataRegion: 'eu', duration: '8h' },
+    grant: { purpose: 'aml.cdd.onboarding', purposeDescription: 'Business onboarding checks', duration: '8h' },
     consentUi: { appName: 'Acme Compliance', privacyUrl: 'https://acme.example.com/privacy' },
     storage,
     ...overrides,
@@ -88,7 +88,7 @@ describe('the consent page', () => {
     expect(grantex.authorize).not.toHaveBeenCalled();
   });
 
-  it('shows the client, redirect host, purpose, tools with caps, region, duration and service', async () => {
+  it('shows the client, redirect host, purpose, tools with caps, duration and service, and no data region', async () => {
     const { app } = await build();
     const { body } = await authorize(app);
     for (const expected of [
@@ -96,7 +96,6 @@ describe('the consent page', () => {
       'app.example.com', // redirect host, shown prominently
       'aml.cdd.onboarding',
       'Business onboarding checks',
-      '<dd>eu</dd>',
       '8 hours',
       'Acme KYB tools',
       TEST_RESOURCE,
@@ -104,14 +103,30 @@ describe('the consent page', () => {
       'verify_business',
       'declared limit per hour: 50 calls',
       'declared limit per case: 3 calls',
-      'They are enforced only where your grant and the service apply them.',
+      // The purpose is sent to Grantex; the caps are only declared.
+      'Grantex records the purpose below on your grant',
+      'Call limits are declared by this service and enforced only where the service applies them.',
       'tool:acme_kyb:read',
     ]) {
       expect(body).toContain(expected);
     }
+    // A grant made through POST /v1/authorize cannot carry a data region, so
+    // none is ever declared.
+    expect(body).toMatch(/<dt>Declared data region<\/dt>\s*<dd>None declared<\/dd>/);
     // Tools the requested scope does not cover are not listed as granted.
     expect(body).not.toContain('monitor_enroll');
     expect(body).toMatch(/<p class="redirect wrap">app\.example\.com<\/p>/);
+  });
+
+  it('without a configured purpose, does not say Grantex records one', async () => {
+    const { app } = await build({ grant: { duration: '8h' } });
+    const { body } = await authorize(app);
+    // Nothing is sent, so the note speaks only of the declared call limits.
+    expect(body).not.toContain('Grantex records the purpose');
+    expect(body).not.toContain('the purpose below');
+    expect(body).toMatch(/<p class="muted">Call limits are declared by this service and enforced only where the service applies them\.<\/p>/);
+    expect(body).toMatch(/<dt>Declared purpose<\/dt>\s*<dd>No purpose declared<\/dd>/);
+    expect(body).toMatch(/<dt>Declared data region<\/dt>\s*<dd>None declared<\/dd>/);
   });
 
   it('flags tools that need a decision grant', async () => {

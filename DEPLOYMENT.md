@@ -179,7 +179,9 @@ curl http://localhost:3001/health
 | `FIDO_RP_ID` | `grantex.dev` | WebAuthn Relying Party ID |
 | `FIDO_RP_NAME` | `Grantex` | WebAuthn Relying Party name |
 | `FIDO_ORIGIN` | `https://grantex.dev` | WebAuthn origin URL |
-| `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED` | `false` | Capture assertion evidence on new consent requests and require it on live token exchange. Deploy migration 119 and follow the [WebAuthn rollout guide](docs/features/fido-webauthn.mdx) before enabling. |
+| `IRREGULARITY_CASCADE_REVOCATION_ENABLED` | `false` | Atomically revoke an irregular agent's grants, descendants, wallet reservations, VCs, and status-list bits. Keep this enabled after any portable evidence rollout, including during a portable-evidence rollback. |
+| `PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED` | `false` | Check evidence-bearing VCs against issuer grant and ancestor status. Enable before evidence issuance; keep it enabled during an issuance rollback. |
+| `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED` | `false` | Capture assertion evidence on new consent requests and require it on live token exchange. Requires both cascade revocation and evidence status check at startup. Deploy migration 119, reconcile historical revoked-grant VCs, and follow the [WebAuthn rollout guide](docs/features/fido-webauthn.mdx) before enabling. |
 | `OPA_URL` | (none) | Open Policy Agent endpoint for policy evaluation |
 | `OPA_FALLBACK_TO_BUILTIN` | (none) | Fall back to built-in policy engine if OPA is unavailable |
 | `CEDAR_URL` | (none) | Cedar policy engine endpoint |

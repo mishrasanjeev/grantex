@@ -127,10 +127,11 @@ _KEY_TYPES = {"RS256": "RSA", "ES256": "EC"}
 _UNKNOWN_KID_COOLDOWN_SECONDS = 30.0
 
 
-def _default_key_resolver(jwks_uri: str) -> KeyResolver:
+def _default_key_resolver(jwks_uri: str, *, bounded: bool = False) -> KeyResolver:
     """Resolves the key named by ``kid`` in the issuer's JWKS, of the type the
     algorithm needs (RSA for RS256, P-256 EC for ES256); an unknown ``kid``
-    refetches the set at most once per cooldown."""
+    refetches the set at most once per cooldown. ``bounded`` fetches the set
+    within the bounds of ``bounded_jwks_fetch``."""
     from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 
     from .._verify import _get_jwks
@@ -153,10 +154,10 @@ def _default_key_resolver(jwks_uri: str) -> KeyResolver:
             return matches[0] if matches else None
 
         try:
-            entry = _get_jwks(jwks_uri)
+            entry = _get_jwks(jwks_uri, bounded=bounded)
             matched = select(entry.keys)
             if matched is None and time.monotonic() - entry.fetched_at >= _UNKNOWN_KID_COOLDOWN_SECONDS:
-                entry = _get_jwks(jwks_uri, force_refresh=True)
+                entry = _get_jwks(jwks_uri, force_refresh=True, bounded=bounded)
                 matched = select(entry.keys)
         except GrantexTokenError as exc:
             raise DecisionGrantError(DecisionSubReason.MALFORMED, f"issuer keys unavailable: {exc}") from exc
@@ -214,6 +215,7 @@ def verify_decision_grant(
     algorithms: Sequence[str] = ("RS256", "ES256"),
     clock_tolerance: int = 0,
     now: Optional[int] = None,
+    bounded_jwks_fetch: bool = False,
 ) -> DecisionGrant:
     """Verify one decision grant against the action about to be performed.
 
@@ -230,6 +232,11 @@ def verify_decision_grant(
     - ``expired``: past ``exp`` (after the signature is known to be good).
 
     It does not check single use; see the module documentation.
+
+    ``bounded_jwks_fetch=True`` reads the keys from ``jwks_uri`` within the
+    bounds that :class:`grantex.VerifyGrantTokenOptions` ``bounded_jwks_fetch``
+    applies. ``False`` by default: a later major release makes ``True`` the
+    default, with ``False`` as the opt-out.
     """
     if not isinstance(token, str) or not token or len(token) > _MAX_TOKEN_LENGTH:
         raise DecisionGrantError(DecisionSubReason.MALFORMED, "decision grant must be a compact JWT")
@@ -239,7 +246,7 @@ def verify_decision_grant(
     if key_resolver is None:
         if jwks_uri is None:
             raise ValueError("verify_decision_grant needs jwks_uri or key_resolver")
-        key_resolver = _default_key_resolver(jwks_uri)
+        key_resolver = _default_key_resolver(jwks_uri, bounded=bool(bounded_jwks_fetch))
 
     try:
         header = jwt.get_unverified_header(token)
@@ -361,6 +368,7 @@ def verify_decision_grants(
     algorithms: Sequence[str] = ("RS256", "ES256"),
     clock_tolerance: int = 0,
     now: Optional[int] = None,
+    bounded_jwks_fetch: bool = False,
 ) -> DecisionGrantSet:
     """Verify the decision grants for one action, including four eyes.
 
@@ -369,6 +377,7 @@ def verify_decision_grants(
     raises the requirement to 2 as well. With two approvals required, exactly
     two grants with different ``sub`` are needed, the second naming the first
     (``same_approver``, ``four_eyes_incomplete`` or ``malformed`` otherwise).
+    ``bounded_jwks_fetch`` is passed to :func:`verify_decision_grant`.
     """
     if approvals_required not in (1, 2):
         raise ValueError("approvals_required must be 1 or 2")
@@ -384,6 +393,7 @@ def verify_decision_grants(
             t, expected, case_version,
             jwks_uri=jwks_uri, issuer=issuer, key_resolver=key_resolver, developer_id=developer_id,
             connector=connector, algorithms=algorithms, clock_tolerance=clock_tolerance, now=now,
+            bounded_jwks_fetch=bounded_jwks_fetch,
         )
         for t in tokens
     )

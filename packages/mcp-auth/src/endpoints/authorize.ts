@@ -181,9 +181,62 @@ async function issueCodeAndRedirect(ctx: ServerContext, reply: FastifyReply, inp
 }
 
 /**
+ * Whether an error from `grantex.authorize` is Grantex refusing the request's
+ * `purpose` (`400 INVALID_PURPOSE` from `POST /v1/authorize`). Read from the
+ * fields of the SDK's `GrantexApiError` rather than with `instanceof`: the
+ * client is the host's own `@grantex/sdk` instance, which need not be the
+ * copy this package resolves.
+ */
+function isPurposeRefusal(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const { statusCode, code } = err as { statusCode?: unknown; code?: unknown };
+  return statusCode === 400 && code === 'INVALID_PURPOSE';
+}
+
+/** Upstream text for the operator log: one line, no control characters, bounded. */
+function forLog(value: unknown, max = 300): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const line = value.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]+/g, ' ').trim();
+  if (line.length === 0) return undefined;
+  return line.length > max ? `${line.slice(0, max)}...` : line;
+}
+
+/**
+ * Reports a configuration problem to the operator (`config.warn`, default
+ * `console.warn`). A failing log function does not change the response.
+ */
+function warnOperator(ctx: ServerContext, message: string): void {
+  try {
+    (ctx.config.warn ?? console.warn)(message);
+  } catch {
+    // The refusal stands whatever the log function does.
+  }
+}
+
+/**
+ * The operator's view of a purpose refusal: Grantex's reason, which is
+ * fixed text naming its vocabulary or the connector-scope requirement,
+ * with the error code and request id. The client never sees it.
+ */
+function purposeRefusalWarning(purpose: string, scopes: readonly string[], err: unknown): string {
+  const { message, requestId, body } = err as { message?: unknown; requestId?: unknown; body?: unknown };
+  const reason = forLog(message)?.replace(/\.+$/, '') || 'no reason given';
+  // The SDK takes the id from an X-Request-Id header; the auth service puts
+  // it in the error body.
+  const bodyRequestId = typeof body === 'object' && body !== null ? (body as { requestId?: unknown }).requestId : undefined;
+  const id = forLog(requestId, 128) ?? forLog(bodyRequestId, 128);
+  return `mcp-auth: Grantex refused grant.purpose "${purpose}" for scopes [${scopes.join(' ')}] `
+    + `(400 INVALID_PURPOSE${id !== undefined ? `, request ${id}` : ''}): ${reason}. `
+    + 'The client was sent invalid_scope. Grantex accepts a purpose that is a vocabulary term or a private '
+    + 'x-<org>.<term>, for requested scopes that include at least one tool:<connector>:<permission> scope; until '
+    + 'that holds, every authorization with this purpose and these scopes is refused.';
+}
+
+/**
  * Starts the upstream Grantex authorization for a validated request: the
  * Principal approves it in Grantex, which redirects back to the callback.
- * The requested resource becomes the grant token's audience.
+ * The requested resource becomes the grant token's audience, and
+ * `grant.purpose` (the purpose the consent page showed) the grant's purpose.
  */
 export async function startUpstreamAuthorization(
   ctx: ServerContext,
@@ -192,11 +245,12 @@ export async function startUpstreamAuthorization(
   status = 302,
 ): Promise<FastifyReply> {
   const { config } = ctx;
+  const purpose = config.grant?.purpose;
   const pendingId = generateCode();
   const codeExpiration = config.codeExpirationSeconds ?? 600;
   let grantexAuth;
   try {
-    const extra = config.grant?.authorizeParams?.({
+    const extra: Record<string, unknown> = config.grant?.authorizeParams?.({
       clientId: request.client.clientId,
       scopes: [...request.scopes],
       resource: request.resource,
@@ -204,10 +258,24 @@ export async function startUpstreamAuthorization(
     if (extra === null || typeof extra !== 'object' || Array.isArray(extra)) {
       throw new Error('grant.authorizeParams must return an object');
     }
+    // The purpose sent is the one the Principal was shown, grant.purpose.
+    // The hook may repeat it but not replace it or add one: either would
+    // bind the grant to a purpose nobody approved, so the request is refused
+    // before Grantex is called rather than one value silently winning.
+    if (extra['purpose'] !== undefined && extra['purpose'] !== purpose) {
+      return reply.status(500).send({
+        error: 'server_error',
+        error_description: 'grant.authorizeParams returned a purpose other than grant.purpose; only grant.purpose, which the consent page shows, is sent',
+      });
+    }
     grantexAuth = await config.grantex.authorize({
       // Extension parameters first: the fields below always win.
       ...extra,
       ...(config.grant?.duration !== undefined ? { expiresIn: config.grant.duration } : {}),
+      // Every SDK version sends the parameters it is given in the request
+      // body, including those from before `purpose` was typed on
+      // AuthorizeParams.
+      ...(purpose !== undefined ? { purpose } : {}),
       agentId: config.agentId,
       userId: request.client.clientId, // Use client_id as principal for MCP flow
       scopes: request.scopes,
@@ -215,11 +283,44 @@ export async function startUpstreamAuthorization(
       redirectUri: resolveCallbackUrl(config),
       state: pendingId,
     });
-  } catch {
+  } catch (err) {
+    if (purpose !== undefined && isPurposeRefusal(err)) {
+      // Grantex refuses a purpose it does not recognise, or one the
+      // requested scopes give nothing to bind to (no
+      // tool:<connector>:<permission> scope). The client and redirect URI
+      // are verified, so the client is told on its redirect URI (RFC 6749
+      // §4.1.2.1), in fixed text: upstream text is never relayed. The
+      // operator gets Grantex's reason, because a purpose outside the
+      // vocabulary refuses every authorization and start-up cannot catch it.
+      warnOperator(ctx, purposeRefusalWarning(purpose, request.scopes, err));
+      return reply.redirect(clientRedirect(ctx, request.redirectUri, {
+        error: 'invalid_scope',
+        error_description: `Grantex refused the grant purpose ${purpose} for the requested scopes. `
+          + 'A purpose needs at least one tool:<connector>:<permission> scope and must be a purpose Grantex accepts.',
+        state: request.clientState,
+      }), status);
+    }
     // Upstream error text is not shown to the user-agent.
     return reply.status(502).send({
       error: 'server_error',
       error_description: 'The upstream authorization request failed',
+    });
+  }
+
+  // Grantex echoes the purpose it bound the request to. A server that
+  // predates purpose-bound grants ignores the field and answers without it,
+  // and the grant would then lack the purpose the Principal approved: fail
+  // closed rather than continue.
+  if (purpose !== undefined && (grantexAuth as typeof grantexAuth & { purpose?: unknown }).purpose !== purpose) {
+    warnOperator(
+      ctx,
+      `mcp-auth: Grantex did not confirm grant.purpose "${purpose}" in its answer to POST /v1/authorize; `
+      + 'the Grantex server may not support purpose-bound grants. The authorization was refused with 502 server_error, '
+      + 'and every authorization is refused until the server confirms the purpose.',
+    );
+    return reply.status(502).send({
+      error: 'server_error',
+      error_description: 'Grantex did not confirm the purpose for this grant; the Grantex server may not support purpose-bound grants',
     });
   }
 

@@ -21,11 +21,11 @@ export async function startAuthServer(options: {
     // scopes_supported and the consent page's tool list come from the manifest.
     manifests: [options.manifest],
 
-    // What the grant is for, shown on the consent page.
+    // What the grant is for, shown on the consent page. The purpose and
+    // duration are sent to Grantex, which binds the grant to them.
     grant: {
       purpose: 'aml.cdd.onboarding',
       purposeDescription: 'Business onboarding checks for new applicants',
-      dataRegion: 'eu',
       duration: '8h',
     },
 

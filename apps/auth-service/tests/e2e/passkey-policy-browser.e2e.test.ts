@@ -55,6 +55,8 @@ async function freePort(): Promise<number> {
   const originalFlags = {
     enrollment: process.env['PASSKEY_ENROLLMENT_ENABLED'],
     policy: process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'],
+    cascade: process.env['IRREGULARITY_CASCADE_REVOCATION_ENABLED'],
+    statusCheck: process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'],
   };
 
   beforeAll(async () => {
@@ -76,6 +78,8 @@ async function freePort(): Promise<number> {
     Object.assign(config as { fidoRpId: string; fidoOrigin: string }, { fidoRpId: 'localhost', fidoOrigin: base });
     process.env['PASSKEY_ENROLLMENT_ENABLED'] = 'true';
     process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'] = 'true';
+    process.env['IRREGULARITY_CASCADE_REVOCATION_ENABLED'] = 'true';
+    process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'] = 'true';
     app = await buildTestApp();
     await app.listen({ port, host: 'localhost' });
     browser = await chromium.launch();
@@ -97,6 +101,10 @@ async function freePort(): Promise<number> {
     else process.env['PASSKEY_ENROLLMENT_ENABLED'] = originalFlags.enrollment;
     if (originalFlags.policy === undefined) delete process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'];
     else process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'] = originalFlags.policy;
+    if (originalFlags.cascade === undefined) delete process.env['IRREGULARITY_CASCADE_REVOCATION_ENABLED'];
+    else process.env['IRREGULARITY_CASCADE_REVOCATION_ENABLED'] = originalFlags.cascade;
+    if (originalFlags.statusCheck === undefined) delete process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'];
+    else process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'] = originalFlags.statusCheck;
     await sql?.end();
     await dropDatabase?.();
   });
@@ -235,6 +243,12 @@ async function freePort(): Promise<number> {
         body: JSON.stringify({ credential: issued.verifiableCredential }),
       });
       expect(await (await verifyVc()).json()).toMatchObject({ valid: true, webauthnVerified: true });
+      const [priorStatus] = await sql<{ status_list_id: string; encoded_list: string }[]>`
+        SELECT credential.status_list_id, list.encoded_list
+        FROM verifiable_credentials credential
+        JOIN vc_status_lists list ON list.id = credential.status_list_id
+        WHERE credential.grant_id = ${issued.grantId}
+      `;
       const revoked = await fetch(`${base}/v1/grants/${issued.grantId}`, {
         method: 'DELETE', headers: { Authorization: `Bearer ${apiKey}` },
       });
@@ -245,6 +259,37 @@ async function freePort(): Promise<number> {
         body: JSON.stringify({ credential: child.verifiableCredential }),
       });
       expect(await revokedChild.json()).toMatchObject({ valid: false, revoked: true });
+
+      // Historical direct grant revocations may have left the VC row and list bit active.
+      await sql`UPDATE verifiable_credentials SET status = 'active', revoked_at = NULL
+        WHERE grant_id = ${issued.grantId}`;
+      await sql`UPDATE vc_status_lists SET encoded_list = ${priorStatus!.encoded_list}
+        WHERE id = ${priorStatus!.status_list_id}`;
+      expect(await (await verifyVc()).json()).toMatchObject({ valid: false, revoked: true });
+      await sql`UPDATE grants SET status = 'active', revoked_at = NULL WHERE id = ${child.grantId}`;
+      await sql`UPDATE verifiable_credentials SET status = 'active', revoked_at = NULL
+        WHERE grant_id = ${child.grantId}`;
+      const staleChild = await fetch(`${base}/v1/credentials/verify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: child.verifiableCredential }),
+      });
+      expect(await staleChild.json()).toMatchObject({ valid: false, revoked: true });
+
+      await sql`UPDATE grants SET status = 'active', revoked_at = NULL,
+        parent_grant_id = ${child.grantId} WHERE id = ${issued.grantId}`;
+      const cyclic = await fetch(`${base}/v1/credentials/verify`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: issued.verifiableCredential }),
+      });
+      expect(await cyclic.json()).toMatchObject({ valid: false, revoked: true });
+
+      process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'] = 'false';
+      expect(await (await verifyVc()).json()).toMatchObject({ valid: true, webauthnVerified: true });
+      process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'] = 'true';
+      await sql`UPDATE grants SET status = 'revoked', revoked_at = NOW(),
+        parent_grant_id = NULL WHERE id = ${issued.grantId}`;
+      await sql`UPDATE grants SET status = 'revoked', revoked_at = NOW()
+        WHERE id = ${child.grantId}`;
     } finally {
       await context.close();
     }

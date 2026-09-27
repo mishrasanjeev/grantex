@@ -766,7 +766,7 @@ client.webauthn.delete_credential(credential_id)
 
 Hosted enrollment requires `PASSKEY_ENROLLMENT_ENABLED=true` and a correctly configured HTTPS `FIDO_ORIGIN`/`FIDO_RP_ID`; the server feature is off by default. Live-mode consent requires an existing passkey, with no weaker fallback. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) for the customer identity-binding and one-use link requirements. The guide also distinguishes the hosted SDK methods from the REST-only custom assertion ceremony.
 
-For a production rollout, deploy the auth service and the `/passkey-enroll` hosting rewrite before enabling the flag. Then run `Production Passkey and Irregularity E2E` from GitHub Actions. That test creates an isolated live account, enrolls a virtual passkey, approves consent, records 51 audit entries, verifies alert-only does not revoke its grant, and verifies the revoke mode does. It leaves the test account and audit records in production; do not run it against a customer account.
+For a production rollout, deploy the auth service and the `/passkey-enroll` hosting rewrite before enabling the flag. Then run `Production Passkey and Irregularity E2E` from GitHub Actions. That test creates an isolated live account, enrolls a virtual passkey, approves consent, checks portable evidence in an opt-in VC, refreshes and delegates the grant, and tests alert-only and revoke modes. It leaves the test account and audit records in production; do not run it against a customer account.
 
 </details>
 
@@ -846,9 +846,16 @@ const { credentials } = await grantex.credentials.list({
 
 ### Portable Passkey Evidence
 
-Live consent requires a passkey assertion. With `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true` (default off), newly issued grants and grant tokens carry a signed `webauthnEvidence` summary with the assertion digest. Request `credentialFormat: 'vc-jwt'` (or `'both'`) at token exchange to receive a signed VC with the raw assertion, public key, challenge, RP ID, origin, and prior counter in `vc.evidence`. With this rollout enabled or evidence already present, the VC is issued atomically with the grant. Delegated grants inherit this original-ceremony evidence, not a new human approval. Historical grants without captured evidence cannot be upgraded retroactively; the principal must complete a new consent ceremony after activation.
+The hosted Grantex service enabled portable evidence on September 27, 2026 and
+passed the production passkey, delegation, refresh, and revocation E2E workflow.
+Self-hosted installations still default to off and must follow the
+[rollout guide](docs/features/fido-webauthn.mdx). The published TypeScript
+0.7.0, Python 0.6.0, and Go v0.4.0 SDKs predate the new typed evidence fields;
+use REST responses or a source build until updated packages are published.
 
-Verify the VC signature, expiry and revocation; require your trusted RP ID and origin; reverify the WebAuthn assertion; and compare its digest to the grant-token reference. The authenticator signs a challenge, not the grant's scopes. Grantex's issuer signature supplies that binding and attests its credential enrollment; a verifier must decide whether to trust that issuer and enrollment process. Raw evidence contains a stable credential public key and is opt-in because it can correlate presentations. No payment-network certification is implied. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) and [VC guide](https://docs.grantex.dev/features/verifiable-credentials).
+Live consent requires a passkey assertion. With `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true` (source default off), newly issued grants and grant tokens carry a signed `webauthnEvidence` summary with the assertion digest. Activation also requires `IRREGULARITY_CASCADE_REVOCATION_ENABLED=true` and `PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED=true`, so automatic grant revocation updates delegated grants, VCs, and public status-list bits, and issuer verification checks the underlying grant. Keep both safety flags on if portable issuance is later rolled back. Request `credentialFormat: 'vc-jwt'` (or `'both'`) at token exchange to receive a signed VC with the raw assertion, public key, challenge, RP ID, origin, and prior counter in `vc.evidence`. With this rollout enabled or evidence already present, the VC is issued atomically with the grant. Delegated grants inherit this original-ceremony evidence, not a new human approval. Historical grants without captured evidence cannot be upgraded retroactively; the principal must complete a new consent ceremony after activation.
+
+Verify the VC signature, expiry and a fresh revocation status list; require your trusted RP ID and origin; reverify the WebAuthn assertion; and compare its digest to the grant-token reference. Offline signature verification alone does not prove current grant status. The authenticator signs a challenge, not the grant's scopes. Grantex's issuer signature supplies that binding and attests its credential enrollment; a verifier must decide whether to trust that issuer and enrollment process. Raw evidence contains a stable credential public key and is opt-in because it can correlate presentations. No payment-network certification is implied. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) and [VC guide](https://docs.grantex.dev/features/verifiable-credentials).
 
 ### DID Infrastructure
 
