@@ -34,8 +34,8 @@ also runs:
 
 ```bash
 make install   # dependencies (use a virtualenv for Python; PYTHON=... to choose one)
-make check     # documentation integrity, ruff, mypy --strict, TypeScript typecheck
-make test      # unit tests
+make check     # documentation integrity, vendor denylist, ruff, mypy --strict, TypeScript typecheck
+make test      # unit tests, including the repository scripts' tests
 ```
 
 `make test` also runs the auth service's real-Postgres audit integration test
@@ -160,6 +160,61 @@ If a scan reports a finding:
    an obviously fake value. If it must stay, append `gitleaks:allow` as a
    comment on that line, or add its fingerprint (printed with the finding) to
    `.gitleaksignore` and say why in the pull request.
+
+### Vendor-neutral names
+
+Code, tests, fixtures, documentation, commit messages, branch names and pull
+requests never name a commercial identity-verification, KYB/KYC, AML or
+screening vendor (see `AGENTS.md`). Interfaces are built from the domain; the
+mock provider is `mock`, and documentation and examples use `acme_kyb`.
+
+`scripts/check_denylist.py` enforces this. It splits the text it checks into
+words and compares salted SHA-256 hashes of every run of up to a few
+consecutive words against `security/denylist.sha256`. Spacing, punctuation,
+case and accents do not matter: `Acme Verify`, `acme_verify` and `AcmeVerify`
+are the same term. Only the salt and the hashes are committed; the plain list
+is kept outside the repository by the maintainers, which keeps the names out
+of the tree and its diffs. The hashes are not a secret: with the committed
+salt anyone can test a guessed name. A failure gives the location and word
+number, not the matched line (a matching file path is itself the location, so
+that path is printed). The check needs Python 3.9 or later and git, nothing
+else, and fails closed: a git error, an unresolvable commit, a missing or
+malformed hash file, a tracked file that is present but cannot be read, or any
+audit path that matches no tracked file (even next to paths that do) is an
+error, not a pass. A submodule or a symlink to a directory is not read; its
+path is still checked.
+
+```bash
+python scripts/check_denylist.py scan --base origin/main   # your branch: added lines, paths, commit messages, branch name
+python scripts/check_denylist.py audit                     # every tracked file (make check-denylist, part of make check)
+python scripts/check_denylist.py audit docs/guides         # only the tracked files under the paths given
+python -m pytest -q tests/scripts                          # the check's own tests (part of make test)
+```
+
+The **Vendor Denylist** workflow runs `scan` on every pull request, again
+whenever its title, description or base branch is edited (it checks the title
+and description too), and on pushes to `main`. It runs `audit` on pull
+requests and pushes to `main` as well, but not for an edit, which adds no
+commits. In CI, `make test` runs the check's tests on Python 3.12 and the
+Python SDK job runs them on 3.9. Consecutive words are joined, so two
+ordinary words can together spell a listed name: rephrase that line. If it
+flags a single word that is not a vendor name, tell a maintainer rather than
+working around it. To change the list, a maintainer edits the private terms
+file and regenerates the hashes
+(`python scripts/check_denylist.py build --keep-salt --terms-file <path outside
+the repository>`, which refuses a terms file inside the working tree and
+prints only a count), then commits `security/denylist.sha256`. AgenticOrg
+checks against the same file; keep the two copies identical.
+
+The same check prints a warning, with the location and the house term to use,
+for each of the terms the house terminology in `AGENTS.md` replaces, in any of
+their spellings and forms (`KillSwitch`, `kill_switches`, `anomalies`,
+`anomalous`): kill switch (*operator override*), white-label
+(*issuer-branded*), anomaly (*irregularity*), trust provider and verification
+partner (*accredited issuer*) and verification result (*attestation*).
+Warnings never change the result. Some of these words are still published API
+names, such as `/v1/anomalies`; renaming those is a product decision, recorded
+in `FINDINGS.md`.
 
 ---
 
