@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Primary SDK registry releases (2026-09-27)
+- Published `@grantex/sdk@0.7.0` and `@grantex/x402@0.4.1` to npm from the
+  verified main-branch artifacts. The registry SHA-512 integrity values match
+  the tested tarballs exactly; a clean consumer installed both and resolved
+  the hosted passkey, account irregularity policy, and x402 public APIs.
 - Published Python `grantex==0.6.0` to PyPI from the verified main-branch
   artifact. The wheel SHA-256 is
   `3d4df0aef712945aaa89762b75403f9ca26460ff5a01f9cf69da4db71c8e7b76`;
@@ -17,10 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `cd3322e0bc8dd3a8a2afdbab729e6c68f0cb1a26`. The public Go proxy
   resolved the tag and its downloaded module passed `go test ./...`; the
   synced source also passed `go vet` and `go test -race`.
-- TypeScript `@grantex/sdk@0.7.0` and x402 `@grantex/x402@0.4.1` remain
-  release candidates until the npm registry serves their exact versions.
-  The release workflow verified both tarballs, but automated publication
-  needs npm/PyPI trusted publisher setup and a Go release credential.
+- The release workflow verified all four distributions, but automated
+  publication still needs npm/PyPI trusted publisher setup and a Go release
+  credential. These releases used the maintainer's authenticated npm/Twine
+  CLIs and a tested Go repository tag.
 
 ### Hosted passkey enrollment and account irregularity response
 - Added a default-off hosted passkey enrollment flow with authenticated,
