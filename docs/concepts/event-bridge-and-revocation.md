@@ -483,14 +483,15 @@ a plain Node process loading the build from the checkout, and the Python one
 refuses to start unless `grantex` was imported from the checkout — an ambient
 install would otherwise "prove" the criterion against code nobody reviewed.
 And the clock starts when the revocation is committed (when the API call
-returns), not when the call was made: a developer on the free plan is rate
-limited to 100 requests a minute, and the SDK waiting out a `Retry-After` is
-not propagation. That wait is reported separately as `revoke_call_max_ms` —
-and it now has a budget of its own (10 s, `REVOCATION_REVOKE_CALL_BUDGET_MS`),
-because a release that prints a minute-long wait on the containment path and
-passes anyway is not telling you the truth. FINDINGS G-23 tracks the
-underlying problem: revoking shares the plan's rate-limit bucket with
-ordinary traffic.
+returns), not when the call was made: the revoke call is rate limited, and
+the SDK waiting out a `Retry-After` is not propagation. That wait is reported
+separately as `revoke_call_max_ms` — and it has a budget of its own (10 s,
+`REVOCATION_REVOKE_CALL_BUDGET_MS`), because a release that prints a
+minute-long wait on the containment path and passes anyway is not telling you
+the truth. Revoking used to share the plan's rate-limit bucket with ordinary
+traffic (FINDINGS G-23); it now has a containment bucket of its own (see
+[Rate limits](#rate-limits) below), so the wait no longer depends on the
+tenant's plan or its other traffic.
 
 Any figure quoted from a run is **environment-specific**. The numbers depend
 on the machine, the container runtime, whether Postgres and Redis are local,
@@ -513,35 +514,76 @@ Authorization: Bearer <developer API key>
   "scope": { "type": "agent", "id": "ag_01..." },
   "reason": "incident 4102: provider credentials leaked",
   "confirm": "stop agent:ag_01...",
-  "dryRun": false
+  "dryRun": false,
+  "lockout": false
 }
 ```
 
 - `confirm` must be exactly `stop <type>:<id>`; anything else is refused with
-  `412 CONFIRMATION_REQUIRED` and the phrase it expected. Nothing is revoked
-  before that check passes.
+  `412 CONFIRMATION_REQUIRED`, and the expected phrase is not echoed back.
+  Nothing is revoked before that check passes.
 - `dryRun: true` reports how many grants the scope covers and revokes nothing.
 - A developer API key can only stop its own grants. The platform operator uses
   `POST /v1/admin/emergency-stop` with `ADMIN_API_KEY` and a `developerId`.
 - `GET /v1/emergency-stops` lists what has been stopped, when, by whom and
-  why.
+  why, and the lockouts still in force, a page at a time (`page`,
+  `pageSize`) with `freezesTotal` giving how many there are in all.
 - Underneath it is an ordinary cascade revocation per matched grant, so the
   stop appears in the audit hash chain (one `grantex.grant.revoked` per grant
   plus one `grantex.emergency_stop` summary) and on the revocation feed, and
   agents following the feed are denied within seconds.
 - Off unless `EMERGENCY_STOP_ENABLED=true`. The revocations are irreversible:
   principals have to authorise again.
-- **A sweep, not a lockout.** It revokes what exists, re-reading the scope
-  until it comes back empty so a grant delegated mid-stop is caught, and then
-  it is done: the same API key can mint a new grant immediately afterwards.
-  The response says `"lockout": false`, and `status` is `completed`,
-  `incomplete` (grants kept appearing) or `failed` (a batch did not finish —
-  the record says what was revoked, and the call can be repeated). Rotate the
-  leaked credential first; the runbook gives the order.
+- **A sweep, and a lockout only when asked for.** Without `lockout`, it
+  revokes what exists, re-reading the scope until it comes back empty so a
+  grant delegated mid-stop is caught, and then it is done: the same API key
+  can mint a new grant immediately afterwards, and the response says
+  `"lockout": false`. `status` is `completed`, `incomplete` (grants kept
+  appearing) or `failed` (a batch did not finish — the record says what was
+  revoked, and the call can be repeated).
+- **`lockout: true` freezes issuance under the scope** until the freeze is
+  lifted. The freeze is recorded before the first sweep, in the same
+  transaction as the stop's record. Every issuance path then refuses with
+  `403 ISSUANCE_FROZEN` (`access_denied` on the OAuth endpoints): authorize,
+  code exchange, refresh, delegation, the OAuth profile's pushed request and
+  token endpoint, consent bundles and agent passports
+  (`POST /v1/passport/issue`). Commerce passports and decision grants are not
+  issued from grants and are outside any lockout; the runbook says how to
+  contain commerce passports. A freeze covers what a stop over the same scope
+  would revoke, so a refresh, delegation or passport is checked against every
+  grant above it. If the freeze state cannot be read, issuance fails closed
+  with `503 FREEZE_STATE_UNAVAILABLE`. The response says
+  `"lockout": true` with a `freezeId`, and `grantex.issuance_frozen` goes on
+  the audit chain.
+- `POST /v1/emergency-stop/unfreeze` lifts a lockout; `confirm` must be
+  exactly `unfreeze <type>:<id>`. The operator lifts any lockout with
+  `POST /v1/admin/emergency-stop/unfreeze`. A lockout the operator placed can
+  only be lifted by the operator, because the tenant's key may be the leaked
+  credential. Lifting it writes `grantex.issuance_unfrozen` on the audit
+  chain.
 
 The runbook — rehearsing it, working out the blast radius, what to do when an
 agent keeps running, and what to do if the API itself is unreachable — is
 section 11 of `docs/self-hosting.md`.
+
+## Rate limits
+
+Revoking and stopping are rate limited in a **containment** bucket of their
+own, and the feed in a **status** bucket of its own, rather than in the
+developer's plan budget. A tenant that has spent its plan quota on ordinary
+calls can still revoke, and its SDKs can still learn about revocations.
+
+| Bucket | Routes | Per developer, every plan | Redis unavailable |
+|---|---|---|---|
+| containment | `DELETE /v1/grants/:id`, `POST /v1/tokens/revoke`, `POST /v1/emergency-stop`, `POST /v1/passport/:id/revoke`, `POST /v1/consent-bundles/:id/revoke` | 2,000 a minute | served, counted per instance against the same ceiling |
+| status | `GET /v1/revocations`, `/v1/revocations/status`, `/v1/revocations/stream`, `GET /v1/consent-bundles/:id/revocation-status` | 6,000 a minute | `503 RATE_LIMIT_UNAVAILABLE`; clients fail closed |
+
+The per-address limits on each route still apply first (20 a minute for the
+emergency stop; 600, 1,200 and 120 for the feed, status and stream routes).
+A revocation fails open when the limiter cannot count it because it is written
+to Postgres, which is authoritative, and refusing it would prolong an incident
+over an outage of a cache. `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false` puts these
+routes back in the plan budget. See `docs/guides/rate-limits.mdx`.
 
 ## Observability
 
@@ -564,6 +606,9 @@ section 11 of `docs/self-hosting.md`.
 | `grantex_revocation_feed_pruned_total` | — (entries deleted past retention) |
 | `grantex_revocation_feed_prune_runs_total` | `outcome` (`complete`, `capped`, `skipped_locked`, `failed`) |
 | `grantex_emergency_stops_total` | `scope`, `outcome` (`applied`, `dry_run`, `refused`) |
+| `grantex_issuance_freeze_changes_total` | `action` (`placed`, `reaffirmed`, `lifted`), `scope` |
+| `grantex_issuance_refusals_total` | `path` (the issuance route), `reason` (`frozen`, `freeze_state_unavailable`) |
+| `grantex_rate_limit_decisions_total` | `bucket` (`plan`, `containment`, `status`), `outcome` (`allowed`, `limited`, `unavailable`, `local_allowed`, `local_limited`) |
 
 Every refused delivery also logs `alert: "event_bridge_verification_failure"`
 with the source id and reason, never the payload or signature. Alert rules are

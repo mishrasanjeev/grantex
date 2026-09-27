@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { getSql, type TxSql } from '../db/client.js';
+import { getSql, queries, type TxSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
 import { config } from '../config.js';
 import { checkActiveOAuthAccessToken } from '../lib/active-grant-token.js';
@@ -18,6 +18,14 @@ import { isValidPkceChallenge, isValidPkceVerifier, verifyPkceChallenge } from '
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 import { getPolicyBackend } from '../lib/policy-backend.js';
 import { openRefreshReplayToken, sealRefreshReplayToken } from '../lib/refresh-replay.js';
+import type { AppLogger } from '../lib/logger.js';
+import {
+  FreezeStateUnavailableError,
+  IssuanceFrozenError,
+  assertIssuanceOpen,
+  type IssuancePath,
+  type IssuanceSubject,
+} from '../lib/revocation/issuance-freeze.js';
 
 const OAUTH_PROTOCOL = 'oauth-agent-grants-03';
 const PAR_LIFETIME_SECONDS = 90;
@@ -145,6 +153,33 @@ async function requireGrantCapacity(tx: TxSql, developerId: string): Promise<voi
   }
 }
 
+/**
+ * An emergency stop's lockout, in this profile's error vocabulary. A frozen
+ * scope is `access_denied`: RFC 6749 §4.1.2.1 defines it for an authorization
+ * the server refuses, and none of the token endpoint's codes in §5.2 describe
+ * a lockout better. A freeze state that cannot be read is
+ * `temporarily_unavailable`, as the grant capacity check above answers:
+ * refused either way, never let through.
+ */
+async function requireIssuanceOpen(
+  sql: TxSql,
+  subject: IssuanceSubject,
+  path: IssuancePath,
+  options: { inTransaction: boolean; log?: AppLogger },
+): Promise<void> {
+  try {
+    await assertIssuanceOpen(sql, subject, { path, ...options });
+  } catch (err) {
+    if (err instanceof IssuanceFrozenError) {
+      oauthFailure(403, 'access_denied', 'Issuance for this client is frozen by an emergency stop');
+    }
+    if (err instanceof FreezeStateUnavailableError) {
+      oauthFailure(503, 'temporarily_unavailable', 'Issuance cannot be confirmed open; retry shortly');
+    }
+    throw err;
+  }
+}
+
 function validState(value: string): boolean {
   return value.length >= 22 && value.length <= 1024 && /^[A-Za-z0-9._~-]+$/.test(value);
 }
@@ -267,6 +302,16 @@ export async function oauthRoutes(app: FastifyInstance): Promise<void> {
             WHERE id = ${clientId} AND key_thumbprint = ${proofThumbprint}
           `;
         }
+
+        // An emergency stop's lockout refuses the request before it is
+        // recorded; the code it would lead to is checked again at the token
+        // endpoint. After the key binding is proven, so the refusal tells
+        // nothing to a caller who holds only a client_id.
+        await requireIssuanceOpen(queries(sql), {
+          developerId: agent['developer_id'] as string,
+          agentIds: [clientId],
+          principalIds: [principalHint],
+        }, 'oauth_par', { inTransaction: false, log: request.log });
 
         let authorizationDetails: unknown = null;
         const rawAuthorizationDetails = single(body, 'authorization_details');
@@ -592,6 +637,7 @@ async function authorizationCodeToken(
   headers: Record<string, unknown>,
   reply: FastifyReply,
 ) {
+  const log = reply.log;
   const code = required(body, 'code');
   const clientId = required(body, 'client_id');
   const redirectUri = required(body, 'redirect_uri');
@@ -638,6 +684,13 @@ async function authorizationCodeToken(
     }
 
     await requireGrantCapacity(tx, auth['developer_id'] as string);
+    // In the transaction that writes the grant, after the same per-developer
+    // lock the capacity check takes; the code is not consumed when refused.
+    await requireIssuanceOpen(tx, {
+      developerId: auth['developer_id'] as string,
+      agentIds: [clientId],
+      principalIds: [auth['principal_id'] as string],
+    }, 'oauth_code', { inTransaction: true, log });
     scopes = auth['scopes'] as string[];
     jwt = await signOAuthAccessToken({
       sub: auth['principal_id'] as string,
@@ -689,6 +742,7 @@ async function authorizationCodeToken(
 }
 
 async function refreshToken(body: OAuthBody, headers: Record<string, unknown>, reply: FastifyReply) {
+  const log = reply.log;
   const refreshId = required(body, 'refresh_token');
   const clientId = required(body, 'client_id');
   const proof = await verifyDpopProof(dpopHeader(headers), { method: 'POST', targetUri: endpoint('/oauth/token') });
@@ -732,6 +786,17 @@ async function refreshToken(body: OAuthBody, headers: Record<string, unknown>, r
         || row['current_key_thumbprint'] !== proof.thumbprint) {
       oauthFailure(400, 'invalid_dpop_proof', 'The refresh proof key does not match the token family');
     }
+    // An emergency stop's lockout over this grant, anything above it, its
+    // client or its principal. Checked where a token would be handed out —
+    // before a replayed one is returned and before a new one is minted — and
+    // not before reuse detection, which revokes the family and must still
+    // happen under a lockout.
+    const lockoutSubject: IssuanceSubject = {
+      developerId: row['developer_id'] as string,
+      agentIds: [clientId],
+      principalIds: [row['principal_id'] as string],
+      grantIds: [row['grant_id'] as string],
+    };
     if (row['is_used']) {
       const now = new Date();
       const replayExpiresAt = row['replay_expires_at'] !== null && row['replay_expires_at'] !== undefined
@@ -762,6 +827,7 @@ async function refreshToken(body: OAuthBody, headers: Record<string, unknown>, r
             && rotated['grant_id'] === row['grant_id']
             && !rotated['is_used']
             && new Date(rotated['expires_at'] as string) > now) {
+          await requireIssuanceOpen(tx, lockoutSubject, 'oauth_refresh', { inTransaction: true, log });
           const originalAccessExpiry = Math.min(
             replayIssuedAt + ACCESS_TOKEN_LIFETIME_SECONDS,
             Math.floor(new Date(row['grant_expires_at'] as string).getTime() / 1000),
@@ -800,6 +866,7 @@ async function refreshToken(body: OAuthBody, headers: Record<string, unknown>, r
         || new Date(row['refresh_expires_at'] as string) <= now || grantExpiresAt <= now) {
       oauthFailure(400, 'invalid_grant', 'The refresh token or grant has expired or been revoked');
     }
+    await requireIssuanceOpen(tx, lockoutSubject, 'oauth_refresh', { inTransaction: true, log });
     const accessExpiresAt = new Date(Math.min(now.getTime() + ACCESS_TOKEN_LIFETIME_SECONDS * 1000, grantExpiresAt.getTime()));
     expiresIn = Math.max(1, Math.floor((accessExpiresAt.getTime() - now.getTime()) / 1000));
     scopes = row['scopes'] as string[];
@@ -894,6 +961,16 @@ async function exchangeToken(body: OAuthBody, headers: Record<string, unknown>, 
   if (!agent || agent['status'] !== 'active' || agent['key_thumbprint'] !== proof.thumbprint) {
     oauthFailure(401, 'invalid_client', 'Client authentication failed');
   }
+  // An emergency stop's lockout over the subject token's grant, anything above
+  // it, the client or the principal refuses the exchanged token. The token
+  // is recorded against an existing grant, which a stop over the same scope
+  // revokes, so no transaction is needed to keep the two in step.
+  await requireIssuanceOpen(queries(sql), {
+    developerId: agent['developer_id'] as string,
+    agentIds: [clientId],
+    principalIds: [claims.sub],
+    grantIds: [checked.grantId],
+  }, 'oauth_token_exchange', { inTransaction: false, log: reply.log });
 
   const now = Math.floor(Date.now() / 1000);
   const exp = Math.min(claims.exp, now + ACCESS_TOKEN_LIFETIME_SECONDS);

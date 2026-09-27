@@ -67,6 +67,103 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `createMcpResourceGuard()`. Documented in
   `docs/concepts/event-bridge-and-revocation.md`, `docs/self-hosting.md` and
   `docs/mcp-auth.md`.
+### Emergency stop lockout
+- The emergency stop can now freeze issuance as well as revoke. `lockout: true`
+  on `POST /v1/emergency-stop` or `POST /v1/admin/emergency-stop` records a
+  freeze over the stop's scope (grant, agent, principal or developer). The
+  freeze is written before the first sweep, in the same transaction as the
+  stop's record, and the response says `lockout: true` with a `freezeId`. A
+  stop without the option is unchanged: it revokes what exists, says
+  `lockout: false`, and the same key can mint a new grant straight afterwards.
+- While a freeze is in force, every issuance path under its scope refuses with
+  `403 ISSUANCE_FROZEN`: `POST /v1/authorize`, `POST /v1/token`,
+  `POST /v1/token/refresh`, `POST /v1/grants/delegate`,
+  `POST /v1/consent-bundles` and its refresh, and `POST /v1/passport/issue`.
+  The OAuth profile's `POST /oauth/par` and `POST /oauth/token` (authorization
+  code, refresh token and token exchange) answer `403 access_denied`. A freeze
+  covers what a stop over the same scope would revoke, so a refresh,
+  delegation, exchange or passport is checked against every grant above the
+  one it acts on. If the freeze state cannot be read, issuance fails closed
+  with `503 FREEZE_STATE_UNAVAILABLE` (`503 temporarily_unavailable` on the
+  OAuth endpoints). A refused code is not consumed and a refused refresh token
+  is not rotated, so both work once the freeze is lifted.
+- New endpoints: `POST /v1/emergency-stop/unfreeze` (developer API key) and
+  `POST /v1/admin/emergency-stop/unfreeze` (`ADMIN_API_KEY`) lift a freeze.
+  Each must repeat `confirm: "unfreeze <type>:<id>"`. A freeze the operator
+  placed, or reaffirmed, can only be lifted by the operator, because the
+  tenant's own key may be the leaked credential. Placing and lifting both go
+  on the audit hash chain (`grantex.issuance_frozen`,
+  `grantex.issuance_unfrozen`), and `GET /v1/emergency-stops` now also lists
+  the freezes in force, under `freezes`, oldest first and paged with `page`
+  and `pageSize` (default 50, at most 200) as the other paged lists are, with
+  `freezesTotal` giving how many are in force in all.
+- Freezing and issuing share a per-developer advisory lock, so a grant written
+  while a freeze lands is either found by the sweep or refused. The same holds
+  for a passport: `POST /v1/passport/issue` now writes the passport and its
+  credential in one transaction that takes the lock and reads the grant
+  again, locked. A passport being written as a lockout lands is waited for,
+  and the sweep sets its status bit. One whose grant a stop revoked while it
+  was being issued is refused with `400 INVALID_GRANT`.
+- The verifiable credential a code exchange or a delegation issues after its
+  grant is committed (`credentialFormat: "vc-jwt"` or `"both"`, without
+  portable passkey evidence) is written in a transaction of its own that
+  reads the grant, locked, and the freeze again under the same lock. A lockout
+  that lands between the grant and its credential either waits for the
+  credential and sets its status bit, or, if it committed first, the call is
+  refused with `403 ISSUANCE_FROZEN` and no credential is written. A grant
+  revoked in between gets no credential, and the call returns without one, as
+  when best-effort issuance fails.
+- A lockout does not cover commerce passports
+  (`POST /v1/commerce/passports/exchange`) or decision grants, which are not
+  issued from grants. The runbook says how to contain commerce passports:
+  disable the commerce tenant, and revoke those already issued.
+- Off with the rest of the emergency stop. Unless `EMERGENCY_STOP_ENABLED=true`,
+  the issuance paths do not read the freeze state and behave exactly as
+  before: the passport route writes its two rows separately and the
+  post-commit credential is issued as it was. Turning the flag off stops enforcing any freeze still in
+  force; the runbook says to lift freezes first.
+- Migration `120_emergency_stop_lockout.sql` adds the `issuance_freezes`
+  table and an `emergency_stops.lockout` column with a constant default, so
+  there is no table rewrite and existing stops read as sweeps. Metrics:
+  `grantex_issuance_freeze_changes_total{action,scope}` and
+  `grantex_issuance_refusals_total{path,reason}`. Alert rules:
+  `GrantexIssuanceLockoutPlaced` and `GrantexIssuanceFreezeStateUnreadable`.
+  The runbook is section 11 of `docs/self-hosting.md`.
+### Revoking is no longer rate limited like ordinary traffic (default on)
+- **Breaking (default flip):** while the Redis rate-limit counter is
+  unavailable, revoking and the emergency stop are now served, counted per
+  instance, where they used to answer `503 RATE_LIMIT_UNAVAILABLE`; and they
+  and the revocation feed no longer draw on the plan budget. On by default,
+  with no flag to turn on; opt out with `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false`.
+- Containment routes — `DELETE /v1/grants/:id`, `POST /v1/tokens/revoke`,
+  `POST /v1/emergency-stop`, `POST /v1/passport/:id/revoke` and
+  `POST /v1/consent-bundles/:id/revoke` — draw on a per-developer
+  containment budget of 2,000 requests a minute on every plan instead of the
+  plan budget. A tenant that has spent its plan quota on ordinary calls can
+  still revoke; previously a free-plan tenant near its 100-a-minute quota
+  waited out `Retry-After` on the one path that ends an incident.
+- Containment routes fail open when the Redis rate-limit counter is
+  unavailable or does not answer within 500 ms: each instance counts them in
+  memory against the same ceiling, instead of answering
+  `503 RATE_LIMIT_UNAVAILABLE`. The revocation itself is written to Postgres,
+  so a cache outage no longer blocks it. Against a stopped Redis a revoke now
+  commits after about half a second; it used to wait over a minute for the
+  counter to fail and then answer `503`.
+- The revocation feed and status reads (`GET /v1/revocations`, `/status`,
+  `/stream`, and a consent bundle's `revocation-status`) draw on a
+  per-developer status budget of 6,000 requests a minute instead of the plan
+  budget, keep their per-address limits, and still fail closed.
+- Every other standard API-key route is unchanged: plan budget, `503` when
+  the counter is unavailable. That includes DPDP consent withdrawal and
+  erasure, which can mark grants revoked but are compliance operations, not
+  the incident path. Nothing previously accepted is now refused; the
+  visible difference is the `X-RateLimit-*` values on the moved routes,
+  which report the budget they draw on.
+- New metric `grantex_rate_limit_decisions_total{bucket, outcome}` and two
+  alert rules in `deploy/prometheus/revocation-feed-alerts.yml`.
+- **Opt-out:** `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false` puts these routes back
+  in the plan budget, failing closed, as before. See the
+  [rate limits guide](docs/guides/rate-limits.mdx).
 ### Portable WebAuthn SDK patch candidates
 - Prepared `@grantex/sdk@0.7.1`, Python `grantex==0.6.1`, and Go SDK
   `v0.4.1` to ship the typed signed grant-evidence reference and VC
