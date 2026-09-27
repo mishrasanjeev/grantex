@@ -110,6 +110,9 @@
     .field input:focus, .field select:focus { border-color: var(--accent); }
     .field input::placeholder { color: var(--muted); opacity: 0.6; }
     .field .hint { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .field .key-choice { display: flex; align-items: center; gap: 8px; color: var(--text); cursor: pointer; }
+    .field .key-choice input { width: auto; margin: 0; }
+    .field input:disabled { opacity: 0.55; }
 
     .btn {
       display: inline-flex; align-items: center; gap: 8px;
@@ -262,9 +265,10 @@
     </div>
     <div id="advancedPanel" style="display:none;margin-top:16px;">
       <div class="field">
+        <label class="key-choice" for="useOwnKey"><input type="checkbox" id="useOwnKey" autocomplete="off" onchange="toggleOwnKey()">Use my sandbox key</label>
         <label for="apiKey">Sandbox API Key</label>
-        <input type="password" id="apiKey" placeholder="Leave blank for a demo key" autocomplete="off" spellcheck="false">
-        <div class="hint">Use a sandbox key from the <a href="/dashboard">Dashboard</a>, or leave this blank. Never enter a live or production key here.</div>
+        <input type="password" id="apiKey" placeholder="gx_test_..." autocomplete="new-password" spellcheck="false" disabled>
+        <div class="hint">The default demo creates a fresh sandbox key. To use your own, select the option above and enter a sandbox key from the <a href="/dashboard">Dashboard</a>. Never enter a live or production key here.</div>
       </div>
       <div class="field">
         <label for="baseUrl">Server URL</label>
@@ -574,6 +578,11 @@ function toggleAdvanced() {
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 
+function toggleOwnKey() {
+  $('apiKey').disabled = !$('useOwnKey').checked;
+  if ($('apiKey').disabled) $('apiKey').value = '';
+}
+
 async function startFlow() {
   $('setupError').textContent = '';
   let baseUrl;
@@ -584,13 +593,20 @@ async function startFlow() {
     return;
   }
   const version = ++flowVersion;
-  const customKey = $('apiKey').value.trim();
+  const useOwnKey = $('useOwnKey').checked;
+  const customKey = useOwnKey ? $('apiKey').value.trim() : '';
+  if (useOwnKey && !customKey) {
+    $('setupError').textContent = 'Enter a sandbox key, or turn off "Use my sandbox key".';
+    return;
+  }
   $('startBtn').disabled = true;
   try {
     const apiKey = customKey || await mintSandboxKey(baseUrl);
     const profile = await httpCall(baseUrl, 'GET', '/v1/me', undefined, apiKey);
     if (profile.status !== 200) {
-      throw new Error('Could not verify the sandbox key (HTTP ' + profile.status + ').');
+      throw new Error(profile.status === 401 && useOwnKey
+        ? 'Your sandbox key was rejected. Check the key or turn off "Use my sandbox key".'
+        : 'Could not verify the sandbox key (HTTP ' + profile.status + ').');
     }
     if (!profile.data || profile.data.mode !== 'sandbox') {
       throw new Error('This walkthrough accepts sandbox-mode keys only.');
@@ -626,6 +642,8 @@ function resetFlow() {
   pendingController = null;
   state = { apiKey: '', baseUrl: '', agentId: null, code: null, grantToken: null, refreshToken: null, grantId: null, tokenJti: null };
   $('apiKey').value = '';
+  $('useOwnKey').checked = false;
+  toggleOwnKey();
   $('baseUrl').value = DEFAULT_BASE_URL;
   $('setupError').textContent = '';
   $('advancedPanel').style.display = 'none';
@@ -836,6 +854,12 @@ async function step7() {
     failStep(7);
   }
 }
+
+window.addEventListener('pageshow', () => {
+  $('useOwnKey').checked = false;
+  $('apiKey').value = '';
+  toggleOwnKey();
+});
 </script>
 
 </body>
