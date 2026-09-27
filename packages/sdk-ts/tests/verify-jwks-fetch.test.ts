@@ -121,7 +121,7 @@ beforeAll(async () => {
   server = createServer((req, res) => {
     requestHeaders.push(req.headers);
     const route = routes.get(req.url ?? '');
-    if (route === undefined) {
+    if (typeof route !== 'function') {
       res.writeHead(404).end();
       return;
     }
