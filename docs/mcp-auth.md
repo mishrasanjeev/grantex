@@ -491,11 +491,22 @@ export const decisionVerifier: DecisionVerifier = {
   the case's current version from your own case state; verifies the grants
   with `verify` and consumes them with `consume`, answering `valid` only after
   the issuer confirmed consumption (`consume_unavailable` otherwise). Pass
-  `verifyDecisionGrants` and `grantex.decisions.consume` from `@grantex/sdk`
-  0.6 or later; they are injected so this package does not depend on an
-  unreleased SDK. Refusals carry the SDK's sub-reason (`action_mismatch`,
-  `wrong_case`, `case_changed`, `expired`, `consumed`, `same_approver`,
-  `four_eyes_incomplete`, `malformed`, ...) in the `decision_invalid` body.
+  `verifyDecisionGrants` and
+  `(set, context) => grantex.decisions.consume(set, context)` from
+  `@grantex/sdk` 0.6 or later; they are injected so this package does not
+  depend on an unreleased SDK. `context` is `{ agentDid, grantId, grantToken }`:
+  the agent (`agt`, its DID) and grant of the access token, and the access
+  token itself as the guard verified it (`check.grantToken`). Pass it on,
+  because an auth service with `DECISION_GRANT_AGENT_BINDING=true`
+  establishes the calling agent from `grantToken` and consumes a decision
+  requested for an agent only with that agent's live grant token
+  (`wrong_agent` otherwise). The token goes only to `consume`, and so only to
+  the auth service that issued it. An SDK that predates `agentDid` or
+  `grantToken` drops them and consumes as before, and an auth service with the
+  binding off ignores them. Refusals carry the SDK's sub-reason
+  (`action_mismatch`, `wrong_case`, `wrong_agent`, `case_changed`, `expired`,
+  `consumed`, `same_approver`, `four_eyes_incomplete`, `malformed`, ...) in the
+  `decision_invalid` body.
   Consumption spends the grant: if the tool call fails afterwards, a person
   has to approve again.
   The guard also reads the access token's `urn:grantex:decision:v1` entries

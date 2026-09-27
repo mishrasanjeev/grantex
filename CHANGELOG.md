@@ -6,6 +6,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Decision grants are bound to the requesting agent
+- Added `DECISION_GRANT_AGENT_BINDING` to the auth service, off by default.
+  Only `true` and `false` are accepted; any other value makes the decision
+  endpoints answer 503 rather than leave the binding silently off. **Off,
+  request creation, `GET /v1/decisions/requests/{id}` and
+  `POST /v1/decisions/consume` answer exactly as before**: GET returns
+  `decisionGrants` to the developer API key once a request is approved, and
+  consumption records `agentId` and `grantId` without comparing them and
+  does not read `agentDid` or `grantToken`.
+- **Breaking when turned on:** the developer API key alone never receives a
+  decision grant. GET answers `decisionGrantsReady` and the approvals by
+  `jti`, never `decisionGrants`. `POST /v1/decisions/consume` establishes
+  the calling agent from its grant token (`grantToken`, verified as the
+  release endpoint verifies it: signature, expiry, revocation, grant status
+  and developer), never from `agentDid`, `agentId` or `grantId`, which, when
+  sent, must be that token's agent and grant. It consumes the grants of a
+  request that names an agent or a grant only with a live grant token of that
+  agent and grant; no token, one that is not live, or another agent's or
+  grant's is refused. A request that names no agent is consumed without a
+  token, as before; a token sent with it must be live. New sub-reason
+  `wrong_agent` (403), checked once the request row is locked and before any
+  stored state of its grants is examined, and audited like every refusal,
+  with why no agent was established (`token_check`) and the body's claims
+  apart. A repeated request for the same action and case version while one
+  is open for another agent or grant is refused (`wrong_agent`, 409) instead
+  of answered with that request; a repeat for the same agent and grant
+  answers the open request with its approvals as they stand.
+- New endpoints, available whether or not the binding is on:
+  `POST /v1/decisions/requests/{id}/grants` releases a request's grants only
+  to a live grant token (signature, expiry, revocation and grant status
+  checked) of the agent and grant it names, and records every hand-out
+  (`decision.grants_released`) and refusal (`decision.release_refused`) in
+  the audit chain, releasing nothing when the record cannot be written.
+  `POST /v1/decisions/requests/{id}/consume` consumes the grants of a request
+  that names no agent by its id, so a platform's own decision never leaves
+  the auth service; a request that names an agent is refused.
+- `enforce()` in both SDKs and `grantexDecisionVerifier` in `@grantex/mcp-auth`
+  consume with the grant token they verified as `grantToken`, its agent DID
+  as `agentDid` and its grant as `grantId` (`consume` takes `grantToken` /
+  `grant_token`; the MCP guard hands the verified access token to the
+  verifier). The DID never goes in `agentId`: an auth service from before
+  this change accepts only a Grantex agent id there and ignores members it
+  does not know, and one with the binding off reads neither `grantToken` nor
+  `agentDid`, so the new SDKs consume against every version. A Python
+  `DecisionConsumer` whose `consume` does not take `agent_did` or
+  `grant_token` is called without them. New SDK methods `getGrants` /
+  `get_grants` and `consumeRequest` / `consume_request`; both SDKs map
+  `wrong_agent`.
+- *Action before turning the binding on:* move every platform off reading
+  `decisionGrants` from `GET /v1/decisions/requests/{id}`. A platform's own
+  decision (its request names no agent) is consumed by request id; a decision
+  for an agent names it on the request (`agentId`, `grantId`), is fetched with
+  that agent's grant token and consumed with the same token. Map a 403 that
+  carries a `subReason` as a refusal, not an authentication failure. SDKs from
+  before this change send no grant token: with the binding on they cannot
+  consume a decision that names an agent, and report it as
+  `consume_unavailable` (still a denial). AgenticOrg governed cases read
+  `decisionGrants` from GET today; the changes it needs first are listed in
+  `docs/guides/agenticorg-governed-cases.mdx`.
 ### Bounded JWKS fetch and validated `did:web` issuers (TypeScript and Python SDKs, default off)
 - Added an opt-in option, default `false`: `boundedJwksFetch` on
   `verifyGrantToken`'s options and on `verifyDecisionGrant` /

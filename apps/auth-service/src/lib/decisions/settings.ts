@@ -15,6 +15,12 @@ export class DecisionSettingsError extends Error {
 
 export interface DecisionSettings {
   enabled: boolean;
+  /**
+   * Whether decision grants are bound to the agent a request names
+   * (`DECISION_GRANT_AGENT_BINDING`, default off). See
+   * {@link decisionGrantAgentBinding}.
+   */
+  agentBinding: boolean;
   stepUp: StepUpPolicy;
   dwell: DwellPolicy;
   loginStateSeconds: number;
@@ -46,7 +52,29 @@ export function decisionGrantsEnabled(): boolean {
   return process.env['DECISION_GRANTS_ENABLED'] === 'true';
 }
 
+/**
+ * Whether decision grants are bound to the agent a request names
+ * (`DECISION_GRANT_AGENT_BINDING=true`, default off). When on,
+ * `GET /v1/decisions/requests/{id}` no longer returns the grants, consumption
+ * establishes the calling agent from its grant token (`grantToken`) and
+ * compares that agent and grant with the ones the request names, and a
+ * repeated request for another agent is refused. When off, those endpoints
+ * answer as they did before the binding existed.
+ *
+ * Only `true` and `false` are accepted (unset or empty is off). Any other
+ * value fails the decision endpoints closed (503): a misspelt `True` or `1`
+ * must not silently leave the binding off.
+ */
+export function decisionGrantAgentBinding(): boolean {
+  const raw = process.env['DECISION_GRANT_AGENT_BINDING'];
+  if (raw === undefined || raw === '') return false;
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  throw new DecisionSettingsError('DECISION_GRANT_AGENT_BINDING must be true or false');
+}
+
 export function decisionSettings(): DecisionSettings {
+  const agentBinding = decisionGrantAgentBinding();
   const acrValues = list('DECISION_STEP_UP_ACR', '');
   const amrValues = list('DECISION_STEP_UP_AMR', 'mfa,hwk');
   if (acrValues.length === 0 && amrValues.length === 0) {
@@ -73,6 +101,7 @@ export function decisionSettings(): DecisionSettings {
   }
   return {
     enabled: decisionGrantsEnabled(),
+    agentBinding,
     stepUp: {
       acrValues,
       amrValues,
