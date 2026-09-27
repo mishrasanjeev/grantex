@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Portable WebAuthn SDK patch candidates
+- Prepared `@grantex/sdk@0.7.1`, Python `grantex==0.6.1`, and Go SDK
+  `v0.4.1` to ship the typed signed grant-evidence reference and VC
+  `webauthnVerified` response already tested in source. These version bumps
+  are not registry publication; verify all three public artifacts before
+  updating release-status claims.
+
 ### Bounded JWKS fetch and validated `did:web` issuers (TypeScript and Python SDKs, default off)
 - Added an opt-in option, default `false`: `boundedJwksFetch` on
   `verifyGrantToken`'s options and on `verifyDecisionGrant` /
