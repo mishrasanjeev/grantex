@@ -1,26 +1,29 @@
 ---
 title: "FIDO2 / WebAuthn"
 sidebarTitle: "FIDO2 / WebAuthn"
-description: "Passkey-based human presence verification for agent authorization. Cryptographic proof that a real human approved the grant."
+description: "Enroll customer passkeys and verify live-mode agent consent with WebAuthn. Published SDK versions, rollout requirements, and evidence limitations."
+keywords: ["Grantex passkey enrollment", "WebAuthn agent consent", "FIDO2 live-mode consent", "passkey SDK"]
 ---
 
 ## Overview
 
-Grantex supports FIDO2/WebAuthn passkeys as a human presence verification mechanism during the consent flow. When enabled, end-users authenticate with a biometric, security key, or platform authenticator before a grant is issued. This raises the assurance level from "user clicked approve" to "user was cryptographically verified by their device."
+Grantex supports FIDO2/WebAuthn passkeys during consent. A valid assertion proves use of a credential bound to the principal and to Grantex's challenge. When hosted enrollment is enabled, the server also requires WebAuthn user verification during registration and assertion; this may be a device PIN, biometric, or other authenticator-supported method. The server does not learn which method the customer used.
 
 Live-mode consent requires an existing passkey for the principal. Sandbox-mode accounts can also require one with `fidoRequired: true`. A consent link alone cannot register a passkey because it does not authenticate the principal.
 
 Hosted passkey enrollment is available when the server operator enables `PASSKEY_ENROLLMENT_ENABLED=true` and configures `FIDO_RP_ID` and `FIDO_ORIGIN` for the public HTTPS origin. The feature is off by default; do not enable live mode for customers until they can complete an enrollment test on that origin.
 
+The hosted enrollment client is published in `@grantex/sdk@0.7.0`, `grantex==0.6.0`, and `github.com/mishrasanjeev/grantex-go@v0.4.0`. These are independently versioned packages; installation does not turn on the server feature. Check [Release Status](/release-status) for current registry evidence and rollout limitations.
+
 ## Why FIDO for Agents?
 
-Standard consent flows rely on a button click in a browser. This is vulnerable to session hijacking, UI redressing, and automated approval. A FIDO assertion proves that:
+Standard consent flows rely on a button click in a browser. A verified WebAuthn assertion establishes that:
 
 1. The specific device registered by the user is present
-2. The user completed a biometric or physical authentication
+2. User verification was performed when the hosted-enrollment policy requires it; the legacy developer registration path only requests it as preferred
 3. The assertion is bound to the specific challenge issued by Grantex
 
-For high-value agent operations (payments, data access, contract signing), this level of assurance is required by emerging standards like the Mastercard Verifiable Intent specification.
+For high-value operations, use hosted enrollment with required user verification and your own customer identity-binding controls. No payment-network certification or portable assertion evidence is implied by this consent gate.
 
 ## Developer Setup
 
@@ -39,14 +42,14 @@ await grantex.updateSettings({
 ```
 
 ```python Python
-from grantex import Grantex
+from grantex import Grantex, UpdateDeveloperSettingsParams
 
 client = Grantex(api_key="gx_...")
 
-client.update_settings(
+client.update_settings(UpdateDeveloperSettingsParams(
     fido_required=True,
     fido_rp_name="My Application",
-)
+))
 ```
 
 ```bash cURL
@@ -70,6 +73,7 @@ curl -X PATCH https://api.grantex.dev/v1/me \
 Your application must first authenticate the end customer and bind that session to the exact `principalId` it uses in Grantex. From your **server**, issue a short-lived, one-use enrollment link and deliver it to that customer through the authenticated session. Never expose your developer API key in browser code. The enrollment link itself is a bearer secret: do not log it, put it in analytics, or send it to another customer.
 
 ```typescript
+// Run on your server with @grantex/sdk@0.7.0, after authenticating the customer.
 const { enrollmentUrl, expiresAt } = await grantex.webauthn.createEnrollmentSession({
   principalId: authenticatedCustomer.grantexPrincipalId,
   // Optional: link back to a pending consent request for the same principal.
@@ -77,6 +81,8 @@ const { enrollmentUrl, expiresAt } = await grantex.webauthn.createEnrollmentSess
 });
 // Show enrollmentUrl only to authenticatedCustomer. It expires after 10 minutes.
 ```
+
+Python `grantex==0.6.0` uses `client.webauthn.create_enrollment_session(principal_id=principal_id, auth_request_id=auth_request_id)`; Go `v0.4.0` uses `client.WebAuthn.CreateEnrollmentSession(ctx, grantex.WebAuthnEnrollmentSessionParams{PrincipalID: principalID, AuthRequestID: authRequestID})`. Both calls belong on your authenticated application server, not in browser code.
 
 The customer opens the link at `/passkey-enroll`, uses their device's passkey prompt, and returns to consent when the link was bound to an authorization request. The browser registration challenge expires after five minutes and must be restarted if it expires. The registration requires device user verification. An enrollment ticket can register only one credential and cannot be reused. To add another device, create another link.
 
@@ -86,9 +92,11 @@ If enrollment is disabled (404) or the customer cannot use a passkey-capable bro
 
 For production rollout, deploy the auth service and the `/passkey-enroll` public-hosting rewrite first. Confirm `FIDO_ORIGIN` is the exact public HTTPS origin and `FIDO_RP_ID` is its valid relying-party domain, then enable `PASSKEY_ENROLLMENT_ENABLED=true`. Test registration and live approval on that origin before sending links to customers. The repository includes `apps/auth-service/tests/production/passkey-policy.test.ts` and the manual `Production Passkey and Irregularity E2E` GitHub Actions workflow. That test creates an isolated production account, passkey, grant and audit records; it must not use a customer account.
 
-## Server-Driven Registration Ceremony
+For local verification, start a disposable Postgres instance, set `AUDIT_INTEGRATION_DATABASE_URL`, install Chromium with `npx playwright install chromium`, and run `npm run test:e2e` from `apps/auth-service`. The browser suite uses a virtual authenticator and a real local Postgres database; it cannot by itself prove that a hosted production origin, routing rewrite, or customer device is configured correctly.
 
-Before a user can authenticate with FIDO, they must register a passkey. This is a one-time process per user per device.
+## Developer-Driven Registration Ceremony
+
+The hosted link above is the recommended customer flow. The older developer-authenticated `register/options` and `register/verify` endpoints can drive registration from your own application, but they request user verification as `preferred`, not `required`. Do not treat a credential created through that path as verified human presence at enrollment. Register a new passkey for each device.
 
 ```
   Browser                          Your Server                     Grantex
@@ -197,7 +205,7 @@ When FIDO is enabled, the consent flow includes a WebAuthn assertion challenge. 
   Browser                          Grantex Consent UI              Grantex
     │                                  │                              │
     │── user opens consent URL ───────►│                              │
-    │                                  │── assertOptions() ──────────►│
+    │                                  │── POST assert/options ──────►│
     │                                  │◄── challenge ────────────────│
     │◄── publicKey get options ────────│                              │
     │                                  │                              │
@@ -205,72 +213,15 @@ When FIDO is enabled, the consent flow includes a WebAuthn assertion challenge. 
     │── (user touches fingerprint) ────│                              │
     │                                  │                              │
     │── assertion response ───────────►│                              │
-    │                                  │── assertVerify() ───────────►│
-    │                                  │◄── grant approved ───────────│
+    │                                  │── POST assert/verify ───────►│
+    │                                  │── POST consent/approve ─────►│
+    │                                  │◄── authorization code ───────│
     │◄── redirect to callback ─────────│                              │
 ```
 
 ### Programmatic Assertion
 
-If you build a custom consent UI, use the assertion endpoints directly:
-
-<CodeGroup>
-```typescript TypeScript
-// Get assertion options
-const assertOpts = await grantex.webauthn.assertOptions({
-  principalId: 'user_abc123',
-  authRequestId: 'areq_01HXYZ...',
-});
-
-// Browser performs navigator.credentials.get()
-const assertion = await navigator.credentials.get({
-  publicKey: {
-    challenge: base64urlToBuffer(assertOpts.challenge),
-    allowCredentials: assertOpts.allowCredentials,
-    userVerification: 'required',
-    timeout: 60000,
-  },
-});
-
-// Verify the assertion and approve the grant
-await grantex.webauthn.assertVerify({
-  challengeId: assertOpts.challengeId,
-  response: {
-    id: assertion.id,
-    rawId: bufferToBase64url(assertion.rawId),
-    type: assertion.type,
-    response: {
-      clientDataJSON: bufferToBase64url(assertion.response.clientDataJSON),
-      authenticatorData: bufferToBase64url(assertion.response.authenticatorData),
-      signature: bufferToBase64url(assertion.response.signature),
-    },
-  },
-});
-```
-
-```python Python
-# Get assertion options
-assert_opts = client.webauthn.assert_options(
-    principal_id="user_abc123",
-    auth_request_id="areq_01HXYZ...",
-)
-
-# After browser performs navigator.credentials.get()
-client.webauthn.assert_verify(
-    challenge_id=assert_opts.challenge_id,
-    response={
-        "id": assertion_id,
-        "rawId": raw_id_b64,
-        "type": "public-key",
-        "response": {
-            "clientDataJSON": client_data_b64,
-            "authenticatorData": auth_data_b64,
-            "signature": signature_b64,
-        },
-    },
-)
-```
-</CodeGroup>
+If you build a custom consent UI, call `POST /v1/webauthn/assert/options` with the pending `authRequestId` and bound `principalId`. The response contains `{ challengeId, publicKey }`; decode `publicKey.challenge` and each `publicKey.allowCredentials[].id` from base64url before calling `navigator.credentials.get({ publicKey })`. Serialize the returned assertion's `id`, `rawId`, `type`, `response.clientDataJSON`, `response.authenticatorData`, `response.signature`, optional `response.userHandle`, and `clientExtensionResults` as base64url where applicable. Send `{ challengeId, response }` to `POST /v1/webauthn/assert/verify`, then separately call `POST /v1/consent/{authRequestId}/approve` or `/deny`. Verification only marks the pending request as FIDO-verified; it does **not** approve the grant by itself. The hosted consent page implements this sequence. The published TypeScript, Python, and Go WebAuthn clients do not currently expose `assertOptions`/`assertVerify` helper methods; use these REST endpoints for a custom UI.
 
 ## Managing Credentials
 
@@ -279,7 +230,7 @@ Users can have multiple passkeys registered (e.g., laptop fingerprint + phone + 
 <CodeGroup>
 ```typescript TypeScript
 // List all credentials for a user
-const credentials = await grantex.webauthn.listCredentials('user_abc123');
+const { credentials } = await grantex.webauthn.listCredentials('user_abc123');
 for (const cred of credentials) {
   console.log(cred.id, cred.createdAt, cred.lastUsedAt);
 }
@@ -290,7 +241,7 @@ await grantex.webauthn.deleteCredential('cred_01HXYZ...');
 
 ```python Python
 # List all credentials for a user
-credentials = client.webauthn.list_credentials("user_abc123")
+credentials = client.webauthn.list_credentials("user_abc123").credentials
 for cred in credentials:
     print(cred.id, cred.created_at, cred.last_used_at)
 
@@ -299,23 +250,9 @@ client.webauthn.delete_credential("cred_01HXYZ...")
 ```
 </CodeGroup>
 
-## FIDO Evidence in Grants
+## FIDO Evidence Boundary
 
-When a grant is approved via FIDO assertion, the grant record includes FIDO evidence metadata:
-
-```json
-{
-  "grantId": "grnt_01HXYZ...",
-  "fidoEvidence": {
-    "credentialId": "cred_01HXYZ...",
-    "authenticatorType": "platform",
-    "userVerified": true,
-    "assertedAt": "2026-03-08T12:00:00Z"
-  }
-}
-```
-
-This evidence is also embedded in Verifiable Credentials when `credentialFormat: "vc-jwt"` is used during token exchange. See [Verifiable Credentials](/features/verifiable-credentials) for details.
+On successful assertion verification, Grantex sets `fido_verified` on the pending authorization request and emits a `fido.assertion` event. Approval or denial is a separate operation. The current token-exchange path does not copy credential ID, authenticator type, or assertion time into the grant or issued VC. A VC alone is therefore **not** portable proof of the passkey ceremony. See [Verifiable Credentials](/features/verifiable-credentials) for the fields that are currently issued.
 
 ## API Reference
 
@@ -343,7 +280,7 @@ This evidence is also embedded in Verifiable Credentials when `credentialFormat:
 
 ## Next Steps
 
-- [Verifiable Credentials](/features/verifiable-credentials) -- FIDO evidence embedded in W3C VCs
+- [Verifiable Credentials](/features/verifiable-credentials) -- current VC claims and evidence limits
 - [DID Infrastructure](/features/did-infrastructure) -- how verifiers resolve Grantex's signing keys
 - [End-User Permissions](/guides/end-user-permissions) -- user-facing permission dashboard
 

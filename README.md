@@ -706,9 +706,13 @@ Grantex supports passkey-based human presence verification using FIDO2/WebAuthn.
 1. **Developer configures FIDO** — Live mode already requires it; set `fidoRequired: true` via `PATCH /v1/me` to require it in sandbox mode too.
 2. **Application enrolls the customer** — After authenticating the customer, the application issues a one-use hosted enrollment link for their exact principal ID. The consent URL alone cannot register a passkey.
 3. **User authenticates on consent** — On subsequent authorization requests, the user completes a WebAuthn assertion challenge instead of a simple button click
-4. **FIDO evidence embedded in grants** — The assertion result is recorded in the grant and can be embedded in Verifiable Credentials as cryptographic proof of human presence
+4. **Consent requires verified presence** — The pending authorization request records successful assertion verification before approval or denial. Issued grants and VCs do not currently carry the assertion details.
 
 ### SDK Usage
+
+Hosted enrollment is included in published `@grantex/sdk@0.7.0`,
+`grantex==0.6.0`, and `github.com/mishrasanjeev/grantex-go@v0.4.0`.
+Publishing an SDK does not enable the server-side enrollment flag.
 
 ```typescript
 // Enable FIDO for your developer account
@@ -721,7 +725,7 @@ const { enrollmentUrl } = await grantex.webauthn.createEnrollmentSession({
 // Show the one-use link only to that customer. The hosted page handles WebAuthn.
 
 // List and manage credentials
-const creds = await grantex.webauthn.listCredentials('user_abc123');
+const { credentials: creds } = await grantex.webauthn.listCredentials('user_abc123');
 await grantex.webauthn.deleteCredential(credentialId);
 ```
 
@@ -739,7 +743,7 @@ session = client.webauthn.create_enrollment_session(principal_id="user_abc123")
 enrollment_url = session.enrollment_url
 
 # List and manage credentials
-creds = client.webauthn.list_credentials("user_abc123")
+creds = client.webauthn.list_credentials("user_abc123").credentials
 client.webauthn.delete_credential(credential_id)
 ```
 
@@ -759,7 +763,7 @@ client.webauthn.delete_credential(credential_id)
 | `POST` | `/v1/webauthn/assert/verify` | Verify assertion during consent |
 | `PATCH` | `/v1/me` | Update developer settings (FIDO config) |
 
-Hosted enrollment requires `PASSKEY_ENROLLMENT_ENABLED=true` and a correctly configured HTTPS `FIDO_ORIGIN`/`FIDO_RP_ID`; the server feature is off by default. Live-mode consent requires an existing passkey, with no weaker fallback. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) for the customer identity-binding and one-use link requirements. SDK methods shown above describe repository source; verify your installed package version includes them before use.
+Hosted enrollment requires `PASSKEY_ENROLLMENT_ENABLED=true` and a correctly configured HTTPS `FIDO_ORIGIN`/`FIDO_RP_ID`; the server feature is off by default. Live-mode consent requires an existing passkey, with no weaker fallback. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) for the customer identity-binding and one-use link requirements. The guide also distinguishes the hosted SDK methods from the REST-only custom assertion ceremony.
 
 For a production rollout, deploy the auth service and the `/passkey-enroll` hosting rewrite before enabling the flag. Then run `Production Passkey and Irregularity E2E` from GitHub Actions. That test creates an isolated live account, enrolls a virtual passkey, approves consent, records 51 audit entries, verifies alert-only does not revoke its grant, and verifies the revoke mode does. It leaves the test account and audit records in production; do not run it against a customer account.
 
@@ -839,9 +843,9 @@ const { credentials } = await grantex.credentials.list({
 });
 ```
 
-### FIDO Evidence in VCs
+### FIDO Evidence Boundary
 
-When FIDO is enabled and the user completes a WebAuthn assertion during consent, the VC includes a `fidoEvidence` field that cryptographically proves human presence at the time of authorization. This is compatible with the Mastercard Verifiable Intent specification for agentic commerce.
+The hosted consent flow requires a passkey assertion before a live request can be approved or denied. The current token-exchange path does not attach `fidoEvidence` to the issued grant or VC. Do not present a Grantex VC alone as portable proof of the WebAuthn ceremony or as certified payment-network intent evidence.
 
 ### DID Infrastructure
 
