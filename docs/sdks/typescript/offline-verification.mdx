@@ -80,9 +80,20 @@ This function does not require a `Grantex` client instance.
   this option is omitted.
 </ParamField>
 
-<ParamField body="issuerDid" type="string">
-  A `did:web` issuer identifier. When provided, the SDK derives both the JWKS URL
-  and expected issuer from the DID. An explicit `issuer` still takes precedence.
+<ParamField body="issuerDid" type="string | null">
+  A `did:web` issuer identifier. When provided, the JWKS is read from
+  `https://<host>[:<port>][/<path>]/.well-known/jwks.json` instead of `jwksUri`,
+  and the expected issuer is that location without the suffix. An explicit
+  `issuer` still takes precedence. With `boundedJwksFetch: true` it must name a
+  public domain; see [DID issuers](#did-issuers). `null`, like leaving it out,
+  means no DID, as `issuer_did=None` does in the Python SDK.
+</ParamField>
+
+<ParamField body="boundedJwksFetch" type="boolean">
+  Apply the [JWKS fetch limits](#jwks-fetch-limits) and the
+  [DID issuer](#did-issuers) checks. Defaults to `false` in these releases; a
+  later major release makes `true` the default, with `false` as the opt-out.
+  Not in `@grantex/sdk` 0.7.0; in the next release.
 </ParamField>
 
 <ParamField body="clockTolerance" type="number">
@@ -112,6 +123,81 @@ This function does not require a `Grantex` client instance.
   JWK Set entry named by `kid` whose type matches the algorithm (RSA for RS256, EC
   P-256 for ES256); `alg: none` and HS256 are always rejected.
 </ParamField>
+
+## JWKS fetch limits
+
+<Note>
+  Not in `@grantex/sdk` 0.7.0; the next release includes these limits and the
+  [DID issuer](#did-issuers) checks, which apply when `boundedJwksFetch: true`
+  is set. The option is off by default in these releases. A later major
+  release turns it on by default, with `boundedJwksFetch: false` as the
+  opt-out.
+</Note>
+
+The key set comes from whichever endpoint the verifier is pointed at. With
+`boundedJwksFetch: true`, each fetch is bounded, with the same limits as the
+Python SDK's `bounded_jwks_fetch=True`:
+
+```typescript
+const grant = await verifyGrantToken(token, {
+  jwksUri: 'https://issuer.example/.well-known/jwks.json',
+  boundedJwksFetch: true,
+});
+```
+
+| Limit | Value | Refused when |
+|-------|-------|--------------|
+| Status | `200` | Any other status. Redirects are not followed. |
+| Media type | `application/json` or `application/jwk-set+json` | Any other `Content-Type`, a missing one, or a `charset` other than `utf-8`. |
+| Size | 64 KiB | A larger `Content-Length`, or more bytes than that while reading. A compressed response is measured by its decoded size. |
+| Keys | 128 | A `keys` array with more entries. |
+| Time | 5000 ms | The whole exchange, headers and body, takes longer. |
+
+A refused fetch throws `GrantexTokenError` naming the endpoint and the reason,
+and nothing is cached, so the next verification fetches again. JOSE's cache
+and refresh behaviour is unchanged. The key-count limit leaves room for the
+`grantex-YYYY-MM` aliases a self-hosted auth service publishes
+(`JWT_LEGACY_KID_MONTHS`). Decision-grant verification (`verifyDecisionGrant`,
+`verifyDecisionGrants`) with `jwksUri` and `boundedJwksFetch: true` reads keys
+within the same limits.
+
+Without the option, the key set is read as in earlier releases, with JOSE's
+`createRemoteJWKSet` defaults: an HTTP 200 of any size, media type and number
+of keys, within JOSE's 5-second timeout. Bounded and unbounded key sets for the
+same URL are cached separately.
+
+## DID issuers
+
+With `boundedJwksFetch: true`, `issuerDid` follows the did:web method
+specification (§2.3, §2.5.2): the identifier after `did:web:` is a fully
+qualified domain name, optionally followed by a port whose colon is
+percent-encoded (`%3A`) and by path segments separated by colons. A DID is
+written in ASCII (§3.5), so an internationalized domain name is given in its
+IDNA A-label form, beginning `xn--`.
+
+| `issuerDid` | JWKS URL | Expected issuer |
+|-------------|----------|-----------------|
+| `did:web:issuer.example` | `https://issuer.example/.well-known/jwks.json` | `https://issuer.example` |
+| `did:web:issuer.example%3A8443` | `https://issuer.example:8443/.well-known/jwks.json` | `https://issuer.example:8443` |
+| `did:web:issuer.example:tenants:acme` | `https://issuer.example/tenants/acme/.well-known/jwks.json` | `https://issuer.example/tenants/acme` |
+| `did:web:xn--bcher-kva.example` | `https://xn--bcher-kva.example/.well-known/jwks.json` | `https://xn--bcher-kva.example` |
+
+The DID decides whose keys are trusted, so the SDK throws `GrantexTokenError`,
+before any request, for an IP address, `localhost` or a name under `.localhost`,
+`.local`, `.home.arpa` or `.internal`, a single-label host, user information
+(`@`), a port outside 1–65535, a path segment other than letters, digits, `.`,
+`-` and `_` (or `.` / `..`), any character outside ASCII, and any value that is
+not a `did:web` identifier. A non-ASCII name is refused rather than converted,
+because conversion can turn a different character into an ASCII one (the
+Kelvin sign, U+212A, into `k`) and so fetch keys from a host the DID does not spell.
+It is never ignored in favour of `jwksUri`. For a local or private issuer, set
+`jwksUri` and `issuer` instead. The Python SDK applies the same rules with
+`bounded_jwks_fetch=True`.
+
+Without the option, `issuerDid` is read as in earlier releases: a value that
+does not start with `did:web:` is ignored in favour of `jwksUri`, and the rest
+of the identifier is used as written, each `:` becoming `/`, with none of the
+checks above (so a percent-encoded port is not decoded).
 
 ## Response: `VerifiedGrant`
 
@@ -170,6 +256,8 @@ This function does not require a `Grantex` client instance.
 - Required claims (`jti`, `sub`, `agt`, `dev`, `scp`, `iat`, `exp`) are missing
 - The token is missing one or more `requiredScopes`
 - The `audience` does not match
+- With `boundedJwksFetch: true`, the JWKS response exceeds a [fetch limit](#jwks-fetch-limits): not `200`, not JSON, larger than 64 KiB, more than 128 keys, or slower than 5000 ms
+- With `boundedJwksFetch: true`, `issuerDid` is not a usable [did:web issuer](#did-issuers)
 
 ```typescript
 import { verifyGrantToken, GrantexTokenError } from '@grantex/sdk';

@@ -10,6 +10,7 @@
  * (`grantex.decisions`); the token profile is `spec/decision-grant.md`.
  */
 import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
+import { createBoundedRemoteJWKSet } from '../jwks.js';
 import { DecisionSubReason } from '../denials.js';
 import { ActionValidationError, computeActionHash, isActionHash, parseDecisionAction, type DecisionAction } from './action.js';
 
@@ -94,6 +95,14 @@ export interface VerifyDecisionGrantOptions {
   clockTolerance?: number;
   /** Current time in seconds (for tests). */
   now?: number;
+  /**
+   * Fetch the issuer's JWK Set from `jwksUri` within the bounds that
+   * `verifyGrantToken`'s `boundedJwksFetch` applies: HTTP 200 only,
+   * `application/json` or `application/jwk-set+json`, at most 64 KiB and 128
+   * keys, 5 seconds for the whole exchange. Defaults to `false`; a later
+   * major release makes `true` the default, with `false` as the opt-out.
+   */
+  boundedJwksFetch?: boolean;
 }
 
 export interface VerifyDecisionGrantsOptions extends VerifyDecisionGrantOptions {
@@ -104,17 +113,20 @@ export interface VerifyDecisionGrantsOptions extends VerifyDecisionGrantOptions 
 const MAX_JWKS_RESOLVERS = 64;
 const jwksResolvers = new Map<string, JWTVerifyGetKey>();
 
-function remoteKey(jwksUri: string): JWTVerifyGetKey {
+function remoteKey(jwksUri: string, bounded: boolean): JWTVerifyGetKey {
   const url = new URL(jwksUri);
   url.hash = '';
-  const cached = jwksResolvers.get(url.href);
+  // Keyed by fetch mode as well as URL: keys a resolver read without the
+  // bounds must never answer a verification that asked for them.
+  const cacheKey = `${bounded ? 'bounded' : 'unbounded'} ${url.href}`;
+  const cached = jwksResolvers.get(cacheKey);
   if (cached) return cached;
-  const resolver = createRemoteJWKSet(url);
+  const resolver = bounded ? createBoundedRemoteJWKSet(url) : createRemoteJWKSet(url);
   if (jwksResolvers.size >= MAX_JWKS_RESOLVERS) {
     const oldest = jwksResolvers.keys().next().value as string | undefined;
     if (oldest !== undefined) jwksResolvers.delete(oldest);
   }
-  jwksResolvers.set(url.href, resolver);
+  jwksResolvers.set(cacheKey, resolver);
   return resolver;
 }
 
@@ -201,7 +213,8 @@ export async function verifyDecisionGrant(
   if (typeof header.alg !== 'string' || !algorithms.includes(header.alg)) {
     throw new DecisionGrantError(DecisionSubReason.MALFORMED, `decision grant algorithm ${String(header.alg)} is not allowed`);
   }
-  const key = options.key ?? (options.jwksUri !== undefined ? remoteKey(options.jwksUri) : undefined);
+  const key = options.key
+    ?? (options.jwksUri !== undefined ? remoteKey(options.jwksUri, options.boundedJwksFetch ?? false) : undefined);
   if (key === undefined) throw new Error('verifyDecisionGrant needs jwksUri or key');
 
   let payload: JWTPayload;

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import re
 import threading
 import time
 import warnings
@@ -66,6 +67,33 @@ _JWKS_CACHE_TTL_SECONDS = 10 * 60.0
 _JWKS_REFRESH_COOLDOWN_SECONDS = 30.0
 _JWKS_CACHE_MAX_ENTRIES = 64
 
+# With bounded_jwks_fetch (off by default until a major release turns it on,
+# with False as the opt-out), the key set, which comes from whoever the
+# verifier was pointed at, is fetched within bounds like any other untrusted
+# response, with the same limits as the TypeScript SDK's boundedJwksFetch;
+# without it, _download_jwks reads it as earlier releases did. 64 KiB holds
+# the auth service's default set many times over. The key cap keeps the
+# per-token key search small when the keys are small (64 KiB holds some 350
+# EC keys). It is 128 rather than lower because the auth service publishes
+# its legacy RSA key under one kid alias per month of JWT_LEGACY_KID_MONTHS
+# (13 by default, up to 120) beside its signing keys, so a set of several
+# dozen keys is an ordinary configuration. The deadline covers the whole
+# exchange, as JOSE's timeoutDuration does in the TypeScript SDK.
+_JWKS_MAX_BYTES = 64 * 1024
+_JWKS_MAX_KEYS = 128
+_JWKS_FETCH_DEADLINE_SECONDS = 5.0
+# RFC 8259 §11 registers application/json; RFC 7517 §8.5.1 registers
+# application/jwk-set+json.
+_JWKS_MEDIA_TYPES = frozenset({"application/json", "application/jwk-set+json"})
+_JWKS_REQUEST_HEADERS = {
+    "Accept": "application/json, application/jwk-set+json",
+    # httpx decodes a compressed body a network read at a time with no bound
+    # on what one read expands to, so the size cap could only be checked after
+    # the memory was spent. Ask for the body as it is (RFC 9110 §12.5.3) and
+    # refuse one that arrives encoded anyway.
+    "Accept-Encoding": "identity",
+}
+
 
 @dataclass
 class _JwksCacheEntry:
@@ -73,7 +101,9 @@ class _JwksCacheEntry:
     fetched_at: float
 
 
-_jwks_cache: dict[str, _JwksCacheEntry] = {}
+# Keyed by (bounded, jwks_uri): keys read without the bounds never answer a
+# verification that asked for them, and the reverse.
+_jwks_cache: dict[tuple[bool, str], _JwksCacheEntry] = {}
 _jwks_cache_lock = threading.Lock()
 
 
@@ -117,9 +147,19 @@ def verify_grant_token(
             f"Grant token typ must be at+jwt, got {header.get('typ')!r}"
         )
 
+    bounded = bool(options.bounded_jwks_fetch)
     jwks_uri = options.jwks_uri
     expected_issuer = options.issuer
-    if options.issuer_did is not None and options.issuer_did.startswith("did:web:"):
+    if bounded:
+        if options.issuer_did is not None:
+            # The DID is the trust anchor: one that cannot be resolved safely
+            # is refused, never skipped in favour of jwks_uri.
+            jwks_uri, did_issuer = _resolve_did_web(options.issuer_did)
+            if expected_issuer is None:
+                expected_issuer = did_issuer
+    elif options.issuer_did is not None and options.issuer_did.startswith("did:web:"):
+        # Without bounded_jwks_fetch, the DID is read as earlier releases read
+        # it, and a value that is not did:web is ignored.
         domain = options.issuer_did.removeprefix("did:web:").replace(":", "/")
         jwks_uri = f"https://{domain}/.well-known/jwks.json"
         if expected_issuer is None:
@@ -127,7 +167,7 @@ def verify_grant_token(
     if expected_issuer is None:
         expected_issuer = _derive_issuer_from_jwks_uri(jwks_uri)
 
-    signing_key = _fetch_signing_key(jwks_uri, header.get("kid"), alg)
+    signing_key = _fetch_signing_key(jwks_uri, header.get("kid"), alg, bounded=bounded)
 
     decode_kwargs: dict[str, Any] = {
         # Only the header's algorithm, already checked against the allowlist
@@ -208,9 +248,112 @@ def _derive_issuer_from_jwks_uri(jwks_uri: str) -> str:
     return f"{origin}{path.rstrip('/')}"
 
 
+_DID_WEB_PREFIX = "did:web:"
+# ASCII letters, digits and hyphens, spelled out rather than matched without
+# case: under re.IGNORECASE, "[a-z]" also matches the Kelvin sign, "ſ", "ı"
+# and "İ", which the TypeScript SDK's pattern does not.
+_DNS_LABEL = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
+# A last label a URL parser reads as a number makes the host an IPv4 address
+# (WHATWG URL, "ends in a number"): 127.1, 0x7f.0.0.1, 2130706433.
+_NUMERIC_LABEL = re.compile(r"[0-9]+|0[xX][0-9A-Fa-f]*")
+# DID Core idchar without pct-encoded: an encoded "/" or "." could turn a
+# segment into a separator or a traversal once the URL is built.
+_DID_PATH_SEGMENT = re.compile(r"[A-Za-z0-9._-]+")
+_PORT = re.compile(r"[1-9][0-9]{0,4}")
+# Names that only mean something on this host or this network: localhost
+# (RFC 6761 §6.3), .local (RFC 6762 §3), .home.arpa (RFC 8375 §3) and
+# .internal (reserved by ICANN for private use in 2024).
+_LOCAL_ONLY_DOMAINS = ("localhost", "local", "home.arpa", "internal")
+
+
+def _resolve_did_web(issuer_did: str) -> tuple[str, str]:
+    """Return the JWKS URL and expected issuer for a ``did:web`` issuer.
+
+    did:web Method Specification §2.3 (Method-specific identifier): a fully
+    qualified domain name that MUST NOT include IP addresses, an optional port
+    whose colon MUST be percent-encoded, and optional path segments delimited
+    by colons. §2.5.2 (Read): replace ":" with "/", then percent-decode the
+    port's colon. The key set is read from ``/.well-known/jwks.json`` under
+    that location, as before, rather than from its ``did.json``.
+
+    §3.5 (International Domain Names): DID Core syntax allows no Unicode in a
+    method-specific identifier, so an internationalized domain appears in its
+    IDNA A-label (``xn--``) form (RFC 5890 §2.3.2.1). Any other non-ASCII
+    character is refused rather than mapped: UTS #46 mapping would fetch keys
+    from a host the DID does not spell (the Kelvin sign becomes "k", "。"
+    becomes "."), while the expected issuer keeps the original spelling.
+
+    The DID decides whose keys are trusted, so anything the method does not
+    allow, and any host that names this machine or a private network, is
+    refused before a request is made. The TypeScript SDK applies the same
+    checks in the same order.
+
+    Raises:
+        GrantexTokenError: if ``issuer_did`` is not such an identifier.
+    """
+
+    def refuse(reason: str) -> GrantexTokenError:
+        return GrantexTokenError(f"issuer_did {issuer_did!r} cannot be used: {reason}")
+
+    if not isinstance(issuer_did, str) or not issuer_did.startswith(_DID_WEB_PREFIX):
+        raise refuse("it must be a did:web identifier")
+    identifier = issuer_did[len(_DID_WEB_PREFIX):]
+    if not identifier.isascii():
+        raise refuse(
+            "a DID is written in ASCII; give an internationalized domain name "
+            "in its A-label (xn--) form"
+        )
+    if "@" in identifier or "%40" in identifier.lower():
+        raise refuse("a did:web identifier carries no user information")
+    host, *path = identifier.split(":")
+    if host.startswith("[") or host.lower().startswith("%5b"):
+        raise refuse("the host must be a domain name, not an IP address")
+    port: str | None = None
+    encoded_colon = host.lower().find("%3a")
+    if encoded_colon >= 0:
+        host, port = host[:encoded_colon], host[encoded_colon + 3:]
+        if not _PORT.fullmatch(port) or int(port) > 65535:
+            raise refuse(f"the port {port!r} must be a number from 1 to 65535")
+    labels = host.split(".")
+    if len(host) > 253 or not all(_DNS_LABEL.fullmatch(label) for label in labels):
+        raise refuse(f"the host {host!r} is not a valid domain name")
+    if _NUMERIC_LABEL.fullmatch(labels[-1]):
+        raise refuse("the host must be a domain name, not an IP address")
+    lowered = host.lower()
+    if any(lowered == name or lowered.endswith(f".{name}") for name in _LOCAL_ONLY_DOMAINS):
+        raise refuse(f"the host {host!r} is local to a machine or private network")
+    if len(labels) < 2:
+        raise refuse(f"the host {host!r} must be a fully qualified domain name")
+    for segment in path:
+        if segment in (".", "..") or not _DID_PATH_SEGMENT.fullmatch(segment):
+            raise refuse(f"the path segment {segment!r} is not allowed")
+
+    base = f"https://{host}" + (f":{port}" if port else "") + "".join(f"/{s}" for s in path)
+    return f"{base}/.well-known/jwks.json", base
+
+
+def _is_jwks_media_type(content_type: str) -> bool:
+    """``application/json`` or ``application/jwk-set+json``, compared without
+    case (RFC 9110 §8.3.1), with at most a UTF-8 charset parameter: JSON
+    exchanged between systems is UTF-8 (RFC 8259 §8.1)."""
+    media_type, _, parameters = content_type.partition(";")
+    if media_type.strip().lower() not in _JWKS_MEDIA_TYPES:
+        return False
+    for parameter in parameters.split(";"):
+        if not parameter.strip():
+            continue
+        name, _, value = parameter.partition("=")
+        if name.strip().lower() != "charset" or value.strip().strip('"').lower() != "utf-8":
+            return False
+    return True
+
+
 def _download_jwks(jwks_uri: str) -> list[dict[str, Any]]:
     """Fetch and validate the key set. Blocking: callers on an event loop
-    must run this in a worker thread (see grantex.fastapi)."""
+    must run this in a worker thread (see grantex.fastapi).
+
+    The fetch without ``bounded_jwks_fetch``, unchanged from earlier releases.
+    """
     try:
         resp = httpx.get(jwks_uri, timeout=10.0)
         resp.raise_for_status()
@@ -231,11 +374,114 @@ def _download_jwks(jwks_uri: str) -> list[dict[str, Any]]:
     return keys
 
 
-def _get_jwks(jwks_uri: str, *, force_refresh: bool = False) -> _JwksCacheEntry:
-    """Return the cached key set for ``jwks_uri``, fetching when stale."""
+def _download_jwks_bounded(jwks_uri: str) -> list[dict[str, Any]]:
+    """Fetch and validate the key set within ``_JWKS_FETCH_DEADLINE_SECONDS``
+    and the other bounds (``bounded_jwks_fetch``).
+
+    Blocking: callers on an event loop must run this in a worker thread (see
+    grantex.fastapi).
+    """
+    deadline = _JWKS_FETCH_DEADLINE_SECONDS
+    fetched: list[list[dict[str, Any]]] = []
+    failed: list[Exception] = []
+
+    def fetch() -> None:
+        try:
+            fetched.append(_read_jwks(jwks_uri, time.monotonic() + deadline))
+        except Exception as exc:  # noqa: BLE001 - re-raised by the caller below
+            failed.append(exc)
+
+    # httpx's timeouts bound each connect and each read, not the exchange: a
+    # server that sends a byte at a time never trips one. The fetch runs on a
+    # worker so the caller waits for the deadline and no longer. A worker left
+    # behind stops at its next read, where _read_jwks checks the same
+    # deadline, and nothing reads what it produces.
+    worker = threading.Thread(target=fetch, name="grantex-jwks-fetch", daemon=True)
+    worker.start()
+    worker.join(deadline)
+    if failed:
+        raise failed[0]
+    if not fetched:
+        raise GrantexTokenError(
+            f"Failed to fetch JWKS from {jwks_uri}: "
+            f"no complete response within {deadline:g} seconds"
+        )
+    return fetched[0]
+
+
+def _read_jwks(jwks_uri: str, deadline: float) -> list[dict[str, Any]]:
+    def refuse(reason: str) -> GrantexTokenError:
+        return GrantexTokenError(f"Failed to fetch JWKS from {jwks_uri}: {reason}")
+
+    too_large = f"the response is larger than {_JWKS_MAX_BYTES} bytes"
+    body = bytearray()
+    try:
+        with httpx.stream(
+            "GET",
+            jwks_uri,
+            headers=_JWKS_REQUEST_HEADERS,
+            timeout=_JWKS_FETCH_DEADLINE_SECONDS,
+            follow_redirects=False,
+        ) as resp:
+            # Only a 200 carries the key set; a redirect is not followed, as
+            # in JOSE, so the URL the caller configured is the one trusted.
+            if resp.status_code != 200:
+                raise refuse(f"HTTP {resp.status_code}; expected 200")
+            content_type = resp.headers.get("content-type")
+            if content_type is None or not _is_jwks_media_type(content_type):
+                raise refuse(
+                    f"Content-Type {content_type!r} is not application/json "
+                    "or application/jwk-set+json"
+                )
+            encoding = resp.headers.get("content-encoding", "identity").strip().lower()
+            if encoding not in ("", "identity"):
+                raise refuse(f"Content-Encoding {encoding!r} was not asked for")
+            declared = resp.headers.get("content-length", "")
+            if re.fullmatch(r"[0-9]+", declared) and int(declared) > _JWKS_MAX_BYTES:
+                raise refuse(too_large)
+            for chunk in resp.iter_raw():
+                body += chunk
+                if len(body) > _JWKS_MAX_BYTES:
+                    raise refuse(too_large)
+                if time.monotonic() > deadline:
+                    raise refuse(
+                        f"no complete response within {_JWKS_FETCH_DEADLINE_SECONDS:g} seconds"
+                    )
+        jwks = json.loads(body.decode("utf-8"))
+    except GrantexTokenError:
+        raise
+    except Exception as exc:
+        # Every transport, decoding and parsing failure leaves the verifier
+        # without keys, and a verifier without keys refuses the token.
+        raise refuse(str(exc) or type(exc).__name__) from exc
+
+    if not isinstance(jwks, dict):
+        raise GrantexTokenError("JWKS must be a JSON object")
+    raw_keys = jwks.get("keys", [])
+    if not isinstance(raw_keys, list):
+        raise GrantexTokenError("JWKS keys must be an array")
+    if len(raw_keys) > _JWKS_MAX_KEYS:
+        raise refuse(f"the key set has {len(raw_keys)} keys; the limit is {_JWKS_MAX_KEYS}")
+    keys: list[dict[str, Any]] = [
+        key for key in raw_keys if isinstance(key, dict)
+    ]
+    if not keys:
+        raise GrantexTokenError("JWKS contains no keys")
+    return keys
+
+
+def _get_jwks(
+    jwks_uri: str, *, force_refresh: bool = False, bounded: bool = False
+) -> _JwksCacheEntry:
+    """Return the cached key set for ``jwks_uri``, fetching when stale.
+
+    ``bounded`` selects the bounded fetch (``bounded_jwks_fetch``); each mode
+    has its own cache entry for the URL.
+    """
+    cache_key = (bounded, jwks_uri)
     now = time.monotonic()
     with _jwks_cache_lock:
-        entry = _jwks_cache.get(jwks_uri)
+        entry = _jwks_cache.get(cache_key)
         if (
             entry is not None
             and not force_refresh
@@ -243,30 +489,33 @@ def _get_jwks(jwks_uri: str, *, force_refresh: bool = False) -> _JwksCacheEntry:
         ):
             return entry
 
-    fresh = _JwksCacheEntry(keys=_download_jwks(jwks_uri), fetched_at=time.monotonic())
+    download = _download_jwks_bounded if bounded else _download_jwks
+    fresh = _JwksCacheEntry(keys=download(jwks_uri), fetched_at=time.monotonic())
     with _jwks_cache_lock:
-        _jwks_cache.pop(jwks_uri, None)
+        _jwks_cache.pop(cache_key, None)
         if len(_jwks_cache) >= _JWKS_CACHE_MAX_ENTRIES:
             oldest = next(iter(_jwks_cache))
             del _jwks_cache[oldest]
-        _jwks_cache[jwks_uri] = fresh
+        _jwks_cache[cache_key] = fresh
     return fresh
 
 
-def _fetch_signing_key(jwks_uri: str, kid: str | None, alg: str = "RS256") -> Any:
+def _fetch_signing_key(
+    jwks_uri: str, kid: str | None, alg: str = "RS256", *, bounded: bool = False
+) -> Any:
     """Resolve the public key for ``kid`` and ``alg`` from the (cached) JWKS."""
     if alg not in _KEY_TYPE_FOR_ALGORITHM:
         raise GrantexTokenError(f"Grant token uses unsupported algorithm '{alg}'")
     if kid is not None and (not isinstance(kid, str) or not kid):
         raise GrantexTokenError("Grant token kid header must be a non-empty string")
 
-    entry = _get_jwks(jwks_uri)
+    entry = _get_jwks(jwks_uri, bounded=bounded)
     matched = _select_key(entry.keys, kid, alg)
     if matched is None and kid is not None:
         # Key rotation: the kid may simply be newer than the cached set. One
         # refresh per cooldown window keeps unknown kids from being a DoS lever.
         if time.monotonic() - entry.fetched_at >= _JWKS_REFRESH_COOLDOWN_SECONDS:
-            entry = _get_jwks(jwks_uri, force_refresh=True)
+            entry = _get_jwks(jwks_uri, force_refresh=True, bounded=bounded)
             matched = _select_key(entry.keys, kid, alg)
 
     kty = _KEY_TYPE_FOR_ALGORITHM[alg][0]

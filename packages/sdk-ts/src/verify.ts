@@ -1,4 +1,5 @@
-import { createRemoteJWKSet, jwtVerify, decodeJwt } from 'jose';
+import { createRemoteJWKSet, jwtVerify, decodeJwt, type RemoteJWKSet } from 'jose';
+import { createBoundedRemoteJWKSet, resolveDidWebIssuer } from './jwks.js';
 import { missingScopes } from './scopes.js';
 import { GrantexTokenError } from './errors.js';
 import type { ActorClaim, VerifiedGrant, VerifyGrantTokenOptions, GrantTokenPayload, WebAuthnGrantEvidence } from './types.js';
@@ -71,16 +72,19 @@ const PRODUCTION_JWKS_URI = 'https://api.grantex.dev/.well-known/jwks.json';
 const PRODUCTION_ISSUER = 'https://grantex.dev';
 const MAX_REMOTE_JWKS_RESOLVERS = 64;
 
-type RemoteJwksResolver = ReturnType<typeof createRemoteJWKSet>;
+type RemoteJwksResolver = RemoteJWKSet;
 
 // A createRemoteJWKSet resolver owns JOSE's key cache, cooldown, and unknown-kid
-// refresh behavior. Reusing it is both faster and safer than rebuilding an
-// empty cache for every verification. The bounded LRU prevents tenant-provided
-// JWKS URLs from growing process memory without limit.
+// refresh behavior; with boundedJwksFetch it also fetches within the bounds in
+// jwks.ts. Reusing it is both faster and safer than rebuilding an empty cache
+// for every verification. The bounded LRU prevents tenant-provided JWKS URLs
+// from growing process memory without limit.
 const remoteJwksResolvers = new Map<string, RemoteJwksResolver>();
 
-function getRemoteJwksResolver(jwksUrl: URL): RemoteJwksResolver {
-  const cacheKey = jwksUrl.href;
+function getRemoteJwksResolver(jwksUrl: URL, bounded: boolean): RemoteJwksResolver {
+  // Keyed by fetch mode as well as URL: keys a resolver read without the
+  // bounds must never answer a verification that asked for them.
+  const cacheKey = `${bounded ? 'bounded' : 'unbounded'} ${jwksUrl.href}`;
   const cached = remoteJwksResolvers.get(cacheKey);
   if (cached !== undefined) {
     remoteJwksResolvers.delete(cacheKey);
@@ -88,7 +92,7 @@ function getRemoteJwksResolver(jwksUrl: URL): RemoteJwksResolver {
     return cached;
   }
 
-  const resolver = createRemoteJWKSet(jwksUrl);
+  const resolver = bounded ? createBoundedRemoteJWKSet(jwksUrl) : createRemoteJWKSet(jwksUrl);
   if (remoteJwksResolvers.size >= MAX_REMOTE_JWKS_RESOLVERS) {
     const oldest = remoteJwksResolvers.keys().next().value as string | undefined;
     if (oldest !== undefined) remoteJwksResolvers.delete(oldest);
@@ -114,9 +118,22 @@ export async function verifyGrantToken(
   options: VerifyGrantTokenOptions,
 ): Promise<VerifiedGrant> {
   const algorithms = resolveAlgorithms(options.algorithms);
+  const bounded = options.boundedJwksFetch ?? false;
   let jwksUri = options.jwksUri;
   let expectedIssuer = options.issuer;
-  if (options.issuerDid?.startsWith('did:web:')) {
+  if (bounded) {
+    // null means no DID, as None does for the Python SDK's issuer_did; any
+    // other value, the empty string included, must resolve.
+    if (options.issuerDid !== undefined && options.issuerDid !== null) {
+      // The DID is the trust anchor: one that cannot be resolved safely is
+      // refused, never skipped in favour of jwksUri.
+      const resolved = resolveDidWebIssuer(options.issuerDid);
+      jwksUri = resolved.jwksUri;
+      expectedIssuer ??= resolved.issuer;
+    }
+  } else if (options.issuerDid?.startsWith('did:web:')) {
+    // Without boundedJwksFetch, the DID is read as earlier releases read it,
+    // and a value that is not did:web is ignored.
     const domain = options.issuerDid.replace('did:web:', '').replaceAll(':', '/');
     jwksUri = `https://${domain}/.well-known/jwks.json`;
     expectedIssuer ??= `https://${domain}`;
@@ -134,7 +151,7 @@ export async function verifyGrantToken(
         : `${jwksUrl.origin}${jwksUrl.pathname.replace(/\/$/, '')}`;
     }
   }
-  const jwks = getRemoteJwksResolver(jwksUrl);
+  const jwks = getRemoteJwksResolver(jwksUrl, bounded);
 
   const legacyClaims = options.legacyClaims ?? true;
   let payload: GrantTokenPayload;
