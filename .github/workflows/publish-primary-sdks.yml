@@ -7,8 +7,13 @@ on:
         description: 'Type RELEASE_PRIMARY_SDKS to authorize irreversible publication'
         required: true
         type: string
-      publish_npm:
-        description: 'Publish @grantex/sdk and @grantex/x402 at the versions in their manifests'
+      publish_typescript_sdk:
+        description: 'Publish @grantex/sdk at the version in its manifest'
+        required: true
+        default: false
+        type: boolean
+      publish_x402:
+        description: 'Publish @grantex/x402 at the version in its manifest'
         required: true
         default: false
         type: boolean
@@ -38,7 +43,7 @@ jobs:
       - name: Validate confirmation
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
-          PUBLISH: ${{ inputs.publish_npm || inputs.publish_pypi || inputs.publish_go }}
+          PUBLISH: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_pypi || inputs.publish_go }}
         run: |
           test "$CONFIRMATION" = 'RELEASE_PRIMARY_SDKS'
           if [ "$PUBLISH" = 'true' ]; then
@@ -87,16 +92,21 @@ jobs:
           SDK: ${{ steps.versions.outputs.sdk }}
           X402: ${{ steps.versions.outputs.x402 }}
           PY: ${{ steps.versions.outputs.py }}
+          PUBLISH_SDK: ${{ inputs.publish_typescript_sdk }}
+          PUBLISH_X402: ${{ inputs.publish_x402 }}
+          PUBLISH_PY: ${{ inputs.publish_pypi }}
         run: |
           set -euo pipefail
           fail=0
-          for spec in "@grantex/sdk@$SDK" "@grantex/x402@$X402"; do
-            if npm view "$spec" version >/dev/null 2>&1; then
-              echo "::error::$spec is already published; bump the version in its package.json"
-              fail=1
-            fi
-          done
-          if curl -fsSL https://pypi.org/pypi/grantex/json \
+          if [ "$PUBLISH_SDK" = 'true' ] && npm view "@grantex/sdk@$SDK" version >/dev/null 2>&1; then
+            echo "::error::@grantex/sdk@$SDK is already published; bump the version in its package.json"
+            fail=1
+          fi
+          if [ "$PUBLISH_X402" = 'true' ] && npm view "@grantex/x402@$X402" version >/dev/null 2>&1; then
+            echo "::error::@grantex/x402@$X402 is already published; bump the version in its package.json"
+            fail=1
+          fi
+          if [ "$PUBLISH_PY" = 'true' ] && curl -fsSL https://pypi.org/pypi/grantex/json \
             | python -c "import json,os,sys; sys.exit(0 if os.environ['PY'] in json.load(sys.stdin)['releases'] else 1)"; then
             echo "::error::grantex $PY is already on PyPI; bump the version in packages/sdk-py/pyproject.toml"
             fail=1
@@ -130,7 +140,8 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/grantex-sdk-consumer" --ignore-scripts \
             "$PWD/release-artifacts/npm/grantex-sdk-${{ steps.versions.outputs.sdk }}.tgz" \
             "$PWD/release-artifacts/npm/grantex-x402-${{ steps.versions.outputs.x402 }}.tgz"
-          node scripts/verify-sdk-artifacts.mjs "$RUNNER_TEMP/grantex-sdk-consumer"
+          node scripts/verify-sdk-artifacts.mjs "$RUNNER_TEMP/grantex-sdk-consumer" \
+            "${{ steps.versions.outputs.sdk }}" "${{ steps.versions.outputs.x402 }}"
 
       - name: Verify the Python SDK
         working-directory: packages/sdk-py
@@ -161,7 +172,7 @@ jobs:
   npm:
     name: Publish npm SDKs
     needs: verify
-    if: ${{ inputs.publish_npm }}
+    if: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 }}
     runs-on: ubuntu-latest
     environment: sdk-release
     permissions:
@@ -182,10 +193,12 @@ jobs:
           npm install --global npm@11.19.1
           node -e "const [major, minor] = process.versions.node.split('.').map(Number); if (major < 22 || (major === 22 && minor < 14)) process.exit(1)"
           node -e "const { execFileSync } = require('node:child_process'); const [major, minor, patch] = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim().split('.').map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) process.exit(1)"
-      - name: Publish TypeScript and x402 SDKs
-        run: |
-          npm publish "release-artifacts/npm/grantex-sdk-${{ needs.verify.outputs.sdk }}.tgz" --access public
-          npm publish "release-artifacts/npm/grantex-x402-${{ needs.verify.outputs.x402 }}.tgz" --access public
+      - name: Publish TypeScript SDK
+        if: ${{ inputs.publish_typescript_sdk }}
+        run: npm publish "release-artifacts/npm/grantex-sdk-${{ needs.verify.outputs.sdk }}.tgz" --access public
+      - name: Publish x402 SDK
+        if: ${{ inputs.publish_x402 }}
+        run: npm publish "release-artifacts/npm/grantex-x402-${{ needs.verify.outputs.x402 }}.tgz" --access public
 
   pypi:
     name: Publish Python SDK

@@ -5,8 +5,14 @@ wallets, plus legacy standalone GDT authorization utilities.
 
 ## Install
 
+Version 0.4.1 packages the current source and is tested with
+`@grantex/sdk@0.7.0`. Base USDC support was introduced in 0.4.0; the
+additional hosted passkey and response-policy methods are on the primary SDK,
+not this payment adapter. Confirm published versions in
+[Release Status](https://docs.grantex.dev/release-status) before installing.
+
 ```bash
-npm install @grantex/x402@0.4.0 @grantex/sdk@0.6.0
+npm install @grantex/x402@0.4.1 @grantex/sdk@0.7.0
 ```
 
 Layered policy, semantic payment context, and exact approval retry require
@@ -40,7 +46,7 @@ USDC (`0x833589fcd6edb6e08f4c7c32d4f71b54bda02913`), EOA wallets and the
 smart wallets fail closed. Base requests reject redirects and resource URL
 mismatches; reuse the same idempotency key after response loss.
 
-Read the [custody setup and safety boundaries](../../docs/guides/base-usdc-custody.mdx).
+Read the [custody setup and safety boundaries](https://docs.grantex.dev/guides/base-usdc-custody).
 Blocking stops new signatures, but cannot recall one already issued. Signed
 amounts remain reserved until finalized on-chain settlement or unused expiry.
 Merchant result recovery still requires the merchant's idempotency store.

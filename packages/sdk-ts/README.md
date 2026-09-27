@@ -9,13 +9,18 @@ TypeScript SDK for the [Grantex](https://grantex.dev) delegated authorization pr
 
 ## Installation
 
-**New in 0.6.0:** the wallet clients preserve the
+**Version 0.7.0:** adds hosted passkey enrollment sessions and
+account-level irregularity response policy methods. The server must enable the
+corresponding feature flags; this SDK does not register a passkey without an
+authenticated customer handoff. Version 0.6.0 added wallet clients that preserve the
 server's Base USDC `evmPayment` payload and expose `reconcileReservation()` for
 finalized settlement/expiry. Use `@grantex/x402@0.4.0` or later for
-the automatic 402/payment/retry flow. See [Base custody setup](https://docs.grantex.dev/guides/base-usdc-custody).
+the automatic 402/payment/retry flow. Confirm the published SDK version in
+[Release Status](https://docs.grantex.dev/release-status) before installing.
+See [Base custody setup](https://docs.grantex.dev/guides/base-usdc-custody).
 
 ```bash
-npm install @grantex/sdk@0.6.0
+npm install @grantex/sdk@0.7.0
 ```
 
 ## Quick Start
@@ -713,15 +718,15 @@ console.log(pack.policies);
 
 ### Anomaly Detection
 
-In repository source, `grantex.anomalies.getResponsePolicy()` and
+In version 0.7.0, `grantex.anomalies.getResponsePolicy()` and
 `grantex.anomalies.setResponsePolicy('alert_only')` control the account-wide
 response of the legacy detector when the server operator enables
 `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`. Default behavior revokes active
 grants for a high/critical finding's agent. Alert-only retains findings and
 events without that automatic revocation. This setting does not disable other
-security controls. Check the installed SDK version before using these methods.
+security controls.
 
-The repository source also supports
+Version 0.7.0 also supports
 `grantex.webauthn.createEnrollmentSession({ principalId, authRequestId? })`.
 Call it only on your server after authenticating the customer. Deliver the
 returned one-use hosted link to that exact customer; never expose the API key

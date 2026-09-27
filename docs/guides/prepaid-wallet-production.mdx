@@ -329,8 +329,11 @@ instructions to overwrite those immutable versions.
 
 The guarded [Publish primary
 SDKs](https://github.com/mishrasanjeev/grantex/actions/workflows/publish-primary-sdks.yml)
-workflow tests and builds all four SDKs once, uploads immutable distributions,
-and makes publication jobs consume those exact artifacts. Before the first run:
+workflow tests and builds the TypeScript SDK, x402 package, Python SDK, and Go
+SDK once, uploads immutable distributions, and makes publication jobs consume
+those exact artifacts. TypeScript and x402 publication are independently
+selectable, so an unchanged x402 release is never republished just to ship a
+new TypeScript SDK. Before the first run:
 
 1. Create the GitHub `sdk-release` environment and require a human reviewer.
 2. On npm, configure trusted-publisher records for both `@grantex/sdk` and
@@ -344,9 +347,9 @@ and makes publication jobs consume those exact artifacts. Before the first run:
 5. Protect `main` and the publication workflow through review and required CI.
 
 Run the workflow only from reviewed `main`, type `RELEASE_PRIMARY_SDKS`, and
-select the registries to publish. The workflow fails closed when trusted
-publishing or the Go credential is absent; a version bump is not evidence that
-a registry release exists.
+select only the packages with new, unpublished versions. The workflow fails
+closed when trusted publishing or the Go credential is absent; a version bump
+is not evidence that a registry release exists.
 
 After publication, verify from empty temporary projects rather than importing
 the monorepo checkout:
