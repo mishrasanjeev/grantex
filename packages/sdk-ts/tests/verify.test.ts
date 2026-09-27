@@ -10,8 +10,13 @@ vi.mock('jose', () => {
     jwtVerify: mockJwtVerify,
     decodeJwt: mockDecodeJwt,
     createRemoteJWKSet: mockCreateRemoteJWKSet,
+    // The option key for the SDK's bounded fetch (see jwks.ts).
+    customFetch: Symbol('customFetch'),
   };
 });
+
+// Every resolver is created with the SDK's fetch bounds.
+const BOUNDED = expect.objectContaining({ timeoutDuration: 5000 });
 
 // Import after mock is in place
 const {
@@ -111,6 +116,7 @@ describe('verifyGrantToken', () => {
     expect(jose.createRemoteJWKSet).toHaveBeenCalledOnce();
     expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(
       new URL('https://grantex.dev/.well-known/jwks.json'),
+      BOUNDED,
     );
     expect(vi.mocked(jose.jwtVerify).mock.calls[0]?.[1]).toBe(
       vi.mocked(jose.jwtVerify).mock.calls[1]?.[1],
@@ -303,6 +309,7 @@ describe('verifyGrantToken', () => {
     // The DID should resolve to https://grantex.dev/.well-known/jwks.json
     expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(
       new URL('https://grantex.dev/.well-known/jwks.json'),
+      BOUNDED,
     );
     expect(jose.jwtVerify).toHaveBeenCalledWith(
       'fake.token.here',
@@ -326,6 +333,7 @@ describe('verifyGrantToken', () => {
     // Colons after the method-specific-id prefix become path separators
     expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(
       new URL('https://example.com/api/v1/.well-known/jwks.json'),
+      BOUNDED,
     );
     expect(jose.jwtVerify).toHaveBeenCalledWith(
       'fake.token.here',

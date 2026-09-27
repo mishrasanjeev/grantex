@@ -9,7 +9,8 @@
  * before it allows the call. The Python SDK implements the same rules
  * (`grantex.decisions`); the token profile is `spec/decision-grant.md`.
  */
-import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
+import { decodeProtectedHeader, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
+import { createBoundedRemoteJWKSet } from '../jwks.js';
 import { DecisionSubReason } from '../denials.js';
 import { ActionValidationError, computeActionHash, isActionHash, parseDecisionAction, type DecisionAction } from './action.js';
 
@@ -109,7 +110,7 @@ function remoteKey(jwksUri: string): JWTVerifyGetKey {
   url.hash = '';
   const cached = jwksResolvers.get(url.href);
   if (cached) return cached;
-  const resolver = createRemoteJWKSet(url);
+  const resolver = createBoundedRemoteJWKSet(url);
   if (jwksResolvers.size >= MAX_JWKS_RESOLVERS) {
     const oldest = jwksResolvers.keys().next().value as string | undefined;
     if (oldest !== undefined) jwksResolvers.delete(oldest);

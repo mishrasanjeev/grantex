@@ -591,3 +591,72 @@ the pull request that references it.
   limits, the
   first on its own limit. A failure in the first test that is not a timeout
   does not leave a migration running, so it cannot cause either.
+
+## G-37 — The Go SDK's JWKS fetch is unbounded and its `IssuerDID` is not validated
+
+- **Found:** bounding the JWKS fetch in the TypeScript and Python SDKs
+  (2026-09-27).
+- **What:** `packages/go-sdk/verify.go` registers the JWKS URL with the jwx
+  `jwk.Cache` and its default HTTP client: no response size limit, no
+  `Content-Type` check, no limit on the number of keys and no deadline on the
+  whole fetch. `resolveVerificationEndpoints` turns `did:web:<x>` into
+  `https://<x with ":" replaced by "/">/.well-known/jwks.json` without
+  checking the host, so an IP address, `localhost`, a single label or user
+  information is fetched and trusted, a percent-encoded port produces an
+  unusable URL, and an `IssuerDID` that is not `did:web` is ignored in favour
+  of `JwksURI`.
+- **Fix:** give the cache a fetch with the TypeScript and Python limits (HTTP
+  200 only, `application/json` or `application/jwk-set+json`, 64 KiB, 128
+  keys, 5 seconds for the whole exchange) and validate `IssuerDID` with the
+  same did:web rules (did:web §2.3, §2.5.2 and §3.5: ASCII only, an
+  internationalized name as its `xn--` A-label, never mapped), with the shared
+  cases from `packages/sdk-py/tests/test_verify_jwks_fetch.py`.
+
+## G-38 — Other TypeScript verifiers fetch JWKS without bounds
+
+- **Found:** bounding the JWKS fetch in the TypeScript and Python SDKs
+  (2026-09-27).
+- **What:** these call `jose.createRemoteJWKSet(url)` with no options, so they
+  accept any response size, media type and number of keys, with only JOSE's
+  default five-second timeout:
+  - `packages/cli/src/commands/verify.ts` (`grantex verify`);
+  - `packages/mcp-auth/src/lib/verify.ts` and
+    `packages/mcp-auth/src/resource/guard.ts`.
+
+  `packages/mpp/src/verifier.ts` fetches the JWK Set with plain `fetch`: no
+  timeout at all, no size or key limit, and redirects are followed.
+- **Fix:** export the SDK's bounded key set (`createBoundedRemoteJWKSet` in
+  `packages/sdk-ts/src/jwks.ts`, not yet part of the package's public API) and
+  use it in these packages, and give the mpp fetch the same limits.
+
+## G-39 — The auth service can publish a JWK Set the SDKs refuse
+
+- **Found:** choosing the SDKs' JWKS key-count limit (2026-09-27).
+- **What:** the TypeScript and Python SDKs refuse a JWK Set of more than 128
+  keys or 64 KiB. The auth service publishes its legacy RSA key under one
+  `grantex-YYYY-MM` alias per month of `JWT_LEGACY_KID_MONTHS` (13 by default,
+  up to 120), beside its signing-key ring, every key in
+  `JWT_VERIFICATION_PUBLIC_KEYS`, its EdDSA key and the commerce passport keys
+  in their grace window. Nothing stops that set from passing either limit: at
+  120 months it is close to both with 2048-bit keys, and larger RSA keys reach
+  64 KiB well before 120 aliases. Every relying party using the SDKs would then
+  refuse every token.
+- **Fix:** check the size of the published set when the auth service starts
+  (and when keys are reloaded), and refuse to start, or at least warn, when it
+  exceeds what the SDKs accept; or lower the `JWT_LEGACY_KID_MONTHS` maximum
+  to a window that fits.
+
+## G-40 — Docs say the standalone verifier fetches the JWKS on every call
+
+- **Found:** documenting the bounded JWKS fetch (2026-09-27).
+- **What:** both SDKs have cached the key set per JWKS URL since 0.5.1
+  (10-minute TTL, one refresh per 30 seconds for an unknown `kid`), but the
+  docs still describe a fetch on every call:
+  `docs/sdks/python/offline-verification.mdx` (description and overview),
+  `docs/sdks/typescript/offline-verification.mdx` (overview),
+  `docs/guides/token-verification.mdx` (introduction and the "do not assume
+  ... a persistent JWKS cache" recommendation) and
+  `packages/sdk-py/README.md` ("Local JWKS verification").
+- **Fix:** describe the cache, its TTL and the unknown-`kid` refresh, and
+  keep the note that the JWKS endpoint must be reachable for the first fetch
+  and for refreshes.

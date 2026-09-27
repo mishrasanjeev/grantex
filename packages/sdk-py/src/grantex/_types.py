@@ -533,6 +533,16 @@ class VerifyGrantTokenOptions:
     clock_tolerance: int = 0
     audience: str | None = None
     issuer_did: str | None = None
+    """A ``did:web`` issuer. When set, the JWK Set is read from
+    ``https://<host>[:<port>][/<path>]/.well-known/jwks.json`` instead of
+    ``jwks_uri``, and the expected issuer defaults to that location without
+    the suffix. It must name a fully qualified public domain, written in ASCII
+    (an internationalized name in its ``xn--`` form): an IP address, a local
+    or private name (``localhost``, ``.local``, ``.home.arpa``,
+    ``.internal``), a single label, user information, a non-ASCII character
+    or another DID method is refused with :class:`GrantexTokenError`.
+    ``None`` means no DID, as ``null`` or leaving it out does in the
+    TypeScript SDK."""
     issuer: str | None = None
     algorithms: list[str] | None = None
     """Signature algorithms to accept: a subset of ``["RS256", "ES256"]`` (the

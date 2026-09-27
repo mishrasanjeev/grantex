@@ -55,7 +55,7 @@ from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenErr
 | `clock_tolerance`  | `int`            | No       | `0`     | Seconds of leeway for `exp` and `iat` clock skew.                  |
 | `audience`         | `str \| None`    | No       | `None`  | Expected `aud` claim. If `None`, audience is not validated.        |
 | `issuer`           | `str \| None`    | No       | `None`  | Expected `iss` claim. The hosted alias expects `https://grantex.dev`; custom JWKS URLs derive it when omitted. |
-| `issuer_did`       | `str \| None`    | No       | `None`  | A `did:web` issuer used to derive the JWKS URL and expected issuer. An explicit `issuer` takes precedence. |
+| `issuer_did`       | `str \| None`    | No       | `None`  | A `did:web` issuer. The JWKS is read from `https://<host>[:<port>][/<path>]/.well-known/jwks.json` instead of `jwks_uri`, and the expected issuer is that location without the suffix; an explicit `issuer` takes precedence. It must name a public domain (see [did:web issuers](#did-issuers)). |
 | `algorithms`       | `list[str] \| None` | No    | `None`  | Narrow the accepted algorithms to a subset of `["RS256", "ES256"]`. Any other value raises `GrantexTokenError`. |
 | `proof_jkt`        | `str \| None`    | No       | `None`  | Thumbprint of the key the caller proved possession of (for example with a verified DPoP proof); the token's `cnf.jkt` must match. The verifier does not check DPoP proofs. |
 | `require_proof_of_possession` | `bool` | No     | `False` | Fail closed unless `proof_jkt` is given and matches `cnf.jkt`. |
@@ -92,6 +92,57 @@ see `spec/grant-token-0.6.md`.
 Tokens signed with **RS256** or **ES256** are accepted (`grantex.GRANT_TOKEN_ALGORITHMS`). `alg: none`, HS256 and every other algorithm are rejected, and `algorithms` can only narrow the list.
 
 The key is the JWK Set entry named by the token's `kid` whose type matches the algorithm: an RSA key for RS256, an EC key on P-256 for ES256. A key published with a different `alg` or a `use` other than `sig` is never used, and there is no fallback to another key.
+
+## JWKS fetch limits
+
+<Note>
+  Not in `grantex` 0.6.0; the next release includes these limits and the
+  [DID issuer](#did-issuers) checks.
+</Note>
+
+The key set comes from whichever endpoint the verifier is pointed at, so each
+fetch is bounded, with the same limits as the TypeScript SDK:
+
+| Limit | Value | Refused when |
+|-------|-------|--------------|
+| Status | `200` | Any other status. Redirects are not followed. |
+| Media type | `application/json` or `application/jwk-set+json` | Any other `Content-Type`, a missing one, or a `charset` other than `utf-8`. |
+| Encoding | `identity` | The SDK asks for an unencoded body and refuses a `Content-Encoding` such as `gzip`. |
+| Size | 64 KiB | A larger `Content-Length`, or more bytes than that while reading. |
+| Keys | 128 | A `keys` array with more entries. |
+| Time | 5 seconds | The whole exchange, headers and body, takes longer. |
+
+A refused fetch raises `GrantexTokenError` naming the endpoint and the reason,
+and nothing is cached, so the next verification fetches again. The key-count
+limit leaves room for the `grantex-YYYY-MM` aliases a self-hosted auth service
+publishes (`JWT_LEGACY_KID_MONTHS`).
+
+## DID issuers
+
+`issuer_did` follows the did:web method specification (§2.3, §2.5.2): the
+identifier after `did:web:` is a fully qualified domain name, optionally
+followed by a port whose colon is percent-encoded (`%3A`) and by path segments
+separated by colons. A DID is written in ASCII (§3.5), so an internationalized
+domain name is given in its IDNA A-label form, beginning `xn--`.
+
+| `issuer_did` | JWKS URL | Expected issuer |
+|--------------|----------|-----------------|
+| `did:web:issuer.example` | `https://issuer.example/.well-known/jwks.json` | `https://issuer.example` |
+| `did:web:issuer.example%3A8443` | `https://issuer.example:8443/.well-known/jwks.json` | `https://issuer.example:8443` |
+| `did:web:issuer.example:tenants:acme` | `https://issuer.example/tenants/acme/.well-known/jwks.json` | `https://issuer.example/tenants/acme` |
+| `did:web:xn--bcher-kva.example` | `https://xn--bcher-kva.example/.well-known/jwks.json` | `https://xn--bcher-kva.example` |
+
+The DID decides whose keys are trusted, so the SDK raises `GrantexTokenError`,
+before any request, for an IP address, `localhost` or a name under `.localhost`,
+`.local`, `.home.arpa` or `.internal`, a single-label host, user information
+(`@`), a port outside 1–65535, a path segment other than letters, digits, `.`,
+`-` and `_` (or `.` / `..`), any character outside ASCII, and any value that is
+not a `did:web` identifier. A non-ASCII name is refused rather than converted,
+because conversion can turn a different character into an ASCII one (the
+Kelvin sign, U+212A, into `k`) and so fetch keys from a host the DID does not spell.
+It is never ignored in favour of `jwks_uri`. For a local or private issuer, set
+`jwks_uri` and `issuer` instead. `issuer_did=None` means no DID. The TypeScript
+SDK applies the same rules, and treats `issuerDid: null` as `None`.
 
 ## Examples
 
@@ -175,6 +226,8 @@ else:
 
 - The token header uses an algorithm other than RS256 or ES256, or one excluded by `algorithms`
 - The JWKS endpoint is unreachable or returns invalid data
+- The JWKS response exceeds a [fetch limit](#jwks-fetch-limits): not `200`, not JSON, encoded, larger than 64 KiB, more than 128 keys, or slower than 5 seconds
+- `issuer_did` is not a usable [did:web issuer](#did-issuers)
 - No key of the type the algorithm requires is found in the JWKS under the token's `kid`
 - The token signature is invalid
 - The token is expired

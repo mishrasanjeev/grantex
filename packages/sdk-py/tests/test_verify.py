@@ -9,7 +9,7 @@ import pytest
 from grantex import verify_grant_token, GrantexTokenError
 import grantex._verify as verify_module
 from grantex._types import VerifyGrantTokenOptions, VerifiedGrant
-from tests.conftest import MOCK_JWT_PAYLOAD
+from tests.conftest import MOCK_JWT_PAYLOAD, serve_jwks
 
 
 def _fake_jwt(payload: dict, alg: str = "RS256") -> str:
@@ -212,13 +212,8 @@ def test_no_matching_kid_raises_token_error(mocker: pytest.FixtureRequest) -> No
         verify_grant_token(token, options)
 
 
-def _mock_jwks(mocker: pytest.FixtureRequest, keys: object) -> None:
-    response = mocker.Mock()  # type: ignore[attr-defined]
-    response.raise_for_status.return_value = None
-    response.json.return_value = {"keys": keys}
-    mocker.patch(  # type: ignore[attr-defined]
-        "grantex._verify.httpx.get", return_value=response
-    )
+def _mock_jwks(mocker: pytest.FixtureRequest, keys: object) -> object:
+    return serve_jwks(mocker, {"keys": keys})
 
 
 def test_fetch_signing_key_rejects_unknown_kid_without_fallback(
@@ -288,14 +283,14 @@ def test_jwks_is_cached_across_verifications(
     mocker: pytest.FixtureRequest,
 ) -> None:
     key = {"kid": "k1", "kty": "RSA", "n": "AQ", "e": "AQAB"}
-    _mock_jwks(mocker, [key])
+    transport = _mock_jwks(mocker, [key])
     mocker.patch(  # type: ignore[attr-defined]
         "grantex._verify.RSAAlgorithm.from_jwk", return_value="resolved-key"
     )
 
     for _ in range(3):
         assert verify_module._fetch_signing_key("https://keys.example/jwks.json", "k1") == "resolved-key"
-    assert verify_module.httpx.get.call_count == 1  # type: ignore[attr-defined]
+    assert transport.call_count == 1  # type: ignore[attr-defined]
 
 
 def test_unknown_kid_refreshes_jwks_after_cooldown_but_not_inside_it(
@@ -304,10 +299,7 @@ def test_unknown_kid_refreshes_jwks_after_cooldown_but_not_inside_it(
     old = {"kid": "kid-old", "kty": "RSA", "n": "AQ", "e": "AQAB"}
     new = {"kid": "kid-new", "kty": "RSA", "n": "Ag", "e": "AQAB"}
     served = [old]
-    response = mocker.Mock()  # type: ignore[attr-defined]
-    response.raise_for_status.return_value = None
-    response.json.side_effect = lambda: {"keys": list(served)}
-    get = mocker.patch("grantex._verify.httpx.get", return_value=response)  # type: ignore[attr-defined]
+    get = serve_jwks(mocker, lambda: {"keys": list(served)})
     mocker.patch(  # type: ignore[attr-defined]
         "grantex._verify.RSAAlgorithm.from_jwk", side_effect=lambda jwk: jwk["kid"]
     )

@@ -1,7 +1,7 @@
 """verify_grant_token accepts RS256 and ES256 from a JWK Set and nothing else.
 
 Real signatures (PyJWT + cryptography) against a JWK Set served by a mocked
-HTTP client: key selection by kid and key type, algorithm confusion and
+HTTP transport: key selection by kid and key type, algorithm confusion and
 header tampering.
 """
 from __future__ import annotations
@@ -20,6 +20,7 @@ from jwt.algorithms import ECAlgorithm, RSAAlgorithm
 
 from grantex import GRANT_TOKEN_ALGORITHMS, GrantexTokenError, verify_grant_token
 from grantex._types import VerifyGrantTokenOptions
+from tests.conftest import serve_jwks
 
 ISSUER = "https://auth.example.com"
 JWKS_URI = f"{ISSUER}/.well-known/jwks.json"
@@ -70,10 +71,7 @@ def _with_header(token: str, header: dict[str, Any]) -> str:
 
 
 def _serve(mocker: Any, keys: list[dict[str, Any]]) -> None:
-    response = mocker.Mock()
-    response.raise_for_status.return_value = None
-    response.json.return_value = {"keys": keys}
-    mocker.patch("grantex._verify.httpx.get", return_value=response)
+    serve_jwks(mocker, {"keys": keys})
 
 
 def _verify(token: str, algorithms: list[str] | None = None) -> Any:

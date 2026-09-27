@@ -390,8 +390,18 @@ export interface VerifyGrantTokenOptions {
   audience?: string;
   /** Expected issuer URL. Production JWKS uses https://grantex.dev; custom URLs derive the issuer from issuerDid or jwksUri. */
   issuer?: string;
-  /** Resolve a did:web DID to derive the JWKS URL instead of using jwksUri directly */
-  issuerDid?: string;
+  /**
+   * A `did:web` issuer. When set, the JWK Set is read from
+   * `https://<host>[:<port>][/<path>]/.well-known/jwks.json` instead of
+   * `jwksUri`, and the expected issuer defaults to that location without the
+   * suffix. It must name a fully qualified public domain, written in ASCII
+   * (an internationalized name in its `xn--` form): an IP address, a local or
+   * private name (`localhost`, `.local`, `.home.arpa`, `.internal`), a single
+   * label, user information, a non-ASCII character or another DID method is
+   * refused with `GrantexTokenError`. `null`, like leaving it out, means no
+   * DID, as `None` does in the Python SDK.
+   */
+  issuerDid?: string | null;
   /** @internal override clock for testing */
   clockTolerance?: number;
   /**

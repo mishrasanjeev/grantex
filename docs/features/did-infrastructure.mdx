@@ -243,6 +243,16 @@ When self-hosting Grantex, the DID document is served from your own domain. The 
 
 Configure the `ISSUER_DID` environment variable in your auth service deployment to set the DID that appears in issued VCs. The auth service automatically generates the DID document from the signing key.
 
+From the releases after `grantex` 0.6.0 and `@grantex/sdk` 0.7.0, the SDKs'
+`issuerDid` / `issuer_did` verification option reads grant-token keys
+from the JWK Set next to that location (`did:web:auth.example.com` reads
+`https://auth.example.com/.well-known/jwks.json`). As the did:web method
+requires, it accepts only a fully qualified domain name written in ASCII (an
+internationalized name in its `xn--` form), never an IP address, and it also
+refuses `localhost` and names under `.local`, `.home.arpa` and `.internal`.
+Verifiers of a deployment on a private network set `jwksUri` and
+`issuer` instead. See [Offline verification](/sdks/typescript/offline-verification#did-issuers).
+
 ## W3C Standards Alignment
 
 | Standard | Grantex Implementation |

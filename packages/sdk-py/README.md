@@ -91,6 +91,12 @@ print(verified.principal_id) # 'usr_01HXYZ...'
 print(verified.agent_did)    # 'did:web:...'
 ```
 
+Not in `grantex` 0.6.0; in the next release: each JWKS fetch is bounded (HTTP
+200 served as `application/json` or `application/jwk-set+json`, at most 64 KiB
+and 128 keys, 5 seconds for the whole fetch), and `issuer_did` must be a
+`did:web` identifier for a public, fully qualified domain. See
+[JWKS fetch limits](https://docs.grantex.dev/sdks/python/offline-verification#jwks-fetch-limits).
+
 ## PKCE Support
 
 The SDK includes built-in PKCE (Proof Key for Code Exchange) support using the S256 method:
