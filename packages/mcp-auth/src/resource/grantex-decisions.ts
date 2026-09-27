@@ -12,11 +12,13 @@
  * Verification and consumption are injected so this package does not pin a
  * `@grantex/sdk` version: pass `verifyDecisionGrants` and
  * `grantex.decisions.consume` from `@grantex/sdk` (0.6 or later), or your own
- * implementations of the same contract. Consumption is told the agent (its
- * DID, as `agentDid`) and grant of the caller's access token; an issuer that
- * binds decision grants to the requesting agent compares them with the agent
- * and grant the decision was requested for, and one that does not ignores
- * `agentDid`.
+ * implementations of the same contract. Consumption is given the caller's
+ * access token (`grantToken`, the grant token the guard verified) and the
+ * agent (its DID, as `agentDid`) and grant it carries. An issuer that binds
+ * decision grants to the requesting agent verifies that token itself, takes
+ * the agent and grant from it and compares them with the ones the decision
+ * was requested for; one that does not ignores `grantToken` and `agentDid`.
+ * The token goes only to `consume`, and so only to the issuer that signed it.
  *
  * The grant's developer (`dev`, from the access token) and the tool's
  * connector (from a manifest-derived policy) are always checked; a call
@@ -71,14 +73,16 @@ export interface GrantexDecisionVerifierOptions<Set extends VerifiedDecisionGran
   /**
    * Atomic consumption at the issuer, e.g.
    * `(set, context) => grantex.decisions.consume(set, context)`. `context`
-   * carries `agentDid` and `grantId` from the caller's access token; pass them
-   * on, since an issuer that binds decision grants to the requesting agent
-   * refuses a decision requested for another agent or grant (`wrong_agent`).
-   * An `@grantex/sdk` from before `agentDid` existed drops it and consumes as
-   * before. Must throw (with a string `subReason` when the issuer refused)
-   * unless the issuer confirmed that every grant in the set was consumed.
+   * carries the caller's access token (`grantToken`) and the `agentDid` and
+   * `grantId` it carries; pass them on, since an issuer that binds decision
+   * grants to the requesting agent consumes a decision requested for an agent
+   * only with that agent's live grant token (`wrong_agent` otherwise). An
+   * `@grantex/sdk` from before `agentDid` or `grantToken` existed drops them
+   * and consumes as before. Must throw (with a string `subReason` when the
+   * issuer refused) unless the issuer confirmed that every grant in the set
+   * was consumed.
    */
-  consume: (grants: Set, context: { agentDid?: string; grantId?: string }) => Promise<unknown>;
+  consume: (grants: Set, context: { agentDid?: string; grantId?: string; grantToken?: string }) => Promise<unknown>;
   /**
    * The case's current version from the server's own case state (never from
    * the call's arguments). Returning `undefined` refuses the call.
@@ -180,6 +184,7 @@ export function grantexDecisionVerifier<Set extends VerifiedDecisionGrants>(
         await options.consume(verified, {
           ...(check.grant.agentDid !== undefined ? { agentDid: check.grant.agentDid } : {}),
           ...(check.grant.grantId !== undefined ? { grantId: check.grant.grantId } : {}),
+          ...(check.grantToken !== undefined ? { grantToken: check.grantToken } : {}),
         });
       } catch (err) {
         return { status: 'invalid', subReason: subReasonOf(err) ?? 'consume_unavailable' };

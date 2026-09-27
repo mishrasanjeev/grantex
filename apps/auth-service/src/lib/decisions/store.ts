@@ -21,6 +21,7 @@ import { decrypt, encrypt } from '../vault-crypto.js';
 import { computeActionHash, type DecisionAction } from './action.js';
 import { canonicalize } from './canonical.js';
 import type { ApproverIdp } from './approver-oidc.js';
+import { NO_GRANT_TOKEN, notLiveGrantToken, type CallingAgent } from './calling-agent.js';
 import { approverEmailHash, encryptApproverName } from './personal-data.js';
 import {
   DecisionError,
@@ -888,10 +889,12 @@ export async function approveDecisionRequest(sql: Sql, input: ApproveInput): Pro
 // ── The requesting agent ─────────────────────────────────────────────────
 
 /**
- * The agent and grant a caller acts for. `agentDid` and `grantId` are read
- * from that agent's verified grant token: by an enforcer (`enforce()`, an MCP
- * server) when it consumes, or by this service when it releases decision
- * grants. `agentId` is the Grantex agent id a platform may send instead.
+ * The agent and grant a caller acts for: `agentDid` (the agent's DID),
+ * `agentId` (its Grantex agent id) and `grantId`. Where this service checks
+ * them against a request, they come from the agent's grant token, which it
+ * verified itself (`calling-agent.ts`): when it releases decision grants, and
+ * when presented grants are consumed with `DECISION_GRANT_AGENT_BINDING`. The
+ * same members sent in a consumption body are only what the caller claims.
  */
 export interface DecisionRequester {
   agentId?: string;
@@ -943,6 +946,54 @@ export async function assertRequester(sql: Sql, request: DecisionRequestRow, req
   }
 }
 
+/**
+ * With `DECISION_GRANT_AGENT_BINDING`: the agent and grant presented decision
+ * grants are consumed for, as the consumption records them, or a refusal
+ * (`wrong_agent`, 403). The agent is the one `input.callingAgent` established
+ * from its grant token; the body's `agentId`, `agentDid` and `grantId` never
+ * name it, they are only compared with it.
+ *
+ * - A grant token that was presented and is not live (unverifiable, expired,
+ *   revoked, another developer's, unknown) refuses the consumption whatever
+ *   the request names, as it refuses the release of the grants.
+ * - Without a grant token no agent is established. A request that names an
+ *   agent or a grant is then refused, since only its agent's credential
+ *   shows the caller is the requester. A request that names neither is
+ *   consumed as before: `assertRequester` never required an agent for it, and
+ *   the binding does not start refusing it. The body's agent members are
+ *   unverified there, so they are not recorded as the consuming agent.
+ * - With a live grant token, each of `agentDid`, `grantId` and `agentId` the
+ *   body gives must be that token's agent and grant (an `agentId` is matched
+ *   through the developer's registered agent), and the request is then
+ *   checked against the token's agent and grant (`assertRequester`).
+ */
+async function bindingRequester(t: Sql, request: DecisionRequestRow, input: ConsumePresentedInput): Promise<DecisionRequester> {
+  const agent: CallingAgent = input.callingAgent ?? NO_GRANT_TOKEN;
+  if (!agent.verified) {
+    if (agent.tokenCheck !== 'missing') throw notLiveGrantToken(agent.tokenCheck);
+    if (request.agent_id !== null || request.grant_id !== null) {
+      throw refuse(
+        DecisionSubReason.WRONG_AGENT,
+        "This decision was requested for an agent; it is consumed only with that agent's grant token (grantToken)",
+        403,
+      );
+    }
+    return {};
+  }
+  if (input.agentDid !== undefined && input.agentDid !== agent.agentDid) {
+    throw refuse(DecisionSubReason.WRONG_AGENT, 'agentDid is not the agent of the presented grant token', 403);
+  }
+  if (input.grantId !== undefined && input.grantId !== agent.grantId) {
+    throw refuse(DecisionSubReason.WRONG_AGENT, 'grantId is not the grant of the presented grant token', 403);
+  }
+  if (input.agentId !== undefined && !(await isDidOfAgent(t, input.developerId, input.agentId, agent.agentDid))) {
+    throw refuse(DecisionSubReason.WRONG_AGENT, 'agentId is not the agent of the presented grant token', 403);
+  }
+  const verified: DecisionRequester = { agentDid: agent.agentDid, grantId: agent.grantId };
+  await assertRequester(t, request, verified);
+  return { ...(input.agentId !== undefined ? { agentId: input.agentId } : {}), ...verified };
+}
+
 // ── Consumption ──────────────────────────────────────────────────────────
 //
 // A decision is consumed in one of two ways, each with its own function and
@@ -959,7 +1010,11 @@ export async function assertRequester(sql: Sql, request: DecisionRequestRow, req
 // made on the locked grant rows, then the consumption and its audit entry,
 // in the transaction the caller began.
 
-/** The decision grants presented for one action (`POST /v1/decisions/consume`). */
+/**
+ * The decision grants presented for one action (`POST /v1/decisions/consume`).
+ * `agentId`, `agentDid` and `grantId` are the body's members: what the caller
+ * says it acts for.
+ */
 export interface ConsumePresentedInput extends DecisionRequester {
   developerId: string;
   /** The decision grants presented with the call: one, or two for four eyes. */
@@ -968,11 +1023,19 @@ export interface ConsumePresentedInput extends DecisionRequester {
   action: unknown;
   caseVersion: unknown;
   /**
-   * `DECISION_GRANT_AGENT_BINDING`: presented grants of a request that names
-   * an agent or a grant are consumed only for that agent and grant
-   * (`wrong_agent`). Off, `agentId` and `grantId` are recorded, not compared.
+   * `DECISION_GRANT_AGENT_BINDING`. On, the grants are consumed for
+   * `callingAgent`, the agent established from its grant token, and the
+   * grants of a request that names an agent or a grant only for that agent
+   * and grant (`wrong_agent`); see `bindingRequester`. Off, `agentId` and
+   * `grantId` are recorded, not compared, and `callingAgent` is not read.
    */
   bindAgent?: boolean;
+  /**
+   * With `bindAgent`: the agent the route established from the grant token
+   * presented with the call (`calling-agent.ts`). Absent means no token was
+   * presented.
+   */
+  callingAgent?: CallingAgent;
 }
 
 /** A platform's own decision, consumed by request id (`POST /v1/decisions/requests/:id/consume`). */
@@ -1169,9 +1232,10 @@ async function spendDecisionGrants(t: Sql, spend: GrantsToSpend): Promise<Consum
  * signature is verified, and each must be, claim for claim, a grant row the
  * service issued to this developer, before `spendDecisionGrants` checks and
  * spends those rows. With `bindAgent`, the grants of a request that names an
- * agent or a grant are consumed only for that agent and grant
- * (`wrong_agent`). This function never consumes by request id; a platform's
- * own request is consumed by `consumePlatformDecisionRequest`.
+ * agent or a grant are consumed only for that agent and grant, established
+ * from the agent's grant token (`wrong_agent`). This function never consumes
+ * by request id; a platform's own request is consumed by
+ * `consumePlatformDecisionRequest`.
  */
 export async function consumePresentedDecisionGrants(sql: Sql, input: ConsumePresentedInput): Promise<ConsumeResult> {
   if (!Array.isArray(input.tokens) || input.tokens.length < 1 || input.tokens.length > 2) {
@@ -1209,8 +1273,10 @@ export async function consumePresentedDecisionGrants(sql: Sql, input: ConsumePre
     if (!request) throw refuse(DecisionSubReason.UNKNOWN_GRANT, 'Decision grant not found');
     // Who may spend the decision is settled before any stored state of its
     // grants is examined, so a caller that is not the requesting agent learns
-    // nothing more about them.
-    if (input.bindAgent === true) await assertRequester(t, request, input);
+    // nothing more about them. With the binding the agent recorded is the one
+    // its grant token established; without it, what the body says, as before
+    // the binding existed.
+    const requester: DecisionRequester = input.bindAgent === true ? await bindingRequester(t, request, input) : input;
     const rows = await t<DecisionGrantRow[]>`
       SELECT * FROM decision_grants
       WHERE jti = ANY(${presentedJtis}) AND developer_id = ${input.developerId}
@@ -1231,7 +1297,7 @@ export async function consumePresentedDecisionGrants(sql: Sql, input: ConsumePre
       // Presentation order.
       jtis: presentedJtis,
       target,
-      requester: input,
+      requester,
       now,
       fourEyesIncomplete: 'This decision needs two approvals from different people; present both decision grants',
       auditMetadata: {},
@@ -1299,17 +1365,37 @@ export async function consumePlatformDecisionRequest(sql: Sql, input: ConsumePla
   }) as Promise<ConsumeResult>;
 }
 
+/** What a refused consumption is recorded with (`auditConsumeRefusal`). */
+export interface ConsumeAttempt extends DecisionRequester {
+  jtis: string[];
+  action: unknown;
+  caseVersion: unknown;
+  requestId?: unknown;
+  /**
+   * With `DECISION_GRANT_AGENT_BINDING`, when no agent was established from a
+   * grant token: `missing`, or why the token presented is not live.
+   */
+  tokenCheck?: string;
+  /**
+   * With `DECISION_GRANT_AGENT_BINDING`, the body's agent members, which are
+   * then only claims: recorded apart from the agent the token established.
+   */
+  claimed?: DecisionRequester;
+}
+
 /**
  * Records a refused consumption in its own transaction, with what was
  * attempted: the action and its hash when the action was valid, the case
- * version, and the jtis of grants whose signature verified. Throws if the
- * entry cannot be written; the caller must then fail the request.
+ * version, the jtis of grants whose signature verified, and the agent and
+ * grant (with the binding, the ones a grant token established, why none was,
+ * and what the body claimed). Throws if the entry cannot be written; the
+ * caller must then fail the request.
  */
 export async function auditConsumeRefusal(
   sql: Sql,
   developerId: string,
   subReason: string,
-  attempt: { jtis: string[]; action: unknown; caseVersion: unknown; requestId?: unknown; agentId?: string; agentDid?: string; grantId?: string },
+  attempt: ConsumeAttempt,
 ): Promise<void> {
   let action: DecisionAction | undefined;
   let actionHash: string | undefined;
@@ -1334,6 +1420,10 @@ export async function auditConsumeRefusal(
         ...(action !== undefined ? { action, action_hash: actionHash } : { action_valid: false }),
         ...(typeof attempt.caseVersion === 'string' && attempt.caseVersion.length <= 128 ? { case_version: attempt.caseVersion } : {}),
         ...(isDecisionRequestId(attempt.requestId) ? { request_id: attempt.requestId } : {}),
+        ...(attempt.tokenCheck !== undefined ? { token_check: attempt.tokenCheck } : {}),
+        ...(attempt.claimed?.agentId !== undefined ? { claimed_agent_id: attempt.claimed.agentId } : {}),
+        ...(attempt.claimed?.agentDid !== undefined ? { claimed_agent_did: attempt.claimed.agentDid } : {}),
+        ...(attempt.claimed?.grantId !== undefined ? { claimed_grant_id: attempt.claimed.grantId } : {}),
       },
     });
   });

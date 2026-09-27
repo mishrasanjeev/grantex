@@ -56,7 +56,8 @@ export function decisionGrantsEnabled(): boolean {
  * Whether decision grants are bound to the agent a request names
  * (`DECISION_GRANT_AGENT_BINDING=true`, default off). When on,
  * `GET /v1/decisions/requests/{id}` no longer returns the grants, consumption
- * compares the calling agent and grant with the ones the request names, and a
+ * establishes the calling agent from its grant token (`grantToken`) and
+ * compares that agent and grant with the ones the request names, and a
  * repeated request for another agent is refused. When off, those endpoints
  * answer as they did before the binding existed.
  *

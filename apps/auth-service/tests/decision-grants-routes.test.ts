@@ -349,6 +349,106 @@ describe('decision grant routes', () => {
       expect((await consume({ agentId: 'did:grantex:ag_01' })).statusCode).toBe(400);
     });
 
+    it('establishes the consuming agent from its grant token when the binding is on, as the release does, and never from the body', async () => {
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', 'true');
+      vi.mocked(store.consumePresentedDecisionGrants).mockResolvedValue({ requestId: REQUEST_ID, jtis: ['dgnt_a'], approvers: [], actionHash: 'sha256:x' });
+      const consume = (payload: Record<string, unknown>) => {
+        seedAuth();
+        return app.inject({ method: 'POST', url: '/v1/decisions/consume', headers: authHeader(), payload: { decisionGrants: ['a'], action: ACTION, caseVersion: 'v1', ...payload } });
+      };
+      const lastInput = () => vi.mocked(store.consumePresentedDecisionGrants).mock.calls.at(-1)![1];
+
+      // The agent's live grant token: the agent and grant come from it, checked as for a release.
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce(liveGrantToken('did:grantex:ag_01', 'grnt_01'));
+      expect((await consume({ grantToken: 'token-of-the-agent' })).statusCode).toBe(200);
+      expect(checkActiveGrantToken).toHaveBeenLastCalledWith('token-of-the-agent', { expectedDeveloperId: 'dev_TEST' });
+      expect(lastInput()).toMatchObject({ bindAgent: true, callingAgent: { verified: true, agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' } });
+      expect(lastInput()).not.toHaveProperty('agentDid');
+
+      // Body members naming another agent stay claims beside the token's agent; they never replace it.
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce(liveGrantToken('did:grantex:ag_02', 'grnt_02'));
+      await consume({ grantToken: 'token-of-another-agent', agentDid: 'did:grantex:ag_01', agentId: 'ag_01', grantId: 'grnt_01' });
+      expect(lastInput()).toMatchObject({
+        agentDid: 'did:grantex:ag_01', agentId: 'ag_01', grantId: 'grnt_01',
+        callingAgent: { verified: true, agentDid: 'did:grantex:ag_02', grantId: 'grnt_02' },
+      });
+
+      // A token that is not live establishes no agent, and says why.
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce({ ok: false, reason: 'expired' });
+      await consume({ grantToken: 'token-of-an-expired-grant', agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' });
+      expect(lastInput()).toMatchObject({ callingAgent: { verified: false, tokenCheck: 'expired' } });
+
+      // No token, no agent: the body's members do not stand in for one.
+      vi.mocked(checkActiveGrantToken).mockClear();
+      await consume({ agentDid: 'did:grantex:ag_01', agentId: 'ag_01', grantId: 'grnt_01' });
+      expect(lastInput()).toMatchObject({ bindAgent: true, callingAgent: { verified: false, tokenCheck: 'missing' } });
+      expect(checkActiveGrantToken).not.toHaveBeenCalled();
+
+      // A grantToken that cannot be a token is refused before anything is checked or consumed.
+      vi.mocked(store.consumePresentedDecisionGrants).mockClear();
+      for (const grantToken of ['', 7, null, { token: 'x' }, 'x'.repeat(16_385)]) {
+        const res = await consume({ grantToken });
+        expect(res.statusCode, JSON.stringify(grantToken).slice(0, 40)).toBe(400);
+        expect(res.json<{ message: string }>().message).toMatch(/grantToken/);
+      }
+      expect(store.consumePresentedDecisionGrants).not.toHaveBeenCalled();
+      expect(checkActiveGrantToken).not.toHaveBeenCalled();
+    });
+
+    it('does not read grantToken on consumption when the binding is off, so the endpoint answers as before it existed', async () => {
+      vi.mocked(store.consumePresentedDecisionGrants).mockResolvedValue({ requestId: REQUEST_ID, jtis: ['dgnt_a'], approvers: [], actionHash: 'sha256:x' });
+      for (const binding of ['', 'false']) {
+        vi.stubEnv('DECISION_GRANT_AGENT_BINDING', binding);
+        for (const grantToken of ['token-of-another-agent', 'not a token', '', 7, null]) {
+          seedAuth();
+          const res = await app.inject({
+            method: 'POST', url: '/v1/decisions/consume', headers: authHeader(),
+            payload: { decisionGrants: ['a'], action: ACTION, caseVersion: 'v1', agentId: 'ag_01', grantId: 'grnt_01', grantToken },
+          });
+          expect(res.statusCode, `${binding} ${JSON.stringify(grantToken)}`).toBe(200);
+          const input = vi.mocked(store.consumePresentedDecisionGrants).mock.calls.at(-1)![1];
+          expect(input).toEqual({ developerId: 'dev_TEST', tokens: ['a'], action: ACTION, caseVersion: 'v1', agentId: 'ag_01', grantId: 'grnt_01', bindAgent: false });
+        }
+      }
+      expect(checkActiveGrantToken).not.toHaveBeenCalled();
+
+      // A refusal is recorded with the body's agent and grant, as before.
+      vi.mocked(store.consumePresentedDecisionGrants).mockRejectedValueOnce(new DecisionError('consumed', 409, 'used'));
+      seedAuth();
+      await app.inject({
+        method: 'POST', url: '/v1/decisions/consume', headers: authHeader(),
+        payload: { decisionGrants: ['a'], action: ACTION, caseVersion: 'v1', agentId: 'ag_01', grantId: 'grnt_01', grantToken: 'token-of-another-agent' },
+      });
+      expect(vi.mocked(store.auditConsumeRefusal).mock.calls.at(-1)![3]).toEqual({ jtis: [], action: ACTION, caseVersion: 'v1', agentId: 'ag_01', grantId: 'grnt_01' });
+    });
+
+    it('records a refused consumption with the agent its grant token established, or why none was, and the body claims apart', async () => {
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', 'true');
+      vi.mocked(store.consumePresentedDecisionGrants).mockRejectedValue(new DecisionError('wrong_agent', 403, 'refused'));
+      vi.mocked(metrics.decisionGrantsRejectedTotal.labels).mockClear();
+      const refusedWith = async (payload: Record<string, unknown>) => {
+        seedAuth();
+        const res = await app.inject({ method: 'POST', url: '/v1/decisions/consume', headers: authHeader(), payload: { decisionGrants: ['a'], action: ACTION, caseVersion: 'v1', ...payload } });
+        expect(res.statusCode).toBe(403);
+        expect(res.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
+        return vi.mocked(store.auditConsumeRefusal).mock.calls.at(-1)!.slice(1);
+      };
+
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce(liveGrantToken('did:grantex:ag_02', 'grnt_02'));
+      expect(await refusedWith({ grantToken: 'token-of-another-agent', agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' })).toEqual([
+        'dev_TEST', 'wrong_agent',
+        { jtis: [], action: ACTION, caseVersion: 'v1', agentDid: 'did:grantex:ag_02', grantId: 'grnt_02', claimed: { agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' } },
+      ]);
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce({ ok: false, reason: 'revoked' });
+      expect(await refusedWith({ grantToken: 'token-of-a-revoked-grant' })).toEqual([
+        'dev_TEST', 'wrong_agent', { jtis: [], action: ACTION, caseVersion: 'v1', tokenCheck: 'revoked' },
+      ]);
+      expect(await refusedWith({ agentId: 'ag_01', grantId: 'grnt_01' })).toEqual([
+        'dev_TEST', 'wrong_agent', { jtis: [], action: ACTION, caseVersion: 'v1', tokenCheck: 'missing', claimed: { agentId: 'ag_01', grantId: 'grnt_01' } },
+      ]);
+      expect(metrics.decisionGrantsRejectedTotal.labels).toHaveBeenCalledWith('consume', 'wrong_agent');
+    });
+
     it('consumes the decision grants of a request by its id, on its own endpoint, in both states of the binding', async () => {
       vi.mocked(store.consumePlatformDecisionRequest).mockResolvedValue({ requestId: REQUEST_ID, jtis: ['dgnt_a'], approvers: [], actionHash: 'sha256:x' });
       for (const binding of ['false', 'true']) {

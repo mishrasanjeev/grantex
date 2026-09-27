@@ -86,8 +86,8 @@ on an argument that is not bound, declare it in `decision_fields`.
    the grants with the grant token of the agent the request names
    (`getGrants` / `get_grants`) and passes them with that agent's tool call.
    `enforce()` (or an MCP server) verifies them and **consumes** them at the
-   auth service as that agent; only then does the call proceed. With the
-   agent binding on (`DECISION_GRANT_AGENT_BINDING=true`, see
+   auth service with that agent's grant token; only then does the call
+   proceed. With the agent binding on (`DECISION_GRANT_AGENT_BINDING=true`, see
    [Binding decisions to the requesting agent](#binding-decisions-to-the-requesting-agent)),
    this is the only way to get them: the developer API key alone never
    receives a decision grant, `GET /v1/decisions/requests/{id}` reports
@@ -272,7 +272,7 @@ without one.
 | `decision_required` | | No decision grant was presented. |
 | `decision_invalid` | `action_mismatch` | Approves another action, field value or connector. |
 | | `wrong_case` | Approves an action on another case. |
-| | `wrong_agent` | With the agent binding on: requested for another agent or grant. `enforce()` names the agent (its DID) and grant from the caller's grant token. |
+| | `wrong_agent` | With the agent binding on: requested for another agent or grant, or consumed without that agent's live grant token. `enforce()` sends the caller's grant token, from which the auth service establishes the agent and grant. |
 | | `case_changed` | The case changed since the approval. |
 | | `expired` | Past its expiry. |
 | | `consumed` | Already used. |
@@ -303,10 +303,16 @@ asked for belongs to that agent:
   releases them only against a live grant token of the agent and grant the
   request names. Every hand-out and every refusal is recorded in the audit
   chain; if the record cannot be written, nothing is released.
-- `POST /v1/decisions/consume` spends a request's grants only when the
-  enforcer names that agent and grant: `agentDid`, the DID from the grant
-  token it verified, or `agentId`, and `grantId`. A missing value is refused
-  like a wrong one (`wrong_agent`, 403).
+- `POST /v1/decisions/consume` spends a request's grants only when a live
+  grant token of that agent and grant accompanies them (`grantToken`, as for
+  `getGrants`). The auth service verifies the token itself (signature,
+  expiry, revocation, grant status, developer) and takes the agent and grant
+  from it, never from the body: `agentDid`, `agentId` and `grantId`, when
+  sent, must be that token's. A missing token, one that is not live, or
+  another agent's or grant's, is refused (`wrong_agent`, 403), and the
+  refusal is recorded with why (`token_check`) and what the body claimed. A
+  request that names no agent is consumed as before, without a token; a token
+  sent with it must still be live, and its agent is recorded.
 - Asking again for the same action and case version while a request is open
   for another agent or grant is refused (`wrong_agent`, 409) instead of
   answering with that request.
@@ -317,13 +323,15 @@ the grants once approved, and consumption records the agent and grant without
 comparing them. Only `true` and `false` are accepted; any other value makes the
 decision endpoints answer 503.
 
-The SDKs send the agent's DID as `agentDid`, never as `agentId`. An auth service
+`enforce()` in both SDKs, and `grantexDecisionVerifier` given the SDK's
+`consume`, send the grant token they verified as `grantToken`, with its DID
+as `agentDid` (never as `agentId`) and its grant as `grantId`. An auth service
 from before the binding accepts only a Grantex agent id in `agentId` and ignores
-members it does not know, and one with the binding off does not read
-`agentDid`, so the SDKs consume against every version. An SDK from before the
-binding sends no agent at all: against a service with the binding on, it cannot
-consume a decision that names an agent, and reports the refusal as
-`consume_unavailable`, which still denies the call.
+members it does not know, and one with the binding off reads neither
+`grantToken` nor `agentDid`, so the SDKs consume against every version. An SDK
+from before this change sends no grant token: against a service with the
+binding on, it cannot consume a decision that names an agent, and reports the
+refusal as `consume_unavailable`, which still denies the call.
 
 Before turning the binding on, move every platform that reads `decisionGrants`
 from `GET /v1/decisions/requests/{id}`:
@@ -336,11 +344,11 @@ from `GET /v1/decisions/requests/{id}`:
    is refused with `unknown_grant` or `four_eyes_incomplete`.
 2. A decision for an agent: name the agent (`agentId`, `grantId`) when asking
    for it, fetch the grants with that agent's grant token (`getGrants` /
-   `get_grants`), and consume them with the agent's DID and grant, as
-   `enforce()` does.
+   `get_grants`), and consume them with the same grant token (`grantToken`),
+   as `enforce()` does. Naming the agent in the body is not enough.
 3. Read `subReason` before the HTTP status when mapping refusals: `wrong_agent`
    arrives with 403, which is not an authentication failure.
-4. Use an SDK that sends `agentDid` (this release or later) wherever
+4. Use an SDK that sends `grantToken` (this release or later) wherever
    `enforce()` or `grantexDecisionVerifier` consumes decision grants.
 
 Both endpoints in steps 1 and 2 work with the binding off, so each platform

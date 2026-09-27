@@ -16,14 +16,16 @@
  * - the agent calls `enforce()` from the TypeScript SDK (and, when
  *   `GRANTEX_E2E_PYTHON` names a Python with the SDK's dependencies, the
  *   Python SDK), which verifies the decision grant against the service's JWK
- *   Set and consumes it at the service as that agent: the tool call is
- *   allowed once, a replay is refused, another agent's call is refused, and a
+ *   Set and consumes it at the service with the agent's grant token, from
+ *   which the service establishes the agent: the tool call is allowed once, a
+ *   replay is refused, another agent's call is refused, the developer API key
+ *   naming the agent in the body without its grant token is refused, and a
  *   four-eyes decision cannot be approved twice by one person;
  * - a decision that names no agent is the platform's own: it is consumed by
  *   request id, and its grant never leaves the service;
  * - with the binding off (the default), the service answers as before it
- *   existed, and the SDKs, which now report the calling agent's DID as
- *   `agentDid`, still consume there.
+ *   existed, and the SDKs, which now send the calling agent's DID as
+ *   `agentDid` and its grant token as `grantToken`, still consume there.
  *
  * The identity provider is https://idp.example.com, an in-test provider that
  * issues ES256 ID tokens and checks the PKCE verifier. The browser reaches it
@@ -425,8 +427,15 @@ describeE2e('decision grants in a real browser against a live auth service', () 
     // and the grant is still there for the agent it was requested for.
     expect(await enforceTs(await otherAgentGrantToken(), caseId, 'approve', grants))
       .toMatchObject({ allowed: false, reasonCode: 'decision_invalid', subReason: 'wrong_agent' });
+    // So is the developer API key naming the agent and grant in the body
+    // without the agent's grant token: the service establishes the agent only
+    // from that token.
+    await expect(grantex.decisions.consume(grants, {
+      action: actionFor(caseId, 'approve'), caseVersion: 'v1', agentId: agent.id, agentDid: agent.did, grantId: agent.grantId,
+    })).rejects.toMatchObject({ subReason: 'wrong_agent' });
 
-    // The agent's call carries the decision grant: verified and consumed by enforce().
+    // The agent's call carries the decision grant and the agent's grant
+    // token: verified and consumed by enforce().
     const allowed = await enforceTs(grantToken, caseId, 'approve', grants);
     expect(allowed.allowed, allowed.reason).toBe(true);
     expect(allowed.decision?.jtis).toHaveLength(1);

@@ -232,7 +232,8 @@ binding silently off.
   `POST /v1/decisions/consume` answer as they did before the binding existed:
   GET returns `decisionGrants` to the developer API key once the request is
   fully approved and its grants are usable, and consumption records `agentId`
-  and `grantId` without comparing them. `agentDid` (section 6) is not read.
+  and `grantId` without comparing them. `agentDid` and `grantToken` (section
+  6) are not read.
 - **On**, a decision grant, being a bearer credential, is never returned to the
   developer API key alone. `GET /v1/decisions/requests/{id}` answers the
   status, the approvals (each with its grant's `jti`) and
@@ -290,13 +291,14 @@ An enforcer MUST, in this order:
    `sub`, the same `decision_request` (`four_eyes_incomplete`,
    `same_approver`, `malformed`).
 4. **Consume** every presented grant at the issuer
-   (`POST /v1/decisions/consume`), all or none, as the calling agent:
-   `agentDid` is the agent's DID and `grantId` the grant, both from the grant
-   token the enforcer verified, never from the call's arguments. The DID goes
-   in `agentDid` and never in `agentId`: an issuer from before the agent
-   binding accepts only a Grantex agent id in `agentId` and ignores members it
-   does not know, so this body is accepted by every issuer version, and one
-   with the binding off ignores `agentDid`. Allow the call only if the issuer
+   (`POST /v1/decisions/consume`), all or none, as the calling agent: with
+   the grant token the enforcer verified in `grantToken`, and the agent's DID
+   in `agentDid` and the grant in `grantId`, both from that token, never from
+   the call's arguments. The DID goes in `agentDid` and never in `agentId`:
+   an issuer from before the agent binding accepts only a Grantex agent id in
+   `agentId` and ignores members it does not know, so this body is accepted by
+   every issuer version, and one with the binding off reads neither
+   `grantToken` nor `agentDid`. Allow the call only if the issuer
    confirmed exactly the presented `jti`s. The issuer answers with
    `requestId`, `actionHash`, `jtis` and one `approvers` entry per consumed
    grant (`sub`, `approver_auth`, `dwell_ms`, `dwell_source`, and the `jti` of
@@ -311,13 +313,32 @@ Every refusal is audited; if the refusal cannot be recorded the issuer answers
 503 and nothing is consumed.
 
 **Bound to the requesting agent.** With the agent binding on, the issuer MUST
-refuse a bound request's grants (`wrong_agent`, 403) unless the caller names
-the agent the request names, by `agentDid` (resolved through the developer's
-registered agent) or by `agentId`, every reference given matching, and
-`grantId` names the grant it names. A missing value is refused like a
-different one, since the caller has not shown it is the requester. The check
-runs once the request row is locked and before any stored state of its grants
-is examined; a malformed `agentDid` (not W3C DID syntax, or longer than 512
+establish the calling agent from the grant token presented in `grantToken`,
+checked as for a release (section 4.6: a live grant token of the developer),
+and MUST NOT take it from `agentDid`, `agentId` or `grantId`, which a caller
+authenticated only by the developer API key can set to anything. It MUST
+refuse (`wrong_agent`, 403):
+
+- a `grantToken` that is presented and is not live (unverifiable, expired,
+  revoked, of a grant that is not active, another developer's or unknown),
+  whatever the request names;
+- a bound request's grants without a `grantToken`, however the body names
+  the agent;
+- a bound request's grants unless the token's agent is the agent the request
+  names (its DID resolved through the developer's registered agent) and the
+  token's grant is the grant it names;
+- a body whose `agentDid`, `agentId` (resolved through the developer's
+  registered agent) or `grantId` names another agent or grant than the token.
+
+The consumption and every refusal record the agent and grant the token
+established; a refusal also records why no agent was established
+(`token_check`, `missing` when no token was presented) and, apart, the
+members the body claimed. A request that names no agent is consumed without
+a grant token, as before the binding; the body's agent members are then not
+recorded as the consuming agent, since nothing verified them. The check runs
+once the request row is locked and before any stored state of its grants is
+examined; a malformed `agentDid` (not W3C DID syntax, or longer than 512
+characters) or `grantToken` (not a non-empty string of at most 16384
 characters) is refused before that (400). Checks that need no stored state
 (signature, developer, a grant presented twice, grants of different requests)
 come first.
@@ -353,7 +374,7 @@ first four are PRD Appendix B's.
 | `same_approver` | issuer, enforcer | The same approver twice, or the same grant twice. |
 | `case_changed` | issuer, enforcer | The case version differs from the one approved. |
 | `wrong_case` | issuer, enforcer | The grant is for another case. |
-| `wrong_agent` | issuer | With the agent binding on: the decision was requested for another agent or grant, or the caller did not name the agent or grant it was requested for (403); a request for the same action and case version is open for another agent or grant (409). In both states: the grant token presented to fetch the grants is not live or is not the named agent's, or the request names no agent (403); a bound request was consumed by request id (403). |
+| `wrong_agent` | issuer | With the agent binding on: the decision was requested for another agent or grant, it was consumed without a live grant token of the agent and grant it was requested for, the grant token presented with a consumption is not live, or a body member names another agent or grant than that token (403); a request for the same action and case version is open for another agent or grant (409). In both states: the grant token presented to fetch the grants is not live or is not the named agent's, or the request names no agent (403); a bound request was consumed by request id (403). |
 | `four_eyes_incomplete` | issuer, enforcer | Two approvals needed, fewer presented. |
 | `revoked` | issuer | The request was cancelled. |
 | `unknown_grant` | issuer, enforcer | Unknown to the issuer, or another developer's. |
@@ -437,10 +458,12 @@ this; a token whose decision entries cannot be read is refused.
 - *Another agent, or the developer API key alone, using a decision an agent
   asked for, with the agent binding off.* The developer API key reads the
   grants and any agent can present them, as before the binding existed.
-- *An enforcer that misreports the calling agent.* `agentDid` and `grantId` are
-  what the enforcer read from the grant token it verified; an enforcer that
-  already holds a bound decision's grants can name the agent they were
-  requested for.
+- *An enforcer that holds the requesting agent's grant token.* With the agent
+  binding on, the issuer establishes the calling agent from the grant token
+  presented with the consumption, not from what the enforcer reports, so the
+  developer API key alone cannot consume a bound decision. A party that holds
+  both the decision grants and a live grant token of the agent they were
+  requested for can consume them as that agent, as the agent itself could.
 - *A request that names no agent,* which the platform's API key alone can
   consume by request id: it is the platform's own decision.
 - *A stale case version* supplied by the platform.

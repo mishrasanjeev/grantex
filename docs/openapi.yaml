@@ -8363,13 +8363,22 @@ paths:
         recorded in the audit chain with the attempted action and hash; if that record cannot be written the
         answer is 503 DECISION_AUDIT_UNAVAILABLE (nothing is consumed).
 
-        Present the grants (`decisionGrants`) with the agent and grant read from the calling agent's verified grant
-        token: `agentDid` (its DID) and `grantId`. With `DECISION_GRANT_AGENT_BINDING=true`, a request that names an
-        agent or a grant is consumed only when the agent (`agentDid`, or `agentId`) and grant given match what it
-        names, and a missing one is refused like a different one (403 wrong_agent). With it off (the default),
-        `agentId` and `grantId` are recorded, not compared, and `agentDid` is not read, as before the binding
-        existed. A request that names no agent can instead be consumed by its id
-        (`POST /v1/decisions/requests/{id}/consume`).
+        Present the grants (`decisionGrants`) with the calling agent's grant token (`grantToken`, the same member the
+        release endpoint takes) and the agent and grant it carries: `agentDid` (its DID) and `grantId`.
+
+        With `DECISION_GRANT_AGENT_BINDING=true`, the service establishes the calling agent from `grantToken` alone,
+        checking it as for a release (signature against the service's own keys, expiry, revocation of the token and
+        its grant, grant status, and that it is this developer's), and never from `agentDid`, `agentId` or
+        `grantId`: each of those that is sent must be the token's agent (an `agentId` resolved through the developer's
+        registered agent) and grant. A request that names an agent or a grant is consumed only with a live grant
+        token of that agent and grant; without `grantToken`, with one that is not live, or with another agent's or
+        grant's, it is refused (403 wrong_agent), and the refusal is recorded with the reason (`token_check`) and the
+        members the body claimed. A request that names neither is consumed without `grantToken`, as before; a
+        `grantToken` sent with it must still be live, and its agent and grant are recorded.
+
+        With the binding off (the default), `grantToken` and `agentDid` are not read, and `agentId` and `grantId` are
+        recorded, not compared, as before the binding existed. A request that names no agent can instead be
+        consumed by its id (`POST /v1/decisions/requests/{id}/consume`).
       security:
         - bearerAuth: []
       requestBody:
@@ -8392,6 +8401,14 @@ paths:
                     never in agentId.
                 agentId: { type: string, pattern: "^[A-Za-z0-9_-]{1,128}$", description: "The calling agent's Grantex agent id, when the platform knows it" }
                 grantId: { type: string, pattern: "^[A-Za-z0-9_-]{1,128}$", description: The grant from the same token }
+                grantToken:
+                  type: string
+                  minLength: 1
+                  maxLength: 16384
+                  description: |
+                    The calling agent's grant token. Required, with the agent binding on, to consume the grants of a
+                    request that names an agent or a grant; the agent and grant are taken from it once it is verified.
+                    With the binding off it is not read, so enforcers send it to every version.
       responses:
         "200":
           description: |
@@ -8427,8 +8444,8 @@ paths:
                         dwell_source: { type: string, enum: [server] }
                         jti: { type: string, description: The grant this approver spent }
                   actionHash: { type: string }
-        "400": { description: "Malformed request or token (subReason malformed)" }
-        "403": { description: "With the agent binding on: the decision was requested for another agent or grant, or the caller did not name the one it was requested for (subReason wrong_agent)" }
+        "400": { description: "Malformed request or token (subReason malformed); with the agent binding on, also a grantToken that is not a non-empty string of at most 16384 characters" }
+        "403": { description: "With the agent binding on: the decision was requested for another agent or grant; no grantToken came with a decision requested for an agent or grant; the grantToken is not a live grant token of this developer; or a body member names another agent or grant than the grantToken (subReason wrong_agent)" }
         "409": { description: "Refused (subReason action_mismatch, wrong_case, consumed, same_approver, case_changed, revoked, expired, four_eyes_incomplete or unknown_grant)" }
         "503": { description: The refusal could not be recorded }
   /v1/admin/developers/{developerId}/decision-approver-idps:

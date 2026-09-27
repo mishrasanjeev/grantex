@@ -11,7 +11,9 @@
  * With `DECISION_GRANT_AGENT_BINDING=true` the developer API key never
  * receives a decision grant token: a request that names an agent (`agentId`,
  * `grantId`) releases its grants only to a live grant token of that agent and
- * grant, and they are consumed only for it. Off (the default), request
+ * grant, and they are consumed only when that agent's live grant token
+ * accompanies them (`grantToken`). The agent is always established from its
+ * grant token, never from a body field. Off (the default), request
  * creation, `GET /v1/decisions/requests/:id` and `POST /v1/decisions/consume`
  * answer as they did before the binding existed. In both states a request that
  * names no agent can be consumed by its id, so its grants need not leave the
@@ -22,10 +24,16 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getSql } from '../db/client.js';
 import { config } from '../config.js';
-import { checkActiveGrantToken } from '../lib/active-grant-token.js';
 import { decisionGrantsConsumedTotal, decisionGrantsRejectedTotal } from '../lib/metrics.js';
 import { ActionValidationError, parseDecisionAction, type DecisionAction } from '../lib/decisions/action.js';
 import { DuplicateKeyError, parseJsonRejectingDuplicates } from '../lib/decisions/canonical.js';
+import {
+  NO_GRANT_TOKEN,
+  callingAgentOf,
+  isGrantTokenMember,
+  notLiveGrantToken,
+  type CallingAgent,
+} from '../lib/decisions/calling-agent.js';
 import {
   DECISION_MAX_LIFETIME_SECONDS,
   DecisionError,
@@ -47,10 +55,12 @@ import {
   getDecisionRequest,
   reviewContent,
   setCaseVersion,
+  type ConsumeAttempt,
   type ConsumePlatformRequestInput,
   type ConsumePresentedInput,
   type ConsumeResult,
   type DecisionGrantRow,
+  type DecisionRequester,
   type DecisionRequestRow,
   type GrantRelease,
   type Sql,
@@ -115,7 +125,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 const DECISION_NAME_RE = /^[a-z][a-z0-9_]{0,63}$/;
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
-const MAX_GRANT_TOKEN_LENGTH = 16_384;
 
 /**
  * The `agentId` and `grantId` members of a body (Grantex agent id and grant
@@ -124,7 +133,7 @@ const MAX_GRANT_TOKEN_LENGTH = 16_384;
  * Without it `agentDid` is ignored, as it was before the binding existed, so
  * an SDK that sends it works against a service that does not bind.
  */
-function requesterFields(body: Record<string, unknown>, withDid: boolean): { agentId?: string; agentDid?: string; grantId?: string } | string {
+function requesterFields(body: Record<string, unknown>, withDid: boolean): DecisionRequester | string {
   for (const key of ['agentId', 'grantId'] as const) {
     if (body[key] !== undefined && (typeof body[key] !== 'string' || !ID_RE.test(body[key] as string))) return key;
   }
@@ -190,8 +199,17 @@ function requestResponse(
   };
 }
 
-/** What a refused consumption is recorded with (`auditConsumeRefusal`). */
-type ConsumeAttempt = Parameters<typeof auditConsumeRefusal>[3];
+/**
+ * What a refused consumption records about the agent with the binding on: the
+ * agent and grant its grant token established or, when none was, why
+ * (`token_check`), and apart from them what the body claimed.
+ */
+function attemptedAgent(agent: CallingAgent, claimed: DecisionRequester): Pick<ConsumeAttempt, 'agentDid' | 'grantId' | 'tokenCheck' | 'claimed'> {
+  return {
+    ...(agent.verified ? { agentDid: agent.agentDid, grantId: agent.grantId } : { tokenCheck: agent.tokenCheck }),
+    ...(Object.keys(claimed).length > 0 ? { claimed } : {}),
+  };
+}
 
 /**
  * The jtis of the presented decision grants whose signature verifies and that
@@ -398,7 +416,7 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
     if (!(await decisionGuard(request, reply))) return reply;
     const body = request.body;
     const grantToken = isRecord(body) ? body['grantToken'] : undefined;
-    if (typeof grantToken !== 'string' || grantToken.length === 0 || grantToken.length > MAX_GRANT_TOKEN_LENGTH) {
+    if (!isGrantTokenMember(grantToken)) {
       return badRequest(reply, request, "grantToken, the requesting agent's grant token, is required");
     }
     const sql = getSql();
@@ -409,13 +427,14 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
     // The agent is established from a live grant token of this developer,
     // never from a body field: its signature, expiry, revocation and grant
     // status are checked. A token that fails any of them releases nothing.
-    const agent = await checkActiveGrantToken(grantToken, { expectedDeveloperId: developerId });
-    const requester = agent.ok ? { agentDid: agent.claims.agt, grantId: agent.claims.grnt } : {};
+    // Consumption with the binding establishes the agent the same way.
+    const agent = await callingAgentOf(grantToken, developerId);
+    const requester = agent.verified ? { agentDid: agent.agentDid, grantId: agent.grantId } : {};
     let refusal: DecisionError | null = null;
     let tokenCheck: string | undefined;
-    if (!agent.ok) {
-      tokenCheck = agent.reason;
-      refusal = new DecisionError(DecisionSubReason.WRONG_AGENT, 403, `grantToken is not a live grant token of this developer (${agent.reason})`);
+    if (!agent.verified) {
+      tokenCheck = agent.tokenCheck;
+      refusal = notLiveGrantToken(agent.tokenCheck);
     } else if (found.request.agent_id === null && found.request.grant_id === null) {
       // A request that names no agent has no requesting agent to release to;
       // the platform that asked consumes it by request id instead.
@@ -498,36 +517,57 @@ export async function decisionsRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /v1/decisions/consume — verify and atomically consume the decision
   // grants presented for one action. With the binding, the grants of a request
-  // that names an agent or a grant are consumed only when `agentDid` (the DID
-  // the enforcer read from the calling agent's grant token) or `agentId`, and
-  // `grantId`, name them. This endpoint only ever consumes presented grants:
-  // the body has no request id member, and one without `decisionGrants` is
-  // refused (malformed, 400).
+  // that names an agent or a grant are consumed only when the grant token of
+  // that agent and grant accompanies them (`grantToken`). This endpoint only
+  // ever consumes presented grants: the body has no request id member, and one
+  // without `decisionGrants` is refused (malformed, 400).
   app.post('/v1/decisions/consume', { config: { rateLimit: { max: 600, timeWindow: '1 minute' } } }, async (request, reply) => {
     const settings = await decisionGuard(request, reply);
     if (!settings) return reply;
     const body = request.body;
     if (!isRecord(body)) return badRequest(reply, request, 'Request body must be a JSON object');
-    const context = requesterFields(body, settings.agentBinding);
-    if (typeof context === 'string') return badRequest(reply, request, `${context} is malformed`);
+    const claimed = requesterFields(body, settings.agentBinding);
+    if (typeof claimed === 'string') return badRequest(reply, request, `${claimed} is malformed`);
+    const developerId = request.developer.id;
+
+    // With the binding (a service setting, never a value the caller sends),
+    // the agent the grants are consumed for is established by this service
+    // from the agent's grant token, exactly as the release of the grants
+    // establishes it: `agentId`, `agentDid` and `grantId` in the body are then
+    // only claims, compared with that agent and never taking its place. A
+    // missing token establishes no agent. That never admits more than a live
+    // token would: only a request that names no agent can then be consumed,
+    // as the binding already allowed (see `bindingRequester`), and the
+    // decision grants' own signatures are verified in every case.
+    //
+    // Off, `grantToken` is not read at all, not even for its shape, so this
+    // endpoint answers exactly as it did before the binding existed, and an
+    // SDK that sends the token works against it.
+    let callingAgent: CallingAgent | undefined;
+    if (settings.agentBinding) {
+      const grantToken = body['grantToken'];
+      if (grantToken !== undefined && !isGrantTokenMember(grantToken)) return badRequest(reply, request, 'grantToken is malformed');
+      callingAgent = grantToken === undefined ? NO_GRANT_TOKEN : await callingAgentOf(grantToken, developerId);
+    }
     const input: ConsumePresentedInput = {
-      developerId: request.developer.id,
+      developerId,
       tokens: body['decisionGrants'],
       action: body['action'],
       caseVersion: body['caseVersion'],
-      ...context,
+      ...claimed,
       bindAgent: settings.agentBinding,
+      ...(callingAgent !== undefined ? { callingAgent } : {}),
     };
     return consumeAndReply(
       request,
       reply,
-      input.developerId,
+      developerId,
       (sql) => consumePresentedDecisionGrants(sql, input),
       async () => ({
-        jtis: await verifiedJtis(input.tokens, input.developerId),
+        jtis: await verifiedJtis(input.tokens, developerId),
         action: input.action,
         caseVersion: input.caseVersion,
-        ...context,
+        ...(callingAgent !== undefined ? attemptedAgent(callingAgent, claimed) : claimed),
       }),
     );
   });

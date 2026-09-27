@@ -98,8 +98,12 @@ is turned on, such an integration:
    `"subReason": "wrong_agent"`, which is not an authentication failure.
 4. **Leaves agent decisions to the agent.** Grants of a request made for an
    agent (`agentId`, `grantId`) are released only to that agent's grant token
-   (`POST /v1/decisions/requests/{id}/grants`) and consumed only on that
-   agent's behalf, as [Decision Grants](/concepts/decision-grants#binding-decisions-to-the-requesting-agent)
+   (`POST /v1/decisions/requests/{id}/grants`) and consumed only when the same
+   agent's grant token accompanies the consumption (`grantToken` on
+   `POST /v1/decisions/consume`). Grantex establishes the agent from that
+   token, never from agent or grant identifiers in the request body, so the
+   developer API key alone cannot consume them. The SDKs' `enforce()` sends
+   the token it verified, as [Decision Grants](/concepts/decision-grants#binding-decisions-to-the-requesting-agent)
    describes.
 
 Consumption by request id and the grants endpoint work with the binding off,

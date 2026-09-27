@@ -699,6 +699,30 @@ describePostgres('decision grants against real Postgres', () => {
     return { agentId, did, grantId, grantToken };
   }
 
+  /** Another grant token of the agent: under `grantId` when given, else under a second active grant of its own. */
+  async function anotherTokenOf(agent: { agentId: string; did: string }, grantId?: string) {
+    const label = `${++agentCounter}_${suffix}`;
+    const grant = grantId ?? `grnt_dec_${label}`;
+    const jti = `tok_dec_${label}`;
+    if (grantId === undefined) {
+      await sql`
+        INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+        VALUES (${grant}, ${agent.agentId}, 'shopper-01', ${developerId}, ${['tool:acme_kyb:write']}, NOW() + INTERVAL '2 hours')`;
+    }
+    await sql`INSERT INTO grant_tokens (jti, grant_id, expires_at) VALUES (${jti}, ${grant}, NOW() + INTERVAL '1 hour')`;
+    const iat = now();
+    const grantToken = await signGrantToken({ sub: 'shopper-01', agt: agent.did, dev: developerId, scp: ['tool:acme_kyb:write'], jti, grnt: grant, iat, exp: iat + 3600 });
+    return { jti, grantId: grant, grantToken };
+  }
+
+  /** The recorded refusals of consumptions that presented `jti`, oldest first. */
+  async function consumeRefusalsOf(jti: string) {
+    return sql<{ status: string; agent_id: string; agent_did: string; grant_id: string; metadata: Record<string, unknown> }[]>`
+      SELECT status, agent_id, agent_did, grant_id, metadata FROM audit_entries
+      WHERE developer_id = ${developerId} AND action = 'decision.consume_refused' AND metadata->'jtis' ? ${jti}
+      ORDER BY timestamp, id`;
+  }
+
   async function approveOnce(requestId: string): Promise<void> {
     const session = await signIn(requestId, `bound_${randomUUID().slice(0, 8)}`);
     const res = await approve(requestId, session.cookie!);
@@ -786,6 +810,23 @@ describePostgres('decision grants against real Postgres', () => {
       expect(ok.json()).toMatchObject({ consumed: true, requestId });
       const [consumed] = await auditFor('decision.consumed', requestId);
       expect(consumed).toMatchObject({ agent_id: other.agentId, agent_did: '', grant_id: other.grantId });
+    });
+
+    it('does not read a grant token sent with a consumption: neither another agent\'s nor one that is not a token', async () => {
+      const agent = await agentWithGrant();
+      const other = await agentWithGrant();
+      for (const grantToken of [other.grantToken, 'not a grant token', 7]) {
+        const action = actionFor(newCase());
+        const request = await createRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+        await approveOnce(request.requestId);
+        const tokens = await mintedGrants(request.requestId);
+        const ok = await consumeAs(tokens, action, { grantToken, agentId: other.agentId, grantId: other.grantId });
+        expect(ok.statusCode, ok.body).toBe(200);
+        expect(ok.json()).toMatchObject({ consumed: true, requestId: request.requestId });
+        // Recorded with the body's agent and grant, as before the binding.
+        const [consumed] = await auditFor('decision.consumed', request.requestId);
+        expect(consumed).toMatchObject({ agent_id: other.agentId, agent_did: '', grant_id: other.grantId });
+      }
     });
 
     it('answers a repeated request for another agent with the open request, as before the binding', async () => {
@@ -917,20 +958,29 @@ describePostgres('decision grants against real Postgres', () => {
         const refused = await consumeAs(tokens, action, requester);
         expect(refused.statusCode, refused.body).toBe(403);
         expect(refused.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
+        // Presenting its own live grant token does not make it the requester.
+        const withToken = await consumeAs(tokens, action, { grantToken: other.grantToken, ...requester });
+        expect(withToken.statusCode, withToken.body).toBe(403);
+        expect(withToken.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
       }
       // The right agent under another grant is not the requester either, and
       // every agent reference given must be the right one.
       expect((await consumeAs(tokens, action, { agentDid: agent.did, grantId: other.grantId })).json()).toMatchObject({ subReason: 'wrong_agent' });
       expect((await consumeAs(tokens, action, { agentDid: agent.did, agentId: other.agentId, grantId: agent.grantId })).json()).toMatchObject({ subReason: 'wrong_agent' });
+      const secondGrant = await anotherTokenOf(agent);
+      expect((await consumeAs(tokens, action, { grantToken: secondGrant.grantToken })).json()).toMatchObject({ subReason: 'wrong_agent' });
+      expect((await consumeAs(tokens, action, { grantToken: agent.grantToken, agentId: other.agentId })).json()).toMatchObject({ subReason: 'wrong_agent' });
       expect(await consumedAt(request.requestId)).toEqual([null]);
+      // The refusal names the agent its grant token established.
       const [audited] = await sql<{ status: string; agent_did: string; grant_id: string; metadata: Record<string, unknown> }[]>`
         SELECT status, agent_did, grant_id, metadata FROM audit_entries
         WHERE developer_id = ${developerId} AND action = 'decision.consume_refused' AND agent_did = ${other.did}`;
       expect(audited).toMatchObject({ status: 'blocked', grant_id: other.grantId, metadata: { sub_reason: 'wrong_agent', action_hash: computeActionHash(action) } });
 
-      // The agent the request names consumes it: the enforcer reports the DID
-      // from its grant token, and the request named it by agent id.
-      const ok = await consumeAs(tokens, action, { agentDid: agent.did, grantId: agent.grantId });
+      // The agent the request names consumes it with its grant token; the
+      // DID and grant an enforcer reports, and the agent id the request named
+      // it by, are that token's.
+      const ok = await consumeAs(tokens, action, { grantToken: agent.grantToken, agentDid: agent.did, agentId: agent.agentId, grantId: agent.grantId });
       expect(ok.statusCode, ok.body).toBe(200);
       expect(ok.json()).toMatchObject({ consumed: true, requestId: request.requestId });
       const [consumed] = await auditFor('decision.consumed', request.requestId);
@@ -951,15 +1001,164 @@ describePostgres('decision grants against real Postgres', () => {
       }
       expect(await consumedAt(request.requestId)).toEqual([null]);
 
-      // A request bound only to a grant needs only that grant.
+      // A request bound only to a grant needs only that grant, which the
+      // grant token carries. Naming the right agent and grant in the body is
+      // not that token.
       const grantOnly = actionFor(newCase());
       const second = await createRequest(grantOnly, { grantId: agent.grantId });
       await approveOnce(second.requestId);
       const secondTokens = await mintedGrants(second.requestId);
       expect((await consumeAs(secondTokens, grantOnly, { agentDid: agent.did })).json()).toMatchObject({ subReason: 'wrong_agent' });
-      expect((await consumeAs(secondTokens, grantOnly, { agentDid: agent.did, grantId: agent.grantId })).statusCode).toBe(200);
-      // A platform that names the agent by its Grantex agent id is the same agent.
-      expect((await consumeAs(tokens, action, { agentId: agent.agentId, grantId: agent.grantId })).statusCode).toBe(200);
+      expect((await consumeAs(secondTokens, grantOnly, { agentDid: agent.did, grantId: agent.grantId })).json()).toMatchObject({ subReason: 'wrong_agent' });
+      expect(await consumedAt(second.requestId)).toEqual([null]);
+      expect((await consumeAs(secondTokens, grantOnly, { grantToken: agent.grantToken })).statusCode).toBe(200);
+      // A platform that names the agent by its Grantex agent id is the same
+      // agent, when that agent's grant token comes with it.
+      expect((await consumeAs(tokens, action, { agentId: agent.agentId, grantId: agent.grantId })).json()).toMatchObject({ subReason: 'wrong_agent' });
+      expect((await consumeAs(tokens, action, { grantToken: agent.grantToken, agentId: agent.agentId, grantId: agent.grantId })).statusCode).toBe(200);
+    });
+
+    it("consumes a bound decision only with its agent's grant token: body members naming the right agent are not enough, and with the token they may be omitted", async () => {
+      const agent = await agentWithGrant();
+      const action = actionFor(newCase());
+      const request = await createRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+      await approveOnce(request.requestId);
+      const tokens = await mintedGrants(request.requestId);
+      const jti = decodeJwt(tokens[0]!).jti as string;
+
+      // The developer API key with every member naming the right agent and grant, but no grant token.
+      for (const requester of [
+        { agentDid: agent.did, grantId: agent.grantId },
+        { agentId: agent.agentId, grantId: agent.grantId },
+        { agentId: agent.agentId, agentDid: agent.did, grantId: agent.grantId },
+      ]) {
+        const refused = await consumeAs(tokens, action, requester);
+        expect(refused.statusCode, JSON.stringify(requester)).toBe(403);
+        expect(refused.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
+      }
+      expect(await consumedAt(request.requestId)).toEqual([null]);
+      // Recorded with no agent (none was established) and the claims apart.
+      const refusals = await consumeRefusalsOf(jti);
+      expect(refusals).toHaveLength(3);
+      expect(refusals[0]).toMatchObject({
+        status: 'blocked', agent_id: '', agent_did: '', grant_id: '',
+        metadata: { sub_reason: 'wrong_agent', token_check: 'missing', claimed_agent_did: agent.did, claimed_grant_id: agent.grantId },
+      });
+
+      // The agent's grant token alone: consumed, and recorded as that agent.
+      const ok = await consumeAs(tokens, action, { grantToken: agent.grantToken });
+      expect(ok.statusCode, ok.body).toBe(200);
+      expect(ok.json()).toMatchObject({ consumed: true, requestId: request.requestId, jtis: [jti] });
+      const [consumed] = await auditFor('decision.consumed', request.requestId);
+      expect(consumed).toMatchObject({ agent_id: agent.agentId, agent_did: agent.did, grant_id: agent.grantId });
+    });
+
+    it("refuses another agent's live grant token presented with the requesting agent's ids in the body", async () => {
+      const agent = await agentWithGrant();
+      const other = await agentWithGrant();
+      const action = actionFor(newCase());
+      const request = await createRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+      await approveOnce(request.requestId);
+      const tokens = await mintedGrants(request.requestId);
+      const jti = decodeJwt(tokens[0]!).jti as string;
+
+      for (const requester of [
+        { agentDid: agent.did, grantId: agent.grantId },
+        { agentId: agent.agentId, grantId: agent.grantId },
+        { agentId: agent.agentId, agentDid: agent.did, grantId: agent.grantId },
+        { agentDid: agent.did },
+        { grantId: agent.grantId },
+      ]) {
+        const refused = await consumeAs(tokens, action, { grantToken: other.grantToken, ...requester });
+        expect(refused.statusCode, JSON.stringify(requester)).toBe(403);
+        expect(refused.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
+      }
+      expect(await consumedAt(request.requestId)).toEqual([null]);
+      // Recorded as the agent the token established, with what the body claimed apart.
+      const [first] = await consumeRefusalsOf(jti);
+      expect(first).toMatchObject({
+        agent_did: other.did, grant_id: other.grantId,
+        metadata: { sub_reason: 'wrong_agent', claimed_agent_did: agent.did, claimed_grant_id: agent.grantId },
+      });
+      expect(first!.metadata).not.toHaveProperty('token_check');
+
+      expect((await consumeAs(tokens, action, { grantToken: agent.grantToken, agentDid: agent.did, grantId: agent.grantId })).statusCode).toBe(200);
+    });
+
+    it('refuses an expired, revoked, unknown, other developer\'s or unverifiable grant token whatever the body says, and consumes nothing', async () => {
+      const agent = await agentWithGrant();
+      const action = actionFor(newCase());
+      const request = await createRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+      await approveOnce(request.requestId);
+      const tokens = await mintedGrants(request.requestId);
+      const jti = decodeJwt(tokens[0]!).jti as string;
+
+      // Tokens of the right agent and grant that are no longer live.
+      const lapsed = await anotherTokenOf(agent, agent.grantId);
+      await sql`UPDATE grant_tokens SET expires_at = NOW() - INTERVAL '1 second' WHERE jti = ${lapsed.jti}`;
+      const revoked = await anotherTokenOf(agent, agent.grantId);
+      await sql`UPDATE grant_tokens SET is_revoked = TRUE WHERE jti = ${revoked.jti}`;
+      // Signed by this service for the right agent and grant, but never issued.
+      const iat = now();
+      const unknown = await signGrantToken({ sub: 'shopper-01', agt: agent.did, dev: developerId, scp: ['tool:acme_kyb:write'], jti: `tok_dec_unknown_${suffix}`, grnt: agent.grantId, iat, exp: iat + 3600 });
+      // A live token of another developer's agent.
+      const foreign = await agentWithGrant(otherDeveloperId);
+      const cases: [string, string][] = [
+        [lapsed.grantToken, 'expired'],
+        [revoked.grantToken, 'revoked'],
+        [unknown, 'not_found'],
+        [foreign.grantToken, 'wrong_developer'],
+        ['not-a-grant-token', 'invalid'],
+        [`${agent.grantToken.split('.').slice(0, 2).join('.')}.${'A'.repeat(43)}`, 'invalid'],
+      ];
+      for (const [grantToken] of cases) {
+        const refused = await consumeAs(tokens, action, { grantToken, agentId: agent.agentId, agentDid: agent.did, grantId: agent.grantId });
+        expect(refused.statusCode, refused.body).toBe(403);
+        expect(refused.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
+        expect(refused.json<{ message: string }>().message).toMatch(/grantToken is not a live grant token/);
+      }
+      expect(await consumedAt(request.requestId)).toEqual([null]);
+      const refusals = await consumeRefusalsOf(jti);
+      expect(refusals.map((r) => r.metadata['token_check'])).toEqual(cases.map(([, check]) => check));
+      for (const refusal of refusals) {
+        expect(refusal).toMatchObject({ status: 'blocked', agent_did: '', grant_id: '', metadata: { sub_reason: 'wrong_agent', claimed_agent_id: agent.agentId } });
+      }
+
+      // The live token still consumes it.
+      expect((await consumeAs(tokens, action, { grantToken: agent.grantToken })).statusCode).toBe(200);
+    });
+
+    it('consumes the presented grants of a request that names no agent as before: no grant token is needed, and one given must be live', async () => {
+      const live = await agentWithGrant();
+      const request = async () => {
+        const action = actionFor(newCase());
+        const created = await createRequest(action);
+        await approveOnce(created.requestId);
+        return { action, requestId: created.requestId, tokens: await mintedGrants(created.requestId) };
+      };
+
+      // No grant token and no agent, as before the binding.
+      const bare = await request();
+      const ok = await consumeAs(bare.tokens, bare.action, {});
+      expect(ok.statusCode, ok.body).toBe(200);
+      expect((await auditFor('decision.consumed', bare.requestId))[0]).toMatchObject({ agent_id: '', agent_did: '', grant_id: '' });
+
+      // Body members without a token are still accepted, but, unverified, not recorded as the consuming agent.
+      const claimed = await request();
+      expect((await consumeAs(claimed.tokens, claimed.action, { agentDid: live.did, agentId: live.agentId, grantId: live.grantId })).statusCode).toBe(200);
+      expect((await auditFor('decision.consumed', claimed.requestId))[0]).toMatchObject({ agent_id: '', agent_did: '', grant_id: '' });
+
+      // A token that is not live fails closed here too; a live one is recorded as its agent.
+      const tokened = await request();
+      const refused = await consumeAs(tokened.tokens, tokened.action, { grantToken: 'not-a-grant-token' });
+      expect(refused.statusCode).toBe(403);
+      expect(refused.json()).toMatchObject({ subReason: 'wrong_agent' });
+      expect(await consumedAt(tokened.requestId)).toEqual([null]);
+      const other = await agentWithGrant();
+      expect((await consumeAs(tokened.tokens, tokened.action, { grantToken: live.grantToken, agentDid: other.did })).json()).toMatchObject({ subReason: 'wrong_agent' });
+      expect(await consumedAt(tokened.requestId)).toEqual([null]);
+      expect((await consumeAs(tokened.tokens, tokened.action, { grantToken: live.grantToken })).statusCode).toBe(200);
+      expect((await auditFor('decision.consumed', tokened.requestId))[0]).toMatchObject({ agent_id: '', agent_did: live.did, grant_id: live.grantId });
     });
 
     it('refuses a malformed agentDid and a DID given as agentId', async () => {
@@ -1018,7 +1217,7 @@ describePostgres('decision grants against real Postgres', () => {
         metadata: expect.objectContaining({ jtis: [jti], action_hash: computeActionHash(action) }),
       })]);
 
-      expect((await consumeAs(tokens, action, { agentDid: agent.did, grantId: agent.grantId })).statusCode).toBe(200);
+      expect((await consumeAs(tokens, action, { grantToken: agent.grantToken, agentDid: agent.did, grantId: agent.grantId })).statusCode).toBe(200);
       // Once spent there is nothing left to release, and nothing is recorded as released.
       const spent = await release(request.requestId, { grantToken: agent.grantToken });
       expect(spent.json()).toMatchObject({ status: 'consumed', decisionGrantsReady: false });
@@ -1073,8 +1272,8 @@ describePostgres('decision grants against real Postgres', () => {
 
       const tokens = (await release(request.requestId, { grantToken: agent.grantToken })).json<{ decisionGrants: string[] }>().decisionGrants;
       expect(tokens).toHaveLength(2);
-      expect((await consumeAs([tokens[0]!], action, { agentDid: agent.did, grantId: agent.grantId })).json()).toMatchObject({ subReason: 'four_eyes_incomplete' });
-      const consumed = await consumeAs([tokens[1]!, tokens[0]!], action, { agentDid: agent.did, grantId: agent.grantId });
+      expect((await consumeAs([tokens[0]!], action, { grantToken: agent.grantToken, agentDid: agent.did, grantId: agent.grantId })).json()).toMatchObject({ subReason: 'four_eyes_incomplete' });
+      const consumed = await consumeAs([tokens[1]!, tokens[0]!], action, { grantToken: agent.grantToken, agentDid: agent.did, grantId: agent.grantId });
       expect(consumed.statusCode, consumed.body).toBe(200);
       expect(consumed.json<{ jtis: string[] }>().jtis).toHaveLength(2);
     });

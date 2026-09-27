@@ -20,7 +20,7 @@ import pytest
 import respx
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from grantex import DenialReason, Grantex, ToolManifest
+from grantex import DenialReason, Grantex, GrantexTokenError, ToolManifest
 from grantex._types import VerifiedGrant
 from grantex.caps import CapsMeter, InMemoryCapsBackend
 from grantex.decisions import (
@@ -254,7 +254,33 @@ def test_enforce_passes_agent_did_to_a_consumer_that_takes_keyword_arguments(ver
         "t", "acme_kyb", "case_decision", decision_grants=[build_grant({})], arguments=call_args(), case_version="v7",
     )
     assert result.allowed, result.reason
-    assert seen == [{"agent_did": "did:grantex:ag_01", "grant_id": "grnt_01"}]
+    assert seen == [{"agent_did": "did:grantex:ag_01", "grant_id": "grnt_01", "grant_token": "t"}]
+
+
+def test_enforce_passes_the_grant_token_it_verified_to_a_consumer_that_takes_it(verify_grant: MagicMock) -> None:
+    seen: List[Dict[str, Optional[str]]] = []
+    inner = FakeIssuer()
+
+    class TokenIssuer:
+        def consume(
+            self,
+            grants: DecisionGrantSet,
+            *,
+            agent_id: Optional[str] = None,
+            grant_id: Optional[str] = None,
+            grant_token: Optional[str] = None,
+        ) -> ConsumedDecision:
+            seen.append({"agent_id": agent_id, "grant_id": grant_id, "grant_token": grant_token})
+            return inner._consume(grants)
+
+    result = client(TokenIssuer()).enforce(  # type: ignore[arg-type]
+        "agent.grant.token", "acme_kyb", "case_decision", decision_grants=[build_grant({})], arguments=call_args(), case_version="v7",
+    )
+    assert result.allowed, result.reason
+    # An issuer that binds decisions to the requesting agent verifies the
+    # token itself and takes the agent from it; agent_did, which this consumer
+    # does not declare, is not passed.
+    assert seen == [{"agent_id": None, "grant_id": "grnt_01", "grant_token": "agent.grant.token"}]
 
 
 def test_replay_of_a_consumed_jti_is_denied(verify_grant: MagicMock) -> None:
@@ -425,6 +451,37 @@ def test_enforce_sends_the_agent_and_grant_of_the_grant_token_when_it_consumes(v
     # in agentId and ignores members it does not know, so the DID never goes
     # there: this body is accepted by every version.
     assert "agentId" not in body
+    # The grant token enforce() verified goes with it, for an auth service
+    # that binds decisions to take the agent from.
+    assert body["grantToken"] == "t"
+
+
+@respx.mock
+def test_enforce_sends_no_grant_token_it_could_not_verify(verify_grant: MagicMock) -> None:
+    route = respx.post(f"{BASE}/v1/decisions/consume").mock(return_value=httpx.Response(200, json={
+        "consumed": True, "requestId": "dreq_1", "jtis": [FIXTURE["base_claims"]["jti"]], "actionHash": "sha256:x", "approvers": [],
+    }))
+    verify_grant.side_effect = GrantexTokenError("bad signature")
+    c = Grantex(api_key="test-key")
+    c.load_manifest(MANIFEST)
+    result = c.enforce("forged.grant.token", "acme_kyb", "case_decision", decision_grants=[build_grant({})], arguments=call_args(), case_version="v7")
+    assert not result.allowed
+    assert route.call_count == 0
+
+
+@respx.mock
+def test_consume_sends_grant_token_in_its_own_member_when_given_and_omits_it_otherwise() -> None:
+    route = respx.post(f"{BASE}/v1/decisions/consume").mock(return_value=httpx.Response(200, json={
+        "consumed": True, "requestId": "dreq_1", "jtis": [FIXTURE["base_claims"]["jti"]], "actionHash": "sha256:x", "approvers": [],
+    }))
+    grants = _set([build_grant({})])
+    decisions = Grantex(api_key="test-key").decisions
+    decisions.consume(grants, grant_token="agent.grant.token")
+    assert json.loads(route.calls[0].request.content) == {
+        "decisionGrants": list(grants.tokens), "action": ACTION, "caseVersion": "v7", "grantToken": "agent.grant.token",
+    }
+    decisions.consume(grants)
+    assert "grantToken" not in json.loads(route.calls[1].request.content)
 
 
 @respx.mock

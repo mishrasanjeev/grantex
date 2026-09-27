@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
+from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Protocol, Sequence, Tuple, Union
 from urllib.parse import quote
 
 from .._errors import GrantexApiError, GrantexError
@@ -37,12 +37,14 @@ class ConsumedDecision:
 class DecisionConsumer(Protocol):
     """Consumes decision grants atomically at their issuer.
 
-    ``enforce()`` passes ``agent_did`` and ``grant_id`` from the caller's
-    verified grant token; an issuer that binds decision grants to the
-    requesting agent refuses a decision requested for another agent or grant
-    (``wrong_agent``). ``enforce()`` passes ``agent_did`` only to a consumer
-    whose ``consume`` declares it (or ``**kwargs``), so a consumer written
-    before it existed keeps working and consumes as before.
+    ``enforce()`` passes the caller's grant token, which it verified
+    (``grant_token``), and the agent DID and grant it carries (``agent_did``,
+    ``grant_id``); an issuer that binds decision grants to the requesting
+    agent establishes the agent from that token and refuses a decision
+    requested for another agent or grant (``wrong_agent``). ``enforce()``
+    passes ``agent_did`` and ``grant_token`` only to a consumer whose
+    ``consume`` declares them (or ``**kwargs``), so a consumer written before
+    they existed keeps working and consumes as before.
     """
 
     def consume(
@@ -52,6 +54,7 @@ class DecisionConsumer(Protocol):
         agent_id: Optional[str] = None,
         grant_id: Optional[str] = None,
         agent_did: Optional[str] = None,
+        grant_token: Optional[str] = None,
     ) -> ConsumedDecision:
         """Consume every grant in ``grants`` or none. Raise
         ``DecisionGrantError`` with the refusal's sub-reason, or any other
@@ -179,6 +182,7 @@ class DecisionsClient:
         agent_id: Optional[str] = None,
         grant_id: Optional[str] = None,
         agent_did: Optional[str] = None,
+        grant_token: Optional[str] = None,
     ) -> ConsumedDecision:
         """Consume decision grants atomically at the auth service.
 
@@ -194,6 +198,15 @@ class DecisionsClient:
         to the requesting agent ignores, so it is safe to send to any version.
         ``agent_id`` is the agent's Grantex agent id (``ag_...``), sent as
         ``agentId``; ``grant_id`` the grant the call is made under.
+
+        ``grant_token`` is the grant token of the agent the call is made for
+        (what ``enforce()`` passes, after verifying it), sent as
+        ``grantToken``. An auth service that binds decision grants to the
+        requesting agent verifies it and takes the agent and grant from it,
+        never from ``agentDid``, ``agentId`` or ``grantId``, which must then
+        match it: the grants of a decision requested for an agent are consumed
+        only with that agent's live grant token. An auth service with the
+        binding off, or from before it, ignores the member.
 
         Consumption spends the grants. If the response is lost after the auth
         service consumed them, or the tool call fails afterwards, they stay
@@ -216,6 +229,8 @@ class DecisionsClient:
             body["agentDid"] = agent_did
         if grant_id is not None:
             body["grantId"] = grant_id
+        if grant_token is not None:
+            body["grantToken"] = grant_token
         data = self._consume("/v1/decisions/consume", body)
         if sorted(data["jtis"]) != sorted(_jtis_of(grants)):
             raise DecisionGrantError(DecisionSubReason.CONSUME_UNAVAILABLE, "the auth service consumed different decision grants")
@@ -292,21 +307,27 @@ def _jtis_of(grants: Union[DecisionGrantSet, Sequence[str]]) -> List[str]:
     return out
 
 
-def _takes_agent_did(consumer: object) -> bool:
-    """Whether ``consumer.consume`` accepts ``agent_did``, by name or ``**kwargs``.
+_LATER_CONSUME_KEYWORDS = ("agent_did", "grant_token")
 
-    A :class:`DecisionConsumer` written before ``agent_did`` existed does not:
-    passing it would raise ``TypeError`` and deny every decision call, so
-    ``enforce()`` calls such a consumer as it did before (``grant_id`` only).
+
+def _consume_keywords(consumer: object) -> FrozenSet[str]:
+    """Which of ``agent_did`` and ``grant_token`` ``consumer.consume`` accepts, by name or ``**kwargs``.
+
+    A :class:`DecisionConsumer` written before they existed accepts neither:
+    passing one would raise ``TypeError`` and deny every decision call, so
+    ``enforce()`` passes each only to a consumer that accepts it, and calls
+    an older one as it did before (``grant_id`` only).
     """
     try:
         parameters = inspect.signature(getattr(consumer, "consume")).parameters
     except (AttributeError, TypeError, ValueError):
-        return False
-    return any(
-        p.kind is inspect.Parameter.VAR_KEYWORD
-        or (p.name == "agent_did" and p.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD))
-        for p in parameters.values()
+        return frozenset()
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+        return frozenset(_LATER_CONSUME_KEYWORDS)
+    return frozenset(
+        p.name for p in parameters.values()
+        if p.name in _LATER_CONSUME_KEYWORDS
+        and p.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
     )
 
 
@@ -323,5 +344,8 @@ class _ClientConsumer:
         agent_id: Optional[str] = None,
         grant_id: Optional[str] = None,
         agent_did: Optional[str] = None,
+        grant_token: Optional[str] = None,
     ) -> ConsumedDecision:
-        return self._client.consume(grants, agent_id=agent_id, grant_id=grant_id, agent_did=agent_did)
+        return self._client.consume(
+            grants, agent_id=agent_id, grant_id=grant_id, agent_did=agent_did, grant_token=grant_token,
+        )

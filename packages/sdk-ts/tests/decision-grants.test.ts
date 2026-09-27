@@ -207,8 +207,9 @@ describe('enforce() and decision grants', () => {
     expect(result.allowed, result.reason).toBe(true);
     // An issuer that binds decisions to the requesting agent refuses one
     // requested for another agent or grant (wrong_agent), so both come from
-    // the verified token, never the call.
-    expect(issuer.requesters).toEqual([{ agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' }]);
+    // the verified token, never the call, and the token itself goes with
+    // them for the issuer to verify.
+    expect(issuer.requesters).toEqual([{ agentDid: 'did:grantex:ag_01', grantId: 'grnt_01', grantToken: 't' }]);
   });
 
   it('denies replay of a consumed jti', async () => {
@@ -371,11 +372,47 @@ describe('grantex.decisions', () => {
     const consumeCalls = (fetchMock.mock.calls as [string, RequestInit][]).filter(([url]) => url.endsWith('/v1/decisions/consume'));
     expect(consumeCalls).toHaveLength(1);
     const body = JSON.parse(String(consumeCalls[0]![1].body)) as Record<string, unknown>;
-    expect(body).toMatchObject({ agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' });
+    expect(body).toMatchObject({ agentDid: 'did:grantex:ag_01', grantId: 'grnt_01', grantToken: 't' });
     // An auth service from before the binding accepts only a Grantex agent id
     // in agentId and ignores members it does not know, so the DID never goes
     // there: this body is accepted by every version.
     expect(body).not.toHaveProperty('agentId');
+  });
+
+  it("enforce() sends the grant token it verified as grantToken, for an issuer that binds decisions to take the agent from it", async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockResolvedValue(json(200, { consumed: true, requestId: 'dreq_1', jtis: [FIXTURE.base_claims['jti']], actionHash: 'sha256:x', approvers: [] }));
+    vi.mocked(verifyGrantToken).mockResolvedValue(grantFor());
+    const c = new Grantex({ apiKey: 'test-key' });
+    c.loadManifest(MANIFEST);
+    const result = await c.enforce({ grantToken: 'agent.grant.token', connector: 'acme_kyb', tool: 'case_decision', decisionGrants: [await buildGrant({})], arguments: args(), caseVersion: 'v7' });
+    expect(result.allowed, result.reason).toBe(true);
+    const consumeCalls = (fetchMock.mock.calls as [string, RequestInit][]).filter(([url]) => url.endsWith('/v1/decisions/consume'));
+    expect(consumeCalls).toHaveLength(1);
+    // A body member, like the release endpoint's: an auth service without the
+    // binding, or from before it, ignores members it does not know.
+    const body = JSON.parse(String(consumeCalls[0]![1].body)) as Record<string, unknown>;
+    expect(body).toMatchObject({ grantToken: 'agent.grant.token', agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' });
+
+    // Without a verified grant token nothing is consumed, so no token is ever sent unverified.
+    fetchMock.mockClear();
+    vi.mocked(verifyGrantToken).mockRejectedValueOnce(new Error('bad signature'));
+    const denied = await c.enforce({ grantToken: 'forged.grant.token', connector: 'acme_kyb', tool: 'case_decision', decisionGrants: [await buildGrant({})], arguments: args(), caseVersion: 'v7' });
+    expect(denied.allowed).toBe(false);
+    expect((fetchMock.mock.calls as [string, RequestInit][]).filter(([url]) => url.endsWith('/v1/decisions/consume'))).toHaveLength(0);
+  });
+
+  it('consume sends grantToken in its own member when given, and omits it otherwise', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockImplementation(async () => json(200, { consumed: true, requestId: 'dreq_1', jtis: [FIXTURE.base_claims['jti']], actionHash: 'sha256:x', approvers: [] }));
+    const token = await buildGrant({});
+    const decisions = new Grantex({ apiKey: 'test-key' }).decisions;
+    await decisions.consume([token], { action: FIXTURE.action, caseVersion: 'v7', grantToken: 'agent.grant.token' });
+    expect(JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body))).toEqual({
+      decisionGrants: [token], action: FIXTURE.action, caseVersion: 'v7', grantToken: 'agent.grant.token',
+    });
+    await decisions.consume([token], { action: FIXTURE.action, caseVersion: 'v7' });
+    expect(JSON.parse(String((fetchMock.mock.calls[1] as [string, RequestInit])[1].body))).not.toHaveProperty('grantToken');
   });
 
   it('consume sends agentDid and agentId as given, each in its own member', async () => {
