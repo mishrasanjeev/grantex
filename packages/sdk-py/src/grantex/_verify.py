@@ -67,16 +67,18 @@ _JWKS_CACHE_TTL_SECONDS = 10 * 60.0
 _JWKS_REFRESH_COOLDOWN_SECONDS = 30.0
 _JWKS_CACHE_MAX_ENTRIES = 64
 
-# The key set comes from whoever the verifier was pointed at, so the fetch is
-# bounded like any other untrusted response, with the same limits as the
-# TypeScript SDK. 64 KiB holds the auth service's default set many times over.
-# The key cap keeps the per-token key search small when the keys are small
-# (64 KiB holds some 350 EC keys). It is 128 rather than lower because the
-# auth service publishes its legacy RSA key under one kid alias per month of
-# JWT_LEGACY_KID_MONTHS (13 by default, up to 120) beside its signing keys,
-# so a set of several dozen keys is an ordinary configuration. The deadline
-# covers the whole exchange, as JOSE's timeoutDuration does in the TypeScript
-# SDK.
+# With bounded_jwks_fetch (off by default until a major release turns it on,
+# with False as the opt-out), the key set, which comes from whoever the
+# verifier was pointed at, is fetched within bounds like any other untrusted
+# response, with the same limits as the TypeScript SDK's boundedJwksFetch;
+# without it, _download_jwks reads it as earlier releases did. 64 KiB holds
+# the auth service's default set many times over. The key cap keeps the
+# per-token key search small when the keys are small (64 KiB holds some 350
+# EC keys). It is 128 rather than lower because the auth service publishes
+# its legacy RSA key under one kid alias per month of JWT_LEGACY_KID_MONTHS
+# (13 by default, up to 120) beside its signing keys, so a set of several
+# dozen keys is an ordinary configuration. The deadline covers the whole
+# exchange, as JOSE's timeoutDuration does in the TypeScript SDK.
 _JWKS_MAX_BYTES = 64 * 1024
 _JWKS_MAX_KEYS = 128
 _JWKS_FETCH_DEADLINE_SECONDS = 5.0
@@ -99,7 +101,9 @@ class _JwksCacheEntry:
     fetched_at: float
 
 
-_jwks_cache: dict[str, _JwksCacheEntry] = {}
+# Keyed by (bounded, jwks_uri): keys read without the bounds never answer a
+# verification that asked for them, and the reverse.
+_jwks_cache: dict[tuple[bool, str], _JwksCacheEntry] = {}
 _jwks_cache_lock = threading.Lock()
 
 
@@ -143,18 +147,27 @@ def verify_grant_token(
             f"Grant token typ must be at+jwt, got {header.get('typ')!r}"
         )
 
+    bounded = bool(options.bounded_jwks_fetch)
     jwks_uri = options.jwks_uri
     expected_issuer = options.issuer
-    if options.issuer_did is not None:
-        # The DID is the trust anchor: one that cannot be resolved safely is
-        # refused, never skipped in favour of jwks_uri.
-        jwks_uri, did_issuer = _resolve_did_web(options.issuer_did)
+    if bounded:
+        if options.issuer_did is not None:
+            # The DID is the trust anchor: one that cannot be resolved safely
+            # is refused, never skipped in favour of jwks_uri.
+            jwks_uri, did_issuer = _resolve_did_web(options.issuer_did)
+            if expected_issuer is None:
+                expected_issuer = did_issuer
+    elif options.issuer_did is not None and options.issuer_did.startswith("did:web:"):
+        # Without bounded_jwks_fetch, the DID is read as earlier releases read
+        # it, and a value that is not did:web is ignored.
+        domain = options.issuer_did.removeprefix("did:web:").replace(":", "/")
+        jwks_uri = f"https://{domain}/.well-known/jwks.json"
         if expected_issuer is None:
-            expected_issuer = did_issuer
+            expected_issuer = f"https://{domain}"
     if expected_issuer is None:
         expected_issuer = _derive_issuer_from_jwks_uri(jwks_uri)
 
-    signing_key = _fetch_signing_key(jwks_uri, header.get("kid"), alg)
+    signing_key = _fetch_signing_key(jwks_uri, header.get("kid"), alg, bounded=bounded)
 
     decode_kwargs: dict[str, Any] = {
         # Only the header's algorithm, already checked against the allowlist
@@ -336,7 +349,34 @@ def _is_jwks_media_type(content_type: str) -> bool:
 
 
 def _download_jwks(jwks_uri: str) -> list[dict[str, Any]]:
-    """Fetch and validate the key set within ``_JWKS_FETCH_DEADLINE_SECONDS``.
+    """Fetch and validate the key set. Blocking: callers on an event loop
+    must run this in a worker thread (see grantex.fastapi).
+
+    The fetch without ``bounded_jwks_fetch``, unchanged from earlier releases.
+    """
+    try:
+        resp = httpx.get(jwks_uri, timeout=10.0)
+        resp.raise_for_status()
+        jwks: dict[str, Any] = resp.json()
+    except Exception as exc:
+        raise GrantexTokenError(
+            f"Failed to fetch JWKS from {jwks_uri}: {exc}"
+        ) from exc
+
+    raw_keys = jwks.get("keys", [])
+    if not isinstance(raw_keys, list):
+        raise GrantexTokenError("JWKS keys must be an array")
+    keys: list[dict[str, Any]] = [
+        key for key in raw_keys if isinstance(key, dict)
+    ]
+    if not keys:
+        raise GrantexTokenError("JWKS contains no keys")
+    return keys
+
+
+def _download_jwks_bounded(jwks_uri: str) -> list[dict[str, Any]]:
+    """Fetch and validate the key set within ``_JWKS_FETCH_DEADLINE_SECONDS``
+    and the other bounds (``bounded_jwks_fetch``).
 
     Blocking: callers on an event loop must run this in a worker thread (see
     grantex.fastapi).
@@ -430,11 +470,18 @@ def _read_jwks(jwks_uri: str, deadline: float) -> list[dict[str, Any]]:
     return keys
 
 
-def _get_jwks(jwks_uri: str, *, force_refresh: bool = False) -> _JwksCacheEntry:
-    """Return the cached key set for ``jwks_uri``, fetching when stale."""
+def _get_jwks(
+    jwks_uri: str, *, force_refresh: bool = False, bounded: bool = False
+) -> _JwksCacheEntry:
+    """Return the cached key set for ``jwks_uri``, fetching when stale.
+
+    ``bounded`` selects the bounded fetch (``bounded_jwks_fetch``); each mode
+    has its own cache entry for the URL.
+    """
+    cache_key = (bounded, jwks_uri)
     now = time.monotonic()
     with _jwks_cache_lock:
-        entry = _jwks_cache.get(jwks_uri)
+        entry = _jwks_cache.get(cache_key)
         if (
             entry is not None
             and not force_refresh
@@ -442,30 +489,33 @@ def _get_jwks(jwks_uri: str, *, force_refresh: bool = False) -> _JwksCacheEntry:
         ):
             return entry
 
-    fresh = _JwksCacheEntry(keys=_download_jwks(jwks_uri), fetched_at=time.monotonic())
+    download = _download_jwks_bounded if bounded else _download_jwks
+    fresh = _JwksCacheEntry(keys=download(jwks_uri), fetched_at=time.monotonic())
     with _jwks_cache_lock:
-        _jwks_cache.pop(jwks_uri, None)
+        _jwks_cache.pop(cache_key, None)
         if len(_jwks_cache) >= _JWKS_CACHE_MAX_ENTRIES:
             oldest = next(iter(_jwks_cache))
             del _jwks_cache[oldest]
-        _jwks_cache[jwks_uri] = fresh
+        _jwks_cache[cache_key] = fresh
     return fresh
 
 
-def _fetch_signing_key(jwks_uri: str, kid: str | None, alg: str = "RS256") -> Any:
+def _fetch_signing_key(
+    jwks_uri: str, kid: str | None, alg: str = "RS256", *, bounded: bool = False
+) -> Any:
     """Resolve the public key for ``kid`` and ``alg`` from the (cached) JWKS."""
     if alg not in _KEY_TYPE_FOR_ALGORITHM:
         raise GrantexTokenError(f"Grant token uses unsupported algorithm '{alg}'")
     if kid is not None and (not isinstance(kid, str) or not kid):
         raise GrantexTokenError("Grant token kid header must be a non-empty string")
 
-    entry = _get_jwks(jwks_uri)
+    entry = _get_jwks(jwks_uri, bounded=bounded)
     matched = _select_key(entry.keys, kid, alg)
     if matched is None and kid is not None:
         # Key rotation: the kid may simply be newer than the cached set. One
         # refresh per cooldown window keeps unknown kids from being a DoS lever.
         if time.monotonic() - entry.fetched_at >= _JWKS_REFRESH_COOLDOWN_SECONDS:
-            entry = _get_jwks(jwks_uri, force_refresh=True)
+            entry = _get_jwks(jwks_uri, force_refresh=True, bounded=bounded)
             matched = _select_key(entry.keys, kid, alg)
 
     kty = _KEY_TYPE_FOR_ALGORITHM[alg][0]

@@ -313,8 +313,9 @@ def test_unknown_kid_refreshes_jwks_after_cooldown_but_not_inside_it(
         verify_module._fetch_signing_key("https://keys.example/jwks.json", "kid-new")
     assert get.call_count == 1
 
-    # Past the cooldown one refresh happens and the rotated key resolves.
-    entry = verify_module._jwks_cache["https://keys.example/jwks.json"]
+    # Past the cooldown one refresh happens and the rotated key resolves. The
+    # cache is keyed by (bounded, jwks_uri); the default fetch is unbounded.
+    entry = verify_module._jwks_cache[(False, "https://keys.example/jwks.json")]
     entry.fetched_at -= verify_module._JWKS_REFRESH_COOLDOWN_SECONDS + 1
     assert verify_module._fetch_signing_key("https://keys.example/jwks.json", "kid-new") == "kid-new"
     assert get.call_count == 2

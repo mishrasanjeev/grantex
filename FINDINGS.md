@@ -681,15 +681,17 @@ the pull request that references it.
 ## G-39 — The auth service can publish a JWK Set the SDKs refuse
 
 - **Found:** choosing the SDKs' JWKS key-count limit (2026-09-27).
-- **What:** the TypeScript and Python SDKs refuse a JWK Set of more than 128
-  keys or 64 KiB. The auth service publishes its legacy RSA key under one
-  `grantex-YYYY-MM` alias per month of `JWT_LEGACY_KID_MONTHS` (13 by default,
-  up to 120), beside its signing-key ring, every key in
+- **What:** with `boundedJwksFetch` / `bounded_jwks_fetch` on (opt-in until
+  G-41 is fixed, then the default), the TypeScript and Python SDKs refuse a
+  JWK Set of more than 128 keys or 64 KiB. The auth service publishes its
+  legacy RSA key under one `grantex-YYYY-MM` alias per month of
+  `JWT_LEGACY_KID_MONTHS` (13 by default, up to 120), beside its signing-key
+  ring, every key in
   `JWT_VERIFICATION_PUBLIC_KEYS`, its EdDSA key and the commerce passport keys
   in their grace window. Nothing stops that set from passing either limit: at
   120 months it is close to both with 2048-bit keys, and larger RSA keys reach
-  64 KiB well before 120 aliases. Every relying party using the SDKs would then
-  refuse every token.
+  64 KiB well before 120 aliases. Every relying party using the SDKs with the
+  option on would then refuse every token.
 - **Fix:** check the size of the published set when the auth service starts
   (and when keys are reloaded), and refuse to start, or at least warn, when it
   exceeds what the SDKs accept; or lower the `JWT_LEGACY_KID_MONTHS` maximum
@@ -709,3 +711,29 @@ the pull request that references it.
 - **Fix:** describe the cache, its TTL and the unknown-`kid` refresh, and
   keep the note that the JWKS endpoint must be reachable for the first fetch
   and for refreshes.
+
+## G-41 — The bounded JWKS fetch is opt-in until the next major release
+
+- **Found:** putting the bounded JWKS fetch and the `did:web` checks behind an
+  option that defaults off, as `AGENTS.md` ("Feature flags") requires for a
+  behaviour change on an existing path (2026-09-27).
+- **What:** `boundedJwksFetch` (TypeScript: `verifyGrantToken`,
+  `verifyDecisionGrant`, `verifyDecisionGrants`) and `bounded_jwks_fetch`
+  (Python: `VerifyGrantTokenOptions`, `grantex.decisions.verify_decision_grant`
+  and `verify_decision_grants`) default to off, and the clients' `enforce()`
+  cannot turn them on. While the option is off, the JWK Set is fetched without
+  bounds: the TypeScript SDK reads a response of any size, media type and
+  number of keys, and the Python SDK reads any `2xx` response whole under a
+  10-second timeout per network operation, so a server sending a byte at a
+  time is never cut off. `issuerDid` / `issuer_did` is not checked either: a
+  caller-supplied `did:web` issuer can name an IP address, `localhost`, a
+  private or single-label name, or user information, and its keys are fetched
+  without bounds from that host and trusted, while a value that is not
+  `did:web` is ignored in favour of `jwksUri` / `jwks_uri`.
+- **Fix:** in a major release, make the option on by default in both SDKs,
+  with `boundedJwksFetch: false` / `bounded_jwks_fetch=False` as the explicit
+  opt-out, recorded in `CHANGELOG.md` as a breaking change; give the clients'
+  `enforce()` the same option; and fix G-39 first, so the auth service cannot
+  publish a set the new default refuses. Owner: the TypeScript and Python SDK
+  maintainers. Exit criterion: that major release ships with the default
+  flipped, the explicit opt-out, and tests of both settings in both SDKs.

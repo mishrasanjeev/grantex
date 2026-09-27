@@ -1,7 +1,9 @@
-"""The JWKS fetch is bounded, and ``issuer_did`` must be a usable did:web.
+"""With ``bounded_jwks_fetch=True`` the JWKS fetch is bounded, and
+``issuer_did`` must be a usable did:web. Without it (the default), both behave
+as they did before the option existed.
 
-Whoever operates a JWKS endpoint controls the response, so the verifier reads
-at most 64 KiB of it, only as ``application/json`` or
+Whoever operates a JWKS endpoint controls the response, so the bounded
+verifier reads at most 64 KiB of it, only as ``application/json`` or
 ``application/jwk-set+json``, takes at most 128 keys from it, and gives the
 whole fetch one deadline. Those checks run against a real HTTP server on the
 loopback interface, so the streaming read is exercised rather than a mock of
@@ -165,8 +167,32 @@ def server() -> Iterator[_JwksServer]:
         srv.server_close()
 
 
-def _verify(jwks_uri: str) -> Any:
-    return verify_grant_token(_token(), VerifyGrantTokenOptions(jwks_uri=jwks_uri, issuer=ISSUER))
+def _verify(jwks_uri: str, **options: Any) -> Any:
+    return verify_grant_token(
+        _token(), VerifyGrantTokenOptions(jwks_uri=jwks_uri, issuer=ISSUER, **options)
+    )
+
+
+def _oversized_key_set() -> bytes:
+    """A valid key set padded past the 64 KiB cap."""
+    return json.dumps({"keys": [EC_JWK], "padding": "x" * (70 * 1024)}).encode()
+
+
+def _decision_fixture() -> Dict[str, Any]:
+    fixture: Dict[str, Any] = json.loads(
+        (Path(__file__).resolve().parents[3] / "spec" / "examples" / "decision-grant" / "verification.json")
+        .read_text(encoding="utf-8")
+    )
+    return fixture
+
+
+def _decision_grant(decisions: Dict[str, Any]) -> str:
+    return jwt.encode(
+        {**decisions["base_claims"], "iss": ISSUER},
+        EC_KEY,
+        algorithm="ES256",
+        headers={"typ": "decision+jwt", "kid": "ec-1"},
+    )
 
 
 # ─── Bounded fetch ───────────────────────────────────────────────────────────
@@ -183,12 +209,12 @@ def _verify(jwks_uri: str) -> Any:
 )
 def test_a_json_key_set_is_read_and_the_token_verifies(server: _JwksServer, content_type: str) -> None:
     server.routes["/jwks"] = _respond(JWKS_BODY, content_type)
-    assert _verify(server.url("/jwks")).principal_id == "shopper-01"
+    assert _verify(server.url("/jwks"), bounded_jwks_fetch=True).principal_id == "shopper-01"
 
 
 def test_the_fetch_asks_for_a_json_key_set_and_an_unencoded_body(server: _JwksServer) -> None:
     server.routes["/jwks"] = _respond(JWKS_BODY)
-    _verify(server.url("/jwks"))
+    _verify(server.url("/jwks"), bounded_jwks_fetch=True)
     sent = server.request_headers[-1]
     assert sent["accept"] == "application/json, application/jwk-set+json"
     assert sent["accept-encoding"] == "identity"
@@ -198,7 +224,7 @@ def test_a_response_declaring_more_than_64_kib_is_refused(server: _JwksServer) -
     padded = json.dumps({"keys": [EC_JWK], "padding": "x" * (64 * 1024)}).encode()
     server.routes["/big"] = _respond(padded)
     with pytest.raises(GrantexTokenError, match=r"Failed to fetch JWKS .*larger than 65536 bytes"):
-        _verify(server.url("/big"))
+        _verify(server.url("/big"), bounded_jwks_fetch=True)
 
 
 def test_a_response_without_a_length_is_cut_off_at_64_kib(server: _JwksServer) -> None:
@@ -207,7 +233,7 @@ def test_a_response_without_a_length_is_cut_off_at_64_kib(server: _JwksServer) -
     padded = json.dumps({"keys": [EC_JWK], "padding": "x" * (1024 * 1024)}).encode()
     server.routes["/unbounded"] = _respond(padded, length=False)
     with pytest.raises(GrantexTokenError, match=r"Failed to fetch JWKS .*larger than 65536 bytes"):
-        _verify(server.url("/unbounded"))
+        _verify(server.url("/unbounded"), bounded_jwks_fetch=True)
 
 
 def test_a_response_of_exactly_64_kib_is_read(server: _JwksServer) -> None:
@@ -215,7 +241,7 @@ def test_a_response_of_exactly_64_kib_is_read(server: _JwksServer) -> None:
     body = json.dumps({"keys": [EC_JWK], "padding": "x" * (64 * 1024 - len(body))}).encode()
     assert len(body) == 64 * 1024
     server.routes["/edge"] = _respond(body)
-    assert _verify(server.url("/edge")).token_id == "tok_jwks_fetch"
+    assert _verify(server.url("/edge"), bounded_jwks_fetch=True).token_id == "tok_jwks_fetch"
 
 
 @pytest.mark.parametrize(
@@ -237,7 +263,7 @@ def test_a_response_that_is_not_a_json_key_set_is_refused(
 ) -> None:
     server.routes["/typed"] = _respond(JWKS_BODY, content_type)
     with pytest.raises(GrantexTokenError, match=r"Failed to fetch JWKS .*Content-Type"):
-        _verify(server.url("/typed"))
+        _verify(server.url("/typed"), bounded_jwks_fetch=True)
 
 
 def test_a_content_encoded_response_is_refused(server: _JwksServer) -> None:
@@ -245,7 +271,7 @@ def test_a_content_encoded_response_is_refused(server: _JwksServer) -> None:
     # small download expand past the size cap when it is decoded.
     server.routes["/gzip"] = _respond(gzip.compress(JWKS_BODY), headers=(("Content-Encoding", "gzip"),))
     with pytest.raises(GrantexTokenError, match=r"Failed to fetch JWKS .*Content-Encoding"):
-        _verify(server.url("/gzip"))
+        _verify(server.url("/gzip"), bounded_jwks_fetch=True)
 
 
 def _key_set(count: int) -> bytes:
@@ -256,12 +282,12 @@ def _key_set(count: int) -> bytes:
 def test_more_than_128_keys_are_refused(server: _JwksServer) -> None:
     server.routes["/many"] = _respond(_key_set(129))
     with pytest.raises(GrantexTokenError, match=r"Failed to fetch JWKS .*129 keys; the limit is 128"):
-        _verify(server.url("/many"))
+        _verify(server.url("/many"), bounded_jwks_fetch=True)
 
 
 def test_128_keys_are_read(server: _JwksServer) -> None:
     server.routes["/max"] = _respond(_key_set(128))
-    assert _verify(server.url("/max")).token_id == "tok_jwks_fetch"
+    assert _verify(server.url("/max"), bounded_jwks_fetch=True).token_id == "tok_jwks_fetch"
 
 
 def test_a_response_trickling_past_the_deadline_is_abandoned(
@@ -273,7 +299,7 @@ def test_a_response_trickling_past_the_deadline_is_abandoned(
     server.routes["/drip"] = _drip(JWKS_BODY, pieces=20, interval=0.15)
     started = time.monotonic()
     with pytest.raises(GrantexTokenError, match=r"Failed to fetch JWKS .*within 0.5 seconds"):
-        _verify(server.url("/drip"))
+        _verify(server.url("/drip"), bounded_jwks_fetch=True)
     assert time.monotonic() - started < 1.5
 
 
@@ -284,16 +310,16 @@ def test_a_response_that_stalls_past_the_deadline_is_abandoned(
     server.routes["/stall"] = _stall(JWKS_BODY, pause=3.0)
     started = time.monotonic()
     with pytest.raises(GrantexTokenError, match=r"Failed to fetch JWKS .*within 0.5 seconds"):
-        _verify(server.url("/stall"))
+        _verify(server.url("/stall"), bounded_jwks_fetch=True)
     assert time.monotonic() - started < 1.5
 
 
 def test_a_failed_fetch_is_not_cached(server: _JwksServer) -> None:
     server.routes["/flaky"] = _respond(JWKS_BODY, "text/html")
     with pytest.raises(GrantexTokenError, match="Content-Type"):
-        _verify(server.url("/flaky"))
+        _verify(server.url("/flaky"), bounded_jwks_fetch=True)
     server.routes["/flaky"] = _respond(JWKS_BODY)
-    assert _verify(server.url("/flaky")).token_id == "tok_jwks_fetch"
+    assert _verify(server.url("/flaky"), bounded_jwks_fetch=True).token_id == "tok_jwks_fetch"
 
 
 @pytest.mark.parametrize("status", [203, 302, 404, 503])
@@ -301,13 +327,13 @@ def test_anything_but_200_is_refused(server: _JwksServer, status: int) -> None:
     server.routes["/status"] = _respond(JWKS_BODY, status=status, headers=(("Location", "/jwks"),))
     server.routes["/jwks"] = _respond(JWKS_BODY)
     with pytest.raises(GrantexTokenError, match=rf"Failed to fetch JWKS .*HTTP {status}"):
-        _verify(server.url("/status"))
+        _verify(server.url("/status"), bounded_jwks_fetch=True)
 
 
 def test_a_body_that_is_not_a_key_set_is_refused(server: _JwksServer) -> None:
     server.routes["/list"] = _respond(b"[1, 2, 3]")
     with pytest.raises(GrantexTokenError, match="JWKS"):
-        _verify(server.url("/list"))
+        _verify(server.url("/list"), bounded_jwks_fetch=True)
 
 
 def test_decision_grant_keys_are_fetched_with_the_same_bounds(server: _JwksServer) -> None:
@@ -331,6 +357,7 @@ def test_decision_grant_keys_are_fetched_with_the_same_bounds(server: _JwksServe
             issuer=ISSUER,
             jwks_uri=server.url("/decision-keys"),
             now=decisions["now"],
+            bounded_jwks_fetch=True,
         )
 
 
@@ -371,7 +398,11 @@ def test_a_did_web_issuer_resolves_to_its_jwks(issuer_did: str, jwks_uri: str, i
         )
         grant = verify_grant_token(
             _token(issuer),
-            VerifyGrantTokenOptions(jwks_uri="https://unused.example/jwks.json", issuer_did=issuer_did),
+            VerifyGrantTokenOptions(
+                jwks_uri="https://unused.example/jwks.json",
+                issuer_did=issuer_did,
+                bounded_jwks_fetch=True,
+            ),
         )
     assert grant.principal_id == "shopper-01"
     assert keys.call_count == 1
@@ -452,7 +483,11 @@ def test_an_unusable_did_web_issuer_is_refused_before_any_fetch(issuer_did: str,
         with pytest.raises(GrantexTokenError, match="issuer_did") as info:
             verify_grant_token(
                 _token(),
-                VerifyGrantTokenOptions(jwks_uri="https://issuer.example/.well-known/jwks.json", issuer_did=issuer_did),
+                VerifyGrantTokenOptions(
+                    jwks_uri="https://issuer.example/.well-known/jwks.json",
+                    issuer_did=issuer_did,
+                    bounded_jwks_fetch=True,
+                ),
             )
     assert reason in str(info.value)
     assert anything.call_count == 0
@@ -474,7 +509,184 @@ def test_issuer_did_none_means_no_did() -> None:
         )
         grant = verify_grant_token(
             _token(),
-            VerifyGrantTokenOptions(jwks_uri="https://issuer.example/.well-known/jwks.json", issuer_did=None),
+            VerifyGrantTokenOptions(
+                jwks_uri="https://issuer.example/.well-known/jwks.json",
+                issuer_did=None,
+                bounded_jwks_fetch=True,
+            ),
         )
     assert grant.principal_id == "shopper-01"
     assert keys.call_count == 1
+
+
+# ─── Without bounded_jwks_fetch (the default) ────────────────────────────────
+#
+# Until a major release turns the option on by default, leaving it out, or
+# setting it to False, keeps the fetch and the issuer_did handling of earlier
+# releases: each case here is refused by the bounded verifier above.
+
+
+@pytest.mark.parametrize("options", [{}, {"bounded_jwks_fetch": False}], ids=["left-out", "false"])
+def test_without_the_option_a_key_set_larger_than_64_kib_is_read(
+    server: _JwksServer, options: Dict[str, Any]
+) -> None:
+    server.routes["/big"] = _respond(_oversized_key_set())
+    assert _verify(server.url("/big"), **options).token_id == "tok_jwks_fetch"
+
+
+def test_without_the_option_a_key_set_larger_than_64_kib_without_a_length_is_read(
+    server: _JwksServer,
+) -> None:
+    server.routes["/unbounded"] = _respond(_oversized_key_set(), length=False)
+    assert _verify(server.url("/unbounded")).token_id == "tok_jwks_fetch"
+
+
+@pytest.mark.parametrize("content_type", ["text/plain", "text/html", None])
+def test_without_the_option_any_media_type_is_read(
+    server: _JwksServer, content_type: Optional[str]
+) -> None:
+    server.routes["/typed"] = _respond(JWKS_BODY, content_type)
+    assert _verify(server.url("/typed")).principal_id == "shopper-01"
+
+
+def test_without_the_option_a_content_encoded_response_is_read(server: _JwksServer) -> None:
+    server.routes["/gzip"] = _respond(gzip.compress(JWKS_BODY), headers=(("Content-Encoding", "gzip"),))
+    assert _verify(server.url("/gzip")).token_id == "tok_jwks_fetch"
+    # Nor does the earlier fetch ask for an unencoded body.
+    assert server.request_headers[-1].get("accept-encoding") != "identity"
+
+
+def test_without_the_option_more_than_128_keys_are_read(server: _JwksServer) -> None:
+    server.routes["/many"] = _respond(_key_set(129))
+    assert _verify(server.url("/many")).token_id == "tok_jwks_fetch"
+
+
+def test_without_the_option_decision_grant_keys_larger_than_64_kib_are_read(
+    server: _JwksServer,
+) -> None:
+    decisions = _decision_fixture()
+    server.routes["/decision-keys-default"] = _respond(_oversized_key_set())
+    grant = verify_decision_grant(
+        _decision_grant(decisions),
+        decisions["action"],
+        "v7",
+        issuer=ISSUER,
+        jwks_uri=server.url("/decision-keys-default"),
+        now=decisions["now"],
+    )
+    assert grant.iss == ISSUER
+
+
+@pytest.mark.parametrize(
+    ("issuer_did", "host", "path", "issuer"),
+    [
+        # Hosts the did:web checks refuse are fetched as written.
+        ("did:web:127.0.0.1", "127.0.0.1", "/.well-known/jwks.json", "https://127.0.0.1"),
+        ("did:web:localhost", "localhost", "/.well-known/jwks.json", "https://localhost"),
+        ("did:web:vault.internal", "vault.internal", "/.well-known/jwks.json", "https://vault.internal"),
+        ("did:web:intranet", "intranet", "/.well-known/jwks.json", "https://intranet"),
+        # A percent-encoded port is not decoded: it stays part of the host.
+        (
+            "did:web:issuer.example%3A8443",
+            "issuer.example%3a8443",
+            "/.well-known/jwks.json",
+            "https://issuer.example%3A8443",
+        ),
+        (
+            "did:web:issuer.example:tenants:acme",
+            "issuer.example",
+            "/tenants/acme/.well-known/jwks.json",
+            "https://issuer.example/tenants/acme",
+        ),
+    ],
+)
+def test_without_the_option_a_did_web_issuer_is_fetched_as_written(
+    issuer_did: str, host: str, path: str, issuer: str
+) -> None:
+    with respx.mock(assert_all_called=False, assert_all_mocked=False) as router:
+        # text/plain: the bounded fetch would refuse it, the earlier one does not.
+        anything = router.route().mock(
+            return_value=httpx.Response(200, content=JWKS_BODY, headers={"Content-Type": "text/plain"})
+        )
+        grant = verify_grant_token(
+            _token(issuer),
+            VerifyGrantTokenOptions(jwks_uri="https://unused.example/jwks.json", issuer_did=issuer_did),
+        )
+    assert grant.principal_id == "shopper-01"
+    assert anything.call_count == 1
+    requested = anything.calls.last.request.url
+    assert (requested.scheme, requested.host.lower(), requested.port, requested.path) == (
+        "https",
+        host,
+        None,
+        path,
+    )
+
+
+@pytest.mark.parametrize(
+    "issuer_did",
+    ["https://elsewhere.example", "DID:WEB:elsewhere.example", "did:example:elsewhere", ""],
+)
+def test_without_the_option_a_value_that_is_not_did_web_is_ignored(
+    server: _JwksServer, issuer_did: str
+) -> None:
+    server.routes["/jwks"] = _respond(JWKS_BODY)
+    before = len(server.request_headers)
+    grant = verify_grant_token(
+        _token(), VerifyGrantTokenOptions(jwks_uri=server.url("/jwks"), issuer=ISSUER, issuer_did=issuer_did)
+    )
+    assert grant.principal_id == "shopper-01"
+    # The key set came from jwks_uri, on the loopback server.
+    assert len(server.request_headers) == before + 1
+
+
+def test_without_the_option_issuer_did_none_means_no_did(server: _JwksServer) -> None:
+    server.routes["/jwks"] = _respond(JWKS_BODY)
+    grant = verify_grant_token(
+        _token(), VerifyGrantTokenOptions(jwks_uri=server.url("/jwks"), issuer=ISSUER, issuer_did=None)
+    )
+    assert grant.principal_id == "shopper-01"
+
+
+# ─── Bounded and unbounded key sets for one URL are cached apart ─────────────
+
+
+def test_a_grant_token_gets_each_modes_own_fetch_in_either_order(server: _JwksServer) -> None:
+    server.routes["/shared"] = _respond(_oversized_key_set())
+    assert _verify(server.url("/shared")).token_id == "tok_jwks_fetch"
+    with pytest.raises(GrantexTokenError, match="larger than 65536 bytes"):
+        _verify(server.url("/shared"), bounded_jwks_fetch=True)
+    assert _verify(server.url("/shared")).token_id == "tok_jwks_fetch"
+
+    server.routes["/shared-bounded-first"] = _respond(_oversized_key_set())
+    with pytest.raises(GrantexTokenError, match="larger than 65536 bytes"):
+        _verify(server.url("/shared-bounded-first"), bounded_jwks_fetch=True)
+    assert _verify(server.url("/shared-bounded-first")).token_id == "tok_jwks_fetch"
+    with pytest.raises(GrantexTokenError, match="larger than 65536 bytes"):
+        _verify(server.url("/shared-bounded-first"), bounded_jwks_fetch=True)
+
+
+def test_a_decision_grant_gets_each_modes_own_fetch_in_either_order(server: _JwksServer) -> None:
+    decisions = _decision_fixture()
+    grant = _decision_grant(decisions)
+
+    def check(path: str, bounded: bool) -> Any:
+        return verify_decision_grant(
+            grant,
+            decisions["action"],
+            "v7",
+            issuer=ISSUER,
+            jwks_uri=server.url(path),
+            now=decisions["now"],
+            bounded_jwks_fetch=bounded,
+        )
+
+    server.routes["/decision-shared"] = _respond(_oversized_key_set())
+    assert check("/decision-shared", False).iss == ISSUER
+    with pytest.raises(DecisionGrantError, match="larger than 65536 bytes"):
+        check("/decision-shared", True)
+
+    server.routes["/decision-shared-bounded-first"] = _respond(_oversized_key_set())
+    with pytest.raises(DecisionGrantError, match="larger than 65536 bytes"):
+        check("/decision-shared-bounded-first", True)
+    assert check("/decision-shared-bounded-first", False).iss == ISSUER

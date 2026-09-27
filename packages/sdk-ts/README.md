@@ -546,8 +546,6 @@ const grant = await verifyGrantToken('eyJhbG...', {
 
 If you call a deployment through a raw Cloud Run URL or another internal host, but the service signs tokens for a canonical public domain, pass `issuer` explicitly. Otherwise issuer validation will reject a valid token because the JWT `iss` claim will not match the transport host.
 
-Not in `@grantex/sdk` 0.7.0; in the next release: each JWKS fetch is bounded (HTTP 200 served as `application/json` or `application/jwk-set+json`, at most 64 KiB and 128 keys, 5 seconds for the whole fetch), and `issuerDid` must be a `did:web` identifier for a public, fully qualified domain. See [JWKS fetch limits](https://docs.grantex.dev/sdks/typescript/offline-verification#jwks-fetch-limits).
-
 **Returns**: `VerifiedGrant`
 
 | Field | Type | Description |

@@ -409,14 +409,30 @@ export interface VerifyGrantTokenOptions {
    * A `did:web` issuer. When set, the JWK Set is read from
    * `https://<host>[:<port>][/<path>]/.well-known/jwks.json` instead of
    * `jwksUri`, and the expected issuer defaults to that location without the
-   * suffix. It must name a fully qualified public domain, written in ASCII
-   * (an internationalized name in its `xn--` form): an IP address, a local or
-   * private name (`localhost`, `.local`, `.home.arpa`, `.internal`), a single
-   * label, user information, a non-ASCII character or another DID method is
-   * refused with `GrantexTokenError`. `null`, like leaving it out, means no
-   * DID, as `None` does in the Python SDK.
+   * suffix. `null`, like leaving it out, means no DID, as `None` does in the
+   * Python SDK.
+   *
+   * With `boundedJwksFetch: true` it must name a fully qualified public
+   * domain, written in ASCII (an internationalized name in its `xn--` form):
+   * an IP address, a local or private name (`localhost`, `.local`,
+   * `.home.arpa`, `.internal`), a single label, user information, a non-ASCII
+   * character or another DID method is refused with `GrantexTokenError`.
+   * Without it, a value that does not start with `did:web:` is ignored and
+   * the rest of the identifier is used as written, with each `:` read as `/`.
    */
   issuerDid?: string | null;
+  /**
+   * Fetch the JWK Set within fixed bounds and check `issuerDid` against the
+   * did:web method before anything is fetched. The response must be an HTTP
+   * 200 (redirects are not followed) served as `application/json` or
+   * `application/jwk-set+json`, at most 64 KiB, with at most 128 keys, within
+   * one 5-second deadline for the whole exchange; otherwise verification
+   * fails with `GrantexTokenError` and nothing is cached.
+   *
+   * Defaults to `false`: a later major release makes `true` the default, with
+   * `false` as the opt-out.
+   */
+  boundedJwksFetch?: boolean;
   /** @internal override clock for testing */
   clockTolerance?: number;
   /**

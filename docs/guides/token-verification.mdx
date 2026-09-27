@@ -63,10 +63,13 @@ The JWKS endpoint (`/.well-known/jwks.json`) is exempt from rate limits. You can
 
 <Note>
 From the releases after `grantex` 0.6.0 and `@grantex/sdk` 0.7.0, the Python
-and TypeScript SDKs bound every JWKS fetch: an HTTP 200 served as
+and TypeScript SDKs can bound the JWKS fetch. With `boundedJwksFetch: true` /
+`bounded_jwks_fetch=True`, the key set must be an HTTP 200 served as
 `application/json` or `application/jwk-set+json`, at most 64 KiB and 128 keys,
-within 5 seconds, or the token is refused. An `issuerDid` / `issuer_did` must
-be a `did:web` identifier for a public, fully qualified domain. See
+within 5 seconds, or the token is refused, and an `issuerDid` / `issuer_did`
+must be a `did:web` identifier for a public, fully qualified domain. The option
+is off by default in these releases; a later major release turns it on by
+default, with `false` / `False` as the opt-out. See
 [JWKS fetch limits](/sdks/typescript/offline-verification#jwks-fetch-limits).
 </Note>
 

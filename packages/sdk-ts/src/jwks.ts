@@ -1,7 +1,10 @@
 /**
  * Remote JWK Sets, fetched within fixed bounds, and the did:web issuers that
- * locate them. Grant-token and decision-grant verification both read keys
- * through here.
+ * locate them. Grant-token and decision-grant verification read keys through
+ * here when the caller sets `boundedJwksFetch: true`. The option is off by
+ * default until a major release turns it on, with `false` as the opt-out;
+ * without it, verification keeps JOSE's plain `createRemoteJWKSet` and the
+ * earlier `issuerDid` handling.
  */
 import { createRemoteJWKSet, customFetch, type FetchImplementation, type RemoteJWKSet } from 'jose';
 import { GrantexTokenError } from './errors.js';

@@ -55,7 +55,8 @@ from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenErr
 | `clock_tolerance`  | `int`            | No       | `0`     | Seconds of leeway for `exp` and `iat` clock skew.                  |
 | `audience`         | `str \| None`    | No       | `None`  | Expected `aud` claim. If `None`, audience is not validated.        |
 | `issuer`           | `str \| None`    | No       | `None`  | Expected `iss` claim. The hosted alias expects `https://grantex.dev`; custom JWKS URLs derive it when omitted. |
-| `issuer_did`       | `str \| None`    | No       | `None`  | A `did:web` issuer. The JWKS is read from `https://<host>[:<port>][/<path>]/.well-known/jwks.json` instead of `jwks_uri`, and the expected issuer is that location without the suffix; an explicit `issuer` takes precedence. It must name a public domain (see [did:web issuers](#did-issuers)). |
+| `issuer_did`       | `str \| None`    | No       | `None`  | A `did:web` issuer. The JWKS is read from `https://<host>[:<port>][/<path>]/.well-known/jwks.json` instead of `jwks_uri`, and the expected issuer is that location without the suffix; an explicit `issuer` takes precedence. With `bounded_jwks_fetch=True` it must name a public domain (see [did:web issuers](#did-issuers)). |
+| `bounded_jwks_fetch` | `bool`         | No       | `False` | Apply the [JWKS fetch limits](#jwks-fetch-limits) and the [did:web issuer](#did-issuers) checks. `False` by default in these releases; a later major release makes `True` the default, with `False` as the opt-out. Not in `grantex` 0.6.0; in the next release. |
 | `algorithms`       | `list[str] \| None` | No    | `None`  | Narrow the accepted algorithms to a subset of `["RS256", "ES256"]`. Any other value raises `GrantexTokenError`. |
 | `proof_jkt`        | `str \| None`    | No       | `None`  | Thumbprint of the key the caller proved possession of (for example with a verified DPoP proof); the token's `cnf.jkt` must match. The verifier does not check DPoP proofs. |
 | `require_proof_of_possession` | `bool` | No     | `False` | Fail closed unless `proof_jkt` is given and matches `cnf.jkt`. |
@@ -97,11 +98,25 @@ The key is the JWK Set entry named by the token's `kid` whose type matches the a
 
 <Note>
   Not in `grantex` 0.6.0; the next release includes these limits and the
-  [DID issuer](#did-issuers) checks.
+  [DID issuer](#did-issuers) checks, which apply when `bounded_jwks_fetch=True`
+  is set. The option is off by default in these releases. A later major
+  release turns it on by default, with `bounded_jwks_fetch=False` as the
+  opt-out.
 </Note>
 
-The key set comes from whichever endpoint the verifier is pointed at, so each
-fetch is bounded, with the same limits as the TypeScript SDK:
+The key set comes from whichever endpoint the verifier is pointed at. With
+`bounded_jwks_fetch=True`, each fetch is bounded, with the same limits as the
+TypeScript SDK's `boundedJwksFetch: true`:
+
+```python
+grant = verify_grant_token(
+    token,
+    VerifyGrantTokenOptions(
+        jwks_uri="https://issuer.example/.well-known/jwks.json",
+        bounded_jwks_fetch=True,
+    ),
+)
+```
 
 | Limit | Value | Refused when |
 |-------|-------|--------------|
@@ -115,15 +130,23 @@ fetch is bounded, with the same limits as the TypeScript SDK:
 A refused fetch raises `GrantexTokenError` naming the endpoint and the reason,
 and nothing is cached, so the next verification fetches again. The key-count
 limit leaves room for the `grantex-YYYY-MM` aliases a self-hosted auth service
-publishes (`JWT_LEGACY_KID_MONTHS`).
+publishes (`JWT_LEGACY_KID_MONTHS`). `grantex.decisions.verify_decision_grant`
+and `verify_decision_grants` take the same `bounded_jwks_fetch` keyword for
+the keys they read from `jwks_uri`.
+
+Without the option, the key set is read as in earlier releases: any `2xx`
+response of any size, media type and number of keys, with a 10-second timeout
+for each network operation. Bounded and unbounded key sets for the same URL
+are cached separately.
 
 ## DID issuers
 
-`issuer_did` follows the did:web method specification (§2.3, §2.5.2): the
-identifier after `did:web:` is a fully qualified domain name, optionally
-followed by a port whose colon is percent-encoded (`%3A`) and by path segments
-separated by colons. A DID is written in ASCII (§3.5), so an internationalized
-domain name is given in its IDNA A-label form, beginning `xn--`.
+With `bounded_jwks_fetch=True`, `issuer_did` follows the did:web method
+specification (§2.3, §2.5.2): the identifier after `did:web:` is a fully
+qualified domain name, optionally followed by a port whose colon is
+percent-encoded (`%3A`) and by path segments separated by colons. A DID is
+written in ASCII (§3.5), so an internationalized domain name is given in its
+IDNA A-label form, beginning `xn--`.
 
 | `issuer_did` | JWKS URL | Expected issuer |
 |--------------|----------|-----------------|
@@ -142,7 +165,13 @@ because conversion can turn a different character into an ASCII one (the
 Kelvin sign, U+212A, into `k`) and so fetch keys from a host the DID does not spell.
 It is never ignored in favour of `jwks_uri`. For a local or private issuer, set
 `jwks_uri` and `issuer` instead. `issuer_did=None` means no DID. The TypeScript
-SDK applies the same rules, and treats `issuerDid: null` as `None`.
+SDK applies the same rules with `boundedJwksFetch: true`, and treats
+`issuerDid: null` as `None`.
+
+Without the option, `issuer_did` is read as in earlier releases: a value that
+does not start with `did:web:` is ignored in favour of `jwks_uri`, and the rest
+of the identifier is used as written, each `:` becoming `/`, with none of the
+checks above (so a percent-encoded port is not decoded).
 
 ## Examples
 
@@ -226,8 +255,8 @@ else:
 
 - The token header uses an algorithm other than RS256 or ES256, or one excluded by `algorithms`
 - The JWKS endpoint is unreachable or returns invalid data
-- The JWKS response exceeds a [fetch limit](#jwks-fetch-limits): not `200`, not JSON, encoded, larger than 64 KiB, more than 128 keys, or slower than 5 seconds
-- `issuer_did` is not a usable [did:web issuer](#did-issuers)
+- With `bounded_jwks_fetch=True`, the JWKS response exceeds a [fetch limit](#jwks-fetch-limits): not `200`, not JSON, encoded, larger than 64 KiB, more than 128 keys, or slower than 5 seconds
+- With `bounded_jwks_fetch=True`, `issuer_did` is not a usable [did:web issuer](#did-issuers)
 - No key of the type the algorithm requires is found in the JWKS under the token's `kid`
 - The token signature is invalid
 - The token is expired

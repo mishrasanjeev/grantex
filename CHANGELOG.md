@@ -6,53 +6,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-### Bounded JWKS fetch and validated `did:web` issuers (TypeScript and Python SDKs)
-- **Behaviour change:** `verifyGrantToken` / `verify_grant_token` read a JWK
-  Set within the same bounds in both SDKs: an HTTP 200 (redirects are not
-  followed) served as `application/json` or `application/jwk-set+json` (with,
-  at most, a `utf-8` charset), no more than 64 KiB, no more than 128 keys, and
-  one 5-second deadline for the whole exchange, body included. A response
-  outside them fails verification with a `GrantexTokenError` that names the
-  endpoint and the reason, and nothing is cached. Before, the Python SDK read
-  any response whole under a 10-second timeout per network operation, so a
-  server sending a byte at a time was never cut off; the TypeScript SDK took
-  any size, media type and number of keys, and reported its timeout as a JSON
-  parse failure. The cache TTL (10 minutes) and the unknown-`kid` refresh
-  cooldown (30 seconds) are unchanged.
-- The Python SDK asks for an unencoded body and refuses a compressed one,
-  which it could only measure after decoding it; the TypeScript SDK measures a
-  compressed body by its decoded size as it reads. Decision-grant verification
-  with `jwksUri` / `jwks_uri` reads keys within the same bounds.
-- **Behaviour change:** `issuerDid` / `issuer_did` is checked against the
+### Bounded JWKS fetch and validated `did:web` issuers (TypeScript and Python SDKs, default off)
+- Added an opt-in option, default `false`: `boundedJwksFetch` on
+  `verifyGrantToken`'s options and on `verifyDecisionGrant` /
+  `verifyDecisionGrants` (TypeScript), and `bounded_jwks_fetch` on
+  `VerifyGrantTokenOptions` and on `grantex.decisions.verify_decision_grant` /
+  `verify_decision_grants` (Python). One option covers the fetch bounds and
+  the `did:web` checks below. Left off, verification is unchanged: the key set
+  is fetched, and `issuerDid` / `issuer_did` is read, exactly as before. The
+  clients' `enforce()` verifies with the option off and has no setting for it
+  yet.
+- With the option on, a JWK Set is read within the same bounds in both SDKs:
+  an HTTP 200 (redirects are not followed) served as `application/json` or
+  `application/jwk-set+json` (with, at most, a `utf-8` charset), no more than
+  64 KiB, no more than 128 keys, and one 5-second deadline for the whole
+  exchange, body included. A response outside them fails verification with a
+  `GrantexTokenError` that names the endpoint and the reason, and nothing is
+  cached. With it off, the Python SDK reads any `2xx` response whole under a
+  10-second timeout per network operation, so a server sending a byte at a
+  time is never cut off, and the TypeScript SDK takes any size, media type
+  and number of keys. The cache TTL (10 minutes) and the unknown-`kid`
+  refresh cooldown (30 seconds) are the same in both modes, and bounded and
+  unbounded key sets for the same URL are cached separately.
+- With the option on, the Python SDK asks for an unencoded body and refuses a
+  compressed one, which it could only measure after decoding it; the
+  TypeScript SDK measures a compressed body by its decoded size as it reads.
+  Decision-grant verification with `jwksUri` / `jwks_uri` and the option on
+  reads keys within the same bounds.
+- With the option on, `issuerDid` / `issuer_did` is checked against the
   did:web method specification (§2.3, §2.5.2) before anything is fetched. A
   fully qualified domain name, a percent-encoded port and colon-separated path
-  segments are accepted, and `did:web:issuer.example%3A8443` now resolves to
-  `https://issuer.example:8443/.well-known/jwks.json` rather than a URL that
-  could not be fetched. An IP address, `localhost` or a name under
-  `.localhost`, `.local`, `.home.arpa` or `.internal`, a single-label host,
-  user information, a port outside 1–65535 and a path segment that is not
-  plain DID characters are refused. A value that is not a `did:web` identifier
-  is refused instead of being ignored in favour of `jwksUri` / `jwks_uri`.
-- A DID is written in ASCII (did:web §3.5), so an internationalized domain is
-  accepted in its IDNA A-label form (`did:web:xn--bcher-kva.example`) and any
-  non-ASCII character is refused rather than converted: conversion maps some
-  characters onto ASCII ones (the Kelvin sign, U+212A, becomes `k`), which
-  would fetch keys from a host the DID does not spell. Both SDKs apply the
-  same host rule, ASCII letters, digits and hyphens.
-- `issuerDid: null` means no DID, as leaving it out does and as
-  `issuer_did=None` does in Python; the TypeScript option's type is now
-  `string | null`. An empty string is refused in both SDKs.
-- **Behaviour change:** all of this is on by default. These are verification
-  paths, so there is no flag to turn the limits or the DID checks off. To
-  verify tokens from an issuer on a private network, set `jwksUri` /
-  `jwks_uri` and `issuer` instead of a DID. The 128-key cap leaves room for
-  the auth service's default set (one signing key and 13 `grantex-YYYY-MM`
-  aliases) and for `JWT_LEGACY_KID_MONTHS` at its maximum of 120; a
-  self-hosted auth service keeps its whole JWK Set within 128 keys and
-  64 KiB (`docs/self-hosting.md`).
+  segments are accepted, and `did:web:issuer.example%3A8443` resolves to
+  `https://issuer.example:8443/.well-known/jwks.json` (with the option off it
+  still becomes a URL that cannot be fetched). An IP address, `localhost` or
+  a name under `.localhost`, `.local`, `.home.arpa` or `.internal`, a
+  single-label host, user information, a port outside 1–65535 and a path
+  segment that is not plain DID characters are refused. A value that is not a
+  `did:web` identifier is refused instead of being ignored in favour of
+  `jwksUri` / `jwks_uri`.
+- A DID is written in ASCII (did:web §3.5), so with the option on an
+  internationalized domain is accepted in its IDNA A-label form
+  (`did:web:xn--bcher-kva.example`) and any non-ASCII character is refused
+  rather than converted: conversion maps some characters onto ASCII ones (the
+  Kelvin sign, U+212A, becomes `k`), which would fetch keys from a host the
+  DID does not spell. Both SDKs apply the same host rule, ASCII letters,
+  digits and hyphens.
+- `issuerDid: null` means no DID in either mode, as leaving it out does and
+  as `issuer_did=None` does in Python; the TypeScript option's type is now
+  `string | null`. With the option on, an empty string is refused in both
+  SDKs; with it off, it is ignored, as before.
+- **Planned breaking change:** a later major release turns the option on by
+  default, with `boundedJwksFetch: false` / `bounded_jwks_fetch=False` as the
+  explicit opt-out. Before turning it on, verify tokens from an issuer on a
+  private network with `jwksUri` / `jwks_uri` and `issuer` instead of a DID.
+  The 128-key cap leaves room for the auth service's default set (one signing
+  key and 13 `grantex-YYYY-MM` aliases) and for `JWT_LEGACY_KID_MONTHS` at
+  its maximum of 120; a self-hosted auth service keeps its whole JWK Set
+  within 128 keys and 64 KiB (`docs/self-hosting.md`).
 - The Go SDK and the other TypeScript verifiers (the CLI, mcp-auth and mpp)
   are not changed yet, and the auth service can be configured to publish a
-  larger set than the SDKs accept; `FINDINGS.md` tracks both.
+  larger set than the bounded fetch accepts; `FINDINGS.md` tracks both, and
+  the default flip.
 ### Vendor denylist gate
 - A new **Vendor Denylist** workflow fails a pull request that names a
   denylisted identity-verification, KYB/KYC, AML or screening vendor in its
