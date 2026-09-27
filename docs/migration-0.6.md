@@ -230,7 +230,12 @@ months. 0.6 therefore:
 
 The JWK Set is therefore larger (one entry per alias). *Action:* none for most
 deployments. Raise `JWT_LEGACY_KID_MONTHS` if you issued grants that live longer
-than a year before upgrading. Do not remove the RSA key while pre-0.6 tokens are
+than a year before upgrading. From the releases after `grantex` 0.6.0 and
+`@grantex/sdk` 0.7.0, SDK verifiers that set `boundedJwksFetch: true` /
+`bounded_jwks_fetch=True` refuse a JWK Set of more than 128 keys or 64 KiB.
+The option is off by default in these releases, and a later major release
+turns it on by default (with `false` / `False` as the opt-out), so keep the
+whole set within that. Do not remove the RSA key while pre-0.6 tokens are
 valid, and set `JWT_LEGACY_KID_KEY` to its thumbprint `kid` if it stops being
 `RSA_PRIVATE_KEY`. There is deliberately no setting to rename a key's `kid`:
 changing a published `kid` would invalidate the tokens signed under it.

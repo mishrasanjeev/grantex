@@ -37,6 +37,7 @@ from grantex import (
 )
 from grantex._authorization_details import DECISION_DETAIL_TYPE, AuthorizationDetailsError
 from grantex._types import VerifiedGrant, VerifyGrantTokenOptions
+from tests.conftest import serve_jwks
 
 FIXTURE: Dict[str, Any] = json.loads(
     (Path(__file__).resolve().parents[3] / "spec" / "examples" / "grant-token-0.6.json").read_text(
@@ -87,10 +88,7 @@ def _sign(payload: Dict[str, Any], alg: str = "ES256", typ: str = "at+jwt") -> s
 
 @pytest.fixture(autouse=True)
 def _serve_jwks(mocker: Any) -> None:
-    response = mocker.Mock()
-    response.raise_for_status.return_value = None
-    response.json.return_value = JWKS
-    mocker.patch("grantex._verify.httpx.get", return_value=response)
+    _serve(mocker, JWKS)
 
 
 def _verify(token: str, **options: Any) -> VerifiedGrant:
@@ -106,10 +104,7 @@ ISSUED: Dict[str, Any] = json.loads(
 
 
 def _serve(mocker: Any, jwks: Dict[str, Any]) -> None:
-    response = mocker.Mock()
-    response.raise_for_status.return_value = None
-    response.json.return_value = jwks
-    mocker.patch("grantex._verify.httpx.get", return_value=response)
+    serve_jwks(mocker, jwks)
 
 
 @pytest.mark.parametrize("name", ["standard_rs256", "standard_es256"])

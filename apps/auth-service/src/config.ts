@@ -197,7 +197,9 @@ export const config = {
   fidoOrigin: optional('FIDO_ORIGIN', 'https://grantex.dev'),
   get passkeyEnrollmentEnabled() { return process.env['PASSKEY_ENROLLMENT_ENABLED'] === 'true'; },
   get portableWebAuthnEvidenceEnabled() { return process.env['PORTABLE_WEBAUTHN_EVIDENCE_ENABLED'] === 'true'; },
+  get portableWebAuthnEvidenceStatusCheckEnabled() { return process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'] === 'true'; },
   get irregularityResponsePolicyEnabled() { return process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'] === 'true'; },
+  get irregularityCascadeRevocationEnabled() { return process.env['IRREGULARITY_CASCADE_REVOCATION_ENABLED'] === 'true'; },
   // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
   ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
   // CORS: comma-separated list of browser origins allowed to call the API
@@ -350,6 +352,11 @@ export function validateConfig(): void {
     const problem = passkeyOriginConfigError(config.fidoOrigin, config.fidoRpId, process.env['NODE_ENV'] === 'production');
     if (problem) errors.push(problem);
   }
+  const cascadeProblem = portableEvidenceCascadeConfigError(
+    config.portableWebAuthnEvidenceEnabled, config.irregularityCascadeRevocationEnabled,
+    config.portableWebAuthnEvidenceStatusCheckEnabled,
+  );
+  if (cascadeProblem) errors.push(cascadeProblem);
 
   if (errors.length > 0) {
     console.error(
@@ -357,6 +364,12 @@ export function validateConfig(): void {
     );
     process.exit(1);
   }
+}
+
+export function portableEvidenceCascadeConfigError(portable: boolean, cascade: boolean, statusCheck: boolean): string | null {
+  if (portable && !cascade) return 'IRREGULARITY_CASCADE_REVOCATION_ENABLED=true is required for portable WebAuthn evidence';
+  if (portable && !statusCheck) return 'PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED=true is required for portable WebAuthn evidence';
+  return null;
 }
 
 export function passkeyOriginConfigError(origin: string, rpId: string, production: boolean): string | null {

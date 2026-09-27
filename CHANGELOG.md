@@ -57,6 +57,148 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `grantex_issuance_refusals_total{path,reason}`. Alert rules:
   `GrantexIssuanceLockoutPlaced` and `GrantexIssuanceFreezeStateUnreadable`.
   The runbook is section 11 of `docs/self-hosting.md`.
+### Bounded JWKS fetch and validated `did:web` issuers (TypeScript and Python SDKs, default off)
+- Added an opt-in option, default `false`: `boundedJwksFetch` on
+  `verifyGrantToken`'s options and on `verifyDecisionGrant` /
+  `verifyDecisionGrants` (TypeScript), and `bounded_jwks_fetch` on
+  `VerifyGrantTokenOptions` and on `grantex.decisions.verify_decision_grant` /
+  `verify_decision_grants` (Python). One option covers the fetch bounds and
+  the `did:web` checks below. Left off, verification is unchanged: the key set
+  is fetched, and `issuerDid` / `issuer_did` is read, exactly as before. The
+  clients' `enforce()` verifies with the option off and has no setting for it
+  yet.
+- With the option on, a JWK Set is read within the same bounds in both SDKs:
+  an HTTP 200 (redirects are not followed) served as `application/json` or
+  `application/jwk-set+json` (with, at most, a `utf-8` charset), no more than
+  64 KiB, no more than 128 keys, and one 5-second deadline for the whole
+  exchange, body included. A response outside them fails verification with a
+  `GrantexTokenError` that names the endpoint and the reason, and nothing is
+  cached. With it off, the Python SDK reads any `2xx` response whole under a
+  10-second timeout per network operation, so a server sending a byte at a
+  time is never cut off, and the TypeScript SDK takes any size, media type
+  and number of keys. The cache TTL (10 minutes) and the unknown-`kid`
+  refresh cooldown (30 seconds) are the same in both modes, and bounded and
+  unbounded key sets for the same URL are cached separately.
+- With the option on, the Python SDK asks for an unencoded body and refuses a
+  compressed one, which it could only measure after decoding it; the
+  TypeScript SDK measures a compressed body by its decoded size as it reads.
+  Decision-grant verification with `jwksUri` / `jwks_uri` and the option on
+  reads keys within the same bounds.
+- With the option on, `issuerDid` / `issuer_did` is checked against the
+  did:web method specification (§2.3, §2.5.2) before anything is fetched. A
+  fully qualified domain name, a percent-encoded port and colon-separated path
+  segments are accepted, and `did:web:issuer.example%3A8443` resolves to
+  `https://issuer.example:8443/.well-known/jwks.json` (with the option off it
+  still becomes a URL that cannot be fetched). An IP address, `localhost` or
+  a name under `.localhost`, `.local`, `.home.arpa` or `.internal`, a
+  single-label host, user information, a port outside 1–65535 and a path
+  segment that is not plain DID characters are refused. A value that is not a
+  `did:web` identifier is refused instead of being ignored in favour of
+  `jwksUri` / `jwks_uri`.
+- A DID is written in ASCII (did:web §3.5), so with the option on an
+  internationalized domain is accepted in its IDNA A-label form
+  (`did:web:xn--bcher-kva.example`) and any non-ASCII character is refused
+  rather than converted: conversion maps some characters onto ASCII ones (the
+  Kelvin sign, U+212A, becomes `k`), which would fetch keys from a host the
+  DID does not spell. Both SDKs apply the same host rule, ASCII letters,
+  digits and hyphens.
+- `issuerDid: null` means no DID in either mode, as leaving it out does and
+  as `issuer_did=None` does in Python; the TypeScript option's type is now
+  `string | null`. With the option on, an empty string is refused in both
+  SDKs; with it off, it is ignored, as before.
+- **Planned breaking change:** a later major release turns the option on by
+  default, with `boundedJwksFetch: false` / `bounded_jwks_fetch=False` as the
+  explicit opt-out. Before turning it on, verify tokens from an issuer on a
+  private network with `jwksUri` / `jwks_uri` and `issuer` instead of a DID.
+  The 128-key cap leaves room for the auth service's default set (one signing
+  key and 13 `grantex-YYYY-MM` aliases) and for `JWT_LEGACY_KID_MONTHS` at
+  its maximum of 120; a self-hosted auth service keeps its whole JWK Set
+  within 128 keys and 64 KiB (`docs/self-hosting.md`).
+- The Go SDK and the other TypeScript verifiers (the CLI, mcp-auth and mpp)
+  are not changed yet, and the auth service can be configured to publish a
+  larger set than the bounded fetch accepts; `FINDINGS.md` tracks both, and
+  the default flip.
+### mcp-auth: the purpose on the consent page is the purpose on the grant
+- `@grantex/mcp-auth` 3.0.0 (prepared, not published) sends `grant.purpose` to
+  Grantex as the `purpose` of `POST /v1/authorize` once the Principal
+  approves the consent page, so the grant, and its token's
+  `authorization_details`, carry the purpose the page showed. Before, the
+  purpose was only displayed. With a purpose configured, the page's note
+  says that Grantex records it on the grant; without one, the note (new
+  `consentPage.text.noPurposeNote`) speaks only of call limits, which are
+  still labelled as declared by the service.
+- Fails closed when Grantex does not confirm it: `POST /v1/authorize` echoes
+  the purpose it bound, and an answer without it (a server that predates
+  purpose-bound grants ignores the field) ends the authorization with
+  `502 server_error` rather than issuing a grant without the purpose.
+- A purpose Grantex refuses (`400 INVALID_PURPOSE`: a purpose outside the
+  vocabulary, or requested scopes that name no connector) reaches the client
+  on its redirect URI as `error=invalid_scope`, with a fixed description
+  naming the purpose, instead of the generic `502` "The upstream
+  authorization request failed". Upstream text is still not relayed to the
+  client.
+- New `warn` option (default `console.warn`) for the operator. A purpose
+  refusal is reported with Grantex's reason, error code and request id, on
+  one line with the reason cut to 300 characters; an unconfirmed purpose is
+  reported too. Start-up still checks only the purpose's syntax, because
+  Grantex does not publish its vocabulary in its metadata: a well-formed
+  term outside the vocabulary starts cleanly and then refuses every
+  authorization after consent with `invalid_scope`, as the guide now says.
+- `grant.authorizeParams` cannot set the purpose. It may repeat
+  `grant.purpose`; any other `purpose`, or one when `grant.purpose` is unset,
+  refuses the authorization with `500 server_error` before Grantex is
+  called, so neither value silently wins.
+- Breaking: `createMcpAuthServer` refuses to start when `grant.dataRegion` is
+  set. `POST /v1/authorize`, which mcp-auth calls, takes no data region, so
+  a grant made through mcp-auth cannot carry one and the page showed a
+  restriction the grant did not carry. Remove the option; the region row
+  reads "None declared" and `ConsentViewModel.dataRegion` is never set.
+- Breaking for a deployment that returned `purpose` from `authorizeParams`
+  without setting `grant.purpose`, as the 3.0 guide suggested: set
+  `grant.purpose` instead, which the page then shows.
+- Not behind a flag: 3.0.0 is unpublished, and a purpose is sent only when
+  `grant.purpose` is configured (leave it unset to send none). No
+  auth-service or SDK change. Documented in `docs/mcp-auth.md` ("Purpose").
+### Vendor denylist gate
+- A new **Vendor Denylist** workflow fails a pull request that names a
+  denylisted identity-verification, KYB/KYC, AML or screening vendor in its
+  added lines, file paths, commit messages, branch name, title or description,
+  and fails when any tracked file does. The check is
+  `scripts/check_denylist.py`: only a salt and the salted SHA-256 hashes of the
+  terms are committed (`security/denylist.sha256`), and a failure gives the
+  location and word number, not the matched line. It fails closed when git,
+  the hash file or a tracked file it has to read misbehaves, and when a path
+  given to the audit matches no tracked file.
+- The same check prints a warning, with the location and the house term, for
+  each term the house terminology in `AGENTS.md` replaces (kill switch,
+  white-label, anomaly, trust provider, verification partner, verification
+  result). Warnings never change the result. The existing uses, most of them
+  the published `/v1/anomalies` API and its documentation, are recorded in
+  `FINDINGS.md`; renaming them is a separate product decision.
+- `make check` runs the audit over every tracked file (`make check-denylist`)
+  and `make test` runs the check's own tests (`make test-scripts`); the
+  Python 3.9 SDK CI job runs those tests too. The check needs only Python 3.9
+  or later and git. See "Vendor-neutral names" in `CONTRIBUTING.md`.
+- Two existing lines the audit flagged were reworded without changing their
+  meaning: a portal test title and one sentence of the draft privacy policy.
+- CI and documentation only; no product change, nothing behind a flag.
+
+### Portable evidence rollout and VC revocation
+- Added `IRREGULARITY_CASCADE_REVOCATION_ENABLED` (default `false`). When enabled,
+  high/critical irregularity responses revoke the affected agent's grants,
+  descendants, wallet reservations, VCs, and status-list bits in one database
+  transaction. Portable evidence requires this flag at startup.
+- Added `PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED` (default `false`).
+  When enabled, issuer verification checks evidence-bearing VCs against the
+  stored credential and complete grant ancestry, rejecting broken and cyclic
+  chains. Enable it before evidence issuance and keep it on during an issuance
+  rollback; startup rejects issuance without this and cascade revocation.
+  An explicit, idempotent reconciliation command repairs
+  active descendants and VCs left behind by historical grant-only revocations,
+  including public status-list bits. Local Postgres and Chromium regressions
+  cover both paths.
+- Expanded the isolated production passkey test to verify the exported
+  assertion, grant-reference digest, refresh, delegation, and revocation.
 
 ### Portable WebAuthn assertion evidence (default off)
 - Added `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED` (default `false`). When enabled,
@@ -905,11 +1047,14 @@ Added
   failing closed with a reason code.
 - `/revoke` also revokes refresh tokens bound to the client (RFC 7009).
 - Rendered consent page before anything reaches Grantex, showing the client,
-  redirect host, purpose, data region, duration, tools with caps and decision
-  requirements, labelled as declared by the service; strict CSP with no
+  redirect host, purpose, duration, tools with caps and decision
+  requirements. The purpose is sent to Grantex, which binds the grant to it;
+  call limits are labelled as declared by the service. Strict CSP with no
   script, CSRF token plus a per-consent `__Host-` SameSite=Strict cookie;
   customisable theme (WCAG AA contrast enforced), text, `lang`, `extraCss`
-  and `renderDetails`. New `grant` and `consentPage` options.
+  and `renderDetails`. New `grant` (`purpose`, `purposeDescription`,
+  `duration`, and `authorizeParams` for extra authorize parameters, which
+  cannot change the purpose), `consentPage` and `warn` options.
 - Confused-deputy protection: approval sets a `__Host-` Secure HttpOnly
   SameSite=Lax callback-binding cookie whose hash is stored on the pending
   authorization, and `/callback` issues a code only to the browser that
@@ -925,8 +1070,7 @@ Added
   `spec/mcp-auth-challenges.md`). With a tools policy, a body that is not
   parsed JSON-RPC 2.0 is refused (`body_not_parsed`). `onDenial` reports
   refusals with low-cardinality reasons (`grant_revoked`, ...); a guard
-  without `revocations` warns at start-up. `grant.authorizeParams` is the
-  extension point for purpose-bound grants.
+  without `revocations` warns at start-up.
 - Tests: storage contract against memory, real Postgres and real Redis; a
   server-process restart test on both; a conformance suite mapping each
   server-side MUST of the specification and the Security Best Practices'

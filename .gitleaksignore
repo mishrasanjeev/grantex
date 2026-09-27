@@ -180,3 +180,7 @@ f2f89031f108977f1b2a00d03e78e0ea73e13f69:docs/reports/commerce-v1-option-a-smoke
 8a86568511149552d5270a203241c44f414fba82:spec/examples/caps-counters.json:generic-api-key:34
 8a86568511149552d5270a203241c44f414fba82:spec/examples/caps-counters.json:generic-api-key:52
 8a86568511149552d5270a203241c44f414fba82:spec/examples/caps-counters.json:generic-api-key:72
+d43754a96201dcce5144377d896cba45a0e45832:packages/sdk-ts/tests/verify-jwks-fetch.test.ts:generic-api-key:358
+d43754a96201dcce5144377d896cba45a0e45832:packages/sdk-py/tests/test_verify_jwks_fetch.py:generic-api-key:441
+f71ee3999f1001bd055da6db6fe8eb5755d75b27:packages/sdk-ts/tests/verify-jwks-fetch.test.ts:generic-api-key:386
+f71ee3999f1001bd055da6db6fe8eb5755d75b27:packages/sdk-py/tests/test_verify_jwks_fetch.py:generic-api-key:472

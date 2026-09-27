@@ -1,12 +1,13 @@
 # Developer entry points. CI runs the same targets (.github/workflows/ci.yml, job "make").
 #
 #   make install   install dependencies for the packages below
-#   make check     documentation integrity, lint and type checks
+#   make check     documentation integrity, vendor denylist, lint and type checks
 #   make test      unit tests
 #
 # Scope: the core protocol packages - the Python SDK, the TypeScript SDK,
-# @grantex/mcp-auth and the auth service. Other packages keep their own
-# commands (see CONTRIBUTING.md) and CI jobs.
+# @grantex/mcp-auth and the auth service - plus the repository-wide
+# documentation and vendor-denylist checks and the tests of those scripts.
+# Other packages keep their own commands (see CONTRIBUTING.md) and CI jobs.
 
 SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c
@@ -22,11 +23,11 @@ NPM ?= npm
 PY_SDK := packages/sdk-py
 TS_PACKAGES := packages/sdk-ts packages/mcp-auth apps/auth-service
 
-.PHONY: help install check test check-docs check-py check-ts test-py test-ts
+.PHONY: help install check test check-docs check-denylist check-py check-ts test-py test-scripts test-ts
 
 help:
 	@echo "make install   install dependencies"
-	@echo "make check     documentation integrity, lint and type checks"
+	@echo "make check     documentation integrity, vendor denylist, lint and type checks"
 	@echo "make test      unit tests"
 
 install:
@@ -39,10 +40,16 @@ install:
 	$(NPM) --prefix packages/sdk-ts run build
 	$(PYTHON) -m pip install --disable-pip-version-check -e "$(PY_SDK)[dev]" ruff
 
-check: check-docs check-py check-ts
+check: check-docs check-denylist check-py check-ts
 
 check-docs:
 	node scripts/check-docs-integrity.mjs
+
+# Vendor names in every tracked file; house-terminology matches only warn.
+# Needs Python 3.9+ and git. The Vendor Denylist workflow also scans each
+# change's commit messages, branch name and pull request text.
+check-denylist:
+	$(PYTHON) scripts/check_denylist.py audit
 
 check-py:
 	cd $(PY_SDK) && $(PYTHON) -m ruff check src tests
@@ -54,10 +61,14 @@ check-ts:
 	  $(NPM) --prefix "$$pkg" run typecheck; \
 	done
 
-test: test-py test-ts
+test: test-py test-scripts test-ts
 
 test-py:
 	cd $(PY_SDK) && $(PYTHON) -m pytest -q
+
+# Tests of the repository scripts (the vendor denylist check).
+test-scripts:
+	$(PYTHON) -m pytest -q tests/scripts
 
 test-ts:
 	@for pkg in $(TS_PACKAGES); do \

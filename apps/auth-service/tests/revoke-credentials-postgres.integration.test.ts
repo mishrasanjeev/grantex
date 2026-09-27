@@ -59,7 +59,8 @@ afterAll(async () => {
   }
 }, 60_000);
 
-const { revokeGrantCascade } = await import('../src/lib/revoke.js');
+const { revokeGrantCascade, revokeAgentGrantsCascade } = await import('../src/lib/revoke.js');
+const { reconcileRevokedGrantDescendants, reconcileRevokedGrantVCs } = await import('../src/lib/vc-reconciliation.js');
 const { runMigrations } = await import('../src/db/migrate.js');
 
 describePostgres('revoking a grant revokes its credentials in the same transaction', () => {
@@ -118,7 +119,87 @@ describePostgres('revoking a grant revokes its credentials in the same transacti
       await sql`DELETE FROM grants WHERE developer_id = ${dev}`.catch(() => undefined);
       await sql`DELETE FROM agents WHERE developer_id = ${dev}`.catch(() => undefined);
       await sql`DELETE FROM developers WHERE id = ${dev}`.catch(() => undefined);
-      await sql.end({ timeout: 5 }).catch(() => undefined);
+    }
+  }, 300_000);
+
+  it('auto-revokes an agent tree, credentials and status bits only under revoke policy', async () => {
+    const sql = state.pool!;
+    const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
+    const dev = `dev_rvc_${suffix}`;
+    const agent = `ag_rvc_${suffix}`;
+    const childAgent = `ag_rvc_c_${suffix}`;
+    const otherAgent = `ag_rvc_o_${suffix}`;
+    const parent = `grnt_rvc_p_${suffix}`;
+    const child = `grnt_rvc_c_${suffix}`;
+    const unrelated = `grnt_rvc_o_${suffix}`;
+    const listId = `vcsl_rvc_${suffix}`;
+    const emptyList = gzipSync(Buffer.alloc(16384, 0)).toString('base64url');
+
+    await runMigrations(sql);
+    try {
+      await sql`INSERT INTO developers (id, api_key_hash, name, irregularity_response_mode)
+                VALUES (${dev}, ${'hash_' + suffix}, 'Auto Revoke VC Test', 'alert_only')`;
+      for (const id of [agent, childAgent, otherAgent]) {
+        await sql`INSERT INTO agents (id, did, developer_id, name)
+                  VALUES (${id}, ${'did:grantex:' + id}, ${dev}, 'Agent')`;
+      }
+      await sql`INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+                VALUES (${parent}, ${agent}, 'user_rvc', ${dev}, ${['read']}, NOW() + INTERVAL '1 hour')`;
+      await sql`INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at, parent_grant_id)
+                VALUES (${child}, ${childAgent}, 'user_rvc', ${dev}, ${['read']}, NOW() + INTERVAL '1 hour', ${parent})`;
+      await sql`INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+                VALUES (${unrelated}, ${otherAgent}, 'user_rvc', ${dev}, ${['read']}, NOW() + INTERVAL '1 hour')`;
+      await sql`INSERT INTO vc_status_lists (id, developer_id, purpose, encoded_list, size, next_index)
+                VALUES (${listId}, ${dev}, 'revocation', ${emptyList}, 131072, 3)`;
+      for (const [grantId, index] of [[parent, 1], [child, 2]] as const) {
+        await sql`
+          INSERT INTO verifiable_credentials
+            (id, grant_id, developer_id, principal_id, agent_did, credential_type, credential_jwt,
+             status, status_list_id, status_list_idx, expires_at)
+          VALUES (${'vc_' + grantId}, ${grantId}, ${dev}, 'user_rvc', ${'did:grantex:' + agent},
+                  'AgentGrantCredential', 'placeholder', 'active', ${listId}, ${index},
+                  NOW() + INTERVAL '1 hour')`;
+      }
+
+      expect(await revokeAgentGrantsCascade(agent, dev, true)).toEqual([]);
+      expect((await sql`SELECT status FROM grants WHERE id = ${parent}`)[0]?.['status']).toBe('active');
+
+      await sql`UPDATE developers SET irregularity_response_mode = 'revoke_agent_grants' WHERE id = ${dev}`;
+      expect(new Set(await revokeAgentGrantsCascade(agent, dev, true)))
+        .toEqual(new Set([parent, child]));
+      const grants = await sql`SELECT id, status FROM grants WHERE developer_id = ${dev}`;
+      expect(grants.find((row) => row['id'] === unrelated)?.['status']).toBe('active');
+      expect(grants.filter((row) => row['id'] !== unrelated).every((row) => row['status'] === 'revoked')).toBe(true);
+      const credentials = await sql`SELECT status FROM verifiable_credentials WHERE developer_id = ${dev}`;
+      expect(credentials.every((row) => row['status'] === 'revoked')).toBe(true);
+      const [list] = await sql<{ encoded_list: string }[]>`
+        SELECT encoded_list FROM vc_status_lists WHERE id = ${listId}`;
+      const bits = gunzipSync(Buffer.from(list!.encoded_list, 'base64url'));
+      expect((bits[0]! >> 6) & 1).toBe(1);
+      expect((bits[0]! >> 5) & 1).toBe(1);
+
+      await sql`UPDATE verifiable_credentials SET status = 'active', revoked_at = NULL
+                WHERE developer_id = ${dev}`;
+      await sql`UPDATE grants SET status = 'active', revoked_at = NULL WHERE id = ${child}`;
+      await sql`UPDATE vc_status_lists SET encoded_list = ${emptyList} WHERE id = ${listId}`;
+      expect(await reconcileRevokedGrantDescendants()).toBe(1);
+      expect((await sql`SELECT status FROM grants WHERE id = ${child}`)[0]?.['status']).toBe('revoked');
+      expect(await reconcileRevokedGrantVCs()).toBe(1);
+      const repaired = await sql`SELECT status FROM verifiable_credentials WHERE developer_id = ${dev}`;
+      expect(repaired.every((row) => row['status'] === 'revoked')).toBe(true);
+      const [repairedList] = await sql<{ encoded_list: string }[]>`
+        SELECT encoded_list FROM vc_status_lists WHERE id = ${listId}`;
+      const repairedBits = gunzipSync(Buffer.from(repairedList!.encoded_list, 'base64url'));
+      expect((repairedBits[0]! >> 6) & 1).toBe(1);
+      expect((repairedBits[0]! >> 5) & 1).toBe(1);
+      expect(await reconcileRevokedGrantDescendants()).toBe(0);
+      expect(await reconcileRevokedGrantVCs()).toBe(0);
+    } finally {
+      await sql`DELETE FROM verifiable_credentials WHERE developer_id = ${dev}`.catch(() => undefined);
+      await sql`DELETE FROM vc_status_lists WHERE developer_id = ${dev}`.catch(() => undefined);
+      await sql`DELETE FROM grants WHERE developer_id = ${dev}`.catch(() => undefined);
+      await sql`DELETE FROM agents WHERE developer_id = ${dev}`.catch(() => undefined);
+      await sql`DELETE FROM developers WHERE id = ${dev}`.catch(() => undefined);
     }
   }, 300_000);
 });

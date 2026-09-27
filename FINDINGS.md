@@ -625,6 +625,188 @@ the pull request that references it.
   first on its own limit. A failure in the first test that is not a timeout
   does not leave a migration running, so it cannot cause either.
 
+## G-33 — Tracked files use terms the house terminology replaces
+
+- **Found:** the first audit with the vendor denylist's terminology warnings
+  (`python scripts/check_denylist.py audit`), 2026-09-27.
+- **What:** 1,715 warnings in the files tracked before the check was added.
+  1,628 are *anomaly*, *anomalies* or *anomalous*, most of them the legacy
+  detector's published names: the `/v1/anomalies` routes, the
+  `anomaly.detected` event, the `anomalies`, `anomaly_rules` and
+  `anomaly_channels` tables, the SDK resources and types in TypeScript, Python
+  and Go, the CLI, the portal page, the OpenAPI document and API reference, the
+  IETF draft and the `web/anomaly.html` landing page. 71 are *verification
+  result(s)*, nearly all naming the outcome of checking an evidence package, a
+  credential, a token or an audit hash chain (`VerificationResult` in the SDKs
+  and the auth service, `VCVerificationResult`, the Android example's
+  `ChainVerificationResult`, the token-verification guide) rather than an
+  identity attestation. The other 16 are *kill switch(es)* (8), *white label*
+  or *white-labeling* (4), *trust provider* (2) and *verification partner* (2):
+  the rule in `AGENTS.md` itself and its copy, planning and review documents,
+  the Custom Domains heading in `README.md` and one readiness-check description
+  in `apps/auth-service/src/lib/commerce/live-mode-guard.ts`. The warnings do
+  not fail anything; this entry records why they are there.
+- **Fix:** a product decision per surface. A published name (route, event
+  type, table, SDK export) needs a new name, with the old one kept as a
+  deprecated alias and a `CHANGELOG.md` entry; documentation, comments and the
+  landing page are reworded once the new names exist, so that documentation
+  and API agree. If the `VerificationResult` names stay because they name a
+  different concept, the check should learn that exception rather than warn
+  on them for ever.
+
+## G-34 — mcp-auth tests build their first server under a 5s limit
+
+- **Found:** a full local `make test` on a loaded machine while adding the
+  vendor denylist check (G-33), 2026-09-27.
+- **What:** in several `packages/mcp-auth` test files, the first test that seeds
+  storage and builds a server with `createMcpAuthServer` does so cold (in
+  `client-metadata.test.ts` it also imports the server module), under
+  vitest's default 5-second `testTimeout`: `vitest.config.ts` sets none. In
+  one run six files failed that test with
+  `Test timed out in 5000ms` (`client-metadata`, `consent`, `protocol`,
+  `state`, `token` and the 2026-07-28 conformance suite) and a seventh file's
+  worker exited unexpectedly; a second run failed one of them. Run on its own,
+  `client-metadata.test.ts` passes all 35 tests in under two seconds, and
+  nothing in the package changed between the runs.
+- **Fix:** find which part of the first build is slow when cold, then build
+  once per file in a `beforeAll` with a generous hook timeout or give the
+  package a `testTimeout` that covers it, as the auth service did for its
+  migrations (G-32). Show it by forcing a short limit before and after, as
+  G-32 did.
+
+## G-35 — mcp-auth records nothing when most upstream authorizations fail
+
+- **Found:** sending the consent page's purpose to Grantex from mcp-auth
+  (2026-09-27).
+- **What:** `startUpstreamAuthorization` in
+  `packages/mcp-auth/src/endpoints/authorize.ts` answers every
+  `grantex.authorize` failure other than a purpose refusal with
+  `502 server_error`, "The upstream authorization request failed", and
+  records nothing. The `warn` option reports only a purpose refusal and an
+  answer that does not confirm the purpose. A request Grantex refuses for a
+  configuration reason (callback URL or resource not registered on the
+  agent, a scope outside the agent's registration, a rate limit) looks to the
+  operator exactly like an outage, and the code Grantex returned is lost.
+  `/revoke` has the same gap (G-7).
+- **Fix:** report the other upstream failures through `warn` with the
+  Grantex error code and request id (not the message text, which, unlike the
+  fixed `INVALID_PURPOSE` reasons, can echo request details), and count them
+  by code.
+
+## G-36 — mcp-auth is built and tested only against the published SDK
+
+- **Found:** the same work (2026-09-27).
+- **What:** the `Makefile` says `@grantex/mcp-auth` resolves `@grantex/sdk`
+  from the local build, but `packages/mcp-auth/package-lock.json` pins
+  `@grantex/sdk` 0.6.0 from the npm registry, and the package's typecheck,
+  unit, integration and browser suites all resolve that copy. Nothing checks
+  mcp-auth against `packages/sdk-ts`, so an SDK change that breaks it (a
+  renamed type, a changed error shape) is not caught until the SDK is
+  published. Typechecking `packages/mcp-auth/src` against the in-repo build
+  by hand passed during this work.
+- **Fix:** add a CI step that typechecks and runs the mcp-auth unit suite
+  with `@grantex/sdk` resolved to the in-repo build (a tsconfig path and a
+  vitest alias behind an environment variable, as the root
+  `vitest.config.ts` does with `GRANTEX_SDK_TEST_ROOT`), and correct the
+  Makefile comment.
+
+## G-37 — The Go SDK's JWKS fetch is unbounded and its `IssuerDID` is not validated
+
+- **Found:** bounding the JWKS fetch in the TypeScript and Python SDKs
+  (2026-09-27).
+- **What:** `packages/go-sdk/verify.go` registers the JWKS URL with the jwx
+  `jwk.Cache` and its default HTTP client: no response size limit, no
+  `Content-Type` check, no limit on the number of keys and no deadline on the
+  whole fetch. `resolveVerificationEndpoints` turns `did:web:<x>` into
+  `https://<x with ":" replaced by "/">/.well-known/jwks.json` without
+  checking the host, so an IP address, `localhost`, a single label or user
+  information is fetched and trusted, a percent-encoded port produces an
+  unusable URL, and an `IssuerDID` that is not `did:web` is ignored in favour
+  of `JwksURI`.
+- **Fix:** give the cache a fetch with the TypeScript and Python limits (HTTP
+  200 only, `application/json` or `application/jwk-set+json`, 64 KiB, 128
+  keys, 5 seconds for the whole exchange) and validate `IssuerDID` with the
+  same did:web rules (did:web §2.3, §2.5.2 and §3.5: ASCII only, an
+  internationalized name as its `xn--` A-label, never mapped), with the shared
+  cases from `packages/sdk-py/tests/test_verify_jwks_fetch.py`.
+
+## G-38 — Other TypeScript verifiers fetch JWKS without bounds
+
+- **Found:** bounding the JWKS fetch in the TypeScript and Python SDKs
+  (2026-09-27).
+- **What:** these call `jose.createRemoteJWKSet(url)` with no options, so they
+  accept any response size, media type and number of keys, with only JOSE's
+  default five-second timeout:
+  - `packages/cli/src/commands/verify.ts` (`grantex verify`);
+  - `packages/mcp-auth/src/lib/verify.ts` and
+    `packages/mcp-auth/src/resource/guard.ts`.
+
+  `packages/mpp/src/verifier.ts` fetches the JWK Set with plain `fetch`: no
+  timeout at all, no size or key limit, and redirects are followed.
+- **Fix:** export the SDK's bounded key set (`createBoundedRemoteJWKSet` in
+  `packages/sdk-ts/src/jwks.ts`, not yet part of the package's public API) and
+  use it in these packages, and give the mpp fetch the same limits.
+
+## G-39 — The auth service can publish a JWK Set the SDKs refuse
+
+- **Found:** choosing the SDKs' JWKS key-count limit (2026-09-27).
+- **What:** with `boundedJwksFetch` / `bounded_jwks_fetch` on (opt-in until
+  G-41 is fixed, then the default), the TypeScript and Python SDKs refuse a
+  JWK Set of more than 128 keys or 64 KiB. The auth service publishes its
+  legacy RSA key under one `grantex-YYYY-MM` alias per month of
+  `JWT_LEGACY_KID_MONTHS` (13 by default, up to 120), beside its signing-key
+  ring, every key in
+  `JWT_VERIFICATION_PUBLIC_KEYS`, its EdDSA key and the commerce passport keys
+  in their grace window. Nothing stops that set from passing either limit: at
+  120 months it is close to both with 2048-bit keys, and larger RSA keys reach
+  64 KiB well before 120 aliases. Every relying party using the SDKs with the
+  option on would then refuse every token.
+- **Fix:** check the size of the published set when the auth service starts
+  (and when keys are reloaded), and refuse to start, or at least warn, when it
+  exceeds what the SDKs accept; or lower the `JWT_LEGACY_KID_MONTHS` maximum
+  to a window that fits.
+
+## G-40 — Docs say the standalone verifier fetches the JWKS on every call
+
+- **Found:** documenting the bounded JWKS fetch (2026-09-27).
+- **What:** both SDKs have cached the key set per JWKS URL since 0.5.1
+  (10-minute TTL, one refresh per 30 seconds for an unknown `kid`), but the
+  docs still describe a fetch on every call:
+  `docs/sdks/python/offline-verification.mdx` (description and overview),
+  `docs/sdks/typescript/offline-verification.mdx` (overview),
+  `docs/guides/token-verification.mdx` (introduction and the "do not assume
+  ... a persistent JWKS cache" recommendation) and
+  `packages/sdk-py/README.md` ("Local JWKS verification").
+- **Fix:** describe the cache, its TTL and the unknown-`kid` refresh, and
+  keep the note that the JWKS endpoint must be reachable for the first fetch
+  and for refreshes.
+
+## G-41 — The bounded JWKS fetch is opt-in until the next major release
+
+- **Found:** putting the bounded JWKS fetch and the `did:web` checks behind an
+  option that defaults off, as `AGENTS.md` ("Feature flags") requires for a
+  behaviour change on an existing path (2026-09-27).
+- **What:** `boundedJwksFetch` (TypeScript: `verifyGrantToken`,
+  `verifyDecisionGrant`, `verifyDecisionGrants`) and `bounded_jwks_fetch`
+  (Python: `VerifyGrantTokenOptions`, `grantex.decisions.verify_decision_grant`
+  and `verify_decision_grants`) default to off, and the clients' `enforce()`
+  cannot turn them on. While the option is off, the JWK Set is fetched without
+  bounds: the TypeScript SDK reads a response of any size, media type and
+  number of keys, and the Python SDK reads any `2xx` response whole under a
+  10-second timeout per network operation, so a server sending a byte at a
+  time is never cut off. `issuerDid` / `issuer_did` is not checked either: a
+  caller-supplied `did:web` issuer can name an IP address, `localhost`, a
+  private or single-label name, or user information, and its keys are fetched
+  without bounds from that host and trusted, while a value that is not
+  `did:web` is ignored in favour of `jwksUri` / `jwks_uri`.
+- **Fix:** in a major release, make the option on by default in both SDKs,
+  with `boundedJwksFetch: false` / `bounded_jwks_fetch=False` as the explicit
+  opt-out, recorded in `CHANGELOG.md` as a breaking change; give the clients'
+  `enforce()` the same option; and fix G-39 first, so the auth service cannot
+  publish a set the new default refuses. Owner: the TypeScript and Python SDK
+  maintainers. Exit criterion: that major release ships with the default
+  flipped, the explicit opt-out, and tests of both settings in both SDKs.
+
 ## G-50 — A lockout does not refuse resuming a suspended grant
 
 - **Found:** emergency stop lockout work (G-22), 2026-09-27.
