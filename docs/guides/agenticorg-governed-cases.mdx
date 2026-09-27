@@ -1,7 +1,7 @@
 ---
 title: "Grantex and AgenticOrg Governed Cases"
 sidebarTitle: "AgenticOrg Governed Cases"
-description: "What Grantex verifies for AgenticOrg business onboarding cases, what AgenticOrg enforces locally, and which purpose and cap controls are not yet active in the published Python SDK."
+description: "What Grantex verifies for AgenticOrg business onboarding cases, what AgenticOrg enforces locally, and which purpose and cap controls are not yet wired into the integration."
 keywords: ["AgenticOrg governed cases", "Grantex agent authorization", "business onboarding grant", "case purpose", "human decision"]
 ---
 
@@ -28,13 +28,13 @@ Check the deployed revision and the tenant's `governed_cases.enabled` flag.
 | Provider response and evidence | Provider and AgenticOrg | Provider access, cited response, policy version, case record and hand-off |
 | Token-level purpose, case-bound cap | Not active in this integration | Do not represent the local allowlist or a general budget as either control |
 
-The current published Python dependency is `grantex==0.5.1`. It does not
-enforce token-level purpose or per-case caps for this flow. A pooled run token
-is not bound to one case. Newer Python `0.6.0` and TypeScript `0.7.0` source
-trees include general purpose and decision-aware APIs, but they are not the
-published SDKs at this guide's registry check on September 24, 2026, and
-AgenticOrg has not wired their case context into enforcement. Source presence
-alone is not a production control. See [Release Status](/release-status).
+At the last verified AgenticOrg integration check on September 24, 2026, its
+Python dependency was `grantex==0.5.1`. That integration did not enforce
+token-level purpose or per-case caps for this flow, and a pooled run token was
+not bound to one case. Python `0.6.0` is now published with general purpose and
+cap APIs, but a package release alone does not wire AgenticOrg's case context
+into enforcement. Recheck AgenticOrg's deployed dependency and flow before
+claiming this as a production control. See [Release Status](/release-status).
 
 ## Operator setup
 

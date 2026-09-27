@@ -5,10 +5,10 @@ description: "Detect and manage security anomalies"
 
 ## Detect
 
-Repository source includes `client.Anomalies.GetResponsePolicy(ctx)` and
+Published `v0.4.0` includes `client.Anomalies.GetResponsePolicy(ctx)` and
 `SetResponsePolicy(ctx, "alert_only")`. These are account-wide and require the
-default-off server setting `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`;
-check your installed Go module version before calling them. Alert-only stops
+default-off server setting `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`.
+Earlier tags do not include these methods. Alert-only stops
 automatic revocation by this detector, not independent controls.
 
 Trigger anomaly detection and get results.

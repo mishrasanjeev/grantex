@@ -1,7 +1,7 @@
 # Grantex — Full Implementation Brief for AI Assistants
 
-> Last updated: 2026-09-24
-> Release snapshot verified: 2026-09-15
+> Last updated: 2026-09-27
+> Release snapshot verified: 2026-09-27
 
 Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
@@ -71,8 +71,8 @@ Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 |---|---|---|
 | TypeScript or Node.js application | `@grantex/sdk@0.6.0` | Published; npm and clean-install verified; Node.js 18+ ESM |
 | x402 prepaid-wallet application | `@grantex/x402@0.4.0` with `@grantex/sdk@0.6.0` | Both packages are published and registry verified; Node.js 20+ ESM; external custody is operator-supplied |
-| Python application | `grantex==0.5.1` | Published; PyPI and clean-install verified; Python 3.9+ |
-| Go application | `github.com/mishrasanjeev/grantex-go@v0.3.0` | Published; tag, public Go proxy, and clean-install verified; Go 1.26.1+ |
+| Python application | `grantex==0.6.0` | Published; PyPI and clean-install verified; Python 3.9+ |
+| Go application | `github.com/mishrasanjeev/grantex-go@v0.4.0` | Published; tag, public Go proxy, and clean-install verified; Go 1.26.1+ |
 | Service-side JWT enforcement | SDK verifier or direct verification with issuer JWKS | Signature and claim verification; add online or synchronized state for current revocation |
 | MCP HTTP transport authorization | Established MCP-compatible authorization server and maintained MCP SDK | Follow the current MCP authorization specification; a Grantex SDK alone does not provide this layer |
 | Agent-specific enforcement in MCP tools | Primary Grantex SDK or direct JWKS-backed validation | Add after transport authorization when the tool must verify delegated agent authority |
@@ -86,8 +86,8 @@ Primary reproducible installs:
 ```bash
 npm install @grantex/sdk@0.6.0
 npm install @grantex/x402@0.4.0 @grantex/sdk@0.6.0
-python -m pip install grantex==0.5.1
-go get github.com/mishrasanjeev/grantex-go@v0.3.0
+python -m pip install grantex==0.6.0
+go get github.com/mishrasanjeev/grantex-go@v0.4.0
 npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.6.0
 npm install -g @grantex/cli@0.3.0
 ```
@@ -125,8 +125,8 @@ custody adapter.
 
 The newer source checkout includes an opt-in native Base USDC EIP-3009 adapter
 with policy-gated signing, verified finalized funding and chain reconciliation.
-It requires operator-provisioned custody and trusted RPC. Python 0.5.1 and Go
-v0.3.0 publish EVM response and reconciliation APIs, not automatic HTTP payment
+It requires operator-provisioned custody and trusted RPC. Python 0.6.0 and Go
+v0.4.0 publish EVM response and reconciliation APIs, not automatic HTTP payment
 wrappers. Published TypeScript 0.6.0 and x402 0.4.0 support the opt-in automatic
 Base 402/sign/retry flow. All four versions are registry verified. Server deployment
 alone does not activate real
@@ -416,7 +416,7 @@ MCP connects models to tools. Grantex carries and enforces the delegated authori
 
 ### Which SDK should I install?
 
-Use npm-verified `@grantex/sdk@0.6.0` for TypeScript, published `grantex==0.5.1` for Python, or public-proxy-verified `github.com/mishrasanjeev/grantex-go@v0.3.0` for Go. Read the machine release status before upgrading.
+Use npm-verified `@grantex/sdk@0.6.0` for TypeScript, published `grantex==0.6.0` for Python, or public-proxy-verified `github.com/mishrasanjeev/grantex-go@v0.4.0` for Go. Read the machine release status before upgrading.
 
 ### Does local verification check revocation?
 
@@ -430,10 +430,10 @@ No. It is single-process evaluation software with documented consent, code-state
 
 Not in the currently published AgenticOrg/Python integration. AgenticOrg source
 checks an exact case-purpose allowlist locally and verifies a delegated tool
-grant before provider calls. Published `grantex==0.5.1` does not enforce
+grant before provider calls. The last verified integration does not wire
 token-level case purpose or per-case caps; its pooled grant is not bound to a
-single case. Newer SDK source does not change that deployed integration until
-published, pinned, and wired with case context. A human case decision remains
+single case. Published Python `grantex==0.6.0` provides general-purpose and cap
+APIs, but the integration must be upgraded and wired with case context. A human case decision remains
 outside MCP and agent-token authority. See the
 [AgenticOrg governed-case guide](https://docs.grantex.dev/guides/agenticorg-governed-cases).
 

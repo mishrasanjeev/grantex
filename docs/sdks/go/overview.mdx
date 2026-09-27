@@ -5,12 +5,12 @@ description: "Official Go SDK for the Grantex delegated authorization protocol"
 
 ## Installation
 
-Published release: **`github.com/mishrasanjeev/grantex-go@v0.3.0`**. The tag,
-public Go proxy, clean module install, standard tests, and race tests were
-verified before this page was updated.
+Published release: **`github.com/mishrasanjeev/grantex-go@v0.4.0`**. The tag,
+public Go proxy, downloaded-module tests, standard tests, and race tests were
+verified on September 27, 2026.
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.3.0
+go get github.com/mishrasanjeev/grantex-go@v0.4.0
 ```
 
 The unpinned `go get github.com/mishrasanjeev/grantex-go` command follows Go's
@@ -20,6 +20,12 @@ See [Release Status](/release-status) before upgrading.
 ## Requirements
 
 - **Go 1.26.1+**, matching this module's `go.mod` directive
+
+Version `v0.4.0` adds `client.WebAuthn.CreateEnrollmentSession` for
+principal-authenticated hosted passkey registration and
+`client.Anomalies.GetResponsePolicy` / `SetResponsePolicy` for the
+account-level irregularity response mode. Both server capabilities are
+default-off and require explicit operator rollout.
 
 ## Configuration
 
