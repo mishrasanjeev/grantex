@@ -22,7 +22,7 @@ Grantex is an open protocol and a hosted developer service owned and operated by
 
 - **Principal identifier** — the opaque identifier your developer assigned you (typically pseudonymous).
 - **Authorization events** — what scopes you granted, to which agent, when, and when you revoked them. This is the core audit trail Grantex exists to provide.
-- **Optional WebAuthn credential references** — only if your developer turned on FIDO/WebAuthn.
+- **Optional WebAuthn credential references** — only if your developer enabled FIDO/WebAuthn.
 - **DPDP consent records, grievance references, erasure request IDs** — only if your developer is using the DPDP compliance features.
 
 We do **not** ask you for payment-card data, government identifiers, biometrics, location, or contacts.

@@ -627,3 +627,51 @@ the pull request that references it.
   vitest alias behind an environment variable, as the root
   `vitest.config.ts` does with `GRANTEX_SDK_TEST_ROOT`), and correct the
   Makefile comment.
+## G-33 — Tracked files use terms the house terminology replaces
+
+- **Found:** the first audit with the vendor denylist's terminology warnings
+  (`python scripts/check_denylist.py audit`), 2026-09-27.
+- **What:** 1,715 warnings in the files tracked before the check was added.
+  1,628 are *anomaly*, *anomalies* or *anomalous*, most of them the legacy
+  detector's published names: the `/v1/anomalies` routes, the
+  `anomaly.detected` event, the `anomalies`, `anomaly_rules` and
+  `anomaly_channels` tables, the SDK resources and types in TypeScript, Python
+  and Go, the CLI, the portal page, the OpenAPI document and API reference, the
+  IETF draft and the `web/anomaly.html` landing page. 71 are *verification
+  result(s)*, nearly all naming the outcome of checking an evidence package, a
+  credential, a token or an audit hash chain (`VerificationResult` in the SDKs
+  and the auth service, `VCVerificationResult`, the Android example's
+  `ChainVerificationResult`, the token-verification guide) rather than an
+  identity attestation. The other 16 are *kill switch(es)* (8), *white label*
+  or *white-labeling* (4), *trust provider* (2) and *verification partner* (2):
+  the rule in `AGENTS.md` itself and its copy, planning and review documents,
+  the Custom Domains heading in `README.md` and one readiness-check description
+  in `apps/auth-service/src/lib/commerce/live-mode-guard.ts`. The warnings do
+  not fail anything; this entry records why they are there.
+- **Fix:** a product decision per surface. A published name (route, event
+  type, table, SDK export) needs a new name, with the old one kept as a
+  deprecated alias and a `CHANGELOG.md` entry; documentation, comments and the
+  landing page are reworded once the new names exist, so that documentation
+  and API agree. If the `VerificationResult` names stay because they name a
+  different concept, the check should learn that exception rather than warn
+  on them for ever.
+
+## G-34 — mcp-auth tests build their first server under a 5s limit
+
+- **Found:** a full local `make test` on a loaded machine while adding the
+  vendor denylist check (G-33), 2026-09-27.
+- **What:** in several `packages/mcp-auth` test files, the first test that seeds
+  storage and builds a server with `createMcpAuthServer` does so cold (in
+  `client-metadata.test.ts` it also imports the server module), under
+  vitest's default 5-second `testTimeout`: `vitest.config.ts` sets none. In
+  one run six files failed that test with
+  `Test timed out in 5000ms` (`client-metadata`, `consent`, `protocol`,
+  `state`, `token` and the 2026-07-28 conformance suite) and a seventh file's
+  worker exited unexpectedly; a second run failed one of them. Run on its own,
+  `client-metadata.test.ts` passes all 35 tests in under two seconds, and
+  nothing in the package changed between the runs.
+- **Fix:** find which part of the first build is slow when cold, then build
+  once per file in a `beforeAll` with a generous hook timeout or give the
+  package a `testTimeout` that covers it, as the auth service did for its
+  migrations (G-32). Show it by forcing a short limit before and after, as
+  G-32 did.
