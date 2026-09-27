@@ -147,7 +147,16 @@ that counts.
 
 Set it on the client (`Grantex(caps_mode="warn")`, `new Grantex({ capsMode: 'warn' })`)
 or per call. Malformed grant caps are a token problem and are denied in every
-mode. Log `would_deny` while in `warn`, review it, then switch to `enforce`.
+mode. Log `would_deny_all` / `wouldDenyAll` while in `warn`, review it, then
+switch to `enforce`.
+
+`would_deny` / `wouldDeny` is the first denial warn mode let through on the
+call. When several steps would deny the same call (for example a missing
+decision grant under `decisions_mode="warn"`, then a missing amount, then an
+exhausted call cap), `would_deny_all` / `wouldDenyAll` lists every one of
+them, in the order the steps run: decision, amount cap, call caps, decision
+consumption. Read the full list: a later warning never replaces an earlier one
+in `would_deny`, so reading only that field hides it.
 
 The client's separate `enforce_mode="permissive"` (development only) turns
 **every** denial into an allow, including `cap_exceeded` and
@@ -192,8 +201,8 @@ arguments on its own.
 |---|---|---|
 | `amount_cap` | `amount` is above the cap; `details` carries `limit` and `amount` | Yes |
 | `invalid_amount` | `amount` is not a finite number, or a wrapper's amount extractor raised | Yes |
-| `malformed_cap` | A `capped:N` scope on the connector cannot be read | Yes when an amount is given. From the next release, a call with no amount is denied too, and `warn` allows it and reports it in `would_deny` / `wouldDeny`; `off` skips it (the current release allows it) |
-| `amount_missing` (from the next release) | A `capped:N` scope covers the connector and the call gave no amount; `details` carries `limit` | No: `warn` allows the call and reports it in `would_deny` / `wouldDeny`; `off` skips it |
+| `malformed_cap` | A `capped:N` scope on the connector cannot be read | Yes when an amount is given. From the next release, a call with no amount is denied too, and `warn` allows it and reports it in `would_deny_all` / `wouldDenyAll`; `off` skips it (the current release allows it) |
+| `amount_missing` (from the next release) | A `capped:N` scope covers the connector and the call gave no amount; `details` carries `limit` | No: `warn` allows the call and reports it in `would_deny_all` / `wouldDenyAll`; `off` skips it |
 
 **From the next release (breaking):** a call with no amount under a
 `capped:N` scope is denied with `cap_exceeded` / `amount_missing`, and a
@@ -202,8 +211,9 @@ release such a call is allowed and the cap is never checked. Because the cap
 is connector-wide, this includes read-only tools with no monetary amount on a
 connector that carries a capped scope: give them an amount (an extractor may
 return `0`). To keep the old behaviour while you add amounts, set
-`caps_mode="warn"` / `capsMode: 'warn'` and log `would_deny`; it covers both
-`amount_missing` and a malformed cap on a call without an amount.
+`caps_mode="warn"` / `capsMode: 'warn'` and log `would_deny_all` /
+`wouldDenyAll`; it covers both `amount_missing` and a malformed cap on a call
+without an amount, including calls that also report a decision warning.
 
 From the next release, the wrappers take an amount extractor, a function from
 the call to its amount:

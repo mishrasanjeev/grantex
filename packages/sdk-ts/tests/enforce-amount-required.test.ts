@@ -151,6 +151,83 @@ describe('caps mode opt-out', () => {
   });
 });
 
+const refunds = ToolManifest.fromJSON({
+  connector: 'merchant',
+  tools: {
+    approve_refund: { permission: 'write', requires_decision: true },
+    release_refund: { permission: 'write', requires_decision: true, caps: { per_hour: 5 } },
+  },
+});
+
+function refundsClient(options: Record<string, unknown> = {}) {
+  const c = new Grantex({ apiKey: 'test-key', ...options } as ConstructorParameters<typeof Grantex>[0]);
+  c.loadManifest(refunds);
+  return c;
+}
+
+function steps(r: { wouldDenyAll?: readonly { reason_code: string; sub_reason: string }[] }) {
+  return (r.wouldDenyAll ?? []).map((w) => [w.reason_code, w.sub_reason]);
+}
+
+describe('warn mode reports every would-be denial', () => {
+  it('reports the decision and amount_missing, in step order', async () => {
+    const r = await refundsClient({ decisionsMode: 'warn', capsMode: 'warn' })
+      .enforce({ grantToken: 't', connector: 'merchant', tool: 'approve_refund' });
+    expect(r.allowed).toBe(true);
+    expect(steps(r)).toEqual([
+      [DenialReason.DECISION_REQUIRED, ''],
+      [DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_MISSING],
+    ]);
+    expect(r.wouldDenyAll?.[1]?.details).toEqual({ limit: 50 });
+    // The first would-be denial is still reported in wouldDeny.
+    expect(r.wouldDeny?.reason_code).toBe(DenialReason.DECISION_REQUIRED);
+    expect(r.wouldDeny).toEqual(r.wouldDenyAll?.[0]);
+  });
+
+  it('reports the decision, a malformed cap and the meter, in step order', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(grant('tool:merchant:write:*:capped:abc'));
+    const r = await refundsClient({ decisionsMode: 'warn', capsMode: 'warn' })
+      .enforce({ grantToken: 't', connector: 'merchant', tool: 'release_refund', reserve: false });
+    expect(r.allowed).toBe(true);
+    expect(steps(r)).toEqual([
+      [DenialReason.DECISION_REQUIRED, ''],
+      [DenialReason.CAP_EXCEEDED, CapSubReason.MALFORMED_CAP],
+      [DenialReason.CAP_EXCEEDED, CapSubReason.METER_UNAVAILABLE],
+    ]);
+    expect(r.wouldDeny).toEqual(r.wouldDenyAll?.[0]);
+  });
+
+  it('reports amount_missing and the meter after the decision', async () => {
+    const r = await refundsClient({ decisionsMode: 'warn', capsMode: 'warn' })
+      .enforce({ grantToken: 't', connector: 'merchant', tool: 'release_refund', reserve: false });
+    expect(steps(r)).toEqual([
+      [DenialReason.DECISION_REQUIRED, ''],
+      [DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_MISSING],
+      [DenialReason.CAP_EXCEEDED, CapSubReason.METER_UNAVAILABLE],
+    ]);
+  });
+
+  it('lists a single warning as the only entry', async () => {
+    const r = await client({ capsMode: 'warn' }).enforce({ grantToken: 't', connector: 'merchant', tool: 'place_order' });
+    expect(r.wouldDeny?.sub_reason).toBe(CapSubReason.AMOUNT_MISSING);
+    expect(r.wouldDenyAll).toEqual([r.wouldDeny]);
+  });
+
+  it('leaves both absent without a warning', async () => {
+    const r = await client({ capsMode: 'warn' }).enforce({ grantToken: 't', connector: 'merchant', tool: 'place_order', amount: 10 });
+    expect(r.allowed).toBe(true);
+    expect('wouldDeny' in r).toBe(false);
+    expect('wouldDenyAll' in r).toBe(false);
+  });
+
+  it('still denies at the decision step when decisions enforce', async () => {
+    const r = await refundsClient({ capsMode: 'warn' }).enforce({ grantToken: 't', connector: 'merchant', tool: 'approve_refund' });
+    expect([r.allowed, r.reasonCode]).toEqual([false, DenialReason.DECISION_REQUIRED]);
+    expect(r.wouldDeny).toBeUndefined();
+    expect(r.wouldDenyAll).toBeUndefined();
+  });
+});
+
 describe('wrapTool() amount extractor', () => {
   it('test_wrap_tool_passes_extracted_amount', async () => {
     const gx = client();

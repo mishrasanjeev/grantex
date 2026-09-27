@@ -462,6 +462,10 @@ class Grantex:
           well formed (``amount_missing``) or not (``malformed_cap``); an
           amount above the cap, a non-finite amount and a malformed cap with
           an amount are denied in every mode.
+        - ``result.would_deny`` is the first denial warn mode let through;
+          ``result.would_deny_all`` lists every one, in step order (decision,
+          amount cap, call caps, decision consumption), so a call that both
+          lacks a decision grant and an amount reports both.
         - ``caps_tenant_id`` replaces the grant's developer as the tenant of
           every counter of this call.
 
@@ -673,7 +677,9 @@ class Grantex:
         #    approvers if either the manifest or the grant says so.
         decision_mode = self._decisions_mode if decisions_mode is None else _check_decisions_mode(decisions_mode)
         decision_set: DecisionGrantSet | None = None
-        would_deny: dict[str, Any] | None = None
+        # Every denial warn mode lets through, in step order; would_deny is
+        # the first of them.
+        would_deny_all: list[dict[str, Any]] = []
         ref_tools = decision_ref.tools if decision_ref is not None else ()
         if spec.requires_decision or tool in ref_tools:
             four_eyes_on = tuple(spec.four_eyes_on) + tuple(
@@ -702,10 +708,10 @@ class Grantex:
                 code, sub_reason, message = decision_denial
                 if decision_mode != DECISIONS_WARN:
                     return _denied(message, code, sub_reason, requirement)
-                would_deny = {
+                would_deny_all.append({
                     "reason_code": code, "sub_reason": sub_reason,
                     "reason": message, "details": requirement,
-                }
+                })
 
         # 10. Amount caps. A ``capped:N`` scope on the connector bounds every
         #     call's amount, so a call with no amount is denied: it used to
@@ -737,12 +743,12 @@ class Grantex:
             if amount is not None or mode == CAPS_ENFORCE:
                 return _denied(malformed, DenialReason.CAP_EXCEEDED, CapSubReason.MALFORMED_CAP)
             cap = None
-            if mode == CAPS_WARN and would_deny is None:
-                would_deny = {
+            if mode == CAPS_WARN:
+                would_deny_all.append({
                     "reason_code": DenialReason.CAP_EXCEEDED,
                     "sub_reason": CapSubReason.MALFORMED_CAP,
                     "reason": malformed, "details": {},
-                }
+                })
         if cap is not None and amount is None and mode != CAPS_OFF:
             message = (
                 f"A capped scope on {connector} limits the amount to {cap} and the call "
@@ -752,12 +758,11 @@ class Grantex:
                 return _denied(
                     message, DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_MISSING, {"limit": cap},
                 )
-            if would_deny is None:
-                would_deny = {
-                    "reason_code": DenialReason.CAP_EXCEEDED,
-                    "sub_reason": CapSubReason.AMOUNT_MISSING,
-                    "reason": message, "details": {"limit": cap},
-                }
+            would_deny_all.append({
+                "reason_code": DenialReason.CAP_EXCEEDED,
+                "sub_reason": CapSubReason.AMOUNT_MISSING,
+                "reason": message, "details": {"limit": cap},
+            })
         if cap is not None and amount is not None and amount > cap:
             return _denied(
                 f"Amount {amount} exceeds budget cap of {cap} on {connector}.",
@@ -828,11 +833,10 @@ class Grantex:
                 code, sub_reason, message, details = cap_denial
                 if mode != CAPS_WARN:
                     return _denied(message, code, sub_reason, details)
-                if would_deny is None:
-                    would_deny = {
-                        "reason_code": code, "sub_reason": sub_reason,
-                        "reason": message, "details": details,
-                    }
+                would_deny_all.append({
+                    "reason_code": code, "sub_reason": sub_reason,
+                    "reason": message, "details": details,
+                })
 
         # 12. Consume the decision grants at the issuer. Offline verification
         #     alone never allows a call: one grant authorises one call. The
@@ -864,11 +868,10 @@ class Grantex:
                 details = {"decision_required": f"{connector}:{tool}"}
                 if decision_mode != DECISIONS_WARN:
                     return _denied(message, DenialReason.DECISION_INVALID, sub_reason, details)
-                if would_deny is None:
-                    would_deny = {
-                        "reason_code": DenialReason.DECISION_INVALID, "sub_reason": sub_reason,
-                        "reason": message, "details": details,
-                    }
+                would_deny_all.append({
+                    "reason_code": DenialReason.DECISION_INVALID, "sub_reason": sub_reason,
+                    "reason": message, "details": details,
+                })
 
         return EnforceResult(
             allowed=True, reason="",
@@ -876,7 +879,8 @@ class Grantex:
             permission=permission, connector=connector, tool=tool,
             purpose=result_purpose, reservation=reservation,
             cap_limits=cap_limits, caps_tenant_id=caps_tenant if cap_limits else "",
-            would_deny=would_deny, decision=consumed,
+            would_deny=would_deny_all[0] if would_deny_all else None,
+            would_deny_all=tuple(would_deny_all), decision=consumed,
         )
 
     def _verify_decision(

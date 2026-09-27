@@ -21,8 +21,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Opt-out:** `caps_mode="warn"` / `capsMode: 'warn'`, on the client or per
   call, keeps allowing a call without an amount (`amount_missing`, or
   `malformed_cap` when the cap cannot be read) and reports the denial in
-  `result.would_deny` / `wouldDeny`, as warn mode already does for call caps;
-  it does not print or log anything itself. `caps_mode="off"` skips the check.
+  `result.would_deny_all` / `wouldDenyAll`, as warn mode already does for
+  call caps; it does not print or log anything itself.
+- New `EnforceResult.would_deny_all` / `wouldDenyAll`: every denial that caps
+  or decisions warn mode let through on the call, in step order (decision,
+  amount cap, call caps, decision consumption). Before, only the first was
+  kept, so a call that lacked both a decision grant and an amount reported
+  only the decision. `would_deny` / `wouldDeny` is unchanged: it is still the
+  first of them. `caps_mode="off"` skips the check.
   An amount above the cap, a non-finite amount and a malformed cap with an
   amount are denied in every mode, as before.
 - New amount extractor on the wrappers: `wrap_tool(extract_amount=...)`
@@ -39,8 +45,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   to `enforce()`, or give the wrapper an amount extractor, for every tool of
   that connector, including read-only tools with no monetary amount (pass
   `0`, or an extractor that returns `0`). To roll out
-  gradually, set `caps_mode="warn"` / `capsMode: 'warn'`, log `would_deny`,
-  add amounts until no `amount_missing` appears, then return to `enforce`.
+  gradually, set `caps_mode="warn"` / `capsMode: 'warn'`, log the full
+  `would_deny_all` / `wouldDenyAll` list (not only `would_deny`, which holds
+  just the first warning of the call and so hides `amount_missing` behind a
+  decision warning), add amounts until no `amount_missing` appears in it, then
+  return to `enforce`.
   Grants without a capped scope are unaffected. The FastAPI `GrantexEnforcer`
   and the Python Strands integration take no amount yet; where they meet
   capped grants, call `enforce()` with `amount` directly or use the opt-out.

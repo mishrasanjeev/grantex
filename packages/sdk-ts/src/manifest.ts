@@ -613,13 +613,22 @@ export interface EnforceResult {
   capLimits?: readonly CapLimit[];
   /** Tenant of `capLimits`; pass both to `CapsMeter.reserve`. */
   capsTenantId?: string;
-  /** In caps warn mode, the cap denial that was not applied. */
+  /**
+   * In caps or decisions warn mode, the first denial that was not applied. The
+   * same as `wouldDenyAll[0]`; read `wouldDenyAll` to see every one.
+   */
   wouldDeny?: WouldDeny;
+  /**
+   * In caps or decisions warn mode, every denial that was not applied, in the
+   * order the steps run (decision, amount cap, call caps, decision consumption).
+   * Absent when there is none.
+   */
+  wouldDenyAll?: readonly WouldDeny[];
   /** For a tool that requires a decision: the decision grants consumed for this call. */
   decision?: ConsumedDecision;
 }
 
-/** A cap denial reported, not applied, in caps warn mode. Keys match the Python SDK. */
+/** A denial reported, not applied, in caps or decisions warn mode. Keys match the Python SDK. */
 export interface WouldDeny {
   reason_code: string;
   sub_reason: string;

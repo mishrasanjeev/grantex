@@ -149,6 +149,91 @@ class TestCapsModeOptOut:
         assert result.would_deny is None
 
 
+REFUNDS = ToolManifest.from_dict(
+    {
+        "connector": "merchant",
+        "tools": {
+            "approve_refund": {"permission": "write", "requires_decision": True},
+            "release_refund": {"permission": "write", "requires_decision": True, "caps": {"per_hour": 5}},
+        },
+    }
+)
+
+
+def _refunds_client(**kwargs: Any) -> Grantex:
+    c = Grantex(api_key="test-key", **kwargs)
+    c.load_manifest(REFUNDS)
+    return c
+
+
+def _steps(result: object) -> list[Tuple[str, str]]:
+    return [(w["reason_code"], w["sub_reason"]) for w in getattr(result, "would_deny_all")]
+
+
+class TestWarnReportsEveryWouldBeDenial:
+    """Warn mode keeps would_deny as the first would-be denial and lists every
+    one, in step order, in would_deny_all."""
+
+    def test_decision_and_amount_missing_are_both_reported_in_step_order(
+        self, verify: MagicMock
+    ) -> None:
+        result = _refunds_client(decisions_mode="warn", caps_mode="warn").enforce(
+            "t", "merchant", "approve_refund"
+        )
+        assert result.allowed is True
+        assert _steps(result) == [
+            (DenialReason.DECISION_REQUIRED, ""),
+            (DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_MISSING),
+        ]
+        assert result.would_deny_all[1]["details"] == {"limit": 50.0}
+        # The first would-be denial is still reported in would_deny.
+        assert result.would_deny is not None
+        assert result.would_deny["reason_code"] == DenialReason.DECISION_REQUIRED
+        assert result.would_deny == result.would_deny_all[0]
+
+    def test_decision_malformed_cap_and_meter_are_all_reported_in_step_order(
+        self, verify: MagicMock
+    ) -> None:
+        verify.return_value = _grant("tool:merchant:write:*:capped:abc")
+        result = _refunds_client(decisions_mode="warn", caps_mode="warn").enforce(
+            "t", "merchant", "release_refund", reserve=False
+        )
+        assert result.allowed is True
+        assert _steps(result) == [
+            (DenialReason.DECISION_REQUIRED, ""),
+            (DenialReason.CAP_EXCEEDED, CapSubReason.MALFORMED_CAP),
+            (DenialReason.CAP_EXCEEDED, CapSubReason.METER_UNAVAILABLE),
+        ]
+        assert result.would_deny == result.would_deny_all[0]
+
+    def test_amount_missing_and_meter_are_both_reported(self, verify: MagicMock) -> None:
+        result = _refunds_client(decisions_mode="warn", caps_mode="warn").enforce(
+            "t", "merchant", "release_refund", reserve=False
+        )
+        assert _steps(result) == [
+            (DenialReason.DECISION_REQUIRED, ""),
+            (DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_MISSING),
+            (DenialReason.CAP_EXCEEDED, CapSubReason.METER_UNAVAILABLE),
+        ]
+
+    def test_a_single_warning_is_the_only_entry(self, verify: MagicMock) -> None:
+        result = _client(caps_mode="warn").enforce("t", "merchant", "place_order")
+        assert result.would_deny is not None
+        assert result.would_deny["sub_reason"] == CapSubReason.AMOUNT_MISSING
+        assert result.would_deny_all == (result.would_deny,)
+
+    def test_no_warning_leaves_both_empty(self, verify: MagicMock) -> None:
+        result = _client(caps_mode="warn").enforce("t", "merchant", "place_order", amount=10)
+        assert result.allowed is True
+        assert result.would_deny is None
+        assert result.would_deny_all == ()
+
+    def test_decisions_enforce_still_denies_before_the_cap_step(self, verify: MagicMock) -> None:
+        result = _refunds_client(caps_mode="warn").enforce("t", "merchant", "approve_refund")
+        assert (result.allowed, result.reason_code) == (False, DenialReason.DECISION_REQUIRED)
+        assert result.would_deny is None and result.would_deny_all == ()
+
+
 class _FakeTool:
     def __init__(self) -> None:
         self.calls: list[Mapping[str, Any]] = []

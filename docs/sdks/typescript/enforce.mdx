@@ -88,6 +88,14 @@ enforce(options: EnforceOptions): Promise<EnforceResult>
   The tool name that was checked.
 </ResponseField>
 
+<ResponseField name="wouldDeny" type="WouldDeny">
+  In caps or decisions warn mode, the first denial that was let through (`reason_code`, `sub_reason`, `reason`, `details`). Absent when there is none.
+</ResponseField>
+
+<ResponseField name="wouldDenyAll" type="readonly WouldDeny[]">
+  In caps or decisions warn mode, every denial that was let through, in step order (decision, amount cap, call caps, decision consumption); `wouldDeny` is its first entry. Absent when there is none.
+</ResponseField>
+
 ### Example
 
 ```typescript
@@ -125,7 +133,10 @@ const result = await grantex.enforce({
 scope is denied with `reasonCode` `cap_exceeded` and `subReason`
 `amount_missing` (`details` carries `limit`). In the current release it is
 allowed and the cap is not checked. `capsMode: 'warn'` (on the client or per
-call) keeps allowing it and reports the denial in `result.wouldDeny`;
+call) keeps allowing it and reports the denial in `result.wouldDenyAll`
+(and in `result.wouldDeny` when it is the first warning of the call, so a
+call that also lacks a decision grant under `decisionsMode: 'warn'` shows the
+decision there and `amount_missing` only in `wouldDenyAll`);
 `capsMode: 'off'` skips it. The cap covers every tool of the connector, read
 tools included, so pass an amount (`0` when there is none) for those too. See
 [Amount caps](/concepts/caps-and-metering#amount-caps).

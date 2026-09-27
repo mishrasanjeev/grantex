@@ -61,6 +61,8 @@ def enforce(
 | `permission` | `str` | The resolved permission level for this tool from the manifest (`"read"`, `"write"`, `"delete"`, or `"admin"`). |
 | `connector` | `str` | The connector name that was checked. |
 | `tool` | `str` | The tool name that was checked. |
+| `would_deny` | `dict \| None` | In caps or decisions warn mode, the first denial that was let through (`reason_code`, `sub_reason`, `reason`, `details`); `None` when there is none. |
+| `would_deny_all` | `tuple[dict, ...]` | In caps or decisions warn mode, every denial that was let through, in step order (decision, amount cap, call caps, decision consumption); `would_deny` is its first entry. Empty when there is none. |
 
 ### Example
 
@@ -98,7 +100,10 @@ result = grantex.enforce(
 scope is denied with `reason_code` `cap_exceeded` and `sub_reason`
 `amount_missing` (`details` carries `limit`). In the current release it is
 allowed and the cap is not checked. `caps_mode="warn"` (on the client or per
-call) keeps allowing it and reports the denial in `result.would_deny`;
+call) keeps allowing it and reports the denial in `result.would_deny_all`
+(and in `result.would_deny` when it is the first warning of the call, so a
+call that also lacks a decision grant under `decisions_mode="warn"` shows the
+decision there and `amount_missing` only in `would_deny_all`);
 `caps_mode="off"` skips it. The cap covers every tool of the connector, read
 tools included, so pass an amount (`0` when there is none) for those too. See
 [Amount caps](/concepts/caps-and-metering#amount-caps).

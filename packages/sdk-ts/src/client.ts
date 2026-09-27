@@ -601,7 +601,9 @@ export class Grantex {
     //    last step, after caps are reserved. A decision needs two approvers if
     //    either the manifest or the grant says so.
     let decisionSet: DecisionGrantSet | undefined;
-    let wouldDeny: WouldDeny | undefined;
+    // Every denial warn mode lets through, in step order; wouldDeny is the
+    // first of them.
+    const wouldDenyAll: WouldDeny[] = [];
     if (spec.requiresDecision || decisionReference?.tools.includes(tool)) {
       const fourEyesOn = [...new Set([...spec.fourEyesOn, ...(decisionReference?.fourEyesOn[tool] ?? [])])];
       const requirement = { decision_required: `${connector}:${tool}` };
@@ -623,7 +625,7 @@ export class Grantex {
             decisionDenial.details,
           );
         }
-        wouldDeny = decisionDenial;
+        wouldDenyAll.push(decisionDenial);
       }
     }
 
@@ -654,12 +656,12 @@ export class Grantex {
         return denied(message, DenialReason.CAP_EXCEEDED, CapSubReason.MALFORMED_CAP);
       }
       if (capsMode === 'warn') {
-        wouldDeny ??= {
+        wouldDenyAll.push({
           reason_code: DenialReason.CAP_EXCEEDED,
           sub_reason: CapSubReason.MALFORMED_CAP,
           reason: message,
           details: {},
-        };
+        });
       }
     }
     if (cap !== undefined && cap !== 'invalid' && amount === undefined && capsMode !== 'off') {
@@ -668,12 +670,12 @@ export class Grantex {
       if (capsMode !== 'warn') {
         return denied(message, DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_MISSING, { limit: cap });
       }
-      wouldDeny ??= {
+      wouldDenyAll.push({
         reason_code: DenialReason.CAP_EXCEEDED,
         sub_reason: CapSubReason.AMOUNT_MISSING,
         reason: message,
         details: { limit: cap },
-      };
+      });
     }
     if (cap !== undefined && cap !== 'invalid' && amount !== undefined && amount > cap) {
       return denied(
@@ -775,7 +777,7 @@ export class Grantex {
         if (capsMode !== 'warn') {
           return denied(capDenial.reason, capDenial.reason_code as DenialReason, capDenial.sub_reason, capDenial.details);
         }
-        wouldDeny ??= capDenial;
+        wouldDenyAll.push(capDenial);
       }
     }
 
@@ -804,7 +806,7 @@ export class Grantex {
         const message = `The decision grant for tool '${tool}' on ${connector} was not consumed: ${err instanceof Error ? err.message : 'consumption failed'}`;
         const details = { decision_required: `${connector}:${tool}` };
         if (decisionsMode !== 'warn') return denied(message, DenialReason.DECISION_INVALID, subReason, details);
-        wouldDeny ??= { reason_code: DenialReason.DECISION_INVALID, sub_reason: subReason, reason: message, details };
+        wouldDenyAll.push({ reason_code: DenialReason.DECISION_INVALID, sub_reason: subReason, reason: message, details });
       }
     }
 
@@ -815,7 +817,7 @@ export class Grantex {
       ...(purpose !== undefined ? { purpose } : {}),
       ...(reservation !== undefined ? { reservation } : {}),
       ...(capLimits.length > 0 ? { capLimits, capsTenantId: capsTenant } : {}),
-      ...(wouldDeny !== undefined ? { wouldDeny } : {}),
+      ...(wouldDenyAll.length > 0 ? { wouldDeny: wouldDenyAll[0], wouldDenyAll } : {}),
       ...(decision !== undefined ? { decision } : {}),
     };
   }
