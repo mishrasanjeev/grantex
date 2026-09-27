@@ -477,8 +477,8 @@ describe('POST /v1/webauthn/assert/verify', () => {
     }]);
     // Conditional counter update
     sqlMock.mockResolvedValueOnce([{ id: 'cred_1' }]);
-    // Update auth request fido_verified
-    sqlMock.mockResolvedValueOnce([]);
+    // Persist the verified assertion on the pending authorization request.
+    sqlMock.mockResolvedValueOnce([{ id: 'areq_test' }]);
 
     const res = await app.inject({
       method: 'POST',
@@ -495,6 +495,63 @@ describe('POST /v1/webauthn/assert/verify', () => {
     const claimSql = (sqlMock.mock.calls[0]?.[0] as TemplateStringsArray).join(' ');
     expect(claimSql).toContain('UPDATE webauthn_challenges');
     expect(claimSql).toContain('consumed = FALSE');
+    const evidenceUpdate = sqlMock.mock.calls.find(([strings]) =>
+      (strings as TemplateStringsArray).join(' ').includes('SET fido_verified = TRUE, fido_evidence'));
+    expect(evidenceUpdate).toBeDefined();
+    const evidence = evidenceUpdate![1] as Record<string, unknown>;
+    expect(evidence['authRequestId']).toBe('areq_test');
+    expect(evidence['credentialId']).toBe('bW9jay1jcmVk');
+    expect(evidence['digest']).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('marks consent verified without exporting assertion data when the rollout flag is off', async () => {
+    vi.stubEnv('PORTABLE_WEBAUTHN_EVIDENCE_ENABLED', 'false');
+    try {
+      sqlMock.mockResolvedValueOnce([{
+        challenge: 'mock-auth-challenge', principal_id: 'user_123',
+        developer_id: 'dev_TEST', auth_request_id: 'areq_test',
+      }]);
+      sqlMock.mockResolvedValueOnce([{
+        id: 'cred_1', credential_id: 'bW9jay1jcmVk', public_key: 'AQIDBA',
+        counter: 5, transports: ['internal'],
+      }]);
+      sqlMock.mockResolvedValueOnce([{ id: 'cred_1' }]);
+      sqlMock.mockResolvedValueOnce([{ id: 'areq_test' }]);
+      const res = await app.inject({
+        method: 'POST', url: '/v1/webauthn/assert/verify',
+        payload: {
+          challengeId: 'wac_test',
+          response: { id: 'bW9jay1jcmVk', rawId: 'bW9jay1jcmVk', type: 'public-key', response: { clientDataJSON: '', authenticatorData: '', signature: '' }, clientExtensionResults: {} },
+        },
+      });
+      expect(res.statusCode).toBe(200);
+      const update = sqlMock.mock.calls.find(([strings]) =>
+        (strings as TemplateStringsArray).join(' ').includes('SET fido_verified = TRUE'));
+      expect((update![0] as TemplateStringsArray).join(' ')).not.toContain('fido_evidence');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('does not report success when the authorization request is no longer pending', async () => {
+    sqlMock.mockResolvedValueOnce([{
+      challenge: 'mock-auth-challenge', principal_id: 'user_123',
+      developer_id: 'dev_TEST', auth_request_id: 'areq_test',
+    }]);
+    sqlMock.mockResolvedValueOnce([{
+      id: 'cred_1', credential_id: 'bW9jay1jcmVk', public_key: 'AQIDBA',
+      counter: 5, transports: ['internal'],
+    }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'cred_1' }]);
+    sqlMock.mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'POST', url: '/v1/webauthn/assert/verify',
+      payload: {
+        challengeId: 'wac_test',
+        response: { id: 'bW9jay1jcmVk', rawId: 'bW9jay1jcmVk', type: 'public-key', response: { clientDataJSON: '', authenticatorData: '', signature: '' }, clientExtensionResults: {} },
+      },
+    });
+    expect(res.statusCode).toBe(410);
   });
 
   it('rejects an assertion when its credential counter changed concurrently', async () => {

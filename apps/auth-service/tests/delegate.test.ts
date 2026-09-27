@@ -38,6 +38,32 @@ beforeAll(async () => {
 });
 
 describe('POST /v1/grants/delegate', () => {
+  it('refuses to delegate a signed passkey reference without matching stored evidence', async () => {
+    const signedParent = await signGrantToken({
+      sub: 'user_123', agt: TEST_AGENT.did, dev: TEST_DEVELOPER.id,
+      scp: ['read'], jti: 'tok_EVIDENCE_PARENT', grnt: 'grnt_PARENT01',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      webauthnEvidence: {
+        type: 'GrantexWebAuthnAssertion', version: 1, authRequestId: 'areq_parent',
+        rpId: 'example.com', origin: 'https://example.com', userVerified: true,
+        assertedAt: new Date().toISOString(), digest: 'a'.repeat(64),
+      },
+    });
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
+    sqlMock.mockResolvedValueOnce([{ fido_evidence: null }]);
+
+    const res = await app.inject({
+      method: 'POST', url: '/v1/grants/delegate', headers: authHeader(),
+      payload: { parentGrantToken: signedParent, subAgentId: SUB_AGENT.id, scopes: ['read'] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().message).toContain('passkey evidence');
+    expect(sqlMock.mock.calls.some(([parts]) =>
+      (Array.isArray(parts) ? parts.join('') : String(parts)).includes('INSERT INTO grants'))).toBe(false);
+  });
+
   it('creates a delegated grant token for a sub-agent', async () => {
     seedAuth();
     // Redis: parent token not revoked
@@ -418,7 +444,7 @@ describe('POST /v1/grants/delegate', () => {
     expect(vcClaims['vc']).toBeDefined();
   });
 
-  it('succeeds without verifiableCredential when VC issuance fails (best-effort)', async () => {
+  it('fails delegation when a requested VC cannot be issued', async () => {
     seedAuth();
     mockRedis.get.mockResolvedValue(null);
     sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
@@ -450,20 +476,7 @@ describe('POST /v1/grants/delegate', () => {
       },
     });
 
-    // Delegation should still succeed
-    expect(res.statusCode).toBe(201);
-    const body = res.json<{
-      grantToken: string;
-      expiresAt: string;
-      scopes: string[];
-      grantId: string;
-      verifiableCredential?: string;
-    }>();
-    expect(typeof body.grantToken).toBe('string');
-    expect(body.scopes).toEqual(['read']);
-    expect(typeof body.grantId).toBe('string');
-    // verifiableCredential should NOT be present since VC issuance failed
-    expect(body.verifiableCredential).toBeUndefined();
+    expect(res.statusCode).toBe(500);
   });
 });
 
