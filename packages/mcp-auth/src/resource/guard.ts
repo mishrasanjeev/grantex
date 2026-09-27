@@ -51,6 +51,15 @@ export interface DecisionCheck {
   arguments: unknown;
   /** Reads a request header (case-insensitive), e.g. for a decision grant carried in a header. */
   header(name: string): string | undefined;
+  /**
+   * The bearer grant token this request was authorized with, as the guard
+   * verified it (signature, issuer, audience, scopes and, when configured,
+   * revocation). A verifier passes it to the issuer that signed it when it
+   * consumes decision grants, so that an issuer binding decisions to the
+   * requesting agent can establish the agent from the token itself. Set by
+   * the guard; a verifier called directly may not have it.
+   */
+  grantToken?: string;
 }
 
 export type DecisionOutcome =
@@ -470,7 +479,7 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
           let outcome: DecisionOutcome;
           try {
             outcome = options.decisions
-              ? await options.decisions.verify({ grant, requirement, arguments: call.arguments, header: request.header })
+              ? await options.decisions.verify({ grant, requirement, arguments: call.arguments, header: request.header, grantToken: token })
               : { status: 'absent' };
           } catch {
             outcome = { status: 'invalid', subReason: 'verification_failed' };

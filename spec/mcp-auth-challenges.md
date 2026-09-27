@@ -83,7 +83,7 @@ is the same (a new decision is still needed) and the body says why:
 `"reason":"decision_invalid"` with `"sub_reason"` one of `action_mismatch`,
 `expired`, `consumed`, `same_approver` (PRD Appendix B), the further
 decision-grant sub-reasons of `spec/decision-grant.md` (`case_changed`,
-`wrong_case`, `four_eyes_incomplete`, `malformed`, `revoked`,
+`wrong_case`, `wrong_agent`, `four_eyes_incomplete`, `malformed`, `revoked`,
 `unknown_grant`, `consume_unavailable`) or `verification_failed` when the
 verifier itself failed. Scope is checked
 first: a tool the grant does not cover is `tool_not_granted`, never
