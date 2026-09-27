@@ -54,7 +54,9 @@ from .denials import (
     ToolSubReason,
 )
 from .revocations import (
+    DEFAULT_REVOCATION_CHECK,
     REVOCATION_CHECK_MODES,
+    REVOCATION_CHECK_STRENGTH,
     RevocationFeed,
     RevocationFeedState,
 )
@@ -138,6 +140,26 @@ def _check_revocation_check(mode: str) -> str:
     return mode
 
 
+def _per_call_revocation_check(configured: str, requested: str | None) -> str:
+    """The mode one ``enforce()`` call uses: the client's, or a stricter one.
+
+    A per-call value may tighten the client's mode, never loosen it, so code
+    that reaches ``enforce()`` cannot switch off what the deployment chose.
+    A weaker value is refused with ``ValueError`` rather than quietly ignored:
+    the caller asked for something it will not get, and must find out.
+    """
+    if requested is None:
+        return configured
+    mode = _check_revocation_check(requested)
+    if REVOCATION_CHECK_STRENGTH[mode] < REVOCATION_CHECK_STRENGTH[configured]:
+        raise ValueError(
+            f"revocation_check={mode!r} cannot loosen this client's "
+            f"revocation_check={configured!r}; a per-call value may only be as strict "
+            "or stricter (offline < feed < online)"
+        )
+    return mode
+
+
 class Grantex:
     """Main entry point for the Grantex SDK."""
 
@@ -181,7 +203,7 @@ class Grantex:
         caps_meter: CapsMeter | None = None,
         legacy_claims: bool = True,
         caps_mode: str = CAPS_ENFORCE,
-        revocation_check: str = "offline",
+        revocation_check: str = DEFAULT_REVOCATION_CHECK,
         revocation_feed_stale_after: float = 5.0,
         revocation_feed_transport: str = "stream",
         decisions_mode: str = "enforce",
@@ -201,10 +223,11 @@ class Grantex:
         # False by default from 0.7.
         self._legacy_claims = legacy_claims
         self._caps_mode = _check_caps_mode(caps_mode)
-        # How enforce() finds out about revocations (PRD G-6). "offline" (the
-        # default) does not check: a revoked grant's token stays valid until it
-        # expires. "feed" follows the revocation feed and fails closed when it
-        # goes stale; "online" asks the auth service about every call.
+        # How enforce() finds out about revocations (PRD G-6). "online" (the
+        # default) asks the auth service about every call and denies when it
+        # cannot. "feed" follows the revocation feed and fails closed when it
+        # goes stale. "offline" is the explicit opt-out: a revoked grant's
+        # token stays valid until it expires.
         self._revocation_check = _check_revocation_check(revocation_check)
         self._revocation_feed_stale_after = revocation_feed_stale_after
         self._revocation_feed_transport = revocation_feed_transport
@@ -454,6 +477,10 @@ class Grantex:
           skips caps.
         - ``caps_tenant_id`` replaces the grant's developer as the tenant of
           every counter of this call.
+        - ``revocation_check`` overrides the client's revocation check for
+          this call, but only to tighten it (``offline`` < ``feed`` <
+          ``online``); a weaker value raises ``ValueError`` before anything
+          is checked.
 
         For a tool whose manifest entry has ``requires_decision`` (PRD G-3):
 
@@ -497,6 +524,10 @@ class Grantex:
             if not result.allowed:
                 raise PermissionError(result.reason)
         """
+        # A per-call revocation check may only tighten the client's. Checked
+        # before anything else so a refused override has no side effects.
+        revocation_mode = _per_call_revocation_check(self._revocation_check, revocation_check)
+
         grant_id = ""
         agent_did = ""
         scopes: list[str] = []
@@ -526,11 +557,6 @@ class Grantex:
 
         # 1b. Revocation. The token verifies offline whether or not the grant
         #     still stands, so this is the only place a revocation can be seen.
-        revocation_mode = (
-            self._revocation_check
-            if revocation_check is None
-            else _check_revocation_check(revocation_check)
-        )
         if revocation_mode != "offline":
             denial = self._revocation_denial(
                 revocation_mode,

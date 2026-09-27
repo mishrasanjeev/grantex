@@ -169,7 +169,7 @@ def verify_grant() -> Iterator[MagicMock]:
 
 
 def client(issuer: Optional[FakeIssuer] = None, **options: Any) -> Grantex:
-    c = Grantex(api_key="test-key", decision_consumer=issuer or FakeIssuer(), **options)
+    c = Grantex(api_key="test-key", revocation_check="offline", decision_consumer=issuer or FakeIssuer(), **options)
     c.load_manifest(MANIFEST)
     return c
 
@@ -305,7 +305,7 @@ def test_a_tool_the_grant_references_needs_a_decision_grant_and_four_eyes(verify
         }],
     )
     issuer = FakeIssuer()
-    c = Grantex(api_key="test-key", decision_consumer=issuer)
+    c = Grantex(api_key="test-key", revocation_check="offline", decision_consumer=issuer)
     c.load_manifest(manifest)
 
     absent = c.enforce("t", "acme_kyb", "case_decision", arguments=call_args(), case_version="v7")
@@ -424,7 +424,7 @@ def test_any_consumer_failure_denies_and_refunds_caps(verify_grant: MagicMock) -
     meter = CapsMeter(InMemoryCapsBackend())
     payout = {**ACTION, "action": "payout_release"}
     token = build_grant({"claims": {"action": payout, "action_hash": DecisionAction.from_dict(payout).action_hash()}})
-    c = Grantex(api_key="test-key", decision_consumer=ExplodingIssuer(), caps_meter=meter)  # type: ignore[arg-type]
+    c = Grantex(api_key="test-key", revocation_check="offline", decision_consumer=ExplodingIssuer(), caps_meter=meter)  # type: ignore[arg-type]
     c.load_manifest(MANIFEST)
     denied = c.enforce("t", "acme_kyb", "payout_release", decision_grants=[token], decision_action=payout, case_version="v7")
     assert (denied.allowed, denied.reason_code, denied.sub_reason) == (False, DenialReason.DECISION_INVALID, DecisionSubReason.CONSUME_UNAVAILABLE)

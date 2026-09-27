@@ -2,8 +2,12 @@
  * Revocation feed settings (PRD G-6), read at request time so a deployment can
  * change them without a rebuild and tests can stub them.
  *
- * - REVOCATION_FEED_ENABLED=true turns on the feed endpoints (default off:
- *   they answer 404, and nothing else changes).
+ * - REVOCATION_FEED_ENABLED=false turns off the feed endpoints (they answer
+ *   404, and the prune worker does not run). On by default: the SDKs check
+ *   revocation online by default, against `/v1/revocations/status`, and deny
+ *   every call when it answers 404. Only `false` (any case, surrounding
+ *   spaces ignored) turns it off; any other value leaves it on, so a typo
+ *   cannot silently stop revocations from being seen.
  * - REVOCATION_FEED_DEVELOPER_IDS limits them to these developers.
  * - REVOCATION_FEED_POLL_MS is how often an instance looks for new
  *   revocations when no notification arrives (default 500 ms).
@@ -17,6 +21,9 @@
  *   one instance (default 200).
  * - REVOCATION_FEED_RETENTION_HOURS is how long delivered entries are kept
  *   after they expire (default 48 h).
+ * - REVOCATION_FEED_PRUNE_JITTER_SECONDS bounds the random delay before an
+ *   instance's first prune (default 300 s, 0 to 3600), so instances that start
+ *   together do not prune together (FINDINGS G-66). 0 prunes at start.
  */
 
 export interface RevocationFeedSettings {
@@ -27,6 +34,7 @@ export interface RevocationFeedSettings {
   heartbeatMs: number;
   maxConnections: number;
   retentionHours: number;
+  pruneJitterSeconds: number;
 }
 
 function boundedInteger(value: string | undefined, fallback: number, min: number, max: number): number {
@@ -41,13 +49,14 @@ export function revocationFeedSettings(env: NodeJS.ProcessEnv = process.env): Re
     .map((id) => id.trim())
     .filter((id) => id.length > 0);
   return {
-    enabled: env['REVOCATION_FEED_ENABLED'] === 'true',
+    enabled: (env['REVOCATION_FEED_ENABLED'] ?? '').trim().toLowerCase() !== 'false',
     developerIds: ids.length > 0 ? new Set(ids) : null,
     pollMs: boundedInteger(env['REVOCATION_FEED_POLL_MS'], 500, 50, 60_000),
     settleSeconds: boundedInteger(env['REVOCATION_FEED_SETTLE_SECONDS'], 15, 1, 3_600),
     heartbeatMs: boundedInteger(env['REVOCATION_FEED_HEARTBEAT_MS'], 1_000, 100, 30_000),
     maxConnections: boundedInteger(env['REVOCATION_FEED_MAX_CONNECTIONS'], 200, 1, 10_000),
     retentionHours: boundedInteger(env['REVOCATION_FEED_RETENTION_HOURS'], 48, 1, 8_760),
+    pruneJitterSeconds: boundedInteger(env['REVOCATION_FEED_PRUNE_JITTER_SECONDS'], 300, 0, 3_600),
   };
 }
 

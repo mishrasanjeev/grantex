@@ -244,13 +244,14 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `EVENT_BRIDGE_DEVELOPER_IDS` | No | — | Limit the event bridge to these developers (comma separated) |
 | `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | No | `30000` | Event ingestion requests per client address (read per request) |
 | `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS` | No | `48` | Floor for how long delivery receipts are kept; never shorter than the source's own replay window (twice its tolerance) |
-| `REVOCATION_FEED_ENABLED` | No | `false` | Serve the revocation feed SDKs follow to see revocations (`docs/concepts/event-bridge-and-revocation.md`) |
-| `REVOCATION_FEED_DEVELOPER_IDS` | No | — | Limit the feed to these developers (comma separated) |
+| `REVOCATION_FEED_ENABLED` | No | `true` | Serve the revocation feed and status endpoints SDKs use to see revocations (`docs/concepts/event-bridge-and-revocation.md`). On by default from the next release (it was `false`); `false` is the opt-out, and any other value leaves it on. SDK clients from the next release check revocation online by default and deny every call while it is off, so opt out only when every client sets `revocationCheck: 'offline'` |
+| `REVOCATION_FEED_DEVELOPER_IDS` | No | — | Limit the feed to these developers (comma separated); every other developer's default SDK clients deny every call |
 | `REVOCATION_FEED_POLL_MS` | No | `500` | How often an instance looks for new revocations when no notification arrives |
 | `REVOCATION_FEED_SETTLE_SECONDS` | No | `15` | How long a feed entry may still be uncommitted; the cursor never advances past younger entries |
 | `REVOCATION_FEED_HEARTBEAT_MS` | No | `1000` | How often a live stream confirms it is up to date; must stay well below a client's staleness bound |
 | `REVOCATION_FEED_MAX_CONNECTIONS` | No | `200` | Revocation streams one developer may hold on one instance |
 | `REVOCATION_FEED_RETENTION_HOURS` | No | `48` | How long delivered feed entries are kept after the credential expires |
+| `REVOCATION_FEED_PRUNE_JITTER_SECONDS` | No | `300` | Upper bound, 0 to 3600, of the random delay before an instance first prunes the feed table; it then prunes hourly from that point. Only one instance prunes at a time (a Postgres advisory lock; the others skip that run), in batches of 1000 rows, at most 50 batches or 60 seconds a run, so a large backlog is removed over several hours rather than in one statement. `0` prunes at start |
 | `EMERGENCY_STOP_ENABLED` | No | `false` | Serve the emergency stop (section 11); revocations are irreversible |
 
 ---
@@ -558,10 +559,13 @@ revoked before it stopped, and the call is safe to repeat).
 
 ### Before the incident
 
-- Turn on `REVOCATION_FEED_ENABLED=true` and make sure the agents you need to
-  stop use `revocationCheck: 'feed'` (or `online`). An agent checking neither
-  keeps working with the token it already holds until that token expires — the
-  stop revokes the grant, but nothing tells that agent.
+- Keep the revocation feed on (`REVOCATION_FEED_ENABLED` unset or `true`; it
+  is on by default from the next release) and make sure the agents you need to
+  stop check revocation: `revocationCheck: 'online'` (the default from the
+  next SDK release) or `'feed'`. An agent checking neither (`'offline'`, or a
+  client of `@grantex/sdk` 0.7.0 or `grantex` 0.6.0 and earlier, which do not
+  check revocation at all) keeps working with the token it already holds until that
+  token expires — the stop revokes the grant, but nothing tells that agent.
 - Keep grant lifetimes short enough that the tokens of an agent you cannot
   reach expire in a time you can live with.
 - Rehearse it: `scripts/revocation-release-test.sh` runs agents under a grant

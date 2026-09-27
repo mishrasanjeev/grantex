@@ -82,8 +82,13 @@ export interface McpResourceGuardOptions {
   scopes?: string[];
   /** Allowed JWT algorithms (default RS256, ES256, PS256, EdDSA). */
   algorithms?: string[];
-  /** Revocation state, e.g. the `storage` given to the authorization server. */
-  revocations?: RevocationChecker;
+  /**
+   * Revocation state, e.g. the `storage` given to the authorization server.
+   * Required: the guard refuses to start without it, because a guard that
+   * cannot see revocations accepts a revoked token until it expires. Pass
+   * `'none'` to opt out explicitly (a start-up warning is still logged).
+   */
+  revocations: RevocationChecker | 'none';
   /**
    * Tool requirements. When set, every JSON-RPC `tools/call` (single or
    * batched) must name a known tool the grant covers; anything else is
@@ -232,11 +237,30 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
   if (resourceMetadataUrl === undefined && audiences.length === 1 && canonicalResource(audiences[0]) !== undefined) {
     resourceMetadataUrl = protectedResourceMetadataUrl(audiences[0]!);
   }
-  if (!options.revocations) {
+  // Fail closed at start-up: a guard with no revocation source would accept a
+  // revoked token until it expires, so running without one must be an
+  // explicit choice rather than a missing option.
+  const revocationOption: unknown = options.revocations;
+  let revocations: RevocationChecker | null;
+  if (revocationOption === 'none') {
+    revocations = null;
     (options.warn ?? console.warn)(
-      'requireMcpAuth: `revocations` is not configured, so a revoked token stays usable here until it expires. '
-      + 'Pass the authorization server\'s storage as `revocations`.',
+      'requireMcpAuth: revocations: "none" is set, so a revoked token stays usable here until it expires. '
+      + 'Pass the authorization server\'s storage as `revocations` to check them.',
     );
+  } else if (
+    revocationOption !== null
+    && typeof revocationOption === 'object'
+    && typeof (revocationOption as Partial<RevocationChecker>).isTokenRevoked === 'function'
+  ) {
+    revocations = revocationOption as RevocationChecker;
+  } else if (revocationOption === undefined) {
+    throw new Error(
+      'requireMcpAuth: `revocations` is required. Pass the authorization server\'s storage (anything with '
+      + 'isTokenRevoked(jti)), or revocations: "none" to accept revoked tokens until they expire.',
+    );
+  } else {
+    throw new Error('requireMcpAuth: `revocations` must have an isTokenRevoked(jti) function, or be "none".');
   }
   const algorithms = options.algorithms ?? DEFAULT_ALGORITHMS;
   const requiredScopes = options.scopes ?? [];
@@ -313,7 +337,7 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
     }
     const grantedScopes = scp as string[];
 
-    if (options.revocations) {
+    if (revocations !== null) {
       if (typeof payload.jti !== 'string' || payload.jti.length === 0) {
         return deny(401, 'invalid_token', invalidTokenChallenge('Token has no jti, so its revocation state is unknown', resourceMetadataUrl), {
           error: 'unauthorized',
@@ -322,7 +346,7 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
       }
       let revoked: boolean;
       try {
-        revoked = await options.revocations.isTokenRevoked(payload.jti);
+        revoked = await revocations.isTokenRevoked(payload.jti);
       } catch {
         return deny(503, 'revocation_unavailable', undefined, {
           error: 'temporarily_unavailable',

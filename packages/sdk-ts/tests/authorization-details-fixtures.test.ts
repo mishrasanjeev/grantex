@@ -70,7 +70,7 @@ function grant(details: unknown): VerifiedGrant {
 }
 
 function client() {
-  const c = new Grantex({ apiKey: 'test-key', capsMeter: new CapsMeter(new InMemoryCapsBackend()) });
+  const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', capsMeter: new CapsMeter(new InMemoryCapsBackend()) });
   c.loadManifest(manifest);
   return c;
 }

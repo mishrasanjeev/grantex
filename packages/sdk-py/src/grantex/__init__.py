@@ -169,7 +169,9 @@ from .denials import (
     ToolSubReason,
 )
 from .revocations import (
+    DEFAULT_REVOCATION_CHECK,
     REVOCATION_CHECK_MODES,
+    REVOCATION_CHECK_STRENGTH,
     RevocationEntry,
     RevocationFeed,
     RevocationFeedState,
@@ -387,7 +389,9 @@ __all__ = [
     "CapSubReason",
     "ManifestSubReason",
     "PurposeSubReason",
+    "DEFAULT_REVOCATION_CHECK",
     "REVOCATION_CHECK_MODES",
+    "REVOCATION_CHECK_STRENGTH",
     "RevocationEntry",
     "RevocationFeed",
     "RevocationFeedState",

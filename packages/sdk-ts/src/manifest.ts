@@ -651,7 +651,11 @@ export interface EnforceOptions {
   capsMode?: CapsMode;
   /** Tenant of every counter of this call instead of the grant's developer. */
   capsTenantId?: string;
-  /** Overrides the client's revocation check for this call. */
+  /**
+   * Overrides the client's revocation check for this call, but only to
+   * tighten it (`offline` < `feed` < `online`); a weaker value makes
+   * `enforce()` reject before anything is checked.
+   */
   revocationCheck?: 'offline' | 'online' | 'feed';
   /**
    * Decision grant tokens for a tool with `requires_decision` (one, or two for a decision in

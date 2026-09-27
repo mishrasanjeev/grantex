@@ -8,7 +8,7 @@
  *   GET /v1/revocations/status          one credential, for online checks
  *   GET /v1/revocations/stream          live Server-Sent Events with heartbeats
  *
- * Off unless REVOCATION_FEED_ENABLED=true, when every route answers 404. When
+ * On unless REVOCATION_FEED_ENABLED=false, when every route answers 404. When
  * the feed cannot be trusted — the triggers that fill it are missing — the
  * endpoints answer 503 rather than a feed that might miss a revocation.
  */

@@ -77,7 +77,7 @@ async function callTool(
   args: Record<string, unknown>,
   options: { toolName?: string; policy?: typeof tools; grant?: Record<string, unknown> } = {},
 ) {
-  const mw = requireMcpAuth({ issuer, audience: RESOURCE, tools: options.policy ?? tools, decisions: verifier, warn: () => {} });
+  const mw = requireMcpAuth({ issuer, revocations: 'none', audience: RESOURCE, tools: options.policy ?? tools, decisions: verifier, warn: () => {} });
   const server = createServer((raw: IncomingMessage, res: ServerResponse) => {
     const req = raw as McpAuthRequest;
     const chunks: Buffer[] = [];

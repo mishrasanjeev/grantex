@@ -166,7 +166,7 @@ function grantFor(): VerifiedGrant {
 
 function client(issuer: DecisionConsumer = new FakeIssuer(), options: Record<string, unknown> = {}) {
   vi.mocked(verifyGrantToken).mockResolvedValue(grantFor());
-  const c = new Grantex({ apiKey: 'test-key', decisionConsumer: issuer, ...options });
+  const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', decisionConsumer: issuer, ...options });
   c.loadManifest(MANIFEST);
   return c;
 }
@@ -292,7 +292,7 @@ describe('enforce() and decision grants', () => {
     // The manifest does not declare requiresDecision; the grant's decision
     // reference does, with four eyes on decline.
     const issuer = new FakeIssuer();
-    const c = new Grantex({ apiKey: 'test-key', decisionConsumer: issuer });
+    const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', decisionConsumer: issuer });
     c.loadManifest(ToolManifest.fromJSON({ connector: 'acme_kyb', tools: { case_decision: 'write' } }));
     const withReference = () => vi.mocked(verifyGrantToken).mockResolvedValue({
       ...grantFor(),

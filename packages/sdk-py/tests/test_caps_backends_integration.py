@@ -131,7 +131,7 @@ def test_enforce_with_fifty_parallel_calls_against_a_per_hour_cap_of_ten(backend
     manifest = ToolManifest.from_dict(
         {"connector": "acme_kyb", "tools": {"resolve_business": {"permission": "read", "caps": {"per_hour": 10}}}}
     )
-    client = Grantex(api_key="test-key", caps_meter=CapsMeter(backend))
+    client = Grantex(api_key="test-key", revocation_check="offline", caps_meter=CapsMeter(backend))
     client.load_manifest(manifest)
     grant = VerifiedGrant(
         token_id="tok_01", grant_id="grnt_01", principal_id="user_01", agent_did="did:grantex:ag_01",

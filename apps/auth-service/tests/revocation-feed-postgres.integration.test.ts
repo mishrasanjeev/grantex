@@ -3,12 +3,12 @@ import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
 import { RevocationFeedHub } from '../src/lib/revocation-feed/hub.js';
-import { pruneRevocationFeedOnce } from '../src/workers/revocationFeedPrune.js';
+import { PRUNE_LOCK_KEY, pruneRevocationFeedOnce } from '../src/workers/revocationFeedPrune.js';
 import {
   MAX_PAGE,
   feedReady,
   headSeq,
-  pruneFeed,
+  pruneFeedBatch,
   readSince,
   resetFeedReadyCache,
   revocationStatus,
@@ -462,7 +462,7 @@ describePostgres('the revocation feed against real Postgres', () => {
         INSERT INTO grant_revocation_events (developer_id, grant_id, action, expires_at, created_at)
         VALUES (${dev}, 'grnt_ancient', 'revoked', NOW() - INTERVAL '30 days', NOW() - INTERVAL '30 days')`;
 
-      expect(await pruneFeed(sql, 48)).toBe(1);
+      expect(await pruneFeedBatch(sql, 48, 1_000)).toBe(1);
       const left = await readSince(sql, dev, 0);
       expect(left.map((entry) => entry.grantId)).toEqual([recent]);
 
@@ -471,9 +471,85 @@ describePostgres('the revocation feed against real Postgres', () => {
         INSERT INTO grant_revocation_events (developer_id, grant_id, action, expires_at, created_at)
         VALUES (${dev}, 'grnt_ancient_2', 'revoked', NOW() - INTERVAL '30 days', NOW() - INTERVAL '30 days')`;
       vi.stubEnv('REVOCATION_FEED_ENABLED', 'false');
-      expect(await pruneRevocationFeedOnce(sql, log)).toBe(0);
+      expect(await pruneRevocationFeedOnce(sql, log)).toMatchObject({ outcome: 'disabled', deleted: 0 });
       vi.stubEnv('REVOCATION_FEED_ENABLED', 'true');
-      expect(await pruneRevocationFeedOnce(sql, log)).toBe(1);
+      expect(await pruneRevocationFeedOnce(sql, log)).toMatchObject({ outcome: 'complete', deleted: 1 });
+      vi.unstubAllEnvs();
+    });
+  }, 180_000);
+
+  it('prunes a backlog larger than one batch across capped runs, one instance at a time (FINDINGS G-66)', async () => {
+    await withFixture(async ({ sql, dev, grant }) => {
+      vi.stubEnv('REVOCATION_FEED_ENABLED', 'true');
+      vi.stubEnv('REVOCATION_FEED_RETENTION_HOURS', '48');
+      // Checked first: the lock key is bound as a query parameter below, and
+      // postgres.js stalls rather than failing on an undefined parameter.
+      expect(PRUNE_LOCK_KEY).toBe('grantex:revocation-feed-prune');
+      const backlog = 750;
+      const batchSize = 100;
+      const maxBatches = 3;
+      await sql`
+        INSERT INTO grant_revocation_events (developer_id, grant_id, action, expires_at, created_at)
+        SELECT ${dev}, 'grnt_backlog_' || n, 'revoked', NOW() - INTERVAL '30 days', NOW() - INTERVAL '30 days'
+          FROM generate_series(1, ${backlog}) AS n`;
+      // Rows inside retention, each kept for a different reason: written
+      // recently; written long ago about a credential that is still live; and
+      // written long ago about one that expired within the retention window.
+      const recent = await grant(dev, 'kept');
+      await sql`UPDATE grants SET status = 'revoked', revoked_at = NOW() WHERE id = ${recent}`;
+      await sql`
+        INSERT INTO grant_revocation_events (developer_id, grant_id, action, expires_at, created_at) VALUES
+          (${dev}, 'grnt_kept_live', 'revoked', NOW() + INTERVAL '30 days', NOW() - INTERVAL '30 days'),
+          (${dev}, 'grnt_kept_recently_expired', 'revoked', NOW() - INTERVAL '1 hour', NOW() - INTERVAL '30 days'),
+          (${dev}, 'grnt_kept_no_expiry_recent', 'revoked', NULL, NOW() - INTERVAL '1 hour')`;
+      const kept = [recent, 'grnt_kept_live', 'grnt_kept_recently_expired', 'grnt_kept_no_expiry_recent'];
+      const countBacklog = async () => Number((await sql<{ n: string }[]>`
+        SELECT COUNT(*)::text AS n FROM grant_revocation_events
+         WHERE developer_id = ${dev} AND grant_id LIKE 'grnt_backlog_%'`)[0]!.n);
+
+      // Another instance holds the prune lock: this one skips and deletes nothing.
+      const other = await sql.reserve();
+      try {
+        const [held] = await other<{ locked: boolean }[]>`
+          SELECT pg_try_advisory_lock(hashtextextended(${PRUNE_LOCK_KEY}, 0)) AS locked`;
+        expect(held!.locked).toBe(true);
+        const skipped = await pruneRevocationFeedOnce(sql, log, { batchSize, maxBatches });
+        expect(skipped).toEqual({ outcome: 'skipped_locked', deleted: 0, batches: 0 });
+        expect(await countBacklog()).toBe(backlog);
+      } finally {
+        await other`SELECT pg_advisory_unlock(hashtextextended(${PRUNE_LOCK_KEY}, 0))`;
+        other.release();
+      }
+
+      // Two instances start together: exactly one prunes, the other skips.
+      const slow = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+      const together = await Promise.all([
+        pruneRevocationFeedOnce(sql, log, { batchSize, maxBatches, sleep: () => slow(200) }),
+        pruneRevocationFeedOnce(sql, log, { batchSize, maxBatches, sleep: () => slow(200) }),
+      ]);
+      expect(together.map((run) => run.outcome).sort()).toEqual(['capped', 'skipped_locked']);
+      const first = together.find((run) => run.outcome === 'capped')!;
+      // Capped: several bounded statements, not the whole backlog in one.
+      expect(first).toEqual({ outcome: 'capped', deleted: batchSize * maxBatches, batches: maxBatches });
+      expect(await countBacklog()).toBe(backlog - batchSize * maxBatches);
+
+      // Later runs finish the backlog; the lock was released each time.
+      let total = first.deleted;
+      let runs = 0;
+      for (;;) {
+        const run = await pruneRevocationFeedOnce(sql, log, { batchSize, maxBatches, sleep: async () => undefined });
+        expect(run.outcome === 'capped' || run.outcome === 'complete').toBe(true);
+        total += run.deleted;
+        runs += 1;
+        if (run.outcome === 'complete') break;
+        expect(runs).toBeLessThan(10);
+      }
+      expect(total).toBe(backlog);
+      expect(await countBacklog()).toBe(0);
+
+      const left = await sql<{ grant_id: string }[]>`
+        SELECT grant_id FROM grant_revocation_events WHERE developer_id = ${dev} ORDER BY grant_id`;
+      expect(left.map((row) => row.grant_id).sort()).toEqual([...kept].sort());
       vi.unstubAllEnvs();
     });
   }, 180_000);
