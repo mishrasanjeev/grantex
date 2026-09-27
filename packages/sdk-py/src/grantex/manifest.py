@@ -640,7 +640,13 @@ class EnforceResult:
 
     would_deny: Optional[Dict[str, Any]] = None
     """In caps or decisions warn mode, the first denial that was not applied:
-    ``reason_code``, ``sub_reason``, ``reason`` and ``details``."""
+    ``reason_code``, ``sub_reason``, ``reason`` and ``details``. The same as
+    ``would_deny_all[0]``; read ``would_deny_all`` to see every one."""
+
+    would_deny_all: Tuple[Dict[str, Any], ...] = ()
+    """In caps or decisions warn mode, every denial that was not applied, in
+    the order the steps run (decision, amount cap, call caps, decision
+    consumption), each shaped like ``would_deny``. Empty when there is none."""
 
     decision: Optional["ConsumedDecision"] = None
     """For a tool that requires a decision: the decision grants consumed for

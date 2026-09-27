@@ -97,7 +97,7 @@ When you call `enforce()`, Grantex performs these steps:
 2. **Look up the manifest** — find the loaded manifest for the given connector
 3. **Resolve the permission** — look up the tool name in the manifest to get its required permission level
 4. **Check coverage** — determine if any scope in the token covers the required permission on this connector
-5. **Check caps** — if the scope is capped and an amount was provided, verify the amount is within the cap
+5. **Check caps** — if the scope is capped, verify the call's amount is within the cap. From the next release a capped scope denies a call that gives no amount (`amount_missing`); see [Amount caps](/concepts/caps-and-metering#amount-caps)
 6. **Return the result** — `allowed: true` or `allowed: false` with a reason
 
 ```python

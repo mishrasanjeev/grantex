@@ -51,7 +51,7 @@ enforce(options: EnforceOptions): Promise<EnforceResult>
 </ParamField>
 
 <ParamField body="amount" type="number">
-  Optional amount for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap.
+  The call's amount, for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap. From the next release a capped scope denies a call without it (`amount_missing`).
 </ParamField>
 
 <ParamField body="audience" type="string">
@@ -92,6 +92,14 @@ enforce(options: EnforceOptions): Promise<EnforceResult>
   The tool name that was checked.
 </ResponseField>
 
+<ResponseField name="wouldDeny" type="WouldDeny">
+  In caps or decisions warn mode, the first denial that was let through (`reason_code`, `sub_reason`, `reason`, `details`). Absent when there is none.
+</ResponseField>
+
+<ResponseField name="wouldDenyAll" type="readonly WouldDeny[]">
+  In caps or decisions warn mode, every denial that was let through, in step order (decision, amount cap, call caps, decision consumption); `wouldDeny` is its first entry. Absent when there is none.
+</ResponseField>
+
 ### Example
 
 ```typescript
@@ -122,9 +130,20 @@ const result = await grantex.enforce({
 });
 // If token scope is tool:stripe:write:*:capped:500
 // result.allowed = false
-// result.reason = "amount 750 exceeds cap of 500 on tool:stripe:write:*:capped:500"
+// result.reasonCode = 'cap_exceeded', result.subReason = 'amount_cap'
 ```
 
+**From the next release (breaking):** a call without `amount` under a capped
+scope is denied with `reasonCode` `cap_exceeded` and `subReason`
+`amount_missing` (`details` carries `limit`). In the current release it is
+allowed and the cap is not checked. `capsMode: 'warn'` (on the client or per
+call) keeps allowing it and reports the denial in `result.wouldDenyAll`
+(and in `result.wouldDeny` when it is the first warning of the call, so a
+call that also lacks a decision grant under `decisionsMode: 'warn'` shows the
+decision there and `amount_missing` only in `wouldDenyAll`);
+`capsMode: 'off'` skips it. The cap covers every tool of the connector, read
+tools included, so pass an amount (`0` when there is none) for those too. See
+[Amount caps](/concepts/caps-and-metering#amount-caps).
 
 ### Grant token audience
 
@@ -359,9 +378,17 @@ wrapTool(
     connector: string;
     tool: string;
     grantToken: string | (() => string);
+    extractAmount?: (input: unknown) => number | undefined | null | Promise<number | undefined | null>;
   },
 ): StructuredTool
 ```
+
+`extractAmount` (from the next release) receives the tool's input and returns
+the call's amount, which is passed to `enforce()` as `amount`. Under a capped
+scope, a wrapper without it (or an extractor returning `undefined` or `null`)
+denies every call with `amount_missing`. An extractor that throws refuses the
+call before `enforce()` runs; a value that is not a finite number is denied
+with `invalid_amount`.
 
 ### Example
 
@@ -370,6 +397,7 @@ const protectedTool = grantex.wrapTool(myLangChainTool, {
   connector: 'salesforce',
   tool: 'create_lead',
   grantToken: () => currentState.grant_token,
+  extractAmount: (input) => (input as { amount: number }).amount,
 });
 
 // Use protectedTool in your LangChain agent chain.
@@ -388,8 +416,15 @@ grantex.enforceMiddleware(options: {
   extractToken: (req: Request) => string | undefined;
   extractConnector: (req: Request) => string;
   extractTool: (req: Request) => string;
+  extractAmount?: (req: Request) => number | undefined | null | Promise<number | undefined | null>;
 }): RequestHandler
 ```
+
+`extractAmount` (from the next release) returns the request's amount for a
+capped scope. Without it, a capped scope answers 403 with `reason`
+`cap_exceeded` and `subReason` `amount_missing`. An extractor that throws, or
+returns something that is not a finite number, answers 403 with
+`invalid_amount`.
 
 ### Example
 
@@ -398,6 +433,7 @@ app.use('/api/tools/:connector/:tool', grantex.enforceMiddleware({
   extractToken: (req) => req.headers.authorization?.replace('Bearer ', ''),
   extractConnector: (req) => req.params.connector,
   extractTool: (req) => req.params.tool,
+  extractAmount: (req) => req.body.amount,
 }));
 
 // Requests with insufficient scope receive a 403 response automatically.

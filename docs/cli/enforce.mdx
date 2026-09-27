@@ -93,7 +93,9 @@ grantex enforce test \
 
 ## Capped Scopes
 
-Use the `--amount` flag to test enforcement against capped scopes:
+Use the `--amount` flag to test enforcement against capped scopes. From the
+next SDK release, a capped scope denies a test without `--amount`
+(`amount_missing`):
 
 ```bash
 grantex enforce test \
