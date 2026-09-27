@@ -1,6 +1,12 @@
 # grantex
 
-**New in 0.5.1:** security and reliability fixes. `enforce()` applies the
+**Version 0.6.0:** adds hosted passkey enrollment sessions and account-level
+irregularity response policy methods. Both require the server's corresponding
+feature flags and an authenticated customer handoff for enrollment. Confirm
+the published version in [Release Status](https://docs.grantex.dev/release-status)
+before installing.
+
+**0.5.1:** security and reliability fixes. `enforce()` applies the
 tightest budget cap and denies malformed, negative or non-finite amounts; the
 FastAPI enforcer reads the `Authorization` header; grant-token verification
 caches the JWKS and runs off the event loop; resource ids are percent-encoded;
@@ -25,7 +31,7 @@ Grantex lets humans authorize AI agents with **verifiable, revocable, audited gr
 ## Install
 
 ```bash
-pip install grantex==0.5.1
+pip install grantex==0.6.0
 ```
 
 ## Quick start
@@ -131,13 +137,8 @@ token = client.tokens.exchange(ExchangeTokenParams(
 | **Audit trail** | `client.audit.log()`, `.list()`, `.get()` — tamper-evident hash-chained log |
 | **Policy engine** | `client.policies.create()`, `.list()`, `.update()`, `.delete()` |
 | **Anomaly detection** | `client.anomalies.list()`, `.detect()` |
-| **Account irregularity response** | Source API: `client.anomalies.get_response_policy()`, `.set_response_policy("alert_only")` (server flag required) |
-| **Hosted passkey enrollment** | Source API: `client.webauthn.create_enrollment_session(principal_id=...)` after customer authentication (server flag required) |
-
-The new enrollment and response-policy methods are repository-source APIs and
-are not claims about the currently published PyPI version. Enrollment links
-are one-use bearer secrets. Alert-only is account-wide and affects the legacy
-detector's automatic revocation, not other security gates.
+| **Account irregularity response** | 0.6.0: `client.anomalies.get_response_policy()`, `.set_response_policy("alert_only")` (server flag required) |
+| **Hosted passkey enrollment** | 0.6.0: `client.webauthn.create_enrollment_session(principal_id=...)` after customer authentication (server flag required) |
 | **Compliance** | `client.compliance.get_summary()`, `.export_audit()`, `.export_grants()`, `.evidence_pack()` |
 | **Webhooks** | `client.webhooks.create()`, `.list()`, `.delete()` + `verify_webhook_signature()` |
 | **Billing** | `client.billing.get_subscription()`, `.create_checkout()`, `.create_portal()` |
@@ -145,6 +146,9 @@ detector's automatic revocation, not other security gates.
 | **OIDC SSO** | `client.sso.create_config()`, `.get_config()`, `.get_login_url()`, `.handle_callback()` |
 | **Agent prepaid wallets** | Developer policy, principal wallet/policy/approval, and ES256 DPoP agent clients |
 | **Commerce V1/OACP** | `client.commerce.get_profile()`, `.search_catalog()`, `.create_cart()`, `.get_ops_health()` |
+
+Enrollment links are one-use bearer secrets. Alert-only is account-wide and
+affects the legacy detector's automatic revocation, not other security gates.
 
 ## Agent prepaid wallets (0.4+)
 

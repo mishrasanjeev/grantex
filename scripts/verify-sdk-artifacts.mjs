@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 assert.ok(process.argv[2], 'Pass the clean consumer directory containing installed SDK packages');
+assert.ok(process.argv[3] && process.argv[4], 'Pass the expected TypeScript SDK and x402 versions');
 const root = resolve(process.argv[2]);
 const pkg = name => resolve(root, 'node_modules', ...name.split('/'));
 const read = name => JSON.parse(readFileSync(resolve(pkg(name), 'package.json'), 'utf8'));
@@ -12,13 +13,17 @@ for (const name of ['@grantex/sdk', '@grantex/x402']) {
   assert.match(readFileSync(resolve(pkg(name), 'LICENSE'), 'utf8'), /Apache License/);
   assert.match(readFileSync(resolve(pkg(name), 'NOTICE'), 'utf8'), /Orchestrum Technologies LLP/);
 }
-assert.equal(read('@grantex/sdk').version, '0.6.0');
-assert.equal(read('@grantex/x402').version, '0.4.0');
+assert.equal(read('@grantex/sdk').version, process.argv[3]);
+assert.equal(read('@grantex/x402').version, process.argv[4]);
 const sdk = await import(pathToFileURL(resolve(pkg('@grantex/sdk'), 'dist/index.js')).href);
 const x402 = await import(pathToFileURL(resolve(pkg('@grantex/x402'), 'dist/index.js')).href);
 for (const name of ['Grantex', 'OAuthAgentClient', 'generateOAuthAgentKey', 'PrincipalPrepaidWalletClient', 'PrepaidWalletAgentClient']) {
   assert.equal(typeof sdk[name], 'function', `Missing packaged SDK export ${name}`);
 }
+const client = new sdk.Grantex({ apiKey: 'artifact-test-only' });
+assert.equal(typeof client.webauthn.createEnrollmentSession, 'function');
+assert.equal(typeof client.anomalies.getResponsePolicy, 'function');
+assert.equal(typeof client.anomalies.setResponsePolicy, 'function');
 assert.equal(typeof x402.createX402Agent, 'function');
 assert.throws(() => x402.createX402Agent({ walletId: 'wal_test', authorizePayment: async () => ({}), baseUsdc: { scope: '' } }), /scope/);
 const guarded = x402.createX402Agent({ walletId: 'wal_test', authorizePayment: async () => ({}), baseUsdc: { scope: 'licensing:preflight' } });

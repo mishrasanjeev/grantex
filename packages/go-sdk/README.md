@@ -1,6 +1,12 @@
 # Grantex Go SDK
 
-**New in v0.3.0:** wallet responses include typed
+**Version v0.4.0:** adds hosted passkey enrollment sessions and account-level
+irregularity response policy methods. Both require the server's corresponding
+feature flags and an authenticated customer handoff for enrollment. Confirm
+the published version in [Release Status](https://docs.grantex.dev/release-status)
+before installing.
+
+**v0.3.0:** wallet responses include typed
 `EVMPayment`/`EVMAuthorization` fields and agent/principal clients expose
 `ReconcileReservation`. Automatic x402 HTTP retries are currently provided by
 the TypeScript adapter. See [Base custody setup](https://docs.grantex.dev/guides/base-usdc-custody).
@@ -10,7 +16,7 @@ Official Go SDK for the [Grantex](https://grantex.dev) delegated authorization p
 ## Installation
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.3.0
+go get github.com/mishrasanjeev/grantex-go@v0.4.0
 ```
 
 Requires Go 1.26.1 or newer, matching the module's `go.mod` directive.
@@ -100,21 +106,19 @@ client := grantex.NewClient("api-key",
 | `client.Usage` | Current, History |
 | `client.Domains` | Create, List, Verify, Delete |
 | `client.WebAuthn` | CreateEnrollmentSession, RegisterOptions, RegisterVerify, ListCredentials, DeleteCredential |
-
-`client.WebAuthn.CreateEnrollmentSession` and
-`client.Anomalies.GetResponsePolicy` / `SetResponsePolicy` are available in
-repository source, not yet asserted as published in the Go proxy. Hosted
-enrollment requires `PASSKEY_ENROLLMENT_ENABLED=true` on the server and must be
-issued after your application authenticates the principal. The account-wide
-irregularity response requires `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`;
-`alert_only` stops this detector's automatic agent-grant revocation but not
-other security controls.
 | `client.Credentials` | Get, List, Verify, Present |
 | `client.Passports` | Issue, Get, List, Revoke |
 | `client.Vault` | Store, List, Get, Delete, Exchange |
 | `client.DPDP` | Consent records/notices, grievances, erasure, principal records, exports |
 | `client.Commerce` | GetProfile, SearchCatalog, CreateCart, CreatePaymentIntent, CreateCheckoutLink, GetOpsHealth |
 | `client.WalletSpendPolicies` | Create, List, SetStatus for developer-level wallet policy |
+
+In v0.4.0, `client.WebAuthn.CreateEnrollmentSession` requires
+`PASSKEY_ENROLLMENT_ENABLED=true` on the server and must be issued after your
+application authenticates the principal. `client.Anomalies.GetResponsePolicy`
+and `SetResponsePolicy` require `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`;
+`alert_only` stops this detector's automatic agent-grant revocation but not
+other security controls.
 
 ## Agent prepaid wallets (v0.2.0+)
 
