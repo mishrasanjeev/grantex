@@ -53,6 +53,8 @@ export default defineConfig({
       // toggle it via vi.stubEnv. The feature-flag test stubs it back off.
       COMMERCE_V1_ENABLED: 'true',
       PORTABLE_WEBAUTHN_EVIDENCE_ENABLED: 'true',
+      IRREGULARITY_CASCADE_REVOCATION_ENABLED: 'true',
+      PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED: 'true',
     },
   },
 });

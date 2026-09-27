@@ -67,6 +67,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   are not changed yet, and the auth service can be configured to publish a
   larger set than the bounded fetch accepts; `FINDINGS.md` tracks both, and
   the default flip.
+### mcp-auth: the purpose on the consent page is the purpose on the grant
+- `@grantex/mcp-auth` 3.0.0 (prepared, not published) sends `grant.purpose` to
+  Grantex as the `purpose` of `POST /v1/authorize` once the Principal
+  approves the consent page, so the grant, and its token's
+  `authorization_details`, carry the purpose the page showed. Before, the
+  purpose was only displayed. With a purpose configured, the page's note
+  says that Grantex records it on the grant; without one, the note (new
+  `consentPage.text.noPurposeNote`) speaks only of call limits, which are
+  still labelled as declared by the service.
+- Fails closed when Grantex does not confirm it: `POST /v1/authorize` echoes
+  the purpose it bound, and an answer without it (a server that predates
+  purpose-bound grants ignores the field) ends the authorization with
+  `502 server_error` rather than issuing a grant without the purpose.
+- A purpose Grantex refuses (`400 INVALID_PURPOSE`: a purpose outside the
+  vocabulary, or requested scopes that name no connector) reaches the client
+  on its redirect URI as `error=invalid_scope`, with a fixed description
+  naming the purpose, instead of the generic `502` "The upstream
+  authorization request failed". Upstream text is still not relayed to the
+  client.
+- New `warn` option (default `console.warn`) for the operator. A purpose
+  refusal is reported with Grantex's reason, error code and request id, on
+  one line with the reason cut to 300 characters; an unconfirmed purpose is
+  reported too. Start-up still checks only the purpose's syntax, because
+  Grantex does not publish its vocabulary in its metadata: a well-formed
+  term outside the vocabulary starts cleanly and then refuses every
+  authorization after consent with `invalid_scope`, as the guide now says.
+- `grant.authorizeParams` cannot set the purpose. It may repeat
+  `grant.purpose`; any other `purpose`, or one when `grant.purpose` is unset,
+  refuses the authorization with `500 server_error` before Grantex is
+  called, so neither value silently wins.
+- Breaking: `createMcpAuthServer` refuses to start when `grant.dataRegion` is
+  set. `POST /v1/authorize`, which mcp-auth calls, takes no data region, so
+  a grant made through mcp-auth cannot carry one and the page showed a
+  restriction the grant did not carry. Remove the option; the region row
+  reads "None declared" and `ConsentViewModel.dataRegion` is never set.
+- Breaking for a deployment that returned `purpose` from `authorizeParams`
+  without setting `grant.purpose`, as the 3.0 guide suggested: set
+  `grant.purpose` instead, which the page then shows.
+- Not behind a flag: 3.0.0 is unpublished, and a purpose is sent only when
+  `grant.purpose` is configured (leave it unset to send none). No
+  auth-service or SDK change. Documented in `docs/mcp-auth.md` ("Purpose").
 ### Vendor denylist gate
 - A new **Vendor Denylist** workflow fails a pull request that names a
   denylisted identity-verification, KYB/KYC, AML or screening vendor in its
@@ -90,6 +131,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Two existing lines the audit flagged were reworded without changing their
   meaning: a portal test title and one sentence of the draft privacy policy.
 - CI and documentation only; no product change, nothing behind a flag.
+
+### Portable evidence rollout and VC revocation
+- Added `IRREGULARITY_CASCADE_REVOCATION_ENABLED` (default `false`). When enabled,
+  high/critical irregularity responses revoke the affected agent's grants,
+  descendants, wallet reservations, VCs, and status-list bits in one database
+  transaction. Portable evidence requires this flag at startup.
+- Added `PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED` (default `false`).
+  When enabled, issuer verification checks evidence-bearing VCs against the
+  stored credential and complete grant ancestry, rejecting broken and cyclic
+  chains. Enable it before evidence issuance and keep it on during an issuance
+  rollback; startup rejects issuance without this and cascade revocation.
+  An explicit, idempotent reconciliation command repairs
+  active descendants and VCs left behind by historical grant-only revocations,
+  including public status-list bits. Local Postgres and Chromium regressions
+  cover both paths.
+- Expanded the isolated production passkey test to verify the exported
+  assertion, grant-reference digest, refresh, delegation, and revocation.
+
 ### Portable WebAuthn assertion evidence (default off)
 - Added `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED` (default `false`). When enabled,
   verified consent assertions are retained, bound to new grants, referenced by
@@ -937,11 +996,14 @@ Added
   failing closed with a reason code.
 - `/revoke` also revokes refresh tokens bound to the client (RFC 7009).
 - Rendered consent page before anything reaches Grantex, showing the client,
-  redirect host, purpose, data region, duration, tools with caps and decision
-  requirements, labelled as declared by the service; strict CSP with no
+  redirect host, purpose, duration, tools with caps and decision
+  requirements. The purpose is sent to Grantex, which binds the grant to it;
+  call limits are labelled as declared by the service. Strict CSP with no
   script, CSRF token plus a per-consent `__Host-` SameSite=Strict cookie;
   customisable theme (WCAG AA contrast enforced), text, `lang`, `extraCss`
-  and `renderDetails`. New `grant` and `consentPage` options.
+  and `renderDetails`. New `grant` (`purpose`, `purposeDescription`,
+  `duration`, and `authorizeParams` for extra authorize parameters, which
+  cannot change the purpose), `consentPage` and `warn` options.
 - Confused-deputy protection: approval sets a `__Host-` Secure HttpOnly
   SameSite=Lax callback-binding cookie whose hash is stored on the pending
   authorization, and `/callback` issues a code only to the browser that
@@ -957,8 +1019,7 @@ Added
   `spec/mcp-auth-challenges.md`). With a tools policy, a body that is not
   parsed JSON-RPC 2.0 is refused (`body_not_parsed`). `onDenial` reports
   refusals with low-cardinality reasons (`grant_revoked`, ...); a guard
-  without `revocations` warns at start-up. `grant.authorizeParams` is the
-  extension point for purpose-bound grants.
+  without `revocations` warns at start-up.
 - Tests: storage contract against memory, real Postgres and real Redis; a
   server-process restart test on both; a conformance suite mapping each
   server-side MUST of the specification and the Security Best Practices'

@@ -641,6 +641,42 @@ the pull request that references it.
   migrations (G-32). Show it by forcing a short limit before and after, as
   G-32 did.
 
+## G-35 — mcp-auth records nothing when most upstream authorizations fail
+
+- **Found:** sending the consent page's purpose to Grantex from mcp-auth
+  (2026-09-27).
+- **What:** `startUpstreamAuthorization` in
+  `packages/mcp-auth/src/endpoints/authorize.ts` answers every
+  `grantex.authorize` failure other than a purpose refusal with
+  `502 server_error`, "The upstream authorization request failed", and
+  records nothing. The `warn` option reports only a purpose refusal and an
+  answer that does not confirm the purpose. A request Grantex refuses for a
+  configuration reason (callback URL or resource not registered on the
+  agent, a scope outside the agent's registration, a rate limit) looks to the
+  operator exactly like an outage, and the code Grantex returned is lost.
+  `/revoke` has the same gap (G-7).
+- **Fix:** report the other upstream failures through `warn` with the
+  Grantex error code and request id (not the message text, which, unlike the
+  fixed `INVALID_PURPOSE` reasons, can echo request details), and count them
+  by code.
+
+## G-36 — mcp-auth is built and tested only against the published SDK
+
+- **Found:** the same work (2026-09-27).
+- **What:** the `Makefile` says `@grantex/mcp-auth` resolves `@grantex/sdk`
+  from the local build, but `packages/mcp-auth/package-lock.json` pins
+  `@grantex/sdk` 0.6.0 from the npm registry, and the package's typecheck,
+  unit, integration and browser suites all resolve that copy. Nothing checks
+  mcp-auth against `packages/sdk-ts`, so an SDK change that breaks it (a
+  renamed type, a changed error shape) is not caught until the SDK is
+  published. Typechecking `packages/mcp-auth/src` against the in-repo build
+  by hand passed during this work.
+- **Fix:** add a CI step that typechecks and runs the mcp-auth unit suite
+  with `@grantex/sdk` resolved to the in-repo build (a tsconfig path and a
+  vitest alias behind an environment variable, as the root
+  `vitest.config.ts` does with `GRANTEX_SDK_TEST_ROOT`), and correct the
+  Makefile comment.
+
 ## G-37 — The Go SDK's JWKS fetch is unbounded and its `IssuerDID` is not validated
 
 - **Found:** bounding the JWKS fetch in the TypeScript and Python SDKs
