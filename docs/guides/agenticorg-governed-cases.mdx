@@ -70,6 +70,60 @@ case roles. Grantex MCP transport authorization and tool authorization are
 separate from AgenticOrg's human case-decision path. Neither MCP discovery nor
 an agent token can stand in for a signed-in person or a verified decision grant.
 
+## Decision grants and the agent binding
+
+The Grantex auth service setting `DECISION_GRANT_AGENT_BINDING` (off by
+default) binds decision grants to the agent a request names and stops
+`GET /v1/decisions/requests/{id}` returning them to the developer API key (see
+[Decision Grants](/concepts/decision-grants#binding-decisions-to-the-requesting-agent)).
+AgenticOrg `main` at `05eaa69b`, checked on September 27, 2026, records a case
+decision by reading `decisionGrants` from that `GET` and presenting them to
+`POST /v1/decisions/consume`. With the binding on, that list is never present,
+so recording a decision would fail with `decision_not_approved`. Keep the
+binding off until AgenticOrg has made these changes and they are deployed:
+
+1. **Consume the console's own decisions by request id.** In
+   `core/cases/decision_requests.py`, `GrantexDecisionGrantService.grants()`
+   and the `consume(grants=...)` that follows it are replaced, for requests the
+   console created, by `POST /v1/decisions/requests/{id}/consume` with
+   `{"action": ..., "caseVersion": ...}`. The console's requests name no agent
+   (`create_request` sends no `agentId` or `grantId`), so they qualify, and the
+   grant never leaves Grantex. The answer has the same shape as
+   `POST /v1/decisions/consume` (`requestId`, `jtis`, `actionHash`, and
+   `approvers` each with `sub` and `jti`), so the existing receipt parsing
+   applies.
+2. **Keep the consumption under the case row lock.** In
+   `api/v1/governed_cases.py`, `decide_governed_case` stops fetching grants
+   when `decision_request_id` is given and carries the request id to the
+   decision verifier instead, so `record_decision` still consumes while it
+   holds the case row, as it does today. "Not approved yet" comes from the
+   request's own state (`DecisionRequestView.grants_ready`), or from the
+   consumption's `unknown_grant` or `four_eyes_incomplete` refusal, instead of
+   an empty grant list.
+3. **Read `subReason` before the HTTP status.**
+   `GrantexDecisionGrantService._refusal` maps every 401 and 403 to
+   `decision_service_unauthorised`. Grantex answers `wrong_agent` with 403 and
+   `"reason": "decision_invalid"`, so a 403 that carries a `subReason` maps to
+   `decision_invalid` with that sub-reason.
+4. **Workflow steps that pass raw grants** (`decision_grants:
+   $decision_grants` in `core/cases/runtime.py` and
+   `workflows/examples/business_onboarding.yaml`). With the binding on, grants
+   can be held only if they were requested for an agent (`agentId`,
+   `grantId`) and fetched with that agent's grant token
+   (`POST /v1/decisions/requests/{id}/grants`), and they are consumed only
+   with that agent's DID (`agentDid`) and grant. A step that is really the
+   console's own decision uses step 1 instead.
+5. **Tests that encode the old flow:** the `grants()` cases in
+   `tests/unit/governed_cases/test_case_decision_requests.py`, the
+   `FakeDecisionGrantService` in `core/test_doubles/fake_decision_grants.py`,
+   and `ui/e2e/decision-grants.spec.ts`, whose four-eyes decline records the
+   decision through steps 1 and 2.
+
+Consumption by request id and the grants endpoint work with the binding off,
+so these changes can be deployed and verified against production first. Turn
+the binding on only after that, and confirm a four-eyes decline records end to
+end.
+
 ## Future integration gate
 
 Token-level purpose, decision and cap features should be enabled only after a

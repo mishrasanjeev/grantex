@@ -29,6 +29,7 @@ import {
   approverSubject,
   assertStepUp,
   decisionGrantExpiry,
+  isDecisionRequestId,
   serverDwellMs,
   type ApproverClaims,
   type DwellPolicy,
@@ -144,10 +145,12 @@ function isUniqueViolation(err: unknown): boolean {
 export interface DecisionAuditEntry {
   developerId: string;
   action: 'decision.requested' | 'decision.approved' | 'decision.consumed' | 'decision.consume_refused'
+    | 'decision.grants_released' | 'decision.release_refused'
     | 'decision.case_changed' | 'decision.cancelled' | 'decision.approver_signed_in'
     | 'decision.approver_idp_added' | 'decision.approver_idp_disabled';
   principalId: string;
   agentId?: string | null;
+  agentDid?: string | null;
   grantId?: string | null;
   status?: 'success' | 'blocked';
   metadata: Record<string, unknown>;
@@ -172,7 +175,7 @@ export async function appendDecisionAudit(sql: Sql, entry: DecisionAuditEntry): 
   const fields = {
     id,
     agentId: entry.agentId ?? '',
-    agentDid: '',
+    agentDid: entry.agentDid ?? '',
     grantId: entry.grantId ?? '',
     principalId: entry.principalId,
     developerId: entry.developerId,
@@ -540,6 +543,13 @@ export interface CreateDecisionRequestInput {
   policyScoreRef?: string;
   agentId?: string;
   grantId?: string;
+  /**
+   * `DECISION_GRANT_AGENT_BINDING`: refuse (`wrong_agent`) to answer with an
+   * open request for the same action and case version that names another
+   * agent or grant, or names one where this request names none (or the
+   * reverse). Off, such a request is returned as it is.
+   */
+  bindAgent?: boolean;
 }
 
 export async function createDecisionRequest(
@@ -607,6 +617,17 @@ export async function createDecisionRequest(
         DecisionSubReason.CLOSED,
         409,
         'An open decision request for this action exists with a different connector, approval requirement, memo or policy score',
+      );
+    }
+    // The open request belongs to the agent and grant it names: answering it
+    // to a platform asking for another agent would hand that agent's approval
+    // link to the wrong requester.
+    if (input.bindAgent === true
+        && (row.agent_id !== (input.agentId ?? null) || row.grant_id !== (input.grantId ?? null))) {
+      throw new DecisionError(
+        DecisionSubReason.WRONG_AGENT,
+        409,
+        'An open decision request for this action and case version was made for another agent or grant; cancel it before asking again',
       );
     }
     return { request: row, created: false };
@@ -864,16 +885,84 @@ export async function approveDecisionRequest(sql: Sql, input: ApproveInput): Pro
   }) as Promise<ApproveResult>;
 }
 
+// ── The requesting agent ─────────────────────────────────────────────────
+
+/**
+ * The agent and grant a caller acts for. `agentDid` and `grantId` are read
+ * from that agent's verified grant token: by an enforcer (`enforce()`, an MCP
+ * server) when it consumes, or by this service when it releases decision
+ * grants. `agentId` is the Grantex agent id a platform may send instead.
+ */
+export interface DecisionRequester {
+  agentId?: string;
+  agentDid?: string;
+  grantId?: string;
+}
+
+/**
+ * Whether `did` is the DID of the agent a decision request names. A request
+ * names its agent by Grantex agent id; an enforcer reports the DID its grant
+ * token carries, so the two are matched through the developer's own agent
+ * record (agents.did is unique).
+ */
+async function isDidOfAgent(sql: Sql, developerId: string, agentId: string, did: string): Promise<boolean> {
+  const rows = await sql<{ did: string }[]>`
+    SELECT did FROM agents WHERE developer_id = ${developerId} AND id = ${agentId}
+  `;
+  return rows.some((row) => row.did === did);
+}
+
+/**
+ * Refuses (`wrong_agent`, 403) unless `requester` is the agent and grant a
+ * decision request names. A request that names an agent, a grant or both
+ * belongs to that agent: a requester that does not say which agent or grant it
+ * acts for is refused like one that names another, since it has not shown it
+ * is the requester. Every agent reference given (`agentId`, `agentDid`) must be
+ * the named agent. A request that names neither is not checked here; each
+ * caller decides what an unbound request allows.
+ */
+export async function assertRequester(sql: Sql, request: DecisionRequestRow, requester: DecisionRequester): Promise<void> {
+  if (request.agent_id !== null) {
+    if (requester.agentId === undefined && requester.agentDid === undefined) {
+      throw refuse(DecisionSubReason.WRONG_AGENT, 'This decision was requested for an agent; the caller did not say which agent it acts for', 403);
+    }
+    if (requester.agentId !== undefined && requester.agentId !== request.agent_id) {
+      throw refuse(DecisionSubReason.WRONG_AGENT, 'This decision was requested for another agent', 403);
+    }
+    if (requester.agentDid !== undefined && !(await isDidOfAgent(sql, request.developer_id, request.agent_id, requester.agentDid))) {
+      throw refuse(DecisionSubReason.WRONG_AGENT, 'This decision was requested for another agent', 403);
+    }
+  }
+  if (request.grant_id !== null) {
+    if (requester.grantId === undefined) {
+      throw refuse(DecisionSubReason.WRONG_AGENT, 'This decision was requested under a grant; the caller did not say which grant it acts under', 403);
+    }
+    if (requester.grantId !== request.grant_id) {
+      throw refuse(DecisionSubReason.WRONG_AGENT, 'This decision was requested under another grant', 403);
+    }
+  }
+}
+
 // ── Consumption ──────────────────────────────────────────────────────────
 
-export interface ConsumeInput {
+export interface ConsumeInput extends DecisionRequester {
   developerId: string;
-  tokens: unknown;
+  /** The decision grants presented with the call: one, or two for four eyes. */
+  tokens?: unknown;
+  /**
+   * Instead of `tokens`, the id of a decision request that names no agent:
+   * the platform consumes that request's grants without ever holding them.
+   */
+  requestId?: string;
   /** The action the caller is about to perform. */
   action: unknown;
   caseVersion: unknown;
-  agentId?: string;
-  grantId?: string;
+  /**
+   * `DECISION_GRANT_AGENT_BINDING`: presented grants of a request that names
+   * an agent or a grant are consumed only for that agent and grant
+   * (`wrong_agent`). Off, `agentId` and `grantId` are recorded, not compared.
+   */
+  bindAgent?: boolean;
 }
 
 export interface ConsumeResult {
@@ -893,13 +982,33 @@ function refuse(subReason: DecisionSubReason, message: string, status = 409): De
   return new DecisionError(subReason, status, message);
 }
 
+/** Why a request with no grant at all cannot be consumed by its id. */
+function refusalWithoutGrants(request: DecisionRequestRow, now: Date): DecisionError {
+  if (request.status === 'superseded') return refuse(DecisionSubReason.CASE_CHANGED, 'The case changed after this decision was requested');
+  if (request.status === 'cancelled') return refuse(DecisionSubReason.REVOKED, 'The decision request was cancelled');
+  if (request.expires_at.getTime() <= now.getTime()) return refuse(DecisionSubReason.EXPIRED, 'This decision request has expired');
+  return refuse(DecisionSubReason.UNKNOWN_GRANT, 'No decision grant has been minted for this request yet');
+}
+
 /**
  * Verifies and atomically consumes the decision grants that authorise one
  * action: one grant, or two with different approvers when the request needs
  * four eyes. Either every grant is consumed or none is.
+ *
+ * The grants are the ones presented (`tokens`), or, for a request that names
+ * no agent, the request's own (`requestId`). A request that names an agent or
+ * a grant is never consumed by its id, and with `bindAgent` its presented
+ * grants are consumed only for that agent and grant (`wrong_agent`).
  */
 export async function consumeDecisionGrants(sql: Sql, input: ConsumeInput): Promise<ConsumeResult> {
-  if (!Array.isArray(input.tokens) || input.tokens.length < 1 || input.tokens.length > 2) {
+  const byRequest = input.requestId !== undefined;
+  if (byRequest && input.tokens !== undefined) {
+    throw new Error('consumeDecisionGrants takes presented grants or a request id, not both');
+  }
+  if (byRequest && !isDecisionRequestId(input.requestId)) {
+    throw refuse(DecisionSubReason.UNKNOWN_GRANT, 'Decision request not found', 404);
+  }
+  if (!byRequest && (!Array.isArray(input.tokens) || input.tokens.length < 1 || input.tokens.length > 2)) {
     throw refuse(DecisionSubReason.MALFORMED, 'decisionGrants must be an array of one or two tokens', 400);
   }
   let expected: DecisionAction;
@@ -916,27 +1025,32 @@ export async function consumeDecisionGrants(sql: Sql, input: ConsumeInput): Prom
   const caseVersion = input.caseVersion;
 
   const presented: DecisionGrantClaims[] = [];
-  for (const token of input.tokens) {
-    try {
-      presented.push(await verifyDecisionGrantSignature(token as string));
-    } catch (err) {
-      if (err instanceof DecisionTokenError) throw refuse(DecisionSubReason.MALFORMED, err.message, 400);
-      throw err;
+  let requestId: string;
+  if (byRequest) {
+    requestId = input.requestId as string;
+  } else {
+    for (const token of input.tokens as unknown[]) {
+      try {
+        presented.push(await verifyDecisionGrantSignature(token as string));
+      } catch (err) {
+        if (err instanceof DecisionTokenError) throw refuse(DecisionSubReason.MALFORMED, err.message, 400);
+        throw err;
+      }
     }
+    // A grant of another developer is indistinguishable from an unknown one.
+    if (presented.some((c) => c.dev !== input.developerId)) {
+      throw refuse(DecisionSubReason.UNKNOWN_GRANT, 'Decision grant not found');
+    }
+    const presentedJtis = presented.map((c) => c.jti);
+    if (new Set(presentedJtis).size !== presentedJtis.length) {
+      throw refuse(DecisionSubReason.SAME_APPROVER, 'The same decision grant was presented twice');
+    }
+    const requestIds = new Set(presented.map((c) => c.decision_request));
+    if (requestIds.size !== 1) {
+      throw refuse(DecisionSubReason.ACTION_MISMATCH, 'The decision grants belong to different decisions');
+    }
+    requestId = presented[0]!.decision_request;
   }
-  // A grant of another developer is indistinguishable from an unknown one.
-  if (presented.some((c) => c.dev !== input.developerId)) {
-    throw refuse(DecisionSubReason.UNKNOWN_GRANT, 'Decision grant not found');
-  }
-  const jtis = presented.map((c) => c.jti);
-  if (new Set(jtis).size !== jtis.length) {
-    throw refuse(DecisionSubReason.SAME_APPROVER, 'The same decision grant was presented twice');
-  }
-  const requestIds = new Set(presented.map((c) => c.decision_request));
-  if (requestIds.size !== 1) {
-    throw refuse(DecisionSubReason.ACTION_MISMATCH, 'The decision grants belong to different decisions');
-  }
-  const requestId = presented[0]!.decision_request;
 
   return sql.begin(async (raw) => {
     const t = tx(raw);
@@ -948,20 +1062,47 @@ export async function consumeDecisionGrants(sql: Sql, input: ConsumeInput): Prom
       FOR UPDATE
     `;
     const request = requests[0];
-    if (!request) throw refuse(DecisionSubReason.UNKNOWN_GRANT, 'Decision grant not found');
-    const rows = await t<DecisionGrantRow[]>`
-      SELECT * FROM decision_grants
-      WHERE jti = ANY(${jtis}) AND developer_id = ${input.developerId}
-      ORDER BY approval_position
-      FOR UPDATE
-    `;
-    if (rows.length !== jtis.length) throw refuse(DecisionSubReason.UNKNOWN_GRANT, 'Decision grant not found');
-    for (const row of rows) {
-      const token = presented.find((c) => c.jti === row.jti)!;
+    if (!request) {
+      throw byRequest
+        ? refuse(DecisionSubReason.UNKNOWN_GRANT, 'Decision request not found', 404)
+        : refuse(DecisionSubReason.UNKNOWN_GRANT, 'Decision grant not found');
+    }
+    // Who may spend the decision is settled before any stored state of its
+    // grants is examined, so a caller that is not the requesting agent learns
+    // nothing more about them. A decision an agent asked for is spent only
+    // with the grants that agent presents: consuming it by request id would
+    // let the developer API key alone spend it.
+    if (byRequest && (request.agent_id !== null || request.grant_id !== null)) {
+      throw refuse(
+        DecisionSubReason.WRONG_AGENT,
+        'This decision was requested for an agent; it is consumed only with the decision grants that agent presents',
+        403,
+      );
+    }
+    if (input.bindAgent === true) await assertRequester(t, request, input);
+    const rows = byRequest
+      ? await t<DecisionGrantRow[]>`
+          SELECT * FROM decision_grants
+          WHERE request_id = ${request.id} AND developer_id = ${input.developerId}
+          ORDER BY approval_position
+          FOR UPDATE
+        `
+      : await t<DecisionGrantRow[]>`
+          SELECT * FROM decision_grants
+          WHERE jti = ANY(${presented.map((c) => c.jti)}) AND developer_id = ${input.developerId}
+          ORDER BY approval_position
+          FOR UPDATE
+        `;
+    if (byRequest && rows.length === 0) throw refusalWithoutGrants(request, now);
+    if (!byRequest && rows.length !== presented.length) throw refuse(DecisionSubReason.UNKNOWN_GRANT, 'Decision grant not found');
+    for (const token of presented) {
+      const row = rows.find((r) => r.jti === token.jti)!;
       if (canonicalize(row.claims) !== canonicalize(token)) {
         throw refuse(DecisionSubReason.MALFORMED, 'Decision grant does not match the grant that was issued', 400);
       }
     }
+    // Presentation order for presented grants; approval order for a request's own.
+    const jtis = byRequest ? rows.map((r) => r.jti) : presented.map((c) => c.jti);
 
     // Order of checks: what the grant is for, then whether it is still usable.
     for (const row of rows) {
@@ -995,7 +1136,10 @@ export async function consumeDecisionGrants(sql: Sql, input: ConsumeInput): Prom
     if (request.status === 'cancelled') throw refuse(DecisionSubReason.REVOKED, 'The decision request was cancelled');
 
     if (rows.length < request.approvals_required) {
-      throw refuse(DecisionSubReason.FOUR_EYES_INCOMPLETE, 'This decision needs two approvals from different people; present both decision grants');
+      throw refuse(
+        DecisionSubReason.FOUR_EYES_INCOMPLETE,
+        byRequest ? 'This decision needs two approvals from different people' : 'This decision needs two approvals from different people; present both decision grants',
+      );
     }
     if (rows.length > request.approvals_required) {
       throw refuse(DecisionSubReason.MALFORMED, 'More decision grants were presented than this decision needs', 400);
@@ -1028,6 +1172,7 @@ export async function consumeDecisionGrants(sql: Sql, input: ConsumeInput): Prom
       action: 'decision.consumed',
       principalId: rows[rows.length - 1]!.approver_sub,
       agentId: input.agentId ?? request.agent_id,
+      ...(input.agentDid !== undefined ? { agentDid: input.agentDid } : {}),
       grantId: input.grantId ?? request.grant_id,
       metadata: {
         request_id: request.id,
@@ -1037,6 +1182,7 @@ export async function consumeDecisionGrants(sql: Sql, input: ConsumeInput): Prom
         case_version: caseVersion,
         approvers: rows.map((r) => ({ sub: r.approver_sub, approver_auth: r.approver_auth, dwell_ms: r.dwell_ms, dwell_source: r.dwell_source, jti: r.jti })),
         consumed_at_epoch: nowSeconds,
+        ...(byRequest ? { consumed_by: 'decision_request' } : {}),
       },
     });
     return {
@@ -1058,7 +1204,7 @@ export async function auditConsumeRefusal(
   sql: Sql,
   developerId: string,
   subReason: string,
-  attempt: { jtis: string[]; action: unknown; caseVersion: unknown; agentId?: string; grantId?: string },
+  attempt: { jtis: string[]; action: unknown; caseVersion: unknown; requestId?: unknown; agentId?: string; agentDid?: string; grantId?: string },
 ): Promise<void> {
   let action: DecisionAction | undefined;
   let actionHash: string | undefined;
@@ -1075,12 +1221,54 @@ export async function auditConsumeRefusal(
       principalId: 'platform',
       status: 'blocked',
       agentId: attempt.agentId ?? null,
+      agentDid: attempt.agentDid ?? null,
       grantId: attempt.grantId ?? null,
       metadata: {
         sub_reason: subReason,
         jtis: attempt.jtis,
         ...(action !== undefined ? { action, action_hash: actionHash } : { action_valid: false }),
         ...(typeof attempt.caseVersion === 'string' && attempt.caseVersion.length <= 128 ? { case_version: attempt.caseVersion } : {}),
+        ...(isDecisionRequestId(attempt.requestId) ? { request_id: attempt.requestId } : {}),
+      },
+    });
+  });
+}
+
+/** What happened when decision grants were asked for with an agent's grant token. */
+export type GrantRelease =
+  | { released: true; jtis: string[]; actionHash: string }
+  | { released: false; subReason: string; tokenCheck?: string };
+
+/**
+ * Records, in its own transaction, that a request's decision grants were
+ * handed out to an agent (`decision.grants_released`) or refused to a caller
+ * (`decision.release_refused`), like consumption and its refusals: the
+ * request, the agent it names, and the agent DID and grant of the presented
+ * grant token when that token verified. Throws if the entry cannot be
+ * written; the caller must then release nothing.
+ */
+export async function auditGrantRelease(
+  sql: Sql,
+  developerId: string,
+  request: DecisionRequestRow,
+  requester: { agentDid?: string; grantId?: string },
+  outcome: GrantRelease,
+): Promise<void> {
+  await sql.begin(async (raw) => {
+    await appendDecisionAudit(tx(raw), {
+      developerId,
+      action: outcome.released ? 'decision.grants_released' : 'decision.release_refused',
+      principalId: 'platform',
+      status: outcome.released ? 'success' : 'blocked',
+      agentId: request.agent_id,
+      agentDid: requester.agentDid ?? null,
+      grantId: requester.grantId ?? null,
+      metadata: {
+        request_id: request.id,
+        ...(request.grant_id !== null ? { requested_grant_id: request.grant_id } : {}),
+        ...(outcome.released
+          ? { jtis: outcome.jtis, action_hash: outcome.actionHash }
+          : { sub_reason: outcome.subReason, ...(outcome.tokenCheck !== undefined ? { token_check: outcome.tokenCheck } : {}) }),
       },
     });
   });

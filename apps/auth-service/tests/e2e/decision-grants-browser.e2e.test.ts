@@ -4,18 +4,26 @@
  * - the auth service listens on a local port, backed by real Postgres;
  * - the service administrator allow-lists an OpenID Connect provider with the
  *   admin credential;
- * - the platform creates a decision request with the TypeScript SDK and its
- *   developer API key;
+ * - the platform creates a decision request for its agent with the TypeScript
+ *   SDK and its developer API key;
  * - the approver opens the approval page in Chromium (Playwright), signs in
  *   through the auth service's own authorization code flow (PKCE, state,
  *   nonce) at an in-test OpenID Connect provider, is refused with a password
  *   alone, steps up with a security key, reviews the page and approves;
+ * - with DECISION_GRANT_AGENT_BINDING=true, the developer API key alone never
+ *   receives the decision grant: the platform fetches it with the agent's
+ *   grant token;
  * - the agent calls `enforce()` from the TypeScript SDK (and, when
  *   `GRANTEX_E2E_PYTHON` names a Python with the SDK's dependencies, the
  *   Python SDK), which verifies the decision grant against the service's JWK
- *   Set and consumes it at the service: the tool call is allowed once, a
- *   replay is refused, and a four-eyes decision cannot be approved twice by
- *   one person.
+ *   Set and consumes it at the service as that agent: the tool call is
+ *   allowed once, a replay is refused, another agent's call is refused, and a
+ *   four-eyes decision cannot be approved twice by one person;
+ * - a decision that names no agent is the platform's own: it is consumed by
+ *   request id, and its grant never leaves the service;
+ * - with the binding off (the default), the service answers as before it
+ *   existed, and the SDKs, which now report the calling agent's DID as
+ *   `agentDid`, still consume there.
  *
  * The identity provider is https://idp.example.com, an in-test provider that
  * issues ES256 ID tokens and checks the PKCE verifier. The browser reaches it
@@ -183,14 +191,25 @@ describeE2e('decision grants in a real browser against a live auth service', () 
   let caseCounter = 0;
 
   const newCase = () => `case_e2e_${suffix}_${++caseCounter}`;
+  // The agent the platform asks decisions for, with a live grant.
+  const agent = { id: `ag_e2e_${suffix}`, did: `did:grantex:ag_e2e_${suffix}`, grantId: `grnt_e2e_${suffix}`, jti: `tok_e2e_${suffix}` };
   const actionFor = (caseId: string, decision: string) => ({ case_id: caseId, action: 'case_decision', decision, subject: 'gb:00000001' });
   const callArguments = (caseId: string, decision: string) => ({ case_id: caseId, decision, subject: 'gb:00000001', note: 'planned by the agent' });
 
   async function agentGrantToken(): Promise<string> {
     const now = Math.floor(Date.now() / 1000);
     return signGrantToken({
-      sub: 'user_e2e', agt: 'did:grantex:ag_e2e', dev: developerId, scp: ['tool:acme_kyb:write'],
-      jti: `tok_e2e_${randomUUID().slice(0, 8)}`, grnt: `grnt_e2e_${suffix}`, iat: now, exp: now + 3600,
+      sub: 'user_e2e', agt: agent.did, dev: developerId, scp: ['tool:acme_kyb:write'],
+      jti: agent.jti, grnt: agent.grantId, iat: now, exp: now + 3600,
+    });
+  }
+
+  /** A grant token of another agent of the same developer (known only to its signature). */
+  async function otherAgentGrantToken(): Promise<string> {
+    const now = Math.floor(Date.now() / 1000);
+    return signGrantToken({
+      sub: 'user_e2e', agt: `did:grantex:ag_e2e_other_${suffix}`, dev: developerId, scp: ['tool:acme_kyb:write'],
+      jti: `tok_e2e_other_${suffix}`, grnt: `grnt_e2e_other_${suffix}`, iat: now, exp: now + 3600,
     });
   }
 
@@ -211,7 +230,7 @@ describeE2e('decision grants in a real browser against a live auth service', () 
     await page.getByRole('button', { name: method === 'hwk' ? 'Sign in with security key' : 'Sign in with password' }).click();
   }
 
-  async function createRequest(caseId: string, decision: string) {
+  async function createRequest(caseId: string, decision: string, forAgent = true) {
     const created = await grantex.decisions.createRequest({
       action: actionFor(caseId, decision),
       connector: 'acme_kyb',
@@ -219,6 +238,7 @@ describeE2e('decision grants in a real browser against a live auth service', () 
       memo: { ref: 'memo:e2e/1', content: `Registry record active; owners reconcile. Proposed: ${decision}.` },
       policyScore: { ref: 'policy:uk/1.2.0', content: { tier: 'low', score: 12 } },
       fourEyesOn: ['decline'],
+      ...(forAgent ? { agentId: agent.id, grantId: agent.grantId } : {}),
     });
     return created as { requestId: string; approvalPage: string; actionHash: string; approvalsRequired: number };
   }
@@ -230,8 +250,12 @@ describeE2e('decision grants in a real browser against a live auth service', () 
     await page.getByRole('button', { name: `Approve: ${decision}` }).click();
   }
 
+  /** The decision grants, fetched as the platform must: with the requesting agent's grant token. */
   async function grantsFor(requestId: string): Promise<string[]> {
-    const found = await grantex.decisions.getRequest(requestId) as { decisionGrants?: string[] };
+    // The developer API key alone never receives them.
+    const status = await grantex.decisions.getRequest(requestId);
+    expect(status).not.toHaveProperty('decisionGrants');
+    const found = await grantex.decisions.getGrants(requestId, await agentGrantToken()) as { decisionGrants?: string[] };
     return found.decisionGrants ?? [];
   }
 
@@ -250,6 +274,11 @@ describeE2e('decision grants in a real browser against a live auth service', () 
     sql = postgres(db.url, { max: 10, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
     await runMigrations(sql);
     await sql`INSERT INTO developers (id, api_key_hash, name) VALUES (${developerId}, ${hashApiKey(apiKey)}, 'Decision E2E')`;
+    await sql`INSERT INTO agents (id, did, developer_id, name) VALUES (${agent.id}, ${agent.did}, ${developerId}, 'Nimbus Shopper 2.4')`;
+    await sql`
+      INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+      VALUES (${agent.grantId}, ${agent.id}, 'user_e2e', ${developerId}, ${['tool:acme_kyb:write']}, NOW() + INTERVAL '2 hours')`;
+    await sql`INSERT INTO grant_tokens (jti, grant_id, expires_at) VALUES (${agent.jti}, ${agent.grantId}, NOW() + INTERVAL '2 hours')`;
     await provider.init();
 
     const port = await freePort();
@@ -257,6 +286,9 @@ describeE2e('decision grants in a real browser against a live auth service', () 
     // The service's public origin and issuer are this local listener.
     Object.assign(config as { publicBaseUrl: string; jwtIssuer: string }, { publicBaseUrl: base, jwtIssuer: base });
     process.env['DECISION_GRANTS_ENABLED'] = 'true';
+    // Every test runs with decision grants bound to the requesting agent,
+    // except the one that switches the binding off.
+    process.env['DECISION_GRANT_AGENT_BINDING'] = 'true';
     process.env['DECISION_STEP_UP_AMR'] = 'hwk';
     process.env['DECISION_MIN_DWELL_MS'] = '2000';
 
@@ -386,6 +418,13 @@ describeE2e('decision grants in a real browser against a live auth service', () 
 
     const grants = await grantsFor(request.requestId);
     expect(grants).toHaveLength(1);
+    // Another agent's grant token fetches nothing.
+    await expect(grantex.decisions.getGrants(request.requestId, await otherAgentGrantToken())).rejects.toMatchObject({ statusCode: 403 });
+
+    // Another agent presenting the decision grant is refused at consumption,
+    // and the grant is still there for the agent it was requested for.
+    expect(await enforceTs(await otherAgentGrantToken(), caseId, 'approve', grants))
+      .toMatchObject({ allowed: false, reasonCode: 'decision_invalid', subReason: 'wrong_agent' });
 
     // The agent's call carries the decision grant: verified and consumed by enforce().
     const allowed = await enforceTs(grantToken, caseId, 'approve', grants);
@@ -463,6 +502,28 @@ describeE2e('decision grants in a real browser against a live auth service', () 
     expect(await enforceTs(grantToken, caseId, 'decline', grants)).toMatchObject({ allowed: false, subReason: 'consumed' });
   }, 150_000);
 
+  it("a decision that names no agent is the platform's own: consumed by request id, never released", async () => {
+    const caseId = newCase();
+    const request = await createRequest(caseId, 'approve', false);
+    const context = await newContext();
+    const page = await context.newPage();
+    await signIn(page, request.approvalPage, 'approver-d', 'hwk');
+    await page.waitForURL(request.approvalPage);
+    await approveOnPage(page, 'approve');
+    await page.getByRole('heading', { name: 'Approved' }).waitFor();
+    await context.close();
+
+    const status = await grantex.decisions.getRequest(request.requestId);
+    expect(status).toMatchObject({ status: 'approved', decisionGrantsReady: true });
+    expect(status).not.toHaveProperty('decisionGrants');
+    await expect(grantex.decisions.getGrants(request.requestId, await agentGrantToken())).rejects.toMatchObject({ statusCode: 403 });
+
+    const consumed = await grantex.decisions.consumeRequest(request.requestId, { action: actionFor(caseId, 'approve'), caseVersion: 'v1' });
+    expect(consumed).toMatchObject({ requestId: request.requestId, jtis: [expect.stringMatching(/^dgnt_/)] });
+    await expect(grantex.decisions.consumeRequest(request.requestId, { action: actionFor(caseId, 'approve'), caseVersion: 'v1' }))
+      .rejects.toMatchObject({ subReason: 'consumed' });
+  }, 120_000);
+
   it.skipIf(!python)('the Python SDK enforce() consumes a browser-approved grant once', async () => {
     const caseId = newCase();
     const request = await createRequest(caseId, 'approve');
@@ -494,4 +555,55 @@ describeE2e('decision grants in a real browser against a live auth service', () 
     expect(results[0], JSON.stringify(results[0])).toMatchObject({ allowed: true });
     expect(results[1]).toMatchObject({ allowed: false, reason_code: 'decision_invalid', sub_reason: 'consumed' });
   }, 120_000);
+
+  it('with DECISION_GRANT_AGENT_BINDING off, as before the binding: the developer key reads the grants and the SDKs consume them for any agent', async () => {
+    process.env['DECISION_GRANT_AGENT_BINDING'] = 'false';
+    try {
+      const approved = async (user: string) => {
+        const caseId = newCase();
+        const request = await createRequest(caseId, 'approve');
+        const context = await newContext();
+        const page = await context.newPage();
+        await signIn(page, request.approvalPage, user, 'hwk');
+        await page.waitForURL(request.approvalPage);
+        await approveOnPage(page, 'approve');
+        await page.getByRole('heading', { name: 'Approved' }).waitFor();
+        await context.close();
+        const status = await grantex.decisions.getRequest(request.requestId) as { decisionGrants?: string[] };
+        expect(status).not.toHaveProperty('decisionGrantsReady');
+        expect(status.decisionGrants).toHaveLength(1);
+        return { caseId, grants: status.decisionGrants! };
+      };
+
+      // The TypeScript SDK sends agentDid, which this service does not read:
+      // another agent's call consumes the grant, exactly as before the binding.
+      const ts = await approved('approver-e');
+      const allowed = await enforceTs(await otherAgentGrantToken(), ts.caseId, 'approve', ts.grants);
+      expect(allowed.allowed, allowed.reason).toBe(true);
+      expect(await enforceTs(await agentGrantToken(), ts.caseId, 'approve', ts.grants)).toMatchObject({ allowed: false, subReason: 'consumed' });
+
+      if (python) {
+        const py = await approved('approver-f');
+        const { stdout: output } = await promisify(execFile)(python, [join(HERE, 'python_enforce.py')], {
+          cwd: REPO,
+          encoding: 'utf8',
+          timeout: 60_000,
+          env: {
+            ...process.env,
+            PYTHONPATH: join(REPO, 'packages', 'sdk-py', 'src'),
+            GRANTEX_E2E_BASE_URL: base,
+            GRANTEX_API_KEY: apiKey,
+            GRANTEX_E2E_GRANT_TOKEN: await otherAgentGrantToken(),
+            GRANTEX_E2E_DECISION_GRANTS: py.grants.join(','),
+            GRANTEX_E2E_ARGUMENTS: JSON.stringify(callArguments(py.caseId, 'approve')),
+          },
+        });
+        const results = JSON.parse(output) as { allowed: boolean; reason_code: string; sub_reason: string }[];
+        expect(results[0], JSON.stringify(results[0])).toMatchObject({ allowed: true });
+        expect(results[1]).toMatchObject({ allowed: false, reason_code: 'decision_invalid', sub_reason: 'consumed' });
+      }
+    } finally {
+      process.env['DECISION_GRANT_AGENT_BINDING'] = 'true';
+    }
+  }, 180_000);
 });

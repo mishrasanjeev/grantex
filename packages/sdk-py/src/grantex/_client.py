@@ -94,7 +94,7 @@ from .decisions import (
     DecisionsClient,
     verify_decision_grants,
 )
-from .decisions._client import _ClientConsumer
+from .decisions._client import _ClientConsumer, _takes_agent_did
 from ._types import VerifyGrantTokenOptions
 
 _DEFAULT_BASE_URL = "https://api.grantex.dev"
@@ -248,6 +248,7 @@ class Grantex:
         self._decision_consumer: DecisionConsumer = (
             decision_consumer if decision_consumer is not None else _ClientConsumer(self.decisions)
         )
+        self._decision_consumer_takes_agent_did = _takes_agent_did(self._decision_consumer)
         self._manifests: dict[str, ToolManifest] = {}
         self._jwks_uri = f"{base_url.rstrip('/')}/.well-known/jwks.json"
         self._revocation_base_url = base_url
@@ -789,11 +790,21 @@ class Grantex:
                     }
 
         # 12. Consume the decision grants at the issuer. Offline verification
-        #     alone never allows a call: one grant authorises one call.
+        #     alone never allows a call: one grant authorises one call. The
+        #     agent (its DID) and grant come from the verified grant token: an
+        #     issuer that binds decision grants to the requesting agent refuses
+        #     one requested for another agent or grant (``wrong_agent``), and
+        #     one that does not ignores ``agentDid``. A consumer written before
+        #     ``agent_did`` existed is called as before.
         consumed: ConsumedDecision | None = None
         if decision_set is not None:
             try:
-                consumed = self._decision_consumer.consume(decision_set, grant_id=grant_id or None)
+                if self._decision_consumer_takes_agent_did:
+                    consumed = self._decision_consumer.consume(
+                        decision_set, grant_id=grant_id or None, agent_did=agent_did or None,
+                    )
+                else:
+                    consumed = self._decision_consumer.consume(decision_set, grant_id=grant_id or None)
             except Exception as exc:  # noqa: BLE001 - any failure leaves the grant unconsumed: deny
                 sub_reason = exc.sub_reason if isinstance(exc, DecisionGrantError) else DecisionSubReason.CONSUME_UNAVAILABLE
                 if reservation is not None and self._caps_meter is not None:

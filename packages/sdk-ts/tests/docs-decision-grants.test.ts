@@ -36,6 +36,7 @@ const { DecisionGrantError } = await import('../src/decisions/verify.js');
 const { ToolManifest } = await import('../src/manifest.js');
 const { callCaseDecision } = await import('./docs/examples/decision-enforce.js');
 const { requestDecline } = await import('./docs/examples/decision-request.js');
+const { grantsForAgent } = await import('./docs/examples/decision-fetch.js');
 
 const read = (path: string) => readFileSync(path, 'utf8').split(String.fromCharCode(13)).join('');
 
@@ -49,7 +50,7 @@ describe('docs/concepts/decision-grants.md TypeScript examples', () => {
 
   it('embeds every example verbatim', () => {
     const doc = read(join(repoRoot, 'docs', 'concepts', 'decision-grants.md'));
-    for (const file of ['decision-enforce.ts', 'decision-request.ts']) {
+    for (const file of ['decision-enforce.ts', 'decision-request.ts', 'decision-fetch.ts']) {
       const path = `packages/sdk-ts/tests/docs/examples/${file}`;
       const opening = `{/* snippet: ${path} */}\n\`\`\`ts\n`;
       const start = doc.indexOf(opening);
@@ -99,10 +100,28 @@ describe('docs/concepts/decision-grants.md TypeScript examples', () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ requestId: 'dreq_1', approvalPage: 'https://grantex.dev/decisions/dreq_1' }), { status: 201, headers: { 'content-type': 'application/json' } }));
     vi.stubGlobal('fetch', fetchMock);
     try {
-      const page = await requestDecline(new Grantex({ apiKey: 'test-key' }), 'case_8841', 'v7', 'Owners do not reconcile.', { tier: 'medium' });
+      const page = await requestDecline(new Grantex({ apiKey: 'test-key' }), 'case_8841', 'v7', 'Owners do not reconcile.', { tier: 'medium' }, { id: 'ag_1', grantId: 'grnt_1' });
       expect(page).toBe('https://grantex.dev/decisions/dreq_1');
       const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)) as Record<string, unknown>;
-      expect(body).toMatchObject({ connector: 'acme_kyb', caseVersion: 'v7', fourEyesOn: ['decline'], memo: { content: 'Owners do not reconcile.' }, policyScore: { content: { tier: 'medium' } } });
+      expect(body).toMatchObject({
+        connector: 'acme_kyb', caseVersion: 'v7', fourEyesOn: ['decline'], memo: { content: 'Owners do not reconcile.' }, policyScore: { content: { tier: 'medium' } },
+        agentId: 'ag_1', grantId: 'grnt_1',
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("grantsForAgent fetches the grants with the agent's grant token, and nothing before they are ready", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ requestId: 'dreq_1', status: 'approved', decisionGrantsReady: true, decisionGrants: ['a.b.c'] }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      expect(await grantsForAgent(new Grantex({ apiKey: 'test-key' }), 'dreq_1', 'agent-grant-token')).toEqual(['a.b.c']);
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+      expect(url).toBe('https://api.grantex.dev/v1/decisions/requests/dreq_1/grants');
+      expect(JSON.parse(String(init.body))).toEqual({ grantToken: 'agent-grant-token' });
+      fetchMock.mockImplementation(async () => new Response(JSON.stringify({ requestId: 'dreq_1', status: 'pending', decisionGrantsReady: false }), { status: 200, headers: { 'content-type': 'application/json' } }));
+      expect(await grantsForAgent(new Grantex({ apiKey: 'test-key' }), 'dreq_1', 'agent-grant-token')).toEqual([]);
     } finally {
       vi.unstubAllGlobals();
     }

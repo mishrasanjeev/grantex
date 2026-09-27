@@ -19,12 +19,14 @@ Keywords MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 | Role | Credential | Can |
 |---|---|---|
 | Service administrator | `ADMIN_API_KEY` of the auth service | Allow-list the identity providers whose users may approve for a developer; disable them. |
-| Platform (for example an approvals console or workflow engine) | Developer API key | Register case versions, create and cancel decision requests, read results, consume decision grants. **Cannot** add an identity provider, sign an approver in or approve. |
+| Platform (for example an approvals console or workflow engine) | Developer API key | Register case versions, create and cancel decision requests, read their status, consume decision grants, and consume its own decisions by request id. **Cannot** add an identity provider, sign an approver in or approve; with the agent binding on (section 4.6), cannot receive a decision grant with the API key alone. |
+| Requesting agent | Its grant token (presented by the platform, with the developer API key) | Fetches the decision grants of a request that names it (section 4.6). With the agent binding on it is the only credential that does, and the grants are consumed only for it. |
 | Approver | A browser session on the auth service, created by signing in with an allow-listed identity provider with step-up | Review and approve decisions on the auth service's approval page. |
-| Enforcer | Issuer's JWKS; developer API key for consumption | Verify decision grants and consume them before allowing a tool call: `enforce()`, or an MCP server with `grantexDecisionVerifier`. |
+| Enforcer | Issuer's JWKS; developer API key for consumption | Verify decision grants and consume them before allowing a tool call, as the agent (its DID) and grant of the caller's verified grant token: `enforce()`, or an MCP server with `grantexDecisionVerifier`. |
 
 The separation is the point of the feature: nothing a developer API key or an
-agent can do produces an approval.
+agent can do produces an approval, and, with the agent binding on, a decision
+an agent asked for is usable only by that agent.
 
 ## 2. Semantic action and canonicalisation
 
@@ -161,6 +163,18 @@ decision entry). The service stores the memo and
 policy score with their hashes. A request lives at most 24 hours. Request
 bodies with duplicate member names are refused.
 
+A request made for an agent names it: `agentId`, its Grantex agent id
+(`ag_...`), and `grantId`, the grant it acts under
+(`urn:grantex:grant.grant_id`). A request that names either is **bound** to
+that agent; a request that names neither is the platform's own. With the agent
+binding on (section 4.6), a bound request's grants are released and consumed
+(section 6) only for that agent and grant, and asking again for the same
+action and case version while a request is open for another agent or grant, or
+for none, is refused (`wrong_agent`, 409) rather than answered with that
+request; a repeat for the same agent and grant answers the open request with
+its approvals as they stand. With the binding off, a repeat answers the open
+request as it is, whichever agent it names.
+
 ### 4.4 Approval
 
 The approval page shows the memo, the policy score and the exact action with
@@ -203,8 +217,45 @@ transaction it records: identity-provider changes (with the operator), sign-ins
 approvals (approver `sub`, identity provider, authentication method, dwell
 time and source, action, action hash, memo and policy score hashes, four-eyes
 position), consumptions, refused consumptions (with the attempted action and
-hash), case changes and cancellations. Approver emails are stored only as keyed
+hash), releases of decision grants to an agent and refused releases (section
+4.6), case changes and cancellations. Approver emails are stored only as keyed
 hashes and names encrypted.
+
+### 4.6 The agent binding and releasing decision grants
+
+`DECISION_GRANT_AGENT_BINDING` (default `false`) binds decision grants to the
+agent a request names. Only `true` and `false` are accepted: any other value
+makes every decision endpoint answer 503, so a misspelt value cannot leave the
+binding silently off.
+
+- **Off**, request creation, `GET /v1/decisions/requests/{id}` and
+  `POST /v1/decisions/consume` answer as they did before the binding existed:
+  GET returns `decisionGrants` to the developer API key once the request is
+  fully approved and its grants are usable, and consumption records `agentId`
+  and `grantId` without comparing them. `agentDid` (section 6) is not read.
+- **On**, a decision grant, being a bearer credential, is never returned to the
+  developer API key alone. `GET /v1/decisions/requests/{id}` answers the
+  status, the approvals (each with its grant's `jti`) and
+  `decisionGrantsReady`: true when the request is fully approved and no grant
+  is consumed, revoked or expired.
+
+In both states, and so usable before the binding is turned on:
+
+- For a bound request, `POST /v1/decisions/requests/{id}/grants`, with the
+  developer API key and `{"grantToken": "..."}`, answers the request with
+  `decisionGrantsReady`, plus `decisionGrants` when they are ready. The service
+  MUST refuse (`wrong_agent`, 403) unless the grant token is a live grant token
+  of the developer (signature, expiry, revocation and grant status checked, as
+  for any grant token it accepts) whose agent is the agent the request names
+  (its DID resolved through the developer's registered agent) and whose grant
+  is the grant it names, when it names them. Every hand-out
+  (`decision.grants_released`, with the `jti`s) and every refusal
+  (`decision.release_refused`, with the sub-reason and, when the token was not
+  live, why) is appended to the audit chain; if the entry cannot be written
+  the service answers 503 and releases nothing.
+- A request that names no agent has no requesting agent: its grants are never
+  released (`wrong_agent`). The platform consumes it by request id
+  (section 6).
 
 ## 5. Case-bound validity
 
@@ -239,8 +290,14 @@ An enforcer MUST, in this order:
    `sub`, the same `decision_request` (`four_eyes_incomplete`,
    `same_approver`, `malformed`).
 4. **Consume** every presented grant at the issuer
-   (`POST /v1/decisions/consume`), all or none, and allow the call only if the
-   issuer confirmed exactly the presented `jti`s. The issuer answers with
+   (`POST /v1/decisions/consume`), all or none, as the calling agent:
+   `agentDid` is the agent's DID and `grantId` the grant, both from the grant
+   token the enforcer verified, never from the call's arguments. The DID goes
+   in `agentDid` and never in `agentId`: an issuer from before the agent
+   binding accepts only a Grantex agent id in `agentId` and ignores members it
+   does not know, so this body is accepted by every issuer version, and one
+   with the binding off ignores `agentDid`. Allow the call only if the issuer
+   confirmed exactly the presented `jti`s. The issuer answers with
    `requestId`, `actionHash`, `jtis` and one `approvers` entry per consumed
    grant (`sub`, `approver_auth`, `dwell_ms`, `dwell_source`, and the `jti` of
    the grant it came from), so a platform recording who decided pairs each
@@ -252,6 +309,27 @@ expiry, revocation and four eyes (subjects and verified-email hashes) under row
 locks, so two concurrent consumptions of one `jti` yield exactly one success.
 Every refusal is audited; if the refusal cannot be recorded the issuer answers
 503 and nothing is consumed.
+
+**Bound to the requesting agent.** With the agent binding on, the issuer MUST
+refuse a bound request's grants (`wrong_agent`, 403) unless the caller names
+the agent the request names, by `agentDid` (resolved through the developer's
+registered agent) or by `agentId`, every reference given matching, and
+`grantId` names the grant it names. A missing value is refused like a
+different one, since the caller has not shown it is the requester. The check
+runs once the request row is locked and before any stored state of its grants
+is examined; a malformed `agentDid` (not W3C DID syntax, or longer than 512
+characters) is refused before that (400). Checks that need no stored state
+(signature, developer, a grant presented twice, grants of different requests)
+come first.
+
+**A platform's own decision.** A platform that consumes a request naming no
+agent on its own server does not need the tokens:
+`POST /v1/decisions/requests/{id}/consume`, with the action and case version,
+consumes that request's grants with the same checks under the same locks, in
+both states of the agent binding (`unknown_grant` when none has been minted
+yet, and with 404 when the request is unknown or another developer's). A bound
+request MUST NOT be consumed this way (`wrong_agent`, 403): only the grants its
+agent presents spend it.
 
 An SDK SHOULD consume after every other check of the call (in `enforce()`,
 after caps are reserved), MUST refund those reservations and deny when
@@ -275,6 +353,7 @@ first four are PRD Appendix B's.
 | `same_approver` | issuer, enforcer | The same approver twice, or the same grant twice. |
 | `case_changed` | issuer, enforcer | The case version differs from the one approved. |
 | `wrong_case` | issuer, enforcer | The grant is for another case. |
+| `wrong_agent` | issuer | With the agent binding on: the decision was requested for another agent or grant, or the caller did not name the agent or grant it was requested for (403); a request for the same action and case version is open for another agent or grant (409). In both states: the grant token presented to fetch the grants is not live or is not the named agent's, or the request names no agent (403); a bound request was consumed by request id (403). |
 | `four_eyes_incomplete` | issuer, enforcer | Two approvals needed, fewer presented. |
 | `revoked` | issuer | The request was cancelled. |
 | `unknown_grant` | issuer, enforcer | Unknown to the issuer, or another developer's. |
@@ -322,6 +401,11 @@ this; a token whose decision entries cannot be read is refused.
   refused.
 - *Replay:* of a consumed grant (single use at the issuer), across cases, after
   the case changed, after 24 hours, across tenants.
+- *Another agent, or the developer API key alone, using a decision an agent
+  asked for,* with the agent binding on. Its grants are released only to a
+  live grant token of the agent and grant the request names and consumed only
+  when the enforcer reports that agent and grant; the developer API key never
+  receives a decision grant.
 - *Showing one action and signing another.* The page shows the stored action,
   memo and policy score; the submitted hash must be the request's; the memo and
   policy score hashes are in the grant.
@@ -350,6 +434,15 @@ this; a token whose decision entries cannot be read is refused.
   argument from `decision_fields`.
 - *An enforcer that skips consumption,* or a tool that acts without calling
   `enforce()`.
+- *Another agent, or the developer API key alone, using a decision an agent
+  asked for, with the agent binding off.* The developer API key reads the
+  grants and any agent can present them, as before the binding existed.
+- *An enforcer that misreports the calling agent.* `agentDid` and `grantId` are
+  what the enforcer read from the grant token it verified; an enforcer that
+  already holds a bound decision's grants can name the agent they were
+  requested for.
+- *A request that names no agent,* which the platform's API key alone can
+  consume by request id: it is the platform's own decision.
 - *A stale case version* supplied by the platform.
 - *Issuer compromise or signing-key theft.*
 - *Availability.* When the issuer is unreachable, decisions cannot be consumed
@@ -362,14 +455,18 @@ this; a token whose decision entries cannot be read is refused.
 | Approver identity providers | | | `POST`, `GET /v1/admin/developers/{id}/decision-approver-idps`, `POST .../{idpId}/disable` (admin credential) |
 | Case version | `grantex.decisions.set_case_version` | `grantex.decisions.setCaseVersion` | `PUT /v1/decisions/cases/{caseId}` |
 | Request | `create_request`, `get_request`, `cancel_request` | `createRequest`, `getRequest`, `cancelRequest` | `POST /v1/decisions/requests`, `GET .../{id}`, `POST .../{id}/cancel` |
+| Fetch the grants (requesting agent) | `get_grants` | `getGrants` | `POST /v1/decisions/requests/{id}/grants` |
 | Sign in and approve | | | `GET /decisions/{id}`, `GET /decisions/login`, `GET /decisions/callback`, `POST /decisions/{id}`, `POST /decisions/logout` (browser only) |
 | Verify offline | `verify_decision_grant(s)` | `verifyDecisionGrant(s)` | |
-| Consume | `consume` | `consume` | `POST /v1/decisions/consume` |
+| Consume | `consume`; `consume_request` (a platform's own decision) | `consume`; `consumeRequest` | `POST /v1/decisions/consume`; `POST /v1/decisions/requests/{id}/consume` |
 | Enforce | `enforce(..., decision_grants, arguments and/or decision_action, case_version, decisions_mode)`; `wrap_tool(..., decision_grants, case_version)`; FastAPI `GrantexEnforcer(..., case_version=...)` | `enforce({..., decisionGrants, arguments and/or decisionAction, caseVersion, decisionsMode})`; `wrapTool`, `enforceMiddleware` | |
 | MCP | | `grantexDecisionVerifier` (`@grantex/mcp-auth`) | |
 
 Shared test cases: `spec/examples/decision-grant/action-hash.json` and
 `spec/examples/decision-grant/verification.json`. The whole flow (admin
-allow-list, request, browser sign-in with step-up and approval, `enforce()`
-in both SDKs, replay and four eyes) runs in Chromium against the auth service
-in `apps/auth-service/tests/e2e/decision-grants-browser.e2e.test.ts`.
+allow-list, request, browser sign-in with step-up and approval, fetching the
+grants with the agent's grant token, `enforce()` in both SDKs, another agent
+refused, replay, four eyes, a platform's own decision consumed by request id,
+and both SDKs consuming with the agent binding off) runs in Chromium against
+the auth service in
+`apps/auth-service/tests/e2e/decision-grants-browser.e2e.test.ts`.

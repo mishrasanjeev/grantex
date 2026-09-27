@@ -7,11 +7,16 @@
  * unique constraint and transaction is the production one. The identity
  * provider is simulated behind the outbound-fetch test hook: discovery, JWKS
  * and a token endpoint that checks the PKCE verifier.
+ *
+ * Every test outside the blocks at the end runs with
+ * DECISION_GRANT_AGENT_BINDING unset (the default), so it shows the endpoints
+ * answering as they did before decision grants were bound to the requesting
+ * agent. The blocks at the end cover each state of that setting.
  */
 import { createHash, randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import { SignJWT, decodeJwt, exportJWK, generateKeyPair } from 'jose';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { runMigrations } from '../src/db/migrate.js';
 import { hashApiKey, computeAuditHash } from '../src/lib/hash.js';
@@ -19,6 +24,8 @@ import { setSafeFetchForTests } from '../src/lib/url-security.js';
 import { clearApproverIdpCaches } from '../src/lib/decisions/approver-oidc.js';
 import { computeActionHash, type DecisionAction } from '../src/lib/decisions/action.js';
 import { consumeDecisionGrants, createApproverSession, type ApproverIdpRow } from '../src/lib/decisions/store.js';
+import { signDecisionGrant, type DecisionGrantClaims } from '../src/lib/decisions/token.js';
+import { signGrantToken } from '../src/lib/crypto.js';
 import { buildTestApp, sqlMock, TEST_ADMIN_API_KEY } from './helpers.js';
 import { createTestDatabase } from './helpers/database.js';
 
@@ -180,6 +187,7 @@ describePostgres('decision grants against real Postgres', () => {
       (${developerId}, ${hashApiKey(apiKey)}, 'Decision Test'),
       (${otherDeveloperId}, ${hashApiKey(otherApiKey)}, 'Other Decision Test')`;
     process.env['DECISION_GRANTS_ENABLED'] = 'true';
+    delete process.env['DECISION_GRANT_AGENT_BINDING'];
     process.env['DECISION_STEP_UP_AMR'] = 'mfa,hwk';
     process.env['DECISION_MIN_DWELL_MS'] = '2000';
 
@@ -242,6 +250,9 @@ describePostgres('decision grants against real Postgres', () => {
         await sql`DELETE FROM decision_approver_idps WHERE developer_id = ${dev}`.catch(() => undefined);
         await sql`DELETE FROM decision_cases WHERE developer_id = ${dev}`.catch(() => undefined);
         await sql`DELETE FROM sso_connections WHERE developer_id = ${dev}`.catch(() => undefined);
+        await sql`DELETE FROM grant_tokens WHERE grant_id IN (SELECT id FROM grants WHERE developer_id = ${dev})`.catch(() => undefined);
+        await sql`DELETE FROM grants WHERE developer_id = ${dev}`.catch(() => undefined);
+        await sql`DELETE FROM agents WHERE developer_id = ${dev}`.catch(() => undefined);
         await sql`DELETE FROM audit_entries WHERE developer_id = ${dev}`.catch(() => undefined);
         await sql`DELETE FROM developers WHERE id = ${dev}`.catch(() => undefined);
       }
@@ -661,5 +672,420 @@ describePostgres('decision grants against real Postgres', () => {
     expect(disabled.statusCode).toBe(200);
     const page = await app.inject({ method: 'GET', url: `/decisions/${request.requestId}`, headers: { cookie: session.cookie! } });
     expect(page.statusCode).toBe(401);
+  });
+
+  // ── Decision grants and the requesting agent ────────────────────────────
+  // Everything above runs with DECISION_GRANT_AGENT_BINDING unset, the
+  // default, and so shows the endpoints answering as they did before the
+  // binding existed. The blocks below cover what is new in each state.
+
+  let agentCounter = 0;
+  const JWS = /eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/;
+
+  /** A registered agent of the developer with an active grant, and a grant token for that grant. */
+  async function agentWithGrant(dev = developerId) {
+    const label = `${++agentCounter}_${suffix}`;
+    const agentId = `ag_dec_${label}`;
+    const did = `did:grantex:${agentId}`;
+    const grantId = `grnt_dec_${label}`;
+    const jti = `tok_dec_${label}`;
+    await sql`INSERT INTO agents (id, did, developer_id, name) VALUES (${agentId}, ${did}, ${dev}, 'Nimbus Shopper 2.4')`;
+    await sql`
+      INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+      VALUES (${grantId}, ${agentId}, 'shopper-01', ${dev}, ${['tool:acme_kyb:write']}, NOW() + INTERVAL '2 hours')`;
+    await sql`INSERT INTO grant_tokens (jti, grant_id, expires_at) VALUES (${jti}, ${grantId}, NOW() + INTERVAL '1 hour')`;
+    const iat = now();
+    const grantToken = await signGrantToken({ sub: 'shopper-01', agt: did, dev, scp: ['tool:acme_kyb:write'], jti, grnt: grantId, iat, exp: iat + 3600 });
+    return { agentId, did, grantId, grantToken };
+  }
+
+  async function approveOnce(requestId: string): Promise<void> {
+    const session = await signIn(requestId, `bound_${randomUUID().slice(0, 8)}`);
+    const res = await approve(requestId, session.cookie!);
+    expect(res.statusCode, res.body).toBe(200);
+  }
+
+  /**
+   * The decision grants exactly as the service minted them, re-signed from
+   * the stored claims, so a consumption test does not depend on how the
+   * grants reached the caller.
+   */
+  async function mintedGrants(requestId: string): Promise<string[]> {
+    const rows = await sql<{ claims: DecisionGrantClaims }[]>`
+      SELECT claims FROM decision_grants WHERE request_id = ${requestId} ORDER BY approval_position`;
+    return Promise.all(rows.map((r) => signDecisionGrant(r.claims)));
+  }
+
+  function consumeAs(decisionGrants: string[], action: DecisionAction, requester: Record<string, unknown>) {
+    return app.inject({ method: 'POST', url: '/v1/decisions/consume', headers: auth(), payload: { decisionGrants, action, caseVersion: 'v1', ...requester } });
+  }
+
+  function consumeById(requestId: string, body: Record<string, unknown>, key = apiKey) {
+    return app.inject({ method: 'POST', url: `/v1/decisions/requests/${requestId}/consume`, headers: auth(key), payload: { caseVersion: 'v1', ...body } });
+  }
+
+  function release(requestId: string, body: Record<string, unknown>, key = apiKey) {
+    return app.inject({ method: 'POST', url: `/v1/decisions/requests/${requestId}/grants`, headers: auth(key), payload: body });
+  }
+
+  function repeatRequest(action: DecisionAction, extra: Record<string, unknown> = {}) {
+    return app.inject({
+      method: 'POST', url: '/v1/decisions/requests', headers: auth(),
+      payload: {
+        action, connector: 'acme_kyb', caseVersion: 'v1',
+        memo: { ref: 'memo:case/1', content: 'Registry active. Owners reconcile.' },
+        policyScore: { ref: 'policy:uk/1.2.0', content: { tier: 'low', score: 12, reasons: [] } },
+        ...extra,
+      },
+    });
+  }
+
+  async function consumedAt(requestId: string): Promise<(Date | null)[]> {
+    const rows = await sql<{ consumed_at: Date | null }[]>`SELECT consumed_at FROM decision_grants WHERE request_id = ${requestId}`;
+    return rows.map((r) => r.consumed_at);
+  }
+
+  async function auditFor(action: string, requestId: string) {
+    return sql<{ status: string; agent_id: string; agent_did: string; grant_id: string; metadata: Record<string, unknown> }[]>`
+      SELECT status, agent_id, agent_did, grant_id, metadata FROM audit_entries
+      WHERE developer_id = ${developerId} AND action = ${action} AND metadata->>'request_id' = ${requestId}
+      ORDER BY timestamp, id`;
+  }
+
+  describe('with DECISION_GRANT_AGENT_BINDING off (the default)', () => {
+    beforeEach(() => {
+      delete process.env['DECISION_GRANT_AGENT_BINDING'];
+    });
+
+    it('answers the decision grants to the developer key and consumes them for any agent, as before the binding', async () => {
+      const agent = await agentWithGrant();
+      const other = await agentWithGrant();
+      const action = actionFor(newCase());
+      const created = await repeatRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+      expect(created.statusCode).toBe(201);
+      expect(created.json()).not.toHaveProperty('decisionGrantsReady');
+      const { requestId } = created.json<{ requestId: string }>();
+      await approveOnce(requestId);
+
+      const status = await app.inject({ method: 'GET', url: `/v1/decisions/requests/${requestId}`, headers: auth() });
+      expect(status.statusCode).toBe(200);
+      expect(status.json()).not.toHaveProperty('decisionGrantsReady');
+      const tokens = status.json<{ decisionGrants: string[] }>().decisionGrants;
+      expect(tokens).toHaveLength(1);
+      expect(decodeJwt(tokens[0]!)).toMatchObject({ decision_request: requestId });
+
+      // agentId is a Grantex agent id, as before: a DID there is malformed.
+      const didAsId = await consumeAs(tokens, action, { agentId: other.did, grantId: other.grantId });
+      expect(didAsId.statusCode).toBe(400);
+      expect(didAsId.json<{ message: string }>().message).toMatch(/agentId/);
+      // agentDid is not read at all, so an SDK that sends it works here as it
+      // does against a service from before the binding; the agent and grant
+      // are recorded, not compared.
+      const ok = await consumeAs(tokens, action, { agentId: other.agentId, agentDid: 'not a DID', grantId: other.grantId });
+      expect(ok.statusCode, ok.body).toBe(200);
+      expect(ok.json()).toMatchObject({ consumed: true, requestId });
+      const [consumed] = await auditFor('decision.consumed', requestId);
+      expect(consumed).toMatchObject({ agent_id: other.agentId, agent_did: '', grant_id: other.grantId });
+    });
+
+    it('answers a repeated request for another agent with the open request, as before the binding', async () => {
+      const agent = await agentWithGrant();
+      const other = await agentWithGrant();
+      const action = actionFor(newCase());
+      const first = await createRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+      for (const extra of [{ agentId: other.agentId, grantId: other.grantId }, {}]) {
+        const again = await repeatRequest(action, extra);
+        expect(again.statusCode, again.body).toBe(200);
+        expect(again.json()).toMatchObject({ created: false, requestId: first.requestId, agentId: agent.agentId, grantId: agent.grantId });
+        expect(again.json()).not.toHaveProperty('decisionGrantsReady');
+      }
+    });
+
+    it("releases a request's grants to its agent's grant token and consumes a platform's own request by id: both are new endpoints", async () => {
+      const agent = await agentWithGrant();
+      const other = await agentWithGrant();
+      const bound = actionFor(newCase());
+      const request = await createRequest(bound, { agentId: agent.agentId, grantId: agent.grantId });
+      await approveOnce(request.requestId);
+      expect((await release(request.requestId, { grantToken: other.grantToken })).json()).toMatchObject({ subReason: 'wrong_agent' });
+      const released = await release(request.requestId, { grantToken: agent.grantToken });
+      expect(released.statusCode, released.body).toBe(200);
+      expect(released.json()).toMatchObject({ decisionGrantsReady: true, decisionGrants: [expect.stringMatching(JWS)] });
+      expect((await consumeById(request.requestId, { action: bound })).json()).toMatchObject({ subReason: 'wrong_agent' });
+
+      const own = actionFor(newCase());
+      const platformOwn = await createRequest(own);
+      await approveOnce(platformOwn.requestId);
+      const consumed = await consumeById(platformOwn.requestId, { action: own });
+      expect(consumed.statusCode, consumed.body).toBe(200);
+      expect(consumed.json()).toMatchObject({ consumed: true, requestId: platformOwn.requestId, jtis: [expect.stringMatching(/^dgnt_/)] });
+    });
+  });
+
+  describe('consuming a decision that names no agent by its id', () => {
+    for (const binding of [undefined, 'true'] as const) {
+      it(`consumes it once, with every check, and refuses one an agent asked for (DECISION_GRANT_AGENT_BINDING ${binding ?? 'unset'})`, async () => {
+        if (binding === undefined) delete process.env['DECISION_GRANT_AGENT_BINDING'];
+        else process.env['DECISION_GRANT_AGENT_BINDING'] = binding;
+        try {
+          const action = actionFor(newCase());
+          const request = await createRequest(action);
+          const byId = (body: Record<string, unknown>) => consumeById(request.requestId, { action, ...body });
+
+          // Not approved yet: there is nothing to consume.
+          expect((await byId({})).json()).toMatchObject({ subReason: 'unknown_grant' });
+          await approveOnce(request.requestId);
+          expect((await byId({ action: { ...action, decision: 'decline' } })).json()).toMatchObject({ subReason: 'action_mismatch' });
+          expect((await byId({ caseVersion: 'v2' })).json()).toMatchObject({ subReason: 'case_changed' });
+
+          // Parallel consumptions by id: exactly one succeeds.
+          const responses = await Promise.all(Array.from({ length: 5 }, () => byId({})));
+          const ok = responses.find((r) => r.statusCode === 200)!;
+          expect(responses.filter((r) => r.statusCode === 200)).toHaveLength(1);
+          expect(responses.filter((r) => r.json<{ subReason?: string }>().subReason === 'consumed')).toHaveLength(4);
+          expect(ok.json()).toMatchObject({ consumed: true, requestId: request.requestId, jtis: [expect.stringMatching(/^dgnt_/)], approvers: [{ dwell_source: 'server' }] });
+          const [consumedEntry] = await auditFor('decision.consumed', request.requestId);
+          expect(consumedEntry!.metadata).toMatchObject({ consumed_by: 'decision_request', action_hash: computeActionHash(action) });
+          const refusals = await auditFor('decision.consume_refused', request.requestId);
+          expect(refusals.map((r) => r.metadata['sub_reason'])).toEqual(expect.arrayContaining(['unknown_grant', 'action_mismatch', 'case_changed', 'consumed']));
+          expect((await byId({})).json()).toMatchObject({ subReason: 'consumed' });
+
+          // Another developer's key cannot see it; an unknown id is not found.
+          const other = await consumeById(request.requestId, { action }, otherApiKey);
+          expect(other.statusCode).toBe(404);
+          expect(other.json()).toMatchObject({ subReason: 'unknown_grant' });
+          expect((await consumeById('dreq_not_an_id', { action })).statusCode).toBe(404);
+
+          // A decision an agent asked for is spent only with the grants that agent presents.
+          const agent = await agentWithGrant();
+          const bound = actionFor(newCase());
+          const boundRequest = await createRequest(bound, { grantId: agent.grantId });
+          await approveOnce(boundRequest.requestId);
+          const refused = await consumeById(boundRequest.requestId, { action: bound });
+          expect(refused.statusCode).toBe(403);
+          expect(refused.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
+          expect(await consumedAt(boundRequest.requestId)).toEqual([null]);
+        } finally {
+          delete process.env['DECISION_GRANT_AGENT_BINDING'];
+        }
+      });
+    }
+  });
+
+  describe('with DECISION_GRANT_AGENT_BINDING=true', () => {
+    beforeEach(() => {
+      process.env['DECISION_GRANT_AGENT_BINDING'] = 'true';
+    });
+
+    afterEach(() => {
+      delete process.env['DECISION_GRANT_AGENT_BINDING'];
+    });
+
+    it("consume refuses another agent's decision grant (wrong_agent)", async () => {
+      const agent = await agentWithGrant();
+      const other = await agentWithGrant();
+      const action = actionFor(newCase());
+      const request = await createRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+      await approveOnce(request.requestId);
+      const tokens = await mintedGrants(request.requestId);
+
+      // Another agent of the same developer, with a live grant of its own,
+      // by the DID an enforcer reports or by its Grantex agent id.
+      for (const requester of [{ agentDid: other.did, grantId: other.grantId }, { agentId: other.agentId, grantId: other.grantId }]) {
+        const refused = await consumeAs(tokens, action, requester);
+        expect(refused.statusCode, refused.body).toBe(403);
+        expect(refused.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
+      }
+      // The right agent under another grant is not the requester either, and
+      // every agent reference given must be the right one.
+      expect((await consumeAs(tokens, action, { agentDid: agent.did, grantId: other.grantId })).json()).toMatchObject({ subReason: 'wrong_agent' });
+      expect((await consumeAs(tokens, action, { agentDid: agent.did, agentId: other.agentId, grantId: agent.grantId })).json()).toMatchObject({ subReason: 'wrong_agent' });
+      expect(await consumedAt(request.requestId)).toEqual([null]);
+      const [audited] = await sql<{ status: string; agent_did: string; grant_id: string; metadata: Record<string, unknown> }[]>`
+        SELECT status, agent_did, grant_id, metadata FROM audit_entries
+        WHERE developer_id = ${developerId} AND action = 'decision.consume_refused' AND agent_did = ${other.did}`;
+      expect(audited).toMatchObject({ status: 'blocked', grant_id: other.grantId, metadata: { sub_reason: 'wrong_agent', action_hash: computeActionHash(action) } });
+
+      // The agent the request names consumes it: the enforcer reports the DID
+      // from its grant token, and the request named it by agent id.
+      const ok = await consumeAs(tokens, action, { agentDid: agent.did, grantId: agent.grantId });
+      expect(ok.statusCode, ok.body).toBe(200);
+      expect(ok.json()).toMatchObject({ consumed: true, requestId: request.requestId });
+      const [consumed] = await auditFor('decision.consumed', request.requestId);
+      expect(consumed).toMatchObject({ agent_id: agent.agentId, agent_did: agent.did, grant_id: agent.grantId });
+    });
+
+    it('consume refuses when the agent is omitted but the request is bound', async () => {
+      const agent = await agentWithGrant();
+      const action = actionFor(newCase());
+      const request = await createRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+      await approveOnce(request.requestId);
+      const tokens = await mintedGrants(request.requestId);
+
+      for (const requester of [{}, { grantId: agent.grantId }, { agentDid: agent.did }, { agentId: agent.agentId }]) {
+        const res = await consumeAs(tokens, action, requester);
+        expect(res.statusCode, JSON.stringify(requester)).toBe(403);
+        expect(res.json()).toMatchObject({ subReason: 'wrong_agent' });
+      }
+      expect(await consumedAt(request.requestId)).toEqual([null]);
+
+      // A request bound only to a grant needs only that grant.
+      const grantOnly = actionFor(newCase());
+      const second = await createRequest(grantOnly, { grantId: agent.grantId });
+      await approveOnce(second.requestId);
+      const secondTokens = await mintedGrants(second.requestId);
+      expect((await consumeAs(secondTokens, grantOnly, { agentDid: agent.did })).json()).toMatchObject({ subReason: 'wrong_agent' });
+      expect((await consumeAs(secondTokens, grantOnly, { agentDid: agent.did, grantId: agent.grantId })).statusCode).toBe(200);
+      // A platform that names the agent by its Grantex agent id is the same agent.
+      expect((await consumeAs(tokens, action, { agentId: agent.agentId, grantId: agent.grantId })).statusCode).toBe(200);
+    });
+
+    it('refuses a malformed agentDid and a DID given as agentId', async () => {
+      const agent = await agentWithGrant();
+      const action = actionFor(newCase());
+      const request = await createRequest(action, { agentId: agent.agentId });
+      await approveOnce(request.requestId);
+      const tokens = await mintedGrants(request.requestId);
+      for (const requester of [{ agentDid: 'not a DID' }, { agentDid: 'did:Grantex:x' }, { agentDid: `did:grantex:${'a'.repeat(600)}` }, { agentDid: 7 }, { agentId: agent.did }]) {
+        const res = await consumeAs(tokens, action, requester);
+        expect(res.statusCode, JSON.stringify(requester).slice(0, 60)).toBe(400);
+      }
+      expect(await consumedAt(request.requestId)).toEqual([null]);
+    });
+
+    it('retrieval does not return bearer decision grants to the developer key, and every release is audited', async () => {
+      const agent = await agentWithGrant();
+      const other = await agentWithGrant();
+      const action = actionFor(newCase());
+      const request = await createRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+      await approveOnce(request.requestId);
+
+      const status = await app.inject({ method: 'GET', url: `/v1/decisions/requests/${request.requestId}`, headers: auth() });
+      expect(status.statusCode).toBe(200);
+      expect(status.json()).toMatchObject({ status: 'approved', decisionGrantsReady: true, agentId: agent.agentId, grantId: agent.grantId, approvals: [{ jti: expect.stringMatching(/^dgnt_/) }] });
+      expect(status.json()).not.toHaveProperty('decisionGrants');
+      // No compact JWS anywhere in the answer.
+      expect(status.body).not.toMatch(JWS);
+
+      // The developer key alone, or with another agent's grant token, gets nothing.
+      expect((await release(request.requestId, {})).statusCode).toBe(400);
+      const wrong = await release(request.requestId, { grantToken: other.grantToken });
+      expect(wrong.statusCode).toBe(403);
+      expect(wrong.json()).toMatchObject({ subReason: 'wrong_agent' });
+      expect(wrong.body).not.toMatch(JWS);
+      // Another developer cannot see the request, even with the right agent's token.
+      expect((await release(request.requestId, { grantToken: agent.grantToken }, otherApiKey)).statusCode).toBe(404);
+
+      // The requesting agent's grant token releases them, and they consume.
+      const released = await release(request.requestId, { grantToken: agent.grantToken });
+      expect(released.statusCode, released.body).toBe(200);
+      const tokens = released.json<{ decisionGrants: string[] }>().decisionGrants;
+      expect(tokens).toHaveLength(1);
+      const jti = decodeJwt(tokens[0]!).jti as string;
+      expect(decodeJwt(tokens[0]!)).toMatchObject({ decision_request: request.requestId });
+
+      // The refusal and the hand-out are in the audit chain.
+      const refusals = await auditFor('decision.release_refused', request.requestId);
+      expect(refusals).toEqual([expect.objectContaining({
+        status: 'blocked', agent_id: agent.agentId, agent_did: other.did, grant_id: other.grantId,
+        metadata: expect.objectContaining({ sub_reason: 'wrong_agent', requested_grant_id: agent.grantId }),
+      })]);
+      const handOuts = await auditFor('decision.grants_released', request.requestId);
+      expect(handOuts).toEqual([expect.objectContaining({
+        status: 'success', agent_id: agent.agentId, agent_did: agent.did, grant_id: agent.grantId,
+        metadata: expect.objectContaining({ jtis: [jti], action_hash: computeActionHash(action) }),
+      })]);
+
+      expect((await consumeAs(tokens, action, { agentDid: agent.did, grantId: agent.grantId })).statusCode).toBe(200);
+      // Once spent there is nothing left to release, and nothing is recorded as released.
+      const spent = await release(request.requestId, { grantToken: agent.grantToken });
+      expect(spent.json()).toMatchObject({ status: 'consumed', decisionGrantsReady: false });
+      expect(spent.json()).not.toHaveProperty('decisionGrants');
+      expect(await auditFor('decision.grants_released', request.requestId)).toHaveLength(1);
+    });
+
+    it('releases nothing to a revoked or expired grant, or for a request that names no agent', async () => {
+      const agent = await agentWithGrant();
+      const bound = actionFor(newCase());
+      const request = await createRequest(bound, { agentId: agent.agentId });
+      await approveOnce(request.requestId);
+      await sql`UPDATE grants SET status = 'revoked' WHERE id = ${agent.grantId}`;
+      const revoked = await release(request.requestId, { grantToken: agent.grantToken });
+      expect(revoked.statusCode).toBe(403);
+      expect(revoked.json()).toMatchObject({ subReason: 'wrong_agent' });
+      expect(revoked.body).not.toMatch(JWS);
+      const [revokedEntry] = await auditFor('decision.release_refused', request.requestId);
+      expect(revokedEntry).toMatchObject({ agent_did: '', grant_id: '', metadata: { sub_reason: 'wrong_agent', token_check: 'revoked' } });
+
+      const lapsed = await agentWithGrant();
+      const second = await createRequest(actionFor(newCase()), { agentId: lapsed.agentId, grantId: lapsed.grantId });
+      await approveOnce(second.requestId);
+      await sql`UPDATE grant_tokens SET expires_at = NOW() - INTERVAL '1 second' WHERE grant_id = ${lapsed.grantId}`;
+      const expired = await release(second.requestId, { grantToken: lapsed.grantToken });
+      expect(expired.statusCode).toBe(403);
+      expect(expired.json()).toMatchObject({ subReason: 'wrong_agent' });
+
+      const live = await agentWithGrant();
+      const unbound = actionFor(newCase());
+      const platformOwn = await createRequest(unbound);
+      await approveOnce(platformOwn.requestId);
+      const refused = await release(platformOwn.requestId, { grantToken: live.grantToken });
+      expect(refused.statusCode).toBe(403);
+      expect(refused.json()).toMatchObject({ subReason: 'wrong_agent' });
+      const [unboundEntry] = await auditFor('decision.release_refused', platformOwn.requestId);
+      expect(unboundEntry).toMatchObject({ agent_id: '', agent_did: live.did, grant_id: live.grantId });
+    });
+
+    it('four eyes: both grants are released to the agent and consumed together as that agent', async () => {
+      const agent = await agentWithGrant();
+      const action = actionFor(newCase(), 'decline');
+      const request = await createRequest(action, { fourEyesOn: ['decline'], agentId: agent.agentId, grantId: agent.grantId });
+      expect(request.approvalsRequired).toBe(2);
+      const alice = await signIn(request.requestId, `bound_fe_alice_${suffix}`);
+      expect((await approve(request.requestId, alice.cookie!)).statusCode).toBe(200);
+      const halfway = await release(request.requestId, { grantToken: agent.grantToken });
+      expect(halfway.json()).toMatchObject({ status: 'pending', approvalsReceived: 1, decisionGrantsReady: false });
+      expect(halfway.json()).not.toHaveProperty('decisionGrants');
+      const bob = await signIn(request.requestId, `bound_fe_bob_${suffix}`, { email: `bound_fe_bob_${suffix}@example.com` }, otherIdpId);
+      expect((await approve(request.requestId, bob.cookie!)).statusCode).toBe(200);
+
+      const tokens = (await release(request.requestId, { grantToken: agent.grantToken })).json<{ decisionGrants: string[] }>().decisionGrants;
+      expect(tokens).toHaveLength(2);
+      expect((await consumeAs([tokens[0]!], action, { agentDid: agent.did, grantId: agent.grantId })).json()).toMatchObject({ subReason: 'four_eyes_incomplete' });
+      const consumed = await consumeAs([tokens[1]!, tokens[0]!], action, { agentDid: agent.did, grantId: agent.grantId });
+      expect(consumed.statusCode, consumed.body).toBe(200);
+      expect(consumed.json<{ jtis: string[] }>().jtis).toHaveLength(2);
+    });
+
+    it('refuses a repeated request for another agent or grant, and answers a repeat for the same one as it stands', async () => {
+      const agent = await agentWithGrant();
+      const other = await agentWithGrant();
+      const action = actionFor(newCase());
+      const first = await createRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+      for (const extra of [{ agentId: other.agentId, grantId: other.grantId }, { agentId: agent.agentId, grantId: other.grantId }, { agentId: agent.agentId }, {}]) {
+        const again = await repeatRequest(action, extra);
+        expect(again.statusCode, JSON.stringify(extra)).toBe(409);
+        expect(again.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
+        expect(again.body).not.toContain(first.requestId);
+      }
+      // A platform's own open request is not handed to an agent either.
+      const own = actionFor(newCase());
+      await createRequest(own);
+      expect((await repeatRequest(own, { agentId: agent.agentId })).json()).toMatchObject({ subReason: 'wrong_agent' });
+
+      // The same agent and grant: the open request, with its approvals as they stand.
+      const pending = await repeatRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+      expect(pending.statusCode).toBe(200);
+      expect(pending.json()).toMatchObject({ created: false, requestId: first.requestId, approvalsReceived: 0, decisionGrantsReady: false });
+      await approveOnce(first.requestId);
+      const approved = await repeatRequest(action, { agentId: agent.agentId, grantId: agent.grantId });
+      expect(approved.statusCode).toBe(200);
+      expect(approved.json()).toMatchObject({
+        created: false, requestId: first.requestId, status: 'approved', approvalsReceived: 1, decisionGrantsReady: true,
+        approvals: [{ jti: expect.stringMatching(/^dgnt_/) }], approvalPage: expect.stringContaining(first.requestId),
+      });
+      expect(approved.json()).not.toHaveProperty('decisionGrants');
+      expect(approved.body).not.toMatch(JWS);
+    });
   });
 });

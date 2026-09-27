@@ -144,16 +144,38 @@ class FakeIssuer:
     def __init__(self, fail_with: Optional[str] = None) -> None:
         self.consumed: Set[str] = set()
         self.calls: List[DecisionGrantSet] = []
+        # The requester each consumption named.
+        self.requesters: List[Dict[str, Optional[str]]] = []
         self.fail_with = fail_with
 
     def consume(self, grants: DecisionGrantSet, *, agent_id: Optional[str] = None, grant_id: Optional[str] = None) -> ConsumedDecision:
         self.calls.append(grants)
+        self.requesters.append({"agent_id": agent_id, "grant_id": grant_id})
+        return self._consume(grants)
+
+    def _consume(self, grants: DecisionGrantSet) -> ConsumedDecision:
         if self.fail_with is not None:
             raise DecisionGrantError(self.fail_with, "refused by the issuer")
         if any(j in self.consumed for j in grants.jtis):
             raise DecisionGrantError(DecisionSubReason.CONSUMED, "already used")
         self.consumed.update(grants.jtis)
         return ConsumedDecision(request_id=grants.grants[0].decision_request, jtis=grants.jtis, action_hash=grants.action_hash, approvers=())
+
+
+class BindingIssuer(FakeIssuer):
+    """A consumer that takes ``agent_did``, like the SDK's own."""
+
+    def consume(  # type: ignore[override]
+        self,
+        grants: DecisionGrantSet,
+        *,
+        agent_id: Optional[str] = None,
+        grant_id: Optional[str] = None,
+        agent_did: Optional[str] = None,
+    ) -> ConsumedDecision:
+        self.calls.append(grants)
+        self.requesters.append({"agent_id": agent_id, "agent_did": agent_did, "grant_id": grant_id})
+        return self._consume(grants)
 
 
 @pytest.fixture()
@@ -193,6 +215,46 @@ def test_valid_decision_grant_is_consumed_and_allows_the_call(verify_grant: Magi
     assert result.allowed, result.reason
     assert result.decision is not None and result.decision.jtis == (FIXTURE["base_claims"]["jti"],)
     assert len(issuer.calls) == 1
+
+
+def test_enforce_consumes_as_the_agent_and_grant_of_the_grant_token(verify_grant: MagicMock) -> None:
+    issuer = BindingIssuer()
+    result = client(issuer).enforce(
+        "t", "acme_kyb", "case_decision", decision_grants=[build_grant({})], arguments=call_args(), case_version="v7",
+    )
+    assert result.allowed, result.reason
+    # An issuer that binds decisions to the requesting agent refuses one
+    # requested for another agent or grant (wrong_agent), so both come from
+    # the verified token, never the call.
+    assert issuer.requesters == [{"agent_id": None, "agent_did": "did:grantex:ag_01", "grant_id": "grnt_01"}]
+
+
+def test_enforce_calls_a_consumer_written_before_agent_did_as_before(verify_grant: MagicMock) -> None:
+    # FakeIssuer.consume takes agent_id and grant_id only, as the 0.6
+    # DecisionConsumer did. Passing agent_did would raise TypeError and deny
+    # every decision call; it is called with the grant alone instead.
+    issuer = FakeIssuer()
+    result = client(issuer).enforce(
+        "t", "acme_kyb", "case_decision", decision_grants=[build_grant({})], arguments=call_args(), case_version="v7",
+    )
+    assert result.allowed, result.reason
+    assert issuer.requesters == [{"agent_id": None, "grant_id": "grnt_01"}]
+
+
+def test_enforce_passes_agent_did_to_a_consumer_that_takes_keyword_arguments(verify_grant: MagicMock) -> None:
+    seen: List[Dict[str, Any]] = []
+    inner = FakeIssuer()
+
+    class KeywordIssuer:
+        def consume(self, grants: DecisionGrantSet, **options: Any) -> ConsumedDecision:
+            seen.append(options)
+            return inner._consume(grants)
+
+    result = client(KeywordIssuer()).enforce(  # type: ignore[arg-type]
+        "t", "acme_kyb", "case_decision", decision_grants=[build_grant({})], arguments=call_args(), case_version="v7",
+    )
+    assert result.allowed, result.reason
+    assert seen == [{"agent_did": "did:grantex:ag_01", "grant_id": "grnt_01"}]
 
 
 def test_replay_of_a_consumed_jti_is_denied(verify_grant: MagicMock) -> None:
@@ -348,9 +410,81 @@ def test_consume_posts_tokens_action_and_case_version() -> None:
 
 
 @respx.mock
+def test_enforce_sends_the_agent_and_grant_of_the_grant_token_when_it_consumes(verify_grant: MagicMock) -> None:
+    route = respx.post(f"{BASE}/v1/decisions/consume").mock(return_value=httpx.Response(200, json={
+        "consumed": True, "requestId": "dreq_1", "jtis": [FIXTURE["base_claims"]["jti"]], "actionHash": "sha256:x", "approvers": [],
+    }))
+    c = Grantex(api_key="test-key")
+    c.load_manifest(MANIFEST)
+    result = c.enforce("t", "acme_kyb", "case_decision", decision_grants=[build_grant({})], arguments=call_args(), case_version="v7")
+    assert result.allowed, result.reason
+    assert route.call_count == 1
+    body = json.loads(route.calls[0].request.content)
+    assert (body["agentDid"], body["grantId"]) == ("did:grantex:ag_01", "grnt_01")
+    # An auth service from before the binding accepts only a Grantex agent id
+    # in agentId and ignores members it does not know, so the DID never goes
+    # there: this body is accepted by every version.
+    assert "agentId" not in body
+
+
+@respx.mock
+def test_consume_sends_agent_did_and_agent_id_each_in_its_own_member() -> None:
+    route = respx.post(f"{BASE}/v1/decisions/consume").mock(return_value=httpx.Response(200, json={
+        "consumed": True, "requestId": "dreq_1", "jtis": [FIXTURE["base_claims"]["jti"]], "actionHash": "sha256:x", "approvers": [],
+    }))
+    grants = _set([build_grant({})])
+    Grantex(api_key="test-key").decisions.consume(grants, agent_id="ag_01", agent_did="did:grantex:ag_01", grant_id="grnt_01")
+    assert json.loads(route.calls[0].request.content) == {
+        "decisionGrants": list(grants.tokens), "action": ACTION, "caseVersion": "v7",
+        "agentId": "ag_01", "agentDid": "did:grantex:ag_01", "grantId": "grnt_01",
+    }
+
+
+@respx.mock
+def test_get_grants_presents_the_requesting_agents_grant_token() -> None:
+    route = respx.post(f"{BASE}/v1/decisions/requests/dreq_1/grants").mock(return_value=httpx.Response(200, json={
+        "requestId": "dreq_1", "status": "approved", "decisionGrantsReady": True, "decisionGrants": ["a.b.c"],
+    }))
+    released = Grantex(api_key="test-key").decisions.get_grants("dreq_1", "agent.grant.token")
+    assert json.loads(route.calls[0].request.content) == {"grantToken": "agent.grant.token"}
+    assert released["decisionGrants"] == ["a.b.c"]
+
+
+@respx.mock
+def test_consume_request_posts_the_request_id_action_and_case_version_once() -> None:
+    route = respx.post(f"{BASE}/v1/decisions/requests/dreq_1/consume").mock(return_value=httpx.Response(200, json={
+        "consumed": True, "requestId": "dreq_1", "jtis": ["dgnt_a"], "actionHash": "sha256:x",
+        "approvers": [{"sub": "user:approver-a", "jti": "dgnt_a"}],
+    }))
+    receipt = Grantex(api_key="test-key").decisions.consume_request("dreq_1", ACTION, "v7")
+    assert route.call_count == 1
+    assert json.loads(route.calls[0].request.content) == {"action": ACTION, "caseVersion": "v7"}
+    assert (receipt.request_id, receipt.jtis) == ("dreq_1", ("dgnt_a",))
+    assert receipt.approvers == ({"sub": "user:approver-a", "jti": "dgnt_a"},)
+
+
+@respx.mock
 @pytest.mark.parametrize(
     ("response", "sub_reason"),
     [
+        (httpx.Response(403, json={"code": "DECISION_INVALID", "subReason": "wrong_agent", "message": "requested for an agent"}), "wrong_agent"),
+        (httpx.Response(200, json={"consumed": True, "requestId": "dreq_other", "jtis": ["dgnt_a"]}), "consume_unavailable"),
+        (httpx.Response(200, json={"consumed": True, "requestId": "dreq_1", "jtis": []}), "consume_unavailable"),
+    ],
+)
+def test_consume_request_maps_refusals_and_never_assumes_success(response: httpx.Response, sub_reason: str) -> None:
+    route = respx.post(f"{BASE}/v1/decisions/requests/dreq_1/consume").mock(return_value=response)
+    with pytest.raises(DecisionGrantError) as info:
+        Grantex(api_key="test-key").decisions.consume_request("dreq_1", ACTION, "v7")
+    assert info.value.sub_reason == sub_reason
+    assert route.call_count == 1  # never retried
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    ("response", "sub_reason"),
+    [
+        (httpx.Response(403, json={"code": "DECISION_INVALID", "subReason": "wrong_agent", "message": "another agent"}), "wrong_agent"),
         (httpx.Response(409, json={"code": "DECISION_INVALID", "subReason": "consumed", "message": "used"}), "consumed"),
         (httpx.Response(409, json={"code": "DECISION_INVALID", "subReason": "case_changed", "message": "changed"}), "case_changed"),
         (httpx.Response(409, json={"code": "DECISION_INVALID", "subReason": "made_up", "message": "?"}), "consume_unavailable"),

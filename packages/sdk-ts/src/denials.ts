@@ -123,6 +123,11 @@ export const DecisionSubReason = {
   CASE_CHANGED: 'case_changed',
   /** The grant approves an action on another case. */
   WRONG_CASE: 'wrong_case',
+  /**
+   * The decision was requested for another agent or grant, or the caller did
+   * not say which agent and grant it acts for (auth service only).
+   */
+  WRONG_AGENT: 'wrong_agent',
   /** The approver's authentication was not step-up (auth service only). */
   STEP_UP_REQUIRED: 'step_up_required',
   /** The decision request was cancelled and its grants revoked. */

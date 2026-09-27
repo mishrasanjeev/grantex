@@ -145,10 +145,13 @@ const MANIFEST = ToolManifest.fromJSON({
 
 class FakeIssuer implements DecisionConsumer {
   readonly consumed = new Set<string>();
+  /** The requester each consumption named: the agent and grant of the caller's grant token. */
+  readonly requesters: Parameters<DecisionConsumer['consume']>[1][] = [];
   calls = 0;
   constructor(private readonly failWith?: DecisionSubReason) {}
-  async consume(grants: Parameters<DecisionConsumer['consume']>[0]): Promise<ConsumedDecision> {
+  async consume(grants: Parameters<DecisionConsumer['consume']>[0], requester?: Parameters<DecisionConsumer['consume']>[1]): Promise<ConsumedDecision> {
     this.calls++;
+    this.requesters.push(requester);
     if (this.failWith) throw new DecisionGrantError(this.failWith, 'refused by the issuer');
     const jtis = grants.grants.map((g) => g.jti);
     if (jtis.some((j) => this.consumed.has(j))) throw new DecisionGrantError('consumed', 'already used');
@@ -194,6 +197,18 @@ describe('enforce() and decision grants', () => {
     expect(result.allowed, result.reason).toBe(true);
     expect(result.decision?.jtis).toEqual([FIXTURE.base_claims['jti']]);
     expect(issuer.calls).toBe(1);
+  });
+
+  it("consumes as the agent and grant of the caller's verified grant token", async () => {
+    const issuer = new FakeIssuer();
+    const result = await client(issuer).enforce({
+      grantToken: 't', connector: 'acme_kyb', tool: 'case_decision', decisionGrants: [await buildGrant({})], arguments: args(), caseVersion: 'v7',
+    });
+    expect(result.allowed, result.reason).toBe(true);
+    // An issuer that binds decisions to the requesting agent refuses one
+    // requested for another agent or grant (wrong_agent), so both come from
+    // the verified token, never the call.
+    expect(issuer.requesters).toEqual([{ agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' }]);
   });
 
   it('denies replay of a consumed jti', async () => {
@@ -345,7 +360,66 @@ describe('grantex.decisions', () => {
     expect(receipt.jtis).toEqual([FIXTURE.base_claims['jti']]);
   });
 
+  it('enforce() sends the agent DID as agentDid, never as agentId, and the grant of the grant token when it consumes', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockResolvedValue(json(200, { consumed: true, requestId: 'dreq_1', jtis: [FIXTURE.base_claims['jti']], actionHash: 'sha256:x', approvers: [] }));
+    vi.mocked(verifyGrantToken).mockResolvedValue(grantFor());
+    const c = new Grantex({ apiKey: 'test-key' });
+    c.loadManifest(MANIFEST);
+    const result = await c.enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'case_decision', decisionGrants: [await buildGrant({})], arguments: args(), caseVersion: 'v7' });
+    expect(result.allowed, result.reason).toBe(true);
+    const consumeCalls = (fetchMock.mock.calls as [string, RequestInit][]).filter(([url]) => url.endsWith('/v1/decisions/consume'));
+    expect(consumeCalls).toHaveLength(1);
+    const body = JSON.parse(String(consumeCalls[0]![1].body)) as Record<string, unknown>;
+    expect(body).toMatchObject({ agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' });
+    // An auth service from before the binding accepts only a Grantex agent id
+    // in agentId and ignores members it does not know, so the DID never goes
+    // there: this body is accepted by every version.
+    expect(body).not.toHaveProperty('agentId');
+  });
+
+  it('consume sends agentDid and agentId as given, each in its own member', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockResolvedValue(json(200, { consumed: true, requestId: 'dreq_1', jtis: [FIXTURE.base_claims['jti']], actionHash: 'sha256:x', approvers: [] }));
+    const token = await buildGrant({});
+    await new Grantex({ apiKey: 'test-key' }).decisions.consume([token], { action: FIXTURE.action, caseVersion: 'v7', agentId: 'ag_01', agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.grantex.dev/v1/decisions/consume');
+    expect(JSON.parse(String(init.body))).toEqual({ decisionGrants: [token], action: FIXTURE.action, caseVersion: 'v7', agentId: 'ag_01', agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' });
+  });
+
+  it("getGrants presents the requesting agent's grant token", async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockResolvedValue(json(200, { requestId: 'dreq_1', status: 'approved', decisionGrantsReady: true, decisionGrants: ['a.b.c'] }));
+    const released = await new Grantex({ apiKey: 'test-key' }).decisions.getGrants('dreq_1', 'agent.grant.token');
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.grantex.dev/v1/decisions/requests/dreq_1/grants');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({ grantToken: 'agent.grant.token' });
+    expect(released['decisionGrants']).toEqual(['a.b.c']);
+  });
+
+  it('consumeRequest posts the request id, action and case version once', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockResolvedValue(json(200, { consumed: true, requestId: 'dreq_1', jtis: ['dgnt_a'], actionHash: 'sha256:x', approvers: [{ sub: 'user:approver-a', jti: 'dgnt_a' }] }));
+    const receipt = await new Grantex({ apiKey: 'test-key' }).decisions.consumeRequest('dreq_1', { action: FIXTURE.action, caseVersion: 'v7' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.grantex.dev/v1/decisions/requests/dreq_1/consume');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({ action: FIXTURE.action, caseVersion: 'v7' });
+    expect(receipt).toMatchObject({ requestId: 'dreq_1', jtis: ['dgnt_a'], approvers: [{ jti: 'dgnt_a' }] });
+
+    fetchMock.mockResolvedValue(json(403, { code: 'DECISION_INVALID', subReason: 'wrong_agent', message: 'requested for an agent' }));
+    await expect(new Grantex({ apiKey: 'test-key' }).decisions.consumeRequest('dreq_1', { action: FIXTURE.action, caseVersion: 'v7' }))
+      .rejects.toMatchObject({ subReason: 'wrong_agent' });
+    fetchMock.mockResolvedValue(json(200, { consumed: true, requestId: 'dreq_other', jtis: ['dgnt_a'] }));
+    await expect(new Grantex({ apiKey: 'test-key' }).decisions.consumeRequest('dreq_1', { action: FIXTURE.action, caseVersion: 'v7' }))
+      .rejects.toMatchObject({ subReason: 'consume_unavailable' });
+  });
+
   it.each([
+    [json(403, { code: 'DECISION_INVALID', subReason: 'wrong_agent', message: 'requested for another agent' }), 'wrong_agent'],
     [json(409, { code: 'DECISION_INVALID', subReason: 'consumed', message: 'used' }), 'consumed'],
     [json(409, { code: 'DECISION_INVALID', subReason: 'case_changed', message: 'changed' }), 'case_changed'],
     [json(409, { code: 'DECISION_INVALID', subReason: 'made_up' }), 'consume_unavailable'],

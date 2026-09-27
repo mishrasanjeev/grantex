@@ -147,6 +147,17 @@ describe('grantexDecisionVerifier', () => {
     expect(consume).toHaveBeenCalledTimes(2);
   });
 
+  it("consumes as the agent and grant of the caller's access token", async () => {
+    const { verifier, consume } = verifierWithIssuer();
+    const outcome = await callTool(verifier, { [DECISION_GRANT_HEADER]: await decisionGrant() }, args, { grant: { dev: 'dev_01', agt: 'did:grantex:ag_01' } });
+    expect(outcome.status).toBe(200);
+    // An issuer that binds decisions to the requesting agent refuses one
+    // requested for another agent or grant (wrong_agent). The DID travels as
+    // agentDid, never agentId: an @grantex/sdk from before agentDid existed
+    // drops it rather than sending a DID where an issuer expects an agent id.
+    expect(consume).toHaveBeenCalledWith(expect.anything(), { agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' });
+  });
+
   it.each([
     [{ ...args, decision: 'decline' }, 'action_mismatch'],
     [{ ...args, case_id: 'case_9999' }, 'case_changed'],

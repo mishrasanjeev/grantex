@@ -21,6 +21,7 @@ export const DecisionSubReason = {
   SAME_APPROVER: 'same_approver',
   CASE_CHANGED: 'case_changed',
   WRONG_CASE: 'wrong_case',
+  WRONG_AGENT: 'wrong_agent',
   STEP_UP_REQUIRED: 'step_up_required',
   REVOKED: 'revoked',
   UNKNOWN_GRANT: 'unknown_grant',
@@ -188,6 +189,27 @@ export function decisionGrantExpiry(nowSeconds: number, requestExpiresAtMs: numb
 const CASE_VERSION_RE = /^[\x21-\x7e]{1,128}$/;
 const REF_RE = /^[\x20-\x7e]{1,512}$/;
 const CONNECTOR_RE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/;
+// W3C DID Core 1.0 §3.1 DID Syntax:
+//   did = "did:" method-name ":" method-specific-id
+//   method-name = 1*method-char; method-char = %x61-7A / DIGIT
+//   method-specific-id = *( *idchar ":" ) 1*idchar
+//   idchar = ALPHA / DIGIT / "." / "-" / "_" / pct-encoded
+const DID_RE = /^did:[a-z0-9]+:(?:(?:[A-Za-z0-9._-]|%[0-9A-Fa-f]{2})*:)*(?:[A-Za-z0-9._-]|%[0-9A-Fa-f]{2})+$/;
+const MAX_DID_LENGTH = 512;
+const DECISION_REQUEST_ID_RE = /^dreq_[0-9A-HJKMNP-TV-Z]{26}$/;
+
+/**
+ * An agent's DID, the form its grant token carries
+ * (`urn:grantex:grant.agent_did`, legacy alias `agt`) and the form an enforcer
+ * reports on consumption (`agentDid`).
+ */
+export function isAgentDid(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= MAX_DID_LENGTH && DID_RE.test(value);
+}
+
+export function isDecisionRequestId(value: unknown): value is string {
+  return typeof value === 'string' && DECISION_REQUEST_ID_RE.test(value);
+}
 
 export function isCaseVersion(value: unknown): value is string {
   return typeof value === 'string' && CASE_VERSION_RE.test(value);

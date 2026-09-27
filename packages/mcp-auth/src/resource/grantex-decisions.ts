@@ -12,7 +12,11 @@
  * Verification and consumption are injected so this package does not pin a
  * `@grantex/sdk` version: pass `verifyDecisionGrants` and
  * `grantex.decisions.consume` from `@grantex/sdk` (0.6 or later), or your own
- * implementations of the same contract.
+ * implementations of the same contract. Consumption is told the agent (its
+ * DID, as `agentDid`) and grant of the caller's access token; an issuer that
+ * binds decision grants to the requesting agent compares them with the agent
+ * and grant the decision was requested for, and one that does not ignores
+ * `agentDid`.
  *
  * The grant's developer (`dev`, from the access token) and the tool's
  * connector (from a manifest-derived policy) are always checked; a call
@@ -65,11 +69,16 @@ export interface GrantexDecisionVerifierOptions<Set extends VerifiedDecisionGran
     },
   ) => Promise<Set>;
   /**
-   * Atomic consumption at the issuer, e.g. `(set) => grantex.decisions.consume(set)`.
-   * Must throw (with a string `subReason` when the issuer refused) unless the
-   * issuer confirmed that every grant in the set was consumed.
+   * Atomic consumption at the issuer, e.g.
+   * `(set, context) => grantex.decisions.consume(set, context)`. `context`
+   * carries `agentDid` and `grantId` from the caller's access token; pass them
+   * on, since an issuer that binds decision grants to the requesting agent
+   * refuses a decision requested for another agent or grant (`wrong_agent`).
+   * An `@grantex/sdk` from before `agentDid` existed drops it and consumes as
+   * before. Must throw (with a string `subReason` when the issuer refused)
+   * unless the issuer confirmed that every grant in the set was consumed.
    */
-  consume: (grants: Set, context: { grantId?: string }) => Promise<unknown>;
+  consume: (grants: Set, context: { agentDid?: string; grantId?: string }) => Promise<unknown>;
   /**
    * The case's current version from the server's own case state (never from
    * the call's arguments). Returning `undefined` refuses the call.
@@ -168,7 +177,10 @@ export function grantexDecisionVerifier<Set extends VerifiedDecisionGrants>(
         throw new Error('decision grant verification returned an unexpected result');
       }
       try {
-        await options.consume(verified, check.grant.grantId !== undefined ? { grantId: check.grant.grantId } : {});
+        await options.consume(verified, {
+          ...(check.grant.agentDid !== undefined ? { agentDid: check.grant.agentDid } : {}),
+          ...(check.grant.grantId !== undefined ? { grantId: check.grant.grantId } : {}),
+        });
       } catch (err) {
         return { status: 'invalid', subReason: subReasonOf(err) ?? 'consume_unavailable' };
       }

@@ -750,11 +750,18 @@ export class Grantex {
     }
 
     // 12. Consume the decision grants at the issuer. Offline verification
-    //     alone never allows a call: one grant authorises one call.
+    //     alone never allows a call: one grant authorises one call. The agent
+    //     (its DID) and grant come from the verified grant token: an issuer
+    //     that binds decision grants to the requesting agent refuses one
+    //     requested for another agent or grant (`wrong_agent`), and one that
+    //     does not ignores `agentDid`.
     let decision: ConsumedDecision | undefined;
     if (decisionSet !== undefined) {
       try {
-        decision = await this.#decisionConsumer.consume(decisionSet, grant.grantId ? { grantId: grant.grantId } : {});
+        decision = await this.#decisionConsumer.consume(decisionSet, {
+          ...(grant.agentDid ? { agentDid: grant.agentDid } : {}),
+          ...(grant.grantId ? { grantId: grant.grantId } : {}),
+        });
       } catch (err) {
         const subReason = err instanceof DecisionGrantError ? err.subReason : DecisionSubReason.CONSUME_UNAVAILABLE;
         if (reservation !== undefined && this.#capsMeter !== undefined) {
