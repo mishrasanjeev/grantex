@@ -243,6 +243,9 @@ export async function emergencyStopRoutes(app: FastifyInstance): Promise<void> {
   const containment = {
     config: { rateLimit: { max: 20, timeWindow: '1 minute' }, rateLimitClass: 'containment' as const },
   };
+  // Lifting a lockout restores issuance, so it is not containment: it keeps
+  // the per-address limit and draws on the plan like any other call.
+  const limited = { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } };
 
   app.post('/v1/emergency-stop', containment, async (request, reply) => {
     if (!emergencyStopEnabled()) {
