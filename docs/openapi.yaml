@@ -8200,6 +8200,11 @@ paths:
         The memo and policy score are stored as supplied, shown verbatim on the approval page, and bound into
         the decision grant by their hashes. Duplicate member names in the body are refused. A platform cannot
         approve through this API: approval happens only on `approvalPage` in the approver's browser.
+
+        With `DECISION_GRANT_AGENT_BINDING=true`, a repeat while the open request names another agent or grant
+        (or none, or one where this request names none) is refused (409 wrong_agent), and a repeat for the same
+        agent and grant answers the open request with its approvals as they stand and `decisionGrantsReady`.
+        With it off (the default), a repeat answers the open request as it is.
       security:
         - bearerAuth: []
       requestBody:
@@ -8240,19 +8245,32 @@ paths:
                 fourEyesOn: { type: array, items: { type: string }, description: "The manifest's four_eyes_on; two approvals are required when it lists the decision" }
                 approvalsRequired: { type: integer, enum: [1, 2] }
                 expiresInSeconds: { type: integer, minimum: 60, maximum: 86400 }
-                agentId: { type: string }
-                grantId: { type: string }
+                agentId:
+                  type: string
+                  pattern: "^[A-Za-z0-9_-]{1,128}$"
+                  description: |
+                    The Grantex agent id of the agent the decision is for. With the agent binding on, only a live grant
+                    token of this agent fetches the decision grants, and they are consumed only for it.
+                grantId: { type: string, pattern: "^[A-Za-z0-9_-]{1,128}$", description: "The grant the decision is for; with the agent binding on, consumed only under this grant" }
       responses:
-        "201": { description: "Created; includes approvalPage, actionHash, memoHash and policyScoreHash" }
+        "201": { description: "Created; includes approvalPage, actionHash, memoHash and policyScoreHash (and decisionGrantsReady with the agent binding on)" }
         "200": { description: An open request for the same action and case version already exists }
         "400": { description: "Invalid action (INVALID_ACTION), review content or parameters" }
-        "409": { description: "caseVersion is not the case's current version (subReason case_changed)" }
+        "409": { description: "caseVersion is not the case's current version (subReason case_changed); with the agent binding on, the open request for this action and case version names another agent or grant (subReason wrong_agent)" }
+        "503": { description: "Decision grants are misconfigured, for example DECISION_GRANT_AGENT_BINDING is neither true nor false (DECISION_CONFIG_INVALID)" }
   /v1/decisions/requests/{id}:
     get:
       operationId: getDecisionRequest
       tags: [Decision Grants]
       summary: Status and approvals of a decision request
-      description: Includes `decisionGrants` (the tokens) only when the request is fully approved and no grant is consumed, revoked or expired.
+      description: |
+        Status and approvals (each with its grant's `jti`).
+
+        With `DECISION_GRANT_AGENT_BINDING=true`, also `decisionGrantsReady` (true when the request is fully
+        approved and no grant is consumed, revoked or expired) and never the decision grant tokens: the developer
+        API key alone does not receive them (fetch them with the requesting agent's grant token, or consume a
+        request that names no agent by its id). With it off (the default), `decisionGrants` (the tokens) when the
+        request is fully approved and no grant is consumed, revoked or expired, as before the binding existed.
       security:
         - bearerAuth: []
       parameters:
@@ -8260,6 +8278,70 @@ paths:
       responses:
         "200": { description: Decision request }
         "404": { description: Not found }
+  /v1/decisions/requests/{id}/grants:
+    post:
+      operationId: getDecisionGrants
+      tags: [Decision Grants]
+      summary: Fetch the decision grants, as the agent the request names
+      description: |
+        The decision request with `decisionGrantsReady`, plus `decisionGrants` (the tokens) when it is true.
+        Released only for a request that names an agent or a grant, and only against a live grant token of this
+        developer (signature, expiry, revocation and grant status are checked) whose agent and grant are the ones
+        the request names. A request that names neither is the platform's own: its grants are never released and
+        it is consumed by its id (`POST /v1/decisions/requests/{id}/consume`). Every hand-out and every refusal is
+        recorded in the audit chain; if that record cannot be written the answer is 503
+        DECISION_AUDIT_UNAVAILABLE and nothing is released. Available whether or not
+        `DECISION_GRANT_AGENT_BINDING` is on.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [grantToken]
+              properties:
+                grantToken: { type: string, maxLength: 16384, description: "The requesting agent's grant token" }
+      responses:
+        "200": { description: "Decision request, with decisionGrants when ready" }
+        "400": { description: grantToken is missing or malformed }
+        "403": { description: "Not the requesting agent: the grant token is not live, is another agent's or grant's, or the request names no agent (subReason wrong_agent)" }
+        "404": { description: Not found }
+        "503": { description: The release or refusal could not be recorded; nothing was released }
+  /v1/decisions/requests/{id}/consume:
+    post:
+      operationId: consumeDecisionRequest
+      tags: [Decision Grants]
+      summary: Consume the decision grants of a request that names no agent, by its id
+      description: |
+        For a platform's own decision: the grants of a request that names neither an agent nor a grant are
+        consumed for one action without the platform ever holding them, with the same checks, locks and audit as
+        `POST /v1/decisions/consume`. A request that names an agent or a grant is refused (403 wrong_agent): only
+        the grants its agent presents spend it. Available whether or not `DECISION_GRANT_AGENT_BINDING` is on.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, caseVersion]
+              properties:
+                action: { type: object, description: The semantic action about to be performed }
+                caseVersion: { type: string }
+      responses:
+        "200": { description: "Consumed; the same answer as POST /v1/decisions/consume" }
+        "400": { description: "Malformed request (subReason malformed)" }
+        "403": { description: "The request names an agent or a grant (subReason wrong_agent)" }
+        "404": { description: "Unknown request, or another developer's (subReason unknown_grant)" }
+        "409": { description: "Refused (subReason unknown_grant before any grant is minted, action_mismatch, consumed, case_changed, revoked, expired or four_eyes_incomplete)" }
+        "503": { description: The refusal could not be recorded }
   /v1/decisions/requests/{id}/cancel:
     post:
       operationId: cancelDecisionRequest
@@ -8281,6 +8363,23 @@ paths:
         One grant, or both grants of a four-eyes decision; either all are consumed or none is. Every refusal is
         recorded in the audit chain with the attempted action and hash; if that record cannot be written the
         answer is 503 DECISION_AUDIT_UNAVAILABLE (nothing is consumed).
+
+        Present the grants (`decisionGrants`) with the calling agent's grant token (`grantToken`, the same member the
+        release endpoint takes) and the agent and grant it carries: `agentDid` (its DID) and `grantId`.
+
+        With `DECISION_GRANT_AGENT_BINDING=true`, the service establishes the calling agent from `grantToken` alone,
+        checking it as for a release (signature against the service's own keys, expiry, revocation of the token and
+        its grant, grant status, and that it is this developer's), and never from `agentDid`, `agentId` or
+        `grantId`: each of those that is sent must be the token's agent (an `agentId` resolved through the developer's
+        registered agent) and grant. A request that names an agent or a grant is consumed only with a live grant
+        token of that agent and grant; without `grantToken`, with one that is not live, or with another agent's or
+        grant's, it is refused (403 wrong_agent), and the refusal is recorded with the reason (`token_check`) and the
+        members the body claimed. A request that names neither is consumed without `grantToken`, as before; a
+        `grantToken` sent with it must still be live, and its agent and grant are recorded.
+
+        With the binding off (the default), `grantToken` and `agentDid` are not read, and `agentId` and `grantId` are
+        recorded, not compared, as before the binding existed. A request that names no agent can instead be
+        consumed by its id (`POST /v1/decisions/requests/{id}/consume`).
       security:
         - bearerAuth: []
       requestBody:
@@ -8294,8 +8393,23 @@ paths:
                 decisionGrants: { type: array, minItems: 1, maxItems: 2, items: { type: string } }
                 action: { type: object, description: The semantic action about to be performed }
                 caseVersion: { type: string }
-                agentId: { type: string }
-                grantId: { type: string }
+                agentDid:
+                  type: string
+                  maxLength: 512
+                  description: |
+                    The calling agent's DID (W3C DID syntax) from its verified grant token. Read only with the agent
+                    binding on; an auth service without it ignores this member, so enforcers send the DID here and
+                    never in agentId.
+                agentId: { type: string, pattern: "^[A-Za-z0-9_-]{1,128}$", description: "The calling agent's Grantex agent id, when the platform knows it" }
+                grantId: { type: string, pattern: "^[A-Za-z0-9_-]{1,128}$", description: The grant from the same token }
+                grantToken:
+                  type: string
+                  minLength: 1
+                  maxLength: 16384
+                  description: |
+                    The calling agent's grant token. Required, with the agent binding on, to consume the grants of a
+                    request that names an agent or a grant; the agent and grant are taken from it once it is verified.
+                    With the binding off it is not read, so enforcers send it to every version.
       responses:
         "200":
           description: |
@@ -8331,7 +8445,8 @@ paths:
                         dwell_source: { type: string, enum: [server] }
                         jti: { type: string, description: The grant this approver spent }
                   actionHash: { type: string }
-        "400": { description: "Malformed request or token (subReason malformed)" }
+        "400": { description: "Malformed request or token (subReason malformed); with the agent binding on, also a grantToken that is not a non-empty string of at most 16384 characters" }
+        "403": { description: "With the agent binding on: the decision was requested for another agent or grant; no grantToken came with a decision requested for an agent or grant; the grantToken is not a live grant token of this developer; or a body member names another agent or grant than the grantToken (subReason wrong_agent)" }
         "409": { description: "Refused (subReason action_mismatch, wrong_case, consumed, same_approver, case_changed, revoked, expired, four_eyes_incomplete or unknown_grant)" }
         "503": { description: The refusal could not be recorded }
   /v1/admin/developers/{developerId}/decision-approver-idps:

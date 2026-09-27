@@ -417,7 +417,7 @@ export function createMcpApp(options: {
 | Situation | Response |
 |---|---|
 | No token | `401`, `WWW-Authenticate: Bearer resource_metadata="…"` |
-| Malformed, expired, revoked (`grant_revoked`), wrong issuer or audience | `401`, `error="invalid_token"` |
+| Malformed, expired, revoked (`grant_revoked`), wrong issuer or audience, an algorithm other than RS256 or ES256, a wrong `typ`, not a grant token (neither `urn:grantex:grant` nor `scp`), no `scope` or `scp`, a `null` or mistyped claim, or standard and legacy claims that disagree | `401`, `error="invalid_token"` |
 | With `tools`: a body that is not parsed JSON-RPC 2.0 (a string, Buffer, `{}`, an array with a non-message) | `400`, `reason: "body_not_parsed"` |
 | Missing required `scopes` | `403`, `error="insufficient_scope"`, `scope="…"` |
 | `tools/call` for a tool the grant does not cover | `403`, `insufficient_scope` with the scope that would grant it; body `reason: "tool_not_granted"` |
@@ -425,6 +425,44 @@ export function createMcpApp(options: {
 | `requires_decision` tool without a valid decision grant | `403`, `error="insufficient_authorization"`, `decision_required="<connector>:<tool>"` |
 | More than one `requires_decision` call in one batch | `403`, body `reason: "decision_invalid"`, `sub_reason: "multiple_decisions_in_batch"` |
 | Revocation state unreadable | `503` |
+
+The guard validates grant tokens as
+[`spec/grant-token-0.6.md`](https://github.com/mishrasanjeev/grantex/blob/main/spec/grant-token-0.6.md)
+("Validation") requires:
+
+- **Algorithms.** Only `RS256` and `ES256`. The `algorithms` option may
+  narrow that to one of them; a list naming any other algorithm (`PS256`,
+  `EdDSA`, `HS256`, ...) throws when the middleware is created.
+- **`typ`.** Must be `at+jwt` (or `application/at+jwt`). The auth service sets
+  it on every grant token; only a pre-0.6 token (no `urn:grantex:grant`, with
+  `scp`), issued before it did, may omit it.
+- **Grant tokens only.** A token must carry `urn:grantex:grant` (0.6) or
+  `scp` (before 0.6). The auth service's OAuth access tokens, which are also
+  `at+jwt` but carry only `client_id`, `scope` and a `cnf.jkt`, are refused.
+- **Scopes.** Read from the space-delimited `scope`, falling back to `scp` when
+  a 0.6 token omits `scope` (a grant with a scope containing whitespace). A
+  pre-0.6 token is read from `scp`, because its `scope` was a lossy join. An
+  empty `scope` (or `scp: []`) is an empty scope set, as the SDK verifiers
+  read it: the token is admitted only where neither `scopes` nor `tools`
+  requires a scope.
+- **Grant fields.** `agentDid`, `developerId`, `grantId` and
+  `delegationDepth` on the verified grant come from `urn:grantex:grant`, then
+  from the legacy `agt`, `dev`, `grnt` and `delegationDepth`. A 0.6 token must
+  name its agent and developer in one form or the other.
+- **Proof of possession is not checked.** Validation step 5 of the profile
+  requires a resource server to verify proof of possession when the token
+  has `cnf.jkt`. The guard does not: a key-bound grant token is admitted as a
+  bearer token. If your server needs sender-constrained tokens, verify the
+  DPoP proof (RFC 9449) yourself and compare its key thumbprint with
+  `raw.cnf.jkt` of the verified grant (`req.mcpGrant`, or
+  `c.get('mcpGrant')` in Hono) before acting on the call.
+
+The guard therefore keeps working when the auth service stops issuing the
+legacy claims (`GRANT_TOKEN_LEGACY_CLAIMS=false`, the 0.7 default), and so does
+the developer check of `grantexDecisionVerifier`. As in the SDK verifiers, a
+claim present with `null` or the wrong type, legacy aliases included, is
+refused rather than treated as absent, and so is a 0.6 token whose standard
+claim and legacy alias disagree.
 
 A batch with one refused call is refused as a whole. Mount it after
 `express.json()`: with `tools` configured, a body the guard cannot read as
@@ -494,17 +532,29 @@ export const decisionVerifier: DecisionVerifier = {
   `grantex-decision-grant` request header (`header` to change it); derives
   the semantic action from the tool name and the call's `case_id`,
   `decision`, `subject`, `amount` and the manifest's `decision_fields`;
-  requires the access token's developer (`dev`) and a connector from a
+  requires the access token's developer (`urn:grantex:grant.developer_id`,
+  or the legacy `dev`) and a connector from a
   manifest-derived tool policy (a call without either is refused as
   `malformed`); asks `caseVersion(caseId, check)` for
   the case's current version from your own case state; verifies the grants
   with `verify` and consumes them with `consume`, answering `valid` only after
   the issuer confirmed consumption (`consume_unavailable` otherwise). Pass
-  `verifyDecisionGrants` and `grantex.decisions.consume` from `@grantex/sdk`
-  0.6 or later; they are injected so this package does not depend on an
-  unreleased SDK. Refusals carry the SDK's sub-reason (`action_mismatch`,
-  `wrong_case`, `case_changed`, `expired`, `consumed`, `same_approver`,
-  `four_eyes_incomplete`, `malformed`, ...) in the `decision_invalid` body.
+  `verifyDecisionGrants` and
+  `(set, context) => grantex.decisions.consume(set, context)` from
+  `@grantex/sdk` 0.6 or later; they are injected so this package does not
+  depend on an unreleased SDK. `context` is `{ agentDid, grantId, grantToken }`:
+  the agent (`agt`, its DID) and grant of the access token, and the access
+  token itself as the guard verified it (`check.grantToken`). Pass it on,
+  because an auth service with `DECISION_GRANT_AGENT_BINDING=true`
+  establishes the calling agent from `grantToken` and consumes a decision
+  requested for an agent only with that agent's live grant token
+  (`wrong_agent` otherwise). The token goes only to `consume`, and so only to
+  the auth service that issued it. An SDK that predates `agentDid` or
+  `grantToken` drops them and consumes as before, and an auth service with the
+  binding off ignores them. Refusals carry the SDK's sub-reason
+  (`action_mismatch`, `wrong_case`, `wrong_agent`, `case_changed`, `expired`,
+  `consumed`, `same_approver`, `four_eyes_incomplete`, `malformed`, ...) in the
+  `decision_invalid` body.
   Consumption spends the grant: if the tool call fails afterwards, a person
   has to approve again.
   The guard also reads the access token's `urn:grantex:decision:v1` entries
@@ -596,6 +646,9 @@ tests/conformance`.
 | Any redirect URI at `/register` | https or loopback http only. |
 | `allowedRedirectUris` (not enforced) | Removed. |
 | `requireMcpAuth({ issuer })` | `audience` and `revocations` are required; responses carry `WWW-Authenticate`. Pass `revocations: storage` (or `revocations: 'none'` to opt out explicitly) and `tools` to enforce revocation and tool grants. |
+| `requireMcpAuth({ issuer })` | `audience` is required; responses carry `WWW-Authenticate`. Add `revocations: storage` and `tools` to enforce revocation and tool grants. |
+| `requireMcpAuth`, `/introspect` and `/revoke` accepted RS256, ES256, PS256 and EdDSA; `algorithms` could name any algorithm | RS256 and ES256 only. `algorithms` naming anything else throws at start-up. `typ` must be `at+jwt` (absent only on a pre-0.6 token). |
+| `requireMcpAuth` read `scp`, `agt`, `dev`, `grnt` and `delegationDepth` only | Reads `scope` and `urn:grantex:grant` first, the legacy claims as a fallback; refuses a 0.6 token whose claims disagree. |
 | Upstream exchange without `redirectUri` | Sends the callback URL, which Grantex requires. |
 | A refresh returning the same refresh token | The token is not handed out again; the response omits `refresh_token`. |
 | `consentUi` URLs of any scheme | `appLogo`, `privacyUrl`, `termsUrl` must be https. |
