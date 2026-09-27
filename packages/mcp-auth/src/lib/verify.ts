@@ -2,8 +2,10 @@ import * as jose from 'jose';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { McpAuthConfig, ClientRegistration } from '../types.js';
 import { acceptedResources } from './resource.js';
+import { checkGrantTokenType, GRANT_TOKEN_ALGORITHMS } from './grant-token.js';
 
-export const ALLOWED_ALGORITHMS = ['RS256', 'ES256', 'PS256', 'EdDSA'];
+/** Grant tokens are signed with RS256 or ES256 only (lib/grant-token.ts). */
+export const ALLOWED_ALGORITHMS: string[] = [...GRANT_TOKEN_ALGORITHMS];
 
 /** Stored form of a client secret: `sha256:<base64url digest>`. */
 export function hashClientSecret(secret: string): string {
@@ -66,8 +68,9 @@ export interface GrantexTokenVerifier {
 }
 
 /**
- * Builds a verifier for Grantex grant tokens: signature against the Grantex
- * JWKS, `iss` must equal `grantexIssuer`, and `aud` must name the configured
+ * Builds a verifier for Grantex grant tokens: an RS256 or ES256 signature
+ * against the Grantex JWKS, `typ: at+jwt` (absent only on a pre-0.6 token),
+ * `iss` must equal `grantexIssuer`, and `aud` must name the configured
  * `audience` or, by default, one of the resources this server issues tokens
  * for (`resource` and `allowedResources`). The audience is always checked.
  */
@@ -97,13 +100,16 @@ export function createGrantexTokenVerifier(config: McpAuthConfig): GrantexTokenV
           currentDate = new Date(Math.min(Date.now(), exp * 1000 - 1000));
         }
       }
-      const { payload } = await jose.jwtVerify(token, jwks, {
+      const { payload, protectedHeader } = await jose.jwtVerify(token, jwks, {
         algorithms: ALLOWED_ALGORITHMS,
         // Tolerate a trailing-slash difference between config and the claim.
         issuer: issuer.endsWith('/') ? [issuer, issuer.slice(0, -1)] : [issuer, `${issuer}/`],
         audience,
         ...(currentDate !== undefined ? { currentDate } : {}),
       });
+      // Throws for another kind of JWT signed with the same key; the callers
+      // treat any throw as an invalid token.
+      checkGrantTokenType(protectedHeader, payload);
       return payload;
     },
   };

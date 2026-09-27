@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### mcp-auth resource guard: grant token algorithms, `typ` and standard claims
+Part of the unpublished `@grantex/mcp-auth` 3.0.0.
+- **Breaking:** `requireMcpAuth` (Express and Hono) and
+  `createMcpResourceGuard` accept only RS256 and ES256 grant tokens, as
+  `spec/grant-token-0.6.md` requires, and refuse PS256 and EdDSA tokens with
+  `401 invalid_token`. The default `algorithms` is `['RS256', 'ES256']`; an
+  `algorithms` list naming any other algorithm throws when the middleware is
+  created instead of being honoured. `/introspect` and `/revoke` verify with
+  the same two algorithms. The auth service signs grant tokens only with
+  RS256 or ES256, so its tokens are unaffected; an MCP server that verifies
+  PS256 or EdDSA tokens from another issuer with this package must move that
+  issuer to RS256 or ES256 first. There is no opt-out.
+- **Breaking:** the guard, `/introspect` and `/revoke` require `typ: at+jwt`
+  (or `application/at+jwt`, RFC 9068 §4). The auth service sets it on every
+  grant token. Only a pre-0.6 token (no `urn:grantex:grant`, with `scp`) may
+  omit it, so grant tokens issued before the auth service set `typ` keep
+  working until they expire; another JWT signed with the same key, such as a
+  decision grant, is refused.
+- The guard reads the space-delimited `scope` claim first and falls back to
+  `scp`; a pre-0.6 token is still read from `scp`, since its `scope` could
+  split a scope containing whitespace. `agentDid`, `developerId`, `grantId`
+  and `delegationDepth` come from `urn:grantex:grant`, then from `agt`, `dev`,
+  `grnt` and `delegationDepth`. MCP servers behind the guard, including the
+  developer check in `grantexDecisionVerifier`, keep working when the auth
+  service sets `GRANT_TOKEN_LEGACY_CLAIMS=false` (the 0.7 default); before,
+  they refused every such token. A token with neither `urn:grantex:grant` nor
+  `scp`, such as an access token from the auth service's OAuth profile, is
+  still refused: it is not a grant token, and the guard does not check the
+  `cnf.jkt` such a token carries.
+- **Breaking:** like the SDK verifiers, the guard refuses with
+  `401 invalid_token` a 0.6 token whose standard claim and legacy alias
+  disagree, a 0.6 token with no agent or developer in either form, a
+  `urn:grantex:grant` that is not an object or has a `null` or mistyped
+  member, a legacy `agt`, `dev`, `grnt` or `delegationDepth` that is `null` or
+  mistyped (before, it was skipped), and a `scope` that is not a string. The
+  auth service has never issued such a token.
 ### Decision grants are bound to the requesting agent
 - Added `DECISION_GRANT_AGENT_BINDING` to the auth service, off by default.
   Only `true` and `false` are accepted; any other value makes the decision
