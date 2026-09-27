@@ -165,9 +165,12 @@ export async function buildApp(opts: AppOptions = {}) {
   // this no-override Fastify policy. A route-level rateLimit object replaces
   // it for that route, normally with a lower per-IP ceiling. Standard
   // developer API-key routes receive an additional Redis-backed plan bucket
-  // after authentication; /v1/authorize also uses a developer-keyed 10/min
-  // bucket. Keeping the default above the 2,000/min Enterprise budget avoids
-  // making that plan unreachable from one IP on routes without an override.
+  // after authentication — or, for revocation and emergency-stop routes and
+  // the revocation feed, a containment or status bucket of their own (see
+  // plugins/dynamicRateLimit.ts); /v1/authorize also uses a developer-keyed
+  // 10/min bucket. Keeping the default above the 2,000/min Enterprise and
+  // containment budgets avoids making them unreachable from one IP on routes
+  // without an override.
   // Custom-auth routes skip the standard plan bucket and retain their route
   // override or this default. The active Fastify policy shields public
   // endpoints and the auth plugin from raw IP floods, while plan throughput

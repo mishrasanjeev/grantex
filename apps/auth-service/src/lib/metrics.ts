@@ -38,6 +38,21 @@ export const grantsRevokedTotal = new Counter({
   registers: [registry],
 });
 
+/**
+ * Per-developer limiter decisions. `bucket` is plan, containment or status;
+ * `outcome` is allowed, limited, unavailable (refused with 503), or
+ * local_allowed / local_limited for a containment call counted in-process
+ * because Redis was unreachable. Never labelled by developer or route.
+ * deploy/prometheus/revocation-feed-alerts.yml alerts on containment calls
+ * counted locally and on status reads refused as unavailable.
+ */
+export const rateLimitDecisionsTotal = new Counter({
+  name: 'grantex_rate_limit_decisions_total',
+  help: 'Per-developer rate-limit decisions by bucket and outcome',
+  labelNames: ['bucket', 'outcome'] as const,
+  registers: [registry],
+});
+
 export const webhookDeliveriesTotal = new Counter({
   name: 'grantex_webhook_deliveries_total',
   help: 'Total webhook delivery attempts',

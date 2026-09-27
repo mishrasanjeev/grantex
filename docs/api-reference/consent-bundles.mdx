@@ -337,6 +337,8 @@ Returns a full `ConsentBundle` object (same schema as the create response) with 
 | `GET /v1/consent-bundles/:id/revocation-status` | 100 requests/minute |
 | `POST /v1/consent-bundles/:id/refresh` | 10 requests/minute |
 
+These are per source address. Every route also draws on a per-developer budget: `POST /v1/consent-bundles/:id/revoke` on the containment budget and `GET /v1/consent-bundles/:id/revocation-status` on the revocation-status budget, neither of which ordinary traffic uses up, and the others on the plan budget. See [Rate Limits](/guides/rate-limits).
+
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -252,6 +252,7 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `REVOCATION_FEED_MAX_CONNECTIONS` | No | `200` | Revocation streams one developer may hold on one instance |
 | `REVOCATION_FEED_RETENTION_HOURS` | No | `48` | How long delivered feed entries are kept after the credential expires |
 | `EMERGENCY_STOP_ENABLED` | No | `false` | Serve the emergency stop (section 11); revocations are irreversible |
+| `RATE_LIMIT_ROUTE_CLASSES_ENABLED` | No | `true` | Revocation and emergency-stop routes, and the revocation feed, draw on per-developer budgets of their own instead of the plan (`docs/guides/rate-limits.mdx`); `false` puts them back in the plan budget, failing closed when Redis is unavailable |
 
 ---
 
@@ -504,6 +505,16 @@ appendfsync everysec
 If Redis data is lost, in-flight auth requests will fail temporarily, but no permanent data
 is lost. PostgreSQL is the source of truth for all grants, audit entries, and agent records.
 
+While Redis is unreachable, standard API-key routes answer `503 RATE_LIMIT_UNAVAILABLE`
+because their per-developer rate limit cannot be counted — once the Redis client gives up on
+the command, which against a stopped Redis took more than a minute. Revoking a grant, token,
+passport or consent bundle and the emergency stop are the exception: after at most 500 ms
+they are counted in each instance's memory against the containment ceiling instead, and the
+revocation is committed, so an incident can be contained during a Redis outage. The response
+can still wait on the best-effort cache write that follows the commit.
+`grantex_rate_limit_decisions_total{bucket="containment",outcome=~"local_.*"}` shows it
+happening.
+
 ---
 
 ## 10. Production Readiness Checklist
@@ -675,6 +686,10 @@ outside its reach:
 - `403 FEATURE_DISABLED` / `404`: `EMERGENCY_STOP_ENABLED` is not `true` on
   the instance you reached.
 - `412 CONFIRMATION_REQUIRED`: the `confirm` phrase does not match.
+- `429`: the stop's own limits — 20 calls a minute from one address, and the
+  developer's containment budget of 2,000 revocation calls a minute, which
+  ordinary traffic does not use up. Wait out `Retry-After`; the stop is
+  idempotent. A Redis outage does not refuse the stop.
 - A 5xx: the stop is idempotent — run it again. Grants already revoked are
   left alone, and a partly finished stop finishes on the retry.
 - If the API cannot be reached at all, revoke at the database
