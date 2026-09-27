@@ -20,7 +20,13 @@ import {
 } from '../lib/webauthn-evidence.js';
 import { issueSDJWT } from '../lib/sd-jwt.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
-import { assertIssuanceOpen, issuanceRefusal } from '../lib/revocation/issuance-freeze.js';
+import {
+  IssuanceFrozenError,
+  assertIssuanceOpen,
+  issuanceFreezeEnforced,
+  issuanceRefusal,
+  issueForCommittedGrant,
+} from '../lib/revocation/issuance-freeze.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import {
   clearExpiredRefreshReplayState,
@@ -364,19 +370,62 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
 
     if ((credentialFormat === 'vc-jwt' || credentialFormat === 'both')
         && !config.portableWebAuthnEvidenceEnabled && !webAuthnEvidence) {
-      try {
-        const vcResult = await issueAgentGrantVC({
-          grantId,
-          agentDid: authReq['agent_did'] as string,
-          principalId: authReq['principal_id'] as string,
-          developerId,
-          scopes: authReq['scopes'] as string[],
-          expiresAt,
-        });
-        verifiableCredential = vcResult.vcJwt;
-        verifiableCredentialId = vcResult.vcId;
-      } catch {
-        // Preserve the pre-rollout best-effort behavior while the flag is off.
+      if (issuanceFreezeEnforced()) {
+        // The grant's transaction has committed and released the lockout's
+        // lock, so a lockout could land before this credential is written:
+        // it would revoke the grant, sweep its credentials, and never see
+        // this one. The credential is written in a transaction of its own
+        // that re-reads the grant and the freeze under the same lock.
+        try {
+          const vcResult = await issueForCommittedGrant(sql, {
+            subject: {
+              developerId,
+              grantId,
+              agentIds: [authReq['agent_id'] as string],
+              principalIds: [authReq['principal_id'] as string],
+            },
+            path: 'token',
+            log: request.log,
+          }, (tx) => issueAgentGrantVC({
+            grantId,
+            agentDid: authReq['agent_did'] as string,
+            principalId: authReq['principal_id'] as string,
+            developerId,
+            scopes: authReq['scopes'] as string[],
+            expiresAt,
+          }, tx));
+          if (vcResult !== null) {
+            verifiableCredential = vcResult.vcJwt;
+            verifiableCredentialId = vcResult.vcId;
+          }
+        } catch (err) {
+          // A lockout now covers the grant, and its stop revokes it: refused
+          // like every other issuance under a lockout, rather than answered
+          // with a token the stop is taking away.
+          if (err instanceof IssuanceFrozenError) {
+            const refusal = issuanceRefusal(err)!;
+            return reply.status(refusal.statusCode).send({ ...refusal.body, requestId: request.id });
+          }
+          // Anything else, a lockout state that cannot be read included,
+          // leaves the credential out, as a failed best-effort issuance
+          // always has. Its transaction rolled back, so nothing was written:
+          // closed, not open.
+        }
+      } else {
+        try {
+          const vcResult = await issueAgentGrantVC({
+            grantId,
+            agentDid: authReq['agent_did'] as string,
+            principalId: authReq['principal_id'] as string,
+            developerId,
+            scopes: authReq['scopes'] as string[],
+            expiresAt,
+          });
+          verifiableCredential = vcResult.vcJwt;
+          verifiableCredentialId = vcResult.vcId;
+        } catch {
+          // Preserve the pre-rollout best-effort behavior while the flag is off.
+        }
       }
     }
     if (verifiableCredentialId) {

@@ -119,7 +119,8 @@ refreshing or delegating from.
 The OAuth profile's endpoints answer `403` with `access_denied`. Nothing is
 issued until the lockout is lifted. An authorization code or refresh token
 refused this way is not used up, so it works again afterwards.
-`GET /v1/emergency-stops` lists the lockouts in force under `freezes`.
+`GET /v1/emergency-stops` lists the lockouts in force under `freezes`, 50 to a
+page; `freezesTotal` says how many there are, and `?page=2` fetches the next.
 `POST /v1/emergency-stop/unfreeze` lifts one you placed; a lockout placed by
 the platform operator can only be lifted by the operator.
 

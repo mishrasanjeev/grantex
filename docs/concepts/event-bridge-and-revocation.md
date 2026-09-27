@@ -492,7 +492,8 @@ Authorization: Bearer <developer API key>
 - A developer API key can only stop its own grants. The platform operator uses
   `POST /v1/admin/emergency-stop` with `ADMIN_API_KEY` and a `developerId`.
 - `GET /v1/emergency-stops` lists what has been stopped, when, by whom and
-  why, and the lockouts still in force.
+  why, and the lockouts still in force, a page at a time (`page`,
+  `pageSize`) with `freezesTotal` giving how many there are in all.
 - Underneath it is an ordinary cascade revocation per matched grant, so the
   stop appears in the audit hash chain (one `grantex.grant.revoked` per grant
   plus one `grantex.emergency_stop` summary) and on the revocation feed, and

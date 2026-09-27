@@ -677,8 +677,15 @@ stop's `emergency_stops` row and a `grantex.issuance_frozen` entry on the
 developer's audit hash chain. From then on, nothing new is issued under the
 scope. An issuance that had already passed its check when the freeze arrived
 is waited for, and the sweep finds what it wrote: a new grant, which it
-revokes, or a passport's credential, whose status bit it sets. Then, with or
-without a lockout:
+revokes, or a passport's credential, whose status bit it sets. The same holds
+for the verifiable credential a code exchange or a delegation issues after its
+grant is committed (`credentialFormat: "vc-jwt"` or `"both"`): it is written in
+a transaction of its own that reads the grant and the freeze again under the
+same lock. If a lockout committed in between, the call is refused with
+`403 ISSUANCE_FROZEN` and no credential is written; the grant it had just
+created is revoked by the stop's sweep. If the grant was revoked in between
+without a lockout, the call returns the grant token without the credential, as
+a failed best-effort issuance always has. Then, with or without a lockout:
 
 1. Every matched grant and everything delegated beneath it is revoked in one
    transaction per batch, with wallet reservations released and credential
@@ -729,8 +736,11 @@ curl -sS -X POST "$BASE_URL/v1/emergency-stop/unfreeze" \
   lockout. A `grantex.issuance_unfrozen` entry goes on the audit chain in the
   same transaction.
 - `GET /v1/emergency-stops` lists the freezes still in force under `freezes`,
-  beside the stops. A stop's own `lockout` field says whether it asked for
-  one, not whether that freeze is still in force.
+  beside the stops, oldest first, 50 to a page. `freezesTotal` is how many are
+  in force in all; when it is larger than the page, ask for the next one with
+  `?page=2`, or for up to 200 at a time with `?pageSize=200`, as on the other
+  paged lists. A stop's own `lockout` field says whether it asked for one, not
+  whether that freeze is still in force.
 - A second stop with a lockout over the same scope reaffirms the freeze in
   force rather than stacking another. If the operator does it, the freeze
   becomes the operator's.
@@ -748,7 +758,8 @@ curl -sS "$BASE_URL/v1/emergency-stops" -H "Authorization: Bearer $DEVELOPER_API
   agents' own denial logs (`grant_revoked`).
 - Any agent still running is one that is not watching the feed. Rotate or
   block its credentials, or wait out the token lifetime.
-- Check `freezes` in the same response. A lockout you placed is still
+- Check `freezes` in the same response, and every page of it when
+  `freezesTotal` is larger than the page. A lockout you placed is still
   refusing issuance until you lift it.
 - To restore service, lift any lockout, and then the principals authorise
   again; the revoked grants cannot come back.

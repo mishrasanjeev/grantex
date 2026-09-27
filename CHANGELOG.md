@@ -33,22 +33,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   tenant's own key may be the leaked credential. Placing and lifting both go
   on the audit hash chain (`grantex.issuance_frozen`,
   `grantex.issuance_unfrozen`), and `GET /v1/emergency-stops` now also lists
-  the freezes in force, under `freezes`.
+  the freezes in force, under `freezes`, oldest first and paged with `page`
+  and `pageSize` (default 50, at most 200) as the other paged lists are, with
+  `freezesTotal` giving how many are in force in all.
 - Freezing and issuing share a per-developer advisory lock, so a grant written
   while a freeze lands is either found by the sweep or refused. The same holds
   for a passport: `POST /v1/passport/issue` now writes the passport and its
-  credential in one transaction that takes the lock and, with the stop on,
-  reads the grant again, locked. A passport being written as a lockout lands
-  is waited for, and the sweep sets its status bit. One whose grant a stop
-  revoked while it was being issued is refused with `400 INVALID_GRANT`.
+  credential in one transaction that takes the lock and reads the grant
+  again, locked. A passport being written as a lockout lands is waited for,
+  and the sweep sets its status bit. One whose grant a stop revoked while it
+  was being issued is refused with `400 INVALID_GRANT`.
+- The verifiable credential a code exchange or a delegation issues after its
+  grant is committed (`credentialFormat: "vc-jwt"` or `"both"`, without
+  portable passkey evidence) is written in a transaction of its own that
+  reads the grant, locked, and the freeze again under the same lock. A lockout
+  that lands between the grant and its credential either waits for the
+  credential and sets its status bit, or, if it committed first, the call is
+  refused with `403 ISSUANCE_FROZEN` and no credential is written. A grant
+  revoked in between gets no credential, and the call returns without one, as
+  when best-effort issuance fails.
 - A lockout does not cover commerce passports
   (`POST /v1/commerce/passports/exchange`) or decision grants, which are not
   issued from grants. The runbook says how to contain commerce passports:
   disable the commerce tenant, and revoke those already issued.
 - Off with the rest of the emergency stop. Unless `EMERGENCY_STOP_ENABLED=true`,
   the issuance paths do not read the freeze state and behave exactly as
-  before, except that a passport and its credential are now written together
-  or not at all. Turning the flag off stops enforcing any freeze still in
+  before: the passport route writes its two rows separately and the
+  post-commit credential is issued as it was. Turning the flag off stops enforcing any freeze still in
   force; the runbook says to lift freezes first.
 - Migration `120_emergency_stop_lockout.sql` adds the `issuance_freezes`
   table and an `emergency_stops.lockout` column with a constant default, so

@@ -33,6 +33,8 @@ import {
 import {
   FreezeHeldByOperatorError,
   FreezeNotFoundError,
+  MAX_FREEZE_PAGE_SIZE,
+  DEFAULT_FREEZE_PAGE_SIZE,
   liftIssuanceFreeze,
   listActiveFreezes,
   toFreezeResponse,
@@ -41,6 +43,14 @@ import {
 } from '../lib/revocation/issuance-freeze.js';
 
 const MAX_REASON = 500;
+
+/** A whole number >= 1, the fallback when absent, or null for anything else. */
+function parsePageNumber(value: string | undefined, fallback: number): number | null {
+  if (value === undefined || value === '') return fallback;
+  if (!/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : null;
+}
 
 export function emergencyStopEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env['EMERGENCY_STOP_ENABLED'] === 'true';
@@ -305,9 +315,29 @@ export async function emergencyStopRoutes(app: FastifyInstance): Promise<void> {
         message: 'The emergency stop is not enabled', code: 'FEATURE_DISABLED', requestId: request.id,
       });
     }
+    // `page` and `pageSize` page the freezes in force, as the other paged
+    // `/v1` lists do; `freezesTotal` says how many there are in all, so a
+    // full page is never mistaken for the whole list. The stops are the most
+    // recent ones, as before.
+    const query = request.query as Record<string, string | undefined>;
+    const page = parsePageNumber(query['page'], 1);
+    const pageSize = parsePageNumber(query['pageSize'], DEFAULT_FREEZE_PAGE_SIZE);
+    if (page === null || pageSize === null || pageSize > MAX_FREEZE_PAGE_SIZE) {
+      return reply.status(400).send({
+        message: `page must be an integer >= 1 and pageSize an integer between 1 and ${MAX_FREEZE_PAGE_SIZE}`,
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
     const rows = await listEmergencyStops(getSql(), request.developer.id);
-    const freezes = await listActiveFreezes(getSql(), request.developer.id);
-    return reply.send({ stops: rows.map(toEmergencyStopResponse), freezes: freezes.map(toFreezeResponse) });
+    const listed = await listActiveFreezes(getSql(), request.developer.id, { page, pageSize });
+    return reply.send({
+      stops: rows.map(toEmergencyStopResponse),
+      freezes: listed.freezes.map(toFreezeResponse),
+      freezesTotal: listed.total,
+      page: listed.page,
+      pageSize: listed.pageSize,
+    });
   });
 
   // Operator-scoped: the platform admin key, which can stop any tenant.

@@ -2571,7 +2571,9 @@ paths:
         "403":
           description: >-
             ISSUANCE_FROZEN: an emergency stop lockout covers this request. Refused before
-            anything is written; retry once the lockout is lifted.
+            anything is written; retry once the lockout is lifted. With `credentialFormat`
+            `vc-jwt` or `both`, also answered when a lockout lands after the grant is written
+            but before its credential: no credential is written, and the stop revokes the grant.
           content:
             application/json:
               schema:
@@ -2918,8 +2920,10 @@ paths:
         "403":
           description: >-
             ISSUANCE_FROZEN: an emergency stop lockout covers the sub-agent, the principal, or the
-            parent grant or anything above it. Also a parent grant of another developer, or a
-            delegation deeper than the configured limit.
+            parent grant or anything above it; with `credentialFormat` `vc-jwt` or `both`, also
+            when a lockout lands after the child grant is written but before its credential, in
+            which case no credential is written and the stop revokes the child. Also a parent
+            grant of another developer, or a delegation deeper than the configured limit.
           content:
             application/json:
               schema:
@@ -3707,13 +3711,27 @@ paths:
       operationId: listEmergencyStops
       tags: [Event Bridge]
       summary: What has been stopped, when, by whom and why, and the lockouts in force
+      description: |
+        The most recent stops, and one page of the freezes still in force, oldest first.
+        `page` and `pageSize` page the freezes, as on the other paged lists; `freezesTotal` is how
+        many are in force in all, so a full page is never mistaken for the whole list.
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
       responses:
         "200":
-          description: Recent stops, and the freezes still in force
+          description: Recent stops, and a page of the freezes still in force
           content:
             application/json:
               schema:
                 type: object
+                required: [stops, freezes, freezesTotal, page, pageSize]
                 properties:
                   stops:
                     type: array
@@ -3723,6 +3741,13 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/IssuanceFreeze"
+                  freezesTotal:
+                    type: integer
+                    description: How many freezes are in force in all, across every page
+                  page: { type: integer }
+                  pageSize: { type: integer }
+        "400":
+          description: "`page` is not an integer >= 1, or `pageSize` not an integer from 1 to 200"
         "403":
           description: Not enabled
   /v1/admin/emergency-stop:

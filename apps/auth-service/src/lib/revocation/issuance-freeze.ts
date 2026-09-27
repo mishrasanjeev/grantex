@@ -19,6 +19,9 @@
  * that writes in a transaction takes it shared, inside that transaction, and
  * a freeze takes it exclusively. That includes every path that creates a
  * grant, and passports: their writes are the ones a later sweep has to find.
+ * So does the credential an exchange or a delegation issues after its grant
+ * has committed (`issueForCommittedGrant`), which is written after that
+ * transaction has released the lock.
  * A write that committed before the freeze is visible to the sweep that
  * follows it; one that had not yet read the freeze state waits, then sees it.
  * Without the lock a grant could read "not frozen", commit after the sweep's
@@ -223,6 +226,57 @@ export async function assertIssuanceOpen(
   throw new IssuanceFrozenError(freeze, options.path);
 }
 
+/**
+ * Issue something for a grant that has already been committed, in a
+ * transaction of its own that the lockout can see: the best-effort
+ * verifiable credential of a code exchange or a delegation, which is issued
+ * after the grant's transaction ends.
+ *
+ * That gap is the problem. A lockout landing in it revokes the grant and
+ * sweeps the credentials it already has; a credential written afterwards
+ * keeps a clear status bit, and repeating the stop never reaches it because
+ * its grant is already revoked. So, in one transaction, and in the order
+ * passports take them:
+ *
+ *   1. the grant's row, `FOR SHARE`: a revocation of it waits for this
+ *      transaction, and then its own sweep of credentials sees what this
+ *      wrote;
+ *   2. the freeze check, with the shared lock (`assertIssuanceOpen`): a
+ *      freeze committed before this refuses it with `IssuanceFrozenError`,
+ *      and one placed after waits for this commit, so its sweep finds the
+ *      credential and sets its bit;
+ *   3. the grant's status, as that row read it: a grant that is no longer
+ *      active and unexpired gets nothing, and `null` is returned.
+ *
+ * Refusals fail closed, as `assertIssuanceOpen` does: a freeze state that
+ * cannot be read throws `FreezeStateUnavailableError` and nothing is issued.
+ * The caller decides how to answer; the issuance itself never goes ahead.
+ *
+ * Only for use while the emergency stop is on: with it off, callers keep
+ * their original path, untouched.
+ */
+export async function issueForCommittedGrant<T>(
+  sql: Sql,
+  input: { subject: IssuanceSubject & { grantId: string }; path: IssuancePath; log?: AppLogger },
+  issue: (tx: TxSql) => Promise<T>,
+): Promise<T | null> {
+  const { grantId, ...subject } = input.subject;
+  const result = await sql.begin(async (raw) => {
+    const tx = raw as unknown as TxSql;
+    const rows = await tx<{ status: string }[]>`
+      SELECT status FROM grants
+       WHERE id = ${grantId} AND developer_id = ${subject.developerId} AND expires_at > NOW()
+       FOR SHARE`;
+    await assertIssuanceOpen(tx, {
+      ...subject,
+      grantIds: [...(subject.grantIds ?? []), grantId],
+    }, { path: input.path, inTransaction: true, ...(input.log ? { log: input.log } : {}) });
+    if (rows[0]?.status !== 'active') return { issued: false as const };
+    return { issued: true as const, value: await issue(tx) };
+  });
+  return result.issued ? result.value : null;
+}
+
 export interface PlaceFreezeInput {
   developerId: string;
   scope: StopScope;
@@ -400,13 +454,35 @@ export async function liftIssuanceFreeze(sql: Sql, input: LiftFreezeInput): Prom
   return cleared;
 }
 
-/** The freezes in force for a developer, oldest first. */
-export async function listActiveFreezes(sql: Sql, developerId: string): Promise<IssuanceFreezeRow[]> {
-  return sql<IssuanceFreezeRow[]>`
-    SELECT * FROM issuance_freezes
-     WHERE developer_id = ${developerId} AND cleared_at IS NULL
-     ORDER BY created_at, id
-     LIMIT 200`;
+/** The largest page of freezes one request may ask for, as on the other paged `/v1` lists. */
+export const MAX_FREEZE_PAGE_SIZE = 200;
+/** The page size when none is asked for. */
+export const DEFAULT_FREEZE_PAGE_SIZE = 50;
+
+/**
+ * One page of the freezes in force for a developer, oldest first, and how
+ * many are in force in all, so a caller can tell a full page from the whole
+ * list and ask for the rest. Paged with `page` and `pageSize`, as
+ * `GET /v1/budget/transactions/:grantId` and the admin developer list are.
+ */
+export async function listActiveFreezes(
+  sql: Sql,
+  developerId: string,
+  options: { page?: number; pageSize?: number } = {},
+): Promise<{ freezes: IssuanceFreezeRow[]; total: number; page: number; pageSize: number }> {
+  const page = options.page ?? 1;
+  const pageSize = Math.min(options.pageSize ?? DEFAULT_FREEZE_PAGE_SIZE, MAX_FREEZE_PAGE_SIZE);
+  const [freezes, counted] = await Promise.all([
+    sql<IssuanceFreezeRow[]>`
+      SELECT * FROM issuance_freezes
+       WHERE developer_id = ${developerId} AND cleared_at IS NULL
+       ORDER BY created_at, id
+       LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`,
+    sql<{ total: number }[]>`
+      SELECT COUNT(*)::int AS total FROM issuance_freezes
+       WHERE developer_id = ${developerId} AND cleared_at IS NULL`,
+  ]);
+  return { freezes, total: Number(counted[0]?.total ?? 0), page, pageSize };
 }
 
 export function toFreezeResponse(row: IssuanceFreezeRow): Record<string, unknown> {

@@ -421,6 +421,7 @@ describe('POST /v1/admin/emergency-stop/unfreeze', () => {
 
 describe('GET /v1/emergency-stops', () => {
   it('lists the freezes still in force beside the stops', async () => {
+    state.handlers.push([/COUNT\(\*\)::int AS total FROM issuance_freezes/, [{ total: 1 }]]);
     state.handlers.push([/FROM issuance_freezes/, [{
       ...FREEZE_ROW, scope_type: 'developer', scope_id: TEST_DEVELOPER.id, placed_by: 'operator', requested_by: 'admin:192.0.2.1',
     }]]);
@@ -432,6 +433,32 @@ describe('GET /v1/emergency-stops', () => {
         freezeId: 'frz_1', scope: { type: 'developer', id: TEST_DEVELOPER.id }, stopId: 'stop_1',
         placedBy: 'operator', frozenAt: '2026-09-20T10:00:00.000Z',
       }],
+      freezesTotal: 1,
+      page: 1,
+      pageSize: 50,
     });
+  });
+
+  it('pages the freezes, and says how many are in force in all', async () => {
+    state.handlers.push([/COUNT\(\*\)::int AS total FROM issuance_freezes/, [{ total: 120 }]]);
+    state.handlers.push([/FROM issuance_freezes/, [FREEZE_ROW]]);
+    const res = await app.inject({
+      method: 'GET', url: '/v1/emergency-stops?page=3&pageSize=50', headers: authHeader(),
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({ freezes: [{ freezeId: 'frz_1' }], freezesTotal: 120, page: 3, pageSize: 50 });
+    const read = state.statements.find((s) => s.includes('FROM issuance_freezes') && !s.includes('COUNT'));
+    expect(read).toMatch(/LIMIT \? OFFSET \?/);
+  });
+
+  it('refuses a page below 1 or a page size outside 1 to 200, reading nothing', async () => {
+    for (const query of ['page=0', 'page=abc', 'pageSize=0', 'pageSize=201', 'pageSize=-1', 'page=1.5']) {
+      state.statements = [];
+      const res = await app.inject({ method: 'GET', url: `/v1/emergency-stops?${query}`, headers: authHeader() });
+      expect(res.statusCode, query).toBe(400);
+      expect(res.json()).toMatchObject({ code: 'BAD_REQUEST' });
+      expect(state.statements.some((s) => s.includes('issuance_freezes') || s.includes('emergency_stops')), query)
+        .toBe(false);
+    }
   });
 });

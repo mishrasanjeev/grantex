@@ -74,6 +74,8 @@ let tenantCounter = 0;
 let failFreezeReads = false;
 /** Armed by a test: the stop's first scope read fails, so the sweep never finishes. */
 let failSweepOnce = false;
+/** Armed by a test: the next insert into verifiable_credentials fails. */
+let failCredentialInsertOnce = false;
 /**
  * Armed by a test: the next query whose text contains `match`, on the pool or
  * inside a transaction, says it has been reached and then waits to be
@@ -93,6 +95,10 @@ function guard(text: string): void {
   if (failSweepOnce && text.includes('SELECT id FROM grants')) {
     failSweepOnce = false;
     throw Object.assign(new Error('connection reset during the sweep'), { code: '08006' });
+  }
+  if (failCredentialInsertOnce && text.includes('INSERT INTO verifiable_credentials')) {
+    failCredentialInsertOnce = false;
+    throw Object.assign(new Error('connection reset while writing the credential'), { code: '08006' });
   }
 }
 
@@ -415,6 +421,7 @@ afterAll(async () => {
 beforeEach(() => {
   failFreezeReads = false;
   failSweepOnce = false;
+  failCredentialInsertOnce = false;
   queryHold = null;
   vi.stubEnv('EMERGENCY_STOP_ENABLED', 'true');
   sqlMock.mockImplementation(((...args: unknown[]) => {
@@ -425,7 +432,7 @@ beforeEach(() => {
   // Only wrapped while a failure or a hold is armed, so ordinary
   // transactions are the untouched postgres.js handle.
   sqlMock.begin.mockImplementation(((cb: (tx: unknown) => unknown) =>
-    sql.begin((tx) => cb(failFreezeReads || queryHold !== null ? guarded(tx as unknown as object) : tx) as never)) as never);
+    sql.begin((tx) => cb(failFreezeReads || failCredentialInsertOnce || queryHold !== null ? guarded(tx as unknown as object) : tx) as never)) as never);
   sqlMock.json.mockImplementation(((value: unknown) => sql.json(value as never)) as never);
   sqlMock.unsafe.mockImplementation(((query: string, parameters?: unknown[]) => sql.unsafe(query, parameters as never)) as never);
 });
@@ -434,6 +441,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   failFreezeReads = false;
   failSweepOnce = false;
+  failCredentialInsertOnce = false;
   queryHold = null;
 });
 
@@ -792,6 +800,184 @@ describePostgres('the emergency stop lockout against real Postgres', () => {
     expect(await sql`SELECT id FROM mpp_passports WHERE developer_id = ${tenant.id}`).toHaveLength(0);
     expect(await sql`
       SELECT id FROM verifiable_credentials WHERE developer_id = ${tenant.id} AND status <> 'revoked'`).toHaveLength(0);
+  }, 120_000);
+
+  /**
+   * A credential asked for with `credentialFormat: vc-jwt` is issued after
+   * the grant's transaction commits (unless portable passkey evidence is on,
+   * when it is issued inside it). A lockout that lands in that gap revokes the
+   * grant and sweeps its credentials, so a credential written afterwards
+   * would stay verifiable, and repeating the stop would never find it: its
+   * grant is already revoked. Here the credential is held at its first write
+   * while the stop runs, and let go once the stop has finished or is seen
+   * waiting for it. Whatever the order, nothing may still verify afterwards.
+   */
+  for (const route of ['exchange', 'delegation'] as const) {
+    it(`leaves no live credential when a lockout lands between the ${route} grant and its credential`, async () => {
+      vi.stubEnv('PORTABLE_WEBAUTHN_EVIDENCE_ENABLED', 'false');
+      const tenant = await newTenant();
+      const parent = route === 'delegation' ? await mintGrant(tenant, tenant.agentA, 'user_1') : undefined;
+      const code = route === 'exchange' ? await approvedCode(tenant, tenant.agentA, 'user_1') : undefined;
+
+      // The first write of the credential: its status-list slot.
+      const { atQuery, release } = holdQuery('UPDATE vc_status_lists');
+      const issuing = route === 'exchange'
+        ? call(tenant, 'POST', '/v1/token', { code, agentId: tenant.agentA, credentialFormat: 'vc-jwt' })
+        : call(tenant, 'POST', '/v1/grants/delegate', {
+          parentGrantToken: parent!.grantToken, subAgentId: tenant.agentB, scopes: [SCOPES[0]], expiresIn: '30m',
+          credentialFormat: 'vc-jwt',
+        });
+      expect(await within(atQuery.then(() => true), 30_000, false)).toBe(true);
+
+      const stopping = stop(tenant, { type: 'developer', id: tenant.id }, { lockout: true });
+      let settled = false;
+      await within(Promise.race([stopping, waitingForFreezeLock(tenant.id, () => settled)]), 30_000, undefined);
+      settled = true;
+      release();
+      const [issued, stopped] = await Promise.all([issuing, stopping]);
+
+      expect(stopped.statusCode, stopped.body).toBe(200);
+      expect(stopped.json()).toMatchObject({ status: 'completed', lockout: true });
+      expect([201, 403], issued.body).toContain(issued.statusCode);
+      expect(await activeGrants(tenant.id)).toBe(0);
+
+      const credentials = await sql<{ id: string; status: string; status_list_id: string; status_list_idx: number }[]>`
+        SELECT id, status, status_list_id, status_list_idx FROM verifiable_credentials
+         WHERE developer_id = ${tenant.id}`;
+      expect(credentials.filter((row) => row.status !== 'revoked')).toEqual([]);
+      for (const row of credentials) {
+        expect(await revocationBitSet(row.status_list_id, Number(row.status_list_idx)), row.id).toBe(true);
+      }
+      if (issued.statusCode === 201 && issued.json<{ verifiableCredential?: string }>().verifiableCredential) {
+        expect(credentials, 'the credential handed out was written').toHaveLength(1);
+      }
+    }, 120_000);
+  }
+
+  /**
+   * The same gap, with the lockout committed before the credential's turn:
+   * the grant is read again, locked, with the freeze, and the credential is
+   * refused with the lockout's error rather than written under a grant the
+   * stop has already swept.
+   */
+  it('refuses the credential when a lockout committed after the grant but before its credential', async () => {
+    vi.stubEnv('PORTABLE_WEBAUTHN_EVIDENCE_ENABLED', 'false');
+    const tenant = await newTenant();
+    const code = await approvedCode(tenant, tenant.agentA, 'user_1');
+
+    // The re-read of the grant that opens the credential's transaction.
+    const { atQuery, release } = holdQuery('SELECT status FROM grants');
+    const issuing = call(tenant, 'POST', '/v1/token', { code, agentId: tenant.agentA, credentialFormat: 'vc-jwt' });
+    expect(await within(atQuery.then(() => true), 30_000, false), 'the credential re-reads its grant').toBe(true);
+
+    const stopped = await stop(tenant, { type: 'developer', id: tenant.id }, { lockout: true });
+    release();
+    const issued = await issuing;
+
+    expect(stopped.statusCode, stopped.body).toBe(200);
+    expect(stopped.json()).toMatchObject({ status: 'completed', grantsRevoked: 1, lockout: true });
+    expect(issued.statusCode, issued.body).toBe(403);
+    expect(issued.json()).toMatchObject({ code: 'ISSUANCE_FROZEN' });
+    expect(await activeGrants(tenant.id)).toBe(0);
+    expect(await sql`SELECT id FROM verifiable_credentials WHERE developer_id = ${tenant.id}`).toHaveLength(0);
+  }, 120_000);
+
+  /**
+   * And with a stop that is only a sweep: nothing is frozen, but the grant is
+   * revoked by the time its credential's turn comes, so no credential is
+   * written for it. The delegation itself was committed before the stop and
+   * is answered as before, without the credential, as when best-effort
+   * issuance fails.
+   */
+  it('writes no credential for a delegated grant a stop revoked before its credential', async () => {
+    vi.stubEnv('PORTABLE_WEBAUTHN_EVIDENCE_ENABLED', 'false');
+    const tenant = await newTenant();
+    const parent = await mintGrant(tenant, tenant.agentA, 'user_1');
+
+    const { atQuery, release } = holdQuery('SELECT status FROM grants');
+    const issuing = call(tenant, 'POST', '/v1/grants/delegate', {
+      parentGrantToken: parent.grantToken, subAgentId: tenant.agentB, scopes: [SCOPES[0]], expiresIn: '30m',
+      credentialFormat: 'vc-jwt',
+    });
+    expect(await within(atQuery.then(() => true), 30_000, false), 'the credential re-reads its grant').toBe(true);
+
+    const stopped = await stop(tenant, { type: 'developer', id: tenant.id });
+    release();
+    const issued = await issuing;
+
+    expect(stopped.statusCode, stopped.body).toBe(200);
+    expect(stopped.json()).toMatchObject({ status: 'completed', grantsRevoked: 2, lockout: false });
+    expect(issued.statusCode, issued.body).toBe(201);
+    expect(issued.json()).not.toHaveProperty('verifiableCredential');
+    expect(await activeGrants(tenant.id)).toBe(0);
+    expect(await sql`SELECT id FROM verifiable_credentials WHERE developer_id = ${tenant.id}`).toHaveLength(0);
+  }, 120_000);
+
+  /**
+   * With the emergency stop off, the passport route is the one it always
+   * was: the passport and its credential row are separate writes, so a
+   * failed credential insert leaves the passport behind. With it on, both are
+   * written in the one transaction the lockout needs, so neither is.
+   */
+  it('keeps the passport writes as they were while the stop is off, and atomic while it is on', async () => {
+    const tenant = await newTenant();
+    const grant = await mintGrant(tenant, tenant.agentA, 'user_1');
+
+    vi.stubEnv('EMERGENCY_STOP_ENABLED', 'false');
+    failCredentialInsertOnce = true;
+    const off = await passport(tenant, tenant.agentA, grant.grantId);
+    expect(off.statusCode, off.body).toBe(500);
+    expect(await sql`SELECT id FROM mpp_passports WHERE developer_id = ${tenant.id}`).toHaveLength(1);
+    expect(await sql`SELECT id FROM verifiable_credentials WHERE developer_id = ${tenant.id}`).toHaveLength(0);
+
+    vi.stubEnv('EMERGENCY_STOP_ENABLED', 'true');
+    failCredentialInsertOnce = true;
+    const on = await passport(tenant, tenant.agentA, grant.grantId);
+    expect(on.statusCode, on.body).toBe(500);
+    expect(await sql`SELECT id FROM mpp_passports WHERE developer_id = ${tenant.id}`).toHaveLength(1);
+    expect(await sql`SELECT id FROM verifiable_credentials WHERE developer_id = ${tenant.id}`).toHaveLength(0);
+  }, 120_000);
+
+  /**
+   * Every freeze in force is reachable from the list, however many there are:
+   * a page at a time, with the total alongside, rather than a silent cap.
+   */
+  it('pages through every freeze in force, with the total', async () => {
+    const tenant = await newTenant();
+    const count = 55;
+    for (let index = 0; index < count; index += 1) {
+      await sql`
+        INSERT INTO issuance_freezes (id, developer_id, scope_type, scope_id, placed_by, reason, requested_by, created_at)
+        VALUES (${`frz_page_${tenant.id}_${String(index).padStart(3, '0')}`}, ${tenant.id}, 'agent',
+                ${`ag_frozen_${String(index).padStart(3, '0')}`}, 'developer', 'incident 4102', 'test',
+                ${new Date(Date.UTC(2026, 8, 20, 10, 0, index))})`;
+    }
+    // A lifted freeze is not in force and is not counted.
+    await sql`
+      INSERT INTO issuance_freezes
+        (id, developer_id, scope_type, scope_id, placed_by, reason, requested_by, cleared_at, cleared_by)
+      VALUES (${`frz_page_${tenant.id}_lifted`}, ${tenant.id}, 'agent', 'ag_lifted', 'developer', 'incident', 'test',
+              NOW(), 'test')`;
+
+    type Page = { freezes: Array<{ freezeId: string }>; freezesTotal: number; page: number; pageSize: number };
+    const first = await call(tenant, 'GET', '/v1/emergency-stops');
+    expect(first.statusCode, first.body).toBe(200);
+    expect(first.json<Page>()).toMatchObject({ freezesTotal: count, page: 1, pageSize: 50 });
+    expect(first.json<Page>().freezes).toHaveLength(50);
+    const second = await call(tenant, 'GET', '/v1/emergency-stops?page=2');
+    expect(second.json<Page>()).toMatchObject({ freezesTotal: count, page: 2, pageSize: 50 });
+    expect(second.json<Page>().freezes).toHaveLength(count - 50);
+
+    // The two pages together are every freeze in force, oldest first, once each.
+    const ids = [...first.json<Page>().freezes, ...second.json<Page>().freezes].map((freeze) => freeze.freezeId);
+    const expected = Array.from({ length: count }, (_, index) => `frz_page_${tenant.id}_${String(index).padStart(3, '0')}`);
+    expect(ids).toEqual(expected);
+
+    const whole = await call(tenant, 'GET', '/v1/emergency-stops?pageSize=200');
+    expect(whole.json<Page>().freezes.map((freeze) => freeze.freezeId)).toEqual(expected);
+    const past = await call(tenant, 'GET', '/v1/emergency-stops?page=9');
+    expect(past.json<Page>()).toMatchObject({ freezes: [], freezesTotal: count, page: 9 });
+    expect((await call(tenant, 'GET', '/v1/emergency-stops?pageSize=201')).statusCode).toBe(400);
   }, 120_000);
 
   /**

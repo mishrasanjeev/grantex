@@ -7,7 +7,13 @@ import { narrowToolsAuthorizationDetails, purposeOfToolsAuthorizationDetails } f
 import { emitEvent } from '../lib/events.js';
 import { issueAgentGrantVC } from '../lib/vc.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
-import { assertIssuanceOpen, issuanceRefusal } from '../lib/revocation/issuance-freeze.js';
+import {
+  IssuanceFrozenError,
+  assertIssuanceOpen,
+  issuanceFreezeEnforced,
+  issuanceRefusal,
+  issueForCommittedGrant,
+} from '../lib/revocation/issuance-freeze.js';
 import { config } from '../config.js';
 import {
   grantWebAuthnEvidence,
@@ -336,20 +342,65 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
 
     if ((body.credentialFormat === 'vc-jwt' || body.credentialFormat === 'both')
         && !config.portableWebAuthnEvidenceEnabled && !inheritedEvidence) {
-      try {
-        const vcResult = await issueAgentGrantVC({
-          grantId,
-          agentDid: subAgent['did'] as string,
-          principalId: parentClaims.sub,
-          developerId,
-          scopes,
-          expiresAt,
-          delegationDepth,
-        });
-        verifiableCredential = vcResult.vcJwt;
-        verifiableCredentialId = vcResult.vcId;
-      } catch {
-        // Preserve the pre-rollout best-effort behavior while the flag is off.
+      if (issuanceFreezeEnforced()) {
+        // The delegation's transaction has committed and released the
+        // lockout's lock, so a lockout could land before this credential is
+        // written: it would revoke the child, sweep its credentials, and
+        // never see this one. The credential is written in a transaction of
+        // its own that re-reads the child grant and the freeze under the same
+        // lock; the child's lineage brings in the parent and everything above.
+        try {
+          const vcResult = await issueForCommittedGrant(sql, {
+            subject: {
+              developerId,
+              grantId,
+              agentIds: [subAgentId],
+              principalIds: [parentClaims.sub],
+            },
+            path: 'delegate',
+            log: request.log,
+          }, (tx) => issueAgentGrantVC({
+            grantId,
+            agentDid: subAgent['did'] as string,
+            principalId: parentClaims.sub,
+            developerId,
+            scopes,
+            expiresAt,
+            delegationDepth,
+          }, tx));
+          if (vcResult !== null) {
+            verifiableCredential = vcResult.vcJwt;
+            verifiableCredentialId = vcResult.vcId;
+          }
+        } catch (err) {
+          // A lockout now covers the child, and its stop revokes it: refused
+          // like every other issuance under a lockout, rather than answered
+          // with a token the stop is taking away.
+          if (err instanceof IssuanceFrozenError) {
+            const refusal = issuanceRefusal(err)!;
+            return reply.status(refusal.statusCode).send({ ...refusal.body, requestId: request.id });
+          }
+          // Anything else, a lockout state that cannot be read included,
+          // leaves the credential out, as a failed best-effort issuance
+          // always has. Its transaction rolled back, so nothing was written:
+          // closed, not open.
+        }
+      } else {
+        try {
+          const vcResult = await issueAgentGrantVC({
+            grantId,
+            agentDid: subAgent['did'] as string,
+            principalId: parentClaims.sub,
+            developerId,
+            scopes,
+            expiresAt,
+            delegationDepth,
+          });
+          verifiableCredential = vcResult.vcJwt;
+          verifiableCredentialId = vcResult.vcId;
+        } catch {
+          // Preserve the pre-rollout best-effort behavior while the flag is off.
+        }
       }
     }
     if (verifiableCredentialId) {

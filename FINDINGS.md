@@ -976,3 +976,66 @@ the pull request that references it.
   (`commerce_developer_tenants`) and have the exchange read the freeze of
   those developers, with a stop that also revokes the tenant's live commerce
   passports.
+
+## G-70 — With the emergency stop off, a failed passport credential insert leaves the passport behind
+
+- **Found:** emergency stop lockout work (G-22), 2026-09-27, in review.
+- **What:** `POST /v1/passport/issue` writes its `mpp_passports` row and its
+  `verifiable_credentials` row as two separate statements on the pool. If the
+  second fails, the route answers 500 but the passport row stays, reading
+  `active`, with no credential row. A revocation of the grant finds
+  credentials through `verifiable_credentials`, so it never sets that
+  passport's status bit. With `EMERGENCY_STOP_ENABLED=true` the two rows are
+  written in one transaction, because the lockout needs the credential row
+  committed with the passport. With the flag off the route keeps the original
+  two writes, since every behaviour change on an existing path ships behind a
+  flag that defaults off; the Postgres test "keeps the passport writes as they
+  were while the stop is off, and atomic while it is on" pins both.
+- **Impact:** narrow. It needs the second insert to fail after the first
+  succeeded (a dropped connection, a constraint on the credential row). The
+  caller gets a 500 and no credential, so nothing was presented; what is
+  wrong is the record, and `GET /v1/passports` lists a passport that was
+  never issued.
+- **Proposal:** write the two rows in one transaction unconditionally, under
+  its own flag or once the emergency stop is on by default. It only changes
+  what a failed issuance leaves behind.
+
+## G-71 — With the emergency stop off, a best-effort credential can outlive a revocation of its grant
+
+- **Found:** emergency stop lockout work (G-22), 2026-09-27, in review.
+- **What:** with `credentialFormat` `vc-jwt` or `both` and portable passkey
+  evidence off, `POST /v1/token` and `POST /v1/grants/delegate` issue the
+  grant's verifiable credential after the grant's transaction commits. A
+  revocation of the grant that commits in that gap sets the status bits of
+  the credentials it finds, which do not yet include this one, and the
+  credential is then written with a clear bit under a revoked grant. No later
+  revocation starts from a revoked grant, so it verifies until it expires.
+  With `EMERGENCY_STOP_ENABLED=true` the credential is written in a
+  transaction that re-reads the grant `FOR SHARE` and the lockout under its
+  lock (`issueForCommittedGrant` in `lib/revocation/issuance-freeze.ts`),
+  which closes the gap for stops and ordinary revocations alike. With the
+  flag off the original path is kept.
+- **Impact:** narrow: a revocation within milliseconds of an exchange or a
+  delegation that asked for a credential.
+- **Proposal:** make the same re-read the path with the flag off too, under
+  its own flag. It only withholds a credential from a grant that is no longer
+  active.
+
+## G-72 — SD-JWT credentials from the code exchange carry no revocation status
+
+- **Found:** emergency stop lockout work (G-22), 2026-09-27, checking every
+  issuance path for credentials issued after the grant commits.
+- **What:** `POST /v1/token` with `credentialFormat: "sd-jwt"` signs an SD-JWT
+  (`issueSDJWT` in `lib/sd-jwt.ts`) after the grant's transaction commits. It
+  has no `credentialStatus` and is not stored, and `verifySDJWT` checks only
+  the signature, the disclosures and expiry. No revocation, emergency stop or
+  lockout can reach one: revoking its grant leaves it verifying until it
+  expires, whether it was issued before the stop or in the gap after the
+  grant committed. The lockout change leaves it as it was, because gating its
+  issuance would not make one issued a moment earlier revocable.
+- **Impact:** an SD-JWT is only as revocable as its expiry. A verifier that
+  also checks the grant token, or the grant online, is not affected.
+- **Proposal:** give SD-JWTs a status-list entry and a `verifiable_credentials`
+  row, issued the way the VC-JWT is (in the grant's transaction, or through
+  `issueForCommittedGrant` while the stop is on), so a revocation sets their
+  bit, and have `verifySDJWT` check it.

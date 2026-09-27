@@ -262,4 +262,166 @@ describe('POST /v1/passport/issue and the freeze', () => {
     expect(position('INSERT INTO mpp_passports')).toBeGreaterThanOrEqual(0);
     expect(position('INSERT INTO verifiable_credentials')).toBeGreaterThanOrEqual(0);
   });
+
+  it('with the stop off, writes on the pool as it always did, with no transaction around the two rows', async () => {
+    vi.stubEnv('EMERGENCY_STOP_ENABLED', 'false');
+    install();
+    const inner = sqlMock.getMockImplementation()!;
+    sqlMock.mockImplementation(async (strings: TemplateStringsArray | string, ...rest: unknown[]) => {
+      const text = Array.isArray(strings) ? strings.join('?') : String(strings);
+      if (text.includes('INSERT INTO verifiable_credentials')) {
+        statements.push(text.replace(/\s+/g, ' ').trim());
+        throw new Error('credential insert failed');
+      }
+      return inner(strings, ...rest);
+    });
+    const res = await app.inject({ method: 'POST', url: '/v1/passport/issue', headers: authHeader(), payload });
+    expect(res.statusCode).toBe(500);
+    // The passport row was its own write, so it is not rolled back with the
+    // credential's: the behaviour of the route before the lockout existed.
+    expect(sqlMock.begin).not.toHaveBeenCalled();
+    expect(position('INSERT INTO mpp_passports')).toBeGreaterThanOrEqual(0);
+    expect(position('INSERT INTO verifiable_credentials')).toBeGreaterThan(position('INSERT INTO mpp_passports'));
+  });
+});
+
+/**
+ * The best-effort credential of a code exchange or a delegation is issued
+ * after the grant's own transaction commits. With the emergency stop on, it
+ * is written in a transaction of its own that locks the grant's row, takes
+ * the lockout's shared lock and reads the freeze again before anything is
+ * written. The interleavings themselves are driven against real Postgres in
+ * emergency-stop-lockout-postgres.integration.test.ts.
+ */
+describe('a credential issued after its grant has committed', () => {
+  let app: FastifyInstance;
+  let statements: string[];
+  let parentToken: string;
+
+  beforeAll(async () => {
+    app = await buildTestApp();
+    const { signGrantToken } = await import('../src/lib/crypto.js');
+    parentToken = await signGrantToken({
+      sub: 'user_1', agt: TEST_AGENT.did, dev: TEST_DEVELOPER.id, scp: ['read'],
+      jti: 'tok_PARENT', grnt: 'grnt_PARENT', exp: Math.floor(Date.now() / 1000) + 3600,
+    });
+  });
+
+  beforeEach(() => {
+    statements = [];
+    vi.stubEnv('PORTABLE_WEBAUTHN_EVIDENCE_ENABLED', 'false');
+  });
+
+  const authRequest = {
+    id: 'areq_1', agent_id: TEST_AGENT.id, principal_id: 'user_1', developer_id: TEST_DEVELOPER.id,
+    scopes: ['read'], expires_in: '1h', expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+    status: 'approved', agent_did: TEST_AGENT.did, redirect_uri: null, code_challenge: null,
+    agent_key_thumbprint: null,
+  };
+
+  /**
+   * Answers by statement. `freezeReads` answers the freeze reads in turn,
+   * the grant's own transaction first and then the credential's, and
+   * `lockedGrant` is what the credential's re-read of the grant returns.
+   */
+  function install(options: { freezeReads?: Array<unknown[] | Error>; lockedGrant?: unknown[] } = {}): void {
+    const freezeReads = [...(options.freezeReads ?? [])];
+    sqlMock.mockImplementation(async (strings: TemplateStringsArray | string) => {
+      const text = Array.isArray(strings) ? strings.join('?') : String(strings);
+      statements.push(text.replace(/\s+/g, ' ').trim());
+      if (text.includes('FROM developers d')) return [TEST_DEVELOPER];
+      if (text.includes('FROM auth_requests ar')) return [authRequest];
+      if (text.includes('FROM grant_tokens gt')) {
+        return [{ is_revoked: false, expires_at: new Date(Date.now() + 3_600_000).toISOString(), grant_status: 'active' }];
+      }
+      if (text.includes('FROM agents')) {
+        return [{ id: 'ag_SUB', did: 'did:grantex:ag_SUB', scopes: ['read'], key_thumbprint: null }];
+      }
+      if (text.includes('FROM issuance_freezes')) {
+        const next = freezeReads.shift() ?? [];
+        if (next instanceof Error) throw next;
+        return next;
+      }
+      if (text.includes('SELECT status FROM grants')) return options.lockedGrant ?? [{ status: 'active' }];
+      if (/SELECT id\s+FROM grants/.test(text) && text.includes('FOR UPDATE')) return [{ id: 'grnt_PARENT' }];
+      if (text.includes('UPDATE vc_status_lists')) return [{ id: 'vcsl_1', allocated_index: 0 }];
+      return [];
+    });
+  }
+
+  const position = (fragment: string, from = 0): number =>
+    statements.findIndex((s, index) => index >= from && s.includes(fragment));
+
+  const exchange = () => app.inject({
+    method: 'POST', url: '/v1/token', headers: authHeader(),
+    payload: { code: 'code_1', agentId: TEST_AGENT.id, credentialFormat: 'vc-jwt' },
+  });
+  const delegate = () => app.inject({
+    method: 'POST', url: '/v1/grants/delegate', headers: authHeader(),
+    payload: { parentGrantToken: parentToken, subAgentId: 'ag_SUB', scopes: ['read'], credentialFormat: 'vc-jwt' },
+  });
+
+  it('on exchange, writes it in its own transaction after locking the grant and reading the freeze again', async () => {
+    vi.stubEnv('EMERGENCY_STOP_ENABLED', 'true');
+    install();
+    const res = await exchange();
+    expect(res.statusCode, res.body).toBe(201);
+    expect(res.json()).toHaveProperty('verifiableCredential');
+    expect(sqlMock.begin).toHaveBeenCalledTimes(2);
+    const committed = position('UPDATE auth_requests');
+    const order = [
+      committed,
+      position('SELECT status FROM grants', committed),
+      position('pg_advisory_xact_lock_shared', committed),
+      position('FROM issuance_freezes', committed),
+      position('UPDATE vc_status_lists', committed),
+      position('INSERT INTO verifiable_credentials', committed),
+    ];
+    expect(order.every((index) => index >= 0), JSON.stringify(order)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  for (const [name, call] of [['exchange', exchange], ['delegation', delegate]] as const) {
+    it(`on ${name}, refuses with ISSUANCE_FROZEN when a lockout landed after the grant committed`, async () => {
+      vi.stubEnv('EMERGENCY_STOP_ENABLED', 'true');
+      install({ freezeReads: [[], [FROZEN]] });
+      const res = await call();
+      expect(res.statusCode, res.body).toBe(403);
+      expect(res.json()).toMatchObject({ code: 'ISSUANCE_FROZEN' });
+      expect(position('UPDATE vc_status_lists')).toBe(-1);
+      expect(position('INSERT INTO verifiable_credentials')).toBe(-1);
+    });
+
+    it(`on ${name}, writes no credential for a grant that is no longer active`, async () => {
+      vi.stubEnv('EMERGENCY_STOP_ENABLED', 'true');
+      install({ lockedGrant: [{ status: 'revoked' }] });
+      const res = await call();
+      expect(res.statusCode, res.body).toBe(201);
+      expect(res.json()).not.toHaveProperty('verifiableCredential');
+      expect(position('INSERT INTO verifiable_credentials')).toBe(-1);
+    });
+
+    it(`on ${name}, writes no credential when the lockout state cannot be read`, async () => {
+      vi.stubEnv('EMERGENCY_STOP_ENABLED', 'true');
+      install({ freezeReads: [[], Object.assign(new Error('connection reset'), { code: '08006' })] });
+      const res = await call();
+      // The grant was committed under a lockout check that passed; only the
+      // credential is left out, closed rather than issued unchecked.
+      expect(res.statusCode, res.body).toBe(201);
+      expect(res.json()).not.toHaveProperty('verifiableCredential');
+      expect(position('INSERT INTO verifiable_credentials')).toBe(-1);
+    });
+
+    it(`on ${name}, with the stop off, issues it as before: no re-read and no freeze read`, async () => {
+      vi.stubEnv('EMERGENCY_STOP_ENABLED', 'false');
+      install({ lockedGrant: [] });
+      const res = await call();
+      expect(res.statusCode, res.body).toBe(201);
+      expect(res.json()).toHaveProperty('verifiableCredential');
+      expect(sqlMock.begin).toHaveBeenCalledTimes(1);
+      expect(position('SELECT status FROM grants')).toBe(-1);
+      expect(position('issuance_freezes')).toBe(-1);
+      expect(position('INSERT INTO verifiable_credentials')).toBeGreaterThanOrEqual(0);
+    });
+  }
 });
