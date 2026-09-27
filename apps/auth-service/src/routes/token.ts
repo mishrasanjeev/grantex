@@ -20,6 +20,7 @@ import {
 } from '../lib/webauthn-evidence.js';
 import { issueSDJWT } from '../lib/sd-jwt.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
+import { assertIssuanceOpen, issuanceRefusal } from '../lib/revocation/issuance-freeze.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import {
   clearExpiredRefreshReplayState,
@@ -233,6 +234,16 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           );
         }
 
+        // An emergency stop's lockout, checked in the transaction that writes
+        // the grant: a freeze committed while this waited is seen, and a
+        // freeze placed after this commits finds the grant in its sweep. The
+        // code is not consumed when it is refused.
+        await assertIssuanceOpen(tx, {
+          developerId,
+          agentIds: [authReq['agent_id'] as string],
+          principalIds: [authReq['principal_id'] as string],
+        }, { path: 'token', inTransaction: true, log: request.log });
+
         // The purpose the Principal approved travels unchanged to the grant and
         // its token. A stored purpose without matching tools entries is a
         // corrupt request: refuse to issue rather than drop the constraint.
@@ -339,6 +350,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         `;
       });
     } catch (err) {
+      const refusal = issuanceRefusal(err);
+      if (refusal) return reply.status(refusal.statusCode).send({ ...refusal.body, requestId: request.id });
       if (isRouteError(err)) {
         return reply.status(err.statusCode).send({
           message: err.message,
@@ -516,6 +529,16 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         if (new Date(row['grant_expires_at'] as string) <= new Date()) {
           routeError(400, 'Grant has expired');
         }
+        // An emergency stop's lockout covers this grant if it covers the grant
+        // or anything above it, as a stop over that scope would have revoked
+        // it. Refused before a token is minted or a replayed one handed back;
+        // the refresh token is left unused.
+        await assertIssuanceOpen(tx, {
+          developerId,
+          agentIds: [row['agent_id'] as string],
+          principalIds: [row['principal_id'] as string],
+          grantIds: [row['grant_id'] as string],
+        }, { path: 'token_refresh', inTransaction: true, log: request.log });
 
         grantId = row['grant_id'] as string;
         scopes = row['scopes'] as string[];
@@ -701,6 +724,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       });
       if (refreshReplayRejected) routeError(400, REFRESH_TOKEN_ALREADY_USED);
     } catch (err) {
+      const refusal = issuanceRefusal(err);
+      if (refusal) return reply.status(refusal.statusCode).send({ ...refusal.body, requestId: request.id });
       if (isRouteError(err)) {
         return reply.status(err.statusCode).send({
           message: err.message,

@@ -164,6 +164,12 @@ components:
           type: boolean
           default: false
           description: Report the blast radius without revoking anything
+        lockout:
+          type: boolean
+          default: false
+          description: >-
+            Also freeze issuance under the scope until the freeze is lifted. The freeze is
+            recorded before the first sweep. A dry run never freezes anything.
     EmergencyStopResult:
       type: object
       properties:
@@ -179,8 +185,13 @@ components:
         lockout:
           type: boolean
           description: >-
-            Always false. The stop revokes what exists; it does not prevent new grants being
-            issued afterwards. Rotate the credential first (see the runbook).
+            True when this stop placed a lockout, or reaffirmed one already in force over the
+            same scope: nothing is issued under the scope until it is lifted. False for a stop
+            without `lockout: true`, which revokes what exists and does not prevent new grants
+            being issued afterwards (rotate the credential first; see the runbook), and for a
+            dry run. In a listing it says whether the stop asked for a lockout; the freezes still
+            in force are listed separately.
+        freezeId: { type: string, description: The freeze in force, when lockout is true }
         error: { type: string, description: Present when status is failed }
         scope:
           type: object
@@ -204,6 +215,41 @@ components:
         requestedBy: { type: string }
         startedAt: { type: string, format: date-time }
         completedAt: { type: [string, "null"], format: date-time }
+    EmergencyStopUnfreezeRequest:
+      type: object
+      required: [scope, reason, confirm]
+      properties:
+        scope:
+          type: object
+          required: [type, id]
+          properties:
+            type: { type: string, enum: [grant, agent, principal, developer] }
+            id: { type: string, maxLength: 256 }
+        reason: { type: string, maxLength: 500 }
+        confirm:
+          type: string
+          description: "Exactly `unfreeze <type>:<id>`; deliberately not the stop's phrase"
+    IssuanceFreeze:
+      type: object
+      properties:
+        freezeId: { type: string }
+        developerId: { type: string }
+        scope:
+          type: object
+          properties:
+            type: { type: string, enum: [grant, agent, principal, developer] }
+            id: { type: string }
+        stopId: { type: [string, "null"], description: The stop that placed it }
+        placedBy:
+          type: string
+          enum: [developer, operator]
+          description: Whose it is to lift. A developer key cannot lift the operator's.
+        reason: { type: string }
+        requestedBy: { type: string }
+        frozenAt: { type: string, format: date-time }
+        clearedAt: { type: string, format: date-time, description: Present once lifted }
+        clearedBy: { type: string, description: Present once lifted }
+        clearReason: { type: string, description: Present once lifted }
     EventMappingRuleInput:
       type: object
       additionalProperties: false
@@ -1655,6 +1701,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OAuthError"
+        "403":
+          description: >-
+            `access_denied`: an emergency stop lockout covers this client, principal or grant.
+            Nothing is issued and a code is not consumed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+        "503":
+          description: >-
+            `temporarily_unavailable`: the lockout state could not be read, so issuance fails
+            closed. Only while EMERGENCY_STOP_ENABLED=true.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
 
   /oauth/authorize:
     get:
@@ -1732,6 +1794,22 @@ paths:
                 $ref: "#/components/schemas/OAuthTokenResponse"
         "400":
           description: Invalid grant, proof, scope, target, or grant type
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+        "403":
+          description: >-
+            `access_denied`: an emergency stop lockout covers this client, principal or grant.
+            Nothing is issued and a code is not consumed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthError"
+        "503":
+          description: >-
+            `temporarily_unavailable`: the lockout state could not be read, so issuance fails
+            closed. Only while EMERGENCY_STOP_ENABLED=true.
           content:
             application/json:
               schema:
@@ -2183,13 +2261,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: Policy denied the authorization
+          description: >-
+            POLICY_DENIED, or ISSUANCE_FROZEN: an emergency stop lockout covers the agent, the
+            principal or the developer. Refused before anything is recorded.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: >-
+            FREEZE_STATE_UNAVAILABLE: the lockout state could not be read, so issuance fails
+            closed. Only while EMERGENCY_STOP_ENABLED=true.
           content:
             application/json:
               schema:
@@ -2480,6 +2568,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: >-
+            ISSUANCE_FROZEN: an emergency stop lockout covers this request. Refused before
+            anything is written; retry once the lockout is lifted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: >-
+            FREEZE_STATE_UNAVAILABLE: the lockout state could not be read, so issuance fails
+            closed. Only while EMERGENCY_STOP_ENABLED=true.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /v1/token/refresh:
     post:
@@ -2539,6 +2643,22 @@ paths:
                     description: Same grant ID as original token
         "400":
           description: Invalid, expired, used, or revoked refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: >-
+            ISSUANCE_FROZEN: an emergency stop lockout covers this request. Refused before
+            anything is written; retry once the lockout is lifted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: >-
+            FREEZE_STATE_UNAVAILABLE: the lockout state could not be read, so issuance fails
+            closed. Only while EMERGENCY_STOP_ENABLED=true.
           content:
             application/json:
               schema:
@@ -2795,8 +2915,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: >-
+            ISSUANCE_FROZEN: an emergency stop lockout covers the sub-agent, the principal, or the
+            parent grant or anything above it. Also a parent grant of another developer, or a
+            delegation deeper than the configured limit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: Sub-agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: >-
+            FREEZE_STATE_UNAVAILABLE: the lockout state could not be read, so issuance fails
+            closed. Only while EMERGENCY_STOP_ENABLED=true.
           content:
             application/json:
               schema:
@@ -3539,10 +3676,13 @@ paths:
         nothing is revoked; `dryRun: true` reports the blast radius and revokes nothing. A
         developer API key can only stop its own grants. Revocations are irreversible.
 
-        It is a sweep, not a lockout: the same credential can mint a new grant immediately
-        afterwards (`lockout` is always false), so rotate the leaked credential first — the
-        runbook in section 11 of docs/self-hosting.md gives the order. Requires
-        `EMERGENCY_STOP_ENABLED=true`.
+        Without `lockout`, it is a sweep, not a lockout: the same credential can mint a new
+        grant immediately afterwards (`lockout: false`), so rotate the leaked credential first.
+        With `lockout: true` it also freezes issuance under the scope, recorded before the
+        first sweep: authorize, token, refresh, delegate, the OAuth profile's pushed request and
+        token endpoint, consent bundles and passports answer 403 `ISSUANCE_FROZEN` until the
+        freeze is lifted with `POST /v1/emergency-stop/unfreeze`. The runbook in section 11 of
+        docs/self-hosting.md gives the order. Requires `EMERGENCY_STOP_ENABLED=true`.
       requestBody:
         required: true
         content:
@@ -3557,19 +3697,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/EmergencyStopResult"
         "400":
-          description: Malformed scope, reason or dryRun
+          description: Malformed scope, reason, dryRun or lockout
         "403":
           description: Not enabled, or an attempt to stop another developer
         "412":
-          description: The confirmation phrase does not match; the response says what it should be
+          description: The confirmation phrase does not match; the expected phrase is not echoed
   /v1/emergency-stops:
     get:
       operationId: listEmergencyStops
       tags: [Event Bridge]
-      summary: What has been stopped, when, by whom and why
+      summary: What has been stopped, when, by whom and why, and the lockouts in force
       responses:
         "200":
-          description: Recent stops
+          description: Recent stops, and the freezes still in force
           content:
             application/json:
               schema:
@@ -3579,6 +3719,10 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/EmergencyStopResult"
+                  freezes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/IssuanceFreeze"
         "403":
           description: Not enabled
   /v1/admin/emergency-stop:
@@ -3589,7 +3733,8 @@ paths:
       description: |
         The same call for the platform operator, authenticated with `ADMIN_API_KEY`. `developerId`
         names the tenant for a grant, agent or principal scope; a `developer` scope names it
-        itself.
+        itself. A lockout placed here, or a tenant's lockout reaffirmed here, can only be lifted
+        by the operator.
       security:
         - adminAuth: []
       requestBody:
@@ -3615,6 +3760,77 @@ paths:
           description: Missing or wrong admin key
         "404":
           description: Not enabled
+        "412":
+          description: The confirmation phrase does not match
+        "503":
+          description: ADMIN_API_KEY is not configured
+  /v1/emergency-stop/unfreeze:
+    post:
+      operationId: emergencyStopUnfreeze
+      tags: [Event Bridge]
+      summary: Lift a lockout this developer placed
+      description: |
+        Lifts the freeze in force for exactly this scope, so issuance under it resumes. The
+        freeze is kept, with who lifted it, when and why, and a `grantex.issuance_unfrozen` entry
+        goes on the audit chain in the same transaction. `confirm` must repeat exactly
+        `unfreeze <type>:<id>`. A lockout the operator placed is refused with 403
+        `FREEZE_HELD_BY_OPERATOR`: the developer's key may be the credential it is containing.
+        Requires `EMERGENCY_STOP_ENABLED=true`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmergencyStopUnfreezeRequest"
+      responses:
+        "200":
+          description: The lifted freeze
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuanceFreeze"
+        "400":
+          description: Malformed scope or reason
+        "403":
+          description: Not enabled, an attempt to lift another developer, or FREEZE_HELD_BY_OPERATOR
+        "404":
+          description: NOT_FROZEN; no freeze is in force for this scope
+        "412":
+          description: The confirmation phrase does not match; the expected phrase is not echoed
+  /v1/admin/emergency-stop/unfreeze:
+    post:
+      operationId: adminEmergencyStopUnfreeze
+      tags: [Event Bridge]
+      summary: Lift any tenant's lockout (operator)
+      description: |
+        The same call for the platform operator, authenticated with `ADMIN_API_KEY`. It lifts
+        any freeze, whoever placed it. `developerId` names the tenant for a grant, agent or
+        principal scope; a `developer` scope names it itself.
+      security:
+        - adminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/EmergencyStopUnfreezeRequest"
+                - type: object
+                  properties:
+                    developerId: { type: string }
+      responses:
+        "200":
+          description: The lifted freeze
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuanceFreeze"
+        "400":
+          description: Malformed request, or a missing developerId
+        "401":
+          description: Missing or wrong admin key
+        "404":
+          description: Not enabled, or NOT_FROZEN
         "412":
           description: The confirmation phrase does not match
         "503":
@@ -7724,6 +7940,8 @@ paths:
       responses:
         "201":
           description: Bundle containing a grant token, JWKS snapshot, and offline audit key
+        "403": { description: "ISSUANCE_FROZEN: an emergency stop lockout covers the agent or user" }
+        "503": { description: "FREEZE_STATE_UNAVAILABLE: the lockout state could not be read; issuance fails closed" }
 
   /v1/consent-bundles/{bundleId}:
     get:
@@ -7807,7 +8025,9 @@ paths:
           schema: { type: string }
       responses:
         "200": { description: Refreshed bundle and rotated offline material }
+        "403": { description: "ISSUANCE_FROZEN: an emergency stop lockout covers the bundle's grant, agent or user" }
         "409": { description: Bundle cannot be refreshed }
+        "503": { description: "FREEZE_STATE_UNAVAILABLE: the lockout state could not be read; issuance fails closed" }
 
   /v1/consent-bundles/{bundleId}/revoke:
     post:
@@ -7842,6 +8062,9 @@ paths:
               additionalProperties: true
       responses:
         "201": { description: Signed agent passport credential }
+        "400": { description: "Invalid request; INVALID_GRANT when the grant is not active, including a grant revoked while the passport was being issued" }
+        "403": { description: "ISSUANCE_FROZEN: an emergency stop lockout covers the grant, anything above it, its agent or its principal" }
+        "503": { description: "FREEZE_STATE_UNAVAILABLE: the lockout state could not be read; issuance fails closed" }
 
   /v1/passports:
     get:

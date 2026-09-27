@@ -101,6 +101,32 @@ A `402 Payment Required` response means you've hit a resource limit for your cur
 - **Clean up unused resources** — delete inactive agents, revoke expired grants
 - **Check your current usage** via the developer dashboard
 
+## Issuance Frozen (403)
+
+`403` with `ISSUANCE_FROZEN` means an emergency stop placed a lockout over
+something this request would issue under. That can be your whole developer
+account, the agent, the principal, or a grant above the one you are
+refreshing or delegating from.
+
+```json
+{
+  "message": "Issuance is frozen for this agent by an emergency stop",
+  "code": "ISSUANCE_FROZEN",
+  "requestId": "..."
+}
+```
+
+The OAuth profile's endpoints answer `403` with `access_denied`. Nothing is
+issued until the lockout is lifted. An authorization code or refresh token
+refused this way is not used up, so it works again afterwards.
+`GET /v1/emergency-stops` lists the lockouts in force under `freezes`.
+`POST /v1/emergency-stop/unfreeze` lifts one you placed; a lockout placed by
+the platform operator can only be lifted by the operator.
+
+`503` with `FREEZE_STATE_UNAVAILABLE` (`temporarily_unavailable` on the OAuth
+endpoints) means the service could not read whether a lockout applies, and
+refused rather than risk issuing under one. Retry shortly.
+
 ## Delegation Failed
 
 If `POST /v1/grants/delegate` returns an error:
@@ -171,6 +197,8 @@ except GrantexApiError as err:
 | `VALIDATION_ERROR` | 422 | Schema validation failure |
 | `PLAN_LIMIT_EXCEEDED` | 402 | Resource count exceeds plan threshold |
 | `POLICY_DENIED` | 403 | An access policy blocked the operation |
+| `ISSUANCE_FROZEN` | 403 | An emergency stop lockout covers what the request would issue |
+| `FREEZE_STATE_UNAVAILABLE` | 503 | The lockout state could not be read, so issuance was refused |
 | `SSO_ERROR` | 400 | SSO/OIDC configuration or callback error |
 | `SERVICE_UNAVAILABLE` | 503 | Service temporarily unavailable |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |
