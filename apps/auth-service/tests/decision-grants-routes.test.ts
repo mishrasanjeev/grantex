@@ -1,23 +1,34 @@
 /**
  * Decision-grant routes (PRD G-3) with the store mocked: the feature flag,
  * configuration failures, input validation, the administrator-only identity
- * provider API and fail-closed auditing of refused consumptions. Database
+ * provider API, fail-closed auditing of refused consumptions and of decision
+ * grant releases, and both states of DECISION_GRANT_AGENT_BINDING. Database
  * behaviour is covered by decision-grants-postgres.integration.test.ts.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { buildTestApp, authHeader, seedAuth, TEST_ADMIN_API_KEY } from './helpers.js';
+import { decodeJwt } from 'jose';
+import { buildTestApp, authHeader, seedAuth, sqlMock, TEST_ADMIN_API_KEY } from './helpers.js';
 import { DecisionError } from '../src/lib/decisions/policy.js';
+import { checkActiveGrantToken } from '../src/lib/active-grant-token.js';
 
 vi.mock('../src/lib/decisions/store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/lib/decisions/store.js')>();
   return {
     ...actual,
-    consumeDecisionGrants: vi.fn(),
+    consumePresentedDecisionGrants: vi.fn(),
+    consumePlatformDecisionRequest: vi.fn(),
     createDecisionRequest: vi.fn(),
+    getDecisionRequest: vi.fn(),
     auditConsumeRefusal: vi.fn(),
+    auditGrantRelease: vi.fn(),
     createApproverIdp: vi.fn(),
   };
+});
+
+vi.mock('../src/lib/active-grant-token.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/active-grant-token.js')>();
+  return { ...actual, checkActiveGrantToken: vi.fn() };
 });
 
 const store = await import('../src/lib/decisions/store.js');
@@ -39,10 +50,14 @@ describe('decision grant routes', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    vi.mocked(store.consumeDecisionGrants).mockReset();
+    vi.mocked(store.consumePresentedDecisionGrants).mockReset();
+    vi.mocked(store.consumePlatformDecisionRequest).mockReset();
     vi.mocked(store.createDecisionRequest).mockReset();
+    vi.mocked(store.getDecisionRequest).mockReset();
     vi.mocked(store.auditConsumeRefusal).mockReset();
+    vi.mocked(store.auditGrantRelease).mockReset();
     vi.mocked(store.createApproverIdp).mockReset();
+    vi.mocked(checkActiveGrantToken).mockReset();
   });
 
   it('is off by default (DECISION_GRANTS_ENABLED unset)', async () => {
@@ -57,7 +72,8 @@ describe('decision grant routes', () => {
     expect((await app.inject({ method: 'GET', url: '/decisions/login?request=x&idp=y' })).statusCode).toBe(404);
     const adminCall = await app.inject({ method: 'GET', url: '/v1/admin/developers/dev_TEST/decision-approver-idps', headers: { authorization: `Bearer ${TEST_ADMIN_API_KEY}` } });
     expect(adminCall.statusCode).toBe(404);
-    expect(store.consumeDecisionGrants).not.toHaveBeenCalled();
+    expect(store.consumePresentedDecisionGrants).not.toHaveBeenCalled();
+    expect(store.consumePlatformDecisionRequest).not.toHaveBeenCalled();
   });
 
   it('fails closed with 503 when the step-up settings are invalid', async () => {
@@ -129,17 +145,17 @@ describe('decision grant routes', () => {
   });
 
   it('counts consumed grants and passes the expected action and case version to the store', async () => {
-    vi.mocked(store.consumeDecisionGrants).mockResolvedValue({ requestId: 'dreq_1', jtis: ['dgnt_a', 'dgnt_b'], approvers: [], actionHash: 'sha256:x' });
+    vi.mocked(store.consumePresentedDecisionGrants).mockResolvedValue({ requestId: 'dreq_1', jtis: ['dgnt_a', 'dgnt_b'], approvers: [], actionHash: 'sha256:x' });
     vi.mocked(metrics.decisionGrantsConsumedTotal.inc).mockClear();
     seedAuth();
     const res = await app.inject({ method: 'POST', url: '/v1/decisions/consume', headers: authHeader(), payload: { decisionGrants: ['a', 'b'], action: ACTION, caseVersion: 'v1' } });
     expect(res.statusCode).toBe(200);
     expect(metrics.decisionGrantsConsumedTotal.inc).toHaveBeenCalledWith(2);
-    expect(vi.mocked(store.consumeDecisionGrants).mock.calls[0]![1]).toMatchObject({ developerId: 'dev_TEST', action: ACTION, caseVersion: 'v1' });
+    expect(vi.mocked(store.consumePresentedDecisionGrants).mock.calls[0]![1]).toMatchObject({ developerId: 'dev_TEST', action: ACTION, caseVersion: 'v1' });
   });
 
   it('records every refused consumption with the attempted action, and fails the request when that record cannot be written', async () => {
-    vi.mocked(store.consumeDecisionGrants).mockRejectedValue(new DecisionError('action_mismatch', 409, 'refused'));
+    vi.mocked(store.consumePresentedDecisionGrants).mockRejectedValue(new DecisionError('action_mismatch', 409, 'refused'));
     vi.mocked(metrics.decisionGrantsRejectedTotal.labels).mockClear();
     seedAuth();
     const refused = await app.inject({ method: 'POST', url: '/v1/decisions/consume', headers: authHeader(), payload: { decisionGrants: ['a'], action: ACTION, caseVersion: 'v1' } });
@@ -153,6 +169,361 @@ describe('decision grant routes', () => {
     const unaudited = await app.inject({ method: 'POST', url: '/v1/decisions/consume', headers: authHeader(), payload: { decisionGrants: ['a'], action: ACTION, caseVersion: 'v1' } });
     expect(unaudited.statusCode).toBe(503);
     expect(unaudited.json()).toMatchObject({ code: 'DECISION_AUDIT_UNAVAILABLE', subReason: 'action_mismatch' });
+  });
+
+  describe('decision grants and the requesting agent', () => {
+    const REQUEST_ID = 'dreq_01K00000000000000000000000';
+    const JWS = /eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/;
+
+    /** An approved request for agent `ag_01` under `grnt_01`, with its one usable grant. */
+    function approvedRequest() {
+      const issuedAt = Math.floor(Date.now() / 1000);
+      const request = {
+        id: REQUEST_ID, developer_id: 'dev_TEST', case_id: ACTION.case_id, case_version: 'v1',
+        connector: 'acme_kyb', action: ACTION, action_hash: `sha256:${'A'.repeat(43)}`, approvals_required: 1,
+        memo_ref: null, memo_content: 'Registry active.', memo_hash: `sha256:${'M'.repeat(43)}`, policy_score_ref: null,
+        policy_score: { tier: 'low' }, policy_score_hash: `sha256:${'P'.repeat(43)}`, agent_id: 'ag_01', grant_id: 'grnt_01',
+        status: 'approved' as const, expires_at: new Date(Date.now() + 3_600_000), created_at: new Date(), updated_at: new Date(),
+      };
+      const claims = {
+        iss: 'https://grantex.dev', aud: 'urn:grantex:decision', sub: 'user:ns:approver-a', jti: 'dgnt_01K00000000000000000000001',
+        iat: issuedAt, exp: issuedAt + 3600, dev: 'dev_TEST', idp: 'https://idp.example.com', approver_auth: 'sso+hwk',
+        amr: ['hwk'], auth_time: issuedAt, action: ACTION, action_hash: request.action_hash, connector: 'acme_kyb',
+        case_version: 'v1', dwell_ms: 5000, dwell_source: 'server' as const, decision_request: request.id,
+        memo_hash: request.memo_hash, policy_score_hash: request.policy_score_hash,
+      };
+      const grants = [{
+        jti: claims.jti, developer_id: 'dev_TEST', request_id: request.id, session_id: 'dsess_1', approver_sub: claims.sub,
+        approver_email_hash: null, approver_auth: 'sso+hwk', dwell_ms: 5000, dwell_source: 'server' as const, case_id: ACTION.case_id,
+        case_version: 'v1', action_hash: request.action_hash, approval_position: 1, first_jti: null, claims,
+        issued_at: new Date(issuedAt * 1000), expires_at: new Date((issuedAt + 3600) * 1000), consumed_at: null, revoked_at: null, revoked_reason: null,
+      }];
+      return { request, grants, claims };
+    }
+
+    /** A verified, live grant token of `agentDid` under `grantId`, as checkActiveGrantToken reports it. */
+    function liveGrantToken(agentDid: string, grantId: string) {
+      const iat = Math.floor(Date.now() / 1000);
+      return { ok: true as const, claims: { sub: 'shopper-01', agt: agentDid, dev: 'dev_TEST', scp: ['tool:acme_kyb:write'], jti: 'tok_1', grnt: grantId, iat, exp: iat + 3600 } };
+    }
+
+    it('fails every decision endpoint closed (503) when DECISION_GRANT_AGENT_BINDING is neither true nor false', async () => {
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', 'True');
+      for (const [method, url] of [
+        ['POST', '/v1/decisions/requests'], ['GET', `/v1/decisions/requests/${REQUEST_ID}`], ['POST', '/v1/decisions/consume'],
+        ['POST', `/v1/decisions/requests/${REQUEST_ID}/grants`], ['POST', `/v1/decisions/requests/${REQUEST_ID}/consume`],
+      ] as const) {
+        seedAuth();
+        const res = await app.inject({ method, url, headers: authHeader(), ...(method === 'POST' ? { payload: {} } : {}) });
+        expect(res.statusCode, url).toBe(503);
+        expect(res.json()).toMatchObject({ code: 'DECISION_CONFIG_INVALID' });
+      }
+      expect(store.consumePresentedDecisionGrants).not.toHaveBeenCalled();
+      expect(store.consumePlatformDecisionRequest).not.toHaveBeenCalled();
+      expect(store.getDecisionRequest).not.toHaveBeenCalled();
+    });
+
+    it('answers the decision grants to the developer API key when the binding is off, as before it existed', async () => {
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', 'false');
+      const { request, grants, claims } = approvedRequest();
+      vi.mocked(store.getDecisionRequest).mockResolvedValue({ request, grants });
+      seedAuth();
+      const res = await app.inject({ method: 'GET', url: `/v1/decisions/requests/${REQUEST_ID}`, headers: authHeader() });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).not.toHaveProperty('decisionGrantsReady');
+      const tokens = res.json<{ decisionGrants: string[] }>().decisionGrants;
+      expect(tokens).toHaveLength(1);
+      expect(decodeJwt(tokens[0]!)).toMatchObject({ jti: claims.jti, decision_request: REQUEST_ID });
+    });
+
+    it('never returns bearer decision grants from GET when the binding is on', async () => {
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', 'true');
+      const { request, grants, claims } = approvedRequest();
+      vi.mocked(store.getDecisionRequest).mockResolvedValue({ request, grants });
+      seedAuth();
+      const res = await app.inject({ method: 'GET', url: `/v1/decisions/requests/${REQUEST_ID}`, headers: authHeader() });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ status: 'approved', decisionGrantsReady: true, approvals: [{ jti: claims.jti }] });
+      expect(res.json()).not.toHaveProperty('decisionGrants');
+      expect(res.body).not.toMatch(JWS);
+    });
+
+    it('releases decision grants only against a grant token, which it validates before touching the store', async () => {
+      for (const binding of ['false', 'true']) {
+        vi.stubEnv('DECISION_GRANT_AGENT_BINDING', binding);
+        for (const payload of [{}, { grantToken: '' }, { grantToken: 7 }, { grantToken: 'x'.repeat(16_385) }]) {
+          seedAuth();
+          const res = await app.inject({ method: 'POST', url: `/v1/decisions/requests/${REQUEST_ID}/grants`, headers: authHeader(), payload });
+          expect(res.statusCode, JSON.stringify(payload).slice(0, 40)).toBe(400);
+          expect(res.json<{ message: string }>().message).toMatch(/grantToken/);
+        }
+      }
+      expect(store.getDecisionRequest).not.toHaveBeenCalled();
+      expect(store.auditGrantRelease).not.toHaveBeenCalled();
+    });
+
+    it('records every hand-out and refusal of decision grants, and releases nothing when that record cannot be written', async () => {
+      const { request, grants, claims } = approvedRequest();
+      vi.mocked(store.getDecisionRequest).mockResolvedValue({ request, grants });
+      vi.mocked(metrics.decisionGrantsRejectedTotal.labels).mockClear();
+
+      // A token that is not live releases nothing, and the refusal says why.
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce({ ok: false, reason: 'revoked' });
+      seedAuth();
+      const revoked = await app.inject({ method: 'POST', url: `/v1/decisions/requests/${REQUEST_ID}/grants`, headers: authHeader(), payload: { grantToken: 'token-of-a-revoked-grant' } });
+      expect(revoked.statusCode).toBe(403);
+      expect(revoked.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
+      expect(vi.mocked(store.auditGrantRelease).mock.calls.at(-1)!.slice(1)).toEqual([
+        'dev_TEST', request, {}, { released: false, subReason: 'wrong_agent', tokenCheck: 'revoked' },
+      ]);
+      expect(metrics.decisionGrantsRejectedTotal.labels).toHaveBeenCalledWith('release', 'wrong_agent');
+
+      // Another agent's live token: refused and recorded with that agent.
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce(liveGrantToken('did:grantex:ag_02', 'grnt_02'));
+      seedAuth();
+      const other = await app.inject({ method: 'POST', url: `/v1/decisions/requests/${REQUEST_ID}/grants`, headers: authHeader(), payload: { grantToken: 'token-of-another-agent' } });
+      expect(other.statusCode).toBe(403);
+      expect(vi.mocked(store.auditGrantRelease).mock.calls.at(-1)!.slice(3)).toEqual([
+        { agentDid: 'did:grantex:ag_02', grantId: 'grnt_02' }, { released: false, subReason: 'wrong_agent' },
+      ]);
+
+      // The named agent: released and recorded with the jtis handed out.
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce(liveGrantToken('did:grantex:ag_01', 'grnt_01'));
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([{ did: 'did:grantex:ag_01' }] as never);
+      const released = await app.inject({ method: 'POST', url: `/v1/decisions/requests/${REQUEST_ID}/grants`, headers: authHeader(), payload: { grantToken: 'token-of-the-agent' } });
+      expect(released.statusCode, released.body).toBe(200);
+      expect(released.json()).toMatchObject({ decisionGrantsReady: true, decisionGrants: [expect.stringMatching(JWS)] });
+      expect(vi.mocked(store.auditGrantRelease).mock.calls.at(-1)!.slice(3)).toEqual([
+        { agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' }, { released: true, jtis: [claims.jti], actionHash: request.action_hash },
+      ]);
+
+      // No record, no hand-out: the tokens never leave the service.
+      vi.mocked(store.auditGrantRelease).mockRejectedValueOnce(new Error('database unavailable'));
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce(liveGrantToken('did:grantex:ag_01', 'grnt_01'));
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([{ did: 'did:grantex:ag_01' }] as never);
+      const unaudited = await app.inject({ method: 'POST', url: `/v1/decisions/requests/${REQUEST_ID}/grants`, headers: authHeader(), payload: { grantToken: 'token-of-the-agent' } });
+      expect(unaudited.statusCode).toBe(503);
+      expect(unaudited.json()).toMatchObject({ code: 'DECISION_AUDIT_UNAVAILABLE' });
+      expect(unaudited.body).not.toMatch(JWS);
+      expect(metrics.decisionGrantsRejectedTotal.labels).toHaveBeenCalledWith('release', 'audit_unavailable');
+
+      // Nor does an unrecorded refusal go out as a plain refusal.
+      vi.mocked(store.auditGrantRelease).mockRejectedValueOnce(new Error('database unavailable'));
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce({ ok: false, reason: 'expired' });
+      seedAuth();
+      const unrecorded = await app.inject({ method: 'POST', url: `/v1/decisions/requests/${REQUEST_ID}/grants`, headers: authHeader(), payload: { grantToken: 'token-of-an-expired-grant' } });
+      expect(unrecorded.statusCode).toBe(503);
+      expect(unrecorded.json()).toMatchObject({ code: 'DECISION_AUDIT_UNAVAILABLE', subReason: 'wrong_agent' });
+    });
+
+    it('reads agentDid on consumption only when the binding is on, and compares only then', async () => {
+      vi.mocked(store.consumePresentedDecisionGrants).mockResolvedValue({ requestId: REQUEST_ID, jtis: ['dgnt_a'], approvers: [], actionHash: 'sha256:x' });
+      const consume = (payload: Record<string, unknown>) => {
+        seedAuth();
+        return app.inject({ method: 'POST', url: '/v1/decisions/consume', headers: authHeader(), payload: { decisionGrants: ['a'], action: ACTION, caseVersion: 'v1', ...payload } });
+      };
+
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', 'true');
+      for (const agentDid of ['did:grantex:ag_01', 'did:web:agents.example.com%3A8443:agents:ag_01']) {
+        const res = await consume({ agentDid, grantId: 'grnt_01' });
+        expect(res.statusCode, agentDid).toBe(200);
+        expect(vi.mocked(store.consumePresentedDecisionGrants).mock.calls.at(-1)![1]).toMatchObject({ agentDid, grantId: 'grnt_01', bindAgent: true });
+      }
+      for (const payload of [{ agentDid: 'did grantex' }, { agentDid: 'ag_01' }, { agentDid: 'did:Grantex:ag_01' }, { agentDid: `did:grantex:${'a'.repeat(600)}` }, { agentDid: 7 }, { agentId: 'did:grantex:ag_01' }]) {
+        const res = await consume(payload);
+        expect(res.statusCode, JSON.stringify(payload).slice(0, 60)).toBe(400);
+      }
+
+      // Off: agentDid is not read, however it looks, as before the binding; agentId is still a Grantex agent id.
+      vi.mocked(store.consumePresentedDecisionGrants).mockClear();
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', '');
+      for (const agentDid of ['did:grantex:ag_01', 'not a DID', 7]) {
+        const res = await consume({ agentDid, agentId: 'ag_01', grantId: 'grnt_01' });
+        expect(res.statusCode, String(agentDid)).toBe(200);
+        const input = vi.mocked(store.consumePresentedDecisionGrants).mock.calls.at(-1)![1];
+        expect(input).toMatchObject({ agentId: 'ag_01', grantId: 'grnt_01', bindAgent: false });
+        expect(input).not.toHaveProperty('agentDid');
+      }
+      expect((await consume({ agentId: 'did:grantex:ag_01' })).statusCode).toBe(400);
+    });
+
+    it('establishes the consuming agent from its grant token when the binding is on, as the release does, and never from the body', async () => {
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', 'true');
+      vi.mocked(store.consumePresentedDecisionGrants).mockResolvedValue({ requestId: REQUEST_ID, jtis: ['dgnt_a'], approvers: [], actionHash: 'sha256:x' });
+      const consume = (payload: Record<string, unknown>) => {
+        seedAuth();
+        return app.inject({ method: 'POST', url: '/v1/decisions/consume', headers: authHeader(), payload: { decisionGrants: ['a'], action: ACTION, caseVersion: 'v1', ...payload } });
+      };
+      const lastInput = () => vi.mocked(store.consumePresentedDecisionGrants).mock.calls.at(-1)![1];
+
+      // The agent's live grant token: the agent and grant come from it, checked as for a release.
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce(liveGrantToken('did:grantex:ag_01', 'grnt_01'));
+      expect((await consume({ grantToken: 'token-of-the-agent' })).statusCode).toBe(200);
+      expect(checkActiveGrantToken).toHaveBeenLastCalledWith('token-of-the-agent', { expectedDeveloperId: 'dev_TEST' });
+      expect(lastInput()).toMatchObject({ bindAgent: true, callingAgent: { verified: true, agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' } });
+      expect(lastInput()).not.toHaveProperty('agentDid');
+
+      // Body members naming another agent stay claims beside the token's agent; they never replace it.
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce(liveGrantToken('did:grantex:ag_02', 'grnt_02'));
+      await consume({ grantToken: 'token-of-another-agent', agentDid: 'did:grantex:ag_01', agentId: 'ag_01', grantId: 'grnt_01' });
+      expect(lastInput()).toMatchObject({
+        agentDid: 'did:grantex:ag_01', agentId: 'ag_01', grantId: 'grnt_01',
+        callingAgent: { verified: true, agentDid: 'did:grantex:ag_02', grantId: 'grnt_02' },
+      });
+
+      // A token that is not live establishes no agent, and says why.
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce({ ok: false, reason: 'expired' });
+      await consume({ grantToken: 'token-of-an-expired-grant', agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' });
+      expect(lastInput()).toMatchObject({ callingAgent: { verified: false, tokenCheck: 'expired' } });
+
+      // No token, no agent: the body's members do not stand in for one.
+      vi.mocked(checkActiveGrantToken).mockClear();
+      await consume({ agentDid: 'did:grantex:ag_01', agentId: 'ag_01', grantId: 'grnt_01' });
+      expect(lastInput()).toMatchObject({ bindAgent: true, callingAgent: { verified: false, tokenCheck: 'missing' } });
+      expect(checkActiveGrantToken).not.toHaveBeenCalled();
+
+      // A grantToken that cannot be a token is refused before anything is checked or consumed.
+      vi.mocked(store.consumePresentedDecisionGrants).mockClear();
+      for (const grantToken of ['', 7, null, { token: 'x' }, 'x'.repeat(16_385)]) {
+        const res = await consume({ grantToken });
+        expect(res.statusCode, JSON.stringify(grantToken).slice(0, 40)).toBe(400);
+        expect(res.json<{ message: string }>().message).toMatch(/grantToken/);
+      }
+      expect(store.consumePresentedDecisionGrants).not.toHaveBeenCalled();
+      expect(checkActiveGrantToken).not.toHaveBeenCalled();
+    });
+
+    it('does not read grantToken on consumption when the binding is off, so the endpoint answers as before it existed', async () => {
+      vi.mocked(store.consumePresentedDecisionGrants).mockResolvedValue({ requestId: REQUEST_ID, jtis: ['dgnt_a'], approvers: [], actionHash: 'sha256:x' });
+      for (const binding of ['', 'false']) {
+        vi.stubEnv('DECISION_GRANT_AGENT_BINDING', binding);
+        for (const grantToken of ['token-of-another-agent', 'not a token', '', 7, null]) {
+          seedAuth();
+          const res = await app.inject({
+            method: 'POST', url: '/v1/decisions/consume', headers: authHeader(),
+            payload: { decisionGrants: ['a'], action: ACTION, caseVersion: 'v1', agentId: 'ag_01', grantId: 'grnt_01', grantToken },
+          });
+          expect(res.statusCode, `${binding} ${JSON.stringify(grantToken)}`).toBe(200);
+          const input = vi.mocked(store.consumePresentedDecisionGrants).mock.calls.at(-1)![1];
+          expect(input).toEqual({ developerId: 'dev_TEST', tokens: ['a'], action: ACTION, caseVersion: 'v1', agentId: 'ag_01', grantId: 'grnt_01', bindAgent: false });
+        }
+      }
+      expect(checkActiveGrantToken).not.toHaveBeenCalled();
+
+      // A refusal is recorded with the body's agent and grant, as before.
+      vi.mocked(store.consumePresentedDecisionGrants).mockRejectedValueOnce(new DecisionError('consumed', 409, 'used'));
+      seedAuth();
+      await app.inject({
+        method: 'POST', url: '/v1/decisions/consume', headers: authHeader(),
+        payload: { decisionGrants: ['a'], action: ACTION, caseVersion: 'v1', agentId: 'ag_01', grantId: 'grnt_01', grantToken: 'token-of-another-agent' },
+      });
+      expect(vi.mocked(store.auditConsumeRefusal).mock.calls.at(-1)![3]).toEqual({ jtis: [], action: ACTION, caseVersion: 'v1', agentId: 'ag_01', grantId: 'grnt_01' });
+    });
+
+    it('records a refused consumption with the agent its grant token established, or why none was, and the body claims apart', async () => {
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', 'true');
+      vi.mocked(store.consumePresentedDecisionGrants).mockRejectedValue(new DecisionError('wrong_agent', 403, 'refused'));
+      vi.mocked(metrics.decisionGrantsRejectedTotal.labels).mockClear();
+      const refusedWith = async (payload: Record<string, unknown>) => {
+        seedAuth();
+        const res = await app.inject({ method: 'POST', url: '/v1/decisions/consume', headers: authHeader(), payload: { decisionGrants: ['a'], action: ACTION, caseVersion: 'v1', ...payload } });
+        expect(res.statusCode).toBe(403);
+        expect(res.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
+        return vi.mocked(store.auditConsumeRefusal).mock.calls.at(-1)!.slice(1);
+      };
+
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce(liveGrantToken('did:grantex:ag_02', 'grnt_02'));
+      expect(await refusedWith({ grantToken: 'token-of-another-agent', agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' })).toEqual([
+        'dev_TEST', 'wrong_agent',
+        { jtis: [], action: ACTION, caseVersion: 'v1', agentDid: 'did:grantex:ag_02', grantId: 'grnt_02', claimed: { agentDid: 'did:grantex:ag_01', grantId: 'grnt_01' } },
+      ]);
+      vi.mocked(checkActiveGrantToken).mockResolvedValueOnce({ ok: false, reason: 'revoked' });
+      expect(await refusedWith({ grantToken: 'token-of-a-revoked-grant' })).toEqual([
+        'dev_TEST', 'wrong_agent', { jtis: [], action: ACTION, caseVersion: 'v1', tokenCheck: 'revoked' },
+      ]);
+      expect(await refusedWith({ agentId: 'ag_01', grantId: 'grnt_01' })).toEqual([
+        'dev_TEST', 'wrong_agent', { jtis: [], action: ACTION, caseVersion: 'v1', tokenCheck: 'missing', claimed: { agentId: 'ag_01', grantId: 'grnt_01' } },
+      ]);
+      expect(metrics.decisionGrantsRejectedTotal.labels).toHaveBeenCalledWith('consume', 'wrong_agent');
+    });
+
+    it('consumes the decision grants of a request by its id, on its own endpoint, in both states of the binding', async () => {
+      vi.mocked(store.consumePlatformDecisionRequest).mockResolvedValue({ requestId: REQUEST_ID, jtis: ['dgnt_a'], approvers: [], actionHash: 'sha256:x' });
+      for (const binding of ['false', 'true']) {
+        vi.stubEnv('DECISION_GRANT_AGENT_BINDING', binding);
+        seedAuth();
+        const res = await app.inject({ method: 'POST', url: `/v1/decisions/requests/${REQUEST_ID}/consume`, headers: authHeader(), payload: { action: ACTION, caseVersion: 'v1', decisionGrants: ['ignored'], agentId: 'ag_01' } });
+        expect(res.statusCode, binding).toBe(200);
+        const input = vi.mocked(store.consumePlatformDecisionRequest).mock.calls.at(-1)![1];
+        expect(input).toEqual({ developerId: 'dev_TEST', requestId: REQUEST_ID, action: ACTION, caseVersion: 'v1' });
+      }
+      expect(store.consumePresentedDecisionGrants).not.toHaveBeenCalled();
+      // The request id is not a member of the consume body: that endpoint only
+      // consumes presented grants, which the store refuses when there are none.
+      vi.mocked(store.consumePlatformDecisionRequest).mockClear();
+      vi.mocked(store.consumePresentedDecisionGrants).mockRejectedValue(new DecisionError('malformed', 400, 'decisionGrants must be an array of one or two tokens'));
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', 'false');
+      seedAuth();
+      const byBody = await app.inject({ method: 'POST', url: '/v1/decisions/consume', headers: authHeader(), payload: { decisionRequest: REQUEST_ID, action: ACTION, caseVersion: 'v1' } });
+      expect(byBody.statusCode).toBe(400);
+      expect(byBody.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'malformed' });
+      expect(store.consumePlatformDecisionRequest).not.toHaveBeenCalled();
+      expect(vi.mocked(store.consumePresentedDecisionGrants).mock.calls.at(-1)![1]).not.toHaveProperty('requestId');
+      expect(vi.mocked(store.auditConsumeRefusal).mock.calls.at(-1)![3]).not.toHaveProperty('requestId');
+    });
+
+    it('records a refused consumption by request id with that id, and fails the request when the record cannot be written', async () => {
+      vi.mocked(store.consumePlatformDecisionRequest).mockRejectedValue(new DecisionError('wrong_agent', 403, 'refused'));
+      vi.mocked(metrics.decisionGrantsRejectedTotal.labels).mockClear();
+      seedAuth();
+      const refused = await app.inject({ method: 'POST', url: `/v1/decisions/requests/${REQUEST_ID}/consume`, headers: authHeader(), payload: { action: ACTION, caseVersion: 'v1' } });
+      expect(refused.statusCode).toBe(403);
+      expect(refused.json()).toMatchObject({ reason: 'decision_invalid', subReason: 'wrong_agent' });
+      expect(vi.mocked(store.auditConsumeRefusal).mock.calls.at(-1)!.slice(1)).toEqual(['dev_TEST', 'wrong_agent', { jtis: [], action: ACTION, caseVersion: 'v1', requestId: REQUEST_ID }]);
+      expect(metrics.decisionGrantsRejectedTotal.labels).toHaveBeenCalledWith('consume', 'wrong_agent');
+      expect(store.consumePresentedDecisionGrants).not.toHaveBeenCalled();
+
+      vi.mocked(store.auditConsumeRefusal).mockRejectedValue(new Error('database unavailable'));
+      seedAuth();
+      const unaudited = await app.inject({ method: 'POST', url: `/v1/decisions/requests/${REQUEST_ID}/consume`, headers: authHeader(), payload: { action: ACTION, caseVersion: 'v1' } });
+      expect(unaudited.statusCode).toBe(503);
+      expect(unaudited.json()).toMatchObject({ code: 'DECISION_AUDIT_UNAVAILABLE', subReason: 'wrong_agent' });
+    });
+
+    it('answers a repeated request with its approvals as they stand only when the binding is on', async () => {
+      const { request, grants } = approvedRequest();
+      vi.mocked(store.createDecisionRequest).mockResolvedValue({ request, created: false });
+      vi.mocked(store.getDecisionRequest).mockResolvedValue({ request, grants });
+      const repeat = () => {
+        seedAuth();
+        return app.inject({ method: 'POST', url: '/v1/decisions/requests', headers: authHeader(), payload: { action: ACTION, connector: 'acme_kyb', caseVersion: 'v1', agentId: 'ag_01', grantId: 'grnt_01', ...REVIEW } });
+      };
+
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', 'true');
+      const bound = await repeat();
+      expect(bound.statusCode, bound.body).toBe(200);
+      expect(bound.json()).toMatchObject({ created: false, approvalsReceived: 1, decisionGrantsReady: true, approvals: [{ jti: grants[0]!.jti }] });
+      expect(bound.body).not.toMatch(JWS);
+      expect(vi.mocked(store.createDecisionRequest).mock.calls.at(-1)![1]).toMatchObject({ agentId: 'ag_01', grantId: 'grnt_01', bindAgent: true });
+
+      vi.mocked(store.getDecisionRequest).mockClear();
+      vi.stubEnv('DECISION_GRANT_AGENT_BINDING', 'false');
+      const unbound = await repeat();
+      expect(unbound.statusCode).toBe(200);
+      expect(unbound.json()).toMatchObject({ created: false, approvalsReceived: 0 });
+      expect(unbound.json()).not.toHaveProperty('decisionGrantsReady');
+      expect(vi.mocked(store.createDecisionRequest).mock.calls.at(-1)![1]).toMatchObject({ bindAgent: false });
+      expect(store.getDecisionRequest).not.toHaveBeenCalled();
+      // A request names its agent by Grantex agent id, in both states.
+      for (const binding of ['false', 'true']) {
+        vi.stubEnv('DECISION_GRANT_AGENT_BINDING', binding);
+        seedAuth();
+        const did = await app.inject({ method: 'POST', url: '/v1/decisions/requests', headers: authHeader(), payload: { action: ACTION, connector: 'acme_kyb', caseVersion: 'v1', agentId: 'did:grantex:ag_01', ...REVIEW } });
+        expect(did.statusCode, binding).toBe(400);
+      }
+    });
   });
 
   describe('approver identity providers', () => {

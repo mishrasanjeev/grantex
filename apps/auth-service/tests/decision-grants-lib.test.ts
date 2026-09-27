@@ -174,6 +174,30 @@ describe('settings', () => {
       Object.assign(process.env, saved);
     }
   });
+
+  it('binds decision grants to the requesting agent only when DECISION_GRANT_AGENT_BINDING is exactly true', () => {
+    const saved = { ...process.env };
+    try {
+      delete process.env['DECISION_STEP_UP_AMR'];
+      delete process.env['DECISION_STEP_UP_ACR'];
+      delete process.env['DECISION_GRANT_AGENT_BINDING'];
+      expect(decisionSettings().agentBinding).toBe(false);
+      process.env['DECISION_GRANT_AGENT_BINDING'] = '';
+      expect(decisionSettings().agentBinding).toBe(false);
+      process.env['DECISION_GRANT_AGENT_BINDING'] = 'false';
+      expect(decisionSettings().agentBinding).toBe(false);
+      process.env['DECISION_GRANT_AGENT_BINDING'] = 'true';
+      expect(decisionSettings().agentBinding).toBe(true);
+      // A value that is neither must not silently leave the binding off.
+      for (const value of ['True', '1', 'yes', 'on', ' true']) {
+        process.env['DECISION_GRANT_AGENT_BINDING'] = value;
+        expect(() => decisionSettings(), value).toThrow(/DECISION_GRANT_AGENT_BINDING/);
+      }
+    } finally {
+      for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+      Object.assign(process.env, saved);
+    }
+  });
 });
 
 describe('decision grant tokens', () => {
