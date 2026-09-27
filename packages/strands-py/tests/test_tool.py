@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import MagicMock, call
+
 import pytest
 
 from conftest import TOKEN_WITH_SCOPES, TOKEN_WITH_READ, make_grant_token
@@ -106,3 +110,68 @@ def test_get_tool_scopes_empty_token() -> None:
 def test_get_tool_scopes_invalid_token() -> None:
     scopes = get_tool_scopes("garbage")
     assert scopes == []
+
+
+# ─── Online mode forwards the audience ──────────────────────────────────────
+
+
+def _online_client(allowed: bool = True, reason: str = "") -> Any:
+    client = MagicMock()
+    client.enforce.return_value = SimpleNamespace(allowed=allowed, reason=reason)
+    return client
+
+
+def test_online_mode_passes_the_audience_to_enforce() -> None:
+    # enforce() checks the grant token audience; the tool's audience is the
+    # one it expects, as in offline verification.
+    client = _online_client()
+    tool = create_grantex_tool(
+        name="read_calendar",
+        description="Read calendar events.",
+        grant_token=TOKEN_WITH_READ,
+        required_scope="tool:calendar:read",
+        func=lambda: "events",
+        client=client,
+        connector="calendar",
+        online=True,
+        audience="https://api.merchant.example",
+    )
+    assert tool() == "events"
+    assert client.enforce.call_args_list == [
+        call(TOKEN_WITH_READ, "calendar", "read_calendar", audience="https://api.merchant.example"),
+        call(TOKEN_WITH_READ, "calendar", "read_calendar", audience="https://api.merchant.example"),
+    ]
+
+
+def test_online_mode_without_an_audience_leaves_the_call_unchanged() -> None:
+    client = _online_client()
+    create_grantex_tool(
+        name="read_calendar",
+        description="Read calendar events.",
+        grant_token=TOKEN_WITH_READ,
+        required_scope="tool:calendar:read",
+        func=lambda: "events",
+        client=client,
+        connector="calendar",
+        online=True,
+    )
+    client.enforce.assert_called_once_with(TOKEN_WITH_READ, "calendar", "read_calendar")
+
+
+def test_online_mode_reports_an_audience_denial() -> None:
+    client = _online_client(
+        allowed=False,
+        reason="The grant token's audience does not include 'https://api.merchant.example'.",
+    )
+    with pytest.raises(PermissionError, match="audience does not include"):
+        create_grantex_tool(
+            name="read_calendar",
+            description="Read calendar events.",
+            grant_token=TOKEN_WITH_READ,
+            required_scope="tool:calendar:read",
+            func=lambda: "events",
+            client=client,
+            connector="calendar",
+            online=True,
+            audience="https://api.merchant.example",
+        )

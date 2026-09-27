@@ -157,6 +157,38 @@ const stripe = new StripeAdapter({
 });
 ```
 
+## Grant token audience
+
+<Warning>
+  From the next release (not in `@grantex/adapters` 0.1.5). This is a breaking
+  change: a grant token that carries an `aud` claim is refused unless the
+  adapter is configured with that audience. Tokens issued without an audience
+  are unaffected.
+</Warning>
+
+Every adapter checks the token's `aud` claim
+([RFC 7519 section 4.1.3](https://www.rfc-editor.org/rfc/rfc7519#section-4.1.3))
+with the same semantics as `enforce()` in the SDKs, right after the signature
+and before the upstream call. `aud` may be a string or an array of strings and
+matches when the configured `audience` is one of its values, compared as exact
+strings.
+
+```typescript
+const stripe = new StripeAdapter({
+  jwksUri,
+  credentials: stripeKey,
+  audience: 'https://api.merchant.example',
+});
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `audience` | `string` | none | The audience the adapter expects. A token without it in `aud`, or without `aud`, throws `AUDIENCE_MISMATCH`. |
+| `audienceCheck` | `'on' \| 'off'` | `'on'` | With `'on'` and no `audience`, a token that carries `aud` throws `AUDIENCE_UNCONFIGURED`. `'off'` ignores `aud`, as earlier releases did, and cannot be combined with `audience`. |
+
+To keep the earlier behaviour while you find the audience, pass
+`audienceCheck: 'off'`, and remove it once `audience` is set.
+
 ## Building Custom Adapters
 
 Extend `BaseAdapter` to integrate any API:
@@ -189,7 +221,9 @@ class MyApiAdapter extends BaseAdapter {
 
 | Code | Meaning |
 |------|---------|
-| `TOKEN_INVALID` | Grant token verification failed |
+| `TOKEN_INVALID` | Grant token verification failed, or its audience cannot be read |
+| `AUDIENCE_UNCONFIGURED` | The token carries `aud` and no `audience` is configured (next release) |
+| `AUDIENCE_MISMATCH` | The token's `aud` does not contain the configured `audience`, or it has no `aud` (next release) |
 | `SCOPE_MISSING` | Grant doesn't include required scope |
 | `CONSTRAINT_VIOLATED` | Value exceeds scope constraint |
 | `UPSTREAM_ERROR` | Upstream API returned an error |

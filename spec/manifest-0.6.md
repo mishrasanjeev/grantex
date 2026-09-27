@@ -119,6 +119,7 @@ a `reason_code` (`reasonCode` in TypeScript) and, where one applies, a
 | Step | Denial `reason_code` | `sub_reason` |
 |---|---|---|
 | Grant token verification | `token_invalid` | |
+| Grant token audience (from the next release; see `grant-token-0.6.md`, Validation) | `token_invalid` | `audience_unconfigured`, `audience_mismatch` |
 | `authorization_details` readable | `token_invalid` | `malformed_authorization_details` |
 | Manifest loaded for the connector | `manifest_unknown_tool` | `unknown_connector` |
 | Tool declared | `manifest_unknown_tool` | `unknown_tool`, `invalid_declaration` |
@@ -137,7 +138,9 @@ The reason codes are the Grantex denial taxonomy: `purpose_not_allowed`,
 `expired`, `consumed`, `same_approver`, and the further sub-reasons of
 `decision-grant.md`), `grant_revoked`, `region_mismatch`,
 `manifest_unknown_tool`, plus `token_invalid` for a token that fails
-verification before any grant is known. They are stable, low-cardinality
+verification before any grant is known (sub-reasons
+`malformed_authorization_details`, `audience_unconfigured` and
+`audience_mismatch`). They are stable, low-cardinality
 values intended for audit records and metric labels; `reason` remains a
 human-readable sentence and may change.
 

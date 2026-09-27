@@ -148,6 +148,46 @@ grantex enforce test \
 
 ---
 
+## Grant Token Audience
+
+<Warning>
+  From the next release of `@grantex/cli`, with an `@grantex/sdk` release that
+  checks the grant token audience (not `@grantex/sdk` 0.7.0).
+</Warning>
+
+A grant token requested with an `audience` carries it in the `aud` claim, and
+`enforce()` denies it unless the relying party expects that audience (see
+[Grant token audience](/sdks/typescript/enforce#grant-token-audience)). Pass
+the audience your service is issued tokens for with `--audience`:
+
+```bash
+grantex enforce test \
+  --token "eyJ..." \
+  --connector salesforce \
+  --tool create_lead \
+  --audience https://api.merchant.example
+```
+
+Without `--audience`, a token that carries `aud` is reported as denied with
+`token_invalid` / `audience_unconfigured`; a token whose `aud` does not contain
+the `--audience` value is denied with `token_invalid` / `audience_mismatch`.
+`--audience-check off` ignores `aud`, as earlier releases did:
+
+```bash
+grantex enforce test \
+  --token "eyJ..." \
+  --connector salesforce \
+  --tool create_lead \
+  --audience-check off
+```
+
+`--audience-check` takes `on` (the default) or `off`; any other value is
+refused. `--audience` cannot be empty or combined with `--audience-check off`,
+and both options are refused when the installed `@grantex/sdk` does not check
+the audience, instead of being ignored.
+
+---
+
 ## JSON Output
 
 Use `--json` for machine-readable output, useful for scripting and CI pipelines:
@@ -198,6 +238,8 @@ Allowed result:
 | `--connector <name>` | The connector name (required) |
 | `--tool <name>` | The tool name (required) |
 | `--amount <number>` | Amount to test against capped scopes |
+| `--audience <audience>` | The grant token audience the relying party expects, passed to `enforce()` for this call. From the next release. |
+| `--audience-check <on\|off>` | The client's grant token audience check: `on` (default) or `off`, which ignores `aud`. From the next release. |
 | `--json` | Output machine-readable JSON |
 
 ---

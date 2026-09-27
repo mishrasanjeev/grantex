@@ -6,6 +6,78 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Breaking: `enforce()` checks the grant token audience (TypeScript and Python SDKs, `@grantex/gateway`, `@grantex/adapters`)
+- **Breaking:** `enforce()` now checks the grant token's `aud` claim
+  (RFC 7519 §4.1.3) right after its signature, before revocation and scopes.
+  A token that carries `aud` is only for the relying parties it names, and
+  earlier releases accepted it anywhere. `aud` may be a string or an array of
+  strings; it matches when the expected audience equals one of its values
+  exactly (no case folding, trailing-slash or prefix matching).
+  - A token that carries `aud` when the client has no expected audience is
+    denied with `reason_code` / `reasonCode` `token_invalid` and
+    `sub_reason` / `subReason` `audience_unconfigured`.
+  - A token whose `aud` does not contain the expected audience, or that has no
+    `aud` while one is expected, is denied with `token_invalid` /
+    `audience_mismatch`.
+  - `details` carries `token_audience` and, for a mismatch,
+    `expected_audience`. Both sub-reasons are exported on `TokenSubReason`.
+  - Audience denials are not relaxed by permissive mode
+    (`enforceMode: 'permissive'` / `enforce_mode="permissive"`): they stay
+    `allowed: false` / `allowed=False`, with the same reason, sub-reason and
+    `details`, in every enforce mode. Other denials behave in permissive mode
+    as before.
+  - Tokens issued without an audience (the auth service sets `aud` only when
+    the authorization request names one) are unaffected while no audience is
+    configured.
+- New options: `audience` and `audienceCheck` on the TypeScript client and
+  `audience` on `enforce()`; `audience` and `audience_check` on the Python
+  client and `audience` on `enforce()`. The per-call value overrides the
+  client's. `audienceCheck` / `audience_check` takes `'on'` (default) or
+  `'off'`; any other value, an empty or non-string `audience`, and an
+  `audience` combined with `'off'` are refused when the client is created (or,
+  for the per-call value, when `enforce()` is called).
+- `@grantex/gateway` applies the same check with `audience` and
+  `audienceCheck` in its config and an `audience` per route (which overrides
+  the top-level one), answering 401 `AUDIENCE_UNCONFIGURED` or
+  `AUDIENCE_MISMATCH`. `@grantex/adapters` takes `audience` and
+  `audienceCheck` in `AdapterConfig` and throws `GrantexAdapterError` with the
+  same codes. Both read `aud` from the payload of the token the SDK has just
+  verified, and refuse a token whose payload cannot be read (`TOKEN_INVALID`).
+  As in `enforce()`, the audience is checked before the scopes, so the gateway
+  answers a token for another relying party that also lacks the route's scopes
+  with the audience code rather than 403 `SCOPE_INSUFFICIENT`.
+  An invalid setting stops the gateway from starting and the adapter from
+  being created.
+- `grantex enforce test` (`@grantex/cli`) takes `--audience <audience>`,
+  passed to `enforce()` as the per-call audience, and
+  `--audience-check <on|off>`, passed to the client. Any other
+  `--audience-check` value, an empty `--audience`, and `--audience` with
+  `--audience-check off` are refused; so are both options when the installed
+  `@grantex/sdk` has no audience check, rather than being ignored.
+- `@grantex/strands` and `grantex-strands` pass their `audience` option to
+  `client.enforce()` as the per-call audience in online mode, as offline
+  verification already did; without it, online mode would deny every token
+  that carries `aud` with `audience_unconfigured` unless the client had its
+  own audience.
+- **Opt-out:** `audienceCheck: 'off'` (TypeScript client, gateway config,
+  adapter config) or `audience_check="off"` (Python client) restores the
+  earlier behaviour exactly: `aud` is not read.
+- **Migration:**
+  1. Find whether the grant tokens your service receives carry `aud`: they do
+     when the authorization request set `audience`.
+  2. Set `audience` on the client (gateway: top-level or per route; adapters:
+     `AdapterConfig`) to the identifier your service is issued tokens for.
+     Use the per-call `audience` on `enforce()` where one client serves
+     several audiences.
+  3. Until you know the audience, set `audienceCheck: 'off'` /
+     `audience_check="off"` to keep the earlier behaviour, and remove it once
+     `audience` is set.
+  4. Treat `audience_unconfigured` as a configuration error and
+     `audience_mismatch` as a token presented to the wrong relying party.
+- The cases shared by the four packages are in
+  `spec/examples/enforce-audience.json`. Documented in the SDK enforce pages,
+  the gateway and adapters pages, `spec/grant-token-0.6.md` (Validation) and
+  `spec/manifest-0.6.md`.
 ### Emergency stop lockout
 - The emergency stop can now freeze issuance as well as revoke. `lockout: true`
   on `POST /v1/emergency-stop` or `POST /v1/admin/emergency-stop` records a

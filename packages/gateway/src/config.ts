@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
 import type { GatewayConfig } from './types.js';
 import { GatewayError } from './errors.js';
+import { checkAudienceCheck, checkExpectedAudience, type AudienceCheck } from './audience.js';
 
 export function loadConfig(filePath: string): GatewayConfig {
   let content: string;
@@ -37,6 +38,15 @@ export function validateConfig(raw: unknown): GatewayConfig {
   }
 
   const port = typeof obj['port'] === 'number' ? obj['port'] : 8080;
+
+  // An invalid audience setting stops the gateway from starting rather than
+  // being read as "no audience", which would accept tokens meant elsewhere.
+  const audienceCheck: AudienceCheck = 'audienceCheck' in obj
+    ? configValue(() => checkAudienceCheck(obj['audienceCheck']))
+    : 'on';
+  const audience = 'audience' in obj
+    ? configValue(() => checkExpectedAudience(obj['audience'], audienceCheck))
+    : undefined;
 
   if (!Array.isArray(obj['routes']) || obj['routes'].length === 0) {
     throw new GatewayError('CONFIG_INVALID', 'Config must include at least one route', 500);
@@ -74,7 +84,16 @@ export function validateConfig(raw: unknown): GatewayConfig {
       return s;
     });
 
-    return { path: r['path'], methods, requiredScopes };
+    const routeAudience = 'audience' in r
+      ? configValue(() => checkExpectedAudience(r['audience'], audienceCheck), `Route ${i}: `)
+      : undefined;
+
+    return {
+      path: r['path'],
+      methods,
+      requiredScopes,
+      ...(routeAudience !== undefined ? { audience: routeAudience } : {}),
+    };
   });
 
   const upstreamHeaders = typeof obj['upstreamHeaders'] === 'object' && obj['upstreamHeaders'] !== null
@@ -90,5 +109,15 @@ export function validateConfig(raw: unknown): GatewayConfig {
     routes,
     ...(upstreamHeaders !== undefined ? { upstreamHeaders } : {}),
     ...(typeof obj['grantexApiKey'] === 'string' ? { grantexApiKey: obj['grantexApiKey'] } : {}),
+    ...(audience !== undefined ? { audience } : {}),
+    ...('audienceCheck' in obj ? { audienceCheck } : {}),
   };
+}
+
+function configValue<T>(read: () => T, prefix = ''): T {
+  try {
+    return read();
+  } catch (err) {
+    throw new GatewayError('CONFIG_INVALID', `${prefix}${err instanceof Error ? err.message : String(err)}`, 500);
+  }
 }

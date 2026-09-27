@@ -174,6 +174,61 @@ describe('createGrantexTool', () => {
     expect(verifyGrantToken).not.toHaveBeenCalled();
   });
 
+  it('passes the audience to client.enforce in online mode', async () => {
+    // enforce() checks the grant token audience; the tool's audience is the
+    // one it expects, as in offline verification.
+    const client: GrantexEnforcer = {
+      enforce: vi.fn().mockResolvedValue(makeEnforceResult({ allowed: true })),
+    };
+    const strandsTool = createGrantexTool({
+      name: 'read_calendar',
+      description: 'Read calendar events',
+      inputSchema: INPUT,
+      grantToken: TOKEN_WITH_READ,
+      requiredScope: 'calendar:read',
+      client,
+      connector: 'calendar',
+      online: true,
+      audience: 'https://api.merchant.example',
+      callback: async () => 'events',
+    });
+
+    await expect(strandsTool.invoke({ date: '2026-06-20' })).resolves.toBe('events');
+    expect(client.enforce).toHaveBeenCalledWith({
+      grantToken: TOKEN_WITH_READ,
+      connector: 'calendar',
+      tool: 'read_calendar',
+      audience: 'https://api.merchant.example',
+    });
+  });
+
+  it('reports an audience denial from online enforcement', async () => {
+    const client: GrantexEnforcer = {
+      enforce: vi.fn().mockResolvedValue(
+        makeEnforceResult({
+          allowed: false,
+          reason: 'The grant token\'s audience does not include "https://api.merchant.example".',
+        }),
+      ),
+    };
+    const callback = vi.fn();
+    const strandsTool = createGrantexTool({
+      name: 'read_calendar',
+      description: 'Read calendar events',
+      inputSchema: INPUT,
+      grantToken: TOKEN_WITH_READ,
+      requiredScope: 'calendar:read',
+      client,
+      connector: 'calendar',
+      online: true,
+      audience: 'https://api.merchant.example',
+      callback,
+    });
+
+    await expect(strandsTool.invoke({ date: '2026-06-20' })).rejects.toThrow('audience does not include');
+    expect(callback).not.toHaveBeenCalled();
+  });
+
   it('throws GrantexScopeError when online enforcement denies the call', async () => {
     const client: GrantexEnforcer = {
       enforce: vi.fn().mockResolvedValue(

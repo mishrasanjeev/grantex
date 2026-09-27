@@ -28,7 +28,10 @@ export interface CreateGrantexToolOptions<
   issuer?: string;
   /** did:web issuer used to derive the JWKS URL. */
   issuerDid?: string;
-  /** Expected JWT audience. */
+  /**
+   * Expected grant token audience. Checked by offline verification, and passed to
+   * `client.enforce()` as the per-call audience in online mode.
+   */
   audience?: string;
   /** Clock tolerance in seconds for token verification. */
   clockTolerance?: number;

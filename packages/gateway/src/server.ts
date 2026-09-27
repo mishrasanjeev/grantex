@@ -1,12 +1,55 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
 import { verifyGrantToken, GrantexTokenError } from '@grantex/sdk';
 import type { GatewayConfig } from './types.js';
 import { matchRoute, isSafeRequestPath } from './matcher.js';
 import { proxyRequest } from './proxy.js';
 import { GatewayError } from './errors.js';
 import { log } from './logger.js';
+import { audienceDenial, checkAudienceCheck, checkExpectedAudience, readTokenAudience } from './audience.js';
 
 export function createGatewayServer(config: GatewayConfig): FastifyInstance {
+  // Checked here as well as in validateConfig, for a config built in code: an
+  // invalid audience setting must stop the gateway, not be read as "no audience".
+  const audienceCheck = checkAudienceCheck(config.audienceCheck === undefined ? 'on' : config.audienceCheck);
+  const audience = checkExpectedAudience(config.audience, audienceCheck);
+  for (const route of config.routes) checkExpectedAudience(route.audience, audienceCheck);
+
+  /**
+   * Sends the audience denial for a verified grant token and returns true, or
+   * returns false when the audience is accepted (or the check is off).
+   */
+  const denyByAudience = (
+    token: string,
+    routeAudience: string | undefined,
+    method: string,
+    path: string,
+    grantId: string | undefined,
+    reply: FastifyReply,
+  ): boolean => {
+    if (audienceCheck === 'off') return false;
+    let tokenAudience: string[] | undefined;
+    try {
+      tokenAudience = readTokenAudience(token);
+    } catch (err) {
+      // Fail closed: a token whose audience cannot be read may be meant for
+      // another relying party.
+      const message = err instanceof Error ? err.message : 'grant token payload cannot be read';
+      log('info', 'Request denied: grant token audience unreadable', { method, path, error: message, grantId });
+      reply.status(401).send({ error: 'TOKEN_INVALID', message });
+      return true;
+    }
+    const denial = audienceDenial(tokenAudience, routeAudience ?? audience);
+    if (denial === undefined) return false;
+    log('info', 'Request denied: grant token audience', { method, path, error: denial, grantId });
+    reply.status(401).send({
+      error: denial,
+      message: denial === 'AUDIENCE_UNCONFIGURED'
+        ? 'The grant token is for a specific audience and the gateway has no audience configured'
+        : 'The grant token audience does not include the audience this gateway expects',
+    });
+    return true;
+  };
+
   const app = Fastify({ logger: false });
 
   // Capture the raw body so it can be relayed byte for byte.
@@ -69,6 +112,10 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
         requiredScopes: match.route.requiredScopes,
       });
 
+      // 3a. Audience (RFC 7519 section 4.1.3), with the same semantics as the
+      //     SDKs' enforce(): the route's audience overrides the gateway's.
+      if (denyByAudience(token, match.route.audience, method, path, grant.grantId, reply)) return;
+
       log('info', 'Request authorized', {
         method,
         path,
@@ -97,6 +144,12 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
         const isScopeError = err.message.toLowerCase().includes('scope');
 
         if (isScopeError) {
+          // The SDKs' enforce() checks the audience before the scopes, so a
+          // token for another relying party is refused as such even when it
+          // also lacks the route's scopes. The scope check runs only after the
+          // signature and claims are verified, so the payload read here is the
+          // verified one. Either reply is a denial.
+          if (denyByAudience(token, match.route.audience, method, path, undefined, reply)) return;
           reply.status(403).send({
             error: 'SCOPE_INSUFFICIENT',
             message: err.message,

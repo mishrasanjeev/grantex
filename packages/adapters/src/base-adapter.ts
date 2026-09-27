@@ -2,6 +2,13 @@ import { verifyGrantToken, type VerifiedGrant } from '@grantex/sdk';
 import type { AdapterConfig, AdapterResult, CredentialProvider, AuditLogger } from './types.js';
 import { findMatchingScope, type ParsedScope } from './scope-utils.js';
 import { GrantexAdapterError } from './errors.js';
+import {
+  audienceDenial,
+  checkAudienceCheck,
+  checkExpectedAudience,
+  readTokenAudience,
+  type AudienceCheck,
+} from './audience.js';
 
 export abstract class BaseAdapter {
   protected readonly jwksUri: string;
@@ -9,6 +16,8 @@ export abstract class BaseAdapter {
   protected readonly auditLogger?: AuditLogger;
   protected readonly clockTolerance?: number;
   protected readonly timeout: number;
+  protected readonly audienceCheck: AudienceCheck;
+  protected readonly audience: string | undefined;
 
   constructor(config: AdapterConfig) {
     this.jwksUri = config.jwksUri;
@@ -16,6 +25,10 @@ export abstract class BaseAdapter {
     this.auditLogger = config.auditLogger;
     this.clockTolerance = config.clockTolerance;
     this.timeout = config.timeout ?? 30_000;
+    // An invalid audience setting stops the adapter from being created rather
+    // than being read as "no audience", which would accept tokens meant elsewhere.
+    this.audienceCheck = checkAudienceCheck(config.audienceCheck === undefined ? 'on' : config.audienceCheck);
+    this.audience = checkExpectedAudience(config.audience, this.audienceCheck);
   }
 
   /**
@@ -27,6 +40,12 @@ export abstract class BaseAdapter {
    * enforces `max_N` against the amount) opt in with `enforcesConstraint: true`
    * and receive the parsed constraint; every other caller gets a
    * `CONSTRAINT_VIOLATED` error instead of silently ignoring the limit.
+   *
+   * The token's audience is checked right after its signature, with the same
+   * semantics as the SDKs' `enforce()` (RFC 7519 section 4.1.3):
+   * `AUDIENCE_MISMATCH` when its `aud` does not contain the configured
+   * `audience` (or it has none), `AUDIENCE_UNCONFIGURED` when it carries `aud`
+   * and no audience is configured. `audienceCheck: 'off'` skips the check.
    */
   protected async verifyAndCheckScope(
     token: string,
@@ -41,6 +60,27 @@ export abstract class BaseAdapter {
       });
     } catch {
       throw new GrantexAdapterError('TOKEN_INVALID', 'Grant token verification failed');
+    }
+
+    if (this.audienceCheck === 'on') {
+      let tokenAudience: string[] | undefined;
+      try {
+        tokenAudience = readTokenAudience(token);
+      } catch {
+        // Fail closed: a token whose audience cannot be read may be meant for
+        // another relying party.
+        throw new GrantexAdapterError('TOKEN_INVALID', 'Grant token audience cannot be read');
+      }
+      const denial = audienceDenial(tokenAudience, this.audience);
+      if (denial === 'AUDIENCE_UNCONFIGURED') {
+        throw new GrantexAdapterError(
+          denial,
+          'The grant token is for a specific audience and this adapter has no audience configured',
+        );
+      }
+      if (denial === 'AUDIENCE_MISMATCH') {
+        throw new GrantexAdapterError(denial, 'The grant token audience does not include the configured audience');
+      }
     }
 
     const matchedScope = findMatchingScope(grant.scopes, requiredScope);

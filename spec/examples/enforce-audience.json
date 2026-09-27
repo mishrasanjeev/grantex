@@ -1,0 +1,24 @@
+{
+  "description": "Audience cases for enforce() shared by the Python SDK, the TypeScript SDK, @grantex/gateway and @grantex/adapters. 'aud' is the grant token's aud claim (null: the token has none). 'client_audience' is the expected audience set on the client (gateway: top-level config; adapters: adapter config); 'call_audience' is the per-call value (gateway: the route's audience), which overrides the client's. 'expect' is 'allow' or the token_invalid sub-reason the call is denied with.",
+  "cases": [
+    {"name": "no aud, no audience configured", "aud": null, "client_audience": null, "call_audience": null, "audience_check": "on", "expect": "allow"},
+    {"name": "aud string, no audience configured", "aud": "https://api.merchant.example", "client_audience": null, "call_audience": null, "audience_check": "on", "expect": "audience_unconfigured"},
+    {"name": "aud array, no audience configured", "aud": ["https://api.merchant.example"], "client_audience": null, "call_audience": null, "audience_check": "on", "expect": "audience_unconfigured"},
+    {"name": "empty aud array, no audience configured", "aud": [], "client_audience": null, "call_audience": null, "audience_check": "on", "expect": "audience_unconfigured"},
+    {"name": "aud string equals client audience", "aud": "https://api.merchant.example", "client_audience": "https://api.merchant.example", "call_audience": null, "audience_check": "on", "expect": "allow"},
+    {"name": "aud array contains client audience", "aud": ["https://issuer.example", "https://api.merchant.example"], "client_audience": "https://api.merchant.example", "call_audience": null, "audience_check": "on", "expect": "allow"},
+    {"name": "aud string differs from client audience", "aud": "https://api.provider.example", "client_audience": "https://api.merchant.example", "call_audience": null, "audience_check": "on", "expect": "audience_mismatch"},
+    {"name": "aud array without client audience", "aud": ["https://issuer.example", "https://api.provider.example"], "client_audience": "https://api.merchant.example", "call_audience": null, "audience_check": "on", "expect": "audience_mismatch"},
+    {"name": "empty aud array, audience configured", "aud": [], "client_audience": "https://api.merchant.example", "call_audience": null, "audience_check": "on", "expect": "audience_mismatch"},
+    {"name": "no aud, audience configured", "aud": null, "client_audience": "https://api.merchant.example", "call_audience": null, "audience_check": "on", "expect": "audience_mismatch"},
+    {"name": "comparison is exact: case", "aud": "https://API.merchant.example", "client_audience": "https://api.merchant.example", "call_audience": null, "audience_check": "on", "expect": "audience_mismatch"},
+    {"name": "comparison is exact: trailing slash", "aud": "https://api.merchant.example/", "client_audience": "https://api.merchant.example", "call_audience": null, "audience_check": "on", "expect": "audience_mismatch"},
+    {"name": "comparison is exact: no prefix match", "aud": "https://api.merchant.example/tools", "client_audience": "https://api.merchant.example", "call_audience": null, "audience_check": "on", "expect": "audience_mismatch"},
+    {"name": "call audience overrides client audience (match)", "aud": "https://tools.merchant.example", "client_audience": "https://api.merchant.example", "call_audience": "https://tools.merchant.example", "audience_check": "on", "expect": "allow"},
+    {"name": "call audience overrides client audience (mismatch)", "aud": "https://api.merchant.example", "client_audience": "https://api.merchant.example", "call_audience": "https://tools.merchant.example", "audience_check": "on", "expect": "audience_mismatch"},
+    {"name": "call audience without client audience", "aud": ["https://tools.merchant.example"], "client_audience": null, "call_audience": "https://tools.merchant.example", "audience_check": "on", "expect": "allow"},
+    {"name": "off: aud string, no audience configured", "aud": "https://api.merchant.example", "client_audience": null, "call_audience": null, "audience_check": "off", "expect": "allow"},
+    {"name": "off: aud array, no audience configured", "aud": ["https://api.provider.example"], "client_audience": null, "call_audience": null, "audience_check": "off", "expect": "allow"},
+    {"name": "off: no aud", "aud": null, "client_audience": null, "call_audience": null, "audience_check": "off", "expect": "allow"}
+  ]
+}

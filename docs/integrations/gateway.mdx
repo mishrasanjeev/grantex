@@ -55,7 +55,7 @@ Client → Gateway (verify token + check scopes) → Upstream API
 
 1. **Route matching** — finds the first route matching the request method + path
 2. **Token verification** — extracts the Bearer token, resolves keys from the configured JWKS endpoint, and verifies signature and claims locally
-3. **Scope checking** — ensures the grant includes all required scopes
+3. **Scope checking** — ensures the grant includes all required scopes, and (from the next release) that the token's `aud` claim is for this gateway; see [Grant token audience](#grant-token-audience)
 4. **Proxy** — strips Authorization header, adds upstream headers + `X-Grantex-*` context, forwards to upstream
 5. **Response** — returns the upstream response to the client
 
@@ -68,6 +68,8 @@ Client → Gateway (verify token + check scopes) → Upstream API
 | `port` | number | No | 8080 | Listen port |
 | `upstreamHeaders` | object | No | — | Headers added to every upstream request |
 | `grantexApiKey` | string | No | — | API key for audit logging |
+| `audience` | string | No | — | Grant token audience the gateway expects. From the next release |
+| `audienceCheck` | `on` \| `off` | No | `on` | `off` ignores the token's `aud`, as earlier releases did; cannot be combined with `audience`. From the next release |
 | `routes` | array | Yes | — | Route definitions |
 
 ### Route Definition
@@ -77,6 +79,7 @@ Client → Gateway (verify token + check scopes) → Upstream API
 | `path` | string | URL pattern. `*` matches one segment, `**` matches any depth |
 | `methods` | string[] | HTTP methods (GET, POST, PUT, PATCH, DELETE) |
 | `requiredScopes` | string[] | Scopes that must be present in the grant |
+| `audience` | string | Grant token audience for this route; overrides the top-level `audience`. From the next release |
 
 ### Path Matching
 
@@ -108,8 +111,54 @@ All errors return JSON with `error` and `message` fields:
 | 401 | `TOKEN_MISSING` | No Bearer token in Authorization header |
 | 401 | `TOKEN_INVALID` | Token signature verification failed |
 | 401 | `TOKEN_EXPIRED` | Token has expired |
+| 401 | `AUDIENCE_UNCONFIGURED` | Token carries `aud` and no `audience` is configured (next release) |
+| 401 | `AUDIENCE_MISMATCH` | Token's `aud` does not contain the route's or gateway's `audience`, or it has no `aud` (next release) |
 | 403 | `SCOPE_INSUFFICIENT` | Grant doesn't include required scopes |
 | 502 | `UPSTREAM_ERROR` | Upstream API is unreachable |
+
+## Grant token audience
+
+<Warning>
+  From the next release (not in `@grantex/gateway` 0.1.5). This is a breaking
+  change: a grant token that carries an `aud` claim is refused unless the
+  gateway is configured with that audience. Tokens issued without an audience
+  are unaffected.
+</Warning>
+
+The gateway checks the token's `aud` claim
+([RFC 7519 section 4.1.3](https://www.rfc-editor.org/rfc/rfc7519#section-4.1.3))
+with the same semantics as `enforce()` in the SDKs, right after the signature
+and before anything is forwarded. As in `enforce()`, the audience comes before
+the scopes: a token for another relying party that also lacks the route's
+scopes is refused with the audience code below, not `SCOPE_INSUFFICIENT`.
+
+
+| Token `aud` | Expected audience | Result |
+|---|---|---|
+| none | none | forwarded |
+| a string or an array of strings | none | 401 `AUDIENCE_UNCONFIGURED` |
+| contains the expected audience | set | forwarded |
+| does not contain it, or no `aud` | set | 401 `AUDIENCE_MISMATCH` |
+
+The expected audience is the route's `audience`, or else the top-level
+`audience`. `aud` matches when the expected audience is one of its values,
+compared as exact strings. A token whose payload cannot be read is refused
+with `TOKEN_INVALID`. Every one of these denials is logged with the method,
+path and grant ID.
+
+```yaml
+audience: https://api.merchant.example
+routes:
+  - path: /tools/**
+    methods: [POST]
+    requiredScopes: [tools:invoke]
+    audience: https://tools.merchant.example
+```
+
+To keep the earlier behaviour while you find the audience, set
+`audienceCheck: off`, and remove it once `audience` is set. An `audienceCheck`
+other than `on` or `off`, an empty `audience`, or an `audience` together with
+`audienceCheck: off` stops the gateway from starting.
 
 ## CLI Usage
 

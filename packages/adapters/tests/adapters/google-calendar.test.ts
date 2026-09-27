@@ -8,6 +8,7 @@ vi.mock('@grantex/sdk', () => ({
 import { verifyGrantToken } from '@grantex/sdk';
 import { GoogleCalendarAdapter } from '../../src/adapters/google-calendar.js';
 import { GrantexAdapterError } from '../../src/errors.js';
+import { GRANT_TOKEN } from '../tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -35,7 +36,7 @@ describe('GoogleCalendarAdapter', () => {
         ok: true, json: () => Promise.resolve(events),
       }));
 
-      const result = await adapter.listEvents('grant-token');
+      const result = await adapter.listEvents(GRANT_TOKEN);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(events);
@@ -50,7 +51,7 @@ describe('GoogleCalendarAdapter', () => {
         ok: true, json: () => Promise.resolve({ items: [] }),
       }));
 
-      await adapter.listEvents('grant-token', {
+      await adapter.listEvents(GRANT_TOKEN, {
         calendarId: 'work',
         timeMin: '2026-01-01T00:00:00Z',
         maxResults: 10,
@@ -68,7 +69,7 @@ describe('GoogleCalendarAdapter', () => {
         scopes: ['email:read'],
       });
 
-      await expect(adapter.listEvents('token'))
+      await expect(adapter.listEvents(GRANT_TOKEN))
         .rejects.toThrow(GrantexAdapterError);
     });
 
@@ -89,7 +90,7 @@ describe('GoogleCalendarAdapter', () => {
       }));
 
       try {
-        await adapter.listEvents('token');
+        await adapter.listEvents(GRANT_TOKEN);
         expect.fail('should throw');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('UPSTREAM_ERROR');
@@ -104,7 +105,7 @@ describe('GoogleCalendarAdapter', () => {
         ok: true, json: () => Promise.resolve(created),
       }));
 
-      const result = await adapter.createEvent('token', {
+      const result = await adapter.createEvent(GRANT_TOKEN, {
         summary: 'Team Sync',
         start: { dateTime: '2026-03-01T10:00:00Z' },
         end: { dateTime: '2026-03-01T11:00:00Z' },
@@ -124,7 +125,7 @@ describe('GoogleCalendarAdapter', () => {
         ok: true, json: () => Promise.resolve({ id: 'evt_2' }),
       }));
 
-      await adapter.createEvent('token', {
+      await adapter.createEvent(GRANT_TOKEN, {
         summary: 'Test',
         start: { dateTime: '2026-03-01T10:00:00Z' },
         end: { dateTime: '2026-03-01T11:00:00Z' },
@@ -144,7 +145,7 @@ describe('GoogleCalendarAdapter', () => {
         scopes: ['calendar:read'],
       });
 
-      await expect(adapter.createEvent('token', {
+      await expect(adapter.createEvent(GRANT_TOKEN, {
         summary: 'Test',
         start: { dateTime: '2026-03-01T10:00:00Z' },
         end: { dateTime: '2026-03-01T11:00:00Z' },

@@ -8,6 +8,7 @@ vi.mock('@grantex/sdk', () => ({
 import { verifyGrantToken } from '@grantex/sdk';
 import { GitHubAdapter } from '../../src/adapters/github.js';
 import { GrantexAdapterError } from '../../src/errors.js';
+import { GRANT_TOKEN } from '../tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -35,7 +36,7 @@ describe('GitHubAdapter', () => {
         ok: true, json: () => Promise.resolve(repos),
       }));
 
-      const result = await adapter.listRepositories('grant-token');
+      const result = await adapter.listRepositories(GRANT_TOKEN);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(repos);
@@ -50,7 +51,7 @@ describe('GitHubAdapter', () => {
         ok: true, json: () => Promise.resolve([]),
       }));
 
-      await adapter.listRepositories('grant-token', {
+      await adapter.listRepositories(GRANT_TOKEN, {
         sort: 'updated',
         direction: 'desc',
         per_page: 50,
@@ -68,7 +69,7 @@ describe('GitHubAdapter', () => {
         scopes: ['email:read'],
       });
 
-      await expect(adapter.listRepositories('token'))
+      await expect(adapter.listRepositories(GRANT_TOKEN))
         .rejects.toThrow(GrantexAdapterError);
     });
 
@@ -89,7 +90,7 @@ describe('GitHubAdapter', () => {
       }));
 
       try {
-        await adapter.listRepositories('token');
+        await adapter.listRepositories(GRANT_TOKEN);
         expect.fail('should throw');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('UPSTREAM_ERROR');
@@ -104,7 +105,7 @@ describe('GitHubAdapter', () => {
         ok: true, json: () => Promise.resolve(created),
       }));
 
-      const result = await adapter.createIssue('token', {
+      const result = await adapter.createIssue(GRANT_TOKEN, {
         owner: 'octocat',
         repo: 'hello-world',
         title: 'Bug report',
@@ -123,7 +124,7 @@ describe('GitHubAdapter', () => {
         ok: true, json: () => Promise.resolve({ id: 43 }),
       }));
 
-      await adapter.createIssue('token', {
+      await adapter.createIssue(GRANT_TOKEN, {
         owner: 'octocat',
         repo: 'hello-world',
         title: 'Feature request',
@@ -144,7 +145,7 @@ describe('GitHubAdapter', () => {
         scopes: ['repos:read'],
       });
 
-      await expect(adapter.createIssue('token', {
+      await expect(adapter.createIssue(GRANT_TOKEN, {
         owner: 'octocat',
         repo: 'hello-world',
         title: 'Test',
