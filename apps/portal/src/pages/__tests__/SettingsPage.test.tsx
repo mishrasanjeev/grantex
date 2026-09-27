@@ -80,7 +80,7 @@ describe('SettingsPage', () => {
     expect(mockShow).toHaveBeenCalledWith('FIDO2 settings saved', 'success');
   });
 
-  it('shows error toast on FIDO2 save failure', async () => {
+  it('shows error toast when saving FIDO2 settings fails', async () => {
     mockApiPatch.mockRejectedValueOnce(new Error('fail'));
     const user = userEvent.setup();
     render(<SettingsPage />);
