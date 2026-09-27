@@ -9,6 +9,12 @@ import {
 } from './challenge.js';
 import type { ToolPolicy, ToolRequirement } from './tool-policy.js';
 import { DecisionReferenceError, withGrantDecisionReference } from './decision-references.js';
+import {
+  checkGrantTokenType,
+  GrantTokenClaimError,
+  grantTokenAlgorithms,
+  readGrantTokenClaims,
+} from '../lib/grant-token.js';
 
 /**
  * Framework-neutral authorization for an MCP server (the resource server):
@@ -17,7 +23,12 @@ import { DecisionReferenceError, withGrantDecisionReference } from './decision-r
  * `tools/list`. The Express and Hono middleware are thin adapters over this.
  */
 
-/** Decoded Grantex grant claims attached to an authorized request. */
+/**
+ * Decoded Grantex grant claims attached to an authorized request. `scopes`
+ * comes from `scope` (or `scp` on a pre-0.6 token); the other Grantex fields
+ * from `urn:grantex:grant`, else from the legacy `agt`, `dev`, `grnt` and
+ * `delegationDepth`.
+ */
 export interface McpGrant {
   sub: string;
   iss: string;
@@ -80,7 +91,10 @@ export interface McpResourceGuardOptions {
   resourceMetadataUrl?: string;
   /** Scopes every request must carry (all of them). */
   scopes?: string[];
-  /** Allowed JWT algorithms (default RS256, ES256, PS256, EdDSA). */
+  /**
+   * Grant token algorithms to accept: RS256 and ES256 (the default), or one
+   * of them. A list naming any other algorithm throws at start-up.
+   */
   algorithms?: string[];
   /** Revocation state, e.g. the `storage` given to the authorization server. */
   revocations?: RevocationChecker;
@@ -149,7 +163,6 @@ export type GuardResult =
     body: Record<string, unknown>;
   };
 
-const DEFAULT_ALGORITHMS = ['RS256', 'ES256', 'PS256', 'EdDSA'];
 const jwksCache = new Map<string, ReturnType<typeof jose.createRemoteJWKSet>>();
 
 function jwksFor(issuer: string, jwksUri: string | undefined): ReturnType<typeof jose.createRemoteJWKSet> {
@@ -238,7 +251,7 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
       + 'Pass the authorization server\'s storage as `revocations`.',
     );
   }
-  const algorithms = options.algorithms ?? DEFAULT_ALGORITHMS;
+  const algorithms = grantTokenAlgorithms(options.algorithms, 'mcp-auth resource guard');
   const requiredScopes = options.scopes ?? [];
   const tools = options.tools;
 
@@ -287,10 +300,11 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
     const token = header.slice(7).trim();
 
     let payload: jose.JWTPayload;
+    let protectedHeader: jose.JWTHeaderParameters;
     try {
       if (!options.issuer) throw new Error('issuer is required');
       const issuer = options.issuer;
-      ({ payload } = await jose.jwtVerify(token, jwksFor(issuer, options.jwksUri), {
+      ({ payload, protectedHeader } = await jose.jwtVerify(token, jwksFor(issuer, options.jwksUri), {
         algorithms,
         issuer: issuer.endsWith('/') ? [issuer, issuer.slice(0, -1)] : [issuer, `${issuer}/`],
         audience: audiences,
@@ -302,16 +316,22 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
       });
     }
 
-    // `scp` must be a string array, matching @grantex/sdk: a string or a
-    // missing claim marks a foreign token from the same issuer.
-    const scp = payload['scp'];
-    if (!Array.isArray(scp) || !scp.every((s) => typeof s === 'string')) {
-      return deny(401, 'invalid_token', invalidTokenChallenge('Token scp claim must be an array of strings', resourceMetadataUrl), {
+    // typ, then scope (or scp) and the grant fields (lib/grant-token.ts). A
+    // token whose header or claims are not a grant token's is refused; any
+    // other error is not a verdict on the token and propagates, so the
+    // request fails rather than being let through.
+    let claims: ReturnType<typeof readGrantTokenClaims>;
+    try {
+      checkGrantTokenType(protectedHeader, payload);
+      claims = readGrantTokenClaims(payload);
+    } catch (err) {
+      if (!(err instanceof GrantTokenClaimError)) throw err;
+      return deny(401, 'invalid_token', invalidTokenChallenge(err.message, resourceMetadataUrl), {
         error: 'unauthorized',
-        error_description: 'Token scp claim must be an array of strings',
+        error_description: err.message,
       });
     }
-    const grantedScopes = scp as string[];
+    const grantedScopes = claims.scopes;
 
     if (options.revocations) {
       if (typeof payload.jti !== 'string' || payload.jti.length === 0) {
@@ -352,10 +372,10 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
       iss: typeof payload.iss === 'string' ? payload.iss : '',
       jti: typeof payload.jti === 'string' ? payload.jti : '',
       scopes: grantedScopes,
-      ...(typeof payload['agt'] === 'string' ? { agentDid: payload['agt'] } : {}),
-      ...(typeof payload['dev'] === 'string' ? { developerId: payload['dev'] } : {}),
-      ...(typeof payload['grnt'] === 'string' ? { grantId: payload['grnt'] } : {}),
-      ...(typeof payload['delegationDepth'] === 'number' ? { delegationDepth: payload['delegationDepth'] } : {}),
+      ...(claims.agentDid !== undefined ? { agentDid: claims.agentDid } : {}),
+      ...(claims.developerId !== undefined ? { developerId: claims.developerId } : {}),
+      ...(claims.grantId !== undefined ? { grantId: claims.grantId } : {}),
+      ...(claims.delegationDepth !== undefined ? { delegationDepth: claims.delegationDepth } : {}),
       exp: payload.exp as number,
       iat: payload.iat as number,
       raw: payload,

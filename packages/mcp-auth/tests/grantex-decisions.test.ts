@@ -75,7 +75,7 @@ async function callTool(
   verifier: ReturnType<typeof grantexDecisionVerifier>,
   headers: Record<string, string>,
   args: Record<string, unknown>,
-  options: { toolName?: string; policy?: typeof tools; grant?: Record<string, unknown> } = {},
+  options: { toolName?: string; policy?: typeof tools; grant?: Record<string, unknown>; accessToken?: string } = {},
 ) {
   const mw = requireMcpAuth({ issuer, audience: RESOURCE, tools: options.policy ?? tools, decisions: verifier, warn: () => {} });
   const server = createServer((raw: IncomingMessage, res: ServerResponse) => {
@@ -97,7 +97,7 @@ async function callTool(
   try {
     const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${await grantToken(options.grant)}`, ...headers },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${options.accessToken ?? await grantToken(options.grant)}`, ...headers },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: options.toolName ?? 'case_decision', arguments: args } }),
     });
     return { status: res.status, challenge: res.headers.get('www-authenticate'), body: (await res.json()) as Record<string, unknown> };
@@ -193,6 +193,29 @@ describe('grantexDecisionVerifier', () => {
     const noConnector = await callTool(verifier, { [DECISION_GRANT_HEADER]: token }, args, { policy: scopesOnly });
     expect(noConnector.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'malformed' });
     expect(consume).not.toHaveBeenCalled();
+  });
+
+  it('reads the developer and grant from urn:grantex:grant when the token has no legacy claims', async () => {
+    // What the auth service issues with GRANT_TOKEN_LEGACY_CLAIMS=false (the
+    // 0.7 default): no scp, dev or grnt.
+    const standardOnly = (developerId: string) => new jose.SignJWT({
+      aud: RESOURCE,
+      client_id: 'shopper-01',
+      scope: 'tool:acme_kyb:write',
+      'urn:grantex:grant': { grant_id: 'grnt_01', agent_did: 'did:grantex:shopper-01', developer_id: developerId },
+    })
+      .setProtectedHeader({ alg: 'RS256', kid: 'k1', typ: 'at+jwt' })
+      .setIssuer(issuer).setSubject('client-a').setJti('tok_1').setIssuedAt().setExpirationTime('1h')
+      .sign(privateKey);
+    const { verifier, consume } = verifierWithIssuer();
+    const outcome = await callTool(verifier, { [DECISION_GRANT_HEADER]: await decisionGrant() }, args, { accessToken: await standardOnly('dev_01') });
+    expect(outcome.status).toBe(200);
+    expect(consume).toHaveBeenCalledTimes(1);
+    expect(consume).toHaveBeenCalledWith(expect.anything(), { grantId: 'grnt_01' });
+    // The developer is still checked: a decision grant for another developer is refused.
+    const other = await callTool(verifier, { [DECISION_GRANT_HEADER]: await decisionGrant() }, args, { accessToken: await standardOnly('dev_02') });
+    expect(other.body).toMatchObject({ reason: 'decision_invalid', sub_reason: 'unknown_grant' });
+    expect(consume).toHaveBeenCalledTimes(1);
   });
 
   it('binds the manifest decision_fields', async () => {
