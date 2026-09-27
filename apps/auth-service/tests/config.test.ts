@@ -3,6 +3,7 @@ import {
   parseIntegerSetting,
   parsePolicyBackend,
   passkeyOriginConfigError,
+  portableEvidenceCascadeConfigError,
   parseTrustProxySetting,
 } from '../src/config.js';
 
@@ -14,6 +15,12 @@ describe('configuration parsing', () => {
     expect(passkeyOriginConfigError('http://localhost:3001', 'localhost', true)).toMatch(/HTTPS/);
     expect(passkeyOriginConfigError('https://example.com/consent', 'example.com', true)).toMatch(/canonical/);
     expect(passkeyOriginConfigError('https://example.com', 'evil.example', true)).toMatch(/FIDO_RP_ID/);
+  });
+  it('requires cascade revocation when portable evidence is enabled', () => {
+    expect(portableEvidenceCascadeConfigError(false, false)).toBeNull();
+    expect(portableEvidenceCascadeConfigError(false, true)).toBeNull();
+    expect(portableEvidenceCascadeConfigError(true, true)).toBeNull();
+    expect(portableEvidenceCascadeConfigError(true, false)).toMatch(/IRREGULARITY_CASCADE_REVOCATION_ENABLED/);
   });
   it('accepts bounded integer settings', () => {
     expect(parseIntegerSetting('PORT', '3001', 1, 65_535)).toBe(3001);

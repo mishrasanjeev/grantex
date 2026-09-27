@@ -388,6 +388,43 @@ export async function verifyAgentGrantVC(vcJwt: string): Promise<VerifyVCResult>
     }
   }
 
+  if (webauthnVerified) {
+    const sql = getSql();
+    const rows = await sql`
+      SELECT c.status AS credential_status, g.status AS grant_status,
+             g.parent_grant_id, g.developer_id
+      FROM verifiable_credentials c
+      JOIN grants g ON g.id = c.grant_id
+        AND g.developer_id = c.developer_id
+      WHERE c.id = ${vcId ?? ''}
+        AND c.credential_jwt = ${vcJwt}
+    `;
+    if (!rows[0]) {
+      return { valid: false, ...vcIdFields, error: 'Credential record unavailable' };
+    }
+    if (rows[0]['credential_status'] !== 'active' || rows[0]['grant_status'] !== 'active') {
+      return { valid: false, ...vcIdFields, revoked: true, error: 'Credential grant has been revoked' };
+    }
+    const parentGrantId = rows[0]['parent_grant_id'] as string | null;
+    if (parentGrantId) {
+      const ancestors = await sql<{ status: string }[]>`
+        WITH RECURSIVE ancestry AS (
+          SELECT id, parent_grant_id, status, developer_id FROM grants
+          WHERE id = ${parentGrantId} AND developer_id = ${rows[0]['developer_id'] as string}
+          UNION
+          SELECT parent.id, parent.parent_grant_id, parent.status, parent.developer_id
+          FROM grants parent
+          JOIN ancestry child ON parent.id = child.parent_grant_id
+            AND parent.developer_id = child.developer_id
+        )
+        SELECT status FROM ancestry
+      `;
+      if (ancestors.length === 0 || ancestors.some((ancestor) => ancestor.status !== 'active')) {
+        return { valid: false, ...vcIdFields, revoked: true, error: 'Credential ancestor grant has been revoked' };
+      }
+    }
+  }
+
   // Check revocation via status list
   const credentialStatus = vc['credentialStatus'] as Record<string, unknown> | undefined;
   if (credentialStatus) {

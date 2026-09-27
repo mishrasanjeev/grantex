@@ -19,6 +19,13 @@ the automatic 402/payment/retry flow. Confirm the published SDK version in
 [Release Status](https://docs.grantex.dev/release-status) before installing.
 See [Base custody setup](https://docs.grantex.dev/guides/base-usdc-custody).
 
+The repository source includes a typed signed WebAuthn evidence reference on
+verified grants and the `webauthnVerified` VC attestation field. Published
+`0.7.0` predates these types. The server controls issuance separately with
+`PORTABLE_WEBAUTHN_EVIDENCE_ENABLED`; a signed grant reference is not the raw
+assertion, and online status or a fresh VC status list is still needed for
+revocation. See the [passkey guide](https://docs.grantex.dev/features/fido-webauthn).
+
 ```bash
 npm install @grantex/sdk@0.7.0
 ```

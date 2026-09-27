@@ -6,6 +6,12 @@ feature flags and an authenticated customer handoff for enrollment. Confirm
 the published version in [Release Status](https://docs.grantex.dev/release-status)
 before installing.
 
+Repository source exposes the signed WebAuthn grant evidence reference and
+`webauthn_verified` VC attestation field; published `0.6.0` predates those
+types. Server-side portable issuance requires an explicit rollout. A signed
+reference alone is not the raw assertion or a current revocation check; see
+the [passkey guide](https://docs.grantex.dev/features/fido-webauthn).
+
 **0.5.1:** security and reliability fixes. `enforce()` applies the
 tightest budget cap and denies malformed, negative or non-finite amounts; the
 FastAPI enforcer reads the `Authorization` header; grant-token verification

@@ -29,6 +29,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Two existing lines the audit flagged were reworded without changing their
   meaning: a portal test title and one sentence of the draft privacy policy.
 - CI and documentation only; no product change, nothing behind a flag.
+
+### Portable evidence rollout and VC revocation
+- Added `IRREGULARITY_CASCADE_REVOCATION_ENABLED` (default `false`). When enabled,
+  high/critical irregularity responses revoke the affected agent's grants,
+  descendants, wallet reservations, VCs, and status-list bits in one database
+  transaction. Portable evidence requires this flag at startup.
+- Evidence-bearing VC verification also checks the issuer's stored credential
+  and grant ancestry. An explicit, idempotent reconciliation command repairs
+  active descendants and VCs left behind by historical grant-only revocations,
+  including public status-list bits. Local Postgres and Chromium regressions
+  cover both paths.
+- Expanded the isolated production passkey test to verify the exported
+  assertion, grant-reference digest, refresh, delegation, and revocation.
+
 ### Portable WebAuthn assertion evidence (default off)
 - Added `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED` (default `false`). When enabled,
   verified consent assertions are retained, bound to new grants, referenced by
