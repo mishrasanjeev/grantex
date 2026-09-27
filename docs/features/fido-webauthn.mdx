@@ -7,6 +7,12 @@ keywords: ["Grantex passkey enrollment", "WebAuthn agent consent", "FIDO2 live-m
 
 ## Overview
 
+The Grantex-hosted service enabled portable WebAuthn evidence on September 27,
+2026. Production browser E2E verified enrollment, live approval, assertion
+evidence, refresh, delegation, account response policy, and public VC
+revocation status. Self-hosted deployments still default to off and must
+follow the rollout below.
+
 Grantex supports FIDO2/WebAuthn passkeys during consent. A valid assertion proves use of a credential bound to the principal and to Grantex's challenge. When hosted enrollment is enabled, the server also requires WebAuthn user verification during registration and assertion; this may be a device PIN, biometric, or other authenticator-supported method. The server does not learn which method the customer used.
 
 Live-mode consent requires an existing passkey for the principal. Sandbox-mode accounts can also require one with `fidoRequired: true`. A consent link alone cannot register a passkey because it does not authenticate the principal.

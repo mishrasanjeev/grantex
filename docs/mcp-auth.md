@@ -25,8 +25,9 @@ server and hands the actual grant to Grantex. 3.0 is built for production:
   server-side MUST of the specification, plus the Security Best Practices'
   confused-deputy requirements (consent and callback bound to the approving
   browser, CSRF-protected consent), to a test.
-- **A rendered consent page** that shows purpose, tools, caps, data region and
-  duration before anything reaches Grantex.
+- **A rendered consent page** that shows purpose, tools, caps and duration
+  before anything reaches Grantex, and a purpose that Grantex then binds the
+  grant to.
 - **Tools refused at the MCP server**, not merely hidden from `tools/list`,
   with scopes derived from Grantex tool manifests and a `decision_required`
   challenge for actions a person must approve.
@@ -42,9 +43,9 @@ server and hands the actual grant to Grantex. 3.0 is built for production:
    identified by an https metadata-document URL.
 4. `/authorize` validates the request and renders the **consent page**.
 5. The Principal approves; only then does the server ask Grantex to
-   authorize the grant, with the resource as its audience, and it sets a
-   callback-binding cookie on that browser. The Principal may confirm again
-   in Grantex.
+   authorize the grant, with the resource as its audience and `grant.purpose`
+   as its purpose, and it sets a callback-binding cookie on that browser. The
+   Principal may confirm again in Grantex.
 6. Grantex redirects to `/callback`. Only if the browser presents the
    callback-binding cookie does the server issue a single-use code to the
    client's redirect URI with `iss`.
@@ -194,11 +195,11 @@ export async function startAuthServer(options: {
     // scopes_supported and the consent page's tool list come from the manifest.
     manifests: [options.manifest],
 
-    // What the grant is for, shown on the consent page.
+    // What the grant is for, shown on the consent page. The purpose and
+    // duration are sent to Grantex, which binds the grant to them.
     grant: {
       purpose: 'aml.cdd.onboarding',
       purposeDescription: 'Business onboarding checks for new applicants',
-      dataRegion: 'eu',
       duration: '8h',
     },
 
@@ -228,7 +229,7 @@ export async function startAuthServer(options: {
 | `scopes` | yes, or `manifests` | Scopes clients may request; others are `invalid_scope`. |
 | `manifests` | no | Grantex tool manifests (0.5 or 0.6 JSON). Adds `tool:<connector>:<permission>` scopes and lists tools on the consent page. |
 | `grantexIssuer`, `jwksUri`, `audience` | for `/introspect`, `/revoke` | Issuer of grant tokens, its JWKS, and the audience to require (defaults to the accepted resources). |
-| `grant` | no | `purpose`, `purposeDescription`, `dataRegion`, `duration` (sent as `expiresIn`), `authorizeParams`. |
+| `grant` | no | `purpose` (sent to Grantex, which binds the grant to it; see [Purpose](#purpose)), `purposeDescription`, `duration` (sent as `expiresIn`), `authorizeParams`. `dataRegion` is refused at start-up. |
 | `consentUi` | no | `appName`, and https `appLogo`, `privacyUrl`, `termsUrl`. |
 | `consentPage` | no | Theme, text, `lang`, `extraCss`, `renderDetails`, `expiresInSeconds` (60–3600). |
 | `clientIdMetadataDocuments` | no | `enabled` (default true), `allowedHosts`, `allowedPorts` (`[443]`), `timeoutMs` (5000), `maxBytes` (16384), `cacheTtlSeconds` (300), `maxCacheTtlSeconds` (86400). |
@@ -237,6 +238,7 @@ export async function startAuthServer(options: {
 | `codeExpirationSeconds` | no | Authorization code and pending authorization lifetime (600). |
 | `sandboxAutoApprove` | no | Accept a Grantex sandbox auto-approval after local consent. Off by default. |
 | `hooks.onRevocation` | no | Called after a revocation is recorded. |
+| `warn` | no | Receives operator warnings (default `console.warn`): Grantex refusing `grant.purpose`, with its reason, error code and request id, or answering without confirming it. See [Purpose](#purpose). |
 
 ### Endpoints
 
@@ -283,9 +285,13 @@ The page shows:
   metadata document, whose name is not verified);
 - the **host the Principal will be sent back to**, prominently, with a warning
   when every redirect URI is on localhost;
-- **purpose**, **data region** and **duration** from `grant`, labelled as
-  declared by the service (the page says they are enforced only where the
-  grant and the service apply them);
+- **purpose** and **duration** from `grant`. When `grant.purpose` is set,
+  the page says that Grantex records the purpose on the grant; when it is
+  not, the page says nothing about recording one. Either way it says that
+  call limits are declared by the service and enforced only where the
+  service applies them. The data region row always reads "None declared",
+  because a grant made through mcp-auth cannot carry a data region (see
+  [Purpose](#purpose));
 - the service (`resourceName` and `resource`);
 - each **tool** the requested scopes cover with its permission and declared
   **caps**, and which tools need a decision grant;
@@ -341,7 +347,7 @@ export const consentPage: ConsentPageOptions = {
       <ul>
         ${model.tools.map((tool) => html`<li>${tool.name}${tool.requiresDecision ? ' (needs approval per action)' : ''}</li>`)}
       </ul>
-      <p>Data stays in ${model.dataRegion ?? 'any region'} for ${model.duration ?? 'the default duration'}.</p>
+      <p>Access lasts ${model.duration ?? 'the default duration'}.</p>
     </section>`,
 };
 ```
@@ -349,10 +355,10 @@ export const consentPage: ConsentPageOptions = {
 | Option | Rules |
 |---|---|
 | `theme` | `backgroundColor`, `surfaceColor`, `textColor`, `mutedTextColor`, `accentColor`, `accentTextColor`, `borderColor` as hex colours; `radiusPx` 0–24; `fontFamily` letters, digits, spaces, commas and hyphens (unquoted family names). Text/background pairs must reach 4.5:1 contrast or the server refuses to start. |
-| `text` | Any of the page's strings (for wording or translation). |
+| `text` | Any of the page's strings (for wording or translation). The note above the details is `declaredNote` when `grant.purpose` is set and `noPurposeNote` when it is not. |
 | `lang` | BCP 47 tag for the `lang` attribute. |
 | `extraCss` | Appended to the stylesheet and covered by its CSP hash; no `<style>` or comment markup. |
-| `renderDetails` | Replaces the details section. Must return `helpers.html` output (`html` works only as a template tag). The header, redirect host, warnings and form cannot be replaced. |
+| `renderDetails` | Replaces the details section. Must return `helpers.html` output (`html` works only as a template tag). The header, redirect host, warnings and form cannot be replaced. `model.dataRegion` is never set. |
 | `expiresInSeconds` | How long a rendered page can be submitted (600). |
 
 ## Protecting the MCP server
@@ -508,15 +514,59 @@ export const decisionVerifier: DecisionVerifier = {
   when its manifest does not declare `requires_decision`, and a token whose
   decision entries cannot be read is refused for every `tools/call`
   (`decision_invalid` / `malformed_authorization_details`).
-- **Purpose-bound grants.** `grant.authorizeParams` returns extra parameters
-  for the Grantex authorize call (for example `authorization_details` with
-  purpose and region). It cannot override the agent, principal, scopes,
-  audience, redirect URI or state. mcp-auth does not yet send `grant.purpose`
-  to Grantex itself (it is built against the published SDK); with a Grantex
-  deployment and SDK that accept a purpose, return it from `authorizeParams`
-  (for example `{ purpose: 'aml.cdd.onboarding' }`) so the grant carries
-  it. Until then the values in `grant` are shown on the consent page as
-  declared, not enforced by the grant token.
+- **Authorize parameters.** `grant.authorizeParams` returns extra parameters
+  for the Grantex authorize call, for parameters a newer Grantex server
+  accepts. It cannot override the agent, principal, scopes, audience,
+  redirect URI, state or purpose: it may repeat `grant.purpose`, but a
+  different `purpose`, or one when `grant.purpose` is unset, refuses the
+  authorization with `500 server_error` before Grantex is called. The
+  purpose sent is always the one the consent page showed.
+
+## Purpose
+
+`grant.purpose` is shown on the consent page and, once the Principal
+approves, sent to Grantex as the `purpose` of `POST /v1/authorize`. Grantex
+stores it on the grant and carries it in the grant token's
+`authorization_details` (`urn:grantex:tools:v1`, one entry per connector),
+where the SDKs' `enforce()` checks it against each tool's `allowed_purposes`.
+Every `@grantex/sdk` version sends it; a Grantex server that predates
+purpose-bound grants ignores it, which is why the answer is checked.
+
+**Use a purpose Grantex accepts.** `createMcpAuthServer` checks only that
+`grant.purpose` is well formed. Whether Grantex accepts the term is for
+Grantex to decide, and it does not publish its purpose vocabulary in its
+metadata (`/.well-known/oauth-authorization-server`), so mcp-auth cannot
+check the term at start-up without keeping a copy that could drift. A
+well-formed term outside the vocabulary, such as `marketing.analytics`,
+therefore starts cleanly and then fails **every** authorization after the
+Principal approves the consent page: the client receives
+`error=invalid_scope`, and `warn` receives Grantex's reason, error code
+and request id. Use a term from the
+[purpose vocabulary](/concepts/purpose-bound-grants) or a private
+`x-<org>.<term>`, and complete one authorization after each deployment
+that changes `grant.purpose`.
+
+| Grantex answers | The server |
+|---|---|
+| `201` echoing the purpose | Continues to Grantex consent as usual. |
+| `201` without the purpose (a server that predates purpose-bound grants) | Refuses with `502 server_error` ("Grantex did not confirm the purpose for this grant") and reports it through `warn`. Nothing is issued. |
+| `400 INVALID_PURPOSE`: a purpose outside the vocabulary, or requested scopes that name no connector (no `tool:<connector>:<permission>` scope) | Redirects the client with `error=invalid_scope` and a fixed `error_description` naming the purpose. Upstream text is not relayed to the client; Grantex's reason, error code and request id go to `warn` on one line, with the reason cut to 300 characters. |
+| Any other failure | `502 server_error` with a fixed description; upstream text is not relayed. |
+
+A purpose needs a connector to bind to, so offer `tool:<connector>:<permission>`
+scopes (from `manifests`) and have clients request at least one; a request
+for a scope such as `profile` alone is refused.
+
+**Data region.** `grant.dataRegion` is not supported. `POST /v1/authorize`,
+the Grantex endpoint mcp-auth calls, takes no data region: Grantex builds
+the grant's `authorization_details` from the purpose and scopes alone. A
+grant made through mcp-auth therefore cannot carry a data region, and the
+consent page could only promise a restriction the grant does not carry.
+`createMcpAuthServer` throws at start-up when it is set; remove it, and say
+where data is held in the privacy policy linked from the page
+(`consentUi.privacyUrl`) instead. Grant tokens from other flows can carry
+`data_region` in `authorization_details`; the SDKs report it but do not
+yet evaluate it (see [purpose-bound grants](/concepts/purpose-bound-grants)).
 
 ## Conformance
 
@@ -563,7 +613,11 @@ changes for them); add `audience`, `revocations` and `tools` to
 
 - The Grantex principal for every grant is the OAuth `client_id`, not the
   person who approved; all users of one client share it. See `FINDINGS.md`.
-- Purpose and data region are displayed but not yet carried in the grant
-  token (see Extension points).
+- A data region cannot be declared: `grant.dataRegion` is refused at
+  start-up, because `POST /v1/authorize` takes no data region (see
+  [Purpose](#purpose)).
+- A purpose outside the Grantex vocabulary is found only when Grantex
+  refuses it, after the Principal approves the consent page, not at
+  start-up (see [Purpose](#purpose)).
 - Rate limits are per process.
 - `onTokenIssued` is declared but not called.
