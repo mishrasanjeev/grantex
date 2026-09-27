@@ -1,6 +1,10 @@
 """Shared fixtures and mock data for the Grantex Python SDK test suite."""
 from __future__ import annotations
 
+import json
+from typing import Any
+
+import httpx
 import pytest
 
 
@@ -10,6 +14,27 @@ def _isolated_jwks_cache() -> None:
     from grantex._verify import clear_jwks_cache
 
     clear_jwks_cache()
+
+
+def serve_jwks(mocker: Any, jwks: Any) -> Any:
+    """Answer every HTTP request with the JWK Set ``jwks`` (or with what the
+    callable ``jwks`` returns at that moment).
+
+    It is patched in at the transport, with the headers at once and the body
+    still to be streamed, so the SDK's own read of the response (status,
+    Content-Type, size and key-count checks) runs on it. Returns the patched
+    ``handle_request``: its ``call_count`` is the number of fetches.
+    """
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        body = jwks() if callable(jwks) else jwks
+        return httpx.Response(
+            200,
+            headers={"Content-Type": "application/json"},
+            stream=httpx.ByteStream(json.dumps(body).encode()),
+        )
+
+    return mocker.patch.object(httpx.HTTPTransport, "handle_request", side_effect=respond)
 
 
 # ─── Mock response data (camelCase, matching the API JSON format) ─────────────

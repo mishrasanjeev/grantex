@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
 import { newAnomalyId, newAnomalyRuleId, newAnomalyChannelId, newIrregularityPolicyChangeId } from '../lib/ids.js';
 import { emitEvent } from '../lib/events.js';
+import { revokeAgentGrantsCascade } from '../lib/revoke.js';
 import { config } from '../config.js';
 
 type AnomalyType = 'rate_spike' | 'high_failure_rate' | 'new_principal' | 'off_hours_activity';
@@ -296,22 +297,30 @@ export async function anomaliesRoutes(app: FastifyInstance): Promise<void> {
 
     // Auto-revoke grants for critical/high severity anomalies if configured
     const autoRevoked: string[] = [];
-    for (const a of anomalies) {
-      if (responseMode === 'revoke_agent_grants'
-          && (a.severity === 'critical' || a.severity === 'high') && a.agent_id) {
-        const revoked = await sql`
-          UPDATE grants SET status = 'revoked', revoked_at = NOW()
-          WHERE agent_id = ${a.agent_id}
-            AND developer_id = ${developerId}
-            AND status = 'active'
-            AND expires_at > NOW()
-            AND (${!config.irregularityResponsePolicyEnabled} OR EXISTS (
-              SELECT 1 FROM developers
-              WHERE id = ${developerId} AND irregularity_response_mode = 'revoke_agent_grants'
-            ))
-          RETURNING id
-        `;
-        autoRevoked.push(...revoked.map((row) => row['id'] as string));
+    if (responseMode === 'revoke_agent_grants') {
+      const agents = new Set(anomalies
+        .filter((a) => (a.severity === 'critical' || a.severity === 'high') && a.agent_id)
+        .map((a) => a.agent_id as string));
+      for (const agentId of agents) {
+        if (config.irregularityCascadeRevocationEnabled) {
+          autoRevoked.push(...await revokeAgentGrantsCascade(
+            agentId, developerId, config.irregularityResponsePolicyEnabled,
+          ));
+        } else {
+          const revoked = await sql`
+            UPDATE grants SET status = 'revoked', revoked_at = NOW()
+            WHERE agent_id = ${agentId}
+              AND developer_id = ${developerId}
+              AND status = 'active'
+              AND expires_at > NOW()
+              AND (${!config.irregularityResponsePolicyEnabled} OR EXISTS (
+                SELECT 1 FROM developers
+                WHERE id = ${developerId} AND irregularity_response_mode = 'revoke_agent_grants'
+              ))
+            RETURNING id
+          `;
+          autoRevoked.push(...revoked.map((row) => row['id'] as string));
+        }
       }
     }
 

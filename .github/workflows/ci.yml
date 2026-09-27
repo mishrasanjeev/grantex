@@ -177,6 +177,12 @@ jobs:
         run: mypy --strict src/grantex
       - name: Test
         run: pytest
+      # `make test` runs these on 3.12 (job "make"); this keeps the vendor
+      # denylist check working on the oldest Python CONTRIBUTING.md supports.
+      - name: Test repository scripts
+        if: matrix.python-version == '3.9'
+        working-directory: .
+        run: python -m pytest -q tests/scripts
 
   # ─── Node packages that depend on @grantex/sdk ───────────────────────────
   #

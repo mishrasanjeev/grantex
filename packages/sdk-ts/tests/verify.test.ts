@@ -10,8 +10,14 @@ vi.mock('jose', () => {
     jwtVerify: mockJwtVerify,
     decodeJwt: mockDecodeJwt,
     createRemoteJWKSet: mockCreateRemoteJWKSet,
+    // The option key for the SDK's bounded fetch (see jwks.ts).
+    customFetch: Symbol('customFetch'),
   };
 });
+
+// With boundedJwksFetch, a resolver is created with the SDK's fetch bounds;
+// without it, with the URL alone, as before.
+const BOUNDED = expect.objectContaining({ timeoutDuration: 5000 });
 
 // Import after mock is in place
 const {
@@ -115,6 +121,54 @@ describe('verifyGrantToken', () => {
     expect(vi.mocked(jose.jwtVerify).mock.calls[0]?.[1]).toBe(
       vi.mocked(jose.jwtVerify).mock.calls[1]?.[1],
     );
+  });
+
+  it('creates the resolver with the fetch bounds when boundedJwksFetch is true', async () => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await verifyGrantToken('first.token', {
+      jwksUri: 'https://GRANTEX.dev:443/.well-known/jwks.json#first',
+      boundedJwksFetch: true,
+    });
+    await verifyGrantToken('second.token', {
+      jwksUri: 'https://grantex.dev/.well-known/jwks.json#second',
+      boundedJwksFetch: true,
+    });
+
+    expect(jose.createRemoteJWKSet).toHaveBeenCalledOnce();
+    expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(
+      new URL('https://grantex.dev/.well-known/jwks.json'),
+      BOUNDED,
+    );
+  });
+
+  it('keeps bounded and unbounded resolvers for the same JWKS URI apart', async () => {
+    vi.mocked(jose.createRemoteJWKSet)
+      .mockReturnValueOnce('resolver-unbounded' as never)
+      .mockReturnValueOnce('resolver-bounded' as never);
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+    const jwksUri = 'https://keys.example/.well-known/jwks.json';
+
+    await verifyGrantToken('first.token', { jwksUri });
+    await verifyGrantToken('second.token', { jwksUri, boundedJwksFetch: true });
+    await verifyGrantToken('third.token', { jwksUri, boundedJwksFetch: false });
+    await verifyGrantToken('fourth.token', { jwksUri, boundedJwksFetch: true });
+
+    expect(jose.createRemoteJWKSet).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(jose.createRemoteJWKSet).mock.calls[0]).toEqual([new URL(jwksUri)]);
+    expect(vi.mocked(jose.createRemoteJWKSet).mock.calls[1]).toEqual([new URL(jwksUri), BOUNDED]);
+    expect(vi.mocked(jose.jwtVerify).mock.calls.map((call) => call[1])).toEqual([
+      'resolver-unbounded',
+      'resolver-bounded',
+      'resolver-unbounded',
+      'resolver-bounded',
+    ]);
   });
 
   it('keeps resolvers isolated between distinct JWKS URIs', async () => {
@@ -310,6 +364,29 @@ describe('verifyGrantToken', () => {
       expect.objectContaining({ issuer: 'https://grantex.dev' }),
     );
     expect(result.grantId).toBe('grant_01');
+  });
+
+  it.each([
+    ['did:web:grantex.dev', 'https://grantex.dev/.well-known/jwks.json', 'https://grantex.dev'],
+    ['did:web:example.com:api:v1', 'https://example.com/api/v1/.well-known/jwks.json', 'https://example.com/api/v1'],
+  ])('resolves %s with the fetch bounds when boundedJwksFetch is true', async (issuerDid, jwksUri, issuer) => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({
+      payload: VALID_PAYLOAD,
+      protectedHeader: { alg: 'RS256' },
+    } as never);
+
+    await verifyGrantToken('fake.token.here', {
+      jwksUri: 'https://fallback.example.com/.well-known/jwks.json',
+      issuerDid,
+      boundedJwksFetch: true,
+    });
+
+    expect(jose.createRemoteJWKSet).toHaveBeenCalledWith(new URL(jwksUri), BOUNDED);
+    expect(jose.jwtVerify).toHaveBeenCalledWith(
+      'fake.token.here',
+      'mock-jwks',
+      expect.objectContaining({ issuer }),
+    );
   });
 
   it('resolves did:web issuerDid with path segments', async () => {

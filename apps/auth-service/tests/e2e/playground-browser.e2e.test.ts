@@ -46,6 +46,10 @@ async function mockApi(page: Page): Promise<ApiFixture> {
     }
     const body = request.postData() ? request.postDataJSON() as unknown : null;
     calls.push({ path, method: request.method(), authorization: request.headers()['authorization'], body });
+    if (path === '/v1/me' && request.headers()['authorization'] === 'Bearer gx_sandbox_invalid') {
+      await route.fulfill({ status: 401, headers, contentType: 'application/json', body: JSON.stringify({ message: 'Invalid API key' }) });
+      return;
+    }
     if (delayNext.delete(path)) {
       await delayed;
       delayed = new Promise<void>((resolve) => { resolveDelay = resolve; });
@@ -151,12 +155,56 @@ describe('public playground in Chromium', () => {
     }
   });
 
+  it('ignores an autofilled key until the visitor explicitly opts in', async () => {
+    const page = await browser.newPage();
+    try {
+      const api = await mockApi(page);
+      await page.goto(`${baseUrl}/playground`);
+      await page.locator('#apiKey').evaluate((input) => { Reflect.set(input, 'value', 'gx_sandbox_stale'); });
+      expect(await page.locator('#apiKey').inputValue()).toBe('gx_sandbox_stale');
+      expect(await page.locator('#apiKey').isDisabled()).toBe(true);
+      await page.locator('#startBtn').click();
+      await page.locator('#run1').waitFor({ state: 'visible' });
+      expect(api.calls.map((call) => call.path)).toEqual(['/v1/signup', '/v1/me']);
+      expect(api.calls[1]?.authorization).toBe('Bearer gx_sandbox_fixture');
+      await page.locator('#resetBtn').click();
+      expect(await page.locator('#apiKey').inputValue()).toBe('');
+      expect(await page.locator('#useOwnKey').isChecked()).toBe(false);
+    } finally {
+      await page.close();
+    }
+  });
+
+  it('explains a rejected custom key and can switch back to a fresh demo key', async () => {
+    const page = await browser.newPage();
+    try {
+      const api = await mockApi(page);
+      await page.goto(`${baseUrl}/playground`);
+      await page.locator('#advancedToggle').click();
+      await page.locator('#useOwnKey').check();
+      await page.locator('#startBtn').click();
+      expect(await page.locator('#setupError').innerText()).toContain('Enter a sandbox key');
+      await page.locator('#apiKey').fill('gx_sandbox_invalid');
+      await page.locator('#startBtn').click();
+      await page.locator('#setupError').getByText('Your sandbox key was rejected', { exact: false }).waitFor();
+      expect(api.calls.map((call) => call.path)).toEqual(['/v1/me']);
+      await page.locator('#useOwnKey').uncheck();
+      await page.locator('#startBtn').click();
+      await page.locator('#run1').waitFor({ state: 'visible' });
+      expect(api.calls.map((call) => call.path)).toEqual(['/v1/me', '/v1/signup', '/v1/me']);
+      expect(api.calls[2]?.authorization).toBe('Bearer gx_sandbox_fixture');
+    } finally {
+      await page.close();
+    }
+  });
+
   it('uses a custom sandbox key and URL, and each failed step can be retried', async () => {
     const page = await browser.newPage();
     try {
       const api = await mockApi(page);
       await page.goto(`${baseUrl}/playground`);
       await page.locator('#advancedToggle').click();
+      await page.locator('#useOwnKey').check();
       await page.locator('#apiKey').fill('gx_sandbox_custom');
       await page.locator('#baseUrl').fill(baseUrl);
       await page.locator('#advancedToggle').click();
@@ -190,12 +238,13 @@ describe('public playground in Chromium', () => {
       expect(await page.locator('#setupError').innerText()).toContain('HTTPS');
       expect(api.calls).toHaveLength(0);
       await page.locator('#baseUrl').fill(baseUrl);
+      await page.locator('#useOwnKey').check();
       await page.locator('#apiKey').fill('gx_live_fixture');
       api.malformedNext.set('/v1/me', { mode: 'live' });
       await page.locator('#startBtn').click();
       await page.locator('#setupError').getByText('sandbox-mode keys only').waitFor();
       expect(api.calls.some((call) => call.path === '/v1/agents')).toBe(false);
-      await page.locator('#apiKey').fill('');
+      await page.locator('#useOwnKey').uncheck();
       api.failNext.set('/v1/signup', 1);
       await page.locator('#startBtn').click();
       await page.locator('#setupError').getByText('Temporary failure').waitFor();
@@ -238,6 +287,7 @@ describe('public playground in Chromium', () => {
       const docsLink = await page.locator('.nav-links a', { hasText: 'Docs' }).boundingBox();
       expect(logo && docsLink && logo.x + logo.width < docsLink.x).toBe(true);
       await page.locator('#advancedToggle').click();
+      await page.locator('#useOwnKey').check();
       await page.locator('#apiKey').fill('gx_sandbox_custom');
       await page.locator('#baseUrl').fill(baseUrl);
       await page.locator('#startBtn').click();

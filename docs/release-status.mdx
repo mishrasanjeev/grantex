@@ -11,6 +11,10 @@ Last verified: **September 27, 2026**
 
 Server feature availability is deployment-specific; confirm the rollout with
 the authenticated policy endpoint and an enrollment test on the public origin.
+The Grantex-hosted service enabled portable WebAuthn evidence on September 27,
+2026 and passed its production consent, delegation, and revocation E2E. This
+does not change the default-off setting for self-hosted installations or the
+published SDK artifacts listed below.
 
 TypeScript `@grantex/sdk@0.7.0` and x402 `@grantex/x402@0.4.1` are published
 on npm. Python `grantex==0.6.0` is published on PyPI and the Go SDK `v0.4.0`
@@ -21,6 +25,13 @@ TypeScript `0.7.0`, Python `0.6.0`, and Go `v0.4.0` include hosted passkey
 enrollment and the account irregularity response policy. Their server routes are default-off
 (`PASSKEY_ENROLLMENT_ENABLED` and `IRREGULARITY_RESPONSE_POLICY_ENABLED`).
 A deployed server may enable these flags independently of SDK publication.
+Portable assertion evidence requires `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED`,
+`IRREGULARITY_CASCADE_REVOCATION_ENABLED`, and
+`PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED` on the server. Keep the latter
+two safety flags enabled if issuance is rolled back. The registry versions
+listed here predate the typed portable-evidence reference and updated
+VC attestation types in repository source; use the REST response or a source
+build until new SDK artifacts are published and independently verified.
 For principal identity binding, one-use links, and the live-consent ceremony,
 see [FIDO2 / WebAuthn](/features/fido-webauthn). The released SDKs issue hosted
 enrollment links; custom assertion UIs use the REST endpoints directly.

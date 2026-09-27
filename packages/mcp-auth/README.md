@@ -283,22 +283,48 @@ In 3.0 `GET /authorize` renders a consent page before anything is sent to
 Grantex, as the MCP authorization specification requires of a proxy
 authorization server. It shows the client, the host the user will be sent
 back to (with a warning when every redirect URI is on localhost), the
-purpose, data region and duration from the `grant` option, and each tool the
-requested scopes cover with its caps (from `manifests`). Approve continues to
-Grantex; Deny returns `access_denied` to the client.
+purpose and duration from the `grant` option, and each tool the requested
+scopes cover with its caps (from `manifests`). Approve continues to Grantex;
+Deny returns `access_denied` to the client.
 
 The page is server-rendered with no script, a strict CSP (the stylesheet is
 pinned by hash) and escaped values. The form is protected by a per-page CSRF
 token and a `__Host-` SameSite=Strict binding cookie, both stored only as
 hashes in a single-use consent record. Approval sets a SameSite=Lax callback
 cookie, and `/callback` issues a code only to the browser that approved.
-Purpose, region and limits are labelled as declared by the service. It is tested at 375 px in Chromium and
-with axe-core.
+It is tested at 375 px in Chromium and with axe-core.
+
+**Purpose.** On approval, `grant.purpose` is sent to Grantex as the
+authorization request's `purpose`, so the grant (and its token's
+`authorization_details`) carries the purpose the page showed, and the page
+says so; call limits are labelled as declared by the service. Without
+`grant.purpose`, no purpose is sent and the page says nothing about
+recording one. If Grantex refuses the purpose (`400 INVALID_PURPOSE`: a
+purpose outside its vocabulary, or requested scopes with no
+`tool:<connector>:<permission>` scope), the client is redirected with
+`error=invalid_scope` and the `warn` option (default `console.warn`)
+receives Grantex's reason. If Grantex answers without confirming the
+purpose, as a server that predates purpose-bound grants does, the
+authorization fails with `502 server_error`, also reported through `warn`.
+`grant.authorizeParams` may repeat `grant.purpose` but cannot change it or
+add one (`500 server_error`).
+
+Start-up checks only that `grant.purpose` is well formed: Grantex does not
+publish its purpose vocabulary in its metadata. A well-formed term outside
+the vocabulary (for example `marketing.analytics`) starts cleanly and then
+fails every authorization after consent with `invalid_scope`. Use a
+vocabulary term or a private `x-<org>.<term>`, and watch `warn` after
+deploying.
+
+**Data region.** `grant.dataRegion` is not supported. `POST /v1/authorize`,
+which mcp-auth calls, takes no data region, so a grant made through
+mcp-auth cannot carry one; `createMcpAuthServer` throws at start-up when it
+is set rather than show a restriction the grant does not carry.
 
 ```typescript
 const server = await createMcpAuthServer({
   // ...required fields...
-  grant: { purpose: 'aml.cdd.onboarding', dataRegion: 'eu', duration: '8h' },
+  grant: { purpose: 'aml.cdd.onboarding', duration: '8h' },   // both sent to Grantex
   consentUi: { appName: 'Acme Compliance', appLogo: 'https://acme.example.com/logo.png' },
   consentPage: {
     theme: { accentColor: '#0b6e4f', radiusPx: 4 },   // hex colours, WCAG AA contrast enforced

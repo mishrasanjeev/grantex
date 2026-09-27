@@ -17,7 +17,7 @@ import { startAuthServer } from './docs/examples/auth-server.js';
 import { createMcpApp } from './docs/examples/mcp-server.js';
 import { decisionVerifier } from './docs/examples/decision-verifier.js';
 import { consentPage } from './docs/examples/consent-details.js';
-import { TEST_CHALLENGE, TEST_CLIENT_ID, TEST_REDIRECT_URI, asGrantex, clientRecord, mockGrantex } from './helpers.js';
+import { TEST_CHALLENGE, TEST_CLIENT_ID, TEST_REDIRECT_URI, asGrantex, clientRecord, mockGrantex, submitConsent } from './helpers.js';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const examplesDir = fileURLToPath(new URL('./docs/examples/', import.meta.url));
@@ -53,7 +53,7 @@ describe('docs/mcp-auth.md examples', () => {
     expect(blocks.length).toBe(snippets.length);
   });
 
-  it('auth-server: starts and renders the consent page with purpose, region, duration and tools', async () => {
+  it('auth-server: starts, renders the consent page with purpose, duration and tools, and sends the purpose to Grantex', async () => {
     const storage = new InMemoryStorage();
     await storage.putClient(clientRecord());
     const grantex = mockGrantex();
@@ -72,10 +72,13 @@ describe('docs/mcp-auth.md examples', () => {
       },
     });
     expect(page.statusCode).toBe(200);
-    for (const text of ['Allow case tools?', 'aml.cdd.onboarding', '<dd>eu</dd>', '8 hours', 'verify_business', 'declared limit per case: 3 calls']) {
+    for (const text of ['Allow case tools?', 'aml.cdd.onboarding', '8 hours', 'verify_business', 'declared limit per case: 3 calls']) {
       expect(page.body).toContain(text);
     }
     expect(grantex.authorize).not.toHaveBeenCalled();
+    const approved = await submitConsent(app, page, 'approve', 'https://auth.acme.example.com');
+    expect(approved.statusCode).toBe(303);
+    expect(grantex.authorize.mock.calls[0]![0]).toMatchObject({ purpose: 'aml.cdd.onboarding', expiresIn: '8h' });
     const metadata = (await app.inject({ method: 'GET', url: '/.well-known/oauth-authorization-server' })).json();
     expect(metadata.scopes_supported).toEqual(['tool:acme_kyb:read', 'tool:acme_kyb:write']);
   });
@@ -89,7 +92,7 @@ describe('docs/mcp-auth.md examples', () => {
       issuer: 'https://auth.acme.example.com',
       resource: 'https://mcp.acme.example.com/mcp',
       manifests: [MANIFEST],
-      grant: { purpose: 'aml.cdd.onboarding', dataRegion: 'eu', duration: '8h' },
+      grant: { purpose: 'aml.cdd.onboarding', duration: '8h' },
       consentPage,
       storage,
     });
@@ -108,7 +111,7 @@ describe('docs/mcp-auth.md examples', () => {
     expect(page.statusCode).toBe(200);
     expect(page.body).toContain('Case tools for aml.cdd.onboarding');
     expect(page.body).toContain('<li>case_decision (needs approval per action)</li>');
-    expect(page.body).toContain('Data stays in eu for 8 hours.');
+    expect(page.body).toContain('Access lasts 8 hours.');
     expect(page.body).toContain('<html lang="en-GB">');
     expect(page.body).toContain('>Not now</button>');
   });
