@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Revoking is no longer rate limited like ordinary traffic (default on)
+- **Breaking (default flip):** while the Redis rate-limit counter is
+  unavailable, revoking and the emergency stop are now served, counted per
+  instance, where they used to answer `503 RATE_LIMIT_UNAVAILABLE`; and they
+  and the revocation feed no longer draw on the plan budget. On by default,
+  with no flag to turn on; opt out with `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false`.
+- Containment routes — `DELETE /v1/grants/:id`, `POST /v1/tokens/revoke`,
+  `POST /v1/emergency-stop`, `POST /v1/passport/:id/revoke` and
+  `POST /v1/consent-bundles/:id/revoke` — draw on a per-developer
+  containment budget of 2,000 requests a minute on every plan instead of the
+  plan budget. A tenant that has spent its plan quota on ordinary calls can
+  still revoke; previously a free-plan tenant near its 100-a-minute quota
+  waited out `Retry-After` on the one path that ends an incident.
+- Containment routes fail open when the Redis rate-limit counter is
+  unavailable or does not answer within 500 ms: each instance counts them in
+  memory against the same ceiling, instead of answering
+  `503 RATE_LIMIT_UNAVAILABLE`. The revocation itself is written to Postgres,
+  so a cache outage no longer blocks it. Against a stopped Redis a revoke now
+  commits after about half a second; it used to wait over a minute for the
+  counter to fail and then answer `503`.
+- The revocation feed and status reads (`GET /v1/revocations`, `/status`,
+  `/stream`, and a consent bundle's `revocation-status`) draw on a
+  per-developer status budget of 6,000 requests a minute instead of the plan
+  budget, keep their per-address limits, and still fail closed.
+- Every other standard API-key route is unchanged: plan budget, `503` when
+  the counter is unavailable. That includes DPDP consent withdrawal and
+  erasure, which can mark grants revoked but are compliance operations, not
+  the incident path. Nothing previously accepted is now refused; the
+  visible difference is the `X-RateLimit-*` values on the moved routes,
+  which report the budget they draw on.
+- New metric `grantex_rate_limit_decisions_total{bucket, outcome}` and two
+  alert rules in `deploy/prometheus/revocation-feed-alerts.yml`.
+- **Opt-out:** `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false` puts these routes back
+  in the plan budget, failing closed, as before. See the
+  [rate limits guide](docs/guides/rate-limits.mdx).
 ### Portable WebAuthn SDK patch candidates
 - Prepared `@grantex/sdk@0.7.1`, Python `grantex==0.6.1`, and Go SDK
   `v0.4.1` to ship the typed signed grant-evidence reference and VC

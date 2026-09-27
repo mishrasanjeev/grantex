@@ -74,6 +74,8 @@ When you receive a `429 Too Many Requests` response:
 | Standard API-key - Free plan | 100 req/min per developer |
 | Standard API-key - Pro plan | 500 req/min per developer |
 | Standard API-key - Enterprise plan | 2,000 req/min per developer |
+| Containment (revoke a grant, token, passport or consent bundle; emergency stop) | 2,000 req/min per developer, every plan |
+| Revocation feed and status reads | 6,000 req/min per developer, every plan |
 | `POST /v1/authorize` | 10 req/min |
 | `POST /v1/token` | 20 req/min |
 | `POST /v1/token/refresh` | 20 req/min |
@@ -81,7 +83,7 @@ When you receive a `429 Too Many Requests` response:
 
 A route-specific Fastify limit replaces the 5,000 req/min Fastify default on that route. The Redis-backed standard developer plan remains an additional policy wherever standard API-key authentication applies.
 
-Standard developer API-key plan exhaustion returns `429` with `RATE_LIMIT_EXCEEDED`. If the Redis-backed plan counter is unavailable, the request fails closed with `503` and `RATE_LIMIT_UNAVAILABLE`. Commerce, the SCIM Bearer data-plane routes under `/scim/v2/*`, admin, and other custom-auth routes do not consume this plan bucket; the standard API-key-authenticated `/v1/scim/tokens` management routes do.
+Standard developer API-key plan exhaustion returns `429` with `RATE_LIMIT_EXCEEDED`. If the Redis-backed plan counter is unavailable, the request fails closed with `503` and `RATE_LIMIT_UNAVAILABLE`. Revoking and the emergency stop do not consume the plan budget and are not refused when the counter is unavailable; the revocation feed and status reads have a budget of their own and still answer `503` then. See [Rate Limits](/guides/rate-limits). Commerce, the SCIM Bearer data-plane routes under `/scim/v2/*`, admin, and other custom-auth routes do not consume this plan bucket; the standard API-key-authenticated `/v1/scim/tokens` management routes do.
 
 ## Plan Limit Exceeded (402)
 

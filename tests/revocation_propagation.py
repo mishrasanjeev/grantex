@@ -122,13 +122,14 @@ def main() -> int:
             admin.grants.revoke(parent_grant_id)
             # Propagation is measured from the moment the revocation is
             # committed - when the API returns - not from when the call was
-            # made. A developer on the free plan is rate limited to 100
-            # requests a minute and the SDK waits out ``Retry-After``; that
-            # wait is reported separately rather than charged to the feed.
+            # made. The revoke call is rate limited (in the developer's
+            # containment bucket, not the plan's) and the SDK waits out
+            # ``Retry-After``; that wait is reported separately rather than
+            # charged to the feed.
             revoked_at = time.time()
             revoke_ms = (revoked_at - started) * 1000
             if revoke_ms > 1000:
-                print(f"trial {index}: the revoke call waited {revoke_ms:.0f} ms (plan rate limit), not counted")
+                print(f"trial {index}: the revoke call waited {revoke_ms:.0f} ms (rate limit or server), not counted")
             denial: Any = None
             while time.time() - revoked_at < 30:
                 result = enforcer.enforce(child_token, "acme_kyb", "resolve_business")
@@ -185,8 +186,8 @@ def main() -> int:
         return 1
     # The revoke call itself is measured separately, because propagation is
     # timed from when it returns. Printing a long wait and passing anyway hid
-    # a containment problem: on a rate-limited plan this call is throttled
-    # like ordinary traffic (FINDINGS G-23).
+    # a containment problem: this call used to be throttled like ordinary
+    # traffic on a rate-limited plan (FINDINGS G-23).
     revoke_budget_ms = float(os.environ.get("REVOCATION_REVOKE_CALL_BUDGET_MS", "10000"))
     if report["revoke_call_max_ms"] > revoke_budget_ms:
         print(

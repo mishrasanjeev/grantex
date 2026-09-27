@@ -25,6 +25,7 @@ This endpoint is **unauthenticated** (no API key required) and rate-limited to 1
 | `grantex_grants_revoked_total` | — | Grants revoked (including cascade) |
 | `grantex_webhook_deliveries_total` | `status` | Webhook delivery outcomes |
 | `grantex_anomalies_detected_total` | `type`, `severity` | Anomalies detected |
+| `grantex_rate_limit_decisions_total` | `bucket`, `outcome` | Per-developer rate-limit decisions. `bucket`: `plan`, `containment` or `status`; `outcome`: `allowed`, `limited`, `unavailable` (refused with `503`), or `local_allowed` / `local_limited` for a containment call counted in-process while Redis was unreachable. See the [rate limits guide](/guides/rate-limits) |
 
 ### Histograms
 
