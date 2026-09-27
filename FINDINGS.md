@@ -161,14 +161,19 @@ the pull request that references it.
     `packages/vercel-ai`
   - `packages/cli` (`verify`)
   - `packages/gemma`, `packages/gemma-py`
-  - `packages/mcp-auth` (`endpoints/introspect.ts` and the Express and Hono
-    middleware)
+  - `packages/mcp-auth` (`endpoints/introspect.ts`)
 
   They keep working while `GRANT_TOKEN_LEGACY_CLAIMS=true`. They break against
   a deployment that sets it to `false`, and by default from 0.7.
 - **Fix:** read `scope`, `client_id`, `act` and `urn:grantex:grant` (or use
   the core SDK verifiers' `VerifiedGrant`) before 0.7. Coordinate the
   `mcp-auth` change with the open 3.0 pull requests.
+- **Partly fixed:** the `mcp-auth` resource guard (the Express and Hono
+  middleware) reads `scope` and `urn:grantex:grant` first and the aliases only
+  as a fallback. `packages/mcp-auth/tests/grant-token-profile.test.ts` shows it
+  with the auth service's own tokens from
+  `spec/examples/grant-token-0.6.issued.json`, including the standard-only
+  ones. `/introspect` still reads only the aliases (G-42).
 
 ## G-13 — Audit chain entries written in the same millisecond can fork the chain
 
@@ -812,6 +817,68 @@ the pull request that references it.
   publish a set the new default refuses. Owner: the TypeScript and Python SDK
   maintainers. Exit criterion: that major release ships with the default
   flipped, the explicit opt-out, and tests of both settings in both SDKs.
+
+## G-42 — mcp-auth `/introspect` reports the developer as `client_id` and reads only legacy claims
+
+- **Found:** aligning the mcp-auth resource guard with the grant token profile
+  (2026-09-27).
+- **What:** `packages/mcp-auth/src/endpoints/introspect.ts` builds its RFC 7662
+  response from the legacy aliases: `scope` from `scp` (a string `scp`, which
+  the guard refuses, is passed through), `grantex_agent_did` from `agt`,
+  `grantex_grant_id` from `grnt`, `grantex_delegation_depth` from
+  `delegationDepth` (0 when absent), and `client_id` from `dev`. `dev` is the
+  Grantex developer, not the OAuth client that RFC 7662 §2.2 means by
+  `client_id`, and the token's own `client_id` claim is ignored. For a token
+  issued with `GRANT_TOKEN_LEGACY_CLAIMS=false` the response is `active: true`
+  with no `scope`, no Grantex fields, and a delegation depth of 0 even for a
+  delegated grant. G-12 lists the alias reading.
+- **Fix:** read the claims with `readGrantTokenClaims`
+  (`packages/mcp-auth/src/lib/grant-token.ts`), as the resource guard does;
+  report `client_id` from the token's `client_id` and the developer as a
+  separate `grantex_developer_id`; omit `grantex_delegation_depth` when the
+  token has none. Changing `client_id` changes the response for existing
+  callers, so it belongs in the 3.0 break list.
+
+## G-43 — The mcp-auth resource guard admits key-bound grant tokens as bearer tokens
+
+- **Found:** review of the mcp-auth resource guard's grant token reading
+  (2026-09-27).
+- **What:** `spec/grant-token-0.6.md` ("Validation", step 5) requires a
+  resource server to verify proof of possession (RFC 9449) when a grant token
+  has `cnf.jkt`. The auth service binds a grant token to the agent's key
+  whenever the grant has an agent key thumbprint
+  (`apps/auth-service/src/routes/token.ts`). `createMcpResourceGuard` and the
+  Express and Hono `requireMcpAuth` built on it never read `cnf` or a `DPoP`
+  header, so a stolen key-bound grant token is accepted at any MCP server
+  behind the guard as if it were a bearer token. The 2.0.2 middleware does
+  the same.
+  `docs/mcp-auth.md` and the package README now say so and tell servers to
+  check the proof themselves against `raw.cnf.jkt`.
+- **Fix:** add a guard option that verifies the `DPoP` proof (RFC 9449 §4.3:
+  `htm`, `htu`, `iat`, `jti` replay, `ath`, and the key thumbprint against
+  `cnf.jkt`), answers `401` with a `DPoP` challenge when it fails, and can be
+  set to refuse any token without `cnf.jkt`. Off by default, since enabling it
+  refuses the key-bound tokens that clients present today as bearer tokens.
+
+## G-44 — The mcp-auth resource guard admits a pre-0.6 token with no agent or developer
+
+- **Found:** review of the mcp-auth resource guard's grant token reading
+  (2026-09-27).
+- **What:** the SDK verifiers (`packages/sdk-ts/src/verify.ts`,
+  `normalizeGrantClaims`) and the auth service
+  (`apps/auth-service/src/lib/grant-token-claims.ts`) refuse a grant token
+  that names no agent (`urn:grantex:grant.agent_did` or `agt`) or no
+  developer (`urn:grantex:grant.developer_id` or `dev`). The guard now refuses
+  such a 0.6 token (one with `urn:grantex:grant`), but still admits a token
+  that carries only `scp`, as it always has, with `agentDid` and
+  `developerId` unset. The auth service never issued such a token; the
+  package's own tests and examples sign `scp`-only tokens throughout
+  (`tests/resource-guard.test.ts`, `tests/middleware.test.ts`, the
+  conformance suite, `tests/docs-examples.test.ts` and
+  `tests/integration/restart.integration.test.ts`).
+- **Fix:** require `agt` and `dev` on a pre-0.6 token too, in the 3.0 break
+  list, after moving those tests and examples to tokens shaped like the auth
+  service's (`spec/examples/grant-token-0.6.issued.json`).
 
 ## G-45 — `DELETE /v1/grants/:id` cannot revoke a suspended grant
 

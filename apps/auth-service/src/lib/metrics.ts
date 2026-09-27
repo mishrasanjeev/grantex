@@ -129,7 +129,7 @@ export const decisionGrantsConsumedTotal = new Counter({
 
 export const decisionGrantsRejectedTotal = new Counter({
   name: 'grantex_decision_grants_rejected_total',
-  help: 'Refused decision-grant operations, by stage (sign_in, request, approve, consume, case) and sub-reason',
+  help: 'Refused decision-grant operations, by stage (sign_in, request, approve, release, consume, case) and sub-reason',
   labelNames: ['stage', 'reason'] as const,
   registers: [registry],
 });

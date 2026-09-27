@@ -374,7 +374,7 @@ app.listen(3000);
 | `jwksUri` | `string` | No | `{issuer}/.well-known/jwks.json` | Explicit JWKS URL |
 | `audience` | `string \| string[]` | No | - | Expected `aud` claim; when set, tokens without a matching `aud` are rejected |
 | `scopes` | `string[]` | No | `[]` | Required scopes (all must be present) |
-| `algorithms` | `string[]` | No | `['RS256', 'ES256', 'PS256', 'EdDSA']` | Allowed JWT algorithms |
+| `algorithms` | `string[]` | No | `['RS256', 'ES256', 'PS256', 'EdDSA']`; **3.0**: `['RS256', 'ES256']` | Allowed JWT algorithms. In **3.0** only RS256 and ES256 (the grant token algorithms) may be listed; a list naming any other algorithm throws at start-up |
 
 ### `McpGrant` (decoded token claims)
 
@@ -391,6 +391,23 @@ app.listen(3000);
 | `exp` | `number` | Expiry (Unix timestamp) |
 | `iat` | `number` | Issued at (Unix timestamp) |
 | `raw` | `JWTPayload` | All raw JWT claims |
+
+In `2.0.2` `scopes` comes from `scp` and the Grantex fields from `agt`, `dev`,
+`grnt` and `delegationDepth`. In **3.0** the middleware reads the standard
+claims of the [grant token profile](../../spec/grant-token-0.6.md) first:
+`scopes` from the space-delimited `scope`, the Grantex fields from
+`urn:grantex:grant`, with the legacy claims as a fallback (a pre-0.6 token is
+read from `scp`). It therefore keeps working when the issuer stops sending the
+legacy claims (`GRANT_TOKEN_LEGACY_CLAIMS=false`, the 0.7 default). It also
+requires `typ: at+jwt` (absent only on a pre-0.6 token), and refuses a token
+that is not a grant token (neither `urn:grantex:grant` nor `scp`), a 0.6
+token with no agent or developer, a claim that is `null` or mistyped (legacy
+aliases included), and a token whose standard and legacy claims disagree.
+
+The middleware does not verify proof of possession: a grant token bound to a
+key (`cnf.jkt`) is accepted as a bearer token. If your server needs
+sender-constrained tokens, verify the DPoP proof (RFC 9449) yourself and
+compare its key thumbprint with `req.mcpGrant.raw.cnf.jkt`.
 
 ## Hono Middleware
 
@@ -511,7 +528,7 @@ Passing the suite is useful deployment evidence; it is not a certification or en
 - **No password grant.** The `password` grant type is not supported.
 - **No implicit grant.** Only `response_type=code` is accepted.
 - **Authorization codes are single-use.** Replayed codes are rejected.
-- **HS256 rejected.** Only asymmetric algorithms (RS256, ES256, PS256, EdDSA) are accepted for token verification.
+- **HS256 rejected.** Only asymmetric algorithms (RS256, ES256, PS256, EdDSA) are accepted for token verification. In **3.0**, only RS256 and ES256.
 - **Rate limiting** is applied with fixed per-endpoint values in this release.
 - **Client secrets** are generated using `crypto.randomBytes(32)`.
 - **JWKS verification** uses the `jose` library with remote key set fetching and caching.
@@ -526,6 +543,12 @@ The introspection and middleware endpoints only accept tokens signed with:
 - `EdDSA` (Ed25519)
 
 Symmetric algorithms (`HS256`, `HS384`, `HS512`) are explicitly rejected.
+
+In **3.0** the middleware, introspection and revocation accept only `RS256`
+and `ES256`, the algorithms grant tokens are signed with
+([`spec/grant-token-0.6.md`](../../spec/grant-token-0.6.md)); PS256 and EdDSA
+tokens are refused. `typ` must be `at+jwt`; only a pre-0.6 token, issued
+before the auth service set it, may omit it.
 
 ## Discovery
 
@@ -634,7 +657,7 @@ Common causes:
 
 - **Token expired** -- check the `exp` claim
 - **Wrong issuer** -- the token's `iss` claim must match
-- **Algorithm mismatch** -- only RS256, ES256, PS256, EdDSA are accepted
+- **Algorithm mismatch** -- only RS256, ES256, PS256, EdDSA are accepted (**3.0**: only RS256 and ES256)
 - **Key rotation** -- JWKS is cached; restart or wait for cache refresh
 
 ### "Invalid client" on introspect/revoke
