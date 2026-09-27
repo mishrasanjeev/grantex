@@ -442,4 +442,102 @@ describe('enforceCommand()', () => {
     ]);
     expect(callOrder).toEqual(['loadManifest', 'enforce']);
   });
+
+  // ── test --audience / --audience-check ────────────────────────────────
+
+  function run(...extra: string[]): Promise<unknown> {
+    const cmd = enforceCommand();
+    cmd.exitOverride();
+    cmd.commands.forEach((c) => c.exitOverride());
+    return cmd.parseAsync([
+      'node', 'test', 'test',
+      '--token', 'jwt_token_value',
+      '--connector', 'salesforce',
+      '--tool', 'query',
+      ...extra,
+    ]);
+  }
+
+  it('test passes --audience to enforce as the per-call audience', async () => {
+    mockClient.enforce.mockResolvedValue(enforceAllowedResult);
+    await run('--audience', 'https://api.merchant.example');
+    expect(requireClient).toHaveBeenCalledWith({});
+    expect(mockClient.enforce).toHaveBeenCalledWith({
+      grantToken: 'jwt_token_value',
+      connector: 'salesforce',
+      tool: 'query',
+      audience: 'https://api.merchant.example',
+    });
+  });
+
+  it('test passes --audience-check to the client', async () => {
+    mockClient.enforce.mockResolvedValue(enforceAllowedResult);
+    await run('--audience-check', 'off');
+    expect(requireClient).toHaveBeenCalledWith({ audienceCheck: 'off' });
+    expect(mockClient.enforce).toHaveBeenCalledWith({
+      grantToken: 'jwt_token_value',
+      connector: 'salesforce',
+      tool: 'query',
+    });
+
+    vi.clearAllMocks();
+    (requireClient as ReturnType<typeof vi.fn>).mockResolvedValue(mockClient);
+    mockClient.enforce.mockResolvedValue(enforceAllowedResult);
+    await run('--audience-check', 'on', '--audience', 'https://api.merchant.example');
+    expect(requireClient).toHaveBeenCalledWith({ audienceCheck: 'on' });
+    expect(mockClient.enforce).toHaveBeenCalledWith(expect.objectContaining({
+      audience: 'https://api.merchant.example',
+    }));
+  });
+
+  it('test without the audience options leaves the client and the call unchanged', async () => {
+    mockClient.enforce.mockResolvedValue(enforceAllowedResult);
+    await run();
+    expect(requireClient).toHaveBeenCalledWith({});
+    expect(mockClient.enforce.mock.calls[0]?.[0]).not.toHaveProperty('audience');
+  });
+
+  it.each(['ON', 'strict', 'false', ''])('test rejects --audience-check %j', async (value) => {
+    await expect(run('--audience-check', value)).rejects.toThrow(
+      /option '--audience-check <on\|off>' argument '.*' is invalid\. Allowed choices are on, off/,
+    );
+    expect(requireClient).not.toHaveBeenCalled();
+    expect(mockClient.enforce).not.toHaveBeenCalled();
+  });
+
+  it('test rejects an empty --audience', async () => {
+    await run('--audience', '');
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('--audience must not be empty'));
+    expect(process.exitCode).toBe(1);
+    expect(requireClient).not.toHaveBeenCalled();
+    expect(mockClient.enforce).not.toHaveBeenCalled();
+  });
+
+  it('test rejects --audience with --audience-check off', async () => {
+    await run('--audience', 'https://api.merchant.example', '--audience-check', 'off');
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('--audience cannot be combined with --audience-check off'),
+    );
+    expect(process.exitCode).toBe(1);
+    expect(requireClient).not.toHaveBeenCalled();
+    expect(mockClient.enforce).not.toHaveBeenCalled();
+  });
+
+  it('test --json reports an audience option error as JSON', async () => {
+    setJsonMode(true);
+    await run('--audience', 'https://api.merchant.example', '--audience-check', 'off');
+    const parsed = JSON.parse((console.log as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]);
+    expect(parsed).toEqual({
+      allowed: false,
+      reason: '--audience cannot be combined with --audience-check off',
+    });
+    expect(process.exitCode).toBe(1);
+    expect(mockClient.enforce).not.toHaveBeenCalled();
+  });
+
+  it('test documents the audience options in its help', () => {
+    const help = enforceCommand().commands.find((c) => c.name() === 'test')!.helpInformation();
+    expect(help).toContain('--audience <audience>');
+    expect(help).toContain('--audience-check <on|off>');
+  });
 });

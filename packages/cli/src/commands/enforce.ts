@@ -1,8 +1,52 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import chalk from 'chalk';
-import { requireClient } from '../client.js';
+import * as sdk from '@grantex/sdk';
+import { requireClient, type ClientOverrides } from '../client.js';
 import { isJsonMode } from '../format.js';
 import { readTokenInput } from '../token-input.js';
+
+/**
+ * Whether the installed @grantex/sdk checks the grant token audience in
+ * enforce(). A release without the check ignores the audience options, so a
+ * dry run would report a token for another relying party as allowed.
+ */
+function sdkChecksAudience(): boolean {
+  try {
+    const subReasons = (sdk as Record<string, unknown>)['TokenSubReason'] as Record<string, unknown> | undefined;
+    return subReasons?.['AUDIENCE_MISMATCH'] === 'audience_mismatch';
+  } catch {
+    return false; // some module loaders throw for a missing export instead of returning undefined
+  }
+}
+
+/** The audience settings for the client and the call, or the reason they are refused. */
+function audienceOptions(audience: string | undefined, audienceCheck: 'on' | 'off' | undefined):
+  { client: ClientOverrides; call: { audience?: string } } | { error: string } {
+  if (audience === undefined && audienceCheck === undefined) return { client: {}, call: {} };
+  if (audience === '') return { error: '--audience must not be empty' };
+  if (audience !== undefined && audienceCheck === 'off') {
+    return { error: '--audience cannot be combined with --audience-check off' };
+  }
+  if (!sdkChecksAudience()) {
+    return {
+      error: 'the installed @grantex/sdk does not check the grant token audience; '
+        + 'upgrade @grantex/sdk to use --audience or --audience-check',
+    };
+  }
+  return {
+    client: audienceCheck !== undefined ? { audienceCheck } : {},
+    call: audience !== undefined ? { audience } : {},
+  };
+}
+
+function reportInputError(reason: string): void {
+  if (isJsonMode()) {
+    console.log(JSON.stringify({ allowed: false, reason }));
+  } else {
+    console.error(chalk.red('✗') + ` ${reason}`);
+  }
+  process.exitCode = 1;
+}
 
 export function enforceCommand(): Command {
   const cmd = new Command('enforce').description('Test scope enforcement against a grant token');
@@ -17,6 +61,14 @@ export function enforceCommand(): Command {
     .requiredOption('--connector <connector>', 'Connector name (e.g., salesforce)')
     .requiredOption('--tool <tool>', 'Tool name (e.g., delete_contact)')
     .option('--amount <amount>', 'Amount for capped scope check', parseFloat)
+    .option(
+      '--audience <audience>',
+      'Grant token audience the relying party expects (matched against the token aud claim)',
+    )
+    .addOption(
+      new Option('--audience-check <on|off>', 'Grant token audience check (default: on; off ignores aud)')
+        .choices(['on', 'off']),
+    )
     .action(async (opts: {
       token?: string;
       tokenFile?: string;
@@ -25,6 +77,8 @@ export function enforceCommand(): Command {
       connector: string;
       tool: string;
       amount?: number;
+      audience?: string;
+      audienceCheck?: 'on' | 'off';
     }) => {
       let token: string;
       try {
@@ -44,7 +98,12 @@ export function enforceCommand(): Command {
         process.exit(1);
         return;
       }
-      const client = await requireClient();
+      const audience = audienceOptions(opts.audience, opts.audienceCheck);
+      if ('error' in audience) {
+        reportInputError(audience.error);
+        return;
+      }
+      const client = await requireClient(audience.client);
 
       // Load the manifest for the connector
       try {
@@ -71,6 +130,7 @@ export function enforceCommand(): Command {
         connector: opts.connector,
         tool: opts.tool,
         ...(opts.amount !== undefined ? { amount: opts.amount } : {}),
+        ...audience.call,
       });
 
       if (isJsonMode()) {

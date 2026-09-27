@@ -77,6 +77,8 @@ export const AUDIT_ACTIONS = {
   resume: 'grantex.grant.resumed',
   reEvaluate: 'grantex.grant.re_evaluation_requested',
   emergencyStop: 'grantex.emergency_stop',
+  issuanceFrozen: 'grantex.issuance_frozen',
+  issuanceUnfrozen: 'grantex.issuance_unfrozen',
 } as const;
 
 /** The evidence-package revocation vocabulary (`admin`, `api`, `cascade`, `event`, `expiry`). */

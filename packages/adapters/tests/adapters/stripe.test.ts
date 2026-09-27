@@ -8,6 +8,7 @@ vi.mock('@grantex/sdk', () => ({
 import { verifyGrantToken } from '@grantex/sdk';
 import { StripeAdapter } from '../../src/adapters/stripe.js';
 import { GrantexAdapterError } from '../../src/errors.js';
+import { GRANT_TOKEN } from '../tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -35,7 +36,7 @@ describe('StripeAdapter', () => {
         ok: true, json: () => Promise.resolve(intents),
       }));
 
-      const result = await adapter.listPaymentIntents('token');
+      const result = await adapter.listPaymentIntents(GRANT_TOKEN);
       expect(result.success).toBe(true);
       expect(result.data).toEqual(intents);
 
@@ -48,7 +49,7 @@ describe('StripeAdapter', () => {
         ok: true, json: () => Promise.resolve({ data: [] }),
       }));
 
-      await adapter.listPaymentIntents('token', {
+      await adapter.listPaymentIntents(GRANT_TOKEN, {
         limit: 10,
         customer: 'cus_123',
       });
@@ -63,7 +64,7 @@ describe('StripeAdapter', () => {
         ...MOCK_GRANT, scopes: ['payments:initiate:max_500'],
       });
 
-      await expect(adapter.listPaymentIntents('token'))
+      await expect(adapter.listPaymentIntents(GRANT_TOKEN))
         .rejects.toThrow(GrantexAdapterError);
     });
   });
@@ -75,7 +76,7 @@ describe('StripeAdapter', () => {
         ok: true, json: () => Promise.resolve(created),
       }));
 
-      const result = await adapter.createPaymentIntent('token', {
+      const result = await adapter.createPaymentIntent(GRANT_TOKEN, {
         amount: 10000, // $100 in cents
         currency: 'usd',
       });
@@ -93,7 +94,7 @@ describe('StripeAdapter', () => {
         ok: true, json: () => Promise.resolve({ id: 'pi_exact' }),
       }));
 
-      const result = await adapter.createPaymentIntent('token', {
+      const result = await adapter.createPaymentIntent(GRANT_TOKEN, {
         amount: 50000, // exactly $500
         currency: 'usd',
       });
@@ -103,7 +104,7 @@ describe('StripeAdapter', () => {
 
     it('rejects payment over max constraint ($600 > $500)', async () => {
       try {
-        await adapter.createPaymentIntent('token', {
+        await adapter.createPaymentIntent(GRANT_TOKEN, {
           amount: 60000, // $600 in cents
           currency: 'usd',
         });
@@ -123,7 +124,7 @@ describe('StripeAdapter', () => {
         ok: true, json: () => Promise.resolve({ id: 'pi_big' }),
       }));
 
-      const result = await adapter.createPaymentIntent('token', {
+      const result = await adapter.createPaymentIntent(GRANT_TOKEN, {
         amount: 10000000, // $100,000
         currency: 'usd',
       });
@@ -136,7 +137,7 @@ describe('StripeAdapter', () => {
         ok: true, json: () => Promise.resolve({ id: 'pi_meta' }),
       }));
 
-      await adapter.createPaymentIntent('token', {
+      await adapter.createPaymentIntent(GRANT_TOKEN, {
         amount: 5000,
         currency: 'usd',
         metadata: { orderId: 'ord_123', source: 'agent' },
@@ -152,7 +153,7 @@ describe('StripeAdapter', () => {
         ...MOCK_GRANT, scopes: ['payments:read'],
       });
 
-      await expect(adapter.createPaymentIntent('token', {
+      await expect(adapter.createPaymentIntent(GRANT_TOKEN, {
         amount: 1000, currency: 'usd',
       })).rejects.toThrow(GrantexAdapterError);
     });
@@ -163,7 +164,7 @@ describe('StripeAdapter', () => {
       }));
 
       try {
-        await adapter.createPaymentIntent('token', {
+        await adapter.createPaymentIntent(GRANT_TOKEN, {
           amount: 1000, currency: 'usd',
         });
         expect.fail('should throw');

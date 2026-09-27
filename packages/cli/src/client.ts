@@ -1,11 +1,17 @@
 import { Grantex } from '@grantex/sdk';
 import { defaultConfigPath, loadConfig, resolveConfig } from './config.js';
 
+/** Client options a command can set on top of the configured URL and key. */
+export interface ClientOverrides {
+  /** The grant token audience check in `enforce()`: `on` (the SDK default) or `off`. */
+  audienceCheck?: 'on' | 'off';
+}
+
 /**
  * Load config from file + env and return an authenticated Grantex client.
  * Exits with a helpful message if the CLI has not been configured yet.
  */
-export async function requireClient(): Promise<Grantex> {
+export async function requireClient(overrides: ClientOverrides = {}): Promise<Grantex> {
   const fileConfig = await loadConfig(defaultConfigPath());
   const config = resolveConfig(fileConfig);
 
@@ -18,5 +24,5 @@ export async function requireClient(): Promise<Grantex> {
     process.exit(1);
   }
 
-  return new Grantex({ baseUrl: config.baseUrl, apiKey: config.apiKey });
+  return new Grantex({ baseUrl: config.baseUrl, apiKey: config.apiKey, ...overrides });
 }

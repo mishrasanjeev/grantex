@@ -1,9 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { SignJWT } from 'jose';
-import { getSql, queries } from '../db/client.js';
+import { getSql, queries, type TxSql } from '../db/client.js';
 import { getKeyPair, getEdKeyPair, parseExpiresIn } from '../lib/crypto.js';
 import { allocateStatusListIndex, setRevocationBits } from '../lib/vc.js';
 import { emitEvent } from '../lib/events.js';
+import {
+  assertIssuanceOpen,
+  issuanceFreezeEnforced,
+  issuanceRefusal,
+} from '../lib/revocation/issuance-freeze.js';
 import { config } from '../config.js';
 import { ulid } from 'ulid';
 
@@ -295,38 +300,127 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
         JSON.stringify(credential),
       ).toString('base64url');
 
-      // Store in database
-      await sql`
-        INSERT INTO mpp_passports (
-          id, developer_id, agent_id, grant_id, principal_id, agent_did,
-          organization_did, allowed_categories, max_amount, max_currency,
-          payment_rails, delegation_depth, parent_passport_id,
-          credential_jwt, encoded_credential, status,
-          status_list_id, status_list_idx, expires_at
-        )
-        VALUES (
-          ${passportId}, ${developerId}, ${agentId}, ${grantId}, ${principalId},
-          ${agentDid}, ${`did:web:${domain}`}, ${allowedMPPCategories},
-          ${maxTransactionAmount.amount}, ${maxTransactionAmount.currency || 'USDC'},
-          ${paymentRails}, ${delegationDepth}, ${parentPassportId ?? null},
-          ${vcJwt}, ${encodedCredential}, 'active',
-          ${statusListId}, ${statusListIdx}, ${expiresAt}
-        )
-      `;
+      if (!issuanceFreezeEnforced()) {
+        // The emergency stop is off: the path as it always was, two separate
+        // writes on the pool. A failed credential insert leaves the passport
+        // row behind, as it did before the lockout existed (FINDINGS G-70).
+        // Store in database
+        await sql`
+          INSERT INTO mpp_passports (
+            id, developer_id, agent_id, grant_id, principal_id, agent_did,
+            organization_did, allowed_categories, max_amount, max_currency,
+            payment_rails, delegation_depth, parent_passport_id,
+            credential_jwt, encoded_credential, status,
+            status_list_id, status_list_idx, expires_at
+          )
+          VALUES (
+            ${passportId}, ${developerId}, ${agentId}, ${grantId}, ${principalId},
+            ${agentDid}, ${`did:web:${domain}`}, ${allowedMPPCategories},
+            ${maxTransactionAmount.amount}, ${maxTransactionAmount.currency || 'USDC'},
+            ${paymentRails}, ${delegationDepth}, ${parentPassportId ?? null},
+            ${vcJwt}, ${encodedCredential}, 'active',
+            ${statusListId}, ${statusListIdx}, ${expiresAt}
+          )
+        `;
 
-      // Also store in verifiable_credentials table for unified VC management
-      await sql`
-        INSERT INTO verifiable_credentials (
-          id, grant_id, developer_id, principal_id, agent_did,
-          credential_type, format, credential_jwt, status,
-          status_list_id, status_list_idx, expires_at
-        )
-        VALUES (
-          ${passportId}, ${grantId}, ${developerId}, ${principalId}, ${agentDid},
-          'AgentPassportCredential', 'agent-passport', ${vcJwt}, 'active',
-          ${statusListId}, ${statusListIdx}, ${expiresAt}
-        )
-      `;
+        // Also store in verifiable_credentials table for unified VC management
+        await sql`
+          INSERT INTO verifiable_credentials (
+            id, grant_id, developer_id, principal_id, agent_did,
+            credential_type, format, credential_jwt, status,
+            status_list_id, status_list_idx, expires_at
+          )
+          VALUES (
+            ${passportId}, ${grantId}, ${developerId}, ${principalId}, ${agentDid},
+            'AgentPassportCredential', 'agent-passport', ${vcJwt}, 'active',
+            ${statusListId}, ${statusListIdx}, ${expiresAt}
+          )
+        `;
+      } else {
+        // The emergency stop is on: both rows in one transaction, which reads
+        // the grant again, locked, and then checks the stop's lockout (a
+        // freeze over the grant, anything above it, its agent or its
+        // principal refuses the passport). A stop that revoked the grant
+        // since it was read above refuses the passport here, rather than let
+        // it be written under a grant no later sweep would start from. A
+        // lockout that lands after the check waits for this commit, so its
+        // sweep finds the credential and sets its status bit. A refused
+        // passport leaves its status-list index unused.
+        let refused = null as ReturnType<typeof issuanceRefusal>;
+        let grantStillActive = true;
+        await sql.begin(async (_tx) => {
+          const tx = _tx as unknown as TxSql;
+          // FOR SHARE: concurrent passports from the grant do not wait on each
+          // other, but a revocation of it waits for this one to commit. The
+          // row lock comes before the lockout's, as on refresh and delegation,
+          // so this never holds the lockout's lock while it waits for a row.
+          const locked = await tx`
+            SELECT id FROM grants
+             WHERE id = ${grantId} AND agent_id = ${agentId} AND developer_id = ${developerId}
+               AND status = 'active'
+             FOR SHARE
+          `;
+          if (!locked[0]) {
+            grantStillActive = false;
+            return;
+          }
+          await assertIssuanceOpen(tx, {
+            developerId,
+            agentIds: [agentId],
+            principalIds: [principalId],
+            grantIds: [grantId],
+          }, { path: 'passport', inTransaction: true, log: request.log });
+
+          await tx`
+            INSERT INTO mpp_passports (
+              id, developer_id, agent_id, grant_id, principal_id, agent_did,
+              organization_did, allowed_categories, max_amount, max_currency,
+              payment_rails, delegation_depth, parent_passport_id,
+              credential_jwt, encoded_credential, status,
+              status_list_id, status_list_idx, expires_at
+            )
+            VALUES (
+              ${passportId}, ${developerId}, ${agentId}, ${grantId}, ${principalId},
+              ${agentDid}, ${`did:web:${domain}`}, ${allowedMPPCategories},
+              ${maxTransactionAmount.amount}, ${maxTransactionAmount.currency || 'USDC'},
+              ${paymentRails}, ${delegationDepth}, ${parentPassportId ?? null},
+              ${vcJwt}, ${encodedCredential}, 'active',
+              ${statusListId}, ${statusListIdx}, ${expiresAt}
+            )
+          `;
+
+          // Also store in verifiable_credentials table for unified VC
+          // management. This is the row a revocation of the grant finds and
+          // sets the status bit for.
+          await tx`
+            INSERT INTO verifiable_credentials (
+              id, grant_id, developer_id, principal_id, agent_did,
+              credential_type, format, credential_jwt, status,
+              status_list_id, status_list_idx, expires_at
+            )
+            VALUES (
+              ${passportId}, ${grantId}, ${developerId}, ${principalId}, ${agentDid},
+              'AgentPassportCredential', 'agent-passport', ${vcJwt}, 'active',
+              ${statusListId}, ${statusListIdx}, ${expiresAt}
+            )
+          `;
+        }).catch((err: unknown) => {
+          // A refusal from the lockout check rolls the transaction back and
+          // is answered below; anything else propagates as it always did.
+          refused = issuanceRefusal(err);
+          if (refused === null) throw err;
+        });
+        if (refused !== null) {
+          return reply.status(refused.statusCode).send({ ...refused.body, requestId: request.id });
+        }
+        if (!grantStillActive) {
+          return reply.status(400).send({
+            message: 'Grant is not active or has expired',
+            code: 'INVALID_GRANT',
+            requestId: request.id,
+          });
+        }
+      }
 
       // Audit
       emitEvent(developerId, 'passport.issued', {

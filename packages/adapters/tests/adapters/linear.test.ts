@@ -8,6 +8,7 @@ vi.mock('@grantex/sdk', () => ({
 import { verifyGrantToken } from '@grantex/sdk';
 import { LinearAdapter } from '../../src/adapters/linear.js';
 import { GrantexAdapterError } from '../../src/errors.js';
+import { GRANT_TOKEN } from '../tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -35,7 +36,7 @@ describe('LinearAdapter', () => {
         ok: true, json: () => Promise.resolve(issues),
       }));
 
-      const result = await adapter.listIssues('grant-token');
+      const result = await adapter.listIssues(GRANT_TOKEN);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(issues);
@@ -51,7 +52,7 @@ describe('LinearAdapter', () => {
         ok: true, json: () => Promise.resolve({ data: { issues: { nodes: [] } } }),
       }));
 
-      await adapter.listIssues('grant-token', {
+      await adapter.listIssues(GRANT_TOKEN, {
         teamId: 'team_abc',
         first: 25,
       });
@@ -68,7 +69,7 @@ describe('LinearAdapter', () => {
         scopes: ['email:read'],
       });
 
-      await expect(adapter.listIssues('token'))
+      await expect(adapter.listIssues(GRANT_TOKEN))
         .rejects.toThrow(GrantexAdapterError);
     });
 
@@ -89,7 +90,7 @@ describe('LinearAdapter', () => {
       }));
 
       try {
-        await adapter.listIssues('token');
+        await adapter.listIssues(GRANT_TOKEN);
         expect.fail('should throw');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('UPSTREAM_ERROR');
@@ -104,7 +105,7 @@ describe('LinearAdapter', () => {
         ok: true, json: () => Promise.resolve(created),
       }));
 
-      const result = await adapter.createIssue('token', {
+      const result = await adapter.createIssue(GRANT_TOKEN, {
         teamId: 'team_abc',
         title: 'New feature',
       });
@@ -125,7 +126,7 @@ describe('LinearAdapter', () => {
         ok: true, json: () => Promise.resolve({ data: { issueCreate: { success: true } } }),
       }));
 
-      await adapter.createIssue('token', {
+      await adapter.createIssue(GRANT_TOKEN, {
         teamId: 'team_abc',
         title: 'Urgent fix',
         description: 'Fix the login bug',
@@ -147,7 +148,7 @@ describe('LinearAdapter', () => {
         scopes: ['issues:read'],
       });
 
-      await expect(adapter.createIssue('token', {
+      await expect(adapter.createIssue(GRANT_TOKEN, {
         teamId: 'team_abc',
         title: 'Test',
       })).rejects.toThrow(GrantexAdapterError);

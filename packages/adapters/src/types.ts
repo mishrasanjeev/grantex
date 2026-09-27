@@ -10,6 +10,14 @@ export interface AdapterConfig {
   auditLogger?: AuditLogger;
   clockTolerance?: number;
   timeout?: number;
+  /** Expected grant token audience (RFC 7519 section 4.1.3). */
+  audience?: string;
+  /**
+   * `on` (default) refuses a token whose `aud` does not contain `audience`, and a
+   * token that carries `aud` when no audience is configured. `off` ignores `aud`,
+   * as releases before the check did, and cannot be combined with `audience`.
+   */
+  audienceCheck?: 'on' | 'off';
 }
 
 export interface AdapterResult<T = unknown> {

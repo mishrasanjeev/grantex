@@ -12,17 +12,26 @@
  * `dryRun` answers "how much would this take down" without taking anything
  * down.
  *
- * **It is a sweep, not a lockout.** It revokes what exists, and repeats until
- * the scope comes back empty, so a grant delegated while it runs is caught by
- * a later sweep. It does not stop new grants being issued afterwards: whoever
- * holds the developer's API key can mint one a second later. Rotating or
- * disabling that credential is a separate step, and the runbook says so.
+ * **By default it is a sweep, not a lockout.** It revokes what exists, and
+ * repeats until the scope comes back empty, so a grant delegated while it runs
+ * is caught by a later sweep. It does not stop new grants being issued
+ * afterwards: whoever holds the developer's API key can mint one a second
+ * later, and the response says `lockout: false`.
+ *
+ * **With `lockout: true` it also freezes issuance** under the scope until the
+ * freeze is lifted (issuance-freeze.ts). The freeze is recorded in the same
+ * transaction as the stop's own row, before the first sweep reads the scope,
+ * so nothing issued while the stop runs can outlive it. A stop whose sweep
+ * then fails leaves the freeze in place: the grants it had not reached yet
+ * stay live, but nothing new is issued under them — refresh and delegation
+ * included — until the stop is repeated or the freeze lifted.
  */
 import type postgres from 'postgres';
 import { ulid } from 'ulid';
 import { appendPlatformAuditEntries, lockAuditChain } from '../audit-chain.js';
 import { logger, type AppLogger } from '../logger.js';
 import { AUDIT_ACTIONS, cascadeGrantAction } from './cascade.js';
+import { placeIssuanceFreeze, type FreezeAuthority } from './issuance-freeze.js';
 import { emergencyStopsTotal } from './metrics.js';
 import { withTransactionRetry } from './retry.js';
 import type { TxSql } from '../../db/client.js';
@@ -58,6 +67,14 @@ export interface EmergencyStopInput {
   /** Who asked: an admin key, or the developer's own API key. */
   requestedBy: string;
   dryRun?: boolean;
+  /** Also freeze issuance under the scope until the freeze is lifted. Ignored on a dry run. */
+  lockout?: boolean;
+  /**
+   * Whose authority the stop carries, which decides who may lift its
+   * lockout. When it is not given the lockout is the operator's: the stricter
+   * reading, since the developer's key cannot lift one.
+   */
+  authority?: FreezeAuthority;
   log?: AppLogger;
 }
 
@@ -76,8 +93,15 @@ export interface EmergencyStopResult {
   agentsStoppedTruncated: boolean;
   /** How many distinct agents were stopped, whatever the list length. */
   agentsStoppedTotal: number;
-  /** Always false: revoking what exists does not stop new grants being issued. */
-  lockout: false;
+  /**
+   * True when this stop placed a lockout, or reaffirmed one already in force:
+   * nothing is issued under the scope until it is lifted. False for a stop
+   * that did not ask for one — revoking what exists does not stop new grants
+   * being issued — and for a dry run.
+   */
+  lockout: boolean;
+  /** The freeze in force, when `lockout` is true. */
+  freezeId?: string;
   startedAt: string;
   completedAt: string;
 }
@@ -163,10 +187,36 @@ export async function emergencyStop(sql: Sql, input: EmergencyStopInput): Promis
     };
   }
 
-  await sql`
-    INSERT INTO emergency_stops (id, developer_id, scope_type, scope_id, reason, requested_by, dry_run, status, started_at)
-    VALUES (${stopId}, ${input.developerId}, ${input.scope.type}, ${input.scope.id}, ${input.reason},
-            ${input.requestedBy}, FALSE, 'running', ${startedAt})`;
+  let freezeId: string | undefined;
+  if (input.lockout === true) {
+    // The stop's row and the freeze commit together, before anything is
+    // swept: from here on, nothing new is issued under the scope, so the sweep
+    // below is chasing a fixed set of grants rather than a moving one. If the
+    // transaction fails nothing has been stopped or frozen, and the caller
+    // sees the error.
+    freezeId = await withTransactionRetry('emergency_stop_lockout', () => sql.begin(async (raw) => {
+      const tx = raw as unknown as TxSql;
+      await tx`
+        INSERT INTO emergency_stops
+          (id, developer_id, scope_type, scope_id, reason, requested_by, dry_run, status, started_at, lockout)
+        VALUES (${stopId}, ${input.developerId}, ${input.scope.type}, ${input.scope.id}, ${input.reason},
+                ${input.requestedBy}, FALSE, 'running', ${startedAt}, TRUE)`;
+      const placed = await placeIssuanceFreeze(tx, {
+        developerId: input.developerId,
+        scope: input.scope,
+        stopId,
+        reason: input.reason,
+        requestedBy: input.requestedBy,
+        placedBy: input.authority ?? 'operator',
+      });
+      return placed.freezeId;
+    }), log);
+  } else {
+    await sql`
+      INSERT INTO emergency_stops (id, developer_id, scope_type, scope_id, reason, requested_by, dry_run, status, started_at)
+      VALUES (${stopId}, ${input.developerId}, ${input.scope.type}, ${input.scope.id}, ${input.reason},
+              ${input.requestedBy}, FALSE, 'running', ${startedAt})`;
+  }
 
   const agents = new Set<string>();
   let matched = 0;
@@ -248,6 +298,7 @@ export async function emergencyStop(sql: Sql, input: EmergencyStopInput): Promis
           // rather than leaving a capped number that reads as the true one.
           agents_stopped_truncated: agents.size > MAX_REPORTED_AGENTS,
           agents_stopped_total: agents.size,
+          ...(freezeId !== undefined ? { lockout: true, freeze_id: freezeId } : {}),
           started_at: startedAt.toISOString(),
           completed_at: completedAt.toISOString(),
         },
@@ -276,7 +327,8 @@ export async function emergencyStop(sql: Sql, input: EmergencyStopInput): Promis
     agentsStopped: [...agents].slice(0, MAX_REPORTED_AGENTS),
     agentsStoppedTruncated: agents.size > MAX_REPORTED_AGENTS,
     agentsStoppedTotal: agents.size,
-    lockout: false,
+    lockout: freezeId !== undefined,
+    ...(freezeId !== undefined ? { freezeId } : {}),
     startedAt: startedAt.toISOString(),
     completedAt: completedAt.toISOString(),
   };
@@ -295,6 +347,8 @@ export interface EmergencyStopRow {
   grants_matched: number;
   grants_revoked: number;
   error: string | null;
+  /** Whether the stop asked for a lockout. Absent on a row read before the column existed. */
+  lockout?: boolean;
   started_at: Date | string;
   completed_at: Date | string | null;
 }
@@ -320,7 +374,9 @@ export function toEmergencyStopResponse(row: EmergencyStopRow): Record<string, u
     grantsMatched: row.grants_matched,
     grantsRevoked: row.grants_revoked,
     ...(row.error !== null ? { error: row.error } : {}),
-    lockout: false,
+    // Whether the stop asked for a lockout, not whether one is still in
+    // force: the freezes in force are listed separately.
+    lockout: row.lockout === true,
     startedAt: new Date(row.started_at).toISOString(),
     completedAt: row.completed_at === null ? null : new Date(row.completed_at).toISOString(),
   };

@@ -138,6 +138,57 @@ def _check_revocation_check(mode: str) -> str:
     return mode
 
 
+AUDIENCE_CHECK_MODES = ("on", "off")
+
+
+def _check_audience_check(mode: object) -> str:
+    if not isinstance(mode, str) or mode not in AUDIENCE_CHECK_MODES:
+        raise ValueError(f"audience_check must be one of on, off, not {mode!r}")
+    return mode
+
+
+def _check_expected_audience(audience: object, audience_check: str) -> str | None:
+    if audience is None:
+        return None
+    if not isinstance(audience, str) or not audience:
+        raise ValueError(f"audience must be a non-empty string, not {audience!r}")
+    if audience_check == "off":
+        # The check is off, so the audience would be ignored and tokens for
+        # other relying parties accepted: refuse the contradiction instead.
+        raise ValueError("audience cannot be set with audience_check='off'")
+    return audience
+
+
+def _audience_denial(
+    token_aud: Any, expected: str | None
+) -> tuple[str, str, dict[str, Any]] | None:
+    """The audience denial for a verified token, if any (RFC 7519 section 4.1.3).
+
+    ``aud`` is a string or an array of strings (the verifier refuses anything
+    else); the expected audience matches when it equals one of them exactly.
+    """
+    audiences = [token_aud] if isinstance(token_aud, str) else list(token_aud or [])
+    if expected is None:
+        if token_aud is None:
+            return None
+        # A token that names an audience is only for that relying party. A
+        # client that does not know its own audience cannot tell whether it is
+        # one of them, so it denies rather than accept a token meant elsewhere.
+        return (
+            "The grant token is for a specific audience and this client has no "
+            "expected audience; set audience (or audience_check='off').",
+            TokenSubReason.AUDIENCE_UNCONFIGURED,
+            {"token_audience": audiences},
+        )
+    if expected in audiences:
+        return None
+    return (
+        f"The grant token's audience does not include {expected!r}.",
+        TokenSubReason.AUDIENCE_MISMATCH,
+        {"expected_audience": expected, "token_audience": audiences},
+    )
+
+
 class Grantex:
     """Main entry point for the Grantex SDK."""
 
@@ -187,6 +238,8 @@ class Grantex:
         decisions_mode: str = "enforce",
         decision_consumer: DecisionConsumer | None = None,
         decision_algorithms: Sequence[str] = ("RS256", "ES256"),
+        audience: str | None = None,
+        audience_check: str = "on",
     ) -> None:
         resolved_key = (api_key or os.environ.get("GRANTEX_API_KEY", "")).strip()
         if not resolved_key:
@@ -213,6 +266,12 @@ class Grantex:
         if not decision_algorithms or any(a not in ("RS256", "ES256") for a in decision_algorithms):
             raise ValueError("decision_algorithms must be a non-empty subset of RS256, ES256")
         self._decision_algorithms = tuple(decision_algorithms)
+        # The grant token audience enforce() expects (RFC 7519 section 4.1.3).
+        # With audience_check "on" (the default) a token that carries aud is
+        # denied unless its aud contains this value; "off" ignores aud, as
+        # releases before the audience check did.
+        self._audience_check = _check_audience_check(audience_check)
+        self._audience = _check_expected_audience(audience, self._audience_check)
 
         self._http = HttpClient(
             base_url=base_url,
@@ -432,8 +491,19 @@ class Grantex:
         case_version: str | None = None,
         decisions_mode: str | None = None,
         revocation_check: str | None = None,
+        audience: str | None = None,
     ) -> EnforceResult:
         """Enforce scope for a tool call.
+
+        The grant token's audience is checked right after its signature
+        (RFC 7519 section 4.1.3): ``audience`` overrides the client's expected
+        audience for this call. A token whose ``aud`` does not contain it, or
+        has no ``aud``, is denied with ``token_invalid`` /
+        ``audience_mismatch``; a token that carries ``aud`` when no audience is
+        expected is denied with ``token_invalid`` / ``audience_unconfigured``.
+        A client created with ``audience_check="off"`` ignores ``aud``. Audience
+        denials are not relaxed by ``enforce_mode="permissive"``: they stay
+        ``allowed=False`` in every enforce mode.
 
         When the tool (manifest) or the grant declares caps, the call is
         metered with the client's ``caps_meter``: units are reserved as the
@@ -515,6 +585,11 @@ class Grantex:
         agent_did = ""
         scopes: list[str] = []
         permission = ""
+        expected_audience = (
+            self._audience
+            if audience is None
+            else _check_expected_audience(audience, self._audience_check)
+        )
 
         # 1. Verify the token locally using JWKS retrieved from the configured URI
         try:
@@ -537,6 +612,24 @@ class Grantex:
         scopes = list(getattr(grant, "scopes", []))
 
         result_purpose = ""
+
+        # 1a. Audience. Checked before revocation: a token meant for another
+        #     relying party is refused without asking the auth service about it.
+        #     The denial fails closed in every enforce mode: it does not pass
+        #     through _apply_enforce_mode, so permissive mode does not turn it
+        #     into an allow for a token issued for another relying party (or
+        #     a client that does not know its own audience).
+        if self._audience_check == "on":
+            audience_denial = _audience_denial(getattr(grant, "audience", None), expected_audience)
+            if audience_denial is not None:
+                message, sub_reason, details = audience_denial
+                return EnforceResult(
+                    allowed=False, reason=message,
+                    grant_id=grant_id, agent_did=agent_did, scopes=scopes,
+                    permission=permission, connector=connector, tool=tool,
+                    reason_code=DenialReason.TOKEN_INVALID, sub_reason=sub_reason,
+                    details=details,
+                )
 
         # 1b. Revocation. The token verifies offline whether or not the grant
         #     still stands, so this is the only place a revocation can be seen.

@@ -109,6 +109,16 @@ export type RevocationSubReason = (typeof RevocationSubReason)[keyof typeof Revo
 export const TokenSubReason = {
   /** The `authorization_details` claim cannot be read unambiguously. */
   MALFORMED_AUTHORIZATION_DETAILS: 'malformed_authorization_details',
+  /**
+   * The token carries `aud` and the client has no expected audience, so it cannot
+   * tell whether the token is meant for it. `details` carries `token_audience`.
+   */
+  AUDIENCE_UNCONFIGURED: 'audience_unconfigured',
+  /**
+   * The token's `aud` does not contain the expected audience, or the token has no
+   * `aud`. `details` carries `expected_audience` and `token_audience`.
+   */
+  AUDIENCE_MISMATCH: 'audience_mismatch',
 } as const;
 
 /**

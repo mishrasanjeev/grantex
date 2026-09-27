@@ -9,6 +9,7 @@ import { verifyGrantToken } from '@grantex/sdk';
 import { BaseAdapter } from '../src/base-adapter.js';
 import { GrantexAdapterError } from '../src/errors.js';
 import type { AdapterConfig } from '../src/types.js';
+import { GRANT_TOKEN } from './tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_123',
@@ -58,11 +59,11 @@ describe('BaseAdapter', () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(MOCK_GRANT);
       const adapter = new TestAdapter(baseConfig);
 
-      const result = await adapter.testVerifyAndCheckScope('valid-token', 'calendar:read');
+      const result = await adapter.testVerifyAndCheckScope(GRANT_TOKEN, 'calendar:read');
 
       expect(result.grant).toBe(MOCK_GRANT);
       expect(result.matchedScope.baseScope).toBe('calendar:read');
-      expect(verifyGrantToken).toHaveBeenCalledWith('valid-token', {
+      expect(verifyGrantToken).toHaveBeenCalledWith(GRANT_TOKEN, {
         jwksUri: baseConfig.jwksUri,
       });
     });
@@ -71,9 +72,9 @@ describe('BaseAdapter', () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(MOCK_GRANT);
       const adapter = new TestAdapter({ ...baseConfig, clockTolerance: 30 });
 
-      await adapter.testVerifyAndCheckScope('token', 'calendar:read');
+      await adapter.testVerifyAndCheckScope(GRANT_TOKEN, 'calendar:read');
 
-      expect(verifyGrantToken).toHaveBeenCalledWith('token', {
+      expect(verifyGrantToken).toHaveBeenCalledWith(GRANT_TOKEN, {
         jwksUri: baseConfig.jwksUri,
         clockTolerance: 30,
       });
@@ -97,11 +98,11 @@ describe('BaseAdapter', () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(MOCK_GRANT);
       const adapter = new TestAdapter(baseConfig);
 
-      await expect(adapter.testVerifyAndCheckScope('token', 'email:send'))
+      await expect(adapter.testVerifyAndCheckScope(GRANT_TOKEN, 'email:send'))
         .rejects.toThrow(GrantexAdapterError);
 
       try {
-        await adapter.testVerifyAndCheckScope('token', 'email:send');
+        await adapter.testVerifyAndCheckScope(GRANT_TOKEN, 'email:send');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('SCOPE_MISSING');
       }
@@ -111,7 +112,7 @@ describe('BaseAdapter', () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(MOCK_GRANT);
       const adapter = new TestAdapter(baseConfig);
 
-      const result = await adapter.testVerifyAndCheckScope('token', 'payments:initiate', { enforcesConstraint: true });
+      const result = await adapter.testVerifyAndCheckScope(GRANT_TOKEN, 'payments:initiate', { enforcesConstraint: true });
       expect(result.matchedScope.baseScope).toBe('payments:initiate');
       expect(result.matchedScope.constraint).toEqual({ type: 'max', value: 500 });
     });
@@ -122,7 +123,7 @@ describe('BaseAdapter', () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(MOCK_GRANT);
       const adapter = new TestAdapter(baseConfig);
 
-      await expect(adapter.testVerifyAndCheckScope('token', 'payments:initiate'))
+      await expect(adapter.testVerifyAndCheckScope(GRANT_TOKEN, 'payments:initiate'))
         .rejects.toMatchObject({ code: 'CONSTRAINT_VIOLATED' });
     });
 
@@ -133,7 +134,7 @@ describe('BaseAdapter', () => {
       });
       const adapter = new TestAdapter(baseConfig);
 
-      const result = await adapter.testVerifyAndCheckScope('token', 'payments:initiate');
+      const result = await adapter.testVerifyAndCheckScope(GRANT_TOKEN, 'payments:initiate');
       expect(result.matchedScope.constraint).toBeUndefined();
     });
   });
