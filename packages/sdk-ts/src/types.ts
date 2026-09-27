@@ -65,7 +65,8 @@ export interface GrantexClientOptions {
    * `on` (default) checks the grant token's `aud` in `enforce()`: without an expected
    * audience, a token that carries `aud` is denied with `token_invalid` /
    * `audience_unconfigured`. `off` ignores `aud`, as releases before the check did,
-   * and cannot be combined with `audience`.
+   * and cannot be combined with `audience`. Audience denials are not relaxed by
+   * `enforceMode: 'permissive'`: they stay `allowed: false` in every enforce mode.
    */
   audienceCheck?: 'on' | 'off';
 }

@@ -21,6 +21,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     `audience_mismatch`.
   - `details` carries `token_audience` and, for a mismatch,
     `expected_audience`. Both sub-reasons are exported on `TokenSubReason`.
+  - Audience denials are not relaxed by permissive mode
+    (`enforceMode: 'permissive'` / `enforce_mode="permissive"`): they stay
+    `allowed: false` / `allowed=False`, with the same reason, sub-reason and
+    `details`, in every enforce mode. Other denials behave in permissive mode
+    as before.
   - Tokens issued without an audience (the auth service sets `aud` only when
     the authorization request names one) are unaffected while no audience is
     configured.
@@ -43,6 +48,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with the audience code rather than 403 `SCOPE_INSUFFICIENT`.
   An invalid setting stops the gateway from starting and the adapter from
   being created.
+- `grantex enforce test` (`@grantex/cli`) takes `--audience <audience>`,
+  passed to `enforce()` as the per-call audience, and
+  `--audience-check <on|off>`, passed to the client. Any other
+  `--audience-check` value, an empty `--audience`, and `--audience` with
+  `--audience-check off` are refused; so are both options when the installed
+  `@grantex/sdk` has no audience check, rather than being ignored.
+- `@grantex/strands` and `grantex-strands` pass their `audience` option to
+  `client.enforce()` as the per-call audience in online mode, as offline
+  verification already did; without it, online mode would deny every token
+  that carries `aud` with `audience_unconfigured` unless the client had its
+  own audience.
 - **Opt-out:** `audienceCheck: 'off'` (TypeScript client, gateway config,
   adapter config) or `audience_check="off"` (Python client) restores the
   earlier behaviour exactly: `aud` is not read.

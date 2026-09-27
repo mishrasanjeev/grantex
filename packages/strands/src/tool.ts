@@ -63,11 +63,14 @@ async function assertAuthorized<
       throw new Error("Grantex: online enforcement requires a 'connector'");
     }
 
+    // enforce() checks the grant token audience; the tool's audience is the
+    // one it expects, as in offline verification.
     const result = await options.client.enforce({
       grantToken,
       connector: options.connector,
       tool: options.name,
       ...(options.amount !== undefined ? { amount: options.amount } : {}),
+      ...(options.audience !== undefined ? { audience: options.audience } : {}),
     });
     if (!result.allowed) {
       throw new GrantexScopeError(requiredScope, result.scopes, result.reason);

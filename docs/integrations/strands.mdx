@@ -35,6 +35,13 @@ const agent = new Agent({
 
 The TypeScript helper verifies the grant token against JWKS before each tool invocation and checks the verified `scp` claim. Set `online: true` with a Grantex client and `connector` to delegate enforcement to `client.enforce()`.
 
+From the next release, both helpers also pass their `audience` option to
+`client.enforce()` in online mode as the per-call grant token audience, as
+offline verification already uses it. `enforce()` denies a token
+that carries `aud` when no audience is expected (`audience_unconfigured`), so
+set `audience` to the identifier your service is issued tokens for (see
+[Grant token audience](/sdks/typescript/enforce#grant-token-audience)).
+
 ## Python Install
 
 ```bash

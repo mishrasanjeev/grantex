@@ -501,7 +501,9 @@ class Grantex:
         has no ``aud``, is denied with ``token_invalid`` /
         ``audience_mismatch``; a token that carries ``aud`` when no audience is
         expected is denied with ``token_invalid`` / ``audience_unconfigured``.
-        A client created with ``audience_check="off"`` ignores ``aud``.
+        A client created with ``audience_check="off"`` ignores ``aud``. Audience
+        denials are not relaxed by ``enforce_mode="permissive"``: they stay
+        ``allowed=False`` in every enforce mode.
 
         When the tool (manifest) or the grant declares caps, the call is
         metered with the client's ``caps_meter``: units are reserved as the
@@ -600,17 +602,21 @@ class Grantex:
 
         # 1a. Audience. Checked before revocation: a token meant for another
         #     relying party is refused without asking the auth service about it.
+        #     The denial fails closed in every enforce mode: it does not pass
+        #     through _apply_enforce_mode, so permissive mode does not turn it
+        #     into an allow for a token issued for another relying party (or
+        #     a client that does not know its own audience).
         if self._audience_check == "on":
             audience_denial = _audience_denial(getattr(grant, "audience", None), expected_audience)
             if audience_denial is not None:
                 message, sub_reason, details = audience_denial
-                return self._apply_enforce_mode(EnforceResult(
+                return EnforceResult(
                     allowed=False, reason=message,
                     grant_id=grant_id, agent_did=agent_did, scopes=scopes,
                     permission=permission, connector=connector, tool=tool,
                     reason_code=DenialReason.TOKEN_INVALID, sub_reason=sub_reason,
                     details=details,
-                ))
+                )
 
         # 1b. Revocation. The token verifies offline whether or not the grant
         #     still stands, so this is the only place a revocation can be seen.

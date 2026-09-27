@@ -133,6 +133,11 @@ audience is one of its values, compared as exact strings (no case folding, no
 trailing-slash or prefix matching). The denial's `details` carry
 `token_audience` (a list) and, for `audience_mismatch`, `expected_audience`.
 
+Audience denials are not relaxed by `enforce_mode="permissive"`: they stay
+`allowed=False`, with the same `reason_code`, `sub_reason` and `details`, in
+every enforce mode, because the token was issued for another relying party (or
+the client does not know its own audience).
+
 Set the audience on the client, and override it for one call:
 
 ```python

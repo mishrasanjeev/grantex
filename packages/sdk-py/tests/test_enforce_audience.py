@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import time
+import warnings
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
 from unittest.mock import MagicMock, patch
@@ -140,12 +141,46 @@ def test_audience_is_checked_before_the_revocation_status(verify: MagicMock) -> 
     get.assert_not_called()
 
 
-def test_permissive_mode_reports_an_audience_denial_as_it_does_any_other(verify: MagicMock) -> None:
+# Permissive mode turns a denial into an allow with a warning. An audience
+# denial is a correctly signed token for another relying party (or a client
+# that does not know its own audience), so it stays denied in every mode.
+@pytest.mark.parametrize(
+    ("aud", "options", "sub_reason", "details"),
+    [
+        (MERCHANT, {}, TokenSubReason.AUDIENCE_UNCONFIGURED, {"token_audience": [MERCHANT]}),
+        (
+            "https://api.provider.example",
+            {"audience": MERCHANT},
+            TokenSubReason.AUDIENCE_MISMATCH,
+            {"expected_audience": MERCHANT, "token_audience": ["https://api.provider.example"]},
+        ),
+    ],
+    ids=["audience_unconfigured", "audience_mismatch"],
+)
+def test_permissive_mode_does_not_relax_an_audience_denial(
+    aud: Any, options: Dict[str, Any], sub_reason: str, details: Dict[str, Any], verify: MagicMock
+) -> None:
+    verify.return_value = _grant(aud)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        result = _client(enforce_mode="permissive", **options).enforce("t", "acme_kyb", "get_case")
+    assert (result.allowed, result.reason_code, result.sub_reason) == (
+        False, DenialReason.TOKEN_INVALID, sub_reason,
+    )
+    assert result.details == details
+    assert "audience" in result.reason
+
+
+def test_permissive_mode_still_relaxes_a_scope_denial_once_the_audience_matches(
+    verify: MagicMock,
+) -> None:
     verify.return_value = _grant(MERCHANT)
+    c = Grantex(api_key="test-key", audience=MERCHANT, enforce_mode="permissive")
+    c.load_manifest(ToolManifest.from_dict({"connector": "acme_kyb", "tools": {"get_case": "write"}}))
     with pytest.warns(UserWarning, match="would deny"):
-        result = _client(enforce_mode="permissive").enforce("t", "acme_kyb", "get_case")
+        result = c.enforce("t", "acme_kyb", "get_case")
     assert result.allowed is True
-    assert result.sub_reason == TokenSubReason.AUDIENCE_UNCONFIGURED
+    assert result.reason_code == DenialReason.PERMISSION_INSUFFICIENT
 
 
 @pytest.mark.parametrize("value", ["", "ON", "strict", None, 1, True])

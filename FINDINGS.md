@@ -1024,7 +1024,7 @@ the pull request that references it.
   `GrantexTokenError`) for expiry and missing scopes, and map those instead of
   the message text.
 
-## G-57 — `grantex enforce test` cannot set the expected audience
+## G-57 — `grantex enforce test` cannot set the expected audience (fixed)
 
 - **Found:** checking the callers of `enforce()` for the audience check
   (2026-09-27).
@@ -1036,3 +1036,33 @@ the pull request that references it.
 - **Fix:** add `--audience <value>` (passed to `enforce()`) and
   `--audience-check <on|off>` (passed to the client) to `grantex enforce test`,
   with tests, and require an `@grantex/sdk` peer range that has the options.
+- **Fixed:** in the `fix/enforce-audience` change. `grantex enforce test`
+  takes `--audience` (passed to `enforce()` as the per-call audience) and
+  `--audience-check <on|off>` (passed to the client through `requireClient`);
+  other `--audience-check` values, an empty `--audience` and `--audience` with
+  `--audience-check off` are refused. No `@grantex/sdk` release has the
+  options yet, so instead of a version range the command checks that the
+  installed SDK exports the audience sub-reasons and refuses both options
+  when it does not, rather than ignoring them. Shown by
+  `packages/cli/tests/enforce.test.ts`, `packages/cli/tests/client.test.ts`
+  and `packages/cli/tests/enforce-older-sdk.test.ts`, which fail without the
+  change.
+
+## G-58 — Permissive enforce mode allows a token that fails verification
+
+- **Found:** making the audience denials fail closed in permissive mode
+  (2026-09-28).
+- **What:** with `enforceMode: 'permissive'` (TypeScript) or
+  `enforce_mode="permissive"` (Python), `enforce()` passes every denial
+  through the permissive conversion, including `token_invalid` for a token
+  whose signature, issuer, expiry or claims fail verification, and
+  `grant_revoked`. A forged, expired or revoked token is therefore reported
+  `allowed: true` with a warning (`packages/sdk-ts/src/client.ts`, `denied()`
+  and `#applyEnforceMode`; `packages/sdk-py/src/grantex/_client.py`,
+  `_apply_enforce_mode`). Permissive mode is documented as development only
+  and meant to relax scope and manifest checks while a manifest is written,
+  not to accept tokens nobody issued. The audience denials already bypass the
+  conversion.
+- **Fix:** have token verification and revocation denials fail closed in
+  every enforce mode, as the audience denials do, as a breaking change
+  recorded in `CHANGELOG.md`, with tests in both SDKs.

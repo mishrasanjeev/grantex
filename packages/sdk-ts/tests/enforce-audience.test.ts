@@ -152,6 +152,43 @@ describe('enforce() audience', () => {
     }
   });
 
+  // Permissive mode turns a denial into an allow with a warning. An audience
+  // denial is a correctly signed token for another relying party (or a client
+  // that does not know its own audience), so it stays denied in every mode.
+  it.each([
+    ['audience_unconfigured', MERCHANT, {}, { token_audience: [MERCHANT] }],
+    ['audience_mismatch', 'https://api.provider.example', { audience: MERCHANT },
+      { expected_audience: MERCHANT, token_audience: ['https://api.provider.example'] }],
+  ] as const)('keeps %s denied in permissive mode', async (subReason, aud, options, details) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      withGrant(aud);
+      const result = await client({ ...options, enforceMode: 'permissive' } as Partial<GrantexClientOptions>)
+        .enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'get_case' });
+      expect([result.allowed, result.reasonCode, result.subReason]).toEqual([false, DenialReason.TOKEN_INVALID, subReason]);
+      expect(result.details).toEqual(details);
+      expect(result.reason).toMatch(/audience/);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('still relaxes a scope denial in permissive mode once the audience matches', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const c = new Grantex({ apiKey: 'test-key', audience: MERCHANT, enforceMode: 'permissive' } as GrantexClientOptions);
+      c.loadManifest(new ToolManifest({ connector: 'acme_kyb', tools: { get_case: 'write' } }));
+      withGrant(MERCHANT);
+      const result = await c.enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'get_case' });
+      expect(result.allowed).toBe(true);
+      expect(result.reasonCode).toBe(DenialReason.PERMISSION_INSUFFICIENT);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it.each(['', 'ON', 'strict', null, 1, true])('refuses audienceCheck %j at construction', (value) => {
     expect(() => new Grantex({ apiKey: 'test-key', audienceCheck: value as never })).toThrow(/audienceCheck/);
   });

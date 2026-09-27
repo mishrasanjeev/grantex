@@ -532,9 +532,21 @@ export class Grantex {
 
     // 1a. Audience. Checked before revocation: a token meant for another
     //     relying party is refused without asking the auth service about it.
+    //     The denial fails closed in every enforce mode: permissive mode does
+    //     not turn it into an allow, since the token was issued for another
+    //     relying party (or this client does not know its own audience).
     if (this.#audienceCheck === 'on') {
       const denial = audienceDenial(grant.audience, expectedAudience);
-      if (denial) return denied(denial.reason, DenialReason.TOKEN_INVALID, denial.subReason, denial.details);
+      if (denial) {
+        return {
+          ...base,
+          allowed: false,
+          reason: denial.reason,
+          reasonCode: DenialReason.TOKEN_INVALID,
+          subReason: denial.subReason,
+          details: denial.details,
+        };
+      }
     }
 
     // 1b. Revocation. The token verifies offline whether or not the grant
