@@ -252,8 +252,9 @@ Current public releases and repository versions, verified 2026-09-27:
 > **Repository development status:** the auth service enforces Redis-backed
 > Free/Pro/Enterprise developer budgets of
 > 100/500/2,000 requests per minute on API-key routes handled by the standard
-> auth plugin. Custom-auth quota policy remains open and the managed-service
-> rollout remains independent of SDK publication.
+> auth plugin; revoking and the emergency stop have a budget of their own, as
+> do the revocation feed and status reads. Custom-auth quota policy remains
+> open and the managed-service rollout remains independent of SDK publication.
 
 Omit a version pin to install the registry's current latest release. See the [release-status documentation](https://docs.grantex.dev/release-status), [COMPATIBILITY.md](COMPATIBILITY.md) for the full package matrix, and [CHANGELOG.md](CHANGELOG.md) for release notes.
 
