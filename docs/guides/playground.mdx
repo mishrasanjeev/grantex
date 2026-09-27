@@ -1,18 +1,18 @@
 ---
 title: "Interactive Playground"
-description: "Try the full Grantex authorization flow in your browser — no signup required."
+description: "Run the Grantex sandbox authorization, refresh, and revocation flow in a browser with an automatically created sandbox account."
 ---
 
 ## What is the Playground?
 
-The [Grantex Playground](https://grantex.dev/playground) is a browser-based, interactive walkthrough of the entire Grantex authorization protocol. It lets you execute real API calls against the Grantex auth service and see every request and response — no backend, no signup, no installation.
+The [Grantex Playground](https://grantex.dev/playground) is a browser-based walkthrough of the sandbox authorization lifecycle. It makes real API calls and displays the request and response for each step. By default, Start creates a new sandbox developer through `POST /v1/signup`; you do not need to bring an existing account or key. This account is not automatically deleted on Reset. The playground is not a live-mode consent or passkey enrollment client.
 
 ## Getting Started
 
 1. **Open the playground** — Visit [grantex.dev/playground](https://grantex.dev/playground).
-2. **Click "Start Demo"** — The playground uses a built-in public sandbox key, so no signup or API key is needed.
+2. **Click "Start Demo"** — The playground creates a fresh sandbox account and holds its key in this browser session. No shared public key is used.
 3. **Walk through each step** — Click "Run" on each step to execute the API call and see the response.
-4. *(Optional)* Click **"Advanced"** to use your own sandbox key or a custom server URL.
+4. *(Optional)* Click **"Advanced"** to use your own sandbox key or a custom server URL. Before creating an agent, the page calls `GET /v1/me` and refuses any key whose account mode is not `sandbox`.
 
 ## The 7 Steps
 
@@ -25,21 +25,21 @@ The playground walks you through the complete Grantex lifecycle:
 | **3. Exchange Token** | `POST /v1/token` | Exchanges the authorization code for a signed RS256 grant token JWT and a refresh token. |
 | **4. Verify Token** | `POST /v1/tokens/verify` | Verifies the grant token online — returns validity, scopes, principal, and agent info. |
 | **5. Refresh Token** | `POST /v1/token/refresh` | Uses the refresh token to rotate credentials while the grant remains active. The same previous refresh token can recover a lost response for five minutes, and refresh does not extend grant expiry. |
-| **6. Revoke Token** | `POST /v1/tokens/revoke` | Revokes the grant token by its JTI, making it permanently invalid. |
+| **6. Revoke Grant** | `DELETE /v1/grants/:id` | Revokes the grant and descendants. The online verifier will reject this grant's token afterward. |
 | **7. Verify After Revocation** | `POST /v1/tokens/verify` | Verifies the revoked token again — confirms it now returns `valid: false`. |
 
 ## Features
 
-- **Auto-populated values** — Each step auto-fills values from previous steps (agent ID, auth code, grant token, refresh token, JTI).
-- **JWT decoding** — Grant tokens are decoded inline with human-readable claim labels (issuer, principal, agent DID, scopes, grant ID, etc.).
-- **Syntax-highlighted JSON** — All request bodies and responses are displayed with color-coded JSON.
+- **Auto-populated values** — Each step fills its request from previous responses (agent ID, auth code, grant token, refresh token, and grant ID).
+- **JWT decoding** — Grant-token claims are decoded for inspection, not verified by the decoder. The separate Verify step calls the online verifier.
+- **Request and response panels** — JSON is shown as text, including error responses.
 - **Status badges** — Each step shows its current state: Pending, Running, Done, or Error.
 - **Sandbox mode** — The playground uses sandbox mode, which auto-approves consent and returns the authorization code directly — no redirect needed.
-- **Zero dependencies** — Pure HTML/CSS/JS, no build step, no framework. Runs entirely in the browser.
+- **No browser build step** — The page uses plain HTML/CSS/JS; the flow still depends on a reachable Grantex auth service.
 
 ## Sandbox Mode
 
-The playground relies on Grantex's sandbox mode. When you call `POST /v1/authorize`, the auth service detects that you're using a sandbox/free-tier API key and:
+The playground relies on a sandbox-mode developer key, which is independent of plan tier. When it calls `POST /v1/authorize`, the auth service:
 
 1. Skips the consent redirect flow
 2. Auto-approves the authorization request
@@ -49,15 +49,14 @@ This means you can complete the full flow without any browser redirects or user 
 
 ## Using Your Own Server
 
-If you're [self-hosting Grantex](/guides/self-hosting), change the **Server URL** in the configuration panel to point to your own auth service instance. The playground works with any spec-compliant Grantex server.
+If you're [self-hosting Grantex](/guides/self-hosting), set **Server URL** under Advanced to your compatible Grantex auth service. It must allow requests from the browser origin. Use HTTPS, or HTTP on localhost for local development. The page sends the sandbox key to the configured URL. A live-mode key cannot complete this sandbox-only walkthrough because live authorization requires separate consent.
 
 ## Security Notes
 
-- The playground uses a **built-in public sandbox key** by default. This key only authenticates a sandbox-mode developer with auto-approved consent, no real user data, and free-plan rate limits — it is intentionally public.
-- If you use your own API key, it is **never stored** — it stays in browser memory only for the duration of your session.
-- All API calls go directly from your browser to the Grantex auth service over HTTPS.
-- The playground does not send any API key to any third-party service.
-- Agents and grants created in the playground are real — you can view and manage them in your [developer dashboard](https://grantex.dev/dashboard).
+- Start creates a **new sandbox key** rather than using a shared public key. Avoid real customer data in a demo account.
+- Your key and token responses remain in the current page's memory and DOM until Reset or navigation; Reset clears the page state but does not delete server-side agents, grants, or the sandbox account.
+- Never paste a live or production API key. With a custom Server URL, the key is sent directly to that host. The UI rejects plain HTTP except on localhost, but you must still trust the host you choose.
+- A custom sandbox account's agents and grants remain on its server. If you use your own dashboard-managed key, you can manage those records in the [dashboard](https://grantex.dev/dashboard). Disposable accounts do not automatically appear under another dashboard login.
 
 ## Ownership
 
