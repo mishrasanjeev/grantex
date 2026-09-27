@@ -646,7 +646,6 @@ tests/conformance`.
 | Any redirect URI at `/register` | https or loopback http only. |
 | `allowedRedirectUris` (not enforced) | Removed. |
 | `requireMcpAuth({ issuer })` | `audience` and `revocations` are required; responses carry `WWW-Authenticate`. Pass `revocations: storage` (or `revocations: 'none'` to opt out explicitly) and `tools` to enforce revocation and tool grants. |
-| `requireMcpAuth({ issuer })` | `audience` is required; responses carry `WWW-Authenticate`. Add `revocations: storage` and `tools` to enforce revocation and tool grants. |
 | `requireMcpAuth`, `/introspect` and `/revoke` accepted RS256, ES256, PS256 and EdDSA; `algorithms` could name any algorithm | RS256 and ES256 only. `algorithms` naming anything else throws at start-up. `typ` must be `at+jwt` (absent only on a pre-0.6 token). |
 | `requireMcpAuth` read `scp`, `agt`, `dev`, `grnt` and `delegationDepth` only | Reads `scope` and `urn:grantex:grant` first, the legacy claims as a fallback; refuses a 0.6 token whose claims disagree. |
 | Upstream exchange without `redirectUri` | Sends the callback URL, which Grantex requires. |
