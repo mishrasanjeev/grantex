@@ -364,6 +364,16 @@ const grantex = new Grantex({ apiKey, revocationCheck: 'offline' });
 grantex = Grantex(api_key=api_key, revocation_check="offline")
 ```
 
+`online` costs one round trip to the auth service per `enforce()` call, and
+those calls draw on the developer's revocation-status budget: 6,000 a minute
+(100 a second) across all of the developer's instances, whatever the plan (see
+[Rate limits](#rate-limits)). The status endpoint's per-address limit is the
+same 6,000 a minute, so a server running many tools behind one egress address
+can use the whole budget; past it the SDK is answered `429`, retries, and then
+denies with `status_unavailable`. A client making more checked calls than that,
+or one on a hot path, should use `feed`, which costs one connection per process
+however many calls it makes.
+
 ### Per-call overrides only tighten
 
 The modes are ordered by how soon a revocation is seen: `offline` never,
@@ -579,7 +589,13 @@ calls can still revoke, and its SDKs can still learn about revocations.
 | status | `GET /v1/revocations`, `/v1/revocations/status`, `/v1/revocations/stream`, `GET /v1/consent-bundles/:id/revocation-status` | 6,000 a minute | `503 RATE_LIMIT_UNAVAILABLE`; clients fail closed |
 
 The per-address limits on each route still apply first (20 a minute for the
-emergency stop; 600, 1,200 and 120 for the feed, status and stream routes).
+emergency stop; 600, 6,000 and 120 for the feed, status and stream routes).
+The status route's per-address limit is the developer's status budget, because
+an SDK checking `online` calls it once per `enforce()`: a lower one would
+refuse a server running many tools behind one address before the developer
+reached its budget. The feed and stream are called once per SDK process (a
+long poll or a reconnect), so their per-address limits scale with processes,
+not calls, and stay lower.
 A revocation fails open when the limiter cannot count it because it is written
 to Postgres, which is authoritative, and refusing it would prolong an incident
 over an outage of a cache. `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false` puts these

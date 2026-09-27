@@ -16,11 +16,20 @@
  * revocation-status bucket rather than the plan, so learning about a
  * revocation does not compete with the tenant's other calls
  * (plugins/dynamicRateLimit.ts).
+ *
+ * The per-address limits are an abuse ceiling, counted before authentication.
+ * The feed and the stream are called once per SDK instance (a long poll, or a
+ * reconnect), so their limits scale with instances, not calls. The status
+ * route is called once per enforce() by a client checking online, the SDK
+ * default, so its per-address limit is the per-developer status budget
+ * (STATUS_RATE_LIMIT): a server running many tools behind one address is
+ * held to the developer's budget, not refused below it (FINDINGS G-65).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { getSql } from '../db/client.js';
 import { getRevocationFeedHub, resetRevocationFeedHub, type FeedBatch } from '../lib/revocation-feed/hub.js';
 import { revocationFeedEnabledFor, revocationFeedSettings } from '../lib/revocation-feed/settings.js';
+import { STATUS_RATE_LIMIT } from '../plugins/dynamicRateLimit.js';
 import {
   feedReady,
   readSince,
@@ -152,7 +161,10 @@ export async function revocationRoutes(app: FastifyInstance): Promise<void> {
 
   app.get<{ Querystring: StatusQuery }>(
     '/v1/revocations/status',
-    { config: { rateLimit: { max: 1_200, timeWindow: '1 minute' }, rateLimitClass: 'status' } },
+    // Per address: no lower than the developer's status budget, so one address
+    // can use the whole budget (see the header). Still a ceiling: it counts
+    // unauthenticated calls too, before the auth plugin looks the key up.
+    { config: { rateLimit: { max: STATUS_RATE_LIMIT, timeWindow: '1 minute' }, rateLimitClass: 'status' } },
     async (request, reply) => {
       const settings = revocationFeedSettings();
       if (!revocationFeedEnabledFor(settings, request.developer.id)) return notFound(request, reply);

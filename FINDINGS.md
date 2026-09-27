@@ -1126,7 +1126,7 @@ the pull request that references it.
   those developers, with a stop that also revokes the tenant's live commerce
   passports.
 
-## G-65 — Default online revocation checks share a 1,200-per-minute limit
+## G-65 — Default online revocation checks share a 1,200-per-minute limit (fixed)
 
 - **Found:** turning revocation checking on by default in both SDKs
   (2026-09-27).
@@ -1142,6 +1142,24 @@ the pull request that references it.
   address, and higher), document the cost next to the default, and point
   high-volume clients at `feed`. Owner: the auth-service maintainers. Exit
   criterion: a load test at the documented rate passes without a `429`.
+- **Fixed:** the status route's per-address limit is now the developer's
+  revocation-status budget (`STATUS_RATE_LIMIT`, 6,000 a minute, per developer
+  on every plan since G-23's buckets), so one address can use the developer's
+  whole budget; the per-address limit stays as an abuse ceiling counted before
+  authentication. The cost of `online` and the advice to use `feed` above
+  100 checked calls a second are documented in
+  `docs/concepts/event-bridge-and-revocation.md`,
+  `docs/guides/rate-limits.mdx` and `docs/self-hosting.md`. Shown by
+  `apps/auth-service/tests/containment-rate-limits.test.ts`: "serves many
+  status calls from one address within a minute while the developer is under
+  its status budget" (1,500 calls from one address; 300 were refused `429`
+  before), "still refuses status calls past the per-developer status budget"
+  and "keeps an abuse ceiling per address on the status route, before
+  authentication". Still true, and documented rather than changed: each checked
+  call is one round trip; a developer's checked calls are capped at 6,000 a
+  minute across all its instances; and developers sharing one egress address
+  share that address's 6,000 a minute. The exit criterion was met with
+  in-process requests, not a load test against a deployed service.
 
 ## G-66 — The first revocation feed prune after turning the feed on is one unbounded DELETE (fixed)
 

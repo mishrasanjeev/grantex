@@ -50,6 +50,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `grantex_revocation_feed_pruned_total` and
   `grantex_revocation_feed_prune_runs_total{outcome}` (`complete`, `capped`,
   `skipped_locked`, `failed`); every run logs the rows it deleted.
+- `GET /v1/revocations/status` now allows 6,000 requests a minute per client
+  address, the developer's revocation-status budget, instead of 1,200
+  (FINDINGS G-65). A default client makes one status request per `enforce()`,
+  so a server running many tools behind one address was answered `429` below
+  the developer's budget, and its SDK retried and denied with
+  `status_unavailable`. The per-developer budget (6,000 a minute on every
+  plan, 100 checked calls a second across a developer's instances) still
+  applies, as does a per-address ceiling counted before authentication.
+  `GET /v1/revocations` (600) and `/stream` (120) keep their per-address
+  limits: they are called once per process, not once per call. A client above
+  that rate should use `feed`.
 - **Breaking:** `@grantex/mcp-auth` 3.0.0 (prepared, not published):
   `requireMcpAuth` (Express and Hono) and `createMcpResourceGuard()` refuse to
   start without a revocation configuration. `revocations` is now a required
