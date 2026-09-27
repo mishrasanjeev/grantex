@@ -440,7 +440,7 @@ def test_enforce_sends_the_agent_and_grant_of_the_grant_token_when_it_consumes(v
     route = respx.post(f"{BASE}/v1/decisions/consume").mock(return_value=httpx.Response(200, json={
         "consumed": True, "requestId": "dreq_1", "jtis": [FIXTURE["base_claims"]["jti"]], "actionHash": "sha256:x", "approvers": [],
     }))
-    c = Grantex(api_key="test-key")
+    c = Grantex(api_key="test-key", revocation_check="offline")
     c.load_manifest(MANIFEST)
     result = c.enforce("t", "acme_kyb", "case_decision", decision_grants=[build_grant({})], arguments=call_args(), case_version="v7")
     assert result.allowed, result.reason

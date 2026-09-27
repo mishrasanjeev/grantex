@@ -365,7 +365,7 @@ describe('grantex.decisions', () => {
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockResolvedValue(json(200, { consumed: true, requestId: 'dreq_1', jtis: [FIXTURE.base_claims['jti']], actionHash: 'sha256:x', approvers: [] }));
     vi.mocked(verifyGrantToken).mockResolvedValue(grantFor());
-    const c = new Grantex({ apiKey: 'test-key' });
+    const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline' });
     c.loadManifest(MANIFEST);
     const result = await c.enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'case_decision', decisionGrants: [await buildGrant({})], arguments: args(), caseVersion: 'v7' });
     expect(result.allowed, result.reason).toBe(true);
@@ -383,7 +383,7 @@ describe('grantex.decisions', () => {
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockResolvedValue(json(200, { consumed: true, requestId: 'dreq_1', jtis: [FIXTURE.base_claims['jti']], actionHash: 'sha256:x', approvers: [] }));
     vi.mocked(verifyGrantToken).mockResolvedValue(grantFor());
-    const c = new Grantex({ apiKey: 'test-key' });
+    const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline' });
     c.loadManifest(MANIFEST);
     const result = await c.enforce({ grantToken: 'agent.grant.token', connector: 'acme_kyb', tool: 'case_decision', decisionGrants: [await buildGrant({})], arguments: args(), caseVersion: 'v7' });
     expect(result.allowed, result.reason).toBe(true);
