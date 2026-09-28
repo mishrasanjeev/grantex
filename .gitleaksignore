@@ -191,3 +191,5 @@ f71ee3999f1001bd055da6db6fe8eb5755d75b27:packages/sdk-py/tests/test_verify_jwks_
 cab4e6e6fdb2481243965e367b5effa07f7dc726:docs/legacy/mcp-auth-server-2.mdx:generic-api-key:165
 cab4e6e6fdb2481243965e367b5effa07f7dc726:docs/legacy/mcp-auth-server-2.mdx:generic-api-key:192
 cab4e6e6fdb2481243965e367b5effa07f7dc726:docs/legacy/mcp-auth-server-2.mdx:curl-auth-user:189
+# Synthetic key thumbprint in the agent-key mirror flag test.
+c5de005c7806c575008632103c76625acafd35dc:apps/auth-service/tests/agent-key-mirror-flag.test.ts:generic-api-key:19
