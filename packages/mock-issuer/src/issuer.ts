@@ -7,7 +7,7 @@
 // registry. Everything runs in process with no network; startMockIssuerServer
 // (server.ts) serves the JWKS and the lists on 127.0.0.1.
 
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   MAX_PASSPORT_LIFETIME_SECONDS,
@@ -176,13 +176,27 @@ export class MockIssuer {
   refresh(): void {
     if (this.dir === undefined) return;
     const file = join(this.dir, STATE_FILE);
-    if (!existsSync(file)) return;
-    const stat = statSync(file);
-    const stamp = `${stat.mtimeMs}:${stat.size}`;
-    if (stamp === this.#stateStamp) return;
+    // One open file for the stamp and the read, so both describe the same file.
+    let fd: number;
+    try {
+      fd = openSync(file, 'r');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw error;
+    }
+    let stamp: string;
+    let text: string;
+    try {
+      const stat = fstatSync(fd);
+      stamp = `${stat.mtimeMs}:${stat.size}`;
+      if (stamp === this.#stateStamp) return;
+      text = readFileSync(fd, 'utf8');
+    } finally {
+      closeSync(fd);
+    }
     let state: SerializedState;
     try {
-      state = JSON.parse(readFileSync(file, 'utf8')) as SerializedState;
+      state = JSON.parse(text) as SerializedState;
     } catch (cause) {
       throw new MockIssuerError('state_unreadable', `${STATE_FILE} is not JSON`, { cause });
     }
