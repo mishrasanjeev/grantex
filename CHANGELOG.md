@@ -33,6 +33,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   expired, and `status_stale` when the issuer's recorded status is no longer
   fresh and its list cannot be read again. A bound grant ends at the earlier
   of the requested lifetime and the `exp` of the passport and its attestation.
+- With the flag on, `POST /v1/grants/delegate` refuses a passport-bound parent
+  grant with `403` `PASSPORT_BOUND_DELEGATION_UNSUPPORTED` and writes
+  nothing, so a delegated grant cannot outlive the parent's passport binding.
 - `GET /v1/consent/{id}` returns `agentPassport` (trust level, verification
   level, issuers, declared limits, software) and the consent page shows it.
 - Migration 125: `auth_requests.passport_binding` and

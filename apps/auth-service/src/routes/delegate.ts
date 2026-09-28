@@ -95,6 +95,25 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ message: 'Invalid parentGrantToken claims', code: 'BAD_REQUEST', requestId: request.id });
     }
 
+    // PRD §8.6: a sub-agent of a passport-bound grant must bind its own
+    // passport, with the parent's binding carried in act.passport. Until that
+    // exists, a passport-bound grant is not delegated: an unbound delegated
+    // grant would escape the binding and its rechecks (spec/passport-binding.md
+    // §5). Read only with the flag on, so nothing changes with it off.
+    if (config.passportBoundGrantsEnabled) {
+      const bound = await getSql()`
+        SELECT 1 FROM grant_passport_bindings
+        WHERE grant_id = ${parentClaims.grnt} AND developer_id = ${request.developer.id}
+      `;
+      if (bound.length > 0) {
+        return reply.status(403).send({
+          message: 'A passport-bound grant cannot be delegated yet: a sub-agent must bind its own Agent Passport',
+          code: 'PASSPORT_BOUND_DELEGATION_UNSUPPORTED',
+          requestId: request.id,
+        });
+      }
+    }
+
     const parentGrnt = parentClaims.grnt;
     const parentAgt = parentClaims.agt;
     const parentScp = parentClaims.scp;
