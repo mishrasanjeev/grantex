@@ -203,3 +203,17 @@ e779a67329a741c61c3fba753288eb9668ffbe42:packages/agent-passport/tests/passport.
 c5de005c7806c575008632103c76625acafd35dc:apps/auth-service/tests/agent-key-mirror-flag.test.ts:generic-api-key:19
 # The squash merge of #1446 re-added the synthetic key thumbprint in the mirror flag test under its own commit.
 cef81ce2dbfda0967aaf05064edf29564f100807:apps/auth-service/tests/agent-key-mirror-flag.test.ts:generic-api-key:19
+# The squash merge of #1449 re-added the synthetic Agent Passport test vectors and the public did:key test value under its own commit.
+43b0633eef18b38f864aa99a7da14dba9d630609:packages/agent-passport-py/tests/test_passport.py:generic-api-key:669
+43b0633eef18b38f864aa99a7da14dba9d630609:packages/agent-passport/tests/passport.test.ts:generic-api-key:654
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:289
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:458
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:843
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:871
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:887
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:903
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:919
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:936
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:952
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:968
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:1081
