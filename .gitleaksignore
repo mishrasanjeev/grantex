@@ -227,3 +227,7 @@ cef81ce2dbfda0967aaf05064edf29564f100807:apps/auth-service/tests/agent-key-mirro
 30d696c7494e616e6645573c6d72653861b0a75a:apps/auth-service/tests/passport-binding-docs.test.ts:generic-api-key:45
 30d696c7494e616e6645573c6d72653861b0a75a:docs/concepts/passport-vs-grant.md:generic-api-key:65
 30d696c7494e616e6645573c6d72653861b0a75a:spec/passport-binding.md:generic-api-key:161
+# Synthetic registry lookup examples (the RFC 7638 example thumbprint), feat/registry-lookup-manifest
+f9058614edae929d3ca591405e9d46725aa2549f:docs/relying-parties/verifying-agents.md:generic-api-key:35
+f9058614edae929d3ca591405e9d46725aa2549f:docs/relying-parties/verifying-agents.md:generic-api-key:66
+f9058614edae929d3ca591405e9d46725aa2549f:spec/registry-federation.md:generic-api-key:409

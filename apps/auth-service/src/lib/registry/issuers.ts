@@ -716,6 +716,60 @@ export async function listPublicIssuers(
   return { issuers, total, page, pageSize };
 }
 
+/** Rows per statement when every issuer is read (listAllPublicIssuers). */
+export const PUBLIC_ISSUER_PAGE_SIZE = 500;
+
+/**
+ * Every issuer, minimised as for the public list and ordered by entity_id,
+ * however many there are: read a page at a time by entity_id, so the
+ * registry manifest never silently drops the issuers past one page. Also
+ * the latest change the result reflects: a record written, a kid revoked,
+ * or a scheduled suspension that has taken effect by `at`.
+ */
+export async function listAllPublicIssuers(
+  sql: Sql,
+  at: Date = new Date(),
+): Promise<{ issuers: PublicIssuer[]; lastChange: Date | null }> {
+  // Byte order ("C"), not the database's collation: the pages and the
+  // manifest's bytes are the same on every database.
+  const issuers: PublicIssuer[] = [];
+  let lastChange: Date | null = null;
+  const note = (value: unknown) => {
+    if (value === null || value === undefined) return;
+    const date = toDate(value);
+    if (date.getTime() <= at.getTime() && (lastChange === null || date > lastChange)) lastChange = date;
+  };
+  let after = '';
+  for (;;) {
+    const rows = await sql`
+      SELECT i.entity_id, i.trust_marks, i.status, i.suspended_effective_from, i.status_list_base, i.jwks, i.updated_at,
+             ARRAY(SELECT r.kid FROM accredited_issuer_revoked_keys r WHERE r.issuer_id = i.id ORDER BY r.kid) AS revoked_kids,
+             (SELECT MAX(r.revoked_at) FROM accredited_issuer_revoked_keys r WHERE r.issuer_id = i.id) AS last_revoked_at
+      FROM accredited_issuers i
+      WHERE i.entity_id COLLATE "C" > ${after}
+      ORDER BY i.entity_id COLLATE "C"
+      LIMIT ${PUBLIC_ISSUER_PAGE_SIZE}`;
+    for (const row of rows) {
+      const suspendedFrom = row['suspended_effective_from'] ? toDate(row['suspended_effective_from']) : null;
+      issuers.push(toPublicIssuer({
+        entityId: row['entity_id'] as string,
+        trustMarks: (row['trust_marks'] as string[]) ?? [],
+        status: row['status'] as IssuerStatus,
+        suspendedEffectiveFrom: suspendedFrom,
+        statusListBase: row['status_list_base'] as string,
+        jwks: toJwks(row['jwks']),
+        revokedKids: (row['revoked_kids'] as string[]) ?? [],
+      }, at));
+      note(row['updated_at']);
+      note(row['last_revoked_at']);
+      if (row['status'] === 'suspended') note(suspendedFrom);
+    }
+    if (rows.length < PUBLIC_ISSUER_PAGE_SIZE) break;
+    after = rows[rows.length - 1]!['entity_id'] as string;
+  }
+  return { issuers, lastChange };
+}
+
 /** The issuer's record, whatever its status, or null when the registry does not know it. */
 export async function getAccreditedIssuer(sql: Sql, entityId: string): Promise<IssuerRecord | null> {
   if (typeof entityId !== 'string' || entityId.length === 0 || entityId.length > MAX_URL_LENGTH) return null;
