@@ -243,8 +243,6 @@ The registry lets a relying party, such as a merchant, a payment service provide
 | Acceptance status lists | The registry publishes its own acceptance of each attestation in two formats: as a Token Status List (`/status/attestations/{list}`) and as a Bitstring Status List. |
 | Lookup and manifest | `GET /v1/registry/agents/{did}` and the thumbprint and credential forms return a minimised record. `/.well-known/agent-registry.json` is a signed manifest of the issuers, their keys, the trust-mark taxonomy and the status lists, for relying parties without Federation support. |
 | Passport-bound grants | `POST /v1/authorize` can take an Agent Passport (SD-JWT VC). The grant is bound to the passport's key and to the registry's acceptance entry, and the binding is checked again at every code exchange and refresh. A passport-bound grant cannot be delegated yet. |
-| Libraries | RFC 9421 request signing (`@grantex/agent-httpsig`, `grantex-agent-httpsig`) and the Agent Passport profile (`@grantex/agent-passport`, `grantex-agent-passport`). They are tested against shared vectors and not yet published. |
-| Local testing | `@grantex/mock-issuer` (private) runs an accredited issuer at `https://mock-issuer.example` with no network. See [Running the mock issuer](docs/issuers/running-the-mock-issuer.md). |
 
 New behaviour on existing paths is off by default. Turn it on per deployment:
 

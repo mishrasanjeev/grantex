@@ -9,9 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Agent Trust Registry documentation
 - The README has a section on the Agent Trust Registry: accredited issuers,
   agent keys, attestations and trust levels, the acceptance status lists, the
-  lookup and signed manifest, passport-bound grants, the request-signing and
-  Agent Passport libraries and the mock issuer, with the flags that turn each
-  on and links to the guides and specifications.
+  lookup and signed manifest and passport-bound grants, with the flags that
+  turn each on and links to the guides and specifications. The unpublished
+  libraries and the mock issuer stay out of the README until they are released.
 - The Trust Registry feature page links the issuer, provider and relying-party
   guides, and the docs navigation now lists Verifying Agents.
 
