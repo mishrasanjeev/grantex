@@ -295,6 +295,97 @@ async function freePort(): Promise<number> {
     }
   }, 60_000);
 
+  it.each(['Approve', 'Deny'] as const)('verifies an interactively selected principal before %s', async (action) => {
+    const selectedPrincipal = `selected_${action}_${suffix}`;
+    const requestId = `areq_${ulid()}`;
+    await sql`INSERT INTO auth_requests (id, agent_id, principal_id, developer_id, scopes, expires_at, protocol)
+      VALUES (${requestId}, ${agentId}, '', ${developerId}, ${['read']},
+        NOW() + INTERVAL '10 minutes', 'oauth-agent-grants-03')`;
+    const enrollment = await client.webauthn.createEnrollmentSession({ principalId: selectedPrincipal });
+    const context = await browser.newContext();
+    try {
+      const page = await context.newPage();
+      const cdp = await context.newCDPSession(page);
+      await cdp.send('WebAuthn.enable');
+      await cdp.send('WebAuthn.addVirtualAuthenticator', {
+        options: {
+          protocol: 'ctap2', transport: 'internal', hasResidentKey: true,
+          hasUserVerification: true, isUserVerified: true,
+        },
+      });
+      await page.goto(enrollment.enrollmentUrl);
+      await page.getByRole('button', { name: 'Register passkey' }).click();
+      await page.getByText('Passkey registered.', { exact: true }).waitFor({ timeout: 20_000 });
+      await page.goto(`${base}/consent?req=${requestId}`);
+      await page.getByLabel('Principal identifier').fill(selectedPrincipal);
+      await page.getByRole('button', { name: action, exact: true }).click();
+      await page.getByRole('heading', { name: action === 'Approve' ? 'Approved' : 'Denied' })
+        .waitFor({ timeout: 20_000 });
+      const [request] = await sql`SELECT principal_id, fido_verified, status
+        FROM auth_requests WHERE id = ${requestId}`;
+      expect(request).toMatchObject({
+        principal_id: selectedPrincipal, fido_verified: true,
+        status: action === 'Approve' ? 'approved' : 'denied',
+      });
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('runs sandbox passkey-required consent without an auto-approval or developer-key bypass', async () => {
+    const dev = `dev_sandbox_${suffix}`;
+    const key = `gx_test_sandbox_${suffix}`;
+    const sandboxAgent = `ag_sandbox_${suffix}`;
+    const person = `sandbox_person_${suffix}`;
+    await sql`INSERT INTO developers (id, api_key_hash, name, mode)
+      VALUES (${dev}, ${hashApiKey(key)}, 'Sandbox passkey E2E', 'sandbox')`;
+    await sql`INSERT INTO agents (id, did, developer_id, name, scopes)
+      VALUES (${sandboxAgent}, ${`did:grantex:${sandboxAgent}`}, ${dev}, 'Sandbox agent', ${['read']})`;
+    const sandbox = new Grantex({ apiKey: key, baseUrl: base, issuer: base, maxRetries: 0 });
+    expect(await sandbox.authorize({ agentId: sandboxAgent, userId: person, scopes: ['read'] }))
+      .toHaveProperty('code');
+    await sandbox.updateSettings({ fidoRequired: true });
+    const pending = await sandbox.authorize({ agentId: sandboxAgent, userId: person, scopes: ['read'] });
+    expect(pending).not.toHaveProperty('code');
+    for (const action of ['approve', 'deny']) {
+      const bypass = await fetch(`${base}/v1/authorize/${pending.authRequestId}/${action}`, {
+        method: 'POST', headers: { Authorization: `Bearer ${key}` },
+      });
+      expect(bypass.status).toBe(403);
+    }
+    const unverified = await fetch(`${base}/v1/consent/${pending.authRequestId}/approve`, { method: 'POST' });
+    expect(unverified.status).toBe(403);
+    const enrollment = await sandbox.webauthn.createEnrollmentSession({
+      principalId: person, authRequestId: pending.authRequestId,
+    });
+    const context = await browser.newContext();
+    try {
+      const page = await context.newPage();
+      const cdp = await context.newCDPSession(page);
+      await cdp.send('WebAuthn.enable');
+      await cdp.send('WebAuthn.addVirtualAuthenticator', {
+        options: {
+          protocol: 'ctap2', transport: 'internal', hasResidentKey: true,
+          hasUserVerification: true, isUserVerified: true,
+        },
+      });
+      await page.goto(enrollment.enrollmentUrl);
+      await page.getByRole('button', { name: 'Register passkey' }).click();
+      await page.waitForURL(`**/consent?req=${pending.authRequestId}`);
+      const approved = page.waitForResponse((response) =>
+        response.url().endsWith(`/v1/consent/${pending.authRequestId}/approve`)
+        && response.status() === 200);
+      await page.getByRole('button', { name: 'Approve', exact: true }).click();
+      const { code } = await (await approved).json() as { code: string };
+      const token = await sandbox.tokens.exchange({ code, agentId: sandboxAgent, credentialFormat: 'vc-jwt' });
+      const evidence = (decodeJwt(token.grantToken)['urn:grantex:grant'] as Record<string, unknown>)['webauthn'];
+      expect(evidence).toMatchObject({ userVerified: true, origin: base });
+      expect(token.verifiableCredential).toBeTruthy();
+    } finally {
+      await context.close();
+    }
+  });
+
   it('refuses legacy or mismatched evidence on a live authorization code', async () => {
     const code = `code_${ulid()}`;
     const missingId = `areq_${ulid()}`;

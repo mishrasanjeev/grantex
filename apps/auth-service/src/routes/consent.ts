@@ -173,8 +173,6 @@ const CONSENT_HTML = `<!DOCTYPE html>
       throw new Error('This approval requires a passkey, but this browser does not support passkeys.');
     }
 
-    showStatus('Passkey required', 'Follow your browser prompt to verify this approval.');
-
     const optionsPayload = { authRequestId: reqId };
     if (data.principalSelectionRequired) {
       const principalInput = document.getElementById('principal-id');
@@ -182,6 +180,8 @@ const CONSENT_HTML = `<!DOCTYPE html>
       if (!principalId) throw new Error('Enter your principal identifier before passkey verification.');
       optionsPayload.principalId = principalId;
     }
+    // Read the selected principal before replacing the form with progress UI.
+    showStatus('Passkey required', 'Follow your browser prompt to verify this request.');
     const optionsRes = await postJson('/v1/webauthn/assert/options', optionsPayload);
     if (!optionsRes.ok) {
       throw new Error(await responseMessage(optionsRes, 'Could not start passkey verification.'));

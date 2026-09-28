@@ -41,7 +41,7 @@ def verify() -> Iterator[MagicMock]:
 
 
 def _client(**kwargs: Any) -> Grantex:
-    c = Grantex(api_key="test-key", **kwargs)
+    c = Grantex(api_key="test-key", **{"revocation_check": "offline", **kwargs})
     c.load_manifest(MERCHANT)
     return c
 
@@ -161,7 +161,7 @@ REFUNDS = ToolManifest.from_dict(
 
 
 def _refunds_client(**kwargs: Any) -> Grantex:
-    c = Grantex(api_key="test-key", **kwargs)
+    c = Grantex(api_key="test-key", **{"revocation_check": "offline", **kwargs})
     c.load_manifest(REFUNDS)
     return c
 

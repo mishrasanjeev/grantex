@@ -7,6 +7,7 @@ import { Grantex, ToolManifest, Permission } from '@grantex/sdk';
 
 const BASE_URL = process.env.E2E_BASE_URL ?? 'https://grantex-auth-dd4mtrt2gq-uc.a.run.app';
 const ISSUER = process.env.E2E_ISSUER ?? 'https://grantex.dev';
+const RESOURCE = `${ISSUER}/e2e/salesforce`;
 
 let grantex: Grantex;
 let apiKey: string;
@@ -14,7 +15,7 @@ let apiKey: string;
 beforeAll(async () => {
   const account = await Grantex.signup({ name: `e2e-enforce-${Date.now()}`, mode: 'sandbox' }, { baseUrl: BASE_URL });
   apiKey = account.apiKey;
-  grantex = new Grantex({ apiKey, baseUrl: BASE_URL, issuer: ISSUER });
+  grantex = new Grantex({ apiKey, baseUrl: BASE_URL, issuer: ISSUER, audience: RESOURCE, revocationCheck: 'online' });
 
   // Load manifest
   grantex.loadManifest(new ToolManifest({
@@ -36,12 +37,14 @@ describe('E2E: Scope Enforcement Integration', () => {
       name: `enforce-e2e-${Date.now()}`,
       scopes: ['tool:salesforce:write:contacts'],
       description: 'e2e test',
+      resourceServers: [RESOURCE],
     });
 
     const auth = await grantex.authorize({
       agentId: agent.agentId,
       userId: 'test@enforce-e2e.com',
       scopes: ['tool:salesforce:write:contacts'],
+      audience: RESOURCE,
     });
 
     let code = (auth as any).code;
@@ -86,10 +89,16 @@ describe('E2E: Scope Enforcement Integration', () => {
     expect(result.valid).toBe(false);
   });
 
-  it('offline enforce still passes (no revocation check)', async () => {
-    // enforce() is offline-only (JWKS signature + manifest) — it does not
-    // query the server for revocation status, so the JWT remains valid locally.
+  it('online enforce denies after revocation', async () => {
     const result = await grantex.enforce({ grantToken, connector: 'salesforce', tool: 'query' });
-    expect(result.allowed).toBe(true);
+    expect(result).toMatchObject({ allowed: false, reasonCode: 'grant_revoked' });
+  });
+
+  it('explicit offline opt-out verifies only the signature and manifest after revocation', async () => {
+    const offline = new Grantex({
+      apiKey, baseUrl: BASE_URL, issuer: ISSUER, audience: RESOURCE, revocationCheck: 'offline',
+    });
+    offline.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { query: Permission.READ } }));
+    expect((await offline.enforce({ grantToken, connector: 'salesforce', tool: 'query' })).allowed).toBe(true);
   });
 });

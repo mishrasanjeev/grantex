@@ -328,7 +328,11 @@ describeE2e('decision grants in a real browser against a live auth service', () 
     await new Promise<void>((resolve) => idpServer!.listen(idpPort, '127.0.0.1', resolve));
     browser = await chromium.launch({ args: [`--host-rules=MAP idp.example.com 127.0.0.1:${idpPort}`] });
 
-    grantex = new Grantex({ apiKey, baseUrl: base, issuer: base, maxRetries: 0 });
+    // Offline revocation check: these tests are about decision grants, and
+    // otherAgentGrantToken() is known only to its signature (no grant row),
+    // so an online check would deny it as unknown before the decision grant
+    // is read. Revocation checking is covered by the revocation feed tests.
+    grantex = new Grantex({ apiKey, baseUrl: base, issuer: base, maxRetries: 0, revocationCheck: 'offline' });
     grantex.loadManifest(ToolManifest.fromJSON({
       connector: 'acme_kyb',
       tools: { case_decision: { permission: 'write', requires_decision: true, four_eyes_on: ['decline'] } },
