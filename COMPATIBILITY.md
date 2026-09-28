@@ -1,7 +1,7 @@
 # Grantex Compatibility Matrix
 
-Last updated: 2026-09-27
-Release snapshot verified: 2026-09-27
+Last updated: 2026-09-28
+Release snapshot verified: 2026-09-28
 
 This repository uses package-specific versions; there is no monorepo-wide SDK or package release number. The protocol specification remains v1.0 Final, while repository metadata and package registries can move independently during a release.
 
@@ -10,9 +10,9 @@ This repository uses package-specific versions; there is no monorepo-wide SDK or
 | Surface | Current value | Notes |
 | --- | --- | --- |
 | Repository changelog | v0.3.12 | Latest top-level release entry in `CHANGELOG.md`. |
-| TypeScript SDK | @grantex/sdk 0.7.0 published | Adds hosted passkey enrollment and account irregularity response policy clients; retains EVM payment responses and bounded refresh recovery. npm integrity and clean-install verified. |
-| Python SDK | grantex 0.6.0 published | Adds hosted passkey enrollment and account irregularity response policy clients; retains fail-closed budget enforcement, EVM responses and bounded refresh recovery. Wheel/sdist hashes and clean public-index install verified. No automatic x402 HTTP wrapper. |
-| Go SDK | github.com/mishrasanjeev/grantex-go v0.4.0 published | Adds hosted passkey enrollment and account irregularity response policy clients; retains typed EVM responses and bounded refresh recovery. Public proxy, downloaded-module tests and race suite verified. Go 1.26.1 is required; no automatic x402 HTTP wrapper. |
+| TypeScript SDK | @grantex/sdk 0.7.1 published | Adds hosted passkey enrollment and account irregularity response policy clients; retains EVM payment responses and bounded refresh recovery. npm integrity and clean-install verified. |
+| Python SDK | grantex 0.6.1 published | Adds hosted passkey enrollment and account irregularity response policy clients; retains fail-closed budget enforcement, EVM responses and bounded refresh recovery. Wheel/sdist hashes and clean public-index install verified. No automatic x402 HTTP wrapper. |
+| Go SDK | github.com/mishrasanjeev/grantex-go v0.4.1 published | Adds hosted passkey enrollment and account irregularity response policy clients; retains typed EVM responses and bounded refresh recovery. Public proxy, downloaded-module tests and race suite verified. Go 1.26.1 is required; no automatic x402 HTTP wrapper. |
 | x402 | @grantex/x402 0.4.1 published | Retains opt-in request-bound Base USDC 402/sign/retry and layered wallet governance; npm integrity and fresh-install verified. Custody and trusted RPC remain operator-provisioned. |
 | OpenAPI | 0.5.0 | Repository API contract including layered prepaid-wallet governance; independent of the deployed/public snapshot. |
 | MCP Auth | @grantex/mcp-auth 2.0.2 | Independently versioned and published to npm; single-process evaluation limitations apply. |
@@ -24,9 +24,9 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 
 | # | Directory | Published name | Version | Status |
 | ---: | --- | --- | ---: | --- |
-| 1 | `packages/sdk-ts` | @grantex/sdk | 0.7.0 | Primary SDK (TypeScript); published and registry verified |
-| 2 | `packages/sdk-py` | grantex | 0.6.0 | Primary SDK (Python); published and registry verified |
-| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.4.0 (Go 1.26.1) | Primary SDK (Go); tag and public proxy verified |
+| 1 | `packages/sdk-ts` | @grantex/sdk | 0.7.1 | Primary SDK (TypeScript); published and registry verified |
+| 2 | `packages/sdk-py` | grantex | 0.6.1 | Primary SDK (Python); published and registry verified |
+| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.4.1 (Go 1.26.1) | Primary SDK (Go); tag and public proxy verified |
 | 4 | `packages/cli` | @grantex/cli | 0.3.0 | Tooling; published with bundled Agent Skills |
 | 5 | `packages/mcp-auth` | @grantex/mcp-auth | 2.0.2 | Independently versioned |
 | 6 | `packages/mcp` | @grantex/mcp | 0.1.10 | Adapter |
@@ -75,11 +75,11 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 Install the verified public releases needed by your application:
 
 ```bash
-npm install @grantex/sdk@0.7.0
-npm install @grantex/x402@0.4.1 @grantex/sdk@0.7.0
-pip install grantex==0.6.0
-go get github.com/mishrasanjeev/grantex-go@v0.4.0
-npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.0
+npm install @grantex/sdk@0.7.1
+npm install @grantex/x402@0.4.1 @grantex/sdk@0.7.1
+pip install grantex==0.6.1
+go get github.com/mishrasanjeev/grantex-go@v0.4.1
+npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.1
 ```
 
 Unpinned install commands resolve to the registry's current release. For reproducible builds, keep the explicit versions above and review this matrix before upgrading.

@@ -15,7 +15,7 @@ const current = await grantex.anomalies.getResponsePolicy();
 await grantex.anomalies.setResponsePolicy('alert_only');
 ```
 
-The default `revoke_agent_grants` mode revokes active grants for an implicated agent on a high/critical finding. `alert_only` persists findings without this detector's automatic revocation; it does not disable other controls. `getResponsePolicy()` and `setResponsePolicy()` are published in `@grantex/sdk@0.7.0` and require the default-off server rollout flag.
+The default `revoke_agent_grants` mode revokes active grants for an implicated agent on a high/critical finding. `alert_only` persists findings without this detector's automatic revocation; it does not disable other controls. `getResponsePolicy()` and `setResponsePolicy()` are published in `@grantex/sdk@0.7.1` and require the default-off server rollout flag.
 
 ```typescript
 const result = await grantex.anomalies.detect();

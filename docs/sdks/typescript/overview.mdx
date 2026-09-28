@@ -6,11 +6,11 @@ description: "Install, configure, and get started with the @grantex/sdk TypeScri
 
 ## Installation
 
-Published release: **`@grantex/sdk@0.7.0`**. npm integrity, exact-version
-clean installation, and public exports were verified on 27 September 2026.
+Published release: **`@grantex/sdk@0.7.1`**. npm integrity, exact-version
+clean installation, and public exports were verified on 28 September 2026.
 
 ```bash
-npm install @grantex/sdk@0.7.0
+npm install @grantex/sdk@0.7.1
 ```
 
 The unpinned `npm install @grantex/sdk` command follows npm's current `latest`
@@ -22,6 +22,10 @@ principal-authenticated hosted passkey registration and
 `grantex.anomalies.getResponsePolicy()` / `setResponsePolicy()` for the
 account-level irregularity response mode. Both server capabilities are
 default-off and require explicit operator rollout.
+
+Version `0.7.1` adds typed `WebAuthnGrantEvidence` references to grant and
+verification responses and the updated VC WebAuthn attestation. It does not
+enable hosted server flags or add custom assertion UI helper methods.
 
 <Note>
 SDK `0.6.0` introduced `PrepaidWalletAgentClient`,
