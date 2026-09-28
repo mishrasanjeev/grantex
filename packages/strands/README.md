@@ -8,8 +8,15 @@ Create Strands tools that verify Grantex grant tokens and enforce scopes before 
 
 ## Install
 
+Version 0.2.0 is a breaking release requiring Node.js 22.12+ and
+`@grantex/sdk` 0.8+. Online tools forward `audience` to `client.enforce()`;
+pass `amount` for capped calls. The default verified mode checks signatures
+and scopes, not current revocation. Use `online: true` with a configured
+Grantex client for current-state enforcement. See the
+[migration guide](https://docs.grantex.dev/migration-enforcement).
+
 ```bash
-npm install @grantex/strands @grantex/sdk @strands-agents/sdk zod
+npm install @grantex/strands@0.2.0 @grantex/sdk@0.8.0 @strands-agents/sdk zod
 ```
 
 ## Quick Start

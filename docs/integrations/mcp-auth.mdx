@@ -1,83 +1,40 @@
 ---
-title: "MCP Auth Server"
-sidebarTitle: "MCP Auth"
-description: "OAuth 2.1 + PKCE endpoint package for MCP servers, with v2.0.2 limitations."
+title: "MCP Authorization"
+description: "Install MCP Auth 3 with durable state, consent, resource binding and explicit revocation enforcement."
 ---
 
-<Info>Full feature guide: [MCP Auth Server](/features/mcp-auth-server)</Info>
+## Installation
 
-<Note>
-  `@grantex/mcp-auth` **3.0.0 is prepared in the repository but not yet
-  published**; npm serves `2.0.2`, which this page describes. For 3.0.0
-  (Postgres or Redis state, the current MCP authorization specification, a
-  rendered consent page and tool refusal at the MCP server) and migrating from
-  2.x, see [MCP Auth 3.0: deployment and consent page](/mcp-auth).
-</Note>
-
-## Overview
-
-`@grantex/mcp-auth` registers OAuth 2.1-style metadata, PKCE authorization-code, client-registration, token, introspection, and revocation routes for MCP servers, plus JWT-verification middleware.
-
-Current published release: **`@grantex/mcp-auth@2.0.2`**.
-
-## Install
+Published release: `@grantex/mcp-auth@3.0.0`. Node.js 22.12+ and SDK 0.8+
+are required; Node.js 24 LTS is recommended.
 
 ```bash
-npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.1
+npm install @grantex/mcp-auth@3.0.0 @grantex/sdk@0.8.0 pg
 ```
 
-The exact versions above provide a reproducible install. The packages are
-versioned independently; check [Release Status](/release-status) before upgrading.
+Read [release validation](/sdk-release-validation) and the
+[breaking migration guide](/migration-enforcement) before upgrading.
 
-<Warning>
-  Treat `2.0.2` as a single-process evaluation release. Authorization codes are
-  always process-local, `consentUi` does not create a consent page, and the
-  Grantex-backed token exchange does not persist the SDK's returned
-  authorization code. End-to-end issuance can therefore fail against the real
-  backend. Middleware and introspection validate signatures/claims but do not
-  perform live revocation checks. See the [full feature guide](/features/mcp-auth-server)
-  before deployment.
-</Warning>
+## Authorization and deployment
 
-## Quick Start
+Version 3 supplies OAuth 2.1 endpoints, PKCE S256, protected-resource
+metadata, resource/audience binding, rendered consent, single-use codes,
+refresh rotation and explicit token revocation configuration. The
+[complete deployment guide](/mcp-auth) contains executable storage,
+consent, middleware, lifecycle-hook and decision-grant examples.
 
-```typescript
-import { Grantex } from '@grantex/sdk';
-import { createMcpAuthServer } from '@grantex/mcp-auth';
+1. Pin the canonical HTTPS issuer and protected resource.
+2. Provision shared Postgres or Redis state and apply its migrations before scaling.
+3. Configure authenticated principal handoff; live Grantex consent still requires a passkey.
+4. Connect resource middleware to the authorization server's revocation storage.
+5. Enforce upstream agent-specific grant and ancestor state before protected tool execution.
+6. Test your client, proxy, storage restart/failure and principal handoff before production.
 
-const grantex = new Grantex({
-  apiKey: process.env.GRANTEX_API_KEY!,
-  baseUrl: 'https://api.grantex.dev',
-});
+Memory storage remains evaluation-only. `revocations: 'none'` is a warned
+opt-out, not revocation enforcement. Token revocation storage is not every
+upstream grant-state check; a consent page does not independently establish
+principal identity. Independent cross-vendor certification is not claimed.
 
-const authServer = await createMcpAuthServer({
-  grantex,
-  agentId: 'ag_your_mcp_server',
-  issuer: 'https://auth.myapp.com',
-  scopes: ['calendar:read', 'email:send'],
-});
-
-await authServer.listen({ port: 3001, host: '0.0.0.0' });
-```
-
-`createMcpAuthServer()` is asynchronous and returns a Fastify instance with the
-OAuth metadata, registration, authorization, token, introspection, and revocation
-routes already registered. Start that returned server with `listen()`; it is not
-an Express router.
-
-### Endpoint surface in 2.0.2
-
-- **OAuth 2.1 + PKCE** — authorization code flow with S256 challenge
-- **Client registration** — dynamic or pre-registered MCP clients
-- **Token introspection** — validate JWT signatures and claims; no live revocation lookup
-- **Revocation endpoint** — submit a token `jti` to Grantex; local verifiers still need synchronized revocation state
-- **Grantex calls** — authorization, exchange, refresh, and revoke handlers call the supplied SDK client, subject to the limitations above
-
-## Links
-
-- [Full Feature Guide](/features/mcp-auth-server)
-- [npm: @grantex/mcp-auth](https://npmjs.com/package/@grantex/mcp-auth)
-
-## Ownership
-
-Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+See [MCP Auth Server](/features/mcp-auth-server) for the request flow and
+operator responsibilities. The six immutable 2.0.2 limitations remain in
+[the historical guide](/legacy/mcp-auth-server-2), not the version 3 deployment profile.

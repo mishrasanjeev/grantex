@@ -7,7 +7,7 @@ description: "Scope-enforced tools for Strands Agents SDK in TypeScript and Pyth
 ## TypeScript Install
 
 ```bash
-npm install @grantex/strands @grantex/sdk @strands-agents/sdk zod
+npm install @grantex/strands@0.2.0 @grantex/sdk@0.8.0 @strands-agents/sdk zod
 ```
 
 ## TypeScript Quick Start
@@ -33,9 +33,9 @@ const agent = new Agent({
 });
 ```
 
-The TypeScript helper verifies the grant token against JWKS before each tool invocation and checks the verified `scp` claim. Set `online: true` with a Grantex client and `connector` to delegate enforcement to `client.enforce()`.
+The TypeScript helper verifies the grant token against JWKS before each tool invocation and checks its verified scopes. Set `online: true` with a Grantex client and `connector` to delegate enforcement to `client.enforce()`. Local verification alone does not prove current revocation. Capped calls require trusted amounts; see [migration](/migration-enforcement).
 
-From the next release, both helpers also pass their `audience` option to
+From version 0.2.0, both helpers also pass their `audience` option to
 `client.enforce()` in online mode as the per-call grant token audience, as
 offline verification already uses it. `enforce()` denies a token
 that carries `aud` when no audience is expected (`audience_unconfigured`), so
@@ -45,7 +45,7 @@ set `audience` to the identifier your service is issued tokens for (see
 ## Python Install
 
 ```bash
-pip install grantex-strands strands-agents
+python -m pip install grantex-strands==0.2.0 grantex==0.7.0 strands-agents
 ```
 
 ## Python Quick Start
@@ -66,9 +66,12 @@ The Python helper verifies the grant token against JWKS and raises `PermissionEr
 
 ## Requirements
 
-- Node.js 18+ for `@grantex/strands`
+- Node.js 22.12+ and SDK 0.8+ for `@grantex/strands`
 - Python 3.11+ for `grantex-strands`
 - Strands Agents SDK for the language you use
+
+Public Python-wheel tests, registry hashes and normal pinned PyPI index
+installations passed; see [release validation](/sdk-release-validation).
 
 ## Ownership
 

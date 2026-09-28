@@ -251,7 +251,7 @@ async function checkAccredited(sql: Sql, issuer: string, now: Date): Promise<voi
 /** The registry's acceptance entry (migration 123): VALID, or the refusal. */
 async function checkAcceptance(q: TxSql, uri: string, idx: number): Promise<void> {
   const listId = acceptanceListIdFromUri(uri);
-  // A URI that is not one of this registry's lists cannot be relied on.
+  // A URI that is not one of this registry's lists has no entry the registry can answer for.
   if (listId === null) refuse('attestation_not_registered', 'acceptance_entry_missing', 'the attestation has no acceptance entry here');
   const rows = await q`SELECT status FROM registry_acceptance_entries WHERE list_id = ${listId} AND idx = ${idx}`;
   if (!rows[0]) refuse('attestation_not_registered', 'acceptance_entry_missing', 'the attestation has no acceptance entry here');

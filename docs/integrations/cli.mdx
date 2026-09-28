@@ -7,8 +7,13 @@ description: "Manage agents, grants, audit logs, and more from your terminal."
 ## Install
 
 ```bash
-npm install -g @grantex/cli
+npm install -g @grantex/cli@0.4.0
 ```
+
+Node.js 22.12+ is required. This release uses SDK 0.8 enforcement: expected
+audience, trusted amounts for capped calls and default online revocation.
+See [migration](/migration-enforcement). An agent-controlled CLI preflight
+does not replace enforcement at the service that owns the side effect.
 
 ## Configure
 

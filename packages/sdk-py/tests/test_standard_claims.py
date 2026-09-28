@@ -211,6 +211,8 @@ def test_legacy_aliases_are_read_by_default_with_a_deprecation_warning() -> None
     assert grant.legacy_claims_used == ("scp", "agt", "dev", "grnt", "parentGrnt", "delegationDepth")
     messages = [str(w.message) for w in record if issubclass(w.category, LegacyClaimsWarning)]
     assert any("'scp' is a legacy alias of scope" in m for m in messages)
+    assert all("set legacy_claims=False" in m for m in messages)
+    assert not any("default in 0.7" in m for m in messages)
     assert issubclass(LegacyClaimsWarning, FutureWarning)
 
 

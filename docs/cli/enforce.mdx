@@ -153,8 +153,8 @@ grantex enforce test \
 ## Grant Token Audience
 
 <Warning>
-  From the next release of `@grantex/cli`, with an `@grantex/sdk` release that
-  checks the grant token audience (not `@grantex/sdk` 0.7.0).
+  Available in `@grantex/cli@0.4.0` with SDK 0.8.0. Node.js 22.12+
+  is required; audience binding and default online revocation are breaking changes.
 </Warning>
 
 A grant token requested with an `audience` carries it in the `aud` claim, and
@@ -240,8 +240,8 @@ Allowed result:
 | `--connector <name>` | The connector name (required) |
 | `--tool <name>` | The tool name (required) |
 | `--amount <number>` | Amount to test against capped scopes |
-| `--audience <audience>` | The grant token audience the relying party expects, passed to `enforce()` for this call. From the next release. |
-| `--audience-check <on\|off>` | The client's grant token audience check: `on` (default) or `off`, which ignores `aud`. From the next release. |
+| `--audience <audience>` | The grant token audience the relying party expects, passed to `enforce()` for this call. From version 0.4.0. |
+| `--audience-check <on\|off>` | The client's grant token audience check: `on` (default) or `off`, which ignores `aud`. From version 0.4.0. |
 | `--json` | Output machine-readable JSON |
 
 ---

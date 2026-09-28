@@ -385,6 +385,47 @@ const keysEqual = [
   { name: 'P-256 key and Ed25519 key', a: holder.publicJwk, b: holderEd.publicJwk, equal: false },
 ];
 
+// Status (draft-ietf-oauth-status-list section 7.1). The verify vectors are
+// checked with a status resolver that answers from statusLists; each status
+// vector re-checks an accepted verify vector with a resolver that answers from
+// its own lists. An entry that is not there makes the resolver fail.
+const STATUS_URI = 'https://mock-issuer.example/status/1';
+const statusLists = { [STATUS_URI]: { '42': 'valid' } };
+const statusCase = (name: string, vector: string, value: string | undefined, expect: Record<string, unknown>) => ({
+  name,
+  vector,
+  statusLists: value === undefined ? {} : { [STATUS_URI]: { '42': value } },
+  expect,
+});
+const status = [
+  statusCase('status VALID', 'every claim disclosed', 'valid', { ok: true }),
+  statusCase('status INVALID (revoked)', 'every claim disclosed', 'invalid', {
+    ok: false,
+    code: 'passport_revoked',
+    reason: 'status_invalid',
+  }),
+  statusCase('status SUSPENDED', 'every claim disclosed', 'suspended', {
+    ok: false,
+    code: 'passport_revoked',
+    reason: 'status_suspended',
+  }),
+  statusCase('status INVALID on an SD-JWT+KB presentation', 'SD-JWT+KB presentation', 'invalid', {
+    ok: false,
+    code: 'passport_revoked',
+    reason: 'status_invalid',
+  }),
+  statusCase('status value outside section 7.1', 'every claim disclosed', 'unknown', {
+    ok: false,
+    code: 'status_stale',
+    reason: 'status_unknown',
+  }),
+  statusCase('status resolver fails (no status list entry)', 'every claim disclosed', undefined, {
+    ok: false,
+    code: 'status_stale',
+    reason: 'status_unresolved',
+  }),
+];
+
 const vectors = {
   description:
     'Shared test vectors for the Agent Passport SD-JWT VC profile (spec/agent-passport-1.0.md). ' +
@@ -392,7 +433,9 @@ const vectors = {
     'only public keys and signed outputs are stored. Regenerate with `npm run vectors` in packages/agent-passport.',
   profile: { typ: 'dc+sd-jwt', vct: 'urn:grantex:agent-passport:1', sdAlg: 'sha-256' },
   issuers: { [ISSUER]: [issuerEs.publicJwk, issuerEd.publicJwk] },
+  statusLists,
   verify,
+  status,
   hash,
   thumbprints,
   keysEqual,
@@ -400,4 +443,4 @@ const vectors = {
 
 const out = fileURLToPath(new URL('../../../spec/examples/agent-passport-vectors.json', import.meta.url));
 writeFileSync(out, `${JSON.stringify(vectors, null, 2)}\n`);
-console.log(`wrote ${verify.length} verify, ${hash.length} hash, ${thumbprints.length} thumbprint and ${keysEqual.length} key vectors`);
+console.log(`wrote ${verify.length} verify, ${status.length} status, ${hash.length} hash, ${thumbprints.length} thumbprint and ${keysEqual.length} key vectors`);

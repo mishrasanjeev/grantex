@@ -12,7 +12,7 @@ The enforce API verifies that an agent's grant token includes sufficient scope t
 from grantex import Grantex
 from grantex.manifests.salesforce import manifest as sf
 
-grantex = Grantex(api_key="gx_...")
+grantex = Grantex(api_key="gx_...", audience="https://api.merchant.example")
 grantex.load_manifest(sf)
 
 result = grantex.enforce(
@@ -37,7 +37,7 @@ def enforce(
     connector: str,
     tool: str,
     amount: float | None = None,
-    *,  # the keyword-only arguments are from the next release
+    *,  # the keyword-only arguments are from version 0.7.0
     case_id: str | None = None,
     cost_components: list[str] | None = None,
     reserve: bool = True,
@@ -60,8 +60,8 @@ def enforce(
 | `grant_token` | `str` | Yes | The JWT grant token issued by Grantex. Decoded and verified inline. |
 | `connector` | `str` | Yes | The connector name to check against (e.g., `"salesforce"`, `"s3"`). Must match a loaded manifest. |
 | `tool` | `str` | Yes | The tool name to check (e.g., `"delete_contact"`, `"create_lead"`). Must be declared in the connector's manifest. |
-| `amount` | `float \| None` | No | The call's amount, for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap. From the next release a capped scope denies a call without it (`amount_missing`). |
-| `audience` | `str \| None` | No | The grant token audience this call expects; overrides the client's `audience`. See [Grant token audience](#grant-token-audience). From the next release. |
+| `amount` | `float \| None` | No | The call's amount, for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap. From version 0.7.0 a capped scope denies a call without it (`amount_missing`). |
+| `audience` | `str \| None` | No | The grant token audience this call expects; overrides the client's `audience`. See [Grant token audience](#grant-token-audience). From version 0.7.0. |
 
 ### Response: `EnforceResult`
 
@@ -110,10 +110,10 @@ result = grantex.enforce(
 # result.reason_code = "cap_exceeded", result.sub_reason = "amount_cap"
 ```
 
-**From the next release (breaking):** a call without `amount` under a capped
+**From version 0.7.0 (breaking):** a call without `amount` under a capped
 scope is denied with `reason_code` `cap_exceeded` and `sub_reason`
-`amount_missing` (`details` carries `limit`). In the current release it is
-allowed and the cap is not checked. `caps_mode="warn"` (on the client or per
+`amount_missing` (`details` carries `limit`). Earlier releases allowed the
+missing amount without checking its cap. `caps_mode="warn"` (on the client or per
 call) keeps allowing it and reports the denial in `result.would_deny_all`
 (and in `result.would_deny` when it is the first warning of the call, so a
 call that also lacks a decision grant under `decisions_mode="warn"` shows the
@@ -125,9 +125,11 @@ tools included, so pass an amount (`0` when there is none) for those too. See
 ### Grant token audience
 
 <Warning>
-  From the next release (not in `grantex` 0.6.1). This is a breaking change:
+  Available in published `grantex==0.7.0`. This is a breaking change:
   a grant token that carries an `aud` claim is denied unless the client
-  expects that audience. Tokens issued without an audience are unaffected.
+  expects that audience. A token without `aud` is denied if the client expects
+  an audience; only tokens and clients both lacking an audience keep their
+  previous semantics. Online revocation is now the default.
 </Warning>
 
 A grant token requested with an `audience` carries it in the `aud` claim
@@ -383,7 +385,7 @@ def wrap_tool(
 ) -> StructuredTool
 ```
 
-`extract_amount` (from the next release) receives the tool call's keyword
+`extract_amount` (from version 0.7.0) receives the tool call's keyword
 arguments and returns the call's amount, which is passed to `enforce()` as
 `amount`. Under a capped scope, a wrapper without it (or an extractor returning
 `None`) denies every call with `amount_missing`. An extractor that raises

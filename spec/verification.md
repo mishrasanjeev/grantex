@@ -234,7 +234,10 @@ The verifier supplies, besides the request:
   the registry), or nothing;
 - **a nonce store** (section 4.4);
 - optionally **the current time** and a **clock skew** in seconds (default
-  10, at most 60).
+  10, at most 60). A current time that is not a finite, non-negative number
+  of seconds (NaN or an infinity, for example) would make the time checks of
+  section 4.3 meaningless, so the libraries refuse it as a configuration
+  error rather than decide on it.
 
 ### 4.2 Steps
 

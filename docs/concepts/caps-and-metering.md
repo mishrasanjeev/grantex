@@ -142,8 +142,8 @@ that counts.
 | Mode | Behaviour |
 |---|---|
 | `enforce` (default) | Calls a cap would deny are denied |
-| `warn` | Calls a cap, a missing meter or an unavailable backend would deny are **allowed**; `result.would_deny` / `wouldDeny` carries the `reason_code`, `sub_reason`, `reason` and `details` they would have got. Calls that fit are reserved as in `enforce`; calls over a cap reserve nothing, so counters show what enforcement would have allowed. From the next release, a call with no amount under a `capped:N` scope is also allowed and reported here (`amount_missing`, or `malformed_cap` when the cap cannot be read) |
-| `off` | Caps are not evaluated and no meter is needed. From the next release, a missing amount under a `capped:N` scope is not evaluated either |
+| `warn` | Calls a cap, a missing meter or an unavailable backend would deny are **allowed**; `result.would_deny` / `wouldDeny` carries the `reason_code`, `sub_reason`, `reason` and `details` they would have got. Calls that fit are reserved as in `enforce`; calls over a cap reserve nothing, so counters show what enforcement would have allowed. From version TypeScript 0.8.0 / Python 0.7.0, a call with no amount under a `capped:N` scope is also allowed and reported here (`amount_missing`, or `malformed_cap` when the cap cannot be read) |
+| `off` | Caps are not evaluated and no meter is needed. From version TypeScript 0.8.0 / Python 0.7.0, a missing amount under a `capped:N` scope is not evaluated either |
 
 Set it on the client (`Grantex(caps_mode="warn")`, `new Grantex({ capsMode: 'warn' })`)
 or per call. Malformed grant caps are a token problem and are denied in every
@@ -201,10 +201,10 @@ arguments on its own.
 |---|---|---|
 | `amount_cap` | `amount` is above the cap; `details` carries `limit` and `amount` | Yes |
 | `invalid_amount` | `amount` is not a finite number, or a wrapper's amount extractor raised | Yes |
-| `malformed_cap` | A `capped:N` scope on the connector cannot be read | Yes when an amount is given. From the next release, a call with no amount is denied too, and `warn` allows it and reports it in `would_deny_all` / `wouldDenyAll`; `off` skips it (the current release allows it) |
-| `amount_missing` (from the next release) | A `capped:N` scope covers the connector and the call gave no amount; `details` carries `limit` | No: `warn` allows the call and reports it in `would_deny_all` / `wouldDenyAll`; `off` skips it |
+| `malformed_cap` | A `capped:N` scope on the connector cannot be read | Yes when an amount is given. From version TypeScript 0.8.0 / Python 0.7.0, a call with no amount is denied too, and `warn` allows it and reports it in `would_deny_all` / `wouldDenyAll`; `off` skips it (the current release allows it) |
+| `amount_missing` (from version TypeScript 0.8.0 / Python 0.7.0) | A `capped:N` scope covers the connector and the call gave no amount; `details` carries `limit` | No: `warn` allows the call and reports it in `would_deny_all` / `wouldDenyAll`; `off` skips it |
 
-**From the next release (breaking):** a call with no amount under a
+**From version TypeScript 0.8.0 / Python 0.7.0 (breaking):** a call with no amount under a
 `capped:N` scope is denied with `cap_exceeded` / `amount_missing`, and a
 malformed cap is denied whether or not an amount is given. In the current
 release such a call is allowed and the cap is never checked. Because the cap
@@ -215,7 +215,7 @@ return `0`). To keep the old behaviour while you add amounts, set
 `wouldDenyAll`; it covers both `amount_missing` and a malformed cap on a call
 without an amount, including calls that also report a decision warning.
 
-From the next release, the wrappers take an amount extractor, a function from
+From version TypeScript 0.8.0 / Python 0.7.0, the wrappers take an amount extractor, a function from
 the call to its amount:
 
 ```python

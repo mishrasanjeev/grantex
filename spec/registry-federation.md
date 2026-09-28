@@ -1,4 +1,4 @@
-# Registry issuers and trust marks
+# Registry federation: issuers, trust marks and acceptance status
 
 Status: draft, Agent Trust Registry Phase 1. Sections 1 to 5 are implemented
 by the auth service (`apps/auth-service`: `routes/registry-issuers.ts`,
@@ -19,7 +19,7 @@ Keywords MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 |---|---|---|
 | Registry operator | A key from `REGISTRY_OPERATOR_API_KEYS` of the auth service | Accredit an issuer; suspend, reinstate or withdraw it; change its trust marks; replace its JWK Set; revoke one of its keys. |
 | Accredited issuer | Its signing keys, as recorded | Issue Agent Passports and attestations covered by its trust marks. |
-| Relying party | None for the public list | Read the public issuer list and decide whether to rely on an issuer's signature. |
+| Relying party | None for the public list (served only with `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`, section 2.1) | Read the public issuer list and decide whether to rely on an issuer's signature. |
 
 An issuer never writes its own record. Accreditation evidence stays with the
 operator; the record carries only an opaque reference to it.
@@ -50,11 +50,25 @@ The public list, `GET /v1/registry/issuers`, carries only `entity_id`,
   a suspension scheduled for later reads `active`;
 - `jwks` leaves out every revoked kid, and is empty for a withdrawn issuer.
 
-The response carries an `ETag` computed over its body. A relying party SHOULD
-send it back in `If-None-Match`; an unchanged list answers `304`. The response
-carries `Cache-Control: no-cache` (RFC 9111 section 5.2.2.4), so a cache
-revalidates every read and a revoked key or a suspension that has taken effect
-is not served from it. The list is limited per client address.
+The list is ordered by `entity_id` and paged: `page` counts from 1 (default
+1) and `pageSize` is 1 to 500 (default 100); any other value is refused with
+`400`. The response is `{issuers, total, page, pageSize}`, where `total` is the
+number of issuers in the registry, read in the same snapshot as the page. A
+page past the end has no issuers and still carries `total`. A relying party
+that needs the whole list MUST read pages until it holds `total` issuers or a
+page is empty, and MUST NOT treat an issuer missing from one page as unknown.
+
+The response carries an `ETag` computed over its body, so one per page. A
+relying party SHOULD send it back in `If-None-Match`; an unchanged page answers
+`304`. The response carries `Cache-Control: no-cache` (RFC 9111 section
+5.2.2.4), so a cache revalidates every read and a revoked key or a suspension
+that has taken effect is not served from it. The list is limited per client
+address.
+
+The list needs no credential, so the auth service serves it only when
+`REGISTRY_PUBLIC_ENDPOINTS_ENABLED` is exactly `true` (default off). Off, the
+route is not registered and answers as any unknown route does; the operator
+routes and the accreditation checks of section 5 are not affected.
 
 ## 3. Keys
 
@@ -142,9 +156,7 @@ an Entity Identifier, Phase 1 records carry over unchanged. Until Phase 2
 ships, relying parties MUST use the public list of section 2.1, or the
 signed registry manifest (see "Registry manifest" below), and MUST NOT
 expect Federation endpoints.
-# Registry federation
-
-## Attestation acceptance status lists
+## 7. Attestation acceptance status lists
 
 Status: draft. Implemented by the auth service (`apps/auth-service`,
 `src/lib/registry/acceptance-status.ts`, `src/routes/registry-status.ts`,
@@ -189,9 +201,29 @@ The list URI is `{PUBLIC_BASE_URL}/status/attestations/{list}`. It is the
 Token Status List token's `sub`, and it is the `uri` a referenced token
 carries next to its `idx` (draft-ietf-oauth-status-list-21 §6.2).
 
-The routes need no authentication, are rate-limited per client address (300
-requests a minute on each route), and allow reads from any browser origin
-(§8.1). A list id that is not one of the registry's is a `404`. A store that
+The routes need no authentication, so they are served only when the auth
+service runs with `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true` (exactly `true`,
+read at startup; the default is off). With it off the paths are not routes:
+they answer like any unknown path, and no CORS preflight is granted for them.
+The service's own allocation and status changes (see Allocation) work either
+way. When served, the routes are rate-limited per client address (300
+requests a minute on each route) and allow reads from any browser origin
+(§8.1), following the CORS protocol of the Fetch standard:
+
+- A cross-origin `GET` with `If-None-Match` is not a simple request
+  (`If-None-Match` is not a CORS-safelisted request-header), so a browser
+  first sends an `OPTIONS` preflight. Each route answers it `204` with
+  `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET`,
+  `Access-Control-Allow-Headers: If-None-Match` and
+  `Access-Control-Max-Age: 600`.
+- `GET` responses, `304 Not Modified` included, carry
+  `Access-Control-Allow-Origin: *` and `Access-Control-Expose-Headers: ETag`,
+  since `ETag` is not a CORS-safelisted response header and a script could
+  not otherwise read it to revalidate.
+- No response carries `Access-Control-Allow-Credentials`; the lists are read
+  without credentials.
+
+A list id that is not one of the registry's is a `404`. A store that
 cannot be read is a `5xx`: the registry never serves an older copy in its
 place, because that copy could show a withdrawn attestation as accepted.
 
@@ -280,6 +312,12 @@ reject a list whose signature does not verify (draft-ietf-oauth-status-list-21
 | Token Status List `ttl` (seconds, §5.1) | 600 | 60 |
 | Bitstring Status List `ttl` (milliseconds, §2.2) | 600000 | 60000 |
 | `Cache-Control` | `public, max-age=600` | `public, max-age=60` |
+
+Both formats state the same interval in their own units. Bitstring Status
+List v1.0 §2.2 defines `credentialSubject.ttl` as an OPTIONAL "time to live"
+in milliseconds before a refresh SHOULD be attempted, with no default and no
+minimum or maximum, so the 60-second cascade ttl is expressed there exactly as
+60000.
 
 A cascade window is the hour after any acceptance change (an entry becomes
 SUSPENDED, INVALID or VALID again) or a registry-wide suspension such as an

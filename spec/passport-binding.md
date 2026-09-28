@@ -207,13 +207,20 @@ A request authorized with a passport keeps its binding if the flag is turned
 off before the exchange: turning the flag off stops new bindings and never
 strips one a Principal consented to. Reporting the key compromised through
 `POST /v1/agents/{id}/keys/{thumbprint}/compromise` denies every pending or
-approved request bound to it, as for any key-bound request. A delegated grant
-(`POST /v1/delegate`) does not inherit the binding in Phase 1.
+approved request bound to it, as for any key-bound request.
+
+A passport-bound grant is not delegated in Phase 1. With the flag on,
+`POST /v1/grants/delegate` refuses a parent grant that has a binding with
+`403` `PASSPORT_BOUND_DELEGATION_UNSUPPORTED` and writes nothing: a delegated
+grant would carry no binding, so it would escape the rechecks above and outlive
+a revoked or suspended passport. PRD §8.6 delegation, where the sub-agent binds
+its own passport and the parent's binding is carried in `act.passport`, is
+later work.
 
 With `REGISTRY_STATUS_RECONCILIATION_ENABLED=true`, a bound grant also follows
 its passport after issuance: when the registry's acceptance entry in the
-binding becomes INVALID the grant and every grant delegated beneath it are
-revoked, when it becomes SUSPENDED they are suspended, and when it is VALID
+binding becomes INVALID the grant, and with it every token issued from it, is
+revoked; when it becomes SUSPENDED the grant is suspended; and when it is VALID
 again what the registry suspended is resumed. The revocation feed carries each
 change. See `spec/registry-federation.md`, "Status reconciliation".
 

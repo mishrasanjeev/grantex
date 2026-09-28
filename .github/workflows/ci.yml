@@ -68,6 +68,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: node --test tests/scripts/seo-aeo-release.test.mjs
       - run: node scripts/check-docs-integrity.mjs
 
   commerce-preview-conformance:
@@ -390,11 +391,11 @@ jobs:
       - name: Test Gemma Python
         working-directory: packages/gemma-py
         run: pip install -e ".[dev]" && mypy --strict src && pytest
-      - name: Test agent-httpsig Python
-        working-directory: packages/agent-httpsig-py
-        run: pip install -e ".[dev]" && mypy --strict src && pytest
       - name: Test Agent Passport Python
         working-directory: packages/agent-passport-py
+        run: pip install -e ".[dev]" && mypy --strict src && pytest
+      - name: Test agent-httpsig Python
+        working-directory: packages/agent-httpsig-py
         run: pip install -e ".[dev]" && mypy --strict src && pytest
       - name: Test Strands Python
         if: matrix.python-version != '3.9'

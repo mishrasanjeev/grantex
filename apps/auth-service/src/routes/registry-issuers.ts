@@ -2,11 +2,19 @@
 /**
  * Accredited issuers in the registry (Agent Trust Registry, Phase 1).
  *
+ * With REGISTRY_STATUS_RECONCILIATION_ENABLED=true, a PATCH then brings the
+ * issuer's attestations and the grants bound to them in line at once
+ * (lib/registry/status-reconciliation.ts applyRegistryDecisions): a
+ * suspension suspends them, a reinstatement resumes what the registry
+ * suspended, a revoked kid withdraws what it signed and revokes the grants.
+ *
  *   POST  /v1/registry/issuers        accredit an issuer (registry operator key)
  *   PATCH /v1/registry/issuers/:id    suspend, reinstate or withdraw it, change its
  *                                     trust marks, replace its JWK Set, revoke a kid
  *                                     (registry operator key)
- *   GET   /v1/registry/issuers        the public, minimised list relying parties read
+ *   GET   /v1/registry/issuers        the public, minimised list relying parties read,
+ *                                     paged with page and pageSize (only with
+ *                                     REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true)
  *
  * The write routes take a key from REGISTRY_OPERATOR_API_KEYS, compared in
  * constant time (lib/registry/operator-auth.ts). With no usable key
@@ -14,22 +22,22 @@
  * nothing can be accredited until an operator credential exists. Every write
  * goes on the registry's audit chain in the same transaction as the change.
  *
- * With REGISTRY_STATUS_RECONCILIATION_ENABLED=true, a PATCH then brings the
- * issuer's attestations and the grants bound to them in line at once
- * (lib/registry/status-reconciliation.ts applyRegistryDecisions): a
- * suspension suspends them, a reinstatement resumes what the registry
- * suspended, a revoked kid withdraws what it signed and revokes the grants.
- *
- * The public list needs no key. It is limited per client address like the
- * other public reads, and carries an ETag so a relying party polling it can
- * ask for changes only.
+ * The public list needs no key, so it is registered only when
+ * REGISTRY_PUBLIC_ENDPOINTS_ENABLED is exactly 'true' (config.ts): new
+ * endpoints ship enabled only behind authentication. Off, the route does not
+ * exist and a request answers as any unknown route does. On, it is limited
+ * per client address like the other public reads, pages with page and
+ * pageSize and reports the total, and carries an ETag so a relying party
+ * polling it can ask for changes only.
  */
 import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { config } from '../config.js';
 import { getSql } from '../db/client.js';
 import {
+  DEFAULT_PUBLIC_ISSUER_PAGE_SIZE,
   IssuerRecordError,
+  MAX_PUBLIC_ISSUER_PAGE_SIZE,
   createAccreditedIssuer,
   listPublicIssuers,
   parseAccreditationRequest,
@@ -72,6 +80,14 @@ function sendRecordError(request: FastifyRequest, reply: FastifyReply, err: Issu
 /** Which operator address made the call. The key itself is never recorded, hashed or otherwise. */
 function requestedBy(request: FastifyRequest): string {
   return `registry-operator:${request.ip}`;
+}
+
+/** A whole number >= 1, the fallback when absent, or null for anything else (a repeated parameter included). */
+function parsePageNumber(value: unknown, fallback: number): number | null {
+  if (value === undefined || value === '') return fallback;
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : null;
 }
 
 function etagMatches(header: string | undefined, etag: string): boolean {
@@ -136,12 +152,29 @@ export async function registryIssuerRoutes(app: FastifyInstance): Promise<void> 
     }
   });
 
+  // Unauthenticated, so off unless the operator turns it on (see the header).
+  if (!config.registryPublicEndpointsEnabled) return;
+
   app.get(
     '/v1/registry/issuers',
     { config: { skipAuth: true, rateLimit: { max: PUBLIC_ISSUER_LIST_RATE_LIMIT, timeWindow: '1 minute' } } },
     async (request, reply) => {
-      const issuers = await listPublicIssuers(getSql());
-      const body = { issuers };
+      // `page` and `pageSize` page the list, as the other paged /v1 lists do;
+      // `total` says how many issuers there are in all.
+      const query = request.query as Record<string, unknown>;
+      const page = parsePageNumber(query['page'], 1);
+      const pageSize = parsePageNumber(query['pageSize'], DEFAULT_PUBLIC_ISSUER_PAGE_SIZE);
+      // The offset must stay a safe integer, or it would reach the query as a
+      // number Postgres cannot take and answer 500 instead of 400.
+      if (page === null || pageSize === null || pageSize > MAX_PUBLIC_ISSUER_PAGE_SIZE
+        || !Number.isSafeInteger((page - 1) * pageSize)) {
+        return reply.status(400).send({
+          message: `page must be an integer >= 1 and pageSize an integer between 1 and ${MAX_PUBLIC_ISSUER_PAGE_SIZE}`,
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+      const body = await listPublicIssuers(getSql(), { page, pageSize });
       // Over the body itself, so it changes whenever what a relying party
       // would read changes, including a scheduled suspension taking effect.
       const etag = `"${createHash('sha256').update(JSON.stringify(body)).digest('base64url')}"`;

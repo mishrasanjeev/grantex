@@ -12,7 +12,7 @@ The enforce API verifies that an agent's grant token includes sufficient scope t
 import { Grantex } from '@grantex/sdk';
 import { salesforceManifest } from '@grantex/sdk/manifests/salesforce';
 
-const grantex = new Grantex({ apiKey: 'gx_...' });
+const grantex = new Grantex({ apiKey: 'gx_...', audience: 'https://api.merchant.example' });
 grantex.loadManifest(salesforceManifest);
 
 const result = await grantex.enforce({
@@ -51,11 +51,11 @@ enforce(options: EnforceOptions): Promise<EnforceResult>
 </ParamField>
 
 <ParamField body="amount" type="number">
-  The call's amount, for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap. From the next release a capped scope denies a call without it (`amount_missing`).
+  The call's amount, for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap. From version 0.8.0 a capped scope denies a call without it (`amount_missing`).
 </ParamField>
 
 <ParamField body="audience" type="string">
-  The grant token audience this call expects; overrides the client's `audience`. See [Grant token audience](#grant-token-audience). From the next release.
+  The grant token audience this call expects; overrides the client's `audience`. See [Grant token audience](#grant-token-audience). From version 0.8.0.
 </ParamField>
 
 ### Response: `EnforceResult`
@@ -133,10 +133,10 @@ const result = await grantex.enforce({
 // result.reasonCode = 'cap_exceeded', result.subReason = 'amount_cap'
 ```
 
-**From the next release (breaking):** a call without `amount` under a capped
+**From version 0.8.0 (breaking):** a call without `amount` under a capped
 scope is denied with `reasonCode` `cap_exceeded` and `subReason`
-`amount_missing` (`details` carries `limit`). In the current release it is
-allowed and the cap is not checked. `capsMode: 'warn'` (on the client or per
+`amount_missing` (`details` carries `limit`). Earlier releases allowed the
+missing amount without checking its cap. `capsMode: 'warn'` (on the client or per
 call) keeps allowing it and reports the denial in `result.wouldDenyAll`
 (and in `result.wouldDeny` when it is the first warning of the call, so a
 call that also lacks a decision grant under `decisionsMode: 'warn'` shows the
@@ -148,10 +148,11 @@ tools included, so pass an amount (`0` when there is none) for those too. See
 ### Grant token audience
 
 <Warning>
-  From the next release (not in `@grantex/sdk` 0.7.1). This is a breaking
+  Available in published `@grantex/sdk@0.8.0`. This is a breaking
   change: a grant token that carries an `aud` claim is denied unless the
-  client expects that audience. Tokens issued without an audience are
-  unaffected.
+  client expects that audience. A token without `aud` is denied if the client
+  expects an audience; only tokens and clients both lacking an audience keep
+  their previous semantics. Online revocation is now the default.
 </Warning>
 
 A grant token requested with an `audience` carries it in the `aud` claim
@@ -383,7 +384,7 @@ wrapTool(
 ): StructuredTool
 ```
 
-`extractAmount` (from the next release) receives the tool's input and returns
+`extractAmount` (from version 0.8.0) receives the tool's input and returns
 the call's amount, which is passed to `enforce()` as `amount`. Under a capped
 scope, a wrapper without it (or an extractor returning `undefined` or `null`)
 denies every call with `amount_missing`. An extractor that throws refuses the
@@ -420,7 +421,7 @@ grantex.enforceMiddleware(options: {
 }): RequestHandler
 ```
 
-`extractAmount` (from the next release) returns the request's amount for a
+`extractAmount` (from version 0.8.0) returns the request's amount for a
 capped scope. Without it, a capped scope answers 403 with `reason`
 `cap_exceeded` and `subReason` `amount_missing`. An extractor that throws, or
 returns something that is not a finite number, answers 403 with

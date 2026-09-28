@@ -45,6 +45,7 @@ import {
   type AgentKeyStatus,
 } from '../lib/registry/agent-keys.js';
 import { JwkThumbprintError, jwkThumbprint } from '../lib/registry/jwk-thumbprint.js';
+import { recordDpopPossession } from '../lib/registry/agent-key-mirror.js';
 import { cascadeGrantAction } from '../lib/revocation/cascade.js';
 
 type Row = Record<string, unknown>;
@@ -187,6 +188,7 @@ export async function agentKeysRoutes(app: FastifyInstance): Promise<void> {
   app.get<AgentParams>('/v1/agents/:id/keys', async (request, reply) => handle(request, reply, async () => {
     const sql = getSql();
     const agent = await ownedAgent(queries(sql), request.params.id, request.developer.id);
+    await recordDpopPossession(queries(sql), agent['id'] as string, request.developer.id);
     const rows = await sql<Row[]>`
       SELECT * FROM agent_keys WHERE agent_id = ${agent['id'] as string}
       ORDER BY created_at DESC, thumbprint`;
@@ -376,6 +378,7 @@ export async function agentKeysRoutes(app: FastifyInstance): Promise<void> {
     const sql = getSql();
     const agent = await ownedAgent(queries(sql), request.params.id, developerId);
     const agentId = agent['id'] as string;
+    await recordDpopPossession(queries(sql), agentId, developerId);
     const keys = await sql<Row[]>`SELECT * FROM agent_keys WHERE thumbprint = ${thumbprint} AND agent_id = ${agentId}`;
     const key = keys[0];
     if (!key) throw keyNotFound();
@@ -455,6 +458,7 @@ export async function agentKeysRoutes(app: FastifyInstance): Promise<void> {
       const tx = raw as unknown as TxSql;
       const agent = await ownedAgent(tx, request.params.id, developerId, 'update');
       const agentId = agent['id'] as string;
+      await recordDpopPossession(tx, agentId, developerId);
       const old = await lockedKey(tx, agentId, thumbprint);
       const replacement = await lockedKey(tx, agentId, replacementThumbprint, 'Replacement key');
       if (old['status'] !== 'active') {
@@ -518,6 +522,7 @@ export async function agentKeysRoutes(app: FastifyInstance): Promise<void> {
       const tx = raw as unknown as TxSql;
       const agent = await ownedAgent(tx, request.params.id, developerId, 'update');
       const agentId = agent['id'] as string;
+      await recordDpopPossession(tx, agentId, developerId);
       const key = await lockedKey(tx, agentId, thumbprint);
       const alreadyCompromised = key['status'] === 'compromised';
       let current = key;
@@ -597,10 +602,24 @@ export async function agentKeysRoutes(app: FastifyInstance): Promise<void> {
     // a call that failed here after step 1 committed is completed by
     // reporting the compromise again. A failure propagates as a 500: the
     // caller must not read success while bound grants may still be active.
-    const bound = await sql<{ id: string }[]>`
-      SELECT id FROM grants
-      WHERE developer_id = ${developerId} AND agent_key_thumbprint = ${thumbprint}
-        AND status IN ('active', 'suspended')`;
+    //
+    // The grants are looked up under the developer's cascade lock
+    // (hashtextextended(developer_id, 4)), the lock POST /v1/grants/delegate
+    // holds while it inserts a grant bound to the sub-agent's key. A
+    // delegation holding it now, its grant not yet committed, is waited for,
+    // and the query (its own statement, so its snapshot is taken after the
+    // lock is granted) sees that grant. A delegation that takes the lock
+    // after this lookup finds the key in compromised_agent_keys (step 1 has
+    // committed) and issues nothing. Without the lock, the first case left a
+    // live grant bound to the compromised key.
+    const bound = await sql.begin(async (raw) => {
+      const tx = raw as unknown as TxSql;
+      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
+      return tx<{ id: string }[]>`
+        SELECT id FROM grants
+        WHERE developer_id = ${developerId} AND agent_key_thumbprint = ${thumbprint}
+          AND status IN ('active', 'suspended')`;
+    });
     let grantsRevoked = 0;
     if (bound.length > 0) {
       const cascade = await cascadeGrantAction(sql, {
