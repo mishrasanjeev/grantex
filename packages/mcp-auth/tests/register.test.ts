@@ -42,6 +42,7 @@ describe('register endpoint', () => {
 
   beforeEach(async () => {
     app = await createMcpAuthServer({
+      resolvePrincipal: async () => ({ principalId: 'principal-1' }),
       grantex: createMockGrantex(),
       agentId: 'agent-1',
       scopes: ['read'],

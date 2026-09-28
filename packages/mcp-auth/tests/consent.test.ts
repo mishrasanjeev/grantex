@@ -39,6 +39,7 @@ type Overrides = { [K in keyof McpAuthConfig]?: McpAuthConfig[K] | undefined };
 async function build(overrides: Overrides = {}, grantex: MockGrantex = mockGrantex()) {
   const storage = overrides.storage ?? await seededStorage(clientRecord({ clientName: 'Acme Underwriting Assistant' }));
   const app = await createMcpAuthServer({
+    resolvePrincipal: async () => ({ principalId: 'principal-1' }),
     grantex: asGrantex(grantex),
     agentId: 'agent-1',
     issuer: ISSUER,
