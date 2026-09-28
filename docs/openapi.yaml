@@ -2116,6 +2116,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "409":
+          description: >-
+            AGENT_KEY_CONFLICT: another agent has `publicJwk` registered. With
+            AGENT_KEY_HISTORY_MIRROR_ENABLED=true (default off), the key also enters the agent
+            key history, and these are refused too: a key another agent holds in its history
+            (AGENT_KEY_CONFLICT) and a key reported compromised (`key_not_active`); a non-P-256
+            key for an agent that declares a payments rail is a 400 KEY_ALGORITHM_NOT_ALLOWED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     get:
       operationId: listAgents
       tags: [Agents]
@@ -2195,6 +2206,18 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: >-
+            AGENT_KEY_CONFLICT: another agent has `publicJwk` registered. With
+            AGENT_KEY_HISTORY_MIRROR_ENABLED=true (default off), the new key also enters the
+            agent key history and the replaced one ends there, and these are refused too: a key
+            another agent holds in its history (AGENT_KEY_CONFLICT) and a key reported
+            compromised (`key_not_active`); a non-P-256 key for an agent that declares a
+            payments rail is a 400 KEY_ALGORITHM_NOT_ALLOWED.
           content:
             application/json:
               schema:
@@ -2472,9 +2495,12 @@ paths:
       summary: Report a key compromised and revoke every grant bound to it
       description: |
         The key ends immediately and can never be registered again, by any agent, even
-        after the agent is deleted. Every grant whose
+        after the agent is deleted, through the key routes, or through `POST` and
+        `PATCH /v1/agents` when AGENT_KEY_HISTORY_MIRROR_ENABLED=true (with it off, those two
+        routes do not consult the history). Every grant whose
         `cnf.jkt` is the key, and every grant delegated from one, is revoked through the
-        cascade. If the key is the agent's registered `publicJwk`, the newest proven
+        cascade; the grants are found under the same lock delegation holds while it binds a
+        grant to a key, and a delegation to a key already compromised is refused. If the key is the agent's registered `publicJwk`, the newest proven
         replacement takes its place; with none, it is cleared and the agent is suspended.
         Safe to repeat.
       requestBody:
@@ -3276,6 +3302,15 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Sub-agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: >-
+            `key_not_active`: the sub-agent's registered key was reported compromised
+            (`POST /v1/agents/{id}/keys/{thumbprint}/compromise`), including while this request
+            was in flight. No grant is bound to a compromised key.
           content:
             application/json:
               schema:

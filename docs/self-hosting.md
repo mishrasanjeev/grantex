@@ -228,6 +228,7 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `SIGNING_KEY_RETIRED_GRACE_SECONDS` | No | `2592000` | How long a retired stored key stays in the JWK Set; must cover your longest grant lifetime |
 | `MAX_GRANT_LIFETIME_SECONDS` | No | — | Longest grant `expiresIn` accepted by authorization and delegation; with the postgres store, start-up refuses a grace shorter than this |
 | `AGENT_KEY_ROTATION_OVERLAP_SECONDS` | No | `604800` | Default overlap of an agent key rotation: how long the replaced key stays usable (0 to 2592000); see `docs/providers/registering-agents.md` |
+| `AGENT_KEY_HISTORY_MIRROR_ENABLED` | No | `false` | Mirror the key `POST` and `PATCH /v1/agents` write into the agent key history, and refuse there a key held in another agent's history, a compromised key, or a non-P-256 key under a payments rail. Off, those routes behave as before the history existed; only exactly `true` turns it on. See `spec/agent-keys.md` §7 |
 | `SSO_STATE_SECRET` | No | derived | HMAC key for SSO state; derived from `RSA_PRIVATE_KEY`, `EC_PRIVATE_KEY` or `VAULT_ENCRYPTION_KEY` when unset, so every instance agrees |
 | `AUTO_GENERATE_KEYS` | No | `false` | Auto-generate the signing key at startup (dev only — invalidated on restart) |
 | `GRANT_TOKEN_LEGACY_CLAIMS` | No | `true` | Issue the pre-0.6 claim aliases (`agt`, `dev`, `grnt`, `scp`, `parentAgt`, `parentGrnt`, `delegationDepth`, `bdg`) next to the standard claims. Defaults to `false` in 0.7; see `docs/migration-0.6.md` |

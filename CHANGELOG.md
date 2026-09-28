@@ -36,11 +36,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `publicJwk` (`KEY_ALGORITHM_NOT_ALLOWED`).
 - Existing keys were backfilled: `active` when a DPoP proof of the registered
   key had been verified, `pending` otherwise; a registered key of a type the
-  history cannot hold is reported with a migration warning. `POST` and
-  `PATCH /v1/agents` behave as before; the keys they write also enter the history, and they
-  refuse a key held in another agent's history (`AGENT_KEY_CONFLICT`), a
-  compromised key (`key_not_active`) or a non-P-256 key under a payments rail.
+  history cannot hold is reported with a migration warning. The migration
+  installs nothing on `agents` (no trigger). A DPoP proof of the registered key
+  counts as possession: the key routes record it before they read the history.
+- New flag `AGENT_KEY_HISTORY_MIRROR_ENABLED` (default off; only `true` turns
+  it on). Off, `POST` and `PATCH /v1/agents` behave exactly as before: the keys
+  they write are not added to the history, and they refuse nothing new. On,
+  the key they write also enters the history in the same transaction (a key
+  replaced by `PATCH` ends at once), and they refuse a key held in another
+  agent's history (`AGENT_KEY_CONFLICT`), a compromised key (`key_not_active`)
+  or a non-P-256 key under a payments rail (`KEY_ALGORITHM_NOT_ALLOWED`).
   The token endpoints still bind to the registered key (FINDINGS G-85).
+- A compromise looks for the grants bound to the key under the developer's
+  cascade lock, the lock delegation holds while it binds a grant to a key, so
+  a delegation in flight cannot leave a live grant bound to the compromised
+  key; `POST /v1/grants/delegate` re-checks the sub-agent's key under that
+  lock and refuses one reported compromised (`409 key_not_active`). Only keys
+  reported through the compromise route are ever refused there.
   Documented in `docs/providers/registering-agents.md` and
   `spec/agent-keys.md`.
 

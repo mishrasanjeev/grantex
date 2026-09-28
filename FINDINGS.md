@@ -1453,11 +1453,34 @@ the pull request that references it.
   overlap ended) can be registered by another agent, which the registered-key
   index has always allowed. Grants the earlier holder obtained with the key
   keep their binding and are not revoked by the compromise. (Registration
-  after a compromise is closed: `compromised_agent_keys` records every
-  compromised thumbprint, outlives the agent, and is checked on every path
-  that writes a key.)
+  after a compromise is closed on every path that writes the history:
+  `compromised_agent_keys` records every compromised thumbprint and outlives
+  the agent. `POST` and `PATCH /v1/agents` check it only with the history
+  mirror on; see G-87.)
 - **Impact:** narrow. It needs one key to move between developers and then be
   reported compromised while grants from the earlier holder are still active.
 - **Proposal:** decide with the owner whether a compromise should revoke
   grants bound to the key in every tenant, or whether a released key should
   stay reserved to its developer.
+
+## G-87 — With the history mirror off, the agents routes do not consult the key history
+
+- **Found:** review of the agent key history work, 2026-09-28.
+- **What:** mirroring the key `POST` and `PATCH /v1/agents` write into
+  `agent_keys` is behind `AGENT_KEY_HISTORY_MIRROR_ENABLED`, default off, so
+  those routes keep their earlier behaviour. With it off they do not add the
+  key to the history, do not end the replaced key there, and do not refuse a
+  key another agent holds in its history, a key in `compromised_agent_keys`,
+  or a non-P-256 key for an agent that declares a payments rail. The history
+  of an agent whose registered key changed through them can therefore list a
+  key it no longer registers as pending or active, and a compromised key can
+  be registered again as `publicJwk`.
+- **Impact:** a key registered again that way is still refused by the key
+  routes and by delegation (`routes/delegate.ts` checks
+  `compromised_agent_keys` under the cascade lock), but `POST /v1/token` and
+  the OAuth profile bind grants to the registered key and do not check it
+  (G-85).
+- **Proposal:** turn the flag on once its exit criterion is green (the flag-on
+  suite in `tests/agent-keys-postgres.integration.test.ts`) and the owner has
+  approved the runbook; then make it the default in a release that records the
+  flip as a breaking change with the flag as the opt-out.

@@ -21,7 +21,9 @@ never changes its thumbprint. Send public keys only: a JWK with a private
 member such as `d` is refused.
 
 One key belongs to one agent. A key already in another agent's history is
-refused with `409 AGENT_KEY_CONFLICT`.
+refused with `409 AGENT_KEY_CONFLICT` by `POST /v1/agents/{agentId}/keys`,
+and by `POST` and `PATCH /v1/agents` when `AGENT_KEY_HISTORY_MIRROR_ENABLED`
+is `true`.
 
 ## Adding a key
 
@@ -38,8 +40,11 @@ An agent may hold at most 10 keys that are pending, active or within a
 rotation overlap.
 
 A key registered as `publicJwk` on `POST` or `PATCH /v1/agents` enters the
-history too. It becomes proven when the agent presents a DPoP proof with it at
-the OAuth endpoints, or through the challenge below.
+history too when the operator has set `AGENT_KEY_HISTORY_MIRROR_ENABLED=true`
+(off by default). With it off, add the registered key through
+`POST /v1/agents/{agentId}/keys` to bring it into the history. A key in the
+history becomes proven when the agent presents a DPoP proof with it at the
+OAuth endpoints, or through the challenge below.
 
 ## Payments rails need P-256
 
@@ -58,7 +63,8 @@ declares a payments rail (`ap2` or `verifiable_intent`) may hold only ES256
 keys on P-256: any other key is refused with `KEY_ALGORITHM_NOT_ALLOWED`, and
 the rail cannot be declared while the agent still holds another key type,
 either in its history (pending, active or within a rotation overlap) or as its
-registered `publicJwk`.
+registered `publicJwk`. `PATCH /v1/agents` refuses a non-P-256 `publicJwk`
+for such an agent only when `AGENT_KEY_HISTORY_MIRROR_ENABLED` is `true`.
 Without a payments rail, Ed25519 keys are accepted as well.
 
 ## Proving possession
@@ -170,9 +176,12 @@ Content-Type: application/json
 
 The key ends immediately and can never be registered again, by any agent,
 including after the agent that held it is deleted: compromised keys are kept
-in a record that outlives the agent. Registering one through `POST` or
-`PATCH /v1/agents` or `POST /v1/agents/{agentId}/keys` is refused with
-`409 key_not_active`.
+in a record that outlives the agent. Registering one through
+`POST /v1/agents/{agentId}/keys` is refused with `409 key_not_active`, and
+so is registering it through `POST` or `PATCH /v1/agents` when
+`AGENT_KEY_HISTORY_MIRROR_ENABLED=true`. A delegation to an agent whose
+registered key was reported compromised is refused with `409 key_not_active`,
+including one that was already in flight.
 Every grant bound to it (`cnf.jkt`) is revoked, with every grant delegated
 from those, and each revocation is written to the audit chain. The response
 says how many grants were revoked. If the key was the agent's registered
