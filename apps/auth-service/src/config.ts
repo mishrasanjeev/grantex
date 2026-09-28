@@ -201,6 +201,15 @@ export const config = {
   get portableWebAuthnEvidenceStatusCheckEnabled() { return process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'] === 'true'; },
   get irregularityResponsePolicyEnabled() { return process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'] === 'true'; },
   get irregularityCascadeRevocationEnabled() { return process.env['IRREGULARITY_CASCADE_REVOCATION_ENABLED'] === 'true'; },
+  // The registry's unauthenticated reads (GET /v1/registry/issuers). Off by
+  // default: new endpoints ship enabled only behind authentication, so these
+  // are registered only for exactly 'true', read when the app is built.
+  // Mirror the key POST and PATCH /v1/agents write into the agent key history
+  // (agent_keys), with its refusals: a key held in another agent's history, a
+  // key reported compromised, a non-P-256 key under a payments rail. Off by
+  // default, and only exactly 'true' turns it on: with it off those routes
+  // behave as they did before the history existed. Read at request time.
+  get agentKeyHistoryMirrorEnabled() { return process.env['AGENT_KEY_HISTORY_MIRROR_ENABLED'] === 'true'; },
   // Default overlap of an agent key rotation: how long the replaced key stays
   // usable (seconds, default 7 days, at most 30). Read at request time;
   // validateConfig reports a bad value at boot.
@@ -212,6 +221,9 @@ export const config = {
       2_592_000,
     );
   },
+  // Unauthenticated registry reads (the attestation-acceptance status lists).
+  // Read when routes are registered at boot; off unless exactly 'true'.
+  get registryPublicEndpointsEnabled() { return process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] === 'true'; },
   // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
   ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
   // CORS: comma-separated list of browser origins allowed to call the API

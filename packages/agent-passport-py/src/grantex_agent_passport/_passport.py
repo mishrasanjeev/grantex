@@ -8,6 +8,7 @@ spec/examples/agent-passport-vectors.json.
 
 from __future__ import annotations
 
+import math
 import os
 import re
 import time
@@ -63,9 +64,29 @@ _NOT_DISCLOSABLE = {
     "_sd_alg",
 }
 
-_DID = re.compile(r"did:[a-z0-9]+:.+", re.DOTALL)
+# W3C DID Core section 3.1 (DID Syntax), the whole string, nothing after it:
+#   did                = "did:" method-name ":" method-specific-id
+#   method-name        = 1*method-char
+#   method-char        = %x61-7A / DIGIT
+#   method-specific-id = *( *idchar ":" ) 1*idchar
+#   idchar             = ALPHA / DIGIT / "." / "-" / "_" / pct-encoded
+#   pct-encoded        = "%" HEXDIG HEXDIG
+# A DID URL (path, query or fragment) is not a DID. Used with fullmatch, so a
+# trailing newline does not pass as it would with "$".
+_IDCHAR = r"(?:[A-Za-z0-9._-]|%[0-9A-Fa-f]{2})"
+_DID = re.compile(rf"did:[a-z0-9]+:(?:{_IDCHAR}*:)*{_IDCHAR}+", re.ASCII)
 
 IssuerKeyResolver = Callable[[str], Sequence[Mapping[str, Any]]]
+
+#: Answers the Token Status List value at (uri, idx) of a passport's status
+#: reference: "valid", "invalid" or "suspended" (draft-ietf-oauth-status-list
+#: section 7.1: VALID 0x00, INVALID 0x01, SUSPENDED 0x02). The relying party's
+#: status-list component fetches and verifies the Status List Token (section 8.3)
+#: and raises when it has no fresh one.
+StatusResolver = Callable[[str, int], str]
+
+#: The status_checked_by value by which a caller states it checks status itself.
+STATUS_CHECKED_BY_CALLER = "caller"
 
 
 @dataclass(frozen=True)
@@ -116,6 +137,9 @@ class VerifiedPassport:
     disclosures: List[VerifiedDisclosure]
     external_credential_hash: str
     key_binding: Optional[Dict[str, Any]] = None
+    #: "resolver" when verify_passport resolved status and it was VALID; "caller"
+    #: when the caller passed status_checked_by="caller" and checks it itself.
+    status_checked_by: str = "resolver"
 
 
 def _is_https_url(value: Any) -> bool:
@@ -123,7 +147,7 @@ def _is_https_url(value: Any) -> bool:
 
 
 def _is_did(value: Any) -> bool:
-    return isinstance(value, str) and _DID.match(value) is not None
+    return isinstance(value, str) and _DID.fullmatch(value) is not None
 
 
 def _is_string_list(value: Any) -> bool:
@@ -275,12 +299,58 @@ def issue_passport(
 
 
 def _check_number(name: str, value: Any, minimum: float) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value != value:
-        # A NaN or non-number time would make every comparison below pass: refuse the call instead.
+    # A NaN, infinite or non-number time would make the comparisons below pass
+    # or fail silently: refuse the call instead. bool is an int subclass, so it
+    # is refused by name.
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{name} must be a finite number >= {minimum}")
-    if value in (float("inf"), float("-inf")) or value < minimum:
+    number: float = value
+    if not math.isfinite(number) or number < minimum:
         raise ValueError(f"{name} must be a finite number >= {minimum}")
-    return value
+    return number
+
+
+def _check_status_options(status_resolver: Any, status_checked_by: Any) -> None:
+    """Exactly one status decision: a resolver, or the caller's statement that it checks status.
+
+    Fail closed: without either, a revoked or suspended passport would be
+    returned as verified to a relying party that forgot the status step.
+    """
+    if status_resolver is not None and status_checked_by is not None:
+        raise ValueError("pass either status_resolver or status_checked_by, not both")
+    if status_resolver is None and status_checked_by is None:
+        raise ValueError(
+            "verify_passport needs a status decision: pass status_resolver to resolve the"
+            " Token Status List reference, or status_checked_by='caller' if you check it yourself"
+        )
+    if status_resolver is not None and not callable(status_resolver):
+        raise ValueError("status_resolver must be a function (uri, idx) -> status")
+    if status_checked_by is not None and status_checked_by != STATUS_CHECKED_BY_CALLER:
+        raise ValueError("status_checked_by must be 'caller'")
+
+
+def _resolve_status(resolver: StatusResolver, uri: str, idx: int) -> None:
+    """draft-ietf-oauth-status-list section 7.1 values; anything else is a refusal."""
+    try:
+        value = resolver(uri, idx)
+    except Exception as cause:
+        # Section 8.3: when the Status List Token cannot be fetched or validated,
+        # no statement about the status can be made and the token is rejected.
+        raise PassportError(
+            "status_stale", "status_unresolved", "the status resolver failed"
+        ) from cause
+    # An exact str match only: an unknown or mistyped answer is never read as VALID.
+    if type(value) is str and value == "valid":
+        return
+    if type(value) is str and value == "invalid":
+        raise PassportError("passport_revoked", "status_invalid", "the passport is revoked (INVALID)")
+    if type(value) is str and value == "suspended":
+        raise PassportError(
+            "passport_revoked", "status_suspended", "the passport is suspended (SUSPENDED)"
+        )
+    raise PassportError(
+        "status_stale", "status_unknown", "the status resolver returned an unknown status"
+    )
 
 
 def _resolve_issuer_keys(resolver: IssuerKeyResolver, iss: str) -> List[Any]:
@@ -312,16 +382,25 @@ def verify_passport(
     allow_eddsa: bool = False,
     clock_skew_seconds: float = 0,
     key_binding: Optional[KeyBindingRequirement] = None,
+    status_resolver: Optional[StatusResolver] = None,
+    status_checked_by: Optional[str] = None,
 ) -> VerifiedPassport:
     """Verify an Agent Passport (or a presentation of one) and return its claims.
 
     issuer_keys returns the issuer's public keys from the relying party's own
     trust configuration (the registry); keys are never taken from the token
     (PRD section 13). Every failure raises PassportError; nothing is returned
-    unless every rule of the profile holds. Revocation is not checked: the
-    caller resolves ``status`` before accepting (spec/agent-passport-1.0.md
-    section 4).
+    unless every rule of the profile holds.
+
+    Status (spec/agent-passport-1.0.md section 4) is required: pass
+    status_resolver, which answers the Token Status List value for the
+    passport's (uri, idx); anything but "valid" is refused (passport_revoked
+    for "invalid" or "suspended", status_stale when it raises or answers
+    anything else). Or pass status_checked_by="caller" to state that you
+    resolve ``status`` yourself before accepting. With neither, or both, the
+    call raises ValueError.
     """
+    _check_status_options(status_resolver, status_checked_by)
     at = _check_number("now", int(time.time()) if now is None else now, 0)
     skew = _check_number("clock_skew_seconds", clock_skew_seconds, 0)
     if key_binding is not None:
@@ -439,6 +518,13 @@ def verify_passport(
             allow_eddsa=allow_eddsa,
         )
 
+    # Status last: every other rule holds, so the resolver (often a network
+    # fetch) is only asked about a passport that would otherwise be accepted.
+    if status_resolver is not None:
+        _resolve_status(
+            status_resolver, status["status_list"]["uri"], status["status_list"]["idx"]
+        )
+
     return VerifiedPassport(
         header=header,
         payload=payload,
@@ -455,4 +541,5 @@ def verify_passport(
         disclosures=[VerifiedDisclosure(d.digest, d.salt, d.name, d.value) for d in decoded],
         external_credential_hash=external_credential_hash(compact),
         key_binding=kb_result,
+        status_checked_by="resolver" if status_resolver is not None else STATUS_CHECKED_BY_CALLER,
     )

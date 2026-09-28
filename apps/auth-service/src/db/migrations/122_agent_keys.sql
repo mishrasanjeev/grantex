@@ -19,12 +19,12 @@
 --
 -- Additive. agents.public_jwk and agents.key_thumbprint stay what every
 -- existing path reads, and idx_agents_key_thumbprint_unique stays in place
--- until those paths read agent_keys instead. A trigger mirrors the agents
--- columns into agent_keys, so the history is complete whichever route wrote
--- the key, and refuses (with the same constraint name the existing routes
--- already map to 409) a key another agent holds in its history. Nothing a
--- request could do before this migration behaves differently after it: the
--- only new refusals are for states that only the new key routes can create.
+-- until those paths read agent_keys instead. Nothing here is installed on
+-- agents: no trigger, and no change to what POST or PATCH /v1/agents does.
+-- Mirroring the key those routes write into agent_keys is application code
+-- behind AGENT_KEY_HISTORY_MIRROR_ENABLED (default off;
+-- lib/registry/agent-key-mirror.ts). The triggers below are on the new
+-- agent_keys table only, so they act only on writes to the history.
 --
 -- Backfill (owner decision 12): every existing agents.public_jwk becomes an
 -- agent_keys row. It is active, with possession_proved_at set, when its
@@ -108,8 +108,8 @@ $$;
 -- takes the row FOR UPDATE and checks the keys) cannot interleave.
 --
 -- It runs whenever a key can become usable (inserted, or moved back to
--- pending or active, as PATCH /v1/agents does for a key the agent held
--- before), and not when a key ends: rotating or compromising a key of another
+-- pending or active, as the history mirror does when PATCH /v1/agents brings
+-- back a key the agent held before), and not when a key ends: rotating or compromising a key of another
 -- type must stay possible under a payments rail.
 CREATE OR REPLACE FUNCTION grantex_agent_key_rail_check() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -132,11 +132,11 @@ CREATE OR REPLACE TRIGGER agent_keys_rail_check_trg
   BEFORE INSERT OR UPDATE OF agent_id, alg, status ON agent_keys
   FOR EACH ROW EXECUTE FUNCTION grantex_agent_key_rail_check();
 
--- The compromise tombstone, where no route can miss it: a key marked
--- compromised is recorded in compromised_agent_keys, and a recorded key can
--- never again be written to agent_keys in any other state. The mirror below
--- inserts into agent_keys for POST and PATCH /v1/agents, so those routes are
--- covered as well as POST /v1/agents/:id/keys.
+-- The compromise tombstone, where no writer of the history can miss it: a
+-- key marked compromised is recorded in compromised_agent_keys, and a
+-- recorded key can never again be written to agent_keys in any other state.
+-- That covers POST /v1/agents/:id/keys, and POST and PATCH /v1/agents when
+-- AGENT_KEY_HISTORY_MIRROR_ENABLED is on.
 CREATE OR REPLACE FUNCTION grantex_agent_key_compromise_check() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -154,87 +154,6 @@ $$;
 CREATE OR REPLACE TRIGGER agent_keys_compromise_check_trg
   BEFORE INSERT OR UPDATE ON agent_keys
   FOR EACH ROW EXECUTE FUNCTION grantex_agent_key_compromise_check();
-
--- Keep agent_keys complete when POST or PATCH /v1/agents writes the key
--- columns, and record a DPoP proof of the registered key as a possession
--- proof (owner decision 12).
-CREATE OR REPLACE FUNCTION grantex_agent_key_mirror() RETURNS trigger
-LANGUAGE plpgsql AS $$
-DECLARE
-  existing agent_keys%ROWTYPE;
-  key_alg TEXT;
-BEGIN
-  IF NEW.key_thumbprint IS NOT NULL AND NEW.public_jwk IS NOT NULL
-     AND (TG_OP = 'INSERT' OR NEW.key_thumbprint IS DISTINCT FROM OLD.key_thumbprint) THEN
-    key_alg := grantex_agent_key_alg(NEW.public_jwk);
-    IF key_alg IS NULL THEN
-      -- The routes only store keys this function understands. Anything else
-      -- cannot be tracked, so it is refused rather than left out of the history.
-      RAISE EXCEPTION 'agent key has no supported algorithm'
-        USING ERRCODE = 'check_violation', CONSTRAINT = 'chk_agent_keys_alg';
-    END IF;
-    SELECT * INTO existing FROM agent_keys WHERE thumbprint = NEW.key_thumbprint FOR UPDATE;
-    IF FOUND THEN
-      IF existing.status = 'compromised' THEN
-        RAISE EXCEPTION 'agent key was reported compromised'
-          USING ERRCODE = 'check_violation', CONSTRAINT = 'chk_agent_keys_not_compromised';
-      ELSIF existing.agent_id = NEW.id THEN
-        -- Back to a key this agent held before: registered again, so it has
-        -- to be proven again, as PATCH /v1/agents already requires.
-        IF existing.status = 'rotated' THEN
-          UPDATE agent_keys
-             SET status = 'pending', valid_from = NOW(), valid_to = NULL,
-                 possession_proved_at = NULL, updated_at = NOW()
-           WHERE thumbprint = NEW.key_thumbprint;
-        END IF;
-      ELSIF existing.status IN ('pending', 'active')
-            OR (existing.valid_to IS NOT NULL AND existing.valid_to > NOW()) THEN
-        -- Another agent holds this key. The constraint name is the one the
-        -- agents routes already answer with 409 AGENT_KEY_CONFLICT.
-        RAISE EXCEPTION 'agent key is registered to another agent'
-          USING ERRCODE = 'unique_violation', CONSTRAINT = 'idx_agents_key_thumbprint_unique';
-      ELSE
-        -- A key another agent replaced and no longer uses. The agents index
-        -- has always allowed it to be registered again, so it still can be;
-        -- the history row moves to the new holder, unproven.
-        DELETE FROM agent_key_challenges WHERE thumbprint = NEW.key_thumbprint;
-        UPDATE agent_keys
-           SET agent_id = NEW.id, developer_id = NEW.developer_id, jwk = NEW.public_jwk,
-               alg = key_alg, status = 'pending', valid_from = NOW(), valid_to = NULL,
-               possession_proved_at = NULL, rotated_from = NULL, updated_at = NOW()
-         WHERE thumbprint = NEW.key_thumbprint;
-      END IF;
-    ELSE
-      INSERT INTO agent_keys (thumbprint, agent_id, developer_id, jwk, alg, status)
-      VALUES (NEW.key_thumbprint, NEW.id, NEW.developer_id, NEW.public_jwk, key_alg, 'pending');
-    END IF;
-  END IF;
-
-  -- PATCH /v1/agents replaces the key at once: the old one ends now.
-  IF TG_OP = 'UPDATE' AND OLD.key_thumbprint IS NOT NULL
-     AND OLD.key_thumbprint IS DISTINCT FROM NEW.key_thumbprint THEN
-    UPDATE agent_keys
-       SET status = 'rotated', valid_to = NOW(), updated_at = NOW()
-     WHERE thumbprint = OLD.key_thumbprint AND agent_id = NEW.id
-       AND status IN ('pending', 'active');
-  END IF;
-
-  IF NEW.key_verified_thumbprint IS NOT NULL
-     AND NEW.key_verified_thumbprint = NEW.key_thumbprint
-     AND (TG_OP = 'INSERT'
-          OR NEW.key_verified_thumbprint IS DISTINCT FROM OLD.key_verified_thumbprint
-          OR NEW.key_verified_at IS DISTINCT FROM OLD.key_verified_at) THEN
-    UPDATE agent_keys
-       SET status = 'active', possession_proved_at = COALESCE(NEW.key_verified_at, NOW()), updated_at = NOW()
-     WHERE thumbprint = NEW.key_verified_thumbprint AND agent_id = NEW.id AND status = 'pending';
-  END IF;
-  RETURN NULL;
-END
-$$;
-
-CREATE OR REPLACE TRIGGER agents_key_mirror_trg
-  AFTER INSERT OR UPDATE OF key_thumbprint, public_jwk, key_verified_thumbprint, key_verified_at ON agents
-  FOR EACH ROW EXECUTE FUNCTION grantex_agent_key_mirror();
 
 -- Backfill. Idempotent: a key already in the history is left as it is.
 -- A registered key whose algorithm cannot be derived (a key type the routes
@@ -271,8 +190,7 @@ BEGIN
   IF skipped > 0 THEN
     -- A warning, not a failure: each stays the agent's registered key exactly
     -- as before this migration, and failing here would stop the service from
-    -- starting. The operator sees which agents need a supported key; the
-    -- mirror refuses any further write of such a key.
+    -- starting. The operator sees which agents need a supported key.
     RAISE WARNING '% registered agent key(s) have no supported algorithm and were not added to agent_keys (agents: %)',
       skipped, sample;
   END IF;

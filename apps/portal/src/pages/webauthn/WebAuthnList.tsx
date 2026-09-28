@@ -64,13 +64,13 @@ export function WebAuthnList() {
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm text-gx-text">Principal ID
             <input className="mt-1 block w-full bg-gx-surface border border-gx-border rounded-md px-3 py-2"
-              value={principalId} maxLength={256} onChange={(event) => {
+              value={principalId} maxLength={256} disabled={busy} onChange={(event) => {
                 setPrincipalId(event.target.value); setSession(null); setCredentials(null);
               }} />
           </label>
           <label className="text-sm text-gx-text">Authorization request ID (optional)
             <input className="mt-1 block w-full bg-gx-surface border border-gx-border rounded-md px-3 py-2"
-              value={authRequestId} onChange={(event) => { setAuthRequestId(event.target.value); setSession(null); }} />
+              value={authRequestId} disabled={busy} onChange={(event) => { setAuthRequestId(event.target.value); setSession(null); }} />
           </label>
         </div>
         <div className="flex gap-2">

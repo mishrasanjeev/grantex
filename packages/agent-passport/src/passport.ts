@@ -127,6 +127,17 @@ export interface IssuedPassport {
 
 export type IssuerKeyResolver = (issuer: string) => readonly Jwk[] | Promise<readonly Jwk[]>;
 
+/** Token Status List values (draft-ietf-oauth-status-list section 7.1: VALID 0x00, INVALID 0x01, SUSPENDED 0x02). */
+export type PassportStatus = 'valid' | 'invalid' | 'suspended';
+
+/**
+ * Answers the Token Status List value at (uri, idx) of a passport's status
+ * reference. The relying party's status-list component fetches and verifies
+ * the Status List Token (draft-ietf-oauth-status-list section 8.3) and throws
+ * when it has no fresh one.
+ */
+export type StatusResolver = (uri: string, idx: number) => PassportStatus | Promise<PassportStatus>;
+
 export interface VerifyPassportOptions {
   compact: string;
   /**
@@ -146,6 +157,17 @@ export interface VerifyPassportOptions {
   clockSkewSeconds?: number;
   /** Require and check a KB-JWT. Without it, a presentation that carries one is refused. */
   keyBinding?: KeyBindingRequirement;
+  /**
+   * Resolves the passport's status. Anything but 'valid' is refused:
+   * passport_revoked for 'invalid' or 'suspended', status_stale when it throws
+   * or answers anything else. Pass this or statusCheckedBy; one is required.
+   */
+  statusResolver?: StatusResolver;
+  /**
+   * 'caller' states that you resolve `status` yourself before accepting the
+   * passport. Pass this or statusResolver; one is required.
+   */
+  statusCheckedBy?: 'caller';
 }
 
 export interface VerifiedDisclosure {
@@ -179,14 +201,31 @@ export interface VerifiedPassport {
   disclosures: VerifiedDisclosure[];
   externalCredentialHash: string;
   keyBinding?: KeyBindingResult;
+  /**
+   * 'resolver' when verifyPassport resolved status and it was VALID; 'caller'
+   * when the caller passed statusCheckedBy: 'caller' and checks it itself.
+   */
+  statusCheckedBy: 'resolver' | 'caller';
 }
 
 function isHttpsUrl(value: unknown): value is string {
   return typeof value === 'string' && value.startsWith('https://') && value.length > 'https://'.length;
 }
 
+/**
+ * W3C DID Core section 3.1 (DID Syntax), anchored at both ends:
+ *   did                = "did:" method-name ":" method-specific-id
+ *   method-name        = 1*method-char
+ *   method-char        = %x61-7A / DIGIT
+ *   method-specific-id = *( *idchar ":" ) 1*idchar
+ *   idchar             = ALPHA / DIGIT / "." / "-" / "_" / pct-encoded
+ *   pct-encoded        = "%" HEXDIG HEXDIG
+ * A DID URL (path, query or fragment) is not a DID.
+ */
+const DID = /^did:[a-z0-9]+:(?:(?:[A-Za-z0-9._-]|%[0-9A-Fa-f]{2})*:)*(?:[A-Za-z0-9._-]|%[0-9A-Fa-f]{2})+$/;
+
 function isDid(value: unknown): value is string {
-  return typeof value === 'string' && /^did:[a-z0-9]+:[\s\S]+/.test(value);
+  return typeof value === 'string' && DID.test(value);
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -328,6 +367,48 @@ function checkNumberOption(name: string, value: unknown, minimum: number): numbe
   return value;
 }
 
+/**
+ * Exactly one status decision: a resolver, or the caller's statement that it
+ * checks status. Fail closed: without either, a revoked or suspended passport
+ * would be returned as verified to a relying party that forgot the status step.
+ */
+function checkStatusOptions(options: VerifyPassportOptions): void {
+  const { statusResolver, statusCheckedBy } = options;
+  if (statusResolver !== undefined && statusCheckedBy !== undefined) {
+    throw new TypeError('pass either statusResolver or statusCheckedBy, not both');
+  }
+  if (statusResolver === undefined && statusCheckedBy === undefined) {
+    throw new TypeError(
+      "verifyPassport needs a status decision: pass statusResolver to resolve the Token Status List reference, or statusCheckedBy: 'caller' if you check it yourself",
+    );
+  }
+  if (statusResolver !== undefined && typeof statusResolver !== 'function') {
+    throw new TypeError('statusResolver must be a function (uri, idx) => status');
+  }
+  if (statusCheckedBy !== undefined && statusCheckedBy !== 'caller') {
+    throw new TypeError("statusCheckedBy must be 'caller'");
+  }
+}
+
+/** draft-ietf-oauth-status-list section 7.1 values; anything else is a refusal. */
+async function resolveStatus(resolver: StatusResolver, uri: string, idx: number): Promise<void> {
+  let value: unknown;
+  try {
+    value = await resolver(uri, idx);
+  } catch (cause) {
+    // Section 8.3: when the Status List Token cannot be fetched or validated,
+    // no statement about the status can be made and the token is rejected.
+    throw new PassportError('status_stale', 'status_unresolved', 'the status resolver failed', { cause });
+  }
+  // An exact string match only: an unknown or mistyped answer is never read as VALID.
+  if (value === 'valid') return;
+  if (value === 'invalid') throw new PassportError('passport_revoked', 'status_invalid', 'the passport is revoked (INVALID)');
+  if (value === 'suspended') {
+    throw new PassportError('passport_revoked', 'status_suspended', 'the passport is suspended (SUSPENDED)');
+  }
+  throw new PassportError('status_stale', 'status_unknown', 'the status resolver returned an unknown status');
+}
+
 async function resolveIssuerKeys(resolver: IssuerKeyResolver, iss: string): Promise<readonly unknown[]> {
   let keys: unknown;
   try {
@@ -354,10 +435,16 @@ async function resolveIssuerKeys(resolver: IssuerKeyResolver, iss: string): Prom
 /**
  * Verify an Agent Passport (or a presentation of one) and return its claims.
  * Every failure throws a PassportError; nothing is returned unless every rule
- * of the profile holds. Revocation is not checked: the caller resolves
- * `status` before accepting (spec/agent-passport-1.0.md section 4).
+ * of the profile holds.
+ *
+ * Status (spec/agent-passport-1.0.md section 4) is required: pass
+ * `statusResolver`, which answers the Token Status List value for the
+ * passport's (uri, idx), or `statusCheckedBy: 'caller'` to state that you
+ * resolve `status` yourself before accepting. With neither, or both, the call
+ * rejects with a TypeError.
  */
 export async function verifyPassport(options: VerifyPassportOptions): Promise<VerifiedPassport> {
+  checkStatusOptions(options);
   const now = checkNumberOption('now', options.now ?? Math.floor(Date.now() / 1000), 0);
   const skew = checkNumberOption('clockSkewSeconds', options.clockSkewSeconds ?? 0, 0);
   if (options.keyBinding?.maxAgeSeconds !== undefined) {
@@ -451,6 +538,12 @@ export async function verifyPassport(options: VerifyPassportOptions): Promise<Ve
     });
   }
 
+  // Status last: every other rule holds, so the resolver (often a network
+  // fetch) is only asked about a passport that would otherwise be accepted.
+  if (options.statusResolver !== undefined) {
+    await resolveStatus(options.statusResolver, payload.status.status_list.uri, payload.status.status_list.idx);
+  }
+
   const disclosed: PassportClaims = {};
   for (const name of DISCLOSABLE_CLAIMS) {
     if (Object.hasOwn(processed.claims, name)) (disclosed as Record<string, unknown>)[name] = processed.claims[name];
@@ -475,6 +568,7 @@ export async function verifyPassport(options: VerifyPassportOptions): Promise<Ve
       value: d.value,
     })),
     externalCredentialHash: externalCredentialHash(options.compact),
+    statusCheckedBy: options.statusResolver !== undefined ? 'resolver' : 'caller',
   };
   if (keyBinding !== undefined) result.keyBinding = keyBinding;
   return result;
