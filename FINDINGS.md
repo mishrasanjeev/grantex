@@ -1415,47 +1415,76 @@ the pull request that references it.
   `issueForCommittedGrant` while the stop is on), so a revocation sets their
   bit, and have `verifySDJWT` check it.
 
-## G-100 — The auth service's SD-JWT verifier does not follow RFC 9901 section 7.1
+## G-85 — The single-key token paths do not read the agent key history
 
-- **Found:** building the Agent Passport verifier (`packages/agent-passport`),
-  2026-09-28, comparing it with the existing `verifySDJWT` in
-  `apps/auth-service/src/lib/sd-jwt.ts`.
-- **What:** `verifySDJWT` drops empty elements before parsing, so `jwt~~d~`
-  verifies although RFC 9901 section 4 allows an empty element only after the
-  last tilde; it treats any element whose header says `kb+jwt` as the Key
-  Binding JWT, wherever it appears, rather than only the last element; and it
-  accepts the same disclosure twice and a digest that appears twice in `_sd`,
-  both of which section 7.1 (steps 4 and 5) says MUST be rejected. A repeated
-  disclosure overwrites the claim with the same value, so nothing is forged
-  today, but the verifier accepts inputs a conforming verifier refuses.
-- **Impact:** interoperability and defence in depth: another verifier refuses
-  what this one accepts, and the checks that stop disclosure games are missing.
-- **Proposal:** take the framing and disclosure processing from
-  `@grantex/agent-passport` (`splitSdJwt`, `processDisclosures`), behind a flag
-  that defaults off because it refuses inputs accepted today, with tests of
-  each refusal. Owner: auth service maintainers. Exit criterion: the
-  refusal vectors of `spec/examples/agent-passport-vectors.json` that apply to
-  plain SD-JWT (`not_sd_jwt`, `duplicate_disclosure`, `duplicate_digest`) are
-  refused by `verifySDJWT` with the flag on.
+- **Found:** agent key history work (Agent Trust Registry, PRD §8.8),
+  2026-09-28.
+- **What:** migration 122 adds `agent_keys` with pending, active, rotated and
+  compromised keys and a rotation overlap, but every path that binds or checks
+  an agent key still reads the single registered key,
+  `agents.key_thumbprint`: the OAuth profile's PAR, code exchange, refresh,
+  revocation and token exchange (`routes/oauth.ts`), `POST /v1/authorize` and
+  `POST /v1/token` (`cnf.jkt`), delegation (`routes/delegate.ts`) and the
+  agent DID document (`routes/did.ts`). Consequences: a key added and proven
+  through the history is not usable there until it is also set as
+  `publicJwk`; a key rotated through the history stays accepted there after
+  its `valid_to` for as long as it remains the registered key; a pending key
+  is accepted there with a DPoP proof (which is also what proves it). A
+  compromise is handled: it moves the registered key to a proven replacement
+  or clears it and suspends the agent.
+- **Impact:** the overlap and the `key_unproven` / `key_not_active` denials
+  apply to the key routes and to relying parties that read the history, not
+  yet to the auth service's own token endpoints. The provider documentation
+  (`docs/providers/registering-agents.md`) and `spec/agent-keys.md` §5 and §7
+  say so, and tell providers to set `publicJwk` to the replacement with
+  `PATCH /v1/agents` after a rotation.
+- **Proposal:** switch those paths to evaluate the presented key against
+  `agent_keys` (`evaluateAgentKey` in `lib/registry/agent-keys.ts`), behind a
+  flag that defaults off, then drop `idx_agents_key_thumbprint_unique` once no
+  path reads `agents.key_thumbprint`.
 
-## G-101 — The grant SD-JWT uses the retired `vc+sd-jwt` typ
+## G-86 — A compromise does not reach grants in other tenants bound to the same key
 
-- **Found:** checking `typ` values against draft-ietf-oauth-sd-jwt-vc-19
-  (section 2.2.1 requires `dc+sd-jwt`) while writing
-  `spec/agent-passport-1.0.md`, 2026-09-28.
-- **What:** `issueSDJWT` in `apps/auth-service/src/lib/sd-jwt.ts` signs its
-  issuer JWT with `typ: 'vc+sd-jwt'`, and the SDKs report the format as
-  `vc+sd-jwt`. The current draft uses `dc+sd-jwt` and, as an SD-JWT VC, also
-  expects a `vct` claim; the grant SD-JWT instead nests `_sd` inside a W3C
-  `vc.credentialSubject`, which is the VC data model shape, not the SD-JWT VC
-  one. A current SD-JWT VC verifier refuses it on `typ` alone.
-- **Impact:** the grant SD-JWT is not interoperable with SD-JWT VC verifiers;
-  Grantex's own verifier is unaffected.
-- **Proposal:** decide whether the grant SD-JWT is an SD-JWT VC (then `typ`
-  `dc+sd-jwt`, a `vct`, claims at the top level) or a plain SD-JWT with its own
-  `typ`, and change it behind a flag with the SDKs' format string, recorded in
-  `CHANGELOG.md`. The Agent Passport profile is not affected: it already uses
-  `dc+sd-jwt`.
+- **Found:** agent key history work, 2026-09-28.
+- **What:** `POST /v1/agents/:id/keys/:thumbprint/compromise` revokes the
+  grants whose `cnf.jkt` is the key only within the reporting developer's
+  tenant. A key can have been held earlier by an agent of another developer:
+  a key released by a replacement (`PATCH /v1/agents`, or a rotation whose
+  overlap ended) can be registered by another agent, which the registered-key
+  index has always allowed. Grants the earlier holder obtained with the key
+  keep their binding and are not revoked by the compromise. (Registration
+  after a compromise is closed on every path that writes the history:
+  `compromised_agent_keys` records every compromised thumbprint and outlives
+  the agent. `POST` and `PATCH /v1/agents` check it only with the history
+  mirror on; see G-87.)
+- **Impact:** narrow. It needs one key to move between developers and then be
+  reported compromised while grants from the earlier holder are still active.
+- **Proposal:** decide with the owner whether a compromise should revoke
+  grants bound to the key in every tenant, or whether a released key should
+  stay reserved to its developer.
+
+## G-87 — With the history mirror off, the agents routes do not consult the key history
+
+- **Found:** review of the agent key history work, 2026-09-28.
+- **What:** mirroring the key `POST` and `PATCH /v1/agents` write into
+  `agent_keys` is behind `AGENT_KEY_HISTORY_MIRROR_ENABLED`, default off, so
+  those routes keep their earlier behaviour. With it off they do not add the
+  key to the history, do not end the replaced key there, and do not refuse a
+  key another agent holds in its history, a key in `compromised_agent_keys`,
+  or a non-P-256 key for an agent that declares a payments rail. The history
+  of an agent whose registered key changed through them can therefore list a
+  key it no longer registers as pending or active, and a compromised key can
+  be registered again as `publicJwk`.
+- **Impact:** a key registered again that way is still refused by the key
+  routes and by delegation (`routes/delegate.ts` checks
+  `compromised_agent_keys` under the cascade lock), but `POST /v1/token` and
+  the OAuth profile bind grants to the registered key and do not check it
+  (G-85).
+- **Proposal:** turn the flag on once its exit criterion is green (the flag-on
+  suite in `tests/agent-keys-postgres.integration.test.ts`) and the owner has
+  approved the runbook; then make it the default in a release that records the
+  flip as a breaking change with the flag as the opt-out.
+
 ## G-90 — The grant credential status list is served unsigned, as a superseded format
 
 - **Found:** registry attestation-acceptance status lists (Stage 1), 2026-09-28,
@@ -1499,3 +1528,45 @@ the pull request that references it.
   range, and return `valid: false` otherwise; test each of the three cases.
   Behind a flag that defaults off, since it can turn today's `valid: true`
   into a denial.
+
+## G-100 — The auth service's SD-JWT verifier does not follow RFC 9901 section 7.1
+
+- **Found:** building the Agent Passport verifier (`packages/agent-passport`),
+  2026-09-28, comparing it with the existing `verifySDJWT` in
+  `apps/auth-service/src/lib/sd-jwt.ts`.
+- **What:** `verifySDJWT` drops empty elements before parsing, so `jwt~~d~`
+  verifies although RFC 9901 section 4 allows an empty element only after the
+  last tilde; it treats any element whose header says `kb+jwt` as the Key
+  Binding JWT, wherever it appears, rather than only the last element; and it
+  accepts the same disclosure twice and a digest that appears twice in `_sd`,
+  both of which section 7.1 (steps 4 and 5) says MUST be rejected. A repeated
+  disclosure overwrites the claim with the same value, so nothing is forged
+  today, but the verifier accepts inputs a conforming verifier refuses.
+- **Impact:** interoperability and defence in depth: another verifier refuses
+  what this one accepts, and the checks that stop disclosure games are missing.
+- **Proposal:** take the framing and disclosure processing from
+  `@grantex/agent-passport` (`splitSdJwt`, `processDisclosures`), behind a flag
+  that defaults off because it refuses inputs accepted today, with tests of
+  each refusal. Owner: auth service maintainers. Exit criterion: the
+  refusal vectors of `spec/examples/agent-passport-vectors.json` that apply to
+  plain SD-JWT (`not_sd_jwt`, `duplicate_disclosure`, `duplicate_digest`) are
+  refused by `verifySDJWT` with the flag on.
+
+## G-101 — The grant SD-JWT uses the retired `vc+sd-jwt` typ
+
+- **Found:** checking `typ` values against draft-ietf-oauth-sd-jwt-vc-19
+  (section 2.2.1 requires `dc+sd-jwt`) while writing
+  `spec/agent-passport-1.0.md`, 2026-09-28.
+- **What:** `issueSDJWT` in `apps/auth-service/src/lib/sd-jwt.ts` signs its
+  issuer JWT with `typ: 'vc+sd-jwt'`, and the SDKs report the format as
+  `vc+sd-jwt`. The current draft uses `dc+sd-jwt` and, as an SD-JWT VC, also
+  expects a `vct` claim; the grant SD-JWT instead nests `_sd` inside a W3C
+  `vc.credentialSubject`, which is the VC data model shape, not the SD-JWT VC
+  one. A current SD-JWT VC verifier refuses it on `typ` alone.
+- **Impact:** the grant SD-JWT is not interoperable with SD-JWT VC verifiers;
+  Grantex's own verifier is unaffected.
+- **Proposal:** decide whether the grant SD-JWT is an SD-JWT VC (then `typ`
+  `dc+sd-jwt`, a `vct`, claims at the top level) or a plain SD-JWT with its own
+  `typ`, and change it behind a flag with the SDKs' format string, recorded in
+  `CHANGELOG.md`. The Agent Passport profile is not affected: it already uses
+  `dc+sd-jwt`.
