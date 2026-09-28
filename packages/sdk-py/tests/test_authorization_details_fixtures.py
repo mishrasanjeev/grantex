@@ -69,7 +69,7 @@ def _grant(details: Any) -> VerifiedGrant:
 @pytest.fixture()
 def client() -> Iterator[tuple[Grantex, MagicMock]]:
     with patch("grantex._client.verify_grant_token") as verify:
-        c = Grantex(api_key="test-key", caps_meter=CapsMeter(InMemoryCapsBackend()))
+        c = Grantex(api_key="test-key", revocation_check="offline", caps_meter=CapsMeter(InMemoryCapsBackend()))
         c.load_manifest(MANIFEST)
         yield c, verify
 

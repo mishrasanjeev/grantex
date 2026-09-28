@@ -339,15 +339,60 @@ def test_feed_denies_once_a_synced_feed_has_gone_quiet() -> None:
 
 
 @respx.mock
-def test_revocation_checking_is_off_by_default() -> None:
-    route = respx.get(f"{BASE_URL}/v1/revocations").mock(
+def test_default_client_checks_revocation() -> None:
+    """Without ``revocation_check`` the client asks the auth service (online)."""
+    status = respx.get(f"{BASE_URL}/v1/revocations/status").mock(
+        return_value=httpx.Response(200, json={"status": "revoked", "revoked": True})
+    )
+    feed = respx.get(f"{BASE_URL}/v1/revocations").mock(
         return_value=httpx.Response(200, json=_snapshot([_entry()]))
     )
     grantex = _client()
     with patch("grantex._client.verify_grant_token", return_value=_grant()):
         result = grantex.enforce("jwt", "acme_kyb", "resolve_business")
+    assert result.allowed is False
+    assert result.reason_code == DenialReason.GRANT_REVOKED
+    assert result.sub_reason == RevocationSubReason.REVOKED
+    assert status.call_count == 1
+    # Online, not the feed: nothing is followed in the background.
+    assert feed.call_count == 0
+    assert grantex.revocation_feed_state() is None
+
+
+@respx.mock
+def test_default_client_fails_closed_when_the_status_cannot_be_checked() -> None:
+    respx.get(f"{BASE_URL}/v1/revocations/status").mock(
+        return_value=httpx.Response(404, json={"message": "Not found"})
+    )
+    grantex = Grantex(api_key="test_key", base_url=BASE_URL, max_retries=0)
+    grantex.load_manifest(
+        ToolManifest(connector="acme_kyb", tools={"resolve_business": Permission.READ})
+    )
+    with patch("grantex._client.verify_grant_token", return_value=_grant()):
+        result = grantex.enforce("jwt", "acme_kyb", "resolve_business")
+    assert result.allowed is False
+    assert result.sub_reason == RevocationSubReason.STATUS_UNAVAILABLE
+
+
+@respx.mock
+def test_offline_opt_out_restores_the_unchecked_behaviour() -> None:
+    """``revocation_check="offline"`` is the explicit opt-out: no check at all."""
+    feed = respx.get(f"{BASE_URL}/v1/revocations").mock(
+        return_value=httpx.Response(200, json=_snapshot([_entry()]))
+    )
+    status = respx.get(f"{BASE_URL}/v1/revocations/status").mock(
+        return_value=httpx.Response(200, json={"status": "revoked", "revoked": True})
+    )
+    grantex = _client(revocation_check="offline")
+    with patch("grantex._client.verify_grant_token", return_value=_grant()):
+        result = grantex.enforce("jwt", "acme_kyb", "resolve_business")
+        per_call = grantex.enforce(
+            "jwt", "acme_kyb", "resolve_business", revocation_check="offline"
+        )
     assert result.allowed is True
-    assert route.call_count == 0
+    assert per_call.allowed is True
+    assert feed.call_count == 0
+    assert status.call_count == 0
 
 
 @respx.mock
@@ -438,7 +483,7 @@ def test_the_mode_can_be_chosen_per_call() -> None:
     respx.get(f"{BASE_URL}/v1/revocations/status").mock(
         return_value=httpx.Response(200, json={"status": "revoked", "revoked": True})
     )
-    grantex = _client()
+    grantex = _client(revocation_check="offline")
     with patch("grantex._client.verify_grant_token", return_value=_grant()):
         assert grantex.enforce("jwt", "acme_kyb", "resolve_business").allowed is True
         denied = grantex.enforce(
@@ -451,3 +496,68 @@ def test_the_mode_can_be_chosen_per_call() -> None:
 def test_an_unknown_mode_is_refused() -> None:
     with pytest.raises(ValueError, match="revocation_check"):
         Grantex(api_key="test_key", base_url=BASE_URL, revocation_check="sometimes")
+
+
+# ── Per-call overrides only tighten ──────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("configured", "per_call"),
+    [("online", "offline"), ("online", "feed"), ("feed", "offline")],
+)
+@respx.mock
+def test_a_per_call_mode_weaker_than_the_client_is_refused(
+    configured: str, per_call: str
+) -> None:
+    _route_feed([])
+    status = respx.get(f"{BASE_URL}/v1/revocations/status").mock(
+        return_value=httpx.Response(200, json={"status": "active", "revoked": False})
+    )
+    grantex = _client(revocation_check=configured)
+    try:
+        with patch("grantex._client.verify_grant_token", return_value=_grant()) as verify:
+            with pytest.raises(ValueError, match="cannot loosen"):
+                grantex.enforce(
+                    "jwt", "acme_kyb", "resolve_business", revocation_check=per_call
+                )
+        # Refused before anything else happens: no token check, no status call.
+        assert verify.call_count == 0
+        assert status.call_count == 0
+    finally:
+        grantex.stop_revocation_feed()
+
+
+@pytest.mark.parametrize(
+    ("configured", "per_call"),
+    [("offline", "feed"), ("offline", "online"), ("feed", "online"), ("online", "online")],
+)
+@respx.mock
+def test_a_per_call_mode_as_strict_or_stricter_is_used(
+    configured: str, per_call: str
+) -> None:
+    _route_feed([_entry()])
+    respx.get(f"{BASE_URL}/v1/revocations/status").mock(
+        return_value=httpx.Response(200, json={"status": "revoked", "revoked": True})
+    )
+    grantex = _client(revocation_check=configured)
+    try:
+        if per_call == "feed":
+            assert grantex.revocation_feed().ready(timeout=2.0) is True
+        with patch("grantex._client.verify_grant_token", return_value=_grant()):
+            result = grantex.enforce(
+                "jwt", "acme_kyb", "resolve_business", revocation_check=per_call
+            )
+        assert result.allowed is False
+        assert result.reason_code == DenialReason.GRANT_REVOKED
+    finally:
+        grantex.stop_revocation_feed()
+
+
+def test_revocation_check_strength_orders_offline_below_feed_below_online() -> None:
+    from grantex.revocations import REVOCATION_CHECK_STRENGTH
+
+    assert (
+        REVOCATION_CHECK_STRENGTH["offline"]
+        < REVOCATION_CHECK_STRENGTH["feed"]
+        < REVOCATION_CHECK_STRENGTH["online"]
+    )

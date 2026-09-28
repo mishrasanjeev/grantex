@@ -65,7 +65,7 @@ describe('enforce()', () => {
     );
     vi.stubGlobal('fetch', makeFetch(200, {}));
 
-    const grantex = new Grantex({ apiKey: 'test_key' });
+    const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
     grantex.loadManifest(salesforceManifest);
 
     const result = await grantex.enforce({
@@ -115,7 +115,7 @@ describe('enforce()', () => {
     );
     vi.stubGlobal('fetch', makeFetch(200, {}));
 
-    const grantex = new Grantex({ apiKey: 'test_key' });
+    const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
     grantex.loadManifest(salesforceManifest);
 
     const result = await grantex.enforce({
@@ -134,7 +134,7 @@ describe('enforce()', () => {
     );
     vi.stubGlobal('fetch', makeFetch(200, {}));
 
-    const grantex = new Grantex({ apiKey: 'test_key' });
+    const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
     // No manifest loaded for "unknown"
 
     const result = await grantex.enforce({
@@ -153,7 +153,7 @@ describe('enforce()', () => {
     );
     vi.stubGlobal('fetch', makeFetch(200, {}));
 
-    const grantex = new Grantex({ apiKey: 'test_key' });
+    const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
     grantex.loadManifest(salesforceManifest);
 
     const result = await grantex.enforce({
@@ -174,7 +174,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -192,7 +192,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -210,7 +210,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -228,7 +228,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -247,7 +247,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -268,7 +268,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -291,7 +291,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -309,7 +309,7 @@ describe('enforce()', () => {
       vi.mocked(verifyGrantToken).mockRejectedValue('unexpected string error');
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -331,7 +331,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -350,7 +350,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -369,7 +369,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -389,7 +389,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -409,7 +409,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -429,7 +429,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -448,7 +448,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -468,7 +468,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -489,7 +489,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -510,7 +510,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -530,7 +530,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
 
       // Before loading, enforce denies
       const before = await grantex.enforce({
@@ -559,7 +559,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifests([salesforceManifest, hubspotManifest]);
 
       const sfResult = await grantex.enforce({
@@ -583,7 +583,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       // manage_org requires admin, so write scope should deny it
@@ -621,7 +621,7 @@ describe('enforce()', () => {
       );
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
       grantex.loadManifest(salesforceManifest);
 
       const result = await grantex.enforce({
@@ -646,7 +646,7 @@ describe('enforce()', () => {
       vi.mocked(verifyGrantToken).mockRejectedValue(new Error('bad token'));
       vi.stubGlobal('fetch', makeFetch(200, {}));
 
-      const grantex = new Grantex({ apiKey: 'test_key' });
+      const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
 
       const result = await grantex.enforce({
         grantToken: 'bad.token',
@@ -665,7 +665,7 @@ describe('enforce()', () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:write'] }));
       vi.stubGlobal('fetch', makeFetch(200, {}));
       const original = { name: 'test', description: 'test', invoke: vi.fn().mockResolvedValue('result') };
-      const gx = new Grantex({ apiKey: 'k' });
+      const gx = new Grantex({ apiKey: 'k', revocationCheck: 'offline' });
       gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
       const wrapped = gx.wrapTool(original, { connector: 'salesforce', tool: 'create_lead', grantToken: 'token' });
       const result = await wrapped.invoke('arg1');
@@ -677,7 +677,7 @@ describe('enforce()', () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:read'] }));
       vi.stubGlobal('fetch', makeFetch(200, {}));
       const original = { name: 'test', description: 'test', invoke: vi.fn() };
-      const gx = new Grantex({ apiKey: 'k' });
+      const gx = new Grantex({ apiKey: 'k', revocationCheck: 'offline' });
       gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
       const wrapped = gx.wrapTool(original, { connector: 'salesforce', tool: 'create_lead', grantToken: 'token' });
       await expect(wrapped.invoke()).rejects.toThrow('Grantex scope denied');
@@ -688,7 +688,7 @@ describe('enforce()', () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:write'] }));
       vi.stubGlobal('fetch', makeFetch(200, {}));
       const original = { name: 'test', description: 'test', invoke: vi.fn().mockResolvedValue('ok') };
-      const gx = new Grantex({ apiKey: 'k' });
+      const gx = new Grantex({ apiKey: 'k', revocationCheck: 'offline' });
       gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
       let token = 'token-1';
       const wrapped = gx.wrapTool(original, { connector: 'salesforce', tool: 'create_lead', grantToken: () => token });
@@ -704,7 +704,7 @@ describe('enforce()', () => {
     it('calls next when scope is sufficient', async () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:write'] }));
       vi.stubGlobal('fetch', makeFetch(200, {}));
-      const gx = new Grantex({ apiKey: 'k' });
+      const gx = new Grantex({ apiKey: 'k', revocationCheck: 'offline' });
       gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
       const mw = gx.enforceMiddleware({
         extractToken: (req) => req['token'] as string,
@@ -722,7 +722,7 @@ describe('enforce()', () => {
     it('returns 403 when scope is insufficient', async () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:read'] }));
       vi.stubGlobal('fetch', makeFetch(200, {}));
-      const gx = new Grantex({ apiKey: 'k' });
+      const gx = new Grantex({ apiKey: 'k', revocationCheck: 'offline' });
       gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
       const mw = gx.enforceMiddleware({
         extractToken: (req) => req['token'] as string,
@@ -741,7 +741,7 @@ describe('enforce()', () => {
 
     it('returns 401 when no token', () => {
       vi.stubGlobal('fetch', makeFetch(200, {}));
-      const gx = new Grantex({ apiKey: 'k' });
+      const gx = new Grantex({ apiKey: 'k', revocationCheck: 'offline' });
       const mw = gx.enforceMiddleware({
         extractToken: () => undefined,
         extractConnector: () => 'salesforce',
@@ -759,7 +759,7 @@ describe('enforce()', () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:read'] }));
       vi.stubGlobal('fetch', makeFetch(200, {}));
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const gx = new Grantex({ apiKey: 'k', enforceMode: 'permissive' } as any);
+      const gx = new Grantex({ apiKey: 'k', revocationCheck: 'offline', enforceMode: 'permissive' } as any);
       gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
       const result = await gx.enforce({ grantToken: 'tok', connector: 'salesforce', tool: 'create_lead' });
       expect(result.allowed).toBe(true); // permissive overrides
@@ -772,7 +772,7 @@ describe('enforce()', () => {
       vi.stubGlobal('fetch', makeFetch(200, {}));
       vi.stubEnv('NODE_ENV', 'production');
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const gx = new Grantex({ apiKey: 'k', enforceMode: 'permissive' } as any);
+      const gx = new Grantex({ apiKey: 'k', revocationCheck: 'offline', enforceMode: 'permissive' } as any);
       gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
       const result = await gx.enforce({ grantToken: 'tok', connector: 'salesforce', tool: 'create_lead' });
       expect(result.allowed).toBe(true);
@@ -783,7 +783,7 @@ describe('enforce()', () => {
     it('strict mode denies normally (default)', async () => {
       vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant({ scopes: ['tool:salesforce:read'] }));
       vi.stubGlobal('fetch', makeFetch(200, {}));
-      const gx = new Grantex({ apiKey: 'k' });
+      const gx = new Grantex({ apiKey: 'k', revocationCheck: 'offline' });
       gx.loadManifest(new ToolManifest({ connector: 'salesforce', tools: { create_lead: Permission.WRITE } }));
       const result = await gx.enforce({ grantToken: 'tok', connector: 'salesforce', tool: 'create_lead' });
       expect(result.allowed).toBe(false);

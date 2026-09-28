@@ -322,7 +322,7 @@ def _grant(details: Any) -> VerifiedGrant:
 def _enforce(grant: VerifiedGrant, tool: str, **client: Any) -> Any:
     with patch("grantex._client.verify_grant_token") as verify:
         verify.return_value = grant
-        g = Grantex(api_key="test-key", **client)
+        g = Grantex(api_key="test-key", revocation_check="offline", **client)
         g.load_manifest(MANIFEST)
         result = g.enforce(grant_token="t", connector="acme_kyb", tool=tool)
         return result, verify

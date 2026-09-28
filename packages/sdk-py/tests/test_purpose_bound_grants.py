@@ -82,7 +82,7 @@ def verify() -> Iterator[MagicMock]:
 
 def _enforce(verify: MagicMock, grant: VerifiedGrant, tool: str, connector: str = "acme_kyb") -> Any:
     verify.return_value = grant
-    client = Grantex(api_key="test-key")
+    client = Grantex(api_key="test-key", revocation_check="offline")
     client.load_manifest(ACME_KYB)
     return client.enforce("t", connector, tool)
 

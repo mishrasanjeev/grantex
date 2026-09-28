@@ -36,6 +36,91 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   empty. The lists are the registry's own; they have no developer or tenant
   column.
 
+### Passkey sandbox/live parity and retained credential history
+- Preserve an interactively selected principal before replacing the hosted
+  consent form, so live OAuth approval and denial can complete WebAuthn.
+- Honor `fidoRequired: true` in sandbox authorization and OAuth PAR. Requests
+  remain pending, and developer-key approve/deny shortcuts cannot bypass the
+  passkey ceremony. Live mode remains passkey-required without a fallback.
+- Reject agent hard deletion with `409 AGENT_HAS_CREDENTIAL_HISTORY` when
+  issued VCs reference its grants, preserving credential status history rather
+  than returning a foreign-key error or deleting that history. Row locking
+  serializes deletion with new agent-referencing records.
+- Add real Chromium/Postgres regressions, production sandbox/live and OAuth
+  parity coverage, and explicit documentation of device/removal boundaries.
+
+### Breaking: revocation is checked by default (TypeScript and Python SDKs, auth service, mcp-auth)
+- **Breaking (default flip):** a `Grantex` client created without
+  `revocationCheck` (TypeScript) or `revocation_check` (Python) now checks
+  revocation `online`: `enforce()` asks the auth service about the grant
+  (`GET /v1/revocations/status`) on every call, and denies with
+  `grant_revoked` when the grant is revoked, suspended, expired or unknown,
+  and with `grant_revoked` / `status_unavailable` when the auth service
+  cannot answer. Before, a client did not check revocation: a revoked
+  grant's token was accepted until it expired. **Opt-out:** pass
+  `revocationCheck: 'offline'` / `revocation_check="offline"` to keep the
+  previous behaviour. `feed` is unchanged. New exports:
+  `DEFAULT_REVOCATION_CHECK` and `REVOCATION_CHECK_STRENGTH` (both SDKs).
+- **Breaking:** the per-call `revocationCheck` / `revocation_check` option of
+  `enforce()` may only tighten the client's mode, never loosen it. The modes
+  are ordered by how soon a revocation is seen: `offline` < `feed` (within
+  its staleness bound) < `online` (the next call). A weaker per-call value is
+  refused before anything is checked: `enforce()` rejects with an `Error`
+  (TypeScript) or raises `ValueError` (Python) naming both modes. **Opt-out:**
+  none per call; configure the client with the weaker mode instead (a client
+  configured `offline` can still ask for `feed` or `online` on one call).
+- **Breaking (default flip):** the auth service serves the revocation feed and
+  status endpoints (`/v1/revocations`, `/v1/revocations/status`,
+  `/v1/revocations/stream`) by default, and while they are on prunes
+  `grant_revocation_events` hourly. Before, they answered `404`
+  unless `REVOCATION_FEED_ENABLED=true`. **Opt-out:**
+  `REVOCATION_FEED_ENABLED=false` (any case); any other value leaves the feed
+  on, so a typo cannot silently turn it off. A deployment that opts out, or
+  limits the feed with `REVOCATION_FEED_DEVELOPER_IDS`, makes every default
+  SDK client of an excluded developer deny every call, so opt out only when
+  every client sets `offline`. The endpoints and triggers (migrations 112,
+  114 and 116) are unchanged; the migrations already run at start-up.
+- The triggers fill `grant_revocation_events` even while the feed is off, so
+  the first prune after this upgrade can face a large backlog. The prune is
+  now bounded, single-instance and jittered (FINDINGS G-66): it deletes in
+  batches of 1000 rows, at most 50 batches or 60 seconds a run, leaving the
+  rest to later runs; it holds a Postgres advisory lock
+  (`hashtextextended('grantex:revocation-feed-prune', 0)`), so only one
+  instance prunes and the others skip that run; and each instance's first run
+  waits a random delay of up to `REVOCATION_FEED_PRUNE_JITTER_SECONDS`
+  (default 300, 0 to 3600) instead of running at start, then runs hourly from
+  there. A failed run is logged and retried next hour. New metrics
+  `grantex_revocation_feed_pruned_total` and
+  `grantex_revocation_feed_prune_runs_total{outcome}` (`complete`, `capped`,
+  `skipped_locked`, `failed`); every run logs the rows it deleted.
+- `GET /v1/revocations/status` now allows 6,000 requests a minute per client
+  address, the developer's revocation-status budget, instead of 1,200
+  (FINDINGS G-65). A default client makes one status request per `enforce()`,
+  so a server running many tools behind one address was answered `429` below
+  the developer's budget, and its SDK retried and denied with
+  `status_unavailable`. The per-developer budget (6,000 a minute on every
+  plan, 100 checked calls a second across a developer's instances) still
+  applies, as does a per-address ceiling counted before authentication.
+  `GET /v1/revocations` (600) and `/stream` (120) keep their per-address
+  limits: they are called once per process, not once per call. A client above
+  that rate should use `feed`.
+- **Breaking:** `@grantex/mcp-auth` 3.0.0 (prepared, not published):
+  `requireMcpAuth` (Express and Hono) and `createMcpResourceGuard()` refuse to
+  start without a revocation configuration. `revocations` is now a required
+  option: an object with `isTokenRevoked(jti)` (the authorization server's
+  storage), or `'none'`. A missing value, or one that is neither, throws.
+  **Opt-out:** `revocations: 'none'` starts the guard with a warning and no
+  revocation check, as a guard without `revocations` did before.
+- Migration: (1) upgrade the auth service first, or make sure
+  `REVOCATION_FEED_ENABLED` is not `false` where it runs, so the status
+  endpoint answers before SDK clients start asking; (2) on upgrading an SDK,
+  either accept `online` (one request to the auth service per `enforce()`
+  call; choose `feed` for the hot path) or pass `offline`; (3) remove any
+  per-call `revocationCheck` / `revocation_check` weaker than the client's
+  mode; (4) pass `revocations` to every `requireMcpAuth` /
+  `createMcpResourceGuard()`. Documented in
+  `docs/concepts/event-bridge-and-revocation.md`, `docs/self-hosting.md` and
+  `docs/mcp-auth.md`.
 ### Capped scopes need an amount (TypeScript and Python SDKs)
 - **Breaking:** `enforce()` denies a call under a `capped:N` scope that gives
   no `amount`, with `reason_code` / `reasonCode` `cap_exceeded` and the new
@@ -254,12 +339,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Opt-out:** `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false` puts these routes back
   in the plan budget, failing closed, as before. See the
   [rate limits guide](docs/guides/rate-limits.mdx).
-### Portable WebAuthn SDK patch candidates
-- Prepared `@grantex/sdk@0.7.1`, Python `grantex==0.6.1`, and Go SDK
-  `v0.4.1` to ship the typed signed grant-evidence reference and VC
-  `webauthnVerified` response already tested in source. These version bumps
-  are not registry publication; verify all three public artifacts before
-  updating release-status claims.
+### Portable WebAuthn SDK releases (2026-09-28)
+- Published and independently verified `@grantex/sdk@0.7.1`, Python
+  `grantex==0.6.1`, and Go SDK `v0.4.1` from the passkey release snapshot
+  `a919ea8a`. They expose the typed signed grant-evidence reference and VC
+  `webauthnVerified` response. npm integrity and PyPI wheel/sdist hashes match
+  the verified artifacts; fresh registry installs and downloaded Go-module
+  tests passed. x402 remains at `0.4.1` and was not republished.
+- These artifacts do not include the subsequent audience enforcement and
+  capped-scope missing-amount fixes from PRs #1440 and #1441. Those breaking
+  changes remain source-only and need a separate versioned release. See
+  `docs/internal/passkey-sdk-release-2026-09-28.md` for evidence and limitations.
 
 ### mcp-auth resource guard: grant token algorithms, `typ` and standard claims
 Part of the unpublished `@grantex/mcp-auth` 3.0.0.
@@ -1048,18 +1138,20 @@ below.
 
 ### Revocation feed: SDKs see revocations within seconds
 - `enforce()` verifies a grant token offline, so a revoked grant's token stays
-  valid until it expires. The revocation feed (PRD G-6) closes that gap, off
-  unless `REVOCATION_FEED_ENABLED=true` (optionally limited with
-  `REVOCATION_FEED_DEVELOPER_IDS`); with the flag off every route answers 404
-  and nothing else changes.
+  valid until it expires. The revocation feed (PRD G-6) closes that gap. It is
+  on by default and the SDKs default to `online` (see the Breaking entry
+  above); `REVOCATION_FEED_ENABLED=false` turns it off, and
+  `REVOCATION_FEED_DEVELOPER_IDS` limits it to named developers. With the feed
+  off every route answers 404.
 - `GET /v1/revocations` serves a paged snapshot of everything currently revoked
   or suspended with the cursor to stream from, or the changes after a cursor
   (ETag, `304`, optional `wait` long-poll); `GET /v1/revocations/stream` is a
   Server-Sent Events stream of `revocation` entries with a heartbeat every
   second; `GET /v1/revocations/status` answers for one grant or token.
-- Both SDKs gain `revocationCheck` / `revocation_check`: `offline` (default,
-  unchanged behaviour), `feed` (an in-memory set kept current by the feed) and
-  `online` (a check per call), settable per client or per call.
+- Both SDKs gain `revocationCheck` / `revocation_check`: `online` (a
+  check per call; the default, see the Breaking entry above), `feed` (an
+  in-memory set kept current by the feed) and `offline` (the opt-out: no
+  check), settable per client or per call.
   `RevocationFeed`, `RevokedSet` and the feed state are exported from both.
 - **Failing closed is the point.** A feed that has not heard from the auth
   service inside its staleness bound (`staleAfterMs` /

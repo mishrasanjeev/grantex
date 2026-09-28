@@ -40,7 +40,7 @@ def grantex() -> Iterator[Grantex]:
         )
         with patch("grantex.decisions._verify._default_key_resolver", return_value=resolver), \
                 patch("grantex.decisions._verify.time.time", return_value=NOW):
-            client = Grantex(api_key="test-key", decision_consumer=FakeIssuer())
+            client = Grantex(api_key="test-key", revocation_check="offline", decision_consumer=FakeIssuer())
             client.load_manifest(ToolManifest.from_dict({
                 "connector": "acme_kyb",
                 "tools": {"case_decision": {"permission": "write", "requires_decision": True, "four_eyes_on": ["decline"]}},

@@ -32,7 +32,7 @@ const merchant = ToolManifest.fromJSON({
 });
 
 function client(options: Record<string, unknown> = {}) {
-  const c = new Grantex({ apiKey: 'test-key', ...options } as ConstructorParameters<typeof Grantex>[0]);
+  const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', ...options } as ConstructorParameters<typeof Grantex>[0]);
   c.loadManifest(merchant);
   return c;
 }
@@ -160,7 +160,7 @@ const refunds = ToolManifest.fromJSON({
 });
 
 function refundsClient(options: Record<string, unknown> = {}) {
-  const c = new Grantex({ apiKey: 'test-key', ...options } as ConstructorParameters<typeof Grantex>[0]);
+  const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', ...options } as ConstructorParameters<typeof Grantex>[0]);
   c.loadManifest(refunds);
   return c;
 }
