@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Agent key history: possession proof, rotation and compromise (auth service)
+- New: every agent key is kept in a history (`agent_keys`, migration 122),
+  identified by its RFC 7638 JWK Thumbprint, with the states `pending`,
+  `active`, `rotated` and `compromised`. A key belongs to one agent only, and
+  a key reported compromised can never be registered again, by any agent: its
+  thumbprint is kept in `compromised_agent_keys`, which outlives the agent.
+- New routes, developer-authenticated and limited to the developer's own
+  agents: `GET` and `POST /v1/agents/{id}/keys`,
+  `PUT /v1/agents/{id}/declared-rails`, and
+  `POST /v1/agents/{id}/keys/{thumbprint}/challenge`, `/prove`, `/rotate` and
+  `/compromise`. Possession is proven with a compact JWS
+  (`typ: agent-key-proof+jwt`) over a single-use, five-minute challenge;
+  replayed, expired, wrong-key and wrong-audience proofs are refused with
+  `key_unproven` or `audience_mismatch`.
+- Rotation needs an active replacement and keeps the old key usable in the
+  history for an overlap (`AGENT_KEY_ROTATION_OVERLAP_SECONDS`, default 7
+  days, at most 30 per request). It does not change the agent's registered
+  `publicJwk`, which the token endpoints still bind to (FINDINGS G-85): the
+  rotated key keeps working there, after its overlap too, until the provider
+  sets `publicJwk` to the replacement with `PATCH /v1/agents`.
+- A compromise ends the key at once and revokes every grant whose `cnf.jkt`
+  is that key, and everything delegated from them, through
+  the cascade revocation, with audit entries; if it was the agent's
+  registered `publicJwk`, the newest proven replacement takes its place, or
+  the key is cleared and the agent suspended.
+- An agent that declares a payments rail (`ap2`, `verifiable_intent`) may
+  hold only ES256 keys on P-256, in its history and as its registered
+  `publicJwk` (`KEY_ALGORITHM_NOT_ALLOWED`).
+- Existing keys were backfilled: `active` when a DPoP proof of the registered
+  key had been verified, `pending` otherwise; a registered key of a type the
+  history cannot hold is reported with a migration warning. `POST` and
+  `PATCH /v1/agents` behave as before; the keys they write also enter the history, and they
+  refuse a key held in another agent's history (`AGENT_KEY_CONFLICT`), a
+  compromised key (`key_not_active`) or a non-P-256 key under a payments rail.
+  The token endpoints still bind to the registered key (FINDINGS G-85).
+  Documented in `docs/providers/registering-agents.md` and
+  `spec/agent-keys.md`.
+
 ### Capped scopes need an amount (TypeScript and Python SDKs)
 - **Breaking:** `enforce()` denies a call under a `capped:N` scope that gives
   no `amount`, with `reason_code` / `reasonCode` `cap_exceeded` and the new

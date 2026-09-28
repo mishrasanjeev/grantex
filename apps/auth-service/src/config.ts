@@ -200,6 +200,17 @@ export const config = {
   get portableWebAuthnEvidenceStatusCheckEnabled() { return process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'] === 'true'; },
   get irregularityResponsePolicyEnabled() { return process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'] === 'true'; },
   get irregularityCascadeRevocationEnabled() { return process.env['IRREGULARITY_CASCADE_REVOCATION_ENABLED'] === 'true'; },
+  // Default overlap of an agent key rotation: how long the replaced key stays
+  // usable (seconds, default 7 days, at most 30). Read at request time;
+  // validateConfig reports a bad value at boot.
+  get agentKeyRotationOverlapSeconds() {
+    return parseIntegerSetting(
+      'AGENT_KEY_ROTATION_OVERLAP_SECONDS',
+      optional('AGENT_KEY_ROTATION_OVERLAP_SECONDS', '604800'),
+      0,
+      2_592_000,
+    );
+  },
   // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
   ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
   // CORS: comma-separated list of browser origins allowed to call the API
@@ -317,6 +328,11 @@ export function validateConfig(): void {
     errors.push(`${signingKeySettingName()} is required (or AUTO_GENERATE_KEYS=true outside production)`);
   }
   if (!config.jwtIssuer) errors.push('JWT_ISSUER is required');
+  try {
+    void config.agentKeyRotationOverlapSeconds;
+  } catch (err) {
+    errors.push((err as Error).message);
+  }
   if (config.metricsEnabled && config.metricsRequireAuth && !config.metricsApiKey) {
     errors.push('METRICS_API_KEY is required');
   }

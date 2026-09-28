@@ -1305,3 +1305,50 @@ the pull request that references it.
   row, issued the way the VC-JWT is (in the grant's transaction, or through
   `issueForCommittedGrant` while the stop is on), so a revocation sets their
   bit, and have `verifySDJWT` check it.
+
+## G-85 — The single-key token paths do not read the agent key history
+
+- **Found:** agent key history work (Agent Trust Registry, PRD §8.8),
+  2026-09-28.
+- **What:** migration 122 adds `agent_keys` with pending, active, rotated and
+  compromised keys and a rotation overlap, but every path that binds or checks
+  an agent key still reads the single registered key,
+  `agents.key_thumbprint`: the OAuth profile's PAR, code exchange, refresh,
+  revocation and token exchange (`routes/oauth.ts`), `POST /v1/authorize` and
+  `POST /v1/token` (`cnf.jkt`), delegation (`routes/delegate.ts`) and the
+  agent DID document (`routes/did.ts`). Consequences: a key added and proven
+  through the history is not usable there until it is also set as
+  `publicJwk`; a key rotated through the history stays accepted there after
+  its `valid_to` for as long as it remains the registered key; a pending key
+  is accepted there with a DPoP proof (which is also what proves it). A
+  compromise is handled: it moves the registered key to a proven replacement
+  or clears it and suspends the agent.
+- **Impact:** the overlap and the `key_unproven` / `key_not_active` denials
+  apply to the key routes and to relying parties that read the history, not
+  yet to the auth service's own token endpoints. The provider documentation
+  (`docs/providers/registering-agents.md`) and `spec/agent-keys.md` §5 and §7
+  say so, and tell providers to set `publicJwk` to the replacement with
+  `PATCH /v1/agents` after a rotation.
+- **Proposal:** switch those paths to evaluate the presented key against
+  `agent_keys` (`evaluateAgentKey` in `lib/registry/agent-keys.ts`), behind a
+  flag that defaults off, then drop `idx_agents_key_thumbprint_unique` once no
+  path reads `agents.key_thumbprint`.
+
+## G-86 — A compromise does not reach grants in other tenants bound to the same key
+
+- **Found:** agent key history work, 2026-09-28.
+- **What:** `POST /v1/agents/:id/keys/:thumbprint/compromise` revokes the
+  grants whose `cnf.jkt` is the key only within the reporting developer's
+  tenant. A key can have been held earlier by an agent of another developer:
+  a key released by a replacement (`PATCH /v1/agents`, or a rotation whose
+  overlap ended) can be registered by another agent, which the registered-key
+  index has always allowed. Grants the earlier holder obtained with the key
+  keep their binding and are not revoked by the compromise. (Registration
+  after a compromise is closed: `compromised_agent_keys` records every
+  compromised thumbprint, outlives the agent, and is checked on every path
+  that writes a key.)
+- **Impact:** narrow. It needs one key to move between developers and then be
+  reported compromised while grants from the earlier holder are still active.
+- **Proposal:** decide with the owner whether a compromise should revoke
+  grants bound to the key in every tenant, or whether a released key should
+  stay reserved to its developer.
