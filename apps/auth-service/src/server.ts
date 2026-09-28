@@ -45,6 +45,7 @@ import { credentialsRoutes } from './routes/credentials.js';
 import { passportRoutes } from './routes/passport.js';
 import { trustRegistryRoutes } from './routes/trust-registry.js';
 import { registryIssuerRoutes } from './routes/registry-issuers.js';
+import { registryStatusRoutes } from './routes/registry-status.js';
 import { consentBundlesRoutes } from './routes/consent-bundles.js';
 import { mcpServersRoutes } from './routes/mcp-servers.js';
 import { dpdpRoutes } from './routes/dpdp.js';
@@ -233,6 +234,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(passportRoutes);
   await app.register(trustRegistryRoutes);
   await app.register(registryIssuerRoutes);
+  await app.register(registryStatusRoutes);
   await app.register(consentBundlesRoutes);
   await app.register(mcpServersRoutes);
   await app.register(dpdpRoutes);

@@ -58,6 +58,8 @@ tags:
     description: End-user consent UI and approval flow
   - name: Event Bridge
     description: Provider events (SSF/CAEP SETs, signed webhooks) mapped to grant actions
+  - name: Registry Status
+    description: The registry's attestation-acceptance status lists (spec/registry-federation.md). Public and rate-limited per client.
   - name: Decision Grants
     description: Decisions a named person approves for one semantic action (spec/decision-grant.md). Disabled unless DECISION_GRANTS_ENABLED=true.
   - name: Tokens
@@ -1777,6 +1779,100 @@ paths:
                     type: array
                     items:
                       type: object
+
+  # ── Registry status lists ──────────────────────────────────────────
+  /status/attestations/{list}:
+    get:
+      operationId: getAttestationAcceptanceTokenStatusList
+      tags: [Registry Status]
+      summary: Attestation acceptance as a Token Status List
+      description: |
+        A Token Status List token (draft-ietf-oauth-status-list-21 §5.1) saying, for every
+        attestation registered with the registry, whether the registry accepts it: 0 VALID,
+        1 INVALID (withdrawn, final), 2 SUSPENDED, two bits per entry. `sub` is this URL; `ttl` is
+        600 seconds, or 60 for one hour after any acceptance change or suspension. Signed with the
+        platform signing key published at `/.well-known/jwks.json`. No authentication; rate-limited
+        per client address (300 requests a minute). A store that cannot be read is a 5xx, never an
+        older copy.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string, pattern: "^racl_[0-9A-HJKMNP-TV-Z]{26}$" }, description: Acceptance list id }
+        - { name: If-None-Match, in: header, schema: { type: string }, description: ETag of a copy already held }
+      responses:
+        "200":
+          description: The signed status list, in JWS compact serialization
+          headers:
+            ETag: { schema: { type: string }, description: "Weak entity tag over the protected header and claims; changes when the list changes or is re-signed (iat moves every five minutes)" }
+            Cache-Control: { schema: { type: string }, description: "`public, max-age=<ttl>`" }
+          content:
+            application/statuslist+jwt:
+              schema:
+                type: string
+        "304":
+          description: Unchanged since the ETag
+        "404":
+          description: Not one of the registry's lists
+        "429":
+          description: Too many requests from this client
+  /status/attestations/{list}/bitstring:
+    get:
+      operationId: getAttestationAcceptanceRevocationBitstring
+      tags: [Registry Status]
+      summary: Withdrawn attestations as a Bitstring Status List credential
+      description: |
+        A BitstringStatusListCredential (W3C Bitstring Status List v1.0 §2.2) with statusPurpose
+        `revocation`: a bit is set for every INVALID entry of the same list. Secured as a VC-JWT
+        (W3C VC-JOSE-COSE §3.1.1, `typ` `vc+jwt`, `cty` `vc`) with the platform signing key.
+        `credentialSubject.ttl` is 600000 milliseconds, or 60000 for one hour after any acceptance
+        change or suspension. Built from the registry's store, not from the Token Status List.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string, pattern: "^racl_[0-9A-HJKMNP-TV-Z]{26}$" }, description: Acceptance list id }
+        - { name: If-None-Match, in: header, schema: { type: string }, description: ETag of a copy already held }
+      responses:
+        "200":
+          description: The signed credential, in JWS compact serialization
+          headers:
+            ETag: { schema: { type: string }, description: "Weak entity tag over the protected header and claims; changes when the list changes or is re-signed (iat moves every five minutes)" }
+            Cache-Control: { schema: { type: string }, description: "`public, max-age=<ttl in seconds>`" }
+          content:
+            application/vc+jwt:
+              schema:
+                type: string
+        "304":
+          description: Unchanged since the ETag
+        "404":
+          description: Not one of the registry's lists
+        "429":
+          description: Too many requests from this client
+  /status/attestations/{list}/bitstring/suspension:
+    get:
+      operationId: getAttestationAcceptanceSuspensionBitstring
+      tags: [Registry Status]
+      summary: Suspended attestations as a Bitstring Status List credential
+      description: |
+        As `/status/attestations/{list}/bitstring`, with statusPurpose `suspension`: a bit is set
+        for every SUSPENDED entry.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string, pattern: "^racl_[0-9A-HJKMNP-TV-Z]{26}$" }, description: Acceptance list id }
+        - { name: If-None-Match, in: header, schema: { type: string }, description: ETag of a copy already held }
+      responses:
+        "200":
+          description: The signed credential, in JWS compact serialization
+          headers:
+            ETag: { schema: { type: string }, description: "Weak entity tag over the protected header and claims; changes when the list changes or is re-signed (iat moves every five minutes)" }
+            Cache-Control: { schema: { type: string }, description: "`public, max-age=<ttl in seconds>`" }
+          content:
+            application/vc+jwt:
+              schema:
+                type: string
+        "304":
+          description: Unchanged since the ETag
+        "404":
+          description: Not one of the registry's lists
+        "429":
+          description: Too many requests from this client
 
   # ── OAuth Agent Grants ─────────────────────────────────────────────
   /.well-known/oauth-authorization-server:
