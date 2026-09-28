@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Passkey sandbox/live parity and retained credential history
+- Preserve an interactively selected principal before replacing the hosted
+  consent form, so live OAuth approval and denial can complete WebAuthn.
+- Honor `fidoRequired: true` in sandbox authorization and OAuth PAR. Requests
+  remain pending, and developer-key approve/deny shortcuts cannot bypass the
+  passkey ceremony. Live mode remains passkey-required without a fallback.
+- Reject agent hard deletion with `409 AGENT_HAS_CREDENTIAL_HISTORY` when
+  issued VCs reference its grants, preserving credential status history rather
+  than returning a foreign-key error or deleting that history. Row locking
+  serializes deletion with new agent-referencing records.
+- Add real Chromium/Postgres regressions, production sandbox/live and OAuth
+  parity coverage, and explicit documentation of device/removal boundaries.
+
 ### Breaking: revocation is checked by default (TypeScript and Python SDKs, auth service, mcp-auth)
 - **Breaking (default flip):** a `Grantex` client created without
   `revocationCheck` (TypeScript) or `revocation_check` (Python) now checks

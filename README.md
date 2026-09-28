@@ -238,9 +238,12 @@ Current public releases and repository versions, verified 2026-09-28:
 
 TypeScript `0.7.1` and Python `0.6.1` are the passkey release snapshot, not all
 current `main` changes. The newer `enforce()` audience and missing-amount cap
-checks from PRs #1440 and #1441 need a separate release. Until then, validate
+checks from PRs #1440 and #1441, and online revocation by default from #1442,
+need a separate release. Until then, validate
 audience at the service boundary and pass validated amounts for capped calls;
-do not rely on wrappers that omit amounts. See [release limitations](https://docs.grantex.dev/release-status#known-limitations-in-the-current-published-artifacts).
+do not rely on wrappers that omit amounts. Explicitly set `revocationCheck: 'online'`
+(TypeScript) or `revocation_check='online'` (Python) to check current grant status.
+See [release limitations](https://docs.grantex.dev/release-status#known-limitations-in-the-current-published-artifacts).
 
 | Component | Published version | Repository version | Reproducible install |
 | --- | ---: | ---: | --- |
@@ -706,7 +709,7 @@ grantex sso enforce --enable
 
 ## FIDO2 / WebAuthn
 
-Grantex supports passkey-based human presence verification using FIDO2/WebAuthn. Live-mode consent requires a passkey assertion; sandbox-mode accounts can opt in with `fidoRequired: true`. The assertion confirms use of a registered credential during the consent flow.
+Grantex supports passkey-based human presence verification using FIDO2/WebAuthn. Live-mode consent requires a passkey assertion; sandbox-mode accounts can opt in with `fidoRequired: true`. The assertion confirms use of a registered credential during the consent flow. A passkey-required sandbox request stays pending just like live consent: neither `/v1/authorize` nor OAuth PAR auto-approves it, and developer-key shortcuts cannot approve or deny it.
 
 ### How It Works
 
@@ -776,6 +779,14 @@ client.webauthn.delete_credential(credential_id)
 Hosted enrollment requires `PASSKEY_ENROLLMENT_ENABLED=true` and a correctly configured HTTPS `FIDO_ORIGIN`/`FIDO_RP_ID`; the server feature is off by default. Live-mode consent requires an existing passkey, with no weaker fallback. See the [WebAuthn guide](https://docs.grantex.dev/features/fido-webauthn) for the customer identity-binding and one-use link requirements. The guide also distinguishes the hosted SDK methods from the REST-only custom assertion ceremony.
 
 For a production rollout, deploy the auth service and the `/passkey-enroll` hosting rewrite before enabling the flag. Then run `Production Passkey and Irregularity E2E` from GitHub Actions. That test creates an isolated live account, enrolls a virtual passkey, approves consent, checks portable evidence in an opt-in VC, refreshes and delegates the grant, and tests alert-only and revoke modes. It leaves the test account and audit records in production; do not run it against a customer account.
+
+The workflow also tests sandbox/live consent parity, two authenticator devices,
+denial, credential removal, one-use ticket replay, and live OAuth approval and
+denial after interactive principal selection. Credential removal blocks new
+assertions; revoke existing grants separately. Agents with issued VCs cannot
+be hard-deleted (`409 AGENT_HAS_CREDENTIAL_HISTORY`); suspend them and revoke
+their grants to retain verifiable status history. Chromium virtual-authenticator
+checks are not certification of every physical device or browser.
 
 </details>
 
@@ -1549,7 +1560,7 @@ Two API keys are seeded automatically:
 | `dev-api-key-local` | live | full consent flow with redirect |
 | `sandbox-api-key-local` | sandbox | skip consent UI — get a `code` immediately |
 
-**Sandbox mode** is designed for testing. With a sandbox key, `POST /v1/authorize` returns a `code` in the response body — no redirect required:
+**Sandbox mode** is designed for testing. With a sandbox key and `fidoRequired: false` (the default), `POST /v1/authorize` returns a `code` in the response body — no redirect required. Set `fidoRequired: true` to rehearse the real enrollment and consent ceremony instead:
 
 ```bash
 # Authorize + get code in one step
