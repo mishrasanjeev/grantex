@@ -115,6 +115,13 @@ updates:
     labels: [dependencies, npm, x402]
 
   - package-ecosystem: npm
+    directory: /packages/agent-httpsig
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, agent-httpsig]
+
+  - package-ecosystem: npm
     directory: /packages/cli
     schedule:
       interval: weekly
@@ -332,6 +339,11 @@ updates:
       interval: weekly
     open-pull-requests-limit: 3
     labels: [dependencies, python, agent-passport]
+    directory: /packages/agent-httpsig-py
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, agent-httpsig-py]
 
   - package-ecosystem: pip
     directory: /packages/fastapi

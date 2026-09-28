@@ -1549,6 +1549,43 @@ the pull request that references it.
   Behind a flag that defaults off, since it can turn today's `valid: true`
   into a denial.
 
+## G-95 — The agent request signature does not cover the query string
+
+- **Found:** agent request signing libraries (S1-4), 2026-09-28, while
+  writing the signing profile in `spec/verification.md`.
+- **What:** the profile covers exactly `("@method" "@authority" "@path"
+  "content-digest" "agent-passport" "agent-grant")`. RFC 9421 section 2.2.6
+  defines `@path` without the query, and `@query` is not covered, so anyone
+  who can alter a signed request in transit (a proxy, or a relying party
+  that forwards it) can change or add query parameters without breaking the
+  signature. `spec/verification.md` section 4.5 tells relying parties not to
+  take anything that affects authority, amount or payee from the query.
+- **Impact:** a relying party that reads, for example, a cart or order
+  identifier from the query of a signed request acts on an unsigned value.
+  Requests that carry everything in the content are not affected.
+- **Proposal:** add `"@query"` after `"@path"` in a second version of the
+  profile (a new `tag`, so verifiers can accept both during a migration), or
+  have verifiers refuse a signed request with a non-empty query.
+
+## G-96 — `Agent-Trust` is not bound to the request it accompanies
+
+- **Found:** agent request signing libraries (S1-4), 2026-09-28.
+- **What:** the covered components do not include `agent-trust`, so an
+  inline `Agent-Trust` value can be replaced or removed without breaking the
+  signature (a value carried by reference is in the content and is covered).
+  The trust statement is signed by the registry, so it cannot be forged, but
+  a genuine statement about another agent can be attached to a request.
+  `spec/verification.md` section 4.5 requires relying parties to check that
+  the statement names the key or the Agent Passport of the signature; the
+  libraries return it unchecked.
+- **Impact:** a relying party that uses `Agent-Trust` without that check
+  could credit an agent with another agent's trust statement.
+- **Proposal:** either cover `agent-trust` when present (a second profile
+  version, since the covered components are fixed), or have the verifier
+  that consumes trust statements (Phase 1 attestation checks) refuse a
+  statement whose subject is not the signature's `keyid` or Agent Passport,
+  with `key_binding_mismatch`.
+
 ## G-100 — The auth service's SD-JWT verifier does not follow RFC 9901 section 7.1
 
 - **Found:** building the Agent Passport verifier (`packages/agent-passport`),
