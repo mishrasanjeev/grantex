@@ -303,3 +303,11 @@ It is rate limited per client address and carries an `ETag` for each page:
 send it back in `If-None-Match` and an unchanged page answers `304`. It is
 sent with `Cache-Control: no-cache`, so a cache checks back on every read and
 never serves a revoked key.
+
+## Trying it locally
+
+The repository has a mock accredited issuer, `https://mock-issuer.example`,
+that issues Agent Passports, publishes its passport status lists and builds
+attestations with no external party and no network. Accredit it in a local
+registry with the entity id, `status_list_base` and JWKS its `keys` command
+prints; see [Running the Mock Issuer](running-the-mock-issuer.md).

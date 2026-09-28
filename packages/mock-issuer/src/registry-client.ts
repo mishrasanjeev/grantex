@@ -51,10 +51,16 @@ async function boundedText(response: Response, limit: number): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === '/') end -= 1;
+  return value.slice(0, end);
+}
+
 export async function postAttestation(params: PostAttestationParams): Promise<PostAttestationResult> {
   let url: URL;
   try {
-    url = new URL(`${params.registryBaseUrl.replace(/\/+$/, '')}${params.path ?? DEFAULT_ATTESTATION_PATH}`);
+    url = new URL(`${trimTrailingSlashes(params.registryBaseUrl)}${params.path ?? DEFAULT_ATTESTATION_PATH}`);
   } catch (cause) {
     throw new MockIssuerError('invalid_request', 'the registry base URL is not a URL', { cause });
   }
