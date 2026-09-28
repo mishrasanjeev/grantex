@@ -43,3 +43,22 @@ export const revocationFeedStaleSeconds = new Gauge({
   help: 'Seconds since the revocation feed last read the database successfully',
   registers: [registry],
 });
+
+/** Feed entries removed by the prune worker (FINDINGS G-66). */
+export const revocationFeedPrunedTotal = new Counter({
+  name: 'grantex_revocation_feed_pruned_total',
+  help: 'Revocation feed entries deleted by the prune worker after their retention',
+  registers: [registry],
+});
+
+/**
+ * Prune runs by outcome: complete (nothing left past retention), capped (hit
+ * the per-run limit; the next run continues), skipped_locked (another instance
+ * was pruning), failed.
+ */
+export const revocationFeedPruneRunsTotal = new Counter({
+  name: 'grantex_revocation_feed_prune_runs_total',
+  help: 'Revocation feed prune runs by outcome',
+  labelNames: ['outcome'] as const,
+  registers: [registry],
+});

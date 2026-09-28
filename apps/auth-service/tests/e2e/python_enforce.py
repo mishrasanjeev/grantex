@@ -10,7 +10,15 @@ import os
 
 from grantex import Grantex, ToolManifest
 
-client = Grantex(api_key=os.environ["GRANTEX_API_KEY"], base_url=os.environ["GRANTEX_E2E_BASE_URL"], max_retries=0)
+# Offline revocation check: this is about decision grants, and the other
+# agent's grant token is known only to its signature (no grant row), so an
+# online check would deny it as unknown before the decision grant is read.
+client = Grantex(
+    api_key=os.environ["GRANTEX_API_KEY"],
+    base_url=os.environ["GRANTEX_E2E_BASE_URL"],
+    max_retries=0,
+    revocation_check="offline",
+)
 client.load_manifest(ToolManifest.from_dict({
     "connector": "acme_kyb",
     "tools": {"case_decision": {"permission": "write", "requires_decision": True, "four_eyes_on": ["decline"]}},

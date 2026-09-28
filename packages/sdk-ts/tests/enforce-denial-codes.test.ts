@@ -37,7 +37,7 @@ const acmeKyb = ToolManifest.fromJSON({
 });
 
 function client(enforceMode: 'strict' | 'permissive' = 'strict') {
-  const c = new Grantex({ apiKey: 'test-key', enforceMode } as ConstructorParameters<typeof Grantex>[0]);
+  const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', enforceMode } as ConstructorParameters<typeof Grantex>[0]);
   c.loadManifest(acmeKyb);
   return c;
 }
@@ -175,7 +175,7 @@ describe('declared constraints fail closed', () => {
       tools: { case_decision: { permission: 'write', requires_decision: true } },
     });
     (manifest.tools as Record<string, Permission>)['case_decision'] = Permission.READ;
-    const c = new Grantex({ apiKey: 'test-key' });
+    const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline' });
     c.loadManifest(manifest);
     expect(await codes('acme_kyb', 'case_decision', undefined, c)).toEqual([
       false,

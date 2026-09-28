@@ -54,7 +54,7 @@ def verify() -> Iterator[MagicMock]:
 
 
 def _client(**options: Any) -> Grantex:
-    c = Grantex(api_key="test-key", **options)
+    c = Grantex(api_key="test-key", **{"revocation_check": "offline", **options})
     c.load_manifest(MANIFEST)
     return c
 
@@ -175,7 +175,7 @@ def test_permissive_mode_still_relaxes_a_scope_denial_once_the_audience_matches(
     verify: MagicMock,
 ) -> None:
     verify.return_value = _grant(MERCHANT)
-    c = Grantex(api_key="test-key", audience=MERCHANT, enforce_mode="permissive")
+    c = Grantex(api_key="test-key", audience=MERCHANT, enforce_mode="permissive", revocation_check="offline")
     c.load_manifest(ToolManifest.from_dict({"connector": "acme_kyb", "tools": {"get_case": "write"}}))
     with pytest.warns(UserWarning, match="would deny"):
         result = c.enforce("t", "acme_kyb", "get_case")
