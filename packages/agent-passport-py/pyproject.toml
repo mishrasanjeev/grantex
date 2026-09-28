@@ -1,0 +1,66 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "grantex-agent-passport"
+version = "0.1.0"
+description = "Agent Passport: the SD-JWT VC profile for AI agent credentials (issue, verify, key binding, hash and key rules)"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+authors = [{ name = "Sanjeev Kumar", email = "sanjeev@orchestrum.in" }]
+maintainers = [{ name = "Orchestrum Technologies LLP", email = "sanjeev@orchestrum.in" }, { name = "Sanjeev Kumar", email = "mishra.sanjeev@gmail.com" }]
+keywords = [
+    "grantex",
+    "agent-passport",
+    "sd-jwt",
+    "sd-jwt-vc",
+    "verifiable-credentials",
+    "ai-agents",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+    # Not yet published: this classifier makes package indexes refuse an upload.
+    "Private :: Do Not Upload",
+]
+dependencies = [
+    "cryptography>=48.0.1",
+]
+
+[project.urls]
+Homepage = "https://grantex.dev"
+Repository = "https://github.com/mishrasanjeev/grantex"
+Issues = "https://github.com/mishrasanjeev/grantex/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9; python_version < '3.10'",
+    "pytest>=9.0.3; python_version >= '3.10'",
+    "mypy>=1.9",
+    "ruff>=0.4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/grantex_agent_passport"]
+
+[tool.mypy]
+strict = true
+files = ["src/grantex_agent_passport"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"

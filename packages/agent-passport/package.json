@@ -1,0 +1,53 @@
+{
+  "name": "@grantex/agent-passport",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent Passport: the SD-JWT VC profile for AI agent credentials (issue, verify, key binding, hash and key rules)",
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar.",
+  "homepage": "https://github.com/mishrasanjeev/grantex/tree/main/packages/agent-passport",
+  "bugs": {
+    "url": "https://github.com/mishrasanjeev/grantex/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "vectors": "node scripts/generate-vectors.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "grantex",
+    "agent-passport",
+    "sd-jwt",
+    "sd-jwt-vc",
+    "verifiable-credentials",
+    "ai-agents"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mishrasanjeev/grantex"
+  }
+}
