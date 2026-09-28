@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Enforcement SDK release candidates
+- Prepare TypeScript SDK 0.8.0 and Python SDK 0.7.0 for the breaking audience,
+  amount-required and online-revocation changes documented below.
+- Prepare CLI 0.4.0, gateway/adapters/TypeScript Strands/Python Strands 0.2.0,
+  and MCP Auth 3.0.0 with package-specific migration guidance and dependency
+  floors that require the updated primary SDK.
+- Correct Node.js support to 22.12+ for these npm releases; recommend Node.js
+  24 LTS. Python SDK remains 3.9+ and Python Strands remains 3.11+.
+- Go v0.4.1 and x402 0.4.1 are unchanged and compatibility-tested, not republished.
+- Registry publication is separate from preparation. See Release Status for
+  verified artifacts and the enforcement migration guide for rollout/rollback.
+
 ### Registry attestation-acceptance status lists
 - The registry now publishes, under its own issuer identifier (`JWT_ISSUER`),
   whether it accepts each attestation registered with it: VALID (accepted),

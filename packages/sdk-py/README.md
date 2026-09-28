@@ -1,5 +1,13 @@
 # grantex
 
+**Version 0.7.0:** `enforce()` checks the grant audience,
+requires an amount for capped scopes, and checks current revocation online by
+default. Per-call revocation settings cannot weaken the client setting.
+Python 3.9+ remains supported. These are breaking changes: follow the
+[enforcement migration guide](https://docs.grantex.dev/migration-enforcement).
+`verify_grant_token()` alone does not check current revocation. Verify
+publication in Release Status before installing.
+
 **Version 0.6.1:** exposes the signed WebAuthn grant evidence reference and
 `webauthn_verified` VC attestation field. An evidence reference is not the raw
 assertion or a current revocation check. Verify issuer, enrollment, RP ID,
@@ -39,7 +47,7 @@ Grantex lets humans authorize AI agents with **verifiable, revocable, audited gr
 ## Install
 
 ```bash
-pip install grantex==0.6.1
+pip install grantex==0.7.0
 ```
 
 ## Quick start

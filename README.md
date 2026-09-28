@@ -236,6 +236,13 @@ Grantex components are independently versioned. The protocol specification remai
 
 Current public releases and repository versions, verified 2026-09-28:
 
+The next enforcement releases (TypeScript `0.8.0`, Python `0.7.0`, CLI
+`0.4.0`, gateway/adapters/Strands `0.2.0` and MCP Auth `3.0.0`) are being
+validated, not yet registry verified. See the complete
+[migration guide](https://docs.grantex.dev/migration-enforcement) before
+upgrading: Node.js requirements, audience binding, capped-call amounts and
+online revocation defaults are breaking changes.
+
 TypeScript `0.7.1` and Python `0.6.1` are the passkey release snapshot, not all
 current `main` changes. The newer `enforce()` audience and missing-amount cap
 checks from PRs #1440 and #1441, and online revocation by default from #1442,

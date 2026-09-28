@@ -1,0 +1,163 @@
+---
+title: "Enforcement SDK migration"
+description: "Migrate TypeScript 0.8, Python 0.7, MCP Auth 3 and enforcement integrations with explicit audience, amounts, revocation and runtime requirements."
+---
+
+## Release scope
+
+These are release candidates until the exact versions appear in
+[Release Status](/release-status). Package versions are independent.
+
+| Package | Target | Required runtime |
+|---|---|---|
+| `@grantex/sdk` | `0.8.0` | Node.js 22.12+; 24 LTS recommended |
+| `grantex` | `0.7.0` | Python 3.9+ |
+| `@grantex/cli` | `0.4.0` | Node.js 22.12+ |
+| `@grantex/gateway` | `0.2.0` | Node.js 22.12+; SDK 0.8+ |
+| `@grantex/adapters` | `0.2.0` | Node.js 22.12+; SDK 0.8+ |
+| `@grantex/strands` | `0.2.0` | Node.js 22.12+; SDK 0.8+ |
+| `grantex-strands` | `0.2.0` | Python 3.11+; grantex 0.7+ |
+| `@grantex/mcp-auth` | `3.0.0` | Node.js 22.12+; SDK 0.8+ |
+
+Go `v0.4.1` and x402 `0.4.1` have no new source changes in this release.
+Do not infer TypeScript/Python `enforce()` behavior from their version numbers.
+
+## Upgrade the service first
+
+Default `enforce()` now reads `GET /v1/revocations/status`. Upgrade the
+auth service and apply its startup migrations before upgrading clients.
+The hosted service already serves these endpoints. Self-hosted installations
+must not disable `REVOCATION_FEED_ENABLED` or exclude the client's developer
+with `REVOCATION_FEED_DEVELOPER_IDS` while relying on online/feed checks.
+An unavailable status endpoint denies the call; it never falls back offline.
+
+The status budget is 6,000 calls/minute per developer and per client address.
+It is shared across instances; it is not 6,000 per agent or per SDK process.
+For high-volume execution use `feed` with an operational feed connection and
+staleness monitoring. Feed failures and stale state fail closed.
+
+## Bind each relying party
+
+Configure the exact resource audience from the verified request/service
+configuration, not from an untrusted agent-provided value:
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const client = new Grantex({
+  apiKey: process.env.GRANTEX_API_KEY!,
+  audience: 'https://api.merchant.example',
+});
+```
+
+```python
+import os
+from grantex import Grantex
+
+client = Grantex(
+    api_key=os.environ["GRANTEX_API_KEY"],
+    audience="https://api.merchant.example",
+)
+```
+
+A token with `aud` but no configured expected audience is denied with
+`token_invalid` / `audience_unconfigured`. A different or missing token
+audience when one is expected is denied with `audience_mismatch`.
+String and array audiences match exactly; URL prefixes and trailing-slash
+normalization are not accepted. Tokens without `aud` and clients without an
+expected audience retain their earlier semantics.
+
+`audienceCheck: 'off'` / `audience_check="off"` is an explicit migration
+opt-out, not a safe production posture. It cannot be combined with a
+configured audience. Audience failures remain denied even in permissive mode.
+Gateway route-level audience overrides the global setting. Adapters accept
+`audience` in their configuration; both expose named audience errors.
+
+## Supply trusted amounts
+
+For every call on a connector covered by `capped:N`, supply a finite amount
+in the cap's agreed units. This includes read-only calls on that connector;
+use a validated zero when the operation genuinely has no monetary amount.
+Omitted amounts now deny with `cap_exceeded` / `amount_missing`.
+Malformed caps and invalid amounts also fail closed.
+
+```typescript
+const result = await client.enforce({
+  grantToken,
+  connector: 'payments',
+  tool: 'pay',
+  amount: validatedAmount,
+});
+if (!result.allowed) throw new Error(result.reason);
+```
+
+```python
+result = client.enforce(
+    grant_token, "payments", "pay", amount=validated_amount,
+)
+if not result.allowed:
+    raise PermissionError(result.reason)
+```
+
+The amount must come from the validated operation, not a cheaper value supplied
+only for authorization. `wrapTool` and `enforceMiddleware` accept
+`extractAmount`; Python `wrap_tool` accepts `extract_amount`. Extractor
+failures refuse execution. TypeScript extractors may be asynchronous.
+See [the executable wrapper examples](/sdks/typescript/enforce) and
+[Python examples](/sdks/python/enforce).
+
+`capsMode: 'warn'` / `caps_mode="warn"` records tolerated denials in
+`wouldDenyAll` / `would_deny_all`; the existing singular field remains the
+first denial. Warn/off settings intentionally reduce protection and must not
+be represented as spend-limit enforcement. Python Strands and the FastAPI
+helper do not extract monetary amounts; call `enforce()` directly with a
+validated amount before executing capped operations.
+
+## Choose current-state enforcement deliberately
+
+The default client is now `online`. A per-call mode can only tighten the
+client setting: `offline < feed < online`. Trying to weaken it throws before
+execution. An explicit offline client is the migration opt-out, but accepts
+cryptographically valid revoked grants until expiry.
+
+```typescript
+const offline = new Grantex({
+  apiKey: process.env.GRANTEX_API_KEY!,
+  revocationCheck: 'offline', // Explicit opt-out; not current-state enforcement.
+});
+```
+
+`verifyGrantToken()` / `verify_grant_token()` alone remain local
+cryptographic verification. Gateway, adapters and Strands default verified
+mode do not call `enforce()` and do not gain online revocation merely by
+installing the newer SDK. Put current-state enforcement at the service
+boundary; Strands online mode uses the configured client's enforcement.
+See [Revocation](/concepts/event-bridge-and-revocation).
+
+## MCP Auth 2 to 3
+
+MCP Auth 3 requires a revocation configuration on resource guards and
+Express/Hono middleware: pass a checker with `isTokenRevoked(jti)` backed by
+the authorization server's storage. Omitting it refuses startup.
+`revocations: 'none'` is an explicit warned opt-out, not revocation enforcement.
+
+Use Postgres or Redis shared storage for multi-instance deployments. Memory
+storage is evaluation-only. Run the package migrations, provision database
+drivers, use HTTPS issuer/resource/redirect URLs and verify the consent/callback
+flow before moving traffic. Codes and callback bindings are single-use.
+The package includes a consent page, but it does not replace Grantex's live
+principal passkey ceremony. Follow [the complete deployment guide](/mcp-auth).
+
+## Verification checklist
+
+1. Install exact versions in a clean environment and check package metadata.
+2. Verify an approved grant succeeds for the correct audience and amount.
+3. Reject a different audience, a missing amount, an excessive amount and a forged token before any side effect.
+4. Revoke the grant and confirm the next online call is denied.
+5. Confirm a status outage denies execution, and a per-call offline downgrade is refused.
+6. For MCP Auth, restart a replica between authorization and exchange, and verify replay and cross-client/tenant rejection.
+7. Confirm passkey enrollment, live approval/denial and portable evidence against the intended public RP origin.
+
+Rollback means pinning a previous package version and explicitly reassessing
+its known security limitations. Do not disable server status checks or delete
+credential history to make an older client appear healthy.

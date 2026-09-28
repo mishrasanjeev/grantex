@@ -9,6 +9,14 @@ TypeScript SDK for the [Grantex](https://grantex.dev) delegated authorization pr
 
 ## Installation
 
+**Version 0.8.0:** `enforce()` checks the grant audience,
+requires an amount for capped scopes, and checks current revocation online by
+default. Per-call revocation settings cannot weaken the client setting.
+Node.js 22.12+ is required; Node.js 24 LTS is recommended. These are breaking
+changes: follow the [enforcement migration guide](https://docs.grantex.dev/migration-enforcement).
+`verifyGrantToken()` alone remains cryptographic verification, not a current
+revocation check. Verify publication in Release Status before installing.
+
 **Version 0.7.1:** exposes the signed WebAuthn evidence reference on verified
 grants and the `webauthnVerified` VC attestation response. A reference is not
 the raw assertion or a current revocation check; verify the issuer, RP ID,
@@ -27,7 +35,7 @@ the automatic 402/payment/retry flow. Confirm the published SDK version in
 See [Base custody setup](https://docs.grantex.dev/guides/base-usdc-custody).
 
 ```bash
-npm install @grantex/sdk@0.7.1
+npm install @grantex/sdk@0.8.0
 ```
 
 ## Quick Start

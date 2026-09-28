@@ -22,6 +22,11 @@ on:
         required: true
         default: false
         type: boolean
+      publish_integrations:
+        description: 'Publish validated CLI, gateway, adapters, Strands and MCP Auth packages'
+        required: true
+        default: false
+        type: boolean
       publish_go:
         description: 'Sync packages/go-sdk to mishrasanjeev/grantex-go and tag the version in http.go'
         required: true
@@ -43,7 +48,7 @@ jobs:
       - name: Validate confirmation
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
-          PUBLISH: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_pypi || inputs.publish_go }}
+          PUBLISH: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_pypi || inputs.publish_go || inputs.publish_integrations }}
         run: |
           test "$CONFIRMATION" = 'RELEASE_PRIMARY_SDKS'
           if [ "$PUBLISH" = 'true' ]; then
@@ -54,6 +59,29 @@ jobs:
     name: Verify all primary SDKs
     needs: authorize
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+        env:
+          POSTGRES_USER: sdk_release
+          POSTGRES_PASSWORD: sdk_release
+          POSTGRES_DB: sdk_release
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U sdk_release -d sdk_release"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      GRANTEX_CAPS_REQUIRE_INTEGRATION: '1'
+      GRANTEX_CAPS_POSTGRES_URL: postgres://sdk_release:sdk_release@127.0.0.1:5432/sdk_release
+      GRANTEX_CAPS_REDIS_URL: redis://127.0.0.1:6379/0
+      MCP_AUTH_INTEGRATION_DATABASE_URL: postgres://sdk_release:sdk_release@127.0.0.1:5432/sdk_release
+      MCP_AUTH_INTEGRATION_REDIS_URL: redis://127.0.0.1:6379/1
     outputs:
       sdk: ${{ steps.versions.outputs.sdk }}
       x402: ${{ steps.versions.outputs.x402 }}
@@ -95,6 +123,7 @@ jobs:
           PUBLISH_SDK: ${{ inputs.publish_typescript_sdk }}
           PUBLISH_X402: ${{ inputs.publish_x402 }}
           PUBLISH_PY: ${{ inputs.publish_pypi }}
+          PUBLISH_INTEGRATIONS: ${{ inputs.publish_integrations }}
         run: |
           set -euo pipefail
           fail=0
@@ -112,6 +141,24 @@ jobs:
             fail=1
           fi
           test "$fail" -eq 0
+
+      - name: Refuse already published integration versions
+        if: ${{ inputs.publish_integrations }}
+        run: |
+          set -euo pipefail
+          for package in cli gateway adapters strands mcp-auth; do
+            name=$(node -p "require('./packages/$package/package.json').name")
+            version=$(node -p "require('./packages/$package/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "::error::$name@$version already exists"
+              exit 1
+            fi
+          done
+          version=$(grep -Eo '^version = "[^"]+"' packages/strands-py/pyproject.toml | cut -d'"' -f2)
+          if curl -fsSL "https://pypi.org/pypi/grantex-strands/$version/json" >/dev/null 2>&1; then
+            echo "::error::grantex-strands $version already exists"
+            exit 1
+          fi
 
       - name: Verify the TypeScript SDK
         working-directory: packages/sdk-ts
@@ -143,6 +190,16 @@ jobs:
           node scripts/verify-sdk-artifacts.mjs "$RUNNER_TEMP/grantex-sdk-consumer" \
             "${{ steps.versions.outputs.sdk }}" "${{ steps.versions.outputs.x402 }}"
 
+      - name: Verify and pack changed integrations
+        run: |
+          set -euo pipefail
+          for package in cli gateway adapters strands mcp-auth; do
+            (cd "packages/$package" && npm ci && npm run typecheck && npm test && npm run build && npm pack --pack-destination ../../release-artifacts/npm)
+          done
+          (cd packages/mcp-auth && npm run test:integration && npx playwright install --with-deps chromium && npm run test:e2e)
+          npm install --prefix "$RUNNER_TEMP/grantex-sdk-consumer" --ignore-scripts release-artifacts/npm/*.tgz
+          node scripts/verify-enforcement-artifacts.mjs "$RUNNER_TEMP/grantex-sdk-consumer"
+
       - name: Verify the Python SDK
         working-directory: packages/sdk-py
         run: |
@@ -161,6 +218,14 @@ jobs:
           test "$(grep -Eo 'sdkVersion = "[^"]+"' http.go | cut -d'"' -f2)" = "${{ steps.versions.outputs.go }}"
           go test ./...
 
+      - name: Verify and build Python Strands
+        run: |
+          set -euo pipefail
+          python -m pip install -e 'packages/strands-py[dev]'
+          python -m pytest packages/strands-py/tests
+          python -m build packages/strands-py --outdir release-artifacts/integration-pypi
+          python -m twine check release-artifacts/integration-pypi/*
+
       - name: Upload immutable release candidates
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -172,7 +237,7 @@ jobs:
   npm:
     name: Publish npm SDKs
     needs: verify
-    if: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 }}
+    if: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_integrations }}
     runs-on: ubuntu-latest
     environment: sdk-release
     permissions:
@@ -199,6 +264,13 @@ jobs:
       - name: Publish x402 SDK
         if: ${{ inputs.publish_x402 }}
         run: npm publish "release-artifacts/npm/grantex-x402-${{ needs.verify.outputs.x402 }}.tgz" --access public
+      - name: Publish changed npm integrations
+        if: ${{ inputs.publish_integrations }}
+        run: |
+          set -euo pipefail
+          for package in cli gateway adapters strands mcp-auth; do
+            npm publish release-artifacts/npm/grantex-$package-*.tgz --access public
+          done
 
   pypi:
     name: Publish Python SDK
@@ -260,3 +332,21 @@ jobs:
           git -C grantex-go commit -m "release: $GO_TAG"
           git -C grantex-go tag -a "$GO_TAG" -m "Grantex Go SDK $GO_TAG"
           git -C grantex-go push --atomic origin HEAD:main "$GO_TAG"
+
+  pypi-integrations:
+    name: Publish Python integrations
+    needs: verify
+    if: ${{ inputs.publish_integrations }}
+    runs-on: ubuntu-latest
+    environment: sdk-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: primary-sdk-distributions
+          path: release-artifacts
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: release-artifacts/integration-pypi/

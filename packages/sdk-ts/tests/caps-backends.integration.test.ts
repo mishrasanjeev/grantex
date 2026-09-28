@@ -197,7 +197,7 @@ for (const [name, url, make] of backends) {
       } finally {
         spy.mockRestore();
       }
-    });
+    }, 60_000);
   });
 }
 
