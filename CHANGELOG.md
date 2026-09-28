@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Agent request signing libraries (not yet published)
+- New `spec/verification.md`: the `Agent-Passport`, `Agent-Grant` and
+  `Agent-Trust` headers (RFC 9651 Byte Sequences; above 6 KB the presentation
+  moves to the JSON content under `agent_credentials` and the header carries
+  `body;sha-256=:...:`, and the content is read only when it nests at most
+  64 deep), `Content-Digest` (RFC 9530, SHA-256 only) and the
+  RFC 9421 signing profile: covered components exactly `("@method"
+  "@authority" "@path" "content-digest" "agent-passport" "agent-grant")`,
+  parameters `created`, `expires`, `nonce`, `keyid` (RFC 7638 thumbprint) and
+  `tag="agent-payer-auth"`, at most 300 seconds between `created` and
+  `expires`, `ecdsa-p256-sha256` (r || s, not DER) and `ed25519`. The
+  verification steps are ordered and each denial carries
+  `request_signature_invalid` or `request_signature_stale` and a reason.
+- New packages `@grantex/agent-httpsig` (`packages/agent-httpsig`) and
+  `grantex-agent-httpsig` (`packages/agent-httpsig-py`), 0.1.0, not
+  published: `sign()` and `verify()` for the profile with an injected key
+  resolver and nonce store, an RFC 9421 signature base builder, and an RFC
+  9651 parser and serializer. Both run the shared vectors in
+  `spec/examples/agent-httpsig-vectors.json` (deterministic Ed25519 signing,
+  ECDSA verification, 58 verification cases with their denial reasons, and
+  the signature bases of RFC 9421 section 2.5 and Appendix B.2.1, B.2.3,
+  B.2.4, B.2.5 and B.2.6 with the B.2.4 and B.2.6 signatures verified), and
+  are in `make check`, `make test` and CI. `verify()` refuses an expected
+  authority that carries the default port (`:80` or `:443`), which
+  `@authority` never does, and a `now` that is not a finite, non-negative
+  number (NaN or an infinity). The Python `InMemoryNonceStore` checks and
+  records a nonce under a lock, so threads sharing one store cannot both
+  accept the same nonce. The signature base builders accept a covered field
+  only when its name is a lowercased RFC 9110 field name (a token), as
+  RFC 9421 section 2.1 requires.
+- `scripts/check-docs-integrity.mjs --live` skips a Python project that
+  carries the `Private :: Do Not Upload` classifier, as it already skipped an
+  npm package marked `"private": true`.
+- New findings: FINDINGS G-95 (the query string is not signed) and
+  FINDINGS G-96 (`Agent-Trust` is not bound to the request).
 ### Accredited issuers in the registry (auth service)
 - New `POST /v1/registry/issuers` and `PATCH /v1/registry/issuers/{id}` for
   the registry operator: accredit an issuer with its `entity_id` (an https
