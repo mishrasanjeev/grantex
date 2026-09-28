@@ -819,6 +819,9 @@ async function validatePublishedVersions(releaseSnapshot) {
     const name = project?.[1].match(/^name\s*=\s*"([^"]+)"/m)?.[1];
     const version = project?.[1].match(/^version\s*=\s*"([^"]+)"/m)?.[1];
     if (!name?.startsWith('grantex') || !version) continue;
+    // An unpublished project carries the classifier PyPI refuses to upload,
+    // as an unpublished npm package carries "private": true.
+    if (/"Private :: Do Not Upload"/.test(project?.[1] ?? '')) continue;
     const advertised = releaseByName.get(name);
     const registryUrl = advertised?.registryUrl || pypiRegistryUrls.get(name);
     if (!registryUrl) {

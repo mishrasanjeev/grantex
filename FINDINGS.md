@@ -1549,6 +1549,85 @@ the pull request that references it.
   Behind a flag that defaults off, since it can turn today's `valid: true`
   into a denial.
 
+## G-95 — The agent request signature does not cover the query string
+
+- **Found:** agent request signing libraries (S1-4), 2026-09-28, while
+  writing the signing profile in `spec/verification.md`.
+- **What:** the profile covers exactly `("@method" "@authority" "@path"
+  "content-digest" "agent-passport" "agent-grant")`. RFC 9421 section 2.2.6
+  defines `@path` without the query, and `@query` is not covered, so anyone
+  who can alter a signed request in transit (a proxy, or a relying party
+  that forwards it) can change or add query parameters without breaking the
+  signature. `spec/verification.md` section 4.5 tells relying parties not to
+  take anything that affects authority, amount or payee from the query.
+- **Impact:** a relying party that reads, for example, a cart or order
+  identifier from the query of a signed request acts on an unsigned value.
+  Requests that carry everything in the content are not affected.
+- **Proposal:** add `"@query"` after `"@path"` in a second version of the
+  profile (a new `tag`, so verifiers can accept both during a migration), or
+  have verifiers refuse a signed request with a non-empty query.
+
+## G-96 — `Agent-Trust` is not bound to the request it accompanies
+
+- **Found:** agent request signing libraries (S1-4), 2026-09-28.
+- **What:** the covered components do not include `agent-trust`, so an
+  inline `Agent-Trust` value can be replaced or removed without breaking the
+  signature (a value carried by reference is in the content and is covered).
+  The trust statement is signed by the registry, so it cannot be forged, but
+  a genuine statement about another agent can be attached to a request.
+  `spec/verification.md` section 4.5 requires relying parties to check that
+  the statement names the key or the Agent Passport of the signature; the
+  libraries return it unchecked.
+- **Impact:** a relying party that uses `Agent-Trust` without that check
+  could credit an agent with another agent's trust statement.
+- **Proposal:** either cover `agent-trust` when present (a second profile
+  version, since the covered components are fixed), or have the verifier
+  that consumes trust statements (Phase 1 attestation checks) refuse a
+  statement whose subject is not the signature's `keyid` or Agent Passport,
+  with `key_binding_mismatch`.
+
+## G-100 — The auth service's SD-JWT verifier does not follow RFC 9901 section 7.1
+
+- **Found:** building the Agent Passport verifier (`packages/agent-passport`),
+  2026-09-28, comparing it with the existing `verifySDJWT` in
+  `apps/auth-service/src/lib/sd-jwt.ts`.
+- **What:** `verifySDJWT` drops empty elements before parsing, so `jwt~~d~`
+  verifies although RFC 9901 section 4 allows an empty element only after the
+  last tilde; it treats any element whose header says `kb+jwt` as the Key
+  Binding JWT, wherever it appears, rather than only the last element; and it
+  accepts the same disclosure twice and a digest that appears twice in `_sd`,
+  both of which section 7.1 (steps 4 and 5) says MUST be rejected. A repeated
+  disclosure overwrites the claim with the same value, so nothing is forged
+  today, but the verifier accepts inputs a conforming verifier refuses.
+- **Impact:** interoperability and defence in depth: another verifier refuses
+  what this one accepts, and the checks that stop disclosure games are missing.
+- **Proposal:** take the framing and disclosure processing from
+  `@grantex/agent-passport` (`splitSdJwt`, `processDisclosures`), behind a flag
+  that defaults off because it refuses inputs accepted today, with tests of
+  each refusal. Owner: auth service maintainers. Exit criterion: the
+  refusal vectors of `spec/examples/agent-passport-vectors.json` that apply to
+  plain SD-JWT (`not_sd_jwt`, `duplicate_disclosure`, `duplicate_digest`) are
+  refused by `verifySDJWT` with the flag on.
+
+## G-101 — The grant SD-JWT uses the retired `vc+sd-jwt` typ
+
+- **Found:** checking `typ` values against draft-ietf-oauth-sd-jwt-vc-19
+  (section 2.2.1 requires `dc+sd-jwt`) while writing
+  `spec/agent-passport-1.0.md`, 2026-09-28.
+- **What:** `issueSDJWT` in `apps/auth-service/src/lib/sd-jwt.ts` signs its
+  issuer JWT with `typ: 'vc+sd-jwt'`, and the SDKs report the format as
+  `vc+sd-jwt`. The current draft uses `dc+sd-jwt` and, as an SD-JWT VC, also
+  expects a `vct` claim; the grant SD-JWT instead nests `_sd` inside a W3C
+  `vc.credentialSubject`, which is the VC data model shape, not the SD-JWT VC
+  one. A current SD-JWT VC verifier refuses it on `typ` alone.
+- **Impact:** the grant SD-JWT is not interoperable with SD-JWT VC verifiers;
+  Grantex's own verifier is unaffected.
+- **Proposal:** decide whether the grant SD-JWT is an SD-JWT VC (then `typ`
+  `dc+sd-jwt`, a `vct`, claims at the top level) or a plain SD-JWT with its own
+  `typ`, and change it behind a flag with the SDKs' format string, recorded in
+  `CHANGELOG.md`. The Agent Passport profile is not affected: it already uses
+  `dc+sd-jwt`.
+
 ## G-105 — The public registry search lists unverified, self-asserted organizations
 
 - **Found:** trust registry listing fix (`GET /v1/trust-registry` can be made

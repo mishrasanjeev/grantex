@@ -84,6 +84,16 @@ updates:
         patterns: [vitest, '@vitest/*']
 
   - package-ecosystem: npm
+    directory: /packages/agent-passport
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, agent-passport]
+    groups:
+      vitest:
+        patterns: [vitest, '@vitest/*']
+
+  - package-ecosystem: npm
     directory: /packages/anthropic
     schedule:
       interval: weekly
@@ -103,6 +113,13 @@ updates:
       interval: weekly
     open-pull-requests-limit: 3
     labels: [dependencies, npm, x402]
+
+  - package-ecosystem: npm
+    directory: /packages/agent-httpsig
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, agent-httpsig]
 
   - package-ecosystem: npm
     directory: /packages/cli
@@ -315,6 +332,20 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     labels: [dependencies, python, sdk-py]
+
+  - package-ecosystem: pip
+    directory: /packages/agent-passport-py
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, agent-passport]
+
+  - package-ecosystem: pip
+    directory: /packages/agent-httpsig-py
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, agent-httpsig-py]
 
   - package-ecosystem: pip
     directory: /packages/fastapi
