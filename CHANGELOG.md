@@ -368,17 +368,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `registry_acceptance_lists` and `registry_acceptance_entries` tables, created
   empty. The lists are the registry's own; they have no developer or tenant
   column.
-### Enforcement SDK release candidates
-- Prepare TypeScript SDK 0.8.0 and Python SDK 0.7.0 for the breaking audience,
+### Enforcement SDK releases (2026-09-28)
+- Publish TypeScript SDK 0.8.0 and Python SDK 0.7.0 for the breaking audience,
   amount-required and online-revocation changes documented below.
-- Prepare CLI 0.4.0, gateway/adapters/TypeScript Strands/Python Strands 0.2.0,
+- Publish CLI 0.4.0, gateway/adapters/TypeScript Strands/Python Strands 0.2.0,
   and MCP Auth 3.0.0 with package-specific migration guidance and dependency
   floors that require the updated primary SDK.
 - Correct Node.js support to 22.12+ for these npm releases; recommend Node.js
   24 LTS. Python SDK remains 3.9+ and Python Strands remains 3.11+.
 - Go v0.4.1 and x402 0.4.1 are unchanged and compatibility-tested, not republished.
-- Registry publication is separate from preparation. See Release Status for
-  verified artifacts and the enforcement migration guide for rollout/rollback.
+- All eight releases have matching registry hashes. Clean npm installation,
+  public Python-wheel suites and production SDK enforcement passed. Normal
+  PyPI index propagation remains pending; see Release Status and validation
+  for this explicit limitation and the migration guide for rollout/rollback.
 - Preserve legacy claim compatibility defaults and correct stale deprecation
   warnings that promised an unimplemented version-based default flip. Tests
   verify the explicit standard-only setting is named in each warning.

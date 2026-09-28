@@ -6,12 +6,12 @@ description: "Install and configure the Grantex Python SDK for delegated authori
 
 ## Installation
 
-Published release: **`grantex==0.6.1`**. The published wheel and sdist hashes
-match the tested artifacts; a clean public-index install was verified on
-September 28, 2026.
+Published release: **`grantex==0.7.0`**. The published wheel and sdist hashes
+match the tested artifacts. Clean public-index verification is pending while
+the registry index propagates; see [Release Status](/release-status).
 
 ```bash
-python -m pip install grantex==0.6.1
+python -m pip install grantex==0.7.0
 ```
 
 The unpinned `python -m pip install grantex` command follows PyPI's current
@@ -39,10 +39,11 @@ verification responses and the updated VC WebAuthn attestation. It does not
 enable hosted server flags or add custom assertion UI helper methods.
 
 <Warning>
-The subsequent `enforce()` audience and missing-amount cap checks are not in
-`0.6.1`. Validate audience at your service boundary and pass validated amounts
-for capped calls; wrappers that omit amounts are not safe cap enforcers.
-See [release limitations](/release-status#known-limitations-in-the-current-published-artifacts).
+Version `0.7.0` introduces breaking enforcement defaults: audience binding,
+denial of capped calls without trusted amounts, and online revocation checks.
+Register allowed resource servers before audience-bound authorization.
+Signature-only verification is not current-state enforcement. Python 3.9+
+remains supported. Follow [the migration guide](/migration-enforcement).
 </Warning>
 
 <Note>

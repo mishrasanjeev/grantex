@@ -5,11 +5,11 @@ description: "Deploying @grantex/mcp-auth 3.0 with Postgres or Redis, configurin
 
 # `@grantex/mcp-auth` 3.0
 
-> **Status.** Version 3.0.0 is prepared in the repository and **not yet
-> published to npm**. The current published release is
-> `@grantex/mcp-auth@2.0.2`; its behaviour is described in the
-> [MCP Auth Server guide](/features/mcp-auth-server). Everything below
-> describes 3.0.0 as built from source.
+> **Status.** `@grantex/mcp-auth@3.0.0` is published. Registry integrity,
+> clean installation, real storage integration and browser tests are recorded
+> in [release validation](/sdk-release-validation). The immutable 2.0.2
+> behavior remains in [the historical guide](/legacy/mcp-auth-server-2).
+> Node.js 22.12+ and SDK 0.8+ are required.
 
 `@grantex/mcp-auth` puts an OAuth 2.1 authorization server in front of an MCP
 server and hands the actual grant to Grantex. 3.0 is built for production:
@@ -58,16 +58,14 @@ server and hands the actual grant to Grantex. 3.0 is built for production:
 
 ## Install
 
-While the candidate is being validated, build it from the repository:
+Install the published packages on Node.js 22.12 or newer:
 
 ```bash
-git clone https://github.com/mishrasanjeev/grantex
-cd grantex/packages/mcp-auth
-npm ci && npm run build && npm pack
+npm install @grantex/mcp-auth@3.0.0 @grantex/sdk@0.8.0
 ```
 
-Install the resulting tarball with `@grantex/sdk` and the database driver you
-use (`pg` or `postgres`, or `ioredis`). The drivers are not dependencies of
+Also install the database driver you use (`pg` or `postgres`, or `ioredis`).
+The drivers are not dependencies of
 the package; the storage classes accept any compatible client.
 
 ## Deploying with Postgres

@@ -9,8 +9,13 @@ description: "Zero-code reverse-proxy that enforces grant tokens in front of any
 `@grantex/gateway` is a standalone reverse-proxy that enforces Grantex grant tokens in front of any upstream API. Define routes and required scopes in a YAML config — no code required.
 
 ```bash
-npm install @grantex/gateway @grantex/sdk
+npm install @grantex/gateway@0.2.0 @grantex/sdk@0.8.0
 ```
+
+Node.js 22.12+ is required. Audience and trusted-amount configuration are
+breaking changes; see [migration](/migration-enforcement). Gateway JWT checks
+alone do not prove current grant revocation; wire current-state enforcement
+at the protected service before side effects.
 
 ## Quick Start
 
@@ -55,7 +60,7 @@ Client → Gateway (verify token + check scopes) → Upstream API
 
 1. **Route matching** — finds the first route matching the request method + path
 2. **Token verification** — extracts the Bearer token, resolves keys from the configured JWKS endpoint, and verifies signature and claims locally
-3. **Scope checking** — ensures the grant includes all required scopes, and (from the next release) that the token's `aud` claim is for this gateway; see [Grant token audience](#grant-token-audience)
+3. **Scope checking** — ensures the grant includes all required scopes, and (from version 0.2.0) that the token's `aud` claim is for this gateway; see [Grant token audience](#grant-token-audience)
 4. **Proxy** — strips Authorization header, adds upstream headers + `X-Grantex-*` context, forwards to upstream
 5. **Response** — returns the upstream response to the client
 
@@ -68,8 +73,8 @@ Client → Gateway (verify token + check scopes) → Upstream API
 | `port` | number | No | 8080 | Listen port |
 | `upstreamHeaders` | object | No | — | Headers added to every upstream request |
 | `grantexApiKey` | string | No | — | API key for audit logging |
-| `audience` | string | No | — | Grant token audience the gateway expects. From the next release |
-| `audienceCheck` | `on` \| `off` | No | `on` | `off` ignores the token's `aud`, as earlier releases did; cannot be combined with `audience`. From the next release |
+| `audience` | string | No | — | Grant token audience the gateway expects. From version 0.2.0 |
+| `audienceCheck` | `on` \| `off` | No | `on` | `off` ignores the token's `aud`, as earlier releases did; cannot be combined with `audience`. From version 0.2.0 |
 | `routes` | array | Yes | — | Route definitions |
 
 ### Route Definition
@@ -79,7 +84,7 @@ Client → Gateway (verify token + check scopes) → Upstream API
 | `path` | string | URL pattern. `*` matches one segment, `**` matches any depth |
 | `methods` | string[] | HTTP methods (GET, POST, PUT, PATCH, DELETE) |
 | `requiredScopes` | string[] | Scopes that must be present in the grant |
-| `audience` | string | Grant token audience for this route; overrides the top-level `audience`. From the next release |
+| `audience` | string | Grant token audience for this route; overrides the top-level `audience`. From version 0.2.0 |
 
 ### Path Matching
 
@@ -111,15 +116,15 @@ All errors return JSON with `error` and `message` fields:
 | 401 | `TOKEN_MISSING` | No Bearer token in Authorization header |
 | 401 | `TOKEN_INVALID` | Token signature verification failed |
 | 401 | `TOKEN_EXPIRED` | Token has expired |
-| 401 | `AUDIENCE_UNCONFIGURED` | Token carries `aud` and no `audience` is configured (next release) |
-| 401 | `AUDIENCE_MISMATCH` | Token's `aud` does not contain the route's or gateway's `audience`, or it has no `aud` (next release) |
+| 401 | `AUDIENCE_UNCONFIGURED` | Token carries `aud` and no `audience` is configured (0.2.0) |
+| 401 | `AUDIENCE_MISMATCH` | Token's `aud` does not contain the route's or gateway's `audience`, or it has no `aud` (0.2.0) |
 | 403 | `SCOPE_INSUFFICIENT` | Grant doesn't include required scopes |
 | 502 | `UPSTREAM_ERROR` | Upstream API is unreachable |
 
 ## Grant token audience
 
 <Warning>
-  From the next release (not in `@grantex/gateway` 0.1.5). This is a breaking
+  From version 0.2.0 (not in `@grantex/gateway` 0.1.5). This is a breaking
   change: a grant token that carries an `aud` claim is refused unless the
   gateway is configured with that audience. Tokens issued without an audience
   are unaffected.
