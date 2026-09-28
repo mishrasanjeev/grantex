@@ -1305,3 +1305,23 @@ the pull request that references it.
   row, issued the way the VC-JWT is (in the grant's transaction, or through
   `issueForCommittedGrant` while the stop is on), so a revocation sets their
   bit, and have `verifySDJWT` check it.
+
+## G-80 — The public trust-registry reads have no limit of their own
+
+- **Found:** adding `GET /v1/registry/issuers`, which is limited per client
+  address, and comparing it with the registry reads already served
+  (2026-09-28).
+- **What:** `GET /v1/trust-registry/:orgDID`, `GET /v1/registry/orgs`,
+  `GET /v1/registry/orgs/:did` and `GET /v1/registry/orgs/:did/jwks`
+  (`apps/auth-service/src/routes/trust-registry.ts`) skip authentication and
+  set no `rateLimit` of their own, so the only limit is the service-wide
+  5,000 requests a minute per address. `GET /v1/registry/orgs` runs a
+  `COUNT(*)` and an `ILIKE` search over `trust_registry` on every call, so one
+  address can keep the database busy with unauthenticated searches.
+- **Impact:** load, not disclosure: the data is public by design.
+- **Proposal:** give each route a per-address limit sized for its use (the
+  issuer list uses 60 a minute; search probably wants less), behind a flag
+  that defaults off because it changes an existing path, with a test that the
+  limit answers 429 and that another address is unaffected. Owner: the
+  registry maintainers. Exit criterion: every unauthenticated registry read
+  has a route limit, with tests.

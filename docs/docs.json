@@ -67,6 +67,7 @@
             "group": "Trust & Identity",
             "pages": [
               "features/trust-registry",
+              "issuers/becoming-an-accredited-issuer",
               "features/fido-webauthn",
               "features/verifiable-credentials",
               "features/sd-jwt",

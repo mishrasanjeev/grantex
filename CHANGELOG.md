@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Accredited issuers in the registry (auth service)
+- New `POST /v1/registry/issuers` and `PATCH /v1/registry/issuers/{id}` for
+  the registry operator: accredit an issuer with its `entity_id` (an https
+  OpenID Federation Entity Identifier, a bare origin written without the
+  trailing slash so one origin has one record), a static JWK Set of EC P-256 (ES256)
+  or Ed25519 (EdDSA) public keys, its trust marks and its `status_list_base`;
+  later suspend it from an `effective_from` time (past or future), reinstate
+  or withdraw it, change its trust marks, replace its keys or revoke one key
+  by `kid`. They authenticate with a key from the new
+  `REGISTRY_OPERATOR_API_KEYS` (comma separated, each at least 32
+  characters, compared in constant time) and answer `503` until one is
+  configured. Every change goes on the registry's audit chain in the same
+  transaction, with the operator's reason.
+- New public `GET /v1/registry/issuers`: each issuer's `entity_id`,
+  `trust_marks`, `status` in effect now, `status_list_base` and keys without
+  revoked kids, with an `ETag` and `Cache-Control: no-cache` (a cache
+  revalidates every read, so a revoked key is not served stale), limited to
+  60 requests a minute per address.
+- Trust marks come from a fixed taxonomy:
+  `urn:grantex:tm:provider.entity`, `provider.ownership`,
+  `provider.screening`, `agent.identity` and `agent.security`; anything else
+  is refused, by the route and by the table.
+- Migration `121_registry_accredited_issuers.sql` adds two empty tables. No
+  existing path changes. Documented in
+  `docs/issuers/becoming-an-accredited-issuer.md`,
+  `spec/registry-federation.md` and `docs/self-hosting.md`.
+
 ### Capped scopes need an amount (TypeScript and Python SDKs)
 - **Breaking:** `enforce()` denies a call under a `capped:N` scope that gives
   no `amount`, with `reason_code` / `reasonCode` `cap_exceeded` and the new

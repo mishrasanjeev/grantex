@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { isIP } from 'node:net';
 import { evidenceConfigErrors } from './lib/evidence-service/settings.js';
 import { migrationLockTimeoutError } from './db/migrate.js';
+import { registryOperatorKeysConfigError } from './lib/registry/operator-auth.js';
 import {
   parseSigningAlgorithm,
   parseSigningKeyStore,
@@ -357,6 +358,8 @@ export function validateConfig(): void {
     config.portableWebAuthnEvidenceStatusCheckEnabled,
   );
   if (cascadeProblem) errors.push(cascadeProblem);
+  const registryOperatorProblem = registryOperatorKeysConfigError(process.env['REGISTRY_OPERATOR_API_KEYS']);
+  if (registryOperatorProblem) errors.push(registryOperatorProblem);
 
   if (errors.length > 0) {
     console.error(

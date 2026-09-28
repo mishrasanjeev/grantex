@@ -1,0 +1,132 @@
+// SPDX-License-Identifier: Apache-2.0
+/**
+ * Accredited issuers in the registry (Agent Trust Registry, Phase 1).
+ *
+ *   POST  /v1/registry/issuers        accredit an issuer (registry operator key)
+ *   PATCH /v1/registry/issuers/:id    suspend, reinstate or withdraw it, change its
+ *                                     trust marks, replace its JWK Set, revoke a kid
+ *                                     (registry operator key)
+ *   GET   /v1/registry/issuers        the public, minimised list relying parties read
+ *
+ * The write routes take a key from REGISTRY_OPERATOR_API_KEYS, compared in
+ * constant time (lib/registry/operator-auth.ts). With no usable key
+ * configured they answer 503, as the admin routes do without ADMIN_API_KEY:
+ * nothing can be accredited until an operator credential exists. Every write
+ * goes on the registry's audit chain in the same transaction as the change.
+ *
+ * The public list needs no key. It is limited per client address like the
+ * other public reads, and carries an ETag so a relying party polling it can
+ * ask for changes only.
+ */
+import { createHash } from 'node:crypto';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { getSql } from '../db/client.js';
+import {
+  IssuerRecordError,
+  createAccreditedIssuer,
+  listPublicIssuers,
+  parseAccreditationRequest,
+  parseIssuerPatch,
+  toOperatorIssuer,
+  updateAccreditedIssuer,
+} from '../lib/registry/issuers.js';
+import { operatorKeyMatches, registryOperatorKeys } from '../lib/registry/operator-auth.js';
+
+/** Public reads per client address per minute. */
+export const PUBLIC_ISSUER_LIST_RATE_LIMIT = 60;
+
+/** Check the registry operator key. Sends the refusal and returns false when it is missing or wrong. */
+function operatorAuthorized(request: FastifyRequest, reply: FastifyReply): boolean {
+  const keys = registryOperatorKeys();
+  if (keys.length === 0) {
+    void reply.status(503).send({
+      message: 'Registry operator API not configured', code: 'SERVICE_UNAVAILABLE', requestId: request.id,
+    });
+    return false;
+  }
+  if (!operatorKeyMatches(request.headers.authorization, keys)) {
+    void reply.status(401).send({ message: 'Unauthorized', code: 'UNAUTHORIZED', requestId: request.id });
+    return false;
+  }
+  return true;
+}
+
+function sendRecordError(request: FastifyRequest, reply: FastifyReply, err: IssuerRecordError): FastifyReply {
+  return reply.status(err.statusCode).send({
+    message: err.message,
+    code: err.code,
+    ...(err.field !== undefined ? { field: err.field } : {}),
+    requestId: request.id,
+  });
+}
+
+/** Which operator address made the call. The key itself is never recorded, hashed or otherwise. */
+function requestedBy(request: FastifyRequest): string {
+  return `registry-operator:${request.ip}`;
+}
+
+function etagMatches(header: string | undefined, etag: string): boolean {
+  if (header === undefined) return false;
+  return header.split(',').map((tag) => tag.trim().replace(/^W\//, '')).some((tag) => tag === etag || tag === '*');
+}
+
+export async function registryIssuerRoutes(app: FastifyInstance): Promise<void> {
+  const operator = { config: { skipAuth: true, rateLimit: { max: 20, timeWindow: '1 minute' } } };
+
+  app.post('/v1/registry/issuers', operator, async (request, reply) => {
+    if (!operatorAuthorized(request, reply)) return reply;
+    try {
+      const input = parseAccreditationRequest(request.body);
+      const record = await createAccreditedIssuer(getSql(), input, requestedBy(request));
+      request.log.warn({
+        alert: 'registry_issuer_accredited', issuerId: record.id, trustMarks: record.trustMarks,
+      }, 'accredited issuer added to the registry');
+      return reply.status(201).send(toOperatorIssuer(record));
+    } catch (err) {
+      if (err instanceof IssuerRecordError) return sendRecordError(request, reply, err);
+      throw err;
+    }
+  });
+
+  app.patch<{ Params: { id: string } }>('/v1/registry/issuers/:id', operator, async (request, reply) => {
+    if (!operatorAuthorized(request, reply)) return reply;
+    const { id } = request.params;
+    try {
+      if (id.length === 0 || id.length > 64) throw new IssuerRecordError('unknown issuer', 'id', 404, 'NOT_FOUND');
+      const patch = parseIssuerPatch(request.body);
+      const record = await updateAccreditedIssuer(getSql(), id, patch, requestedBy(request));
+      if (!record) {
+        return reply.status(404).send({ message: 'Accredited issuer not found', code: 'NOT_FOUND', requestId: request.id });
+      }
+      request.log.warn({
+        alert: 'registry_issuer_updated',
+        issuerId: record.id,
+        status: record.status,
+        revokedKids: patch.revokeKids?.length ?? 0,
+      }, 'accredited issuer changed');
+      return reply.send(toOperatorIssuer(record));
+    } catch (err) {
+      if (err instanceof IssuerRecordError) return sendRecordError(request, reply, err);
+      throw err;
+    }
+  });
+
+  app.get(
+    '/v1/registry/issuers',
+    { config: { skipAuth: true, rateLimit: { max: PUBLIC_ISSUER_LIST_RATE_LIMIT, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const issuers = await listPublicIssuers(getSql());
+      const body = { issuers };
+      // Over the body itself, so it changes whenever what a relying party
+      // would read changes, including a scheduled suspension taking effect.
+      const etag = `"${createHash('sha256').update(JSON.stringify(body)).digest('base64url')}"`;
+      reply.header('ETag', etag);
+      // no-cache, not a max-age: a cache must revalidate every read (a cheap
+      // 304 while the ETag holds), so a revoked kid or a suspension that has
+      // taken effect is never served stale (RFC 9111 section 5.2.2.4).
+      reply.header('Cache-Control', 'no-cache');
+      if (etagMatches(request.headers['if-none-match'], etag)) return reply.status(304).send();
+      return reply.send(body);
+    },
+  );
+}

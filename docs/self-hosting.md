@@ -252,6 +252,7 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `REVOCATION_FEED_MAX_CONNECTIONS` | No | `200` | Revocation streams one developer may hold on one instance |
 | `REVOCATION_FEED_RETENTION_HOURS` | No | `48` | How long delivered feed entries are kept after the credential expires |
 | `EMERGENCY_STOP_ENABLED` | No | `false` | Serve the emergency stop and its lockout (section 11); revocations are irreversible, and issuance reads lockouts only while this is on |
+| `REGISTRY_OPERATOR_API_KEYS` | No | — | Keys for the registry operator routes, `POST` and `PATCH /v1/registry/issuers` (comma separated, each at least 32 characters, separate from `ADMIN_API_KEY`); unset, those routes answer `503`, and a shorter key stops the service from starting. See `docs/issuers/becoming-an-accredited-issuer.md` |
 | `RATE_LIMIT_ROUTE_CLASSES_ENABLED` | No | `true` | Revocation and emergency-stop routes, and the revocation feed, draw on per-developer budgets of their own instead of the plan (`docs/guides/rate-limits.mdx`); `false` puts them back in the plan budget, failing closed when Redis is unavailable |
 
 ---
