@@ -218,7 +218,7 @@ const MANIFEST = {
 };
 
 async function mcp(options: Partial<RequireMcpAuthOptions>, authorization?: string, body?: unknown) {
-  const mw = requireMcpAuth({ issuer: grantexIssuer, audience: TEST_RESOURCE, ...options } as RequireMcpAuthOptions);
+  const mw = requireMcpAuth({ issuer: grantexIssuer, revocations: 'none', audience: TEST_RESOURCE, ...options } as RequireMcpAuthOptions);
   let handled = false;
   const server = createServer((raw: IncomingMessage, res: ServerResponse) => {
     const req = raw as McpAuthRequest;

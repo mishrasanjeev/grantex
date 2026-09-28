@@ -85,7 +85,7 @@ const acmeKyb = ToolManifest.fromJSON({
 
 async function enforce(g: VerifiedGrant, tool: string, connector = 'acme_kyb') {
   vi.mocked(verifyGrantToken).mockResolvedValue(g);
-  const client = new Grantex({ apiKey: 'test-key' });
+  const client = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline' });
   client.loadManifest(acmeKyb);
   return client.enforce({ grantToken: 't', connector, tool });
 }
@@ -466,7 +466,7 @@ it('authorize() sends purpose', async () => {
   });
   vi.stubGlobal('fetch', fetchMock);
   try {
-    const client = new Grantex({ apiKey: 'test-key' });
+    const client = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline' });
     await client.authorize({ agentId: 'ag_01', userId: 'user_01', scopes: ['tool:acme_kyb:read'], purpose: 'aml.screening' });
     const body = JSON.parse(String((fetchMock.mock.calls[0] as [string, { body: string }])[1].body)) as Record<string, unknown>;
     expect(body['purpose']).toBe('aml.screening');

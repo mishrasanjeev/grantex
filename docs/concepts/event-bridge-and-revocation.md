@@ -341,14 +341,50 @@ grant's token stays cryptographically valid until it expires. Revoking a grant
 stops the auth service issuing anything new; it does not, on its own, stop an
 SDK that already holds a token.
 
-The revocation feed closes that gap. Three modes, chosen per client or per
-call:
+The revocation feed closes that gap. Three modes, chosen per client, and
+tightened (never loosened) per call:
 
 | `revocationCheck` / `revocation_check` | What `enforce()` does | Cost |
 |---|---|---|
-| `offline` (default) | nothing — unchanged behaviour | none |
+| `online` (default from the next SDK release) | asks the auth service about this grant (`GET /v1/revocations/status`) | one request per call |
 | `feed` | consults an in-memory set kept current by the feed | one long-lived connection per process |
-| `online` | asks the auth service about this grant | one request per call |
+| `offline` (the opt-out; published versions up to `@grantex/sdk` 0.7.0 and `grantex` 0.6.0 have no revocation check at all and behave like this) | nothing: a revoked grant's token is accepted until it expires | none |
+
+From the next SDK release a client created without `revocationCheck` /
+`revocation_check` checks `online`, and denies with `grant_revoked` /
+`status_unavailable` when the auth service cannot answer, including when a
+deployment has turned the feed endpoints off. To keep the previous behaviour,
+pass `offline` explicitly:
+
+```ts
+const grantex = new Grantex({ apiKey, revocationCheck: 'offline' });
+```
+
+```python
+grantex = Grantex(api_key=api_key, revocation_check="offline")
+```
+
+`online` costs one round trip to the auth service per `enforce()` call, and
+those calls draw on the developer's revocation-status budget: 6,000 a minute
+(100 a second) across all of the developer's instances, whatever the plan (see
+[Rate limits](#rate-limits)). The status endpoint's per-address limit is the
+same 6,000 a minute, so a server running many tools behind one egress address
+can use the whole budget; past it the SDK is answered `429`, retries, and then
+denies with `status_unavailable`. A client making more checked calls than that,
+or one on a hot path, should use `feed`, which costs one connection per process
+however many calls it makes.
+
+### Per-call overrides only tighten
+
+The modes are ordered by how soon a revocation is seen: `offline` never,
+`feed` within its staleness bound, `online` on the next call
+(`offline` < `feed` < `online`; exported as `REVOCATION_CHECK_STRENGTH`). The
+per-call `revocationCheck` / `revocation_check` option of `enforce()` may
+choose the client's mode or a stricter one. A weaker one is refused before
+anything is checked: `enforce()` rejects (TypeScript) or raises `ValueError`
+(Python), so code that reaches `enforce()` cannot switch off what the
+deployment configured. A client configured `offline` can still ask for `feed`
+or `online` on a sensitive call.
 
 ```ts
 const grantex = new Grantex({
@@ -420,7 +456,14 @@ stop, a sweep.
 
 Delivered entries are kept for `REVOCATION_FEED_RETENTION_HOURS` past the
 expiry of the credential they are about, and an hourly worker prunes the rest,
-so the table the snapshot reads does not grow without bound.
+so the table the snapshot reads does not grow without bound. The triggers fill
+the table even while the feed is off, so the first prune after it turns on can
+face a large backlog: the worker deletes in batches of 1000 rows, at most 50
+batches or 60 seconds a run, and leaves the rest to the next run. Only one
+instance prunes at a time (it takes a Postgres advisory lock and the others skip
+that run), and each instance's first run waits a random delay of up to
+`REVOCATION_FEED_PRUNE_JITTER_SECONDS` (default 300), so the instances of one
+deploy do not start together.
 
 ### Where the entries come from
 
@@ -546,7 +589,13 @@ calls can still revoke, and its SDKs can still learn about revocations.
 | status | `GET /v1/revocations`, `/v1/revocations/status`, `/v1/revocations/stream`, `GET /v1/consent-bundles/:id/revocation-status` | 6,000 a minute | `503 RATE_LIMIT_UNAVAILABLE`; clients fail closed |
 
 The per-address limits on each route still apply first (20 a minute for the
-emergency stop; 600, 1,200 and 120 for the feed, status and stream routes).
+emergency stop; 600, 6,000 and 120 for the feed, status and stream routes).
+The status route's per-address limit is the developer's status budget, because
+an SDK checking `online` calls it once per `enforce()`: a lower one would
+refuse a server running many tools behind one address before the developer
+reached its budget. The feed and stream are called once per SDK process (a
+long poll or a reconnect), so their per-address limits scale with processes,
+not calls, and stay lower.
 A revocation fails open when the limiter cannot count it because it is written
 to Postgres, which is authoritative, and refusing it would prolong an incident
 over an outage of a cache. `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false` puts these
@@ -570,6 +619,8 @@ routes back in the plan budget. See `docs/guides/rate-limits.mdx`.
 | `grantex_revocation_feed_polls_total` | `outcome` |
 | `grantex_revocation_feed_subscribers` | — (live streams on this instance) |
 | `grantex_revocation_feed_stale_seconds` | — (since the last successful read) |
+| `grantex_revocation_feed_pruned_total` | — (entries deleted past retention) |
+| `grantex_revocation_feed_prune_runs_total` | `outcome` (`complete`, `capped`, `skipped_locked`, `failed`) |
 | `grantex_emergency_stops_total` | `scope`, `outcome` (`applied`, `dry_run`, `refused`) |
 | `grantex_issuance_freeze_changes_total` | `action` (`placed`, `reaffirmed`, `lifted`), `scope` |
 | `grantex_issuance_refusals_total` | `path` (the issuance route), `reason` (`frozen`, `freeze_state_unavailable`) |
@@ -588,8 +639,8 @@ in `deploy/prometheus/event-bridge-alerts.yml`.
 | `EVENT_BRIDGE_RATE_LIMIT_PER_MINUTE` | `30000` | Ingestion requests per client address, read per request |
 | `EVENT_BRIDGE_RECEIPT_RETENTION_HOURS` | `48` | Floor for how long a delivery receipt is kept; never shorter than the window in which its source would still accept the delivery |
 | `VAULT_ENCRYPTION_KEY` | — | Required to register webhook sources |
-| `REVOCATION_FEED_ENABLED` | `false` | Serves the revocation feed endpoints |
-| `REVOCATION_FEED_DEVELOPER_IDS` | (all) | Developers the feed is limited to |
+| `REVOCATION_FEED_ENABLED` | `true` (from the next release; `false` before) | Serves the revocation feed and status endpoints. `false` is the opt-out; any other value leaves them on. SDK clients checking `online` (the default) or `feed` deny every call while they are off |
+| `REVOCATION_FEED_DEVELOPER_IDS` | (all) | Developers the feed is limited to; every other developer gets `404`, so their default SDK clients deny |
 | `REVOCATION_FEED_POLL_MS` | `500` | How often an instance looks for new revocations |
 | `REVOCATION_FEED_SETTLE_SECONDS` | `15` | How long an entry may still be uncommitted |
 | `REVOCATION_FEED_HEARTBEAT_MS` | `1000` | How often a stream confirms it is up to date |
@@ -611,9 +662,10 @@ in `deploy/prometheus/event-bridge-alerts.yml`.
 - Revocation stops new authorisation decisions. An SDK holding a verified
   token still needs to learn about it; see the revocation feed for how
   quickly, and what happens when it cannot.
-- The feed tells an SDK what the auth service knows. An agent that does not
-  use it (`revocationCheck: 'offline'`, the default) keeps calling until its
-  token expires, which is why short grant lifetimes still matter.
+- The feed tells an SDK what the auth service knows. An agent that opts out
+  (`revocationCheck: 'offline'`, and any client of `@grantex/sdk` 0.7.0 or
+  `grantex` 0.6.0 and earlier, which do not check revocation at all) keeps
+  calling until its token expires, which is why short grant lifetimes still matter.
 - A revocation is bounded by the client's staleness bound, not by zero: an
   agent can make calls in the window between the revocation and the entry
   arriving. Lower `staleAfterMs` and the poll interval to narrow it; the

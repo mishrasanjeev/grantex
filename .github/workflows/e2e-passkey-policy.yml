@@ -5,7 +5,7 @@ on:
 
 jobs:
   production-e2e:
-    name: Hosted passkey consent and account response policy
+    name: Hosted passkey parity, consent, evidence and response policy
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -26,7 +26,7 @@ jobs:
       - name: Install Chromium
         working-directory: apps/auth-service
         run: npx playwright install --with-deps chromium
-      - name: Exercise hosted enrollment, live consent and both response modes
+      - name: Exercise sandbox/live parity, OAuth consent, portable evidence and response modes
         working-directory: apps/auth-service
         env:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app

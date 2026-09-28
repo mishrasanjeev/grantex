@@ -317,12 +317,15 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     let hasFinancialHistory = false;
+    let hasCredentialHistory = false;
     // Serialize deletion with wallet authorization and preserve append-only
     // financial evidence. Agents with payment history must be suspended and
     // their grants revoked instead of being hard-deleted.
     await sql.begin(async (_tx) => {
       const tx = _tx as unknown as TxSql;
       await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`${developerId}:${agentId}`}, 13))`;
+      // Serialize against inserts whose foreign keys reference this agent.
+      await tx`SELECT id FROM agents WHERE id = ${agentId} AND developer_id = ${developerId} FOR UPDATE`;
       const walletHistory = await tx`
         SELECT 1 FROM wallet_payment_reservations
         WHERE agent_id = ${agentId} AND developer_id = ${developerId}
@@ -330,6 +333,16 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       `;
       if (walletHistory[0]) {
         hasFinancialHistory = true;
+        return;
+      }
+      const credentialHistory = await tx`
+        SELECT 1 FROM verifiable_credentials vc
+        JOIN grants g ON g.id = vc.grant_id
+        WHERE g.agent_id = ${agentId} AND g.developer_id = ${developerId}
+        LIMIT 1
+      `;
+      if (credentialHistory[0]) {
+        hasCredentialHistory = true;
         return;
       }
       const grantSubquery = tx`SELECT id FROM grants WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
@@ -347,6 +360,13 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(409).send({
         message: 'Agents with prepaid-wallet history cannot be deleted; suspend the agent and revoke its grants to preserve financial evidence',
         code: 'AGENT_HAS_FINANCIAL_HISTORY',
+        requestId: request.id,
+      });
+    }
+    if (hasCredentialHistory) {
+      return reply.status(409).send({
+        message: 'Agents with issued verifiable credentials cannot be deleted; suspend the agent and revoke its grants to preserve credential status and history',
+        code: 'AGENT_HAS_CREDENTIAL_HISTORY',
         requestId: request.id,
       });
     }

@@ -76,7 +76,7 @@ describe('docs/concepts/decision-grants.md TypeScript examples', () => {
         return { requestId: set.grants[0]!.decisionRequest, jtis, actionHash: set.actionHash, approvers: [] };
       },
     };
-    const grantex = new Grantex({ apiKey: 'test-key', decisionConsumer: consumer });
+    const grantex = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', decisionConsumer: consumer });
     grantex.loadManifest(ToolManifest.fromJSON({ connector: 'acme_kyb', tools: { case_decision: { permission: 'write', requires_decision: true, four_eyes_on: ['decline'] } } }));
     const action = { case_id: 'case_8841', action: 'case_decision', decision: 'approve', subject: 'gb:00000001' };
     const now = Math.floor(Date.now() / 1000);

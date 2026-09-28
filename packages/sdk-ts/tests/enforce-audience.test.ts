@@ -54,7 +54,7 @@ function grant(aud: string | string[] | null): VerifiedGrant {
 }
 
 function client(options: Partial<GrantexClientOptions> = {}): InstanceType<typeof Grantex> {
-  const c = new Grantex({ apiKey: 'test-key', ...options });
+  const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', ...options });
   c.loadManifest(MANIFEST);
   return c;
 }
@@ -177,7 +177,7 @@ describe('enforce() audience', () => {
   it('still relaxes a scope denial in permissive mode once the audience matches', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const c = new Grantex({ apiKey: 'test-key', audience: MERCHANT, enforceMode: 'permissive' } as GrantexClientOptions);
+      const c = new Grantex({ apiKey: 'test-key', audience: MERCHANT, enforceMode: 'permissive', revocationCheck: 'offline' } as GrantexClientOptions);
       c.loadManifest(new ToolManifest({ connector: 'acme_kyb', tools: { get_case: 'write' } }));
       withGrant(MERCHANT);
       const result = await c.enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'get_case' });

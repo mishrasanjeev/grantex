@@ -17,11 +17,11 @@ Grantex supports FIDO2/WebAuthn passkeys during consent. A valid assertion prove
 
 Live-mode consent requires an existing passkey for the principal. Sandbox-mode accounts can also require one with `fidoRequired: true`. A consent link alone cannot register a passkey because it does not authenticate the principal.
 
-Hosted passkey enrollment is available when the server operator enables `PASSKEY_ENROLLMENT_ENABLED=true` and configures `FIDO_RP_ID` and `FIDO_ORIGIN` for the public HTTPS origin. The feature is off by default; do not enable live mode for customers until they can complete an enrollment test on that origin.
+The Grantex-hosted service runs with `PASSKEY_ENROLLMENT_ENABLED=true`, `FIDO_RP_ID=grantex.dev`, and `FIDO_ORIGIN=https://grantex.dev`; its production browser flow has passed enrollment and live-consent E2E. Self-hosted deployments must enable the flag and configure their own public HTTPS origin and RP ID. The feature is off by default there; do not enable live mode for customers until they can complete an enrollment test on that origin.
 
-The hosted enrollment client is published in `@grantex/sdk@0.7.0`, `grantex==0.6.0`, and `github.com/mishrasanjeev/grantex-go@v0.4.0`. These are independently versioned packages; installation does not turn on the server feature. Check [Release Status](/release-status) for current registry evidence and rollout limitations.
+The hosted enrollment client is published in `@grantex/sdk@0.7.1`, `grantex==0.6.1`, and `github.com/mishrasanjeev/grantex-go@v0.4.1`. These are independently versioned packages; installation does not turn on the server feature. Check [Release Status](/release-status) for current registry evidence and rollout limitations.
 
-Portable evidence is a separate, default-off source rollout: `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true`. It requires `IRREGULARITY_CASCADE_REVOCATION_ENABLED=true` so automatic grant revocation also updates VCs and public status lists, and `PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED=true` so issuer verification checks stored grant and ancestor status. Keep both safety flags enabled if issuance is rolled back. A hosted deployment can enable these independently of SDK publication. The current published SDK versions do not expose the new typed evidence reference or updated VC attestation; use REST responses or build from this source until new SDK releases are verified.
+Portable evidence is a separate, default-off source rollout: `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true`. It requires `IRREGULARITY_CASCADE_REVOCATION_ENABLED=true` so automatic grant revocation also updates VCs and public status lists, and `PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED=true` so issuer verification checks stored grant and ancestor status. Keep both safety flags enabled if issuance is rolled back. The hosted service has all three enabled. TypeScript, Python, and Go SDKs expose the typed grant evidence reference and VC attestation in their newly verified releases; custom assertion UIs still use the REST endpoints directly.
 
 ## Why FIDO for Agents?
 
@@ -34,6 +34,22 @@ Standard consent flows rely on a button click in a browser. A verified WebAuthn 
 For high-value operations, use hosted enrollment with required user verification and your own customer identity-binding controls. Portable evidence is available only for new ceremonies with an opt-in VC; the consent gate alone is not payment-network certification.
 
 ## Developer Setup
+
+### Sandbox And Live Parity
+
+| Account mode | `fidoRequired` | Authorization behavior |
+| --- | --- | --- |
+| Sandbox | `false` | Auto-approval for integration testing; no proof of human consent |
+| Sandbox | `true` | Pending consent, enrollment and verified passkey assertion before approval or denial |
+| Live | Either value | Pending consent, enrollment and verified passkey assertion before approval or denial |
+
+For a realistic sandbox rehearsal, set `fidoRequired: true` before requesting
+authorization. Both `/v1/authorize` and OAuth PAR then redirect to consent
+instead of returning an automatic code. Developer-key approve/deny shortcuts
+cannot bypass that requirement. Live mode never inherits sandbox auto-approval.
+OAuth requests without a principal hint let the customer enter the principal
+identifier, then verify a passkey registered for that principal; typing an
+identifier is not itself authentication.
 
 Enable FIDO for your account using the SDK or REST API:
 
@@ -81,7 +97,7 @@ curl -X PATCH https://api.grantex.dev/v1/me \
 Your application must first authenticate the end customer and bind that session to the exact `principalId` it uses in Grantex. From your **server**, issue a short-lived, one-use enrollment link and deliver it to that customer through the authenticated session. Never expose your developer API key in browser code. The enrollment link itself is a bearer secret: do not log it, put it in analytics, or send it to another customer.
 
 ```typescript
-// Run on your server with @grantex/sdk@0.7.0, after authenticating the customer.
+// Run on your server with @grantex/sdk@0.7.1, after authenticating the customer.
 const { enrollmentUrl, expiresAt } = await grantex.webauthn.createEnrollmentSession({
   principalId: authenticatedCustomer.grantexPrincipalId,
   // Optional: link back to a pending consent request for the same principal.
@@ -90,7 +106,7 @@ const { enrollmentUrl, expiresAt } = await grantex.webauthn.createEnrollmentSess
 // Show enrollmentUrl only to authenticatedCustomer. It expires after 10 minutes.
 ```
 
-Python `grantex==0.6.0` uses `client.webauthn.create_enrollment_session(principal_id=principal_id, auth_request_id=auth_request_id)`; Go `v0.4.0` uses `client.WebAuthn.CreateEnrollmentSession(ctx, grantex.WebAuthnEnrollmentSessionParams{PrincipalID: principalID, AuthRequestID: authRequestID})`. Both calls belong on your authenticated application server, not in browser code.
+Python `grantex==0.6.1` uses `client.webauthn.create_enrollment_session(principal_id=principal_id, auth_request_id=auth_request_id)`; Go `v0.4.1` uses `client.WebAuthn.CreateEnrollmentSession(ctx, grantex.WebAuthnEnrollmentSessionParams{PrincipalID: principalID, AuthRequestID: authRequestID})`. Both calls belong on your authenticated application server, not in browser code.
 
 The customer opens the link at `/passkey-enroll`, uses their device's passkey prompt, and returns to consent when the link was bound to an authorization request. The browser registration challenge expires after five minutes and must be restarted if it expires. The registration requires device user verification. An enrollment ticket can register only one credential and cannot be reused. To add another device, create another link.
 
@@ -241,6 +257,16 @@ If you build a custom consent UI, call `POST /v1/webauthn/assert/options` with t
 
 Users can have multiple passkeys registered (e.g., laptop fingerprint + phone + YubiKey). Use the credentials endpoints to list and delete them.
 
+Enroll each additional device with a new one-use link. An authenticator that
+already has a credential for this principal is excluded from duplicate
+registration. Deleting a credential stops future assertions with that key;
+it does not retroactively invalidate existing grants or historical assertion
+evidence. Revoke the affected grants separately when removing access.
+Agents with issued VCs retain their grant and credential history: attempting
+to hard-delete one returns `409 AGENT_HAS_CREDENTIAL_HISTORY`. Suspend the
+agent and revoke its grants instead; its existing public credential status
+must remain available.
+
 <CodeGroup>
 ```typescript TypeScript
 // List all credentials for a user
@@ -293,6 +319,26 @@ Request `credentialFormat: "vc-jwt"` or `"both"` at token exchange to obtain a V
 - **Credential binding**: Each credential is bound to a specific principal and developer. A credential registered for one developer's consent flow cannot be used for another.
 - **Attestation**: Grantex accepts `"none"`, `"indirect"`, and `"direct"` attestation conveyance. Attestation statements are stored but not currently used for trust decisions.
 - **Missing credential**: Consent cannot be approved until the application issues an authenticated enrollment link and the customer registers a passkey. There is no weaker live-mode fallback.
+
+## Release Validation Boundary
+
+The repeatable browser checks are in
+`tests/e2e/passkey-policy-browser.e2e.test.ts` (real Postgres and Chromium),
+`tests/production/passkey-parity.test.ts` (sandbox/live parity, multiple devices,
+denial, approval, principal selection, OAuth callbacks and revocation), and
+`tests/production/passkey-policy.test.ts` (portable evidence, refresh,
+delegation, public VC status and both irregularity response modes).
+The manual **Production Passkey and Irregularity E2E** workflow runs both
+production files against isolated accounts on the hosted HTTPS origin.
+
+Successful automation is sign-off for these tested service/browser contracts,
+not a guarantee that every customer device, operating system or browser works.
+Chromium uses virtual authenticators. Before rollout to your customers, test
+your supported physical devices, user-verification prompts, cancellation,
+recovery and accessibility. Your application still owns customer
+authentication, principal binding and secure delivery of enrollment links.
+No unauthenticated enrollment, weaker live consent fallback, or
+payment-network certification is supplied by these tests.
 
 ## Next Steps
 
