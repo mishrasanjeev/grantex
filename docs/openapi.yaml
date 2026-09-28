@@ -148,6 +148,10 @@ components:
       type: http
       scheme: bearer
       description: Service administrator credential (ADMIN_API_KEY); not a developer API key
+    registryOperatorAuth:
+      type: http
+      scheme: bearer
+      description: Registry operator key (one of REGISTRY_OPERATOR_API_KEYS); not a developer API key or ADMIN_API_KEY
 
   parameters:
     AgentIdPath:
@@ -166,6 +170,139 @@ components:
         pattern: "^[A-Za-z0-9_-]{43}$"
       description: RFC 7638 JWK Thumbprint (SHA-256, base64url) of the agent key
   schemas:
+    TrustMarkType:
+      type: string
+      description: A trust mark type from the Phase 1 taxonomy. Any other value is refused.
+      enum:
+        - urn:grantex:tm:provider.entity
+        - urn:grantex:tm:provider.ownership
+        - urn:grantex:tm:provider.screening
+        - urn:grantex:tm:agent.identity
+        - urn:grantex:tm:agent.security
+    IssuerJwk:
+      type: object
+      description: |
+        A public signing key: EC P-256 for ES256 (RFC 7518) or OKP Ed25519 for EdDSA (RFC 8037).
+        Private members (`d`, the RSA private members, `k`) and members not listed here are refused.
+      required: [kty, crv, x, kid]
+      additionalProperties: false
+      properties:
+        kty: { type: string, enum: [EC, OKP] }
+        crv: { type: string, enum: [P-256, Ed25519] }
+        x: { type: string, description: 32-byte base64url coordinate }
+        y: { type: string, description: 32-byte base64url coordinate (EC only) }
+        kid: { type: string, minLength: 1, maxLength: 128 }
+        alg: { type: string, enum: [ES256, EdDSA] }
+        use: { type: string, enum: [sig] }
+        key_ops:
+          type: array
+          items: { type: string, enum: [verify] }
+    IssuerJwks:
+      type: object
+      required: [keys]
+      additionalProperties: false
+      description: A JWK Set of at most 16 keys and 16 KiB, with unique kids.
+      properties:
+        keys:
+          type: array
+          minItems: 1
+          maxItems: 16
+          items: { $ref: "#/components/schemas/IssuerJwk" }
+    AccreditIssuerRequest:
+      type: object
+      additionalProperties: false
+      required: [entity_id, jwks, trust_marks, status_list_base, accreditation_evidence_ref]
+      properties:
+        entity_id:
+          type: string
+          format: uri
+          description: https URL with a host, no userinfo, query or fragment, in canonical form, a bare origin without the trailing slash (OpenID Federation Entity Identifier)
+          example: https://issuer.example
+        did: { type: string, example: "did:web:issuer.example" }
+        jwks: { $ref: "#/components/schemas/IssuerJwks" }
+        trust_marks:
+          type: array
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/TrustMarkType" }
+        status_list_base:
+          type: string
+          format: uri
+          description: https prefix, ending in "/", that the issuer's passport status lists sit under
+          example: https://issuer.example/status/
+        events_endpoint: { type: string, format: uri }
+        data_residency: { type: string, maxLength: 64, example: EU }
+        accreditation_evidence_ref:
+          type: string
+          pattern: "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$"
+          description: Opaque reference into the operator's accreditation records; never the evidence itself
+    UpdateIssuerRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      description: At least one of status, trust_marks, jwks or revoke_kids.
+      properties:
+        status: { type: string, enum: [active, suspended, withdrawn] }
+        effective_from:
+          type: string
+          format: date-time
+          description: With status "suspended" only; the suspension takes effect then (default now). Past or future.
+        trust_marks:
+          type: array
+          uniqueItems: true
+          items: { $ref: "#/components/schemas/TrustMarkType" }
+        jwks: { $ref: "#/components/schemas/IssuerJwks" }
+        revoke_kids:
+          type: array
+          minItems: 1
+          maxItems: 16
+          uniqueItems: true
+          items: { type: string }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    AccreditedIssuer:
+      type: object
+      description: The operator's view of an accredited issuer.
+      properties:
+        id: { type: string, example: aiss_01J9ZQ3M4K7R8S9T0V1W2X3Y4Z }
+        entity_id: { type: string, format: uri }
+        did: { type: string, nullable: true }
+        jwks: { $ref: "#/components/schemas/IssuerJwks" }
+        trust_marks:
+          type: array
+          items: { $ref: "#/components/schemas/TrustMarkType" }
+        status: { type: string, enum: [active, suspended, withdrawn] }
+        suspended_effective_from: { type: string, format: date-time, nullable: true }
+        status_list_base: { type: string, format: uri }
+        events_endpoint: { type: string, format: uri, nullable: true }
+        data_residency: { type: string, nullable: true }
+        accredited_at: { type: string, format: date-time }
+        accreditation_evidence_ref: { type: string }
+        revoked_keys:
+          type: array
+          items:
+            type: object
+            properties:
+              kid: { type: string }
+              revoked_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    PublicAccreditedIssuer:
+      type: object
+      description: The minimised public record.
+      required: [entity_id, trust_marks, status, status_list_base, jwks]
+      properties:
+        entity_id: { type: string, format: uri }
+        trust_marks:
+          type: array
+          items: { $ref: "#/components/schemas/TrustMarkType" }
+        status:
+          type: string
+          enum: [active, suspended, withdrawn]
+          description: The status in effect at the time of the request; a suspension scheduled for later reads active
+        status_list_base: { type: string, format: uri }
+        jwks:
+          allOf:
+            - $ref: "#/components/schemas/IssuerJwks"
+          description: Without revoked keys; empty for a withdrawn issuer
     EmergencyStopRequest:
       type: object
       required: [scope, reason, confirm]
@@ -8709,6 +8846,123 @@ paths:
       responses:
         "200": { description: Passport revoked }
         "404": { description: Passport not found }
+
+  /v1/registry/issuers:
+    get:
+      operationId: listAccreditedIssuers
+      tags: [Trust Registry]
+      summary: List accredited issuers (public, minimised)
+      description: |
+        One page of the accredited issuers, ordered by `entity_id`, each with only `entity_id`,
+        `trust_marks`, `status`, `status_list_base` and `jwks` (revoked keys left out; none for a
+        withdrawn issuer). Paged with `page` and `pageSize`; `total` is the number of issuers in
+        all, read in the same snapshot as the page, so read pages until you hold `total` issuers
+        or a page is empty. Limited to 60 requests a minute per client address. Send the page's
+        `ETag` back in `If-None-Match` to get `304` while that page has not changed.
+
+        Unauthenticated, so served only when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED` is exactly
+        `true` (default off). Off, the route is not registered and a request is answered as for
+        any unknown route: `401` without an API key, `404` with one.
+      security: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number, from 1.
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          description: Issuers per page.
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - name: If-None-Match
+          in: header
+          schema: { type: string }
+      responses:
+        "200":
+          description: One page of the accredited issuers; a page past the end has none and still carries `total`
+          headers:
+            ETag: { schema: { type: string } }
+            Cache-Control:
+              schema: { type: string, const: no-cache }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [issuers, total, page, pageSize]
+                properties:
+                  issuers:
+                    type: array
+                    maxItems: 500
+                    items: { $ref: "#/components/schemas/PublicAccreditedIssuer" }
+                  total:
+                    type: integer
+                    minimum: 0
+                    description: How many issuers the registry lists in all
+                  page: { type: integer, minimum: 1 }
+                  pageSize: { type: integer, minimum: 1, maximum: 500 }
+        "304": { description: Unchanged since the ETag sent }
+        "400": { description: "`page` is not an integer of at least 1 (small enough that its offset is a safe integer), or `pageSize` not an integer from 1 to 500" }
+        "401": { description: "REGISTRY_PUBLIC_ENDPOINTS_ENABLED is off and no API key was sent (the route is not registered)" }
+        "404": { description: "REGISTRY_PUBLIC_ENDPOINTS_ENABLED is off (the route is not registered)" }
+        "429": { description: Rate limit exceeded for this address }
+    post:
+      operationId: accreditIssuer
+      tags: [Trust Registry]
+      summary: Accredit an issuer (registry operator)
+      description: |
+        Records an accredited issuer with its static JWK Set, trust marks and status list base,
+        and appends `grantex.registry.issuer_accredited` to the registry audit chain in the same
+        transaction. Authenticated with a key from `REGISTRY_OPERATOR_API_KEYS`, compared in
+        constant time.
+      security:
+        - registryOperatorAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccreditIssuerRequest" }
+      responses:
+        "201":
+          description: The new record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccreditedIssuer" }
+        "400": { description: "Malformed record; `field` names the member refused" }
+        "401": { description: Missing or wrong operator key }
+        "409": { description: "`ISSUER_EXISTS`: the entity_id is already in the registry" }
+        "503": { description: REGISTRY_OPERATOR_API_KEYS is not configured, or holds a key shorter than 32 characters }
+  /v1/registry/issuers/{id}:
+    patch:
+      operationId: updateAccreditedIssuer
+      tags: [Trust Registry]
+      summary: Suspend, reinstate or withdraw an issuer, change its trust marks or keys (registry operator)
+      description: |
+        Applies the change and appends `grantex.registry.issuer_updated`, with the reason, to the
+        registry audit chain in the same transaction. A suspension takes effect at
+        `effective_from`, which may be in the future. A revoked kid is no longer served and
+        cannot be registered again for the issuer.
+      security:
+        - registryOperatorAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateIssuerRequest" }
+      responses:
+        "200":
+          description: The record after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccreditedIssuer" }
+        "400": { description: "Malformed change; `field` names the member refused" }
+        "401": { description: Missing or wrong operator key }
+        "404": { description: No such issuer }
+        "409": { description: "`KID_REVOKED`: the replacement jwks carries a revoked kid" }
+        "503": { description: REGISTRY_OPERATOR_API_KEYS is not configured, or holds a key shorter than 32 characters }
 
   /v1/trust-registry:
     get:
