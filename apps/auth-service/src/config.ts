@@ -206,6 +206,10 @@ export const config = {
   // withdrawal and refresh requests and the issuers' status lists. Off by
   // default: ES256 is the profile's required algorithm.
   get registryAttestationEddsaEnabled() { return process.env['REGISTRY_ATTESTATION_EDDSA_ENABLED'] === 'true'; },
+  // Passport binding at grant issuance (spec/passport-binding.md): POST
+  // /v1/authorize takes an Agent Passport and the grant is bound to it. Off by
+  // default; off, the passport member is ignored as any unknown member is.
+  get passportBoundGrantsEnabled() { return process.env['PASSPORT_BOUND_GRANTS_ENABLED'] === 'true'; },
   // Default overlap of an agent key rotation: how long the replaced key stays
   // usable (seconds, default 7 days, at most 30). Read at request time;
   // validateConfig reports a bad value at boot.

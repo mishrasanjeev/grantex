@@ -4,6 +4,7 @@ import { describeScope } from '../lib/scopes.js';
 import { describePurpose } from '../lib/purpose.js';
 import { config } from '../config.js';
 import { newAuthorizationCode } from '../lib/ids.js';
+import { consentViewOf } from '../lib/registry/passport-binding.js';
 
 const CONSENT_CSP = [
   "default-src 'self'",
@@ -297,6 +298,17 @@ const CONSENT_HTML = `<!DOCTYPE html>
         '<div class="purpose" id="purpose">' + esc(data.purposeDescription || data.purpose) + '</div>' +
         '<div class="purpose-note">The agent may use this access only for this purpose.</div>' +
       '</div>' : '') +
+    (data.agentPassport ?
+      '<div class="request-meta" id="agent-passport">' +
+        '<div class="scopes-label">Agent Passport</div>' +
+        (data.agentPassport.softwareName ?
+          '<div><strong>Software:</strong> ' + esc(data.agentPassport.softwareName + (data.agentPassport.softwareVersion ? ' ' + data.agentPassport.softwareVersion : '')) + '</div>' : '') +
+        '<div><strong>Registry trust level:</strong> ' + esc(data.agentPassport.trustLevel) + '</div>' +
+        '<div><strong>Verification level:</strong> ' + esc(data.agentPassport.verificationLevel) + '</div>' +
+        '<div><strong>Accredited issuers:</strong> ' + esc((data.agentPassport.issuers || []).join(', ')) + '</div>' +
+        (data.agentPassport.declaredLimits ?
+          '<div><strong>Declared limits:</strong><pre>' + esc(JSON.stringify(data.agentPassport.declaredLimits, null, 2)) + '</pre></div>' : '') +
+      '</div>' : '') +
     '<div class="scopes-label">Requested permissions</div>' +
     '<ul class="scope-list">' + scopeItems + '</ul>' +
     (data.targetResource ?
@@ -382,9 +394,10 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         authorization_details: unknown;
         principal_id: string;
         purpose: string | null;
+        passport_binding?: unknown;
       }[]>`
         SELECT ar.id, ar.scopes, ar.expires_at, ar.status, ar.redirect_uri, ar.state, ar.principal_id,
-               ar.audience, ar.expires_in, ar.protocol, ar.authorization_details, ar.purpose,
+               ar.audience, ar.expires_in, ar.protocol, ar.authorization_details, ar.purpose, ar.passport_binding,
                a.name AS agent_name, a.description AS agent_description, a.did AS agent_did,
                d.fido_required, d.mode, d.name AS developer_name
         FROM auth_requests ar
@@ -402,6 +415,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
       if (expired || row.status !== 'pending') {
         return reply.status(410).send({ message: 'Auth request expired or already processed', code: 'GONE', requestId: request.id });
       }
+      const agentPassport = consentViewOf(row.passport_binding);
 
       return reply.send({
         id: row.id,
@@ -430,6 +444,9 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         ...(Array.isArray(row.authorization_details)
           ? { authorizationDetails: row.authorization_details }
           : {}),
+        // PRD §7: what the registry checked about the agent, shown before the
+        // Principal decides (spec/passport-binding.md §6).
+        ...(agentPassport !== null ? { agentPassport } : {}),
       });
     },
   );

@@ -29,6 +29,18 @@ import {
 } from '../lib/revocation/issuance-freeze.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import {
+  BoundIssuerStatusStale,
+  PassportBindingError,
+  refreshBoundIssuerStatus,
+  type IssuanceRecheck,
+  bindingFromGrantRow,
+  commerceAuthorizationDetail,
+  insertGrantBinding,
+  parseStoredBinding,
+  recheckBindingAtIssuance,
+  type GrantPassportBinding,
+} from '../lib/registry/passport-binding.js';
+import {
   clearExpiredRefreshReplayState,
   clearRefreshReplayState,
   openRefreshReplayToken,
@@ -75,6 +87,54 @@ function replayHashMatches(stored: unknown, candidate: string | null): boolean {
 
 function routeError(statusCode: number, message: string, code = 'BAD_REQUEST'): never {
   throw { statusCode, message, code } satisfies RouteError;
+}
+
+/**
+ * A bound grant's token is issued only while the registry still stands behind
+ * its passport (spec/passport-binding.md §5). A refusal is the route's, with
+ * the Appendix C code; anything else propagates.
+ */
+async function recheckBinding(
+  sql: ReturnType<typeof getSql>,
+  tx: TxSql,
+  binding: GrantPassportBinding,
+  agentId: string,
+  options: IssuanceRecheck,
+): Promise<{ notAfter: Date }> {
+  try {
+    return await recheckBindingAtIssuance(sql, tx, binding, agentId, options);
+  } catch (err) {
+    if (err instanceof PassportBindingError) routeError(err.statusCode, err.message, err.code);
+    throw err;
+  }
+}
+
+/**
+ * Run a token-issuing transaction. When it finds a bound grant whose recorded
+ * issuer status is past its freshness, the issuer's list is read outside the
+ * transaction (no network while it holds its locks) and the transaction runs
+ * once more, this time refusing a status that is still stale. The first run
+ * rolled back and wrote nothing, so running it again is safe. A list that
+ * cannot be read is the route's refusal (status_stale): never a pass.
+ */
+async function issueWithFreshIssuerStatus(
+  sql: ReturnType<typeof getSql>,
+  now: Date,
+  run: (rereadAllowed: boolean) => Promise<unknown>,
+): Promise<void> {
+  try {
+    await run(true);
+    return;
+  } catch (err) {
+    if (!(err instanceof BoundIssuerStatusStale)) throw err;
+    try {
+      await refreshBoundIssuerStatus(sql, err.registryAttestationId, now);
+    } catch (refusal) {
+      if (refusal instanceof PassportBindingError) routeError(refusal.statusCode, refusal.message, refusal.code);
+      throw refusal;
+    }
+  }
+  await run(false);
 }
 
 function isRouteError(err: unknown): err is RouteError {
@@ -143,16 +203,18 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     const grantId = newGrantId();
     const jti = newTokenId();
     const refreshId = newRefreshTokenId();
+    // The instant a bound grant's registry records are checked at.
+    const issuanceNow = new Date();
 
     try {
-      await sql.begin(async (_tx) => {
+      await issueWithFreshIssuerStatus(sql, issuanceNow, (rereadAllowed) => sql.begin(async (_tx) => {
         const tx = _tx as unknown as TxSql;
         const authRows = await tx`
           SELECT ar.id, ar.agent_id, ar.principal_id, ar.developer_id,
                  ar.scopes, ar.expires_in, ar.expires_at, ar.status,
                  ar.audience, ar.redirect_uri, ar.code_challenge,
                  ar.agent_key_thumbprint, ar.purpose, ar.authorization_details,
-                 ar.fido_verified, ar.fido_evidence, d.mode, d.fido_required,
+                 ar.fido_verified, ar.fido_evidence, ar.passport_binding, d.mode, d.fido_required,
                  a.did AS agent_did
           FROM auth_requests ar
           JOIN agents a ON a.id = ar.agent_id
@@ -216,7 +278,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         expiresAt = new Date(now + expiresSeconds * 1000);
         expTimestamp = Math.floor(expiresAt.getTime() / 1000);
         // Refresh tokens cannot outlive the underlying grant.
-        const refreshExpiresAt = new Date(Math.min(now + 30 * 86400 * 1000, expiresAt.getTime()));
+        let refreshExpiresAt = new Date(Math.min(now + 30 * 86400 * 1000, expiresAt.getTime()));
 
         // The plan limit must be enforced where the grant is actually created.
         // Serializing issuance per developer closes the check-then-insert race and
@@ -267,6 +329,34 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         }
         const grantAuthorizationDetails = approvedDetails as Array<Record<string, unknown>> | null;
 
+        // A request authorized with a passport keeps its binding whatever the
+        // flag says now: turning the flag off stops new bindings, it never
+        // strips one the Principal consented to. The key it binds is the
+        // request's agent_key_thumbprint, the token's cnf.jkt.
+        let passportBinding: GrantPassportBinding | null = null;
+        if (authReq['passport_binding'] !== null && authReq['passport_binding'] !== undefined) {
+          try {
+            passportBinding = parseStoredBinding(authReq['passport_binding']);
+          } catch {
+            routeError(500, 'Authorization request passport binding is invalid', 'INTERNAL_ERROR');
+          }
+          if (authReq['agent_key_thumbprint'] !== passportBinding.key_thumbprint) {
+            routeError(500, 'Authorization request passport binding is inconsistent', 'INTERNAL_ERROR');
+          }
+          const { notAfter } = await recheckBinding(sql, tx, passportBinding, authReq['agent_id'] as string,
+            { now: issuanceNow, rereadAllowed });
+          // A bound grant never outlives its passport or its attestation: a
+          // longer requested lifetime ends at the earlier of their exp values.
+          if (notAfter.getTime() < expiresAt.getTime()) {
+            expiresAt = notAfter;
+            expTimestamp = Math.floor(expiresAt.getTime() / 1000);
+            refreshExpiresAt = new Date(Math.min(refreshExpiresAt.getTime(), expiresAt.getTime()));
+          }
+        }
+        const tokenAuthorizationDetails = passportBinding === null
+          ? grantAuthorizationDetails
+          : [...(grantAuthorizationDetails ?? []), commerceAuthorizationDetail(passportBinding)];
+
         await tx`
           INSERT INTO grants (
             id, agent_id, principal_id, developer_id, scopes, expires_at,
@@ -289,6 +379,13 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             ${webAuthnEvidence ? tx.json(webAuthnEvidence as never) : null}
           )
         `;
+        if (passportBinding !== null) {
+          await insertGrantBinding(tx, {
+            grantId,
+            developerId: authReq['developer_id'] as string,
+            agentId: authReq['agent_id'] as string,
+          }, passportBinding);
+        }
 
         // No `bdg` claim at issuance. A budget is attached to a grant after the
         // fact via POST /v1/budget/allocate, which requires the grant to already
@@ -319,7 +416,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           ...(typeof authReq['agent_key_thumbprint'] === 'string'
             ? { cnf: { jkt: authReq['agent_key_thumbprint'] } }
             : {}),
-          ...(grantAuthorizationDetails !== null ? { authorizationDetails: grantAuthorizationDetails } : {}),
+          ...(tokenAuthorizationDetails !== null ? { authorizationDetails: tokenAuthorizationDetails } : {}),
           ...(webAuthnEvidence ? { webauthnEvidence: grantWebAuthnEvidence(webAuthnEvidence) } : {}),
           exp: expTimestamp,
         }));
@@ -354,7 +451,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           SET status = 'consumed'
           WHERE id = ${authReq['id'] as string}
         `;
-      });
+      }));
     } catch (err) {
       const refusal = issuanceRefusal(err);
       if (refusal) return reply.status(refusal.statusCode).send({ ...refusal.body, requestId: request.id });
@@ -536,8 +633,11 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     let refreshReplay = false;
     let refreshReplayRejected = false;
 
+    // The instant a bound grant's registry records are checked at.
+    const issuanceNow = new Date();
+
     try {
-      await sql.begin(async (_tx) => {
+      await issueWithFreshIssuerStatus(sql, issuanceNow, (rereadAllowed) => sql.begin(async (_tx) => {
         const tx = _tx as unknown as TxSql;
         const rows = await tx`
           SELECT rt.id AS refresh_id, rt.grant_id, rt.is_used,
@@ -551,13 +651,22 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
                   g.fido_evidence,
                  g.parent_grant_id, g.delegation_depth, g.actor_chain,
                  a.did AS agent_did, parent_agent.did AS parent_agent_did,
-                  ba.remaining_budget, ba.currency AS budget_currency
+                  ba.remaining_budget, ba.currency AS budget_currency,
+                  gpb.issuer_entity_id AS passport_issuer_entity_id,
+                  gpb.attestation_id AS passport_attestation_id,
+                  gpb.registry_attestation_id AS passport_registry_attestation_id,
+                  gpb.external_credential_id AS passport_external_credential_id,
+                  gpb.passport_hash, gpb.key_thumbprint AS passport_key_thumbprint,
+                  gpb.acceptance_list_uri AS passport_acceptance_list_uri,
+                  gpb.acceptance_list_idx AS passport_acceptance_list_idx,
+                  gpb.passport_expires_at
           FROM refresh_tokens rt
           JOIN grants g ON g.id = rt.grant_id
           JOIN agents a ON a.id = g.agent_id
           LEFT JOIN grants parent_grant ON parent_grant.id = g.parent_grant_id
           LEFT JOIN agents parent_agent ON parent_agent.id = parent_grant.agent_id
           LEFT JOIN budget_allocations ba ON ba.grant_id = g.id
+          LEFT JOIN grant_passport_bindings gpb ON gpb.grant_id = g.id
           WHERE rt.id = ${refreshToken}
             AND g.developer_id = ${developerId}
             AND g.protocol = 'grantex-v1'
@@ -636,8 +745,25 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         if (storedDetails !== null && !Array.isArray(storedDetails)) {
           routeError(500, 'Invalid grant authorization details', 'INTERNAL_ERROR');
         }
+        // A bound grant's refreshed token carries its binding again, once the
+        // registry's records still stand behind the passport.
+        let passportBinding: GrantPassportBinding | null;
+        try {
+          passportBinding = bindingFromGrantRow(row);
+        } catch {
+          routeError(500, 'Invalid grant passport binding', 'INTERNAL_ERROR');
+        }
+        if (passportBinding !== null) {
+          if (row['agent_key_thumbprint'] !== passportBinding.key_thumbprint) {
+            routeError(500, 'Invalid grant passport binding', 'INTERNAL_ERROR');
+          }
+          // The grant's expires_at was already limited to the passport and
+          // attestation exp at issuance; the recheck refuses once either passed.
+          await recheckBinding(sql, tx, passportBinding, row['agent_id'] as string, { now: issuanceNow, rereadAllowed });
+        }
         const refreshedDetails: Array<Record<string, unknown>> = [
           ...((storedDetails as Array<Record<string, unknown>> | null) ?? []),
+          ...(passportBinding !== null ? [commerceAuthorizationDetail(passportBinding)] : []),
           ...(remainingBudgetText !== undefined && budgetCurrency
             ? [{
                 type: 'urn:grantex:params:oauth:authorization-details:budget',
@@ -770,7 +896,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           INSERT INTO grant_tokens (jti, grant_id, expires_at)
           VALUES (${jti}, ${grantId}, ${grantExpiresAt})
         `;
-      });
+      }));
       if (refreshReplayRejected) routeError(400, REFRESH_TOKEN_ALREADY_USED);
     } catch (err) {
       const refusal = issuanceRefusal(err);

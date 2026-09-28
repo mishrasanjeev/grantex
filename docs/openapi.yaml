@@ -2866,6 +2866,18 @@ paths:
                     Issued tokens carry it in `authorization_details` entries of type
                     `urn:grantex:tools:v1`, one per connector. Rejected with `INVALID_PURPOSE`.
                   example: aml.cdd.onboarding
+                passport:
+                  type: string
+                  maxLength: 16384
+                  description: |
+                    An Agent Passport (SD-JWT VC, `typ` `dc+sd-jwt`, with the disclosures the holder
+                    chooses and no Key Binding JWT). Read only when `PASSPORT_BOUND_GRANTS_ENABLED=true`;
+                    otherwise ignored like any other member this route does not know. With it,
+                    `audience` is required and the request is checked as `spec/passport-binding.md`
+                    section 4 describes before anything is recorded; the grant token then carries an
+                    `authorization_details` entry of type `urn:grantex:commerce:v1` and `cnf.jkt` equal
+                    to the passport's key thumbprint. Only this route takes a passport; `/oauth/par`
+                    and `/oauth/authorize` do not.
               required: [agentId, principalId, scopes]
       responses:
         "201":
@@ -2897,7 +2909,9 @@ paths:
                     type: string
                     description: Present when the request carries a purpose
         "400":
-          description: Validation error
+          description: >-
+            Validation error. With a passport: `passport_malformed` or `passport_not_accepted`
+            (with a `reason`), or `RESOURCE_REQUIRED` when `audience` is missing.
           content:
             application/json:
               schema:
@@ -2911,7 +2925,14 @@ paths:
         "403":
           description: >-
             POLICY_DENIED, or ISSUANCE_FROZEN: an emergency stop lockout covers the agent, the
-            principal or the developer. Refused before anything is recorded.
+            principal or the developer. Refused before anything is recorded. With a passport, a
+            refusal of it with its PRD Appendix C `code` and a `reason`:
+            `passport_invalid_signature`, `passport_expired`, `passport_revoked`,
+            `issuer_not_accredited`, `issuer_suspended`, `trust_mark_missing`,
+            `attestation_not_registered`, `attestation_hash_mismatch`, `attestation_not_accepted`,
+            `attestation_mismatch`, `key_binding_mismatch`, `key_not_active` or `key_unproven`
+            (spec/passport-binding.md section 4). Nothing is recorded, except an audit entry
+            `grantex.passport.attestation_mismatch` for `attestation_mismatch`.
           content:
             application/json:
               schema:
@@ -2925,7 +2946,8 @@ paths:
         "503":
           description: >-
             FREEZE_STATE_UNAVAILABLE: the lockout state could not be read, so issuance fails
-            closed. Only while EMERGENCY_STOP_ENABLED=true.
+            closed. Only while EMERGENCY_STOP_ENABLED=true. With a passport, `status_stale`: the
+            issuer's status for the passport could not be read fresh now.
           content:
             application/json:
               schema:
@@ -3060,6 +3082,34 @@ paths:
                     format: date-time
                   status:
                     type: string
+                  agentPassport:
+                    type: object
+                    description: >-
+                      Present when the request carries an Agent Passport
+                      (PASSPORT_BOUND_GRANTS_ENABLED=true): what the registry checked, shown
+                      before the Principal decides (spec/passport-binding.md section 6).
+                    properties:
+                      trustLevel:
+                        type: string
+                        enum: [basic, verified, attested, attested_verified]
+                      verificationLevel:
+                        type: string
+                        description: The accredited issuer's level, verbatim
+                      issuers:
+                        type: array
+                        items:
+                          type: string
+                          format: uri
+                      declaredLimits:
+                        type: object
+                        nullable: true
+                        additionalProperties: true
+                      softwareName:
+                        type: string
+                        nullable: true
+                      softwareVersion:
+                        type: string
+                        nullable: true
         "404":
           description: Request not found
           content:
@@ -3199,6 +3249,9 @@ paths:
                   expiresAt:
                     type: string
                     format: date-time
+                    description: >-
+                      The grant's expiry. For a request authorized with a passport, the earlier of
+                      the requested lifetime and the `exp` of the passport and of its attestation.
                   scopes:
                     type: array
                     items:
@@ -3222,6 +3275,10 @@ paths:
             anything is written; retry once the lockout is lifted. With `credentialFormat`
             `vc-jwt` or `both`, also answered when a lockout lands after the grant is written
             but before its credential: no credential is written, and the stop revokes the grant.
+            For a request authorized with a passport, the registry's records are checked again
+            (spec/passport-binding.md section 5) and a refusal carries its PRD Appendix C code
+            (`attestation_not_accepted`, `passport_expired`, `passport_revoked`,
+            `issuer_suspended`, `key_not_active`, ...); the code is not consumed.
           content:
             application/json:
               schema:
@@ -3229,7 +3286,9 @@ paths:
         "503":
           description: >-
             FREEZE_STATE_UNAVAILABLE: the lockout state could not be read, so issuance fails
-            closed. Only while EMERGENCY_STOP_ENABLED=true.
+            closed. Only while EMERGENCY_STOP_ENABLED=true. For a request authorized with a
+            passport, `status_stale`: the issuer's recorded status for the passport is no longer
+            fresh and its list could not be read again; the code is not consumed.
           content:
             application/json:
               schema:
@@ -3300,7 +3359,10 @@ paths:
         "403":
           description: >-
             ISSUANCE_FROZEN: an emergency stop lockout covers this request. Refused before
-            anything is written; retry once the lockout is lifted.
+            anything is written; retry once the lockout is lifted. For a passport-bound grant,
+            also a refusal with its PRD Appendix C code when the registry no longer stands
+            behind the passport (spec/passport-binding.md section 5), including
+            `passport_expired`; the refresh token is left unused.
           content:
             application/json:
               schema:
@@ -3308,7 +3370,9 @@ paths:
         "503":
           description: >-
             FREEZE_STATE_UNAVAILABLE: the lockout state could not be read, so issuance fails
-            closed. Only while EMERGENCY_STOP_ENABLED=true.
+            closed. Only while EMERGENCY_STOP_ENABLED=true. For a passport-bound grant,
+            `status_stale`: the issuer's recorded status for the passport is no longer fresh and
+            its list could not be read again; the refresh token is left unused.
           content:
             application/json:
               schema:

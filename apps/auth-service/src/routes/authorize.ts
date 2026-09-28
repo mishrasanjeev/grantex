@@ -14,6 +14,12 @@ import { assertValidRedirectUri } from '../lib/url-security.js';
 import { isValidPkceChallenge } from '../lib/pkce.js';
 import { validateResourceServers } from '../lib/agent-security.js';
 import { resolveRequestedPurpose } from '../lib/purpose.js';
+import {
+  PassportBindingError,
+  checkPassportParameter,
+  evaluatePassportForAuthorization,
+  type PassportBinding,
+} from '../lib/registry/passport-binding.js';
 
 const AUTHORIZE_MAX_PER_MINUTE = 10;
 const AUTHORIZE_WINDOW_SECONDS = 60;
@@ -29,6 +35,12 @@ interface AuthorizeBody {
   codeChallenge?: string;
   codeChallengeMethod?: string;
   purpose?: string;
+  /** An Agent Passport SD-JWT; read only when PASSPORT_BOUND_GRANTS_ENABLED=true (spec/passport-binding.md). */
+  passport?: unknown;
+}
+
+function passportRefusal(err: PassportBindingError, requestId: string) {
+  return { message: err.message, code: err.code, reason: err.reason, requestId };
 }
 
 export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
@@ -44,6 +56,8 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ message: 'Request body must be a JSON object', code: 'BAD_REQUEST', requestId: request.id });
     }
     const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience, codeChallenge, codeChallengeMethod, purpose } = body;
+    // Off, `passport` is ignored like any member this route does not know.
+    const passportBound = config.passportBoundGrantsEnabled && body.passport !== undefined;
 
     const rl = await checkRateLimit(
       `authorize:${request.developer.id}`,
@@ -137,6 +151,25 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
+    }
+
+    let passport: string | null = null;
+    if (passportBound) {
+      try {
+        passport = checkPassportParameter(body.passport);
+      } catch (err) {
+        if (err instanceof PassportBindingError) return reply.status(err.statusCode).send(passportRefusal(err, request.id));
+        throw err;
+      }
+      // A bound grant names the rail or verifier it is for (its aud): the
+      // existing audience, which must be one of the agent's registered resources.
+      if (audience === undefined) {
+        return reply.status(400).send({
+          message: 'audience is required with a passport: a passport-bound grant names its rail or verifier',
+          code: 'RESOURCE_REQUIRED',
+          requestId: request.id,
+        });
+      }
     }
 
     const sql = getSql();
@@ -243,6 +276,18 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
+    // PRD §8.4: the passport is checked before anything is recorded, and every
+    // refusal leaves no authorization request behind.
+    let binding: PassportBinding | null = null;
+    if (passport !== null) {
+      try {
+        binding = await evaluatePassportForAuthorization(sql, { passport, developerId, agentId, scopes });
+      } catch (err) {
+        if (err instanceof PassportBindingError) return reply.status(err.statusCode).send(passportRefusal(err, request.id));
+        throw err;
+      }
+    }
+
     // Evaluate policies via pluggable backend (builtin, OPA, or Cedar)
     const policyDecision = await getPolicyBackend().evaluate({
       agentId,
@@ -291,25 +336,51 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     const autoApprove = isSandbox && !request.developer.fidoRequired;
     const autoCode = autoApprove ? ulid() : null;
 
-    await sql`
-      INSERT INTO auth_requests (
-        id, agent_id, principal_id, developer_id, scopes, redirect_uri, state,
-        expires_in, expires_at, audience, status, code, code_challenge,
-        code_challenge_method, agent_key_thumbprint, purpose, authorization_details
-      )
-      VALUES (
-        ${id}, ${agentId}, ${principalId}, ${developerId}, ${scopes},
-        ${redirectUri ?? null}, ${state ?? null}, ${expiresIn}, ${expiresAt},
-        ${audience ?? null},
-        ${autoApprove ? 'approved' : 'pending'},
-        ${autoCode},
-        ${codeChallenge ?? null},
-        ${codeChallengeMethod ?? null},
-        ${agent.key_thumbprint ?? null},
-        ${requestedPurpose.purpose},
-        ${requestedPurpose.details === null ? null : sql.json(requestedPurpose.details as never)}
-      )
-    `;
+    if (binding === null) {
+      await sql`
+        INSERT INTO auth_requests (
+          id, agent_id, principal_id, developer_id, scopes, redirect_uri, state,
+          expires_in, expires_at, audience, status, code, code_challenge,
+          code_challenge_method, agent_key_thumbprint, purpose, authorization_details
+        )
+        VALUES (
+          ${id}, ${agentId}, ${principalId}, ${developerId}, ${scopes},
+          ${redirectUri ?? null}, ${state ?? null}, ${expiresIn}, ${expiresAt},
+          ${audience ?? null},
+          ${autoApprove ? 'approved' : 'pending'},
+          ${autoCode},
+          ${codeChallenge ?? null},
+          ${codeChallengeMethod ?? null},
+          ${agent.key_thumbprint ?? null},
+          ${requestedPurpose.purpose},
+          ${requestedPurpose.details === null ? null : sql.json(requestedPurpose.details as never)}
+        )
+      `;
+    } else {
+      // The grant is bound to the passport's key (cnf.jkt), which step 7 of
+      // the binding checked is a usable key of this agent.
+      await sql`
+        INSERT INTO auth_requests (
+          id, agent_id, principal_id, developer_id, scopes, redirect_uri, state,
+          expires_in, expires_at, audience, status, code, code_challenge,
+          code_challenge_method, agent_key_thumbprint, purpose, authorization_details,
+          passport_binding
+        )
+        VALUES (
+          ${id}, ${agentId}, ${principalId}, ${developerId}, ${scopes},
+          ${redirectUri ?? null}, ${state ?? null}, ${expiresIn}, ${expiresAt},
+          ${audience ?? null},
+          ${autoApprove ? 'approved' : 'pending'},
+          ${autoCode},
+          ${codeChallenge ?? null},
+          ${codeChallengeMethod ?? null},
+          ${binding.key_thumbprint},
+          ${requestedPurpose.purpose},
+          ${requestedPurpose.details === null ? null : sql.json(requestedPurpose.details as never)},
+          ${sql.json(binding as never)}
+        )
+      `;
+    }
 
     const consentUrl = `${config.publicBaseUrl}/consent?req=${id}`;
 

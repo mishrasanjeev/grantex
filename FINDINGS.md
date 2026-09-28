@@ -1683,3 +1683,68 @@ the pull request that references it.
   `run: pip install -e ".[dev]" && mypy --strict src && pytest` on that step
   (the command the agent-httpsig branch had), and check the merged workflow
   with a workflow linter before pushing.
+
+## G-125 — The migration ledger test expects `evidence_records` among the first twenty missing objects
+
+- **Found:** running the auth-service suite against Postgres for passport
+  binding (migration 125), 2026-09-28, on the branch that merges the
+  registry branches.
+- **What:** `tests/migrate-ledger-postgres.integration.test.ts` ("refuses to
+  baseline a database that is only partly migrated") asserts that the
+  verdict names `evidence_records`. The verdict lists only the first twenty
+  missing objects in sorted order (`src/db/migrate.ts`, `missing.slice(0, 20)`),
+  and the registry migrations 121 to 124 added tables that sort before it
+  (`accredited_issuers`, `agent_keys`, `compromised_agent_keys`, ...), so it
+  is now among the "and 57 more". The test fails on this base before any
+  change of this branch.
+- **Impact:** the Postgres suite is red on the merged registry base; a real
+  regression in the baseline refusal would be hidden in the noise.
+- **Proposal:** assert on the count and on an object the test itself removed,
+  or have the verdict list the missing objects of the newest migration
+  first. Owner: auth-service maintainers. Exit criterion: the test passes
+  with every registry migration applied, and fails if the refusal names
+  nothing.
+
+## G-126 — `registry-acceptance-docs.test.ts` fails on a CRLF checkout
+
+- **Found:** running the auth-service suite on a Windows checkout
+  (`core.autocrlf=true`), 2026-09-28.
+- **What:** the test extracts the examples of `spec/registry-federation.md`
+  with a regular expression that expects `\n` after the code fence. With
+  CRLF line endings in the working copy it finds no example and fails
+  ("has no example tsl-header"), although the examples are there.
+- **Impact:** the suite is red for anyone on Windows with the default Git
+  setting; CI (LF) is unaffected.
+- **Proposal:** normalise `\r\n` to `\n` after reading the file, as
+  `tests/passport-binding-docs.test.ts` does, or add a `.gitattributes`
+  rule `*.md text eol=lf`. Owner: registry maintainers. Exit criterion: the
+  test passes on a CRLF checkout.
+
+## G-127 — `RATE_LIMIT_ROUTE_CLASSES_ENABLED` appears twice in the self-hosting variables table
+
+- **Found:** adding `PASSPORT_BOUND_GRANTS_ENABLED` to `docs/self-hosting.md`,
+  2026-09-28.
+- **What:** the environment variables table in section 5 has two rows for
+  `RATE_LIMIT_ROUTE_CLASSES_ENABLED`, the second a longer version of the
+  first (a merge kept both).
+- **Impact:** readers see two descriptions of one variable; a later edit to
+  one leaves the other stale.
+- **Proposal:** keep the longer row and delete the shorter one. Owner: docs
+  maintainers. Exit criterion: one row per variable (a check in
+  `scripts/check-docs-integrity.mjs` could enforce it).
+
+## G-128 — The JWK thumbprint property tests time out on a slower host
+
+- **Found:** running the whole auth-service suite (`npx vitest run`, two
+  workers, Postgres integration tests included) on a Windows workstation,
+  2026-09-28.
+- **What:** in `tests/jwk-thumbprint.test.ts`, "never changes with member
+  order or with extra members (property)" and "changes when any required
+  member changes (property)" exceeded the 10 s test timeout (12.1 s and
+  14.5 s) while other files ran alongside, and the second also when the file
+  ran alone (12.4 s) on the same workstation.
+- **Impact:** an intermittent red suite on slower or loaded hosts.
+- **Proposal:** lower the iteration count, or give those two tests an
+  explicit timeout that reflects their work. Owner: registry maintainers.
+  Exit criterion: the full suite passes three runs in a row on a CI runner
+  and a developer workstation.
