@@ -55,6 +55,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reported through the compromise route are ever refused there.
   Documented in `docs/providers/registering-agents.md` and
   `spec/agent-keys.md`.
+### Dashboard passkey removal
+- Send JSON content type only when the dashboard request has a JSON body.
+  Bodyless DELETE requests now reach the API instead of failing its JSON parser.
+- Add a hosted-dashboard Chromium regression covering login, enrollment-link
+  issuance, passkey registration, credential listing and confirmed removal.
+- Keep the principal/request fields fixed during pending dashboard requests,
+  preventing late enrollment responses from appearing beside a changed target.
 
 ### Passkey sandbox/live parity and retained credential history
 - Preserve an interactively selected principal before replacing the hosted

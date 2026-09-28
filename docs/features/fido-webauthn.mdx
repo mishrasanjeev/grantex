@@ -327,9 +327,16 @@ The repeatable browser checks are in
 `tests/production/passkey-parity.test.ts` (sandbox/live parity, multiple devices,
 denial, approval, principal selection, OAuth callbacks and revocation), and
 `tests/production/passkey-policy.test.ts` (portable evidence, refresh,
-delegation, public VC status and both irregularity response modes).
-The manual **Production Passkey and Irregularity E2E** workflow runs both
+delegation, public VC status and both irregularity response modes), and
+`tests/production/passkey-portal.test.ts` (dashboard login, enrollment-link
+issuance, credential listing and confirmed removal).
+The manual **Production Passkey and Irregularity E2E** workflow runs all three
 production files against isolated accounts on the hosted HTTPS origin.
+
+Credential removal sends an authenticated, bodyless `DELETE` request. Do not
+attach `Content-Type: application/json` without a JSON body; the API rejects
+that malformed request with HTTP 400. The dashboard handles the successful
+HTTP 204 response without attempting to parse an empty JSON response.
 
 Successful automation is sign-off for these tested service/browser contracts,
 not a guarantee that every customer device, operating system or browser works.
