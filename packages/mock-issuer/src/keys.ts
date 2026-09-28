@@ -5,8 +5,8 @@
 // and read back on later starts, so a CI run can issue in one process and
 // serve in another. The directory is scratch space: never commit it.
 
-import { generateKeyPairSync } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createPrivateKey, createPublicKey, generateKeyPairSync, type JsonWebKeyInput } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { jwkThumbprint, type Jwk } from '@grantex/agent-passport';
 import { hasPrivateMembers, keyKind } from './jose.ts';
@@ -22,18 +22,27 @@ export interface IssuerKey {
   kid: string;
 }
 
-function fromPrivateJwk(privateJwk: Jwk): IssuerKey {
-  if (keyKind(privateJwk) !== 'P-256' || typeof privateJwk.d !== 'string') {
+function fromPrivateJwk(stored: Jwk): IssuerKey {
+  if (keyKind(stored) !== 'P-256' || typeof stored.d !== 'string') {
     throw new MockIssuerError('state_unreadable', 'the issuer key is not a private P-256 JWK');
   }
-  const kid = typeof privateJwk.kid === 'string' && privateJwk.kid !== ''
-    ? privateJwk.kid
-    : `mock-issuer-${jwkThumbprint(privateJwk).slice(0, 16)}`;
+  // Rebuild both halves from the key material alone, so a kid or a public
+  // coordinate written into the file cannot differ from the key that signs.
+  let privateJwk: Jwk;
+  let publicMembers: Jwk;
+  try {
+    const privateKey = createPrivateKey({ key: stored as JsonWebKeyInput['key'], format: 'jwk' });
+    privateJwk = privateKey.export({ format: 'jwk' }) as Jwk;
+    publicMembers = createPublicKey(privateKey).export({ format: 'jwk' }) as Jwk;
+  } catch (cause) {
+    throw new MockIssuerError('state_unreadable', 'the issuer key is not a private P-256 JWK', { cause });
+  }
+  const kid = `mock-issuer-${jwkThumbprint(publicMembers).slice(0, 16)}`;
   const publicJwk: Jwk = {
     kty: 'EC',
     crv: 'P-256',
-    x: privateJwk.x as string,
-    y: privateJwk.y as string,
+    x: publicMembers.x as string,
+    y: publicMembers.y as string,
     kid,
     alg: 'ES256',
     use: 'sig',
@@ -51,10 +60,17 @@ export function generateIssuerKey(): IssuerKey {
 export function loadOrCreateIssuerKey(dir: string): IssuerKey {
   mkdirSync(dir, { recursive: true });
   const file = join(dir, ISSUER_KEY_FILE);
-  if (existsSync(file)) {
+  let text: string | null;
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    text = null;
+  }
+  if (text !== null) {
     let stored: unknown;
     try {
-      stored = JSON.parse(readFileSync(file, 'utf8'));
+      stored = JSON.parse(text);
     } catch (cause) {
       // An unreadable key is never replaced silently: a new key would make
       // every passport issued so far unverifiable against the served JWKS.

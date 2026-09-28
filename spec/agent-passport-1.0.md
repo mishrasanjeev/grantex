@@ -18,7 +18,9 @@ Normative references:
 
 - RFC 9901, Selective Disclosure for JSON Web Tokens (SD-JWT).
 - draft-ietf-oauth-sd-jwt-vc-19, SD-JWT-based Verifiable Digital Credentials.
-- draft-ietf-oauth-status-list, Token Status List (section 6.2, the `status` claim).
+- draft-ietf-oauth-status-list-21, Token Status List (section 6.2, the `status`
+  claim; section 7.1, status values; section 8.3, validation).
+- W3C Decentralized Identifiers (DIDs) v1.0, section 3.1 (DID Syntax).
 - RFC 7515 (JWS), RFC 7518 (ES256), RFC 8037 (EdDSA, OKP thumbprints),
   RFC 7638 (JWK thumbprint), RFC 7800 (`cnf`).
 
@@ -49,7 +51,7 @@ Claims in the clear (never disclosures):
 | Claim | Rule |
 |---|---|
 | `iss` | The issuer's `entity_id`, an `https` URL. |
-| `sub` | The agent's DID (`did:<method>:<id>`). |
+| `sub` | The agent's DID: the whole value matches the `did` rule of W3C DID Core section 3.1 (`"did:" method-name ":" method-specific-id`, where `method-name` is lower-case letters and digits and `method-specific-id` is colon-separated `idchar`s (`ALPHA / DIGIT / "." / "-" / "_" / pct-encoded`) with a non-empty last segment). A DID URL (path, query or fragment) is not a DID and is refused. |
 | `vct` | `urn:grantex:agent-passport:1` (draft-ietf-oauth-sd-jwt-vc section 2.2.2.1). |
 | `iat`, `exp` | Integers (seconds). `exp` > `iat` and `exp` ≤ `iat` + 31 536 000 (one year of 365 days). |
 | `nbf` | OPTIONAL integer. |
@@ -65,7 +67,7 @@ Selectively disclosable claims, one disclosure each:
 
 | Claim | Members |
 |---|---|
-| `provider` | `did` (REQUIRED, a DID), `legal_identifiers` (array), `name` (string). |
+| `provider` | `did` (REQUIRED, a DID with the same syntax as `sub`), `legal_identifiers` (array), `name` (string). |
 | `agent` | `software_name` and `software_version` (REQUIRED, non-empty strings), `cimd_uri` (`https` URL of the client metadata document), `categories` (array of strings), `declared_limits` (object). |
 | `verification` | `level` (REQUIRED, non-empty string), `types` (array of strings), `performed_at` (integer, seconds). |
 | `attestation_id` | Non-empty string: the attestation this passport was issued from. |
@@ -115,15 +117,11 @@ refusal carries a code and a reason (section 9).
 7. If the relying party requires key binding, verify the KB-JWT (section 5).
    If it does not, a presentation that carries a KB-JWT is refused
    (`unexpected_key_binding`).
-8. Check the status (below). This step is the relying party's own: the
-   libraries do not perform it.
+8. Check the status (below).
 
-**Status is not checked by the libraries.** `verifyPassport` /
-`verify_passport` check only that `status` has the shape of a Token Status
-List reference; they do not fetch the Status List Token or read the bit, and
-a revoked or suspended passport passes them. A relying party MUST NOT accept a
-passport on their result alone. Before accepting, it MUST resolve
-`status.status_list` (`uri`, `idx`) through its own status-list component, as
+**Status is required, and verification fails closed without it.** A relying
+party MUST NOT accept a passport without resolving `status.status_list`
+(`uri`, `idx`) through its own status-list component, as
 draft-ietf-oauth-status-list-21 section 8.3 describes (fetch the Status List
 Token from `uri`, verify its signature with the issuer's keys from the relying
 party's trust configuration, read the value at `idx`), and:
@@ -133,6 +131,23 @@ party's trust configuration, read the value at `idx`), and:
 - refuse with `status_stale` when it has no Status List Token that is still
   fresh by its `exp` and `ttl` (section 13.7), including when the fetch or the
   signature check fails. An unknown status is a refusal, never a pass.
+
+`verifyPassport` / `verify_passport` require the caller to choose one of two
+ways to meet this, and refuse to run (a `TypeError` / `ValueError`, not a
+`PassportError`) with neither or both:
+
+- a status resolver (`statusResolver` / `status_resolver`), a function of
+  (`uri`, `idx`) that answers `valid`, `invalid` or `suspended` from the
+  relying party's status-list component. The library calls it after steps 1
+  to 7 pass, and refuses `invalid` (`status_invalid`) and `suspended`
+  (`status_suspended`) with `passport_revoked`, and a resolver that throws or
+  answers anything else with `status_stale` (`status_unresolved`,
+  `status_unknown`);
+- `statusCheckedBy: 'caller'` / `status_checked_by="caller"`, the caller's
+  statement that it resolves the status itself, as above, before accepting.
+
+The result's `statusCheckedBy` / `status_checked_by` (`resolver` or `caller`)
+records which applied.
 
 ## 5. Key binding
 
@@ -221,16 +236,22 @@ resolver is `issuer_key_invalid`. JWT VC Issuer Metadata
 | `key_unproven` | `key_binding_missing`, `kb_malformed`, `nonce_mismatch`, `kb_stale` |
 | `key_binding_mismatch` | `kb_signature_mismatch`, `sd_hash_mismatch` |
 | `audience_mismatch` | `audience_mismatch` |
+| `passport_revoked` | `status_invalid`, `status_suspended` |
+| `status_stale` | `status_unresolved`, `status_unknown` |
 
 `passport_invalid_signature`, `passport_expired`, `key_unproven`,
 `key_binding_mismatch` and `audience_mismatch` are registry denial codes.
-`passport_malformed` and `passport_not_accepted` are specific to this profile.
+`passport_malformed` and `passport_not_accepted` are specific to this profile;
+`passport_revoked` and `status_stale` are the status refusals of section 4.
 
 ## 10. Shared vectors
 
 [`examples/agent-passport-vectors.json`](examples/agent-passport-vectors.json)
 holds accepted and refused passports and presentations with the options to
-verify them and the expected claims or code and reason, hash-rule inputs,
+verify them and the expected claims or code and reason; the Token Status List
+values the verify vectors are resolved against (`statusLists`) and status
+vectors that re-check an accepted passport against other values or a failing
+resolver (`status`); hash-rule inputs,
 thumbprints (including the RFC 7638 section 3.1 and RFC 8037 appendix A.3
 examples) and key-equality cases. The keys are synthetic, generated for the
 file with their private halves discarded; only public keys and signed outputs

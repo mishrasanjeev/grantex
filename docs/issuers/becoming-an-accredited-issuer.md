@@ -4,6 +4,120 @@ sidebarTitle: "Accredited Issuers"
 description: "What the registry records about an accredited issuer in Phase 1, and how an accredited issuer posts, withdraws and refreshes attestations."
 ---
 
+## Posting attestations
+
+Once accredited, an issuer posts each attestation it makes to the registry. An
+attestation is a compact JWS signed with one of the keys in the issuer's
+record; the full profile is in
+[`spec/attestation-1.0.md`](https://github.com/mishrasanjeev/grantex/blob/main/spec/attestation-1.0.md).
+There is no API key: the signature is the authentication.
+
+```bash
+curl -X POST https://auth.example/v1/registry/attestations \
+  -H "Content-Type: application/jwt" \
+  --data-binary @attestation.jwt
+```
+
+The protected header is `{"typ": "grantex-attestation+jwt", "alg": "ES256", "kid": "issuer-2026-01"}`,
+and the payload, for the agent `shopper-01` running Nimbus Shopper 2.4:
+
+```json attestation-payload
+{
+  "iss": "https://issuer.example",
+  "id": "att-2026-000123",
+  "sub": "did:grantex:ag_01J8Z3K4M5N6P7Q8R9S0T1V2W3",
+  "type": "urn:grantex:tm:agent.identity",
+  "iat": 1790596800,
+  "exp": 1822132800,
+  "key_thumbprint": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs",
+  "external_credential_id": "case-000123",
+  "external_credential_hash": "sha-256:OiVR9AjgZRd6DJ8n_6dpLox_0KzFKt7gZ9MHpgHXOKQ",
+  "level": "substantial",
+  "declared_limits": { "max_amount": "250.00", "currency": "EUR" },
+  "status": { "status_list": { "uri": "https://issuer.example/status/1", "idx": 4211 } }
+}
+```
+
+Before posting, check:
+
+- **You are accredited for the type.** `type` is one of your trust marks, and
+  your record is neither suspended nor withdrawn.
+- **The agent has proven its key.** For `agent.identity` and `agent.security`,
+  `key_thumbprint` must be a key the agent registered and proved possession of
+  (`POST /v1/agents/{id}/keys/{thumbprint}/challenge` and `/prove`). An
+  attestation for a key that is not yet proven is refused with `key_unproven`.
+- **Your status list is reachable.** `status.status_list.uri` must be under
+  your `status_list_base`, and the registry fetches it while it checks the
+  attestation: `GET`, `https`, no redirects, served as
+  `application/statuslist+jwt`, signed with a key in your record, fresh by
+  `exp` (or `iat` + `ttl`), with the entry VALID. Otherwise the answer is
+  `status_stale` (or `passport_revoked` for an entry that is not VALID).
+- **Your status list stays reachable.** The registry relies on each read of
+  your list until the earliest of its `exp`, the time of reading plus its
+  `ttl`, and one day, and reads it again shortly before then. A revocation or
+  suspension you publish reaches relying parties within that time. While the
+  registry cannot read your list, your attestations stop counting toward
+  trust levels once the last read runs out, and count again after the next
+  successful read. A `ttl` of a few minutes to an hour is a good choice.
+- **`id` is new.** Posting the same bytes again is harmless and answers the
+  existing record, without checking them again, so a retry after a timeout
+  succeeds even while your status list is briefly unreachable; other bytes
+  under an `id` you have used are `409`.
+- **The hash is `sha-256:` and 43 base64url characters**, the SHA-256 of the
+  credential you checked (for an Agent Passport, of its issuer-signed JWT).
+
+The answer is `201` with the registry's record. Keep its `id` (`ratt_...`) to
+withdraw or refresh the attestation later, and its `acceptance.status_list`:
+that is the registry's own entry saying it accepts the attestation, which
+relying parties check next to your status list.
+
+### Withdrawing and refreshing
+
+To take an attestation back, or to renew it with a new external credential,
+sign a request with the same key set and send it in `Authorization`:
+
+```bash
+curl -X DELETE https://auth.example/v1/registry/attestations/ratt_01J8Z3K4M5N6P7Q8R9S0T1V2W3 \
+  -H "Authorization: GrantexIssuer $REQUEST_JWS"
+
+curl -X POST https://auth.example/v1/registry/attestations/ratt_01J8Z3K4M5N6P7Q8R9S0T1V2W3/refresh \
+  -H "Authorization: GrantexIssuer $REQUEST_JWS" \
+  -H "Content-Type: application/jwt" \
+  --data-binary @renewed-attestation.jwt
+```
+
+The request's header has `"typ": "grantex-attestation-request+jwt"`, and its
+payload names the registry, the attestation (by the `id` you minted) and the
+action, with a fresh single-use nonce:
+
+```json withdraw-request
+{
+  "iss": "https://issuer.example",
+  "aud": "https://registry.example",
+  "id": "att-2026-000123",
+  "action": "withdraw",
+  "iat": 1790600400,
+  "nonce": "8m3Qf0bJ4wX2yK7pL9sT1v"
+}
+```
+
+A request is valid for five minutes and only once. A refresh uses
+`"action": "refresh"`, and its body is a complete new attestation for the same
+subject and type with a new `id` and a new `external_credential_id`. The old
+attestation is then superseded, and the registry's entry for it becomes
+INVALID. The registry operator can do either with its operator key instead.
+
+### How attestations count
+
+Relying parties do not read attestations one by one: the registry computes a
+trust level for each agent. An agent is `attested` when it has an accepted
+`agent.identity` attestation bound to a key it has proven and its provider has
+an accepted `provider.entity` attestation, both from accredited issuers that
+are not the provider itself; `attested_verified` when its provider's domain is
+also DNS-verified. A suspension of the agent, its provider, an attestation or
+its issuer drops it to `basic`. Renew attestations before they expire:
+thirty days before `exp` the agent carries the `attestation_expiring` flag.
+
 An **accredited issuer** is an organisation whose Agent Passports and
 attestations the Grantex registry accepts. Accreditation is decided outside the
 registry, by the registry operator, against the evidence the operator requires.
@@ -152,128 +266,43 @@ Revoke one key:
 A `PATCH` can also set `status` to `active` or `withdrawn`, replace
 `trust_marks` with a new list, or replace `jwks` with a new set.
 
-## Posting attestations
-
-Once accredited, an issuer posts each attestation it makes to the registry. An
-attestation is a compact JWS signed with one of the keys in the issuer's
-record; the full profile is in
-[`spec/attestation-1.0.md`](https://github.com/mishrasanjeev/grantex/blob/main/spec/attestation-1.0.md).
-There is no API key: the signature is the authentication.
-
-```bash
-curl -X POST https://auth.example/v1/registry/attestations \
-  -H "Content-Type: application/jwt" \
-  --data-binary @attestation.jwt
-```
-
-The protected header is `{"typ": "grantex-attestation+jwt", "alg": "ES256", "kid": "issuer-2026-01"}`,
-and the payload, for the agent `shopper-01` running Nimbus Shopper 2.4:
-
-```json attestation-payload
-{
-  "iss": "https://issuer.example",
-  "id": "att-2026-000123",
-  "sub": "did:grantex:ag_01J8Z3K4M5N6P7Q8R9S0T1V2W3",
-  "type": "urn:grantex:tm:agent.identity",
-  "iat": 1790596800,
-  "exp": 1822132800,
-  "key_thumbprint": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs",
-  "external_credential_id": "case-000123",
-  "external_credential_hash": "sha-256:OiVR9AjgZRd6DJ8n_6dpLox_0KzFKt7gZ9MHpgHXOKQ",
-  "level": "substantial",
-  "declared_limits": { "max_amount": "250.00", "currency": "EUR" },
-  "status": { "status_list": { "uri": "https://issuer.example/status/1", "idx": 4211 } }
-}
-```
-
-Before posting, check:
-
-- **You are accredited for the type.** `type` is one of your trust marks, and
-  your record is neither suspended nor withdrawn.
-- **The agent has proven its key.** For `agent.identity` and `agent.security`,
-  `key_thumbprint` must be a key the agent registered and proved possession of
-  (`POST /v1/agents/{id}/keys/{thumbprint}/challenge` and `/prove`). An
-  attestation for a key that is not yet proven is refused with `key_unproven`.
-- **Your status list is reachable.** `status.status_list.uri` must be under
-  your `status_list_base`, and the registry fetches it while it checks the
-  attestation: `GET`, `https`, no redirects, served as
-  `application/statuslist+jwt`, signed with a key in your record, fresh by
-  `exp` (or `iat` + `ttl`), with the entry VALID. Otherwise the answer is
-  `status_stale` (or `passport_revoked` for an entry that is not VALID).
-- **Your status list stays reachable.** The registry relies on each read of
-  your list until the earliest of its `exp`, the time of reading plus its
-  `ttl`, and one day, and reads it again shortly before then. A revocation or
-  suspension you publish reaches relying parties within that time. While the
-  registry cannot read your list, your attestations stop counting toward
-  trust levels once the last read runs out, and count again after the next
-  successful read. A `ttl` of a few minutes to an hour is a good choice.
-- **`id` is new.** Posting the same bytes again is harmless and answers the
-  existing record, without checking them again, so a retry after a timeout
-  succeeds even while your status list is briefly unreachable; other bytes
-  under an `id` you have used are `409`.
-- **The hash is `sha-256:` and 43 base64url characters**, the SHA-256 of the
-  credential you checked (for an Agent Passport, of its issuer-signed JWT).
-
-The answer is `201` with the registry's record. Keep its `id` (`ratt_...`) to
-withdraw or refresh the attestation later, and its `acceptance.status_list`:
-that is the registry's own entry saying it accepts the attestation, which
-relying parties check next to your status list.
-
-### Withdrawing and refreshing
-
-To take an attestation back, or to renew it with a new external credential,
-sign a request with the same key set and send it in `Authorization`:
-
-```bash
-curl -X DELETE https://auth.example/v1/registry/attestations/ratt_01J8Z3K4M5N6P7Q8R9S0T1V2W3 \
-  -H "Authorization: GrantexIssuer $REQUEST_JWS"
-
-curl -X POST https://auth.example/v1/registry/attestations/ratt_01J8Z3K4M5N6P7Q8R9S0T1V2W3/refresh \
-  -H "Authorization: GrantexIssuer $REQUEST_JWS" \
-  -H "Content-Type: application/jwt" \
-  --data-binary @renewed-attestation.jwt
-```
-
-The request's header has `"typ": "grantex-attestation-request+jwt"`, and its
-payload names the registry, the attestation (by the `id` you minted) and the
-action, with a fresh single-use nonce:
-
-```json withdraw-request
-{
-  "iss": "https://issuer.example",
-  "aud": "https://registry.example",
-  "id": "att-2026-000123",
-  "action": "withdraw",
-  "iat": 1790600400,
-  "nonce": "8m3Qf0bJ4wX2yK7pL9sT1v"
-}
-```
-
-A request is valid for five minutes and only once. A refresh uses
-`"action": "refresh"`, and its body is a complete new attestation for the same
-subject and type with a new `id` and a new `external_credential_id`. The old
-attestation is then superseded, and the registry's entry for it becomes
-INVALID. The registry operator can do either with its operator key instead.
-
-### How attestations count
-
-Relying parties do not read attestations one by one: the registry computes a
-trust level for each agent. An agent is `attested` when it has an accepted
-`agent.identity` attestation bound to a key it has proven and its provider has
-an accepted `provider.entity` attestation, both from accredited issuers that
-are not the provider itself; `attested_verified` when its provider's domain is
-also DNS-verified. A suspension of the agent, its provider, an attestation or
-its issuer drops it to `basic`. Renew attestations before they expire:
-thirty days before `exp` the agent carries the `attestation_expiring` flag.
-
 ## What relying parties see
 
-`GET /v1/registry/issuers` needs no key. It lists every issuer with only
-`entity_id`, `trust_marks`, `status` (as it stands at the time of the request),
-`status_list_base` and `jwks` without revoked keys. It is rate limited per
-client address and carries an `ETag`: send it back in `If-None-Match` and an
-unchanged list answers `304`. It is sent with `Cache-Control: no-cache`, so a
-cache checks back on every read and never serves a revoked key.
+`GET /v1/registry/issuers` needs no key, so it is served only when the
+operator sets `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true` (exactly `true`; the
+default is off). Off, the route is not registered and a request is answered
+as for any unknown route: `401` without an API key, `404` with one. The
+operator routes and the accreditation lookups work either way.
+
+It lists the issuers with only `entity_id`, `trust_marks`, `status` (as it
+stands at the time of the request), `status_list_base` and `jwks` without
+revoked keys, ordered by `entity_id`. It is paged with `page` (from 1,
+default 1) and `pageSize` (1 to 500, default 100), and reports `total`, the
+number of issuers in all; a page past the end is empty and still carries
+`total`, and any other value answers `400`. Read pages until you have `total`
+issuers, or until a page comes back empty:
+
+```json
+{
+  "issuers": [
+    {
+      "entity_id": "https://issuer.example",
+      "trust_marks": ["urn:grantex:tm:agent.identity"],
+      "status": "active",
+      "status_list_base": "https://issuer.example/status/",
+      "jwks": { "keys": [] }
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 100
+}
+```
+
+It is rate limited per client address and carries an `ETag` for each page:
+send it back in `If-None-Match` and an unchanged page answers `304`. It is
+sent with `Cache-Control: no-cache`, so a cache checks back on every read and
+never serves a revoked key.
 
 ## Trying it locally
 

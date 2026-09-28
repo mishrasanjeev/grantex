@@ -8,8 +8,14 @@ Command-line tool for the [Grantex](https://grantex.dev) delegated authorization
 
 ## Install
 
+Version 0.4.0 is a breaking release requiring Node.js 22.12+ and
+`@grantex/sdk` 0.8+. The `enforce` command checks the requested audience and
+current revocation by default. Run `grantex enforce test --help` for audience
+and amount options; the client uses the SDK's online revocation default. Follow the
+[migration guide](https://docs.grantex.dev/migration-enforcement).
+
 ```bash
-npm install -g @grantex/cli
+npm install -g @grantex/cli@0.4.0
 ```
 
 ## Configure

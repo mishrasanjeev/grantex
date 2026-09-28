@@ -106,7 +106,7 @@
         "Go"
       ],
       "runtimePlatform": [
-        "Node.js 18+",
+        "Node.js 22.12+",
         "Python 3.9+",
         "Go 1.26.1+"
       ],
@@ -202,7 +202,7 @@
           "name": "Which Grantex SDK should I install?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Use the registry-verified @grantex/sdk@0.7.1 for TypeScript, grantex==0.6.1 for Python, and github.com/mishrasanjeev/grantex-go@v0.4.1 for Go. See release status for exact evidence and limitations."
+            "text": "Use the registry-verified @grantex/sdk@0.8.0 for TypeScript, grantex==0.7.0 for Python, and github.com/mishrasanjeev/grantex-go@v0.4.1 for Go. See release status for exact evidence and limitations."
           }
         },
         {
@@ -223,10 +223,10 @@
         },
         {
           "@type": "Question",
-          "name": "Is @grantex/mcp-auth 2.0.2 ready for general production deployment?",
+          "name": "What must I configure for MCP Auth 3.0?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. @grantex/mcp-auth@2.0.2 is single-process evaluation software with process-local codes, metadata-only consent configuration, incomplete Grantex code handoff, and no live revocation lookup in middleware or introspection."
+            "text": "MCP Auth 3.0.0 supports durable storage and rendered consent. Configure shared state, authenticated principal handoff, resource binding and explicit token revocation, then enforce upstream grant authority. Independent cross-vendor certification is not claimed."
           }
         },
         {

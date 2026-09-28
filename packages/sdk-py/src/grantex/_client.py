@@ -272,8 +272,7 @@ class Grantex:
 
         self._enforce_mode = enforce_mode
         self._caps_meter = caps_meter
-        # Whether enforce() reads legacy grant token claim aliases; True in 0.6,
-        # False by default from 0.7.
+        # Legacy aliases remain enabled unless explicitly disabled.
         self._legacy_claims = legacy_claims
         self._caps_mode = _check_caps_mode(caps_mode)
         # How enforce() finds out about revocations (PRD G-6). "online" (the

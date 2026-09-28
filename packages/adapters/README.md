@@ -4,8 +4,16 @@ Eleven pre-built service provider adapters for [Grantex](https://grantex.dev). T
 
 ## Install
 
+Version 0.2.0 is a breaking release requiring Node.js 22.12+ and
+`@grantex/sdk` 0.8+. Configure the relying-party `audience`; audience-bearing
+tokens without it fail with `AUDIENCE_UNCONFIGURED`, and mismatches fail with
+`AUDIENCE_MISMATCH`. `audienceCheck: 'off'` explicitly restores the old unsafe
+behavior and cannot be combined with `audience`. Adapters verify tokens locally,
+not current grant status; enforce revocation at your service boundary. See the
+[migration guide](https://docs.grantex.dev/migration-enforcement).
+
 ```bash
-npm install @grantex/adapters @grantex/sdk
+npm install @grantex/adapters@0.2.0 @grantex/sdk@0.8.0
 ```
 
 ## Quick Start
@@ -15,6 +23,7 @@ import { GoogleCalendarAdapter } from '@grantex/adapters';
 
 const calendar = new GoogleCalendarAdapter({
   jwksUri: 'https://your-auth-server/.well-known/jwks.json',
+  audience: 'https://api.merchant.example',
   credentials: process.env.GOOGLE_ACCESS_TOKEN!,
 });
 

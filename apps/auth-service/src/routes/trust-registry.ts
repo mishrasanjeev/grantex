@@ -1,8 +1,45 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { resolve } from 'node:dns/promises';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { config } from '../config.js';
 import { getSql } from '../db/client.js';
 import { ulid } from 'ulid';
+
+/**
+ * Whether `GET /v1/trust-registry` takes the service administrator credential
+ * (`ADMIN_API_KEY`). The listing returns every developer's records, so it
+ * should not be readable with a developer API key, but the check is opt-in:
+ * it is on only when the variable is exactly `true`, parsed like the service's
+ * other boolean flags in `config.ts`. Off (the default, and any other value)
+ * keeps the existing behaviour byte-for-byte: standard developer API key auth
+ * and the plan budget. On, the route takes the admin key and fails closed with
+ * 503 while `ADMIN_API_KEY` is unset.
+ */
+export function trustRegistryAdminListingEnforced(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env['TRUST_REGISTRY_ADMIN_LISTING_ENFORCED'] === 'true';
+}
+
+/**
+ * Check the platform admin key, as the other operator routes do. Sends the
+ * refusal and returns false when it is wrong. With no key configured nothing
+ * can match it, so the route answers 503 instead of opening up.
+ */
+function adminAuthorized(request: FastifyRequest, reply: FastifyReply): boolean {
+  const adminKey = config.adminApiKey;
+  if (!adminKey) {
+    void reply.status(503).send({
+      message: 'Admin API not configured', code: 'SERVICE_UNAVAILABLE', requestId: request.id,
+    });
+    return false;
+  }
+  const expected = Buffer.from(`Bearer ${adminKey}`);
+  const actual = Buffer.from(request.headers.authorization ?? '');
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    void reply.status(401).send({ message: 'Unauthorized', code: 'UNAUTHORIZED', requestId: request.id });
+    return false;
+  }
+  return true;
+}
 
 /**
  * Verify organization ownership via DNS TXT record.
@@ -199,10 +236,20 @@ export async function trustRegistryRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // GET /v1/trust-registry — Protected: list all trust records (admin)
+  // GET /v1/trust-registry — Admin: list all trust records, across developers.
+  // With TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true it takes ADMIN_API_KEY,
+  // not a developer key (503 while that is unset); otherwise it keeps the
+  // existing standard developer auth and plan budget. The flag is read here,
+  // when the route is registered, because which authentication the route
+  // takes is route config.
+  const adminListing = trustRegistryAdminListingEnforced();
   app.get(
     '/v1/trust-registry',
+    adminListing
+      ? { config: { skipAuth: true, rateLimit: { max: 20, timeWindow: '1 minute' } } }
+      : {},
     async (request, reply) => {
+      if (adminListing && !adminAuthorized(request, reply)) return reply;
       const sql = getSql();
 
       const rows = await sql`

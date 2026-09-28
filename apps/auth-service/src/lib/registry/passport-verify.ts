@@ -326,8 +326,13 @@ function isHttpsUrl(value: unknown): value is string {
   return typeof value === 'string' && value.startsWith('https://') && value.length > 'https://'.length;
 }
 
-function isDid(value: unknown): value is string {
-  return typeof value === 'string' && /^did:[a-z0-9]+:[\s\S]+/.test(value);
+// DID Core §3.1 syntax, with no path, query or fragment (a DID, not a DID
+// URL). The same expression as packages/agent-passport; a test holds the two
+// together.
+const DID = /^did:[a-z0-9]+:(?:(?:[A-Za-z0-9._-]|%[0-9A-Fa-f]{2})*:)*(?:[A-Za-z0-9._-]|%[0-9A-Fa-f]{2})+$/;
+
+export function isPassportDid(value: unknown): value is string {
+  return typeof value === 'string' && DID.test(value);
 }
 
 function isStringArray(value: unknown): value is string[] {
@@ -348,7 +353,7 @@ function checkProfileClaims(claims: Record<string, unknown>): void {
   const bad = (name: string) => malformed('bad_claim', `claim ${name} does not have the profile's shape`);
   if (Object.hasOwn(claims, 'provider')) {
     const p = claims['provider'];
-    if (!isObject(p) || !isDid(p['did'])
+    if (!isObject(p) || !isPassportDid(p['did'])
         || (p['legal_identifiers'] !== undefined && !Array.isArray(p['legal_identifiers']))
         || (p['name'] !== undefined && typeof p['name'] !== 'string')) {
       throw bad('provider');
@@ -507,7 +512,7 @@ export async function verifyPassportPresentation(options: VerifyPassportOptions)
   if (payload['vct'] !== PASSPORT_VCT) {
     throw new PassportVerifyError('passport_not_accepted', 'wrong_vct', `vct must be ${PASSPORT_VCT}`);
   }
-  if (!isDid(payload['sub'])) throw malformed('bad_claim', 'sub must be the agent DID');
+  if (!isPassportDid(payload['sub'])) throw malformed('bad_claim', 'sub must be the agent DID');
   if (!isSafeInt(payload['iat']) || !isSafeInt(payload['exp'])) throw malformed('bad_claim', 'iat and exp are integers');
   if (payload['nbf'] !== undefined && !isSafeInt(payload['nbf'])) throw malformed('bad_claim', 'nbf is an integer');
   if (!isStatusReference(payload['status'])) throw malformed('bad_claim', 'status must be a Token Status List reference');

@@ -9,8 +9,13 @@ description: "Pre-built integrations that translate Grantex grants into real API
 `@grantex/adapters` provides pre-built adapters for popular APIs — Google Calendar, Gmail, Stripe, and Slack. Each adapter verifies grant tokens offline (JWKS), checks scopes, enforces constraints, and calls the upstream API.
 
 ```bash
-npm install @grantex/adapters @grantex/sdk
+npm install @grantex/adapters@0.2.0 @grantex/sdk@0.8.0
 ```
+
+Node.js 22.12+ is required. Configure the expected resource audience and
+derive trusted amounts at your service boundary. Offline adapter checks
+do not prove current revocation; combine them with operational current-state
+enforcement. See [migration](/migration-enforcement).
 
 ## Google Calendar
 
@@ -160,7 +165,7 @@ const stripe = new StripeAdapter({
 ## Grant token audience
 
 <Warning>
-  From the next release (not in `@grantex/adapters` 0.1.5). This is a breaking
+  From version 0.2.0 (not in `@grantex/adapters` 0.1.5). This is a breaking
   change: a grant token that carries an `aud` claim is refused unless the
   adapter is configured with that audience. Tokens issued without an audience
   are unaffected.
@@ -222,8 +227,8 @@ class MyApiAdapter extends BaseAdapter {
 | Code | Meaning |
 |------|---------|
 | `TOKEN_INVALID` | Grant token verification failed, or its audience cannot be read |
-| `AUDIENCE_UNCONFIGURED` | The token carries `aud` and no `audience` is configured (next release) |
-| `AUDIENCE_MISMATCH` | The token's `aud` does not contain the configured `audience`, or it has no `aud` (next release) |
+| `AUDIENCE_UNCONFIGURED` | The token carries `aud` and no `audience` is configured (0.2.0) |
+| `AUDIENCE_MISMATCH` | The token's `aud` does not contain the configured `audience`, or it has no `aud` (0.2.0) |
 | `SCOPE_MISSING` | Grant doesn't include required scope |
 | `CONSTRAINT_VIOLATED` | Value exceeds scope constraint |
 | `UPSTREAM_ERROR` | Upstream API returned an error |

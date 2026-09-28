@@ -31,9 +31,8 @@ def create_grantex_tool(
 
     Supports two modes:
 
-    **Offline (default):** Decodes the JWT payload and checks the ``scp``
-    claim directly. Fast, no network required. Cannot detect token
-    revocation or verify signatures.
+    **Verified (default):** Verifies the JWT signature and issuer using JWKS,
+    then checks the verified scope claim. Does not check current revocation.
 
     **Online (online=True):** Uses ``client.enforce()`` which verifies the
     token signature via JWKS and checks scopes against the loaded manifest.

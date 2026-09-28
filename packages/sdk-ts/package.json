@@ -1,6 +1,6 @@
 {
   "name": "@grantex/sdk",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "TypeScript SDK for the Grantex delegated authorization protocol",
   "author": {
     "name": "Sanjeev Kumar",
@@ -60,7 +60,7 @@
     "vitest": "^5.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.12.0"
   },
   "keywords": [
     "grantex",

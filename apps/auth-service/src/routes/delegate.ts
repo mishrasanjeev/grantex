@@ -97,10 +97,10 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
 
     // PRD §8.6: a sub-agent of a passport-bound grant must bind its own
     // passport, with the parent's binding carried in act.passport. Until that
-    // exists, a passport-bound grant, or a per-merchant child of one, is not
-    // delegated: an unbound delegated grant would escape the binding
-    // (spec/passport-binding.md §8.6). Read only with the flag on, so nothing
-    // changes with it off.
+    // exists, a passport-bound grant, or a per-merchant child of one (whose
+    // grnt is the parent grant's id), is not delegated: an unbound delegated
+    // grant would escape the binding and its rechecks (spec/passport-binding.md
+    // §5). Read only with the flag on, so nothing changes with it off.
     if (config.passportBoundGrantsEnabled) {
       const bound = await getSql()`
         SELECT 1 FROM grant_passport_bindings
@@ -265,9 +265,28 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
     // A refusal from the lockout check rolls the transaction back and is
     // answered below; anything else propagates as it always did.
     let refused = null as ReturnType<typeof issuanceRefusal>;
+    let subAgentKeyCompromised = false;
     await sql.begin(async (_tx) => {
       const tx = _tx as unknown as TxSql;
       await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
+      // The sub-agent's key, read above, may have been reported compromised
+      // since (POST /v1/agents/:id/keys/:thumbprint/compromise). The
+      // compromise records the key in compromised_agent_keys and only then
+      // looks for the grants bound to it, under this same lock, so a grant
+      // inserted here is either found by it or refused by this check. Its own
+      // statement, after the lock, so its snapshot includes a compromise that
+      // committed while this waited. Fails closed: a grant is never bound to
+      // a key reported compromised. Only that route writes the table, so a
+      // delegation to a key never reported behaves exactly as before.
+      if (typeof subAgent['key_thumbprint'] === 'string') {
+        const compromised = await tx`
+          SELECT 1 FROM compromised_agent_keys WHERE thumbprint = ${subAgent['key_thumbprint'] as string}
+        `;
+        if (compromised[0]) {
+          subAgentKeyCompromised = true;
+          return;
+        }
+      }
       // Serialize against cascade revocation. If revocation wins the lock,
       // this query re-checks the updated row and no child is created. If
       // delegation wins, the revoker waits and its recursive CTE sees this
@@ -351,6 +370,13 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
     });
     if (refused !== null) {
       return reply.status(refused.statusCode).send({ ...refused.body, requestId: request.id });
+    }
+    if (subAgentKeyCompromised) {
+      return reply.status(409).send({
+        message: 'The sub-agent key was reported compromised; register a new key before delegating to it',
+        code: 'key_not_active',
+        requestId: request.id,
+      });
     }
     if (!parentStillActive) {
       return reply.status(400).send({

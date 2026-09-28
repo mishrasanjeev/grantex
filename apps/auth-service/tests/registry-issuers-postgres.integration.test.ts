@@ -8,7 +8,8 @@
  * production ones. Covered: operator keys, the trust mark taxonomy, https-only
  * entity identifiers, suspension with an effective time in the future and in
  * the past, revoking one kid, the public minimised read and its ETag, and an
- * audit entry for every write. The request bodies in
+ * audit entry for every write, paging the public list past one full page, and
+ * the list absent with REGISTRY_PUBLIC_ENDPOINTS_ENABLED off. The request bodies in
  * docs/issuers/becoming-an-accredited-issuer.md are replayed here as written.
  */
 import { generateKeyPairSync, randomBytes } from 'node:crypto';
@@ -148,7 +149,10 @@ beforeAll(async () => {
   dropTestDatabase = db.drop;
   sql = postgres(db.url, { max: 8, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
   await runMigrations(sql);
+  // The public list is registered only with the flag on, read at build time.
+  vi.stubEnv('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', 'true');
   app = await buildTestApp();
+  vi.unstubAllEnvs();
 }, 120_000);
 
 afterAll(async () => {
@@ -455,5 +459,73 @@ describePostgres('accredited issuers against real Postgres', () => {
     const revoked = await patch(id, examples.get('revoke-kid')!);
     expect(revoked.statusCode).toBe(200);
     expect(await issuerVerificationKey(sql, entityId, 'issuer-2026-01')).toBeNull();
+  });
+
+  it('pages the public list past a full page of 500, with a total that covers every issuer', async () => {
+    // Direct inserts: 501 issuers through the route would spend the operator
+    // rate limit and the audit chain for nothing this test reads.
+    await sql`
+      INSERT INTO accredited_issuers (id, entity_id, jwks, trust_marks, status_list_base, accreditation_evidence_ref)
+      SELECT 'aiss_page_' || lpad(n::text, 4, '0'),
+             'https://paged-' || lpad(n::text, 4, '0') || '.example',
+             '{"keys": []}'::jsonb,
+             ARRAY['urn:grantex:tm:agent.identity'],
+             'https://paged-' || lpad(n::text, 4, '0') || '.example/status/',
+             'accreditation-case-paged-' || n
+      FROM generate_series(1, 501) AS n`;
+    const [{ count }] = await sql<[{ count: number }]>`SELECT count(*)::int AS count FROM accredited_issuers`;
+    expect(count).toBeGreaterThan(501);
+
+    const seen: string[] = [];
+    let page = 1;
+    for (;;) {
+      const res = await app.inject({
+        method: 'GET', url: `/v1/registry/issuers?page=${page}&pageSize=500`, remoteAddress: nextAddress(),
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body).toMatchObject({ total: count, page, pageSize: 500 });
+      if (body.issuers.length === 0) break;
+      expect(body.issuers.length).toBeLessThanOrEqual(500);
+      seen.push(...body.issuers.map((issuer: { entity_id: string }) => issuer.entity_id));
+      page += 1;
+    }
+    // Two pages of data then an empty one: nothing omitted, nothing repeated,
+    // in entity_id order across the page boundary.
+    expect(page).toBe(3);
+    expect(seen).toHaveLength(count);
+    expect(new Set(seen).size).toBe(count);
+    expect([...seen].sort()).toEqual(seen);
+    expect(seen).toContain('https://paged-0501.example');
+
+    const byDefault = await app.inject({ method: 'GET', url: '/v1/registry/issuers', remoteAddress: nextAddress() });
+    expect(byDefault.json()).toMatchObject({ total: count, page: 1, pageSize: 100 });
+    expect(byDefault.json().issuers).toHaveLength(100);
+    expect(byDefault.json().issuers.map((issuer: { entity_id: string }) => issuer.entity_id)).toEqual(seen.slice(0, 100));
+  });
+
+  it('has no public list with REGISTRY_PUBLIC_ENDPOINTS_ENABLED off, while the lookups still answer', async () => {
+    const record = newRecord();
+    await accredit(record);
+    vi.stubEnv('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', 'false');
+    const off = await buildTestApp();
+    try {
+      expect(off.hasRoute({ method: 'GET', url: '/v1/registry/issuers' })).toBe(false);
+      const res = await off.inject({ method: 'GET', url: '/v1/registry/issuers', remoteAddress: nextAddress() });
+      expect(res.statusCode).toBe(401);
+      expect(res.body).not.toContain(record['entity_id'] as string);
+      // The internal lookups are not behind the flag.
+      expect(await isAccreditedFor(sql, record['entity_id'] as string, 'urn:grantex:tm:agent.identity'))
+        .toEqual({ accredited: true });
+      expect(await issuerVerificationKey(sql, record['entity_id'] as string, 'k1')).not.toBeNull();
+      // The operator routes are authenticated and are not behind it either.
+      const again = await off.inject({
+        method: 'POST', url: '/v1/registry/issuers', headers: { authorization: `Bearer ${operatorKey}` },
+        payload: newRecord(), remoteAddress: nextAddress(),
+      });
+      expect(again.statusCode).toBe(201);
+    } finally {
+      await off.close();
+    }
   });
 });

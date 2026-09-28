@@ -42,6 +42,7 @@
               "quickstart",
               "release-status",
               "migration-0.6",
+              "migration-enforcement",
               "local-development"
             ]
           },
@@ -100,7 +101,8 @@
           {
             "group": "MCP Authorization",
             "pages": [
-              "features/mcp-auth-server"
+              "features/mcp-auth-server",
+              "mcp-auth"
             ]
           },
           {

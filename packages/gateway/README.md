@@ -4,8 +4,17 @@ Zero-code reverse-proxy that enforces [Grantex](https://grantex.dev) grant token
 
 ## Install
 
+Version 0.2.0 is a breaking release requiring Node.js 22.12+ and
+`@grantex/sdk` 0.8+. Set `audience` globally or on each route. Audience-bearing
+tokens fail closed when no audience is configured; mismatches return HTTP 401.
+`audienceCheck: off` is an explicit unsafe migration opt-out and cannot be
+combined with `audience`. This gateway verifies JWTs locally; upgrading the
+SDK does not add an online revocation check to this gateway. Add service-side
+current-state enforcement where needed. See the
+[migration guide](https://docs.grantex.dev/migration-enforcement).
+
 ```bash
-npm install @grantex/gateway @grantex/sdk
+npm install @grantex/gateway@0.2.0 @grantex/sdk@0.8.0
 ```
 
 ## Quick Start
@@ -15,6 +24,7 @@ npm install @grantex/gateway @grantex/sdk
 ```yaml
 upstream: https://api.internal.example.com
 jwksUri: https://your-auth-server/.well-known/jwks.json
+audience: https://api.merchant.example
 port: 8080
 upstreamHeaders:
   X-Internal-Auth: "secret-key"

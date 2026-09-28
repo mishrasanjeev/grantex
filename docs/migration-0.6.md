@@ -343,12 +343,14 @@ standard semantics. Each 0.5 claim maps to a standard claim:
 - **0.6:** `GRANT_TOKEN_LEGACY_CLAIMS` defaults to `true`. The auth service
   issues the 0.5 aliases next to the standard claims, with identical values,
   so a 0.5 verifier keeps working.
-- **0.7:** the default becomes `false`, and tokens carry only the standard
-  claims.
-- A later release removes the flag.
+- The planned standard-only default has not shipped in TypeScript SDK 0.8
+  or Python SDK 0.7. Package versions are not protocol-version promises.
+  Disable `GRANT_TOKEN_LEGACY_CLAIMS` on the auth service only after migrating
+  relying parties to the standard claims.
+- A future default flip or flag removal requires its own release notice.
 
-The SDK verifiers have a matching option that defaults to reading aliases in
-0.6 and stops in 0.7:
+The SDK verifiers retain the compatibility default: aliases are read with a
+deprecation warning. Require standard claims with the explicit options below:
 
 | SDK | Option | Deprecation warning |
 |---|---|---|
@@ -460,7 +462,7 @@ an array. Tokens issued by the auth service never contain such values.
   tokens verify. Because `scope` is space-delimited and cannot hold such a
   scope, these tokens omit `scope` and always carry `scp`, whatever
   `GRANT_TOKEN_LEGACY_CLAIMS` says. A verifier reading standard claims only
-  (`legacy_claims=False`, and the 0.7 default) refuses them rather than read a
+  (`legacy_claims=False`) refuses them rather than read a
   different scope set. *Action:* re-issue such grants with space-free scopes
   before switching verifiers to standard-only.
 - **Other entry points.** Agent registration and consent bundles still accept
