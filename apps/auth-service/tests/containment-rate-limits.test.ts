@@ -240,6 +240,10 @@ describe('revocation feed and status reads', () => {
   it('serves many status calls from one address within a minute while the developer is under its status budget', async () => {
     // A fresh app, so no other test's calls count against this address.
     const fresh = await buildTestApp();
+    // Keep this single-minute scenario from crossing a real minute boundary.
+    // Timers stay real so Fastify and the Redis timeout paths can still run.
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now);
     try {
       const counts = new Map<string, number>();
       mockRedis.incr.mockImplementation(async (key: string) => {
@@ -263,6 +267,7 @@ describe('revocation feed and status reads', () => {
       expect([...counts.entries()].filter(([key]) => key.includes(':status:'))
         .map(([, count]) => count)).toEqual([calls]);
     } finally {
+      clock.mockRestore();
       await fresh.close();
     }
   }, 60_000);
