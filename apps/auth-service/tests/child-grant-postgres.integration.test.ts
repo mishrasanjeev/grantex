@@ -16,21 +16,25 @@
  * binding checked again (issuer list flipped, acceptance suspended); the
  * parent revoked, by grant and by token, cascading to its children; the
  * budget recorded against the parent grant; delegation of a bound grant
- * refused; parallel exchanges; and the flag off.
+ * refused; parallel exchanges; the proof of the bound key (RFC 9449) the
+ * exchange requires; the metrics; the constraints on the consent view; and
+ * the flag off.
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 import postgres from 'postgres';
 import type { FastifyInstance } from 'fastify';
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT, type CryptoKey, type JWK } from 'jose';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { config } from '../src/config.js';
 import { runMigrations } from '../src/db/migrate.js';
+import { tokenExchangeDuration, tokenExchangeTotal } from '../src/lib/metrics.js';
 import { hashApiKey } from '../src/lib/hash.js';
 import { KEY_PROOF_TYP } from '../src/lib/registry/agent-keys.js';
 import { setAcceptance } from '../src/lib/registry/acceptance-status.js';
 import { REGISTRY_DEV_ISSUER_ORIGIN_MAP_ENV } from '../src/lib/registry/issuer-fetcher.js';
 import { jwkThumbprint } from '../src/lib/registry/jwk-thumbprint.js';
 import { COMMERCE_DETAIL_TYPE } from '../src/lib/registry/passport-binding.js';
-import { buildTestApp, sqlMock } from './helpers.js';
+import { buildTestApp, mockRedis, sqlMock } from './helpers.js';
 import { createTestDatabase } from './helpers/database.js';
 import {
   loadMockIssuer,
@@ -190,7 +194,34 @@ async function parentGrant(options: { limits?: Record<string, unknown> | null; e
   return { agent, passport, attestation, grantToken, grantId };
 }
 
-async function childExchange(parent: Parent, params: Record<string, string | string[]> = {}, form = true) {
+const TOKEN_ENDPOINT = () => `${config.publicBaseUrl.replace(/\/$/, '')}/v1/token`;
+
+/** A DPoP proof (RFC 9449 §4.2) for POST /v1/token, signed with the key. */
+async function dpopProof(key: Key, claims: Record<string, unknown> = {}): Promise<string> {
+  return new SignJWT({
+    htm: 'POST',
+    htu: TOKEN_ENDPOINT(),
+    jti: randomUUID(),
+    iat: Math.floor(Date.now() / 1000),
+    ...claims,
+  }).setProtectedHeader({ typ: 'dpop+jwt', alg: 'ES256', jwk: key.jwk }).sign(key.privateKey);
+}
+
+/**
+ * The exchange, with a fresh DPoP proof of the parent's key unless `proof`
+ * gives one (a string) or none (null).
+ */
+async function childExchange(
+  parent: Parent,
+  params: Record<string, string | string[]> = {},
+  form = true,
+  proof?: string | null,
+) {
+  const dpop = proof === undefined ? await dpopProof(parent.agent.key) : proof;
+  const headers: Record<string, string> = {
+    authorization: `Bearer ${parent.agent.tenant.apiKey}`,
+    ...(dpop !== null ? { dpop } : {}),
+  };
   const body: Record<string, string | string[]> = {
     grant_type: TOKEN_EXCHANGE,
     subject_token: parent.grantToken,
@@ -198,14 +229,14 @@ async function childExchange(parent: Parent, params: Record<string, string | str
     resource: MERCHANT,
     ...params,
   };
-  if (!form) return call(parent.agent.tenant, 'POST', '/v1/token', body);
+  if (!form) return app.inject({ method: 'POST', url: '/v1/token', remoteAddress: nextAddress(), headers, payload: body });
   const encoded = new URLSearchParams();
   for (const [name, value] of Object.entries(body)) {
     for (const item of Array.isArray(value) ? value : [value]) encoded.append(name, item);
   }
   return app.inject({
     method: 'POST', url: '/v1/token', remoteAddress: nextAddress(),
-    headers: { authorization: `Bearer ${parent.agent.tenant.apiKey}`, 'content-type': 'application/x-www-form-urlencoded' },
+    headers: { ...headers, 'content-type': 'application/x-www-form-urlencoded' },
     payload: encoded.toString(),
   });
 }
@@ -281,6 +312,14 @@ beforeEach(() => {
   vi.stubEnv(REGISTRY_DEV_ISSUER_ORIGIN_MAP_ENV, mockServer.originMapEntry);
   vi.stubEnv(FLAG, 'true');
   forwardSqlMock();
+  // The DPoP jti store (RFC 9449 §11.1): SET NX answers OK once per key.
+  const seen = new Set<string>();
+  mockRedis.set.mockImplementation(async (key: string, ...args: unknown[]) => {
+    if (!args.includes('NX')) return 'OK';
+    if (seen.has(key)) return null;
+    seen.add(key);
+    return 'OK';
+  });
 });
 
 afterEach(() => {
@@ -493,10 +532,127 @@ describePostgres('POST /v1/token with the token-exchange grant type (RFC 8693)',
     const stranger = await newTenant();
     const res = await app.inject({
       method: 'POST', url: '/v1/token', remoteAddress: nextAddress(),
-      headers: { authorization: `Bearer ${stranger.apiKey}` },
+      headers: { authorization: `Bearer ${stranger.apiKey}`, dpop: await dpopProof(parent.agent.key) },
       payload: { grant_type: TOKEN_EXCHANGE, subject_token: parent.grantToken, subject_token_type: ACCESS_TOKEN, resource: MERCHANT },
     });
     await expectRefused(res, 400, 'invalid_request');
+  });
+});
+
+describePostgres('proof of the bound key (RFC 9449)', () => {
+  async function expectProofRefused(res: Awaited<ReturnType<typeof childExchange>>, reason: string) {
+    expect(res.statusCode, res.body).toBe(400);
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.json<Record<string, unknown>>()).toMatchObject({ error: 'invalid_dpop_proof', code: 'invalid_dpop_proof', reason });
+  }
+
+  it('issues a child for a fresh proof signed with the parent\'s cnf.jkt key', async () => {
+    const parent = await parentGrant();
+    const proof = await dpopProof(parent.agent.key);
+    const res = await childExchange(parent, {}, true, proof);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(decodeJwt(res.json<{ access_token: string }>().access_token)['cnf']).toEqual({ jkt: parent.agent.key.thumbprint });
+    expect(await childCount(parent.grantId)).toBe(1);
+  });
+
+  it('refuses an exchange without a proof, and writes nothing', async () => {
+    const parent = await parentGrant();
+    await expectProofRefused(await childExchange(parent, {}, true, null), 'dpop_proof_missing');
+    await expectProofRefused(await childExchange(parent, {}, false, null), 'dpop_proof_missing');
+    expect(await childCount(parent.grantId)).toBe(0);
+  });
+
+  it('refuses a proof signed with another key: the developer credential and a copied parent token are not enough', async () => {
+    const parent = await parentGrant();
+    const stranger = await newKey();
+    await expectProofRefused(await childExchange(parent, {}, true, await dpopProof(stranger)), 'dpop_key_mismatch');
+    // Another agent's proven key of the same developer is refused as well.
+    const sibling = await newAgent(parent.agent.tenant);
+    await expectProofRefused(await childExchange(parent, {}, true, await dpopProof(sibling.key)), 'dpop_key_mismatch');
+    expect(await childCount(parent.grantId)).toBe(0);
+  });
+
+  it('refuses a replayed proof', async () => {
+    const parent = await parentGrant();
+    const proof = await dpopProof(parent.agent.key);
+    const first = await childExchange(parent, {}, true, proof);
+    expect(first.statusCode, first.body).toBe(200);
+    await expectProofRefused(await childExchange(parent, { resource: OTHER_MERCHANT }, true, proof), 'dpop_proof_replayed');
+    expect(await childCount(parent.grantId)).toBe(1);
+  });
+
+  it('refuses a proof for another method or another URI, or a stale one', async () => {
+    const parent = await parentGrant();
+    for (const [claims, reason] of [
+      [{ htm: 'GET' }, 'dpop_htm_mismatch'],
+      [{ htu: TOKEN_ENDPOINT().replace(/\/v1\/token$/, '/oauth/token') }, 'dpop_htu_mismatch'],
+      [{ htu: 'https://elsewhere.example/v1/token' }, 'dpop_htu_mismatch'],
+      [{ iat: Math.floor(Date.now() / 1000) - 3600 }, 'dpop_proof_stale'],
+    ] as const) {
+      await expectProofRefused(await childExchange(parent, {}, true, await dpopProof(parent.agent.key, claims)), reason);
+    }
+    expect(await childCount(parent.grantId)).toBe(0);
+  });
+});
+
+describePostgres('token exchange metrics', () => {
+  it('counts a child exchange as a success and times it', async () => {
+    const parent = await parentGrant();
+    // prom-client is mocked (tests/setup.ts): inc and the timer are spies.
+    const endTimer = vi.fn();
+    vi.mocked(tokenExchangeDuration.startTimer).mockReturnValueOnce(endTimer as never);
+    vi.mocked(tokenExchangeTotal.inc).mockClear();
+    const res = await childExchange(parent);
+    expect(res.statusCode, res.body).toBe(200);
+    // The mocked counters share one inc: keep the calls with a status label.
+    expect(statusCalls()).toEqual([{ status: 'success' }]);
+    expect(endTimer).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts a refused child exchange as failed and times it', async () => {
+    const parent = await parentGrant();
+    const endTimer = vi.fn();
+    vi.mocked(tokenExchangeDuration.startTimer).mockReturnValueOnce(endTimer as never);
+    vi.mocked(tokenExchangeTotal.inc).mockClear();
+    await expectRefused(await childExchange(parent, { resource: 'https://elsewhere.example' }), 400, 'audience_mismatch');
+    // The mocked counters share one inc: keep the calls with a status label.
+    expect(statusCalls()).toEqual([{ status: 'failed' }]);
+    expect(endTimer).toHaveBeenCalledTimes(1);
+  });
+});
+
+describePostgres('the constraints on the consent view (§6)', () => {
+  it('GET /v1/consent/{id} shows allowed_merchants, amount_range and budget before the decision', async () => {
+    const agent = await newAgent();
+    // A live developer: its requests wait for the Principal's consent.
+    await sql`UPDATE developers SET mode = 'live' WHERE id = ${agent.tenant.id}`;
+    const passport = mockPassport(agent);
+    await postAttestation(mockIssuer.buildAttestation({ attestationId: passport.attestationId }));
+    const authorized = await authorize(agent, passport.compact, { authorization_details: commerceEntry(PARENT_LIMITS) });
+    expect(authorized.statusCode, authorized.body).toBe(201);
+    const { authRequestId } = authorized.json<{ authRequestId: string }>();
+    const consent = await app.inject({ method: 'GET', url: `/v1/consent/${authRequestId}`, remoteAddress: nextAddress() });
+    expect(consent.statusCode, consent.body).toBe(200);
+    const view = consent.json<Record<string, unknown>>();
+    expect(view['agentPassport']).toBeDefined();
+    expect(view['commerceConstraints']).toEqual({
+      allowedMerchants: [MERCHANT, OTHER_MERCHANT],
+      amountRange: { currency: 'EUR', max: '250.00' },
+      budget: { amount: '500.00', currency: 'EUR' },
+    });
+
+    const none = await authorize(agent, passport.compact);
+    expect(none.statusCode, none.body).toBe(201);
+    const noneView = await app.inject({
+      method: 'GET', url: `/v1/consent/${none.json<{ authRequestId: string }>().authRequestId}`, remoteAddress: nextAddress(),
+    });
+    expect(noneView.statusCode, noneView.body).toBe(200);
+    expect(noneView.json<Record<string, unknown>>()).not.toHaveProperty('commerceConstraints');
+
+    vi.stubEnv(FLAG, 'false');
+    const off = await app.inject({ method: 'GET', url: `/v1/consent/${authRequestId}`, remoteAddress: nextAddress() });
+    expect(off.statusCode, off.body).toBe(200);
+    expect(off.json<Record<string, unknown>>()).not.toHaveProperty('commerceConstraints');
   });
 });
 
@@ -685,3 +841,9 @@ describePostgres('PASSPORT_BOUND_GRANTS_ENABLED off', () => {
     expect(res.statusCode, res.body).toBe(201);
   });
 });
+
+function statusCalls(): unknown[] {
+  return vi.mocked(tokenExchangeTotal.inc).mock.calls
+    .map((call) => call[0] as unknown)
+    .filter((labels) => typeof labels === 'object' && labels !== null && 'status' in labels);
+}

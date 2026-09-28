@@ -177,13 +177,52 @@ components:
         type: string
         pattern: "^[A-Za-z0-9_-]{43}$"
       description: RFC 7638 JWK Thumbprint (SHA-256, base64url) of the agent key
+    DpopHeader:
+      name: DPoP
+      in: header
+      required: false
+      schema:
+        type: string
+      description: >-
+        A DPoP proof JWT (RFC 9449 section 4.2). Required for a token exchange on
+        `POST /v1/token` (PASSPORT_BOUND_GRANTS_ENABLED=true): `typ` `dpop+jwt`, the public
+        `jwk` in its header, `htm` `POST`, `htu` `<PUBLIC_BASE_URL>/v1/token`, `iat` within the
+        last 300 seconds, and a `jti` not used before. Its key's RFC 7638 thumbprint must equal
+        the subject token's `cnf.jkt` (spec/passport-binding.md section 8.2). Otherwise refused
+        `400 invalid_dpop_proof`. Ignored by a code exchange.
   schemas:
+    CodeExchangeRequest:
+      type: object
+      description: Exchange an authorization code for a grant token.
+      properties:
+        code:
+          type: string
+          description: Authorization code from consent approval
+        agentId:
+          type: string
+        codeVerifier:
+          type: string
+          description: PKCE code verifier (required if code_challenge was used)
+        redirectUri:
+          type: string
+          description: Required, and must match exactly, when the authorization request named one.
+        credentialFormat:
+          type: string
+          enum: [jwt, vc-jwt, sd-jwt, both, agent-passport]
+          description: |
+            With "vc-jwt" or "both", a VC-JWT is requested alongside the grant token.
+            Issuance is atomic when portable WebAuthn evidence is enabled or already present.
+            With PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true, passkey-approved requests
+            carry verified WebAuthn evidence in the VC array.
+            The grant token carries a signed digest reference, not the raw assertion.
+      required: [code, agentId]
     ChildGrantExchangeRequest:
       type: object
       description: >-
         RFC 8693 section 2.1 token exchange for a per-merchant child grant
         (spec/passport-binding.md section 8.2). Also accepted as the members of a JSON
-        object, where `authorization_details` may be the array itself.
+        object, where `authorization_details` may be the array itself. The request carries a
+        `DPoP` header (RFC 9449) signed with the key the subject token is bound to.
       required: [grant_type, subject_token, subject_token_type]
       properties:
         grant_type:
@@ -211,11 +250,18 @@ components:
           type: string
           description: A subset of the parent's scopes, space-delimited. Default, the parent's.
         authorization_details:
-          type: string
           description: >-
             JSON array with one `urn:grantex:commerce:v1` entry asking for narrower
-            `amount_range` or `budget` (RFC 9396 section 6). Wider is refused
+            `amount_range` or `budget` (RFC 9396 section 6): a JSON string in a form body, the
+            string or the array itself in a JSON body. Wider is refused
             `invalid_authorization_details`.
+          oneOf:
+            - type: string
+            - type: array
+              maxItems: 1
+              items:
+                type: object
+                additionalProperties: true
     ChildGrantExchangeResponse:
       type: object
       required: [access_token, issued_token_type, token_type, expires_in, scope]
@@ -3406,6 +3452,44 @@ paths:
                       softwareVersion:
                         type: string
                         nullable: true
+                  commerceConstraints:
+                    type: object
+                    description: >-
+                      Present, with PASSPORT_BOUND_GRANTS_ENABLED=true, when the request's
+                      `authorization_details` named commerce constraints: where the grant may be
+                      used and how much it may spend, shown before the Principal decides
+                      (spec/passport-binding.md sections 6 and 8.1).
+                    required: [allowedMerchants]
+                    properties:
+                      allowedMerchants:
+                        type: array
+                        items:
+                          type: string
+                          format: uri
+                        example: ["https://merchant.example", "https://shop.merchant.example"]
+                      amountRange:
+                        type: object
+                        required: [currency, max]
+                        properties:
+                          currency:
+                            type: string
+                            example: EUR
+                          min:
+                            type: string
+                            example: "1.00"
+                          max:
+                            type: string
+                            example: "250.00"
+                      budget:
+                        type: object
+                        required: [amount, currency]
+                        properties:
+                          amount:
+                            type: string
+                            example: "500.00"
+                          currency:
+                            type: string
+                            example: EUR
         "404":
           description: Request not found
           content:
@@ -3506,38 +3590,24 @@ paths:
         `urn:ietf:params:oauth:grant-type:token-exchange` is an RFC 8693 token exchange for a
         per-merchant child grant of a passport-bound grant (spec/passport-binding.md section 8),
         taken form-encoded or as JSON and answered `200` with the RFC 8693 section 2.2.1
-        response. Off, such a request is answered as a code exchange without a code (`400`), and
-        a form-encoded body `415`, as before.
+        response. A token exchange requires a `DPoP` header (RFC 9449) signed with the key the
+        subject token is bound to (`cnf.jkt`). Off, such a request is answered as a code exchange
+        without a code (`400`), and a form-encoded body `415`, as before.
 
         **Rate limit: 20 requests/minute.**
       x-rateLimit:
         limit: 20
         period: minute
+      parameters:
+        - $ref: "#/components/parameters/DpopHeader"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                code:
-                  type: string
-                  description: Authorization code from consent approval
-                agentId:
-                  type: string
-                codeVerifier:
-                  type: string
-                  description: PKCE code verifier (required if code_challenge was used)
-                credentialFormat:
-                  type: string
-                  enum: [jwt, vc-jwt, sd-jwt, both, agent-passport]
-                  description: |
-                    With "vc-jwt" or "both", a VC-JWT is requested alongside the grant token.
-                    Issuance is atomic when portable WebAuthn evidence is enabled or already present.
-                    With PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true, passkey-approved requests
-                    carry verified WebAuthn evidence in the VC array.
-                    The grant token carries a signed digest reference, not the raw assertion.
-              required: [code, agentId]
+              oneOf:
+                - $ref: "#/components/schemas/CodeExchangeRequest"
+                - $ref: "#/components/schemas/ChildGrantExchangeRequest"
           application/x-www-form-urlencoded:
             schema:
               $ref: "#/components/schemas/ChildGrantExchangeRequest"
@@ -3585,7 +3655,10 @@ paths:
             Invalid code, not approved, expired, PKCE mismatch, or PASSKEY_EVIDENCE_REQUIRED after
             portable-evidence activation. A token exchange is refused with an RFC 6749 section 5.2
             error response (RFC 8693 section 2.2.2), always 400: `error` is `invalid_request`,
-            `invalid_target`, `invalid_scope` or `invalid_authorization_details`, and `code` is
+            `invalid_target`, `invalid_scope`, `invalid_authorization_details` or
+            `invalid_dpop_proof` (RFC 9449 section 5: the `DPoP` proof is missing, invalid, for
+            another method or URI, stale, replayed, or not signed with the subject token's
+            `cnf.jkt` key; `reason` says which), and `code` is
             `audience_mismatch` (the merchant is not one of the parent's `allowed_merchants`), a
             PRD Appendix C code of the binding recheck (`passport_revoked`, `passport_expired`,
             `key_not_active`, ...), or else the `error`.

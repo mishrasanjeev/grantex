@@ -17,6 +17,7 @@ import {
   attenuateConstraints,
   parseAuthorizeCommerceDetails,
   parseTokenExchangeRequest,
+  requireProofOfBoundKey,
 } from '../src/lib/registry/child-grant.js';
 import { commerceAuthorizationDetail, parseStoredBinding } from '../src/lib/registry/passport-binding.js';
 
@@ -69,6 +70,23 @@ describe('spec/passport-binding.md §8 examples', () => {
     expect(commerceAuthorizationDetail(binding, child)).toEqual(example('child-commerce-detail'));
   });
 
+  it('the DPoP header of the exchange request and its refusal reasons', () => {
+    const section = SPEC.slice(SPEC.indexOf('### 8.2 The exchange'), SPEC.indexOf('### 8.3'));
+    expect(section).toContain('`DPoP` header');
+    for (const reason of ['dpop_proof_missing', 'dpop_proof_invalid', 'dpop_htm_mismatch', 'dpop_htu_mismatch',
+      'dpop_proof_stale', 'dpop_proof_replayed', 'dpop_replay_unavailable', 'dpop_key_mismatch']) {
+      expect(section, reason).toContain(`\`${reason}\``);
+    }
+  });
+
+  it('the consent view of the constraints (§6)', () => {
+    expect(example('consent-commerce-constraints')).toEqual({
+      allowedMerchants: parent.allowed_merchants,
+      amountRange: parent.amount_range,
+      budget: parent.budget,
+    });
+  });
+
   it('the exchange response', () => {
     const response = example('exchange-response') as Record<string, unknown>;
     expect(response).toMatchObject({ issued_token_type: ACCESS_TOKEN_TYPE, token_type: 'DPoP', scope: 'read' });
@@ -90,6 +108,7 @@ describe('spec/passport-binding.md §8 examples', () => {
       invalid_authorization_details: refusalOf(() => attenuateConstraints(parent, merchant,
         [{ type: 'urn:grantex:commerce:v1', budget: { amount: '999.00', currency: 'EUR' } }])),
       audience_mismatch: refusalOf(() => attenuateConstraints(parent, 'https://elsewhere.example', undefined)),
+      invalid_dpop_proof: refusalOf(() => requireProofOfBoundKey('another-key-thumbprint', binding.key_thumbprint)),
     };
     // status_stale is the binding recheck's, mapped by the route; the
     // Postgres suite answers it (503, invalid_request) end to end.

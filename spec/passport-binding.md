@@ -242,6 +242,24 @@ was checked; `verificationLevel` the issuer's level from the attestation,
 verbatim; `issuers` the passport's issuer and the issuers of the attestations
 the level counts; `declaredLimits` the attestation's.
 
+With the flag on, a request whose `authorization_details` named commerce
+constraints (§8.1) also returns them, next to `agentPassport`, as
+`commerceConstraints`, and the consent page shows them (the merchants, the
+amount per payment and the total budget) before the Principal decides:
+
+<!-- example: consent-commerce-constraints -->
+```json
+{
+  "allowedMerchants": ["https://merchant.example", "https://shop.merchant.example"],
+  "amountRange": { "currency": "EUR", "max": "250.00" },
+  "budget": { "amount": "500.00", "currency": "EUR" }
+}
+```
+
+`allowedMerchants` is always present; `amountRange` and `budget` only when
+the request named them. A request without commerce constraints, or any
+request with the flag off, has no `commerceConstraints`.
+
 ## 7. Configuration
 
 | Variable | Default | Meaning |
@@ -301,8 +319,9 @@ merchant: it cannot be exchanged for a child (`audience_mismatch`).
 
 `POST /v1/token`, authenticated by the developer's API key, with the RFC 8693
 §2.1 parameters, form-encoded (RFC 6749 Appendix B) or as the members of a
-JSON object. In a form body `authorization_details` is a JSON string; a JSON
-body may carry the array itself:
+JSON object, and a `DPoP` header (RFC 9449 §4) proving possession of the key
+the parent is bound to. In a form body `authorization_details` is a JSON
+string; a JSON body may carry the array itself:
 
 <!-- example: exchange-request -->
 ```json
@@ -329,6 +348,14 @@ body may carry the array itself:
 | `authorization_details` | Optional; one `urn:grantex:commerce:v1` entry asking for narrower constraints (RFC 9396 §6). |
 | `actor_token`, `actor_token_type` | Not accepted (`invalid_request`): a child is for the same agent; see §8.6. |
 
+| Header | Rule |
+|---|---|
+| `DPoP` | Required. One DPoP proof JWT (RFC 9449 §4.2): `typ` `dpop+jwt`, an asymmetric `alg`, the public `jwk` in its header; `htm` `POST`; `htu` this endpoint, `<PUBLIC_BASE_URL>/v1/token`; `iat` within the last 300 seconds (30 seconds of clock skew); a `jti` not used before with the same key (the registry records it for 330 seconds, §11.1). Its key's thumbprint (RFC 7638) must equal the subject token's `cnf.jkt`, which is the passport's key. |
+
+The API key says which developer asks; the proof says the agent holding the
+passport's key asks. Neither the developer's credential nor a copy of the
+parent token is enough without the other.
+
 A form body is taken on this route only for the token exchange, and only with
 the flag on; a form-encoded code exchange is `415`, as before. With the flag
 off a token exchange is answered as a code exchange without a code (`400
@@ -336,18 +363,26 @@ BAD_REQUEST`), and a form body `415`, exactly as before.
 
 The registry then, in this order:
 
-1. verifies the subject token and its developer, and that neither it nor its
-   grant is revoked or expired (`invalid_request`);
-2. requires the grant to be passport-bound, and the subject token not to be a
-   child (`invalid_request`);
-3. applies an emergency stop's lockout (`ISSUANCE_FROZEN`);
-4. checks the binding again exactly as the code exchange and the refresh do
+1. verifies the DPoP proof: present, well formed, signed, for `POST` at this
+   endpoint, fresh, and not replayed (`invalid_dpop_proof`), before the
+   subject token is read;
+2. verifies the subject token and its developer, and that neither it nor its
+   grant is revoked or expired (`invalid_request`), and that the proof's key
+   is the one its `cnf.jkt` names (`invalid_dpop_proof`);
+3. requires the grant to be passport-bound, and the subject token not to be a
+   child (`invalid_request`), and the proof's key to be the binding's;
+4. applies an emergency stop's lockout (`ISSUANCE_FROZEN`);
+5. checks the binding again exactly as the code exchange and the refresh do
    (§5), both status sources included, and refuses with that table's codes
    when the passport, its attestation or its issuer is revoked, suspended or
    expired, or the key is no longer usable;
-5. requires the merchant to equal one of the parent's `allowed_merchants`
+6. requires the merchant to equal one of the parent's `allowed_merchants`
    (`audience_mismatch`, decision 3);
-6. attenuates the constraints (§8.3) and the scope.
+7. attenuates the constraints (§8.3) and the scope.
+
+Nothing is recorded for a refused request. A refused proof is answered
+before the subject token is read; a replayed proof is refused even when the
+first request that carried it succeeded.
 
 Refusals are RFC 6749 §5.2 error responses (RFC 8693 §2.2.2), with
 `Cache-Control: no-store`, `error`, `error_description`, and `code` (the PRD
@@ -360,8 +395,19 @@ Appendix C code where one applies, else `error`) and `reason`:
 | `invalid_scope` | 400 | `invalid_scope` |
 | `invalid_authorization_details` | 400 | `invalid_authorization_details` |
 | `audience_mismatch` | 400 | `invalid_target` |
+| `invalid_dpop_proof` | 400 | `invalid_dpop_proof` |
 | a code of §5 | 400 | `invalid_request` |
 | `status_stale` | 503 | `invalid_request` |
+
+`invalid_dpop_proof` is RFC 9449 §5's error code for a token request whose
+proof is refused. Its `reason` says why: `dpop_proof_missing` (no `DPoP`
+header), `dpop_proof_invalid` (not a proof JWT, a bad signature, an
+unsupported `alg` or `jwk`, or a missing `jti` or `iat`),
+`dpop_htm_mismatch`, `dpop_htu_mismatch`, `dpop_proof_stale` (`iat` outside
+the window), `dpop_proof_replayed` (its `jti` was used before),
+`dpop_replay_unavailable` (the replay store cannot be reached: the request is
+refused rather than let through), or `dpop_key_mismatch` (the proof is not
+signed with the subject token's `cnf.jkt` key).
 
 Every refusal is `400`, as RFC 6749 §5.2 specifies for an error response
 unless otherwise stated, and not the `403` of §4: the token endpoint answers

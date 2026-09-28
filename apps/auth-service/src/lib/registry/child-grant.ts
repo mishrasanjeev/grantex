@@ -21,7 +21,10 @@
  *     for must lie within the parent's. Anything wider is refused with
  *     `invalid_authorization_details` (RFC 9396 §6: the AS refuses a token
  *     request whose authorization details the grant does not allow);
- *   - `scope` is a subset of the parent's (`invalid_scope`, RFC 6749 §5.2).
+ *   - `scope` is a subset of the parent's (`invalid_scope`, RFC 6749 §5.2);
+ *   - the request carries a DPoP proof (RFC 9449 §4) signed with the key the
+ *     subject token is bound to (its `cnf.jkt`): the developer's API key and
+ *     a copy of the parent token are not enough (`invalid_dpop_proof`).
  *
  * This module holds the parts that need no database: reading the request and
  * the constraints, the attenuation and the lifetime. The route (token.ts)
@@ -68,7 +71,8 @@ export type ChildGrantErrorName =
   | 'invalid_request'
   | 'invalid_target'
   | 'invalid_scope'
-  | 'invalid_authorization_details';
+  | 'invalid_authorization_details'
+  | 'invalid_dpop_proof';
 
 /**
  * A refusal of a child grant request. `error` is the OAuth error code
@@ -342,6 +346,19 @@ function narrowBudget(parent: CommerceBudget | undefined, requested: CommerceBud
   if (requested.currency !== parent.currency) invalidDetails('wider_budget', 'budget.currency must be the parent grant\'s');
   if (scaled(requested.amount)! > scaled(parent.amount)!) invalidDetails('wider_budget', 'budget.amount exceeds the parent grant\'s');
   return requested;
+}
+
+/**
+ * RFC 9449 §4.3, and §6.1 for a bound subject: the proof's key must be the
+ * one the subject token is bound to (cnf.jkt). A subject without cnf.jkt is
+ * refused as well: there is no key to prove. Throws ChildGrantError
+ * (invalid_dpop_proof).
+ */
+export function requireProofOfBoundKey(proofThumbprint: string, boundThumbprint: string | undefined): void {
+  if (boundThumbprint === undefined || proofThumbprint !== boundThumbprint) {
+    refuse('invalid_dpop_proof', 'dpop_key_mismatch',
+      'The DPoP proof is not signed with the key the subject token is bound to (cnf.jkt)');
+  }
 }
 
 /**

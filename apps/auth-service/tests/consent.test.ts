@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { buildTestApp, sqlMock } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -432,5 +432,66 @@ describe('POST /v1/consent/:id/deny', () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.json<{ code: string }>().code).toBe('PRINCIPAL_VERIFICATION_REQUIRED');
+  });
+});
+
+describe('GET /v1/consent/:id commerce constraints (spec/passport-binding.md §6)', () => {
+  const CONSENT_VIEW = {
+    trust_level: 'attested',
+    verification_level: 'substantial',
+    issuers: ['https://issuer.example'],
+    software_name: 'Nimbus Shopper',
+    software_version: '2.4',
+  };
+  const COMMERCE = {
+    allowed_merchants: ['https://merchant.example', 'https://shop.merchant.example'],
+    amount_range: { currency: 'EUR', min: '1.00', max: '250.00' },
+    budget: { amount: '500.00', currency: 'EUR' },
+  };
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  async function view(binding: unknown) {
+    sqlMock.mockResolvedValueOnce([{ ...TEST_CONSENT_ROW, passport_binding: binding }]);
+    const res = await app.inject({ method: 'GET', url: '/v1/consent/areq_TEST01' });
+    expect(res.statusCode, res.body).toBe(200);
+    return res.json<Record<string, unknown>>();
+  }
+
+  it('shows the merchants, the amount range and the budget next to agentPassport, with the flag on', async () => {
+    vi.stubEnv('PASSPORT_BOUND_GRANTS_ENABLED', 'true');
+    const body = await view({ consent: CONSENT_VIEW, commerce: COMMERCE });
+    expect(body['agentPassport']).toMatchObject({ trustLevel: 'attested' });
+    expect(body['commerceConstraints']).toEqual({
+      allowedMerchants: ['https://merchant.example', 'https://shop.merchant.example'],
+      amountRange: { currency: 'EUR', min: '1.00', max: '250.00' },
+      budget: { amount: '500.00', currency: 'EUR' },
+    });
+    // Only the members the request named.
+    const only = await view({ consent: CONSENT_VIEW, commerce: { allowed_merchants: ['https://merchant.example'] } });
+    expect(only['commerceConstraints']).toEqual({ allowedMerchants: ['https://merchant.example'] });
+  });
+
+  it('is absent when the request named none, and with the flag off', async () => {
+    vi.stubEnv('PASSPORT_BOUND_GRANTS_ENABLED', 'true');
+    expect(await view({ consent: CONSENT_VIEW })).not.toHaveProperty('commerceConstraints');
+    expect(await view(null)).not.toHaveProperty('commerceConstraints');
+    vi.stubEnv('PASSPORT_BOUND_GRANTS_ENABLED', 'false');
+    expect(await view({ consent: CONSENT_VIEW, commerce: COMMERCE })).not.toHaveProperty('commerceConstraints');
+  });
+
+  it('the consent page renders them, escaped, where it renders the agent passport', async () => {
+    const res = await app.inject({ method: 'GET', url: '/consent?req=areq_TEST01' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('data.commerceConstraints');
+    expect(res.body).toContain('id="commerce-constraints"');
+    expect(res.body).toContain('Allowed merchants');
+    expect(res.body).toContain('Amount per payment');
+    expect(res.body).toContain('Total budget');
+    expect(res.body).toMatch(/esc\(\(data\.commerceConstraints\.allowedMerchants/);
+    // Shown before the decision buttons.
+    expect(res.body.indexOf('id="commerce-constraints"')).toBeLessThan(res.body.indexOf('<div class="actions">'));
   });
 });

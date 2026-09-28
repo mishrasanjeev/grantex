@@ -33,6 +33,7 @@ import {
   issueForCommittedGrant,
 } from '../lib/revocation/issuance-freeze.js';
 import { createHash, timingSafeEqual } from 'node:crypto';
+import { DpopError, verifyDpopProof, type VerifiedDpopProof } from '../lib/dpop.js';
 import {
   BoundIssuerStatusStale,
   PassportBindingError,
@@ -61,6 +62,7 @@ import {
   constraintMembers,
   parseStoredConstraints,
   parseTokenExchangeRequest,
+  requireProofOfBoundKey,
   type CommerceConstraints,
   type TokenExchangeRequest,
 } from '../lib/registry/child-grant.js';
@@ -227,7 +229,17 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     // exchange is answered as it always was: a code exchange without a code.
     if (config.passportBoundGrantsEnabled && typeof body === 'object' && body !== null && !Array.isArray(body)
         && (body as unknown as Record<string, unknown>)['grant_type'] === TOKEN_EXCHANGE_GRANT_TYPE) {
-      return exchangeChildGrant(request, reply, body as unknown as Record<string, unknown>);
+      // Counted and timed as the code exchange is: success, or failed for
+      // any refusal or error.
+      let status: 'success' | 'failed' = 'failed';
+      try {
+        const sent = await exchangeChildGrant(request, reply, body as unknown as Record<string, unknown>);
+        if (reply.statusCode === 200) status = 'success';
+        return sent;
+      } finally {
+        tokenExchangeTotal.inc({ status });
+        endTimer();
+      }
     }
     // Only a token exchange is taken form-encoded; a code exchange stays JSON.
     if (isFormRequest(request)) throw new errorCodes.FST_ERR_CTP_INVALID_MEDIA_TYPE(request.headers['content-type']);
@@ -1029,6 +1041,25 @@ function sendChildGrantRefusal(reply: FastifyReply, requestId: string, refusal: 
   });
 }
 
+/**
+ * The DPoP proof (RFC 9449 §4) of a token exchange: one header, signed,
+ * for POST at this endpoint, fresh, and not seen before (its jti is recorded
+ * in the replay store, §11.1). The key is compared with the subject token's
+ * cnf.jkt by the caller. Throws ChildGrantError (invalid_dpop_proof).
+ */
+async function verifyExchangeProof(request: FastifyRequest): Promise<VerifiedDpopProof> {
+  const header = request.headers['dpop'];
+  try {
+    return await verifyDpopProof(typeof header === 'string' ? header : undefined, {
+      method: 'POST',
+      targetUri: `${config.publicBaseUrl.replace(/\/$/, '')}/v1/token`,
+    });
+  } catch (err) {
+    if (err instanceof DpopError) throw new ChildGrantError('invalid_dpop_proof', err.reason, err.message);
+    throw err;
+  }
+}
+
 function subjectRefused(reason: string, message: string): never {
   throw new ChildGrantError('invalid_request', reason, message);
 }
@@ -1040,11 +1071,12 @@ function subjectRefused(reason: string, message: string): never {
  *
  * The client is the developer the API key authenticates (RFC 8693 §2.1
  * leaves client authentication to the deployment); the subject token must be
- * one of its grants' tokens. The child is a token of the parent grant, with a
- * fresh jti, recorded in grant_tokens against the parent grant (so revoking
- * the grant revokes it, and a budget debit made with its grant id lands on
- * the parent's allocation) and in grant_child_tokens (so revoking the subject
- * token revokes it too). Every refusal is an RFC 6749 §5.2 error response
+ * one of its grants' tokens, and the request must carry a DPoP proof (RFC
+ * 9449) signed with the key the subject token is bound to. The child is a
+ * token of the parent grant, with a fresh jti, recorded in grant_tokens
+ * against the parent grant (so revoking the grant revokes it, and a budget
+ * debit made with its grant id lands on the parent's allocation) and in
+ * grant_child_tokens (so revoking the subject token revokes it too). Every refusal is an RFC 6749 §5.2 error response
  * with the PRD Appendix C code where one applies; every check fails closed.
  */
 async function exchangeChildGrant(request: FastifyRequest, reply: FastifyReply, body: Record<string, unknown>) {
@@ -1064,6 +1096,9 @@ async function exchangeChildGrant(request: FastifyRequest, reply: FastifyReply, 
   const childJti = newTokenId();
   try {
     exchange = parseTokenExchangeRequest(body);
+    // Proof of possession of the bound key, before the subject is read: the
+    // developer's credential and a copied parent token do not suffice.
+    const proof = await verifyExchangeProof(request);
 
     // Signature, claims, the developer, and the token's and grant's
     // revocation state (Redis and the database); any doubt is a refusal.
@@ -1078,6 +1113,9 @@ async function exchangeChildGrant(request: FastifyRequest, reply: FastifyReply, 
       subjectRefused(`subject_token_${reason}`, `The subject token is ${reason === 'invalid' ? 'not a grant token of this developer' : reason}`);
     }
     const claims = checked.claims;
+    // A bound subject carries cnf.jkt; one that does not is refused below as
+    // not passport-bound, and the proof is compared with the binding there.
+    if (claims.cnf?.jkt !== undefined) requireProofOfBoundKey(proof.thumbprint, claims.cnf.jkt);
     if (claims.parentJti !== undefined) {
       subjectRefused('subject_is_child', 'A child grant is not exchanged again: exchange the parent grant token');
     }
@@ -1148,6 +1186,8 @@ async function exchangeChildGrant(request: FastifyRequest, reply: FastifyReply, 
       if (row['agent_key_thumbprint'] !== binding.key_thumbprint || claims.cnf?.jkt !== binding.key_thumbprint) {
         throw new ChildGrantInternalError('Invalid grant passport binding');
       }
+      // RFC 9449: the request is signed by the passport's key.
+      requireProofOfBoundKey(proof.thumbprint, binding.key_thumbprint);
 
       // An emergency stop's lockout over the grant, its agent or principal.
       await assertIssuanceOpen(tx, {
