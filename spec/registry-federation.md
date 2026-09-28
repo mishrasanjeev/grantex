@@ -1,4 +1,4 @@
-# Registry issuers and trust marks
+# Registry federation: issuers, trust marks and acceptance status
 
 Status: draft, Agent Trust Registry Phase 1. Sections 1 to 5 are implemented
 by the auth service (`apps/auth-service`: `routes/registry-issuers.ts`,
@@ -155,9 +155,7 @@ are signed Trust Mark JWTs whose `trust_mark_type` claim (OpenID Federation
 an Entity Identifier, Phase 1 records carry over unchanged. Until Phase 2
 ships, relying parties MUST use the public list of section 2.1 and MUST NOT
 expect Federation endpoints.
-# Registry federation
-
-## Attestation acceptance status lists
+## 7. Attestation acceptance status lists
 
 Status: draft. Implemented by the auth service (`apps/auth-service`,
 `src/lib/registry/acceptance-status.ts`, `src/routes/registry-status.ts`,
