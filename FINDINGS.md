@@ -1744,3 +1744,32 @@ the pull request that references it.
   routes, and an operator route to suspend and reinstate a provider that
   also rewrites the stored level. Owner: registry maintainers. Exit
   criterion: each column is written by a route with tests.
+
+## G-120 — The acceptance status list docs test fails on a CRLF checkout
+
+- **Found:** running the auth-service suite on a Windows checkout
+  (`core.autocrlf=true`) while adding the registry lookup, 2026-09-28.
+- **What:** `apps/auth-service/tests/registry-acceptance-docs.test.ts` reads
+  `spec/registry-federation.md` without normalising line endings, and its
+  example pattern expects `\n` after each fenced opening. On a checkout with
+  CRLF line endings no example matches, and both of its tests fail with
+  "has no example tsl-header" / "bsl-header". The other docs tests (for
+  example `registry-attestations-docs.test.ts`) replace `\r\n` first.
+- **Impact:** the suite is red on Windows working trees for a reason that
+  has nothing to do with the code; CI on Linux is unaffected.
+- **Proposal:** normalise `\r\n` to `\n` when reading the spec, as the other
+  docs tests do. Owner: registry maintainers. Exit criterion: the test passes
+  on a CRLF checkout.
+
+## G-124 — Two RFC 7638 property tests time out under the full suite
+
+- **Found:** running the whole auth-service suite (`maxWorkers: 2`) on a
+  loaded Windows host, 2026-09-28.
+- **What:** in `tests/jwk-thumbprint.test.ts`, "never changes with member
+  order or with extra members (property)" and "changes when any required
+  member changes (property)" took 14 and 18 seconds against the 10-second
+  `testTimeout` and failed; they pass when the file runs alone.
+- **Impact:** an intermittent red run unrelated to the change under test.
+- **Proposal:** give the two property tests an explicit timeout sized for a
+  loaded runner, or reduce their iteration count. Owner: registry
+  maintainers. Exit criterion: the full suite passes them on a loaded runner.

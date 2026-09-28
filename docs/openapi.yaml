@@ -293,6 +293,56 @@ components:
               revoked_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    RegistryAgentLookup:
+      type: object
+      description: |
+        spec/registry-federation.md, "Agent lookup". Members marked authenticated are present only
+        for a request with a valid developer API key.
+      required: [agent_did, level, flags, issuers, attestations, keys, cimd_uri]
+      properties:
+        agent_did: { type: string }
+        level: { type: string, enum: [basic, verified, attested, attested_verified] }
+        flags:
+          type: array
+          items: { type: string, enum: [key_compromised, attestation_expiring, issuer_suspended, declared_limits_changed, provider_screening_hit, ownership_unresolved, security_review_failed] }
+        issuers: { type: array, items: { type: string }, description: entity_id of each issuer of a counted attestation }
+        attestations:
+          type: array
+          items:
+            type: object
+            required: [type, issuer, expires_at]
+            properties:
+              type: { type: string }
+              issuer: { type: string }
+              expires_at: { type: string, format: date-time }
+              id: { type: string, description: Authenticated only }
+              issuer_status_list:
+                type: object
+                description: Authenticated only
+                properties: { uri: { type: string }, idx: { type: integer } }
+              acceptance_status_list:
+                type: object
+                description: Authenticated only
+                properties: { uri: { type: string }, idx: { type: integer } }
+        keys:
+          type: array
+          items:
+            type: object
+            properties:
+              thumbprint: { type: string }
+              status: { type: string, enum: [pending, active, rotated, compromised] }
+              current: { type: boolean, description: "Usable now: active, or rotated within its overlap, and proven" }
+        cimd_uri: { type: [string, "null"] }
+        key_thumbprint: { type: string, description: Thumbprint lookup only }
+        key_status: { type: string, enum: [pending, active, rotated, compromised], description: Thumbprint lookup only }
+        key_current: { type: boolean, description: Thumbprint lookup only }
+        provider:
+          type: [object, "null"]
+          description: Authenticated only
+          properties:
+            did: { type: string }
+            name: { type: [string, "null"] }
+            legal_identifiers: { type: array, items: { type: object } }
     PublicAccreditedIssuer:
       type: object
       description: The minimised public record.
@@ -1894,6 +1944,37 @@ paths:
           description: Not one of the registry's lists
         "429":
           description: Too many requests from this client
+  /.well-known/agent-registry.json:
+    get:
+      operationId: getRegistryManifest
+      tags: [Registry Status]
+      summary: The signed registry manifest
+      description: |
+        A compact JWS (RFC 7515 §7.1), `typ` `grantex-registry-manifest+jwt`, signed with the
+        platform signing key published at `/.well-known/jwks.json`: `iss`, `iat`, `exp` (`iat` +
+        1 h), every accredited issuer (entity_id, trust_marks, status in effect, status_list_base,
+        jwks without revoked kids), the trust mark types, the registry's acceptance status lists in
+        Token Status List and Bitstring Status List form, and the lookup, issuer list, status list
+        and JWKS endpoints (spec/registry-federation.md, "Registry manifest"). A relying party
+        refuses it after `exp` or more than one hour after `iat`. Served only when
+        `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true` (otherwise `404`). No authentication; 60 requests
+        a minute per client address. A store that cannot be read is a 5xx, never an older copy.
+      security: []
+      parameters:
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        "200":
+          description: The signed manifest
+          headers:
+            ETag: { schema: { type: string }, description: Weak entity tag over the protected header and claims }
+            Cache-Control: { schema: { type: string }, description: "`public, max-age=N`, N at most 300 and never past exp" }
+          content:
+            application/grantex-registry-manifest+jwt:
+              schema: { type: string }
+        "304": { description: Unchanged since the ETag }
+        "404": { description: The public registry endpoints are off }
+        "429": { description: Too many requests from this client }
+
     options:
       operationId: preflightAttestationAcceptanceTokenStatusList
       tags: [Registry Status]
@@ -8999,6 +9080,73 @@ paths:
         "401": { description: Missing or wrong operator key }
         "409": { description: "`ISSUER_EXISTS`: the entity_id is already in the registry" }
         "503": { description: REGISTRY_OPERATOR_API_KEYS is not configured, or holds a key shorter than 32 characters }
+  /v1/registry/agents/{did}:
+    get:
+      operationId: lookUpRegistryAgent
+      tags: [Trust Registry]
+      summary: Look an agent up by DID (minimised; more with an API key)
+      description: |
+        The agent's computed trust level and flags, the issuers, types and expiry of its counted
+        attestations, its keys with whether each is current (active, or rotated within its overlap)
+        and its `cimd_uri` (spec/registry-federation.md, "Agent lookup"). With a developer API key,
+        also the provider's DID, name and legal identifiers and each attestation's registry id and
+        status list entries. Without a key it answers only when the registry sets
+        `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`, and otherwise `401`; an invalid key is always
+        `401`. Limited to 120 requests a minute per client address; an authenticated request also
+        draws on the developer's plan budget.
+      security: [{ bearerAuth: [] }, {}]
+      parameters:
+        - { name: did, in: path, required: true, schema: { type: string, maxLength: 2048 }, description: The agent DID, percent-encoded }
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        "200":
+          description: The agent
+          headers:
+            ETag: { schema: { type: string } }
+            Cache-Control: { schema: { type: string }, description: "`public, max-age=60` without a key, `private, no-cache` with one" }
+            Vary: { schema: { type: string }, description: "Always lists `Authorization`; `Origin, Authorization` when the request carried an `Origin`" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAgentLookup" }
+        "304": { description: Unchanged since the ETag sent }
+        "400": { description: Not an agent DID }
+        "401": { description: An invalid API key, or no key while the public form is off }
+        "404": { description: "`NOT_FOUND`: no such agent" }
+        "429": { description: Rate limit exceeded }
+  /v1/registry/agents:
+    get:
+      operationId: findRegistryAgent
+      tags: [Trust Registry]
+      summary: Find an agent by key thumbprint or by attested credential
+      description: |
+        Give `key_thumbprint` alone (the answer adds `key_thumbprint`, `key_status` and
+        `key_current` for that key), or all three of `issuer`, `external_credential_id` and `hash`.
+        Any other combination is `400`. A credential lookup matches on all three at once; a mismatch
+        on any one is the same `404` as an unknown credential, with no ETag, so guesses reveal
+        nothing. Authentication, minimisation, limits and caching as for `/v1/registry/agents/{did}`.
+      security: [{ bearerAuth: [] }, {}]
+      parameters:
+        - { name: key_thumbprint, in: query, schema: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" }, description: RFC 7638 SHA-256 thumbprint of a key in the agent's history }
+        - { name: issuer, in: query, schema: { type: string, maxLength: 2048 }, description: The attesting issuer's entity_id }
+        - { name: external_credential_id, in: query, schema: { type: string, maxLength: 256 } }
+        - { name: hash, in: query, schema: { type: string, pattern: "^sha-256:[A-Za-z0-9_-]{43}$" }, description: The attestation's external_credential_hash }
+        - { name: If-None-Match, in: header, schema: { type: string } }
+      responses:
+        "200":
+          description: The agent
+          headers:
+            ETag: { schema: { type: string } }
+            Cache-Control: { schema: { type: string } }
+            Vary: { schema: { type: string }, description: "Always lists `Authorization`; `Origin, Authorization` when the request carried an `Origin`" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAgentLookup" }
+        "304": { description: Unchanged since the ETag sent }
+        "400": { description: Not exactly one of the two query forms, or a malformed value }
+        "401": { description: An invalid API key, or no key while the public form is off }
+        "404": { description: "`NOT_FOUND`: no such agent, or the credential does not match on all three values" }
+        "429": { description: Rate limit exceeded }
+
   /v1/registry/attestations:
     post:
       operationId: postRegistryAttestation
