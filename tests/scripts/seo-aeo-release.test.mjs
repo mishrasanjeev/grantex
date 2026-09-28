@@ -18,7 +18,11 @@ test('MCP Auth 3 requires current operator boundaries, not resolved v2 defects',
 });
 
 test('unknown or absent MCP profiles cannot satisfy the limitation check', () => {
-  for (const version of [undefined, '', '2.0.3', '4.0.0']) {
+  for (const version of [undefined, '', '2.0.3', '5.0.0']) {
     assert.deepEqual(expectedMcpLimitationIds(version), []);
   }
+});
+
+test('MCP Auth 4 retains deployment responsibilities without resurrecting v2 defects', () => {
+  assert.deepEqual(expectedMcpLimitationIds('4.0.0'), expectedMcpLimitationIds('3.0.0'));
 });

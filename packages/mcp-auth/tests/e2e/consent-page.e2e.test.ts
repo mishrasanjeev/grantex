@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer } from 'node:net';
+import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -31,6 +32,13 @@ let browser: Browser;
 const grantex = mockGrantex();
 /** What the server reported to the operator (`warn`). */
 const operatorWarnings: string[] = [];
+const sessions = new Map<string, string>();
+
+async function signIn(context: BrowserContext, principalId = 'principal-1') {
+  const session = randomBytes(32).toString('hex');
+  sessions.set(session, principalId);
+  await context.addCookies([{ name: 'host_session', value: session, url: base, httpOnly: true, sameSite: 'Lax' }]);
+}
 
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -53,6 +61,11 @@ beforeAll(async () => {
     clientRecord({ clientId: LONG_CLIENT, clientName: 'Acme Underwriting Assistant for the Northern Region Operations Team', redirectUris: ['http://127.0.0.1:33418/oauth/callback/with/a/long/path/segment'], publicClient: true }),
   );
   app = await createMcpAuthServer({
+    resolvePrincipal: async (request) => {
+      const session = /(?:^|;\s*)host_session=([a-f0-9]{64})(?:;|$)/.exec(request.headers.cookie ?? '')?.[1];
+      const principalId = session ? sessions.get(session) : undefined;
+      return principalId ? { principalId } : undefined;
+    },
     grantex: asGrantex(grantex),
     agentId: 'agent-1',
     issuer: base,
@@ -97,6 +110,7 @@ function authorizeUrl(query: Record<string, string> = {}): string {
 }
 
 async function open(context: BrowserContext, url: string): Promise<{ page: Page; cspViolations: string[] }> {
+  await signIn(context);
   const page = await context.newPage();
   const cspViolations: string[] = [];
   page.on('console', (message) => {
@@ -132,6 +146,26 @@ async function expectFitsViewport(page: Page): Promise<void> {
 }
 
 describe('consent page in a real browser', () => {
+  it('refuses unauthenticated authorization without an agent receiving authority', async () => {
+    const context = await browser.newContext();
+    try {
+      const page = await context.newPage();
+      expect((await page.goto(authorizeUrl()))?.status()).toBe(401);
+    } finally { await context.close(); }
+  });
+
+  it('refuses browser approval after switching the authenticated human', async () => {
+    const context = await browser.newContext();
+    try {
+      const calls = grantex.authorize.mock.calls.length;
+      const { page } = await open(context, authorizeUrl());
+      await signIn(context, 'other-human');
+      const response = page.waitForResponse((r) => r.url() === `${base}/consent`);
+      await page.getByRole('button', { name: 'Allow', exact: true }).click();
+      expect((await response).status()).toBe(403);
+      expect(grantex.authorize.mock.calls.length).toBe(calls);
+    } finally { await context.close(); }
+  });
   it('renders correctly at 375 px: everything visible, nothing overflows, touch targets are large enough', async () => {
     const context = await browser.newContext({ viewport: { width: 375, height: 812 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     try {

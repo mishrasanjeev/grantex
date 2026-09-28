@@ -1,18 +1,18 @@
 ---
-title: "MCP Auth 3.0: deployment and consent page"
-description: "Deploying @grantex/mcp-auth 3.0 with Postgres or Redis, configuring it against the MCP authorization specification, customising the consent page and migrating from 2.x."
+title: "MCP Auth 4.0: authenticated human consent"
+description: "Bind MCP consent to an authenticated human, preserve principal identity across callbacks and refresh, and check current grant authority before execution."
 ---
 
-# `@grantex/mcp-auth` 3.0
+# `@grantex/mcp-auth` 4.0
 
-> **Status.** `@grantex/mcp-auth@3.0.0` is published. Registry integrity,
-> clean installation, real storage integration and browser tests are recorded
-> in [release validation](/sdk-release-validation). The immutable 2.0.2
+> **Status.** Version 4.0.0 is the security upgrade described here; check
+> [release status](/release-status) for publication. Real storage and browser
+> validation are required before publication. The immutable 2.0.2
 > behavior remains in [the historical guide](/legacy/mcp-auth-server-2).
 > Node.js 22.12+ and SDK 0.8+ are required.
 
 `@grantex/mcp-auth` puts an OAuth 2.1 authorization server in front of an MCP
-server and hands the actual grant to Grantex. 3.0 is built for production:
+server and hands the actual grant to Grantex. Configure every boundary below:
 
 - **Durable state.** Clients, consent records, pending authorizations,
   authorization codes with their PKCE challenges, refresh-token bindings and
@@ -41,32 +41,61 @@ server and hands the actual grant to Grantex. 3.0 is built for production:
 3. It sends the user to `/authorize` with PKCE (S256) and `resource`. The
    client is either registered (dynamic registration or pre-registered) or
    identified by an https metadata-document URL.
-4. `/authorize` validates the request and renders the **consent page**.
+4. `/authorize` validates the request, resolves the authenticated host principal,
+   and renders the **consent page**. Without a verified session it returns 401.
 5. The Principal approves; only then does the server ask Grantex to
    authorize the grant, with the resource as its audience and `grant.purpose`
    as its purpose, and it sets a callback-binding cookie on that browser. The
    Principal may confirm again in Grantex.
 6. Grantex redirects to `/callback`. Only if the browser presents the
-   callback-binding cookie does the server issue a single-use code to the
+   callback-binding cookie and the same authenticated principal does the server issue a single-use code to the
    client's redirect URI with `iss`.
 7. The client redeems the code at `/token` (PKCE verifier, optional
    `resource`); the server exchanges the upstream code and returns the grant
-   token only if its audience is the requested resource.
+   token only if its audience and upstream principal subject match the stored authorization.
 8. The MCP server's `requireMcpAuth` verifies every request's token
-   (signature, issuer, audience, revocation) and refuses any `tools/call` the
+   (signature, issuer, audience, local revocation and current issuer authority) and refuses any `tools/call` the
    grant does not cover.
 
 ## Install
 
-Install the published packages on Node.js 22.12 or newer:
+Install the version documented here after confirming registry publication, on Node.js 22.12 or newer:
 
 ```bash
-npm install @grantex/mcp-auth@3.0.0 @grantex/sdk@0.8.0
+npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.0
 ```
 
 Also install the database driver you use (`pg` or `postgres`, or `ioredis`).
 The drivers are not dependencies of
 the package; the storage classes accept any compatible client.
+
+## Authenticated principal and login
+
+Supply `resolvePrincipal(request)` from your host's verified session or verified
+identity-provider credentials. It returns `{ principalId }` with a stable,
+tenant-scoped external ID, or `undefined` when unauthenticated. Do not read the
+principal from query/body parameters, unsigned cookies or the OAuth client ID.
+The host owns login; authenticate first, then resume a validated authorization
+request. Do not use an arbitrary `returnTo` URL or expose session credentials.
+
+Authorization without a session returns `401 login_required`. A resolver outage
+returns 503 without issuing authority. Approval and callback resolve the session
+again: logout, account/tenant switching or missing identity-bound state returns
+403 and requires a new authorization. Use secure HTTP-only host session cookies
+whose same-site settings permit the cross-origin callback (usually Lax for its
+top-level GET), and protect your host login against CSRF and session fixation.
+
+The OAuth client and human are different identities. Grantex maps the external
+principal ID to an internal ID; that returned ID is stored and must match the
+token subject at exchange and refresh. A swapped upstream code is refused and
+its returned token is never delivered. The original human need not keep a browser
+session for an already-authorized refresh; the stored subject is preserved.
+
+Live Grantex consent still needs a principal passkey. See
+[enrollment](/features/fido-webauthn). Do not invent a sandbox bypass for live
+consent. General delegation approval does not authorize sensitive decisions:
+mark those tools `requires_decision` and consume the action-bound decision grant,
+with independent approvers where a four-eyes rule requires them.
 
 ## Deploying with Postgres
 
@@ -172,15 +201,17 @@ export function openRedisStorage(redisUrl: string, keyPrefix = 'grantex:mcp-auth
 ```typescript
 import type { Grantex } from '@grantex/sdk';
 import { createMcpAuthServer } from '@grantex/mcp-auth';
-import type { LoadedManifest, McpAuthStorage } from '@grantex/mcp-auth';
+import type { LoadedManifest, McpAuthStorage, PrincipalResolver } from '@grantex/mcp-auth';
 
 export async function startAuthServer(options: {
   grantex: Grantex;
   storage: McpAuthStorage;
   manifest: LoadedManifest;
+  resolvePrincipal: PrincipalResolver;
 }) {
   return createMcpAuthServer({
     grantex: options.grantex,
+    resolvePrincipal: options.resolvePrincipal,
     agentId: 'ag_acme_kyb_tools',
     storage: options.storage,
 
@@ -365,7 +396,7 @@ export const consentPage: ConsentPageOptions = {
 ```typescript
 import express from 'express';
 import { toolPolicyFromManifests } from '@grantex/mcp-auth';
-import type { DecisionVerifier, LoadedManifest, RevocationChecker } from '@grantex/mcp-auth';
+import type { CurrentGrantVerifier, DecisionVerifier, LoadedManifest, RevocationChecker } from '@grantex/mcp-auth';
 import { protectedResourceMetadataHandler, requireMcpAuth } from '@grantex/mcp-auth/express';
 import type { McpAuthRequest } from '@grantex/mcp-auth/express';
 
@@ -373,6 +404,7 @@ export function createMcpApp(options: {
   manifest: LoadedManifest;
   /** The authorization server's storage: tokens revoked there are refused here. */
   revocations: RevocationChecker;
+  currentGrant: CurrentGrantVerifier;
   decisions: DecisionVerifier;
   grantexIssuer: string;
 }) {
@@ -393,6 +425,7 @@ export function createMcpApp(options: {
       issuer: options.grantexIssuer,
       audience: resource,
       revocations: options.revocations,
+      currentGrant: options.currentGrant,
       // A tools/call outside the grant is refused here with 403.
       tools: toolPolicyFromManifests([options.manifest]),
       // Tools marked requires_decision also need a person's decision grant.
@@ -627,7 +660,40 @@ which only the host application can meet and is listed with that reason.
 Client requirements are listed as out of scope. Run it with `npx vitest run
 tests/conformance`.
 
-## Migrating from 2.x
+## Migrating from 3.x to 4.0
+
+Token introspection now requires confidential-client Basic authentication and
+defaults to online current issuer verification. A revoked grant or issuer
+outage reports `active: false`; unsigned caller identity is not authentication.
+`allowUnauthenticatedIntrospection: true` and `introspectionCurrentGrant: 'none'`
+are explicit warned evaluation-only opt-outs.
+
+1. Implement and test the verified `resolvePrincipal` host-session resolver.
+2. Add `currentGrant: grantexCurrentGrantVerifier(grantex)` alongside shared
+   `revocations` in every resource guard and Express/Hono middleware. The helper
+   calls `grantex.grants.verify` on each protected request without a positive
+   cache. Inactive authority returns 401; issuer failures return 503.
+3. Drain pending authorizations and upgrade all replicas together. Do not mix
+   v3 and v4 in one state namespace. Existing client registrations can remain;
+   identity-unbound pending requests, codes and refresh bindings must restart.
+   JSON state supports the new fields; existing SQL migrations remain valid.
+4. Test logout/account switching, consent denial, browser callback, token
+   exchange, refresh, revocation, service outages and your actual MCP client.
+
+Version 3 used the OAuth client ID as the principal and had no issuer-side
+current-grant hook in the resource guard. The v4 defaults deliberately close
+those gaps. `allowLegacyClientPrincipal: true`, `currentGrant: 'none'` and
+`revocations: 'none'` are explicit warned evaluation opt-outs, not production
+recommendations. Purpose/duration changes after rendering invalidate consent;
+`authorizeParams` cannot override the displayed duration.
+
+Local or issuer revocation stops subsequent requests, not completed side effects
+or a handler already in flight. Apply atomic spend/call reservations and SDK
+`enforce` at the actual business side-effect boundary; displaying caps does not
+create counters. Host login, session correctness, TLS and gateway-wide rate
+limits remain deployment responsibilities.
+
+## Earlier migration from 2.x to 3.x
 
 | 2.x | 3.0 |
 |---|---|
@@ -657,10 +723,10 @@ clients' expectations of `/authorize` (browsers follow the page; nothing else
 changes for them); add `audience`, `revocations` and `tools` to
 `requireMcpAuth`; then remove the old store options.
 
-## Known limitations
+## Operational boundaries
 
-- The Grantex principal for every grant is the OAuth `client_id`, not the
-  person who approved; all users of one client share it. See `FINDINGS.md`.
+- The host supplies and verifies the human's session; the package cannot
+  establish identity from an unverified caller-supplied principal ID.
 - A data region cannot be declared: `grant.dataRegion` is refused at
   start-up, because `POST /v1/authorize` takes no data region (see
   [Purpose](#purpose)).
@@ -668,4 +734,6 @@ changes for them); add `audience`, `revocations` and `tools` to
   refuses it, after the Principal approves the consent page, not at
   start-up (see [Purpose](#purpose)).
 - Rate limits are per process.
-- `onTokenIssued` is declared but not called.
+- `hooks.onTokenIssued` is invoked after successful exchange and refresh. It
+  carries a secret bearer token and must not log it. Hook errors warn without
+  changing delivery; use policy enforcement, not this hook, for authorization.

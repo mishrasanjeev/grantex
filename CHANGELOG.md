@@ -14,6 +14,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   libraries and the mock issuer stay out of the README until they are released.
 - The Trust Registry feature page links the issuer, provider and relying-party
   guides, and the docs navigation now lists Verifying Agents.
+### MCP Auth 4.0.0 (Breaking)
+- Introspection requires authenticated confidential clients and checks current
+  issuer authority by default. Evaluation-only opt-outs are
+  `allowUnauthenticatedIntrospection: true` and `introspectionCurrentGrant: 'none'`.
+- Human consent now requires an authenticated host principal resolver. Approval
+  and callback recheck the same principal; exchange and refresh preserve the
+  upstream subject. Legacy identity-unbound records require reauthorization.
+- Resource guards require an explicit issuer-side `currentGrant` checker as
+  well as local revocation. The package provides `grantexCurrentGrantVerifier`.
+  Inactive authority and issuer outages fail closed before tool execution.
+- Evaluation-only opt-outs are `allowLegacyClientPrincipal: true` and
+  `currentGrant: 'none'`; neither is a production consent guarantee.
+- Purpose/duration consent drift is refused, token-issued lifecycle hooks run,
+  and current deployment documentation replaces the legacy package walkthrough.
 
 ### Passport binding at grant issuance (auth service)
 - `POST /v1/authorize` takes an Agent Passport in `passport` when
