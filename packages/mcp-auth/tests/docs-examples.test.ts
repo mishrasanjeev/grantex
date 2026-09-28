@@ -57,7 +57,7 @@ describe('docs/mcp-auth.md examples', () => {
     const storage = new InMemoryStorage();
     await storage.putClient(clientRecord());
     const grantex = mockGrantex();
-    const app = await startAuthServer({ grantex: asGrantex(grantex), storage, manifest: MANIFEST });
+    const app = await startAuthServer({ grantex: asGrantex(grantex), storage, manifest: MANIFEST, resolvePrincipal: async () => ({ principalId: 'principal-1' }) });
     const page = await app.inject({
       method: 'GET',
       url: '/authorize',
@@ -87,6 +87,7 @@ describe('docs/mcp-auth.md examples', () => {
     const storage = new InMemoryStorage();
     await storage.putClient(clientRecord());
     const app = await createMcpAuthServer({
+      resolvePrincipal: async () => ({ principalId: 'principal-1' }),
       grantex: asGrantex(mockGrantex()),
       agentId: 'agent-1',
       issuer: 'https://auth.acme.example.com',
@@ -137,7 +138,7 @@ describe('docs/mcp-auth.md examples', () => {
 
       const storage = new InMemoryStorage();
       await storage.revokeToken('grnt_revoked', { revokedAt: Date.now(), expiresAt: Date.now() + 3600_000 });
-      const app = createMcpApp({ manifest: MANIFEST, revocations: storage, decisions: decisionVerifier, grantexIssuer: issuer });
+      const app = createMcpApp({ manifest: MANIFEST, currentGrant: { verify: async () => true }, revocations: storage, decisions: decisionVerifier, grantexIssuer: issuer });
       mcp = app.listen(0, '127.0.0.1');
       await new Promise<void>((resolve) => mcp.once('listening', () => resolve()));
       const address = mcp.address();

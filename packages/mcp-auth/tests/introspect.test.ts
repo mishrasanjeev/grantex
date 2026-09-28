@@ -101,6 +101,7 @@ async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
   const issuer = `http://127.0.0.1:${jwksPort}`;
 
   const app = await createMcpAuthServer({
+    resolvePrincipal: async () => ({ principalId: 'principal-1' }),
     grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
     agentId: 'agent-1',
     scopes: ['read', 'write'],
@@ -351,6 +352,7 @@ describe('introspect endpoint', () => {
     it('fails closed (503) when grantexIssuer is not configured', async () => {
       const clientStore = new InMemoryStorage();
       const appNoIssuer = await createMcpAuthServer({
+        resolvePrincipal: async () => ({ principalId: 'principal-1' }),
         grantex: createMockGrantex() as unknown as McpAuthConfig['grantex'],
         agentId: 'agent-1',
         scopes: ['read'],

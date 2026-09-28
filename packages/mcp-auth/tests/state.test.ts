@@ -53,6 +53,7 @@ async function grantToken(claims: Record<string, unknown> = {}): Promise<string>
 
 async function serverWith(storage: McpAuthStorage, grantex = mockGrantex({ sandboxCode: 'UPSTREAM_CODE' })) {
   const app = await createMcpAuthServer({
+    resolvePrincipal: async () => ({ principalId: 'principal-1' }),
     grantex: asGrantex(grantex),
     agentId: 'agent-1',
     scopes: ['read', 'write'],

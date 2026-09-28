@@ -1,14 +1,16 @@
 import type { Grantex } from '@grantex/sdk';
 import { createMcpAuthServer } from '@grantex/mcp-auth';
-import type { LoadedManifest, McpAuthStorage } from '@grantex/mcp-auth';
+import type { LoadedManifest, McpAuthStorage, PrincipalResolver } from '@grantex/mcp-auth';
 
 export async function startAuthServer(options: {
   grantex: Grantex;
   storage: McpAuthStorage;
   manifest: LoadedManifest;
+  resolvePrincipal: PrincipalResolver;
 }) {
   return createMcpAuthServer({
     grantex: options.grantex,
+    resolvePrincipal: options.resolvePrincipal,
     agentId: 'ag_acme_kyb_tools',
     storage: options.storage,
 

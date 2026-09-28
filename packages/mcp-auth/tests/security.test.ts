@@ -109,6 +109,7 @@ async function createTestApp() {
   const issuer = `http://127.0.0.1:${jwksPort}`;
 
   const app = await createMcpAuthServer({
+    resolvePrincipal: async () => ({ principalId: 'principal-1' }),
     grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
     agentId: 'agent-1',
     scopes: ['read', 'write'],

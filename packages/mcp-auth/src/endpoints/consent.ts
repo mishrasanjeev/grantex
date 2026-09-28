@@ -9,6 +9,7 @@ import { consentPageHeaders, humanDuration, renderConsentPage, renderMessagePage
 import type { ConsentViewModel } from '../consent/page.js';
 import { clientRedirect, startUpstreamAuthorization } from './authorize.js';
 import type { ValidatedAuthorization } from './authorize.js';
+import { resolvePrincipal } from '../lib/principal.js';
 
 /**
  * The consent step. `GET /authorize` renders the page for a validated
@@ -29,6 +30,10 @@ import type { ValidatedAuthorization } from './authorize.js';
 
 export const CONSENT_PATH = '/consent';
 const DEFAULT_EXPIRY_SECONDS = 600;
+
+function grantContextHash(ctx: ServerContext): string {
+  return sha256(JSON.stringify({ purpose: ctx.config.grant?.purpose, duration: ctx.config.grant?.duration }));
+}
 
 function cookieName(ctx: ServerContext, consentId: string): string {
   // One cookie per consent, so two tabs do not overwrite each other's binding.
@@ -53,6 +58,8 @@ export async function renderConsent(ctx: ServerContext, reply: FastifyReply, req
   const now = Date.now();
 
   const record: ConsentRecord = {
+    grantContextHash: grantContextHash(ctx),
+    ...(request.principalId !== undefined ? { principalId: request.principalId } : {}),
     clientId: request.client.clientId,
     redirectUri: request.redirectUri,
     codeChallenge: request.codeChallenge,
@@ -165,6 +172,20 @@ export function registerConsentEndpoint(app: FastifyInstance, ctx: ServerContext
       if (!hashesMatch(record.csrfTokenHash, csrfToken) || !hashesMatch(record.browserBindingHash, readCookie(request, name))) {
         return sendMessage(ctx, reply, 403, 'Request refused', 'This consent form could not be verified. Return to the application and start again.');
       }
+      if (ctx.config.resolvePrincipal) {
+        let principalId;
+        try {
+          principalId = await resolvePrincipal(ctx, request, record.clientId);
+        } catch {
+          return sendMessage(ctx, reply, 503, 'Request refused', 'Principal authentication could not be checked. Start a new authorization.');
+        }
+        if (!principalId || principalId !== record.principalId) {
+          return sendMessage(ctx, reply, 403, 'Request refused', 'The authenticated principal changed. Start a new authorization.');
+        }
+      }
+      if (record.grantContextHash !== grantContextHash(ctx)) {
+        return sendMessage(ctx, reply, 400, 'Request changed', 'The grant terms changed after this page was shown. Start a new authorization.');
+      }
 
       if (decision === 'deny') {
         return reply.redirect(clientRedirect(ctx, record.redirectUri, { error: 'access_denied', state: record.clientState }), 303);
@@ -184,6 +205,7 @@ export function registerConsentEndpoint(app: FastifyInstance, ctx: ServerContext
       }
 
       return startUpstreamAuthorization(ctx, reply, {
+        ...(record.principalId !== undefined ? { principalId: record.principalId } : {}),
         client,
         redirectUri: record.redirectUri,
         codeChallenge: record.codeChallenge,

@@ -14,7 +14,7 @@ import { createMcpAuthServer } from '../../../dist/index.js';
 
 const RESOURCE = 'https://mcp.example.com/mcp';
 // Upstream grant tokens are audience-bound to the resource, as Grantex issues them.
-const grantFor = (jti) => new UnsecuredJWT({ aud: RESOURCE, jti, scp: ['tools:read'] }).setExpirationTime('1h').encode();
+const grantFor = (jti) => new UnsecuredJWT({ sub: 'principal-1', aud: RESOURCE, jti, scp: ['tools:read'] }).setExpirationTime('1h').encode();
 const kind = process.env.MCP_AUTH_STORAGE;
 const url = process.env.MCP_AUTH_STORAGE_URL;
 
@@ -75,6 +75,7 @@ const grantex = {
 
 const storage = await openStorage();
 const app = await createMcpAuthServer({
+  resolvePrincipal: async () => ({ principalId: 'principal-1' }),
   grantex,
   agentId: 'ag_restart',
   scopes: ['tools:read'],

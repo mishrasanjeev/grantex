@@ -7,6 +7,7 @@ import { resolveCallbackUrl } from './authorize.js';
 import { verifyCodeChallenge } from '../lib/pkce.js';
 import { isConfidentialClient, parseBasicAuth, secretMatches } from '../lib/verify.js';
 import type { ClientRegistration } from '../types.js';
+import type { ExchangeTokenResponse } from '@grantex/sdk';
 
 /**
  * OAuth 2.1 §2.1: a confidential client MUST authenticate at the token
@@ -60,7 +61,7 @@ function resourceMatches(requested: unknown, bound: string): boolean {
  * client asked for. Anything else (no `aud`, another audience, or a token
  * that is not a JWT) is refused rather than handed to the client.
  */
-function audienceBound(grantToken: unknown, resource: string): { ok: true } | { ok: false; jti?: string } {
+function audienceBound(grantToken: unknown, resource: string, principalId?: string): { ok: true } | { ok: false; jti?: string; principalMismatch?: boolean } {
   if (typeof grantToken !== 'string') return { ok: false };
   let claims: jose.JWTPayload;
   try {
@@ -69,12 +70,28 @@ function audienceBound(grantToken: unknown, resource: string): { ok: true } | { 
     return { ok: false };
   }
   const audiences = Array.isArray(claims.aud) ? claims.aud : claims.aud !== undefined ? [claims.aud] : [];
-  if (audiences.some((aud) => canonicalResource(aud) === resource)) return { ok: true };
+  if (audiences.some((aud) => canonicalResource(aud) === resource)) {
+    if (principalId === undefined || claims.sub === principalId) return { ok: true };
+    return { ok: false, principalMismatch: true, ...(typeof claims.jti === 'string' ? { jti: claims.jti } : {}) };
+  }
   return { ok: false, ...(typeof claims.jti === 'string' ? { jti: claims.jti } : {}) };
 }
 
 export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext): void {
   const { config, storage } = ctx;
+
+  async function tokenIssued(token: ExchangeTokenResponse, clientId: string): Promise<void> {
+    const hook = config.hooks?.onTokenIssued;
+    if (!hook) return;
+    const claims = jose.decodeJwt(token.grantToken);
+    const extension = claims['urn:grantex:grant'] as { agent_did?: unknown } | undefined;
+    const agentDid = typeof extension?.agent_did === 'string' ? extension.agent_did : typeof claims['agt'] === 'string' ? claims['agt'] : undefined;
+    try {
+      await hook({ accessToken: token.grantToken, clientId, scopes: [...token.scopes], grantId: token.grantId, ...(agentDid ? { agentDid } : {}) });
+    } catch {
+      try { (config.warn ?? console.warn)('mcp-auth: onTokenIssued failed after issuance; token delivery continues'); } catch { /* Observability only. */ }
+    }
+  }
 
   async function lookupClient(clientId: string) {
     try {
@@ -85,7 +102,7 @@ export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext):
     }
   }
 
-  async function refuseUnboundToken(reply: FastifyReply, jti: string | undefined): Promise<FastifyReply> {
+  async function refuseUnboundToken(reply: FastifyReply, jti: string | undefined, principalMismatch = false): Promise<FastifyReply> {
     if (jti !== undefined) {
       // Best effort: the token is never returned, so it cannot be used even
       // if this upstream revocation fails.
@@ -93,7 +110,9 @@ export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext):
     }
     return reply.status(502).send({
       error: 'server_error',
-      error_description: 'Grantex issued a token that is not audience-bound to the requested resource; it was not returned',
+      error_description: principalMismatch
+        ? 'Grantex issued a token for a different principal; it was not returned'
+        : 'Grantex issued a token that is not audience-bound to the requested resource; it was not returned',
     });
   }
 
@@ -101,9 +120,10 @@ export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext):
   // OAuth 2.1 §4.3.1). Recording the binding on every issue path, and
   // re-recording it after rotation, is what lets the refresh_token grant
   // refuse a token presented by a different client_id.
-  async function bindRefreshToken(refreshToken: string | undefined, clientId: string, resource: string): Promise<void> {
+  async function bindRefreshToken(refreshToken: string | undefined, clientId: string, resource: string, grantexPrincipalId?: string): Promise<void> {
     if (refreshToken === undefined) return;
     await storage.putRefreshTokenBinding(refreshToken, {
+      ...(grantexPrincipalId !== undefined ? { grantexPrincipalId } : {}),
       clientId,
       resource,
       expiresAt: Date.now() + REFRESH_TOKEN_BINDING_TTL_MS,
@@ -189,6 +209,9 @@ export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext):
           error_description: 'Authorization code has no approved upstream authorization',
         });
       }
+      if (config.resolvePrincipal && (!authCode.principalId || !authCode.grantexPrincipalId)) {
+        return reply.status(400).send({ error: 'invalid_grant', error_description: 'This code has no authenticated principal binding; start a new authorization' });
+      }
 
       // Exchange with Grantex. Grantex requires the redirect URI used in the
       // upstream authorization request: our consent callback.
@@ -207,10 +230,11 @@ export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext):
         });
       }
 
-      const bound = audienceBound(tokenResponse.grantToken, authCode.resource);
-      if (!bound.ok) return refuseUnboundToken(reply, bound.jti);
+      const bound = audienceBound(tokenResponse.grantToken, authCode.resource, authCode.grantexPrincipalId);
+      if (!bound.ok) return refuseUnboundToken(reply, bound.jti, bound.principalMismatch);
 
-      await bindRefreshToken(tokenResponse.refreshToken, client_id, authCode.resource);
+      await bindRefreshToken(tokenResponse.refreshToken, client_id, authCode.resource, authCode.grantexPrincipalId);
+      await tokenIssued(tokenResponse, client_id);
 
       return reply.send({
         access_token: tokenResponse.grantToken,
@@ -267,6 +291,9 @@ export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext):
           error_description: 'Refresh token was not issued to this client',
         });
       }
+      if (config.resolvePrincipal && !binding.grantexPrincipalId) {
+        return reply.status(400).send({ error: 'invalid_grant', error_description: 'This refresh token has no authenticated principal binding; start a new authorization' });
+      }
       if (binding.resource === undefined || !resourceMatches(body.resource, binding.resource)) {
         await storage.putRefreshTokenBinding(refresh_token, binding);
         return reply.status(400).send({
@@ -294,8 +321,8 @@ export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext):
         });
       }
 
-      const bound = audienceBound(tokenResponse.grantToken, boundResource);
-      if (!bound.ok) return refuseUnboundToken(reply, bound.jti);
+      const bound = audienceBound(tokenResponse.grantToken, boundResource, binding.grantexPrincipalId);
+      if (!bound.ok) return refuseUnboundToken(reply, bound.jti, bound.principalMismatch);
 
       // Rotation (required for public clients, MCP authorization "Token
       // Theft"): the old binding is already spent and a refresh token is
@@ -304,7 +331,8 @@ export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext):
       const rotated = tokenResponse.refreshToken !== undefined && tokenResponse.refreshToken !== refresh_token
         ? tokenResponse.refreshToken
         : undefined;
-      await bindRefreshToken(rotated, client.clientId, boundResource);
+      await bindRefreshToken(rotated, client.clientId, boundResource, binding.grantexPrincipalId);
+      await tokenIssued(tokenResponse, client.clientId);
 
       return reply.send({
         access_token: tokenResponse.grantToken,

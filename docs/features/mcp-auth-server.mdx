@@ -1,73 +1,85 @@
 ---
 title: "MCP Auth Server"
-description: "Deploy MCP Auth 3 with durable storage, consent, PKCE, resource audience binding and explicit revocation enforcement."
+description: "MCP Auth 4 binds rendered consent to the authenticated human and checks current grant authority before protected tool execution."
 ---
 
 ## Release and installation
 
-Install `@grantex/mcp-auth@3.0.0` for this deployment profile. The
-[historical limitations](/legacy/mcp-auth-server-2) remain applicable to
-immutable version 2.0.2, not version 3. See [Release Status](/release-status)
-for publication evidence. Node.js 22.12+ and `@grantex/sdk` 0.8+ are required.
+Currently published baseline: `@grantex/mcp-auth@3.0.0`. The 4.0.0 upgrade
+below must be validated and published before installing it from the registry.
+
+This is the MCP Auth **4.0.0** deployment profile. Check
+[Release Status](/release-status) for publication. Node.js 22.12+ and SDK 0.8+
+are required. Version 2.0.2's missing rendered page is
+[historical](/legacy/mcp-auth-server-2); version 3 added the page, but used the
+OAuth client ID as the human principal. Version 4 closes that identity gap.
 
 ```bash
-npm install @grantex/mcp-auth@3.0.0 @grantex/sdk@0.8.0 pg
+npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.0 pg
 ```
 
-Version 3 is a breaking upgrade from 2.0.2, not an assertion that every MCP
-client or deployment has been independently certified. Follow the
-[complete deployment and consent guide](/mcp-auth) and
-[enforcement migration](/migration-enforcement).
+## Human-confirmed request flow
 
-## Request flow
-
-1. The protected MCP resource advertises resource metadata in its HTTP 401 challenge.
+1. The MCP resource challenges unauthenticated calls and advertises resource metadata.
 2. The client discovers authorization metadata and starts authorization with PKCE S256 and the intended resource.
-3. The server validates client identity, redirects and resource, then renders the consent page.
-4. Approval starts Grantex authorization with audience and purpose; live-mode Grantex still requires the principal's passkey.
-5. The callback requires the bound browser cookie before issuing a single-use authorization code.
-6. Token exchange validates PKCE and the resource, exchanges the upstream code and returns an audience-bound token.
-7. The resource guard checks signature, issuer, audience, scopes and configured revocation before execution. Sensitive tools can require consumed decision grants.
+3. The host authenticates the human. `resolvePrincipal(request)` derives a tenant-scoped external ID from verified host credentials, never client parameters.
+4. The server renders purpose, tools, declared limits, redirect destination and duration, with Allow and Deny. No upstream authorization occurs before approval.
+5. Approval rechecks the same human and browser/CSRF binding, then starts Grantex consent. Live Grantex consent still requires the principal's passkey.
+6. The callback checks browser binding and the same authenticated principal before issuing a single-use code.
+7. Exchange checks PKCE, resource and Grantex's returned principal subject. Refresh preserves that subject.
+8. The resource checks signature, issuer, audience, scopes, local revocation and online current-grant authority before execution. Sensitive actions require consumed, action-bound human decisions.
 
-## Deployment choices
+Logout or identity changes refuse approval/callback. A principal resolver or
+current-authority outage fails closed. The host owns login and session
+verification; the package cannot authenticate an unsigned identity assertion.
+See [passkey registration](/features/fido-webauthn).
 
-| Concern | Version 3 behavior | Operator responsibility |
+## Required resource enforcement
+
+Configure both `revocations` and
+`currentGrant: grantexCurrentGrantVerifier(grantex)` in the resource guard or
+Express/Hono middleware. The latter calls the trusted issuer's
+`grantex.grants.verify` on every protected request, without positive caching.
+Inactive authority returns 401; an issuer outage returns 503. It checks
+issuer-side current authority, not just a locally valid signature.
+
+Mark sensitive tools `requires_decision` and configure
+`grantexDecisionVerifier` with a trusted action resolver to consume decisions.
+Delegation consent alone does not approve every business decision. Four-eyes
+rules require the configured independent approvers. Never accept an agent's
+claim that a human approved as decision evidence.
+
+## Deployment responsibilities
+
+| Concern | Version 4 behavior | Operator responsibility |
 |---|---|---|
-| Shared state | Postgres and Redis adapters for clients, codes, consent, refresh bindings and revocations | Provision drivers/storage, apply migrations, share state across replicas |
-| Memory storage | Available for evaluation | Do not horizontally scale process-local state |
-| Consent | Rendered, CSRF-protected page and browser-bound callback | Configure trustworthy labels/purpose and test the principal handoff |
-| Resource binding | Resource indicators and expected audience | Pin the canonical HTTPS resource and issuer |
-| Revocation | Guard/middleware requires a checker or explicit `none` | Connect the authorization server's revocation storage; never describe `none` as enforcement |
-| Tool enforcement | Refuses unauthorized tool calls at the resource | Configure manifests, scopes and trusted decision verification/consumption |
-| Refresh | Durable bindings and rotation | Protect state and test restart/replay behavior |
+| Human identity | Required resolver, repeated at approval/callback | Verify login/session and namespace IDs by tenant |
+| Consent | Rendered, single-use, browser/CSRF/principal bound | Configure truthful purpose, terms and labels |
+| State | Postgres/Redis adapters and atomic consumption | Provision durable shared state and migrations |
+| Tokens | PKCE/resource/principal binding through exchange/refresh | Protect credentials and shared state |
+| Revocation | Explicit local checker and current issuer verification | Connect both sources; deny outages |
+| Decisions | Decision-required tools fail closed without a verifier | Bind trusted semantic actions and consume approvals |
+| Limits | Caps are displayed as declared | Apply SDK enforcement and atomic service accounting before side effects |
 
-The [deployment guide](/mcp-auth) includes executable Postgres/Redis examples,
-purging expired rows, issuer/resource settings, lifecycle hooks, consent-page
-customization, tool policy and migration from 2.x.
+Revocation prevents subsequent requests; it cannot undo completed side effects
+or cancel a handler already executing. Data residency is not bound by this
+authorization endpoint. Gateway-wide rate limits, TLS and host session security
+remain deployment work.
 
-## Explicit revocation configuration
+## Migration and validation
 
-`createMcpResourceGuard`, Express `requireMcpAuth` and Hono `requireMcpAuth`
-refuse startup without `revocations`. Supply an object implementing
-`isTokenRevoked(jti)` from the same shared storage used by the authorization
-server. Storage failures must deny, not silently authorize.
+Read the [complete deployment guide](/mcp-auth) and
+[enforcement migration](/migration-enforcement). Drain pending requests, upgrade
+all replicas together and reauthorize old identity-unbound requests/refresh
+bindings. Do not mix v3/v4 against one state namespace. JSON binding fields do
+not need a new SQL schema; retain existing registered clients.
 
-`revocations: 'none'` is an explicit warned opt-out. It does not query grant
-status and accepts otherwise valid revoked tokens until expiry. Local JWT
-verification alone is not current-state authorization.
+`allowLegacyClientPrincipal: true`, `currentGrant: 'none'` and
+`revocations: 'none'` are explicit warned evaluation opt-outs, not production
+recommendations. Local memory storage is evaluation-only.
 
-## Tests and boundaries
-
-The package has unit/conformance tests, real Postgres/Redis integration tests
-including a server restart, and Chromium consent-page/accessibility tests.
-Test your own client, TLS origin, reverse proxy, storage failover and principal
-passkey handoff before enabling production traffic.
-
-The local token revocation checker concerns tokens recorded in its storage;
-it is not a substitute for every upstream grant/ancestor-state check. Keep
-Grantex service-side enforcement for agent-specific authority. The consent
-page does not independently prove principal identity or replace live WebAuthn.
-
-For the six limitations of the previous package, see
-[the historical 2.0.2 guide](/legacy/mcp-auth-server-2). Those warnings must not
-be mistaken for version 3 deployment instructions.
+The permanent suite covers identity switches, logout, denial, replay,
+concurrency, expiry, token subject substitution, issuer outage/revocation,
+Postgres/Redis restarts, Chromium layout and accessibility. Validate your actual
+MCP client, host sessions, TLS origin and live passkey ceremony before production.
+Independent cross-vendor or physical-authenticator certification is not claimed.
