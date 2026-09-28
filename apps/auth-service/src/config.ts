@@ -204,6 +204,23 @@ export const config = {
   // The registry's unauthenticated reads (GET /v1/registry/issuers). Off by
   // default: new endpoints ship enabled only behind authentication, so these
   // are registered only for exactly 'true', read when the app is built.
+  // Mirror the key POST and PATCH /v1/agents write into the agent key history
+  // (agent_keys), with its refusals: a key held in another agent's history, a
+  // key reported compromised, a non-P-256 key under a payments rail. Off by
+  // default, and only exactly 'true' turns it on: with it off those routes
+  // behave as they did before the history existed. Read at request time.
+  get agentKeyHistoryMirrorEnabled() { return process.env['AGENT_KEY_HISTORY_MIRROR_ENABLED'] === 'true'; },
+  // Default overlap of an agent key rotation: how long the replaced key stays
+  // usable (seconds, default 7 days, at most 30). Read at request time;
+  // validateConfig reports a bad value at boot.
+  get agentKeyRotationOverlapSeconds() {
+    return parseIntegerSetting(
+      'AGENT_KEY_ROTATION_OVERLAP_SECONDS',
+      optional('AGENT_KEY_ROTATION_OVERLAP_SECONDS', '604800'),
+      0,
+      2_592_000,
+    );
+  },
   // Unauthenticated registry reads (the attestation-acceptance status lists).
   // Read when routes are registered at boot; off unless exactly 'true'.
   get registryPublicEndpointsEnabled() { return process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] === 'true'; },
@@ -324,6 +341,11 @@ export function validateConfig(): void {
     errors.push(`${signingKeySettingName()} is required (or AUTO_GENERATE_KEYS=true outside production)`);
   }
   if (!config.jwtIssuer) errors.push('JWT_ISSUER is required');
+  try {
+    void config.agentKeyRotationOverlapSeconds;
+  } catch (err) {
+    errors.push((err as Error).message);
+  }
   if (config.metricsEnabled && config.metricsRequireAuth && !config.metricsApiKey) {
     errors.push('METRICS_API_KEY is required');
   }

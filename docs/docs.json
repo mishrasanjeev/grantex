@@ -68,6 +68,7 @@
             "pages": [
               "features/trust-registry",
               "issuers/becoming-an-accredited-issuer",
+              "providers/registering-agents",
               "features/fido-webauthn",
               "features/verifiable-credentials",
               "features/sd-jwt",
