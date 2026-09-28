@@ -1243,6 +1243,115 @@ the pull request that references it.
   major. Owner: the mcp-auth maintainers. Exit criterion: a capped grant is
   either capped or refused by the guard, with tests of both outcomes.
 
+## G-65 — Default online revocation checks share a 1,200-per-minute limit (fixed)
+
+- **Found:** turning revocation checking on by default in both SDKs
+  (2026-09-27).
+- **What:** from the next SDK release, every `enforce()` of a client that does
+  not set `revocationCheck` / `revocation_check` calls
+  `GET /v1/revocations/status`. That route is limited to 1,200 requests a
+  minute per client address (`apps/auth-service/src/routes/revocations.ts`),
+  so a process making more than 20 checked calls a second, or several agents
+  behind one egress address, is answered `429`; the SDKs retry and then deny
+  with `grant_revoked` / `status_unavailable`. The check also adds one round
+  trip to every call.
+- **Fix:** size the limit for per-call checks (per developer rather than per
+  address, and higher), document the cost next to the default, and point
+  high-volume clients at `feed`. Owner: the auth-service maintainers. Exit
+  criterion: a load test at the documented rate passes without a `429`.
+- **Fixed:** the status route's per-address limit is now the developer's
+  revocation-status budget (`STATUS_RATE_LIMIT`, 6,000 a minute, per developer
+  on every plan since G-23's buckets), so one address can use the developer's
+  whole budget; the per-address limit stays as an abuse ceiling counted before
+  authentication. The cost of `online` and the advice to use `feed` above
+  100 checked calls a second are documented in
+  `docs/concepts/event-bridge-and-revocation.md`,
+  `docs/guides/rate-limits.mdx` and `docs/self-hosting.md`. Shown by
+  `apps/auth-service/tests/containment-rate-limits.test.ts`: "serves many
+  status calls from one address within a minute while the developer is under
+  its status budget" (1,500 calls from one address; 300 were refused `429`
+  before), "still refuses status calls past the per-developer status budget"
+  and "keeps an abuse ceiling per address on the status route, before
+  authentication". Still true, and documented rather than changed: each checked
+  call is one round trip; a developer's checked calls are capped at 6,000 a
+  minute across all its instances; and developers sharing one egress address
+  share that address's 6,000 a minute. The exit criterion was met with
+  in-process requests, not a load test against a deployed service.
+
+## G-66 — The first revocation feed prune after turning the feed on is one unbounded DELETE (fixed)
+
+- **Found:** reading what the auth service does when the revocation feed
+  turns on by default (2026-09-27).
+- **What:** the triggers from migrations 112, 114 and 116 fill
+  `grant_revocation_events` whether or not the feed is served, but the prune
+  worker (`apps/auth-service/src/workers/revocationFeedPrune.ts`) starts only
+  while it is. On a deployment where the feed was off, the first prune after
+  it turns on deletes the whole backlog past retention in a single statement
+  (`pruneFeed` in `apps/auth-service/src/lib/revocation-feed/store.ts`), one
+  long transaction on a table the revocation triggers write to. The first
+  prune runs as soon as each instance starts (`startRevocationFeedPruneWorker`
+  calls `pruneRevocationFeedOnce` before arming its hourly timer), not an
+  hour later, so on the first deploy with the feed on every Cloud Run
+  instance (up to five, `--max-instances=5` in
+  `.github/workflows/deploy.yml`) runs the same unbounded DELETE at once,
+  at deploy time. Measuring the row count of `grant_revocation_events` in
+  production before the merge tells how large that backlog is.
+- **Fix:** delete in bounded batches (for example `seq` ranges or a
+  `LIMIT`ed subquery) until nothing is left, and count the batches in the
+  prune metrics. Owner: the auth-service maintainers. Exit criterion: a
+  Postgres integration test prunes a backlog larger than one batch in
+  several statements, and instances that start together do not prune the
+  same backlog concurrently (an advisory lock, or a start-up jitter).
+- **Fixed:** `pruneFeedBatch` deletes at most 1000 rows per statement, oldest
+  first through `idx_grant_revocation_events_created`, and the worker loops
+  it with a pause between batches, stopping after 50 batches or 60 seconds
+  and leaving the rest to the next run. A run holds a session advisory lock
+  (`hashtextextended('grantex:revocation-feed-prune', 0)`) on the connection
+  that deletes, and skips when another instance holds it. The first run waits
+  a random delay of up to `REVOCATION_FEED_PRUNE_JITTER_SECONDS` (default
+  300) instead of running at start, and the hourly timer is armed from there.
+  Each run logs the rows it deleted and its outcome, counted in
+  `grantex_revocation_feed_pruned_total` and
+  `grantex_revocation_feed_prune_runs_total{outcome}`. Shown by
+  `apps/auth-service/tests/revocation-feed-prune.test.ts` (batching, the
+  batch and time caps, the lock skip, failure handling, jitter bounds) and the
+  Postgres test "prunes a backlog larger than one batch across capped runs,
+  one instance at a time" in
+  `apps/auth-service/tests/revocation-feed-postgres.integration.test.ts`:
+  750 rows past retention, two prunes started together (one deletes three
+  batches, the other skips), later runs finish the backlog, and the four rows
+  inside retention survive.
+
+## G-67 — The gateway and the Go SDK never check revocation
+
+- **Found:** looking for every caller the revocation default flip should
+  cover (2026-09-27).
+- **What:** `packages/gateway` authorizes a proxied request with
+  `verifyGrantToken` alone (`packages/gateway/src/server.ts`), and the Go SDK
+  has no `enforce()` or revocation check, so a revoked grant's token is
+  accepted there until it expires, whatever the TypeScript and Python SDKs
+  default to.
+- **Fix:** give both an online and a feed revocation check, on by default
+  with an explicit opt-out, recorded as breaking. Owner: the gateway and Go
+  SDK maintainers. Exit criterion: a revoked grant is refused by both in a
+  test against the auth service.
+
+## G-68 — The event-bridge receipt prune is one unbounded DELETE on every instance at start
+
+- **Found:** bounding the revocation feed prune (2026-09-28).
+- **What:** `apps/auth-service/src/workers/eventBridgeReceiptPrune.ts` runs
+  `pruneEventBridgeReceiptsOnce` when each instance starts and then on an
+  interval. Each run is a single `DELETE FROM event_bridge_receipts` over
+  everything past retention, with no batch limit and no lock between
+  instances, so every instance that starts together runs the same large
+  delete at once, as the revocation feed prune did before it was bounded.
+- **Fix:** batch the delete with a per-run cap, run it under a
+  `pg_try_advisory_lock` so one instance prunes at a time, and jitter the
+  first run, as `workers/revocationFeedPrune.ts` now does. Owner: the auth
+  service maintainers. Exit criterion: a Postgres test in which two
+  concurrent prunes over a backlog larger than one batch leave one skipped
+  and the retained rows untouched.
+
 ## G-70 — With the emergency stop off, a failed passport credential insert leaves the passport behind
 
 - **Found:** emergency stop lockout work (G-22), 2026-09-27, in review.

@@ -56,7 +56,7 @@ from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenErr
 | `audience`         | `str \| None`    | No       | `None`  | Expected `aud` claim. If `None`, audience is not validated.        |
 | `issuer`           | `str \| None`    | No       | `None`  | Expected `iss` claim. The hosted alias expects `https://grantex.dev`; custom JWKS URLs derive it when omitted. |
 | `issuer_did`       | `str \| None`    | No       | `None`  | A `did:web` issuer. The JWKS is read from `https://<host>[:<port>][/<path>]/.well-known/jwks.json` instead of `jwks_uri`, and the expected issuer is that location without the suffix; an explicit `issuer` takes precedence. With `bounded_jwks_fetch=True` it must name a public domain (see [did:web issuers](#did-issuers)). |
-| `bounded_jwks_fetch` | `bool`         | No       | `False` | Apply the [JWKS fetch limits](#jwks-fetch-limits) and the [did:web issuer](#did-issuers) checks. `False` by default in these releases; a later major release makes `True` the default, with `False` as the opt-out. Not in `grantex` 0.6.0; in the next release. |
+| `bounded_jwks_fetch` | `bool`         | No       | `False` | Apply the [JWKS fetch limits](#jwks-fetch-limits) and the [did:web issuer](#did-issuers) checks. `False` by default in these releases; a later major release may make `True` the default, with `False` as the opt-out. Available in `grantex==0.6.1`. |
 | `algorithms`       | `list[str] \| None` | No    | `None`  | Narrow the accepted algorithms to a subset of `["RS256", "ES256"]`. Any other value raises `GrantexTokenError`. |
 | `proof_jkt`        | `str \| None`    | No       | `None`  | Thumbprint of the key the caller proved possession of (for example with a verified DPoP proof); the token's `cnf.jkt` must match. The verifier does not check DPoP proofs. |
 | `require_proof_of_possession` | `bool` | No     | `False` | Fail closed unless `proof_jkt` is given and matches `cnf.jkt`. |
@@ -76,6 +76,7 @@ from grantex import verify_grant_token, VerifyGrantTokenOptions, GrantexTokenErr
 | `scopes`            | `tuple[str, ...]` | The granted permission scopes.                        |
 | `issued_at`         | `int`             | Unix timestamp when the token was issued.             |
 | `expires_at`        | `int`             | Unix timestamp when the token expires.                |
+| `webauthn_evidence` | `WebAuthnGrantEvidence \| None` | Signed issuer reference to the original passkey assertion, when captured; not proof of current grant status. |
 | `parent_agent_did`  | `str \| None`     | Parent agent DID (delegation chains only).            |
 | `parent_grant_id`   | `str \| None`     | Parent grant ID (delegation chains only).             |
 | `delegation_depth`  | `int \| None`     | Delegation depth (0 = root grant).                    |
@@ -97,11 +98,9 @@ The key is the JWK Set entry named by the token's `kid` whose type matches the a
 ## JWKS fetch limits
 
 <Note>
-  Not in `grantex` 0.6.0; the next release includes these limits and the
-  [DID issuer](#did-issuers) checks, which apply when `bounded_jwks_fetch=True`
-  is set. The option is off by default in these releases. A later major
-  release turns it on by default, with `bounded_jwks_fetch=False` as the
-  opt-out.
+  `grantex==0.6.1` includes these limits and the [DID issuer](#did-issuers)
+  checks when `bounded_jwks_fetch=True` is set. The option remains off by
+  default; choose it explicitly when verifying untrusted remote issuers.
 </Note>
 
 The key set comes from whichever endpoint the verifier is pointed at. With

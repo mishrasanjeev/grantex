@@ -192,6 +192,34 @@ describe('POST /v1/authorize', () => {
 });
 
 describe('POST /v1/authorize — sandbox mode', () => {
+  it('keeps a passkey-required sandbox request pending without returning a code', async () => {
+    sqlMock.mockResolvedValueOnce([{ id: 'dev_TEST', name: 'Test Developer', mode: 'sandbox', fido_required: true }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'POST', url: '/v1/authorize', headers: authHeader(),
+      payload: { agentId: TEST_AGENT.id, principalId: 'user_123', scopes: ['read'] },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ sandbox: true });
+    expect(res.json()).not.toHaveProperty('code');
+    const insert = sqlMock.mock.calls.find((call) =>
+      Array.isArray(call[0]) && call[0].join('').includes('INSERT INTO auth_requests'));
+    expect(insert).toContain('pending');
+  });
+
+  it.each(['approve', 'deny'])('refuses the developer-key %s shortcut when sandbox requires a passkey', async (action) => {
+    sqlMock.mockResolvedValueOnce([{ id: 'dev_TEST', name: 'Test Developer', mode: 'sandbox', fido_required: true }]);
+    const res = await app.inject({
+      method: 'POST', url: `/v1/authorize/areq_TEST/${action}`, headers: authHeader(),
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ code: 'CONSENT_REQUIRED' });
+  });
+
   it('auto-approves and returns code immediately for sandbox developer', async () => {
     seedSandboxAuth();
     sqlMock.mockResolvedValueOnce([]);                       // subscription lookup

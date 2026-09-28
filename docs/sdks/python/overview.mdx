@@ -6,12 +6,12 @@ description: "Install and configure the Grantex Python SDK for delegated authori
 
 ## Installation
 
-Published release: **`grantex==0.6.0`**. The published wheel and sdist hashes
+Published release: **`grantex==0.6.1`**. The published wheel and sdist hashes
 match the tested artifacts; a clean public-index install was verified on
-September 27, 2026.
+September 28, 2026.
 
 ```bash
-python -m pip install grantex==0.6.0
+python -m pip install grantex==0.6.1
 ```
 
 The unpinned `python -m pip install grantex` command follows PyPI's current
@@ -30,8 +30,20 @@ Version `0.6.0` adds `client.webauthn.create_enrollment_session()` for
 principal-authenticated hosted passkey registration and
 `client.anomalies.get_response_policy()` / `set_response_policy()` for the
 account-level irregularity response mode. Both server capabilities are
-default-off and require explicit operator rollout; an SDK install alone does
-not enable them.
+default-off for self-hosted deployments and require explicit operator rollout;
+both are enabled on the Grantex-hosted service. An SDK install alone does not
+enable them.
+
+Version `0.6.1` adds typed `WebAuthnGrantEvidence` references to grant and
+verification responses and the updated VC WebAuthn attestation. It does not
+enable hosted server flags or add custom assertion UI helper methods.
+
+<Warning>
+The subsequent `enforce()` audience and missing-amount cap checks are not in
+`0.6.1`. Validate audience at your service boundary and pass validated amounts
+for capped calls; wrappers that omit amounts are not safe cap enforcers.
+See [release limitations](/release-status#known-limitations-in-the-current-published-artifacts).
+</Warning>
 
 <Note>
   Version `0.5.1` is a patch release. `enforce()` applies the tightest budget

@@ -103,6 +103,43 @@ beforeEach(() => {
   mockRedis.set.mockResolvedValue('OK');
 });
 
+describe('OAuth consent passkey policy', () => {
+  it.each([
+    { mode: 'sandbox', fidoRequired: false, automatic: true },
+    { mode: 'sandbox', fidoRequired: true, automatic: false },
+    { mode: 'live', fidoRequired: false, automatic: false },
+    { mode: 'live', fidoRequired: true, automatic: false },
+  ])('keeps $mode with fidoRequired=$fidoRequired behind the appropriate consent gate', async ({ mode, fidoRequired, automatic }) => {
+    const requestUri = 'urn:ietf:params:oauth:request_uri:passkey-test';
+    sqlMock.mockResolvedValueOnce([{
+      request_uri: requestUri, client_id: 'ag_oauth', developer_id: 'dev_oauth',
+      status: 'pushed', expires_at: new Date(Date.now() + 60_000).toISOString(),
+      mode, fido_required: fidoRequired, principal_hint: 'principal_123',
+      scopes: ['grantex.resource.read'], redirect_uri: 'https://client.example/callback',
+      state: 'state-test', resource: 'https://grantex.dev/oauth/resource',
+      code_challenge: 'A'.repeat(43), dpop_jkt: dpopKey.thumbprint, authorization_details: null,
+    }]);
+    sqlMock.mockResolvedValueOnce([]); // no policy auto-approval
+    sqlMock.mockResolvedValueOnce([{ request_uri: requestUri }]);
+    sqlMock.mockResolvedValueOnce([]);
+    const response = await app.inject({
+      method: 'GET', url: `/oauth/authorize?client_id=ag_oauth&request_uri=${encodeURIComponent(requestUri)}`,
+    });
+    expect(response.statusCode).toBe(303);
+    const location = new URL(response.headers.location!);
+    if (automatic) {
+      expect(location.origin).toBe('https://client.example');
+      expect(location.searchParams.has('code')).toBe(true);
+    } else {
+      expect(location.pathname).toBe('/consent');
+      expect(location.searchParams.has('code')).toBe(false);
+    }
+    const insert = sqlMock.mock.calls.find((call) =>
+      Array.isArray(call[0]) && call[0].join('').includes('INSERT INTO auth_requests'));
+    expect(insert).toContain(automatic ? 'approved' : 'pending');
+  });
+});
+
 describe('DPoP proof verification', () => {
   it('validates method, URI, freshness, signature, and access-token hash', async () => {
     const token = 'header.payload.signature';
