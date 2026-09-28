@@ -231,3 +231,5 @@ cef81ce2dbfda0967aaf05064edf29564f100807:apps/auth-service/tests/agent-key-mirro
 f9058614edae929d3ca591405e9d46725aa2549f:docs/relying-parties/verifying-agents.md:generic-api-key:35
 f9058614edae929d3ca591405e9d46725aa2549f:docs/relying-parties/verifying-agents.md:generic-api-key:66
 f9058614edae929d3ca591405e9d46725aa2549f:spec/registry-federation.md:generic-api-key:409
+# Public example did:key identifier in the DID syntax test, feat/passport-bound-grants
+b02cb69a538d544a9f74995eea060c64365426c8:apps/auth-service/tests/passport-verify-did.test.ts:generic-api-key:21
