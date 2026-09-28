@@ -1415,6 +1415,120 @@ the pull request that references it.
   `issueForCommittedGrant` while the stop is on), so a revocation sets their
   bit, and have `verifySDJWT` check it.
 
+## G-85 — The single-key token paths do not read the agent key history
+
+- **Found:** agent key history work (Agent Trust Registry, PRD §8.8),
+  2026-09-28.
+- **What:** migration 122 adds `agent_keys` with pending, active, rotated and
+  compromised keys and a rotation overlap, but every path that binds or checks
+  an agent key still reads the single registered key,
+  `agents.key_thumbprint`: the OAuth profile's PAR, code exchange, refresh,
+  revocation and token exchange (`routes/oauth.ts`), `POST /v1/authorize` and
+  `POST /v1/token` (`cnf.jkt`), delegation (`routes/delegate.ts`) and the
+  agent DID document (`routes/did.ts`). Consequences: a key added and proven
+  through the history is not usable there until it is also set as
+  `publicJwk`; a key rotated through the history stays accepted there after
+  its `valid_to` for as long as it remains the registered key; a pending key
+  is accepted there with a DPoP proof (which is also what proves it). A
+  compromise is handled: it moves the registered key to a proven replacement
+  or clears it and suspends the agent.
+- **Impact:** the overlap and the `key_unproven` / `key_not_active` denials
+  apply to the key routes and to relying parties that read the history, not
+  yet to the auth service's own token endpoints. The provider documentation
+  (`docs/providers/registering-agents.md`) and `spec/agent-keys.md` §5 and §7
+  say so, and tell providers to set `publicJwk` to the replacement with
+  `PATCH /v1/agents` after a rotation.
+- **Proposal:** switch those paths to evaluate the presented key against
+  `agent_keys` (`evaluateAgentKey` in `lib/registry/agent-keys.ts`), behind a
+  flag that defaults off, then drop `idx_agents_key_thumbprint_unique` once no
+  path reads `agents.key_thumbprint`.
+
+## G-86 — A compromise does not reach grants in other tenants bound to the same key
+
+- **Found:** agent key history work, 2026-09-28.
+- **What:** `POST /v1/agents/:id/keys/:thumbprint/compromise` revokes the
+  grants whose `cnf.jkt` is the key only within the reporting developer's
+  tenant. A key can have been held earlier by an agent of another developer:
+  a key released by a replacement (`PATCH /v1/agents`, or a rotation whose
+  overlap ended) can be registered by another agent, which the registered-key
+  index has always allowed. Grants the earlier holder obtained with the key
+  keep their binding and are not revoked by the compromise. (Registration
+  after a compromise is closed on every path that writes the history:
+  `compromised_agent_keys` records every compromised thumbprint and outlives
+  the agent. `POST` and `PATCH /v1/agents` check it only with the history
+  mirror on; see G-87.)
+- **Impact:** narrow. It needs one key to move between developers and then be
+  reported compromised while grants from the earlier holder are still active.
+- **Proposal:** decide with the owner whether a compromise should revoke
+  grants bound to the key in every tenant, or whether a released key should
+  stay reserved to its developer.
+
+## G-87 — With the history mirror off, the agents routes do not consult the key history
+
+- **Found:** review of the agent key history work, 2026-09-28.
+- **What:** mirroring the key `POST` and `PATCH /v1/agents` write into
+  `agent_keys` is behind `AGENT_KEY_HISTORY_MIRROR_ENABLED`, default off, so
+  those routes keep their earlier behaviour. With it off they do not add the
+  key to the history, do not end the replaced key there, and do not refuse a
+  key another agent holds in its history, a key in `compromised_agent_keys`,
+  or a non-P-256 key for an agent that declares a payments rail. The history
+  of an agent whose registered key changed through them can therefore list a
+  key it no longer registers as pending or active, and a compromised key can
+  be registered again as `publicJwk`.
+- **Impact:** a key registered again that way is still refused by the key
+  routes and by delegation (`routes/delegate.ts` checks
+  `compromised_agent_keys` under the cascade lock), but `POST /v1/token` and
+  the OAuth profile bind grants to the registered key and do not check it
+  (G-85).
+- **Proposal:** turn the flag on once its exit criterion is green (the flag-on
+  suite in `tests/agent-keys-postgres.integration.test.ts`) and the owner has
+  approved the runbook; then make it the default in a release that records the
+  flip as a breaking change with the flag as the opt-out.
+
+## G-90 — The grant credential status list is served unsigned, as a superseded format
+
+- **Found:** registry attestation-acceptance status lists (Stage 1), 2026-09-28,
+  reading `lib/vc.ts` for how platform-signed artefacts are signed.
+- **What:** `GET /v1/credentials/status/:listId` returns
+  `buildStatusListCredential(listId)` as plain JSON: a `StatusList2021Credential`
+  with no proof and no JWS envelope. Anyone who can answer for that URL (a
+  cache, a proxy, a hostile network) can hand a verifier a list with the bit
+  cleared, and nothing lets the verifier tell. It also mixes formats: the W3C
+  VC 2.0 context with the `StatusList2021` types and the VC 1.1 `issued`
+  property. StatusList2021 is superseded by Bitstring Status List v1.0, which
+  asks for the status list credential to be secured (§3.2 verifies its
+  proofs). Indices are also handed out sequentially, where Bitstring Status
+  List §2.1 says they SHOULD be random.
+- **Impact:** revocation of AgentGrantCredentials depends on an unauthenticated
+  document. A relying party that fetches it over TLS from the issuer is
+  exposed only to the issuer's own infrastructure; one that accepts it from
+  anywhere else is exposed to anyone on the path.
+- **Proposal:** serve the list as a `BitstringStatusListCredential` secured as
+  a VC-JWT with the platform signing key, the way
+  `lib/registry/acceptance-status.ts` does for the registry's lists, behind a
+  flag that defaults off with the old format kept until SDK verifiers move;
+  issue new credentials with `BitstringStatusListEntry` and random indices.
+
+## G-91 — `verifyAgentGrantVC` treats a status list it cannot find as "not revoked"
+
+- **Found:** registry attestation-acceptance status lists (Stage 1), 2026-09-28,
+  in the same reading of `lib/vc.ts`.
+- **What:** the revocation check in `verifyAgentGrantVC` runs only when the
+  `statusListCredential` URL matches `/status/<id>` and a `vc_status_lists` row
+  with that id exists; otherwise it is skipped and the credential verifies.
+  `getBit` returns `false` for an index outside the list. So a credential whose
+  list row is missing, or whose status URL or index is malformed, reads as
+  valid instead of failing closed. A validly signed credential cannot be
+  altered by the holder, so this needs a platform-side fault (a deleted or
+  never-written list row), not a forgery.
+- **Impact:** a credential that should be checkable against a list is accepted
+  without the check whenever that list cannot be read.
+- **Proposal:** when `credentialStatus` is present, require the URL to be one
+  of this service's list URLs, the list row to exist and the index to be in
+  range, and return `valid: false` otherwise; test each of the three cases.
+  Behind a flag that defaults off, since it can turn today's `valid: true`
+  into a denial.
+
 ## G-105 — The public registry search lists unverified, self-asserted organizations
 
 - **Found:** trust registry listing fix (`GET /v1/trust-registry` can be made
@@ -1467,46 +1581,3 @@ the pull request that references it.
   default with `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=false` as the explicit
   opt-out. Owner: the auth-service maintainers. Exit criterion: flag default
   flipped with an explicit opt-out once operators have moved.
-## G-90 — The grant credential status list is served unsigned, as a superseded format
-
-- **Found:** registry attestation-acceptance status lists (Stage 1), 2026-09-28,
-  reading `lib/vc.ts` for how platform-signed artefacts are signed.
-- **What:** `GET /v1/credentials/status/:listId` returns
-  `buildStatusListCredential(listId)` as plain JSON: a `StatusList2021Credential`
-  with no proof and no JWS envelope. Anyone who can answer for that URL (a
-  cache, a proxy, a hostile network) can hand a verifier a list with the bit
-  cleared, and nothing lets the verifier tell. It also mixes formats: the W3C
-  VC 2.0 context with the `StatusList2021` types and the VC 1.1 `issued`
-  property. StatusList2021 is superseded by Bitstring Status List v1.0, which
-  asks for the status list credential to be secured (§3.2 verifies its
-  proofs). Indices are also handed out sequentially, where Bitstring Status
-  List §2.1 says they SHOULD be random.
-- **Impact:** revocation of AgentGrantCredentials depends on an unauthenticated
-  document. A relying party that fetches it over TLS from the issuer is
-  exposed only to the issuer's own infrastructure; one that accepts it from
-  anywhere else is exposed to anyone on the path.
-- **Proposal:** serve the list as a `BitstringStatusListCredential` secured as
-  a VC-JWT with the platform signing key, the way
-  `lib/registry/acceptance-status.ts` does for the registry's lists, behind a
-  flag that defaults off with the old format kept until SDK verifiers move;
-  issue new credentials with `BitstringStatusListEntry` and random indices.
-
-## G-91 — `verifyAgentGrantVC` treats a status list it cannot find as "not revoked"
-
-- **Found:** registry attestation-acceptance status lists (Stage 1), 2026-09-28,
-  in the same reading of `lib/vc.ts`.
-- **What:** the revocation check in `verifyAgentGrantVC` runs only when the
-  `statusListCredential` URL matches `/status/<id>` and a `vc_status_lists` row
-  with that id exists; otherwise it is skipped and the credential verifies.
-  `getBit` returns `false` for an index outside the list. So a credential whose
-  list row is missing, or whose status URL or index is malformed, reads as
-  valid instead of failing closed. A validly signed credential cannot be
-  altered by the holder, so this needs a platform-side fault (a deleted or
-  never-written list row), not a forgery.
-- **Impact:** a credential that should be checkable against a list is accepted
-  without the check whenever that list cannot be read.
-- **Proposal:** when `credentialStatus` is present, require the URL to be one
-  of this service's list URLs, the list row to exist and the index to be in
-  range, and return `valid: false` otherwise; test each of the three cases.
-  Behind a flag that defaults off, since it can turn today's `valid: true`
-  into a denial.

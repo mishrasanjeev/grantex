@@ -9,6 +9,7 @@ import {
 } from '../lib/agent-security.js';
 import type { JWK } from 'jose';
 import { config } from '../config.js';
+import { AgentKeyMirrorRefusal, mirrorRegisteredAgentKey } from '../lib/registry/agent-key-mirror.js';
 
 interface RegisterAgentBody {
   name: string;
@@ -131,6 +132,13 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
                     created_at, updated_at
         `;
         createdRow = rows[0];
+        // AGENT_KEY_HISTORY_MIRROR_ENABLED (default off): the key also enters
+        // the agent key history, in this transaction. Off, nothing here runs.
+        if (config.agentKeyHistoryMirrorEnabled && keyThumbprint !== null) {
+          await mirrorRegisteredAgentKey(tx, {
+            agentId: id, developerId, jwk: publicJwk, thumbprint: keyThumbprint, previousThumbprint: null,
+          });
+        }
       });
     } catch (error) {
       if (isAgentKeyConflict(error)) {
@@ -139,6 +147,10 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
           code: 'AGENT_KEY_CONFLICT',
           requestId: request.id,
         });
+      }
+      // Only the history mirror throws this, and only with its flag on.
+      if (error instanceof AgentKeyMirrorRefusal) {
+        return reply.status(error.status).send({ message: error.message, code: error.code, requestId: request.id });
       }
       throw error;
     }
@@ -246,6 +258,68 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     const keyedDid = keyThumbprint
       ? `did:web:${config.didWebDomain}:agents:${request.params.id}`
       : null;
+
+    // AGENT_KEY_HISTORY_MIRROR_ENABLED (default off), and only when the key
+    // changes: the same update in a transaction that also mirrors the key into
+    // the agent key history. Otherwise, the single statement below, unchanged.
+    if (config.agentKeyHistoryMirrorEnabled && keyThumbprint !== undefined && validatedPublicJwk !== undefined) {
+      const developerId = request.developer.id;
+      const agentId = request.params.id;
+      const jwk = validatedPublicJwk;
+      const thumbprint = keyThumbprint;
+      let mirrored: Record<string, unknown>[] = [];
+      try {
+        await sql.begin(async (_tx) => {
+          const tx = _tx as unknown as TxSql;
+          // The key the agent holds now, locked so the replaced key and the
+          // new one are recorded against the same row the update changes.
+          const current = await tx<{ key_thumbprint: string | null }[]>`
+            SELECT key_thumbprint FROM agents WHERE id = ${agentId} AND developer_id = ${developerId} FOR UPDATE`;
+          if (!current[0]) return;
+          mirrored = await tx`
+            UPDATE agents
+            SET
+            did         = COALESCE(${keyedDid}, did),
+            name        = COALESCE(${name?.trim() ?? null}, name),
+            description = COALESCE(${description ?? null}, description),
+            scopes      = COALESCE(${scopes ?? null}, scopes),
+            status      = COALESCE(${status ?? null}, status),
+            redirect_uris = COALESCE(${validatedRedirectUris ?? null}, redirect_uris),
+            resource_servers = COALESCE(${validatedResourceServers ?? null}, resource_servers),
+            public_jwk = ${tx.json(jwk as never)},
+            key_thumbprint = ${thumbprint},
+            key_verified_thumbprint = NULL,
+            key_verified_at = NULL,
+            updated_at  = NOW()
+            WHERE id = ${agentId} AND developer_id = ${developerId}
+            RETURNING id, did, developer_id, name, description, scopes, status,
+                      redirect_uris, resource_servers, public_jwk, key_thumbprint,
+                      key_verified_thumbprint, key_verified_at,
+                      created_at, updated_at
+          `;
+          await mirrorRegisteredAgentKey(tx, {
+            agentId, developerId, jwk, thumbprint, previousThumbprint: current[0].key_thumbprint,
+          });
+        });
+      } catch (error) {
+        if (isAgentKeyConflict(error)) {
+          return reply.status(409).send({
+            message: 'publicJwk is already registered to another Agent Client Instance',
+            code: 'AGENT_KEY_CONFLICT',
+            requestId: request.id,
+          });
+        }
+        if (error instanceof AgentKeyMirrorRefusal) {
+          return reply.status(error.status).send({ message: error.message, code: error.code, requestId: request.id });
+        }
+        throw error;
+      }
+      const agent = mirrored[0];
+      if (!agent) {
+        return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
+      }
+      return reply.send(toAgentResponse(agent));
+    }
 
     // Use COALESCE so unset fields keep their current values — single SQL call, no fragments
     let rows;
