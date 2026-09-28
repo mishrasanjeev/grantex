@@ -27,9 +27,8 @@ NPM ?= npm
 
 PY_SDK := packages/sdk-py
 PY_AGENT_PASSPORT := packages/agent-passport-py
-TS_PACKAGES := packages/sdk-ts packages/mcp-auth packages/agent-passport apps/auth-service
+TS_PACKAGES := packages/sdk-ts packages/mcp-auth packages/agent-passport apps/auth-service packages/agent-httpsig
 PY_HTTPSIG := packages/agent-httpsig-py
-TS_PACKAGES := packages/sdk-ts packages/mcp-auth apps/auth-service packages/agent-httpsig
 
 .PHONY: help install check test check-docs check-denylist check-py check-ts test-py test-scripts test-ts
 
