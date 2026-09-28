@@ -5,7 +5,9 @@
  * Covers every key route (add, challenge, prove, rotate, compromise, the key
  * listing and declared rails), the migration 122 backfill (owner decision
  * 12), the mirror that keeps the history complete when POST and PATCH
- * /v1/agents write a key, the rotation overlap boundary, a compromise that
+ * /v1/agents write a key (AGENT_KEY_HISTORY_MIRROR_ENABLED=true), those two
+ * routes unchanged with the mirror off (the default), the rotation overlap
+ * boundary, a compromise that
  * revokes the grants bound to the key (and what was delegated from them)
  * through the cascade, replayed and wrong-key proofs, and the P-256 rule for
  * payments rails. The SQL mock forwards to a real database, so the triggers,
@@ -197,6 +199,12 @@ afterEach(() => {
 });
 
 describePostgres('agent key history against real Postgres', () => {
+  // The history mirror on POST and PATCH /v1/agents is behind a flag that
+  // defaults off; these tests cover it on. The block below covers it off.
+  beforeEach(() => {
+    vi.stubEnv('AGENT_KEY_HISTORY_MIRROR_ENABLED', 'true');
+  });
+
   it('mirrors a key registered through POST /v1/agents as pending, and a DPoP proof of it as possession', async () => {
     const tenant = await newTenant();
     const key = await newKey('EdDSA');
@@ -211,6 +219,11 @@ describePostgres('agent key history against real Postgres', () => {
     });
 
     await dpopVerified(agentId, key.thumbprint);
+    // The key routes record the DPoP proof before they read the history.
+    const relisted = await call(tenant, 'GET', keysUrl(agentId));
+    expect(relisted.json()).toMatchObject({
+      keys: [{ thumbprint: key.thumbprint, status: 'active', usable: true }],
+    });
     const row = await keyRow(key.thumbprint);
     expect(row).toMatchObject({ status: 'active', agent_id: agentId, developer_id: tenant.id });
     expect(row!['possession_proved_at']).not.toBeNull();
@@ -719,6 +732,120 @@ describePostgres('agent key history against real Postgres', () => {
     const eleventh = await addKey(tenant, agentId, await newKey('EdDSA'));
     expect(eleventh.statusCode).toBe(409);
     expect(eleventh.json()).toMatchObject({ code: 'KEY_LIMIT_REACHED' });
+  }, 60_000);
+});
+
+describePostgres('POST and PATCH /v1/agents with the history mirror off (the default)', () => {
+  const AGENT_FIELDS = [
+    'agentId', 'createdAt', 'description', 'developerId', 'did', 'keyBindingConfigured', 'keyPossessionVerified',
+    'keyThumbprint', 'name', 'publicJwk', 'redirectUris', 'resourceServers', 'scopes', 'status', 'updatedAt',
+  ];
+
+  beforeEach(() => {
+    // Anything but exactly 'true' is off.
+    vi.stubEnv('AGENT_KEY_HISTORY_MIRROR_ENABLED', 'TRUE');
+  });
+
+  it('installs nothing on agents: no trigger and no mirror function', async () => {
+    const triggers = await sql`
+      SELECT tgname FROM pg_trigger WHERE tgrelid = 'agents'::regclass AND NOT tgisinternal`;
+    expect(triggers.map((row) => row['tgname'])).not.toContain('agents_key_mirror_trg');
+    const functions = await sql`SELECT proname FROM pg_proc WHERE proname = 'grantex_agent_key_mirror'`;
+    expect(functions).toHaveLength(0);
+  }, 60_000);
+
+  it('writes only the agents row, with the response the routes gave before the history existed', async () => {
+    const tenant = await newTenant();
+    const first = await newKey('EdDSA');
+    const second = await newKey();
+
+    const created = await call(tenant, 'POST', '/v1/agents', { name: 'Nimbus Shopper 2.4', scopes: SCOPES, publicJwk: first.jwk });
+    expect(created.statusCode, created.body).toBe(201);
+    expect(Object.keys(created.json()).sort()).toEqual(AGENT_FIELDS);
+    expect(created.json()).toMatchObject({ keyThumbprint: first.thumbprint, keyBindingConfigured: true, keyPossessionVerified: false });
+    const agentId = created.json<{ agentId: string }>().agentId;
+    expect(await keyRow(first.thumbprint)).toBeUndefined();
+
+    await dpopVerified(agentId, first.thumbprint);
+    const patched = await call(tenant, 'PATCH', `/v1/agents/${agentId}`, { publicJwk: second.jwk, name: 'Nimbus Shopper 2.4 (renamed)' });
+    expect(patched.statusCode, patched.body).toBe(200);
+    expect(Object.keys(patched.json()).sort()).toEqual(AGENT_FIELDS);
+    expect(patched.json()).toMatchObject({
+      keyThumbprint: second.thumbprint, keyPossessionVerified: false, name: 'Nimbus Shopper 2.4 (renamed)',
+      did: `did:web:grantex.dev:agents:${agentId}`,
+    });
+    expect(await keyRow(first.thumbprint)).toBeUndefined();
+    expect(await keyRow(second.thumbprint)).toBeUndefined();
+    const history = await sql`SELECT thumbprint FROM agent_keys WHERE agent_id = ${agentId}`;
+    expect(history).toHaveLength(0);
+
+    // The agents index still decides a conflict between registered keys, as before.
+    const taken = await call(tenant, 'POST', '/v1/agents', { name: 'Nimbus Shopper 2.4 (b)', scopes: SCOPES, publicJwk: second.jwk });
+    expect(taken.statusCode).toBe(409);
+    expect(taken.json()).toMatchObject({ code: 'AGENT_KEY_CONFLICT' });
+    const missing = await call(tenant, 'PATCH', '/v1/agents/ag_does_not_exist', { publicJwk: first.jwk });
+    expect(missing.statusCode).toBe(404);
+  }, 60_000);
+
+  it('refuses nothing the history would: those refusals need the flag', async () => {
+    const tenant = await newTenant();
+    // A key held in another agent's history.
+    const holder = await createAgent(tenant, undefined, 'Nimbus Shopper 2.4 (holder)');
+    const held = await newKey();
+    expect((await addKey(tenant, holder, held)).statusCode).toBe(201);
+    const viaPost = await call(tenant, 'POST', '/v1/agents', { name: 'Nimbus Shopper 2.4 (c)', scopes: SCOPES, publicJwk: held.jwk });
+    expect(viaPost.statusCode, viaPost.body).toBe(201);
+
+    // A key reported compromised.
+    const reporter = await createAgent(tenant, undefined, 'Nimbus Shopper 2.4 (reporter)');
+    const leaked = await newKey();
+    expect((await addKey(tenant, reporter, leaked)).statusCode).toBe(201);
+    expect((await call(tenant, 'POST', keyUrl(reporter, leaked.thumbprint, 'compromise'), {})).statusCode).toBe(200);
+    const target = await createAgent(tenant, undefined, 'Nimbus Shopper 2.4 (target)');
+    const viaPatch = await call(tenant, 'PATCH', `/v1/agents/${target}`, { publicJwk: leaked.jwk });
+    expect(viaPatch.statusCode, viaPatch.body).toBe(200);
+    // The history itself still refuses it.
+    const readd = await addKey(tenant, target, leaked);
+    expect(readd.statusCode).toBe(409);
+    expect(readd.json()).toMatchObject({ code: 'key_not_active' });
+
+    // A non-P-256 key under a payments rail.
+    const payments = await createAgent(tenant, undefined, 'Nimbus Shopper 2.4 (payments)');
+    expect((await call(tenant, 'PUT', `/v1/agents/${payments}/declared-rails`, { declaredRails: ['ap2'] })).statusCode).toBe(200);
+    const ed = await newKey('EdDSA');
+    const edPatch = await call(tenant, 'PATCH', `/v1/agents/${payments}`, { publicJwk: ed.jwk });
+    expect(edPatch.statusCode, edPatch.body).toBe(200);
+    const edAdd = await addKey(tenant, payments, await newKey('EdDSA'));
+    expect(edAdd.statusCode).toBe(400);
+    expect(edAdd.json()).toMatchObject({ code: 'KEY_ALGORITHM_NOT_ALLOWED' });
+  }, 60_000);
+
+  it('the key routes still work for keys added through them, including the registered key', async () => {
+    const tenant = await newTenant();
+    const registered = await newKey();
+    const agentId = await createAgent(tenant, registered.jwk);
+    expect(await keyRow(registered.thumbprint)).toBeUndefined();
+
+    // The registered key enters the history through the key route; a DPoP
+    // proof of it counts as possession.
+    const added = await addKey(tenant, agentId, registered);
+    expect(added.statusCode, added.body).toBe(201);
+    await dpopVerified(agentId, registered.thumbprint);
+    const listed = await call(tenant, 'GET', keysUrl(agentId));
+    expect(listed.json()).toMatchObject({ keys: [{ thumbprint: registered.thumbprint, status: 'active', usable: true }] });
+
+    const replacement = await activeKey(tenant, agentId);
+    const rotated = await call(tenant, 'POST', keyUrl(agentId, registered.thumbprint, 'rotate'), {
+      replacementThumbprint: replacement.thumbprint,
+    });
+    expect(rotated.statusCode, rotated.body).toBe(200);
+    expect(rotated.json()).toMatchObject({ rotated: { status: 'rotated' }, replacement: { status: 'active' } });
+
+    const compromised = await call(tenant, 'POST', keyUrl(agentId, registered.thumbprint, 'compromise'), {});
+    expect(compromised.statusCode, compromised.body).toBe(200);
+    expect(compromised.json()).toMatchObject({ agentKey: 'promoted', promotedThumbprint: replacement.thumbprint });
+    const agent = await sql`SELECT key_thumbprint FROM agents WHERE id = ${agentId}`;
+    expect(agent[0]).toMatchObject({ key_thumbprint: replacement.thumbprint });
   }, 60_000);
 });
 

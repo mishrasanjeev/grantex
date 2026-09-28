@@ -12,6 +12,7 @@ import {
   selectDisclosures,
   verifyPassport,
   type Jwk,
+  type PassportStatus,
 } from '../src/index.ts';
 import { ISSUER, p256KeyPair, passportParams } from './helpers.ts';
 
@@ -20,6 +21,7 @@ describe('README examples', () => {
     const issuer = p256KeyPair('mock-issuer-2026');
     const agent = p256KeyPair();
     const registry = { issuerKeys: (iss: string): Jwk[] => (iss === ISSUER ? [issuer.publicJwk] : []) };
+    const statusLists = { status: async (_uri: string, _idx: number): Promise<PassportStatus> => 'valid' };
     const now = Math.floor(Date.now() / 1000);
     const passportCompact = issuePassport(passportParams(issuer, agent, { iat: now - 60, exp: now + 86_400 })).compact;
     const agentPrivateJwk = agent.privateJwk;
@@ -43,6 +45,8 @@ describe('README examples', () => {
         compact: presentation,
         // Issuer keys come only from your own trust configuration, never from the token.
         issuerKeys: (issuer) => registry.issuerKeys(issuer),
+        // Revoked, suspended or unresolvable status is refused (passport_revoked, status_stale).
+        statusResolver: (uri, idx) => statusLists.status(uri, idx),
         keyBinding: { aud: 'https://merchant.example', nonce },
         paymentsRails: true,
       });
@@ -64,6 +68,7 @@ describe('README examples', () => {
       await verifyPassport({
         compact: presentation,
         issuerKeys: (issuer) => registry.issuerKeys(issuer),
+        statusResolver: (uri, idx) => statusLists.status(uri, idx),
         keyBinding: { aud: 'https://merchant.example', nonce: 'another' },
         paymentsRails: true,
       });

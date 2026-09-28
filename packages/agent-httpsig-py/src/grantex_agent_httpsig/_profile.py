@@ -11,8 +11,10 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 import re
 import secrets
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Mapping, Optional, Protocol, Tuple, Union
@@ -86,7 +88,6 @@ class NonceStore(Protocol):
 
         Returns False when the pair is already recorded. Must be atomic.
         """
-        ...
 
 
 @dataclass(frozen=True)
@@ -203,7 +204,26 @@ def _read_credentials(body: bytes) -> Union[Mapping[str, Any], str]:
 def _check_integer(value: Any, name: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise AgentHttpSigError(name + " must be a non-negative integer (UNIX seconds)")
-    return value
+    checked: int = value
+    return checked
+
+
+def _check_now(value: Any) -> int:
+    """The verifier's clock: a finite, non-negative number of UNIX seconds.
+
+    NaN compares false with everything, so both time checks of section 4.3
+    would pass and a stale signature would be accepted; an infinity makes the
+    window meaningless. Such a clock is a configuration error, so verify()
+    refuses to answer rather than deciding on it (fail closed).
+    """
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value < 0
+    ):
+        raise AgentHttpSigError("now must be a finite, non-negative number (UNIX seconds)")
+    return int(value)
 
 
 def sign(
@@ -304,20 +324,27 @@ def _signature_params(
 
 
 class InMemoryNonceStore:
-    """In-memory nonce store for one process and for tests (spec section 4.4)."""
+    """In-memory nonce store for one process and for tests (spec section 4.4).
+
+    Safe to share between threads: pruning, the check and the store happen
+    under one lock, so two concurrent requests with the same nonce cannot
+    both see it as unused (the NonceStore contract requires atomicity).
+    """
 
     def __init__(self, clock: Callable[[], int] = _now) -> None:
         self._clock = clock
         self._seen: Dict[Tuple[str, str], int] = {}
+        self._lock = threading.Lock()
 
     def check_and_store(self, keyid: str, nonce: str, expires_at: int) -> bool:
-        now = self._clock()
-        for k in [k for k, until in self._seen.items() if until < now]:
-            del self._seen[k]
-        if (keyid, nonce) in self._seen:
-            return False
-        self._seen[(keyid, nonce)] = expires_at
-        return True
+        with self._lock:
+            now = self._clock()
+            for k in [k for k, until in self._seen.items() if until < now]:
+                del self._seen[k]
+            if (keyid, nonce) in self._seen:
+                return False
+            self._seen[(keyid, nonce)] = expires_at
+            return True
 
 
 def _parse_presentation(value: str) -> Optional[Tuple[str, Union[str, bytes]]]:
@@ -400,7 +427,7 @@ def verify(
     # configured :80 or :443 would deny every request; refuse it here.
     if re.search(r":(?:80|443)\Z", authority):
         raise AgentHttpSigError("expected_authority must omit the default port (80 or 443)")
-    current = int(_now() if now is None else now)
+    current = _check_now(_now() if now is None else now)
     headers = request.headers
 
     # 1-2. Both fields, both Dictionaries (RFC 9421 sections 4.1, 4.2).

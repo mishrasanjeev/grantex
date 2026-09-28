@@ -783,7 +783,10 @@ For a production rollout, deploy the auth service and the `/passkey-enroll` host
 The workflow also tests sandbox/live consent parity, two authenticator devices,
 denial, credential removal, one-use ticket replay, and live OAuth approval and
 denial after interactive principal selection. Credential removal blocks new
-assertions; revoke existing grants separately. Agents with issued VCs cannot
+assertions. A dashboard browser regression covers login, enrollment-link
+issuance, registration, listing and confirmed removal using a bodyless DELETE;
+the portal sends JSON content type only for requests with a JSON body. Revoke
+existing grants separately. Agents with issued VCs cannot
 be hard-deleted (`409 AGENT_HAS_CREDENTIAL_HISTORY`); suspend them and revoke
 their grants to retain verifiable status history. Chromium virtual-authenticator
 checks are not certification of every physical device or browser.
@@ -1063,7 +1066,7 @@ await grantex.passports.revoke('urn:grantex:passport:01HXYZ...');
 | `GET` | `/v1/passport/:id` | API key | Retrieve passport by ID |
 | `POST` | `/v1/passport/:id/revoke` | API key | Revoke passport (StatusList2021) |
 | `GET` | `/v1/trust-registry/:orgDID` | None | Look up org trust record (public) |
-| `GET` | `/v1/trust-registry` | API key | List all trust records (admin) |
+| `GET` | `/v1/trust-registry` | API key; admin key (`ADMIN_API_KEY`) when `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` | List all trust records, across developers (operator) |
 
 See [`packages/mpp/`](packages/mpp/) for full package docs. Demo: [grantex.dev/mpp-demo](https://grantex.dev/mpp-demo).
 

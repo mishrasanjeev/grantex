@@ -102,6 +102,75 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Documented in `spec/attestation-1.0.md`,
   `docs/issuers/becoming-an-accredited-issuer.md`, `docs/openapi.yaml` and
   `docs/self-hosting.md`. New findings: FINDINGS G-111 to G-113.
+### Agent Passport SD-JWT VC profile (new, unpublished packages)
+- New `spec/agent-passport-1.0.md`: the Agent Passport as an SD-JWT VC
+  (RFC 9901, draft-ietf-oauth-sd-jwt-vc) with `typ` `dc+sd-jwt`, `vct`
+  `urn:grantex:agent-passport:1`, `cnf`, a Token Status List `status`
+  reference, and `provider`, `agent`, `verification` and `attestation_id` as
+  selectively disclosable claims. It defines the hash rule (the SHA-256 of the
+  issuer-signed JWT only, never the disclosures), the key rule (keys are equal
+  when their RFC 7638 thumbprints are), the P-256 rule for payments rails and
+  the refusal codes. The VC-JOSE-COSE rendering is Phase 3.
+- New `@grantex/agent-passport` (`packages/agent-passport`) and
+  `grantex-agent-passport` (`packages/agent-passport-py`), both 0.1.0 and not
+  published: `issuePassport` / `issue_passport` for the mock issuer and tests,
+  `verifyPassport` / `verify_passport`, `createKeyBindingJwt` /
+  `create_key_binding_jwt`, `selectDisclosures` / `select_disclosures`,
+  `externalCredentialHash` / `external_credential_hash`, `jwkThumbprint` /
+  `jwk_thumbprint` and `keysEqual` / `keys_equal`. Verification takes issuer
+  keys only from an injected resolver, requires ES256 (EdDSA only when turned
+  on) and refuses every failure with a `PassportError` code and reason.
+  Verification requires a status decision and fails closed without one: pass a
+  status resolver (`statusResolver` / `status_resolver`, `(uri, idx)` to
+  `valid`, `invalid` or `suspended`), whose `invalid` or `suspended` answer is
+  refused with `passport_revoked` and whose failure or unknown answer is
+  refused with `status_stale`, or pass `statusCheckedBy: 'caller'` /
+  `status_checked_by="caller"` to state that the caller resolves `status`
+  itself; with neither, the call is refused as a configuration error (spec
+  section 4). `sub` and `provider.did` must match the W3C DID Core section 3.1
+  DID syntax in full. The hash names the exact issuer-signed JWT bytes, so it
+  is not a deny-list key (spec section 6).
+- Shared vectors in `spec/examples/agent-passport-vectors.json`, including
+  status vectors, checked by both packages. Both run in `make check` /
+  `make test` and in CI, and both have Dependabot entries. No existing
+  path changes. `scripts/check-docs-integrity.mjs --live` skips a
+  `pyproject.toml` with the `Private :: Do Not Upload` classifier, as it
+  already skips a `package.json` with `"private": true`.
+### Agent request signing libraries (not yet published)
+- New `spec/verification.md`: the `Agent-Passport`, `Agent-Grant` and
+  `Agent-Trust` headers (RFC 9651 Byte Sequences; above 6 KB the presentation
+  moves to the JSON content under `agent_credentials` and the header carries
+  `body;sha-256=:...:`, and the content is read only when it nests at most
+  64 deep), `Content-Digest` (RFC 9530, SHA-256 only) and the
+  RFC 9421 signing profile: covered components exactly `("@method"
+  "@authority" "@path" "content-digest" "agent-passport" "agent-grant")`,
+  parameters `created`, `expires`, `nonce`, `keyid` (RFC 7638 thumbprint) and
+  `tag="agent-payer-auth"`, at most 300 seconds between `created` and
+  `expires`, `ecdsa-p256-sha256` (r || s, not DER) and `ed25519`. The
+  verification steps are ordered and each denial carries
+  `request_signature_invalid` or `request_signature_stale` and a reason.
+- New packages `@grantex/agent-httpsig` (`packages/agent-httpsig`) and
+  `grantex-agent-httpsig` (`packages/agent-httpsig-py`), 0.1.0, not
+  published: `sign()` and `verify()` for the profile with an injected key
+  resolver and nonce store, an RFC 9421 signature base builder, and an RFC
+  9651 parser and serializer. Both run the shared vectors in
+  `spec/examples/agent-httpsig-vectors.json` (deterministic Ed25519 signing,
+  ECDSA verification, 58 verification cases with their denial reasons, and
+  the signature bases of RFC 9421 section 2.5 and Appendix B.2.1, B.2.3,
+  B.2.4, B.2.5 and B.2.6 with the B.2.4 and B.2.6 signatures verified), and
+  are in `make check`, `make test` and CI. `verify()` refuses an expected
+  authority that carries the default port (`:80` or `:443`), which
+  `@authority` never does, and a `now` that is not a finite, non-negative
+  number (NaN or an infinity). The Python `InMemoryNonceStore` checks and
+  records a nonce under a lock, so threads sharing one store cannot both
+  accept the same nonce. The signature base builders accept a covered field
+  only when its name is a lowercased RFC 9110 field name (a token), as
+  RFC 9421 section 2.1 requires.
+- `scripts/check-docs-integrity.mjs --live` skips a Python project that
+  carries the `Private :: Do Not Upload` classifier, as it already skipped an
+  npm package marked `"private": true`.
+- New findings: FINDINGS G-95 (the query string is not signed) and
+  FINDINGS G-96 (`Agent-Trust` is not bound to the request).
 ### Accredited issuers in the registry (auth service)
 - New `POST /v1/registry/issuers` and `PATCH /v1/registry/issuers/{id}` for
   the registry operator: accredit an issuer with its `entity_id` (an https
@@ -120,6 +189,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   revoked kids, with an `ETag` and `Cache-Control: no-cache` (a cache
   revalidates every read, so a revoked key is not served stale), limited to
   60 requests a minute per address.
+  revoked kids, ordered by `entity_id` and paged with `page` (default 1) and
+  `pageSize` (1 to 500, default 100), with `total`, the number of issuers in
+  all, read in the same snapshot as the page. Each page has an `ETag` and
+  `Cache-Control: no-cache` (a cache revalidates every read, so a revoked key
+  is not served stale); limited to 60 requests a minute per address.
+- The public list needs no credential, so it is off by default behind the new
+  `REGISTRY_PUBLIC_ENDPOINTS_ENABLED`, on only for exactly `true`. Off, the
+  route is not registered and answers as any unknown route does (`401`
+  without an API key, `404` with one). The operator routes and the
+  accreditation lookups are not behind the flag.
 - Trust marks come from a fixed taxonomy:
   `urn:grantex:tm:provider.entity`, `provider.ownership`,
   `provider.screening`, `agent.identity` and `agent.security`; anything else
@@ -128,6 +207,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   existing path changes. Documented in
   `docs/issuers/becoming-an-accredited-issuer.md`,
   `spec/registry-federation.md` and `docs/self-hosting.md`.
+  `spec/registry-federation.md`, `docs/self-hosting.md` and
+  `docs/openapi.yaml`.
+### Opt-in admin key for the trust registry listing (auth service)
+- New setting `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED`, off by default and read
+  when the service starts. `GET /v1/trust-registry` returns the 100 newest
+  registry records of every developer, unverified ones included, and was
+  documented as an admin route, but any developer API key can read it, so one
+  tenant can list every other tenant's records. Operators should turn the
+  setting on.
+  - Off (unset, `false`, or any value other than exactly `true`): the route is
+    unchanged, with standard developer API key auth and the plan budget.
+  - `true`: the route takes the service administrator credential
+    (`ADMIN_API_KEY`, as `Authorization: Bearer <key>`), as the other operator
+    routes do. A developer API key, a wrong key or no key is refused with
+    `401 UNAUTHORIZED` before anything is read, and the admin key is compared
+    in constant time. While `ADMIN_API_KEY` is not configured, every call is
+    refused with `503 SERVICE_UNAVAILABLE`. The route is limited to 20 calls a
+    minute per address and no longer draws on a developer's plan budget.
+  - The response is the same either way. `GET /v1/trust-registry/:orgDID`,
+    `POST /v1/trust-registry/verify-dns` and the `/v1/registry/orgs` routes
+    are unchanged.
+- **Before turning it on:** a caller that reads this listing with a developer
+  API key should look organizations up one at a time with the public
+  `GET /v1/registry/orgs/:did` or search with `GET /v1/registry/orgs`; an
+  operator uses `ADMIN_API_KEY`. Documented in
+  `docs/features/trust-registry.mdx` ("Operator Listing"),
+  `docs/openapi.yaml` and `docs/self-hosting.md`. The default stays off until
+  operators have moved (FINDINGS G-106).
 ### Agent key history: possession proof, rotation and compromise (auth service)
 - New: every agent key is kept in a history (`agent_keys`, migration 122),
   identified by its RFC 7638 JWK Thumbprint, with the states `pending`,
@@ -163,6 +270,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   refuse a key held in another agent's history (`AGENT_KEY_CONFLICT`), a
   compromised key (`key_not_active`) or a non-P-256 key under a payments rail.
   The token endpoints still bind to the registered key (FINDINGS G-85).
+  history cannot hold is reported with a migration warning. The migration
+  installs nothing on `agents` (no trigger). A DPoP proof of the registered key
+  counts as possession: the key routes record it before they read the history.
+- New flag `AGENT_KEY_HISTORY_MIRROR_ENABLED` (default off; only `true` turns
+  it on). Off, `POST` and `PATCH /v1/agents` behave exactly as before: the keys
+  they write are not added to the history, and they refuse nothing new. On,
+  the key they write also enters the history in the same transaction (a key
+  replaced by `PATCH` ends at once), and they refuse a key held in another
+  agent's history (`AGENT_KEY_CONFLICT`), a compromised key (`key_not_active`)
+  or a non-P-256 key under a payments rail (`KEY_ALGORITHM_NOT_ALLOWED`).
+  The token endpoints still bind to the registered key (FINDINGS G-85).
+- A compromise looks for the grants bound to the key under the developer's
+  cascade lock, the lock delegation holds while it binds a grant to a key, so
+  a delegation in flight cannot leave a live grant bound to the compromised
+  key; `POST /v1/grants/delegate` re-checks the sub-agent's key under that
+  lock and refuses one reported compromised (`409 key_not_active`). Only keys
+  reported through the compromise route are ever refused there.
   Documented in `docs/providers/registering-agents.md` and
   `spec/agent-keys.md`.
 ### Registry attestation-acceptance status lists
@@ -184,6 +308,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   The routes need no authentication, are rate-limited to 300 requests a
   minute per client address, and allow any browser origin. A store that
   cannot be read is a `5xx`, never an older list.
+- The three routes are served only when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED` is
+  exactly `true` at startup; it defaults off. With it off the paths are not
+  routes and answer like any unknown path. Allocating and setting entries
+  inside the service works either way.
+- CORS for browser relying parties: an `OPTIONS` preflight (sent because
+  `If-None-Match` is not a CORS-safelisted request-header) is answered `204`
+  with `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET`
+  and `Access-Control-Allow-Headers: If-None-Match`, and `200` and `304`
+  responses carry `Access-Control-Expose-Headers: ETag`. No response allows
+  credentials.
 - Entries are allocated at random indices, from lists of 131,072 entries, and
   can never be handed out twice. The code that registers attestations uses
   `allocateAcceptanceEntry()`, `setAcceptance(uri, idx, status)` and
@@ -194,63 +328,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `registry_acceptance_lists` and `registry_acceptance_entries` tables, created
   empty. The lists are the registry's own; they have no developer or tenant
   column.
-### Agent request signing libraries (not yet published)
-- New `spec/verification.md`: the `Agent-Passport`, `Agent-Grant` and
-  `Agent-Trust` headers (RFC 9651 Byte Sequences; above 6 KB the presentation
-  moves to the JSON content under `agent_credentials` and the header carries
-  `body;sha-256=:...:`, and the content is read only when it nests at most
-  64 deep), `Content-Digest` (RFC 9530, SHA-256 only) and the
-  RFC 9421 signing profile: covered components exactly `("@method"
-  "@authority" "@path" "content-digest" "agent-passport" "agent-grant")`,
-  parameters `created`, `expires`, `nonce`, `keyid` (RFC 7638 thumbprint) and
-  `tag="agent-payer-auth"`, at most 300 seconds between `created` and
-  `expires`, `ecdsa-p256-sha256` (r || s, not DER) and `ed25519`. The
-  verification steps are ordered and each denial carries
-  `request_signature_invalid` or `request_signature_stale` and a reason.
-- New packages `@grantex/agent-httpsig` (`packages/agent-httpsig`) and
-  `grantex-agent-httpsig` (`packages/agent-httpsig-py`), 0.1.0, not
-  published: `sign()` and `verify()` for the profile with an injected key
-  resolver and nonce store, an RFC 9421 signature base builder, and an RFC
-  9651 parser and serializer. Both run the shared vectors in
-  `spec/examples/agent-httpsig-vectors.json` (deterministic Ed25519 signing,
-  ECDSA verification, 58 verification cases with their denial reasons, and
-  the signature bases of RFC 9421 section 2.5 and Appendix B.2.1, B.2.3,
-  B.2.4, B.2.5 and B.2.6 with the B.2.4 and B.2.6 signatures verified), and
-  are in `make check`, `make test` and CI. `verify()` refuses an expected
-  authority that carries the default port (`:80` or `:443`), which
-  `@authority` never does.
-- `scripts/check-docs-integrity.mjs --live` skips a Python project that
-  carries the `Private :: Do Not Upload` classifier, as it already skipped an
-  npm package marked `"private": true`.
-- New findings: FINDINGS G-95 (the query string is not signed) and
-  FINDINGS G-96 (`Agent-Trust` is not bound to the request).
-### Agent Passport SD-JWT VC profile (new, unpublished packages)
-- New `spec/agent-passport-1.0.md`: the Agent Passport as an SD-JWT VC
-  (RFC 9901, draft-ietf-oauth-sd-jwt-vc) with `typ` `dc+sd-jwt`, `vct`
-  `urn:grantex:agent-passport:1`, `cnf`, a Token Status List `status`
-  reference, and `provider`, `agent`, `verification` and `attestation_id` as
-  selectively disclosable claims. It defines the hash rule (the SHA-256 of the
-  issuer-signed JWT only, never the disclosures), the key rule (keys are equal
-  when their RFC 7638 thumbprints are), the P-256 rule for payments rails and
-  the refusal codes. The VC-JOSE-COSE rendering is Phase 3.
-- New `@grantex/agent-passport` (`packages/agent-passport`) and
-  `grantex-agent-passport` (`packages/agent-passport-py`), both 0.1.0 and not
-  published: `issuePassport` / `issue_passport` for the mock issuer and tests,
-  `verifyPassport` / `verify_passport`, `createKeyBindingJwt` /
-  `create_key_binding_jwt`, `selectDisclosures` / `select_disclosures`,
-  `externalCredentialHash` / `external_credential_hash`, `jwkThumbprint` /
-  `jwk_thumbprint` and `keysEqual` / `keys_equal`. Verification takes issuer
-  keys only from an injected resolver, requires ES256 (EdDSA only when turned
-  on) and refuses every failure with a `PassportError` code and reason.
-  Verification does not check revocation: the relying party resolves the
-  `status` reference itself and refuses with `passport_revoked` or
-  `status_stale` before accepting (spec section 4). The hash names the exact
-  issuer-signed JWT bytes, so it is not a deny-list key (spec section 6).
-- Shared vectors in `spec/examples/agent-passport-vectors.json`, checked by
-  both packages. Both run in `make check` / `make test` and in CI. No existing
-  path changes. `scripts/check-docs-integrity.mjs --live` skips a
-  `pyproject.toml` with the `Private :: Do Not Upload` classifier, as it
-  already skips a `package.json` with `"private": true`.
+### Dashboard passkey removal
+- Send JSON content type only when the dashboard request has a JSON body.
+  Bodyless DELETE requests now reach the API instead of failing its JSON parser.
+- Add a hosted-dashboard Chromium regression covering login, enrollment-link
+  issuance, passkey registration, credential listing and confirmed removal.
+- Keep the principal/request fields fixed during pending dashboard requests,
+  preventing late enrollment responses from appearing beside a changed target.
 
 ### Mock accredited issuer (new, unpublished package)
 - New `@grantex/mock-issuer` (`packages/mock-issuer`), 0.1.0, private and not

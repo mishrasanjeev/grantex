@@ -9,6 +9,7 @@ import {
 } from '../lib/agent-security.js';
 import type { JWK } from 'jose';
 import { config } from '../config.js';
+import { AgentKeyMirrorRefusal, mirrorRegisteredAgentKey } from '../lib/registry/agent-key-mirror.js';
 
 interface RegisterAgentBody {
   name: string;
@@ -131,6 +132,13 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
                     created_at, updated_at
         `;
         createdRow = rows[0];
+        // AGENT_KEY_HISTORY_MIRROR_ENABLED (default off): the key also enters
+        // the agent key history, in this transaction. Off, nothing here runs.
+        if (config.agentKeyHistoryMirrorEnabled && keyThumbprint !== null) {
+          await mirrorRegisteredAgentKey(tx, {
+            agentId: id, developerId, jwk: publicJwk, thumbprint: keyThumbprint, previousThumbprint: null,
+          });
+        }
       });
     } catch (error) {
       if (isAgentKeyConflict(error)) {
@@ -140,9 +148,9 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
           requestId: request.id,
         });
       }
-      const historyRefusal = agentKeyHistoryRefusal(error);
-      if (historyRefusal) {
-        return reply.status(historyRefusal.status).send({ ...historyRefusal.body, requestId: request.id });
+      // Only the history mirror throws this, and only with its flag on.
+      if (error instanceof AgentKeyMirrorRefusal) {
+        return reply.status(error.status).send({ message: error.message, code: error.code, requestId: request.id });
       }
       throw error;
     }
@@ -251,6 +259,68 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       ? `did:web:${config.didWebDomain}:agents:${request.params.id}`
       : null;
 
+    // AGENT_KEY_HISTORY_MIRROR_ENABLED (default off), and only when the key
+    // changes: the same update in a transaction that also mirrors the key into
+    // the agent key history. Otherwise, the single statement below, unchanged.
+    if (config.agentKeyHistoryMirrorEnabled && keyThumbprint !== undefined && validatedPublicJwk !== undefined) {
+      const developerId = request.developer.id;
+      const agentId = request.params.id;
+      const jwk = validatedPublicJwk;
+      const thumbprint = keyThumbprint;
+      let mirrored: Record<string, unknown>[] = [];
+      try {
+        await sql.begin(async (_tx) => {
+          const tx = _tx as unknown as TxSql;
+          // The key the agent holds now, locked so the replaced key and the
+          // new one are recorded against the same row the update changes.
+          const current = await tx<{ key_thumbprint: string | null }[]>`
+            SELECT key_thumbprint FROM agents WHERE id = ${agentId} AND developer_id = ${developerId} FOR UPDATE`;
+          if (!current[0]) return;
+          mirrored = await tx`
+            UPDATE agents
+            SET
+            did         = COALESCE(${keyedDid}, did),
+            name        = COALESCE(${name?.trim() ?? null}, name),
+            description = COALESCE(${description ?? null}, description),
+            scopes      = COALESCE(${scopes ?? null}, scopes),
+            status      = COALESCE(${status ?? null}, status),
+            redirect_uris = COALESCE(${validatedRedirectUris ?? null}, redirect_uris),
+            resource_servers = COALESCE(${validatedResourceServers ?? null}, resource_servers),
+            public_jwk = ${tx.json(jwk as never)},
+            key_thumbprint = ${thumbprint},
+            key_verified_thumbprint = NULL,
+            key_verified_at = NULL,
+            updated_at  = NOW()
+            WHERE id = ${agentId} AND developer_id = ${developerId}
+            RETURNING id, did, developer_id, name, description, scopes, status,
+                      redirect_uris, resource_servers, public_jwk, key_thumbprint,
+                      key_verified_thumbprint, key_verified_at,
+                      created_at, updated_at
+          `;
+          await mirrorRegisteredAgentKey(tx, {
+            agentId, developerId, jwk, thumbprint, previousThumbprint: current[0].key_thumbprint,
+          });
+        });
+      } catch (error) {
+        if (isAgentKeyConflict(error)) {
+          return reply.status(409).send({
+            message: 'publicJwk is already registered to another Agent Client Instance',
+            code: 'AGENT_KEY_CONFLICT',
+            requestId: request.id,
+          });
+        }
+        if (error instanceof AgentKeyMirrorRefusal) {
+          return reply.status(error.status).send({ message: error.message, code: error.code, requestId: request.id });
+        }
+        throw error;
+      }
+      const agent = mirrored[0];
+      if (!agent) {
+        return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
+      }
+      return reply.send(toAgentResponse(agent));
+    }
+
     // Use COALESCE so unset fields keep their current values — single SQL call, no fragments
     let rows;
     try {
@@ -288,10 +358,6 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
           code: 'AGENT_KEY_CONFLICT',
           requestId: request.id,
         });
-      }
-      const historyRefusal = agentKeyHistoryRefusal(error);
-      if (historyRefusal) {
-        return reply.status(historyRefusal.status).send({ ...historyRefusal.body, requestId: request.id });
       }
       throw error;
     }
@@ -402,30 +468,5 @@ function isAgentKeyConflict(error: unknown): boolean {
     && 'code' in error
     && 'constraint_name' in error
     && (error as { code?: unknown }).code === '23505'
-    && ((error as { constraint_name?: unknown }).constraint_name === 'idx_agents_key_thumbprint_unique'
-      // The same key written to the agent key history at the same moment.
-      || (error as { constraint_name?: unknown }).constraint_name === 'agent_keys_pkey'));
-}
-
-/**
- * Refusals from the agent key history (migration 122), which mirrors the key
- * columns written here. Each is reachable only through a state the key routes
- * create: a key reported compromised, or declared payments rails.
- */
-function agentKeyHistoryRefusal(error: unknown): { status: number; body: { message: string; code: string } } | null {
-  if (!error || typeof error !== 'object' || (error as { code?: unknown }).code !== '23514') return null;
-  const constraint = (error as { constraint_name?: unknown }).constraint_name;
-  if (constraint === 'chk_agent_keys_not_compromised') {
-    return { status: 409, body: { message: 'publicJwk was reported compromised and can never be registered again', code: 'key_not_active' } };
-  }
-  if (constraint === 'chk_agent_keys_payments_rail_alg') {
-    return {
-      status: 400,
-      body: {
-        message: 'an agent that declares a payments rail (ap2, verifiable_intent) must use ES256 keys on P-256',
-        code: 'KEY_ALGORITHM_NOT_ALLOWED',
-      },
-    };
-  }
-  return null;
+    && (error as { constraint_name?: unknown }).constraint_name === 'idx_agents_key_thumbprint_unique');
 }

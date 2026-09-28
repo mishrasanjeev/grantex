@@ -28,12 +28,13 @@ The same value is a grant's `cnf.jkt` (RFC 9449 §6.1). The test vectors are
 RFC 7638 §3.1 (`NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs`) and RFC 8037
 Appendix A.3 (`kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k`).
 
-A thumbprint is unique across the whole registry: a key belongs to at most one
+A thumbprint is unique across the whole history: a key belongs to at most one
 agent. A key reported compromised can never be registered again, by any
 agent: its thumbprint is recorded in `compromised_agent_keys`, which is kept
 when the agent or the developer is deleted, and the registry refuses (with
 `key_not_active`) to write a recorded thumbprint to the history in any state
-other than `compromised`.
+other than `compromised`. `POST` and `PATCH /v1/agents` apply both rules only
+while the history mirror is on (§7).
 
 ## 2. Key states
 
@@ -169,15 +170,43 @@ grant delegated beneath one, is revoked through the cascade revocation, with
 one `grantex.grant.revoked` audit entry per grant. Reporting the same key
 again is safe and completes a cascade that did not finish.
 
+The grants bound to the key are looked up under the developer's cascade lock,
+the lock `POST /v1/grants/delegate` holds while it binds a new grant to the
+sub-agent's registered key. A delegation holding that lock is waited for, and
+the grant it commits is found and revoked. A delegation that takes the lock
+after the lookup re-checks the sub-agent's key against
+`compromised_agent_keys` and is refused with `409 key_not_active`. Either way,
+no grant bound to the key outlives the compromise.
+
 ## 7. Relation to the registered key
 
 `publicJwk` on `POST` and `PATCH /v1/agents` remains the registered key that
-the token endpoints bind grants to. Every key written there also enters the
-history (as `pending`, or `active` once a DPoP proof of it is verified), and a
-key another agent holds in its history is refused there with the same
-`AGENT_KEY_CONFLICT` as before. `PATCH` replaces the registered key at once:
-the old one becomes `rotated` with `valid_to = now` if it was still pending or
+the token endpoints bind grants to.
+
+With `AGENT_KEY_HISTORY_MIRROR_ENABLED=true` (the history mirror), every key
+written there also enters the history as `pending`, in the same transaction.
+They then refuse a key another agent holds in its history (pending, active or
+within a rotation overlap) with the same `AGENT_KEY_CONFLICT` as before, a key
+reported compromised with `key_not_active`, and a key other than ES256 on
+P-256 for an agent that declares a payments rail with
+`KEY_ALGORITHM_NOT_ALLOWED`. `PATCH` replaces the registered key at once: the
+old one becomes `rotated` with `valid_to = now` if it was still pending or
 active, and keeps its `valid_to` if it was already rotated.
+
+The mirror is off by default, and only the exact value `true` turns it on.
+Off, `POST` and `PATCH /v1/agents` behave as they did before the history
+existed: they write only the agent, the keys they write are not in the
+history, and they refuse none of the above; only the registered-key index
+decides a conflict. The history then holds the backfilled keys (below) and
+the keys added through `POST /v1/agents/{id}/keys`, which is also how the
+agent's registered key is brought into it. The key routes still apply every
+rule of §1 to §6 to what they write, and delegation still refuses a
+compromised key (§6).
+
+In both states, a DPoP proof of the registered key verified at the OAuth
+endpoints counts as possession: the key routes record it (the history entry
+becomes `active`) before they read the agent's history. The token endpoints
+write only the columns they always wrote.
 
 Until the token endpoints evaluate keys against the history (FINDINGS G-85),
 the states and the overlap in §2 and §5 apply to the key routes and to

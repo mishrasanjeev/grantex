@@ -31,6 +31,12 @@ const roundTrips: [string, 'dictionary' | 'list' | 'item', string][] = [
   ['1.50', 'item', '1.5'],
   ['-0.0', 'item', '0.0'],
   ['4.000', 'item', '4.0'],
+  // Leading integer zeros and trailing fraction zeros are dropped (section 4.1.5).
+  ['000.100', 'item', '0.1'],
+  ['007.0', 'item', '7.0'],
+  ['-000.000', 'item', '0.0'],
+  ['-0.500', 'item', '-0.5'],
+  ['000000000000.001', 'item', '0.001'],
   ['?1', 'item', '?1'],
   ['@1659578233', 'item', '@1659578233'],
   ['%"This is intended for display to %c3%bcsers."', 'item', '%"This is intended for display to %c3%bcsers."'],

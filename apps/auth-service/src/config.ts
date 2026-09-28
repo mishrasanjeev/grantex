@@ -210,6 +210,15 @@ export const config = {
   // /v1/authorize takes an Agent Passport and the grant is bound to it. Off by
   // default; off, the passport member is ignored as any unknown member is.
   get passportBoundGrantsEnabled() { return process.env['PASSPORT_BOUND_GRANTS_ENABLED'] === 'true'; },
+  // The registry's unauthenticated reads (GET /v1/registry/issuers). Off by
+  // default: new endpoints ship enabled only behind authentication, so these
+  // are registered only for exactly 'true', read when the app is built.
+  // Mirror the key POST and PATCH /v1/agents write into the agent key history
+  // (agent_keys), with its refusals: a key held in another agent's history, a
+  // key reported compromised, a non-P-256 key under a payments rail. Off by
+  // default, and only exactly 'true' turns it on: with it off those routes
+  // behave as they did before the history existed. Read at request time.
+  get agentKeyHistoryMirrorEnabled() { return process.env['AGENT_KEY_HISTORY_MIRROR_ENABLED'] === 'true'; },
   // Default overlap of an agent key rotation: how long the replaced key stays
   // usable (seconds, default 7 days, at most 30). Read at request time;
   // validateConfig reports a bad value at boot.
@@ -221,6 +230,9 @@ export const config = {
       2_592_000,
     );
   },
+  // Unauthenticated registry reads (the attestation-acceptance status lists).
+  // Read when routes are registered at boot; off unless exactly 'true'.
+  get registryPublicEndpointsEnabled() { return process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] === 'true'; },
   // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
   ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
   // CORS: comma-separated list of browser origins allowed to call the API

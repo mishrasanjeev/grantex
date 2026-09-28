@@ -196,3 +196,29 @@ f71ee3999f1001bd055da6db6fe8eb5755d75b27:packages/sdk-py/tests/test_verify_jwks_
 27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:947
 27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:963
 27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:996
+# The public did:key example used as a DID syntax test value.
+e779a67329a741c61c3fba753288eb9668ffbe42:packages/agent-passport-py/tests/test_passport.py:generic-api-key:669
+e779a67329a741c61c3fba753288eb9668ffbe42:packages/agent-passport/tests/passport.test.ts:generic-api-key:654
+# Synthetic key thumbprint in the agent-key mirror flag test.
+c5de005c7806c575008632103c76625acafd35dc:apps/auth-service/tests/agent-key-mirror-flag.test.ts:generic-api-key:19
+# Synthetic key thumbprints and credential hashes in the attestation spec, issuer guide and tests.
+7300aab18e69c528de3b02166242b2adfa30abf3:docs/issuers/becoming-an-accredited-issuer.md:generic-api-key:180
+7300aab18e69c528de3b02166242b2adfa30abf3:apps/auth-service/tests/registry-attestation-jws.test.ts:generic-api-key:61
+7300aab18e69c528de3b02166242b2adfa30abf3:apps/auth-service/tests/registry-attestation-jws.test.ts:generic-api-key:234
+7300aab18e69c528de3b02166242b2adfa30abf3:spec/attestation-1.0.md:generic-api-key:88
+# The squash merge of #1446 re-added the synthetic key thumbprint in the mirror flag test under its own commit.
+cef81ce2dbfda0967aaf05064edf29564f100807:apps/auth-service/tests/agent-key-mirror-flag.test.ts:generic-api-key:19
+# The squash merge of #1449 re-added the synthetic Agent Passport test vectors and the public did:key test value under its own commit.
+43b0633eef18b38f864aa99a7da14dba9d630609:packages/agent-passport-py/tests/test_passport.py:generic-api-key:669
+43b0633eef18b38f864aa99a7da14dba9d630609:packages/agent-passport/tests/passport.test.ts:generic-api-key:654
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:289
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:458
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:843
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:871
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:887
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:903
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:919
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:936
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:952
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:968
+43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:1081

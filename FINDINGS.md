@@ -1476,11 +1476,37 @@ the pull request that references it.
   after a compromise is closed: `compromised_agent_keys` records every
   compromised thumbprint, outlives the agent, and is checked on every path
   that writes a key.)
+  after a compromise is closed on every path that writes the history:
+  `compromised_agent_keys` records every compromised thumbprint and outlives
+  the agent. `POST` and `PATCH /v1/agents` check it only with the history
+  mirror on; see G-87.)
 - **Impact:** narrow. It needs one key to move between developers and then be
   reported compromised while grants from the earlier holder are still active.
 - **Proposal:** decide with the owner whether a compromise should revoke
   grants bound to the key in every tenant, or whether a released key should
   stay reserved to its developer.
+
+## G-87 — With the history mirror off, the agents routes do not consult the key history
+
+- **Found:** review of the agent key history work, 2026-09-28.
+- **What:** mirroring the key `POST` and `PATCH /v1/agents` write into
+  `agent_keys` is behind `AGENT_KEY_HISTORY_MIRROR_ENABLED`, default off, so
+  those routes keep their earlier behaviour. With it off they do not add the
+  key to the history, do not end the replaced key there, and do not refuse a
+  key another agent holds in its history, a key in `compromised_agent_keys`,
+  or a non-P-256 key for an agent that declares a payments rail. The history
+  of an agent whose registered key changed through them can therefore list a
+  key it no longer registers as pending or active, and a compromised key can
+  be registered again as `publicJwk`.
+- **Impact:** a key registered again that way is still refused by the key
+  routes and by delegation (`routes/delegate.ts` checks
+  `compromised_agent_keys` under the cascade lock), but `POST /v1/token` and
+  the OAuth profile bind grants to the registered key and do not check it
+  (G-85).
+- **Proposal:** turn the flag on once its exit criterion is green (the flag-on
+  suite in `tests/agent-keys-postgres.integration.test.ts`) and the owner has
+  approved the runbook; then make it the default in a release that records the
+  flip as a breaking change with the flag as the opt-out.
 
 ## G-90 — The grant credential status list is served unsigned, as a superseded format
 
@@ -1605,6 +1631,59 @@ the pull request that references it.
   `CHANGELOG.md`. The Agent Passport profile is not affected: it already uses
   `dc+sd-jwt`.
 
+## G-105 — The public registry search lists unverified, self-asserted organizations
+
+- **Found:** trust registry listing fix (`GET /v1/trust-registry` can be made
+  to take the admin key), 2026-09-28, reviewing the other registry reads.
+- **What:** `GET /v1/registry/orgs` is public (`skipAuth`) and returns every
+  `trust_registry` row, including `basic` records that were registered with a
+  developer API key and never proved control of their domain. The name and
+  description are whatever the registrant typed, and `verified=false` lists
+  exactly those records. With no filter a caller can page through the whole
+  registry (up to 100 a page, with a total count). `GET /v1/registry/orgs/:did`
+  and the legacy `GET /v1/trust-registry/:orgDID` likewise answer for an
+  unverified record. The `GET /v1/registry/orgs/:did` detail also includes
+  the security and DPO contacts the registrant supplied; the legacy route
+  returns no contact fields. The routes carry only the service-wide per-address
+  limit, not a limit of their own.
+- **Impact:** a public lookup that should answer with the minimum a relying
+  party needs about an organization that has proved something instead
+  publishes self-asserted records. Anyone can register `did:web:` for a
+  domain they do not control, under any display name, and have it appear in
+  search next to verified organizations (`verificationLevel: basic` is the
+  only difference), and the whole registry, contacts included, can be
+  enumerated. The behaviour is unchanged by the listing fix, which kept these
+  routes as they were.
+- **Proposal:** behind a flag that defaults off, have the public search and
+  detail return only records that completed verification (or return an
+  unverified record's DID and `verificationLevel` alone), leave the contacts
+  out of the public detail, and give the public reads a per-client rate limit
+  of their own; the registrant keeps full access to its own records through
+  an authenticated route.
+
+## G-106 — The cross-tenant trust registry listing stays open to developer keys until the flag is turned on
+
+- **Found:** trust registry listing fix, 2026-09-28, when the admin-key check
+  on `GET /v1/trust-registry` was put behind a flag that defaults off, as
+  `AGENTS.md` ("Feature flags") requires for a behaviour change on an existing
+  path.
+- **What:** `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED` defaults to off, and only
+  the exact value `true` turns the check on. While it is off,
+  `GET /v1/trust-registry` still takes any developer API key and returns the
+  100 newest registry records of every developer, unverified ones included.
+- **Risk:** on a deployment that has not set the flag, one tenant can list
+  every other tenant's registry records (DIDs, domains, names, descriptions,
+  trust levels and verification state), including organizations that have not
+  published themselves as verified. The route is documented as an operator
+  route, so a deployment may assume it is already restricted.
+- **Fix:** operators set `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` once
+  their callers have moved to `GET /v1/registry/orgs` and
+  `GET /v1/registry/orgs/:did`, or to `ADMIN_API_KEY`; then, in a release
+  recorded in `CHANGELOG.md` as a breaking change, make the check on by
+  default with `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=false` as the explicit
+  opt-out. Owner: the auth-service maintainers. Exit criterion: flag default
+  flipped with an explicit opt-out once operators have moved.
+
 ## G-111 — An agent's provider is inferred from its developer
 
 - **Found:** computing trust levels for registry attestations (PRD §5.1),
@@ -1666,60 +1745,6 @@ the pull request that references it.
   also rewrites the stored level. Owner: registry maintainers. Exit
   criterion: each column is written by a route with tests.
 
-## G-115 — The CI step for the agent-httpsig Python package has no `run`
-
-- **Found:** wiring `packages/mock-issuer` into `.github/workflows/ci.yml`,
-  2026-09-28, on the branch that merges the Wave 1 registry branches.
-- **What:** in the `python-integrations` job, the step
-  `Test agent-httpsig Python` (`working-directory: packages/agent-httpsig-py`)
-  lost its `run:` line when the agent-httpsig and Agent Passport branches were
-  merged; the next step, `Test Agent Passport Python`, follows it directly.
-  GitHub Actions requires every step to have `uses` or `run`, so the workflow
-  file fails validation and none of its jobs start.
-- **Impact:** until fixed, a pull request from this branch gets no CI run at
-  all (not only the Python job), and grantex-agent-httpsig is not tested in
-  CI.
-- **Proposal:** restore
-  `run: pip install -e ".[dev]" && mypy --strict src && pytest` on that step
-  (the command the agent-httpsig branch had), and check the merged workflow
-  with a workflow linter before pushing.
-
-## G-125 — The migration ledger test expects `evidence_records` among the first twenty missing objects
-
-- **Found:** running the auth-service suite against Postgres for passport
-  binding (migration 125), 2026-09-28, on the branch that merges the
-  registry branches.
-- **What:** `tests/migrate-ledger-postgres.integration.test.ts` ("refuses to
-  baseline a database that is only partly migrated") asserts that the
-  verdict names `evidence_records`. The verdict lists only the first twenty
-  missing objects in sorted order (`src/db/migrate.ts`, `missing.slice(0, 20)`),
-  and the registry migrations 121 to 124 added tables that sort before it
-  (`accredited_issuers`, `agent_keys`, `compromised_agent_keys`, ...), so it
-  is now among the "and 57 more". The test fails on this base before any
-  change of this branch.
-- **Impact:** the Postgres suite is red on the merged registry base; a real
-  regression in the baseline refusal would be hidden in the noise.
-- **Proposal:** assert on the count and on an object the test itself removed,
-  or have the verdict list the missing objects of the newest migration
-  first. Owner: auth-service maintainers. Exit criterion: the test passes
-  with every registry migration applied, and fails if the refusal names
-  nothing.
-
-## G-126 — `registry-acceptance-docs.test.ts` fails on a CRLF checkout
-
-- **Found:** running the auth-service suite on a Windows checkout
-  (`core.autocrlf=true`), 2026-09-28.
-- **What:** the test extracts the examples of `spec/registry-federation.md`
-  with a regular expression that expects `\n` after the code fence. With
-  CRLF line endings in the working copy it finds no example and fails
-  ("has no example tsl-header"), although the examples are there.
-- **Impact:** the suite is red for anyone on Windows with the default Git
-  setting; CI (LF) is unaffected.
-- **Proposal:** normalise `\r\n` to `\n` after reading the file, as
-  `tests/passport-binding-docs.test.ts` does, or add a `.gitattributes`
-  rule `*.md text eol=lf`. Owner: registry maintainers. Exit criterion: the
-  test passes on a CRLF checkout.
-
 ## G-127 — `RATE_LIMIT_ROUTE_CLASSES_ENABLED` appears twice in the self-hosting variables table
 
 - **Found:** adding `PASSPORT_BOUND_GRANTS_ENABLED` to `docs/self-hosting.md`,
@@ -1733,18 +1758,3 @@ the pull request that references it.
   maintainers. Exit criterion: one row per variable (a check in
   `scripts/check-docs-integrity.mjs` could enforce it).
 
-## G-128 — The JWK thumbprint property tests time out on a slower host
-
-- **Found:** running the whole auth-service suite (`npx vitest run`, two
-  workers, Postgres integration tests included) on a Windows workstation,
-  2026-09-28.
-- **What:** in `tests/jwk-thumbprint.test.ts`, "never changes with member
-  order or with extra members (property)" and "changes when any required
-  member changes (property)" exceeded the 10 s test timeout (12.1 s and
-  14.5 s) while other files ran alongside, and the second also when the file
-  ran alone (12.4 s) on the same workstation.
-- **Impact:** an intermittent red suite on slower or loaded hosts.
-- **Proposal:** lower the iteration count, or give those two tests an
-  explicit timeout that reflects their work. Owner: registry maintainers.
-  Exit criterion: the full suite passes three runs in a row on a CI runner
-  and a developer workstation.

@@ -11,6 +11,8 @@ from __future__ import annotations
 import base64
 import json
 import re
+import threading
+import time
 from typing import Any, Callable, Optional
 
 import pytest
@@ -316,6 +318,17 @@ class TestVerifyFailsClosed:
             "authority_mismatch"
         )
 
+    @pytest.mark.parametrize("now", [float("nan"), float("inf"), float("-inf"), -1, True, "1790000005"])
+    def test_unusable_now_is_refused(self, now: Any) -> None:
+        # NaN makes both time comparisons false, so a stale signature would
+        # pass them; a verifier clock that is not a finite, non-negative
+        # number is a configuration error and nothing is answered.
+        request, _ = signed(ED)
+        stale = NOW + 300 + 10
+        assert denial(run_verify(request, ED, now=stale))[2] == "expired"
+        with pytest.raises(AgentHttpSigError, match="now must be"):
+            run_verify(request, ED, now=now)
+
     def test_expected_authority_is_case_insensitive(self) -> None:
         request, _ = signed(ED)
         assert run_verify(request, ED, expected_authority="Merchant.Example").ok
@@ -328,6 +341,41 @@ def test_in_memory_nonce_store_forgets_expired_nonces() -> None:
     assert store.check_and_store("k", "n", 1010) is False
     now[0] = 1011
     assert store.check_and_store("k", "n", 1020) is True
+
+
+class _SlowLookups(dict):  # type: ignore[type-arg]
+    """A dict whose membership test yields to other threads, so a check and
+    the store that follows it interleave unless the store is atomic."""
+
+    def __contains__(self, key: object) -> bool:
+        found = super().__contains__(key)
+        time.sleep(0.05)
+        return found
+
+
+def test_in_memory_nonce_store_is_atomic_across_threads() -> None:
+    request, _ = signed(ED)
+    store = InMemoryNonceStore(clock=lambda: NOW)
+    store._seen = _SlowLookups()  # type: ignore[assignment]
+    threads_count = 8
+    barrier = threading.Barrier(threads_count)
+    results: list[VerifyResult] = []
+    lock = threading.Lock()
+
+    def worker() -> None:
+        barrier.wait()
+        result = run_verify(request, ED, nonce_store=store)
+        with lock:
+            results.append(result)
+
+    threads = [threading.Thread(target=worker) for _ in range(threads_count)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(results) == threads_count
+    assert sum(1 for r in results if r.ok) == 1
+    assert sorted(r.reason for r in results if not r.ok) == ["nonce_replayed"] * (threads_count - 1)
 
 
 def test_request_shapes() -> None:

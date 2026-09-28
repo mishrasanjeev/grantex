@@ -84,7 +84,9 @@ def sign_and_verify(agent_passport: str, agent_grant: str) -> VerifyResult:
 `verify()` answers a request that fails with a `VerifyResult` whose `ok` is
 false and whose `code` and `reason` say why. An exception from the key
 resolver or the nonce store propagates; refuse the request then.
-`InMemoryNonceStore` is for one process and for tests: a deployment with
+`verify()` raises `AgentHttpSigError` when `now` is not a finite,
+non-negative number of seconds. `InMemoryNonceStore` is for one process
+(it is safe to share between threads) and for tests: a deployment with
 several instances needs a shared, atomic store (see section 4.4 of the
 specification).
 
