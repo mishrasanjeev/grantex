@@ -1305,3 +1305,47 @@ the pull request that references it.
   row, issued the way the VC-JWT is (in the grant's transaction, or through
   `issueForCommittedGrant` while the stop is on), so a revocation sets their
   bit, and have `verifySDJWT` check it.
+
+## G-90 — The grant credential status list is served unsigned, as a superseded format
+
+- **Found:** registry attestation-acceptance status lists (Stage 1), 2026-09-28,
+  reading `lib/vc.ts` for how platform-signed artefacts are signed.
+- **What:** `GET /v1/credentials/status/:listId` returns
+  `buildStatusListCredential(listId)` as plain JSON: a `StatusList2021Credential`
+  with no proof and no JWS envelope. Anyone who can answer for that URL (a
+  cache, a proxy, a hostile network) can hand a verifier a list with the bit
+  cleared, and nothing lets the verifier tell. It also mixes formats: the W3C
+  VC 2.0 context with the `StatusList2021` types and the VC 1.1 `issued`
+  property. StatusList2021 is superseded by Bitstring Status List v1.0, which
+  asks for the status list credential to be secured (§3.2 verifies its
+  proofs). Indices are also handed out sequentially, where Bitstring Status
+  List §2.1 says they SHOULD be random.
+- **Impact:** revocation of AgentGrantCredentials depends on an unauthenticated
+  document. A relying party that fetches it over TLS from the issuer is
+  exposed only to the issuer's own infrastructure; one that accepts it from
+  anywhere else is exposed to anyone on the path.
+- **Proposal:** serve the list as a `BitstringStatusListCredential` secured as
+  a VC-JWT with the platform signing key, the way
+  `lib/registry/acceptance-status.ts` does for the registry's lists, behind a
+  flag that defaults off with the old format kept until SDK verifiers move;
+  issue new credentials with `BitstringStatusListEntry` and random indices.
+
+## G-91 — `verifyAgentGrantVC` treats a status list it cannot find as "not revoked"
+
+- **Found:** registry attestation-acceptance status lists (Stage 1), 2026-09-28,
+  in the same reading of `lib/vc.ts`.
+- **What:** the revocation check in `verifyAgentGrantVC` runs only when the
+  `statusListCredential` URL matches `/status/<id>` and a `vc_status_lists` row
+  with that id exists; otherwise it is skipped and the credential verifies.
+  `getBit` returns `false` for an index outside the list. So a credential whose
+  list row is missing, or whose status URL or index is malformed, reads as
+  valid instead of failing closed. A validly signed credential cannot be
+  altered by the holder, so this needs a platform-side fault (a deleted or
+  never-written list row), not a forgery.
+- **Impact:** a credential that should be checkable against a list is accepted
+  without the check whenever that list cannot be read.
+- **Proposal:** when `credentialStatus` is present, require the URL to be one
+  of this service's list URLs, the list row to exist and the index to be in
+  range, and return `valid: false` otherwise; test each of the three cases.
+  Behind a flag that defaults off, since it can turn today's `valid: true`
+  into a denial.

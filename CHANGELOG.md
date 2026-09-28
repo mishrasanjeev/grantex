@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Registry attestation-acceptance status lists
+- The registry now publishes, under its own issuer identifier (`JWT_ISSUER`),
+  whether it accepts each attestation registered with it: VALID (accepted),
+  INVALID (withdrawn, final) or SUSPENDED. Three new public routes serve each
+  list: `GET /status/attestations/{list}` as a Token Status List token
+  (draft-ietf-oauth-status-list-21, `application/statuslist+jwt`, two bits per
+  entry), and `GET /status/attestations/{list}/bitstring` and
+  `.../bitstring/suspension` as Bitstring Status List credentials (W3C
+  Bitstring Status List v1.0, statusPurpose `revocation` and `suspension`)
+  secured as VC-JWTs (`application/vc+jwt`). Both formats are built from the
+  registry's store, never one from the other, and signed with the platform
+  signing key, whose `kid` is in `/.well-known/jwks.json`.
+- `ttl` is 600 seconds (600000 ms in the Bitstring Status List), or 60 seconds
+  for one hour after any acceptance change or suspension, and
+  `Cache-Control: public, max-age=<ttl>` matches it. `exp` is an hour after
+  `iat`. Responses carry a weak `ETag` and answer `If-None-Match` with `304`.
+  The routes need no authentication, are rate-limited to 300 requests a
+  minute per client address, and allow any browser origin. A store that
+  cannot be read is a `5xx`, never an older list.
+- Entries are allocated at random indices, from lists of 131,072 entries, and
+  can never be handed out twice. The code that registers attestations uses
+  `allocateAcceptanceEntry()`, `setAcceptance(uri, idx, status)` and
+  `noteRegistryCascade()` (`src/lib/registry/acceptance-status.ts`); nothing
+  calls them yet, so no list exists until the first registration. See
+  `spec/registry-federation.md`.
+- Migration `123_registry_acceptance_lists.sql` adds the
+  `registry_acceptance_lists` and `registry_acceptance_entries` tables, created
+  empty. The lists are the registry's own; they have no developer or tenant
+  column.
+
 ### Capped scopes need an amount (TypeScript and Python SDKs)
 - **Breaking:** `enforce()` denies a call under a `capped:N` scope that gives
   no `amount`, with `reason_code` / `reasonCode` `cap_exceeded` and the new
