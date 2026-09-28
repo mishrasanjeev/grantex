@@ -1473,6 +1473,9 @@ the pull request that references it.
   overlap ended) can be registered by another agent, which the registered-key
   index has always allowed. Grants the earlier holder obtained with the key
   keep their binding and are not revoked by the compromise. (Registration
+  after a compromise is closed: `compromised_agent_keys` records every
+  compromised thumbprint, outlives the agent, and is checked on every path
+  that writes a key.)
   after a compromise is closed on every path that writes the history:
   `compromised_agent_keys` records every compromised thumbprint and outlives
   the agent. `POST` and `PATCH /v1/agents` check it only with the history
@@ -1549,6 +1552,85 @@ the pull request that references it.
   Behind a flag that defaults off, since it can turn today's `valid: true`
   into a denial.
 
+## G-95 — The agent request signature does not cover the query string
+
+- **Found:** agent request signing libraries (S1-4), 2026-09-28, while
+  writing the signing profile in `spec/verification.md`.
+- **What:** the profile covers exactly `("@method" "@authority" "@path"
+  "content-digest" "agent-passport" "agent-grant")`. RFC 9421 section 2.2.6
+  defines `@path` without the query, and `@query` is not covered, so anyone
+  who can alter a signed request in transit (a proxy, or a relying party
+  that forwards it) can change or add query parameters without breaking the
+  signature. `spec/verification.md` section 4.5 tells relying parties not to
+  take anything that affects authority, amount or payee from the query.
+- **Impact:** a relying party that reads, for example, a cart or order
+  identifier from the query of a signed request acts on an unsigned value.
+  Requests that carry everything in the content are not affected.
+- **Proposal:** add `"@query"` after `"@path"` in a second version of the
+  profile (a new `tag`, so verifiers can accept both during a migration), or
+  have verifiers refuse a signed request with a non-empty query.
+
+## G-96 — `Agent-Trust` is not bound to the request it accompanies
+
+- **Found:** agent request signing libraries (S1-4), 2026-09-28.
+- **What:** the covered components do not include `agent-trust`, so an
+  inline `Agent-Trust` value can be replaced or removed without breaking the
+  signature (a value carried by reference is in the content and is covered).
+  The trust statement is signed by the registry, so it cannot be forged, but
+  a genuine statement about another agent can be attached to a request.
+  `spec/verification.md` section 4.5 requires relying parties to check that
+  the statement names the key or the Agent Passport of the signature; the
+  libraries return it unchecked.
+- **Impact:** a relying party that uses `Agent-Trust` without that check
+  could credit an agent with another agent's trust statement.
+- **Proposal:** either cover `agent-trust` when present (a second profile
+  version, since the covered components are fixed), or have the verifier
+  that consumes trust statements (Phase 1 attestation checks) refuse a
+  statement whose subject is not the signature's `keyid` or Agent Passport,
+  with `key_binding_mismatch`.
+
+## G-100 — The auth service's SD-JWT verifier does not follow RFC 9901 section 7.1
+
+- **Found:** building the Agent Passport verifier (`packages/agent-passport`),
+  2026-09-28, comparing it with the existing `verifySDJWT` in
+  `apps/auth-service/src/lib/sd-jwt.ts`.
+- **What:** `verifySDJWT` drops empty elements before parsing, so `jwt~~d~`
+  verifies although RFC 9901 section 4 allows an empty element only after the
+  last tilde; it treats any element whose header says `kb+jwt` as the Key
+  Binding JWT, wherever it appears, rather than only the last element; and it
+  accepts the same disclosure twice and a digest that appears twice in `_sd`,
+  both of which section 7.1 (steps 4 and 5) says MUST be rejected. A repeated
+  disclosure overwrites the claim with the same value, so nothing is forged
+  today, but the verifier accepts inputs a conforming verifier refuses.
+- **Impact:** interoperability and defence in depth: another verifier refuses
+  what this one accepts, and the checks that stop disclosure games are missing.
+- **Proposal:** take the framing and disclosure processing from
+  `@grantex/agent-passport` (`splitSdJwt`, `processDisclosures`), behind a flag
+  that defaults off because it refuses inputs accepted today, with tests of
+  each refusal. Owner: auth service maintainers. Exit criterion: the
+  refusal vectors of `spec/examples/agent-passport-vectors.json` that apply to
+  plain SD-JWT (`not_sd_jwt`, `duplicate_disclosure`, `duplicate_digest`) are
+  refused by `verifySDJWT` with the flag on.
+
+## G-101 — The grant SD-JWT uses the retired `vc+sd-jwt` typ
+
+- **Found:** checking `typ` values against draft-ietf-oauth-sd-jwt-vc-19
+  (section 2.2.1 requires `dc+sd-jwt`) while writing
+  `spec/agent-passport-1.0.md`, 2026-09-28.
+- **What:** `issueSDJWT` in `apps/auth-service/src/lib/sd-jwt.ts` signs its
+  issuer JWT with `typ: 'vc+sd-jwt'`, and the SDKs report the format as
+  `vc+sd-jwt`. The current draft uses `dc+sd-jwt` and, as an SD-JWT VC, also
+  expects a `vct` claim; the grant SD-JWT instead nests `_sd` inside a W3C
+  `vc.credentialSubject`, which is the VC data model shape, not the SD-JWT VC
+  one. A current SD-JWT VC verifier refuses it on `typ` alone.
+- **Impact:** the grant SD-JWT is not interoperable with SD-JWT VC verifiers;
+  Grantex's own verifier is unaffected.
+- **Proposal:** decide whether the grant SD-JWT is an SD-JWT VC (then `typ`
+  `dc+sd-jwt`, a `vct`, claims at the top level) or a plain SD-JWT with its own
+  `typ`, and change it behind a flag with the SDKs' format string, recorded in
+  `CHANGELOG.md`. The Agent Passport profile is not affected: it already uses
+  `dc+sd-jwt`.
+
 ## G-105 — The public registry search lists unverified, self-asserted organizations
 
 - **Found:** trust registry listing fix (`GET /v1/trust-registry` can be made
@@ -1601,3 +1683,93 @@ the pull request that references it.
   default with `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=false` as the explicit
   opt-out. Owner: the auth-service maintainers. Exit criterion: flag default
   flipped with an explicit opt-out once operators have moved.
+
+## G-111 — An agent's provider is inferred from its developer
+
+- **Found:** computing trust levels for registry attestations (PRD §5.1),
+  2026-09-28.
+- **What:** `agents` has no reference to its provider record in
+  `trust_registry`, and `registry_agents`, which could link them, has no
+  writer. `lib/registry/trust-level.ts` therefore takes the provider of an
+  agent to be the one `trust_registry` record whose `developer_id` is the
+  agent's developer. A developer with no record, or with more than one, has
+  agents whose provider cannot be resolved; they are never more than
+  `basic`, which fails closed but leaves a developer who registers two
+  organisations unable to reach `attested` for any agent.
+- **Impact:** agents of multi-organisation developers cannot be attested.
+- **Proposal:** give an agent an explicit provider (a nullable
+  `agents.provider_id` set when the agent is registered, or rows in
+  `registry_agents` written by the agent routes), backfilled for developers
+  with exactly one record, and resolve through it. Owner: registry
+  maintainers. Exit criterion: an agent of a developer with two provider
+  records reaches `attested` through its own provider's attestation.
+
+## G-112 — Issuers have no way to report screening hits, unresolved ownership or failed security reviews
+
+- **Found:** implementing the trust flags of PRD §5.1 for registry
+  attestations, 2026-09-28.
+- **What:** the flag set includes `provider_screening_hit`,
+  `ownership_unresolved` and `security_review_failed`, but the attestation
+  payload of PRD Appendix A has no member that carries them, and the trust
+  mark types `provider.screening`, `provider.ownership` and `agent.security`
+  are attested with an issuer-defined `level` string the registry stores
+  verbatim and does not interpret. The registry therefore never sets these
+  three flags (`lib/registry/trust-level.ts`, `spec/attestation-1.0.md` §8).
+- **Impact:** relying parties cannot learn of an adverse screening, ownership
+  or security outcome through the registry; an issuer can only decline to
+  attest, or revoke on its status list.
+- **Proposal:** decide how an issuer reports each outcome: a defined
+  `outcome` member for those three types, a fixed vocabulary for `level`, or
+  a separate signed event, and add it to Appendix A and the attestation
+  profile. Owner: product (PRD Appendix A). Exit criterion: a documented
+  payload member, and each flag set by a test from an attestation that
+  carries it.
+
+## G-113 — Provider legal identifiers, agent declarations and provider suspension have no writer yet
+
+- **Found:** adding migration 124 (registry attestations), 2026-09-28.
+- **What:** the migration adds `trust_registry.legal_identifiers` and
+  `trust_registry.suspended_at`, and `agents.cimd_uri`, `declared_purpose`,
+  `declared_categories`, `declared_scopes`, `declared_autonomy` and
+  `declared_limits`, which the level computation and later waves read. No
+  route writes them yet: the provider routes do not accept legal
+  identifiers, there is no operator route to suspend a provider, and the
+  agent routes do not accept declarations. (The issuer's status list is
+  reread by `workers/registryIssuerStatusRecheck.ts`, and a read that has
+  gone stale stops counting, so that part has a writer.)
+- **Impact:** a provider cannot be suspended through the API, and relying
+  parties see no declared purpose, scopes or limits for an agent other than
+  what an attestation carries.
+- **Proposal:** add the provider and agent fields to their registration
+  routes, and an operator route to suspend and reinstate a provider that
+  also rewrites the stored level. Owner: registry maintainers. Exit
+  criterion: each column is written by a route with tests.
+
+## G-120 — The acceptance status list docs test fails on a CRLF checkout
+
+- **Found:** running the auth-service suite on a Windows checkout
+  (`core.autocrlf=true`) while adding the registry lookup, 2026-09-28.
+- **What:** `apps/auth-service/tests/registry-acceptance-docs.test.ts` reads
+  `spec/registry-federation.md` without normalising line endings, and its
+  example pattern expects `\n` after each fenced opening. On a checkout with
+  CRLF line endings no example matches, and both of its tests fail with
+  "has no example tsl-header" / "bsl-header". The other docs tests (for
+  example `registry-attestations-docs.test.ts`) replace `\r\n` first.
+- **Impact:** the suite is red on Windows working trees for a reason that
+  has nothing to do with the code; CI on Linux is unaffected.
+- **Proposal:** normalise `\r\n` to `\n` when reading the spec, as the other
+  docs tests do. Owner: registry maintainers. Exit criterion: the test passes
+  on a CRLF checkout.
+
+## G-124 — Two RFC 7638 property tests time out under the full suite
+
+- **Found:** running the whole auth-service suite (`maxWorkers: 2`) on a
+  loaded Windows host, 2026-09-28.
+- **What:** in `tests/jwk-thumbprint.test.ts`, "never changes with member
+  order or with extra members (property)" and "changes when any required
+  member changes (property)" took 14 and 18 seconds against the 10-second
+  `testTimeout` and failed; they pass when the file runs alone.
+- **Impact:** an intermittent red run unrelated to the change under test.
+- **Proposal:** give the two property tests an explicit timeout sized for a
+  loaded runner, or reduce their iteration count. Owner: registry
+  maintainers. Exit criterion: the full suite passes them on a loaded runner.

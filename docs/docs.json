@@ -69,6 +69,7 @@
             "pages": [
               "features/trust-registry",
               "issuers/becoming-an-accredited-issuer",
+              "issuers/running-the-mock-issuer",
               "providers/registering-agents",
               "features/fido-webauthn",
               "features/verifiable-credentials",

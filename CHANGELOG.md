@@ -6,6 +6,172 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Registry lookup and signed registry manifest (auth service)
+- New `GET /v1/registry/agents/{did}`, `GET /v1/registry/agents?key_thumbprint=`
+  and `GET /v1/registry/agents?issuer=&external_credential_id=&hash=`: a
+  relying party looks an agent up and reads its computed trust level and
+  flags, the issuers, types and expiry of its counted attestations, its keys
+  with whether each is current (active, or rotated within its overlap) and
+  its `cimd_uri`. The thumbprint form also returns `key_status` and
+  `key_current` for that key. The credential form needs all three values
+  (any missing is `400`), and a mismatch on any one is the same `404` as an
+  unknown credential.
+- Minimised: without an API key the answer never carries the provider's
+  legal identifiers or name, or any status list index. A request with a valid
+  developer API key (the authenticated relying party of Phase 1; a dedicated
+  relying-party credential will follow) also reads the provider's DID, name
+  and legal identifiers and each attestation's registry id and status list
+  entries. An invalid key is `401`, never answered as public.
+- The unauthenticated form is served only with the new flag
+  `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true` (default off; off, a lookup
+  without a key is `401`). The authenticated form works either way. Each
+  lookup route allows 120 requests a minute per client address, and an
+  authenticated request also draws on the developer's plan budget. Answers
+  carry an ETag and `Vary: Authorization`; public ones `Cache-Control: public,
+  max-age=60`, authenticated ones `private, no-cache`.
+- New `GET /.well-known/agent-registry.json`, only with
+  `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`: a compact JWS, `typ`
+  `grantex-registry-manifest+jwt`, media type
+  `application/grantex-registry-manifest+jwt`, signed with the platform key
+  (kid in `/.well-known/jwks.json`), valid for one hour: every accredited
+  issuer with its status in effect and its keys without revoked kids, the
+  trust mark taxonomy, the registry's acceptance status lists in both forms,
+  and the lookup, issuer list, status list and JWKS endpoints. Phase 1
+  relying parties without OpenID Federation use it to check passports and
+  attestations offline; `verifyRegistryManifest` in the auth service is the
+  reference check (typ, algorithm, signature, exp, one-hour staleness, and
+  `iss` against the registry the caller names, a required argument).
+- Docs: `spec/registry-federation.md` ("Agent lookup", "Registry manifest"),
+  new `docs/relying-parties/verifying-agents.md`, `docs/openapi.yaml`.
+
+### Registry attestations and computed trust levels (auth service)
+- New `POST /v1/registry/attestations`: an accredited issuer posts an
+  attestation as a compact JWS (`typ` `grantex-attestation+jwt`, ES256, a
+  `kid`; EdDSA only with `REGISTRY_ATTESTATION_EDDSA_ENABLED=true`) with the
+  body type `application/jwt`. No API key: the signature, checked with the
+  issuer's recorded key, is the authentication; limited to 30 requests a
+  minute per client address. The registry checks, in order, the header, the
+  issuer's accreditation for the type, the signature, every payload member
+  (PRD Appendix A), that `sub` is a registered agent or provider, that an
+  agent attestation names a key whose possession has been proven
+  (`key_unproven`, `key_not_active`), the hash rule
+  (`attestation_hash_mismatch`), the times (`passport_expired`) and the
+  issuer's own Token Status List, fetched from under its `status_list_base`
+  and signed by the same issuer (`status_stale`, `passport_revoked`). Every
+  refusal carries a PRD Appendix C code and a reason. The JWS is stored
+  exactly as received, the registry allocates a VALID acceptance entry for
+  it and audits it; the same bytes posted again answer `200` without being
+  checked again, other bytes under the same id `409`.
+- The registry relies on its read of an issuer's status list only until the
+  earliest of the list's `exp`, the time of reading plus its `ttl`, and one
+  day (`issuer_status_fresh_until`); an attestation whose read is past that
+  no longer counts toward a level. A new background worker rereads the lists
+  every minute for attestations whose read goes stale within two minutes,
+  recording a revocation or suspension and auditing the change.
+- New `DELETE /v1/registry/attestations/{id}` (withdraw) and
+  `POST /v1/registry/attestations/{id}/refresh` (renew with a new JWS and a
+  new external credential; the old record is superseded). Both take the
+  issuer's signed request (`Authorization: GrantexIssuer <JWS>`, typ
+  `grantex-attestation-request+jwt`, single use, five minutes) or a registry
+  operator key. The old acceptance entry becomes INVALID.
+- Computed trust levels (PRD §5.1): `basic`, `verified` (DNS-verified
+  provider), `attested` (a counted `agent.identity` attestation bound to a
+  proven key and a counted `provider.entity` attestation of the provider,
+  from accredited issuers independent of the provider) and
+  `attested_verified`; any suspension of the agent, its provider, an
+  attestation or its issuer reads `basic`. Flags `key_compromised`,
+  `attestation_expiring` (30 days), `issuer_suspended` and
+  `declared_limits_changed`; `provider_screening_hit`,
+  `ownership_unresolved` and `security_review_failed` are defined but never
+  set (FINDINGS G-112). `computeAgentTrust()` in
+  `src/lib/registry/trust-level.ts` returns the level, flags, issuers, types,
+  attestation ids, declared limits and the ids of attestations not counted
+  because the issuer status read is stale, by agent DID or key thumbprint.
+- Migration `124_registry_attestations.sql` adds `registry_attestations` and
+  `registry_attestation_request_nonces` (empty), `legal_identifiers`,
+  `suspended_at`, `computed_attested` and `computed_trust_level` (`basic`,
+  `verified`, `attested`, `attested_verified`) on `trust_registry`, and `cimd_uri` and
+  the declared purpose, categories, scopes, autonomy and limits on `agents`.
+  `trust_level` keeps its values and its readers are unchanged;
+  `computed_trust_level` is backfilled to `verified` for DNS-verified
+  providers and kept in step with DNS verification and provider suspension
+  by a trigger. No existing route changes behaviour.
+- New development-only `REGISTRY_DEV_ISSUER_ORIGIN_MAP`: rewrites an issuer
+  origin such as `https://mock-issuer.example` to a loopback server, so the
+  mock issuer's status lists can be served without a network. The service
+  refuses to start with it set unless `NODE_ENV` is `development` or `test`.
+- Documented in `spec/attestation-1.0.md`,
+  `docs/issuers/becoming-an-accredited-issuer.md`, `docs/openapi.yaml` and
+  `docs/self-hosting.md`. New findings: FINDINGS G-111 to G-113.
+### Agent Passport SD-JWT VC profile (new, unpublished packages)
+- New `spec/agent-passport-1.0.md`: the Agent Passport as an SD-JWT VC
+  (RFC 9901, draft-ietf-oauth-sd-jwt-vc) with `typ` `dc+sd-jwt`, `vct`
+  `urn:grantex:agent-passport:1`, `cnf`, a Token Status List `status`
+  reference, and `provider`, `agent`, `verification` and `attestation_id` as
+  selectively disclosable claims. It defines the hash rule (the SHA-256 of the
+  issuer-signed JWT only, never the disclosures), the key rule (keys are equal
+  when their RFC 7638 thumbprints are), the P-256 rule for payments rails and
+  the refusal codes. The VC-JOSE-COSE rendering is Phase 3.
+- New `@grantex/agent-passport` (`packages/agent-passport`) and
+  `grantex-agent-passport` (`packages/agent-passport-py`), both 0.1.0 and not
+  published: `issuePassport` / `issue_passport` for the mock issuer and tests,
+  `verifyPassport` / `verify_passport`, `createKeyBindingJwt` /
+  `create_key_binding_jwt`, `selectDisclosures` / `select_disclosures`,
+  `externalCredentialHash` / `external_credential_hash`, `jwkThumbprint` /
+  `jwk_thumbprint` and `keysEqual` / `keys_equal`. Verification takes issuer
+  keys only from an injected resolver, requires ES256 (EdDSA only when turned
+  on) and refuses every failure with a `PassportError` code and reason.
+  Verification requires a status decision and fails closed without one: pass a
+  status resolver (`statusResolver` / `status_resolver`, `(uri, idx)` to
+  `valid`, `invalid` or `suspended`), whose `invalid` or `suspended` answer is
+  refused with `passport_revoked` and whose failure or unknown answer is
+  refused with `status_stale`, or pass `statusCheckedBy: 'caller'` /
+  `status_checked_by="caller"` to state that the caller resolves `status`
+  itself; with neither, the call is refused as a configuration error (spec
+  section 4). `sub` and `provider.did` must match the W3C DID Core section 3.1
+  DID syntax in full. The hash names the exact issuer-signed JWT bytes, so it
+  is not a deny-list key (spec section 6).
+- Shared vectors in `spec/examples/agent-passport-vectors.json`, including
+  status vectors, checked by both packages. Both run in `make check` /
+  `make test` and in CI, and both have Dependabot entries. No existing
+  path changes. `scripts/check-docs-integrity.mjs --live` skips a
+  `pyproject.toml` with the `Private :: Do Not Upload` classifier, as it
+  already skips a `package.json` with `"private": true`.
+### Agent request signing libraries (not yet published)
+- New `spec/verification.md`: the `Agent-Passport`, `Agent-Grant` and
+  `Agent-Trust` headers (RFC 9651 Byte Sequences; above 6 KB the presentation
+  moves to the JSON content under `agent_credentials` and the header carries
+  `body;sha-256=:...:`, and the content is read only when it nests at most
+  64 deep), `Content-Digest` (RFC 9530, SHA-256 only) and the
+  RFC 9421 signing profile: covered components exactly `("@method"
+  "@authority" "@path" "content-digest" "agent-passport" "agent-grant")`,
+  parameters `created`, `expires`, `nonce`, `keyid` (RFC 7638 thumbprint) and
+  `tag="agent-payer-auth"`, at most 300 seconds between `created` and
+  `expires`, `ecdsa-p256-sha256` (r || s, not DER) and `ed25519`. The
+  verification steps are ordered and each denial carries
+  `request_signature_invalid` or `request_signature_stale` and a reason.
+- New packages `@grantex/agent-httpsig` (`packages/agent-httpsig`) and
+  `grantex-agent-httpsig` (`packages/agent-httpsig-py`), 0.1.0, not
+  published: `sign()` and `verify()` for the profile with an injected key
+  resolver and nonce store, an RFC 9421 signature base builder, and an RFC
+  9651 parser and serializer. Both run the shared vectors in
+  `spec/examples/agent-httpsig-vectors.json` (deterministic Ed25519 signing,
+  ECDSA verification, 58 verification cases with their denial reasons, and
+  the signature bases of RFC 9421 section 2.5 and Appendix B.2.1, B.2.3,
+  B.2.4, B.2.5 and B.2.6 with the B.2.4 and B.2.6 signatures verified), and
+  are in `make check`, `make test` and CI. `verify()` refuses an expected
+  authority that carries the default port (`:80` or `:443`), which
+  `@authority` never does, and a `now` that is not a finite, non-negative
+  number (NaN or an infinity). The Python `InMemoryNonceStore` checks and
+  records a nonce under a lock, so threads sharing one store cannot both
+  accept the same nonce. The signature base builders accept a covered field
+  only when its name is a lowercased RFC 9110 field name (a token), as
+  RFC 9421 section 2.1 requires.
+- `scripts/check-docs-integrity.mjs --live` skips a Python project that
+  carries the `Private :: Do Not Upload` classifier, as it already skipped an
+  npm package marked `"private": true`.
+- New findings: FINDINGS G-95 (the query string is not signed) and
+  FINDINGS G-96 (`Agent-Trust` is not bound to the request).
 ### Accredited issuers in the registry (auth service)
 - New `POST /v1/registry/issuers` and `PATCH /v1/registry/issuers/{id}` for
   the registry operator: accredit an issuer with its `entity_id` (an https
@@ -21,6 +187,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   transaction, with the operator's reason.
 - New public `GET /v1/registry/issuers`: each issuer's `entity_id`,
   `trust_marks`, `status` in effect now, `status_list_base` and keys without
+  revoked kids, with an `ETag` and `Cache-Control: no-cache` (a cache
+  revalidates every read, so a revoked key is not served stale), limited to
+  60 requests a minute per address.
   revoked kids, ordered by `entity_id` and paged with `page` (default 1) and
   `pageSize` (1 to 500, default 100), with `total`, the number of issuers in
   all, read in the same snapshot as the page. Each page has an `ETag` and
@@ -38,6 +207,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Migration `121_registry_accredited_issuers.sql` adds two empty tables. No
   existing path changes. Documented in
   `docs/issuers/becoming-an-accredited-issuer.md`,
+  `spec/registry-federation.md` and `docs/self-hosting.md`.
   `spec/registry-federation.md`, `docs/self-hosting.md` and
   `docs/openapi.yaml`.
 ### Opt-in admin key for the trust registry listing (auth service)
@@ -96,6 +266,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `publicJwk` (`KEY_ALGORITHM_NOT_ALLOWED`).
 - Existing keys were backfilled: `active` when a DPoP proof of the registered
   key had been verified, `pending` otherwise; a registered key of a type the
+  history cannot hold is reported with a migration warning. `POST` and
+  `PATCH /v1/agents` behave as before; the keys they write also enter the history, and they
+  refuse a key held in another agent's history (`AGENT_KEY_CONFLICT`), a
+  compromised key (`key_not_active`) or a non-P-256 key under a payments rail.
+  The token endpoints still bind to the registered key (FINDINGS G-85).
   history cannot hold is reported with a migration warning. The migration
   installs nothing on `agents` (no trigger). A DPoP proof of the registered key
   counts as possession: the key routes record it before they read the history.
@@ -171,6 +346,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Audit pre-publication Python integration dependencies against a wheel built
   from this checkout, without relaxing vulnerability or license policy.
 
+### Mock accredited issuer (new, unpublished package)
+- New `@grantex/mock-issuer` (`packages/mock-issuer`), 0.1.0, private and not
+  published, so the registry flow runs locally and in CI with no external
+  party and no network. It is `https://mock-issuer.example` with a static JWKS
+  of one ES256 key generated at start (kept in a directory named for the run
+  when asked, never committed); OpenID Federation Entity Configuration and an
+  SSF transmitter are Phase 2.
+- It issues Agent Passports with `@grantex/agent-passport` (`vct`
+  `urn:grantex:agent-passport:1`; `provider`, `agent`, `verification` and an
+  issuer-minted `attestation_id` `att_<ulid>`) only after the agent signs the
+  issuer's possession challenge (typ `agent-key-proof+jwt`); without a valid
+  proof it refuses with the registry's codes: `key_unproven` (no proof, or a
+  signature that does not verify), `key_binding_mismatch` (`kid` or `sub` for
+  another key or agent) or `audience_mismatch`. It depends on
+  `@grantex/agent-passport` by name, linked from the root `package.json` and
+  built by `make install`, and uses only its exported API.
+- Its own passport status lists hold 131,072 entries each with indices drawn at
+  random, and are published from the store both as a Token Status List token
+  (draft-ietf-oauth-status-list-21, `statuslist+jwt`, two bits per entry) and
+  as Bitstring Status List credentials (`revocation` and `suspension`, VC-JWT),
+  neither derived from the other. ttl is 1 s by default for the mock and CI and
+  600 s with the standard profile. Passports can be revoked (final), suspended
+  and reinstated; a passport's `provider.entity` attestation has its own entry
+  and follows the passport.
+- Attestations (typ `grantex-attestation+jwt`, ES256, `kid`) for
+  `urn:grantex:tm:agent.identity` and `urn:grantex:tm:provider.entity`, with
+  `key_thumbprint` (RFC 7638) and `external_credential_hash` by the Agent
+  Passport hash rule, and `postAttestation` to POST one to a registry: the
+  compact JWS itself as `application/grantex-attestation+jwt`, with no API key,
+  a 10 s timeout and a 64 KiB bound on the answer.
+- A server bound to 127.0.0.1 only serves `/.well-known/jwks.json`
+  (`application/jwk-set+json`), `/status/N` (`application/statuslist+jwt`) and
+  `/status/N/bitstring[/suspension]` (`application/vc+jwt`) for the registry's
+  `REGISTRY_DEV_ISSUER_ORIGIN_MAP`; a CLI (`keys`, `serve`, `issue-passport`,
+  `attest`, `revoke`, `suspend`, `reinstate`) wraps it for scripts. Documented
+  in `docs/issuers/running-the-mock-issuer.md`. It runs in `make check` /
+  `make test` and in CI. No existing path changes.
 ### Dashboard passkey removal
 - Send JSON content type only when the dashboard request has a JSON body.
   Bodyless DELETE requests now reach the API instead of failing its JSON parser.

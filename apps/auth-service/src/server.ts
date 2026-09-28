@@ -46,6 +46,8 @@ import { passportRoutes } from './routes/passport.js';
 import { trustRegistryRoutes } from './routes/trust-registry.js';
 import { registryIssuerRoutes } from './routes/registry-issuers.js';
 import { registryStatusRoutes } from './routes/registry-status.js';
+import { registryAttestationRoutes } from './routes/registry-attestations.js';
+import { registryLookupRoutes } from './routes/registry-lookup.js';
 import { consentBundlesRoutes } from './routes/consent-bundles.js';
 import { mcpServersRoutes } from './routes/mcp-servers.js';
 import { dpdpRoutes } from './routes/dpdp.js';
@@ -235,6 +237,10 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(trustRegistryRoutes);
   await app.register(registryIssuerRoutes);
   await app.register(registryStatusRoutes);
+  await app.register(registryAttestationRoutes);
+  // Registry lookup (API key; also public when REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true)
+  // and the signed manifest (only then).
+  await app.register(registryLookupRoutes);
   await app.register(consentBundlesRoutes);
   await app.register(mcpServersRoutes);
   await app.register(dpdpRoutes);
