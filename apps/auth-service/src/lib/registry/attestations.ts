@@ -275,9 +275,13 @@ async function readIssuerStatusList(
     throw new AttestationError('status_stale', 'status_list_not_under_base',
       'status.status_list.uri is not under the issuer\'s status_list_base');
   }
+  // The same string as `uri`, since it starts with the base; built from the
+  // registry's own record of the base so the host fetched never comes from
+  // the attestation.
+  const fetchUri = issuer.statusListBase + uri.slice(issuer.statusListBase.length);
   let token: string;
   try {
-    token = await fetchIssuerStatusList(uri);
+    token = await fetchIssuerStatusList(fetchUri);
   } catch (err) {
     // An unreadable list is a refusal, never an accepted attestation.
     if (err instanceof IssuerFetchError) throw new AttestationError('status_stale', 'unreachable', err.message);
