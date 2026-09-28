@@ -56,8 +56,9 @@ export const MAX_JWKS_BYTES = 16_384;
 export const MAX_URL_LENGTH = 2048;
 const MAX_KID_LENGTH = 128;
 const MAX_REASON_LENGTH = 500;
-/** The public list is small by nature; this bounds a response, not a page. */
-export const MAX_PUBLIC_ISSUERS = 500;
+/** The public list is paged with page and pageSize, as the other paged /v1 lists are. */
+export const DEFAULT_PUBLIC_ISSUER_PAGE_SIZE = 100;
+export const MAX_PUBLIC_ISSUER_PAGE_SIZE = 500;
 
 export type IssuerJwk = Record<string, string | string[]>;
 export interface IssuerJwks { keys: IssuerJwk[] }
@@ -659,15 +660,51 @@ export async function updateAccreditedIssuer(
 
 // --- Reads ----------------------------------------------------------------------
 
-/** Every issuer, minimised for the public list, ordered by entity_id. */
-export async function listPublicIssuers(sql: Sql, at: Date = new Date()): Promise<PublicIssuer[]> {
+export interface PublicIssuerPage {
+  issuers: PublicIssuer[];
+  /** How many issuers the registry lists in all, so a full page is never taken for the whole list. */
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * One page of the issuers, minimised for the public list, ordered by
+ * entity_id (unique, so pages neither overlap nor skip). `page` is from 1 and
+ * `pageSize` at most MAX_PUBLIC_ISSUER_PAGE_SIZE; the route validates both.
+ *
+ * The count and the page come from one statement, so from one snapshot: the
+ * total always describes the rows it was read with. Past the last page the
+ * lateral join still yields the one row carrying the count, with no issuer.
+ */
+export async function listPublicIssuers(
+  sql: Sql,
+  paging: { page: number; pageSize: number } = { page: 1, pageSize: DEFAULT_PUBLIC_ISSUER_PAGE_SIZE },
+  at: Date = new Date(),
+): Promise<PublicIssuerPage> {
+  const { page, pageSize } = paging;
+  if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(pageSize)
+    || pageSize < 1 || pageSize > MAX_PUBLIC_ISSUER_PAGE_SIZE || !Number.isSafeInteger((page - 1) * pageSize)) {
+    throw new RangeError(`page must be >= 1 and pageSize between 1 and ${MAX_PUBLIC_ISSUER_PAGE_SIZE}`);
+  }
   const rows = await sql`
-    SELECT i.entity_id, i.trust_marks, i.status, i.suspended_effective_from, i.status_list_base, i.jwks,
-           ARRAY(SELECT r.kid FROM accredited_issuer_revoked_keys r WHERE r.issuer_id = i.id) AS revoked_kids
-    FROM accredited_issuers i
-    ORDER BY i.entity_id
-    LIMIT ${MAX_PUBLIC_ISSUERS}`;
-  return rows.map((row) => toPublicIssuer({
+    WITH counted AS (SELECT count(*)::int AS total FROM accredited_issuers)
+    SELECT c.total, p.*
+    FROM counted c
+    LEFT JOIN LATERAL (
+      SELECT i.entity_id, i.trust_marks, i.status, i.suspended_effective_from, i.status_list_base, i.jwks,
+             ARRAY(SELECT r.kid FROM accredited_issuer_revoked_keys r WHERE r.issuer_id = i.id) AS revoked_kids
+      FROM accredited_issuers i
+      ORDER BY i.entity_id
+      LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
+    ) p ON true
+    ORDER BY p.entity_id`;
+  const total = Number(rows[0]?.['total']);
+  // Fail loudly rather than answer a page whose total is unknown: a relying
+  // party pages until it has `total` issuers, and a wrong total would make it
+  // stop early and treat a listed issuer as unknown.
+  if (!Number.isSafeInteger(total) || total < 0) throw new Error('accredited issuer count missing from the page query');
+  const issuers = rows.filter((row) => row['entity_id'] != null).map((row) => toPublicIssuer({
     entityId: row['entity_id'] as string,
     trustMarks: (row['trust_marks'] as string[]) ?? [],
     status: row['status'] as IssuerStatus,
@@ -676,6 +713,7 @@ export async function listPublicIssuers(sql: Sql, at: Date = new Date()): Promis
     jwks: toJwks(row['jwks']),
     revokedKids: (row['revoked_kids'] as string[]) ?? [],
   }, at));
+  return { issuers, total, page, pageSize };
 }
 
 /** Rows per statement when every issuer is read (listAllPublicIssuers). */

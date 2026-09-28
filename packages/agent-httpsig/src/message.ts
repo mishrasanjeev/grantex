@@ -35,6 +35,22 @@ function fail(message: string): never {
   throw new AgentHttpSigError(message);
 }
 
+/** RFC 9421 section 2.1 step 2: leading and trailing SP and HTAB removed, in linear time. */
+function trimWhitespace(value: string): string {
+  const isSpace = (c: number) => c === 0x20 || c === 0x09;
+  let start = 0;
+  let end = value.length;
+  while (start < end && isSpace(value.charCodeAt(start))) start++;
+  while (end > start && isSpace(value.charCodeAt(end - 1))) end--;
+  return value.slice(start, end);
+}
+
+/**
+ * RFC 9421 section 2.1: the component name of a field is the lowercased form
+ * of its RFC 9110 section 5.1 field name, a token (section 5.6.2: 1*tchar).
+ */
+const FIELD_NAME = /^[!#$%&'*+\-.^_`|~0-9a-z]+$/;
+
 export function bodyBytes(body: string | Uint8Array | null | undefined): Uint8Array {
   if (body === undefined || body === null) return new Uint8Array();
   return typeof body === 'string' ? new TextEncoder().encode(body) : body;
@@ -51,7 +67,7 @@ export function fieldLines(headers: HeadersInit | undefined, name: string): stri
   if (headers === undefined) return null;
   const add = (value: HeaderValue) => {
     if (value === undefined) return;
-    for (const v of typeof value === 'string' ? [value] : value) out.push(v.replace(/^[ \t]+|[ \t]+$/g, ''));
+    for (const v of typeof value === 'string' ? [value] : value) out.push(trimWhitespace(v));
   };
   if (typeof Headers !== 'undefined' && headers instanceof Headers) {
     // Headers already combines repeated lines with ", " (Fetch standard).
@@ -181,8 +197,8 @@ export function createSignatureBase(
     if (name.startsWith('@')) {
       value = overrides[name] ?? derivedValue(message, name);
     } else {
-      // Section 2.1: lowercased field names only.
-      if (name !== name.toLowerCase() || name === '') fail(`invalid field name ${JSON.stringify(name)}`);
+      // Section 2.1: the lowercased form of an RFC 9110 field name.
+      if (!FIELD_NAME.test(name)) fail(`invalid field name ${JSON.stringify(name)}`);
       const v = fieldValue(message.headers, name);
       if (v === null) fail(`covered field ${name} is not in the message`);
       value = v;

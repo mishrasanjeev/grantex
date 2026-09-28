@@ -12,10 +12,10 @@
  * The SQL mock stands in for the store; the store itself is exercised
  * against real Postgres in registry-acceptance-postgres.integration.test.ts.
  */
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify, type JWTPayload } from 'jose';
-import { buildTestApp, sqlMock } from './helpers.js';
+import { authHeader, buildTestApp, seedAuth, sqlMock } from './helpers.js';
 import {
   ACCEPTANCE_STATUS_RATE_LIMIT_PER_MINUTE,
   CASCADE_TTL_SECONDS,
@@ -78,8 +78,19 @@ function get(url: string, headers: Record<string, string> = {}) {
   return app.inject({ method: 'GET', url, headers, remoteAddress: ip });
 }
 
+// The public routes are registered only while REGISTRY_PUBLIC_ENDPOINTS_ENABLED
+// is exactly 'true' at boot; the flag-off app is exercised at the end.
+const FLAG = 'REGISTRY_PUBLIC_ENDPOINTS_ENABLED';
+const savedFlag = process.env[FLAG];
+
 beforeAll(async () => {
+  process.env[FLAG] = 'true';
   app = await buildTestApp();
+});
+
+afterAll(() => {
+  if (savedFlag === undefined) delete process.env[FLAG];
+  else process.env[FLAG] = savedFlag;
 });
 
 beforeEach(() => {
@@ -346,5 +357,144 @@ describe('GET /status/attestations/:list/bitstring (Bitstring Status List)', () 
     expect((await get(`/status/attestations/${LIST_ID}/bitstring/refresh`)).statusCode).toBe(404);
     list = null;
     expect((await get(`/status/attestations/${LIST_ID}/bitstring`)).statusCode).toBe(404);
+  });
+});
+
+describe('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', () => {
+  const paths = [
+    `/status/attestations/${LIST_ID}`,
+    `/status/attestations/${LIST_ID}/bitstring`,
+    `/status/attestations/${LIST_ID}/bitstring/suspension`,
+  ];
+
+  async function appWithFlag(value: string | undefined): Promise<FastifyInstance> {
+    if (value === undefined) delete process.env[FLAG];
+    else process.env[FLAG] = value;
+    try {
+      return await buildTestApp();
+    } finally {
+      process.env[FLAG] = 'true';
+    }
+  }
+
+  for (const value of [undefined, 'false', 'TRUE', '1', 'yes', ' true']) {
+    it(`does not register the public routes when the flag is ${JSON.stringify(value)}`, async () => {
+      const off = await appWithFlag(value);
+      try {
+        for (const url of paths) {
+          // Not registered: exactly the answer a path that was never a route
+          // gets. Without credentials that is the auth hook's 401; with them,
+          // the 404 of an unknown route.
+          const res = await off.inject({ method: 'GET', url, remoteAddress: ip });
+          const unknown = await off.inject({ method: 'GET', url: '/status/no-such-route', remoteAddress: ip });
+          expect(res.statusCode).toBe(unknown.statusCode);
+          expect(res.json().code).toBe(unknown.json().code);
+          expect(res.headers['content-type']).not.toMatch(/jwt/);
+          seedAuth();
+          const authed = await off.inject({ method: 'GET', url, remoteAddress: ip, headers: authHeader() });
+          expect(authed.statusCode).toBe(404);
+          const preflightTo = (target: string) => off.inject({
+            method: 'OPTIONS',
+            url: target,
+            remoteAddress: ip,
+            headers: {
+              origin: 'https://verifier.example',
+              'access-control-request-method': 'GET',
+              'access-control-request-headers': 'if-none-match',
+            },
+          });
+          const preflight = await preflightTo(url);
+          const unknownPreflight = await preflightTo('/status/no-such-route');
+          // No CORS grant for an origin outside CORS_ALLOWED_ORIGINS, so a
+          // browser cannot read these paths cross-origin while the flag is off.
+          expect(preflight.headers['access-control-allow-origin']).toBeUndefined();
+          expect(preflight.headers['access-control-allow-headers']).toBeUndefined();
+          expect(preflight.statusCode).toBe(unknownPreflight.statusCode);
+        }
+        expect(queries.filter((q) => q.includes('registry_acceptance'))).toHaveLength(0);
+      } finally {
+        await off.close();
+      }
+    });
+  }
+
+  it('serves every public route when the flag is exactly "true"', async () => {
+    const on = await appWithFlag('true');
+    try {
+      for (const url of paths) {
+        const res = await on.inject({ method: 'GET', url, remoteAddress: ip });
+        expect(res.statusCode).toBe(200);
+      }
+    } finally {
+      await on.close();
+    }
+  });
+});
+
+describe('CORS for conditional requests from a browser relying party', () => {
+  const paths = [
+    `/status/attestations/${LIST_ID}`,
+    `/status/attestations/${LIST_ID}/bitstring`,
+    `/status/attestations/${LIST_ID}/bitstring/suspension`,
+  ];
+
+  function preflight(url: string, origin = 'https://verifier.example') {
+    return app.inject({
+      method: 'OPTIONS',
+      url,
+      remoteAddress: ip,
+      headers: {
+        origin,
+        'access-control-request-method': 'GET',
+        // If-None-Match is not a CORS-safelisted request-header, so a browser
+        // sends a preflight naming it (lower-cased) before the GET.
+        'access-control-request-headers': 'if-none-match',
+      },
+    });
+  }
+
+  it('answers the preflight for an origin outside CORS_ALLOWED_ORIGINS', async () => {
+    for (const url of paths) {
+      const res = await preflight(url);
+      expect(res.statusCode).toBe(204);
+      expect(res.headers['access-control-allow-origin']).toBe('*');
+      expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+      expect(String(res.headers['access-control-allow-methods']).split(/\s*,\s*/)).toContain('GET');
+      expect(String(res.headers['access-control-allow-headers']).toLowerCase().split(/\s*,\s*/))
+        .toContain('if-none-match');
+      expect(queries.filter((q) => q.includes('registry_acceptance'))).toHaveLength(0);
+    }
+  });
+
+  it('refuses an OPTIONS request that is not a CORS preflight', async () => {
+    const res = await app.inject({ method: 'OPTIONS', url: paths[0]!, remoteAddress: ip });
+    expect(res.statusCode).toBe(400);
+    expect(res.headers['access-control-allow-headers']).toBeUndefined();
+  });
+
+  it('allows only GET, and no credentials, from any origin', async () => {
+    const res = await preflight(paths[0]!, 'https://dashboard.example');
+    const methods = String(res.headers['access-control-allow-methods']).split(/\s*,\s*/);
+    expect(methods).toEqual(['GET']);
+    expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+  });
+
+  it('exposes ETag on 200 and 304 so the relying party can revalidate', async () => {
+    for (const url of paths) {
+      const first = await get(url, { origin: 'https://verifier.example' });
+      expect(first.statusCode).toBe(200);
+      expect(first.headers['access-control-allow-origin']).toBe('*');
+      expect(String(first.headers['access-control-expose-headers']).toLowerCase().split(/\s*,\s*/))
+        .toContain('etag');
+      const again = await get(url, {
+        origin: 'https://verifier.example',
+        'if-none-match': first.headers['etag'] as string,
+      });
+      expect(again.statusCode).toBe(304);
+      expect(again.headers['access-control-allow-origin']).toBe('*');
+      expect(again.headers['access-control-allow-credentials']).toBeUndefined();
+      expect(String(again.headers['access-control-expose-headers']).toLowerCase().split(/\s*,\s*/))
+        .toContain('etag');
+    }
   });
 });

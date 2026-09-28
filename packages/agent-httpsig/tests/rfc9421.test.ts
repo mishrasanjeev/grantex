@@ -76,6 +76,34 @@ describe('RFC 9421 section 2.5 errors', () => {
     expect(() => signatureBaseFor(request('sig1=("x-name");created=1', [['X-Name', 'café']]), 'sig1')).toThrow(AgentHttpSigError);
   });
 
+  it('refuses a covered field that is not a lowercased RFC 9110 field name (section 2.1)', () => {
+    // RFC 9110 section 5.1: field-name = token; section 5.6.2: token = 1*tchar.
+    for (const [name, header] of [
+      ['bad header', 'Bad Header'],
+      ['x:y', 'X:Y'],
+      ['x(y)', 'X(Y)'],
+      ['x/y', 'X/Y'],
+    ] as const) {
+      expect(() => signatureBaseFor(request(`sig1=(${JSON.stringify(name)});created=1`, [[header, 'v']]), 'sig1')).toThrow(
+        /invalid field name/,
+      );
+    }
+    expect(() => signatureBaseFor(request('sig1=("");created=1'), 'sig1')).toThrow(/invalid field name/);
+    expect(() => signatureBaseFor(request('sig1=("X-Name");created=1', [['X-Name', 'v']]), 'sig1')).toThrow(/invalid field name/);
+    // Every tchar is allowed.
+    expect(signatureBaseFor(request('sig1=("x!#$%&\'*+-.^_`|~09");created=1', [["x!#$%&'*+-.^_`|~09", 'v']]), 'sig1')).toBe(
+      '"x!#$%&\'*+-.^_`|~09": v\n"@signature-params": ("x!#$%&\'*+-.^_`|~09");created=1',
+    );
+  });
+
+  it('trims only leading and trailing SP and HTAB from each field line (section 2.1 step 2)', () => {
+    const base = (value: string) =>
+      signatureBaseFor(request('sig1=("x-name");created=1', [['X-Name', value]]), 'sig1').split('\n')[0];
+    expect(base(' \t \tv  w\t \t')).toBe('"x-name": v  w');
+    expect(base('\t\t\t')).toBe('"x-name": ');
+    expect(base('\t'.repeat(50_000) + 'v' + '\t'.repeat(50_000))).toBe('"x-name": v');
+  });
+
   it('refuses a label that is not in Signature-Input', () => {
     expect(() => signatureBaseFor(request('sig1=("@method");created=1'), 'sig2')).toThrow(AgentHttpSigError);
   });

@@ -236,6 +236,14 @@ describe('verify fails closed', () => {
       reason: 'authority_mismatch',
     });
   });
+  it('refuses a verifier clock that is not a finite, non-negative number', async () => {
+    // NaN compares false with everything, so both time checks would pass a stale signature.
+    const { request } = signed(key);
+    expect(await verify(request, options(key, { now: NOW + 300 + 10 }))).toMatchObject({ reason: 'expired' });
+    for (const now of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, '1790000005' as unknown as number]) {
+      await expect(verify(request, options(key, { now }))).rejects.toThrow(/now must be/);
+    }
+  });
   it('matches the expected authority case-insensitively', async () => {
     const { request } = signed(key);
     expect(await verify(request, options(key, { expectedAuthority: 'Merchant.Example' }))).toMatchObject({ ok: true });

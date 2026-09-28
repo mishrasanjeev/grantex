@@ -31,7 +31,7 @@ const issuer = p256KeyPair('mock-issuer-2026');
 const holder = p256KeyPair();
 
 function options(compact: string, extra: Partial<VerifyPassportOptions> = {}): VerifyPassportOptions {
-  return { compact, issuerKeys: resolverFor(issuer.publicJwk), now: NOW, ...extra };
+  return { compact, issuerKeys: resolverFor(issuer.publicJwk), now: NOW, statusResolver: () => 'valid', ...extra };
 }
 
 async function refusal(promise: Promise<unknown>): Promise<{ code: string; reason: string }> {
@@ -135,7 +135,12 @@ describe('verifyPassport', () => {
   it('accepts an EdDSA issuer only when allowEdDSA is set', async () => {
     const edIssuer = ed25519KeyPair('ed-1');
     const issued = issuePassport(passportParams(edIssuer, holder));
-    const opts = { compact: issued.compact, issuerKeys: resolverFor(edIssuer.publicJwk), now: NOW };
+    const opts: VerifyPassportOptions = {
+      compact: issued.compact,
+      issuerKeys: resolverFor(edIssuer.publicJwk),
+      now: NOW,
+      statusResolver: () => 'valid',
+    };
     expect(await refusal(verifyPassport(opts))).toEqual({ code: 'passport_not_accepted', reason: 'eddsa_not_enabled' });
     const result = await verifyPassport({ ...opts, allowEdDSA: true });
     expect(result.iss).toBe(ISSUER);
@@ -533,5 +538,163 @@ describe('recursive disclosures (RFC 9901 section 7.1)', () => {
       code: 'passport_malformed',
       reason: 'disclosure_malformed',
     });
+  });
+});
+
+describe('status (draft-ietf-oauth-status-list section 7.1): verifyPassport fails closed', () => {
+  const STATUS_URI = 'https://mock-issuer.example/status/1';
+
+  /** The options without any status decision, so each test states its own. */
+  function bare(compact: string, extra: Partial<VerifyPassportOptions> = {}): VerifyPassportOptions {
+    return { compact, issuerKeys: resolverFor(issuer.publicJwk), now: NOW, ...extra };
+  }
+
+  it('refuses to run with neither a status resolver nor statusCheckedBy', async () => {
+    const issued = issuePassport(passportParams(issuer, holder));
+    const error = await verifyPassport(bare(issued.compact)).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TypeError);
+    expect(error).not.toBeInstanceOf(PassportError);
+    expect((error as Error).message).toMatch(/statusResolver.*statusCheckedBy/);
+  });
+
+  it('refuses both a resolver and statusCheckedBy, and any statusCheckedBy other than caller', async () => {
+    const issued = issuePassport(passportParams(issuer, holder));
+    const both = bare(issued.compact, { statusResolver: () => 'valid', statusCheckedBy: 'caller' });
+    await expect(verifyPassport(both)).rejects.toBeInstanceOf(TypeError);
+    const other = bare(issued.compact, { statusCheckedBy: 'verifier' as unknown as 'caller' });
+    await expect(verifyPassport(other)).rejects.toBeInstanceOf(TypeError);
+    const notFunction = bare(issued.compact, { statusResolver: 'valid' as unknown as () => 'valid' });
+    await expect(verifyPassport(notFunction)).rejects.toBeInstanceOf(TypeError);
+  });
+
+  it('passes the status reference to the resolver and accepts VALID', async () => {
+    const issued = issuePassport(passportParams(issuer, holder));
+    const calls: unknown[][] = [];
+    const result = await verifyPassport(
+      bare(issued.compact, {
+        statusResolver: async (uri, idx): Promise<'valid'> => {
+          calls.push([uri, idx]);
+          return 'valid';
+        },
+      }),
+    );
+    expect(calls).toEqual([[STATUS_URI, 42]]);
+    expect(result.statusCheckedBy).toBe('resolver');
+  });
+
+  it('refuses INVALID and SUSPENDED with passport_revoked', async () => {
+    const issued = issuePassport(passportParams(issuer, holder));
+    expect(await refusal(verifyPassport(bare(issued.compact, { statusResolver: () => 'invalid' })))).toEqual({
+      code: 'passport_revoked',
+      reason: 'status_invalid',
+    });
+    expect(await refusal(verifyPassport(bare(issued.compact, { statusResolver: () => 'suspended' })))).toEqual({
+      code: 'passport_revoked',
+      reason: 'status_suspended',
+    });
+  });
+
+  it('refuses with status_stale when the resolver fails or answers something unknown', async () => {
+    const issued = issuePassport(passportParams(issuer, holder));
+    const cause = new Error('status list unreachable');
+    const thrown = await verifyPassport(
+      bare(issued.compact, {
+        statusResolver: () => {
+          throw cause;
+        },
+      }),
+    ).catch((e: unknown) => e);
+    expect(thrown).toBeInstanceOf(PassportError);
+    expect({ code: (thrown as PassportError).code, reason: (thrown as PassportError).reason }).toEqual({
+      code: 'status_stale',
+      reason: 'status_unresolved',
+    });
+    expect((thrown as PassportError).cause).toBe(cause);
+    expect(await refusal(verifyPassport(bare(issued.compact, { statusResolver: () => Promise.reject(cause) })))).toEqual({
+      code: 'status_stale',
+      reason: 'status_unresolved',
+    });
+    for (const answer of ['unknown', 'VALID', 0, undefined, null, true]) {
+      const resolver = (() => answer) as unknown as () => 'valid';
+      expect(await refusal(verifyPassport(bare(issued.compact, { statusResolver: resolver })))).toEqual({
+        code: 'status_stale',
+        reason: 'status_unknown',
+      });
+    }
+  });
+
+  it("accepts statusCheckedBy: 'caller' without a resolver and says so in the result", async () => {
+    const issued = issuePassport(passportParams(issuer, holder));
+    const result = await verifyPassport(bare(issued.compact, { statusCheckedBy: 'caller' }));
+    expect(result.statusCheckedBy).toBe('caller');
+    expect(result.status).toEqual({ status_list: { uri: STATUS_URI, idx: 42 } });
+  });
+
+  it('does not call the resolver for a passport that is refused on another rule', async () => {
+    const issued = issuePassport(passportParams(issuer, holder));
+    let called = false;
+    const resolver = () => {
+      called = true;
+      return 'valid' as const;
+    };
+    expect(await refusal(verifyPassport(bare(issued.compact, { now: IAT + 31 * 86_400, statusResolver: resolver })))).toEqual({
+      code: 'passport_expired',
+      reason: 'expired',
+    });
+    expect(called).toBe(false);
+  });
+});
+
+describe('DID syntax (W3C DID Core section 3.1)', () => {
+  const valid = [
+    'did:web:provider.example',
+    'did:web:provider.example:agents:shopper-01',
+    'did:web:provider.example%3A8443:agents:shopper-01',
+    'did:example:123456789abcdefghi',
+    'did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK',
+    'did:example:a::b',
+    'did:example:A.b-c_d',
+  ];
+  const invalid = [
+    'xdid:web:provider.example',
+    'did:web:provider.example agent',
+    'did:web:provider.example\n',
+    'did:web:provider.example/agents',
+    'did:web:provider.example?service=x',
+    'did:web:provider.example#key-1',
+    'did:web:',
+    'did:web:provider.example:',
+    'did:Web:provider.example',
+    'did::provider.example',
+    'did:web',
+    'did:web:provider%2',
+    'did:web:provider%zz',
+    'did:web:café.example',
+  ];
+
+  it('issues and verifies a passport for every DID the ABNF allows', async () => {
+    for (const sub of valid) {
+      const issued = issuePassport(passportParams(issuer, holder, { sub }));
+      expect((await verifyPassport(options(issued.compact))).sub).toBe(sub);
+    }
+  });
+
+  it('refuses a sub that is not a DID in full, at issue and at verify', async () => {
+    const issued = issuePassport(passportParams(issuer, holder));
+    for (const sub of invalid) {
+      expect(() => issuePassport(passportParams(issuer, holder, { sub }))).toThrow(PassportError);
+      const compact = resign(issued.compact, (_h, payload) => {
+        payload.sub = sub;
+      });
+      expect(await refusal(verifyPassport(options(compact)))).toEqual({ code: 'passport_malformed', reason: 'bad_claim' });
+    }
+  });
+
+  it('refuses a provider.did that is not a DID in full', async () => {
+    for (const did of invalid) {
+      const claims = { ...structuredClone(PROFILE_CLAIMS), provider: { ...PROFILE_CLAIMS.provider, did } };
+      const issued = issuePassport(passportParams(issuer, holder, { claims }));
+      expect(await refusal(verifyPassport(options(issued.compact)))).toEqual({ code: 'passport_malformed', reason: 'bad_claim' });
+    }
   });
 });

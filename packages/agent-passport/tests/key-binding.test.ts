@@ -27,6 +27,7 @@ function options(compact: string, extra: Partial<VerifyPassportOptions> = {}): V
     issuerKeys: resolverFor(issuer.publicJwk),
     now: NOW,
     keyBinding: { aud: AUD, nonce: NONCE },
+    statusCheckedBy: 'caller',
     ...extra,
   };
 }

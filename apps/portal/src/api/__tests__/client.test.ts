@@ -52,7 +52,7 @@ describe('client', () => {
     const result = await api.get('/v1/test');
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/test', {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {},
       body: undefined,
     });
     expect(result).toEqual({ foo: 'bar' });
@@ -65,7 +65,6 @@ describe('client', () => {
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/secure', {
       method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
         Authorization: 'Bearer my-key',
       },
       body: undefined,
@@ -90,7 +89,7 @@ describe('client', () => {
     await api.post('/v1/action');
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/action', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {},
       body: undefined,
     });
   });
@@ -126,10 +125,21 @@ describe('client', () => {
     const result = await api.del('/v1/items/1');
     expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/items/1', {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {},
       body: undefined,
     });
     expect(result).toBeUndefined();
+  });
+
+  it('keeps authorization without an empty JSON body when deleting a passkey', async () => {
+    setApiKey('test-key');
+    const json = vi.fn();
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 204, json });
+    await api.del('/v1/webauthn/credentials/test-credential');
+    expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/v1/webauthn/credentials/test-credential', {
+      method: 'DELETE', headers: { Authorization: 'Bearer test-key' }, body: undefined,
+    });
+    expect(json).not.toHaveBeenCalled();
   });
 
   // ── Error handling ─────────────────────────────────────────────────────

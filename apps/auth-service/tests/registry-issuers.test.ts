@@ -8,9 +8,13 @@
  * registry-issuers-postgres.integration.test.ts.
  */
 import crypto, { generateKeyPairSync, randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildTestApp, sqlMock } from './helpers.js';
+import { authHeader, buildTestApp, seedAuth, sqlMock } from './helpers.js';
+import { config } from '../src/config.js';
 import {
   IssuerRecordError,
   MAX_JWKS_BYTES,
@@ -375,12 +379,18 @@ describe('public record', () => {
 let app: FastifyInstance;
 const operatorKey = randomBytes(32).toString('hex');
 
+// The public list is registered only with REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true,
+// which is read when the app is built. This app has it on; the flag's off
+// state has apps of its own below.
 beforeAll(async () => {
+  vi.stubEnv('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', 'true');
   app = await buildTestApp();
+  vi.unstubAllEnvs();
 });
 
 beforeEach(() => {
   vi.stubEnv('REGISTRY_OPERATOR_API_KEYS', operatorKey);
+  vi.stubEnv('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', 'true');
 });
 
 afterEach(() => {
@@ -467,6 +477,7 @@ describe('GET /v1/registry/issuers', () => {
       accreditation_evidence_ref: 'accreditation-case-0001',
       data_residency: 'EU',
       events_endpoint: 'https://issuer.example/events',
+      total: 1,
       ...overrides,
     };
   }
@@ -488,8 +499,8 @@ describe('GET /v1/registry/issuers', () => {
     const later = new Date(Date.now() + 3_600_000);
     const earlier = new Date(Date.now() - 60_000);
     sqlMock.mockResolvedValueOnce([
-      issuerRow({ status: 'suspended', suspended_effective_from: later }),
-      issuerRow({ entity_id: 'https://provider.example', status: 'suspended', suspended_effective_from: earlier }),
+      issuerRow({ status: 'suspended', suspended_effective_from: later, total: 2 }),
+      issuerRow({ entity_id: 'https://provider.example', status: 'suspended', suspended_effective_from: earlier, total: 2 }),
     ]);
     const res = await app.inject({ method: 'GET', url: '/v1/registry/issuers', remoteAddress: '198.51.100.21' });
     expect(res.json().issuers.map((issuer: { status: string }) => issuer.status)).toEqual(['active', 'suspended']);
@@ -518,10 +529,87 @@ describe('GET /v1/registry/issuers', () => {
     expect(changed.headers['etag']).not.toBe(etag);
   });
 
+  it('pages the list with page and pageSize and says how many issuers there are in all', async () => {
+    sqlMock.mockClear();
+    sqlMock.mockResolvedValueOnce([
+      issuerRow({ entity_id: 'https://issuer-3.example', total: 5 }),
+      issuerRow({ entity_id: 'https://issuer-4.example', total: 5 }),
+    ]);
+    const res = await app.inject({
+      method: 'GET', url: '/v1/registry/issuers?page=2&pageSize=2', remoteAddress: '198.51.100.23',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ total: 5, page: 2, pageSize: 2 });
+    expect(body.issuers.map((issuer: { entity_id: string }) => issuer.entity_id))
+      .toEqual(['https://issuer-3.example', 'https://issuer-4.example']);
+    // The page reaches the query as a limit of 2 and an offset of 2.
+    expect(sqlMock.mock.calls[0]!.slice(1)).toEqual([2, 2]);
+  });
+
+  it('defaults to the first page of 100 and answers an empty page past the end with the total', async () => {
+    sqlMock.mockClear();
+    sqlMock.mockResolvedValueOnce([issuerRow()]);
+    const first = await app.inject({ method: 'GET', url: '/v1/registry/issuers', remoteAddress: '198.51.100.24' });
+    expect(first.json()).toMatchObject({ total: 1, page: 1, pageSize: 100 });
+    expect(sqlMock.mock.calls[0]!.slice(1)).toEqual([100, 0]);
+
+    // Past the end the query still answers the count, on one row with no issuer.
+    sqlMock.mockResolvedValueOnce([{ total: 1, entity_id: null }]);
+    const past = await app.inject({
+      method: 'GET', url: '/v1/registry/issuers?page=9', remoteAddress: '198.51.100.24',
+    });
+    expect(past.statusCode).toBe(200);
+    expect(past.json()).toEqual({ issuers: [], total: 1, page: 9, pageSize: 100 });
+  });
+
+  it.each([
+    ['page=0'], ['page=-1'], ['page=abc'], ['pageSize=0'], ['pageSize=501'], ['pageSize=1.5'], ['page=1&page=2'],
+    ['page=100000000000000&pageSize=500'],
+  ])('refuses %s with 400 and reads nothing', async (query) => {
+    sqlMock.mockClear();
+    const res = await app.inject({
+      method: 'GET', url: `/v1/registry/issuers?${query}`, remoteAddress: '198.51.100.25',
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('BAD_REQUEST');
+    expect(sqlMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts the largest page size, 500', async () => {
+    sqlMock.mockResolvedValueOnce([issuerRow()]);
+    const res = await app.inject({
+      method: 'GET', url: '/v1/registry/issuers?pageSize=500', remoteAddress: '198.51.100.26',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().pageSize).toBe(500);
+  });
+
+  it('fails rather than answer a page without the total', async () => {
+    sqlMock.mockResolvedValueOnce([{ ...issuerRow(), total: undefined }]);
+    const res = await app.inject({ method: 'GET', url: '/v1/registry/issuers', remoteAddress: '198.51.100.27' });
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toContain('issuer.example');
+  });
+
+  it('answers the shape the issuer documentation shows for a page', async () => {
+    const doc = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../docs/issuers/becoming-an-accredited-issuer.md'), 'utf8',
+    );
+    const section = doc.slice(doc.indexOf('## What relying parties see'));
+    const block = /```json\r?\n([\s\S]*?)```/.exec(section);
+    expect(block).not.toBeNull();
+    const documented = JSON.parse(block![1]!) as Record<string, unknown>;
+    sqlMock.mockResolvedValueOnce([issuerRow({ jwks: { keys: [] }, revoked_kids: [] })]);
+    const res = await app.inject({ method: 'GET', url: '/v1/registry/issuers', remoteAddress: '198.51.100.28' });
+    expect(res.json()).toEqual(documented);
+  });
+
   it('is rate-limited per client address', async () => {
+    vi.stubEnv('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', 'true');
     const fresh = await buildTestApp();
     try {
-      sqlMock.mockResolvedValue([]);
+      sqlMock.mockResolvedValue([{ total: 0, entity_id: null }]);
       let last;
       for (let i = 0; i < 61; i += 1) {
         last = await fresh.inject({ method: 'GET', url: '/v1/registry/issuers', remoteAddress: '203.0.113.30' });
@@ -533,5 +621,66 @@ describe('GET /v1/registry/issuers', () => {
       sqlMock.mockResolvedValue([]);
       await fresh.close();
     }
+  });
+});
+
+describe('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', () => {
+  it.each([
+    ['unset', undefined],
+    ['empty', ''],
+    ['false', 'false'],
+    ['TRUE', 'TRUE'],
+    ['1', '1'],
+    ['yes', 'yes'],
+    ['true with spaces', ' true '],
+  ])('off when %s: the public list is not registered and answers like an unknown route', async (_label, value) => {
+    if (value === undefined) vi.stubEnv('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', undefined);
+    else vi.stubEnv('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', value);
+    const off = await buildTestApp();
+    try {
+      expect(off.hasRoute({ method: 'GET', url: '/v1/registry/issuers' })).toBe(false);
+      // The operator routes are authenticated and stay registered either way.
+      expect(off.hasRoute({ method: 'POST', url: '/v1/registry/issuers' })).toBe(true);
+      expect(off.hasRoute({ method: 'PATCH', url: '/v1/registry/issuers/:id' })).toBe(true);
+
+      sqlMock.mockClear();
+      const unknown = await off.inject({ method: 'GET', url: '/v1/registry/no-such-route', remoteAddress: '203.0.113.50' });
+      const listed = await off.inject({ method: 'GET', url: '/v1/registry/issuers', remoteAddress: '203.0.113.50' });
+      expect(listed.statusCode).toBe(unknown.statusCode);
+      expect(listed.json().code).toBe(unknown.json().code);
+      expect(sqlMock).not.toHaveBeenCalled();
+
+      seedAuth();
+      const authenticated = await off.inject({
+        method: 'GET', url: '/v1/registry/issuers', headers: authHeader(), remoteAddress: '203.0.113.50',
+      });
+      expect(authenticated.statusCode).toBe(404);
+      expect(authenticated.body).not.toContain('"issuers"');
+    } finally {
+      await off.close();
+    }
+  });
+
+  it('on only for exactly true: the public list is registered and answers 200', async () => {
+    vi.stubEnv('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', 'true');
+    const on = await buildTestApp();
+    try {
+      expect(on.hasRoute({ method: 'GET', url: '/v1/registry/issuers' })).toBe(true);
+      sqlMock.mockResolvedValueOnce([{ total: 0, entity_id: null }]);
+      const res = await on.inject({ method: 'GET', url: '/v1/registry/issuers', remoteAddress: '203.0.113.51' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ issuers: [], total: 0, page: 1, pageSize: 100 });
+    } finally {
+      await on.close();
+    }
+  });
+
+  it('is read by config as the other boolean flags are, on for exactly true', () => {
+    vi.stubEnv('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', 'true');
+    expect(config.registryPublicEndpointsEnabled).toBe(true);
+    vi.stubEnv('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', 'True');
+    expect(config.registryPublicEndpointsEnabled).toBe(false);
+    vi.stubEnv('REGISTRY_PUBLIC_ENDPOINTS_ENABLED', '');
+    expect(config.registryPublicEndpointsEnabled).toBe(false);
   });
 });

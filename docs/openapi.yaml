@@ -59,7 +59,7 @@ tags:
   - name: Event Bridge
     description: Provider events (SSF/CAEP SETs, signed webhooks) mapped to grant actions
   - name: Registry Status
-    description: The registry's attestation-acceptance status lists (spec/registry-federation.md). Public and rate-limited per client.
+    description: The registry's attestation-acceptance status lists (spec/registry-federation.md). Public and rate-limited per client. Served only when REGISTRY_PUBLIC_ENDPOINTS_ENABLED is exactly true (default off); otherwise these paths are not routes.
   - name: Decision Grants
     description: Decisions a named person approves for one semantic action (spec/decision-grant.md). Disabled unless DECISION_GRANTS_ENABLED=true.
   - name: Tokens
@@ -1913,6 +1913,13 @@ paths:
         platform signing key published at `/.well-known/jwks.json`. No authentication; rate-limited
         per client address (300 requests a minute). A store that cannot be read is a 5xx, never an
         older copy.
+
+        Served only when the auth service runs with `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`
+        (exactly `true`; default off). With it off this path is not a route and answers like any
+        unknown path. CORS: any origin may read it without credentials; an `OPTIONS` preflight is
+        answered `204` with `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET`
+        and `Access-Control-Allow-Headers: If-None-Match`, and `200` and `304` responses carry
+        `Access-Control-Expose-Headers: ETag`.
       security: []
       parameters:
         - { name: list, in: path, required: true, schema: { type: string, pattern: "^racl_[0-9A-HJKMNP-TV-Z]{26}$" }, description: Acceptance list id }
@@ -1922,6 +1929,7 @@ paths:
           description: The signed status list, in JWS compact serialization
           headers:
             ETag: { schema: { type: string }, description: "Weak entity tag over the protected header and claims; changes when the list changes or is re-signed (iat moves every five minutes)" }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`, so a browser relying party can read the tag and revalidate" }
             Cache-Control: { schema: { type: string }, description: "`public, max-age=<ttl>`" }
           content:
             application/statuslist+jwt:
@@ -1929,70 +1937,13 @@ paths:
                 type: string
         "304":
           description: Unchanged since the ETag
-        "404":
-          description: Not one of the registry's lists
-        "429":
-          description: Too many requests from this client
-  /status/attestations/{list}/bitstring:
-    get:
-      operationId: getAttestationAcceptanceRevocationBitstring
-      tags: [Registry Status]
-      summary: Withdrawn attestations as a Bitstring Status List credential
-      description: |
-        A BitstringStatusListCredential (W3C Bitstring Status List v1.0 §2.2) with statusPurpose
-        `revocation`: a bit is set for every INVALID entry of the same list. Secured as a VC-JWT
-        (W3C VC-JOSE-COSE §3.1.1, `typ` `vc+jwt`, `cty` `vc`) with the platform signing key.
-        `credentialSubject.ttl` is 600000 milliseconds, or 60000 for one hour after any acceptance
-        change or suspension. Built from the registry's store, not from the Token Status List.
-      security: []
-      parameters:
-        - { name: list, in: path, required: true, schema: { type: string, pattern: "^racl_[0-9A-HJKMNP-TV-Z]{26}$" }, description: Acceptance list id }
-        - { name: If-None-Match, in: header, schema: { type: string }, description: ETag of a copy already held }
-      responses:
-        "200":
-          description: The signed credential, in JWS compact serialization
           headers:
-            ETag: { schema: { type: string }, description: "Weak entity tag over the protected header and claims; changes when the list changes or is re-signed (iat moves every five minutes)" }
-            Cache-Control: { schema: { type: string }, description: "`public, max-age=<ttl in seconds>`" }
-          content:
-            application/vc+jwt:
-              schema:
-                type: string
-        "304":
-          description: Unchanged since the ETag
+            ETag: { schema: { type: string }, description: The current entity tag }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`" }
         "404":
           description: Not one of the registry's lists
         "429":
           description: Too many requests from this client
-  /status/attestations/{list}/bitstring/suspension:
-    get:
-      operationId: getAttestationAcceptanceSuspensionBitstring
-      tags: [Registry Status]
-      summary: Suspended attestations as a Bitstring Status List credential
-      description: |
-        As `/status/attestations/{list}/bitstring`, with statusPurpose `suspension`: a bit is set
-        for every SUSPENDED entry.
-      security: []
-      parameters:
-        - { name: list, in: path, required: true, schema: { type: string, pattern: "^racl_[0-9A-HJKMNP-TV-Z]{26}$" }, description: Acceptance list id }
-        - { name: If-None-Match, in: header, schema: { type: string }, description: ETag of a copy already held }
-      responses:
-        "200":
-          description: The signed credential, in JWS compact serialization
-          headers:
-            ETag: { schema: { type: string }, description: "Weak entity tag over the protected header and claims; changes when the list changes or is re-signed (iat moves every five minutes)" }
-            Cache-Control: { schema: { type: string }, description: "`public, max-age=<ttl in seconds>`" }
-          content:
-            application/vc+jwt:
-              schema:
-                type: string
-        "304":
-          description: Unchanged since the ETag
-        "404":
-          description: Not one of the registry's lists
-        "429":
-          description: Too many requests from this client
-
   /.well-known/agent-registry.json:
     get:
       operationId: getRegistryManifest
@@ -2023,6 +1974,144 @@ paths:
         "304": { description: Unchanged since the ETag }
         "404": { description: The public registry endpoints are off }
         "429": { description: Too many requests from this client }
+
+    options:
+      operationId: preflightAttestationAcceptanceTokenStatusList
+      tags: [Registry Status]
+      summary: CORS preflight
+      description: |
+        Answers a browser's CORS preflight for a conditional `GET` (Fetch standard CORS protocol;
+        `If-None-Match` is not a CORS-safelisted request-header). Requires `Origin` and
+        `Access-Control-Request-Method`; an `OPTIONS` request without them is a 400. Served only
+        when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string }, description: Acceptance list id }
+      responses:
+        "204":
+          description: Preflight accepted
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string }, description: "`*`" }
+            Access-Control-Allow-Methods: { schema: { type: string }, description: "`GET`" }
+            Access-Control-Allow-Headers: { schema: { type: string }, description: "`If-None-Match`" }
+            Access-Control-Max-Age: { schema: { type: string }, description: "`600`" }
+        "400":
+          description: Not a CORS preflight
+  /status/attestations/{list}/bitstring:
+    get:
+      operationId: getAttestationAcceptanceRevocationBitstring
+      tags: [Registry Status]
+      summary: Withdrawn attestations as a Bitstring Status List credential
+      description: |
+        A BitstringStatusListCredential (W3C Bitstring Status List v1.0 §2.2) with statusPurpose
+        `revocation`: a bit is set for every INVALID entry of the same list. Secured as a VC-JWT
+        (W3C VC-JOSE-COSE §3.1.1, `typ` `vc+jwt`, `cty` `vc`) with the platform signing key.
+        `credentialSubject.ttl` is 600000 milliseconds, or 60000 for one hour after any acceptance
+        change or suspension. Built from the registry's store, not from the Token Status List.
+
+        Served only when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true` (exactly `true`; default off),
+        with the same CORS behaviour as `/status/attestations/{list}`.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string, pattern: "^racl_[0-9A-HJKMNP-TV-Z]{26}$" }, description: Acceptance list id }
+        - { name: If-None-Match, in: header, schema: { type: string }, description: ETag of a copy already held }
+      responses:
+        "200":
+          description: The signed credential, in JWS compact serialization
+          headers:
+            ETag: { schema: { type: string }, description: "Weak entity tag over the protected header and claims; changes when the list changes or is re-signed (iat moves every five minutes)" }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`, so a browser relying party can read the tag and revalidate" }
+            Cache-Control: { schema: { type: string }, description: "`public, max-age=<ttl in seconds>`" }
+          content:
+            application/vc+jwt:
+              schema:
+                type: string
+        "304":
+          description: Unchanged since the ETag
+          headers:
+            ETag: { schema: { type: string }, description: The current entity tag }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`" }
+        "404":
+          description: Not one of the registry's lists
+        "429":
+          description: Too many requests from this client
+    options:
+      operationId: preflightAttestationAcceptanceRevocationBitstring
+      tags: [Registry Status]
+      summary: CORS preflight
+      description: |
+        Answers a browser's CORS preflight for a conditional `GET` (Fetch standard CORS protocol;
+        `If-None-Match` is not a CORS-safelisted request-header). Requires `Origin` and
+        `Access-Control-Request-Method`; an `OPTIONS` request without them is a 400. Served only
+        when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string }, description: Acceptance list id }
+      responses:
+        "204":
+          description: Preflight accepted
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string }, description: "`*`" }
+            Access-Control-Allow-Methods: { schema: { type: string }, description: "`GET`" }
+            Access-Control-Allow-Headers: { schema: { type: string }, description: "`If-None-Match`" }
+            Access-Control-Max-Age: { schema: { type: string }, description: "`600`" }
+        "400":
+          description: Not a CORS preflight
+  /status/attestations/{list}/bitstring/suspension:
+    get:
+      operationId: getAttestationAcceptanceSuspensionBitstring
+      tags: [Registry Status]
+      summary: Suspended attestations as a Bitstring Status List credential
+      description: |
+        As `/status/attestations/{list}/bitstring`, with statusPurpose `suspension`: a bit is set
+        for every SUSPENDED entry. Served only when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`
+        (exactly `true`; default off), with the same CORS behaviour.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string, pattern: "^racl_[0-9A-HJKMNP-TV-Z]{26}$" }, description: Acceptance list id }
+        - { name: If-None-Match, in: header, schema: { type: string }, description: ETag of a copy already held }
+      responses:
+        "200":
+          description: The signed credential, in JWS compact serialization
+          headers:
+            ETag: { schema: { type: string }, description: "Weak entity tag over the protected header and claims; changes when the list changes or is re-signed (iat moves every five minutes)" }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`, so a browser relying party can read the tag and revalidate" }
+            Cache-Control: { schema: { type: string }, description: "`public, max-age=<ttl in seconds>`" }
+          content:
+            application/vc+jwt:
+              schema:
+                type: string
+        "304":
+          description: Unchanged since the ETag
+          headers:
+            ETag: { schema: { type: string }, description: The current entity tag }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`" }
+        "404":
+          description: Not one of the registry's lists
+        "429":
+          description: Too many requests from this client
+    options:
+      operationId: preflightAttestationAcceptanceSuspensionBitstring
+      tags: [Registry Status]
+      summary: CORS preflight
+      description: |
+        Answers a browser's CORS preflight for a conditional `GET` (Fetch standard CORS protocol;
+        `If-None-Match` is not a CORS-safelisted request-header). Requires `Origin` and
+        `Access-Control-Request-Method`; an `OPTIONS` request without them is a 400. Served only
+        when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string }, description: Acceptance list id }
+      responses:
+        "204":
+          description: Preflight accepted
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string }, description: "`*`" }
+            Access-Control-Allow-Methods: { schema: { type: string }, description: "`GET`" }
+            Access-Control-Allow-Headers: { schema: { type: string }, description: "`If-None-Match`" }
+            Access-Control-Max-Age: { schema: { type: string }, description: "`600`" }
+        "400":
+          description: Not a CORS preflight
 
   # ── OAuth Agent Grants ─────────────────────────────────────────────
   /.well-known/oauth-authorization-server:
@@ -2499,6 +2588,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "409":
+          description: >-
+            AGENT_KEY_CONFLICT: another agent has `publicJwk` registered. With
+            AGENT_KEY_HISTORY_MIRROR_ENABLED=true (default off), the key also enters the agent
+            key history, and these are refused too: a key another agent holds in its history
+            (AGENT_KEY_CONFLICT) and a key reported compromised (`key_not_active`); a non-P-256
+            key for an agent that declares a payments rail is a 400 KEY_ALGORITHM_NOT_ALLOWED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     get:
       operationId: listAgents
       tags: [Agents]
@@ -2578,6 +2678,18 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: >-
+            AGENT_KEY_CONFLICT: another agent has `publicJwk` registered. With
+            AGENT_KEY_HISTORY_MIRROR_ENABLED=true (default off), the new key also enters the
+            agent key history and the replaced one ends there, and these are refused too: a key
+            another agent holds in its history (AGENT_KEY_CONFLICT) and a key reported
+            compromised (`key_not_active`); a non-P-256 key for an agent that declares a
+            payments rail is a 400 KEY_ALGORITHM_NOT_ALLOWED.
           content:
             application/json:
               schema:
@@ -2855,9 +2967,12 @@ paths:
       summary: Report a key compromised and revoke every grant bound to it
       description: |
         The key ends immediately and can never be registered again, by any agent, even
-        after the agent is deleted. Every grant whose
+        after the agent is deleted, through the key routes, or through `POST` and
+        `PATCH /v1/agents` when AGENT_KEY_HISTORY_MIRROR_ENABLED=true (with it off, those two
+        routes do not consult the history). Every grant whose
         `cnf.jkt` is the key, and every grant delegated from one, is revoked through the
-        cascade. If the key is the agent's registered `publicJwk`, the newest proven
+        cascade; the grants are found under the same lock delegation holds while it binds a
+        grant to a key, and a delegation to a key already compromised is refused. If the key is the agent's registered `publicJwk`, the newest proven
         replacement takes its place; with none, it is cleared and the agent is suspended.
         Safe to repeat.
       requestBody:
@@ -3659,6 +3774,15 @@ paths:
                 $ref: "#/components/schemas/Error"
         "404":
           description: Sub-agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: >-
+            `key_not_active`: the sub-agent's registered key was reported compromised
+            (`POST /v1/agents/{id}/keys/{thumbprint}/compromise`), including while this request
+            was in flight. No grant is bound to a compromised key.
           content:
             application/json:
               schema:
@@ -8879,18 +9003,32 @@ paths:
       tags: [Trust Registry]
       summary: List accredited issuers (public, minimised)
       description: |
-        Every accredited issuer with only `entity_id`, `trust_marks`, `status`, `status_list_base`
-        and `jwks` (revoked keys left out; none for a withdrawn issuer). At most 500 issuers.
-        Limited to 60 requests a minute per client address. Send the `ETag` back in
-        `If-None-Match` to get `304` while nothing has changed.
+        One page of the accredited issuers, ordered by `entity_id`, each with only `entity_id`,
+        `trust_marks`, `status`, `status_list_base` and `jwks` (revoked keys left out; none for a
+        withdrawn issuer). Paged with `page` and `pageSize`; `total` is the number of issuers in
+        all, read in the same snapshot as the page, so read pages until you hold `total` issuers
+        or a page is empty. Limited to 60 requests a minute per client address. Send the page's
+        `ETag` back in `If-None-Match` to get `304` while that page has not changed.
+
+        Unauthenticated, so served only when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED` is exactly
+        `true` (default off). Off, the route is not registered and a request is answered as for
+        any unknown route: `401` without an API key, `404` with one.
       security: []
       parameters:
+        - name: page
+          in: query
+          description: Page number, from 1.
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          description: Issuers per page.
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
         - name: If-None-Match
           in: header
           schema: { type: string }
       responses:
         "200":
-          description: The accredited issuers
+          description: One page of the accredited issuers; a page past the end has none and still carries `total`
           headers:
             ETag: { schema: { type: string } }
             Cache-Control:
@@ -8899,11 +9037,22 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [issuers, total, page, pageSize]
                 properties:
                   issuers:
                     type: array
+                    maxItems: 500
                     items: { $ref: "#/components/schemas/PublicAccreditedIssuer" }
+                  total:
+                    type: integer
+                    minimum: 0
+                    description: How many issuers the registry lists in all
+                  page: { type: integer, minimum: 1 }
+                  pageSize: { type: integer, minimum: 1, maximum: 500 }
         "304": { description: Unchanged since the ETag sent }
+        "400": { description: "`page` is not an integer of at least 1 (small enough that its offset is a safe integer), or `pageSize` not an integer from 1 to 500" }
+        "401": { description: "REGISTRY_PUBLIC_ENDPOINTS_ENABLED is off and no API key was sent (the route is not registered)" }
+        "404": { description: "REGISTRY_PUBLIC_ENDPOINTS_ENABLED is off (the route is not registered)" }
         "429": { description: Rate limit exceeded for this address }
     post:
       operationId: accreditIssuer
@@ -8931,40 +9080,6 @@ paths:
         "401": { description: Missing or wrong operator key }
         "409": { description: "`ISSUER_EXISTS`: the entity_id is already in the registry" }
         "503": { description: REGISTRY_OPERATOR_API_KEYS is not configured, or holds a key shorter than 32 characters }
-  /v1/registry/issuers/{id}:
-    patch:
-      operationId: updateAccreditedIssuer
-      tags: [Trust Registry]
-      summary: Suspend, reinstate or withdraw an issuer, change its trust marks or keys (registry operator)
-      description: |
-        Applies the change and appends `grantex.registry.issuer_updated`, with the reason, to the
-        registry audit chain in the same transaction. A suspension takes effect at
-        `effective_from`, which may be in the future. A revoked kid is no longer served and
-        cannot be registered again for the issuer.
-      security:
-        - registryOperatorAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/UpdateIssuerRequest" }
-      responses:
-        "200":
-          description: The record after the change
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AccreditedIssuer" }
-        "400": { description: "Malformed change; `field` names the member refused" }
-        "401": { description: Missing or wrong operator key }
-        "404": { description: No such issuer }
-        "409": { description: "`KID_REVOKED`: the replacement jwks carries a revoked kid" }
-        "503": { description: REGISTRY_OPERATOR_API_KEYS is not configured, or holds a key shorter than 32 characters }
-
   /v1/registry/agents/{did}:
     get:
       operationId: lookUpRegistryAgent
@@ -9214,6 +9329,85 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+
+  /v1/registry/issuers/{id}:
+    patch:
+      operationId: updateAccreditedIssuer
+      tags: [Trust Registry]
+      summary: Suspend, reinstate or withdraw an issuer, change its trust marks or keys (registry operator)
+      description: |
+        Applies the change and appends `grantex.registry.issuer_updated`, with the reason, to the
+        registry audit chain in the same transaction. A suspension takes effect at
+        `effective_from`, which may be in the future. A revoked kid is no longer served and
+        cannot be registered again for the issuer.
+      security:
+        - registryOperatorAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateIssuerRequest" }
+      responses:
+        "200":
+          description: The record after the change
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccreditedIssuer" }
+        "400": { description: "Malformed change; `field` names the member refused" }
+        "401": { description: Missing or wrong operator key }
+        "404": { description: No such issuer }
+        "409": { description: "`KID_REVOKED`: the replacement jwks carries a revoked kid" }
+        "503": { description: REGISTRY_OPERATOR_API_KEYS is not configured, or holds a key shorter than 32 characters }
+
+  /v1/trust-registry:
+    get:
+      operationId: listTrustRegistryRecords
+      tags: [Trust Registry]
+      summary: List every developer's registry records (operator)
+      description: |
+        The 100 newest registry records, across every developer, verified or not. By default
+        any developer API key can read it, under its plan budget. With
+        `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` (read at startup, recommended because the
+        listing crosses tenants) it is for the platform operator only: it takes `ADMIN_API_KEY`,
+        never a developer API key, answers 503 while `ADMIN_API_KEY` is unset, and is limited to
+        20 calls a minute per address.
+      security:
+        - bearerAuth: []
+        - adminAuth: []
+      responses:
+        "200":
+          description: Registry records, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [records]
+                properties:
+                  records:
+                    type: array
+                    maxItems: 100
+                    items:
+                      type: object
+                      properties:
+                        organizationDID: { type: string, example: "did:web:issuer.example" }
+                        verifiedAt: { type: [string, "null"], format: date-time }
+                        verificationMethod: { type: [string, "null"], example: dns-txt }
+                        trustLevel: { type: string, description: The stored trust level, example: verified }
+                        domains: { type: array, items: { type: string } }
+                        name: { type: [string, "null"] }
+                        description: { type: [string, "null"] }
+                        badges: { type: array, items: { type: string } }
+        "401":
+          description: Missing or invalid developer API key; when enforced, a missing or wrong admin key, or a developer API key
+        "429":
+          description: Over the plan budget; when enforced, more than 20 calls a minute from one address
+        "503":
+          description: Enforced and ADMIN_API_KEY is not configured
 
   /v1/registry/orgs:
     get:

@@ -1476,11 +1476,37 @@ the pull request that references it.
   after a compromise is closed: `compromised_agent_keys` records every
   compromised thumbprint, outlives the agent, and is checked on every path
   that writes a key.)
+  after a compromise is closed on every path that writes the history:
+  `compromised_agent_keys` records every compromised thumbprint and outlives
+  the agent. `POST` and `PATCH /v1/agents` check it only with the history
+  mirror on; see G-87.)
 - **Impact:** narrow. It needs one key to move between developers and then be
   reported compromised while grants from the earlier holder are still active.
 - **Proposal:** decide with the owner whether a compromise should revoke
   grants bound to the key in every tenant, or whether a released key should
   stay reserved to its developer.
+
+## G-87 — With the history mirror off, the agents routes do not consult the key history
+
+- **Found:** review of the agent key history work, 2026-09-28.
+- **What:** mirroring the key `POST` and `PATCH /v1/agents` write into
+  `agent_keys` is behind `AGENT_KEY_HISTORY_MIRROR_ENABLED`, default off, so
+  those routes keep their earlier behaviour. With it off they do not add the
+  key to the history, do not end the replaced key there, and do not refuse a
+  key another agent holds in its history, a key in `compromised_agent_keys`,
+  or a non-P-256 key for an agent that declares a payments rail. The history
+  of an agent whose registered key changed through them can therefore list a
+  key it no longer registers as pending or active, and a compromised key can
+  be registered again as `publicJwk`.
+- **Impact:** a key registered again that way is still refused by the key
+  routes and by delegation (`routes/delegate.ts` checks
+  `compromised_agent_keys` under the cascade lock), but `POST /v1/token` and
+  the OAuth profile bind grants to the registered key and do not check it
+  (G-85).
+- **Proposal:** turn the flag on once its exit criterion is green (the flag-on
+  suite in `tests/agent-keys-postgres.integration.test.ts`) and the owner has
+  approved the runbook; then make it the default in a release that records the
+  flip as a breaking change with the flag as the opt-out.
 
 ## G-90 — The grant credential status list is served unsigned, as a superseded format
 
@@ -1605,6 +1631,59 @@ the pull request that references it.
   `CHANGELOG.md`. The Agent Passport profile is not affected: it already uses
   `dc+sd-jwt`.
 
+## G-105 — The public registry search lists unverified, self-asserted organizations
+
+- **Found:** trust registry listing fix (`GET /v1/trust-registry` can be made
+  to take the admin key), 2026-09-28, reviewing the other registry reads.
+- **What:** `GET /v1/registry/orgs` is public (`skipAuth`) and returns every
+  `trust_registry` row, including `basic` records that were registered with a
+  developer API key and never proved control of their domain. The name and
+  description are whatever the registrant typed, and `verified=false` lists
+  exactly those records. With no filter a caller can page through the whole
+  registry (up to 100 a page, with a total count). `GET /v1/registry/orgs/:did`
+  and the legacy `GET /v1/trust-registry/:orgDID` likewise answer for an
+  unverified record. The `GET /v1/registry/orgs/:did` detail also includes
+  the security and DPO contacts the registrant supplied; the legacy route
+  returns no contact fields. The routes carry only the service-wide per-address
+  limit, not a limit of their own.
+- **Impact:** a public lookup that should answer with the minimum a relying
+  party needs about an organization that has proved something instead
+  publishes self-asserted records. Anyone can register `did:web:` for a
+  domain they do not control, under any display name, and have it appear in
+  search next to verified organizations (`verificationLevel: basic` is the
+  only difference), and the whole registry, contacts included, can be
+  enumerated. The behaviour is unchanged by the listing fix, which kept these
+  routes as they were.
+- **Proposal:** behind a flag that defaults off, have the public search and
+  detail return only records that completed verification (or return an
+  unverified record's DID and `verificationLevel` alone), leave the contacts
+  out of the public detail, and give the public reads a per-client rate limit
+  of their own; the registrant keeps full access to its own records through
+  an authenticated route.
+
+## G-106 — The cross-tenant trust registry listing stays open to developer keys until the flag is turned on
+
+- **Found:** trust registry listing fix, 2026-09-28, when the admin-key check
+  on `GET /v1/trust-registry` was put behind a flag that defaults off, as
+  `AGENTS.md` ("Feature flags") requires for a behaviour change on an existing
+  path.
+- **What:** `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED` defaults to off, and only
+  the exact value `true` turns the check on. While it is off,
+  `GET /v1/trust-registry` still takes any developer API key and returns the
+  100 newest registry records of every developer, unverified ones included.
+- **Risk:** on a deployment that has not set the flag, one tenant can list
+  every other tenant's registry records (DIDs, domains, names, descriptions,
+  trust levels and verification state), including organizations that have not
+  published themselves as verified. The route is documented as an operator
+  route, so a deployment may assume it is already restricted.
+- **Fix:** operators set `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` once
+  their callers have moved to `GET /v1/registry/orgs` and
+  `GET /v1/registry/orgs/:did`, or to `ADMIN_API_KEY`; then, in a release
+  recorded in `CHANGELOG.md` as a breaking change, make the check on by
+  default with `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=false` as the explicit
+  opt-out. Owner: the auth-service maintainers. Exit criterion: flag default
+  flipped with an explicit opt-out once operators have moved.
+
 ## G-111 — An agent's provider is inferred from its developer
 
 - **Found:** computing trust levels for registry attestations (PRD §5.1),
@@ -1666,24 +1745,6 @@ the pull request that references it.
   also rewrites the stored level. Owner: registry maintainers. Exit
   criterion: each column is written by a route with tests.
 
-## G-115 — The CI step for the agent-httpsig Python package has no `run`
-
-- **Found:** wiring `packages/mock-issuer` into `.github/workflows/ci.yml`,
-  2026-09-28, on the branch that merges the Wave 1 registry branches.
-- **What:** in the `python-integrations` job, the step
-  `Test agent-httpsig Python` (`working-directory: packages/agent-httpsig-py`)
-  lost its `run:` line when the agent-httpsig and Agent Passport branches were
-  merged; the next step, `Test Agent Passport Python`, follows it directly.
-  GitHub Actions requires every step to have `uses` or `run`, so the workflow
-  file fails validation and none of its jobs start.
-- **Impact:** until fixed, a pull request from this branch gets no CI run at
-  all (not only the Python job), and grantex-agent-httpsig is not tested in
-  CI.
-- **Proposal:** restore
-  `run: pip install -e ".[dev]" && mypy --strict src && pytest` on that step
-  (the command the agent-httpsig branch had), and check the merged workflow
-  with a workflow linter before pushing.
-
 ## G-120 — The acceptance status list docs test fails on a CRLF checkout
 
 - **Found:** running the auth-service suite on a Windows checkout
@@ -1699,61 +1760,6 @@ the pull request that references it.
 - **Proposal:** normalise `\r\n` to `\n` when reading the spec, as the other
   docs tests do. Owner: registry maintainers. Exit criterion: the test passes
   on a CRLF checkout.
-
-## G-121 — The migration ledger test looks for a table the verdict no longer lists
-
-- **Found:** running the auth-service suite against Postgres 16 while adding
-  the registry lookup, 2026-09-28.
-- **What:** `tests/migrate-ledger-postgres.integration.test.ts` ("refuses to
-  baseline a database that is only partly migrated") expects the dry-run
-  verdict to name `evidence_records`. The verdict names the first 20 missing
-  objects in order and summarises the rest (`src/db/migrate.ts`,
-  `missing.slice(0, 20)`); the registry tables of migrations 121 to 124
-  (`accredited_issuers`, `agent_keys`, ...) now sort before it, so it falls
-  into "and 57 more" and the assertion fails. `check.missingTables` still
-  contains it; only the message check is stale.
-- **Impact:** one failing integration test on every branch that carries the
-  registry migrations.
-- **Proposal:** assert on a table that sorts first among those created after
-  migration 060, or on `check.missingTables` only, or name the missing
-  tables in the verdict in migration order. Owner: auth-service maintainers.
-  Exit criterion: the test passes with migrations 121 to 124 present.
-
-## G-122 — The older public registry reads are not behind REGISTRY_PUBLIC_ENDPOINTS_ENABLED
-
-- **Found:** adding the registry lookup and manifest behind
-  `REGISTRY_PUBLIC_ENDPOINTS_ENABLED`, 2026-09-28.
-- **What:** the flag did not exist on this branch; it is added here
-  (`config.registryPublicEndpointsEnabled`, default off) and governs the
-  unauthenticated lookup and `/.well-known/agent-registry.json`. The
-  unauthenticated registry reads that shipped earlier,
-  `GET /v1/registry/issuers` and the acceptance status lists under
-  `/status/attestations/`, are served whatever it says.
-- **Impact:** an operator who leaves the flag off to keep the registry
-  private still publishes the issuer list and the acceptance lists. They
-  reveal little (issuer records meant to be public, and bits per entry), and
-  relying parties need the status lists to check passports.
-- **Proposal:** decide per route whether it is public by nature (status
-  lists that passports already point at) or belongs behind the flag (the
-  issuer list), and gate the latter with a changelog entry and an opt-out.
-  Owner: product (registry rollout). Exit criterion: each public registry
-  route is documented as gated or deliberately ungated.
-
-## G-123 — The public issuer list stops at 500 issuers without saying so
-
-- **Found:** building the registry manifest, which must list every
-  accredited issuer, 2026-09-28.
-- **What:** `listPublicIssuers` in `lib/registry/issuers.ts`, behind
-  `GET /v1/registry/issuers`, reads with `LIMIT 500` (`MAX_PUBLIC_ISSUERS`)
-  and returns no cursor or truncation marker. The manifest reads through the
-  new `listAllPublicIssuers`, which pages, so it is not affected.
-- **Impact:** past 500 issuers a relying party reading the list would treat
-  the issuers after the 500th (by entity_id) as unknown and refuse their
-  passports with `issuer_not_accredited`.
-- **Proposal:** page the public list with a cursor, or serve it from
-  `listAllPublicIssuers`, and document the bound. Owner: registry
-  maintainers. Exit criterion: a test with more than 500 issuers reads all
-  of them through the route.
 
 ## G-124 — Two RFC 7638 property tests time out under the full suite
 
