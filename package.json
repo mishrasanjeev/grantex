@@ -8,6 +8,7 @@
     "test:stress:docker": "node scripts/docker-stress-test.mjs"
   },
   "devDependencies": {
+    "@grantex/agent-passport": "file:packages/agent-passport",
     "@grantex/sdk": "file:packages/sdk-ts",
     "@mdx-js/mdx": "^3.1.1",
     "vitest": "^4.0.18",

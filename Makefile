@@ -5,13 +5,12 @@
 #   make test      unit tests
 #
 # Scope: the core protocol packages - the Python SDK, the TypeScript SDK,
-# @grantex/mcp-auth, the auth service and the Agent Passport libraries
-# (@grantex/agent-passport, grantex-agent-passport) - plus the repository-wide
-# documentation and vendor-denylist checks and the tests of those scripts.
-# @grantex/mcp-auth, the auth service and the agent request signing
-# libraries (@grantex/agent-httpsig, grantex-agent-httpsig) - plus the
-# repository-wide documentation and vendor-denylist checks and the tests of
-# those scripts.
+# @grantex/mcp-auth, the auth service, the agent request signing libraries
+# (@grantex/agent-httpsig, grantex-agent-httpsig), the Agent Passport libraries
+# (@grantex/agent-passport, grantex-agent-passport) and the mock accredited
+# issuer (@grantex/mock-issuer, which uses the local @grantex/agent-passport
+# build) - plus the repository-wide documentation and vendor-denylist checks
+# and the tests of those scripts.
 # Other packages keep their own commands (see CONTRIBUTING.md) and CI jobs.
 
 SHELL := bash
@@ -27,7 +26,7 @@ NPM ?= npm
 
 PY_SDK := packages/sdk-py
 PY_AGENT_PASSPORT := packages/agent-passport-py
-TS_PACKAGES := packages/sdk-ts packages/mcp-auth packages/agent-passport apps/auth-service packages/agent-httpsig
+TS_PACKAGES := packages/sdk-ts packages/mcp-auth packages/agent-passport apps/auth-service packages/agent-httpsig packages/mock-issuer
 PY_HTTPSIG := packages/agent-httpsig-py
 
 .PHONY: help install check test check-docs check-denylist check-py check-ts test-py test-scripts test-ts
@@ -45,6 +44,8 @@ install:
 	done
 	# @grantex/mcp-auth resolves @grantex/sdk from the local build.
 	$(NPM) --prefix packages/sdk-ts run build
+	# @grantex/mock-issuer resolves @grantex/agent-passport from the local build.
+	$(NPM) --prefix packages/agent-passport run build
 	$(PYTHON) -m pip install --disable-pip-version-check -e "$(PY_SDK)[dev]" -e "$(PY_AGENT_PASSPORT)[dev]" ruff
 	$(PYTHON) -m pip install --disable-pip-version-check -e "$(PY_SDK)[dev]" -e "$(PY_HTTPSIG)[dev]" ruff
 
