@@ -57,9 +57,15 @@ from grantex import AuthorizeParams, ExchangeTokenParams, Grantex, VerifyGrantTo
 
 client = Grantex(api_key="YOUR_API_KEY", audience="https://api.merchant.example")
 
-# 1. Start the authorization flow
+# 1. Register the agent and its allowed resource, then request authorization
+agent = client.agents.register(
+    name="Email Assistant",
+    description="Reads files and sends email for the principal",
+    scopes=["files:read", "email:send"],
+    resource_servers=["https://api.merchant.example"],
+)
 request = client.authorize(AuthorizeParams(
-    agent_id="ag_01HXYZ...",
+    agent_id=agent.id,
     user_id="usr_01HXYZ...",
     scopes=["files:read", "email:send"],
     audience="https://api.merchant.example",  # must match the relying party
@@ -70,7 +76,7 @@ print(request.consent_url)
 
 # 2. Exchange the authorization code for a grant token
 # (your redirect callback receives the `code` after user approves)
-token = client.tokens.exchange(ExchangeTokenParams(code=code, agent_id="ag_01HXYZ..."))
+token = client.tokens.exchange(ExchangeTokenParams(code=code, agent_id=agent.id))
 # Deliver token.grant_token securely to the agent; do not log it.
 print(token.scopes)       # ('files:read', 'email:send')
 

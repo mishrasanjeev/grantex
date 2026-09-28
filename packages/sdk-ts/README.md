@@ -57,6 +57,7 @@ const { consentUrl } = await grantex.authorize({
   agentId: agent.agentId,
   userId: 'usr_01J...',
   scopes: ['email:read', 'email:send'],
+  resourceServers: ['https://api.merchant.example'],
   audience: 'https://api.merchant.example',
 });
 // Redirect the user to consentUrl — they approve in plain language
