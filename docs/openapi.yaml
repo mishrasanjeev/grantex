@@ -8289,18 +8289,32 @@ paths:
       tags: [Trust Registry]
       summary: List accredited issuers (public, minimised)
       description: |
-        Every accredited issuer with only `entity_id`, `trust_marks`, `status`, `status_list_base`
-        and `jwks` (revoked keys left out; none for a withdrawn issuer). At most 500 issuers.
-        Limited to 60 requests a minute per client address. Send the `ETag` back in
-        `If-None-Match` to get `304` while nothing has changed.
+        One page of the accredited issuers, ordered by `entity_id`, each with only `entity_id`,
+        `trust_marks`, `status`, `status_list_base` and `jwks` (revoked keys left out; none for a
+        withdrawn issuer). Paged with `page` and `pageSize`; `total` is the number of issuers in
+        all, read in the same snapshot as the page, so read pages until you hold `total` issuers
+        or a page is empty. Limited to 60 requests a minute per client address. Send the page's
+        `ETag` back in `If-None-Match` to get `304` while that page has not changed.
+
+        Unauthenticated, so served only when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED` is exactly
+        `true` (default off). Off, the route is not registered and a request is answered as for
+        any unknown route: `401` without an API key, `404` with one.
       security: []
       parameters:
+        - name: page
+          in: query
+          description: Page number, from 1.
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          description: Issuers per page.
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
         - name: If-None-Match
           in: header
           schema: { type: string }
       responses:
         "200":
-          description: The accredited issuers
+          description: One page of the accredited issuers; a page past the end has none and still carries `total`
           headers:
             ETag: { schema: { type: string } }
             Cache-Control:
@@ -8309,11 +8323,22 @@ paths:
             application/json:
               schema:
                 type: object
+                required: [issuers, total, page, pageSize]
                 properties:
                   issuers:
                     type: array
+                    maxItems: 500
                     items: { $ref: "#/components/schemas/PublicAccreditedIssuer" }
+                  total:
+                    type: integer
+                    minimum: 0
+                    description: How many issuers the registry lists in all
+                  page: { type: integer, minimum: 1 }
+                  pageSize: { type: integer, minimum: 1, maximum: 500 }
         "304": { description: Unchanged since the ETag sent }
+        "400": { description: "`page` is not an integer of at least 1 (small enough that its offset is a safe integer), or `pageSize` not an integer from 1 to 500" }
+        "401": { description: "REGISTRY_PUBLIC_ENDPOINTS_ENABLED is off and no API key was sent (the route is not registered)" }
+        "404": { description: "REGISTRY_PUBLIC_ENDPOINTS_ENABLED is off (the route is not registered)" }
         "429": { description: Rate limit exceeded for this address }
     post:
       operationId: accreditIssuer

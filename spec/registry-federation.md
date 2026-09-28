@@ -19,7 +19,7 @@ Keywords MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 |---|---|---|
 | Registry operator | A key from `REGISTRY_OPERATOR_API_KEYS` of the auth service | Accredit an issuer; suspend, reinstate or withdraw it; change its trust marks; replace its JWK Set; revoke one of its keys. |
 | Accredited issuer | Its signing keys, as recorded | Issue Agent Passports and attestations covered by its trust marks. |
-| Relying party | None for the public list | Read the public issuer list and decide whether to rely on an issuer's signature. |
+| Relying party | None for the public list (served only with `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`, section 2.1) | Read the public issuer list and decide whether to rely on an issuer's signature. |
 
 An issuer never writes its own record. Accreditation evidence stays with the
 operator; the record carries only an opaque reference to it.
@@ -50,11 +50,25 @@ The public list, `GET /v1/registry/issuers`, carries only `entity_id`,
   a suspension scheduled for later reads `active`;
 - `jwks` leaves out every revoked kid, and is empty for a withdrawn issuer.
 
-The response carries an `ETag` computed over its body. A relying party SHOULD
-send it back in `If-None-Match`; an unchanged list answers `304`. The response
-carries `Cache-Control: no-cache` (RFC 9111 section 5.2.2.4), so a cache
-revalidates every read and a revoked key or a suspension that has taken effect
-is not served from it. The list is limited per client address.
+The list is ordered by `entity_id` and paged: `page` counts from 1 (default
+1) and `pageSize` is 1 to 500 (default 100); any other value is refused with
+`400`. The response is `{issuers, total, page, pageSize}`, where `total` is the
+number of issuers in the registry, read in the same snapshot as the page. A
+page past the end has no issuers and still carries `total`. A relying party
+that needs the whole list MUST read pages until it holds `total` issuers or a
+page is empty, and MUST NOT treat an issuer missing from one page as unknown.
+
+The response carries an `ETag` computed over its body, so one per page. A
+relying party SHOULD send it back in `If-None-Match`; an unchanged page answers
+`304`. The response carries `Cache-Control: no-cache` (RFC 9111 section
+5.2.2.4), so a cache revalidates every read and a revoked key or a suspension
+that has taken effect is not served from it. The list is limited per client
+address.
+
+The list needs no credential, so the auth service serves it only when
+`REGISTRY_PUBLIC_ENDPOINTS_ENABLED` is exactly `true` (default off). Off, the
+route is not registered and answers as any unknown route does; the operator
+routes and the accreditation checks of section 5 are not affected.
 
 ## 3. Keys
 

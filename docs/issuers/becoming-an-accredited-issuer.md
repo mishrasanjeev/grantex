@@ -154,9 +154,38 @@ A `PATCH` can also set `status` to `active` or `withdrawn`, replace
 
 ## What relying parties see
 
-`GET /v1/registry/issuers` needs no key. It lists every issuer with only
-`entity_id`, `trust_marks`, `status` (as it stands at the time of the request),
-`status_list_base` and `jwks` without revoked keys. It is rate limited per
-client address and carries an `ETag`: send it back in `If-None-Match` and an
-unchanged list answers `304`. It is sent with `Cache-Control: no-cache`, so a
-cache checks back on every read and never serves a revoked key.
+`GET /v1/registry/issuers` needs no key, so it is served only when the
+operator sets `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true` (exactly `true`; the
+default is off). Off, the route is not registered and a request is answered
+as for any unknown route: `401` without an API key, `404` with one. The
+operator routes and the accreditation lookups work either way.
+
+It lists the issuers with only `entity_id`, `trust_marks`, `status` (as it
+stands at the time of the request), `status_list_base` and `jwks` without
+revoked keys, ordered by `entity_id`. It is paged with `page` (from 1,
+default 1) and `pageSize` (1 to 500, default 100), and reports `total`, the
+number of issuers in all; a page past the end is empty and still carries
+`total`, and any other value answers `400`. Read pages until you have `total`
+issuers, or until a page comes back empty:
+
+```json
+{
+  "issuers": [
+    {
+      "entity_id": "https://issuer.example",
+      "trust_marks": ["urn:grantex:tm:agent.identity"],
+      "status": "active",
+      "status_list_base": "https://issuer.example/status/",
+      "jwks": { "keys": [] }
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 100
+}
+```
+
+It is rate limited per client address and carries an `ETag` for each page:
+send it back in `If-None-Match` and an unchanged page answers `304`. It is
+sent with `Cache-Control: no-cache`, so a cache checks back on every read and
+never serves a revoked key.

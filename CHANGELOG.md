@@ -21,9 +21,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   transaction, with the operator's reason.
 - New public `GET /v1/registry/issuers`: each issuer's `entity_id`,
   `trust_marks`, `status` in effect now, `status_list_base` and keys without
-  revoked kids, with an `ETag` and `Cache-Control: no-cache` (a cache
-  revalidates every read, so a revoked key is not served stale), limited to
-  60 requests a minute per address.
+  revoked kids, ordered by `entity_id` and paged with `page` (default 1) and
+  `pageSize` (1 to 500, default 100), with `total`, the number of issuers in
+  all, read in the same snapshot as the page. Each page has an `ETag` and
+  `Cache-Control: no-cache` (a cache revalidates every read, so a revoked key
+  is not served stale); limited to 60 requests a minute per address.
+- The public list needs no credential, so it is off by default behind the new
+  `REGISTRY_PUBLIC_ENDPOINTS_ENABLED`, on only for exactly `true`. Off, the
+  route is not registered and answers as any unknown route does (`401`
+  without an API key, `404` with one). The operator routes and the
+  accreditation lookups are not behind the flag.
 - Trust marks come from a fixed taxonomy:
   `urn:grantex:tm:provider.entity`, `provider.ownership`,
   `provider.screening`, `agent.identity` and `agent.security`; anything else
@@ -31,7 +38,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Migration `121_registry_accredited_issuers.sql` adds two empty tables. No
   existing path changes. Documented in
   `docs/issuers/becoming-an-accredited-issuer.md`,
-  `spec/registry-federation.md` and `docs/self-hosting.md`.
+  `spec/registry-federation.md`, `docs/self-hosting.md` and
+  `docs/openapi.yaml`.
 
 ### Passkey sandbox/live parity and retained credential history
 - Preserve an interactively selected principal before replacing the hosted
