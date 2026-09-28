@@ -217,6 +217,9 @@ export const config = {
       2_592_000,
     );
   },
+  // Unauthenticated registry reads (the attestation-acceptance status lists).
+  // Read when routes are registered at boot; off unless exactly 'true'.
+  get registryPublicEndpointsEnabled() { return process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] === 'true'; },
   // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
   ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
   // CORS: comma-separated list of browser origins allowed to call the API
