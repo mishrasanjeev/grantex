@@ -1484,6 +1484,7 @@ the pull request that references it.
   suite in `tests/agent-keys-postgres.integration.test.ts`) and the owner has
   approved the runbook; then make it the default in a release that records the
   flip as a breaking change with the flag as the opt-out.
+
 ## G-90 — The grant credential status list is served unsigned, as a superseded format
 
 - **Found:** registry attestation-acceptance status lists (Stage 1), 2026-09-28,
@@ -1527,3 +1528,56 @@ the pull request that references it.
   range, and return `valid: false` otherwise; test each of the three cases.
   Behind a flag that defaults off, since it can turn today's `valid: true`
   into a denial.
+
+## G-105 — The public registry search lists unverified, self-asserted organizations
+
+- **Found:** trust registry listing fix (`GET /v1/trust-registry` can be made
+  to take the admin key), 2026-09-28, reviewing the other registry reads.
+- **What:** `GET /v1/registry/orgs` is public (`skipAuth`) and returns every
+  `trust_registry` row, including `basic` records that were registered with a
+  developer API key and never proved control of their domain. The name and
+  description are whatever the registrant typed, and `verified=false` lists
+  exactly those records. With no filter a caller can page through the whole
+  registry (up to 100 a page, with a total count). `GET /v1/registry/orgs/:did`
+  and the legacy `GET /v1/trust-registry/:orgDID` likewise answer for an
+  unverified record. The `GET /v1/registry/orgs/:did` detail also includes
+  the security and DPO contacts the registrant supplied; the legacy route
+  returns no contact fields. The routes carry only the service-wide per-address
+  limit, not a limit of their own.
+- **Impact:** a public lookup that should answer with the minimum a relying
+  party needs about an organization that has proved something instead
+  publishes self-asserted records. Anyone can register `did:web:` for a
+  domain they do not control, under any display name, and have it appear in
+  search next to verified organizations (`verificationLevel: basic` is the
+  only difference), and the whole registry, contacts included, can be
+  enumerated. The behaviour is unchanged by the listing fix, which kept these
+  routes as they were.
+- **Proposal:** behind a flag that defaults off, have the public search and
+  detail return only records that completed verification (or return an
+  unverified record's DID and `verificationLevel` alone), leave the contacts
+  out of the public detail, and give the public reads a per-client rate limit
+  of their own; the registrant keeps full access to its own records through
+  an authenticated route.
+
+## G-106 — The cross-tenant trust registry listing stays open to developer keys until the flag is turned on
+
+- **Found:** trust registry listing fix, 2026-09-28, when the admin-key check
+  on `GET /v1/trust-registry` was put behind a flag that defaults off, as
+  `AGENTS.md` ("Feature flags") requires for a behaviour change on an existing
+  path.
+- **What:** `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED` defaults to off, and only
+  the exact value `true` turns the check on. While it is off,
+  `GET /v1/trust-registry` still takes any developer API key and returns the
+  100 newest registry records of every developer, unverified ones included.
+- **Risk:** on a deployment that has not set the flag, one tenant can list
+  every other tenant's registry records (DIDs, domains, names, descriptions,
+  trust levels and verification state), including organizations that have not
+  published themselves as verified. The route is documented as an operator
+  route, so a deployment may assume it is already restricted.
+- **Fix:** operators set `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` once
+  their callers have moved to `GET /v1/registry/orgs` and
+  `GET /v1/registry/orgs/:did`, or to `ADMIN_API_KEY`; then, in a release
+  recorded in `CHANGELOG.md` as a breaking change, make the check on by
+  default with `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=false` as the explicit
+  opt-out. Owner: the auth-service maintainers. Exit criterion: flag default
+  flipped with an explicit opt-out once operators have moved.
