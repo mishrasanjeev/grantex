@@ -396,6 +396,9 @@ jobs:
       - name: Test Agent Passport Python
         working-directory: packages/agent-passport-py
         run: pip install -e ".[dev]" && mypy --strict src && pytest
+      - name: Test relying-party verifier Python
+        working-directory: packages/verifier-py
+        run: pip install -e ../agent-passport-py -e ../agent-httpsig-py -e ".[dev]" && mypy --strict src && pytest
       - name: Test Strands Python
         if: matrix.python-version != '3.9'
         working-directory: packages/strands-py

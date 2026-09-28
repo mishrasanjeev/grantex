@@ -6,6 +6,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Relying-party verifier for Python (`grantex-verifier`, not published)
+- New package `packages/verifier-py` (`grantex-verifier` 0.1.0, not
+  published; `Private :: Do Not Upload`; Python 3.9+), built on the local
+  `grantex-agent-passport` and `grantex-agent-httpsig`. `verify(passport,
+  grant, request, tx, config=...)` reports fourteen named checks
+  (`issuer.accredited`, `passport.signature`, `passport.status`,
+  `attestation.registered`, `attestation.accepted`, `grant.signature`,
+  `grant.status`, `grant.audience`, `key.binding`, `key.status`,
+  `request.signature`, `level`, `constraints`, `budget.remaining`), each with
+  `ok`, `detail` and `cached_at`; the first that fails sets `denial_code`.
+  It also returns the registry's level and flags, an informational tier and
+  an evidence record (passport hash, attestation id, both status results and
+  the level at verification time).
+- Issuer keys come only from the signed registry manifest, verified with the
+  registry JWK Set the relying party configures, as `verifyRegistryManifest`
+  does. Both status sources are read (the issuer's Token Status List and the
+  registry's acceptance list), and the staleness matrix applies: registry
+  keys 24 hours, the manifest one hour, status lists their `ttl` and at most
+  five minutes (60 seconds above the HITL threshold or for a
+  human-not-present Tier A transaction), the revocation feed ten seconds
+  after its last heartbeat. Anything older, or unreadable, is
+  `status_stale`. Every document is read through an injected fetcher; the
+  grant's revocation through an injected online status client or the
+  revocation feed; the key's status through an injected registry lookup.
+- WSGI and ASGI middleware read the `Agent-Passport`, `Agent-Grant` and
+  signature headers (and presentations over 6 KB from the content), attach
+  the result and refuse with `401` (request signature), `503`
+  (`status_stale`) or `403` and the denial code; `reject=False` reports
+  only.
+- `render_acp_delegate_payment` and `render_ap2_mandate` render a verified
+  grant as an ACP delegated payment allowance with Stripe Shared Payment
+  Token usage limits, and as AP2 v0.2 open mandate claims bound to the
+  agent's key (Phase 1 preview, pure functions; the AP2 member names are
+  placeholders until checked against the AP2 text).
+- Specified in `spec/verification.md` section 7; the relying-party guide
+  `docs/relying-parties/verifying-agents.md` has a Python section whose
+  examples the package's tests run. Wired into `make check`, `make test` and
+  the Python integrations CI job (3.9 and 3.12). FINDINGS G-135 to G-139.
+
 ### Passport binding at grant issuance (auth service)
 - `POST /v1/authorize` takes an Agent Passport in `passport` when
   `PASSPORT_BOUND_GRANTS_ENABLED=true` (off by default; off, the member is

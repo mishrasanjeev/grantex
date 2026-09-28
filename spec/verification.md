@@ -1,11 +1,15 @@
 # Agent request verification
 
-Status: draft (Agent Trust Registry, Phase 1). This document holds the header
-specification and the request signing profile only. Implemented by
+Status: draft (Agent Trust Registry, Phase 1). Sections 1 to 6 hold the
+header specification and the request signing profile, implemented by
 `@grantex/agent-httpsig` (TypeScript, `packages/agent-httpsig`) and
 `grantex-agent-httpsig` (Python, `packages/agent-httpsig-py`), neither of
 which is published yet. Both run the shared test vectors in
 [`examples/agent-httpsig-vectors.json`](examples/agent-httpsig-vectors.json).
+Section 7 is what a relying party checks around the signature (the Agent
+Passport, the grant, both status sources and the staleness matrix),
+implemented by `grantex-verifier` (Python, `packages/verifier-py`, 0.1.0, not
+published).
 
 Keywords MUST, MUST NOT, SHOULD and MAY are used as in RFC 2119.
 
@@ -436,3 +440,180 @@ holds, for both libraries:
 The test keys are for tests only. The Ed25519 key is derived when the tests
 run from a published seed label, and only the public half of the P-256 key
 exists.
+
+## 7. Relying-party verification
+
+This section says what a relying party checks, besides the request
+signature of section 4, before it acts on an agent's request: the Agent
+Passport ([agent-passport-1.0.md](agent-passport-1.0.md)), the grant
+([grant-token-0.6.md](grant-token-0.6.md), bound to the passport as
+[passport-binding.md](passport-binding.md) section 5 describes), both status
+sources, the key, and the transaction. `grantex-verifier`
+(`packages/verifier-py`) implements it; its tests build a registry, an
+issuer and an agent and exercise every row below.
+
+Two rules frame it:
+
+- **Two status sources.** A passport is usable only while its issuer holds
+  it VALID in the issuer's Token Status List *and* the registry holds its
+  attestation VALID in the registry's acceptance list
+  (draft-ietf-oauth-status-list-21 §7.1). Either one alone is not enough.
+- **Key equality** ([agent-passport-1.0.md](agent-passport-1.0.md) §7). The
+  passport's `cnf` key, the grant's `cnf.jkt` (RFC 9449 §6.1), the grant's
+  `passport.key_thumbprint` and the request's `keyid` are the same key: their
+  RFC 7638 SHA-256 thumbprints are equal.
+
+### 7.1 Inputs
+
+The relying party configures:
+
+- **its origin** (`https://merchant.example`), from which the `@authority` of
+  section 4.1 is derived, and optionally a separate **audience** for root
+  grants (default: the origin);
+- **the registry**: its issuer identifier, its JWK Set (the set itself, or its
+  URL) and the URL of its signed manifest
+  ([registry-federation.md](registry-federation.md), "Registry manifest").
+  Keys are taken from nowhere else: an issuer's keys come only from the
+  manifest, never from a URL or a key named in a token;
+- a **fetcher** for the manifest, the JWK Set and the status lists (https, no
+  redirects, as the registry's own fetcher);
+- a **registry lookup** by key thumbprint
+  (`GET /v1/registry/agents?key_thumbprint=`);
+- a **grant status source**: the auth service's revocation status endpoint
+  (`GET /v1/revocations/status`), read on every verification, or the
+  revocation feed;
+- a **nonce store** (section 4.4), optionally the **HITL threshold** (minor
+  units) and a **minimum trust level**.
+
+For each request it passes the Agent Passport and grant the request presents
+(section 1), the request, and the transaction: when it happens, the amount in
+minor units, the currency, the merchant's origin and, if it knows, whether
+the Principal is present. The transaction is read from the signed content,
+never from the query string (section 4.5).
+
+### 7.2 Checks
+
+Every check is evaluated and reported with `ok`, a `detail` and `cached_at`
+(when the data it relied on was read). A check that depends on one that
+failed is reported as failed and "not evaluated", without a code of its own.
+The **first failing check in this order sets the denial code**; the result is
+`ok` only when every check passes.
+
+| # | Check | Rule | Denial codes |
+|---|---|---|---|
+| 1 | `issuer.accredited` | The passport's `iss` is an issuer of a valid manifest (7.3), its status there is `active`, and its `trust_marks` include `urn:grantex:tm:agent.identity`. Read before the signature, as at grant issuance, so an unknown or suspended issuer is refused as such. The status is the one in effect when the manifest was issued, at most an hour earlier (FINDINGS G-138). | `issuer_not_accredited` (absent, `withdrawn` or any other status), `issuer_suspended`, `trust_mark_missing`; a manifest that does not verify: `passport_invalid_signature`; one that is stale or cannot be read: `status_stale` |
+| 2 | `passport.signature` | The passport verifies as [agent-passport-1.0.md](agent-passport-1.0.md) §4 describes, with the key of the issuer's manifest `jwks` whose `kid` is the header's (a passport without `kid` has no key), 60 seconds of clock skew, a P-256 `cnf` key, and no KB-JWT (the request signature proves possession). | `passport_invalid_signature`, `passport_expired`, `passport_malformed`, `passport_not_accepted` |
+| 3 | `passport.status` | The passport's `status.status_list.uri` is under the issuer's `status_list_base` and already in its URL-serialised form (https, no query, fragment or dot segments, as the registry's rule for status URIs); the list there is a `statuslist+jwt` (draft-ietf-oauth-status-list-21 §5.1) signed by the issuer's manifest key for its `kid`, with `sub` equal to the URI (§8.3), fresh (7.3), and the entry at `idx` is VALID. | `passport_revoked` (INVALID, SUSPENDED or any other value), `status_stale` |
+| 4 | `attestation.registered` | The grant carries one `urn:grantex:commerce:v1` entry whose `passport` names the passport's issuer, its disclosed `attestation_id` and its hash ([agent-passport-1.0.md](agent-passport-1.0.md) §6). | `attestation_not_registered` (no binding, no disclosed `attestation_id`, another id), `attestation_mismatch` (another issuer), `attestation_hash_mismatch` |
+| 5 | `attestation.accepted` | The entry's `acceptance_status` `{uri, idx}` names one of the registry's acceptance lists (under the manifest's `acceptance_status_list` endpoint); the list is a `statuslist+jwt` signed with the registry JWK Set, `iss` the registry and `sub` the URI, fresh, and the entry is VALID. | `attestation_not_accepted` (`acceptance_invalid`, `acceptance_suspended`), `attestation_not_registered` (not a registry list), `status_stale` |
+| 6 | `grant.signature` | The grant is a JWS with `typ` `at+jwt`, `RS256` or `ES256`, verified with the registry JWK Set key for its `kid`; `iss` is the registry; `exp`, `iat` and `nbf` hold with 60 seconds of skew; `jti` and `sub` are present; at most one commerce entry. | `token_invalid`; registry keys that cannot be read: `status_stale` |
+| 7 | `grant.status` | The grant status source says the grant (by `urn:grantex:grant.grant_id`, `jti` and `parent_grant_id`) is not revoked. An unknown or unreadable state is a refusal. | `grant_revoked` (revoked or suspended), `status_stale` |
+| 8 | `grant.audience` | `aud` contains the configured audience exactly; for a child grant (one that names `parent_grant_id`), the merchant's origin. | `audience_mismatch` |
+| 9 | `key.binding` | Key equality: passport `cnf`, grant `cnf.jkt`, the commerce entry's `passport.key_thumbprint` and the request's `keyid`. | `key_binding_mismatch` |
+| 10 | `key.status` | The registry lookup for the passport's key thumbprint names the passport's `sub`, and the key is `active` or `rotated` with `key_current` true. | `key_unproven` (no agent holds the key, or `pending`), `key_not_active` (`compromised`, rotated past its overlap, any other status), `key_binding_mismatch` (held by another agent), `status_stale` (lookup failed) |
+| 11 | `request.signature` | Section 4, with the passport's `cnf` key as the only key and the origin's authority; and the presentations it signed are the ones being verified. | `request_signature_invalid`, `request_signature_stale` |
+| 12 | `level` | When a minimum is configured, the lookup's `level` is at least it (`basic` < `verified` < `attested` < `attested_verified`). | `level_below_policy`, `status_stale` |
+| 13 | `constraints` | The transaction is within the commerce entry's `constraints` (7.5). | `cap_exceeded` (window, currency, amount), `audience_mismatch` (merchant), `token_invalid` (unreadable) |
+| 14 | `budget.remaining` | The grant's `urn:grantex:params:oauth:authorization-details:budget` entry is reported. The authorization server enforces the budget; the verifier does not. | `token_invalid` (unreadable) |
+
+A failure of the nonce store is not a denial: it is raised to the caller,
+which refuses the request with a server error (section 4.2).
+
+### 7.3 Staleness matrix
+
+How old the relying party's copy of each source may be when it relies on it
+(PRD §9). Beyond its bound a source is read again; one that cannot be read
+again, or that does not verify, is `status_stale`. An older copy is never
+used in its place.
+
+| Source | Maximum age |
+|---|---|
+| Registry JWK Set (the key set for the manifest, the acceptance lists and grants) | 24 hours; read early, at most every five minutes, when a token names a `kid` it lacks |
+| Registry manifest (issuer keys, accreditation, trust marks) | 1 hour after its `iat`, before its `exp`, `iat` not more than 60 s in the future; reread every five minutes, and a copy still inside its hour is used while the registry cannot be reached |
+| Status lists (the issuer's and the registry's) | the list's `ttl`, and at most 5 minutes; **60 seconds** when the amount is above the HITL threshold or the transaction is human-not-present Tier A (7.6). A list is also unusable from its `exp` (or, without `exp`, `iat` + `ttl`) |
+| Registry lookup (key status, level, flags) | the status-list bound, and at most 60 seconds (the public answer's `max-age`) |
+| Revocation feed (when used) | heartbeat every second; the grant's state is unknown, and refused, 10 seconds after the last heartbeat |
+| Online revocation status | read on every verification |
+
+The HITL threshold is the lower of the relying party's and the grant's
+`constraints.hitl_threshold_minor`. An unknown amount is treated as above a
+configured threshold.
+
+### 7.4 Denial taxonomy and HTTP status
+
+The codes are PRD Appendix C's. Three refusals have no Appendix C code; they
+use the codes the grantex SDKs' `enforce()` already returns (FINDINGS G-135):
+`token_invalid` (a grant that does not verify or cannot be read),
+`grant_revoked` and `cap_exceeded` (a transaction outside the grant's
+constraints). The Agent Passport profile's `passport_malformed` and
+`passport_not_accepted` pass through as at grant issuance.
+
+The middleware answers a refusal with `401` for `request_signature_invalid`
+and `request_signature_stale` (and a request without both presentations),
+`503` for `status_stale` (the request may be good; the relying party could
+not establish it), and `403` for every other code, with a JSON body
+`{"denial_code": ..., "check": ...}`. Each mapping can be changed.
+
+### 7.5 What the verifier reads from the grant
+
+The commerce entry (`urn:grantex:commerce:v1`) carries `passport` and
+`acceptance_status` ([passport-binding.md](passport-binding.md) §5) and, for
+a grant with commerce limits, `constraints`, an object with these members:
+
+| Member | Type | Rule |
+|---|---|---|
+| `amount_range` | object with `min_minor` and `max_minor`, non-negative integers | The amount, in minor units, is at least `min_minor` and at most `max_minor`. |
+| `currency` | ISO 4217 code, upper case | The transaction's currency is this one. |
+| `allowed_merchants` | array of origins | The transaction's merchant is one of them. |
+| `window` | object with `not_before` and `not_after`, integers (UNIX seconds) | The transaction happens at or after `not_before` and before `not_after`. |
+| `human_present` | boolean | Whether the Principal is present (7.6). |
+| `hitl_threshold_minor` | non-negative integer | The grant's HITL threshold (7.3). |
+
+Every member is optional. A member the verifier does not know, or one of the
+wrong type, makes the constraints unreadable (`token_invalid`): a
+restriction is never ignored. The transaction must be inside the window
+(`not_before` inclusive, `not_after` exclusive), its merchant (default: the
+relying party's origin) in `allowed_merchants`, its currency the
+`currency`, and its amount within `amount_range`; an unknown amount against
+an `amount_range` is refused. A grant without `constraints` is limited by
+its scopes and budget only. The issuing side of these members belongs to
+per-merchant child grants, which are not in this tree yet (FINDINGS G-136).
+
+### 7.6 Tier (information only in Phase 1)
+
+The verifier reports a tier for the transaction; in Phase 1 it only chooses
+the status staleness bound (7.3), and no policy acts on it. Tier policy
+enforcement is Phase 3. The default rules:
+
+| Tier | When |
+|---|---|
+| A | The Principal is not present (the transaction's `human_present`, else the grant's `constraints.human_present`, else not present). |
+| B | The Principal is present and the amount is at or below the HITL threshold, or no threshold applies. |
+| C | The Principal is present and the amount is above the threshold, or unknown. |
+
+A relying party may supply its own rules; the 60-second bound still applies
+above the threshold whatever the tier.
+
+### 7.7 Evidence
+
+With every result the verifier returns an evidence record (PRD §8.10): the
+time of verification and of the transaction, the agent's DID, the issuer,
+the passport's hash, the attestation id, the key thumbprint, the grant id,
+both status results (`uri`, `idx`, the status read and when it was read),
+the level and flags at verification time, the tier, the budget reported, the
+manifest's `iat` and the denial code. The hash identifies the exact bytes of
+the issuer-signed JWT; do not key a deny list on it alone
+([agent-passport-1.0.md](agent-passport-1.0.md) §6).
+
+### 7.8 Payment-protocol rendering (Phase 1 preview)
+
+The library renders a verified grant into two payment protocols, as pure
+functions with no network call and no signature: a per-merchant child
+grant's limits as an ACP delegated payment `allowance` and a Stripe Shared
+Payment Token `usage_limits` (the earlier of the grant's `exp` and its
+window's end), and claims for AP2 v0.2 open Checkout and Payment Mandates
+whose `cnf` is the agent's key (RFC 7800 §3.2), with the grant's passport
+reference as a selectively disclosable claim (RFC 9901 §4.2). They are
+previews: their member names follow those public specifications as
+published and must be checked against the current texts before a later
+phase relies on them (FINDINGS G-137).

@@ -146,3 +146,121 @@ Refetch the manifest at least every hour. Its `ETag` stays the same while
 the registry has not changed and the manifest has not been re-signed, so a
 conditional request is cheap. The manifest route allows 60 requests a minute
 per client address.
+
+## Verifying a request in Python
+
+`grantex-verifier` (`packages/verifier-py`, 0.1.0, **not yet published**)
+does everything above for each request: it checks the manifest, the Agent
+Passport against the issuer's keys in it, both status lists, the grant, its
+revocation and audience, that the passport, the grant and the request
+signature name one key, the key's status in the lookup, the RFC 9421
+signature and the transaction's fit with the grant. The checks, their order,
+the staleness matrix and the denial codes are specified in
+`spec/verification.md` section 7.
+
+<!-- snippet: packages/verifier-py/tests/docs/examples/verify_checkout.py -->
+```python
+from __future__ import annotations
+
+from typing import Any, Callable, Mapping, Optional, Union
+
+from grantex_verifier import (
+    GrantStatusSource,
+    HttpRequest,
+    InMemoryNonceStore,
+    Transaction,
+    VerificationResult,
+    VerifierConfig,
+    presentations_from_request,
+    verify,
+)
+
+
+def make_config(
+    *,
+    fetch: Callable[[str], Union[str, bytes]],
+    registry_lookup: Callable[[str], Optional[Mapping[str, Any]]],
+    grant_status: GrantStatusSource,
+) -> VerifierConfig:
+    # Build this once per process and keep it: it holds the nonce store that
+    # refuses a replayed request and the caches the staleness matrix governs.
+    # A configuration built per request would accept every replay. fetch
+    # reads a URL (https, no redirects); the registry lookup and the grant
+    # status source are your clients for those calls.
+    return VerifierConfig(
+        origin="https://merchant.example",
+        registry_issuer="https://registry.example",
+        registry_jwks="https://registry.example/.well-known/jwks.json",
+        manifest_url="https://registry.example/.well-known/agent-registry.json",
+        fetch=fetch,
+        registry_lookup=registry_lookup,
+        grant_status=grant_status,
+        nonce_store=InMemoryNonceStore(),
+        hitl_threshold_minor=20_000,
+    )
+
+
+def verify_checkout(request: HttpRequest, *, config: VerifierConfig) -> VerificationResult:
+    passport, grant = presentations_from_request(request)
+    result = verify(
+        passport or "",
+        grant or "",
+        request,
+        Transaction(amount_minor=12_500, currency="EUR", merchant="https://merchant.example"),
+        config=config,
+    )
+    if not result.ok:
+        print("refused:", result.denial_code)
+    return result
+```
+
+Call `make_config` once when the process starts and pass the same
+configuration to every `verify_checkout` call. Its nonce store is what
+refuses a replayed request (`request_signature_invalid`); a configuration
+built per request starts with an empty store and accepts every replay. If
+several processes serve the same origin, give them one shared nonce store.
+
+`result.checks` reports every check with `ok`, `detail` and `cached_at`, and
+`result.denial_code` is the code of the first that failed. Keep
+`result.evidence` with the order: it records the passport's hash, the
+attestation id, both status results and the level when you verified.
+
+To verify in front of a WSGI application (an ASGI middleware is included
+too):
+
+<!-- snippet: packages/verifier-py/tests/docs/examples/wsgi_app.py -->
+```python
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, Iterable
+
+from grantex_verifier import (
+    HttpRequest,
+    Transaction,
+    VerifierConfig,
+    WsgiVerifierMiddleware,
+)
+
+
+def checkout(environ: Dict[str, Any], start_response: Callable[..., Any]) -> Iterable[bytes]:
+    result = environ["grantex.verification"]  # the VerificationResult, always ok here
+    start_response("200 OK", [("Content-Type", "text/plain")])
+    return [("accepted at level " + str(result.level)).encode()]
+
+
+def transaction_for(request: HttpRequest) -> Transaction:
+    # Take the amount from the signed content, never from the query string
+    # (spec/verification.md section 4.5).
+    return Transaction(amount_minor=12_500, currency="EUR", merchant="https://merchant.example")
+
+
+def build_app(config: VerifierConfig) -> WsgiVerifierMiddleware:
+    # Refuses with 401 (request signature), 503 (status_stale) or 403 (any
+    # other denial code) and a JSON body naming the code.
+    return WsgiVerifierMiddleware(checkout, config=config, transaction=transaction_for)
+```
+
+A refused request is answered `401` for a request signature failure, `503`
+for `status_stale` (the request may be good, but you could not establish
+it) and `403` for any other code, with `{"denial_code": ..., "check": ...}`.
+Both examples are run by the package's tests.

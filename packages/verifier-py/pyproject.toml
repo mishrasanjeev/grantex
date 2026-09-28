@@ -1,0 +1,70 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "grantex-verifier"
+version = "0.1.0"
+description = "Relying-party verifier for agent requests: Agent Passport, grant, request signature and registry status, with ACP and AP2 rendering and WSGI/ASGI middleware"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+authors = [{ name = "Sanjeev Kumar", email = "sanjeev@orchestrum.in" }]
+maintainers = [{ name = "Orchestrum Technologies LLP", email = "sanjeev@orchestrum.in" }, { name = "Sanjeev Kumar", email = "mishra.sanjeev@gmail.com" }]
+keywords = [
+    "grantex",
+    "agent-passport",
+    "relying-party",
+    "rfc9421",
+    "token-status-list",
+    "ai-agents",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+    # Not yet published: this classifier makes package indexes refuse an upload.
+    "Private :: Do Not Upload",
+]
+# The two local libraries are not published either: install them from the
+# repository first (see README.md, "Development").
+dependencies = [
+    "cryptography>=48.0.1",
+    "grantex-agent-passport==0.1.0",
+    "grantex-agent-httpsig==0.1.0",
+]
+
+[project.urls]
+Homepage = "https://grantex.dev"
+Repository = "https://github.com/mishrasanjeev/grantex"
+Issues = "https://github.com/mishrasanjeev/grantex/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9; python_version < '3.10'",
+    "pytest>=9.0.3; python_version >= '3.10'",
+    "mypy>=1.9",
+    "ruff>=0.4",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/grantex_verifier"]
+
+[tool.mypy]
+strict = true
+files = ["src/grantex_verifier"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
