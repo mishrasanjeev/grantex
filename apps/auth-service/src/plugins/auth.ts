@@ -25,7 +25,7 @@ declare module 'fastify' {
   }
 }
 
-async function authenticateRequest(
+export async function authenticateRequest(
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {

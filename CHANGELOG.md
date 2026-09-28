@@ -6,6 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Registry lookup and signed registry manifest (auth service)
+- New `GET /v1/registry/agents/{did}`, `GET /v1/registry/agents?key_thumbprint=`
+  and `GET /v1/registry/agents?issuer=&external_credential_id=&hash=`: a
+  relying party looks an agent up and reads its computed trust level and
+  flags, the issuers, types and expiry of its counted attestations, its keys
+  with whether each is current (active, or rotated within its overlap) and
+  its `cimd_uri`. The thumbprint form also returns `key_status` and
+  `key_current` for that key. The credential form needs all three values
+  (any missing is `400`), and a mismatch on any one is the same `404` as an
+  unknown credential.
+- Minimised: without an API key the answer never carries the provider's
+  legal identifiers or name, or any status list index. A request with a valid
+  developer API key (the authenticated relying party of Phase 1; a dedicated
+  relying-party credential will follow) also reads the provider's DID, name
+  and legal identifiers and each attestation's registry id and status list
+  entries. An invalid key is `401`, never answered as public.
+- The unauthenticated form is served only with the new flag
+  `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true` (default off; off, a lookup
+  without a key is `401`). The authenticated form works either way. Each
+  lookup route allows 120 requests a minute per client address, and an
+  authenticated request also draws on the developer's plan budget. Answers
+  carry an ETag and `Vary: Authorization`; public ones `Cache-Control: public,
+  max-age=60`, authenticated ones `private, no-cache`.
+- New `GET /.well-known/agent-registry.json`, only with
+  `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`: a compact JWS, `typ`
+  `grantex-registry-manifest+jwt`, media type
+  `application/grantex-registry-manifest+jwt`, signed with the platform key
+  (kid in `/.well-known/jwks.json`), valid for one hour: every accredited
+  issuer with its status in effect and its keys without revoked kids, the
+  trust mark taxonomy, the registry's acceptance status lists in both forms,
+  and the lookup, issuer list, status list and JWKS endpoints. Phase 1
+  relying parties without OpenID Federation use it to check passports and
+  attestations offline; `verifyRegistryManifest` in the auth service is the
+  reference check (typ, algorithm, signature, exp, one-hour staleness, and
+  `iss` against the registry the caller names, a required argument).
+- Docs: `spec/registry-federation.md` ("Agent lookup", "Registry manifest"),
+  new `docs/relying-parties/verifying-agents.md`, `docs/openapi.yaml`.
+
 ### Registry attestations and computed trust levels (auth service)
 - New `POST /v1/registry/attestations`: an accredited issuer posts an
   attestation as a compact JWS (`typ` `grantex-attestation+jwt`, ES256, a
