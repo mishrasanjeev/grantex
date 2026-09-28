@@ -58,6 +58,8 @@ export interface GrantTokenPayload {
   delegationDepth?: number;
   bdg?: number;
   webauthnEvidence?: GrantWebAuthnEvidence;
+  /** A child grant's subject token jti (spec/passport-binding.md §8). */
+  parentJti?: string;
 }
 
 export interface VerifiedGrantTokenClaims {
@@ -81,6 +83,7 @@ export interface VerifiedGrantTokenClaims {
   cnf?: { jkt: string };
   act?: Record<string, unknown>;
   authorizationDetails?: Array<Record<string, unknown>>;
+  parentJti?: string;
 }
 
 export interface OAuthAccessTokenPayload {
@@ -353,6 +356,7 @@ export async function verifyGrantToken(
       : {}),
     ...(grant.act !== undefined ? { act: grant.act as Record<string, unknown> } : {}),
     ...(grant.webauthnEvidence !== undefined ? { webauthnEvidence: grant.webauthnEvidence } : {}),
+    ...(grant.parentJti !== undefined ? { parentJti: grant.parentJti } : {}),
     ...(Array.isArray(payload['authorization_details'])
       ? { authorizationDetails: payload['authorization_details'] as Array<Record<string, unknown>> }
       : {}),

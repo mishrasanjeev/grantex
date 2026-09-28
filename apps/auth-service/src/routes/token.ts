@@ -1,9 +1,14 @@
-import type { FastifyInstance } from 'fastify';
+import { errorCodes, type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { getSql, type TxSql, queries } from '../db/client.js';
 import { newGrantId, newTokenId, newRefreshTokenId } from '../lib/ids.js';
 import { signGrantToken, parseExpiresIn } from '../lib/crypto.js';
 import { parseActorClaim } from '../lib/grant-token-claims.js';
-import { isKnownPurpose, purposeOfToolsAuthorizationDetails } from '../lib/purpose.js';
+import {
+  isKnownPurpose,
+  narrowToolsAuthorizationDetails,
+  purposeOfToolsAuthorizationDetails,
+} from '../lib/purpose.js';
+import { checkActiveGrantToken } from '../lib/active-grant-token.js';
 import { emitEvent } from '../lib/events.js';
 import { tokenExchangeTotal, tokenExchangeDuration } from '../lib/metrics.js';
 import { withSpan } from '../lib/tracing.js';
@@ -35,6 +40,7 @@ import {
   type IssuanceRecheck,
   bindingFromGrantRow,
   commerceAuthorizationDetail,
+  constraintsOfStoredBinding,
   insertGrantBinding,
   parseStoredBinding,
   recheckBindingAtIssuance,
@@ -46,6 +52,18 @@ import {
   openRefreshReplayToken,
   sealRefreshReplayToken,
 } from '../lib/refresh-replay.js';
+import {
+  ACCESS_TOKEN_TYPE,
+  ChildGrantError,
+  TOKEN_EXCHANGE_GRANT_TYPE,
+  attenuateConstraints,
+  childGrantExpiry,
+  constraintMembers,
+  parseStoredConstraints,
+  parseTokenExchangeRequest,
+  type CommerceConstraints,
+  type TokenExchangeRequest,
+} from '../lib/registry/child-grant.js';
 
 interface TokenBody {
   code: string;
@@ -137,6 +155,26 @@ async function issueWithFreshIssuerStatus(
   await run(false);
 }
 
+/**
+ * issueWithFreshIssuerStatus for the child grant exchange, whose refusals
+ * are RFC 6749 §5.2 error responses: a refusal of the issuer's list read
+ * again propagates as the PassportBindingError it is.
+ */
+async function runWithFreshIssuerStatus(
+  sql: ReturnType<typeof getSql>,
+  now: Date,
+  run: (rereadAllowed: boolean) => Promise<unknown>,
+): Promise<void> {
+  try {
+    await run(true);
+    return;
+  } catch (err) {
+    if (!(err instanceof BoundIssuerStatusStale)) throw err;
+    await refreshBoundIssuerStatus(sql, err.registryAttestationId, now);
+  }
+  await run(false);
+}
+
 function isRouteError(err: unknown): err is RouteError {
   return typeof err === 'object'
     && err !== null
@@ -162,10 +200,37 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
     });
   }
 
+  // RFC 8693 §2.1 sends a token exchange form-encoded (RFC 6749 Appendix B).
+  // A form body is parsed only for POST /v1/token with
+  // PASSPORT_BOUND_GRANTS_ENABLED; everywhere else it is refused 415 exactly
+  // as when no parser existed, so nothing changes with the flag off.
+  app.addContentTypeParser(FORM_CONTENT_TYPE, { parseAs: 'string' }, (request, body, done) => {
+    if (!config.passportBoundGrantsEnabled || request.routeOptions.url !== '/v1/token') {
+      done(new errorCodes.FST_ERR_CTP_INVALID_MEDIA_TYPE(request.headers['content-type']));
+      return;
+    }
+    const parsed: Record<string, string | string[]> = {};
+    for (const [key, value] of new URLSearchParams(typeof body === 'string' ? body : body.toString('utf8'))) {
+      const current = parsed[key];
+      if (current === undefined) parsed[key] = value;
+      else if (Array.isArray(current)) current.push(value);
+      else parsed[key] = [current, value];
+    }
+    done(null, parsed);
+  });
+
   // POST /v1/token — stricter rate limit: 20/min
   app.post<{ Body: TokenBody }>('/v1/token', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (request, reply) => {
     const endTimer = tokenExchangeDuration.startTimer();
     const body = request.body;
+    // A per-merchant child grant (spec/passport-binding.md §8). Off, a token
+    // exchange is answered as it always was: a code exchange without a code.
+    if (config.passportBoundGrantsEnabled && typeof body === 'object' && body !== null && !Array.isArray(body)
+        && (body as unknown as Record<string, unknown>)['grant_type'] === TOKEN_EXCHANGE_GRANT_TYPE) {
+      return exchangeChildGrant(request, reply, body as unknown as Record<string, unknown>);
+    }
+    // Only a token exchange is taken form-encoded; a code exchange stays JSON.
+    if (isFormRequest(request)) throw new errorCodes.FST_ERR_CTP_INVALID_MEDIA_TYPE(request.headers['content-type']);
     if (typeof body !== 'object' || body === null || Array.isArray(body)) {
       return reply.status(400).send({ message: 'Request body must be a JSON object', code: 'BAD_REQUEST', requestId: request.id });
     }
@@ -334,9 +399,11 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         // strips one the Principal consented to. The key it binds is the
         // request's agent_key_thumbprint, the token's cnf.jkt.
         let passportBinding: GrantPassportBinding | null = null;
+        let commerceConstraints: CommerceConstraints | null = null;
         if (authReq['passport_binding'] !== null && authReq['passport_binding'] !== undefined) {
           try {
             passportBinding = parseStoredBinding(authReq['passport_binding']);
+            commerceConstraints = constraintsOfStoredBinding(authReq['passport_binding']);
           } catch {
             routeError(500, 'Authorization request passport binding is invalid', 'INTERNAL_ERROR');
           }
@@ -355,7 +422,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         }
         const tokenAuthorizationDetails = passportBinding === null
           ? grantAuthorizationDetails
-          : [...(grantAuthorizationDetails ?? []), commerceAuthorizationDetail(passportBinding)];
+          : [...(grantAuthorizationDetails ?? []), commerceAuthorizationDetail(passportBinding, commerceConstraints)];
 
         await tx`
           INSERT INTO grants (
@@ -384,7 +451,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             grantId,
             developerId: authReq['developer_id'] as string,
             agentId: authReq['agent_id'] as string,
-          }, passportBinding);
+          }, passportBinding, commerceConstraints);
         }
 
         // No `bdg` claim at issuance. A budget is attached to a grant after the
@@ -659,7 +726,8 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
                   gpb.passport_hash, gpb.key_thumbprint AS passport_key_thumbprint,
                   gpb.acceptance_list_uri AS passport_acceptance_list_uri,
                   gpb.acceptance_list_idx AS passport_acceptance_list_idx,
-                  gpb.passport_expires_at
+                  gpb.passport_expires_at,
+                  gpb.commerce_constraints AS passport_commerce_constraints
           FROM refresh_tokens rt
           JOIN grants g ON g.id = rt.grant_id
           JOIN agents a ON a.id = g.agent_id
@@ -748,8 +816,10 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         // A bound grant's refreshed token carries its binding again, once the
         // registry's records still stand behind the passport.
         let passportBinding: GrantPassportBinding | null;
+        let commerceConstraints: CommerceConstraints | null = null;
         try {
           passportBinding = bindingFromGrantRow(row);
+          if (passportBinding !== null) commerceConstraints = parseStoredConstraints(row['passport_commerce_constraints']);
         } catch {
           routeError(500, 'Invalid grant passport binding', 'INTERNAL_ERROR');
         }
@@ -763,7 +833,7 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
         }
         const refreshedDetails: Array<Record<string, unknown>> = [
           ...((storedDetails as Array<Record<string, unknown>> | null) ?? []),
-          ...(passportBinding !== null ? [commerceAuthorizationDetail(passportBinding)] : []),
+          ...(passportBinding !== null ? [commerceAuthorizationDetail(passportBinding, commerceConstraints)] : []),
           ...(remainingBudgetText !== undefined && budgetCurrency
             ? [{
                 type: 'urn:grantex:params:oauth:authorization-details:budget',
@@ -928,5 +998,262 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
       refreshToken: responseRefreshToken,
       grantId,
     });
+  });
+}
+
+const FORM_CONTENT_TYPE = 'application/x-www-form-urlencoded';
+
+function isFormRequest(request: FastifyRequest): boolean {
+  const type = request.headers['content-type'];
+  return typeof type === 'string' && type.toLowerCase().startsWith(FORM_CONTENT_TYPE);
+}
+
+/** A failure of the child grant exchange that is the server's, not the request's. */
+class ChildGrantInternalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ChildGrantInternalError';
+  }
+}
+
+function sendChildGrantRefusal(reply: FastifyReply, requestId: string, refusal: {
+  statusCode: number; error: string; code: string; reason: string; message: string;
+}) {
+  return reply.status(refusal.statusCode).send({
+    error: refusal.error,
+    error_description: refusal.message,
+    code: refusal.code,
+    reason: refusal.reason,
+    message: refusal.message,
+    requestId,
+  });
+}
+
+function subjectRefused(reason: string, message: string): never {
+  throw new ChildGrantError('invalid_request', reason, message);
+}
+
+/**
+ * POST /v1/token with grant_type urn:ietf:params:oauth:grant-type:token-exchange
+ * (RFC 8693 §2.1), PASSPORT_BOUND_GRANTS_ENABLED on: a per-merchant child of
+ * a passport-bound grant (spec/passport-binding.md §8).
+ *
+ * The client is the developer the API key authenticates (RFC 8693 §2.1
+ * leaves client authentication to the deployment); the subject token must be
+ * one of its grants' tokens. The child is a token of the parent grant, with a
+ * fresh jti, recorded in grant_tokens against the parent grant (so revoking
+ * the grant revokes it, and a budget debit made with its grant id lands on
+ * the parent's allocation) and in grant_child_tokens (so revoking the subject
+ * token revokes it too). Every refusal is an RFC 6749 §5.2 error response
+ * with the PRD Appendix C code where one applies; every check fails closed.
+ */
+async function exchangeChildGrant(request: FastifyRequest, reply: FastifyReply, body: Record<string, unknown>) {
+  reply.header('Cache-Control', 'no-store');
+  reply.header('Pragma', 'no-cache');
+  const developerId = request.developer.id;
+  const sql = getSql();
+  // The instant the parent's binding is checked at, and the child's clock.
+  const issuanceNow = new Date();
+  const nowSeconds = Math.floor(issuanceNow.getTime() / 1000);
+
+  let exchange: TokenExchangeRequest;
+  let jwt!: string;
+  let exp!: number;
+  let scopes!: string[];
+  let grantId!: string;
+  const childJti = newTokenId();
+  try {
+    exchange = parseTokenExchangeRequest(body);
+
+    // Signature, claims, the developer, and the token's and grant's
+    // revocation state (Redis and the database); any doubt is a refusal.
+    const checked = await checkActiveGrantToken(exchange.subjectToken, {
+      expectedDeveloperId: developerId,
+      expectedProtocol: 'grantex-v1',
+    });
+    if (!checked.ok) {
+      // Another developer's token reads as an invalid one: the answer does
+      // not say whose it is.
+      const reason = checked.reason === 'revoked' || checked.reason === 'expired' ? checked.reason : 'invalid';
+      subjectRefused(`subject_token_${reason}`, `The subject token is ${reason === 'invalid' ? 'not a grant token of this developer' : reason}`);
+    }
+    const claims = checked.claims;
+    if (claims.parentJti !== undefined) {
+      subjectRefused('subject_is_child', 'A child grant is not exchanged again: exchange the parent grant token');
+    }
+
+    await runWithFreshIssuerStatus(sql, issuanceNow, (rereadAllowed) => sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      // FOR SHARE: a revocation of the grant or of the subject token that
+      // comes second waits for this exchange to commit. The grant's status is
+      // read by every check of the child; the token revocation revokes the
+      // children in a second statement, with a snapshot taken after the wait,
+      // so it sees this child (routes/tokens.ts). A revocation that came
+      // first has committed by the time this lock is granted, and this reads
+      // it. Parallel exchanges do not block one another.
+      const rows = await tx`
+        SELECT g.id, g.agent_id, g.principal_id, g.scopes, g.status, g.expires_at,
+               g.agent_key_thumbprint, g.authorization_details,
+               gt.is_revoked AS subject_revoked, gt.expires_at AS subject_expires_at,
+               a.did AS agent_did, a.status AS agent_status,
+               EXISTS (SELECT 1 FROM grant_child_tokens c WHERE c.jti = gt.jti) AS subject_is_child,
+               gpb.issuer_entity_id AS passport_issuer_entity_id,
+               gpb.attestation_id AS passport_attestation_id,
+               gpb.registry_attestation_id AS passport_registry_attestation_id,
+               gpb.external_credential_id AS passport_external_credential_id,
+               gpb.passport_hash, gpb.key_thumbprint AS passport_key_thumbprint,
+               gpb.acceptance_list_uri AS passport_acceptance_list_uri,
+               gpb.acceptance_list_idx AS passport_acceptance_list_idx,
+               gpb.passport_expires_at,
+               gpb.commerce_constraints AS passport_commerce_constraints
+        FROM grant_tokens gt
+        JOIN grants g ON g.id = gt.grant_id
+        JOIN agents a ON a.id = g.agent_id
+        LEFT JOIN grant_passport_bindings gpb ON gpb.grant_id = g.id
+        WHERE gt.jti = ${claims.jti}
+          AND g.developer_id = ${developerId}
+          AND g.protocol = 'grantex-v1'
+        FOR SHARE OF gt, g
+      `;
+      const row = rows[0];
+      if (!row || row['id'] !== claims.grnt) subjectRefused('subject_token_invalid', 'The subject token is not a grant token of this developer');
+      if (row['subject_revoked'] === true || row['status'] !== 'active') {
+        subjectRefused('subject_token_revoked', 'The subject token or its grant has been revoked');
+      }
+      if (new Date(row['expires_at'] as string).getTime() <= issuanceNow.getTime()
+          || new Date(row['subject_expires_at'] as string).getTime() <= issuanceNow.getTime()) {
+        subjectRefused('subject_token_expired', 'The subject token or its grant has expired');
+      }
+      if (row['agent_status'] !== 'active') subjectRefused('agent_inactive', 'The agent of the subject token is not active');
+      if (row['subject_is_child'] === true) {
+        subjectRefused('subject_is_child', 'A child grant is not exchanged again: exchange the parent grant token');
+      }
+
+      let binding: GrantPassportBinding | null;
+      let parentConstraints: CommerceConstraints | null = null;
+      try {
+        binding = bindingFromGrantRow(row);
+        if (binding !== null) parentConstraints = parseStoredConstraints(row['passport_commerce_constraints']);
+      } catch {
+        // A binding the registry did not write: refuse to issue rather than
+        // issue unbound or unconstrained.
+        throw new ChildGrantInternalError('Invalid grant passport binding');
+      }
+      // Child grants exist only for passport-bound parents (PRD §8.5).
+      if (binding === null) {
+        subjectRefused('not_passport_bound', 'Only a passport-bound grant is exchanged for a per-merchant child grant');
+      }
+      // Key equality (spec/agent-passport-1.0.md §7): the child keeps the
+      // parent's cnf.jkt, which is the passport's key.
+      if (row['agent_key_thumbprint'] !== binding.key_thumbprint || claims.cnf?.jkt !== binding.key_thumbprint) {
+        throw new ChildGrantInternalError('Invalid grant passport binding');
+      }
+
+      // An emergency stop's lockout over the grant, its agent or principal.
+      await assertIssuanceOpen(tx, {
+        developerId,
+        agentIds: [row['agent_id'] as string],
+        principalIds: [row['principal_id'] as string],
+        grantIds: [row['id'] as string],
+      }, { path: 'token_exchange', inTransaction: true, log: request.log });
+
+      // The same recheck as the code exchange and the refresh (§5): the
+      // issuer, the attestation, both status sources, the passport's and the
+      // attestation's exp, and the key. Refusals propagate with their code.
+      const { notAfter } = await recheckBindingAtIssuance(sql, tx, binding, row['agent_id'] as string,
+        { now: issuanceNow, rereadAllowed });
+
+      // Decision 3 and attenuation (child-grant.ts).
+      const childConstraints = attenuateConstraints(parentConstraints, exchange.merchant, exchange.authorizationDetails);
+
+      const grantScopes = row['scopes'] as string[];
+      scopes = exchange.scopes ?? claims.scp;
+      if (scopes.some((scope) => !claims.scp.includes(scope) || !grantScopes.includes(scope))) {
+        throw new ChildGrantError('invalid_scope', 'wider_scope', 'The requested scope exceeds the parent grant\'s');
+      }
+
+      exp = childGrantExpiry({
+        now: nowSeconds,
+        subjectExp: claims.exp,
+        grantExpiresAt: Math.floor(new Date(row['expires_at'] as string).getTime() / 1000),
+        notAfter: Math.floor(notAfter.getTime() / 1000),
+      });
+      if (exp <= nowSeconds) subjectRefused('subject_token_expired', 'The subject token or its grant has expired');
+
+      let toolsDetails: Array<Record<string, unknown>>;
+      try {
+        toolsDetails = narrowToolsAuthorizationDetails(row['authorization_details'] ?? null, scopes);
+      } catch {
+        throw new ChildGrantInternalError('Invalid grant authorization details');
+      }
+
+      grantId = row['id'] as string;
+      const expiresAt = new Date(exp * 1000);
+      // Signed before anything is written: a signer failure rolls back.
+      jwt = await signGrantToken({
+        sub: row['principal_id'] as string,
+        agt: row['agent_did'] as string,
+        dev: developerId,
+        clientId: row['agent_id'] as string,
+        scp: scopes,
+        jti: childJti,
+        grnt: grantId,
+        iat: nowSeconds,
+        aud: exchange.merchant,
+        cnf: { jkt: binding.key_thumbprint },
+        // RFC 8693 §4.1: the same agent acts with the same key, so no actor is
+        // added; the parent's actor chain, when it has one, is kept as it is.
+        ...(claims.act !== undefined ? { act: claims.act } : {}),
+        authorizationDetails: [...toolsDetails, commerceAuthorizationDetail(binding, childConstraints)],
+        parentJti: claims.jti,
+        exp,
+      });
+      await tx`
+        INSERT INTO grant_tokens (jti, grant_id, expires_at)
+        VALUES (${childJti}, ${grantId}, ${expiresAt})
+      `;
+      await tx`
+        INSERT INTO grant_child_tokens (jti, grant_id, developer_id, parent_jti, merchant_origin, constraints, expires_at)
+        VALUES (${childJti}, ${grantId}, ${developerId}, ${claims.jti}, ${exchange.merchant},
+                ${tx.json(constraintMembers(childConstraints) as never)}, ${expiresAt})
+      `;
+    }));
+  } catch (err) {
+    if (err instanceof ChildGrantError) return sendChildGrantRefusal(reply, request.id, err);
+    if (err instanceof PassportBindingError) {
+      // RFC 8693 §2.2.2: a subject token unacceptable by policy is
+      // invalid_request, answered as RFC 6749 §5.2 specifies, 400; the
+      // Appendix C code says why. status_stale is not a refusal of the
+      // request but the registry unable to answer now, and keeps its 503 so
+      // that a client retries rather than gives up.
+      return sendChildGrantRefusal(reply, request.id, {
+        statusCode: err.code === 'status_stale' ? err.statusCode : 400, error: 'invalid_request', code: err.code, reason: err.reason, message: err.message,
+      });
+    }
+    const refusal = issuanceRefusal(err);
+    if (refusal) return reply.status(refusal.statusCode).send({ ...refusal.body, requestId: request.id });
+    if (err instanceof ChildGrantInternalError) {
+      return reply.status(500).send({ message: err.message, code: 'INTERNAL_ERROR', requestId: request.id });
+    }
+    throw err;
+  }
+
+  emitEvent(developerId, 'token.issued', {
+    tokenId: childJti,
+    grantId,
+    merchant: exchange.merchant,
+    scopes,
+    expiresAt: new Date(exp * 1000).toISOString(),
+  }).catch(() => {});
+  incrementUsage(developerId, 'token_exchanges').catch(() => {});
+
+  // RFC 8693 §2.2.1. The child is sender-constrained by cnf.jkt (RFC 9449
+  // §6.1), hence DPoP; it is short-lived and gets no refresh token.
+  return reply.status(200).send({
+    access_token: jwt,
+    issued_token_type: ACCESS_TOKEN_TYPE,
+    token_type: 'DPoP',
+    expires_in: exp - nowSeconds,
+    scope: scopes.join(' '),
   });
 }

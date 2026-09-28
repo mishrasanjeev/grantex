@@ -62,7 +62,8 @@ export type IssuancePath =
   | 'oauth_par'
   | 'oauth_code'
   | 'oauth_refresh'
-  | 'oauth_token_exchange';
+  | 'oauth_token_exchange'
+  | 'token_exchange';
 
 /**
  * What a request would issue under. Every field is matched against the freeze

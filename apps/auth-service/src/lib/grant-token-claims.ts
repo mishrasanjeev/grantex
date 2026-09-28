@@ -14,8 +14,9 @@
  *   (`urn:grantex:tools:v1`), budget, and decision references
  *   (`urn:grantex:decision:v1`).
  * - `urn:grantex:grant`: Grantex's own grant record fields (`grant_id`,
- *   `agent_did`, `developer_id`, and for delegated grants `parent_grant_id`
- *   and `delegation_depth`) under a collision-resistant name.
+ *   `agent_did`, `developer_id`, for delegated grants `parent_grant_id`
+ *   and `delegation_depth`, and for a per-merchant child grant `parent_jti`,
+ *   the token it was exchanged from) under a collision-resistant name.
  *
  * Legacy aliases (`agt`, `dev`, `grnt`, `scp`, `parentAgt`, `parentGrnt`,
  * `delegationDepth`, `bdg`) are added while `GRANT_TOKEN_LEGACY_CLAIMS` is on:
@@ -83,6 +84,7 @@ export interface GrantTokenClaimsInput {
   delegationDepth?: number;
   bdg?: number;
   webauthnEvidence?: GrantWebAuthnEvidence;
+  parentJti?: string;
 }
 
 /**
@@ -100,6 +102,7 @@ export function buildGrantTokenClaims(
     ...(input.parentGrnt !== undefined ? { parent_grant_id: input.parentGrnt } : {}),
     ...(input.delegationDepth !== undefined ? { delegation_depth: input.delegationDepth } : {}),
     ...(input.webauthnEvidence !== undefined ? { webauthn: input.webauthnEvidence } : {}),
+    ...(input.parentJti !== undefined ? { parent_jti: input.parentJti } : {}),
   };
   const unrepresentable = hasUnrepresentableScope(input.scp);
   return {
@@ -194,6 +197,7 @@ export interface NormalizedGrantTokenClaims {
   delegationDepth?: number;
   act?: ActorClaim;
   webauthnEvidence?: GrantWebAuthnEvidence;
+  parentJti?: string;
 }
 
 /**
@@ -251,6 +255,8 @@ export function normalizeGrantTokenClaims(payload: Record<string, unknown>): Nor
     }
   }
 
+  const parentJti = optionalString(grant, 'parent_jti', where);
+
   if (agt === undefined || dev === undefined || scp === undefined) return null;
   return {
     agt,
@@ -262,6 +268,7 @@ export function normalizeGrantTokenClaims(payload: Record<string, unknown>): Nor
     ...(delegationDepth !== undefined ? { delegationDepth } : {}),
     ...(act !== undefined ? { act } : {}),
     ...(webauthnEvidence !== undefined ? { webauthnEvidence } : {}),
+    ...(parentJti !== undefined ? { parentJti } : {}),
   };
 }
 

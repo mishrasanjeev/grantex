@@ -61,6 +61,7 @@ import {
 } from './passport-verify.js';
 import { TOKEN_STATUS } from './status-list-codec.js';
 import { computeAgentTrust } from './trust-level.js';
+import { constraintMembers, parseStoredConstraints, type CommerceConstraints } from './child-grant.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -155,6 +156,12 @@ export interface PassportBinding {
   /** The passport's exp, in seconds since the epoch. */
   passport_exp: number;
   consent: PassportConsentView;
+  /**
+   * The merchants and limits the request named in its urn:grantex:commerce:v1
+   * authorization_details entry (spec/passport-binding.md §8.1), when it
+   * named any. Added by the route, not by the passport checks.
+   */
+  commerce?: CommerceConstraints;
 }
 
 export type GrantPassportBinding = Omit<PassportBinding, 'consent'>;
@@ -560,8 +567,15 @@ export function bindingFromGrantRow(row: Record<string, unknown>): GrantPassport
   });
 }
 
-/** The authorization_details entry that carries the binding (owner decision 1). */
-export function commerceAuthorizationDetail(binding: GrantPassportBinding): Record<string, unknown> {
+/**
+ * The authorization_details entry that carries the binding (owner decision 1)
+ * and, when the grant has them, its commerce constraints (decision 3,
+ * spec/passport-binding.md §8.1): allowed_merchants, amount_range, budget.
+ */
+export function commerceAuthorizationDetail(
+  binding: GrantPassportBinding,
+  constraints: CommerceConstraints | null = null,
+): Record<string, unknown> {
   return {
     type: COMMERCE_DETAIL_TYPE,
     passport: {
@@ -571,7 +585,19 @@ export function commerceAuthorizationDetail(binding: GrantPassportBinding): Reco
       key_thumbprint: binding.key_thumbprint,
     },
     acceptance_status: { uri: binding.acceptance.uri, idx: binding.acceptance.idx },
+    ...(constraints !== null ? constraintMembers(constraints) : {}),
   };
+}
+
+/**
+ * The commerce constraints stored with an authorization request's binding
+ * (auth_requests.passport_binding.commerce), or null when it named none.
+ * Throws on a value the registry did not write.
+ */
+export function constraintsOfStoredBinding(value: unknown): CommerceConstraints | null {
+  const stored = typeof value === 'string' ? JSON.parse(value) as unknown : value;
+  if (!isObject(stored)) throw new Error('stored passport binding is not an object');
+  return parseStoredConstraints(stored['commerce']);
 }
 
 /**
@@ -654,22 +680,27 @@ export async function recheckBindingAtIssuance(
   return { notAfter: new Date(Math.min(passportExp.getTime(), record.exp.getTime())) };
 }
 
-/** Record a bound grant (migration 125), in the transaction that writes the grant. */
+/**
+ * Record a bound grant (migration 125) and its commerce constraints
+ * (migration 126), in the transaction that writes the grant.
+ */
 export async function insertGrantBinding(
   tx: TxSql,
   grant: { grantId: string; developerId: string; agentId: string },
   binding: GrantPassportBinding,
+  constraints: CommerceConstraints | null = null,
 ): Promise<void> {
   await tx`
     INSERT INTO grant_passport_bindings (
       grant_id, developer_id, agent_id, issuer_entity_id, attestation_id, registry_attestation_id,
       external_credential_id, passport_hash, key_thumbprint, acceptance_list_uri, acceptance_list_idx,
-      passport_expires_at
+      passport_expires_at, commerce_constraints
     ) VALUES (
       ${grant.grantId}, ${grant.developerId}, ${grant.agentId}, ${binding.issuer}, ${binding.attestation_id},
       ${binding.registry_attestation_id}, ${binding.external_credential_id}, ${binding.hash},
       ${binding.key_thumbprint}, ${binding.acceptance.uri}, ${binding.acceptance.idx},
-      ${new Date(binding.passport_exp * 1000)}
+      ${new Date(binding.passport_exp * 1000)},
+      ${constraints === null ? null : tx.json(constraints as never)}
     )`;
 }
 
