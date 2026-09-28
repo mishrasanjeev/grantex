@@ -43,7 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Specified in `spec/verification.md` section 7; the relying-party guide
   `docs/relying-parties/verifying-agents.md` has a Python section whose
   examples the package's tests run. Wired into `make check`, `make test` and
-  the Python integrations CI job (3.9 and 3.12). FINDINGS G-135 to G-139.
+  the Python integrations CI job (3.9 and 3.12). FINDINGS G-135 to G-138.
 
 ### Passport binding at grant issuance (auth service)
 - `POST /v1/authorize` takes an Agent Passport in `passport` when

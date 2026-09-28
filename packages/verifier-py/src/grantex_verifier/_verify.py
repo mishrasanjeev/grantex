@@ -501,6 +501,9 @@ class _Run:
                 payments_rails=self.config.payments_rails,
                 allow_eddsa=self.config.allow_eddsa,
                 clock_skew_seconds=CREDENTIAL_CLOCK_SKEW_SECONDS,
+                # The passport.status check below reads the issuer's list itself,
+                # under the manifest's status_list_base; it always runs.
+                status_checked_by="caller",
             )
         except PassportError as error:
             raise Refusal(error.code, "passport: %s (%s)" % (error, error.reason)) from error
