@@ -164,6 +164,21 @@ flow before moving traffic. Codes and callback bindings are single-use.
 The package includes a consent page, but it does not replace Grantex's live
 principal passkey ceremony. Follow [the complete deployment guide](/mcp-auth).
 
+## MCP Auth 3 to 4
+
+Version 4 requires `resolvePrincipal(request)`, derived from a verified host
+session, and `currentGrant: grantexCurrentGrantVerifier(grantex)` on resource
+guards alongside shared `revocations`. OAuth client IDs are not human IDs.
+Approval/callback recheck the same principal; exchange/refresh preserve the
+upstream subject. Login and passkey enrollment remain host/Grantex ceremonies.
+
+Drain pending requests and upgrade all replicas together. Reauthorize legacy
+identity-unbound codes and refresh bindings; do not mix v3/v4 against one state
+namespace. Existing JSON state and SQL migrations support the new fields.
+Explicit evaluation opt-outs are `allowLegacyClientPrincipal: true` and
+`currentGrant: 'none'`; do not use them to claim secure human consent.
+See [the full v4 migration](/mcp-auth#migrating-from-3-x-to-4-0).
+
 ## Verification checklist
 
 1. Install exact versions in a clean environment and check package metadata.

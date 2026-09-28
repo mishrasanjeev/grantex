@@ -82,6 +82,11 @@ export interface DecisionVerifier {
   verify(check: DecisionCheck): Promise<DecisionOutcome>;
 }
 
+export interface CurrentGrantVerifier {
+  /** Verify current authority at its trusted issuer; throws on service failure. */
+  verify(token: string): Promise<boolean>;
+}
+
 export interface McpResourceGuardOptions {
   /** Expected `iss` — the Grantex issuer that signs grant tokens. */
   issuer: string;
@@ -112,6 +117,8 @@ export interface McpResourceGuardOptions {
    * `'none'` to opt out explicitly (a start-up warning is still logged).
    */
   revocations: RevocationChecker | 'none';
+  /** Required in v4: issuer-side current authority, or an explicit evaluation opt-out. */
+  currentGrant: CurrentGrantVerifier | 'none';
   /**
    * Tool requirements. When set, every JSON-RPC `tools/call` (single or
    * batched) must name a known tool the grant covers; anything else is
@@ -159,6 +166,7 @@ export type GuardDenialReason =
   | 'invalid_token'
   | 'grant_revoked'
   | 'revocation_unavailable'
+  | 'grant_state_unavailable'
   | 'insufficient_scope'
   | 'tool_not_granted'
   | 'manifest_unknown_tool'
@@ -285,6 +293,14 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
     throw new Error('requireMcpAuth: `revocations` must have an isTokenRevoked(jti) function, or be "none".');
   }
   const algorithms = grantTokenAlgorithms(options.algorithms, 'mcp-auth resource guard');
+  const currentGrant = options.currentGrant;
+  if (currentGrant === 'none') {
+    try {
+      (options.warn ?? console.warn)('requireMcpAuth: currentGrant: "none" skips issuer-side current grant checks. Evaluation only; locally valid revoked grants may remain usable.');
+    } catch { /* Observability must not change authorization. */ }
+  } else if (!currentGrant || typeof currentGrant.verify !== 'function') {
+    throw new Error('requireMcpAuth: `currentGrant` is required; use grantexCurrentGrantVerifier(grantex), or "none" for evaluation only');
+  }
   const requiredScopes = options.scopes ?? [];
   const tools = options.tools;
 
@@ -386,6 +402,23 @@ export function createMcpResourceGuard(options: McpResourceGuardOptions): (reque
         return deny(401, 'grant_revoked', invalidTokenChallenge('Token has been revoked', resourceMetadataUrl), {
           error: 'unauthorized',
           error_description: 'Token has been revoked',
+        });
+      }
+    }
+
+    if (currentGrant !== 'none') {
+      let active: boolean;
+      try {
+        active = await currentGrant.verify(token);
+      } catch {
+        return deny(503, 'grant_state_unavailable', undefined, {
+          error: 'temporarily_unavailable',
+          error_description: 'Current grant authority could not be checked; the request was refused',
+        });
+      }
+      if (active !== true) {
+        return deny(401, 'grant_revoked', invalidTokenChallenge('Grant is not active', resourceMetadataUrl), {
+          error: 'unauthorized', error_description: 'Grant is not active',
         });
       }
     }

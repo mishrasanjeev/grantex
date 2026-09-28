@@ -20,7 +20,7 @@ const load = async (name) => {
 const versions = new Map([
   ['@grantex/sdk', '0.8.0'], ['@grantex/cli', '0.4.0'],
   ['@grantex/gateway', '0.2.0'], ['@grantex/adapters', '0.2.0'],
-  ['@grantex/strands', '0.2.0'], ['@grantex/mcp-auth', '3.0.0'],
+  ['@grantex/strands', '0.2.0'], ['@grantex/mcp-auth', '4.0.0'],
 ]);
 for (const [name, version] of versions) {
   const manifest = JSON.parse(readFileSync(resolve(root, 'node_modules', name, 'package.json'), 'utf8'));

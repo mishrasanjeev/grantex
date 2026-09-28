@@ -1,6 +1,6 @@
 import express from 'express';
 import { toolPolicyFromManifests } from '@grantex/mcp-auth';
-import type { DecisionVerifier, LoadedManifest, RevocationChecker } from '@grantex/mcp-auth';
+import type { CurrentGrantVerifier, DecisionVerifier, LoadedManifest, RevocationChecker } from '@grantex/mcp-auth';
 import { protectedResourceMetadataHandler, requireMcpAuth } from '@grantex/mcp-auth/express';
 import type { McpAuthRequest } from '@grantex/mcp-auth/express';
 
@@ -8,6 +8,7 @@ export function createMcpApp(options: {
   manifest: LoadedManifest;
   /** The authorization server's storage: tokens revoked there are refused here. */
   revocations: RevocationChecker;
+  currentGrant: CurrentGrantVerifier;
   decisions: DecisionVerifier;
   grantexIssuer: string;
 }) {
@@ -28,6 +29,7 @@ export function createMcpApp(options: {
       issuer: options.grantexIssuer,
       audience: resource,
       revocations: options.revocations,
+      currentGrant: options.currentGrant,
       // A tools/call outside the grant is refused here with 403.
       tools: toolPolicyFromManifests([options.manifest]),
       // Tools marked requires_decision also need a person's decision grant.
