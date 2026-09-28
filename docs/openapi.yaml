@@ -58,6 +58,8 @@ tags:
     description: End-user consent UI and approval flow
   - name: Event Bridge
     description: Provider events (SSF/CAEP SETs, signed webhooks) mapped to grant actions
+  - name: Registry Status
+    description: The registry's attestation-acceptance status lists (spec/registry-federation.md). Public and rate-limited per client. Served only when REGISTRY_PUBLIC_ENDPOINTS_ENABLED is exactly true (default off); otherwise these paths are not routes.
   - name: Decision Grants
     description: Decisions a named person approves for one semantic action (spec/decision-grant.md). Disabled unless DECISION_GRANTS_ENABLED=true.
   - name: Tokens
@@ -1726,6 +1728,189 @@ paths:
                     type: array
                     items:
                       type: object
+
+  # ── Registry status lists ──────────────────────────────────────────
+  /status/attestations/{list}:
+    get:
+      operationId: getAttestationAcceptanceTokenStatusList
+      tags: [Registry Status]
+      summary: Attestation acceptance as a Token Status List
+      description: |
+        A Token Status List token (draft-ietf-oauth-status-list-21 §5.1) saying, for every
+        attestation registered with the registry, whether the registry accepts it: 0 VALID,
+        1 INVALID (withdrawn, final), 2 SUSPENDED, two bits per entry. `sub` is this URL; `ttl` is
+        600 seconds, or 60 for one hour after any acceptance change or suspension. Signed with the
+        platform signing key published at `/.well-known/jwks.json`. No authentication; rate-limited
+        per client address (300 requests a minute). A store that cannot be read is a 5xx, never an
+        older copy.
+
+        Served only when the auth service runs with `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`
+        (exactly `true`; default off). With it off this path is not a route and answers like any
+        unknown path. CORS: any origin may read it without credentials; an `OPTIONS` preflight is
+        answered `204` with `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET`
+        and `Access-Control-Allow-Headers: If-None-Match`, and `200` and `304` responses carry
+        `Access-Control-Expose-Headers: ETag`.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string, pattern: "^racl_[0-9A-HJKMNP-TV-Z]{26}$" }, description: Acceptance list id }
+        - { name: If-None-Match, in: header, schema: { type: string }, description: ETag of a copy already held }
+      responses:
+        "200":
+          description: The signed status list, in JWS compact serialization
+          headers:
+            ETag: { schema: { type: string }, description: "Weak entity tag over the protected header and claims; changes when the list changes or is re-signed (iat moves every five minutes)" }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`, so a browser relying party can read the tag and revalidate" }
+            Cache-Control: { schema: { type: string }, description: "`public, max-age=<ttl>`" }
+          content:
+            application/statuslist+jwt:
+              schema:
+                type: string
+        "304":
+          description: Unchanged since the ETag
+          headers:
+            ETag: { schema: { type: string }, description: The current entity tag }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`" }
+        "404":
+          description: Not one of the registry's lists
+        "429":
+          description: Too many requests from this client
+    options:
+      operationId: preflightAttestationAcceptanceTokenStatusList
+      tags: [Registry Status]
+      summary: CORS preflight
+      description: |
+        Answers a browser's CORS preflight for a conditional `GET` (Fetch standard CORS protocol;
+        `If-None-Match` is not a CORS-safelisted request-header). Requires `Origin` and
+        `Access-Control-Request-Method`; an `OPTIONS` request without them is a 400. Served only
+        when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string }, description: Acceptance list id }
+      responses:
+        "204":
+          description: Preflight accepted
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string }, description: "`*`" }
+            Access-Control-Allow-Methods: { schema: { type: string }, description: "`GET`" }
+            Access-Control-Allow-Headers: { schema: { type: string }, description: "`If-None-Match`" }
+            Access-Control-Max-Age: { schema: { type: string }, description: "`600`" }
+        "400":
+          description: Not a CORS preflight
+  /status/attestations/{list}/bitstring:
+    get:
+      operationId: getAttestationAcceptanceRevocationBitstring
+      tags: [Registry Status]
+      summary: Withdrawn attestations as a Bitstring Status List credential
+      description: |
+        A BitstringStatusListCredential (W3C Bitstring Status List v1.0 §2.2) with statusPurpose
+        `revocation`: a bit is set for every INVALID entry of the same list. Secured as a VC-JWT
+        (W3C VC-JOSE-COSE §3.1.1, `typ` `vc+jwt`, `cty` `vc`) with the platform signing key.
+        `credentialSubject.ttl` is 600000 milliseconds, or 60000 for one hour after any acceptance
+        change or suspension. Built from the registry's store, not from the Token Status List.
+
+        Served only when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true` (exactly `true`; default off),
+        with the same CORS behaviour as `/status/attestations/{list}`.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string, pattern: "^racl_[0-9A-HJKMNP-TV-Z]{26}$" }, description: Acceptance list id }
+        - { name: If-None-Match, in: header, schema: { type: string }, description: ETag of a copy already held }
+      responses:
+        "200":
+          description: The signed credential, in JWS compact serialization
+          headers:
+            ETag: { schema: { type: string }, description: "Weak entity tag over the protected header and claims; changes when the list changes or is re-signed (iat moves every five minutes)" }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`, so a browser relying party can read the tag and revalidate" }
+            Cache-Control: { schema: { type: string }, description: "`public, max-age=<ttl in seconds>`" }
+          content:
+            application/vc+jwt:
+              schema:
+                type: string
+        "304":
+          description: Unchanged since the ETag
+          headers:
+            ETag: { schema: { type: string }, description: The current entity tag }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`" }
+        "404":
+          description: Not one of the registry's lists
+        "429":
+          description: Too many requests from this client
+    options:
+      operationId: preflightAttestationAcceptanceRevocationBitstring
+      tags: [Registry Status]
+      summary: CORS preflight
+      description: |
+        Answers a browser's CORS preflight for a conditional `GET` (Fetch standard CORS protocol;
+        `If-None-Match` is not a CORS-safelisted request-header). Requires `Origin` and
+        `Access-Control-Request-Method`; an `OPTIONS` request without them is a 400. Served only
+        when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string }, description: Acceptance list id }
+      responses:
+        "204":
+          description: Preflight accepted
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string }, description: "`*`" }
+            Access-Control-Allow-Methods: { schema: { type: string }, description: "`GET`" }
+            Access-Control-Allow-Headers: { schema: { type: string }, description: "`If-None-Match`" }
+            Access-Control-Max-Age: { schema: { type: string }, description: "`600`" }
+        "400":
+          description: Not a CORS preflight
+  /status/attestations/{list}/bitstring/suspension:
+    get:
+      operationId: getAttestationAcceptanceSuspensionBitstring
+      tags: [Registry Status]
+      summary: Suspended attestations as a Bitstring Status List credential
+      description: |
+        As `/status/attestations/{list}/bitstring`, with statusPurpose `suspension`: a bit is set
+        for every SUSPENDED entry. Served only when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`
+        (exactly `true`; default off), with the same CORS behaviour.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string, pattern: "^racl_[0-9A-HJKMNP-TV-Z]{26}$" }, description: Acceptance list id }
+        - { name: If-None-Match, in: header, schema: { type: string }, description: ETag of a copy already held }
+      responses:
+        "200":
+          description: The signed credential, in JWS compact serialization
+          headers:
+            ETag: { schema: { type: string }, description: "Weak entity tag over the protected header and claims; changes when the list changes or is re-signed (iat moves every five minutes)" }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`, so a browser relying party can read the tag and revalidate" }
+            Cache-Control: { schema: { type: string }, description: "`public, max-age=<ttl in seconds>`" }
+          content:
+            application/vc+jwt:
+              schema:
+                type: string
+        "304":
+          description: Unchanged since the ETag
+          headers:
+            ETag: { schema: { type: string }, description: The current entity tag }
+            Access-Control-Expose-Headers: { schema: { type: string }, description: "`ETag`" }
+        "404":
+          description: Not one of the registry's lists
+        "429":
+          description: Too many requests from this client
+    options:
+      operationId: preflightAttestationAcceptanceSuspensionBitstring
+      tags: [Registry Status]
+      summary: CORS preflight
+      description: |
+        Answers a browser's CORS preflight for a conditional `GET` (Fetch standard CORS protocol;
+        `If-None-Match` is not a CORS-safelisted request-header). Requires `Origin` and
+        `Access-Control-Request-Method`; an `OPTIONS` request without them is a 400. Served only
+        when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`.
+      security: []
+      parameters:
+        - { name: list, in: path, required: true, schema: { type: string }, description: Acceptance list id }
+      responses:
+        "204":
+          description: Preflight accepted
+          headers:
+            Access-Control-Allow-Origin: { schema: { type: string }, description: "`*`" }
+            Access-Control-Allow-Methods: { schema: { type: string }, description: "`GET`" }
+            Access-Control-Allow-Headers: { schema: { type: string }, description: "`If-None-Match`" }
+            Access-Control-Max-Age: { schema: { type: string }, description: "`600`" }
+        "400":
+          description: Not a CORS preflight
 
   # ── OAuth Agent Grants ─────────────────────────────────────────────
   /.well-known/oauth-authorization-server:
