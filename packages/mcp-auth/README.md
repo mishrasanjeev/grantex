@@ -40,14 +40,14 @@ middleware.
 > token exchange, so end-to-end issuance can fail against the real backend.
 > Middleware and introspection verify signatures/claims but do not perform a live
 > revocation lookup. See the
-> [feature guide](https://docs.grantex.dev/features/mcp-auth-server) for the full
+> [legacy feature guide](https://docs.grantex.dev/legacy/mcp-auth-server-2) for the full
 > current-status matrix.
 
 > [!NOTE]
 > Version **3.0.0** adds Postgres/Redis state, the MCP authorization
 > specification (2026-07-28) surface, a rendered consent page and tool refusal
 > at the MCP server, with breaking changes. Sections marked **3.0** describe
-> it; see [the 3.0 deployment guide](../../docs/mcp-auth.md) for deployment,
+> it; see [the 3.0 deployment guide](https://docs.grantex.dev/mcp-auth) for deployment,
 > consent-page customisation and migrating from 2.x.
 
 ## What 2.0.2 implements
@@ -416,7 +416,7 @@ claims of the [grant token profile](../../spec/grant-token-0.6.md) first:
 `scopes` from the space-delimited `scope`, the Grantex fields from
 `urn:grantex:grant`, with the legacy claims as a fallback (a pre-0.6 token is
 read from `scp`). It therefore keeps working when the issuer stops sending the
-legacy claims (`GRANT_TOKEN_LEGACY_CLAIMS=false`, the 0.7 default). It also
+legacy claims (`GRANT_TOKEN_LEGACY_CLAIMS=false`, explicitly configured). It also
 requires `typ: at+jwt` (absent only on a pre-0.6 token), and refuses a token
 that is not a grant token (neither `urn:grantex:grant` nor `scp`), a 0.6
 token with no agent or developer, a claim that is `null` or mistyped (legacy

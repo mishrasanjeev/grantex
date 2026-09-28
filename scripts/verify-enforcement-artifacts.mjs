@@ -30,6 +30,11 @@ for (const [name, version] of versions) {
   assert.match(readFileSync(resolve(root, 'node_modules', name, 'NOTICE'), 'utf8'), /Orchestrum Technologies LLP/);
   assert.ok(readFileSync(resolve(root, 'node_modules', name, 'README.md'), 'utf8').includes('migration-enforcement'), `${name} migration documentation`);
 }
+assert.doesNotMatch(
+  readFileSync(resolve(root, 'node_modules/@grantex/sdk/README.md'), 'utf8'),
+  /console\.log\((?:token|delegation)\.(?:grantToken|refreshToken)\)/,
+  'SDK documentation must not log bearer credentials',
+);
 const sdk = await load('@grantex/sdk');
 const jose = await load('jose');
 assert.equal(sdk.DEFAULT_REVOCATION_CHECK, 'online');
@@ -82,6 +87,10 @@ try {
     .setIssuer(issuer).setAudience(audience).setSubject('principal_release')
     .setJti('tok_release').setIssuedAt().setExpirationTime('5m').sign(key.privateKey);
   const call = { grantToken: token, connector: 'payments', tool: 'pay' };
+  const verified = await sdk.verifyGrantToken(token, {
+    jwksUri: `${issuer}/.well-known/jwks.json`, issuer, audience,
+  });
+  assert.equal(verified.tokenId, 'tok_release', 'Audience-bound README verification flow');
   const allowed = await client.enforce({ ...call, amount: 10 });
   assert.equal(allowed.allowed, true, JSON.stringify(allowed));
   assert.equal(statusCalls, 1, 'Default must query current status');

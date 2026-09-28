@@ -43,7 +43,7 @@ npm install @grantex/sdk@0.8.0
 ```typescript
 import { Grantex, verifyGrantToken } from '@grantex/sdk';
 
-const grantex = new Grantex({ apiKey: 'YOUR_API_KEY' });
+const grantex = new Grantex({ apiKey: 'YOUR_API_KEY', audience: 'https://api.merchant.example' });
 
 // 1. Register an agent
 const agent = await grantex.agents.register({
@@ -54,22 +54,24 @@ const agent = await grantex.agents.register({
 
 // 2. Request authorization
 const { consentUrl } = await grantex.authorize({
-  agentId: agent.id,
+  agentId: agent.agentId,
   userId: 'usr_01J...',
   scopes: ['email:read', 'email:send'],
+  audience: 'https://api.merchant.example',
 });
 // Redirect the user to consentUrl — they approve in plain language
 
 // 3. Exchange authorization code for a grant token
 // (your redirect callback receives the `code` after user approves)
-const token = await grantex.tokens.exchange({ code, agentId: agent.id });
-console.log(token.grantToken);  // RS256-signed JWT
+const token = await grantex.tokens.exchange({ code, agentId: agent.agentId });
+// Treat token.grantToken as a bearer credential; do not log it.
 console.log(token.scopes);     // ['email:read', 'email:send']
 console.log(token.grantId);    // 'grnt_01J...'
 
 // 4. Verify locally using keys retrieved from the issuer's JWKS
 const grant = await verifyGrantToken(token.grantToken, {
   jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  audience: 'https://api.merchant.example',
 });
 console.log(grant.principalId);  // 'usr_01J...'
 
@@ -456,7 +458,7 @@ const delegation = await grantex.grants.delegate({
   expiresIn: '1h',                // optional, cannot exceed parent
 });
 
-console.log(delegation.grantToken); // new JWT for the sub-agent
+// Deliver delegation.grantToken securely to the sub-agent; do not log it.
 console.log(delegation.grantId);
 ```
 
@@ -486,11 +488,11 @@ const token = await grantex.tokens.exchange({
   agentId: 'ag_01J...',
 });
 
-console.log(token.grantToken);   // RS256-signed JWT — pass this to your agent
+// Deliver token.grantToken securely to the agent; do not log it.
 console.log(token.grantId);      // grant record ID
 console.log(token.scopes);       // granted scopes
 console.log(token.expiresAt);    // ISO 8601 expiry
-console.log(token.refreshToken); // for token refresh
+// Store token.refreshToken securely for refresh; do not log it.
 ```
 
 **Returns**: `ExchangeTokenResponse`
