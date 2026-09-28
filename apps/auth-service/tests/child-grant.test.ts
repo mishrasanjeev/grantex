@@ -10,6 +10,9 @@
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
+import { exportJWK, generateKeyPair, SignJWT } from 'jose';
+import { tokenExchangeDuration, tokenExchangeTotal } from '../src/lib/metrics.js';
 import {
   CHILD_GRANT_MAX_LIFETIME_SECONDS,
   ChildGrantError,
@@ -21,7 +24,7 @@ import {
   parseStoredConstraints,
   parseTokenExchangeRequest,
 } from '../src/lib/registry/child-grant.js';
-import { authHeader, buildTestApp, seedAuth } from './helpers.js';
+import { authHeader, buildTestApp, mockRedis, seedAuth, sqlMock } from './helpers.js';
 
 const ACCESS_TOKEN = 'urn:ietf:params:oauth:token-type:access_token';
 const COMMERCE = 'urn:grantex:commerce:v1';
@@ -291,3 +294,87 @@ describe('POST /v1/token with PASSPORT_BOUND_GRANTS_ENABLED off', () => {
     expect(res.statusCode).toBe(415);
   });
 });
+
+describe('POST /v1/token token exchange: proof of the bound key (RFC 9449), flag on', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildTestApp();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const TOKEN_ENDPOINT = 'https://grantex.dev/v1/token';
+  const exchange = {
+    grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+    subject_token: 'eyJ.subject.token',
+    subject_token_type: ACCESS_TOKEN,
+    resource: MERCHANT,
+  };
+
+  async function proof(claims: Record<string, unknown> = {}): Promise<string> {
+    const { privateKey, publicKey } = await generateKeyPair('ES256', { extractable: true });
+    const jwk = await exportJWK(publicKey);
+    return new SignJWT({ htm: 'POST', htu: TOKEN_ENDPOINT, jti: randomUUID(), iat: Math.floor(Date.now() / 1000), ...claims })
+      .setProtectedHeader({ typ: 'dpop+jwt', alg: 'ES256', jwk })
+      .sign(privateKey);
+  }
+
+  async function send(headers: Record<string, string> = {}) {
+    vi.stubEnv('PASSPORT_BOUND_GRANTS_ENABLED', 'true');
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST', url: '/v1/token',
+      headers: { ...authHeader(), 'content-type': 'application/x-www-form-urlencoded', ...headers },
+      payload: new URLSearchParams(exchange).toString(),
+    });
+    return res;
+  }
+
+  it('refuses an exchange without a DPoP proof, before reading the subject token', async () => {
+    const res = await send();
+    expect(res.statusCode, res.body).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'invalid_dpop_proof', code: 'invalid_dpop_proof', reason: 'dpop_proof_missing' });
+    expect(res.json<Record<string, unknown>>()['error_description']).toEqual(expect.any(String));
+    expect(res.headers['cache-control']).toBe('no-store');
+    // Only the API key was looked up: nothing about the subject was read.
+    expect(sqlMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a proof for another method or another URI', async () => {
+    for (const [claims, reason] of [
+      [{ htm: 'GET' }, 'dpop_htm_mismatch'],
+      [{ htu: 'https://grantex.dev/oauth/token' }, 'dpop_htu_mismatch'],
+    ] as const) {
+      const res = await send({ dpop: await proof(claims) });
+      expect(res.statusCode, res.body).toBe(400);
+      expect(res.json(), JSON.stringify(claims)).toMatchObject({ error: 'invalid_dpop_proof', code: 'invalid_dpop_proof', reason });
+    }
+  });
+
+  it('refuses a replayed proof (the jti store already holds it)', async () => {
+    mockRedis.set.mockResolvedValue(null);
+    const res = await send({ dpop: await proof() });
+    expect(res.statusCode, res.body).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'invalid_dpop_proof', reason: 'dpop_proof_replayed' });
+  });
+
+  it('records the exchange in the token exchange metrics, refusals included', async () => {
+    // prom-client is mocked (tests/setup.ts): the counter's inc and the
+    // histogram's timer are spies.
+    const endTimer = vi.fn();
+    vi.mocked(tokenExchangeDuration.startTimer).mockReturnValueOnce(endTimer as never);
+    vi.mocked(tokenExchangeTotal.inc).mockClear();
+    const res = await send();
+    expect(res.statusCode, res.body).toBe(400);
+    // The mocked counters share one inc: keep the calls with a status label.
+    expect(statusCalls()).toEqual([{ status: 'failed' }]);
+    expect(endTimer).toHaveBeenCalledTimes(1);
+  });
+});
+
+function statusCalls(): unknown[] {
+  return vi.mocked(tokenExchangeTotal.inc).mock.calls
+    .map((call) => call[0] as unknown)
+    .filter((labels) => typeof labels === 'object' && labels !== null && 'status' in labels);
+}

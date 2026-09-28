@@ -111,7 +111,9 @@ names them, as exact origins, in the authorization request's
 The grant token carries them in its commerce entry. It is not what the agent
 shows a merchant. Before it checks out at one, the agent's developer
 exchanges the grant token (RFC 8693 token exchange on `POST /v1/token`) for a
-**child grant** for that merchant alone:
+**child grant** for that merchant alone. The request carries a `DPoP` proof
+(RFC 9449) signed with the passport's key, the parent's `cnf.jkt`: the
+developer's API key and a copy of the parent token are not enough.
 
 ```json
 {

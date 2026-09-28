@@ -66,10 +66,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   invalid_authorization_details`. The grant token's commerce entry carries
   them after `acceptance_status`, at issuance and refresh. Off, the member is
   ignored as before.
+- With the flag on, `GET /v1/consent/{id}` returns those constraints as
+  `commerceConstraints` (`allowedMerchants`, and `amountRange` and `budget`
+  when named) next to `agentPassport`, and the consent page shows the
+  merchants, the amount per payment and the total budget before the
+  Principal decides. Absent when the request named none, and with the flag
+  off.
 - With the flag on, `POST /v1/token` takes an RFC 8693 token exchange
   (`grant_type=urn:ietf:params:oauth:grant-type:token-exchange`,
   form-encoded or JSON) whose subject token is a passport-bound grant's
-  token, and issues a child grant for one merchant: `aud` the merchant
+  token, with a `DPoP` proof (RFC 9449) signed with the key the subject
+  token is bound to (`cnf.jkt`): `htm` `POST`, `htu` the token endpoint,
+  fresh, and not replayed. A missing, invalid, stale or replayed proof, or
+  one for another key, is refused `400 invalid_dpop_proof` with a `reason`,
+  before anything is written. It then issues a child grant for one merchant: `aud` the merchant
   (`audience_mismatch` unless it is one of `allowed_merchants`), at most
   900 s and never beyond the parent, the passport or its attestation, the
   parent's `cnf.jkt`, passport reference, acceptance status and `act`,
@@ -80,7 +90,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   revoking the grant revokes it, and a budget debit made with its grant id is
   taken from the parent. Refusals are RFC 6749 §5.2 error responses, `400`
   with the Appendix C code in `code` (`503` for `status_stale`). Off, a token
-  exchange is answered as before (`400`, and `415` for a form body).
+  exchange is answered as before (`400`, and `415` for a form body). A child
+  exchange is counted in `grantex_token_exchange_total` (`status` `success`
+  or `failed`) and timed in `grantex_token_exchange_duration_seconds`, as a
+  code exchange is.
 - `POST /v1/tokens/revoke` also revokes, in the same transaction, the child
   grants exchanged from the revoked token, including one whose exchange was
   still committing (none exist until the flag issues one).

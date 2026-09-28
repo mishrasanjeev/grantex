@@ -4,7 +4,25 @@ import { describeScope } from '../lib/scopes.js';
 import { describePurpose } from '../lib/purpose.js';
 import { config } from '../config.js';
 import { newAuthorizationCode } from '../lib/ids.js';
-import { consentViewOf } from '../lib/registry/passport-binding.js';
+import { consentViewOf, constraintsOfStoredBinding } from '../lib/registry/passport-binding.js';
+import type { CommerceConstraints } from '../lib/registry/child-grant.js';
+
+/**
+ * The commerce constraints an authorization request named
+ * (auth_requests.passport_binding.commerce; spec/passport-binding.md §6,
+ * §8.1), for the consent view, or null when it named none. Shown only with
+ * PASSPORT_BOUND_GRANTS_ENABLED on.
+ */
+function commerceConstraintsView(binding: unknown): Record<string, unknown> | null {
+  if (!config.passportBoundGrantsEnabled || binding === null || binding === undefined) return null;
+  const constraints: CommerceConstraints | null = constraintsOfStoredBinding(binding);
+  if (constraints === null) return null;
+  return {
+    allowedMerchants: constraints.allowed_merchants,
+    ...(constraints.amount_range !== undefined ? { amountRange: constraints.amount_range } : {}),
+    ...(constraints.budget !== undefined ? { budget: constraints.budget } : {}),
+  };
+}
 
 const CONSENT_CSP = [
   "default-src 'self'",
@@ -309,6 +327,18 @@ const CONSENT_HTML = `<!DOCTYPE html>
         (data.agentPassport.declaredLimits ?
           '<div><strong>Declared limits:</strong><pre>' + esc(JSON.stringify(data.agentPassport.declaredLimits, null, 2)) + '</pre></div>' : '') +
       '</div>' : '') +
+    (data.commerceConstraints ?
+      '<div class="request-meta" id="commerce-constraints">' +
+        '<div class="scopes-label">Where and how much</div>' +
+        '<div><strong>Allowed merchants:</strong> ' + esc((data.commerceConstraints.allowedMerchants || []).join(', ')) + '</div>' +
+        (data.commerceConstraints.amountRange ?
+          '<div><strong>Amount per payment:</strong> ' +
+            esc((data.commerceConstraints.amountRange.min ? data.commerceConstraints.amountRange.min + ' to ' : 'up to ') +
+              data.commerceConstraints.amountRange.max + ' ' + data.commerceConstraints.amountRange.currency) + '</div>' : '') +
+        (data.commerceConstraints.budget ?
+          '<div><strong>Total budget:</strong> ' +
+            esc(data.commerceConstraints.budget.amount + ' ' + data.commerceConstraints.budget.currency) + '</div>' : '') +
+      '</div>' : '') +
     '<div class="scopes-label">Requested permissions</div>' +
     '<ul class="scope-list">' + scopeItems + '</ul>' +
     (data.targetResource ?
@@ -416,6 +446,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(410).send({ message: 'Auth request expired or already processed', code: 'GONE', requestId: request.id });
       }
       const agentPassport = consentViewOf(row.passport_binding);
+      const commerceConstraints = commerceConstraintsView(row.passport_binding);
 
       return reply.send({
         id: row.id,
@@ -447,6 +478,9 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         // PRD §7: what the registry checked about the agent, shown before the
         // Principal decides (spec/passport-binding.md §6).
         ...(agentPassport !== null ? { agentPassport } : {}),
+        // Where the grant may be used and how much it may spend (§8.1),
+        // shown before the Principal decides.
+        ...(commerceConstraints !== null ? { commerceConstraints } : {}),
       });
     },
   );
