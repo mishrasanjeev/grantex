@@ -1434,6 +1434,7 @@ the pull request that references it.
   limit answers 429 and that another address is unaffected. Owner: the
   registry maintainers. Exit criterion: every unauthenticated registry read
   has a route limit, with tests.
+
 ## G-85 — The single-key token paths do not read the agent key history
 
 - **Found:** agent key history work (Agent Trust Registry, PRD §8.8),
@@ -1480,6 +1481,7 @@ the pull request that references it.
 - **Proposal:** decide with the owner whether a compromise should revoke
   grants bound to the key in every tenant, or whether a released key should
   stay reserved to its developer.
+
 ## G-90 — The grant credential status list is served unsigned, as a superseded format
 
 - **Found:** registry attestation-acceptance status lists (Stage 1), 2026-09-28,
@@ -1523,6 +1525,7 @@ the pull request that references it.
   range, and return `valid: false` otherwise; test each of the three cases.
   Behind a flag that defaults off, since it can turn today's `valid: true`
   into a denial.
+
 ## G-95 — The agent request signature does not cover the query string
 
 - **Found:** agent request signing libraries (S1-4), 2026-09-28, while
@@ -1559,6 +1562,7 @@ the pull request that references it.
   that consumes trust statements (Phase 1 attestation checks) refuse a
   statement whose subject is not the signature's `keyid` or Agent Passport,
   with `key_binding_mismatch`.
+
 ## G-100 — The auth service's SD-JWT verifier does not follow RFC 9901 section 7.1
 
 - **Found:** building the Agent Passport verifier (`packages/agent-passport`),
@@ -1661,3 +1665,21 @@ the pull request that references it.
   routes, and an operator route to suspend and reinstate a provider that
   also rewrites the stored level. Owner: registry maintainers. Exit
   criterion: each column is written by a route with tests.
+
+## G-115 — The CI step for the agent-httpsig Python package has no `run`
+
+- **Found:** wiring `packages/mock-issuer` into `.github/workflows/ci.yml`,
+  2026-09-28, on the branch that merges the Wave 1 registry branches.
+- **What:** in the `python-integrations` job, the step
+  `Test agent-httpsig Python` (`working-directory: packages/agent-httpsig-py`)
+  lost its `run:` line when the agent-httpsig and Agent Passport branches were
+  merged; the next step, `Test Agent Passport Python`, follows it directly.
+  GitHub Actions requires every step to have `uses` or `run`, so the workflow
+  file fails validation and none of its jobs start.
+- **Impact:** until fixed, a pull request from this branch gets no CI run at
+  all (not only the Python job), and grantex-agent-httpsig is not tested in
+  CI.
+- **Proposal:** restore
+  `run: pip install -e ".[dev]" && mypy --strict src && pytest` on that step
+  (the command the agent-httpsig branch had), and check the merged workflow
+  with a workflow linter before pushing.

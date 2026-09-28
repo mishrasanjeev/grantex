@@ -339,6 +339,12 @@ jobs:
       - name: Test agent-passport
         working-directory: packages/agent-passport
         run: npm ci && npm run typecheck && npm test
+      - name: Build agent-passport (the mock issuer resolves it from the local build)
+        working-directory: packages/agent-passport
+        run: npm run build
+      - name: Test mock issuer
+        working-directory: packages/mock-issuer
+        run: npm ci && npm run typecheck && npm test
       - name: Test x402
         working-directory: packages/x402
         run: npm ci && npm run typecheck && npm test && npm run build
