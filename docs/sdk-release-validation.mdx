@@ -74,6 +74,12 @@ denylist, pinned secret scanning and its scanner self-test passed locally.
 Packed licenses and Python distribution metadata were inspected.
 The Python Strands candidate's resolved third-party dependencies passed
 vulnerability and license checks using the same-checkout SDK wheel.
+The Python dependency audit uses the supported OSV backend after the PyPI
+per-version API repeatedly returned HTTP 503 for the unpublished SDK candidate.
+It still resolves the complete dependency graph, fails on advisory findings
+or audit errors, and retains the existing license policy. A known-vulnerable
+fixture was separately verified to return failure. See the
+[auditor's supported backends](https://github.com/pypa/pip-audit#usage).
 The unpublished SDK version has no PyPI advisory record yet; source-level
 security checks and functional tests are distinct from registry advisories.
 

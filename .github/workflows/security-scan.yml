@@ -91,6 +91,9 @@ jobs:
           python -m build packages/sdk-py --wheel --outdir "$RUNNER_TEMP/sdk-audit-dependencies"
           echo "PIP_FIND_LINKS=$RUNNER_TEMP/sdk-audit-dependencies" >> "$GITHUB_ENV"
       - name: Audit every tracked Python dependency and license surface
+        env:
+          # Query advisory version ranges even when the SDK candidate is unpublished.
+          PIP_AUDIT_VULNERABILITY_SERVICE: osv
         run: python scripts/audit-python-dependencies.py
 
   python-static-analysis:
