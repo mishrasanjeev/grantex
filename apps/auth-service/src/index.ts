@@ -16,6 +16,10 @@ import { startWebhookDeliveryWorker, stopWebhookDeliveryWorker } from './workers
 import { startAnomalyDetectionWorker, stopAnomalyDetectionWorker } from './workers/anomalyDetection.js';
 import { startUsageRollupWorker } from './workers/usageRollup.js';
 import {
+  startRegistryIssuerStatusRecheckWorker,
+  stopRegistryIssuerStatusRecheckWorker,
+} from './workers/registryIssuerStatusRecheck.js';
+import {
   startEventBridgeReceiptPruneWorker,
   stopEventBridgeReceiptPruneWorker,
 } from './workers/eventBridgeReceiptPrune.js';
@@ -111,6 +115,9 @@ async function main() {
   // Only while the revocation feed is served: it keeps the append-only feed
   // table bounded (lib/revocation-feed/settings.ts).
   if (revocationFeedSettings().enabled) startRevocationFeedPruneWorker(sql);
+  // Rereads issuers' status lists for accepted registry attestations before
+  // each read goes stale; a stale read stops counting toward a trust level.
+  startRegistryIssuerStatusRecheckWorker(sql);
   if (config.commerceReconciliationWorkerEnabled) {
     startCommercePaymentReconciliationWorker(sql, {
       intervalMs: config.commerceReconciliationIntervalMs,
@@ -127,6 +134,7 @@ async function main() {
     stopEventBridgeReceiptPruneWorker();
     stopRevocationFeedPruneWorker();
     stopCommercePaymentReconciliationWorker();
+    stopRegistryIssuerStatusRecheckWorker();
     await app.close();
     await closeRedis();
     await closeSql();
