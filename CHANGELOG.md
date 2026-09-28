@@ -6,23 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-### Enforcement SDK release candidates
-- Prepare TypeScript SDK 0.8.0 and Python SDK 0.7.0 for the breaking audience,
-  amount-required and online-revocation changes documented below.
-- Prepare CLI 0.4.0, gateway/adapters/TypeScript Strands/Python Strands 0.2.0,
-  and MCP Auth 3.0.0 with package-specific migration guidance and dependency
-  floors that require the updated primary SDK.
-- Correct Node.js support to 22.12+ for these npm releases; recommend Node.js
-  24 LTS. Python SDK remains 3.9+ and Python Strands remains 3.11+.
-- Go v0.4.1 and x402 0.4.1 are unchanged and compatibility-tested, not republished.
-- Registry publication is separate from preparation. See Release Status for
-  verified artifacts and the enforcement migration guide for rollout/rollback.
-- Preserve legacy claim compatibility defaults and correct stale deprecation
-  warnings that promised an unimplemented version-based default flip. Tests
-  verify the explicit standard-only setting is named in each warning.
-- Audit pre-publication Python integration dependencies against a wheel built
-  from this checkout, without relaxing vulnerability or license policy.
-
+### Opt-in admin key for the trust registry listing (auth service)
+- New setting `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED`, off by default and read
+  when the service starts. `GET /v1/trust-registry` returns the 100 newest
+  registry records of every developer, unverified ones included, and was
+  documented as an admin route, but any developer API key can read it, so one
+  tenant can list every other tenant's records. Operators should turn the
+  setting on.
+  - Off (unset, `false`, or any value other than exactly `true`): the route is
+    unchanged, with standard developer API key auth and the plan budget.
+  - `true`: the route takes the service administrator credential
+    (`ADMIN_API_KEY`, as `Authorization: Bearer <key>`), as the other operator
+    routes do. A developer API key, a wrong key or no key is refused with
+    `401 UNAUTHORIZED` before anything is read, and the admin key is compared
+    in constant time. While `ADMIN_API_KEY` is not configured, every call is
+    refused with `503 SERVICE_UNAVAILABLE`. The route is limited to 20 calls a
+    minute per address and no longer draws on a developer's plan budget.
+  - The response is the same either way. `GET /v1/trust-registry/:orgDID`,
+    `POST /v1/trust-registry/verify-dns` and the `/v1/registry/orgs` routes
+    are unchanged.
+- **Before turning it on:** a caller that reads this listing with a developer
+  API key should look organizations up one at a time with the public
+  `GET /v1/registry/orgs/:did` or search with `GET /v1/registry/orgs`; an
+  operator uses `ADMIN_API_KEY`. Documented in
+  `docs/features/trust-registry.mdx` ("Operator Listing"),
+  `docs/openapi.yaml` and `docs/self-hosting.md`. The default stays off until
+  operators have moved (FINDINGS G-106).
 ### Agent key history: possession proof, rotation and compromise (auth service)
 - New: every agent key is kept in a history (`agent_keys`, migration 122),
   identified by its RFC 7638 JWK Thumbprint, with the states `pending`,
@@ -111,6 +120,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `registry_acceptance_lists` and `registry_acceptance_entries` tables, created
   empty. The lists are the registry's own; they have no developer or tenant
   column.
+### Enforcement SDK release candidates
+- Prepare TypeScript SDK 0.8.0 and Python SDK 0.7.0 for the breaking audience,
+  amount-required and online-revocation changes documented below.
+- Prepare CLI 0.4.0, gateway/adapters/TypeScript Strands/Python Strands 0.2.0,
+  and MCP Auth 3.0.0 with package-specific migration guidance and dependency
+  floors that require the updated primary SDK.
+- Correct Node.js support to 22.12+ for these npm releases; recommend Node.js
+  24 LTS. Python SDK remains 3.9+ and Python Strands remains 3.11+.
+- Go v0.4.1 and x402 0.4.1 are unchanged and compatibility-tested, not republished.
+- Registry publication is separate from preparation. See Release Status for
+  verified artifacts and the enforcement migration guide for rollout/rollback.
+- Preserve legacy claim compatibility defaults and correct stale deprecation
+  warnings that promised an unimplemented version-based default flip. Tests
+  verify the explicit standard-only setting is named in each warning.
+- Audit pre-publication Python integration dependencies against a wheel built
+  from this checkout, without relaxing vulnerability or license policy.
+
 ### Dashboard passkey removal
 - Send JSON content type only when the dashboard request has a JSON body.
   Bodyless DELETE requests now reach the API instead of failing its JSON parser.
