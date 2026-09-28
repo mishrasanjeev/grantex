@@ -31,7 +31,7 @@ Check the deployed revision and the tenant's `governed_cases.enabled` flag.
 At the last verified AgenticOrg integration check on September 24, 2026, its
 Python dependency was `grantex==0.5.1`. That integration did not enforce
 token-level purpose or per-case caps for this flow, and a pooled run token was
-not bound to one case. Python `0.6.0` is now published with general purpose and
+not bound to one case. Python `0.6.1` is now published with general purpose and
 cap APIs, but a package release alone does not wire AgenticOrg's case context
 into enforcement. Recheck AgenticOrg's deployed dependency and flow before
 claiming this as a production control. See [Release Status](/release-status).

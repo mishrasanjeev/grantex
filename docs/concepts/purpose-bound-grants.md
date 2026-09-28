@@ -5,7 +5,7 @@ description: "Bind a grant to the purpose a person approved, and let tools refus
 ---
 
 <Warning>
-The examples on this page are available in published Python `grantex==0.6.0`.
+The examples on this page are available in published Python `grantex==0.6.1`.
 The last verified AgenticOrg governed-case integration uses an exact local
 purpose allowlist; installing the newer SDK does not make that integration
 enforce token-level purpose or per-case caps without case-context wiring.

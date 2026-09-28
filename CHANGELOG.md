@@ -224,12 +224,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Opt-out:** `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false` puts these routes back
   in the plan budget, failing closed, as before. See the
   [rate limits guide](docs/guides/rate-limits.mdx).
-### Portable WebAuthn SDK patch candidates
-- Prepared `@grantex/sdk@0.7.1`, Python `grantex==0.6.1`, and Go SDK
-  `v0.4.1` to ship the typed signed grant-evidence reference and VC
-  `webauthnVerified` response already tested in source. These version bumps
-  are not registry publication; verify all three public artifacts before
-  updating release-status claims.
+### Portable WebAuthn SDK releases (2026-09-28)
+- Published and independently verified `@grantex/sdk@0.7.1`, Python
+  `grantex==0.6.1`, and Go SDK `v0.4.1` from the passkey release snapshot
+  `a919ea8a`. They expose the typed signed grant-evidence reference and VC
+  `webauthnVerified` response. npm integrity and PyPI wheel/sdist hashes match
+  the verified artifacts; fresh registry installs and downloaded Go-module
+  tests passed. x402 remains at `0.4.1` and was not republished.
+- These artifacts do not include the subsequent audience enforcement and
+  capped-scope missing-amount fixes from PRs #1440 and #1441. Those breaking
+  changes remain source-only and need a separate versioned release. See
+  `docs/internal/passkey-sdk-release-2026-09-28.md` for evidence and limitations.
 
 ### mcp-auth resource guard: grant token algorithms, `typ` and standard claims
 Part of the unpublished `@grantex/mcp-auth` 3.0.0.
