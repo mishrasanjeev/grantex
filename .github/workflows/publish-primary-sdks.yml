@@ -144,8 +144,21 @@ jobs:
 
       - name: Refuse already published integration versions
         if: ${{ inputs.publish_integrations }}
+        env:
+          SDK: ${{ steps.versions.outputs.sdk }}
+          PY: ${{ steps.versions.outputs.py }}
+          PUBLISH_SDK: ${{ inputs.publish_typescript_sdk }}
+          PUBLISH_PY: ${{ inputs.publish_pypi }}
         run: |
           set -euo pipefail
+          if [ "$PUBLISH_SDK" != 'true' ] && ! npm view "@grantex/sdk@$SDK" version >/dev/null 2>&1; then
+            echo "::error::Publish the required TypeScript SDK in this run or verify it exists first"
+            exit 1
+          fi
+          if [ "$PUBLISH_PY" != 'true' ] && ! curl -fsSL "https://pypi.org/pypi/grantex/$PY/json" >/dev/null 2>&1; then
+            echo "::error::Publish the required Python SDK in this run or verify it exists first"
+            exit 1
+          fi
           for package in cli gateway adapters strands mcp-auth; do
             name=$(node -p "require('./packages/$package/package.json').name")
             version=$(node -p "require('./packages/$package/package.json').version")
@@ -335,8 +348,8 @@ jobs:
 
   pypi-integrations:
     name: Publish Python integrations
-    needs: verify
-    if: ${{ inputs.publish_integrations }}
+    needs: [verify, pypi]
+    if: ${{ always() && inputs.publish_integrations && needs.verify.result == 'success' && (needs.pypi.result == 'success' || needs.pypi.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment: sdk-release
     permissions:
