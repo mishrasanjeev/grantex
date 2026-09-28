@@ -1,0 +1,58 @@
+{
+  "name": "@grantex/agent-httpsig",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RFC 9421 HTTP Message Signatures for agent requests: the Agent-Passport, Agent-Grant and Agent-Trust headers and the agent-payer-auth signing profile",
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar.",
+  "homepage": "https://github.com/mishrasanjeev/grantex/tree/main/packages/agent-httpsig",
+  "bugs": {
+    "url": "https://github.com/mishrasanjeev/grantex/issues"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mishrasanjeev/grantex.git",
+    "directory": "packages/agent-httpsig"
+  },
+  "keywords": [
+    "grantex",
+    "http-message-signatures",
+    "rfc9421",
+    "structured-fields",
+    "rfc9651",
+    "content-digest",
+    "agent-passport",
+    "ai-agents"
+  ]
+}
