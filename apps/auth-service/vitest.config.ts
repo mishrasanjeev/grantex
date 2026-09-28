@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { configDefaults, defineConfig } from 'vitest/config';
 
 // Fresh per test process. The literal that used to live here ('test-admin-key-secret')
@@ -8,6 +9,16 @@ import { configDefaults, defineConfig } from 'vitest/config';
 const generatedAdminApiKey = randomBytes(32).toString('hex');
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      // Tests drive the mock accredited issuer (packages/mock-issuer) from its
+      // sources. It imports @grantex/agent-passport by name; resolve that to
+      // the package's sources too, so no build of it is needed and the
+      // service's own dependencies stay unchanged. Tests only: the service
+      // never imports either package.
+      '@grantex/agent-passport': fileURLToPath(new URL('../../packages/agent-passport/src/index.ts', import.meta.url)),
+    },
+  },
   test: {
     environment: 'node',
     globals: false,
