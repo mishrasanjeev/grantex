@@ -152,6 +152,14 @@ components:
       type: http
       scheme: bearer
       description: Registry operator key (one of REGISTRY_OPERATOR_API_KEYS); not a developer API key or ADMIN_API_KEY
+    registryIssuerRequestAuth:
+      type: http
+      scheme: GrantexIssuer
+      bearerFormat: JWS
+      description: |
+        An accredited issuer's signed request (typ grantex-attestation-request+jwt): a compact JWS
+        with iss, aud (the registry's issuer identifier), id, action, iat and a single-use nonce,
+        signed with a current key of the issuer (spec/attestation-1.0.md section 7)
 
   parameters:
     AgentIdPath:
@@ -303,6 +311,67 @@ components:
           allOf:
             - $ref: "#/components/schemas/IssuerJwks"
           description: Without revoked keys; empty for a withdrawn issuer
+    RegistryAttestation:
+      type: object
+      description: |
+        An attestation the registry accepted (spec/attestation-1.0.md). The JWS itself is kept as
+        received and not returned. `status` is the issuer's status list entry; `acceptance` is the
+        registry's own acceptance entry (spec/registry-federation.md), VALID while `state` is
+        `accepted`.
+      required: [id, iss, attestation_id, sub, type, level, external_credential_id, external_credential_hash,
+        iat, exp, status, acceptance, state, issuer_status, received_at]
+      properties:
+        id: { type: string, pattern: "^ratt_[0-9A-HJKMNP-TV-Z]{26}$", description: The registry's id }
+        iss: { type: string, format: uri, description: The issuer's entity_id }
+        attestation_id: { type: string, description: The id the issuer minted; unique per issuer }
+        sub: { type: string, description: The agent's or the provider's DID }
+        type: { $ref: "#/components/schemas/TrustMarkType" }
+        level: { type: string, description: The issuer's level, verbatim }
+        key_thumbprint: { type: [string, "null"], description: "RFC 7638 thumbprint of the agent key (agent types only)" }
+        external_credential_id: { type: string }
+        external_credential_hash: { type: string, pattern: "^sha-256:[A-Za-z0-9_-]{43}$" }
+        declared_limits: { type: [object, "null"] }
+        iat: { type: string, format: date-time }
+        exp: { type: string, format: date-time }
+        status:
+          type: object
+          properties:
+            status_list:
+              type: object
+              properties:
+                uri: { type: string, format: uri }
+                idx: { type: integer, minimum: 0 }
+        acceptance:
+          type: object
+          properties:
+            status_list:
+              type: object
+              properties:
+                uri: { type: string, format: uri }
+                idx: { type: integer, minimum: 0 }
+        state: { type: string, enum: [accepted, withdrawn, superseded] }
+        issuer_status:
+          type: string
+          enum: [valid, revoked, suspended]
+          description: What the issuer's own status list said when the registry last read it
+        received_at: { type: string, format: date-time }
+        supersedes: { type: [string, "null"] }
+        superseded_by: { type: [string, "null"] }
+        withdrawn_at: { type: [string, "null"], format: date-time }
+    RegistryAttestationRefusal:
+      type: object
+      required: [message, code, reason, requestId]
+      properties:
+        message: { type: string }
+        code:
+          type: string
+          enum: [attestation_malformed, attestation_conflict, passport_invalid_signature, passport_revoked,
+            passport_expired, attestation_not_accepted, attestation_not_registered, attestation_hash_mismatch,
+            attestation_mismatch, issuer_not_accredited, issuer_suspended, trust_mark_missing, key_not_active,
+            key_unproven, audience_mismatch, request_signature_invalid, request_signature_stale,
+            status_stale]
+        reason: { type: string }
+        requestId: { type: string }
     EmergencyStopRequest:
       type: object
       required: [scope, reason, confirm]
@@ -8814,6 +8883,189 @@ paths:
         "404": { description: No such issuer }
         "409": { description: "`KID_REVOKED`: the replacement jwks carries a revoked kid" }
         "503": { description: REGISTRY_OPERATOR_API_KEYS is not configured, or holds a key shorter than 32 characters }
+
+  /v1/registry/attestations:
+    post:
+      operationId: postRegistryAttestation
+      tags: [Trust Registry]
+      summary: Post an attestation (accredited issuer)
+      description: |
+        The body is the compact JWS (typ `grantex-attestation+jwt`, ES256, with a kid). It needs no
+        API key: the issuer's signature, checked against the registry's record of the issuer, is the
+        authentication. Checked in order: the JWS and its header; the issuer accredited for the type
+        and not suspended; the signature; every payload member; the subject registered; for an agent,
+        a key whose possession has been proven; the hash rule; the times; the issuer's Token Status
+        List, fetched now from under its `status_list_base`, showing the entry VALID. On success the
+        JWS is stored as received, the registry allocates a VALID acceptance entry, and
+        `grantex.registry.attestation_accepted` is appended to the registry audit chain. The same bytes
+        posted again answer `200` with the existing record. Limited to 30 requests a minute per client
+        address.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/jwt:
+            schema: { type: string }
+          application/grantex-attestation+jwt:
+            schema: { type: string }
+      responses:
+        "201":
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestation" }
+        "200":
+          description: The same bytes were already accepted; the existing record as it is now, answered without verifying the bytes again
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestation" }
+        "400":
+          description: "`attestation_malformed` (not an attestation) or `attestation_hash_mismatch` (hash rule)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "401":
+          description: "`passport_invalid_signature`: not signed by a current key of the issuer"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "403":
+          description: "`issuer_not_accredited`, `issuer_suspended` or `trust_mark_missing`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "409":
+          description: "`attestation_conflict`: the issuer already registered other bytes under this id"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "415": { description: The body is not application/jwt or application/grantex-attestation+jwt }
+        "422":
+          description: "`attestation_mismatch` (sub is not a registered agent or provider of the kind the type attests), `key_unproven`, `key_not_active`, `passport_expired`, or `passport_revoked` (the issuer's list shows the entry INVALID or SUSPENDED)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "429": { description: Rate limit exceeded for this address }
+        "503":
+          description: "`status_stale`: the issuer's status list is outside its status_list_base, or could not be fetched, verified or shown fresh"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+  /v1/registry/attestations/{id}:
+    delete:
+      operationId: withdrawRegistryAttestation
+      tags: [Trust Registry]
+      summary: Withdraw an attestation (its issuer, or the registry operator)
+      description: |
+        Sets the record to `withdrawn` and its acceptance entry to INVALID, which is final, and appends
+        `grantex.registry.attestation_withdrawn`. Authenticated by the issuer's signed request with
+        `action: withdraw` (`Authorization: GrantexIssuer <JWS>`) or a registry operator key
+        (`Authorization: Bearer <key>`). Withdrawing a withdrawn attestation answers the record again.
+        Limited to 30 requests a minute per client address.
+      security:
+        - registryIssuerRequestAuth: []
+        - registryOperatorAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The withdrawn record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestation" }
+        "401":
+          description: "`request_signature_invalid` (no credential, a wrong operator key, a bad or replayed request), `request_signature_stale` or `audience_mismatch`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "404":
+          description: "`attestation_not_registered`: no such attestation"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "409":
+          description: "`attestation_not_accepted`: the attestation was superseded"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "422":
+          description: "`attestation_mismatch`: the signed request names another attestation or issuer"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "429": { description: Rate limit exceeded for this address }
+  /v1/registry/attestations/{id}/refresh:
+    post:
+      operationId: refreshRegistryAttestation
+      tags: [Trust Registry]
+      summary: Renew an attestation with a new JWS (its issuer, or the registry operator)
+      description: |
+        The body is the new attestation: same issuer, subject and type, a new `id` and a new
+        `external_credential_id`. It is checked exactly as a posted attestation is. The old record
+        becomes `superseded` and its acceptance entry INVALID, in the same transaction as the new
+        record and its VALID entry. Authenticated as the withdrawal is, with `action: refresh`.
+        Limited to 30 requests a minute per client address.
+      security:
+        - registryIssuerRequestAuth: []
+        - registryOperatorAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/jwt:
+            schema: { type: string }
+          application/grantex-attestation+jwt:
+            schema: { type: string }
+      responses:
+        "201":
+          description: The new record, with `supersedes` naming the old one
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestation" }
+        "400":
+          description: "`attestation_malformed` (the new JWS is not an attestation) or `attestation_hash_mismatch` (hash rule)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "401":
+          description: "`request_signature_invalid` (no credential, a wrong operator key, a bad or replayed request), `request_signature_stale` or `audience_mismatch`; or `passport_invalid_signature` (the new JWS is not signed by a current key of the issuer)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "403":
+          description: "`issuer_not_accredited`, `issuer_suspended` or `trust_mark_missing`, for the issuer of the new JWS"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "404":
+          description: "`attestation_not_registered`: no such attestation"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "409":
+          description: "`attestation_not_accepted` (the old attestation is no longer accepted) or `attestation_conflict` (the issuer already registered the new id)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "415": { description: The body is not application/jwt or application/grantex-attestation+jwt }
+        "422":
+          description: "`attestation_mismatch` (the signed request names another attestation, the issuer, subject or type changed, the credential did not, or sub is not registered), `key_unproven`, `key_not_active`, `passport_expired`, or `passport_revoked` (the issuer's list shows the new entry INVALID or SUSPENDED)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
+        "429": { description: Rate limit exceeded for this address }
+        "503":
+          description: "`status_stale`: the new attestation's status list is outside its status_list_base, or could not be fetched, verified or shown fresh"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegistryAttestationRefusal" }
 
   /v1/registry/orgs:
     get:

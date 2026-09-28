@@ -3,6 +3,7 @@ import { isIP } from 'node:net';
 import { evidenceConfigErrors } from './lib/evidence-service/settings.js';
 import { migrationLockTimeoutError } from './db/migrate.js';
 import { registryOperatorKeysConfigError } from './lib/registry/operator-auth.js';
+import { devIssuerOriginMapConfigError } from './lib/registry/issuer-fetcher.js';
 import {
   parseSigningAlgorithm,
   parseSigningKeyStore,
@@ -201,6 +202,10 @@ export const config = {
   get portableWebAuthnEvidenceStatusCheckEnabled() { return process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'] === 'true'; },
   get irregularityResponsePolicyEnabled() { return process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'] === 'true'; },
   get irregularityCascadeRevocationEnabled() { return process.env['IRREGULARITY_CASCADE_REVOCATION_ENABLED'] === 'true'; },
+  // Accept EdDSA (Ed25519) signatures on registry attestations, their
+  // withdrawal and refresh requests and the issuers' status lists. Off by
+  // default: ES256 is the profile's required algorithm.
+  get registryAttestationEddsaEnabled() { return process.env['REGISTRY_ATTESTATION_EDDSA_ENABLED'] === 'true'; },
   // Default overlap of an agent key rotation: how long the replaced key stays
   // usable (seconds, default 7 days, at most 30). Read at request time;
   // validateConfig reports a bad value at boot.
@@ -376,6 +381,11 @@ export function validateConfig(): void {
   if (cascadeProblem) errors.push(cascadeProblem);
   const registryOperatorProblem = registryOperatorKeysConfigError(process.env['REGISTRY_OPERATOR_API_KEYS']);
   if (registryOperatorProblem) errors.push(registryOperatorProblem);
+  // Development and tests only: refused whenever NODE_ENV is production (or
+  // anything but development or test), so production never rewrites an
+  // issuer origin to a local server.
+  const devIssuerMapProblem = devIssuerOriginMapConfigError(process.env);
+  if (devIssuerMapProblem) errors.push(devIssuerMapProblem);
 
   if (errors.length > 0) {
     console.error(
