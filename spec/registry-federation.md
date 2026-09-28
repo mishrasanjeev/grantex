@@ -705,6 +705,17 @@ is what an operator suspends an issuer for when it publishes a wrong list. The
 issuer's attestations are suspended instead (below), and statuses recorded
 before the suspension stay as they were.
 
+A list is fetched outside any transaction, so an operator may suspend or
+withdraw its issuer, or revoke the key it was signed with, while the fetch is
+in flight. The read is recorded in one transaction that takes the registry
+chain's lock and then the issuer's row (`FOR SHARE`), the order the operator's
+`PATCH` takes them in (`FOR UPDATE`), and checks again that the issuer is
+active and that the `kid` the list was verified with is one of its keys and
+not revoked. If either no longer holds, the read is discarded whole: no
+status, no freshness and no attempt time is written, and it is counted as a
+failed poll with reason `issuer_changed`. A suspension therefore never lets a
+read that started before it land after it.
+
 An entry that changed is recorded as the attestation's `issuer_status`
 (`valid`, `suspended`, or `revoked` for INVALID and any value the registry
 does not know) and audited on the registry chain
@@ -753,10 +764,15 @@ becomes `withdrawn`, its acceptance entry INVALID, audited as
 `grantex.registry.attestation_withdrawn` with `requestedBy`
 `registry:key_revoked` and the `kid`. The signing key is the `kid` in the
 protected header of the attestation's JWS, which the registry stores byte for
-byte. The operator's `PATCH` checks every accepted attestation of the issuer;
-the loop looks again, for a day after a revocation, at attestations of issuers
-with a kid revoked in that day. Retiring a key that signed attestations still
-in use is a `jwks` replacement that keeps the old key, not a revocation.
+byte. The operator's `PATCH` checks every accepted attestation of the issuer.
+The loop checks every accepted attestation of every issuer with a revoked
+kid, however long ago the kid was revoked, so a kid revoked while
+reconciliation was off, or whose cascade at the `PATCH` kept failing, is
+acted on once the loop runs. It reads at most four pages of 500 attestations
+a run, in primary-key order, and carries its place to the next run until it
+has been through them all; withdrawn attestations drop out of the scan.
+Retiring a key that signed attestations still in use is a `jwks` replacement
+that keeps the old key, not a revocation.
 
 ### The cascade to bound grants
 
@@ -812,7 +828,7 @@ minimum interval is at least 30 s and each list is polled at its own `ttl`.
 | Metric | Labels | Meaning |
 |---|---|---|
 | `grantex_registry_status_list_polls_total` | `outcome` | Lists read (`ok`) or not readable (`failed`). |
-| `grantex_registry_status_list_poll_failures_total` | `reason` | Why: `unreachable`, `http_status`, `content_type`, `too_large`, `dev_map_refused`, `invalid`, `not_under_base`, `issuer_unknown`, `error`. |
+| `grantex_registry_status_list_poll_failures_total` | `reason` | Why: `unreachable`, `http_status`, `content_type`, `too_large`, `dev_map_refused`, `invalid`, `not_under_base`, `issuer_unknown`, `issuer_changed`, `error`. |
 | `grantex_registry_status_flips_total` | `to` | Recorded issuer statuses that changed. |
 | `grantex_registry_acceptance_changes_total` | `to`, `cause` | Acceptance entries changed. |
 | `grantex_registry_cascade_grants_total` | `action` | Grants `revoked`, `suspended` or `resumed`. |
@@ -834,5 +850,5 @@ reconciliation runs fail. What to do is in
 <!-- config-table -->
 | Variable | Default | Meaning |
 |---|---|---|
-| `REGISTRY_STATUS_RECONCILIATION_ENABLED` | `false` | `true` (exactly) runs the reconciliation, and the cascade on `PATCH /v1/registry/issuers/{id}`. Otherwise the per-attestation recheck worker keeps the recorded statuses fresh as before, and nothing is cascaded. |
+| `REGISTRY_STATUS_RECONCILIATION_ENABLED` | `false` | `true` (exactly) runs the reconciliation, and the cascade on `PATCH /v1/registry/issuers/{id}`. Otherwise the per-attestation recheck worker keeps the recorded statuses fresh as before, and nothing is cascaded. Needs `DATABASE_POOL_MAX` of at least 2: a run holds one connection for its advisory lock and works through another, so with `true` and a pool of 1 the service refuses to start. |
 | `REGISTRY_STATUS_POLL_MIN_INTERVAL_MS` | `30000` | The minimum interval between two reads of one list. At least 30000; at least 1000 when `NODE_ENV` is `development` or `test` (the mock issuer and CI only); at most 86400000. Anything else stops the service from starting. |

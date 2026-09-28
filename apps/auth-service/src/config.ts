@@ -4,7 +4,7 @@ import { evidenceConfigErrors } from './lib/evidence-service/settings.js';
 import { migrationLockTimeoutError } from './db/migrate.js';
 import { registryOperatorKeysConfigError } from './lib/registry/operator-auth.js';
 import { devIssuerOriginMapConfigError } from './lib/registry/issuer-fetcher.js';
-import { statusPollMinIntervalConfigError } from './lib/registry/status-poll-config.js';
+import { statusPollMinIntervalConfigError, statusReconciliationPoolConfigError } from './lib/registry/status-poll-config.js';
 import {
   parseSigningAlgorithm,
   parseSigningKeyStore,
@@ -416,6 +416,10 @@ export function validateConfig(): void {
   // issuer and CI), never below 1 s.
   const statusPollProblem = statusPollMinIntervalConfigError(process.env);
   if (statusPollProblem) errors.push(statusPollProblem);
+  // A reconciliation run reserves a connection for its advisory lock and
+  // works through the pool: with a pool of one it would deadlock on itself.
+  const reconciliationPoolProblem = statusReconciliationPoolConfigError(process.env);
+  if (reconciliationPoolProblem) errors.push(reconciliationPoolProblem);
 
   if (errors.length > 0) {
     console.error(

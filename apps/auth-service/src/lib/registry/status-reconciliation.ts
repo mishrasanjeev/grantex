@@ -17,13 +17,20 @@
  *      (issuer_status valid, suspended or revoked; audited). A list that
  *      cannot be read, verified or decoded changes nothing but the time of
  *      the attempt: the recorded status stops counting when its freshness
- *      runs out, and a bound grant's refresh then refuses with status_stale;
+ *      runs out, and a bound grant's refresh then refuses with status_stale.
+ *      A read whose issuer was suspended or withdrawn, or whose list key was
+ *      revoked, while it was being fetched is discarded whole
+ *      (recordIssuerStatusReads checks again under the issuer row's lock);
  *   2. decide: the registry's acceptance entry of each accepted attestation
  *      follows deriveAcceptance (INVALID for a revoked passport, SUSPENDED
  *      while the passport or its issuer is suspended or the issuer
  *      withdrawn, VALID on a fresh read only), through setAcceptance, which opens the
  *      cascade window of the acceptance lists. An attestation signed with an
- *      issuer key revoked in the last day is withdrawn (INVALID, final);
+ *      issuer key revoked at any time is withdrawn (INVALID, final): the
+ *      sweep pages through every accepted attestation of an issuer with a
+ *      revoked key, KEY_REVOCATION_SWEEP_PAGES_PER_RUN pages a run, and
+ *      carries its cursor to the next run until it has been through them
+ *      all, then starts again;
  *   3. cascade: every grant bound to a passport (grant_passport_bindings)
  *      follows its acceptance entry. INVALID revokes the grant and its
  *      descendants; SUSPENDED suspends them (grant_suspensions, cause
@@ -94,8 +101,14 @@ export const MAX_LISTS_PER_RUN = 200;
 export const POLL_CONCURRENCY = 8;
 /** Rows each decision or cascade query takes in one run. */
 export const DECISION_BATCH = 500;
-/** How long after a kid is revoked the loop keeps looking for attestations it signed. */
-export const KEY_REVOCATION_SWEEP_SECONDS = 86_400;
+/**
+ * Pages of DECISION_BATCH attestations the loop's revoked-key sweep reads in
+ * one run. The sweep has no time cutoff: a key revoked while reconciliation
+ * was off, or whose cascade kept failing, is found whenever that was. Its
+ * cursor carries over to the next run, so each run's work is bounded and
+ * every attestation is reached within a few runs.
+ */
+export const KEY_REVOCATION_SWEEP_PAGES_PER_RUN = 4;
 /**
  * The advisory lock key, hashed the way the migration lock is
  * (hashtextextended(key, 0)). One key for every instance: whoever holds it
@@ -205,7 +218,7 @@ async function pollList(sql: Sql, list: DueList, now: Date, log: AppLogger): Pro
   if (rows.length === 0) return { ok: true, flips: 0 };
   const issuer = await getAccreditedIssuer(sql, list.entity_id);
   if (!issuer) return fail('issuer_unknown', null);
-  let read: { values: Map<number, number | null>; freshUntil: Date };
+  let read: { values: Map<number, number | null>; freshUntil: Date; kid: string };
   try {
     read = await readIssuerStatusListEntries(sql, issuer, list.status_list_uri, rows.map((row) => Number(row.status_list_idx)), now);
   } catch (err) {
@@ -218,7 +231,17 @@ async function pollList(sql: Sql, list: DueList, now: Date, log: AppLogger): Pro
     if (value === undefined || value === null) missing.push(row.id);
     else reads.push({ id: row.id, value });
   }
-  const flips = await recordIssuerStatusReads(sql, reads, read.freshUntil, now);
+  const flips = await recordIssuerStatusReads(sql, reads, read.freshUntil, now, { issuerId: list.issuer_id, kid: read.kid });
+  if (flips === null) {
+    // The operator suspended or withdrew the issuer, or revoked the key the
+    // list was signed with, while it was being fetched: the read is
+    // discarded whole, the attempt included (recordIssuerStatusReads).
+    registryStatusListPollsTotal.inc({ outcome: 'failed' });
+    registryStatusListPollFailuresTotal.inc({ reason: 'issuer_changed' });
+    log.warn({ worker: 'registry-status-reconciliation', issuerId: list.issuer_id },
+      'discarded an issuer status list read: the issuer or its list key changed while it was fetched');
+    return { ok: false, flips: 0 };
+  }
   if (missing.length > 0) {
     // An entry the list does not have cannot be read: as for an unreadable list.
     await recordIssuerStatusAttempts(sql, missing, now);
@@ -319,22 +342,37 @@ export interface DecisionResult {
   grantsResumed: number;
 }
 
+/**
+ * Where the loop's revoked-key sweep goes on from at its next run: the last
+ * attestation id it read, or '' to start from the first. Per instance; an
+ * instance that takes the lock over starts its own pass, which is complete
+ * all the same.
+ */
+let keySweepCursor = '';
+
 /** Attestations signed with a revoked kid of their issuer: withdrawn (INVALID, final). */
 async function withdrawRevokedKeyAttestations(sql: Sql, scope: DecisionScope, now: Date): Promise<number> {
   const q = queries(sql);
   // At the operator's PATCH every accepted attestation of the issuer is
-  // checked; the loop looks only at kids revoked in the last day, as the
-  // retry of a PATCH whose cascade failed. An attestation received after a
-  // kid was revoked cannot be signed with it (ingestion refuses the kid).
-  const since = scope.issuerId !== undefined ? new Date(0) : new Date(now.getTime() - KEY_REVOCATION_SWEEP_SECONDS * 1000);
+  // checked at once. The loop checks every accepted attestation of every
+  // issuer with a revoked kid, however long ago the kid was revoked (it is
+  // the retry of a PATCH whose cascade failed, and the only path for a kid
+  // revoked while the flag was off), a bounded number of pages a run, in
+  // primary-key order from where the previous run stopped. Withdrawn ones
+  // drop out of the scan, so it shrinks as it works.
+  const loop = scope.issuerId === undefined;
   let withdrawn = 0;
-  let after = '';
-  for (;;) {
+  let after = loop ? keySweepCursor : '';
+  for (let page = 0; ; page += 1) {
+    if (loop && page >= KEY_REVOCATION_SWEEP_PAGES_PER_RUN) {
+      keySweepCursor = after;
+      return withdrawn;
+    }
     const rows = await q<{ id: string; jws: string; kids: string[] }[]>`
       SELECT a.id, a.jws, ARRAY_AGG(r.kid) AS kids
       FROM registry_attestations a
       JOIN accredited_issuer_revoked_keys r ON r.issuer_id = a.issuer_id
-      WHERE a.state = 'accepted' AND r.revoked_at >= ${since} AND a.id > ${after}
+      WHERE a.state = 'accepted' AND a.id > ${after}
         AND (${scope.issuerId ?? null}::text IS NULL OR a.issuer_id = ${scope.issuerId ?? null})
       GROUP BY a.id, a.jws
       ORDER BY a.id
@@ -349,7 +387,11 @@ async function withdrawRevokedKeyAttestations(sql: Sql, scope: DecisionScope, no
         registryAcceptanceChangesTotal.inc({ to: 'invalid', cause: 'key_revoked' });
       }
     }
-    if (rows.length < DECISION_BATCH) return withdrawn;
+    if (rows.length < DECISION_BATCH) {
+      // The end of the pass: the next run starts from the first again.
+      if (loop) keySweepCursor = '';
+      return withdrawn;
+    }
     after = rows[rows.length - 1]!.id;
   }
 }

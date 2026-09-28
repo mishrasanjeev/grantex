@@ -23,7 +23,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   it (a suspended issuer's lists are not read), each change audited
   (`grantex.registry.attestation_acceptance_changed`) and opening the
   acceptance lists' cascade window. An attestation signed with a revoked
-  issuer kid is withdrawn (`requestedBy: registry:key_revoked`).
+  issuer kid is withdrawn (`requestedBy: registry:key_revoked`), however long
+  ago the kid was revoked: the loop pages through every accepted attestation
+  of an issuer with a revoked kid, a bounded number a run, so a kid revoked
+  while reconciliation was off or whose cascade kept failing is still acted on.
+- A status list read in flight when an operator suspends or withdraws its
+  issuer, or revokes the key it was signed with, is discarded: the read is
+  recorded only after checking again, under the issuer row's lock, that the
+  issuer is active and the key still in force (poll failure reason
+  `issuer_changed`).
+- `REGISTRY_STATUS_RECONCILIATION_ENABLED=true` with `DATABASE_POOL_MAX=1`
+  stops the service from starting: a run holds one connection for its lock
+  and works through another, and with one it would stall every request.
 - Grants bound to a passport follow the acceptance entry: INVALID revokes the
   grant and its delegated grants, SUSPENDED suspends them (cause `registry`),
   VALID resumes only what the registry suspended; the revocation feed, the

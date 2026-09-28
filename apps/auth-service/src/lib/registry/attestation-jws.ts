@@ -469,6 +469,11 @@ export interface StatusListEntriesRead {
   values: Map<number, number | null>;
   /** As StatusListRead.freshUntil: one bound for every entry of the one token. */
   freshUntil: Date;
+  /**
+   * The issuer key (kid) the list was verified with. Reconciliation checks
+   * again, when it records the read, that the key is still in force.
+   */
+  kid: string;
 }
 
 /**
@@ -525,7 +530,7 @@ export async function readStatusListEntries(token: string, check: StatusListEntr
   const bounds = [nowS + ISSUER_STATUS_MAX_FRESHNESS_SECONDS];
   if (exp !== undefined) bounds.push(exp as number);
   if (ttl !== undefined) bounds.push(nowS + (ttl as number));
-  return { values, freshUntil: new Date(Math.min(...bounds) * 1000) };
+  return { values, freshUntil: new Date(Math.min(...bounds) * 1000), kid: header.kid };
 }
 
 /**

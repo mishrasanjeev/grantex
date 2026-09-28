@@ -53,6 +53,7 @@ Alert: `GrantexRegistryStatusPollFailures` first, then
    | `invalid` | The token did not verify with the issuer's recorded keys, its `sub` is not the list URI, it has expired, or it has no entry at an attestation's index. |
    | `not_under_base` | The list URI is not under the issuer's `status_list_base`. |
    | `issuer_unknown` | The issuer record is gone. |
+   | `issuer_changed` | The issuer was suspended or withdrawn, or the key the list was signed with was revoked, while the list was being fetched. The read was discarded; expected right after such a `PATCH`, and nothing to do. |
    | `dev_map_refused` | `REGISTRY_DEV_ISSUER_ORIGIN_MAP` is set outside development and tests. Unset it. |
    | `error` | The registry's own database failed while recording. Check the database first. |
 
@@ -100,7 +101,9 @@ Alert: `GrantexRegistryStatusMassFlip`, and a jump in
    (`PATCH /v1/registry/issuers/{id}`, `status: suspended`). The registry
    stops reading its lists, so no further flip is acted on while it is fixed,
    and it suspends every bound grant of the issuer's passports in the
-   meantime. Flips the registry recorded before the suspension stay recorded.
+   meantime. A read of its list already in flight when the suspension
+   commits is discarded, not recorded (`issuer_changed`). Flips the registry
+   recorded before the suspension stay recorded.
    Reinstate the issuer only once it publishes the right list: the first read
    after the reinstatement decides, and entries it shows valid come back.
    Entries the wrong list showed as suspended come back the same way.
@@ -110,6 +113,20 @@ Alert: `GrantexRegistryStatusMassFlip`, and a jump in
    attestations; agents ask for new grants.
 4. Tell the developers whose grants were revoked. Their `grant.revoked`
    webhooks carry `cause: registry` and the reason.
+
+## Turning reconciliation on
+
+`REGISTRY_STATUS_RECONCILIATION_ENABLED=true` needs `DATABASE_POOL_MAX` of at
+least 2 (the default is 3): a run holds one connection for its advisory lock
+and works through another. With a pool of 1 the service refuses to start and
+names both variables.
+
+Kids revoked while reconciliation was off are acted on once it runs: the
+loop withdraws every accepted attestation signed with a revoked kid, however
+long ago it was revoked, and revokes the grants bound to them. With many
+accepted attestations this takes a few ticks (at most 2000 attestations are
+checked a run); `grantex_registry_acceptance_changes_total{cause="key_revoked"}`
+counts them.
 
 ## Turning reconciliation off
 

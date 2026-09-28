@@ -20,7 +20,9 @@ export const registryStatusListPollsTotal = new Counter({
  * Why a poll failed: the fetch reasons of lib/registry/issuer-fetcher.ts
  * (unreachable, http_status, content_type, too_large, dev_map_refused),
  * `invalid` for a list that was fetched but did not verify or decode,
- * `not_under_base` and `issuer_unknown`.
+ * `not_under_base`, `issuer_unknown`, and `issuer_changed` for a read
+ * discarded because the issuer was suspended or withdrawn, or its list key
+ * revoked, while the list was being fetched.
  */
 export const registryStatusListPollFailuresTotal = new Counter({
   name: 'grantex_registry_status_list_poll_failures_total',

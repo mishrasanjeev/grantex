@@ -76,6 +76,7 @@ import {
   REGISTRY_AUDIT_CHAIN,
   getAccreditedIssuer,
   isAccreditedFor,
+  issuerReadStillInForce,
   issuerVerificationKey,
   type IssuerRecord,
 } from './issuers.js';
@@ -313,7 +314,7 @@ export async function readIssuerStatusListEntries(
   uri: string,
   idxs: readonly number[],
   now: Date,
-): Promise<{ values: Map<number, number | null>; freshUntil: Date }> {
+): Promise<{ values: Map<number, number | null>; freshUntil: Date; kid: string }> {
   if (!statusUriUnderBase(uri, issuer.statusListBase)) {
     throw new AttestationError('status_stale', 'status_list_not_under_base',
       'status.status_list.uri is not under the issuer\'s status_list_base');
@@ -699,7 +700,18 @@ export interface IssuerStatusFlip {
  * Record what one read of an issuer's list said for each attestation
  * pointing into it (status reconciliation), in one transaction under the
  * registry chain's lock: issuer_status, until when the read stays fresh, the
- * attempt, and an audit entry for each change. Returns the changes.
+ * attempt, and an audit entry for each change. Returns the changes, or null
+ * when the read is discarded.
+ *
+ * `source` is the issuer whose list was read and the kid it was verified
+ * with. The list is fetched outside any transaction, so an operator may have
+ * suspended or withdrawn the issuer, or revoked that kid, while it was in
+ * flight: inside the transaction, with the issuer row locked
+ * (issuerReadStillInForce), the read is discarded, and nothing at all is
+ * written, unless the issuer is still active (at `now` and at the time of
+ * writing) and the kid still one of its keys in force. A suspension exists
+ * to stop acting on a faulty list, so a read that started before it never
+ * lands after it.
  *
  * A record that is no longer accepted, or whose issuer status is already
  * revoked, is left alone: INVALID is final (draft-ietf-oauth-status-list-21
@@ -711,10 +723,14 @@ export async function recordIssuerStatusReads(
   reads: ReadonlyArray<{ id: string; value: number }>,
   freshUntil: Date,
   now: Date,
-): Promise<IssuerStatusFlip[]> {
+  source: { issuerId: string; kid: string },
+): Promise<IssuerStatusFlip[] | null> {
   if (reads.length === 0) return [];
   return sql.begin(async (tx) => {
     let head = await lockAuditChain(tx, REGISTRY_AUDIT_CHAIN);
+    // Fail closed: judged at the later of the run's time and the clock now.
+    const at = new Date(Math.max(now.getTime(), Date.now()));
+    if (!await issuerReadStillInForce(tx, source.issuerId, source.kid, at)) return null;
     const flips: IssuerStatusFlip[] = [];
     for (const read of reads) {
       const current = await selectRecord(tx, read.id, true);
@@ -724,7 +740,7 @@ export async function recordIssuerStatusReads(
       if (current.issuerStatus !== status) flips.push({ id: current.id, from: current.issuerStatus, to: status });
     }
     return flips;
-  }) as Promise<IssuerStatusFlip[]>;
+  }) as Promise<IssuerStatusFlip[] | null>;
 }
 
 /**

@@ -15,7 +15,9 @@
  * one poll interval (1 s here, owner decision 5) and inside the 2 s feed SLO;
  * suspension suspends the bound grant and reinstatement resumes it; an
  * unreadable list changes nothing, is counted and ends in status_stale; an
- * issuer suspension and a revoked issuer key cascade; one fetch per list per
+ * issuer suspension and a revoked issuer key cascade, including a key revoked
+ * days before reconciliation ran; a read in flight when its issuer is
+ * suspended, or its list key revoked, is discarded; one fetch per list per
  * interval; one instance at a time; and the flag off, where nothing runs.
  */
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -32,6 +34,7 @@ import { KEY_PROOF_TYP } from '../src/lib/registry/agent-keys.js';
 import { ATTESTATION_TYP } from '../src/lib/registry/attestation-jws.js';
 import { REGISTRY_DEV_ISSUER_ORIGIN_MAP_ENV } from '../src/lib/registry/issuer-fetcher.js';
 import { jwkThumbprint } from '../src/lib/registry/jwk-thumbprint.js';
+import { recordIssuerStatusReads } from '../src/lib/registry/attestations.js';
 import {
   RECONCILIATION_LOCK_KEY,
   reconcileRegistryStatusOnce,
@@ -83,6 +86,9 @@ interface TestIssuer {
   entityId: string;
   key: Key;
   kid: string;
+  /** The key the issuer signs its status list with: `key` unless the issuer has a second one. */
+  listKey: Key;
+  listKid: string;
   statusListUri: string;
   entries: Map<number, number>;
   ttl: number;
@@ -101,6 +107,8 @@ let listPort = 0;
 const down = new Set<string>();
 /** Fetches of each list, by path. */
 const fetches = new Map<string, number>();
+/** Lists whose response is held until the test releases it, by issuer host. */
+const holds = new Map<string, { arrived: () => void; released: Promise<void> }>();
 const testIssuers = new Map<string, TestIssuer>();
 const operatorKey = randomBytes(32).toString('hex');
 let addressCounter = 0;
@@ -142,15 +150,31 @@ async function testIssuerStatusList(issuer: TestIssuer): Promise<string> {
   return new CompactSign(new TextEncoder().encode(JSON.stringify({
     sub: issuer.statusListUri, iat: now, exp: now + 3600, ttl: issuer.ttl,
     status_list: { bits: 2, lst: encodeList(issuer.entries) },
-  }))).setProtectedHeader({ typ: 'statuslist+jwt', alg: 'ES256', kid: issuer.kid }).sign(issuer.key.privateKey);
+  }))).setProtectedHeader({ typ: 'statuslist+jwt', alg: 'ES256', kid: issuer.listKid }).sign(issuer.listKey.privateKey);
 }
 
-async function newTestIssuer(options: { ttl?: number } = {}): Promise<TestIssuer> {
+/**
+ * Hold the issuer's list at the server until `release`: `arrived` settles
+ * once the registry's fetch of it is in flight.
+ */
+function holdList(issuer: TestIssuer): { arrived: Promise<void>; release: () => void } {
+  let arrived!: () => void;
+  let release!: () => void;
+  const arrival = new Promise<void>((resolve) => { arrived = resolve; });
+  const released = new Promise<void>((resolve) => { release = resolve; });
+  holds.set(issuer.host, { arrived, released });
+  return { arrived: arrival, release: () => { holds.delete(issuer.host); release(); } };
+}
+
+async function newTestIssuer(options: { ttl?: number; separateListKey?: boolean } = {}): Promise<TestIssuer> {
   const host = `issuer-${randomBytes(4).toString('hex')}.example`;
   const key = await newKey();
+  const listKey = options.separateListKey ? await newKey() : key;
+  const keys = [{ ...key.jwk, kid: 'k1', alg: 'ES256', use: 'sig' }];
+  if (options.separateListKey) keys.push({ ...listKey.jwk, kid: 'k2', alg: 'ES256', use: 'sig' });
   const record = await operator('POST', '/v1/registry/issuers', {
     entity_id: `https://${host}`,
-    jwks: { keys: [{ ...key.jwk, kid: 'k1', alg: 'ES256', use: 'sig' }] },
+    jwks: { keys },
     trust_marks: [AGENT_IDENTITY, PROVIDER_ENTITY],
     status_list_base: `https://${host}/status/`,
     accreditation_evidence_ref: `accreditation-case-${host}`,
@@ -161,6 +185,8 @@ async function newTestIssuer(options: { ttl?: number } = {}): Promise<TestIssuer
     entityId: `https://${host}`,
     key,
     kid: 'k1',
+    listKey,
+    listKid: options.separateListKey ? 'k2' : 'k1',
     statusListUri: `https://${host}/status/${host}/1`,
     entries: new Map(),
     ttl: options.ttl ?? 1,
@@ -356,18 +382,24 @@ beforeAll(async () => {
     const fail = () => { res.writeHead(503); res.end(); };
     const mockList = /^\/status\/(\d+)$/.exec(path);
     const testList = /^\/status\/([^/]+)\/1$/.exec(path);
-    let token: Promise<string> | null = null;
-    if (mockList && !down.has(MOCK_HOST)) {
-      token = Promise.resolve(mockIssuer.tokenStatusList(Number(mockList[1])));
-    } else if (testList && !down.has(testList[1]!)) {
-      const issuer = testIssuers.get(testList[1]!);
-      if (issuer) token = testIssuerStatusList(issuer);
-    }
-    if (!token) return fail();
-    void token.then((body) => {
-      res.writeHead(200, { 'content-type': 'application/statuslist+jwt' });
-      res.end(body);
-    }, fail);
+    const hold = testList ? holds.get(testList[1]!) : undefined;
+    hold?.arrived();
+    // The list is signed when it is answered, so a held list says what the
+    // issuer's entries are at the release.
+    void (hold?.released ?? Promise.resolve()).then(() => {
+      let token: Promise<string> | null = null;
+      if (mockList && !down.has(MOCK_HOST)) {
+        token = Promise.resolve(mockIssuer.tokenStatusList(Number(mockList[1])));
+      } else if (testList && !down.has(testList[1]!)) {
+        const issuer = testIssuers.get(testList[1]!);
+        if (issuer) token = testIssuerStatusList(issuer);
+      }
+      if (!token) return fail();
+      void token.then((body) => {
+        res.writeHead(200, { 'content-type': 'application/statuslist+jwt' });
+        res.end(body);
+      }, fail);
+    });
   });
   await new Promise<void>((resolve) => listServer.listen(0, '127.0.0.1', resolve));
   listPort = (listServer.address() as AddressInfo).port;
@@ -395,6 +427,7 @@ afterAll(async () => {
 beforeEach(() => {
   if (!adminDatabaseUrl) return;
   down.clear();
+  holds.clear();
   stubEnv();
   forwardSqlMock();
 });
@@ -605,6 +638,72 @@ describePostgres('an accredited issuer is reinstated', () => {
   });
 });
 
+describePostgres('a read in flight when the operator acts on the issuer', () => {
+  async function checkedAt(id: string): Promise<number> {
+    const [row] = await sql`SELECT issuer_status_checked_at FROM registry_attestations WHERE id = ${id}`;
+    return new Date(row!['issuer_status_checked_at'] as string).getTime();
+  }
+
+  it('is discarded when the issuer is suspended while its list is being fetched', async () => {
+    const issuer = await newTestIssuer();
+    const bound = await testBound(issuer);
+    // The faulty list the operator suspends the issuer for revokes the passport.
+    issuer.entries.set(bound.idx, 1);
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    const checked = await checkedAt(bound.registryAttestationId);
+    const gate = holdList(issuer);
+    const run = reconcileRegistryStatusOnce(sql, undefined, { minIntervalMs: POLL_MS, force: true });
+    try {
+      await gate.arrived;
+      await operator('PATCH', `/v1/registry/issuers/${issuer.id}`, { status: 'suspended', reason: 'wrong list published' });
+      expect(await grantStatus(bound.grantId)).toBe('suspended');
+    } finally {
+      gate.release();
+    }
+    const result = await run;
+    expect(result.outcome).toBe('complete');
+    expect(result.flips).toBe(0);
+    // Nothing the list said was recorded, not even the attempt, and nothing cascaded.
+    expect(await attestationState(bound.registryAttestationId)).toEqual({ state: 'accepted', issuer_status: 'valid', acceptance: 2 });
+    expect(await checkedAt(bound.registryAttestationId)).toBe(checked);
+    expect(await grantStatus(bound.grantId)).toBe('suspended');
+    expect(await feedActions(bound.grantId)).toEqual(['suspended']);
+    const changes = await sql`
+      SELECT 1 FROM audit_entries
+      WHERE developer_id = 'grantex:registry' AND action = 'grantex.registry.attestation_issuer_status_changed'
+        AND metadata->>'attestationId' = ${bound.registryAttestationId}`;
+    expect(changes).toHaveLength(0);
+
+    // Reinstated with the list corrected, the first fresh read decides.
+    issuer.entries.delete(bound.idx);
+    await operator('PATCH', `/v1/registry/issuers/${issuer.id}`, { status: 'active', reason: 'list corrected' });
+    await reconcileNow();
+    expect(await attestationState(bound.registryAttestationId)).toEqual({ state: 'accepted', issuer_status: 'valid', acceptance: 0 });
+    expect(await grantStatus(bound.grantId)).toBe('active');
+  });
+
+  it('is not recorded once the key that signed the list is revoked', async () => {
+    const issuer = await newTestIssuer({ ttl: 3600, separateListKey: true });
+    const bound = await testBound(issuer);
+    await operator('PATCH', `/v1/registry/issuers/${issuer.id}`, { revoke_kids: ['k2'], reason: 'list key compromise' });
+    // The attestation was signed with k1, which is still in force.
+    expect(await attestationState(bound.registryAttestationId)).toEqual({ state: 'accepted', issuer_status: 'valid', acceptance: 0 });
+    const fresh = () => new Date(Date.now() + 60_000);
+    // A read verified with k2 just before the revocation, recorded after it.
+    expect(await recordIssuerStatusReads(sql, [{ id: bound.registryAttestationId, value: 1 }],
+      fresh(), new Date(), { issuerId: issuer.id, kid: 'k2' })).toBeNull();
+    expect(await attestationState(bound.registryAttestationId)).toEqual({ state: 'accepted', issuer_status: 'valid', acceptance: 0 });
+    // A kid the issuer does not have is refused the same way.
+    expect(await recordIssuerStatusReads(sql, [{ id: bound.registryAttestationId, value: 1 }],
+      fresh(), new Date(), { issuerId: issuer.id, kid: 'k9' })).toBeNull();
+    // With k1, still in force, the read is recorded.
+    expect(await recordIssuerStatusReads(sql, [{ id: bound.registryAttestationId, value: 2 }],
+      fresh(), new Date(), { issuerId: issuer.id, kid: 'k1' }))
+      .toEqual([{ id: bound.registryAttestationId, from: 'valid', to: 'suspended' }]);
+    expect(await attestationState(bound.registryAttestationId)).toMatchObject({ issuer_status: 'suspended' });
+  });
+});
+
 describePostgres('resuming what the registry suspended', () => {
   it('is not held up by suspensions that cannot be resumed yet', async () => {
     const stuck = await mockBound();
@@ -668,6 +767,30 @@ describePostgres('an issuer key is revoked', () => {
       WHERE developer_id = 'grantex:registry' AND action = 'grantex.registry.attestation_withdrawn'
         AND metadata->>'attestationId' = ${bound.registryAttestationId}`;
     expect(audit?.['metadata']).toMatchObject({ requestedBy: 'registry:key_revoked', kid: 'k1' });
+  });
+
+  it('withdraws, on the next tick, what a key revoked days ago while reconciliation was off still has accepted', async () => {
+    const issuer = await newTestIssuer({ ttl: 3600 });
+    const bound = await testBound(issuer);
+    vi.stubEnv('REGISTRY_STATUS_RECONCILIATION_ENABLED', 'false');
+    const replacement = await newKey();
+    await operator('PATCH', `/v1/registry/issuers/${issuer.id}`, {
+      jwks: { keys: [{ ...replacement.jwk, kid: 'k2', alg: 'ES256', use: 'sig' }] },
+      revoke_kids: ['k1'],
+      reason: 'key compromise',
+    });
+    await sql`
+      UPDATE accredited_issuer_revoked_keys SET revoked_at = NOW() - INTERVAL '3 days'
+      WHERE issuer_id = ${issuer.id} AND kid = 'k1'`;
+    expect(await attestationState(bound.registryAttestationId)).toEqual({ state: 'accepted', issuer_status: 'valid', acceptance: 0 });
+    expect(await grantStatus(bound.grantId)).toBe('active');
+
+    vi.stubEnv('REGISTRY_STATUS_RECONCILIATION_ENABLED', 'true');
+    const result = await reconcileNow();
+    expect(result.attestationsWithdrawn).toBeGreaterThanOrEqual(1);
+    expect(await attestationState(bound.registryAttestationId)).toEqual({ state: 'withdrawn', issuer_status: 'valid', acceptance: 1 });
+    expect(await grantStatus(bound.grantId)).toBe('revoked');
+    expect(await feedActions(bound.grantId)).toEqual(['revoked']);
   });
 });
 

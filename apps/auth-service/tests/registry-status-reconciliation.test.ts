@@ -4,7 +4,7 @@
  * interval floor (owner decision 5), the registry's decision for an
  * attestation, the start jitter, and the flag.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_POLL_MIN_INTERVAL_MS,
   DEV_POLL_MIN_INTERVAL_FLOOR_MS,
@@ -15,7 +15,7 @@ import {
   statusPollMinIntervalConfigError,
   statusPollMinIntervalMs,
 } from '../src/lib/registry/status-reconciliation.js';
-import { config } from '../src/config.js';
+import { config, validateConfig } from '../src/config.js';
 
 const NOW = new Date('2026-09-28T12:00:00Z');
 const active = { status: 'active' as const, suspendedEffectiveFrom: null };
@@ -126,5 +126,50 @@ describe('REGISTRY_STATUS_RECONCILIATION_ENABLED', () => {
       if (before === undefined) delete process.env['REGISTRY_STATUS_RECONCILIATION_ENABLED'];
       else process.env['REGISTRY_STATUS_RECONCILIATION_ENABLED'] = before;
     }
+  });
+});
+
+describe('the database pool reconciliation needs', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  /** validateConfig's fatal message, or null when it lets the service start. */
+  function validate(): string | null {
+    const errors: string[] = [];
+    vi.spyOn(console, 'error').mockImplementation((message: unknown) => { errors.push(String(message)); });
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`exit ${String(code)}`);
+    }) as never);
+    try {
+      validateConfig();
+      return null;
+    } catch (err) {
+      expect((err as Error).message).toBe('exit 1');
+      return errors.join(' ');
+    } finally {
+      vi.mocked(console.error).mockRestore();
+      vi.mocked(process.exit).mockRestore();
+    }
+  }
+
+  it('refuses to start with the flag on and a pool of one connection', () => {
+    // The run keeps one connection for its advisory lock and does its work
+    // on another: with one in the pool it would wait for itself.
+    vi.stubEnv('REGISTRY_STATUS_RECONCILIATION_ENABLED', 'true');
+    vi.stubEnv('DATABASE_POOL_MAX', '1');
+    const problem = validate();
+    expect(problem).toMatch(/REGISTRY_STATUS_RECONCILIATION_ENABLED/);
+    expect(problem).toMatch(/DATABASE_POOL_MAX/);
+  });
+
+  it('starts with the flag off and a pool of one, and with the flag on and a pool of two', () => {
+    vi.stubEnv('REGISTRY_STATUS_RECONCILIATION_ENABLED', 'false');
+    vi.stubEnv('DATABASE_POOL_MAX', '1');
+    expect(validate()).toBeNull();
+    vi.stubEnv('REGISTRY_STATUS_RECONCILIATION_ENABLED', 'true');
+    vi.stubEnv('DATABASE_POOL_MAX', '2');
+    expect(validate()).toBeNull();
   });
 });

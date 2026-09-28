@@ -52,7 +52,7 @@ describe('pollDueStatusLists', () => {
     read.mockImplementation(async (_sql, _issuer, uri) => {
       // The second list answers later than the first fails.
       if (uri === SECOND) await new Promise((resolve) => setTimeout(resolve, 50));
-      return { values: new Map([[0, 0]]), freshUntil: new Date(NOW.getTime() + 1_000) };
+      return { values: new Map([[0, 0]]), freshUntil: new Date(NOW.getTime() + 1_000), kid: 'k1' };
     });
     const recorded: string[] = [];
     vi.mocked(attestations.recordIssuerStatusReads).mockImplementation(async (_sql, reads) => {

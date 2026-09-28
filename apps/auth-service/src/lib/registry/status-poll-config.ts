@@ -42,6 +42,32 @@ export function statusPollMinIntervalConfigError(env: NodeJS.ProcessEnv = proces
   return null;
 }
 
+export const RECONCILIATION_ENABLED_ENV = 'REGISTRY_STATUS_RECONCILIATION_ENABLED';
+export const DATABASE_POOL_MAX_ENV = 'DATABASE_POOL_MAX';
+/**
+ * Connections reconciliation needs: a run keeps one for its advisory lock
+ * for the whole run and does its work through the pool, so the pool needs
+ * at least one more. With one, the run would wait for itself and every
+ * request would stall behind it.
+ */
+export const RECONCILIATION_MIN_POOL_CONNECTIONS = 2;
+
+/**
+ * Why REGISTRY_STATUS_RECONCILIATION_ENABLED=true cannot run with the
+ * configured DATABASE_POOL_MAX (default 3), or null. validateConfig refuses
+ * to start on it. A DATABASE_POOL_MAX that is not a whole number is
+ * reported by config.ts itself.
+ */
+export function statusReconciliationPoolConfigError(env: NodeJS.ProcessEnv = process.env): string | null {
+  if (env[RECONCILIATION_ENABLED_ENV] !== 'true') return null;
+  const raw = env[DATABASE_POOL_MAX_ENV] ?? '3';
+  const text = raw.trim();
+  if (!/^\d+$/.test(text)) return null;
+  if (Number(text) >= RECONCILIATION_MIN_POOL_CONNECTIONS) return null;
+  return `${RECONCILIATION_ENABLED_ENV}=true requires ${DATABASE_POOL_MAX_ENV} of at least ${RECONCILIATION_MIN_POOL_CONNECTIONS} `
+    + '(a reconciliation run holds one connection for its lock and works through another)';
+}
+
 /** The minimum poll interval in force. A value validateConfig would refuse reads as the default. */
 export function statusPollMinIntervalMs(env: NodeJS.ProcessEnv = process.env): number {
   const raw = env[POLL_MIN_INTERVAL_ENV];

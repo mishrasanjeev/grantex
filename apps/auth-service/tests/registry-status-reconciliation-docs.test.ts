@@ -101,7 +101,8 @@ describe('spec/registry-federation.md, Status reconciliation', () => {
   it('the runbook explains every poll failure reason the spec lists', () => {
     const reasonsCell = table('metrics-table').find(([name]) => name === '`grantex_registry_status_list_poll_failures_total`')![2]!;
     const reasons = [...reasonsCell.matchAll(/`([a-z_]+)`/g)].map((match) => match[1]!);
-    expect(reasons).toHaveLength(9);
+    expect(reasons).toHaveLength(10);
+    expect(reasons).toContain('issuer_changed');
     const explained = [...RUNBOOK.matchAll(/^ *\| `([a-z_]+)` \|/gm)].map((match) => match[1]!);
     expect(explained.sort()).toEqual([...reasons].sort());
   });
@@ -113,7 +114,9 @@ describe('spec/registry-federation.md, Status reconciliation', () => {
       REGISTRY_STATUS_POLL_MIN_INTERVAL_MS: String(DEFAULT_POLL_MIN_INTERVAL_MS),
     });
     expect(SECTION).toContain(`at most ${MAX_POLL_MIN_INTERVAL_MS}`);
-    expect(SELF_HOSTING).toMatch(/^\| `REGISTRY_STATUS_RECONCILIATION_ENABLED` \| No \| `false` \|/m);
+    expect(SELF_HOSTING).toMatch(/^\| `REGISTRY_STATUS_RECONCILIATION_ENABLED` \| No \| `false` \|.*`DATABASE_POOL_MAX` of at least 2/m);
+    // Reconciliation needs a pool of two (validateConfig refuses one).
+    expect(SECTION).toContain('Needs `DATABASE_POOL_MAX` of at least 2');
     expect(SELF_HOSTING).toMatch(new RegExp(`^\\| \`REGISTRY_STATUS_POLL_MIN_INTERVAL_MS\` \\| No \\| \`${DEFAULT_POLL_MIN_INTERVAL_MS}\` \\|`, 'm'));
   });
 });
