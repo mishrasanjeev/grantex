@@ -662,6 +662,12 @@ tests/conformance`.
 
 ## Migrating from 3.x to 4.0
 
+Token introspection now requires confidential-client Basic authentication and
+defaults to online current issuer verification. A revoked grant or issuer
+outage reports `active: false`; unsigned caller identity is not authentication.
+`allowUnauthenticatedIntrospection: true` and `introspectionCurrentGrant: 'none'`
+are explicit warned evaluation-only opt-outs.
+
 1. Implement and test the verified `resolvePrincipal` host-session resolver.
 2. Add `currentGrant: grantexCurrentGrantVerifier(grantex)` alongside shared
    `revocations` in every resource guard and Express/Hono middleware. The helper

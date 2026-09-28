@@ -75,6 +75,8 @@ const grantex = {
 
 const storage = await openStorage();
 const app = await createMcpAuthServer({
+  allowUnauthenticatedIntrospection: true,
+  introspectionCurrentGrant: 'none',
   resolvePrincipal: async () => ({ principalId: 'principal-1' }),
   grantex,
   agentId: 'ag_restart',

@@ -49,6 +49,11 @@ Delegation consent alone does not approve every business decision. Four-eyes
 rules require the configured independent approvers. Never accept an agent's
 claim that a human approved as decision evidence.
 
+`/introspect` requires confidential-client Basic authentication and checks current
+issuer authority by default. It reports inactive during an issuer outage. The
+warned `allowUnauthenticatedIntrospection` and `introspectionCurrentGrant: 'none'`
+options are evaluation-only, not recommended production configuration.
+
 ## Deployment responsibilities
 
 | Concern | Version 4 behavior | Operator responsibility |

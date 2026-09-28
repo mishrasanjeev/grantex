@@ -121,6 +121,11 @@ bind a data region, and `grant.dataRegion` is rejected.
 
 ## Migrate from 3.x or 2.x
 
+`/introspect` now requires confidential-client Basic authentication and checks
+current issuer authority by default. An issuer failure reports inactive.
+`allowUnauthenticatedIntrospection: true` and `introspectionCurrentGrant: 'none'`
+are additional warned evaluation opt-outs, not production recommendations.
+
 - Supply `resolvePrincipal`. Version 3 used the OAuth client ID as the principal;
   version 2.0.2 also lacked a rendered local consent page.
 - Supply `currentGrant` as well as `revocations` to resource middleware.

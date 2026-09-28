@@ -21,9 +21,9 @@ the historical v2 walkthrough. The historical guide remains clearly archived.
 | Environment / check | Result |
 |---|---|
 | Windows typecheck and build | Pass |
-| Windows unit/conformance suite | 391 passed; 2 memory-only persistence cases skipped |
+| Windows unit/conformance suite | 396 passed; 2 memory-only persistence cases skipped |
 | Local Docker Linux typecheck and build | Pass |
-| Local Docker unit/conformance suite | 391 passed; same 2 memory-only skips |
+| Local Docker unit/conformance suite | 396 passed; same 2 memory-only skips |
 | Local Docker Postgres/Redis integration, including process restart | 63 passed |
 | Local Docker Chromium consent, layout and accessibility | 9 passed |
 | Clean packed artifact with published TypeScript SDK 0.8.0 | Pass |
@@ -53,6 +53,7 @@ was corrected before the successful complete run. Neither failure was ignored.
 - Consent replay, concurrency, CSRF, expiry and storage restart/replica handling.
 - Purpose/duration changes after rendering and hidden lifetime overrides.
 - Signed-token current authority: active, revoked, issuer outage and signature-before-online-check.
+- Authenticated introspection, malformed credentials and uncached issuer-state checks; outages report inactive.
 - Missing action-bound human decisions, wrong action, consumed/expired decisions and independent approver rules.
 - Token-issued observability hooks on exchange/refresh and safe hook-failure warnings.
 

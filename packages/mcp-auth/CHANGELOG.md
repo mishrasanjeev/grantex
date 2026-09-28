@@ -3,6 +3,10 @@
 ## 4.0.0
 
 ### Breaking
+- `/introspect` requires authenticated confidential clients and defaults to
+  current online issuer verification. Explicit evaluation-only opt-outs are
+  `allowUnauthenticatedIntrospection: true` and `introspectionCurrentGrant: 'none'`.
+  Issuer outages report inactive rather than trusting a cached local signature.
 - Authorization requires `resolvePrincipal`, derived from a verified host session.
   The OAuth client ID is no longer the human by default. An explicit
   `allowLegacyClientPrincipal: true` migration opt-out warns and is evaluation-only.

@@ -4,6 +4,7 @@ import type { ClientIdMetadataDocumentOptions } from './lib/client-metadata.js';
 import type { LoadedManifest } from './resource/tool-policy.js';
 import type { ConsentPageOptions } from './consent/page.js';
 import type { FastifyRequest } from 'fastify';
+import type { CurrentGrantVerifier } from './resource/guard.js';
 
 export interface AuthenticatedPrincipal {
   /** Tenant-scoped external principal ID derived from a verified host session. */
@@ -29,6 +30,10 @@ export interface McpAuthConfig {
   resolvePrincipal?: PrincipalResolver;
   /** Explicit insecure v3 migration opt-out; evaluation only, with a warning. */
   allowLegacyClientPrincipal?: boolean;
+  /** Defaults to online Grantex verification; 'none' is an evaluation-only opt-out. */
+  introspectionCurrentGrant?: CurrentGrantVerifier | 'none';
+  /** Explicit evaluation-only opt-out from authenticated token introspection. */
+  allowUnauthenticatedIntrospection?: boolean;
   /**
    * Scopes clients may request (`scopes_supported`). A request for any other
    * scope is refused with `invalid_scope`. Optional when `manifests` is set:

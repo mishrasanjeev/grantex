@@ -101,6 +101,8 @@ async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
   const issuer = `http://127.0.0.1:${jwksPort}`;
 
   const app = await createMcpAuthServer({
+    allowUnauthenticatedIntrospection: true,
+    introspectionCurrentGrant: 'none',
     resolvePrincipal: async () => ({ principalId: 'principal-1' }),
     grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
     agentId: 'agent-1',
@@ -119,6 +121,39 @@ async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
 function grantexIssuer(): string {
   return `http://127.0.0.1:${jwksPort}`;
 }
+
+describe('secure introspection defaults', () => {
+  it.each([undefined, 'Bearer untrusted', 'Basic invalid'])('refuses missing or malformed client authentication %j', async (authorization) => {
+    const { app } = await createTestApp({ allowUnauthenticatedIntrospection: false });
+    try {
+      const response = await app.inject({ method: 'POST', url: '/introspect', payload: { token: await signTestJwt({ sub: 'human-1', scp: ['read'] }) }, headers: authorization ? { authorization } : {} });
+      expect(response.statusCode).toBe(401);
+      expect(response.body).not.toContain('human-1');
+    } finally { await app.close(); }
+  });
+
+  it('authenticated introspection checks current authority each time without caching', async () => {
+    const verify = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const { app } = await createTestApp({ allowUnauthenticatedIntrospection: false, introspectionCurrentGrant: { verify } });
+    try {
+      const token = await signTestJwt({ sub: 'human-1', scp: ['read'] });
+      const request = { method: 'POST' as const, url: '/introspect', payload: { token }, headers: { authorization: `Basic ${Buffer.from(`${TEST_CLIENT_ID}:${TEST_CLIENT_SECRET}`).toString('base64')}` } };
+      expect((await app.inject(request)).json().active).toBe(true);
+      expect((await app.inject(request)).json()).toEqual({ active: false });
+      expect(verify).toHaveBeenCalledTimes(2);
+      expect(verify).toHaveBeenCalledWith(token);
+    } finally { await app.close(); }
+  });
+
+  it('reports inactive during a current-authority outage without disclosing private error text', async () => {
+    const { app } = await createTestApp({ allowUnauthenticatedIntrospection: false, introspectionCurrentGrant: { verify: async () => { throw new Error('private-issuer-detail'); } } });
+    try {
+      const response = await app.inject({ method: 'POST', url: '/introspect', payload: { token: await signTestJwt({ sub: 'human-1', scp: ['read'] }) }, headers: { authorization: `Basic ${Buffer.from(`${TEST_CLIENT_ID}:${TEST_CLIENT_SECRET}`).toString('base64')}` } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ active: false });
+    } finally { await app.close(); }
+  });
+});
 
 async function signTestJwt(
   claims: Record<string, unknown>,

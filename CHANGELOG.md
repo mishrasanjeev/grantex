@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### MCP Auth 4.0.0 (Breaking)
+- Introspection requires authenticated confidential clients and checks current
+  issuer authority by default. Evaluation-only opt-outs are
+  `allowUnauthenticatedIntrospection: true` and `introspectionCurrentGrant: 'none'`.
 - Human consent now requires an authenticated host principal resolver. Approval
   and callback recheck the same principal; exchange and refresh preserve the
   upstream subject. Legacy identity-unbound records require reauthorization.
