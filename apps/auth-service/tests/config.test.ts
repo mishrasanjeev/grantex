@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  config,
   parseIntegerSetting,
   parsePolicyBackend,
   passkeyOriginConfigError,
@@ -69,5 +70,22 @@ describe('configuration parsing', () => {
   it('rejects unknown policy backends instead of silently using builtin', () => {
     expect(parsePolicyBackend('opa')).toBe('opa');
     expect(() => parsePolicyBackend('open-policy-agent')).toThrow(/POLICY_BACKEND/);
+  });
+
+  it('turns the public registry routes on only for exactly "true"', () => {
+    const saved = process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'];
+    try {
+      delete process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'];
+      expect(config.registryPublicEndpointsEnabled).toBe(false);
+      for (const value of ['false', 'TRUE', '1', 'yes', ' true', '']) {
+        process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] = value;
+        expect(config.registryPublicEndpointsEnabled).toBe(false);
+      }
+      process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] = 'true';
+      expect(config.registryPublicEndpointsEnabled).toBe(true);
+    } finally {
+      if (saved === undefined) delete process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'];
+      else process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] = saved;
+    }
   });
 });

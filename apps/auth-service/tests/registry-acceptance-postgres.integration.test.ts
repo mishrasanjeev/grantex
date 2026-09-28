@@ -59,6 +59,8 @@ async function resetStore(): Promise<void> {
   resetAcceptanceStatusCache();
 }
 
+const savedPublicFlag = process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'];
+
 beforeAll(async () => {
   if (!adminDatabaseUrl) return;
   const db = await createTestDatabase('acceptance-lists');
@@ -66,7 +68,14 @@ beforeAll(async () => {
   dropTestDatabase = db.drop;
   sql = postgres(databaseUrl, { max: 16, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
   await runMigrations(sql);
-  app = await buildTestApp();
+  // The public list routes are served only with the flag on at boot.
+  process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] = 'true';
+  try {
+    app = await buildTestApp();
+  } finally {
+    if (savedPublicFlag === undefined) delete process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'];
+    else process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] = savedPublicFlag;
+  }
 }, 180_000);
 
 afterAll(async () => {

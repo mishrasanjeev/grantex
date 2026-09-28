@@ -25,6 +25,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   The routes need no authentication, are rate-limited to 300 requests a
   minute per client address, and allow any browser origin. A store that
   cannot be read is a `5xx`, never an older list.
+- The three routes are served only when `REGISTRY_PUBLIC_ENDPOINTS_ENABLED` is
+  exactly `true` at startup; it defaults off. With it off the paths are not
+  routes and answer like any unknown path. Allocating and setting entries
+  inside the service works either way.
+- CORS for browser relying parties: an `OPTIONS` preflight (sent because
+  `If-None-Match` is not a CORS-safelisted request-header) is answered `204`
+  with `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET`
+  and `Access-Control-Allow-Headers: If-None-Match`, and `200` and `304`
+  responses carry `Access-Control-Expose-Headers: ETag`. No response allows
+  credentials.
 - Entries are allocated at random indices, from lists of 131,072 entries, and
   can never be handed out twice. The code that registers attestations uses
   `allocateAcceptanceEntry()`, `setAcceptance(uri, idx, status)` and

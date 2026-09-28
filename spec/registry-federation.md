@@ -45,9 +45,29 @@ The list URI is `{PUBLIC_BASE_URL}/status/attestations/{list}`. It is the
 Token Status List token's `sub`, and it is the `uri` a referenced token
 carries next to its `idx` (draft-ietf-oauth-status-list-21 §6.2).
 
-The routes need no authentication, are rate-limited per client address (300
-requests a minute on each route), and allow reads from any browser origin
-(§8.1). A list id that is not one of the registry's is a `404`. A store that
+The routes need no authentication, so they are served only when the auth
+service runs with `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true` (exactly `true`,
+read at startup; the default is off). With it off the paths are not routes:
+they answer like any unknown path, and no CORS preflight is granted for them.
+The service's own allocation and status changes (see Allocation) work either
+way. When served, the routes are rate-limited per client address (300
+requests a minute on each route) and allow reads from any browser origin
+(§8.1), following the CORS protocol of the Fetch standard:
+
+- A cross-origin `GET` with `If-None-Match` is not a simple request
+  (`If-None-Match` is not a CORS-safelisted request-header), so a browser
+  first sends an `OPTIONS` preflight. Each route answers it `204` with
+  `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET`,
+  `Access-Control-Allow-Headers: If-None-Match` and
+  `Access-Control-Max-Age: 600`.
+- `GET` responses, `304 Not Modified` included, carry
+  `Access-Control-Allow-Origin: *` and `Access-Control-Expose-Headers: ETag`,
+  since `ETag` is not a CORS-safelisted response header and a script could
+  not otherwise read it to revalidate.
+- No response carries `Access-Control-Allow-Credentials`; the lists are read
+  without credentials.
+
+A list id that is not one of the registry's is a `404`. A store that
 cannot be read is a `5xx`: the registry never serves an older copy in its
 place, because that copy could show a withdrawn attestation as accepted.
 
@@ -136,6 +156,12 @@ reject a list whose signature does not verify (draft-ietf-oauth-status-list-21
 | Token Status List `ttl` (seconds, §5.1) | 600 | 60 |
 | Bitstring Status List `ttl` (milliseconds, §2.2) | 600000 | 60000 |
 | `Cache-Control` | `public, max-age=600` | `public, max-age=60` |
+
+Both formats state the same interval in their own units. Bitstring Status
+List v1.0 §2.2 defines `credentialSubject.ttl` as an OPTIONAL "time to live"
+in milliseconds before a refresh SHOULD be attempted, with no default and no
+minimum or maximum, so the 60-second cascade ttl is expressed there exactly as
+60000.
 
 A cascade window is the hour after any acceptance change (an entry becomes
 SUSPENDED, INVALID or VALID again) or a registry-wide suspension such as an
