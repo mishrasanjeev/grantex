@@ -184,3 +184,10 @@ d43754a96201dcce5144377d896cba45a0e45832:packages/sdk-ts/tests/verify-jwks-fetch
 d43754a96201dcce5144377d896cba45a0e45832:packages/sdk-py/tests/test_verify_jwks_fetch.py:generic-api-key:441
 f71ee3999f1001bd055da6db6fe8eb5755d75b27:packages/sdk-ts/tests/verify-jwks-fetch.test.ts:generic-api-key:386
 f71ee3999f1001bd055da6db6fe8eb5755d75b27:packages/sdk-py/tests/test_verify_jwks_fetch.py:generic-api-key:472
+# MCP Auth 2 legacy guide relocation: two truncated JWT examples ending in
+# "..." and the literal client_id:client_secret were copied from the old guide.
+# These are documentation placeholders, not credentials; current examples use
+# environment variables. Ignore only their original commit/path fingerprints.
+cab4e6e6fdb2481243965e367b5effa07f7dc726:docs/legacy/mcp-auth-server-2.mdx:generic-api-key:165
+cab4e6e6fdb2481243965e367b5effa07f7dc726:docs/legacy/mcp-auth-server-2.mdx:generic-api-key:192
+cab4e6e6fdb2481243965e367b5effa07f7dc726:docs/legacy/mcp-auth-server-2.mdx:curl-auth-user:189

@@ -85,7 +85,11 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.12'
-      - run: python -m pip install --disable-pip-version-check pip-audit==2.10.1
+      - run: python -m pip install --disable-pip-version-check pip-audit==2.10.1 'build>=1,<2'
+      - name: Build the SDK dependency candidate for pre-publication audits
+        run: |
+          python -m build packages/sdk-py --wheel --outdir "$RUNNER_TEMP/sdk-audit-dependencies"
+          echo "PIP_FIND_LINKS=$RUNNER_TEMP/sdk-audit-dependencies" >> "$GITHUB_ENV"
       - name: Audit every tracked Python dependency and license surface
         run: python scripts/audit-python-dependencies.py
 

@@ -168,6 +168,8 @@ describe('legacy claim aliases behind the compatibility flag', () => {
       expect.stringContaining('"scp" is a legacy alias of scope'),
       { type: 'DeprecationWarning', code: 'GRANTEX_LEGACY_CLAIM' },
     );
+    expect(warn.mock.calls.every(([message]) => String(message).includes('set legacyClaims: false'))).toBe(true);
+    expect(warn.mock.calls.some(([message]) => String(message).includes('default in 0.7'))).toBe(false);
 
     await verifyGrantToken(token, { jwksUri: JWKS_URI });
     expect(warn).toHaveBeenCalledTimes(6);

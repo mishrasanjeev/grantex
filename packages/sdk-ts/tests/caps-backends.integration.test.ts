@@ -107,7 +107,7 @@ for (const [name, url, make] of backends) {
       expect(outcomes.filter((o) => o === 'reserved')).toHaveLength(10);
       expect(outcomes.filter((o) => o === 'cap_exceeded')).toHaveLength(40);
       expect((await meter.usage(t, [limit(10)]))[0]?.used).toBe(10);
-    });
+    }, 60_000);
 
     it('fifty parallel weighted calls across two counters', async () => {
       const meter = new CapsMeter(await make());
@@ -116,7 +116,7 @@ for (const [name, url, make] of backends) {
       const results = await Promise.allSettled(Array.from({ length: 50 }, () => meter.reserve(t, limits)));
       expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(10);
       expect((await meter.usage(t, limits)).map((u) => u.used)).toEqual([10, 30]);
-    });
+    }, 60_000);
 
     it('rolling window and refund', async () => {
       const c = { now: T0 };

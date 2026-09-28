@@ -73,6 +73,14 @@ configured audience. Audience failures remain denied even in permissive mode.
 Gateway route-level audience overrides the global setting. Adapters accept
 `audience` in their configuration; both expose named audience errors.
 
+## Legacy claim compatibility
+
+Legacy token-claim aliases remain enabled with deprecation warnings in
+TypeScript 0.8 and Python 0.7. This release does not flip that compatibility
+default. After migrating old grants, set `legacyClaims: false` or
+`legacy_claims=False` to require standard claims and `typ: at+jwt`.
+See [the claim migration guide](https://docs.grantex.dev/migration-0.6).
+
 ## Supply trusted amounts
 
 For every call on a connector covered by `capped:N`, supply a finite amount

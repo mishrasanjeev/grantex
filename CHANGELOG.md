@@ -17,6 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Go v0.4.1 and x402 0.4.1 are unchanged and compatibility-tested, not republished.
 - Registry publication is separate from preparation. See Release Status for
   verified artifacts and the enforcement migration guide for rollout/rollback.
+- Preserve legacy claim compatibility defaults and correct stale deprecation
+  warnings that promised an unimplemented version-based default flip. Tests
+  verify the explicit standard-only setting is named in each warning.
+- Audit pre-publication Python integration dependencies against a wheel built
+  from this checkout, without relaxing vulnerability or license policy.
 
 ### Registry attestation-acceptance status lists
 - The registry now publishes, under its own issuer identifier (`JWT_ISSUER`),
