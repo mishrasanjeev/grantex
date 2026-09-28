@@ -123,7 +123,7 @@ Trust levels: `basic` (self-declared), `verified` (DNS-TXT proof), `soc2` (SOC 2
 | `GET` | `/v1/passport/:id` | API key | Retrieve passport by ID |
 | `POST` | `/v1/passport/:id/revoke` | API key | Revoke passport (flips StatusList2021 bit) |
 | `GET` | `/v1/trust-registry/:orgDID` | None | Look up org trust record (public) |
-| `GET` | `/v1/trust-registry` | API key | List all trust records (admin) |
+| `GET` | `/v1/trust-registry` | API key; admin key (`ADMIN_API_KEY`) when `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` | List all trust records, across developers (operator) |
 
 ## SDK Support
 

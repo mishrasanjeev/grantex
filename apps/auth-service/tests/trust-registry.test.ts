@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { buildTestApp, seedAuth, authHeader, sqlMock, TEST_DEVELOPER } from './helpers.js';
-import { verifyDnsTxt } from '../src/routes/trust-registry.js';
+import { buildTestApp, seedAuth, authHeader, sqlMock, TEST_DEVELOPER, TEST_ADMIN_API_KEY } from './helpers.js';
+import { config } from '../src/config.js';
+import { trustRegistryAdminListingEnforced, verifyDnsTxt } from '../src/routes/trust-registry.js';
 import type { FastifyInstance } from 'fastify';
 
 // Mock node:dns/promises to control verifyDnsTxt behavior
@@ -666,5 +667,248 @@ describe('GET /v1/trust-registry/:orgDID (legacy)', () => {
     expect(body.trustLevel).toBe('verified');
     expect(body.domains).toEqual(['legacy.com']);
     expect(body.agents).toEqual([]);
+  });
+});
+
+// -----------------------------------------------------------------
+// GET /v1/trust-registry — every record, across developers. Takes the admin
+// key only when TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true (opt-in); by
+// default it keeps the existing developer-key behaviour.
+// -----------------------------------------------------------------
+describe('GET /v1/trust-registry (admin listing)', () => {
+  const adminHeaders = () => ({ authorization: `Bearer ${TEST_ADMIN_API_KEY}` });
+
+  // Two developers' records: the listing is cross-tenant by design, which is
+  // why the enforced setting lets only the service administrator read it.
+  const acrossDevelopers = () => [
+    registryRow('treg_a', {
+      developer_id: 'dev_A',
+      verification_method: 'dns-txt',
+      trust_level: 'verified',
+      verified_at: new Date('2026-09-01T00:00:00Z'),
+    }),
+    registryRow('treg_b', { developer_id: 'dev_B', verification_method: 'pending', verified_at: null }),
+  ];
+
+  // The flag is read when the routes are registered, so each setting gets an
+  // app of its own. `undefined` removes the variable for the build.
+  async function buildWithFlag(value: string | undefined): Promise<FastifyInstance> {
+    vi.stubEnv('TRUST_REGISTRY_ADMIN_LISTING_ENFORCED', value);
+    try {
+      return await buildTestApp();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+
+  describe('enforced (TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true)', () => {
+    let enforced: FastifyInstance;
+
+    beforeAll(async () => {
+      enforced = await buildWithFlag('true');
+    });
+
+    afterAll(async () => {
+      await enforced?.close();
+    });
+
+    it('refuses a developer API key with 401 and reads nothing from the registry', async () => {
+      seedAuth();
+      sqlMock.mockResolvedValueOnce(acrossDevelopers());
+
+      const res = await enforced.inject({ method: 'GET', url: '/v1/trust-registry', headers: authHeader() });
+
+      expect(res.statusCode).toBe(401);
+      expect(res.json()).toEqual({ message: 'Unauthorized', code: 'UNAUTHORIZED', requestId: expect.any(String) });
+      // Tenant isolation: no query ran, so no other developer's record could leak.
+      expect(sqlMock).not.toHaveBeenCalled();
+    });
+
+    it('refuses a request with no credential or the wrong one', async () => {
+      const none = await enforced.inject({ method: 'GET', url: '/v1/trust-registry' });
+      expect(none.statusCode).toBe(401);
+      expect(none.json().code).toBe('UNAUTHORIZED');
+
+      const wrong = await enforced.inject({
+        method: 'GET',
+        url: '/v1/trust-registry',
+        headers: { authorization: `Bearer ${TEST_ADMIN_API_KEY.slice(0, -1)}x` },
+      });
+      expect(wrong.statusCode).toBe(401);
+
+      // The key without the Bearer scheme is not the credential either.
+      const bare = await enforced.inject({
+        method: 'GET',
+        url: '/v1/trust-registry',
+        headers: { authorization: TEST_ADMIN_API_KEY },
+      });
+      expect(bare.statusCode).toBe(401);
+      expect(sqlMock).not.toHaveBeenCalled();
+    });
+
+    it('lists every developer\'s records for the admin key', async () => {
+      sqlMock.mockResolvedValueOnce(acrossDevelopers());
+
+      const res = await enforced.inject({ method: 'GET', url: '/v1/trust-registry', headers: adminHeaders() });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        records: [
+          {
+            organizationDID: 'did:web:treg_a.example',
+            verifiedAt: '2026-09-01T00:00:00.000Z',
+            verificationMethod: 'dns-txt',
+            trustLevel: 'verified',
+            domains: ['treg_a.example'],
+            name: 'Organization treg_a',
+            description: null,
+            badges: [],
+          },
+          {
+            organizationDID: 'did:web:treg_b.example',
+            verifiedAt: null,
+            verificationMethod: 'pending',
+            trustLevel: 'basic',
+            domains: ['treg_b.example'],
+            name: 'Organization treg_b',
+            description: null,
+            badges: [],
+          },
+        ],
+      });
+      // One query, and it is the registry listing: the admin key is never
+      // looked up as a developer key.
+      expect(sqlMock).toHaveBeenCalledTimes(1);
+      expect(sqlText(0)).toMatch(/FROM\s+trust_registry\s+ORDER BY created_at DESC\s+LIMIT 100/);
+      // The operator routes' per-address limit.
+      expect(res.headers['x-ratelimit-limit']).toBe('20');
+    });
+
+    it('fails closed with 503 when ADMIN_API_KEY is not configured', async () => {
+      const original = config.adminApiKey;
+      (config as { adminApiKey: string }).adminApiKey = '';
+      try {
+        // Neither an empty bearer value, a developer key nor the old admin key gets through.
+        const empty = await enforced.inject({ method: 'GET', url: '/v1/trust-registry', headers: { authorization: 'Bearer ' } });
+        expect(empty.statusCode).toBe(503);
+        expect(empty.json().code).toBe('SERVICE_UNAVAILABLE');
+
+        seedAuth();
+        const developer = await enforced.inject({ method: 'GET', url: '/v1/trust-registry', headers: authHeader() });
+        expect(developer.statusCode).toBe(503);
+
+        const formerAdmin = await enforced.inject({
+          method: 'GET',
+          url: '/v1/trust-registry',
+          headers: { authorization: `Bearer ${original}` },
+        });
+        expect(formerAdmin.statusCode).toBe(503);
+      } finally {
+        (config as { adminApiKey: string }).adminApiKey = original;
+      }
+      // The developer seed was never consumed: nothing was read.
+      expect(sqlMock).not.toHaveBeenCalled();
+    });
+
+    it('leaves the public single-record lookup and the verify-dns route as they were', async () => {
+      sqlMock.mockResolvedValueOnce([registryRow('treg_a', { verification_method: 'dns-txt', verified_at: null })]);
+      sqlMock.mockResolvedValueOnce([]);
+      const lookup = await enforced.inject({ method: 'GET', url: '/v1/trust-registry/did:web:treg_a.example' });
+      expect(lookup.statusCode).toBe(200);
+
+      // verify-dns still takes a developer key, not the admin key.
+      const verify = await enforced.inject({
+        method: 'POST',
+        url: '/v1/trust-registry/verify-dns',
+        headers: adminHeaders(),
+        payload: { domain: 'treg_a.example' },
+      });
+      expect(verify.statusCode).toBe(401);
+    });
+  });
+
+  describe('flag', () => {
+    it('is enforced only when TRUST_REGISTRY_ADMIN_LISTING_ENFORCED is exactly true', () => {
+      expect(trustRegistryAdminListingEnforced({})).toBe(false);
+      expect(trustRegistryAdminListingEnforced({ TRUST_REGISTRY_ADMIN_LISTING_ENFORCED: 'false' })).toBe(false);
+      expect(trustRegistryAdminListingEnforced({ TRUST_REGISTRY_ADMIN_LISTING_ENFORCED: 'true' })).toBe(true);
+      // Parsed like the service's other boolean flags in config.ts: exact and
+      // case-sensitive. Anything else leaves the existing behaviour in place.
+      for (const value of ['', 'TRUE', 'True', '1', 'yes', 'on', ' true', 'true ']) {
+        expect(trustRegistryAdminListingEnforced({ TRUST_REGISTRY_ADMIN_LISTING_ENFORCED: value }), value).toBe(false);
+      }
+    });
+
+    // Off keeps the existing behaviour: standard developer API key auth and
+    // the plan budget, with the admin key not a credential on this route.
+    const keepsExistingBehaviour = (getApp: () => FastifyInstance) => {
+      it('lists for any developer API key, as before', async () => {
+        seedAuth();
+        sqlMock.mockResolvedValueOnce(acrossDevelopers());
+
+        const res = await getApp().inject({ method: 'GET', url: '/v1/trust-registry', headers: authHeader() });
+
+        expect(res.statusCode).toBe(200);
+        expect(res.json().records.map((r: { organizationDID: string }) => r.organizationDID))
+          .toEqual(['did:web:treg_a.example', 'did:web:treg_b.example']);
+      });
+
+      it('takes standard developer auth, so the admin key is not a credential there', async () => {
+        const res = await getApp().inject({ method: 'GET', url: '/v1/trust-registry', headers: adminHeaders() });
+        expect(res.statusCode).toBe(401);
+        expect(res.json().message).toBe('Invalid API key');
+      });
+    };
+
+    describe('default (TRUST_REGISTRY_ADMIN_LISTING_ENFORCED unset)', () => {
+      let byDefault: FastifyInstance;
+
+      beforeAll(async () => {
+        byDefault = await buildWithFlag(undefined);
+      });
+
+      afterAll(async () => {
+        await byDefault?.close();
+      });
+
+      it('reads the unset variable as off', () => {
+        vi.stubEnv('TRUST_REGISTRY_ADMIN_LISTING_ENFORCED', undefined);
+        try {
+          expect(trustRegistryAdminListingEnforced()).toBe(false);
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      });
+
+      keepsExistingBehaviour(() => byDefault);
+    });
+
+    describe('off (TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=false)', () => {
+      let off: FastifyInstance;
+
+      beforeAll(async () => {
+        off = await buildWithFlag('false');
+      });
+
+      afterAll(async () => {
+        await off?.close();
+      });
+
+      keepsExistingBehaviour(() => off);
+    });
+
+    describe('a value other than true (TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=TRUE)', () => {
+      let mistyped: FastifyInstance;
+
+      beforeAll(async () => {
+        mistyped = await buildWithFlag('TRUE');
+      });
+
+      afterAll(async () => {
+        await mistyped?.close();
+      });
+
+      keepsExistingBehaviour(() => mistyped);
+    });
   });
 });
