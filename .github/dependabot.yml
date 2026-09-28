@@ -94,6 +94,16 @@ updates:
         patterns: [vitest, '@vitest/*']
 
   - package-ecosystem: npm
+    directory: /packages/mock-issuer
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, mock-issuer]
+    groups:
+      vitest:
+        patterns: [vitest, '@vitest/*']
+
+  - package-ecosystem: npm
     directory: /packages/anthropic
     schedule:
       interval: weekly

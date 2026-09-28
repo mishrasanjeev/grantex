@@ -328,14 +328,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `registry_acceptance_lists` and `registry_acceptance_entries` tables, created
   empty. The lists are the registry's own; they have no developer or tenant
   column.
-### Dashboard passkey removal
-- Send JSON content type only when the dashboard request has a JSON body.
-  Bodyless DELETE requests now reach the API instead of failing its JSON parser.
-- Add a hosted-dashboard Chromium regression covering login, enrollment-link
-  issuance, passkey registration, credential listing and confirmed removal.
-- Keep the principal/request fields fixed during pending dashboard requests,
-  preventing late enrollment responses from appearing beside a changed target.
-
 ### Mock accredited issuer (new, unpublished package)
 - New `@grantex/mock-issuer` (`packages/mock-issuer`), 0.1.0, private and not
   published, so the registry flow runs locally and in CI with no external
@@ -373,6 +365,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `attest`, `revoke`, `suspend`, `reinstate`) wraps it for scripts. Documented
   in `docs/issuers/running-the-mock-issuer.md`. It runs in `make check` /
   `make test` and in CI. No existing path changes.
+### Dashboard passkey removal
+- Send JSON content type only when the dashboard request has a JSON body.
+  Bodyless DELETE requests now reach the API instead of failing its JSON parser.
+- Add a hosted-dashboard Chromium regression covering login, enrollment-link
+  issuance, passkey registration, credential listing and confirmed removal.
+- Keep the principal/request fields fixed during pending dashboard requests,
+  preventing late enrollment responses from appearing beside a changed target.
 
 ### Passkey sandbox/live parity and retained credential history
 - Preserve an interactively selected principal before replacing the hosted
