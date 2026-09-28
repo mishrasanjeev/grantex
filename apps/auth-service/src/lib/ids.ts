@@ -53,6 +53,7 @@ export const newGrievanceReference = (): string =>
 export const newErasureRequestId = (): string =>
   `ER-${new Date().getUTCFullYear()}-${ulid()}`;
 export const newRegistryAgentId = (): string => `ragent_${ulid()}`;
+export const newAccreditedIssuerId = (): string => `aiss_${ulid()}`;
 export const newAnomalyRuleId = (): string => `arule_${ulid()}`;
 export const newAnomalyChannelId = (): string => `achan_${ulid()}`;
 export const newPrepaidWalletId = (): string => `pwal_${ulid()}`;
