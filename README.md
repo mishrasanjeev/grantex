@@ -236,6 +236,12 @@ Grantex components are independently versioned. The protocol specification remai
 
 Current public releases and repository versions, verified 2026-09-28:
 
+TypeScript `0.7.1` and Python `0.6.1` are the passkey release snapshot, not all
+current `main` changes. The newer `enforce()` audience and missing-amount cap
+checks from PRs #1440 and #1441 need a separate release. Until then, validate
+audience at the service boundary and pass validated amounts for capped calls;
+do not rely on wrappers that omit amounts. See [release limitations](https://docs.grantex.dev/release-status#known-limitations-in-the-current-published-artifacts).
+
 | Component | Published version | Repository version | Reproducible install |
 | --- | ---: | ---: | --- |
 | TypeScript SDK | `@grantex/sdk` `0.7.1` | `0.7.1` | `npm install @grantex/sdk@0.7.1` |

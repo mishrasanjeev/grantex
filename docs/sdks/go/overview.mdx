@@ -25,7 +25,8 @@ Version `v0.4.0` adds `client.WebAuthn.CreateEnrollmentSession` for
 principal-authenticated hosted passkey registration and
 `client.Anomalies.GetResponsePolicy` / `SetResponsePolicy` for the
 account-level irregularity response mode. Both server capabilities are
-default-off and require explicit operator rollout.
+default-off for self-hosted deployments and require explicit operator rollout;
+both are enabled on the Grantex-hosted service.
 
 Version `v0.4.1` adds typed `WebAuthnGrantEvidence` references to grant and
 verification responses and the updated VC WebAuthn attestation. It does not

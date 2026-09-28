@@ -73,13 +73,20 @@
       "ecosystem": "npm",
       "name": "@grantex/sdk",
       "version": "0.7.1",
-      "status": "published",
+      "status": "published-with-known-limitations",
       "installCommand": "npm install @grantex/sdk@0.7.1",
       "runtime": "Node.js 18+; ESM",
       "registryUrl": "https://registry.npmjs.org/%40grantex%2Fsdk/latest",
       "packageUrl": "https://www.npmjs.com/package/@grantex/sdk/v/0.7.1",
       "documentationUrl": "https://docs.grantex.dev/sdks/typescript/overview",
-      "limitations": []
+      "limitations": [
+        {
+          "id": "enforce-source-only-hardening",
+          "summary": "This passkey release predates PRs #1440 and #1441: enforce() audience checks and denial of capped calls without an amount are not included.",
+          "workaround": "Validate the intended token audience at the service boundary and pass a validated amount for capped calls. Do not rely on wrappers that omit amounts. The breaking source fixes require a separately versioned release.",
+          "workaroundUrl": "https://docs.grantex.dev/release-status#known-limitations-in-the-current-published-artifacts"
+        }
+      ]
     },
     {
       "id": "x402",
@@ -108,13 +115,20 @@
       "ecosystem": "pypi",
       "name": "grantex",
       "version": "0.6.1",
-      "status": "published",
+      "status": "published-with-known-limitations",
       "installCommand": "python -m pip install grantex==0.6.1",
       "runtime": "Python 3.9+",
       "registryUrl": "https://pypi.org/pypi/grantex/json",
       "packageUrl": "https://pypi.org/project/grantex/0.6.1/",
       "documentationUrl": "https://docs.grantex.dev/sdks/python/overview",
-      "limitations": []
+      "limitations": [
+        {
+          "id": "enforce-source-only-hardening",
+          "summary": "This passkey release predates PRs #1440 and #1441: enforce() audience checks and denial of capped calls without an amount are not included.",
+          "workaround": "Validate the intended token audience at the service boundary and pass a validated amount for capped calls. Do not rely on wrappers that omit amounts. The breaking source fixes require a separately versioned release.",
+          "workaroundUrl": "https://docs.grantex.dev/release-status#known-limitations-in-the-current-published-artifacts"
+        }
+      ]
     },
     {
       "id": "go-sdk",

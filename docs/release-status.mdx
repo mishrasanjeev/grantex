@@ -68,7 +68,7 @@ custody, principal notification delivery, or merchant idempotency storage; see
 ## Published and source-only changes
 
 On September 28, 2026, TypeScript `0.7.1`, Python `0.6.1`, and Go `v0.4.1`
-were built and tested from merged `main`. Their registry artifacts were
+were built and tested from merged `main` snapshot `a919ea8a`. Their registry artifacts were
 independently installed or downloaded and checked against the release
 artifacts. These updates expose typed portable WebAuthn grant evidence and VC
 attestations; they do not alter the server-side enrollment or evidence rollout
@@ -145,6 +145,17 @@ Custody](/guides/base-usdc-custody) for the custody and RPC prerequisites.
 - **AgenticOrg governed cases:** see [the integration boundary](/guides/agenticorg-governed-cases); the last verified AgenticOrg integration does not wire token-level case purpose or per-case caps, regardless of the newer published Python package.
 
 ## Known limitations in the current published artifacts
+
+<Warning>
+  **TypeScript `0.7.1` and Python `0.6.1`:** these passkey releases were built
+  from `a919ea8a`. The later `enforce()` audience checks and denial of capped
+  calls without an amount (PRs #1440 and #1441) are source-only, not included
+  in these registry artifacts. Until a separately versioned release ships,
+  validate the intended token audience at your service boundary and always
+  supply and validate the transaction amount for a capped scope. Do not rely
+  on wrapper calls that omit it. The corresponding source docs mark these
+  changes as "next release".
+</Warning>
 
 <Warning>
   **MCP Auth `2.0.2`:** use a single process for evaluation only. Authorization
