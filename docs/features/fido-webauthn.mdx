@@ -17,11 +17,11 @@ Grantex supports FIDO2/WebAuthn passkeys during consent. A valid assertion prove
 
 Live-mode consent requires an existing passkey for the principal. Sandbox-mode accounts can also require one with `fidoRequired: true`. A consent link alone cannot register a passkey because it does not authenticate the principal.
 
-Hosted passkey enrollment is available when the server operator enables `PASSKEY_ENROLLMENT_ENABLED=true` and configures `FIDO_RP_ID` and `FIDO_ORIGIN` for the public HTTPS origin. The feature is off by default; do not enable live mode for customers until they can complete an enrollment test on that origin.
+The Grantex-hosted service runs with `PASSKEY_ENROLLMENT_ENABLED=true`, `FIDO_RP_ID=grantex.dev`, and `FIDO_ORIGIN=https://grantex.dev`; its production browser flow has passed enrollment and live-consent E2E. Self-hosted deployments must enable the flag and configure their own public HTTPS origin and RP ID. The feature is off by default there; do not enable live mode for customers until they can complete an enrollment test on that origin.
 
-The hosted enrollment client is published in `@grantex/sdk@0.7.0`, `grantex==0.6.0`, and `github.com/mishrasanjeev/grantex-go@v0.4.0`. These are independently versioned packages; installation does not turn on the server feature. Check [Release Status](/release-status) for current registry evidence and rollout limitations.
+The hosted enrollment client is published in `@grantex/sdk@0.7.1`, `grantex==0.6.1`, and `github.com/mishrasanjeev/grantex-go@v0.4.1`. These are independently versioned packages; installation does not turn on the server feature. Check [Release Status](/release-status) for current registry evidence and rollout limitations.
 
-Portable evidence is a separate, default-off source rollout: `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true`. It requires `IRREGULARITY_CASCADE_REVOCATION_ENABLED=true` so automatic grant revocation also updates VCs and public status lists, and `PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED=true` so issuer verification checks stored grant and ancestor status. Keep both safety flags enabled if issuance is rolled back. A hosted deployment can enable these independently of SDK publication. The current published SDK versions do not expose the new typed evidence reference or updated VC attestation; use REST responses or build from this source until new SDK releases are verified.
+Portable evidence is a separate, default-off source rollout: `PORTABLE_WEBAUTHN_EVIDENCE_ENABLED=true`. It requires `IRREGULARITY_CASCADE_REVOCATION_ENABLED=true` so automatic grant revocation also updates VCs and public status lists, and `PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED=true` so issuer verification checks stored grant and ancestor status. Keep both safety flags enabled if issuance is rolled back. The hosted service has all three enabled. TypeScript, Python, and Go SDKs expose the typed grant evidence reference and VC attestation in their newly verified releases; custom assertion UIs still use the REST endpoints directly.
 
 ## Why FIDO for Agents?
 
@@ -81,7 +81,7 @@ curl -X PATCH https://api.grantex.dev/v1/me \
 Your application must first authenticate the end customer and bind that session to the exact `principalId` it uses in Grantex. From your **server**, issue a short-lived, one-use enrollment link and deliver it to that customer through the authenticated session. Never expose your developer API key in browser code. The enrollment link itself is a bearer secret: do not log it, put it in analytics, or send it to another customer.
 
 ```typescript
-// Run on your server with @grantex/sdk@0.7.0, after authenticating the customer.
+// Run on your server with @grantex/sdk@0.7.1, after authenticating the customer.
 const { enrollmentUrl, expiresAt } = await grantex.webauthn.createEnrollmentSession({
   principalId: authenticatedCustomer.grantexPrincipalId,
   // Optional: link back to a pending consent request for the same principal.
@@ -90,7 +90,7 @@ const { enrollmentUrl, expiresAt } = await grantex.webauthn.createEnrollmentSess
 // Show enrollmentUrl only to authenticatedCustomer. It expires after 10 minutes.
 ```
 
-Python `grantex==0.6.0` uses `client.webauthn.create_enrollment_session(principal_id=principal_id, auth_request_id=auth_request_id)`; Go `v0.4.0` uses `client.WebAuthn.CreateEnrollmentSession(ctx, grantex.WebAuthnEnrollmentSessionParams{PrincipalID: principalID, AuthRequestID: authRequestID})`. Both calls belong on your authenticated application server, not in browser code.
+Python `grantex==0.6.1` uses `client.webauthn.create_enrollment_session(principal_id=principal_id, auth_request_id=auth_request_id)`; Go `v0.4.1` uses `client.WebAuthn.CreateEnrollmentSession(ctx, grantex.WebAuthnEnrollmentSessionParams{PrincipalID: principalID, AuthRequestID: authRequestID})`. Both calls belong on your authenticated application server, not in browser code.
 
 The customer opens the link at `/passkey-enroll`, uses their device's passkey prompt, and returns to consent when the link was bound to an authorization request. The browser registration challenge expires after five minutes and must be restarted if it expires. The registration requires device user verification. An enrollment ticket can register only one credential and cannot be reused. To add another device, create another link.
 
