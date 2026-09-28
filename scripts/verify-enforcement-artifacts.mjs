@@ -43,6 +43,7 @@ for (const name of ['@grantex/gateway', '@grantex/adapters', '@grantex/strands',
 for (const subpath of ['postgres', 'redis', 'testing', 'express', 'hono']) await load(`@grantex/mcp-auth/${subpath}`);
 const mcp = await load('@grantex/mcp-auth');
 assert.throws(() => mcp.createMcpResourceGuard({ issuer: 'https://issuer.example', audience: 'https://merchant.example' }), /revocations/);
+assert.throws(() => mcp.createMcpResourceGuard({ issuer: 'https://issuer.example', audience: 'https://merchant.example', revocations: { isTokenRevoked: async () => false } }), /currentGrant/);
 
 const key = await jose.generateKeyPair('RS256', { extractable: true });
 const publicJwk = { ...await jose.exportJWK(key.publicKey), kid: 'release-key', alg: 'RS256', use: 'sig' };
@@ -51,7 +52,22 @@ let statusUnavailable = false;
 let statusCalls = 0;
 let userAgent;
 let upstreamCalls = 0;
+let issuerRevoked = false;
+let issuerUnavailable = false;
+let issuerCalls = 0;
 const server = createServer((req, res) => {
+  if (req.url === '/v1/grants/verify') {
+    issuerCalls++;
+    assert.equal(req.headers.authorization, 'Bearer artifact-test-only');
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      const input = JSON.parse(body);
+      res.writeHead(issuerUnavailable ? 503 : 200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(issuerUnavailable ? { message: 'test unavailable' } : issuerRevoked ? { active: false, reason: 'revoked' } : { active: true, claims: jose.decodeJwt(input.token) }));
+    });
+    return;
+  }
   if (req.url.startsWith('/upstream/')) {
     upstreamCalls++;
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -151,9 +167,22 @@ try {
     assert.equal(response.json().error, 'AUDIENCE_MISMATCH');
     assert.equal(upstreamCalls, 0);
   } finally { await gatewayServer.close(); }
-  const guard = mcp.createMcpResourceGuard({ issuer, audience, jwksUri: `${issuer}/.well-known/jwks.json`, revocations: { isTokenRevoked: async () => revoked } });
+  const guard = mcp.createMcpResourceGuard({ issuer, audience, jwksUri: `${issuer}/.well-known/jwks.json`, revocations: { isTokenRevoked: async () => revoked }, currentGrant: mcp.grantexCurrentGrantVerifier(client) });
   const guardedRequest = { method: 'GET', header: (name) => name.toLowerCase() === 'authorization' ? `Bearer ${token}` : undefined };
   assert.equal((await guard(guardedRequest)).ok, true);
+  assert.equal(issuerCalls, 1, 'Installed MCP verifier calls the issuer');
+  assert.equal((await guard(guardedRequest)).ok, true);
+  assert.equal(issuerCalls, 2, 'MCP verifier must not positively cache active authority');
+  issuerRevoked = true;
+  const issuerDenial = await guard(guardedRequest);
+  assert.equal(issuerDenial.ok, false);
+  assert.equal(issuerDenial.status, 401, 'Issuer revocation denies even when local revocation has not synchronized');
+  issuerRevoked = false;
+  issuerUnavailable = true;
+  const issuerOutage = await guard(guardedRequest);
+  assert.equal(issuerOutage.ok, false);
+  assert.equal(issuerOutage.status, 503, 'Issuer outage fails closed');
+  issuerUnavailable = false;
   revoked = true;
   const denial = await client.enforce({ ...call, amount: 10 });
   assert.equal(denial.allowed, false);
@@ -165,7 +194,7 @@ try {
   const unavailable = await client.enforce({ ...call, amount: 10 });
   assert.equal(unavailable.allowed, false);
   assert.equal(unavailable.subReason, 'status_unavailable');
-  console.log('Enforcement artifact verification passed: exact versions, imports, audience, amount, side-effect prevention, default revocation, outage refusal and real installed integration guards.');
+  console.log('Enforcement artifact verification passed: exact versions, imports, audience, amount, side-effect prevention, default revocation, current issuer authority, outage refusal and real installed integration guards.');
 } finally {
   await new Promise((done) => server.close(done));
 }
