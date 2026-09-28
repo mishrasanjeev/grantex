@@ -139,7 +139,8 @@ publish Entity Configurations at their Entity Identifiers, and trust marks
 are signed Trust Mark JWTs whose `trust_mark_type` claim (OpenID Federation
 1.0 section 7.1) carries the types of section 4. Because `entity_id` is already
 an Entity Identifier, Phase 1 records carry over unchanged. Until Phase 2
-ships, relying parties MUST use the public list of section 2.1 and MUST NOT
+ships, relying parties MUST use the public list of section 2.1, or the
+signed registry manifest (see "Registry manifest" below), and MUST NOT
 expect Federation endpoints.
 # Registry federation
 
@@ -320,3 +321,308 @@ Each takes the caller's transaction, so an attestation and its entry are
 recorded together or not at all. Allocation increments a per-list counter
 whose row stays locked until the caller's transaction ends, so callers
 allocate as late in their transaction as they can.
+
+## Agent lookup
+
+Status: draft. Implemented by the auth service (`apps/auth-service`,
+`src/lib/registry/lookup.ts`, `src/routes/registry-lookup.ts`). No schema
+change.
+
+A relying party looks an agent up to learn its computed trust level and
+flags (spec/attestation-1.0.md §8), who attests it, and whether the key that
+signed a request is one the agent may use now. The lookup is minimised: what
+anyone may read is the least a relying party needs to decide, and the rest is
+for relying parties the registry can identify.
+
+### Requests
+
+| Request | Finds |
+|---|---|
+| `GET /v1/registry/agents/{agent_did}` | The agent with that DID. The DID is one path segment, percent-encoded. |
+| `GET /v1/registry/agents?key_thumbprint={thumbprint}` | The agent holding that key anywhere in its history (spec/agent-keys.md §1): the RFC 7638 SHA-256 thumbprint, base64url, 43 characters. |
+| `GET /v1/registry/agents?issuer={entity_id}&external_credential_id={id}&hash={hash}` | The agent an accredited issuer attested on that credential: `issuer` is the attestation's `iss`, `external_credential_id` and `hash` its `external_credential_id` and `external_credential_hash` (spec/attestation-1.0.md §2, §3). |
+
+The query form takes `key_thumbprint` alone, or all three of `issuer`,
+`external_credential_id` and `hash`. Any other combination, a parameter given
+twice, an unknown parameter, a malformed thumbprint or a `hash` that does not
+follow the hash rule is `400` before the registry reads anything, so a partial
+credential never narrows a search.
+
+The credential lookup MUST match on all three values at once. A mismatch on
+any one of them is answered exactly as a credential the registry has never
+seen: the same `404` body and no `ETag`. So is a credential that names a
+provider rather than an agent, or one that names more than one agent (nothing
+makes the three values unique across agents, so an issuer can attest two
+agents under one credential; the lookup then names neither, with or without
+a key). A caller
+therefore learns nothing from a guess except that it was wrong, which resists
+enumeration of the agents an issuer attested.
+
+An unknown agent or thumbprint is `404` with code `NOT_FOUND`.
+
+### What the answer carries
+
+The level and flags are computed when asked, never read from a stored
+snapshot (spec/attestation-1.0.md §8).
+
+| Member | Public | Authenticated | Contents |
+|---|---|---|---|
+| `agent_did` | yes | yes | The agent's DID. |
+| `level` | yes | yes | `basic`, `verified`, `attested` or `attested_verified`. |
+| `flags` | yes | yes | From the enumerated set, in its order. |
+| `issuers` | yes | yes | The `entity_id` of each issuer of a counted attestation. |
+| `attestations[]` `type`, `issuer`, `expires_at` | yes | yes | Each counted attestation: its trust mark type, issuer and expiry (RFC 3339). |
+| `attestations[]` `id` | no | yes | The registry's id of the attestation. |
+| `attestations[]` `issuer_status_list` | no | yes | `{uri, idx}`: the entry in the issuer's own status list. |
+| `attestations[]` `acceptance_status_list` | no | yes | `{uri, idx}`: the entry in the registry's acceptance list. |
+| `keys[]` | yes | yes | Every key in the agent's history: `thumbprint`, `status` (`pending`, `active`, `rotated`, `compromised`) and `current`. |
+| `key_thumbprint`, `key_status`, `key_current` | yes | yes | Thumbprint lookup only: the key asked about. |
+| `cimd_uri` | yes | yes | The agent's client metadata document, or `null`. |
+| `provider` | no | yes | `{did, name, legal_identifiers}` of the agent's provider, or `null` when the agent has none the registry can resolve. |
+
+A key is **current** when it may sign now: it is `active`, or it is `rotated`
+and its overlap has not ended (`valid_to` is later than now), and its
+possession has been proven. A `pending` or `compromised` key, or a rotated key
+past its overlap, is not current; a relying party that verified a request with
+it denies with `key_not_active` (or `key_unproven` for a pending key).
+
+The public answer never carries a provider's legal identifiers, its name, or
+any status list index. The registry builds each answer member by member from
+the table above; nothing else from its records can appear in it.
+
+<!-- example: lookup-public -->
+```json
+{
+  "agent_did": "did:grantex:ag_01J8Z3K4M5N6P7Q8R9S0T1V2W3",
+  "level": "attested_verified",
+  "flags": [],
+  "issuers": ["https://issuer.example"],
+  "attestations": [
+    { "type": "urn:grantex:tm:agent.identity", "issuer": "https://issuer.example", "expires_at": "2027-09-28T12:00:00.000Z" },
+    { "type": "urn:grantex:tm:provider.entity", "issuer": "https://issuer.example", "expires_at": "2027-09-28T12:00:00.000Z" }
+  ],
+  "keys": [
+    { "thumbprint": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs", "status": "rotated", "current": true },
+    { "thumbprint": "kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k", "status": "active", "current": true }
+  ],
+  "cimd_uri": "https://provider.example/agents/shopper-01/cimd.json",
+  "key_thumbprint": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs",
+  "key_status": "rotated",
+  "key_current": true
+}
+```
+
+The same agent, looked up by DID with a developer API key:
+
+<!-- example: lookup-relying-party -->
+```json
+{
+  "agent_did": "did:grantex:ag_01J8Z3K4M5N6P7Q8R9S0T1V2W3",
+  "level": "attested_verified",
+  "flags": [],
+  "issuers": ["https://issuer.example"],
+  "attestations": [
+    {
+      "type": "urn:grantex:tm:agent.identity",
+      "issuer": "https://issuer.example",
+      "expires_at": "2027-09-28T12:00:00.000Z",
+      "id": "ratt_01J8Z3K4M5N6P7Q8R9S0T1V2W4",
+      "issuer_status_list": { "uri": "https://issuer.example/status/1", "idx": 4211 },
+      "acceptance_status_list": { "uri": "https://registry.example/status/attestations/racl_01J8Z3K4M5N6P7Q8R9S0T1V2W3", "idx": 77012 }
+    }
+  ],
+  "keys": [
+    { "thumbprint": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs", "status": "active", "current": true }
+  ],
+  "cimd_uri": "https://provider.example/agents/shopper-01/cimd.json",
+  "provider": {
+    "did": "did:web:provider.example",
+    "name": "Provider Example Ltd",
+    "legal_identifiers": [{ "scheme": "lei", "value": "5299000EXAMPLE000042" }]
+  }
+}
+```
+
+### Authentication
+
+An **authenticated relying party** is, in Phase 1, a request carrying a valid
+developer API key (`Authorization: Bearer <key>`), checked exactly as every
+other `/v1` route checks it. A key that is sent and is not valid is `401`;
+it is never answered as if no key had been sent. A dedicated relying-party
+credential, separate from a developer's key, is a later refinement.
+
+The lookup reads the whole registry, not the caller's own agents: a relying
+party looks up agents that other developers registered.
+
+### Availability, limits and caching
+
+| `REGISTRY_PUBLIC_ENDPOINTS_ENABLED` | Without a key | With a key |
+|---|---|---|
+| unset or anything but `true` (default) | `401` | the authenticated answer |
+| `true` | the public answer | the authenticated answer |
+
+Each route is limited to 120 requests a minute per client address. An
+authenticated request also draws on its developer's plan budget, which is the
+per-API-key limit.
+
+A found agent carries a strong `ETag` over the body (RFC 9110 §8.8.3);
+`If-None-Match` with it is answered `304` (RFC 9110 §13.1.2). Every answer
+lists `Authorization` in `Vary` (RFC 9110 §12.5.5), added to any field names
+already there: a request with an `Origin` also gets `Origin` from the CORS
+handling, so the answer is `Vary: Origin, Authorization` and a shared cache
+keeps the reflected `Access-Control-Allow-Origin` per origin. A public answer carries
+`Cache-Control: public, max-age=60`, the shortest ttl the registry's
+acceptance lists use, so a cached level is never older than a relying party
+checking those lists could see; an authenticated answer carries
+`Cache-Control: private, no-cache` (RFC 9111 §5.2.2.4, §5.2.2.7). A store that
+cannot be read is a `5xx`.
+
+## Registry manifest
+
+Status: draft. Implemented by the auth service (`apps/auth-service`,
+`src/lib/registry/manifest.ts`, `src/routes/registry-lookup.ts`).
+
+`GET /.well-known/agent-registry.json` serves one signed, compact statement
+of what a relying party needs to verify Agent Passports and attestations
+offline: the accredited issuers and their keys, the trust mark taxonomy, the
+registry's acceptance lists and where to look agents up. In Phase 1 a relying
+party without OpenID Federation support uses it instead of resolving a trust
+chain. It is served only while `REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true`;
+otherwise the path does not exist (`404`).
+
+### Format
+
+The response body is a JWS in the compact serialization (RFC 7515 §7.1),
+served as `application/grantex-registry-manifest+jwt`. The path ends in
+`.json` for discovery; the body is not JSON. OpenID Federation 1.0 serves its
+Entity Configuration in the same way, as a typed JWT from a well-known path.
+
+| Header | Rule |
+|---|---|
+| `typ` | Exactly `grantex-registry-manifest+jwt`: the media type without its `application/` prefix, as RFC 7515 §4.1.9 recommends, so the manifest is explicitly typed (RFC 8725 §3.11) and cannot be taken for any other JWT the platform key signs. Compared as an exact string. |
+| `alg` | The platform signing key's algorithm, `RS256` or `ES256`. |
+| `kid` | The platform signing key, resolvable from `/.well-known/jwks.json`. |
+
+`jku`, `jwk`, `x5u`, `x5c` and `crit` are never present, and a relying party
+MUST refuse a manifest that carries one.
+
+<!-- example: manifest-header -->
+```json
+{
+  "alg": "RS256",
+  "kid": "grantex-RS256-0123456789abcdef",
+  "typ": "grantex-registry-manifest+jwt"
+}
+```
+
+| Claim | Contents |
+|---|---|
+| `iss` | The registry's issuer identifier (`JWT_ISSUER`). |
+| `iat` | When it was signed: the start of the current five-minute interval, or the latest change it reflects if that is later. |
+| `exp` | `iat` + 3600. |
+| `issuers` | Every accredited issuer, whatever its status, ordered by `entity_id` (byte order), each as the public issuer list shows it (section 2.1 of the issuer document above): `entity_id`, `trust_marks`, `status` in effect when the manifest is built (so a suspended issuer is listed, with `suspended`, and keeps its keys), `status_list_base`, and `jwks` without any revoked kid (and no keys for a withdrawn issuer). The manifest is not limited to one page of issuers. |
+| `trust_mark_types` | The trust mark taxonomy (section 4 above). |
+| `acceptance_status_lists` | Every acceptance list of the registry, in both forms: `token_status_list` (the list URI, the Token Status List) and `bitstring_status_list` with its `revocation` and `suspension` credentials. |
+| `endpoints` | `agent_by_did`, `agent_by_key_thumbprint`, `agent_by_credential` (lookup URL templates, RFC 6570 level 1, §1.2: substitute each `{name}` percent-encoded), `issuers` (the public issuer list), `acceptance_status_list` (a template over the list id) and `jwks_uri`. |
+
+<!-- example: manifest-payload -->
+```json
+{
+  "iss": "https://registry.example",
+  "iat": 1790596800,
+  "exp": 1790600400,
+  "issuers": [
+    {
+      "entity_id": "https://issuer.example",
+      "trust_marks": ["urn:grantex:tm:agent.identity", "urn:grantex:tm:provider.entity"],
+      "status": "active",
+      "status_list_base": "https://issuer.example/status/",
+      "jwks": {
+        "keys": [
+          {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU",
+            "y": "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0",
+            "kid": "issuer-2026-01",
+            "alg": "ES256",
+            "use": "sig"
+          }
+        ]
+      }
+    },
+    {
+      "entity_id": "https://mock-issuer.example",
+      "trust_marks": ["urn:grantex:tm:agent.identity"],
+      "status": "suspended",
+      "status_list_base": "https://mock-issuer.example/status/",
+      "jwks": {
+        "keys": [
+          {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": "f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU",
+            "y": "x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0",
+            "kid": "mock-2026-01",
+            "alg": "ES256",
+            "use": "sig"
+          }
+        ]
+      }
+    }
+  ],
+  "trust_mark_types": [
+    "urn:grantex:tm:provider.entity",
+    "urn:grantex:tm:provider.ownership",
+    "urn:grantex:tm:provider.screening",
+    "urn:grantex:tm:agent.identity",
+    "urn:grantex:tm:agent.security"
+  ],
+  "acceptance_status_lists": [
+    {
+      "token_status_list": "https://registry.example/status/attestations/racl_01J8Z3K4M5N6P7Q8R9S0T1V2W3",
+      "bitstring_status_list": {
+        "revocation": "https://registry.example/status/attestations/racl_01J8Z3K4M5N6P7Q8R9S0T1V2W3/bitstring",
+        "suspension": "https://registry.example/status/attestations/racl_01J8Z3K4M5N6P7Q8R9S0T1V2W3/bitstring/suspension"
+      }
+    }
+  ],
+  "endpoints": {
+    "agent_by_did": "https://registry.example/v1/registry/agents/{agent_did}",
+    "agent_by_key_thumbprint": "https://registry.example/v1/registry/agents?key_thumbprint={key_thumbprint}",
+    "agent_by_credential": "https://registry.example/v1/registry/agents?issuer={issuer}&external_credential_id={external_credential_id}&hash={hash}",
+    "issuers": "https://registry.example/v1/registry/issuers",
+    "acceptance_status_list": "https://registry.example/status/attestations/{list}",
+    "jwks_uri": "https://registry.example/.well-known/jwks.json"
+  }
+}
+```
+
+### Verification
+
+A relying party (and the auth service's own `verifyRegistryManifest`) accepts
+a manifest only when all of these hold, and otherwise refuses with the
+Appendix C code shown:
+
+| Check | Refusal |
+|---|---|
+| It is a compact JWS whose header has exactly the `typ` above, an `alg` of `RS256` or `ES256`, a `kid`, and none of `jku`, `jwk`, `x5u`, `x5c`, `crit`. | `passport_invalid_signature` |
+| The key for `kid` is in the registry's JWK Set, fetched from `jwks_uri` (never from the manifest), and the signature verifies with it under that algorithm only (RFC 8725 §3.1). | `passport_invalid_signature` |
+| The payload has every claim above, and `iss` is the registry the relying party trusts. The relying party names that registry itself; a verifier with no expected issuer configured refuses every manifest rather than skipping the check. | `passport_invalid_signature` |
+| `exp - iat` is positive and at most 3600; `iat` is not more than 60 seconds in the future. | `status_stale` |
+| Now is before `exp`, and not more than 3600 seconds after `iat` (the manifest is stale after one hour). | `status_stale` |
+
+A relying party that holds no manifest passing these checks cannot establish
+that an issuer is accredited, and refuses the passport or attestation that
+depends on it; it never falls back to an expired manifest.
+
+### Caching
+
+The same registry state gives the same manifest on every instance within an
+interval. The response carries a weak `ETag` over the protected header and
+claims (RFC 9110 §8.8.1); `If-None-Match` with it is answered `304` while
+nothing has changed and the manifest has not been re-signed. It carries
+`Cache-Control: public, max-age=N`, where N is at most 300 and never past
+`exp`, and `Access-Control-Allow-Origin: *`. The route is limited to 60
+requests a minute per client address. A store that cannot be read is a
+`5xx`: the registry never serves an older manifest in its place.

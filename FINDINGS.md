@@ -1684,6 +1684,90 @@ the pull request that references it.
   (the command the agent-httpsig branch had), and check the merged workflow
   with a workflow linter before pushing.
 
+## G-120 — The acceptance status list docs test fails on a CRLF checkout
+
+- **Found:** running the auth-service suite on a Windows checkout
+  (`core.autocrlf=true`) while adding the registry lookup, 2026-09-28.
+- **What:** `apps/auth-service/tests/registry-acceptance-docs.test.ts` reads
+  `spec/registry-federation.md` without normalising line endings, and its
+  example pattern expects `\n` after each fenced opening. On a checkout with
+  CRLF line endings no example matches, and both of its tests fail with
+  "has no example tsl-header" / "bsl-header". The other docs tests (for
+  example `registry-attestations-docs.test.ts`) replace `\r\n` first.
+- **Impact:** the suite is red on Windows working trees for a reason that
+  has nothing to do with the code; CI on Linux is unaffected.
+- **Proposal:** normalise `\r\n` to `\n` when reading the spec, as the other
+  docs tests do. Owner: registry maintainers. Exit criterion: the test passes
+  on a CRLF checkout.
+
+## G-121 — The migration ledger test looks for a table the verdict no longer lists
+
+- **Found:** running the auth-service suite against Postgres 16 while adding
+  the registry lookup, 2026-09-28.
+- **What:** `tests/migrate-ledger-postgres.integration.test.ts` ("refuses to
+  baseline a database that is only partly migrated") expects the dry-run
+  verdict to name `evidence_records`. The verdict names the first 20 missing
+  objects in order and summarises the rest (`src/db/migrate.ts`,
+  `missing.slice(0, 20)`); the registry tables of migrations 121 to 124
+  (`accredited_issuers`, `agent_keys`, ...) now sort before it, so it falls
+  into "and 57 more" and the assertion fails. `check.missingTables` still
+  contains it; only the message check is stale.
+- **Impact:** one failing integration test on every branch that carries the
+  registry migrations.
+- **Proposal:** assert on a table that sorts first among those created after
+  migration 060, or on `check.missingTables` only, or name the missing
+  tables in the verdict in migration order. Owner: auth-service maintainers.
+  Exit criterion: the test passes with migrations 121 to 124 present.
+
+## G-122 — The older public registry reads are not behind REGISTRY_PUBLIC_ENDPOINTS_ENABLED
+
+- **Found:** adding the registry lookup and manifest behind
+  `REGISTRY_PUBLIC_ENDPOINTS_ENABLED`, 2026-09-28.
+- **What:** the flag did not exist on this branch; it is added here
+  (`config.registryPublicEndpointsEnabled`, default off) and governs the
+  unauthenticated lookup and `/.well-known/agent-registry.json`. The
+  unauthenticated registry reads that shipped earlier,
+  `GET /v1/registry/issuers` and the acceptance status lists under
+  `/status/attestations/`, are served whatever it says.
+- **Impact:** an operator who leaves the flag off to keep the registry
+  private still publishes the issuer list and the acceptance lists. They
+  reveal little (issuer records meant to be public, and bits per entry), and
+  relying parties need the status lists to check passports.
+- **Proposal:** decide per route whether it is public by nature (status
+  lists that passports already point at) or belongs behind the flag (the
+  issuer list), and gate the latter with a changelog entry and an opt-out.
+  Owner: product (registry rollout). Exit criterion: each public registry
+  route is documented as gated or deliberately ungated.
+
+## G-123 — The public issuer list stops at 500 issuers without saying so
+
+- **Found:** building the registry manifest, which must list every
+  accredited issuer, 2026-09-28.
+- **What:** `listPublicIssuers` in `lib/registry/issuers.ts`, behind
+  `GET /v1/registry/issuers`, reads with `LIMIT 500` (`MAX_PUBLIC_ISSUERS`)
+  and returns no cursor or truncation marker. The manifest reads through the
+  new `listAllPublicIssuers`, which pages, so it is not affected.
+- **Impact:** past 500 issuers a relying party reading the list would treat
+  the issuers after the 500th (by entity_id) as unknown and refuse their
+  passports with `issuer_not_accredited`.
+- **Proposal:** page the public list with a cursor, or serve it from
+  `listAllPublicIssuers`, and document the bound. Owner: registry
+  maintainers. Exit criterion: a test with more than 500 issuers reads all
+  of them through the route.
+
+## G-124 — Two RFC 7638 property tests time out under the full suite
+
+- **Found:** running the whole auth-service suite (`maxWorkers: 2`) on a
+  loaded Windows host, 2026-09-28.
+- **What:** in `tests/jwk-thumbprint.test.ts`, "never changes with member
+  order or with extra members (property)" and "changes when any required
+  member changes (property)" took 14 and 18 seconds against the 10-second
+  `testTimeout` and failed; they pass when the file runs alone.
+- **Impact:** an intermittent red run unrelated to the change under test.
+- **Proposal:** give the two property tests an explicit timeout sized for a
+  loaded runner, or reduce their iteration count. Owner: registry
+  maintainers. Exit criterion: the full suite passes them on a loaded runner.
+
 ## G-125 — The migration ledger test expects `evidence_records` among the first twenty missing objects
 
 - **Found:** running the auth-service suite against Postgres for passport

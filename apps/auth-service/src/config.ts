@@ -210,6 +210,10 @@ export const config = {
   // /v1/authorize takes an Agent Passport and the grant is bound to it. Off by
   // default; off, the passport member is ignored as any unknown member is.
   get passportBoundGrantsEnabled() { return process.env['PASSPORT_BOUND_GRANTS_ENABLED'] === 'true'; },
+  // Serve the registry's unauthenticated reads: the minimised agent lookup
+  // without an API key and /.well-known/agent-registry.json. Off by default;
+  // read when the app is built, so it decides which routes exist.
+  get registryPublicEndpointsEnabled() { return process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] === 'true'; },
   // Default overlap of an agent key rotation: how long the replaced key stays
   // usable (seconds, default 7 days, at most 30). Read at request time;
   // validateConfig reports a bad value at boot.
