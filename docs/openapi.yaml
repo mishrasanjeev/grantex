@@ -151,6 +151,22 @@ components:
       scheme: bearer
       description: Registry operator key (one of REGISTRY_OPERATOR_API_KEYS); not a developer API key or ADMIN_API_KEY
 
+  parameters:
+    AgentIdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Agent ID
+    AgentKeyThumbprintPath:
+      name: thumbprint
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[A-Za-z0-9_-]{43}$"
+      description: RFC 7638 JWK Thumbprint (SHA-256, base64url) of the agent key
   schemas:
     TrustMarkType:
       type: string
@@ -820,6 +836,41 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    DeclaredRail:
+      type: string
+      enum: [ap2, verifiable_intent, acp, ucp]
+
+    AgentKey:
+      type: object
+      required: [thumbprint, agentId, jwk, alg, status, validFrom, validTo, possessionProvedAt, rotatedFrom, createdAt, usable]
+      properties:
+        thumbprint:
+          type: string
+          description: RFC 7638 JWK Thumbprint (SHA-256, base64url)
+        agentId: { type: string }
+        jwk: { type: object, description: Public JWK }
+        alg: { type: string, enum: [ES256, ES384, ES512, EdDSA, RS256] }
+        status: { type: string, enum: [pending, active, rotated, compromised] }
+        validFrom: { type: string, format: date-time }
+        validTo: { type: [string, "null"], format: date-time }
+        possessionProvedAt: { type: [string, "null"], format: date-time }
+        rotatedFrom: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        usable: { type: boolean, description: Whether the key may be used now }
+        denial: { type: string, enum: [key_unproven, key_not_active], description: Why the key is not usable }
+
+    AgentKeyChallenge:
+      type: object
+      required: [thumbprint, challenge, audience, subject, typ, alg, expiresAt]
+      properties:
+        thumbprint: { type: string }
+        challenge: { type: string, description: 256-bit base64url nonce, single use }
+        audience: { type: string, description: The proof's aud claim }
+        subject: { type: string, description: The proof's sub claim (the agent id) }
+        typ: { type: string, enum: [agent-key-proof+jwt] }
+        alg: { type: string }
+        expiresAt: { type: string, format: date-time }
 
     Grant:
       type: object
@@ -2298,6 +2349,299 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  # ── Agent key history (spec/agent-keys.md) ──────────────────────────
+  /v1/agents/{id}/keys:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdPath"
+    get:
+      operationId: listAgentKeys
+      tags: [Agents]
+      summary: List the agent's key history
+      description: |
+        Every key the agent holds or held, newest first, with whether it is usable now.
+        A key that is not usable says why in `denial`.
+      responses:
+        "200":
+          description: Key history
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agentId, declaredRails, keys]
+                properties:
+                  agentId: { type: string }
+                  declaredRails:
+                    type: array
+                    items: { $ref: "#/components/schemas/DeclaredRail" }
+                  keys:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentKey" }
+        "404":
+          description: Agent not found (or owned by another developer)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    post:
+      operationId: addAgentKey
+      tags: [Agents]
+      summary: Add a pending key to the agent
+      description: |
+        The key starts `pending` and is not usable until its possession is proven with
+        a challenge. An agent that declares a payments rail (`ap2`, `verifiable_intent`)
+        may add only ES256 keys on P-256. At most 10 keys may be pending, active or within
+        a rotation overlap at once.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [publicJwk]
+              properties:
+                publicJwk:
+                  type: object
+                  description: Public JWK (EC P-256/P-384/P-521, OKP Ed25519, or RSA of at least 2048 bits). Private members are refused.
+      responses:
+        "201":
+          description: Key added (pending)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentKey" }
+        "400":
+          description: Invalid key, or `KEY_ALGORITHM_NOT_ALLOWED` under a payments rail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`AGENT_KEY_CONFLICT` (another agent holds the key), `KEY_ALREADY_REGISTERED`, `key_not_active` (the key was reported compromised) or `KEY_LIMIT_REACHED`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/agents/{id}/declared-rails:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdPath"
+    put:
+      operationId: setAgentDeclaredRails
+      tags: [Agents]
+      summary: Set the rails the agent declares
+      description: |
+        Declaring a payments rail (`ap2`, `verifiable_intent`) requires every key that is
+        pending, active or within a rotation overlap, and the agent's registered
+        `publicJwk`, to be ES256 on P-256.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [declaredRails]
+              properties:
+                declaredRails:
+                  type: array
+                  uniqueItems: true
+                  items: { $ref: "#/components/schemas/DeclaredRail" }
+      responses:
+        "200":
+          description: Rails set
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agentId, declaredRails]
+                properties:
+                  agentId: { type: string }
+                  declaredRails:
+                    type: array
+                    items: { $ref: "#/components/schemas/DeclaredRail" }
+        "400":
+          description: Unknown or repeated rail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`KEY_ALGORITHM_NOT_ALLOWED`: the agent still holds a key that is not ES256"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/agents/{id}/keys/{thumbprint}/challenge:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdPath"
+      - $ref: "#/components/parameters/AgentKeyThumbprintPath"
+    post:
+      operationId: challengeAgentKey
+      tags: [Agents]
+      summary: Issue a single-use possession challenge for a pending key
+      description: Supersedes any earlier unused challenge for the key. Expires after 300 seconds.
+      responses:
+        "201":
+          description: Challenge issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentKeyChallenge" }
+        "404":
+          description: Agent or key not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`KEY_ALREADY_ACTIVE`, or `key_not_active` for a rotated or compromised key"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/agents/{id}/keys/{thumbprint}/prove:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdPath"
+      - $ref: "#/components/parameters/AgentKeyThumbprintPath"
+    post:
+      operationId: proveAgentKey
+      tags: [Agents]
+      summary: Prove possession of a key with a signed challenge
+      description: |
+        `proof` is a compact JWS signed with the key, `typ` `agent-key-proof+jwt`, with the
+        claims `aud` (the challenge audience), `sub` (the agent id), `nonce` (the challenge)
+        and `iat`. A challenge proves possession once; see spec/agent-keys.md.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [proof]
+              properties:
+                proof: { type: string, description: Compact JWS (RFC 7515 section 7.1) }
+      responses:
+        "200":
+          description: Possession proven; the key is active
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentKey" }
+        "400":
+          description: "`key_unproven` (bad signature, typ or iat, or an unknown, used, superseded or expired challenge), `audience_mismatch` or `key_binding_mismatch`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Agent or key not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`key_not_active`: the key is rotated or compromised"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/agents/{id}/keys/{thumbprint}/rotate:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdPath"
+      - $ref: "#/components/parameters/AgentKeyThumbprintPath"
+    post:
+      operationId: rotateAgentKey
+      tags: [Agents]
+      summary: Rotate an active key to an active replacement, with an overlap
+      description: |
+        Changes the key history only. The agent's registered `publicJwk`, which the token
+        endpoints bind grants to, is not changed: until it is set to the replacement with
+        `PATCH /v1/agents/{id}`, the rotated key keeps working at the token endpoints, after
+        `validTo` too, and the replacement is not accepted there.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [replacementThumbprint]
+              properties:
+                replacementThumbprint: { type: string, pattern: "^[A-Za-z0-9_-]{43}$" }
+                overlapSeconds:
+                  type: integer
+                  minimum: 0
+                  maximum: 2592000
+                  description: How long the rotated key stays usable. Defaults to AGENT_KEY_ROTATION_OVERLAP_SECONDS (604800, 7 days).
+      responses:
+        "200":
+          description: Rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rotated, replacement]
+                properties:
+                  rotated: { $ref: "#/components/schemas/AgentKey" }
+                  replacement: { $ref: "#/components/schemas/AgentKey" }
+        "400":
+          description: Invalid replacement or overlap
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Agent, key or replacement not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "`key_not_active` (the key is not active, or the replacement has ended) or `key_unproven` (the replacement is pending)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /v1/agents/{id}/keys/{thumbprint}/compromise:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdPath"
+      - $ref: "#/components/parameters/AgentKeyThumbprintPath"
+    post:
+      operationId: compromiseAgentKey
+      tags: [Agents]
+      summary: Report a key compromised and revoke every grant bound to it
+      description: |
+        The key ends immediately and can never be registered again, by any agent, even
+        after the agent is deleted. Every grant whose
+        `cnf.jkt` is the key, and every grant delegated from one, is revoked through the
+        cascade. If the key is the agent's registered `publicJwk`, the newest proven
+        replacement takes its place; with none, it is cleared and the agent is suspended.
+        Safe to repeat.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Key compromised
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [key, grantsRevoked, alreadyCompromised, agentKey, agentSuspended]
+                properties:
+                  key: { $ref: "#/components/schemas/AgentKey" }
+                  grantsRevoked: { type: integer }
+                  alreadyCompromised: { type: boolean }
+                  agentKey: { type: string, enum: [promoted, cleared, unchanged] }
+                  promotedThumbprint: { type: string }
+                  agentSuspended: { type: boolean }
+        "404":
+          description: Agent or key not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   # ── Authorization ────────────────────────────────────────────────────
   /v1/authorize:

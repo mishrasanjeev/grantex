@@ -8,6 +8,7 @@ import { authPlugin } from './plugins/auth.js';
 import { dynamicRateLimitPlugin } from './plugins/dynamicRateLimit.js';
 import { jwksRoutes } from './routes/jwks.js';
 import { agentsRoutes } from './routes/agents.js';
+import { agentKeysRoutes } from './routes/agent-keys.js';
 import { authorizeRoutes } from './routes/authorize.js';
 import { tokenRoutes } from './routes/token.js';
 import { grantsRoutes } from './routes/grants.js';
@@ -199,6 +200,7 @@ export async function buildApp(opts: AppOptions = {}) {
 
   // Protected routes
   await app.register(agentsRoutes);
+  await app.register(agentKeysRoutes);
   await app.register(authorizeRoutes);
   await app.register(tokenRoutes);
   await app.register(grantsRoutes);

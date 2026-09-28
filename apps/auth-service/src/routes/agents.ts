@@ -140,6 +140,10 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
           requestId: request.id,
         });
       }
+      const historyRefusal = agentKeyHistoryRefusal(error);
+      if (historyRefusal) {
+        return reply.status(historyRefusal.status).send({ ...historyRefusal.body, requestId: request.id });
+      }
       throw error;
     }
 
@@ -285,6 +289,10 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
           requestId: request.id,
         });
       }
+      const historyRefusal = agentKeyHistoryRefusal(error);
+      if (historyRefusal) {
+        return reply.status(historyRefusal.status).send({ ...historyRefusal.body, requestId: request.id });
+      }
       throw error;
     }
     const agent = rows[0];
@@ -394,5 +402,30 @@ function isAgentKeyConflict(error: unknown): boolean {
     && 'code' in error
     && 'constraint_name' in error
     && (error as { code?: unknown }).code === '23505'
-    && (error as { constraint_name?: unknown }).constraint_name === 'idx_agents_key_thumbprint_unique');
+    && ((error as { constraint_name?: unknown }).constraint_name === 'idx_agents_key_thumbprint_unique'
+      // The same key written to the agent key history at the same moment.
+      || (error as { constraint_name?: unknown }).constraint_name === 'agent_keys_pkey'));
+}
+
+/**
+ * Refusals from the agent key history (migration 122), which mirrors the key
+ * columns written here. Each is reachable only through a state the key routes
+ * create: a key reported compromised, or declared payments rails.
+ */
+function agentKeyHistoryRefusal(error: unknown): { status: number; body: { message: string; code: string } } | null {
+  if (!error || typeof error !== 'object' || (error as { code?: unknown }).code !== '23514') return null;
+  const constraint = (error as { constraint_name?: unknown }).constraint_name;
+  if (constraint === 'chk_agent_keys_not_compromised') {
+    return { status: 409, body: { message: 'publicJwk was reported compromised and can never be registered again', code: 'key_not_active' } };
+  }
+  if (constraint === 'chk_agent_keys_payments_rail_alg') {
+    return {
+      status: 400,
+      body: {
+        message: 'an agent that declares a payments rail (ap2, verifiable_intent) must use ES256 keys on P-256',
+        code: 'KEY_ALGORITHM_NOT_ALLOWED',
+      },
+    };
+  }
+  return null;
 }
