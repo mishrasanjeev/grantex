@@ -626,3 +626,175 @@ nothing has changed and the manifest has not been re-signed. It carries
 `exp`, and `Access-Control-Allow-Origin: *`. The route is limited to 60
 requests a minute per client address. A store that cannot be read is a
 `5xx`: the registry never serves an older manifest in its place.
+
+## Status reconciliation
+
+Status: draft. Implemented by the auth service (`apps/auth-service`,
+`src/lib/registry/status-reconciliation.ts`,
+`src/workers/registryStatusReconciliation.ts`). No schema change. Off unless
+`REGISTRY_STATUS_RECONCILIATION_ENABLED` is exactly `true`.
+
+The registry reads every accredited issuer's Token Status Lists that its
+accepted attestations point into, treats an entry that changed as an event,
+keeps its own acceptance entries in line with what it read, and brings every
+grant bound to an Agent Passport (`spec/passport-binding.md`) in line with its
+acceptance entry. The revocation feed then carries the change to relying
+parties that hold a token for the grant.
+
+### Polling
+
+A list is read when it is due:
+
+- one tick before the registry's last read of it goes stale. A read stays
+  fresh until the earliest of the list's `exp`, the time of reading plus its
+  `ttl`, and a day (draft-ietf-oauth-status-list-21 §5.1 and §13.7), so a
+  list is polled at its `ttl`;
+- and never sooner than `REGISTRY_STATUS_POLL_MIN_INTERVAL_MS` after the last
+  attempt, successful or not.
+
+A tick is a quarter of the minimum interval, and never shorter than 250 ms.
+The list is fetched once for every attestation that points into it, however
+many there are; at most 200 lists are read in one run, eight at a time. The
+fetch, the checks on the token and the fail-closed rules are those of
+`spec/attestation-1.0.md` section 10. Only one instance reconciles at a time:
+it holds a Postgres session advisory lock for the run, and the others skip it.
+Each instance starts after a random delay of up to one minimum interval.
+Only lists of an issuer that is active now are read (a suspension scheduled
+for later has not taken effect yet). A withdrawn issuer's lists are not read
+because the registry no longer holds keys to verify them; a suspended issuer's
+are not read so that nothing on them is acted on while it is suspended, which
+is what an operator suspends an issuer for when it publishes a wrong list. The
+issuer's attestations are suspended instead (below), and statuses recorded
+before the suspension stay as they were.
+
+An entry that changed is recorded as the attestation's `issuer_status`
+(`valid`, `suspended`, or `revoked` for INVALID and any value the registry
+does not know) and audited on the registry chain
+(`grantex.registry.attestation_issuer_status_changed`). An attestation whose
+issuer status is `revoked` is not read again: INVALID is final (§7.1).
+
+A list that cannot be fetched, verified or decoded changes nothing but the
+time of the attempt. The recorded status is not replaced by a guess and its
+freshness is not extended, so once it runs out the attestation stops counting
+toward a trust level, and the code exchange and every refresh of a bound grant
+refuse with `status_stale` until a read succeeds.
+
+### The registry's decision
+
+For each accepted, unexpired attestation, the registry's acceptance entry
+(see "Attestation acceptance status lists") is set as follows, first match
+wins:
+
+<!-- decision-table -->
+| Issuer's list says | Read | Issuer | Acceptance entry | Cause |
+|---|---|---|---|---|
+| revoked | any | any | INVALID | `issuer_status` |
+| any | any | suspended (from `suspended_effective_from`) or withdrawn | SUSPENDED | `issuer` |
+| suspended | any | active | SUSPENDED | `issuer_status` |
+| valid | fresh | active | VALID | `issuer_status` |
+| valid | stale | active | unchanged | none |
+
+A read is fresh until its `issuer_status_fresh_until`. An INVALID entry is
+final. A withdrawn issuer's attestations are suspended rather than ended
+because an operator can reinstate an issuer; they return to VALID with it,
+but only on a fresh read: a read that has run out is no evidence that the
+passport is still valid, so an entry that is SUSPENDED stays SUSPENDED, and
+its grants stay suspended, until the issuer's list has been read again (a
+reinstated issuer's lists are due at once, so that is the next tick if the
+list can be read). An entry that is VALID on a read that has run out stays
+VALID; the issuance and refresh checks refuse with `status_stale` on their
+own. Each change goes through `setAcceptance`, so it opens the
+acceptance lists' cascade window (60 s `ttl` for an hour), and is audited as
+`grantex.registry.attestation_acceptance_changed` with `from`, `to` and
+`cause`. The registry sets SUSPENDED only through this decision, so an entry
+the decision no longer calls for returns to VALID.
+
+An attestation signed with an issuer key that has been revoked
+(`revoke_kids` in `PATCH /v1/registry/issuers/{id}`) is withdrawn: its record
+becomes `withdrawn`, its acceptance entry INVALID, audited as
+`grantex.registry.attestation_withdrawn` with `requestedBy`
+`registry:key_revoked` and the `kid`. The signing key is the `kid` in the
+protected header of the attestation's JWS, which the registry stores byte for
+byte. The operator's `PATCH` checks every accepted attestation of the issuer;
+the loop looks again, for a day after a revocation, at attestations of issuers
+with a kid revoked in that day. Retiring a key that signed attestations still
+in use is a `jwks` replacement that keeps the old key, not a revocation.
+
+### The cascade to bound grants
+
+Every grant bound to a passport follows the acceptance entry in its binding
+(`grant_passport_bindings`):
+
+<!-- cascade-table -->
+| Acceptance entry | Bound grant | What happens |
+|---|---|---|
+| INVALID | active or suspended | revoked, with every grant delegated beneath it |
+| SUSPENDED | active | suspended, with every grant delegated beneath it; the suspension is recorded with cause `registry` |
+| VALID | suspended by the registry | resumed, with the grants the same suspension suspended |
+
+This includes an INVALID entry the registry set for another reason: a
+withdrawn attestation, and one superseded by a refresh (whose passport the
+refresh replaced). Revocation and suspension are those of the event bridge
+and the emergency stop: the grants change status in one transaction per
+developer, each gets an entry on its developer's audit chain
+(`grantex.grant.revoked` or `grantex.grant.suspended`, `cause` `registry`,
+evidence `trigger` `event`, or `cascade` below the root), the `grant.revoked`
+or `grant.suspended` webhook is sent, and the revocation feed carries the
+change. A grant suspended for any other reason is never resumed by the
+registry, and a resume is refused while an ancestor grant is not active. A
+revoked grant stays revoked when its passport is later reinstated: the agent
+asks for a new grant.
+
+An operator's `PATCH /v1/registry/issuers/{id}` (a suspension, a
+reinstatement, a withdrawal or a revoked kid) runs the decision and the
+cascade for that issuer before it answers. A reinstatement returns to VALID
+at the `PATCH` only the entries whose last read is still fresh; the others
+return at the first fresh read of their list. If that fails, the change itself is
+still committed, the failure is logged and counted, and the loop completes it
+at its next tick; the issuance and refresh checks refuse on the committed
+change either way. The loop repeats the decision and the cascade for every
+issuer on every tick, which also applies a suspension scheduled for later
+once it takes effect. Every step acts on what the tables say, not on the
+change that led there, so a run that stops half way is completed by the next
+and work done twice changes nothing.
+
+### Timing
+
+With a list `ttl` of `T` seconds and a tick of `t`, an issuer's flip reaches
+the acceptance list and the bound grant within `T + t` plus the run itself,
+and the revocation feed as soon as the cascade commits (PRD §9). The mock
+issuer and CI use `T` = 1 s and a 1 s minimum interval (owner decision 5);
+the integration tests measure the time from the issuer's flip to the
+revocation feed entry and require it to be at most 2 s. In production the
+minimum interval is at least 30 s and each list is polled at its own `ttl`.
+
+### Metrics and alerts
+
+<!-- metrics-table -->
+| Metric | Labels | Meaning |
+|---|---|---|
+| `grantex_registry_status_list_polls_total` | `outcome` | Lists read (`ok`) or not readable (`failed`). |
+| `grantex_registry_status_list_poll_failures_total` | `reason` | Why: `unreachable`, `http_status`, `content_type`, `too_large`, `dev_map_refused`, `invalid`, `not_under_base`, `issuer_unknown`, `error`. |
+| `grantex_registry_status_flips_total` | `to` | Recorded issuer statuses that changed. |
+| `grantex_registry_acceptance_changes_total` | `to`, `cause` | Acceptance entries changed. |
+| `grantex_registry_cascade_grants_total` | `action` | Grants `revoked`, `suspended` or `resumed`. |
+| `grantex_registry_status_reconcile_runs_total` | `outcome` | Runs: `complete`, `skipped_locked`, `failed`, `disabled`. |
+| `grantex_registry_status_reconcile_failures_total` | `step` | Steps that failed: `poll`, `decide`, `cascade`. |
+| `grantex_registry_status_poll_lag_seconds` | none | How late the most overdue list was at the start of the latest run. |
+| `grantex_registry_status_lists_stale` | none | Lists whose last good read has run out. |
+
+No label names an issuer, a list, an attestation or a grant. An instance that
+does not hold the lock reports 0 on both gauges, so `max()` over instances is
+the reconciling instance's value. `deploy/prometheus/registry-status-alerts.yml`
+alerts when a list has stayed unreadable past its staleness, when polls keep
+failing, when polls lag, when many entries flip at once, and when
+reconciliation runs fail. What to do is in
+`docs/runbooks/status-list-incident.md`.
+
+### Configuration
+
+<!-- config-table -->
+| Variable | Default | Meaning |
+|---|---|---|
+| `REGISTRY_STATUS_RECONCILIATION_ENABLED` | `false` | `true` (exactly) runs the reconciliation, and the cascade on `PATCH /v1/registry/issuers/{id}`. Otherwise the per-attestation recheck worker keeps the recorded statuses fresh as before, and nothing is cascaded. |
+| `REGISTRY_STATUS_POLL_MIN_INTERVAL_MS` | `30000` | The minimum interval between two reads of one list. At least 30000; at least 1000 when `NODE_ENV` is `development` or `test` (the mock issuer and CI only); at most 86400000. Anything else stops the service from starting. |

@@ -9005,6 +9005,16 @@ paths:
         registry audit chain in the same transaction. A suspension takes effect at
         `effective_from`, which may be in the future. A revoked kid is no longer served and
         cannot be registered again for the issuer.
+
+        With `REGISTRY_STATUS_RECONCILIATION_ENABLED=true`, the change is then cascaded before
+        the response (spec/registry-federation.md, "Status reconciliation"): a suspension or
+        withdrawal suspends the registry's acceptance of the issuer's attestations and every
+        grant bound to one of their passports, a reinstatement resumes what the registry
+        suspended once the issuer's list has been read afresh and still shows the passport
+        valid (at once when the last read is still fresh, otherwise at the loop's next read),
+        and a revoked kid withdraws every attestation it signed and revokes the
+        grants bound to them. The response is the same; a cascade that fails is logged and
+        completed by the reconciliation loop.
       security:
         - registryOperatorAuth: []
       parameters:

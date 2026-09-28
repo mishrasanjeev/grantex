@@ -4,6 +4,7 @@ import { evidenceConfigErrors } from './lib/evidence-service/settings.js';
 import { migrationLockTimeoutError } from './db/migrate.js';
 import { registryOperatorKeysConfigError } from './lib/registry/operator-auth.js';
 import { devIssuerOriginMapConfigError } from './lib/registry/issuer-fetcher.js';
+import { statusPollMinIntervalConfigError } from './lib/registry/status-poll-config.js';
 import {
   parseSigningAlgorithm,
   parseSigningKeyStore,
@@ -214,6 +215,13 @@ export const config = {
   // without an API key and /.well-known/agent-registry.json. Off by default;
   // read when the app is built, so it decides which routes exist.
   get registryPublicEndpointsEnabled() { return process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] === 'true'; },
+  // Status-list reconciliation with cascade (lib/registry/status-reconciliation.ts):
+  // one instance polls issuers' status lists at their ttl, keeps the
+  // registry's acceptance entries in line, and revokes, suspends or resumes
+  // the grants bound to a passport; an operator's PATCH of an issuer
+  // cascades at once. Off by default; off, the per-attestation recheck
+  // worker runs as before and nothing is cascaded.
+  get registryStatusReconciliationEnabled() { return process.env['REGISTRY_STATUS_RECONCILIATION_ENABLED'] === 'true'; },
   // Default overlap of an agent key rotation: how long the replaced key stays
   // usable (seconds, default 7 days, at most 30). Read at request time;
   // validateConfig reports a bad value at boot.
@@ -394,6 +402,10 @@ export function validateConfig(): void {
   // issuer origin to a local server.
   const devIssuerMapProblem = devIssuerOriginMapConfigError(process.env);
   if (devIssuerMapProblem) errors.push(devIssuerMapProblem);
+  // Owner decision 5: below 30 s only in development and tests (the mock
+  // issuer and CI), never below 1 s.
+  const statusPollProblem = statusPollMinIntervalConfigError(process.env);
+  if (statusPollProblem) errors.push(statusPollProblem);
 
   if (errors.length > 0) {
     console.error(

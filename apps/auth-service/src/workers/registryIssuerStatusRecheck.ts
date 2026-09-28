@@ -23,6 +23,10 @@
  * write what the list said, under the registry chain's lock, and only a
  * change of status is audited, so the result is the same. A run does not
  * start while the previous one on this instance is still going.
+ *
+ * index.ts starts it only while REGISTRY_STATUS_RECONCILIATION_ENABLED is
+ * off; with the flag on, workers/registryStatusReconciliation.ts reads each
+ * list once for every attestation on it and also cascades.
  */
 import type postgres from 'postgres';
 import { logger, type AppLogger } from '../lib/logger.js';

@@ -453,6 +453,32 @@ function stale(reason: string, message: string): never {
  * status is a refusal, never a pass.
  */
 export async function readStatusListEntry(token: string, check: StatusListCheck): Promise<StatusListRead> {
+  const { idx, ...rest } = check;
+  const read = await readStatusListEntries(token, { ...rest, idxs: [idx] });
+  const value = read.values.get(idx);
+  if (value === undefined || value === null) stale('index_out_of_range', `the status list has no entry ${idx}`);
+  return { value, freshUntil: read.freshUntil };
+}
+
+export interface StatusListEntriesCheck extends Omit<StatusListCheck, 'idx'> {
+  idxs: readonly number[];
+}
+
+export interface StatusListEntriesRead {
+  /** Each asked index's value (§7.1), or null when the list has no such entry. */
+  values: Map<number, number | null>;
+  /** As StatusListRead.freshUntil: one bound for every entry of the one token. */
+  freshUntil: Date;
+}
+
+/**
+ * readStatusListEntry for several entries of one token, so one fetch of a
+ * list serves every attestation that points into it (status reconciliation,
+ * status-reconciliation.ts). The token is checked once, exactly as for one
+ * entry; an index past the end of the list is null for that index alone,
+ * and the caller treats it as a failed read of that entry.
+ */
+export async function readStatusListEntries(token: string, check: StatusListEntriesCheck): Promise<StatusListEntriesRead> {
   let parsed: ParsedJws;
   try {
     parsed = parseCompactJws(token);
@@ -488,11 +514,10 @@ export async function readStatusListEntry(token: string, check: StatusListCheck)
 
   const statusList = claims['status_list'];
   if (!isPlainObject(statusList)) stale('bad_claim', 'status list has no status_list object');
-  let value: number;
+  const values = new Map<number, number | null>();
   try {
     const decoded = decodeTokenStatusList(statusList as { bits: number; lst: string });
-    if (check.idx >= decoded.size) stale('index_out_of_range', `the status list has no entry ${check.idx}`);
-    value = decoded.statusAt(check.idx);
+    for (const idx of check.idxs) values.set(idx, idx >= 0 && idx < decoded.size ? decoded.statusAt(idx) : null);
   } catch (err) {
     if (err instanceof StatusListCodecError) stale('bad_claim', `status list: ${err.message}`);
     throw err;
@@ -500,7 +525,7 @@ export async function readStatusListEntry(token: string, check: StatusListCheck)
   const bounds = [nowS + ISSUER_STATUS_MAX_FRESHNESS_SECONDS];
   if (exp !== undefined) bounds.push(exp as number);
   if (ttl !== undefined) bounds.push(nowS + (ttl as number));
-  return { value, freshUntil: new Date(Math.min(...bounds) * 1000) };
+  return { values, freshUntil: new Date(Math.min(...bounds) * 1000) };
 }
 
 /**

@@ -1832,3 +1832,37 @@ the pull request that references it.
   explicit timeout that reflects their work. Owner: registry maintainers.
   Exit criterion: the full suite passes three runs in a row on a CI runner
   and a developer workstation.
+
+## G-140 — `resumeSuspendedGrants` counts every resume as `cause="api"`
+
+- **Found:** adding the registry's status reconciliation, which resumes the
+  grants it suspended when a passport is reinstated, 2026-09-28.
+- **What:** `apps/auth-service/src/lib/revocation/cascade.ts`
+  `resumeSuspendedGrants` increments `grantex_grant_revocations_total` with
+  `{ action: 'resumed', cause: 'api' }` whoever resumed, while revocations and
+  suspensions carry the cause their caller passed (`event`,
+  `emergency_stop`, `registry`). The audit entries are right: the caller's
+  context is recorded.
+- **Impact:** dashboards over `grantex_grant_revocations_total` attribute
+  resumes by the event bridge and the registry to the API.
+- **Proposal:** take a `cause` argument (default `api`) and use it for the
+  metric, as `cascadeGrantAction` does. Owner: revocation maintainers. Exit
+  criterion: a resume by the registry is counted with `cause="registry"`.
+
+## G-141 — The registry's grant cascade reads every INVALID acceptance entry on each tick
+
+- **Found:** writing the cascade step of
+  `apps/auth-service/src/lib/registry/status-reconciliation.ts`, 2026-09-28.
+- **What:** to find bound grants whose acceptance entry is INVALID but that
+  are still active or suspended, each reconciliation tick joins every
+  non-VALID entry of `registry_acceptance_entries` to
+  `grant_passport_bindings` and `grants`. INVALID entries are final and
+  accumulate with every withdrawal, refresh and revocation, so the join
+  grows with the registry's history, not with the work to do.
+- **Impact:** none at Phase 1 volumes; the tick query slows as the registry
+  ages (a tick is a quarter of `REGISTRY_STATUS_POLL_MIN_INTERVAL_MS`).
+- **Proposal:** record on the binding (or on a small queue table) when its
+  entry leaves VALID, written in the same transaction as `setAcceptance`, and
+  cascade from that instead; or index bindings of live grants only. Needs a
+  migration. Owner: registry maintainers. Exit criterion: the cascade query
+  reads rows proportional to bindings whose grant still needs acting on.

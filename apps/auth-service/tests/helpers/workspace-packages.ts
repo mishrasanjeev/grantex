@@ -53,6 +53,8 @@ export interface MockIssuer {
   revokePassport(attestationId: string): string;
   suspendPassport(attestationId: string): string;
   reinstatePassport(attestationId: string): string;
+  /** The signed Token Status List token of list `list`, as the mock's server serves it. */
+  tokenStatusList(list: number): string;
 }
 
 export interface MockIssuerServer {

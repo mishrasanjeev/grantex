@@ -14,12 +14,19 @@
  * nothing can be accredited until an operator credential exists. Every write
  * goes on the registry's audit chain in the same transaction as the change.
  *
+ * With REGISTRY_STATUS_RECONCILIATION_ENABLED=true, a PATCH then brings the
+ * issuer's attestations and the grants bound to them in line at once
+ * (lib/registry/status-reconciliation.ts applyRegistryDecisions): a
+ * suspension suspends them, a reinstatement resumes what the registry
+ * suspended, a revoked kid withdraws what it signed and revokes the grants.
+ *
  * The public list needs no key. It is limited per client address like the
  * other public reads, and carries an ETag so a relying party polling it can
  * ask for changes only.
  */
 import { createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { config } from '../config.js';
 import { getSql } from '../db/client.js';
 import {
   IssuerRecordError,
@@ -31,6 +38,8 @@ import {
   updateAccreditedIssuer,
 } from '../lib/registry/issuers.js';
 import { operatorKeyMatches, registryOperatorKeys } from '../lib/registry/operator-auth.js';
+import { registryReconcileFailuresTotal } from '../lib/registry/reconciliation-metrics.js';
+import { applyRegistryDecisions } from '../lib/registry/status-reconciliation.js';
 
 /** Public reads per client address per minute. */
 export const PUBLIC_ISSUER_LIST_RATE_LIMIT = 60;
@@ -104,6 +113,22 @@ export async function registryIssuerRoutes(app: FastifyInstance): Promise<void> 
         status: record.status,
         revokedKids: patch.revokeKids?.length ?? 0,
       }, 'accredited issuer changed');
+      if (config.registryStatusReconciliationEnabled) {
+        try {
+          const cascade = await applyRegistryDecisions(getSql(), { issuerId: record.id });
+          request.log.warn({ alert: 'registry_issuer_cascade', issuerId: record.id, ...cascade },
+            'accredited issuer change cascaded to its attestations and bound grants');
+        } catch (err) {
+          // The change itself is committed, and every issuance and refresh of
+          // a bound grant already refuses on it (issuer_suspended,
+          // passport_revoked). What failed is pushing it to the acceptance
+          // lists and the revocation feed: logged and counted here, and done
+          // by the reconciliation loop at its next tick.
+          registryReconcileFailuresTotal.inc({ step: 'cascade' });
+          request.log.error({ err, alert: 'registry_issuer_cascade_failed', issuerId: record.id },
+            'accredited issuer change could not be cascaded now; the reconciliation loop retries it');
+        }
+      }
       return reply.send(toOperatorIssuer(record));
     } catch (err) {
       if (err instanceof IssuerRecordError) return sendRecordError(request, reply, err);

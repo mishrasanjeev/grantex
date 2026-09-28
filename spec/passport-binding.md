@@ -210,6 +210,13 @@ strips one a Principal consented to. Reporting the key compromised through
 approved request bound to it, as for any key-bound request. A delegated grant
 (`POST /v1/delegate`) does not inherit the binding in Phase 1.
 
+With `REGISTRY_STATUS_RECONCILIATION_ENABLED=true`, a bound grant also follows
+its passport after issuance: when the registry's acceptance entry in the
+binding becomes INVALID the grant and every grant delegated beneath it are
+revoked, when it becomes SUSPENDED they are suspended, and when it is VALID
+again what the registry suspended is resumed. The revocation feed carries each
+change. See `spec/registry-federation.md`, "Status reconciliation".
+
 ## 6. Consent
 
 `GET /v1/consent/{id}` returns `agentPassport` for a request that carries a
