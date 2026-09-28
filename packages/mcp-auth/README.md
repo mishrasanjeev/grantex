@@ -6,7 +6,26 @@
 
 **OAuth 2.1 + PKCE endpoint package for MCP servers, powered by Grantex.**
 
-Current published release: **`@grantex/mcp-auth@2.0.2`**.
+Version: **`@grantex/mcp-auth@3.0.0`**; verify registry publication in
+[Release Status](https://docs.grantex.dev/release-status). Node.js 22.12+ and
+`@grantex/sdk` 0.8+ are required. For the complete current setup, use the
+[3.0 deployment guide](https://docs.grantex.dev/mcp-auth) and
+[migration guide](https://docs.grantex.dev/migration-enforcement).
+
+```bash
+npm install @grantex/mcp-auth@3.0.0 @grantex/sdk@0.8.0 pg
+```
+
+Version 3 includes shared Postgres/Redis state, a consent page, browser-bound
+callbacks, PKCE/resource binding and tool guards. Guards and Express/Hono
+middleware require a revocation checker with `isTokenRevoked(jti)`;
+`revocations: 'none'` is an explicit warned opt-out. Memory storage is for
+evaluation. Live Grantex consent still requires the principal passkey.
+
+## Historical 2.0.2 behavior and migration context
+
+The following 2.0.2 examples and limitations are historical. Do not use them
+as the version 3 startup contract; the 3.0 deployment guide is authoritative.
 
 `createMcpAuthServer()` registers authorization-server metadata, Dynamic Client
 Registration, PKCE authorization, token, introspection, and revocation routes on
@@ -21,15 +40,14 @@ middleware.
 > token exchange, so end-to-end issuance can fail against the real backend.
 > Middleware and introspection verify signatures/claims but do not perform a live
 > revocation lookup. See the
-> [feature guide](https://docs.grantex.dev/features/mcp-auth-server) for the full
+> [legacy feature guide](https://docs.grantex.dev/legacy/mcp-auth-server-2) for the full
 > current-status matrix.
 
 > [!NOTE]
-> Version **3.0.0 is prepared in this repository but not published**; npm
-> still serves `2.0.2`. 3.0.0 adds Postgres/Redis state, the MCP authorization
+> Version **3.0.0** adds Postgres/Redis state, the MCP authorization
 > specification (2026-07-28) surface, a rendered consent page and tool refusal
 > at the MCP server, with breaking changes. Sections marked **3.0** describe
-> it; see [the 3.0 deployment guide](../../docs/mcp-auth.md) for deployment,
+> it; see [the 3.0 deployment guide](https://docs.grantex.dev/mcp-auth) for deployment,
 > consent-page customisation and migrating from 2.x.
 
 ## What 2.0.2 implements
@@ -398,7 +416,7 @@ claims of the [grant token profile](../../spec/grant-token-0.6.md) first:
 `scopes` from the space-delimited `scope`, the Grantex fields from
 `urn:grantex:grant`, with the legacy claims as a fallback (a pre-0.6 token is
 read from `scp`). It therefore keeps working when the issuer stops sending the
-legacy claims (`GRANT_TOKEN_LEGACY_CLAIMS=false`, the 0.7 default). It also
+legacy claims (`GRANT_TOKEN_LEGACY_CLAIMS=false`, explicitly configured). It also
 requires `typ: at+jwt` (absent only on a pre-0.6 token), and refuses a token
 that is not a grant token (neither `urn:grantex:grant` nor `scp`), a 0.6
 token with no agent or developer, a claim that is `null` or mistyped (legacy

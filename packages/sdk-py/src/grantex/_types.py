@@ -314,8 +314,8 @@ class VerifiedGrant:
     webauthn_evidence: WebAuthnGrantEvidence | None = None
     legacy_claims_used: tuple[str, ...] = ()
     """Legacy claim aliases read because the token had no standard claim for
-    them (for example ``scp`` without ``scope``). Empty for 0.6 tokens. Reading
-    aliases is deprecated and off by default from 0.7."""
+    them (for example ``scp`` without ``scope``). Empty for standard-claim tokens.
+    Reading aliases is deprecated; disable ``legacy_claims`` for standard claims."""
 
 
 # ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -580,8 +580,8 @@ class VerifyGrantTokenOptions:
     legacy_claims: bool = True
     """Read legacy claim aliases (``agt``, ``dev``, ``grnt``, ``scp``,
     ``parentAgt``, ``parentGrnt``, ``delegationDepth``) when a token lacks the
-    standard claim. ``True`` in 0.6, with a :class:`LegacyClaimsWarning` when
-    an alias is used; the default becomes ``False`` in 0.7. With ``False`` only
+    standard claim. Defaults to ``True``, with a :class:`LegacyClaimsWarning` when
+    an alias is used. With ``False`` only
     standard claims are read and the token must have ``typ: at+jwt``."""
     proof_jkt: str | None = None
     """RFC 7638 thumbprint of the key the caller proved possession of (for

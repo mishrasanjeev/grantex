@@ -58,7 +58,7 @@ server and hands the actual grant to Grantex. 3.0 is built for production:
 
 ## Install
 
-Until 3.0.0 is published, build it from the repository:
+While the candidate is being validated, build it from the repository:
 
 ```bash
 git clone https://github.com/mishrasanjeev/grantex
@@ -473,7 +473,7 @@ never act on a call the guard did not check. Every refusal is reported to
 `manifest_unknown_tool`, `body_not_parsed`, `decision_required`,
 `decision_invalid`, ...) for metrics.
 
-From 3.0.0 (the next release) the guard refuses to start without a revocation
+From 3.0.0 the guard refuses to start without a revocation
 configuration: `requireMcpAuth`, the Hono version and
 `createMcpResourceGuard()` throw when `revocations` is missing, or is neither
 an object with an `isTokenRevoked(jti)` function nor `'none'`. A guard that

@@ -12,8 +12,16 @@ Wrap Strands tool functions with Grantex grant token scope checks so agents only
 
 ## Install
 
+Version 0.2.0 is a breaking release requiring Python 3.11+ and
+`grantex` 0.7+. Online tools forward `audience` to `client.enforce()`.
+The default verified mode checks signatures and scopes, not current
+revocation. This helper has no amount extractor; for capped tools call
+`Grantex.enforce(..., amount=...)` directly before execution. Do not use
+`caps_mode="warn"` or `"off"` as production spend enforcement. See the
+[migration guide](https://docs.grantex.dev/migration-enforcement).
+
 ```bash
-pip install grantex-strands
+pip install grantex-strands==0.2.0 grantex==0.7.0
 ```
 
 You also need the Strands Agents SDK installed:

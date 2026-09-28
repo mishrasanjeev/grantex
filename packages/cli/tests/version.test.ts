@@ -8,6 +8,6 @@ describe('CLI dependencies', () => {
     const { dependencies } = JSON.parse(
       readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
     ) as { dependencies: Record<string, string> };
-    expect(dependencies['@grantex/sdk']).toBe('>=0.7.0');
+    expect(dependencies['@grantex/sdk']).toBe('>=0.8.0 <1');
   });
 });
