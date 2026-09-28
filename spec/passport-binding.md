@@ -209,9 +209,6 @@ A request authorized with a passport keeps its binding if the flag is turned
 off before the exchange: turning the flag off stops new bindings and never
 strips one a Principal consented to. Reporting the key compromised through
 `POST /v1/agents/{id}/keys/{thumbprint}/compromise` denies every pending or
-approved request bound to it, as for any key-bound request. With the flag on,
-a bound grant is not delegated (`POST /v1/grants/delegate`, §8.6); with it
-off, a delegated grant does not inherit the binding.
 approved request bound to it, as for any key-bound request.
 
 A passport-bound grant is not delegated in Phase 1. With the flag on,
@@ -220,7 +217,8 @@ A passport-bound grant is not delegated in Phase 1. With the flag on,
 grant would carry no binding, so it would escape the rechecks above and outlive
 a revoked or suspended passport. PRD §8.6 delegation, where the sub-agent binds
 its own passport and the parent's binding is carried in `act.passport`, is
-later work.
+later work. With the flag off, a delegated grant does not inherit the binding
+(FINDINGS G-130). The refusal covers per-merchant children too (§8.6).
 
 ## 6. Consent
 
