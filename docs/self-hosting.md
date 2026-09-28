@@ -251,7 +251,8 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `REVOCATION_FEED_HEARTBEAT_MS` | No | `1000` | How often a live stream confirms it is up to date; must stay well below a client's staleness bound |
 | `REVOCATION_FEED_MAX_CONNECTIONS` | No | `200` | Revocation streams one developer may hold on one instance |
 | `REVOCATION_FEED_RETENTION_HOURS` | No | `48` | How long delivered feed entries are kept after the credential expires |
-| `EMERGENCY_STOP_ENABLED` | No | `false` | Serve the emergency stop (section 11); revocations are irreversible |
+| `EMERGENCY_STOP_ENABLED` | No | `false` | Serve the emergency stop and its lockout (section 11); revocations are irreversible, and issuance reads lockouts only while this is on |
+| `RATE_LIMIT_ROUTE_CLASSES_ENABLED` | No | `true` | Revocation and emergency-stop routes, and the revocation feed, draw on per-developer budgets of their own instead of the plan (`docs/guides/rate-limits.mdx`); `false` puts them back in the plan budget, failing closed when Redis is unavailable |
 
 ---
 
@@ -504,6 +505,16 @@ appendfsync everysec
 If Redis data is lost, in-flight auth requests will fail temporarily, but no permanent data
 is lost. PostgreSQL is the source of truth for all grants, audit entries, and agent records.
 
+While Redis is unreachable, standard API-key routes answer `503 RATE_LIMIT_UNAVAILABLE`
+because their per-developer rate limit cannot be counted — once the Redis client gives up on
+the command, which against a stopped Redis took more than a minute. Revoking a grant, token,
+passport or consent bundle and the emergency stop are the exception: after at most 500 ms
+they are counted in each instance's memory against the containment ceiling instead, and the
+revocation is committed, so an incident can be contained during a Redis outage. The response
+can still wait on the best-effort cache write that follows the commit.
+`grantex_rate_limit_decisions_total{bucket="containment",outcome=~"local_.*"}` shows it
+happening.
+
 ---
 
 ## 10. Production Readiness Checklist
@@ -525,36 +536,84 @@ Before going live, verify each item:
 
 One call halts every agent under a grant, an agent, a principal or a whole
 developer. Use it when an agent is doing damage, a provider credential has
-leaked, or a tenant must be stopped now and questions asked afterwards.
+leaked, or a tenant must be stopped now and questions asked afterwards. With
+`lockout: true` the same call also freezes issuance under that scope until the
+freeze is lifted.
 
 It is off unless `EMERGENCY_STOP_ENABLED=true`. Grants stopped this way are
 **revoked, not paused**: there is no undo, and the principals involved have to
 authorise again.
 
-### What it does not do
+### A sweep, and a lockout only when you ask for one
 
-**It is a sweep, not a lockout.** It revokes what exists — repeatedly, until
-the scope comes back empty, so a grant delegated while it runs is caught by a
-later sweep — and then it is finished. It does **not** prevent new grants from
-being issued a second later. Anyone still holding the developer's API key can
-call `POST /v1/authorize` and mint another one, and `POST /v1/agents` to
-register another agent.
+**Without `lockout`, it is a sweep, not a lockout.** It revokes what exists —
+repeatedly, until the scope comes back empty, so a grant delegated while it
+runs is caught by a later sweep — and then it is finished. It does **not**
+prevent new grants from being issued a second later. Anyone still holding the
+developer's API key can call `POST /v1/authorize` and mint another one, and
+`POST /v1/agents` to register another agent. The response says
+`"lockout": false`.
 
-So an incident that starts with a leaked credential needs two actions, in this
-order:
+**With `"lockout": true`, it also freezes issuance.** The stop records a freeze
+over its scope *before* it sweeps, in the same transaction as its own record,
+and until the freeze is lifted nothing is issued under that scope. These are
+refused with `403 ISSUANCE_FROZEN` (`403 access_denied` on the OAuth
+endpoints):
 
-1. **Rotate or disable the leaked credential** — `POST /v1/keys/rotate` for a
-   developer API key, or remove the agent (`DELETE /v1/agents/:id`) so nothing
-   can be issued for it. The platform operator can also disable the developer.
-2. **Then run the emergency stop**, to revoke everything that credential
-   already issued.
+- `POST /v1/authorize`, and `POST /v1/token` for a code approved before the
+  stop (the code is not consumed, so it works again once the freeze is lifted);
+- `POST /v1/token/refresh` and `POST /v1/grants/delegate`;
+- the OAuth profile's `POST /oauth/par` and `POST /oauth/token`
+  (authorization code, refresh token and token exchange);
+- `POST /v1/consent-bundles`, `POST /v1/consent-bundles/:id/refresh` and
+  `POST /v1/passport/issue`.
 
-Run it the other way round and the stop will be clean while the attacker mints
-a fresh grant behind it. The response says `"lockout": false` for this reason,
-and `status` tells you how the sweep ended: `completed`, `incomplete` (grants
-were still appearing after five sweeps — something is still issuing them, go
-back to step 1) or `failed` (a batch did not finish; the row records what was
-revoked before it stopped, and the call is safe to repeat).
+A freeze covers what a stop over the same scope would revoke, and anything
+new that would be issued under it. That means a new grant for a frozen agent
+or principal. It also means a refresh, delegation, exchange or passport from
+any grant with a frozen grant, agent or principal anywhere above it. An
+`agent` or `principal` lockout does not stop the key registering a *new*
+agent and asking for grants for it. A `developer` lockout covers every path
+listed above for every agent and principal of the tenant, including agents
+registered after it. Commerce passports and decision grants are outside any
+lockout ("What a lockout does not refuse", below). The response says
+`"lockout": true` and gives the `freezeId`.
+
+So an incident that starts with a leaked credential:
+
+1. **Stop with a lockout**, as the platform operator if you can
+   (`POST /v1/admin/emergency-stop`). Only the operator can lift a lockout
+   the operator placed. A lockout the tenant places with its own key can be
+   lifted by any key of that tenant, *including the leaked one*.
+2. **Rotate or disable the leaked credential**: `POST /v1/keys/rotate` for a
+   developer API key, or remove the agent (`DELETE /v1/agents/:id`). The
+   platform operator can also disable the developer.
+3. **Lift the lockout** once the credential is safe ("Lifting a lockout",
+   below).
+
+Without a lockout the order is the other way round: rotate first, *then* stop.
+Run a sweep-only stop first and it will be clean while the attacker mints a
+fresh grant behind it. `status` tells you how the sweep ended:
+
+- `completed`;
+- `incomplete`: grants were still appearing after five sweeps. Something is
+  still issuing them; add a lockout or go back to step 2;
+- `failed`: a batch did not finish. The row records what was revoked before
+  it stopped, and the call is safe to repeat.
+
+A lockout recorded before a sweep fails **stays in place**. The grants the
+sweep had not reached yet are still live, but nothing new is issued under
+them, refresh and delegation included, until you repeat the stop or lift the
+freeze.
+
+The lockout is part of the emergency stop and is off with it: while
+`EMERGENCY_STOP_ENABLED` is not `true`, no issuance path reads the freeze
+state. Turning the flag off while a freeze is in force therefore stops
+enforcing it. The freeze stays recorded and is enforced again when the flag
+comes back. **Lift freezes before turning the stop off.** If the freeze state
+cannot be read, issuance fails closed: every path answers
+`503 FREEZE_STATE_UNAVAILABLE` (`503 temporarily_unavailable` on the OAuth
+endpoints) and logs `alert: "issuance_freeze_unavailable"`.
 
 ### Before the incident
 
@@ -598,11 +657,17 @@ are stopping, which is lost if the endpoint hands them the answer to paste.
 | `principal` | Every live grant that principal authorised, and their subtrees |
 | `developer` | Every live grant of the developer |
 
+To freeze issuance as well, add `"lockout": true` to the real call. It must be
+a boolean; anything else is refused with `400` before anything is recorded. A
+dry run never freezes anything, and says `lockout: false`.
+
 The response names the stop (`stopId`), its `status`, how many sweeps it took,
 how many grants matched and were revoked, which agents were stopped, and
-`lockout: false`. `agentsStopped` lists at most 100 ids; when more were
-stopped, `agentsStoppedTruncated` is true and `agentsStoppedTotal` gives the
-real number.
+`lockout`: `true` with the `freezeId` when the stop placed a lockout, or
+reaffirmed one already in force over the same scope, and `false` otherwise.
+`agentsStopped` lists at most 100 ids; when more were stopped,
+`agentsStoppedTruncated` is true and `agentsStoppedTotal` gives the real
+number.
 
 **Suspended grants are swept up too.** A suspension is reversible; a stop is
 not. Every grant the scope covers with status `active` *or* `suspended` is
@@ -614,9 +679,24 @@ be resumed afterwards — the principals must authorise again.
 As the platform operator, use `POST /v1/admin/emergency-stop` with
 `ADMIN_API_KEY` and the same body plus `developerId` (not needed for a
 `developer` scope, where the scope names it). A developer API key can only ever
-stop its own grants.
+stop, or freeze, its own grants.
 
 ### What happens
+
+With `lockout: true`, the freeze goes in first, in one transaction with the
+stop's `emergency_stops` row and a `grantex.issuance_frozen` entry on the
+developer's audit hash chain. From then on, nothing new is issued under the
+scope. An issuance that had already passed its check when the freeze arrived
+is waited for, and the sweep finds what it wrote: a new grant, which it
+revokes, or a passport's credential, whose status bit it sets. The same holds
+for the verifiable credential a code exchange or a delegation issues after its
+grant is committed (`credentialFormat: "vc-jwt"` or `"both"`): it is written in
+a transaction of its own that reads the grant and the freeze again under the
+same lock. If a lockout committed in between, the call is refused with
+`403 ISSUANCE_FROZEN` and no credential is written; the grant it had just
+created is revoked by the stop's sweep. If the grant was revoked in between
+without a lockout, the call returns the grant token without the credential, as
+a failed best-effort issuance always has. Then, with or without a lockout:
 
 1. Every matched grant and everything delegated beneath it is revoked in one
    transaction per batch, with wallet reservations released and credential
@@ -630,7 +710,51 @@ stop its own grants.
    second on a local stack, with two seconds as the requirement.
 4. The auth service logs `alert: "emergency_stop"`, and
    `grantex_emergency_stops_total{scope,outcome}` and
-   `grantex_grant_revocations_total{cause="emergency_stop"}` move.
+   `grantex_grant_revocations_total{cause="emergency_stop"}` move. A lockout
+   also moves `grantex_issuance_freeze_changes_total{action,scope}`. Every
+   refusal it causes moves `grantex_issuance_refusals_total{path,reason}` and
+   logs `alert: "issuance_frozen"`.
+
+### Lifting a lockout
+
+A freeze stays in force until someone lifts it. There is no expiry, and
+repeating the stop does not lift it. Lift it once the credential it was
+containing is rotated or disabled:
+
+```bash
+curl -sS -X POST "$BASE_URL/v1/emergency-stop/unfreeze" \
+  -H "Authorization: Bearer $DEVELOPER_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"scope": {"type": "agent", "id": "ag_01..."},
+       "reason": "credential rotated; incident 4102 closed",
+       "confirm": "unfreeze agent:ag_01..."}'
+```
+
+- `confirm` must be exactly `unfreeze <type>:<id>`. It is deliberately not
+  the stop's phrase, so pasting the stop's confirmation lifts nothing. It is
+  not echoed back either. A mismatch is `412 CONFIRMATION_REQUIRED`.
+- `404 NOT_FROZEN`: no freeze is in force for exactly that scope. A freeze is
+  lifted by the scope it was placed with; a `developer` freeze is not lifted
+  by unfreezing one agent.
+- `403 FREEZE_HELD_BY_OPERATOR`: the platform operator placed it, or
+  reaffirmed it with a stop of its own, so only the operator can lift it. The
+  operator uses `POST /v1/admin/emergency-stop/unfreeze` with `ADMIN_API_KEY`
+  and the same body, plus `developerId` for a `grant`, `agent` or `principal`
+  scope. The operator can lift any freeze.
+- The response is the lifted freeze: `freezeId`, `scope`, the `stopId` that
+  placed it, `placedBy`, `frozenAt`, `clearedAt`, `clearedBy` and
+  `clearReason`. The row is kept, so the table is also the history of every
+  lockout. A `grantex.issuance_unfrozen` entry goes on the audit chain in the
+  same transaction.
+- `GET /v1/emergency-stops` lists the freezes still in force under `freezes`,
+  beside the stops, oldest first, 50 to a page. `freezesTotal` is how many are
+  in force in all; when it is larger than the page, ask for the next one with
+  `?page=2`, or for up to 200 at a time with `?pageSize=200`, as on the other
+  paged lists. A stop's own `lockout` field says whether it asked for one, not
+  whether that freeze is still in force.
+- A second stop with a lockout over the same scope reaffirms the freeze in
+  force rather than stacking another. If the operator does it, the freeze
+  becomes the operator's.
 
 ### Afterwards
 
@@ -645,10 +769,13 @@ curl -sS "$BASE_URL/v1/emergency-stops" -H "Authorization: Bearer $DEVELOPER_API
   agents' own denial logs (`grant_revoked`).
 - Any agent still running is one that is not watching the feed. Rotate or
   block its credentials, or wait out the token lifetime.
-- To restore service, the principals authorise again; the revoked grants
-  cannot come back.
-- Keep the `stopId`: the audit entries, the `emergency_stops` row and the
-  feed entries all carry it.
+- Check `freezes` in the same response, and every page of it when
+  `freezesTotal` is larger than the page. A lockout you placed is still
+  refusing issuance until you lift it.
+- To restore service, lift any lockout, and then the principals authorise
+  again; the revoked grants cannot come back.
+- Keep the `stopId`: the audit entries, the `emergency_stops` row, the freeze
+  and the feed entries all carry it.
 
 ### What the stop cannot see
 
@@ -656,8 +783,11 @@ It revokes grants. Anything already handed out and cached elsewhere is
 outside its reach:
 
 - **Decision grants and passports already issued** keep verifying until they
-  expire; they are signed artefacts, not rows the sweep reads. Whatever
-  consumes them has to check revocation itself.
+  expire; they are signed artefacts. Whatever consumes them has to check
+  revocation itself. For an agent passport (`POST /v1/passport/issue`) that
+  check works: the sweep sets its status-list bit when it revokes the grant
+  behind it. Decision grants and commerce passports are not touched by the
+  sweep.
 - **Work already in flight** — a tool call the agent has already made, a
   payment already authorised downstream — is not recalled. The stop denies
   the *next* call.
@@ -669,18 +799,42 @@ outside its reach:
 - **Agents beyond the hundredth**: the response and the audit summary name at
   most 100. The summary also carries `agents_stopped_total`, so the true
   number is written down, but the list is not.
+- **What a lockout does not refuse.** It refuses new issuance only; tokens
+  already held keep working until the sweep revokes their grants. It does not
+  stop the key registering new agents: under an `agent` or `principal`
+  lockout, a new agent can still be given grants. It does not refuse decision
+  grants, which are issued when an approver signs in and approves, not by the
+  tenant's key. It does not refuse resuming a suspended grant that a sweep
+  which did not finish left behind; repeat the stop, which revokes it. It does
+  not refuse commerce passports (`POST /v1/commerce/passports/exchange`),
+  which a commerce tenant's agent mints from a consent the shopper approved
+  rather than from a grant, and the stop does not sweep them either. Contain
+  those with the commerce tenant's own control: disable the tenant
+  (`PATCH /v1/commerce/tenants/:tenant_id` with `{"status": "disabled"}`, as
+  the platform operator or the tenant's owner), which refuses new ones with
+  `403 tenant_disabled`, and revoke any already issued with
+  `POST /v1/commerce/passports/revoke`.
 
 ### If the stop itself fails
 
 - `403 FEATURE_DISABLED` / `404`: `EMERGENCY_STOP_ENABLED` is not `true` on
   the instance you reached.
 - `412 CONFIRMATION_REQUIRED`: the `confirm` phrase does not match.
+- `429`: the stop's own limits — 20 calls a minute from one address, and the
+  developer's containment budget of 2,000 revocation calls a minute, which
+  ordinary traffic does not use up. Wait out `Retry-After`; the stop is
+  idempotent. A Redis outage does not refuse the stop.
 - A 5xx: the stop is idempotent — run it again. Grants already revoked are
-  left alone, and a partly finished stop finishes on the retry.
+  left alone, and a partly finished stop finishes on the retry. A lockout the
+  failed call had already placed is still in force; the retry reaffirms it
+  rather than adding another.
 - If the API cannot be reached at all, revoke at the database
   (`UPDATE grants SET status = 'revoked', revoked_at = NOW() WHERE …`): the
   feed triggers fire on that too, so agents still find out. The audit chain
-  will not record it, so write it up.
+  will not record it, so write it up. A row inserted straight into
+  `issuance_freezes` is enforced as a lockout too. It bypasses the audit chain
+  and the lock that keeps a concurrent issuance from slipping past a freeze,
+  so repeat the stop with `lockout: true` as soon as the API is back.
 
 ## Ownership
 

@@ -6,6 +6,224 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Capped scopes need an amount (TypeScript and Python SDKs)
+- **Breaking:** `enforce()` denies a call under a `capped:N` scope that gives
+  no `amount`, with `reason_code` / `reasonCode` `cap_exceeded` and the new
+  `sub_reason` / `subReason` `amount_missing` (`details` carries `limit`).
+  Before, such a call was allowed and the cap was never checked, and
+  `wrap_tool` / `wrapTool` / `enforceMiddleware` never passed an amount, so a
+  capped grant used through them was not capped at all. The cap is
+  connector-wide, as it already was for amounts: the tightest `capped:N` on
+  the connector applies to every tool of the connector, whatever permission
+  the capped scope names, so read-only tools on such a connector need an
+  amount too. A `capped:N` scope with a malformed cap is now denied
+  (`malformed_cap`) whether or not an amount is given.
+- **Opt-out:** `caps_mode="warn"` / `capsMode: 'warn'`, on the client or per
+  call, keeps allowing a call without an amount (`amount_missing`, or
+  `malformed_cap` when the cap cannot be read) and reports the denial in
+  `result.would_deny_all` / `wouldDenyAll`, as warn mode already does for
+  call caps; it does not print or log anything itself.
+- New `EnforceResult.would_deny_all` / `wouldDenyAll`: every denial that caps
+  or decisions warn mode let through on the call, in step order (decision,
+  amount cap, call caps, decision consumption). Before, only the first was
+  kept, so a call that lacked both a decision grant and an amount reported
+  only the decision. `would_deny` / `wouldDeny` is unchanged: it is still the
+  first of them. `caps_mode="off"` skips the check.
+  An amount above the cap, a non-finite amount and a malformed cap with an
+  amount are denied in every mode, as before.
+- New amount extractor on the wrappers: `wrap_tool(extract_amount=...)`
+  (receives the tool call's keyword arguments), `wrapTool({ extractAmount })`
+  (receives the tool's input) and `enforceMiddleware({ extractAmount })`
+  (receives the request); the TypeScript extractors may be async. The value
+  is passed to `enforce()` as `amount`. `None` / `undefined` / `null` means no
+  amount. An extractor that raises refuses the call before `enforce()` runs
+  (`PermissionError` in Python, a thrown `Error` from `wrapTool`, a 403 with
+  `cap_exceeded` / `invalid_amount` from the middleware), whatever the grant
+  says and in every caps mode; a value that is not a finite number is denied
+  with `invalid_amount`.
+- Migration: for every grant that carries a `capped:N` scope, pass `amount`
+  to `enforce()`, or give the wrapper an amount extractor, for every tool of
+  that connector, including read-only tools with no monetary amount (pass
+  `0`, or an extractor that returns `0`). To roll out
+  gradually, set `caps_mode="warn"` / `capsMode: 'warn'`, log the full
+  `would_deny_all` / `wouldDenyAll` list (not only `would_deny`, which holds
+  just the first warning of the call and so hides `amount_missing` behind a
+  decision warning), add amounts until no `amount_missing` appears in it, then
+  return to `enforce`.
+  Grants without a capped scope are unaffected. The FastAPI `GrantexEnforcer`
+  and the Python Strands integration take no amount yet; where they meet
+  capped grants, call `enforce()` with `amount` directly or use the opt-out.
+  Documented in `docs/concepts/caps-and-metering.md` ("Amount caps") and
+  `spec/manifest-0.6.md`.
+### Breaking: `enforce()` checks the grant token audience (TypeScript and Python SDKs, `@grantex/gateway`, `@grantex/adapters`)
+- **Breaking:** `enforce()` now checks the grant token's `aud` claim
+  (RFC 7519 §4.1.3) right after its signature, before revocation and scopes.
+  A token that carries `aud` is only for the relying parties it names, and
+  earlier releases accepted it anywhere. `aud` may be a string or an array of
+  strings; it matches when the expected audience equals one of its values
+  exactly (no case folding, trailing-slash or prefix matching).
+  - A token that carries `aud` when the client has no expected audience is
+    denied with `reason_code` / `reasonCode` `token_invalid` and
+    `sub_reason` / `subReason` `audience_unconfigured`.
+  - A token whose `aud` does not contain the expected audience, or that has no
+    `aud` while one is expected, is denied with `token_invalid` /
+    `audience_mismatch`.
+  - `details` carries `token_audience` and, for a mismatch,
+    `expected_audience`. Both sub-reasons are exported on `TokenSubReason`.
+  - Audience denials are not relaxed by permissive mode
+    (`enforceMode: 'permissive'` / `enforce_mode="permissive"`): they stay
+    `allowed: false` / `allowed=False`, with the same reason, sub-reason and
+    `details`, in every enforce mode. Other denials behave in permissive mode
+    as before.
+  - Tokens issued without an audience (the auth service sets `aud` only when
+    the authorization request names one) are unaffected while no audience is
+    configured.
+- New options: `audience` and `audienceCheck` on the TypeScript client and
+  `audience` on `enforce()`; `audience` and `audience_check` on the Python
+  client and `audience` on `enforce()`. The per-call value overrides the
+  client's. `audienceCheck` / `audience_check` takes `'on'` (default) or
+  `'off'`; any other value, an empty or non-string `audience`, and an
+  `audience` combined with `'off'` are refused when the client is created (or,
+  for the per-call value, when `enforce()` is called).
+- `@grantex/gateway` applies the same check with `audience` and
+  `audienceCheck` in its config and an `audience` per route (which overrides
+  the top-level one), answering 401 `AUDIENCE_UNCONFIGURED` or
+  `AUDIENCE_MISMATCH`. `@grantex/adapters` takes `audience` and
+  `audienceCheck` in `AdapterConfig` and throws `GrantexAdapterError` with the
+  same codes. Both read `aud` from the payload of the token the SDK has just
+  verified, and refuse a token whose payload cannot be read (`TOKEN_INVALID`).
+  As in `enforce()`, the audience is checked before the scopes, so the gateway
+  answers a token for another relying party that also lacks the route's scopes
+  with the audience code rather than 403 `SCOPE_INSUFFICIENT`.
+  An invalid setting stops the gateway from starting and the adapter from
+  being created.
+- `grantex enforce test` (`@grantex/cli`) takes `--audience <audience>`,
+  passed to `enforce()` as the per-call audience, and
+  `--audience-check <on|off>`, passed to the client. Any other
+  `--audience-check` value, an empty `--audience`, and `--audience` with
+  `--audience-check off` are refused; so are both options when the installed
+  `@grantex/sdk` has no audience check, rather than being ignored.
+- `@grantex/strands` and `grantex-strands` pass their `audience` option to
+  `client.enforce()` as the per-call audience in online mode, as offline
+  verification already did; without it, online mode would deny every token
+  that carries `aud` with `audience_unconfigured` unless the client had its
+  own audience.
+- **Opt-out:** `audienceCheck: 'off'` (TypeScript client, gateway config,
+  adapter config) or `audience_check="off"` (Python client) restores the
+  earlier behaviour exactly: `aud` is not read.
+- **Migration:**
+  1. Find whether the grant tokens your service receives carry `aud`: they do
+     when the authorization request set `audience`.
+  2. Set `audience` on the client (gateway: top-level or per route; adapters:
+     `AdapterConfig`) to the identifier your service is issued tokens for.
+     Use the per-call `audience` on `enforce()` where one client serves
+     several audiences.
+  3. Until you know the audience, set `audienceCheck: 'off'` /
+     `audience_check="off"` to keep the earlier behaviour, and remove it once
+     `audience` is set.
+  4. Treat `audience_unconfigured` as a configuration error and
+     `audience_mismatch` as a token presented to the wrong relying party.
+- The cases shared by the four packages are in
+  `spec/examples/enforce-audience.json`. Documented in the SDK enforce pages,
+  the gateway and adapters pages, `spec/grant-token-0.6.md` (Validation) and
+  `spec/manifest-0.6.md`.
+### Emergency stop lockout
+- The emergency stop can now freeze issuance as well as revoke. `lockout: true`
+  on `POST /v1/emergency-stop` or `POST /v1/admin/emergency-stop` records a
+  freeze over the stop's scope (grant, agent, principal or developer). The
+  freeze is written before the first sweep, in the same transaction as the
+  stop's record, and the response says `lockout: true` with a `freezeId`. A
+  stop without the option is unchanged: it revokes what exists, says
+  `lockout: false`, and the same key can mint a new grant straight afterwards.
+- While a freeze is in force, every issuance path under its scope refuses with
+  `403 ISSUANCE_FROZEN`: `POST /v1/authorize`, `POST /v1/token`,
+  `POST /v1/token/refresh`, `POST /v1/grants/delegate`,
+  `POST /v1/consent-bundles` and its refresh, and `POST /v1/passport/issue`.
+  The OAuth profile's `POST /oauth/par` and `POST /oauth/token` (authorization
+  code, refresh token and token exchange) answer `403 access_denied`. A freeze
+  covers what a stop over the same scope would revoke, so a refresh,
+  delegation, exchange or passport is checked against every grant above the
+  one it acts on. If the freeze state cannot be read, issuance fails closed
+  with `503 FREEZE_STATE_UNAVAILABLE` (`503 temporarily_unavailable` on the
+  OAuth endpoints). A refused code is not consumed and a refused refresh token
+  is not rotated, so both work once the freeze is lifted.
+- New endpoints: `POST /v1/emergency-stop/unfreeze` (developer API key) and
+  `POST /v1/admin/emergency-stop/unfreeze` (`ADMIN_API_KEY`) lift a freeze.
+  Each must repeat `confirm: "unfreeze <type>:<id>"`. A freeze the operator
+  placed, or reaffirmed, can only be lifted by the operator, because the
+  tenant's own key may be the leaked credential. Placing and lifting both go
+  on the audit hash chain (`grantex.issuance_frozen`,
+  `grantex.issuance_unfrozen`), and `GET /v1/emergency-stops` now also lists
+  the freezes in force, under `freezes`, oldest first and paged with `page`
+  and `pageSize` (default 50, at most 200) as the other paged lists are, with
+  `freezesTotal` giving how many are in force in all.
+- Freezing and issuing share a per-developer advisory lock, so a grant written
+  while a freeze lands is either found by the sweep or refused. The same holds
+  for a passport: `POST /v1/passport/issue` now writes the passport and its
+  credential in one transaction that takes the lock and reads the grant
+  again, locked. A passport being written as a lockout lands is waited for,
+  and the sweep sets its status bit. One whose grant a stop revoked while it
+  was being issued is refused with `400 INVALID_GRANT`.
+- The verifiable credential a code exchange or a delegation issues after its
+  grant is committed (`credentialFormat: "vc-jwt"` or `"both"`, without
+  portable passkey evidence) is written in a transaction of its own that
+  reads the grant, locked, and the freeze again under the same lock. A lockout
+  that lands between the grant and its credential either waits for the
+  credential and sets its status bit, or, if it committed first, the call is
+  refused with `403 ISSUANCE_FROZEN` and no credential is written. A grant
+  revoked in between gets no credential, and the call returns without one, as
+  when best-effort issuance fails.
+- A lockout does not cover commerce passports
+  (`POST /v1/commerce/passports/exchange`) or decision grants, which are not
+  issued from grants. The runbook says how to contain commerce passports:
+  disable the commerce tenant, and revoke those already issued.
+- Off with the rest of the emergency stop. Unless `EMERGENCY_STOP_ENABLED=true`,
+  the issuance paths do not read the freeze state and behave exactly as
+  before: the passport route writes its two rows separately and the
+  post-commit credential is issued as it was. Turning the flag off stops enforcing any freeze still in
+  force; the runbook says to lift freezes first.
+- Migration `120_emergency_stop_lockout.sql` adds the `issuance_freezes`
+  table and an `emergency_stops.lockout` column with a constant default, so
+  there is no table rewrite and existing stops read as sweeps. Metrics:
+  `grantex_issuance_freeze_changes_total{action,scope}` and
+  `grantex_issuance_refusals_total{path,reason}`. Alert rules:
+  `GrantexIssuanceLockoutPlaced` and `GrantexIssuanceFreezeStateUnreadable`.
+  The runbook is section 11 of `docs/self-hosting.md`.
+### Revoking is no longer rate limited like ordinary traffic (default on)
+- **Breaking (default flip):** while the Redis rate-limit counter is
+  unavailable, revoking and the emergency stop are now served, counted per
+  instance, where they used to answer `503 RATE_LIMIT_UNAVAILABLE`; and they
+  and the revocation feed no longer draw on the plan budget. On by default,
+  with no flag to turn on; opt out with `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false`.
+- Containment routes — `DELETE /v1/grants/:id`, `POST /v1/tokens/revoke`,
+  `POST /v1/emergency-stop`, `POST /v1/passport/:id/revoke` and
+  `POST /v1/consent-bundles/:id/revoke` — draw on a per-developer
+  containment budget of 2,000 requests a minute on every plan instead of the
+  plan budget. A tenant that has spent its plan quota on ordinary calls can
+  still revoke; previously a free-plan tenant near its 100-a-minute quota
+  waited out `Retry-After` on the one path that ends an incident.
+- Containment routes fail open when the Redis rate-limit counter is
+  unavailable or does not answer within 500 ms: each instance counts them in
+  memory against the same ceiling, instead of answering
+  `503 RATE_LIMIT_UNAVAILABLE`. The revocation itself is written to Postgres,
+  so a cache outage no longer blocks it. Against a stopped Redis a revoke now
+  commits after about half a second; it used to wait over a minute for the
+  counter to fail and then answer `503`.
+- The revocation feed and status reads (`GET /v1/revocations`, `/status`,
+  `/stream`, and a consent bundle's `revocation-status`) draw on a
+  per-developer status budget of 6,000 requests a minute instead of the plan
+  budget, keep their per-address limits, and still fail closed.
+- Every other standard API-key route is unchanged: plan budget, `503` when
+  the counter is unavailable. That includes DPDP consent withdrawal and
+  erasure, which can mark grants revoked but are compliance operations, not
+  the incident path. Nothing previously accepted is now refused; the
+  visible difference is the `X-RateLimit-*` values on the moved routes,
+  which report the budget they draw on.
+- New metric `grantex_rate_limit_decisions_total{bucket, outcome}` and two
+  alert rules in `deploy/prometheus/revocation-feed-alerts.yml`.
+- **Opt-out:** `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false` puts these routes back
+  in the plan budget, failing closed, as before. See the
+  [rate limits guide](docs/guides/rate-limits.mdx).
 ### Portable WebAuthn SDK patch candidates
 - Prepared `@grantex/sdk@0.7.1`, Python `grantex==0.6.1`, and Go SDK
   `v0.4.1` to ship the typed signed grant-evidence reference and VC

@@ -74,6 +74,9 @@ def create_grantex_tool(
         client: Grantex client instance (required for online mode).
         connector: Connector name for manifest lookup (required for online mode).
         online: If True, use client.enforce() for signature + scope verification.
+        audience: Expected grant token audience. Checked by offline verification,
+            and passed to ``client.enforce()`` as the per-call audience in
+            online mode.
 
     Raises:
         PermissionError: if the grant token does not contain the required scope.
@@ -92,7 +95,13 @@ def create_grantex_tool(
 
     def _verify_required_scope() -> None:
         if online:
-            result = client.enforce(grant_token, connector, name)
+            # enforce() checks the grant token audience; the tool's audience
+            # is the one it expects, as in offline verification. Without one
+            # the call is left as it was, so older clients keep working.
+            if audience is None:
+                result = client.enforce(grant_token, connector, name)
+            else:
+                result = client.enforce(grant_token, connector, name, audience=audience)
             allowed = result.allowed if hasattr(result, "allowed") else result.get("allowed")
             if not allowed:
                 reason = result.reason if hasattr(result, "reason") else result.get("reason", "")

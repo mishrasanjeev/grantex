@@ -40,6 +40,20 @@ describe('requireClient()', () => {
     expect(client).toBeDefined();
   });
 
+  it('passes the audience check option to the client', async () => {
+    const config = { baseUrl: 'http://localhost:3000', apiKey: 'gx_test_abc' };
+    (loadConfig as ReturnType<typeof vi.fn>).mockResolvedValue(config);
+    (resolveConfig as ReturnType<typeof vi.fn>).mockReturnValue(config);
+
+    await requireClient({ audienceCheck: 'off' });
+
+    expect(Grantex).toHaveBeenCalledWith({
+      baseUrl: 'http://localhost:3000',
+      apiKey: 'gx_test_abc',
+      audienceCheck: 'off',
+    });
+  });
+
   it('exits with error when config is null', async () => {
     (loadConfig as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     (resolveConfig as ReturnType<typeof vi.fn>).mockReturnValue(null);

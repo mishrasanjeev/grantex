@@ -104,10 +104,10 @@ try {
     const started = Date.now();
     await admin.grants.revoke(pair.parentGrantId);
     // Propagation is measured from the moment the revocation is committed —
-    // when the API returns — not from when the call was made. A developer on
-    // the free plan is rate limited to 100 requests a minute, and the SDK
-    // waits out `Retry-After`; that wait is reported separately rather than
-    // charged to the feed.
+    // when the API returns — not from when the call was made. The revoke
+    // call is rate limited (in the developer's containment bucket, not the
+    // plan's), and the SDK waits out `Retry-After`; that wait is reported
+    // separately rather than charged to the feed.
     const revokedAt = Date.now();
     let denial = null;
     while (Date.now() - revokedAt < 30_000) {
@@ -123,7 +123,7 @@ try {
     const elapsed = Date.now() - revokedAt;
     const revokeMs = revokedAt - started;
     if (revokeMs > 1_000) {
-      console.log(`trial ${index}: the revoke call waited ${revokeMs} ms (plan rate limit), not counted`);
+      console.log(`trial ${index}: the revoke call waited ${revokeMs} ms (rate limit or server), not counted`);
     }
     if (!denial) {
       console.error(`trial ${index}: child grant still allowed ${elapsed} ms after its parent was revoked`
@@ -197,7 +197,7 @@ if (report.revoke_call_max_ms > REVOKE_CALL_BUDGET_MS) {
   console.error(
     `the revoke call itself took up to ${report.revoke_call_max_ms} ms (budget ${REVOKE_CALL_BUDGET_MS} ms). `
     + 'Propagation is within budget, but issuing the revocation is not: this is the containment path, '
-    + 'and on a rate-limited plan it is throttled like ordinary traffic (FINDINGS G-23).',
+    + 'which has a rate-limit bucket of its own, so something is refusing or slowing revocations.',
   );
   process.exit(1);
 }

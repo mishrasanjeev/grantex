@@ -177,6 +177,11 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // POST /v1/dpdp/consent-records/:recordId/withdraw — Withdraw consent
+  // It can revoke the record's grant, but it stays in the plan rate-limit
+  // bucket and fails closed, unlike the containment routes
+  // (plugins/dynamicRateLimit.ts): it is a compliance operation, not the
+  // incident path, and revokes only that grant, without the cascade that
+  // DELETE /v1/grants/:id performs.
   app.post<{ Params: { recordId: string }; Body: WithdrawConsentBody }>(
     '/v1/dpdp/consent-records/:recordId/withdraw',
     async (request, reply) => {
@@ -716,6 +721,9 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // POST /v1/dpdp/data-principals/:principalId/erasure — Right to erasure (DPDP Section 11)
+  // Plan rate-limit bucket, failing closed, as for withdrawal above; it also
+  // rewrites the principal's audit entries, which must not run unmetered
+  // while the limiter is down.
   app.post<{ Params: { principalId: string } }>(
     '/v1/dpdp/data-principals/:principalId/erasure',
     async (request, reply) => {

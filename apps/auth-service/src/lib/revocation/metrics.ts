@@ -31,3 +31,23 @@ export const emergencyStopsTotal = new Counter({
   labelNames: ['scope', 'outcome'] as const,
   registers: [registry],
 });
+
+/** Lockouts placed, reaffirmed by a later stop, and lifted, by scope type. */
+export const issuanceFreezeChangesTotal = new Counter({
+  name: 'grantex_issuance_freeze_changes_total',
+  help: 'Issuance freezes placed, reaffirmed and lifted, by scope type',
+  labelNames: ['action', 'scope'] as const,
+  registers: [registry],
+});
+
+/**
+ * Issuance refused by a lockout: `frozen` when a freeze covers the request,
+ * `freeze_state_unavailable` when the freeze state could not be read and the
+ * path failed closed. `path` is one of a fixed set of issuance routes.
+ */
+export const issuanceRefusalsTotal = new Counter({
+  name: 'grantex_issuance_refusals_total',
+  help: 'Grant and token issuance refused by an emergency stop lockout, by path and reason',
+  labelNames: ['path', 'reason'] as const,
+  registers: [registry],
+});

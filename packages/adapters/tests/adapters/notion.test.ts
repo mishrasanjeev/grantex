@@ -8,6 +8,7 @@ vi.mock('@grantex/sdk', () => ({
 import { verifyGrantToken } from '@grantex/sdk';
 import { NotionAdapter } from '../../src/adapters/notion.js';
 import { GrantexAdapterError } from '../../src/errors.js';
+import { GRANT_TOKEN } from '../tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -35,7 +36,7 @@ describe('NotionAdapter', () => {
         ok: true, json: () => Promise.resolve(results),
       }));
 
-      const result = await adapter.queryDatabase('grant-token', {
+      const result = await adapter.queryDatabase(GRANT_TOKEN, {
         database_id: 'db_123',
       });
 
@@ -53,7 +54,7 @@ describe('NotionAdapter', () => {
         ok: true, json: () => Promise.resolve({ results: [] }),
       }));
 
-      await adapter.queryDatabase('grant-token', {
+      await adapter.queryDatabase(GRANT_TOKEN, {
         database_id: 'db_123',
         filter: { property: 'Status', select: { equals: 'Done' } },
         sorts: [{ property: 'Created', direction: 'descending' }],
@@ -72,7 +73,7 @@ describe('NotionAdapter', () => {
         scopes: ['email:read'],
       });
 
-      await expect(adapter.queryDatabase('token', { database_id: 'db_1' }))
+      await expect(adapter.queryDatabase(GRANT_TOKEN, { database_id: 'db_1' }))
         .rejects.toThrow(GrantexAdapterError);
     });
 
@@ -93,7 +94,7 @@ describe('NotionAdapter', () => {
       }));
 
       try {
-        await adapter.queryDatabase('token', { database_id: 'db_1' });
+        await adapter.queryDatabase(GRANT_TOKEN, { database_id: 'db_1' });
         expect.fail('should throw');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('UPSTREAM_ERROR');
@@ -108,7 +109,7 @@ describe('NotionAdapter', () => {
         ok: true, json: () => Promise.resolve(created),
       }));
 
-      const result = await adapter.createPage('token', {
+      const result = await adapter.createPage(GRANT_TOKEN, {
         parent: { database_id: 'db_123' },
         properties: { Name: { title: [{ text: { content: 'New Page' } }] } },
       });
@@ -126,7 +127,7 @@ describe('NotionAdapter', () => {
         ok: true, json: () => Promise.resolve({ id: 'page_2' }),
       }));
 
-      await adapter.createPage('token', {
+      await adapter.createPage(GRANT_TOKEN, {
         parent: { database_id: 'db_123' },
         properties: { Name: { title: [{ text: { content: 'Test' } }] } },
         children: [{ object: 'block', type: 'paragraph', paragraph: { rich_text: [] } }],
@@ -142,7 +143,7 @@ describe('NotionAdapter', () => {
         scopes: ['pages:read'],
       });
 
-      await expect(adapter.createPage('token', {
+      await expect(adapter.createPage(GRANT_TOKEN, {
         parent: { database_id: 'db_123' },
         properties: {},
       })).rejects.toThrow(GrantexAdapterError);

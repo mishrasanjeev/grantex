@@ -93,6 +93,53 @@ function checkRevocationCheck(mode: unknown): RevocationCheckMode {
   return mode;
 }
 
+function checkAudienceCheck(mode: unknown): 'on' | 'off' {
+  if (mode !== 'on' && mode !== 'off') {
+    throw new Error(`audienceCheck must be one of on, off, not ${JSON.stringify(mode)}`);
+  }
+  return mode;
+}
+
+function checkExpectedAudience(audience: unknown, audienceCheck: 'on' | 'off'): string | undefined {
+  if (audience === undefined) return undefined;
+  if (typeof audience !== 'string' || audience === '') {
+    throw new Error(`audience must be a non-empty string, not ${JSON.stringify(audience)}`);
+  }
+  // The check is off, so the audience would be ignored and tokens for other
+  // relying parties accepted: refuse the contradiction instead.
+  if (audienceCheck === 'off') throw new Error("audience cannot be set with audienceCheck: 'off'");
+  return audience;
+}
+
+/**
+ * The audience denial for a verified token, if any (RFC 7519 section 4.1.3).
+ * `aud` is a string or an array of strings (the verifier refuses anything
+ * else); the expected audience matches when it equals one of them exactly.
+ */
+function audienceDenial(
+  tokenAudience: string | string[] | undefined,
+  expected: string | undefined,
+): { reason: string; subReason: string; details: Record<string, unknown> } | undefined {
+  const audiences = tokenAudience === undefined ? [] : typeof tokenAudience === 'string' ? [tokenAudience] : [...tokenAudience];
+  if (expected === undefined) {
+    if (tokenAudience === undefined) return undefined;
+    // A token that names an audience is only for that relying party. A client
+    // that does not know its own audience cannot tell whether it is one of
+    // them, so it denies rather than accept a token meant elsewhere.
+    return {
+      reason: "The grant token is for a specific audience and this client has no expected audience; set audience (or audienceCheck: 'off').",
+      subReason: TokenSubReason.AUDIENCE_UNCONFIGURED,
+      details: { token_audience: audiences },
+    };
+  }
+  if (audiences.includes(expected)) return undefined;
+  return {
+    reason: `The grant token's audience does not include ${JSON.stringify(expected)}.`,
+    subReason: TokenSubReason.AUDIENCE_MISMATCH,
+    details: { expected_audience: expected, token_audience: audiences },
+  };
+}
+
 function checkCapsMode(mode: unknown): CapsMode {
   if (!(CAPS_MODES as readonly unknown[]).includes(mode)) {
     throw new Error(`capsMode must be one of ${CAPS_MODES.join(', ')}, not ${JSON.stringify(mode)}`);
@@ -131,6 +178,8 @@ export class Grantex {
   readonly #decisionsMode: 'enforce' | 'warn';
   readonly #decisionConsumer: DecisionConsumer;
   readonly #decisionAlgorithms: string[];
+  readonly #audienceCheck: 'on' | 'off';
+  readonly #audience: string | undefined;
 
   readonly agents: AgentsClient;
   readonly grants: GrantsClient;
@@ -216,6 +265,12 @@ export class Grantex {
       throw new Error('decisionAlgorithms must be a non-empty subset of RS256, ES256');
     }
     this.#decisionAlgorithms = algorithms;
+    // The grant token audience enforce() expects (RFC 7519 section 4.1.3). With
+    // audienceCheck 'on' (the default) a token that carries aud is denied unless
+    // its aud contains this value; 'off' ignores aud, as releases before the
+    // audience check did.
+    this.#audienceCheck = checkAudienceCheck(options.audienceCheck === undefined ? 'on' : options.audienceCheck);
+    this.#audience = checkExpectedAudience(options.audience, this.#audienceCheck);
     this.decisions = new DecisionsClient(this.#http);
     const decisions = this.decisions;
     this.#decisionConsumer = options.decisionConsumer ?? {
@@ -428,6 +483,9 @@ export class Grantex {
     const { grantToken, connector, tool, amount, caseId, costComponents, reserve = true, capsTenantId } = options;
     const capsMode = options.capsMode === undefined ? this.#capsMode : checkCapsMode(options.capsMode);
     const decisionsMode = options.decisionsMode === undefined ? this.#decisionsMode : checkDecisionsMode(options.decisionsMode);
+    const expectedAudience = options.audience === undefined
+      ? this.#audience
+      : checkExpectedAudience(options.audience, this.#audienceCheck);
     const base: Omit<EnforceResult, 'allowed' | 'reason'> = {
       grantId: '',
       agentDid: '',
@@ -471,6 +529,25 @@ export class Grantex {
     base.grantId = grant.grantId;
     base.agentDid = grant.agentDid;
     base.scopes = grant.scopes;
+
+    // 1a. Audience. Checked before revocation: a token meant for another
+    //     relying party is refused without asking the auth service about it.
+    //     The denial fails closed in every enforce mode: permissive mode does
+    //     not turn it into an allow, since the token was issued for another
+    //     relying party (or this client does not know its own audience).
+    if (this.#audienceCheck === 'on') {
+      const denial = audienceDenial(grant.audience, expectedAudience);
+      if (denial) {
+        return {
+          ...base,
+          allowed: false,
+          reason: denial.reason,
+          reasonCode: DenialReason.TOKEN_INVALID,
+          subReason: denial.subReason,
+          details: denial.details,
+        };
+      }
+    }
 
     // 1b. Revocation. The token verifies offline whether or not the grant
     //     still stands, so this is the only place a revocation can be seen.
@@ -601,7 +678,9 @@ export class Grantex {
     //    last step, after caps are reserved. A decision needs two approvers if
     //    either the manifest or the grant says so.
     let decisionSet: DecisionGrantSet | undefined;
-    let wouldDeny: WouldDeny | undefined;
+    // Every denial warn mode lets through, in step order; wouldDeny is the
+    // first of them.
+    const wouldDenyAll: WouldDeny[] = [];
     if (spec.requiresDecision || decisionReference?.tools.includes(tool)) {
       const fourEyesOn = [...new Set([...spec.fourEyesOn, ...(decisionReference?.fourEyesOn[tool] ?? [])])];
       const requirement = { decision_required: `${connector}:${tool}` };
@@ -623,35 +702,65 @@ export class Grantex {
             decisionDenial.details,
           );
         }
-        wouldDeny = decisionDenial;
+        wouldDenyAll.push(decisionDenial);
       }
     }
 
-    // 10. Check capped amount if provided
-    if (amount !== undefined) {
-      if (typeof amount !== 'number' || !Number.isFinite(amount)) {
-        return denied(
-          `Amount must be a finite number to enforce a budget cap on ${connector}.`,
-          DenialReason.CAP_EXCEEDED,
-          CapSubReason.INVALID_AMOUNT,
-        );
+    // 10. Amount caps. A `capped:N` scope on the connector bounds every call's
+    //     amount, so a call with no amount is denied: it used to pass, and a
+    //     caller that never reported an amount was never capped. Caps mode
+    //     "warn" allows it and reports the denial in wouldDeny; "off" skips it.
+    //     The cap is connector-wide: the tightest `capped:N` on the connector
+    //     applies to every tool on it, read tools included. A malformed cap
+    //     with no amount follows the same modes (it used to pass too); a
+    //     malformed amount, a malformed cap with an amount, or an amount above
+    //     the cap is denied in every mode.
+    if (amount !== undefined && (typeof amount !== 'number' || !Number.isFinite(amount))) {
+      return denied(
+        `Amount must be a finite number to enforce a budget cap on ${connector}.`,
+        DenialReason.CAP_EXCEEDED,
+        CapSubReason.INVALID_AMOUNT,
+      );
+    }
+    const cap = this.#extractCap(grant.scopes, connector);
+    if (cap === 'invalid') {
+      // The cap cannot be read, so no amount (or its absence) can be judged
+      // against it: deny rather than guess. Without an amount the call used
+      // to pass, so caps mode "warn" reports the denial and "off" skips it,
+      // the same opt-out as amount_missing below.
+      const message = `A capped scope on ${connector} carries a malformed cap; refusing to authorize ${amount === undefined ? 'the call' : `amount ${amount}`}.`;
+      if (amount !== undefined || capsMode === 'enforce') {
+        return denied(message, DenialReason.CAP_EXCEEDED, CapSubReason.MALFORMED_CAP);
       }
-      const cap = this.#extractCap(grant.scopes, connector);
-      if (cap === 'invalid') {
-        return denied(
-          `A capped scope on ${connector} carries a malformed cap; refusing to authorize amount ${amount}.`,
-          DenialReason.CAP_EXCEEDED,
-          CapSubReason.MALFORMED_CAP,
-        );
+      if (capsMode === 'warn') {
+        wouldDenyAll.push({
+          reason_code: DenialReason.CAP_EXCEEDED,
+          sub_reason: CapSubReason.MALFORMED_CAP,
+          reason: message,
+          details: {},
+        });
       }
-      if (cap !== undefined && amount > cap) {
-        return denied(
-          `Amount ${amount} exceeds budget cap of ${cap} on ${connector}.`,
-          DenialReason.CAP_EXCEEDED,
-          CapSubReason.AMOUNT_CAP,
-          { limit: cap, amount },
-        );
+    }
+    if (cap !== undefined && cap !== 'invalid' && amount === undefined && capsMode !== 'off') {
+      const message = `A capped scope on ${connector} limits the amount to ${cap} and the call gave no amount; `
+        + 'pass amount to enforce() or an amount extractor to the wrapper.';
+      if (capsMode !== 'warn') {
+        return denied(message, DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_MISSING, { limit: cap });
       }
+      wouldDenyAll.push({
+        reason_code: DenialReason.CAP_EXCEEDED,
+        sub_reason: CapSubReason.AMOUNT_MISSING,
+        reason: message,
+        details: { limit: cap },
+      });
+    }
+    if (cap !== undefined && cap !== 'invalid' && amount !== undefined && amount > cap) {
+      return denied(
+        `Amount ${amount} exceeds budget cap of ${cap} on ${connector}.`,
+        DenialReason.CAP_EXCEEDED,
+        CapSubReason.AMOUNT_CAP,
+        { limit: cap, amount },
+      );
     }
 
     // 11. Call caps and cost units (declared by the manifest or by the grant).
@@ -745,7 +854,7 @@ export class Grantex {
         if (capsMode !== 'warn') {
           return denied(capDenial.reason, capDenial.reason_code as DenialReason, capDenial.sub_reason, capDenial.details);
         }
-        wouldDeny ??= capDenial;
+        wouldDenyAll.push(capDenial);
       }
     }
 
@@ -774,7 +883,7 @@ export class Grantex {
         const message = `The decision grant for tool '${tool}' on ${connector} was not consumed: ${err instanceof Error ? err.message : 'consumption failed'}`;
         const details = { decision_required: `${connector}:${tool}` };
         if (decisionsMode !== 'warn') return denied(message, DenialReason.DECISION_INVALID, subReason, details);
-        wouldDeny ??= { reason_code: DenialReason.DECISION_INVALID, sub_reason: subReason, reason: message, details };
+        wouldDenyAll.push({ reason_code: DenialReason.DECISION_INVALID, sub_reason: subReason, reason: message, details });
       }
     }
 
@@ -785,7 +894,7 @@ export class Grantex {
       ...(purpose !== undefined ? { purpose } : {}),
       ...(reservation !== undefined ? { reservation } : {}),
       ...(capLimits.length > 0 ? { capLimits, capsTenantId: capsTenant } : {}),
-      ...(wouldDeny !== undefined ? { wouldDeny } : {}),
+      ...(wouldDenyAll.length > 0 ? { wouldDeny: wouldDenyAll[0], wouldDenyAll } : {}),
       ...(decision !== undefined ? { decision } : {}),
     };
   }
@@ -949,9 +1058,25 @@ export class Grantex {
       const decisionGrants = typeof options.decisionGrants === 'function' ? options.decisionGrants() : options.decisionGrants;
       const caseVersion = typeof options.caseVersion === 'function' ? options.caseVersion() : options.caseVersion;
       const input = args[0];
+      let amount: unknown;
+      if (options.extractAmount !== undefined) {
+        try {
+          amount = await options.extractAmount(input);
+        } catch (err) {
+          // An amount the application cannot work out is not "no amount":
+          // refuse the call rather than let it through uncapped.
+          throw new Error(
+            `Grantex scope denied: the amount extractor for ${options.connector}.${options.tool} threw `
+              + `${err instanceof Error ? err.name : typeof err}; refusing the call without an amount.`,
+            { cause: err },
+          );
+        }
+      }
       const callOptions = {
         connector: options.connector,
         tool: options.tool,
+        // A non-number is passed on so that enforce() denies it (invalid_amount).
+        ...(amount !== undefined && amount !== null ? { amount: amount as number } : {}),
         ...(caseId !== undefined ? { caseId } : {}),
         ...(costComponents !== undefined ? { costComponents } : {}),
         ...(decisionGrants !== undefined ? { decisionGrants } : {}),
@@ -1012,37 +1137,58 @@ export class Grantex {
       const decisionGrants = options.extractDecisionGrants?.(request);
       const callArguments = options.extractArguments?.(request);
       const caseVersion = options.extractCaseVersion?.(request);
-      self.enforce({
-        grantToken: token,
-        connector,
-        tool,
-        ...(caseId !== undefined ? { caseId } : {}),
-        ...(costComponents !== undefined ? { costComponents } : {}),
-        ...(decisionGrants !== undefined ? { decisionGrants } : {}),
-        ...(callArguments !== undefined ? { arguments: callArguments } : {}),
-        ...(caseVersion !== undefined ? { caseVersion } : {}),
-      })
-        .then((result) => {
-          if (!result.allowed) {
-            const statusFn = response['status'] as (code: number) => Record<string, unknown>;
-            const jsonFn = statusFn.call(response, 403)['json'] as (body: unknown) => void;
-            jsonFn.call(statusFn.call(response, 403), {
-              error: {
-                code: 'SCOPE_DENIED',
-                message: result.reason,
-                connector,
-                tool,
-                ...(result.reasonCode !== undefined ? { reason: result.reasonCode } : {}),
-                ...(result.subReason !== undefined ? { subReason: result.subReason } : {}),
-              },
-            });
+      const deny = (message: string, reasonCode?: string, subReason?: string) => {
+        const statusFn = response['status'] as (code: number) => Record<string, unknown>;
+        const jsonFn = statusFn.call(response, 403)['json'] as (body: unknown) => void;
+        jsonFn.call(statusFn.call(response, 403), {
+          error: {
+            code: 'SCOPE_DENIED',
+            message,
+            connector,
+            tool,
+            ...(reasonCode !== undefined ? { reason: reasonCode } : {}),
+            ...(subReason !== undefined ? { subReason } : {}),
+          },
+        });
+      };
+      const run = async (): Promise<void> => {
+        let amount: number | undefined | null;
+        if (options.extractAmount !== undefined) {
+          try {
+            amount = await options.extractAmount(request);
+          } catch (err) {
+            // An amount the application cannot work out is not "no amount":
+            // refuse the request rather than let it through uncapped.
+            deny(
+              `Could not read the amount for ${connector}.${tool}: the amount extractor threw `
+                + `${err instanceof Error ? err.name : typeof err}; refusing the request without an amount.`,
+              DenialReason.CAP_EXCEEDED,
+              CapSubReason.INVALID_AMOUNT,
+            );
             return;
           }
-          // Attach enforce result to request for downstream use
-          (request as Record<string, unknown>)['grantexEnforce'] = result;
-          nextFn();
-        })
-        .catch((err) => nextFn(err));
+        }
+        const result = await self.enforce({
+          grantToken: token,
+          connector,
+          tool,
+          // A non-number is passed on so that enforce() denies it (invalid_amount).
+          ...(amount !== undefined && amount !== null ? { amount } : {}),
+          ...(caseId !== undefined ? { caseId } : {}),
+          ...(costComponents !== undefined ? { costComponents } : {}),
+          ...(decisionGrants !== undefined ? { decisionGrants } : {}),
+          ...(callArguments !== undefined ? { arguments: callArguments } : {}),
+          ...(caseVersion !== undefined ? { caseVersion } : {}),
+        });
+        if (!result.allowed) {
+          deny(result.reason, result.reasonCode, result.subReason);
+          return;
+        }
+        // Attach enforce result to request for downstream use
+        (request as Record<string, unknown>)['grantexEnforce'] = result;
+        nextFn();
+      };
+      run().catch((err: unknown) => nextFn(err));
     };
   }
 }

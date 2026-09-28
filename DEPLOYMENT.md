@@ -363,7 +363,7 @@ Before deploying to production:
 
 The auth service includes these security features out of the box:
 
-- Rate limiting: Fastify applies a 5,000/min per-IP default to routes without an override (JWKS exempt), while route-specific Fastify limits replace that default on those routes; Redis additionally enforces Free/Pro/Enterprise budgets of 100/500/2,000 per developer on standard-auth API-key routes
+- Rate limiting: Fastify applies a 5,000/min per-IP default to routes without an override (JWKS exempt), while route-specific Fastify limits replace that default on those routes; Redis additionally enforces Free/Pro/Enterprise budgets of 100/500/2,000 per developer on standard-auth API-key routes, with separate per-developer budgets for revocation and the emergency stop (2,000/min) and for the revocation feed and status reads (6,000/min)
 - 7 HTTP security headers (HSTS, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, Cache-Control)
 - Timing-safe admin authentication
 - HMAC-signed SSO state parameters
@@ -632,7 +632,7 @@ Ensure your PostgreSQL `max_connections` and Redis `maxclients` can handle your 
 
 ### Rate Limiting
 
-Standard-auth developer/plan counters use Redis and are shared across instances. Commerce, the SCIM Bearer data-plane (`/scim/v2/*`), admin, and other custom-auth routes are outside those plan counters and need an explicit quota policy; the standard-auth `/v1/scim/tokens` route does consume the developer plan budget. Fastify applies its process-local 5,000/min per-IP default to routes without an override, while a route-specific Fastify limit replaces that default for the route. The Redis plan budget is additional to the active Fastify per-IP policy. Every instance must use the same Redis deployment for plan budgets, and production ingress limits should stay above the 2,000/min Enterprise developer ceiling.
+Standard-auth developer/plan counters use Redis and are shared across instances. Commerce, the SCIM Bearer data-plane (`/scim/v2/*`), admin, and other custom-auth routes are outside those plan counters and need an explicit quota policy; the standard-auth `/v1/scim/tokens` route does consume the developer plan budget. Fastify applies its process-local 5,000/min per-IP default to routes without an override, while a route-specific Fastify limit replaces that default for the route. The Redis plan budget is additional to the active Fastify per-IP policy. Revoking (grants, tokens, passports, consent bundles) and the emergency stop draw on a separate per-developer containment budget of 2,000/min, and the revocation feed and status reads on a per-developer status budget of 6,000/min, on every plan; while Redis is unreachable, containment calls are counted in each instance's memory against the same ceiling instead of being refused, and every other budget answers `503 RATE_LIMIT_UNAVAILABLE` (see `docs/guides/rate-limits.mdx`). Every instance must use the same Redis deployment for these budgets, and production ingress limits should stay above the 2,000/min Enterprise and containment ceilings and the 6,000/min status ceiling.
 
 ---
 

@@ -288,8 +288,9 @@ decision grants out per tenant maps its `decisions.required` flag to the mode:
 on means `enforce`; off means `warn`. **`warn` is not a control**: it does not
 deny a call to a decision tool that lacks a valid decision grant; it lets the
 call through and reports the denial that would have happened in
-`result.would_deny`, so you can measure the effect before turning enforcement
-on. Valid grants presented in warn mode are still consumed.
+`result.would_deny` (with any caps warn-mode warnings on the same call listed
+after it in `result.would_deny_all` / `wouldDenyAll`), so you can measure the
+effect before turning enforcement on. Valid grants presented in warn mode are still consumed.
 
 ## Binding decisions to the requesting agent
 

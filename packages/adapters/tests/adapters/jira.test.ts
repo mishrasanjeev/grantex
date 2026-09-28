@@ -8,6 +8,7 @@ vi.mock('@grantex/sdk', () => ({
 import { verifyGrantToken } from '@grantex/sdk';
 import { JiraAdapter } from '../../src/adapters/jira.js';
 import { GrantexAdapterError } from '../../src/errors.js';
+import { GRANT_TOKEN } from '../tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -36,7 +37,7 @@ describe('JiraAdapter', () => {
         ok: true, json: () => Promise.resolve(issues),
       }));
 
-      const result = await adapter.searchIssues('grant-token', {
+      const result = await adapter.searchIssues(GRANT_TOKEN, {
         jql: 'project = PROJ',
       });
 
@@ -54,7 +55,7 @@ describe('JiraAdapter', () => {
         ok: true, json: () => Promise.resolve({ total: 0, issues: [] }),
       }));
 
-      await adapter.searchIssues('grant-token', {
+      await adapter.searchIssues(GRANT_TOKEN, {
         jql: 'status = Open',
         maxResults: 50,
         startAt: 10,
@@ -73,7 +74,7 @@ describe('JiraAdapter', () => {
         ok: true, json: () => Promise.resolve({ total: 0, issues: [] }),
       }));
 
-      await adapter.searchIssues('grant-token', { jql: 'project = PROJ' });
+      await adapter.searchIssues(GRANT_TOKEN, { jql: 'project = PROJ' });
 
       const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Record<string, string>;
       expect(headers['Authorization']).toBe('Basic base64-encoded-credentials');
@@ -85,7 +86,7 @@ describe('JiraAdapter', () => {
         scopes: ['email:read'],
       });
 
-      await expect(adapter.searchIssues('token', { jql: 'project = PROJ' }))
+      await expect(adapter.searchIssues(GRANT_TOKEN, { jql: 'project = PROJ' }))
         .rejects.toThrow(GrantexAdapterError);
     });
 
@@ -106,7 +107,7 @@ describe('JiraAdapter', () => {
       }));
 
       try {
-        await adapter.searchIssues('token', { jql: 'INVALID' });
+        await adapter.searchIssues(GRANT_TOKEN, { jql: 'INVALID' });
         expect.fail('should throw');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('UPSTREAM_ERROR');
@@ -121,7 +122,7 @@ describe('JiraAdapter', () => {
         ok: true, json: () => Promise.resolve(created),
       }));
 
-      const result = await adapter.createIssue('token', {
+      const result = await adapter.createIssue(GRANT_TOKEN, {
         projectKey: 'PROJ',
         summary: 'New bug report',
         issueType: 'Bug',
@@ -144,7 +145,7 @@ describe('JiraAdapter', () => {
         ok: true, json: () => Promise.resolve({ key: 'PROJ-3' }),
       }));
 
-      await adapter.createIssue('token', {
+      await adapter.createIssue(GRANT_TOKEN, {
         projectKey: 'PROJ',
         summary: 'Feature request',
         issueType: 'Story',
@@ -168,7 +169,7 @@ describe('JiraAdapter', () => {
         scopes: ['issues:read'],
       });
 
-      await expect(adapter.createIssue('token', {
+      await expect(adapter.createIssue(GRANT_TOKEN, {
         projectKey: 'PROJ',
         summary: 'Test',
         issueType: 'Task',

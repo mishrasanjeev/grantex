@@ -190,7 +190,7 @@ Wrap any LangChain tool with `wrap_tool()` to enforce scope checks automatically
 protected_tool = grantex.wrap_tool(
     my_langchain_tool,
     connector="salesforce",
-    tool="create_lead",
+    tool_name="create_lead",
     grant_token=lambda: current_state["grant_token"],
 )
 
@@ -210,6 +210,12 @@ const protectedTool = grantex.wrapTool(myLangChainTool, {
 ```
 
 </CodeGroup>
+
+From the next release, a grant with a `capped:N` scope needs the call's amount:
+pass an amount extractor (`extract_amount=lambda arguments: arguments["amount"]`
+/ `extractAmount: (input) => input.amount`, and `extractAmount` on
+`enforceMiddleware`), or every call is denied with `amount_missing`. See
+[Amount caps](/concepts/caps-and-metering#amount-caps).
 
 ---
 

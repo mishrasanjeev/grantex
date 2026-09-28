@@ -43,7 +43,7 @@ from ._verify import (
 DECISIONS_ENFORCE = "enforce"
 """``decisions_mode``: deny a ``requires_decision`` call without a valid, consumed decision grant."""
 DECISIONS_WARN = "warn"
-"""``decisions_mode``: allow such a call and report the denial in ``EnforceResult.would_deny``."""
+"""``decisions_mode``: allow such a call and report the denial in ``EnforceResult.would_deny`` / ``would_deny_all``."""
 DECISIONS_MODES = (DECISIONS_ENFORCE, DECISIONS_WARN)
 
 __all__ = [

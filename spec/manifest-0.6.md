@@ -119,6 +119,7 @@ a `reason_code` (`reasonCode` in TypeScript) and, where one applies, a
 | Step | Denial `reason_code` | `sub_reason` |
 |---|---|---|
 | Grant token verification | `token_invalid` | |
+| Grant token audience (from the next release; see `grant-token-0.6.md`, Validation) | `token_invalid` | `audience_unconfigured`, `audience_mismatch` |
 | `authorization_details` readable | `token_invalid` | `malformed_authorization_details` |
 | Manifest loaded for the connector | `manifest_unknown_tool` | `unknown_connector` |
 | Tool declared | `manifest_unknown_tool` | `unknown_tool`, `invalid_declaration` |
@@ -127,7 +128,7 @@ a `reason_code` (`reasonCode` in TypeScript) and, where one applies, a
 | The grant's tools list (when present) names the tool | `tool_not_granted` | `not_in_authorization_details` |
 | `allowed_purposes` | `purpose_not_allowed` | `missing`, `unknown_purpose`, `not_matched` |
 | `requires_decision`, or the tool is listed in the grant's `urn:grantex:decision:v1` entry: decision grants verified offline (see `decision-grant.md`) | `decision_required` (none presented), `decision_invalid` | `action_mismatch`, `wrong_case`, `case_changed`, `expired`, `same_approver`, `four_eyes_incomplete`, `malformed`, `unknown_grant` |
-| `amount` within a `capped:N` scope | `cap_exceeded` | `invalid_amount`, `malformed_cap`, `amount_cap` |
+| `amount` present, finite and within every `capped:N` scope on the connector (any permission) | `cap_exceeded` | `invalid_amount`, `malformed_cap`, `amount_missing`, `amount_cap` |
 | `caps`, `cost_units` (manifest or grant), reserved last | `cap_exceeded` | `limit_reached` (E1008), `case_required`, `invalid_case_id`, `invalid_cost_component`, `meter_unavailable` |
 | The same decision grants, consumed at the issuer, after caps | `decision_invalid` | `consumed`, `revoked`, `wrong_agent` (an issuer that binds decision grants to the requesting agent), `consume_unavailable` and the above |
 
@@ -137,12 +138,18 @@ The reason codes are the Grantex denial taxonomy: `purpose_not_allowed`,
 `expired`, `consumed`, `same_approver`, and the further sub-reasons of
 `decision-grant.md`), `grant_revoked`, `region_mismatch`,
 `manifest_unknown_tool`, plus `token_invalid` for a token that fails
-verification before any grant is known. They are stable, low-cardinality
+verification before any grant is known (sub-reasons
+`malformed_authorization_details`, `audience_unconfigured` and
+`audience_mismatch`). They are stable, low-cardinality
 values intended for audit records and metric labels; `reason` remains a
 human-readable sentence and may change.
 
 Declarations are enforced fail-closed: an SDK that cannot evaluate a declared
-constraint denies the call rather than ignoring the constraint. Purpose
+constraint denies the call rather than ignoring the constraint. A `capped:N` scope is
+such a constraint: from the next SDK release a call that gives no `amount`
+under one is denied with `amount_missing` (caps mode `warn` allows it and
+reports the denial; `off` skips it), where earlier releases allowed it
+unchecked. Purpose
 matching is specified in `docs/concepts/purpose-bound-grants.md` and caps in
 `docs/concepts/caps-and-metering.md`. A tool with caps or cost units is
 denied with `meter_unavailable` when the client has no caps meter. A tool with

@@ -33,7 +33,7 @@ export interface GrantexClientOptions {
    * `true` in 0.6 and `false` from 0.7; see `VerifyGrantTokenOptions.legacyClaims`.
    */
   legacyClaims?: boolean;
-  /** `enforce` (default) denies over-cap calls, `warn` allows them and reports `wouldDeny`, `off` skips caps. */
+  /** `enforce` (default) denies over-cap calls, `warn` allows them and reports `wouldDeny` / `wouldDenyAll`, `off` skips caps. */
   capsMode?: CapsMode;
   /**
    * How `enforce()` finds out about revocations (PRD G-6). `offline` (the
@@ -47,7 +47,7 @@ export interface GrantexClientOptions {
   revocationFeed?: RevocationFeedOptions;
   /**
    * `enforce` (default) denies a `requires_decision` call without a valid, consumed decision
-   * grant; `warn` allows it and reports `wouldDeny`. Platforms map their `decisions.required`
+   * grant; `warn` allows it and reports `wouldDeny` / `wouldDenyAll`. Platforms map their `decisions.required`
    * flag to `enforce` (on) or `warn` (off).
    */
   decisionsMode?: 'enforce' | 'warn';
@@ -55,6 +55,20 @@ export interface GrantexClientOptions {
   decisionConsumer?: DecisionConsumer;
   /** Algorithms accepted on decision grants, a subset of RS256 and ES256. Default both. */
   decisionAlgorithms?: readonly ('RS256' | 'ES256')[];
+  /**
+   * The grant token audience `enforce()` expects (RFC 7519 section 4.1.3). A token
+   * whose `aud` does not contain it, or that has no `aud`, is denied with
+   * `token_invalid` / `audience_mismatch`. `enforce({ audience })` overrides it per call.
+   */
+  audience?: string;
+  /**
+   * `on` (default) checks the grant token's `aud` in `enforce()`: without an expected
+   * audience, a token that carries `aud` is denied with `token_invalid` /
+   * `audience_unconfigured`. `off` ignores `aud`, as releases before the check did,
+   * and cannot be combined with `audience`. Audience denials are not relaxed by
+   * `enforceMode: 'permissive'`: they stay `allowed: false` in every enforce mode.
+   */
+  audienceCheck?: 'on' | 'off';
 }
 
 // ─── Signup ─────────────────────────────────────────────────────────────────

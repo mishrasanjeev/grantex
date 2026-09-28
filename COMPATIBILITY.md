@@ -68,7 +68,7 @@ The repository contains 29 packages under `packages/`. Each row maps a directory
 | Surface | Repository `main` status | Publication or deployment status |
 | --- | --- | --- |
 | Wallet governance | Layered policy, exact approvals, reload limits, safe assignment defaults, and durable decisions are implemented across the auth service and primary SDKs. | External custody, issuer controls, and merchant result recovery remain separately operated dependencies. |
-| Standard-auth throughput | Auth service source enforces Redis-backed Free/Pro/Enterprise budgets of 100/500/2,000 requests per minute per developer on API-key routes handled by the standard auth plugin, after the active Fastify per-IP policy (the 5,000/min default or a route override). Commerce, SCIM Bearer data-plane, admin, and other custom-auth routes remain outside these plan buckets. | Source completion does not confirm managed-service deployment. |
+| Standard-auth throughput | Auth service source enforces Redis-backed Free/Pro/Enterprise budgets of 100/500/2,000 requests per minute per developer on API-key routes handled by the standard auth plugin, after the active Fastify per-IP policy (the 5,000/min default or a route override). Revocation and emergency-stop routes use a 2,000/min containment budget instead, which is not refused when Redis is unavailable; the revocation feed and status reads use a 6,000/min status budget. Commerce, SCIM Bearer data-plane, admin, and other custom-auth routes remain outside these plan buckets. | Source completion does not confirm managed-service deployment. |
 
 ## Installation Guidance
 

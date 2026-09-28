@@ -37,6 +37,19 @@ def enforce(
     connector: str,
     tool: str,
     amount: float | None = None,
+    *,  # the keyword-only arguments are from the next release
+    case_id: str | None = None,
+    cost_components: list[str] | None = None,
+    reserve: bool = True,
+    caps_mode: str | None = None,
+    caps_tenant_id: str | None = None,
+    decision_grants: Sequence[str] | None = None,
+    decision_action: DecisionAction | Mapping[str, Any] | None = None,
+    arguments: Mapping[str, Any] | None = None,
+    case_version: str | None = None,
+    decisions_mode: str | None = None,
+    revocation_check: str | None = None,
+    audience: str | None = None,
 ) -> EnforceResult
 ```
 
@@ -47,7 +60,8 @@ def enforce(
 | `grant_token` | `str` | Yes | The JWT grant token issued by Grantex. Decoded and verified inline. |
 | `connector` | `str` | Yes | The connector name to check against (e.g., `"salesforce"`, `"s3"`). Must match a loaded manifest. |
 | `tool` | `str` | Yes | The tool name to check (e.g., `"delete_contact"`, `"create_lead"`). Must be declared in the connector's manifest. |
-| `amount` | `float \| None` | No | Optional amount for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap. |
+| `amount` | `float \| None` | No | The call's amount, for capped scopes. When the token includes a capped scope like `tool:stripe:write:*:capped:500`, pass the transaction amount to check against the cap. From the next release a capped scope denies a call without it (`amount_missing`). |
+| `audience` | `str \| None` | No | The grant token audience this call expects; overrides the client's `audience`. See [Grant token audience](#grant-token-audience). From the next release. |
 
 ### Response: `EnforceResult`
 
@@ -61,6 +75,8 @@ def enforce(
 | `permission` | `str` | The resolved permission level for this tool from the manifest (`"read"`, `"write"`, `"delete"`, or `"admin"`). |
 | `connector` | `str` | The connector name that was checked. |
 | `tool` | `str` | The tool name that was checked. |
+| `would_deny` | `dict \| None` | In caps or decisions warn mode, the first denial that was let through (`reason_code`, `sub_reason`, `reason`, `details`); `None` when there is none. |
+| `would_deny_all` | `tuple[dict, ...]` | In caps or decisions warn mode, every denial that was let through, in step order (decision, amount cap, call caps, decision consumption); `would_deny` is its first entry. Empty when there is none. |
 
 ### Example
 
@@ -91,8 +107,76 @@ result = grantex.enforce(
 )
 # If token scope is tool:stripe:write:*:capped:500
 # result.allowed = False
-# result.reason = "amount 750 exceeds cap of 500 on tool:stripe:write:*:capped:500"
+# result.reason_code = "cap_exceeded", result.sub_reason = "amount_cap"
 ```
+
+**From the next release (breaking):** a call without `amount` under a capped
+scope is denied with `reason_code` `cap_exceeded` and `sub_reason`
+`amount_missing` (`details` carries `limit`). In the current release it is
+allowed and the cap is not checked. `caps_mode="warn"` (on the client or per
+call) keeps allowing it and reports the denial in `result.would_deny_all`
+(and in `result.would_deny` when it is the first warning of the call, so a
+call that also lacks a decision grant under `decisions_mode="warn"` shows the
+decision there and `amount_missing` only in `would_deny_all`);
+`caps_mode="off"` skips it. The cap covers every tool of the connector, read
+tools included, so pass an amount (`0` when there is none) for those too. See
+[Amount caps](/concepts/caps-and-metering#amount-caps).
+
+### Grant token audience
+
+<Warning>
+  From the next release (not in `grantex` 0.6.0). This is a breaking change:
+  a grant token that carries an `aud` claim is denied unless the client
+  expects that audience. Tokens issued without an audience are unaffected.
+</Warning>
+
+A grant token requested with an `audience` carries it in the `aud` claim
+([RFC 7519 section 4.1.3](https://www.rfc-editor.org/rfc/rfc7519#section-4.1.3)):
+the token is only for that relying party. `enforce()` checks `aud` right after
+the signature, before revocation and scopes:
+
+| Token `aud` | Expected audience | Result |
+|---|---|---|
+| none | none | checked as before |
+| a string or an array of strings | none | denied: `token_invalid` / `audience_unconfigured` |
+| contains the expected audience | set | checked as before |
+| does not contain it, or no `aud` | set | denied: `token_invalid` / `audience_mismatch` |
+
+`aud` may be a string or an array of strings; it matches when the expected
+audience is one of its values, compared as exact strings (no case folding, no
+trailing-slash or prefix matching). The denial's `details` carry
+`token_audience` (a list) and, for `audience_mismatch`, `expected_audience`.
+
+Audience denials are not relaxed by `enforce_mode="permissive"`: they stay
+`allowed=False`, with the same `reason_code`, `sub_reason` and `details`, in
+every enforce mode, because the token was issued for another relying party (or
+the client does not know its own audience).
+
+Set the audience on the client, and override it for one call:
+
+```python
+grantex = Grantex(api_key="gx_...", audience="https://api.merchant.example")
+
+result = grantex.enforce(grant_token=token, connector="acme_kyb", tool="get_case")
+if result.sub_reason == "audience_mismatch":
+    print(result.details["token_audience"])
+
+# A tool served under a second audience
+result = grantex.enforce(
+    grant_token=token,
+    connector="acme_kyb",
+    tool="get_case",
+    audience="https://tools.merchant.example",
+)
+```
+
+| Client option | Type | Default | Description |
+|---|---|---|---|
+| `audience` | `str \| None` | `None` | The audience `enforce()` expects. A non-empty string. |
+| `audience_check` | `str` | `"on"` | `"on"` applies the check above. `"off"` ignores `aud`, as earlier releases did, and cannot be combined with `audience`. Any other value raises `ValueError`. |
+
+To keep the earlier behaviour while you find each service's audience, create
+the client with `audience_check="off"`; remove it once `audience` is set.
 
 ---
 
@@ -295,8 +379,16 @@ def wrap_tool(
     connector: str,
     tool_name: str,
     grant_token: str | Callable[[], str],
+    extract_amount: Callable[[Mapping[str, Any]], float | None] | None = None,
 ) -> StructuredTool
 ```
+
+`extract_amount` (from the next release) receives the tool call's keyword
+arguments and returns the call's amount, which is passed to `enforce()` as
+`amount`. Under a capped scope, a wrapper without it (or an extractor returning
+`None`) denies every call with `amount_missing`. An extractor that raises
+refuses the call with `PermissionError` before `enforce()` runs; a value that
+is not a finite number is denied with `invalid_amount`.
 
 ### Example
 
@@ -304,8 +396,9 @@ def wrap_tool(
 protected_tool = grantex.wrap_tool(
     my_langchain_tool,
     connector="salesforce",
-    tool="create_lead",
+    tool_name="create_lead",
     grant_token=lambda: current_state["grant_token"],
+    extract_amount=lambda arguments: arguments["amount"],
 )
 
 # Use protected_tool in your LangChain agent chain.

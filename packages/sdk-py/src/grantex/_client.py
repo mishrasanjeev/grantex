@@ -138,6 +138,57 @@ def _check_revocation_check(mode: str) -> str:
     return mode
 
 
+AUDIENCE_CHECK_MODES = ("on", "off")
+
+
+def _check_audience_check(mode: object) -> str:
+    if not isinstance(mode, str) or mode not in AUDIENCE_CHECK_MODES:
+        raise ValueError(f"audience_check must be one of on, off, not {mode!r}")
+    return mode
+
+
+def _check_expected_audience(audience: object, audience_check: str) -> str | None:
+    if audience is None:
+        return None
+    if not isinstance(audience, str) or not audience:
+        raise ValueError(f"audience must be a non-empty string, not {audience!r}")
+    if audience_check == "off":
+        # The check is off, so the audience would be ignored and tokens for
+        # other relying parties accepted: refuse the contradiction instead.
+        raise ValueError("audience cannot be set with audience_check='off'")
+    return audience
+
+
+def _audience_denial(
+    token_aud: Any, expected: str | None
+) -> tuple[str, str, dict[str, Any]] | None:
+    """The audience denial for a verified token, if any (RFC 7519 section 4.1.3).
+
+    ``aud`` is a string or an array of strings (the verifier refuses anything
+    else); the expected audience matches when it equals one of them exactly.
+    """
+    audiences = [token_aud] if isinstance(token_aud, str) else list(token_aud or [])
+    if expected is None:
+        if token_aud is None:
+            return None
+        # A token that names an audience is only for that relying party. A
+        # client that does not know its own audience cannot tell whether it is
+        # one of them, so it denies rather than accept a token meant elsewhere.
+        return (
+            "The grant token is for a specific audience and this client has no "
+            "expected audience; set audience (or audience_check='off').",
+            TokenSubReason.AUDIENCE_UNCONFIGURED,
+            {"token_audience": audiences},
+        )
+    if expected in audiences:
+        return None
+    return (
+        f"The grant token's audience does not include {expected!r}.",
+        TokenSubReason.AUDIENCE_MISMATCH,
+        {"expected_audience": expected, "token_audience": audiences},
+    )
+
+
 class Grantex:
     """Main entry point for the Grantex SDK."""
 
@@ -187,6 +238,8 @@ class Grantex:
         decisions_mode: str = "enforce",
         decision_consumer: DecisionConsumer | None = None,
         decision_algorithms: Sequence[str] = ("RS256", "ES256"),
+        audience: str | None = None,
+        audience_check: str = "on",
     ) -> None:
         resolved_key = (api_key or os.environ.get("GRANTEX_API_KEY", "")).strip()
         if not resolved_key:
@@ -213,6 +266,12 @@ class Grantex:
         if not decision_algorithms or any(a not in ("RS256", "ES256") for a in decision_algorithms):
             raise ValueError("decision_algorithms must be a non-empty subset of RS256, ES256")
         self._decision_algorithms = tuple(decision_algorithms)
+        # The grant token audience enforce() expects (RFC 7519 section 4.1.3).
+        # With audience_check "on" (the default) a token that carries aud is
+        # denied unless its aud contains this value; "off" ignores aud, as
+        # releases before the audience check did.
+        self._audience_check = _check_audience_check(audience_check)
+        self._audience = _check_expected_audience(audience, self._audience_check)
 
         self._http = HttpClient(
             base_url=base_url,
@@ -432,8 +491,19 @@ class Grantex:
         case_version: str | None = None,
         decisions_mode: str | None = None,
         revocation_check: str | None = None,
+        audience: str | None = None,
     ) -> EnforceResult:
         """Enforce scope for a tool call.
+
+        The grant token's audience is checked right after its signature
+        (RFC 7519 section 4.1.3): ``audience`` overrides the client's expected
+        audience for this call. A token whose ``aud`` does not contain it, or
+        has no ``aud``, is denied with ``token_invalid`` /
+        ``audience_mismatch``; a token that carries ``aud`` when no audience is
+        expected is denied with ``token_invalid`` / ``audience_unconfigured``.
+        A client created with ``audience_check="off"`` ignores ``aud``. Audience
+        denials are not relaxed by ``enforce_mode="permissive"``: they stay
+        ``allowed=False`` in every enforce mode.
 
         When the tool (manifest) or the grant declares caps, the call is
         metered with the client's ``caps_meter``: units are reserved as the
@@ -449,10 +519,23 @@ class Grantex:
           ``result.caps_tenant_id`` can then be reserved with
           ``CapsMeter.reserve`` at the call that incurs cost, or call
           ``enforce()`` again there with ``reserve=True``.
+        - ``amount`` is the call's amount for a ``capped:N`` scope. When such
+          a scope covers the connector (on any permission: the cap applies
+          to every tool of the connector, read tools included), a call
+          without ``amount`` is denied with ``amount_missing``; an amount
+          above the cap with ``amount_cap``.
         - ``caps_mode`` overrides the client's mode: ``enforce`` denies,
           ``warn`` allows a call a cap would deny and reports it in
           ``result.would_deny`` (reserving only calls that fit), ``off``
-          skips caps.
+          skips caps. For ``capped:N`` scopes, ``warn`` allows (and reports)
+          and ``off`` skips only a call without an amount, whether the cap is
+          well formed (``amount_missing``) or not (``malformed_cap``); an
+          amount above the cap, a non-finite amount and a malformed cap with
+          an amount are denied in every mode.
+        - ``result.would_deny`` is the first denial warn mode let through;
+          ``result.would_deny_all`` lists every one, in step order (decision,
+          amount cap, call caps, decision consumption), so a call that both
+          lacks a decision grant and an amount reports both.
         - ``caps_tenant_id`` replaces the grant's developer as the tenant of
           every counter of this call.
 
@@ -502,6 +585,11 @@ class Grantex:
         agent_did = ""
         scopes: list[str] = []
         permission = ""
+        expected_audience = (
+            self._audience
+            if audience is None
+            else _check_expected_audience(audience, self._audience_check)
+        )
 
         # 1. Verify the token locally using JWKS retrieved from the configured URI
         try:
@@ -524,6 +612,24 @@ class Grantex:
         scopes = list(getattr(grant, "scopes", []))
 
         result_purpose = ""
+
+        # 1a. Audience. Checked before revocation: a token meant for another
+        #     relying party is refused without asking the auth service about it.
+        #     The denial fails closed in every enforce mode: it does not pass
+        #     through _apply_enforce_mode, so permissive mode does not turn it
+        #     into an allow for a token issued for another relying party (or
+        #     a client that does not know its own audience).
+        if self._audience_check == "on":
+            audience_denial = _audience_denial(getattr(grant, "audience", None), expected_audience)
+            if audience_denial is not None:
+                message, sub_reason, details = audience_denial
+                return EnforceResult(
+                    allowed=False, reason=message,
+                    grant_id=grant_id, agent_did=agent_did, scopes=scopes,
+                    permission=permission, connector=connector, tool=tool,
+                    reason_code=DenialReason.TOKEN_INVALID, sub_reason=sub_reason,
+                    details=details,
+                )
 
         # 1b. Revocation. The token verifies offline whether or not the grant
         #     still stands, so this is the only place a revocation can be seen.
@@ -664,7 +770,9 @@ class Grantex:
         #    approvers if either the manifest or the grant says so.
         decision_mode = self._decisions_mode if decisions_mode is None else _check_decisions_mode(decisions_mode)
         decision_set: DecisionGrantSet | None = None
-        would_deny: dict[str, Any] | None = None
+        # Every denial warn mode lets through, in step order; would_deny is
+        # the first of them.
+        would_deny_all: list[dict[str, Any]] = []
         ref_tools = decision_ref.tools if decision_ref is not None else ()
         if spec.requires_decision or tool in ref_tools:
             four_eyes_on = tuple(spec.four_eyes_on) + tuple(
@@ -693,36 +801,71 @@ class Grantex:
                 code, sub_reason, message = decision_denial
                 if decision_mode != DECISIONS_WARN:
                     return _denied(message, code, sub_reason, requirement)
-                would_deny = {
+                would_deny_all.append({
                     "reason_code": code, "sub_reason": sub_reason,
                     "reason": message, "details": requirement,
-                }
+                })
 
-        # 10. Check capped amount if provided
-        if amount is not None:
-            if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount):
+        # 10. Amount caps. A ``capped:N`` scope on the connector bounds every
+        #     call's amount, so a call with no amount is denied: it used to
+        #     pass, and a caller that never reported an amount was never
+        #     capped. ``caps_mode`` "warn" allows it and reports the denial in
+        #     would_deny; "off" skips it. The cap is connector-wide: the
+        #     tightest ``capped:N`` on the connector applies to every tool on
+        #     it, read tools included. A malformed cap with no amount follows
+        #     the same modes (it used to pass too); a malformed amount, a
+        #     malformed cap with an amount, or an amount above the cap is
+        #     denied in every mode.
+        mode = self._caps_mode if caps_mode is None else _check_caps_mode(caps_mode)
+        if amount is not None and (
+            isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount)
+        ):
+            return _denied(
+                f"Amount must be a finite number to enforce a budget cap on {connector}.",
+                DenialReason.CAP_EXCEEDED, CapSubReason.INVALID_AMOUNT,
+            )
+        try:
+            cap = self._extract_cap(scopes, connector)
+        except ValueError:
+            # The cap cannot be read, so no amount (or its absence) can be
+            # judged against it: deny rather than guess. Without an amount the
+            # call used to pass, so caps_mode "warn" reports the denial and
+            # "off" skips it, the same opt-out as amount_missing below.
+            subject = "the call" if amount is None else f"amount {amount}"
+            malformed = f"A capped scope on {connector} carries a malformed cap; refusing to authorize {subject}."
+            if amount is not None or mode == CAPS_ENFORCE:
+                return _denied(malformed, DenialReason.CAP_EXCEEDED, CapSubReason.MALFORMED_CAP)
+            cap = None
+            if mode == CAPS_WARN:
+                would_deny_all.append({
+                    "reason_code": DenialReason.CAP_EXCEEDED,
+                    "sub_reason": CapSubReason.MALFORMED_CAP,
+                    "reason": malformed, "details": {},
+                })
+        if cap is not None and amount is None and mode != CAPS_OFF:
+            message = (
+                f"A capped scope on {connector} limits the amount to {cap} and the call "
+                "gave no amount; pass amount to enforce() or an amount extractor to the wrapper."
+            )
+            if mode != CAPS_WARN:
                 return _denied(
-                    f"Amount must be a finite number to enforce a budget cap on {connector}.",
-                    DenialReason.CAP_EXCEEDED, CapSubReason.INVALID_AMOUNT,
+                    message, DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_MISSING, {"limit": cap},
                 )
-            try:
-                cap = self._extract_cap(scopes, connector)
-            except ValueError:
-                return _denied(
-                    f"A capped scope on {connector} carries a malformed cap; refusing to authorize amount {amount}.",
-                    DenialReason.CAP_EXCEEDED, CapSubReason.MALFORMED_CAP,
-                )
-            if cap is not None and amount > cap:
-                return _denied(
-                    f"Amount {amount} exceeds budget cap of {cap} on {connector}.",
-                    DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_CAP,
-                    {"limit": cap, "amount": amount},
-                )
+            would_deny_all.append({
+                "reason_code": DenialReason.CAP_EXCEEDED,
+                "sub_reason": CapSubReason.AMOUNT_MISSING,
+                "reason": message, "details": {"limit": cap},
+            })
+        if cap is not None and amount is not None and amount > cap:
+            return _denied(
+                f"Amount {amount} exceeds budget cap of {cap} on {connector}.",
+                DenialReason.CAP_EXCEEDED, CapSubReason.AMOUNT_CAP,
+                {"limit": cap, "amount": amount},
+            )
 
         # 11. Call caps and cost units (declared by the manifest or by the
         #     grant). Reserving is the last step, so a denied call never
         #     consumes a cap; without a meter the call is denied.
-        mode = self._caps_mode if caps_mode is None else _check_caps_mode(caps_mode)
         grant_caps = entry.caps if entry is not None else None
         grant_caps_apply = grant_caps is not None and (
             tool in grant_caps or (spec.cost_units is not None and "cost_units" in grant_caps)
@@ -783,11 +926,10 @@ class Grantex:
                 code, sub_reason, message, details = cap_denial
                 if mode != CAPS_WARN:
                     return _denied(message, code, sub_reason, details)
-                if would_deny is None:
-                    would_deny = {
-                        "reason_code": code, "sub_reason": sub_reason,
-                        "reason": message, "details": details,
-                    }
+                would_deny_all.append({
+                    "reason_code": code, "sub_reason": sub_reason,
+                    "reason": message, "details": details,
+                })
 
         # 12. Consume the decision grants at the issuer. Offline verification
         #     alone never allows a call: one grant authorises one call. The
@@ -819,11 +961,10 @@ class Grantex:
                 details = {"decision_required": f"{connector}:{tool}"}
                 if decision_mode != DECISIONS_WARN:
                     return _denied(message, DenialReason.DECISION_INVALID, sub_reason, details)
-                if would_deny is None:
-                    would_deny = {
-                        "reason_code": DenialReason.DECISION_INVALID, "sub_reason": sub_reason,
-                        "reason": message, "details": details,
-                    }
+                would_deny_all.append({
+                    "reason_code": DenialReason.DECISION_INVALID, "sub_reason": sub_reason,
+                    "reason": message, "details": details,
+                })
 
         return EnforceResult(
             allowed=True, reason="",
@@ -831,7 +972,8 @@ class Grantex:
             permission=permission, connector=connector, tool=tool,
             purpose=result_purpose, reservation=reservation,
             cap_limits=cap_limits, caps_tenant_id=caps_tenant if cap_limits else "",
-            would_deny=would_deny, decision=consumed,
+            would_deny=would_deny_all[0] if would_deny_all else None,
+            would_deny_all=tuple(would_deny_all), decision=consumed,
         )
 
     def _verify_decision(
@@ -959,6 +1101,7 @@ class Grantex:
         cost_components: list[str] | Callable[[], list[str] | None] | None = None,
         decision_grants: Sequence[str] | Callable[[], Sequence[str] | None] | None = None,
         case_version: str | Callable[[], str | None] | None = None,
+        extract_amount: Callable[[Mapping[str, Any]], Any] | None = None,
     ) -> Any:
         """Wrap a LangChain StructuredTool with automatic Grantex scope enforcement.
 
@@ -980,6 +1123,12 @@ class Grantex:
                 is derived from the tool call's keyword arguments.
             case_version: The case's current version (or a callable), from the
                 application's case state.
+            extract_amount: For a grant with a ``capped:N`` scope, a function
+                from the tool call's keyword arguments to the call's amount,
+                passed to ``enforce()``. Without it, or when it returns
+                ``None``, a capped scope denies the call with
+                ``amount_missing``. If it raises the call is refused; a value
+                that is not a finite number is denied with ``invalid_amount``.
 
         Example::
 
@@ -988,6 +1137,7 @@ class Grantex:
                 connector="salesforce",
                 tool_name="create_lead",
                 grant_token=lambda: state["grant_token"],
+                extract_amount=lambda arguments: arguments["amount"],
             )
         """
         grantex = self
@@ -998,7 +1148,21 @@ class Grantex:
         def _get_token() -> str:
             return grant_token() if callable(grant_token) else grant_token
 
+        def _amount(call_arguments: Mapping[str, Any]) -> Any:
+            if extract_amount is None:
+                return None
+            try:
+                return extract_amount(call_arguments)
+            except Exception as exc:
+                # An amount the application cannot work out is not "no
+                # amount": refuse the call rather than let it through uncapped.
+                raise PermissionError(
+                    f"Grantex scope denied: the amount extractor for {connector}.{tool_name} "
+                    f"raised {type(exc).__name__}; refusing the call without an amount."
+                ) from exc
+
         def _check(call_arguments: Mapping[str, Any]) -> None:
+            call_amount = _amount(call_arguments)
             token = _get_token()
             call_case = case_id() if callable(case_id) else case_id
             call_costs = cost_components() if callable(cost_components) else cost_components
@@ -1012,7 +1176,7 @@ class Grantex:
                     "case_version": version,
                 }
             result = grantex.enforce(
-                grant_token=token, connector=connector, tool=tool_name,
+                grant_token=token, connector=connector, tool=tool_name, amount=call_amount,
                 case_id=call_case, cost_components=call_costs, **decision_kwargs,
             )
             # Retry once with refreshed token if expired and grant_token is callable.
@@ -1021,7 +1185,7 @@ class Grantex:
             if not result.allowed and "expired" in result.reason.lower() and callable(grant_token):
                 token = _get_token()
                 result = grantex.enforce(
-                    grant_token=token, connector=connector, tool=tool_name,
+                    grant_token=token, connector=connector, tool=tool_name, amount=call_amount,
                     case_id=call_case, cost_components=call_costs, **decision_kwargs,
                 )
             if not result.allowed:

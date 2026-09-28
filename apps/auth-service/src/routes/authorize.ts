@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { getSql } from '../db/client.js';
+import { getSql, queries } from '../db/client.js';
 import { newAuthRequestId } from '../lib/ids.js';
+import { assertIssuanceOpen, issuanceRefusal } from '../lib/revocation/issuance-freeze.js';
 import { config } from '../config.js';
 import { ulid } from 'ulid';
 import { getPolicyBackend } from '../lib/policy-backend.js';
@@ -140,6 +141,18 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
     const sql = getSql();
     const developerId = request.developer.id;
+
+    // An emergency stop's lockout refuses the request before anything is
+    // recorded. Not read at all unless EMERGENCY_STOP_ENABLED=true.
+    try {
+      await assertIssuanceOpen(queries(sql), {
+        developerId, agentIds: [agentId], principalIds: [principalId],
+      }, { path: 'authorize', inTransaction: false, log: request.log });
+    } catch (err) {
+      const refusal = issuanceRefusal(err);
+      if (refusal) return reply.status(refusal.statusCode).send({ ...refusal.body, requestId: request.id });
+      throw err;
+    }
 
     // Enforce plan grant limit
     const subRows = await sql<{ plan: string }[]>`

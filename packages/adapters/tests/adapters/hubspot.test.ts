@@ -8,6 +8,7 @@ vi.mock('@grantex/sdk', () => ({
 import { verifyGrantToken } from '@grantex/sdk';
 import { HubSpotAdapter } from '../../src/adapters/hubspot.js';
 import { GrantexAdapterError } from '../../src/errors.js';
+import { GRANT_TOKEN } from '../tokens.js';
 
 const MOCK_GRANT: VerifiedGrant = {
   tokenId: 'tok_1', grantId: 'grnt_1', principalId: 'user_1',
@@ -35,7 +36,7 @@ describe('HubSpotAdapter', () => {
         ok: true, json: () => Promise.resolve(contacts),
       }));
 
-      const result = await adapter.listContacts('grant-token');
+      const result = await adapter.listContacts(GRANT_TOKEN);
 
       expect(result.success).toBe(true);
       expect(result.data).toEqual(contacts);
@@ -50,7 +51,7 @@ describe('HubSpotAdapter', () => {
         ok: true, json: () => Promise.resolve({ results: [] }),
       }));
 
-      await adapter.listContacts('grant-token', {
+      await adapter.listContacts(GRANT_TOKEN, {
         limit: 20,
         after: 'cursor_abc',
         properties: ['email', 'firstname'],
@@ -69,7 +70,7 @@ describe('HubSpotAdapter', () => {
         scopes: ['email:read'],
       });
 
-      await expect(adapter.listContacts('token'))
+      await expect(adapter.listContacts(GRANT_TOKEN))
         .rejects.toThrow(GrantexAdapterError);
     });
 
@@ -90,7 +91,7 @@ describe('HubSpotAdapter', () => {
       }));
 
       try {
-        await adapter.listContacts('token');
+        await adapter.listContacts(GRANT_TOKEN);
         expect.fail('should throw');
       } catch (err) {
         expect((err as GrantexAdapterError).code).toBe('UPSTREAM_ERROR');
@@ -105,7 +106,7 @@ describe('HubSpotAdapter', () => {
         ok: true, json: () => Promise.resolve(created),
       }));
 
-      const result = await adapter.createContact('token', {
+      const result = await adapter.createContact(GRANT_TOKEN, {
         email: 'new@example.com',
       });
 
@@ -123,7 +124,7 @@ describe('HubSpotAdapter', () => {
         ok: true, json: () => Promise.resolve({ id: '3' }),
       }));
 
-      await adapter.createContact('token', {
+      await adapter.createContact(GRANT_TOKEN, {
         email: 'jane@example.com',
         firstname: 'Jane',
         lastname: 'Doe',
@@ -144,7 +145,7 @@ describe('HubSpotAdapter', () => {
         scopes: ['contacts:read'],
       });
 
-      await expect(adapter.createContact('token', {
+      await expect(adapter.createContact(GRANT_TOKEN, {
         email: 'test@example.com',
       })).rejects.toThrow(GrantexAdapterError);
     });

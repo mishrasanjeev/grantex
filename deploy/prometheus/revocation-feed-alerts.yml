@@ -50,3 +50,43 @@ groups:
             Expected during a rehearsal or an incident; otherwise find the stop in the auth
             service logs (alert=emergency_stop) and in GET /v1/emergency-stops, and page the
             on-call owner.
+      - alert: GrantexIssuanceLockoutPlaced
+        expr: sum by (scope) (increase(grantex_issuance_freeze_changes_total{action="placed"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "An emergency stop lockout was placed ({{ $labels.scope }} scope)"
+          description: >-
+            Nothing is issued under that scope until the lockout is lifted with
+            POST /v1/emergency-stop/unfreeze, or the operator's equivalent. It does not expire.
+            Find it under freezes in GET /v1/emergency-stops and make sure someone owns lifting
+            it once the credential it contains is rotated.
+      - alert: GrantexIssuanceFreezeStateUnreadable
+        expr: sum(increase(grantex_issuance_refusals_total{reason="freeze_state_unavailable"}[5m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: Issuance is failing closed because the emergency stop lockout state cannot be read
+          description: >-
+            While issuance_freezes cannot be read, every grant and token issuance path refuses
+            with 503 FREEZE_STATE_UNAVAILABLE rather than risk issuing under a lockout. Check the
+            database and the auth service logs (alert=issuance_freeze_unavailable).
+      - alert: GrantexContainmentLimiterFailingOpen
+        expr: sum(increase(grantex_rate_limit_decisions_total{bucket="containment",outcome=~"local_.*"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Revocations are being rate limited per instance because Redis is unreachable
+          description: >-
+            Revoking and the emergency stop are still served, counted in each instance's memory
+            against the containment ceiling instead of the shared Redis counter. Every other
+            standard API-key route is answering 503 RATE_LIMIT_UNAVAILABLE. Restore Redis.
+      - alert: GrantexRevocationStatusLimiterUnavailable
+        expr: sum(increase(grantex_rate_limit_decisions_total{bucket="status",outcome="unavailable"}[5m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: Revocation feed and status reads are refused because the rate limiter is unavailable
+          description: >-
+            The feed and status endpoints answer 503 RATE_LIMIT_UNAVAILABLE, so SDK clients in
+            feed or online mode fail closed and deny calls. Check Redis.
