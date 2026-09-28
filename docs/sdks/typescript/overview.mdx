@@ -6,11 +6,11 @@ description: "Install, configure, and get started with the @grantex/sdk TypeScri
 
 ## Installation
 
-Published release: **`@grantex/sdk@0.7.1`**. npm integrity, exact-version
+Published release: **`@grantex/sdk@0.8.0`**. npm integrity, exact-version
 clean installation, and public exports were verified on 28 September 2026.
 
 ```bash
-npm install @grantex/sdk@0.7.1
+npm install @grantex/sdk@0.8.0
 ```
 
 The unpinned `npm install @grantex/sdk` command follows npm's current `latest`
@@ -29,10 +29,11 @@ verification responses and the updated VC WebAuthn attestation. It does not
 enable hosted server flags or add custom assertion UI helper methods.
 
 <Warning>
-The subsequent `enforce()` audience and missing-amount cap checks are not in
-`0.7.1`. Validate audience at your service boundary and pass validated amounts
-for capped calls; wrappers that omit amounts are not safe cap enforcers.
-See [release limitations](/release-status#known-limitations-in-the-current-published-artifacts).
+Version `0.8.0` requires Node.js 22.12+ and introduces breaking enforcement
+defaults: audience binding, denial of capped calls without trusted amounts,
+and online revocation checks. Register allowed resource servers before
+audience-bound authorization. Signature-only verification is not current-state
+enforcement. Follow [the migration guide](/migration-enforcement).
 </Warning>
 
 <Note>

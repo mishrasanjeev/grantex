@@ -5,7 +5,7 @@ description: "Migrate TypeScript 0.8, Python 0.7, MCP Auth 3 and enforcement int
 
 ## Release scope
 
-These are release candidates until the exact versions appear in
+Use the exact release versions verified in
 [Release Status](/release-status). Package versions are independent.
 
 | Package | Target | Required runtime |
@@ -39,6 +39,12 @@ For high-volume execution use `feed` with an operational feed connection and
 staleness monitoring. Feed failures and stale state fail closed.
 
 ## Bind each relying party
+
+Register the agent's allowed resource servers before requesting an
+audience-bound grant: use `resourceServers` in TypeScript or `resource_servers`
+in Python. Set the same resource audience in authorization and in the
+service-side verifier. Configuring a verifier audience alone does not authorize
+the agent to request that resource.
 
 Configure the exact resource audience from the verified request/service
 configuration, not from an untrusted agent-provided value:
