@@ -39,6 +39,7 @@ type Overrides = { [K in keyof McpAuthConfig]?: McpAuthConfig[K] | undefined };
 
 async function build(grantex: McpAuthConfig['grantex'], overrides: Overrides = {}): Promise<FastifyInstance> {
   return createMcpAuthServer({
+    resolvePrincipal: async () => ({ principalId: 'principal-1' }),
     grantex,
     agentId: 'agent-1',
     issuer: ISSUER,
@@ -120,6 +121,7 @@ function created(body: Record<string, unknown>) {
     status: 201,
     body: {
       authRequestId: 'areq_01',
+      principalId: 'principal-1',
       consentUrl: 'https://grantex.example.com/consent?req=areq_01',
       expiresAt: new Date(Date.now() + 600_000).toISOString(),
       ...(body['purpose'] !== undefined ? { purpose: body['purpose'] } : {}),
@@ -153,7 +155,7 @@ describe('the grant purpose reaches Grantex', () => {
     expect(api.requests[0]).toMatchObject({
       path: '/v1/authorize',
       purpose: PURPOSE,
-      principalId: TEST_CLIENT_ID,
+      principalId: 'principal-1',
       scopes: ['tool:acme_kyb:read'],
     });
   });

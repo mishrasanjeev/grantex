@@ -10,9 +10,52 @@ import type { GuardDenialEvent, GuardRequest, McpResourceGuardOptions } from '..
 import { toolPolicyFromManifests, toolPolicyFromScopes } from '../src/resource/tool-policy.js';
 import type { LoadedManifest } from '../src/resource/tool-policy.js';
 import { decisionRequiredChallenge, formatBearerChallenge } from '../src/resource/challenge.js';
+import { grantexCurrentGrantVerifier } from '../src/resource/grantex-current-grant.js';
+import { GrantexTokenError } from '@grantex/sdk';
+import type { Grantex } from '@grantex/sdk';
 
 const RESOURCE = 'https://mcp.example.com/mcp';
 const METADATA = 'https://mcp.example.com/.well-known/oauth-protected-resource/mcp';
+
+describe('issuer-side current authority', () => {
+  it('requires an explicit current-authority source', () => {
+    expect(() => createMcpResourceGuard({ issuer: 'https://grantex.example.com', audience: RESOURCE, revocations: 'none', warn: () => {} } as unknown as McpResourceGuardOptions)).toThrow(/currentGrant.*required/);
+  });
+
+  it('refuses a signed, unexpired token immediately when its issuer denies current authority', async () => {
+    const signed = await token();
+    const verify = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, revocations: 'none', currentGrant: { verify }, warn: () => {} });
+    const request: GuardRequest = { method: 'GET', bodyParsed: true, header: (name) => name === 'authorization' ? `Bearer ${signed}` : undefined };
+    expect((await guard(request)).ok).toBe(true);
+    expect(await guard(request)).toMatchObject({ ok: false, status: 401, reason: 'grant_revoked' });
+    expect(verify).toHaveBeenCalledTimes(2);
+    expect(verify).toHaveBeenCalledWith(signed);
+  });
+
+  it('fails closed on a current-authority service outage without disclosing service details', async () => {
+    const signed = await token();
+    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, revocations: 'none', currentGrant: { verify: async () => { throw new Error('private-service-detail'); } }, warn: () => {} });
+    const result = await guard({ method: 'GET', bodyParsed: true, header: () => `Bearer ${signed}` });
+    expect(result).toMatchObject({ ok: false, status: 503, reason: 'grant_state_unavailable' });
+    expect(JSON.stringify(result)).not.toContain('private-service-detail');
+  });
+
+  it('checks signatures before calling the online verifier', async () => {
+    const verify = vi.fn().mockResolvedValue(true);
+    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, revocations: 'none', currentGrant: { verify }, warn: () => {} });
+    expect((await guard({ method: 'GET', bodyParsed: true, header: () => 'Bearer invalid' })).ok).toBe(false);
+    expect(verify).not.toHaveBeenCalled();
+  });
+
+  it('the SDK verifier distinguishes inactive authority from an issuer outage', async () => {
+    const verify = vi.fn().mockResolvedValueOnce({}).mockRejectedValueOnce(new GrantexTokenError('Grant is revoked')).mockRejectedValueOnce(new Error('network unavailable'));
+    const checker = grantexCurrentGrantVerifier({ grants: { verify } } as unknown as Pick<Grantex, 'grants'>);
+    expect(await checker.verify('token')).toBe(true);
+    expect(await checker.verify('token')).toBe(false);
+    await expect(checker.verify('token')).rejects.toThrow('network unavailable');
+  });
+});
 
 // Plain manifest data in the 0.6 shape (string and object tool values).
 const ACME_KYB: LoadedManifest = {
@@ -73,7 +116,7 @@ async function express(
   request: { authorization?: string; body?: unknown; parse?: boolean; method?: string },
   downstream?: (req: McpAuthRequest, res: ServerResponse) => void,
 ): Promise<Outcome> {
-  const mw = requireMcpAuth({ issuer, revocations: 'none', audience: RESOURCE, ...options } as RequireMcpAuthOptions);
+  const mw = requireMcpAuth({ issuer, currentGrant: "none", revocations: 'none', audience: RESOURCE, ...options } as RequireMcpAuthOptions);
   const server = createServer((raw: IncomingMessage, res: ServerResponse) => {
     const req = raw as McpAuthRequest;
     const chunks: Buffer[] = [];
@@ -125,7 +168,7 @@ async function express(
 describe('resource server: token validation and challenges', () => {
   it('requires an audience at construction', () => {
     expect(() => requireMcpAuth({ issuer } as RequireMcpAuthOptions)).toThrow(/`audience` is required/);
-    expect(() => requireMcpAuthHono({ issuer, audience: [], revocations: 'none' })).toThrow(/`audience` is required/);
+    expect(() => requireMcpAuthHono({ issuer, audience: [], currentGrant: "none", revocations: 'none' })).toThrow(/`audience` is required/);
   });
 
   it('401 without a token points at the protected-resource metadata (RFC 9728 §5.1)', async () => {
@@ -289,7 +332,7 @@ describe('resource server: revocation', () => {
     expect((await express({ revocations }, { authorization: `Bearer ${await token({}, null)}` })).status).toBe(401);
 
     const unavailable = { isTokenRevoked: async () => { throw new Error('redis down'); } };
-    const outcome = await express({ revocations: unavailable }, { authorization: `Bearer ${await token()}` });
+    const outcome = await express({ currentGrant: "none", revocations: unavailable }, { authorization: `Bearer ${await token()}` });
     expect(outcome.status).toBe(503);
   });
 });
@@ -303,7 +346,7 @@ describe('resource server: downstream errors are not authorization failures', ()
   });
 
   it('Hono: an error from next() propagates', async () => {
-    const mw = requireMcpAuthHono({ issuer, revocations: 'none', audience: RESOURCE });
+    const mw = requireMcpAuthHono({ issuer, currentGrant: "none", revocations: 'none', audience: RESOURCE });
     const c = {
       req: { header: (name: string) => (name.toLowerCase() === 'authorization' ? auth : undefined) },
       set: () => {},
@@ -314,7 +357,7 @@ describe('resource server: downstream errors are not authorization failures', ()
   });
 
   it('Hono: enforces tools with the body it reads and returns the challenge header', async () => {
-    const mw = requireMcpAuthHono({ issuer, revocations: 'none', audience: RESOURCE, tools: toolPolicyFromManifests([ACME_KYB]) });
+    const mw = requireMcpAuthHono({ issuer, currentGrant: "none", revocations: 'none', audience: RESOURCE, tools: toolPolicyFromManifests([ACME_KYB]) });
     const auth = `Bearer ${await token()}`;
     let captured: { status?: number; headers?: Record<string, string>; data?: unknown } = {};
     const c = {
@@ -395,7 +438,7 @@ describe('resource server: tool enforcement fails closed on bodies it cannot rea
     const guard = createMcpResourceGuard({
       issuer,
       audience: RESOURCE,
-      revocations: 'none',
+      currentGrant: "none", revocations: 'none',
       tools,
       warn: () => {},
       onDenial: (event) => denials.push(event),
@@ -459,7 +502,7 @@ describe('resource server: tool enforcement fails closed on bodies it cannot rea
   it('refuses a batch with more than one call that needs a decision, before any verifier runs', async () => {
     const verify = vi.fn().mockResolvedValue({ status: 'valid' });
     const denials: GuardDenialEvent[] = [];
-    const guard = createMcpResourceGuard({ issuer, revocations: 'none', audience: RESOURCE, tools, decisions: { verify }, warn: () => {}, onDenial: (e) => denials.push(e) });
+    const guard = createMcpResourceGuard({ issuer, currentGrant: "none", revocations: 'none', audience: RESOURCE, tools, decisions: { verify }, warn: () => {}, onDenial: (e) => denials.push(e) });
     const authorization = `Bearer ${await token({ scp: ['tool:acme_kyb:write'] })}`;
     const result = await guard({
       header: (name) => (name === 'authorization' ? authorization : undefined),
@@ -475,7 +518,7 @@ describe('resource server: tool enforcement fails closed on bodies it cannot rea
 
   it('reports denials to onDenial with low-cardinality fields and survives a throwing hook', async () => {
     const events: GuardDenialEvent[] = [];
-    const guard = createMcpResourceGuard({ issuer, revocations: 'none', audience: RESOURCE, tools, warn: () => {}, onDenial: (e) => events.push(e) });
+    const guard = createMcpResourceGuard({ issuer, currentGrant: "none", revocations: 'none', audience: RESOURCE, tools, warn: () => {}, onDenial: (e) => events.push(e) });
     const authorization = `Bearer ${await token()}`;
     const header = (name: string) => (name === 'authorization' ? authorization : undefined);
     await guard({ header, method: 'POST', bodyParsed: true, body: writeCall });
@@ -486,13 +529,13 @@ describe('resource server: tool enforcement fails closed on bodies it cannot rea
       { reason: 'manifest_unknown_tool', status: 403 },
       { reason: 'missing_token', status: 401 },
     ]);
-    const throwing = createMcpResourceGuard({ issuer, revocations: 'none', audience: RESOURCE, tools, warn: () => {}, onDenial: () => { throw new Error('metrics down'); } });
+    const throwing = createMcpResourceGuard({ issuer, currentGrant: "none", revocations: 'none', audience: RESOURCE, tools, warn: () => {}, onDenial: () => { throw new Error('metrics down'); } });
     const refused = await throwing({ header, method: 'POST', bodyParsed: true, body: writeCall });
     expect(refused.ok).toBe(false);
   });
 
   it('names a revoked grant grant_revoked', async () => {
-    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, revocations: { isTokenRevoked: async () => true } });
+    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, currentGrant: "none", revocations: { isTokenRevoked: async () => true } });
     const authorization = `Bearer ${await token()}`;
     const result = await guard({ header: (name) => (name === 'authorization' ? authorization : undefined), method: 'GET', bodyParsed: false });
     expect(result.ok).toBe(false);
@@ -508,7 +551,7 @@ describe('resource server: tool enforcement fails closed on bodies it cannot rea
     expect(() => requireMcpAuthHono({ issuer, audience: RESOURCE } as RequireMcpAuthOptions))
       .toThrow(/`revocations` is required/);
     const quiet = vi.fn();
-    createMcpResourceGuard({ issuer, audience: RESOURCE, revocations: { isTokenRevoked: async () => false }, warn: quiet });
+    createMcpResourceGuard({ issuer, audience: RESOURCE, currentGrant: { verify: async () => true }, revocations: { isTokenRevoked: async () => false }, warn: quiet });
     expect(quiet).not.toHaveBeenCalled();
   });
 
@@ -519,10 +562,11 @@ describe('resource server: tool enforcement fails closed on bodies it cannot rea
     }
   });
 
-  it('revocations: "none" is the explicit opt-out: it starts, warns, and does not check', async () => {
+  it('currentGrant: "none", revocations: "none" is the explicit opt-out: it starts, warns, and does not check', async () => {
     const warn = vi.fn();
-    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, revocations: 'none', warn });
+    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, currentGrant: "none", revocations: 'none', warn });
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('revocations: "none"'));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('currentGrant: "none"'));
     // As before the opt-in: a token without a jti is not refused for it.
     const authorization = `Bearer ${await token({}, null)}`;
     const result = await guard({ header: (name) => (name === 'authorization' ? authorization : undefined), method: 'GET', bodyParsed: false });

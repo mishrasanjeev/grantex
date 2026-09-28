@@ -63,6 +63,7 @@ async function setupWithCode(options: { publicClient?: boolean } = {}) {
   const mockGrantex = createMockGrantex();
 
   const app = await createMcpAuthServer({
+    resolvePrincipal: async () => ({ principalId: 'principal-1' }),
     grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
     agentId: 'agent-1',
     scopes: ['read', 'write'],
@@ -259,6 +260,7 @@ describe('token endpoint', () => {
       code: 'GRANTEX_SANDBOX_CODE',
     });
     const app = await createMcpAuthServer({
+      resolvePrincipal: async () => ({ principalId: 'principal-1' }),
       grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
       agentId: 'agent-1',
       scopes: ['read', 'write'],

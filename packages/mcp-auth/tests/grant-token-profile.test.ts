@@ -87,7 +87,7 @@ async function sign(
 }
 
 function guardFor(extra: Partial<McpResourceGuardOptions> = {}) {
-  return createMcpResourceGuard({ issuer, audience: RESOURCE, warn: () => {}, revocations: 'none', ...extra });
+  return createMcpResourceGuard({ issuer, audience: RESOURCE, warn: () => {}, currentGrant: "none", revocations: 'none', ...extra });
 }
 
 async function present(
@@ -138,15 +138,15 @@ describe('grant token algorithms: RS256 and ES256 only', () => {
   it('refuses a start-up algorithms list with anything outside RS256 and ES256', () => {
     for (const algorithms of [['RS256', 'PS256'], ['EdDSA'], ['ES256', 'HS256'], ['none'], []]) {
       expect(() => guardFor({ algorithms })).toThrow(/`algorithms`/);
-      expect(() => requireMcpAuth({ issuer, audience: RESOURCE, warn: () => {}, revocations: 'none', algorithms })).toThrow(/`algorithms`/);
-      expect(() => requireMcpAuthHono({ issuer, audience: RESOURCE, warn: () => {}, revocations: 'none', algorithms })).toThrow(/`algorithms`/);
+      expect(() => requireMcpAuth({ issuer, audience: RESOURCE, warn: () => {}, currentGrant: "none", revocations: 'none', algorithms })).toThrow(/`algorithms`/);
+      expect(() => requireMcpAuthHono({ issuer, audience: RESOURCE, warn: () => {}, currentGrant: "none", revocations: 'none', algorithms })).toThrow(/`algorithms`/);
     }
     expect(() => guardFor({ algorithms: ['RS256', 'PS256'] })).toThrow(/PS256/);
   });
 
   it('names the guard, not a middleware the caller may not have used, in the start-up error', () => {
     expect(() => guardFor({ algorithms: ['PS256'] })).toThrow(/^mcp-auth resource guard: `algorithms` may list only RS256 and ES256/);
-    expect(() => requireMcpAuth({ issuer, audience: RESOURCE, warn: () => {}, revocations: 'none', algorithms: ['PS256'] }))
+    expect(() => requireMcpAuth({ issuer, audience: RESOURCE, warn: () => {}, currentGrant: "none", revocations: 'none', algorithms: ['PS256'] }))
       .toThrow(/^mcp-auth resource guard: /);
   });
 
@@ -412,7 +412,7 @@ describe('tokens issued by the auth service (spec/examples/grant-token-0.6.issue
   });
 
   async function issued(name: string) {
-    const guard = createMcpResourceGuard({ issuer: fixture.issuer, jwksUri, audience: fixture.audience, warn: () => {}, revocations: 'none' });
+    const guard = createMcpResourceGuard({ issuer: fixture.issuer, jwksUri, audience: fixture.audience, warn: () => {}, currentGrant: "none", revocations: 'none' });
     const authorization = `Bearer ${fixture.tokens[name]!.token}`;
     return grantOf(await guard({ header: (h) => (h === 'authorization' ? authorization : undefined), method: 'GET', bodyParsed: false }));
   }

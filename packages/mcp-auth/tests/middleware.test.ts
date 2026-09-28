@@ -124,7 +124,7 @@ async function invokeMiddleware(
 
 describe('Express middleware', () => {
   it('passes valid token and sets mcpGrant', async () => {
-    const mw = requireMcpAuth({ issuer, revocations: 'none', audience: AUDIENCE });
+    const mw = requireMcpAuth({ issuer, currentGrant: "none", revocations: 'none', audience: AUDIENCE });
     const token = await signTestJwt({
       sub: 'user_abc',
       scp: ['read', 'write'],
@@ -144,7 +144,7 @@ describe('Express middleware', () => {
   });
 
   it('rejects missing token with 401', async () => {
-    const mw = requireMcpAuth({ issuer, revocations: 'none', audience: AUDIENCE });
+    const mw = requireMcpAuth({ issuer, currentGrant: "none", revocations: 'none', audience: AUDIENCE });
 
     const result = await invokeMiddleware(mw, {});
 
@@ -155,7 +155,7 @@ describe('Express middleware', () => {
   });
 
   it('rejects expired token with 401', async () => {
-    const mw = requireMcpAuth({ issuer, revocations: 'none', audience: AUDIENCE });
+    const mw = requireMcpAuth({ issuer, currentGrant: "none", revocations: 'none', audience: AUDIENCE });
     const token = await signTestJwt(
       { sub: 'user_abc', scp: ['read'] },
       { expiresIn: '-1h' },
@@ -171,7 +171,7 @@ describe('Express middleware', () => {
   });
 
   it('enforces required scopes (403)', async () => {
-    const mw = requireMcpAuth({ issuer, revocations: 'none', audience: AUDIENCE, scopes: ['admin:write'] });
+    const mw = requireMcpAuth({ issuer, currentGrant: "none", revocations: 'none', audience: AUDIENCE, scopes: ['admin:write'] });
     const token = await signTestJwt({
       sub: 'user_abc',
       scp: ['read'],
@@ -188,7 +188,7 @@ describe('Express middleware', () => {
   });
 
   it('passes when all required scopes present', async () => {
-    const mw = requireMcpAuth({ issuer, revocations: 'none', audience: AUDIENCE, scopes: ['read'] });
+    const mw = requireMcpAuth({ issuer, currentGrant: "none", revocations: 'none', audience: AUDIENCE, scopes: ['read'] });
     const token = await signTestJwt({
       sub: 'user_abc',
       scp: ['read', 'write'],
@@ -202,7 +202,7 @@ describe('Express middleware', () => {
   });
 
   it('rejects invalid Bearer format with 401', async () => {
-    const mw = requireMcpAuth({ issuer, revocations: 'none', audience: AUDIENCE });
+    const mw = requireMcpAuth({ issuer, currentGrant: "none", revocations: 'none', audience: AUDIENCE });
 
     const result = await invokeMiddleware(mw, {
       authorization: 'NotBearer some-token',
@@ -213,7 +213,7 @@ describe('Express middleware', () => {
 
   describe('issuer / audience pinning', () => {
     it('rejects a token from a different iss even when the key validates', async () => {
-      const mw = requireMcpAuth({ issuer: 'https://grantex.example.com', audience: AUDIENCE, revocations: 'none', jwksUri: `${issuer}/.well-known/jwks.json` });
+      const mw = requireMcpAuth({ issuer: 'https://grantex.example.com', audience: AUDIENCE, currentGrant: "none", revocations: 'none', jwksUri: `${issuer}/.well-known/jwks.json` });
       const wrongIss = await signTestJwt({ sub: 'user_abc', scp: ['read'] }, { issuer });
       const rightIss = await signTestJwt({ sub: 'user_abc', scp: ['read'] }, { issuer: 'https://grantex.example.com' });
 
@@ -225,7 +225,7 @@ describe('Express middleware', () => {
     });
 
     it('rejects a token whose aud does not match the configured audience', async () => {
-      const mw = requireMcpAuth({ issuer, revocations: 'none', audience: 'https://mcp.example.com' });
+      const mw = requireMcpAuth({ issuer, currentGrant: "none", revocations: 'none', audience: 'https://mcp.example.com' });
       const good = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://mcp.example.com' });
       const bad = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://other.example.com' });
       const none = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: undefined });
@@ -236,7 +236,7 @@ describe('Express middleware', () => {
     });
 
     it('fails closed when issuer is empty', async () => {
-      const mw = requireMcpAuth({ issuer: '', audience: AUDIENCE, revocations: 'none' });
+      const mw = requireMcpAuth({ issuer: '', audience: AUDIENCE, currentGrant: "none", revocations: 'none' });
       const token = await signTestJwt({ sub: 'user_abc', scp: ['read'] });
       expect((await invokeMiddleware(mw, { authorization: `Bearer ${token}` })).statusCode).toBe(401);
     });
@@ -248,7 +248,7 @@ describe('scp claim shape', () => {
   // space-separated string, so a foreign token from the same issuer gained
   // scopes it never carried as an array.
   it('Express rejects a space-separated string scp and a missing scp', async () => {
-    const mw = requireMcpAuth({ issuer, revocations: 'none', audience: AUDIENCE, scopes: ['read'] });
+    const mw = requireMcpAuth({ issuer, currentGrant: "none", revocations: 'none', audience: AUDIENCE, scopes: ['read'] });
     const stringScp = await signTestJwt({ sub: 'user_abc', scp: 'read write' });
     const noScp = await signTestJwt({ sub: 'user_abc' });
     const mixedScp = await signTestJwt({ sub: 'user_abc', scp: ['read', 42] });
@@ -275,7 +275,7 @@ describe('Hono middleware', () => {
   }
 
   it('rejects a different iss and a mismatched aud, accepts the pinned pair', async () => {
-    const mw = requireMcpAuthHono({ issuer, revocations: 'none', audience: 'https://mcp.example.com' });
+    const mw = requireMcpAuthHono({ issuer, currentGrant: "none", revocations: 'none', audience: 'https://mcp.example.com' });
     const good = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://mcp.example.com' });
     const wrongIss = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://mcp.example.com' }, { issuer: 'https://evil.example.com' });
     const wrongAud = await signTestJwt({ sub: 'user_abc', scp: ['read'], aud: 'https://other.example.com' });
@@ -288,7 +288,7 @@ describe('Hono middleware', () => {
   });
 
   it('rejects a space-separated string scp and a missing scp', async () => {
-    const mw = requireMcpAuthHono({ issuer, revocations: 'none', audience: AUDIENCE });
+    const mw = requireMcpAuthHono({ issuer, currentGrant: "none", revocations: 'none', audience: AUDIENCE });
     const stringScp = await signTestJwt({ sub: 'user_abc', scp: 'read write' });
     const noScp = await signTestJwt({ sub: 'user_abc' });
 

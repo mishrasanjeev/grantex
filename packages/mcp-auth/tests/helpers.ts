@@ -21,7 +21,7 @@ export const TEST_RESOURCE = 'https://mcp.example.com/mcp';
  * the tests do not need to sign it.
  */
 export function upstreamGrantToken(claims: Record<string, unknown> = {}): string {
-  return new jose.UnsecuredJWT({ aud: TEST_RESOURCE, jti: 'grnt_upstream', scp: ['read', 'write'], ...claims })
+  return new jose.UnsecuredJWT({ sub: 'principal-1', aud: TEST_RESOURCE, jti: 'grnt_upstream', scp: ['read', 'write'], ...claims })
     .setIssuedAt()
     .setExpirationTime('1h')
     .encode();
