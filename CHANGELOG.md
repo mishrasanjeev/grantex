@@ -40,6 +40,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   path changes. `scripts/check-docs-integrity.mjs --live` skips a
   `pyproject.toml` with the `Private :: Do Not Upload` classifier, as it
   already skips a `package.json` with `"private": true`.
+### Opt-in admin key for the trust registry listing (auth service)
+- New setting `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED`, off by default and read
+  when the service starts. `GET /v1/trust-registry` returns the 100 newest
+  registry records of every developer, unverified ones included, and was
+  documented as an admin route, but any developer API key can read it, so one
+  tenant can list every other tenant's records. Operators should turn the
+  setting on.
+  - Off (unset, `false`, or any value other than exactly `true`): the route is
+    unchanged, with standard developer API key auth and the plan budget.
+  - `true`: the route takes the service administrator credential
+    (`ADMIN_API_KEY`, as `Authorization: Bearer <key>`), as the other operator
+    routes do. A developer API key, a wrong key or no key is refused with
+    `401 UNAUTHORIZED` before anything is read, and the admin key is compared
+    in constant time. While `ADMIN_API_KEY` is not configured, every call is
+    refused with `503 SERVICE_UNAVAILABLE`. The route is limited to 20 calls a
+    minute per address and no longer draws on a developer's plan budget.
+  - The response is the same either way. `GET /v1/trust-registry/:orgDID`,
+    `POST /v1/trust-registry/verify-dns` and the `/v1/registry/orgs` routes
+    are unchanged.
+- **Before turning it on:** a caller that reads this listing with a developer
+  API key should look organizations up one at a time with the public
+  `GET /v1/registry/orgs/:did` or search with `GET /v1/registry/orgs`; an
+  operator uses `ADMIN_API_KEY`. Documented in
+  `docs/features/trust-registry.mdx` ("Operator Listing"),
+  `docs/openapi.yaml` and `docs/self-hosting.md`. The default stays off until
+  operators have moved (FINDINGS G-106).
 ### Agent key history: possession proof, rotation and compromise (auth service)
 - New: every agent key is kept in a history (`agent_keys`, migration 122),
   identified by its RFC 7638 JWK Thumbprint, with the states `pending`,
