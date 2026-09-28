@@ -162,7 +162,7 @@ The endpoint verifies JWT signatures and claims against the issuer JWKS. In `2.0
 ```bash
 curl -X POST https://your-mcp-server.example.com/introspect \
   -H "Content-Type: application/json" \
-  --data-urlencode "token=$GRANT_TOKEN"
+  --data "$(jq -n --arg token "$GRANT_TOKEN" '{token: $token}')"
 ```
 
 Active token response:
@@ -189,7 +189,7 @@ The revocation endpoint decodes the token `jti` and requests revocation from Gra
 curl -X POST https://your-mcp-server.example.com/revoke \
   -u "$CLIENT_ID:$CLIENT_SECRET" \
   -H "Content-Type: application/json" \
-  --data-urlencode "token=$GRANT_TOKEN"
+  --data "$(jq -n --arg token "$GRANT_TOKEN" '{token: $token}')"
 ```
 
 Per RFC 7009, the endpoint always returns `200 OK`, even if the token was already revoked.

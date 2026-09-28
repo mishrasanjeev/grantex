@@ -1,0 +1,90 @@
+---
+title: "Enforcement release validation"
+description: "Validation evidence and explicit limits for the TypeScript, Python and integration enforcement release candidates."
+---
+
+## Status
+
+Updated September 28, 2026. This report records completed tests of the release
+candidates, not a claim that they are published. CI and registry publication
+are separate gates. [Release Status](/release-status) is the source of truth
+for installable versions; [Migration](/migration-enforcement) covers breaking
+defaults, runtime requirements and rollout.
+
+## Package Validation
+
+| Candidate | Completed local verification |
+| --- | --- |
+| `@grantex/sdk@0.8.0` | Typecheck, build, all 1,351 tests with real Postgres and Redis |
+| `grantex==0.7.0` | Lint, strict typing of 121 source files, wheel/sdist build, metadata checks, all 1,584 installed-wheel tests with real Postgres and Redis |
+| `@grantex/cli@0.4.0` | Typecheck, build, all 556 tests and installed CLI version check |
+| `@grantex/gateway@0.2.0` | Typecheck, build, all 111 tests |
+| `@grantex/adapters@0.2.0` | Typecheck, build, all 164 tests |
+| `@grantex/strands@0.2.0` | Typecheck, build, all 11 tests and real installed tool invocation |
+| `grantex-strands==0.2.0` | Build, metadata checks, all 12 installed-wheel tests |
+| `@grantex/mcp-auth@3.0.0` | Typecheck, build, 359 unit tests; 63 real Postgres/Redis integration tests; 7 Chromium browser tests |
+
+MCP Auth has two unit skips for storage-contract inspection when an adapter
+does not expose a dump operation. They are not counted as passing. The real
+Postgres/Redis suite separately exercises durable storage and server restart.
+
+Unchanged packages were compatibility-tested rather than republished:
+`@grantex/x402@0.4.1` passed its 210 tests, typecheck and build;
+Go `v0.4.1` passed `go test ./...` and `go vet ./...`.
+
+## Installed Artifact and Runtime Checks
+
+The clean npm installation uses the packed distributions, not source imports.
+Its executable verification is
+[`scripts/verify-enforcement-artifacts.mjs`](https://github.com/mishrasanjeev/grantex/blob/main/scripts/verify-enforcement-artifacts.mjs).
+It checks exact versions, runtime declarations, public exports, package
+licenses/NOTICE files and migration documentation, then uses real signed
+tokens against a synthetic issuer to test:
+
+1. Correct audience and trusted amount succeed.
+2. Wrong or unconfigured audience, omitted amount and excessive amount fail.
+3. Rejected calls do not reach the tool callback or gateway upstream.
+4. Default enforcement queries current revocation state.
+5. Revocation and a status-service outage refuse execution.
+6. A per-call offline downgrade is rejected.
+7. Installed Strands, adapter, gateway and MCP guards enforce their respective
+   contracts, including mandatory MCP revocation configuration.
+
+This check also passed in workstation Docker on Node.js 22.12, the minimum
+runtime for the changed npm packages. Python Strands passed all 12 tests in
+Docker on Python 3.11. The installed Python SDK passed 1,582 tests in Docker
+on Python 3.9, with two runtime-specific skips. Following correction of stale
+deprecation text, its 53 claim-compatibility regressions were repeated on
+Python 3.9. The rebuilt Python wheel passed the full 1,584-test suite again.
+
+## Hosted Passkey Verification
+
+The production Chromium suite passed six tests across three files, covering
+sandbox/live enrollment and consent parity, multiple devices, removal,
+replay and unauthorized request rejection, OAuth consent, portable evidence,
+revocation status, account response policy and the hosted dashboard.
+These tests use disposable accounts and Chromium virtual authenticators.
+They do not certify physical hardware, every browser or independent vendor
+interoperability.
+
+## Security and Documentation Checks
+
+Documentation integrity, navigation compilation, SEO/AEO checks, the vendor
+denylist, pinned secret scanning and its scanner self-test passed locally.
+Packed licenses and Python distribution metadata were inspected.
+The Python Strands candidate's resolved third-party dependencies passed
+vulnerability and license checks using the same-checkout SDK wheel.
+The unpublished SDK version has no PyPI advisory record yet; source-level
+security checks and functional tests are distinct from registry advisories.
+
+## Boundaries
+
+- A packed-artifact test is not a registry install. Registry integrity and
+  clean public installs must be verified after publication.
+- Local JWT verification does not imply current revocation. Gateway,
+  adapters and default Strands verification remain local unless explicitly
+  combined with current-state enforcement.
+- SDK tests do not prove custody-provider availability, funded mainnet
+  payment settlement, external merchant acceptance or regulatory compliance.
+- Passing the suites is evidence for the tested cases, not a guarantee that
+  every possible execution is flawless.
