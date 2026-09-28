@@ -1684,20 +1684,63 @@ the pull request that references it.
   opt-out. Owner: the auth-service maintainers. Exit criterion: flag default
   flipped with an explicit opt-out once operators have moved.
 
-## G-115 — The CI step for the agent-httpsig Python package has no `run`
+## G-111 — An agent's provider is inferred from its developer
 
-- **Found:** wiring `packages/mock-issuer` into `.github/workflows/ci.yml`,
-  2026-09-28, on the branch that merges the Wave 1 registry branches.
-- **What:** in the `python-integrations` job, the step
-  `Test agent-httpsig Python` (`working-directory: packages/agent-httpsig-py`)
-  lost its `run:` line when the agent-httpsig and Agent Passport branches were
-  merged; the next step, `Test Agent Passport Python`, follows it directly.
-  GitHub Actions requires every step to have `uses` or `run`, so the workflow
-  file fails validation and none of its jobs start.
-- **Impact:** until fixed, a pull request from this branch gets no CI run at
-  all (not only the Python job), and grantex-agent-httpsig is not tested in
-  CI.
-- **Proposal:** restore
-  `run: pip install -e ".[dev]" && mypy --strict src && pytest` on that step
-  (the command the agent-httpsig branch had), and check the merged workflow
-  with a workflow linter before pushing.
+- **Found:** computing trust levels for registry attestations (PRD §5.1),
+  2026-09-28.
+- **What:** `agents` has no reference to its provider record in
+  `trust_registry`, and `registry_agents`, which could link them, has no
+  writer. `lib/registry/trust-level.ts` therefore takes the provider of an
+  agent to be the one `trust_registry` record whose `developer_id` is the
+  agent's developer. A developer with no record, or with more than one, has
+  agents whose provider cannot be resolved; they are never more than
+  `basic`, which fails closed but leaves a developer who registers two
+  organisations unable to reach `attested` for any agent.
+- **Impact:** agents of multi-organisation developers cannot be attested.
+- **Proposal:** give an agent an explicit provider (a nullable
+  `agents.provider_id` set when the agent is registered, or rows in
+  `registry_agents` written by the agent routes), backfilled for developers
+  with exactly one record, and resolve through it. Owner: registry
+  maintainers. Exit criterion: an agent of a developer with two provider
+  records reaches `attested` through its own provider's attestation.
+
+## G-112 — Issuers have no way to report screening hits, unresolved ownership or failed security reviews
+
+- **Found:** implementing the trust flags of PRD §5.1 for registry
+  attestations, 2026-09-28.
+- **What:** the flag set includes `provider_screening_hit`,
+  `ownership_unresolved` and `security_review_failed`, but the attestation
+  payload of PRD Appendix A has no member that carries them, and the trust
+  mark types `provider.screening`, `provider.ownership` and `agent.security`
+  are attested with an issuer-defined `level` string the registry stores
+  verbatim and does not interpret. The registry therefore never sets these
+  three flags (`lib/registry/trust-level.ts`, `spec/attestation-1.0.md` §8).
+- **Impact:** relying parties cannot learn of an adverse screening, ownership
+  or security outcome through the registry; an issuer can only decline to
+  attest, or revoke on its status list.
+- **Proposal:** decide how an issuer reports each outcome: a defined
+  `outcome` member for those three types, a fixed vocabulary for `level`, or
+  a separate signed event, and add it to Appendix A and the attestation
+  profile. Owner: product (PRD Appendix A). Exit criterion: a documented
+  payload member, and each flag set by a test from an attestation that
+  carries it.
+
+## G-113 — Provider legal identifiers, agent declarations and provider suspension have no writer yet
+
+- **Found:** adding migration 124 (registry attestations), 2026-09-28.
+- **What:** the migration adds `trust_registry.legal_identifiers` and
+  `trust_registry.suspended_at`, and `agents.cimd_uri`, `declared_purpose`,
+  `declared_categories`, `declared_scopes`, `declared_autonomy` and
+  `declared_limits`, which the level computation and later waves read. No
+  route writes them yet: the provider routes do not accept legal
+  identifiers, there is no operator route to suspend a provider, and the
+  agent routes do not accept declarations. (The issuer's status list is
+  reread by `workers/registryIssuerStatusRecheck.ts`, and a read that has
+  gone stale stops counting, so that part has a writer.)
+- **Impact:** a provider cannot be suspended through the API, and relying
+  parties see no declared purpose, scopes or limits for an agent other than
+  what an attestation carries.
+- **Proposal:** add the provider and agent fields to their registration
+  routes, and an operator route to suspend and reinstate a provider that
+  also rewrites the stored level. Owner: registry maintainers. Exit
+  criterion: each column is written by a route with tests.

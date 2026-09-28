@@ -6,6 +6,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Registry attestations and computed trust levels (auth service)
+- New `POST /v1/registry/attestations`: an accredited issuer posts an
+  attestation as a compact JWS (`typ` `grantex-attestation+jwt`, ES256, a
+  `kid`; EdDSA only with `REGISTRY_ATTESTATION_EDDSA_ENABLED=true`) with the
+  body type `application/jwt`. No API key: the signature, checked with the
+  issuer's recorded key, is the authentication; limited to 30 requests a
+  minute per client address. The registry checks, in order, the header, the
+  issuer's accreditation for the type, the signature, every payload member
+  (PRD Appendix A), that `sub` is a registered agent or provider, that an
+  agent attestation names a key whose possession has been proven
+  (`key_unproven`, `key_not_active`), the hash rule
+  (`attestation_hash_mismatch`), the times (`passport_expired`) and the
+  issuer's own Token Status List, fetched from under its `status_list_base`
+  and signed by the same issuer (`status_stale`, `passport_revoked`). Every
+  refusal carries a PRD Appendix C code and a reason. The JWS is stored
+  exactly as received, the registry allocates a VALID acceptance entry for
+  it and audits it; the same bytes posted again answer `200` without being
+  checked again, other bytes under the same id `409`.
+- The registry relies on its read of an issuer's status list only until the
+  earliest of the list's `exp`, the time of reading plus its `ttl`, and one
+  day (`issuer_status_fresh_until`); an attestation whose read is past that
+  no longer counts toward a level. A new background worker rereads the lists
+  every minute for attestations whose read goes stale within two minutes,
+  recording a revocation or suspension and auditing the change.
+- New `DELETE /v1/registry/attestations/{id}` (withdraw) and
+  `POST /v1/registry/attestations/{id}/refresh` (renew with a new JWS and a
+  new external credential; the old record is superseded). Both take the
+  issuer's signed request (`Authorization: GrantexIssuer <JWS>`, typ
+  `grantex-attestation-request+jwt`, single use, five minutes) or a registry
+  operator key. The old acceptance entry becomes INVALID.
+- Computed trust levels (PRD §5.1): `basic`, `verified` (DNS-verified
+  provider), `attested` (a counted `agent.identity` attestation bound to a
+  proven key and a counted `provider.entity` attestation of the provider,
+  from accredited issuers independent of the provider) and
+  `attested_verified`; any suspension of the agent, its provider, an
+  attestation or its issuer reads `basic`. Flags `key_compromised`,
+  `attestation_expiring` (30 days), `issuer_suspended` and
+  `declared_limits_changed`; `provider_screening_hit`,
+  `ownership_unresolved` and `security_review_failed` are defined but never
+  set (FINDINGS G-112). `computeAgentTrust()` in
+  `src/lib/registry/trust-level.ts` returns the level, flags, issuers, types,
+  attestation ids, declared limits and the ids of attestations not counted
+  because the issuer status read is stale, by agent DID or key thumbprint.
+- Migration `124_registry_attestations.sql` adds `registry_attestations` and
+  `registry_attestation_request_nonces` (empty), `legal_identifiers`,
+  `suspended_at`, `computed_attested` and `computed_trust_level` (`basic`,
+  `verified`, `attested`, `attested_verified`) on `trust_registry`, and `cimd_uri` and
+  the declared purpose, categories, scopes, autonomy and limits on `agents`.
+  `trust_level` keeps its values and its readers are unchanged;
+  `computed_trust_level` is backfilled to `verified` for DNS-verified
+  providers and kept in step with DNS verification and provider suspension
+  by a trigger. No existing route changes behaviour.
+- New development-only `REGISTRY_DEV_ISSUER_ORIGIN_MAP`: rewrites an issuer
+  origin such as `https://mock-issuer.example` to a loopback server, so the
+  mock issuer's status lists can be served without a network. The service
+  refuses to start with it set unless `NODE_ENV` is `development` or `test`.
+- Documented in `spec/attestation-1.0.md`,
+  `docs/issuers/becoming-an-accredited-issuer.md`, `docs/openapi.yaml` and
+  `docs/self-hosting.md`. New findings: FINDINGS G-111 to G-113.
 ### Agent Passport SD-JWT VC profile (new, unpublished packages)
 - New `spec/agent-passport-1.0.md`: the Agent Passport as an SD-JWT VC
   (RFC 9901, draft-ietf-oauth-sd-jwt-vc) with `typ` `dc+sd-jwt`, `vct`
