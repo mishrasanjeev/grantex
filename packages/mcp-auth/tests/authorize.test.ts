@@ -61,6 +61,7 @@ async function createTestApp(overrides: Partial<McpAuthConfig> = {}) {
   const mockGrantex = createMockGrantex();
 
   const app = await createMcpAuthServer({
+    resolvePrincipal: async () => ({ principalId: 'principal-1' }),
     grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
     agentId: 'agent-1',
     scopes: ['read', 'write'],
@@ -217,7 +218,7 @@ describe('authorize endpoint', () => {
     const params = mockGrantex.authorize.mock.calls[0]![0] as Record<string, unknown>;
     expect(params).toMatchObject({
       agentId: 'agent-1',
-      userId: TEST_CLIENT_ID,
+      userId: 'principal-1',
       scopes: ['read', 'write'],
       redirectUri: 'https://auth.example.com/callback',
     });

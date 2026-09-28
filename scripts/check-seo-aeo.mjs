@@ -125,7 +125,7 @@ export function expectedMcpLimitationIds(version) {
     'mcp-code-handoff-incomplete', 'mcp-no-live-revocation-lookup',
     'mcp-token-issued-hook-unused', 'mcp-redirect-allowlist-not-global',
   ];
-  if (version?.startsWith('3.')) return [
+  if (version?.startsWith('3.') || version?.startsWith('4.')) return [
     'mcp-shared-storage-configuration', 'mcp-upstream-authority-check',
     'mcp-principal-handoff',
   ];

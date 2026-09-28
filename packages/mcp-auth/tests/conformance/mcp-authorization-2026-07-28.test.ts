@@ -151,6 +151,7 @@ async function authServer(overrides: Partial<McpAuthConfig> = {}, grantex = mock
     clientRecord({ clientId: 'public-client', publicClient: true, grantTypes: ['authorization_code', 'refresh_token'] }),
   );
   const app = await createMcpAuthServer({
+    resolvePrincipal: async () => ({ principalId: 'principal-1' }),
     grantex: asGrantex(grantex),
     agentId: 'agent-1',
     scopes: ['tool:acme_kyb:read'],
@@ -218,7 +219,7 @@ const MANIFEST = {
 };
 
 async function mcp(options: Partial<RequireMcpAuthOptions>, authorization?: string, body?: unknown) {
-  const mw = requireMcpAuth({ issuer: grantexIssuer, revocations: 'none', audience: TEST_RESOURCE, ...options } as RequireMcpAuthOptions);
+  const mw = requireMcpAuth({ issuer: grantexIssuer, currentGrant: "none", revocations: 'none', audience: TEST_RESOURCE, ...options } as RequireMcpAuthOptions);
   let handled = false;
   const server = createServer((raw: IncomingMessage, res: ServerResponse) => {
     const req = raw as McpAuthRequest;
@@ -427,7 +428,7 @@ describe('MCP authorization 2026-07-28: authorization server', () => {
   must('SEC-01', 'an upstream that does not rotate never gets the same refresh token handed out again', async () => {
     const grantex = mockGrantex({ sandboxCode: 'UPSTREAM' });
     grantex.tokens.refresh.mockImplementation(async ({ refreshToken }: { refreshToken: string }) => ({
-      grantToken: new jose.UnsecuredJWT({ aud: TEST_RESOURCE, jti: 'grnt_same' }).encode(),
+      grantToken: new jose.UnsecuredJWT({ sub: 'principal-1', aud: TEST_RESOURCE, jti: 'grnt_same' }).encode(),
       expiresAt: new Date(Date.now() + 3600_000).toISOString(),
       scopes: ['tool:acme_kyb:read'],
       refreshToken,
