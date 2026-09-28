@@ -1043,7 +1043,7 @@ await grantex.passports.revoke('urn:grantex:passport:01HXYZ...');
 | `GET` | `/v1/passport/:id` | API key | Retrieve passport by ID |
 | `POST` | `/v1/passport/:id/revoke` | API key | Revoke passport (StatusList2021) |
 | `GET` | `/v1/trust-registry/:orgDID` | None | Look up org trust record (public) |
-| `GET` | `/v1/trust-registry` | API key | List all trust records (admin) |
+| `GET` | `/v1/trust-registry` | API key; admin key (`ADMIN_API_KEY`) when `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` | List all trust records, across developers (operator) |
 
 See [`packages/mpp/`](packages/mpp/) for full package docs. Demo: [grantex.dev/mpp-demo](https://grantex.dev/mpp-demo).
 

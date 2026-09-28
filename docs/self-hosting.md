@@ -253,6 +253,7 @@ This table is a quick-start subset, not an exhaustive schema. Consult `apps/auth
 | `REVOCATION_FEED_RETENTION_HOURS` | No | `48` | How long delivered feed entries are kept after the credential expires |
 | `EMERGENCY_STOP_ENABLED` | No | `false` | Serve the emergency stop and its lockout (section 11); revocations are irreversible, and issuance reads lockouts only while this is on |
 | `RATE_LIMIT_ROUTE_CLASSES_ENABLED` | No | `true` | Revocation and emergency-stop routes, and the revocation feed, draw on per-developer budgets of their own instead of the plan (`docs/guides/rate-limits.mdx`); `false` puts them back in the plan budget, failing closed when Redis is unavailable |
+| `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED` | No | `false` | `true` makes `GET /v1/trust-registry`, which lists every developer's registry records, take `ADMIN_API_KEY` instead of a developer API key, answering `503` while that is unset; recommended, since the listing crosses tenants. Off (and any value other than exactly `true`) keeps the existing developer-API-key access. Read at startup |
 
 ---
 
