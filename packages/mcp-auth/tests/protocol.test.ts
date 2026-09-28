@@ -28,6 +28,7 @@ type Overrides = { [K in keyof McpAuthConfig]?: McpAuthConfig[K] | undefined };
 async function build(overrides: Overrides = {}, grantex: MockGrantex = mockGrantex({ sandboxCode: 'UPSTREAM' })) {
   const storage = await seededStorage(clientRecord({ grantTypes: ['authorization_code', 'refresh_token'] }));
   const app = await createMcpAuthServer({
+    resolvePrincipal: async () => ({ principalId: 'principal-1' }),
     grantex: asGrantex(grantex),
     agentId: 'agent-1',
     scopes: ['read', 'write'],
@@ -86,24 +87,24 @@ describe('configuration fails closed', () => {
   };
 
   it('refuses to start without a resource to bind tokens to', async () => {
-    await expect(createMcpAuthServer({ ...base, storage: new InMemoryStorage() })).rejects.toThrow(/`resource` is required/);
+    await expect(createMcpAuthServer({ resolvePrincipal: async () => ({ principalId: 'principal-1' }), ...base, storage: new InMemoryStorage() })).rejects.toThrow(/`resource` is required/);
   });
 
   it('refuses a resource that is not a canonical URI', async () => {
     for (const resource of ['mcp.example.com', 'https://mcp.example.com#frag', 'http://mcp.example.com/mcp', 'ftp://mcp.example.com']) {
-      await expect(createMcpAuthServer({ ...base, resource, storage: new InMemoryStorage() })).rejects.toThrow(/not a valid resource URI/);
+      await expect(createMcpAuthServer({ resolvePrincipal: async () => ({ principalId: 'principal-1' }), ...base, resource, storage: new InMemoryStorage() })).rejects.toThrow(/not a valid resource URI/);
     }
   });
 
   it('refuses an http issuer that is not localhost', async () => {
     await expect(
-      createMcpAuthServer({ ...base, issuer: 'http://auth.example.com', resource: TEST_RESOURCE, storage: new InMemoryStorage() }),
+      createMcpAuthServer({ resolvePrincipal: async () => ({ principalId: 'principal-1' }), ...base, issuer: 'http://auth.example.com', resource: TEST_RESOURCE, storage: new InMemoryStorage() }),
     ).rejects.toThrow(/issuer must be an https URL/);
   });
 
   it('refuses to start with no scopes and no manifests', async () => {
     await expect(
-      createMcpAuthServer({ ...base, scopes: [], resource: TEST_RESOURCE, storage: new InMemoryStorage() }),
+      createMcpAuthServer({ resolvePrincipal: async () => ({ principalId: 'principal-1' }), ...base, scopes: [], resource: TEST_RESOURCE, storage: new InMemoryStorage() }),
     ).rejects.toThrow(/configure `scopes` or `manifests`/);
   });
 });

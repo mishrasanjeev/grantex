@@ -42,6 +42,7 @@ describe('metadata endpoint', () => {
 
   beforeEach(async () => {
     app = await createMcpAuthServer({
+      resolvePrincipal: async () => ({ principalId: 'principal-1' }),
       grantex: createMockGrantex(),
       agentId: 'agent-1',
       scopes: ['read', 'write'],
@@ -95,6 +96,7 @@ describe('metadata endpoint', () => {
 
   it('includes resource_indicators_supported when allowedResources configured', async () => {
     const appWithResources = await createMcpAuthServer({
+      resolvePrincipal: async () => ({ principalId: 'principal-1' }),
       grantex: createMockGrantex(),
       agentId: 'agent-1',
       scopes: ['read'],

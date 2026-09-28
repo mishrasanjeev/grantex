@@ -3,6 +3,7 @@ import type { McpAuthConfig } from '../types.js';
 import { serverContext } from '../context.js';
 import { ClientMetadataError } from '../lib/client-metadata.js';
 import { createGrantexTokenVerifier, parseBasicAuth, secretMatches } from '../lib/verify.js';
+import { grantexCurrentGrantVerifier } from '../resource/grantex-current-grant.js';
 
 interface IntrospectBody {
   token?: string;
@@ -22,6 +23,7 @@ export function registerIntrospectEndpoint(
   // Tokens are issued by Grantex, not by this server: verify them against
   // the Grantex JWKS with iss/aud pinned. Fail closed when unconfigured.
   const verifier = createGrantexTokenVerifier(config);
+  const currentGrant = config.introspectionCurrentGrant ?? grantexCurrentGrantVerifier(config.grantex);
 
   // Rate limited via @fastify/rate-limit plugin config (20 req/min)
   app.post<{ Body: IntrospectBody }>(
@@ -47,10 +49,15 @@ export function registerIntrospectEndpoint(
         });
       }
 
-      // Optional client authentication via Basic auth
+      // Protected introspection defaults to authenticated confidential clients.
       const basicCreds = parseBasicAuth(
         request.headers.authorization,
       );
+      if (!basicCreds && (config.allowUnauthenticatedIntrospection !== true || request.headers.authorization !== undefined)) {
+        return reply.status(401).header('www-authenticate', 'Basic realm="mcp-introspection"').send({
+          error: 'invalid_client', error_description: 'Client authentication is required for introspection',
+        });
+      }
       if (basicCreds) {
         const [clientId, clientSecret] = basicCreds;
         const client = await getClient(clientId);
@@ -70,6 +77,9 @@ export function registerIntrospectEndpoint(
         // signature is still valid. A storage failure throws into the catch
         // below and the token is reported inactive (fail closed).
         if (typeof payload.jti !== 'string' || await storage.isTokenRevoked(payload.jti)) {
+          return reply.send({ active: false });
+        }
+        if (currentGrant !== 'none' && await currentGrant.verify(token) !== true) {
           return reply.send({ active: false });
         }
 

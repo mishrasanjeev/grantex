@@ -321,6 +321,7 @@ describe('metadata-document clients at the authorization endpoint', () => {
     const { seededStorage, asGrantex, mockGrantex, TEST_CHALLENGE, TEST_RESOURCE } = await import('./helpers.js');
     const grantex = mockGrantex();
     const app = await createMcpAuthServer({
+      resolvePrincipal: async () => ({ principalId: 'principal-1' }),
       grantex: asGrantex(grantex),
       agentId: 'agent-1',
       scopes: ['read'],
@@ -353,6 +354,7 @@ describe('metadata-document clients at the authorization endpoint', () => {
     const storage = await seededStorage(clientRecord({ clientId: 'http://app.example.com/client.json' }));
     const spy = vi.spyOn(storage, 'getClient');
     const app = await createMcpAuthServer({
+      resolvePrincipal: async () => ({ principalId: 'principal-1' }),
       grantex: asGrantex(mockGrantex()),
       agentId: 'agent-1',
       scopes: ['read'],
