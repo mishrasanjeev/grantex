@@ -1773,3 +1773,16 @@ the pull request that references it.
 - **Proposal:** give the two property tests an explicit timeout sized for a
   loaded runner, or reduce their iteration count. Owner: registry
   maintainers. Exit criterion: the full suite passes them on a loaded runner.
+
+## G-127 — `RATE_LIMIT_ROUTE_CLASSES_ENABLED` appears twice in the self-hosting variables table
+
+- **Found:** adding `PASSPORT_BOUND_GRANTS_ENABLED` to `docs/self-hosting.md`,
+  2026-09-28.
+- **What:** the environment variables table in section 5 has two rows for
+  `RATE_LIMIT_ROUTE_CLASSES_ENABLED`, the second a longer version of the
+  first (a merge kept both).
+- **Impact:** readers see two descriptions of one variable; a later edit to
+  one leaves the other stale.
+- **Proposal:** keep the longer row and delete the shorter one. Owner: docs
+  maintainers. Exit criterion: one row per variable (a check in
+  `scripts/check-docs-integrity.mjs` could enforce it).

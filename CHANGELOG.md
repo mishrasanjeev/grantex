@@ -6,6 +6,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Passport binding at grant issuance (auth service)
+- `POST /v1/authorize` takes an Agent Passport in `passport` when
+  `PASSPORT_BOUND_GRANTS_ENABLED=true` (off by default; off, the member is
+  ignored as every unknown member is, and nothing else changes). Before the
+  request is recorded, the registry checks, in order: the issuer is
+  accredited for `urn:grantex:tm:agent.identity` and not suspended; the
+  passport verifies with the issuer key the registry recorded for its `kid`
+  and is within its validity; its `sub` is the agent; its `attestation_id`
+  names an attestation the issuer registered, with the passport's hash, still
+  accepted; the registry's acceptance entry is VALID and the issuer's status
+  valid and fresh (read again when stale); its `cnf` key is the attested key
+  and a usable key of the agent; and the requested scopes are within the
+  attestation's declared limits. Each refusal carries its PRD Appendix C code
+  and a reason; an `attestation_mismatch` is also audited
+  (`grantex.passport.attestation_mismatch`). `audience` is required with a
+  passport. No KB-JWT is taken at consent. Only this route takes a passport;
+  the OAuth PAR and authorize routes do not.
+- A bound grant's token carries an `authorization_details` entry of type
+  `urn:grantex:commerce:v1` (`passport` `{issuer, id, hash, key_thumbprint}`
+  and `acceptance_status` `{uri, idx}`) after the existing entries, and
+  `cnf.jkt` equal to the passport's key thumbprint. The code exchange and
+  every refresh check the registry's records again and refuse with the
+  Appendix C code once the registry no longer stands behind the passport,
+  including `passport_expired` once the passport or its attestation has
+  expired, and `status_stale` when the issuer's recorded status is no longer
+  fresh and its list cannot be read again. A bound grant ends at the earlier
+  of the requested lifetime and the `exp` of the passport and its attestation.
+- With the flag on, `POST /v1/grants/delegate` refuses a passport-bound parent
+  grant with `403` `PASSPORT_BOUND_DELEGATION_UNSUPPORTED` and writes
+  nothing, so a delegated grant cannot outlive the parent's passport binding.
+- `GET /v1/consent/{id}` returns `agentPassport` (trust level, verification
+  level, issuers, declared limits, software) and the consent page shows it.
+- Migration 125: `auth_requests.passport_binding` and
+  `grant_passport_bindings` (with the passport's `exp`), indexed by attestation, registry attestation,
+  acceptance entry and key, so a later cascade finds every bound grant.
+- Specified in `spec/passport-binding.md`; see also
+  `docs/concepts/passport-vs-grant.md`. The service verifies passports with a
+  copy of the verification half of `@grantex/agent-passport`, held to the
+  shared vectors.
 ### Registry lookup and signed registry manifest (auth service)
 - New `GET /v1/registry/agents/{did}`, `GET /v1/registry/agents?key_thumbprint=`
   and `GET /v1/registry/agents?issuer=&external_credential_id=&hash=`: a

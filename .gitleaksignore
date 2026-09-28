@@ -230,7 +230,13 @@ cef81ce2dbfda0967aaf05064edf29564f100807:apps/auth-service/tests/agent-key-mirro
 43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:968
 43b0633eef18b38f864aa99a7da14dba9d630609:spec/examples/agent-passport-vectors.json:jwt:1081
 
+# Synthetic passport-binding examples (a public key thumbprint), feat/passport-bound-grants
+30d696c7494e616e6645573c6d72653861b0a75a:apps/auth-service/tests/passport-binding-docs.test.ts:generic-api-key:45
+30d696c7494e616e6645573c6d72653861b0a75a:docs/concepts/passport-vs-grant.md:generic-api-key:65
+30d696c7494e616e6645573c6d72653861b0a75a:spec/passport-binding.md:generic-api-key:161
 # Synthetic registry lookup examples (the RFC 7638 example thumbprint), feat/registry-lookup-manifest
 f9058614edae929d3ca591405e9d46725aa2549f:docs/relying-parties/verifying-agents.md:generic-api-key:35
 f9058614edae929d3ca591405e9d46725aa2549f:docs/relying-parties/verifying-agents.md:generic-api-key:66
 f9058614edae929d3ca591405e9d46725aa2549f:spec/registry-federation.md:generic-api-key:409
+# Public example did:key identifier in the DID syntax test, feat/passport-bound-grants
+b02cb69a538d544a9f74995eea060c64365426c8:apps/auth-service/tests/passport-verify-did.test.ts:generic-api-key:21
