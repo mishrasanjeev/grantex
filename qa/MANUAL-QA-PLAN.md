@@ -876,7 +876,7 @@ npx @grantex/conformance --base-url http://localhost:3001 --api-key dev-api-key-
 | **RATE-014** | Browser clients can read retry timing | P1 | Send an allowed-origin browser request that receives rate-limit headers | CORS exposes all `X-RateLimit-*` headers and `Retry-After`. |
 | **RATE-015** | Containment is not starved by the plan | P0 | Exhaust a Free key's 100/min plan budget, then `DELETE /v1/grants/:id`, `POST /v1/tokens/revoke` and `POST /v1/emergency-stop` | Each is served (not 429); `X-RateLimit-Limit` is 2000; the plan budget is not consumed. The 2,001st containment call in a minute returns 429 `RATE_LIMIT_EXCEEDED`. |
 | **RATE-016** | Containment survives a Redis outage | P0 | Stop Redis, then revoke a grant and run the emergency stop | Both are served; ordinary routes answer 503 `RATE_LIMIT_UNAVAILABLE`; `grantex_rate_limit_decisions_total{bucket="containment",outcome="local_allowed"}` rises. |
-| **RATE-017** | Revocation feed reads have their own budget | P1 | Exhaust a Free key's plan budget, then read `GET /v1/revocations` and `GET /v1/revocations/status` | Served with `X-RateLimit-Limit` 6000; the per-address limits (600 and 1,200/min) still apply. |
+| **RATE-017** | Revocation feed reads have their own budget | P1 | Exhaust a Free key's plan budget, then read `GET /v1/revocations` and `GET /v1/revocations/status` | Served with `X-RateLimit-Limit` 6000; the per-address limits (600 and 6,000/min) still apply. |
 | **RATE-018** | Opt-out restores the plan bucket | P2 | Set `RATE_LIMIT_ROUTE_CLASSES_ENABLED=false`, exhaust the plan budget, then revoke a grant | 429 from the plan budget; with Redis stopped, 503 `RATE_LIMIT_UNAVAILABLE`. |
 
 ---

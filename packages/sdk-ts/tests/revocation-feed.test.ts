@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ToolManifest, Permission } from '../src/manifest.js';
 import { DenialReason, RevocationSubReason } from '../src/denials.js';
-import { RevocationFeed, RevokedSet, type RevocationEntry } from '../src/revocations/index.js';
+import { REVOCATION_CHECK_STRENGTH, RevocationFeed, RevokedSet, type RevocationEntry } from '../src/revocations/index.js';
 import { HttpClient } from '../src/http.js';
 import type { VerifiedGrant } from '../src/types.js';
 
@@ -292,7 +292,7 @@ data: {"cursor":5}
     }
   });
 
-  it('is off by default: the same client without the option allows the call', async () => {
+  it('is not followed by default: the default client checks online instead', async () => {
     vi.mocked(verifyGrantToken).mockResolvedValue(grant());
     const fetchMock = feedFetch({ snapshot: [entry()] });
     vi.stubGlobal('fetch', fetchMock);
@@ -300,6 +300,24 @@ data: {"cursor":5}
     grantex.loadManifest(manifest);
     const result = await grantex.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' });
     expect(result.allowed).toBe(true);
+    const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toContain('/v1/revocations/status?');
+    expect(grantex.revocationFeedState()).toBeUndefined();
+  });
+
+  it('the offline opt-out restores the unchecked behaviour', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(grant());
+    const fetchMock = feedFetch({ snapshot: [entry()] });
+    vi.stubGlobal('fetch', fetchMock);
+    const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
+    grantex.loadManifest(manifest);
+    const result = await grantex.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' });
+    const perCall = await grantex.enforce({
+      grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business', revocationCheck: 'offline',
+    });
+    expect(result.allowed).toBe(true);
+    expect(perCall.allowed).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
@@ -420,10 +438,34 @@ describe('enforce() with revocationCheck: online', () => {
     expect(result.subReason).toBe(RevocationSubReason.STATUS_UNAVAILABLE);
   });
 
-  it('can be chosen per call, overriding the client default', async () => {
+  it('test_default_client_checks_revocation: a client without the option checks online', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(grant());
+    const fetchMock = statusFetch({ status: 'revoked', revoked: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    grantex.loadManifest(manifest);
+    const result = await grantex.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' });
+    expect(result.allowed).toBe(false);
+    expect(result.reasonCode).toBe(DenialReason.GRANT_REVOKED);
+    expect(result.subReason).toBe(RevocationSubReason.REVOKED);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]![0])).toContain('/v1/revocations/status?grantId=grnt_child&jti=tok_01');
+  });
+
+  it('the default client fails closed when the deployment does not answer status checks', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(grant());
+    vi.stubGlobal('fetch', statusFetch({ message: 'Not found' }, 404));
+    const grantex = new Grantex({ apiKey: 'test_key', maxRetries: 0 });
+    grantex.loadManifest(manifest);
+    const result = await grantex.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' });
+    expect(result.allowed).toBe(false);
+    expect(result.subReason).toBe(RevocationSubReason.STATUS_UNAVAILABLE);
+  });
+
+  it('can be chosen per call, tightening the client mode', async () => {
     vi.mocked(verifyGrantToken).mockResolvedValue(grant());
     vi.stubGlobal('fetch', statusFetch({ status: 'revoked', revoked: true }));
-    const grantex = new Grantex({ apiKey: 'test_key' });
+    const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: 'offline' });
     grantex.loadManifest(manifest);
     const offline = await grantex.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' });
     expect(offline.allowed).toBe(true);
@@ -431,5 +473,67 @@ describe('enforce() with revocationCheck: online', () => {
       grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business', revocationCheck: 'online',
     });
     expect(online.allowed).toBe(false);
+  });
+});
+
+describe('per-call revocation checks only tighten', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('orders offline below feed below online', () => {
+    expect(REVOCATION_CHECK_STRENGTH.offline).toBeLessThan(REVOCATION_CHECK_STRENGTH.feed);
+    expect(REVOCATION_CHECK_STRENGTH.feed).toBeLessThan(REVOCATION_CHECK_STRENGTH.online);
+  });
+
+  it.each([
+    ['online', 'offline'],
+    ['online', 'feed'],
+    ['feed', 'offline'],
+  ] as const)('refuses a per-call loosening (client %s, call %s) before checking anything', async (configured, perCall) => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(grant());
+    const fetchMock = feedFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: configured });
+    grantex.loadManifest(manifest);
+    try {
+      await expect(grantex.enforce({
+        grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business', revocationCheck: perCall,
+      })).rejects.toThrow(/cannot loosen/);
+      expect(verifyGrantToken).not.toHaveBeenCalled();
+      expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/v1/revocations/status'))).toBe(false);
+    } finally {
+      await grantex.stopRevocationFeed();
+    }
+  });
+
+  it.each([
+    ['offline', 'feed'],
+    ['offline', 'online'],
+    ['feed', 'online'],
+    ['online', 'online'],
+  ] as const)('uses a per-call mode as strict or stricter (client %s, call %s)', async (configured, perCall) => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(grant());
+    const feed = feedFetch({ snapshot: [entry()] });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes('/v1/revocations/status')) {
+        const body = { status: 'revoked', revoked: true };
+        return { ok: true, status: 200, headers: { get: () => null }, json: async () => body, text: async () => JSON.stringify(body) };
+      }
+      return feed(url);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const grantex = new Grantex({ apiKey: 'test_key', revocationCheck: configured });
+    grantex.loadManifest(manifest);
+    try {
+      const result = await grantex.enforce({
+        grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business', revocationCheck: perCall,
+      });
+      expect(result.allowed).toBe(false);
+      expect(result.reasonCode).toBe(DenialReason.GRANT_REVOKED);
+    } finally {
+      await grantex.stopRevocationFeed();
+    }
   });
 });

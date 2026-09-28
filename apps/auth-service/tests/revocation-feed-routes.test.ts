@@ -42,7 +42,18 @@ afterEach(() => {
 });
 
 describe('the revocation feed flag', () => {
-  it('hides every feed route unless REVOCATION_FEED_ENABLED is true', async () => {
+  it('serves the feed routes when REVOCATION_FEED_ENABLED is not set (on by default)', async () => {
+    vi.stubEnv('REVOCATION_FEED_ENABLED', undefined);
+    expect(process.env['REVOCATION_FEED_ENABLED']).toBeUndefined();
+    state.handlers.push([/SELECT id, status, expires_at FROM grants/, [
+      { id: 'grnt_1', status: 'active', expires_at: new Date(Date.now() + 3_600_000) },
+    ]]);
+    const res = await app.inject({ method: 'GET', url: '/v1/revocations/status?grantId=grnt_1', headers: authHeader() });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: 'active', revoked: false, grantId: 'grnt_1' });
+  });
+
+  it('hides every feed route when REVOCATION_FEED_ENABLED=false (the opt-out)', async () => {
     vi.stubEnv('REVOCATION_FEED_ENABLED', 'false');
     for (const url of ['/v1/revocations', '/v1/revocations/status?grantId=grnt_1', '/v1/revocations/stream']) {
       const res = await app.inject({ method: 'GET', url, headers: authHeader() });

@@ -31,7 +31,7 @@ function grant(authorizationDetails: unknown): VerifiedGrant {
 
 async function enforce(g: VerifiedGrant, tool: string) {
   vi.mocked(verifyGrantToken).mockResolvedValue(g);
-  const client = new Grantex({ apiKey: 'test-key' });
+  const client = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline' });
   client.loadManifest(manifest);
   return client.enforce({ grantToken: 't', connector: 'acme_kyb', tool });
 }
@@ -61,7 +61,7 @@ describe('enforce() and grant decision references', () => {
 
   it('passes legacyClaims from the client options to the verifier only when set', async () => {
     vi.mocked(verifyGrantToken).mockResolvedValue(grant(undefined));
-    const client = new Grantex({ apiKey: 'test-key', legacyClaims: false });
+    const client = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', legacyClaims: false });
     client.loadManifest(manifest);
     await client.enforce({ grantToken: 't', connector: 'acme_kyb', tool: 'get_case' });
     expect(verifyGrantToken).toHaveBeenCalledWith('t', expect.objectContaining({ legacyClaims: false }));

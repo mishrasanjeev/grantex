@@ -53,9 +53,12 @@ export const PLAN_RATE_LIMITS: Record<PlanName, number> = {
 export const CONTAINMENT_RATE_LIMIT = 2_000;
 
 /**
- * Feed and status reads per developer per window, on every plan: several SDK
- * instances each polling at the per-address ceiling of
- * `GET /v1/revocations/status` (1,200/min), which still applies per address.
+ * Feed and status reads per developer per window, on every plan. SDK clients
+ * checking online (the default) call `GET /v1/revocations/status` once per
+ * enforce(), so this is also the ceiling on a developer's checked calls: 100 a
+ * second across all its instances. That route's per-address limit is this same
+ * number (routes/revocations.ts), so the developer's budget is reachable from
+ * one address.
  */
 export const STATUS_RATE_LIMIT = 6_000;
 

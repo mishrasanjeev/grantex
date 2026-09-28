@@ -6,7 +6,7 @@ import { requireMcpAuth, protectedResourceMetadataHandler } from '../src/middlew
 import type { McpAuthRequest, RequireMcpAuthOptions } from '../src/middleware/express.js';
 import { requireMcpAuth as requireMcpAuthHono } from '../src/middleware/hono.js';
 import { createMcpResourceGuard, filterToolsForGrant } from '../src/resource/guard.js';
-import type { GuardDenialEvent, GuardRequest } from '../src/resource/guard.js';
+import type { GuardDenialEvent, GuardRequest, McpResourceGuardOptions } from '../src/resource/guard.js';
 import { toolPolicyFromManifests, toolPolicyFromScopes } from '../src/resource/tool-policy.js';
 import type { LoadedManifest } from '../src/resource/tool-policy.js';
 import { decisionRequiredChallenge, formatBearerChallenge } from '../src/resource/challenge.js';
@@ -73,7 +73,7 @@ async function express(
   request: { authorization?: string; body?: unknown; parse?: boolean; method?: string },
   downstream?: (req: McpAuthRequest, res: ServerResponse) => void,
 ): Promise<Outcome> {
-  const mw = requireMcpAuth({ issuer, audience: RESOURCE, ...options } as RequireMcpAuthOptions);
+  const mw = requireMcpAuth({ issuer, revocations: 'none', audience: RESOURCE, ...options } as RequireMcpAuthOptions);
   const server = createServer((raw: IncomingMessage, res: ServerResponse) => {
     const req = raw as McpAuthRequest;
     const chunks: Buffer[] = [];
@@ -125,7 +125,7 @@ async function express(
 describe('resource server: token validation and challenges', () => {
   it('requires an audience at construction', () => {
     expect(() => requireMcpAuth({ issuer } as RequireMcpAuthOptions)).toThrow(/`audience` is required/);
-    expect(() => requireMcpAuthHono({ issuer, audience: [] })).toThrow(/`audience` is required/);
+    expect(() => requireMcpAuthHono({ issuer, audience: [], revocations: 'none' })).toThrow(/`audience` is required/);
   });
 
   it('401 without a token points at the protected-resource metadata (RFC 9728 §5.1)', async () => {
@@ -303,7 +303,7 @@ describe('resource server: downstream errors are not authorization failures', ()
   });
 
   it('Hono: an error from next() propagates', async () => {
-    const mw = requireMcpAuthHono({ issuer, audience: RESOURCE });
+    const mw = requireMcpAuthHono({ issuer, revocations: 'none', audience: RESOURCE });
     const c = {
       req: { header: (name: string) => (name.toLowerCase() === 'authorization' ? auth : undefined) },
       set: () => {},
@@ -314,7 +314,7 @@ describe('resource server: downstream errors are not authorization failures', ()
   });
 
   it('Hono: enforces tools with the body it reads and returns the challenge header', async () => {
-    const mw = requireMcpAuthHono({ issuer, audience: RESOURCE, tools: toolPolicyFromManifests([ACME_KYB]) });
+    const mw = requireMcpAuthHono({ issuer, revocations: 'none', audience: RESOURCE, tools: toolPolicyFromManifests([ACME_KYB]) });
     const auth = `Bearer ${await token()}`;
     let captured: { status?: number; headers?: Record<string, string>; data?: unknown } = {};
     const c = {
@@ -395,6 +395,7 @@ describe('resource server: tool enforcement fails closed on bodies it cannot rea
     const guard = createMcpResourceGuard({
       issuer,
       audience: RESOURCE,
+      revocations: 'none',
       tools,
       warn: () => {},
       onDenial: (event) => denials.push(event),
@@ -458,7 +459,7 @@ describe('resource server: tool enforcement fails closed on bodies it cannot rea
   it('refuses a batch with more than one call that needs a decision, before any verifier runs', async () => {
     const verify = vi.fn().mockResolvedValue({ status: 'valid' });
     const denials: GuardDenialEvent[] = [];
-    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, tools, decisions: { verify }, warn: () => {}, onDenial: (e) => denials.push(e) });
+    const guard = createMcpResourceGuard({ issuer, revocations: 'none', audience: RESOURCE, tools, decisions: { verify }, warn: () => {}, onDenial: (e) => denials.push(e) });
     const authorization = `Bearer ${await token({ scp: ['tool:acme_kyb:write'] })}`;
     const result = await guard({
       header: (name) => (name === 'authorization' ? authorization : undefined),
@@ -474,7 +475,7 @@ describe('resource server: tool enforcement fails closed on bodies it cannot rea
 
   it('reports denials to onDenial with low-cardinality fields and survives a throwing hook', async () => {
     const events: GuardDenialEvent[] = [];
-    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, tools, warn: () => {}, onDenial: (e) => events.push(e) });
+    const guard = createMcpResourceGuard({ issuer, revocations: 'none', audience: RESOURCE, tools, warn: () => {}, onDenial: (e) => events.push(e) });
     const authorization = `Bearer ${await token()}`;
     const header = (name: string) => (name === 'authorization' ? authorization : undefined);
     await guard({ header, method: 'POST', bodyParsed: true, body: writeCall });
@@ -485,7 +486,7 @@ describe('resource server: tool enforcement fails closed on bodies it cannot rea
       { reason: 'manifest_unknown_tool', status: 403 },
       { reason: 'missing_token', status: 401 },
     ]);
-    const throwing = createMcpResourceGuard({ issuer, audience: RESOURCE, tools, warn: () => {}, onDenial: () => { throw new Error('metrics down'); } });
+    const throwing = createMcpResourceGuard({ issuer, revocations: 'none', audience: RESOURCE, tools, warn: () => {}, onDenial: () => { throw new Error('metrics down'); } });
     const refused = await throwing({ header, method: 'POST', bodyParsed: true, body: writeCall });
     expect(refused.ok).toBe(false);
   });
@@ -498,12 +499,33 @@ describe('resource server: tool enforcement fails closed on bodies it cannot rea
     if (!result.ok) expect(result.reason).toBe('grant_revoked');
   });
 
-  it('warns at start-up when revocations are not configured', () => {
+  it('test_guard_refuses_to_start_without_revocation_config', () => {
     const warn = vi.fn();
-    createMcpResourceGuard({ issuer, audience: RESOURCE, warn });
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('`revocations` is not configured'));
+    expect(() => createMcpResourceGuard({ issuer, audience: RESOURCE, warn } as unknown as McpResourceGuardOptions))
+      .toThrow(/`revocations` is required/);
+    expect(() => requireMcpAuth({ issuer, audience: RESOURCE } as RequireMcpAuthOptions))
+      .toThrow(/`revocations` is required/);
+    expect(() => requireMcpAuthHono({ issuer, audience: RESOURCE } as RequireMcpAuthOptions))
+      .toThrow(/`revocations` is required/);
     const quiet = vi.fn();
     createMcpResourceGuard({ issuer, audience: RESOURCE, revocations: { isTokenRevoked: async () => false }, warn: quiet });
     expect(quiet).not.toHaveBeenCalled();
+  });
+
+  it('refuses to start with a revocations value it cannot call', () => {
+    for (const revocations of [{}, { isTokenRevoked: true }, 'off', null, false]) {
+      expect(() => createMcpResourceGuard({ issuer, audience: RESOURCE, revocations } as unknown as McpResourceGuardOptions))
+        .toThrow(/`revocations`/);
+    }
+  });
+
+  it('revocations: "none" is the explicit opt-out: it starts, warns, and does not check', async () => {
+    const warn = vi.fn();
+    const guard = createMcpResourceGuard({ issuer, audience: RESOURCE, revocations: 'none', warn });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('revocations: "none"'));
+    // As before the opt-in: a token without a jti is not refused for it.
+    const authorization = `Bearer ${await token({}, null)}`;
+    const result = await guard({ header: (name) => (name === 'authorization' ? authorization : undefined), method: 'GET', bodyParsed: false });
+    expect(result.ok).toBe(true);
   });
 });
