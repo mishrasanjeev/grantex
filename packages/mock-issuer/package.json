@@ -1,0 +1,53 @@
+{
+  "name": "@grantex/mock-issuer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A mock accredited issuer for local runs and CI: static JWKS, Agent Passport issuance, passport status lists, attestations",
+  "author": {
+    "name": "Sanjeev Kumar",
+    "email": "sanjeev@orchestrum.in"
+  },
+  "copyright": "Copyright 2026 Orchestrum Technologies LLP. Grantex inventor and owner: Sanjeev Kumar.",
+  "homepage": "https://github.com/mishrasanjeev/grantex/tree/main/packages/mock-issuer",
+  "bugs": {
+    "url": "https://github.com/mishrasanjeev/grantex/issues"
+  },
+  "type": "module",
+  "bin": {
+    "grantex-mock-issuer": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "mock-issuer": "node src/cli.ts"
+  },
+  "peerDependencies": {
+    "@grantex/agent-passport": "0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@grantex/agent-passport": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "keywords": [
+    "grantex",
+    "agent-passport",
+    "accredited-issuer",
+    "token-status-list",
+    "bitstring-status-list",
+    "testing"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mishrasanjeev/grantex"
+  }
+}

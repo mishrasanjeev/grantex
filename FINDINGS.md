@@ -1600,3 +1600,21 @@ the pull request that references it.
   `typ`, and change it behind a flag with the SDKs' format string, recorded in
   `CHANGELOG.md`. The Agent Passport profile is not affected: it already uses
   `dc+sd-jwt`.
+
+## G-115 — The CI step for the agent-httpsig Python package has no `run`
+
+- **Found:** wiring `packages/mock-issuer` into `.github/workflows/ci.yml`,
+  2026-09-28, on the branch that merges the Wave 1 registry branches.
+- **What:** in the `python-integrations` job, the step
+  `Test agent-httpsig Python` (`working-directory: packages/agent-httpsig-py`)
+  lost its `run:` line when the agent-httpsig and Agent Passport branches were
+  merged; the next step, `Test Agent Passport Python`, follows it directly.
+  GitHub Actions requires every step to have `uses` or `run`, so the workflow
+  file fails validation and none of its jobs start.
+- **Impact:** until fixed, a pull request from this branch gets no CI run at
+  all (not only the Python job), and grantex-agent-httpsig is not tested in
+  CI.
+- **Proposal:** restore
+  `run: pip install -e ".[dev]" && mypy --strict src && pytest` on that step
+  (the command the agent-httpsig branch had), and check the merged workflow
+  with a workflow linter before pushing.

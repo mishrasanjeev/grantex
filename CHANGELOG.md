@@ -156,6 +156,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `pyproject.toml` with the `Private :: Do Not Upload` classifier, as it
   already skips a `package.json` with `"private": true`.
 
+### Mock accredited issuer (new, unpublished package)
+- New `@grantex/mock-issuer` (`packages/mock-issuer`), 0.1.0, private and not
+  published, so the registry flow runs locally and in CI with no external
+  party and no network. It is `https://mock-issuer.example` with a static JWKS
+  of one ES256 key generated at start (kept in a directory named for the run
+  when asked, never committed); OpenID Federation Entity Configuration and an
+  SSF transmitter are Phase 2.
+- It issues Agent Passports with `@grantex/agent-passport` (`vct`
+  `urn:grantex:agent-passport:1`; `provider`, `agent`, `verification` and an
+  issuer-minted `attestation_id` `att_<ulid>`) only after the agent signs the
+  issuer's possession challenge (typ `agent-key-proof+jwt`); without a valid
+  proof it refuses with the registry's codes: `key_unproven` (no proof, or a
+  signature that does not verify), `key_binding_mismatch` (`kid` or `sub` for
+  another key or agent) or `audience_mismatch`. It depends on
+  `@grantex/agent-passport` by name, linked from the root `package.json` and
+  built by `make install`, and uses only its exported API.
+- Its own passport status lists hold 131,072 entries each with indices drawn at
+  random, and are published from the store both as a Token Status List token
+  (draft-ietf-oauth-status-list-21, `statuslist+jwt`, two bits per entry) and
+  as Bitstring Status List credentials (`revocation` and `suspension`, VC-JWT),
+  neither derived from the other. ttl is 1 s by default for the mock and CI and
+  600 s with the standard profile. Passports can be revoked (final), suspended
+  and reinstated; a passport's `provider.entity` attestation has its own entry
+  and follows the passport.
+- Attestations (typ `grantex-attestation+jwt`, ES256, `kid`) for
+  `urn:grantex:tm:agent.identity` and `urn:grantex:tm:provider.entity`, with
+  `key_thumbprint` (RFC 7638) and `external_credential_hash` by the Agent
+  Passport hash rule, and `postAttestation` to POST one to a registry: the
+  compact JWS itself as `application/grantex-attestation+jwt`, with no API key,
+  a 10 s timeout and a 64 KiB bound on the answer.
+- A server bound to 127.0.0.1 only serves `/.well-known/jwks.json`
+  (`application/jwk-set+json`), `/status/N` (`application/statuslist+jwt`) and
+  `/status/N/bitstring[/suspension]` (`application/vc+jwt`) for the registry's
+  `REGISTRY_DEV_ISSUER_ORIGIN_MAP`; a CLI (`keys`, `serve`, `issue-passport`,
+  `attest`, `revoke`, `suspend`, `reinstate`) wraps it for scripts. Documented
+  in `docs/issuers/running-the-mock-issuer.md`. It runs in `make check` /
+  `make test` and in CI. No existing path changes.
+
 ### Passkey sandbox/live parity and retained credential history
 - Preserve an interactively selected principal before replacing the hosted
   consent form, so live OAuth approval and denial can complete WebAuthn.
