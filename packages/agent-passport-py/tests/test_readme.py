@@ -29,10 +29,16 @@ class _Registry:
         return self._keys.get(issuer, [])
 
 
+class _StatusLists:
+    def status(self, uri: str, idx: int) -> str:
+        return "valid"
+
+
 def test_readme_examples() -> None:
     issuer = p256_key_pair("mock-issuer-2026")
     agent = p256_key_pair()
     registry = _Registry({ISSUER: [issuer.public_jwk]})
+    status_lists = _StatusLists()
     now = int(time.time())
     passport_compact = issue_passport(
         **passport_params(issuer, agent, iat=now - 60, exp=now + 86_400)
@@ -57,6 +63,8 @@ def test_readme_examples() -> None:
                 presentation,
                 # Issuer keys come only from your own trust configuration, never from the token.
                 issuer_keys=registry.issuer_keys,
+                # Revoked, suspended or unresolvable status is refused (passport_revoked, status_stale).
+                status_resolver=status_lists.status,
                 key_binding=KeyBindingRequirement(aud="https://merchant.example", nonce=nonce),
                 payments_rails=True,
             )
@@ -78,6 +86,7 @@ def test_readme_examples() -> None:
             verify_passport(
                 presentation,
                 issuer_keys=registry.issuer_keys,
+                status_resolver=status_lists.status,
                 key_binding=KeyBindingRequirement(aud="https://merchant.example", nonce="another"),
                 payments_rails=True,
             )

@@ -84,6 +84,16 @@ updates:
         patterns: [vitest, '@vitest/*']
 
   - package-ecosystem: npm
+    directory: /packages/agent-passport
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, npm, agent-passport]
+    groups:
+      vitest:
+        patterns: [vitest, '@vitest/*']
+
+  - package-ecosystem: npm
     directory: /packages/anthropic
     schedule:
       interval: weekly
@@ -315,6 +325,13 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     labels: [dependencies, python, sdk-py]
+
+  - package-ecosystem: pip
+    directory: /packages/agent-passport-py
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    labels: [dependencies, python, agent-passport]
 
   - package-ecosystem: pip
     directory: /packages/fastapi

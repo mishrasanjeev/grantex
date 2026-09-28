@@ -46,6 +46,7 @@ def verify(compact: str, **extra: Any) -> Any:
         "issuer_keys": resolver_for(ISSUER_KEYS.public_jwk),
         "now": NOW,
         "key_binding": KeyBindingRequirement(aud=AUD, nonce=NONCE),
+        "status_checked_by": "caller",
     }
     kwargs.update(extra)
     return verify_passport(compact, **kwargs)

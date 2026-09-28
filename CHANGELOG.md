@@ -24,12 +24,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `jwk_thumbprint` and `keysEqual` / `keys_equal`. Verification takes issuer
   keys only from an injected resolver, requires ES256 (EdDSA only when turned
   on) and refuses every failure with a `PassportError` code and reason.
-  Verification does not check revocation: the relying party resolves the
-  `status` reference itself and refuses with `passport_revoked` or
-  `status_stale` before accepting (spec section 4). The hash names the exact
-  issuer-signed JWT bytes, so it is not a deny-list key (spec section 6).
-- Shared vectors in `spec/examples/agent-passport-vectors.json`, checked by
-  both packages. Both run in `make check` / `make test` and in CI. No existing
+  Verification requires a status decision and fails closed without one: pass a
+  status resolver (`statusResolver` / `status_resolver`, `(uri, idx)` to
+  `valid`, `invalid` or `suspended`), whose `invalid` or `suspended` answer is
+  refused with `passport_revoked` and whose failure or unknown answer is
+  refused with `status_stale`, or pass `statusCheckedBy: 'caller'` /
+  `status_checked_by="caller"` to state that the caller resolves `status`
+  itself; with neither, the call is refused as a configuration error (spec
+  section 4). `sub` and `provider.did` must match the W3C DID Core section 3.1
+  DID syntax in full. The hash names the exact issuer-signed JWT bytes, so it
+  is not a deny-list key (spec section 6).
+- Shared vectors in `spec/examples/agent-passport-vectors.json`, including
+  status vectors, checked by both packages. Both run in `make check` /
+  `make test` and in CI, and both have Dependabot entries. No existing
   path changes. `scripts/check-docs-integrity.mjs --live` skips a
   `pyproject.toml` with the `Private :: Do Not Upload` classifier, as it
   already skips a `package.json` with `"private": true`.
