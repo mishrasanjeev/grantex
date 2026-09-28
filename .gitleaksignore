@@ -184,5 +184,20 @@ d43754a96201dcce5144377d896cba45a0e45832:packages/sdk-ts/tests/verify-jwks-fetch
 d43754a96201dcce5144377d896cba45a0e45832:packages/sdk-py/tests/test_verify_jwks_fetch.py:generic-api-key:441
 f71ee3999f1001bd055da6db6fe8eb5755d75b27:packages/sdk-ts/tests/verify-jwks-fetch.test.ts:generic-api-key:386
 f71ee3999f1001bd055da6db6fe8eb5755d75b27:packages/sdk-py/tests/test_verify_jwks_fetch.py:generic-api-key:472
+# Synthetic signed Agent Passport test vectors (spec/examples/agent-passport-vectors.json), issued with throwaway keys generated for the vectors file.
+27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:284
+27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:453
+27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:838
+27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:866
+27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:882
+27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:898
+27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:914
+27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:931
+27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:947
+27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:963
+27f9c380f5dbd54ad4a334f13cf0f49ee5a48559:spec/examples/agent-passport-vectors.json:jwt:996
+# The public did:key example used as a DID syntax test value.
+e779a67329a741c61c3fba753288eb9668ffbe42:packages/agent-passport-py/tests/test_passport.py:generic-api-key:669
+e779a67329a741c61c3fba753288eb9668ffbe42:packages/agent-passport/tests/passport.test.ts:generic-api-key:654
 # Synthetic key thumbprint in the agent-key mirror flag test.
 c5de005c7806c575008632103c76625acafd35dc:apps/auth-service/tests/agent-key-mirror-flag.test.ts:generic-api-key:19

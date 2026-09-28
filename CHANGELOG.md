@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Agent Passport SD-JWT VC profile (new, unpublished packages)
+- New `spec/agent-passport-1.0.md`: the Agent Passport as an SD-JWT VC
+  (RFC 9901, draft-ietf-oauth-sd-jwt-vc) with `typ` `dc+sd-jwt`, `vct`
+  `urn:grantex:agent-passport:1`, `cnf`, a Token Status List `status`
+  reference, and `provider`, `agent`, `verification` and `attestation_id` as
+  selectively disclosable claims. It defines the hash rule (the SHA-256 of the
+  issuer-signed JWT only, never the disclosures), the key rule (keys are equal
+  when their RFC 7638 thumbprints are), the P-256 rule for payments rails and
+  the refusal codes. The VC-JOSE-COSE rendering is Phase 3.
+- New `@grantex/agent-passport` (`packages/agent-passport`) and
+  `grantex-agent-passport` (`packages/agent-passport-py`), both 0.1.0 and not
+  published: `issuePassport` / `issue_passport` for the mock issuer and tests,
+  `verifyPassport` / `verify_passport`, `createKeyBindingJwt` /
+  `create_key_binding_jwt`, `selectDisclosures` / `select_disclosures`,
+  `externalCredentialHash` / `external_credential_hash`, `jwkThumbprint` /
+  `jwk_thumbprint` and `keysEqual` / `keys_equal`. Verification takes issuer
+  keys only from an injected resolver, requires ES256 (EdDSA only when turned
+  on) and refuses every failure with a `PassportError` code and reason.
+  Verification requires a status decision and fails closed without one: pass a
+  status resolver (`statusResolver` / `status_resolver`, `(uri, idx)` to
+  `valid`, `invalid` or `suspended`), whose `invalid` or `suspended` answer is
+  refused with `passport_revoked` and whose failure or unknown answer is
+  refused with `status_stale`, or pass `statusCheckedBy: 'caller'` /
+  `status_checked_by="caller"` to state that the caller resolves `status`
+  itself; with neither, the call is refused as a configuration error (spec
+  section 4). `sub` and `provider.did` must match the W3C DID Core section 3.1
+  DID syntax in full. The hash names the exact issuer-signed JWT bytes, so it
+  is not a deny-list key (spec section 6).
+- Shared vectors in `spec/examples/agent-passport-vectors.json`, including
+  status vectors, checked by both packages. Both run in `make check` /
+  `make test` and in CI, and both have Dependabot entries. No existing
+  path changes. `scripts/check-docs-integrity.mjs --live` skips a
+  `pyproject.toml` with the `Private :: Do Not Upload` classifier, as it
+  already skips a `package.json` with `"private": true`.
 ### Agent request signing libraries (not yet published)
 - New `spec/verification.md`: the `Agent-Passport`, `Agent-Grant` and
   `Agent-Trust` headers (RFC 9651 Byte Sequences; above 6 KB the presentation

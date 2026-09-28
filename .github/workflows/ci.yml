@@ -336,6 +336,9 @@ jobs:
       - name: Test gemma
         working-directory: packages/gemma
         run: npm ci && npm run typecheck && npm test
+      - name: Test agent-passport
+        working-directory: packages/agent-passport
+        run: npm ci && npm run typecheck && npm test
       - name: Test x402
         working-directory: packages/x402
         run: npm ci && npm run typecheck && npm test && npm run build
@@ -380,6 +383,9 @@ jobs:
         run: pip install -e ".[dev]" && mypy --strict src && pytest
       - name: Test Gemma Python
         working-directory: packages/gemma-py
+        run: pip install -e ".[dev]" && mypy --strict src && pytest
+      - name: Test Agent Passport Python
+        working-directory: packages/agent-passport-py
         run: pip install -e ".[dev]" && mypy --strict src && pytest
       - name: Test agent-httpsig Python
         working-directory: packages/agent-httpsig-py
