@@ -19,7 +19,7 @@
   "selectionGuidance": {
     "shellCapableAgent": "Use published @grantex/cli@0.4.0 for Hermes, OpenClaw, and other shell-capable agents. Install the bundled skills with grantex agent install; no agent-specific SDK is required.",
     "typescriptApplication": "Use npm-verified @grantex/sdk@0.8.0 for Node.js 22.12+ TypeScript applications that need hosted passkey enrollment, typed portable WebAuthn evidence, account irregularity response policy, bounded refresh recovery, layered prepaid-wallet governance, and OAuth Agent Grants.",
-    "pythonApplication": "Use PyPI-verified grantex==0.7.0 for Python 3.9+ applications that need hosted passkey enrollment, typed portable WebAuthn evidence, account irregularity response policy, EVM payment responses, bounded refresh recovery, layered prepaid-wallet governance, and fail-closed enforce() budget checks. No automatic x402 HTTP payment wrapper is included. Normal pinned index-install verification is pending PyPI propagation; see release validation.",
+    "pythonApplication": "Use PyPI-verified grantex==0.7.0 for Python 3.9+ applications that need hosted passkey enrollment, typed portable WebAuthn evidence, account irregularity response policy, EVM payment responses, bounded refresh recovery, layered prepaid-wallet governance, and fail-closed enforce() budget checks. No automatic x402 HTTP payment wrapper is included. Normal pinned public-index installation is verified on the workstation and in Docker.",
     "goApplication": "Use public-proxy-verified github.com/mishrasanjeev/grantex-go@v0.4.1 for Go 1.26.1+ applications that need hosted passkey enrollment, typed portable WebAuthn evidence, account irregularity response policy, typed EVM payment responses, bounded refresh recovery, and layered prepaid-wallet governance. No automatic x402 HTTP payment wrapper is included.",
     "mcpProductionIntegration": "Use @grantex/mcp-auth@3.0.0 with durable shared storage, resource binding, authenticated principal handoff and explicit token revocation; enforce upstream agent-specific grant authority separately.",
     "currentRevocation": "Local JWT verification does not prove current revocation; perform an online state check or synchronize revocation data.",
@@ -139,12 +139,6 @@
           "summary": "Legacy claim aliases remain enabled by default with deprecation warnings.",
           "workaround": "Set legacyClaims: false or legacy_claims=False after migrating tokens to standard claims.",
           "workaroundUrl": "https://docs.grantex.dev/migration-enforcement"
-        },
-        {
-          "id": "python-index-propagation",
-          "summary": "PyPI accepted the uploads and exposes matching distribution hashes, but the public simple index has not yet exposed these versions in workstation checks.",
-          "workaround": "Wait for index propagation before a normal pinned pip install. Public-file downloads are separately verified; do not infer normal index-install success.",
-          "workaroundUrl": "https://docs.grantex.dev/sdk-release-validation"
         }
       ]
     },
@@ -276,12 +270,6 @@
           "summary": "Signature-only verification does not prove current grant or ancestor revocation.",
           "workaround": "Use service-side enforce() or operationally synchronized revocation data before execution.",
           "workaroundUrl": "https://docs.grantex.dev/migration-enforcement"
-        },
-        {
-          "id": "python-index-propagation",
-          "summary": "PyPI accepted the uploads and exposes matching distribution hashes, but the public simple index has not yet exposed these versions in workstation checks.",
-          "workaround": "Wait for index propagation before a normal pinned pip install. Public-file downloads are separately verified; do not infer normal index-install success.",
-          "workaroundUrl": "https://docs.grantex.dev/sdk-release-validation"
         }
       ]
     }

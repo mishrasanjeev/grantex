@@ -379,8 +379,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Go v0.4.1 and x402 0.4.1 are unchanged and compatibility-tested, not republished.
 - All eight releases have matching registry hashes. Clean npm installation,
   public Python-wheel suites and production SDK enforcement passed. Normal
-  PyPI index propagation remains pending; see Release Status and validation
-  for this explicit limitation and the migration guide for rollout/rollback.
+  pinned PyPI index installation also passed on the workstation and in Docker;
+  see Release Status, validation and the migration guide for rollout/rollback.
 - Preserve legacy claim compatibility defaults and correct stale deprecation
   warnings that promised an unimplemented version-based default flip. Tests
   verify the explicit standard-only setting is named in each warning.

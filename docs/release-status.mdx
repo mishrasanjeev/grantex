@@ -10,8 +10,8 @@ keywords: ["Grantex CLI version", "Grantex SDK versions", "AI agent authorizatio
 The enforcement releases are TypeScript `0.8.0`, Python
 `0.7.0`, CLI `0.4.0`, gateway/adapters/Strands `0.2.0` and MCP Auth `3.0.0`.
 All eight uploads and registry hashes are verified. Clean npm installation
-passed; Python public-file installations passed, but normal PyPI index
-propagation is still pending. See [the validation report](/sdk-release-validation)
+passed; Python public-file and normal pinned PyPI index installations passed
+on the workstation and in Docker. See [the validation report](/sdk-release-validation)
 and [the complete migration guide](/migration-enforcement), including
 runtime requirements, default revocation, trusted amounts and integration limits.
 
@@ -53,12 +53,12 @@ repository.
 |---|---|---|---|
 | CLI | `@grantex/cli@0.4.0` | Registry integrity and clean install | Node.js 22.12+; ESM |
 | TypeScript SDK | `@grantex/sdk@0.8.0` | Registry integrity, clean install and production enforcement | Node.js 22.12+; ESM |
-| Python SDK | `grantex==0.7.0` | PyPI hashes, public-wheel tests and production enforcement; index propagation pending | Python 3.9+ |
+| Python SDK | `grantex==0.7.0` | PyPI hashes, normal pinned installs, public-wheel tests and production enforcement | Python 3.9+ |
 | MCP Auth | `@grantex/mcp-auth@3.0.0` | Registry integrity, clean install and storage/browser tests | Node.js 22.12+; ESM |
 | Gateway | `@grantex/gateway@0.2.0` | Registry integrity and installed gateway invocation | Node.js 22.12+; SDK 0.8+ |
 | Adapters | `@grantex/adapters@0.2.0` | Registry integrity and installed adapter invocation | Node.js 22.12+; SDK 0.8+ |
 | Strands TypeScript | `@grantex/strands@0.2.0` | Registry integrity and installed tool invocation | Node.js 22.12+; SDK 0.8+ |
-| Strands Python | `grantex-strands==0.2.0` | PyPI hashes and public-wheel tests; index propagation pending | Python 3.11+; grantex 0.7+ |
+| Strands Python | `grantex-strands==0.2.0` | PyPI hashes, normal pinned installs and public-wheel tests | Python 3.11+; grantex 0.7+ |
 | x402 | `@grantex/x402@0.4.1` | Unchanged, compatibility-tested; custody remains external | Node.js 20+ standalone; 22.12+ with SDK 0.8 |
 | Go SDK | `github.com/mishrasanjeev/grantex-go@v0.4.1` | Unchanged, compatibility-tested | Go 1.26.1+ |
 | OpenAPI | `0.5.0` | Repository contract, independently versioned | Independent of SDK versions |
@@ -157,10 +157,6 @@ Custody](/guides/base-usdc-custody) for the custody and RPC prerequisites.
 - **AgenticOrg governed cases:** see [the integration boundary](/guides/agenticorg-governed-cases); the last verified AgenticOrg integration does not wire token-level case purpose or per-case caps, regardless of the newer published Python package.
 
 ## Known limitations in the current published artifacts
-
-**Python index propagation:** public PyPI file installations and tests passed,
-but normal pinned index installation is still pending in workstation checks.
-See [the validation report](/sdk-release-validation) before deploying.
 
 <Warning>
   **TypeScript `0.8.0` and Python `0.7.0`:** `enforce()` binds the expected

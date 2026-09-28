@@ -23,7 +23,7 @@ Release snapshot verified: 2026-09-28. Packages are independently versioned. Typ
 ## Choose an Implementation
 
 - [TypeScript SDK](https://docs.grantex.dev/sdks/typescript/overview): `npm install @grantex/sdk@0.8.0` for Node.js 22.12+ ESM applications; npm and clean-install verified.
-- [Python SDK](https://docs.grantex.dev/sdks/python/overview): `python -m pip install grantex==0.7.0` for Python 3.9+; PyPI hashes and public-wheel tests verified, normal index propagation pending.
+- [Python SDK](https://docs.grantex.dev/sdks/python/overview): `python -m pip install grantex==0.7.0` for Python 3.9+; PyPI hashes, public-wheel tests and normal pinned index installs verified.
 - [Go SDK](https://docs.grantex.dev/sdks/go/overview): `go get github.com/mishrasanjeev/grantex-go@v0.4.1` for Go 1.26.1+; tag, public proxy, and clean-install verified.
 - [MCP Authorization Server](https://docs.grantex.dev/features/mcp-auth-server): `npm install @grantex/mcp-auth@3.0.0 @grantex/sdk@0.8.0`; Node.js 22.12+, durable state adapters, rendered consent and explicit revocation configuration.
 - [CLI](https://docs.grantex.dev/integrations/cli): Install `@grantex/cli@0.4.0` to manage agents, grants, tokens, audit records, manifests, and portable Agent Skills from a terminal.

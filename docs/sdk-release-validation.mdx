@@ -26,13 +26,13 @@ URLs passed all 1,584 SDK tests with real Postgres/Redis and all 12 Strands
 tests; the installed SDK passed the production enforcement probe. These are
 registry downloads, not local-wheel substitutions.
 
-**Index propagation remains pending:** the workstation's standard pinned
-PyPI simple-index install still did not expose `grantex==0.7.0` in the last
-check on Windows and workstation Docker, and per-version JSON requests
-returned HTTP 503. Public project JSON
-exposed the release files and matching hashes. The file-URL tests above must
-not be mistaken for successful standard index installation. Wait for normal
-index availability before promoting a pinned Python deployment.
+**Normal index installation passed:** after an initial propagation delay,
+fresh uncached exact-version installation of both packages from the public
+PyPI simple index succeeded on Windows and in workstation Docker on Python
+3.11. These checks used no local wheels or file-URL substitutions. The fresh
+index-installed Windows environment then passed all 1,584 SDK tests with real
+Postgres/Redis, all 12 Strands tests and the production enforcement probe.
+Earlier file-URL verification is recorded separately above.
 
 | Python registry distribution | SHA-256 |
 |---|---|
@@ -118,9 +118,9 @@ advisories.
 
 ## Boundaries
 
-- A packed-artifact test is not a registry install. npm clean-install checks
-  and public Python-file installation passed after publication; normal PyPI
-  index-install verification remains pending as recorded above.
+- A packed-artifact test is not a registry install. npm clean-install checks,
+  public Python-file installation and normal pinned PyPI index installs passed
+  after publication as recorded above.
 - Local JWT verification does not imply current revocation. Gateway,
   adapters and default Strands verification remain local unless explicitly
   combined with current-state enforcement.

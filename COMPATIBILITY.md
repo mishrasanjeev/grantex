@@ -11,7 +11,7 @@ This repository uses package-specific versions; there is no monorepo-wide SDK or
 | --- | --- | --- |
 | Repository changelog | v0.3.12 | Latest top-level release entry in `CHANGELOG.md`. |
 | TypeScript SDK | @grantex/sdk 0.8.0 published | Adds hosted passkey enrollment and account irregularity response policy clients; retains EVM payment responses and bounded refresh recovery. npm integrity and clean-install verified. |
-| Python SDK | grantex 0.7.0 published | Audience and trusted-amount enforcement with default online revocation; wheel/sdist hashes, public-file tests and production probes verified. Normal index propagation pending. No automatic x402 HTTP wrapper. |
+| Python SDK | grantex 0.7.0 published | Audience and trusted-amount enforcement with default online revocation; wheel/sdist hashes, public-file tests, normal pinned index installs and production probes verified. No automatic x402 HTTP wrapper. |
 | Go SDK | github.com/mishrasanjeev/grantex-go v0.4.1 published | Adds hosted passkey enrollment and account irregularity response policy clients; retains typed EVM responses and bounded refresh recovery. Public proxy, downloaded-module tests and race suite verified. Go 1.26.1 is required; no automatic x402 HTTP wrapper. |
 | x402 | @grantex/x402 0.4.1 published | Retains opt-in request-bound Base USDC 402/sign/retry and layered wallet governance; npm integrity and fresh-install verified. Custody and trusted RPC remain operator-provisioned. |
 | OpenAPI | 0.5.0 | Repository API contract including layered prepaid-wallet governance; independent of the deployed/public snapshot. |
@@ -20,7 +20,7 @@ This repository uses package-specific versions; there is no monorepo-wide SDK or
 
 ## Package Versions
 
-The repository contains 34 packages under `packages/`. Each row maps a directory to its artifact name and repository version. A `published` status means the exact version has been verified on its public registry; other rows describe the package's role without claiming registry publication. Python public-file tests passed; normal PyPI index-install verification remains pending propagation.
+The repository contains 34 packages under `packages/`. Each row maps a directory to its artifact name and repository version. A `published` status means the exact version has been verified on its public registry; other rows describe the package's role without claiming registry publication. Python public-file tests and normal pinned PyPI index installations passed.
 
 | # | Directory | Published name | Version | Status |
 | ---: | --- | --- | ---: | --- |
@@ -37,7 +37,7 @@ The repository contains 34 packages under `packages/`. Each row maps a directory
 | 11 | `packages/crewai` | grantex-crewai | 0.1.7 | Adapter |
 | 12 | `packages/openai-agents` | grantex-openai-agents | 0.1.6 | Adapter |
 | 13 | `packages/google-adk` | grantex-adk | 0.1.6 | Adapter |
-| 14 | `packages/strands-py` | grantex-strands | 0.2.0 | Published; public-wheel tests passed; index propagation pending |
+| 14 | `packages/strands-py` | grantex-strands | 0.2.0 | Published; public-wheel tests and normal pinned index installs passed |
 | 15 | `packages/strands` | @grantex/strands | 0.2.0 | Published; installed-tool enforcement checked |
 | 16 | `packages/express` | @grantex/express | 0.1.5 | Middleware |
 | 17 | `packages/fastapi` | grantex-fastapi | 0.1.5 | Middleware |
@@ -66,8 +66,7 @@ The repository contains 34 packages under `packages/`. Each row maps a directory
   for upstream grant-state enforcement. Memory storage remains evaluation-only.
 - **Current SDK enforcement:** Node.js 22.12+ is required for changed npm
   packages. Local verification is not current-state enforcement; legacy aliases
-  remain enabled until explicitly disabled. Python public-file tests passed,
-  but normal index installation remains pending registry propagation.
+  remain enabled until explicitly disabled.
 
 ## Release boundaries
 

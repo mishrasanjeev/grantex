@@ -264,10 +264,9 @@ See [release limitations](https://docs.grantex.dev/release-status#known-limitati
 | Strands TypeScript | `@grantex/strands` `0.2.0` | `0.2.0` | `npm install @grantex/strands@0.2.0 @grantex/sdk@0.8.0` |
 | Strands Python | `grantex-strands` `0.2.0` | `0.2.0` | `python -m pip install grantex-strands==0.2.0 grantex==0.7.0` |
 
-Python public-file installations and registry hashes are verified. Normal
-pinned PyPI index installation is still pending propagation in workstation
-checks; see the [validation report](https://docs.grantex.dev/sdk-release-validation)
-before promoting a Python deployment.
+Python registry hashes, public-file tests and normal pinned PyPI index
+installations are verified on the workstation and in Docker. See the
+[validation report](https://docs.grantex.dev/sdk-release-validation).
 
 > **Deployment responsibilities:** MCP Auth `3.0.0` supports durable shared
 > storage, rendered consent and corrected code handoff. Configure shared state,
