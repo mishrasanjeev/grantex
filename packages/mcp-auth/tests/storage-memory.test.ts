@@ -46,13 +46,13 @@ describe('createMcpAuthServer storage requirement', () => {
 
   it('rejects a storage object that does not implement the interface', async () => {
     await expect(
-      createMcpAuthServer({ ...base, storage: { kind: 'broken', getClient: async () => undefined } } as unknown as McpAuthConfig),
+      createMcpAuthServer({ resolvePrincipal: async () => ({ principalId: 'principal-1' }), ...base, storage: { kind: 'broken', getClient: async () => undefined } } as unknown as McpAuthConfig),
     ).rejects.toThrow(/does not implement/);
   });
 
   it('names the removed 2.x store options', async () => {
     await expect(
-      createMcpAuthServer({ ...base, storage: new InMemoryStorage(), codeStore: {} } as unknown as McpAuthConfig),
+      createMcpAuthServer({ resolvePrincipal: async () => ({ principalId: 'principal-1' }), ...base, storage: new InMemoryStorage(), codeStore: {} } as unknown as McpAuthConfig),
     ).rejects.toThrow(/codeStore was removed in 3\.0/);
   });
 });

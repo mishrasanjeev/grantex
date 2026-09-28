@@ -32,6 +32,11 @@ on:
         required: true
         default: false
         type: boolean
+      publish_mcp_auth:
+        description: 'Publish only validated MCP Auth (do not republish unchanged integrations)'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -48,7 +53,7 @@ jobs:
       - name: Validate confirmation
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
-          PUBLISH: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_pypi || inputs.publish_go || inputs.publish_integrations }}
+          PUBLISH: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_pypi || inputs.publish_go || inputs.publish_integrations || inputs.publish_mcp_auth }}
         run: |
           test "$CONFIRMATION" = 'RELEASE_PRIMARY_SDKS'
           if [ "$PUBLISH" = 'true' ]; then
@@ -124,9 +129,17 @@ jobs:
           PUBLISH_X402: ${{ inputs.publish_x402 }}
           PUBLISH_PY: ${{ inputs.publish_pypi }}
           PUBLISH_INTEGRATIONS: ${{ inputs.publish_integrations }}
+          PUBLISH_MCP_AUTH: ${{ inputs.publish_mcp_auth }}
         run: |
           set -euo pipefail
           fail=0
+          if [ "$PUBLISH_MCP_AUTH" = 'true' ]; then
+            version=$(node -p "require('./packages/mcp-auth/package.json').version")
+            if npm view "@grantex/mcp-auth@$version" version >/dev/null 2>&1; then
+              echo "::error::@grantex/mcp-auth@$version is already published"
+              fail=1
+            fi
+          fi
           if [ "$PUBLISH_SDK" = 'true' ] && npm view "@grantex/sdk@$SDK" version >/dev/null 2>&1; then
             echo "::error::@grantex/sdk@$SDK is already published; bump the version in its package.json"
             fail=1
@@ -212,6 +225,7 @@ jobs:
           (cd packages/mcp-auth && npm run test:integration && npx playwright install --with-deps chromium && npm run test:e2e)
           npm install --prefix "$RUNNER_TEMP/grantex-sdk-consumer" --ignore-scripts release-artifacts/npm/*.tgz
           node scripts/verify-enforcement-artifacts.mjs "$RUNNER_TEMP/grantex-sdk-consumer"
+          node scripts/verify-mcp-consent-artifact.mjs "$RUNNER_TEMP/grantex-sdk-consumer"
 
       - name: Verify the Python SDK
         working-directory: packages/sdk-py
@@ -250,7 +264,7 @@ jobs:
   npm:
     name: Publish npm SDKs
     needs: verify
-    if: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_integrations }}
+    if: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_integrations || inputs.publish_mcp_auth }}
     runs-on: ubuntu-latest
     environment: sdk-release
     permissions:
@@ -284,6 +298,9 @@ jobs:
           for package in cli gateway adapters strands mcp-auth; do
             npm publish release-artifacts/npm/grantex-$package-*.tgz --access public
           done
+      - name: Publish only MCP Auth
+        if: ${{ inputs.publish_mcp_auth && !inputs.publish_integrations }}
+        run: npm publish release-artifacts/npm/grantex-mcp-auth-*.tgz --access public
 
   pypi:
     name: Publish Python SDK

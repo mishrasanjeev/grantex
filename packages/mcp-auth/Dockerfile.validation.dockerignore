@@ -1,0 +1,15 @@
+**
+!packages/
+!packages/sdk-ts/
+!packages/sdk-ts/**
+!packages/mcp-auth/
+!packages/mcp-auth/**
+!docs/
+!docs/mcp-auth.md
+!spec/
+!spec/examples/
+!spec/examples/grant-token-0.6.issued.json
+**/node_modules
+**/dist
+**/.env*
+**/test-results

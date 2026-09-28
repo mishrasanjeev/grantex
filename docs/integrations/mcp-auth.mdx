@@ -1,15 +1,19 @@
 ---
 title: "MCP Authorization"
-description: "Install MCP Auth 3 with durable state, consent, resource binding and explicit revocation enforcement."
+description: "Install MCP Auth 4 with authenticated human consent, durable state, resource binding and issuer-side current authority."
 ---
 
 ## Installation
 
-Published release: `@grantex/mcp-auth@3.0.0`. Node.js 22.12+ and SDK 0.8+
+Currently published baseline: `@grantex/mcp-auth@3.0.0`. The security upgrade
+below describes 4.0.0; confirm its publication before a registry installation.
+
+Deployment profile: `@grantex/mcp-auth@4.0.0`; confirm publication in
+[release status](/release-status). Node.js 22.12+ and SDK 0.8+
 are required; Node.js 24 LTS is recommended.
 
 ```bash
-npm install @grantex/mcp-auth@3.0.0 @grantex/sdk@0.8.0 pg
+npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.0 pg
 ```
 
 Read [release validation](/sdk-release-validation) and the
@@ -17,7 +21,7 @@ Read [release validation](/sdk-release-validation) and the
 
 ## Authorization and deployment
 
-Version 3 supplies OAuth 2.1 endpoints, PKCE S256, protected-resource
+Version 4 supplies OAuth 2.1 endpoints, PKCE S256, protected-resource
 metadata, resource/audience binding, rendered consent, single-use codes,
 refresh rotation and explicit token revocation configuration. The
 [complete deployment guide](/mcp-auth) contains executable storage,
@@ -25,16 +29,16 @@ consent, middleware, lifecycle-hook and decision-grant examples.
 
 1. Pin the canonical HTTPS issuer and protected resource.
 2. Provision shared Postgres or Redis state and apply its migrations before scaling.
-3. Configure authenticated principal handoff; live Grantex consent still requires a passkey.
+3. Supply `resolvePrincipal(request)` from a verified host session; live Grantex consent still requires a passkey. Approval and callback reject logout or a changed principal.
 4. Connect resource middleware to the authorization server's revocation storage.
-5. Enforce upstream agent-specific grant and ancestor state before protected tool execution.
+5. Supply `currentGrant: grantexCurrentGrantVerifier(grantex)` to check current issuer authority before protected execution. Mark sensitive tools decision-required and consume action-bound human decisions.
 6. Test your client, proxy, storage restart/failure and principal handoff before production.
 
 Memory storage remains evaluation-only. `revocations: 'none'` is a warned
 opt-out, not revocation enforcement. Token revocation storage is not every
-upstream grant-state check; a consent page does not independently establish
-principal identity. Independent cross-vendor certification is not claimed.
+upstream grant-state check: the online verifier is also required. The host owns
+verified principal login. Independent cross-vendor certification is not claimed.
 
 See [MCP Auth Server](/features/mcp-auth-server) for the request flow and
 operator responsibilities. The six immutable 2.0.2 limitations remain in
-[the historical guide](/legacy/mcp-auth-server-2), not the version 3 deployment profile.
+[the historical guide](/legacy/mcp-auth-server-2), not the version 4 deployment profile.

@@ -119,6 +119,7 @@ describe('revoke endpoint', () => {
     const issuer = `http://127.0.0.1:${jwksPort}`;
 
     app = await createMcpAuthServer({
+      resolvePrincipal: async () => ({ principalId: 'principal-1' }),
       grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
       agentId: 'agent-1',
       scopes: ['read', 'write'],
@@ -316,6 +317,7 @@ describe('revoke endpoint', () => {
         createdAt: new Date().toISOString(),
       });
       const appNoIssuer = await createMcpAuthServer({
+        resolvePrincipal: async () => ({ principalId: 'principal-1' }),
         grantex: mockGrantex as unknown as McpAuthConfig['grantex'],
         agentId: 'agent-1',
         scopes: ['read'],
