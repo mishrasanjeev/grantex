@@ -9,7 +9,7 @@ description: "Public organization directory with DID identity and DNS ownership 
 The Grantex Trust Registry is a public, searchable directory of organizations that publish AI agents. Organization records use DIDs as stable identifiers and can prove domain ownership through a DNS TXT challenge.
 
 <Info>
-Search and organization-detail endpoints are public. Registration and DNS verification require a developer API key.
+Search and organization-detail endpoints are public. Registration and DNS verification require a developer API key. The full listing of registry records, across developers, can be restricted to the service administrator credential, and operators should turn that on.
 </Info>
 
 <Warning>
@@ -84,6 +84,19 @@ curl -X POST "https://api.grantex.dev/v1/registry/orgs/$ORG_ID/verify-dns" \
 
 Successful verification sets the organization to `verified`, records `dns-txt`, clears the stored token hash, and adds the `dns-verified` marker.
 
+## Operator Listing
+
+`GET /v1/trust-registry` returns the 100 newest registry records of every developer, verified or not. Because it crosses tenants, it is meant for the platform operator, but by default any developer API key can still read it, under that developer's plan budget.
+
+Set `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` (read when the service starts) to restrict it. Operators should turn this on. With it on, the listing takes the service administrator credential (`ADMIN_API_KEY`, as `Authorization: Bearer <key>`), never a developer API key, and is limited to 20 calls a minute per address:
+
+- A developer API key, a wrong key or no key is refused with `401 UNAUTHORIZED`, and nothing is read.
+- While `ADMIN_API_KEY` is not configured, every call is refused with `503 SERVICE_UNAVAILABLE`.
+
+Off, the default, and any value other than exactly `true`, keep the existing developer-API-key behaviour unchanged.
+
+To look up one organization, use the public detail endpoints above.
+
 ## Endpoint Summary
 
 | Method | Path | Authentication | Purpose |
@@ -93,6 +106,7 @@ Successful verification sets the organization to `verified`, records `dns-txt`, 
 | `GET` | `/v1/registry/orgs/:did/jwks` | None | Read organization public keys |
 | `POST` | `/v1/registry/orgs` | Developer API key | Register an organization |
 | `POST` | `/v1/registry/orgs/:orgId/verify-dns` | Developer API key | Verify its DNS challenge |
+| `GET` | `/v1/trust-registry` | Developer API key; admin key (`ADMIN_API_KEY`) when `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` | List every developer's records (operator) |
 
 ## Related
 

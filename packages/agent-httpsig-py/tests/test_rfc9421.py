@@ -86,6 +86,31 @@ def test_section_2_5_errors(request_: HttpRequest) -> None:
         signature_base_for(request_, "sig1")
 
 
+@pytest.mark.parametrize(
+    "name,header",
+    [
+        ("bad header", "Bad Header"),
+        ("x:y", "X:Y"),
+        ("x(y)", "X(Y)"),
+        ("x/y", "X/Y"),
+        ("", "X-Empty"),
+        ("X-Name", "X-Name"),
+    ],
+)
+def test_covered_field_must_be_a_lowercased_field_name(name: str, header: str) -> None:
+    # RFC 9421 section 2.1; RFC 9110 section 5.1: field-name = token;
+    # section 5.6.2: token = 1*tchar.
+    request = _request('sig1=("%s");created=1' % name, (header, "v"))
+    with pytest.raises(AgentHttpSigError, match="invalid field name"):
+        signature_base_for(request, "sig1")
+
+
+def test_every_tchar_is_allowed_in_a_field_name() -> None:
+    name = "x!#$%&'*+-.^_`|~09"
+    base = signature_base_for(_request('sig1=("%s");created=1' % name, (name, "v")), "sig1")
+    assert base == '"%s": v\n"@signature-params": ("%s");created=1' % (name, name)
+
+
 def test_label_must_be_in_signature_input() -> None:
     with pytest.raises(AgentHttpSigError):
         signature_base_for(_request('sig1=("@method");created=1'), "sig2")

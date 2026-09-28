@@ -24,6 +24,8 @@ try {
     compact: presentation,
     // Issuer keys come only from your own trust configuration, never from the token.
     issuerKeys: (issuer) => registry.issuerKeys(issuer),
+    // Revoked, suspended or unresolvable status is refused (passport_revoked, status_stale).
+    statusResolver: (uri, idx) => statusLists.status(uri, idx),
     keyBinding: { aud: 'https://merchant.example', nonce },
     paymentsRails: true,
   });
@@ -43,14 +45,19 @@ private key members, a non-P-256 `cnf` key when `paymentsRails` is set, a
 header that names a key (`jku`, `x5u`, `jwk`, `x5c`), and every Key Binding
 failure. EdDSA is accepted only with `allowEdDSA: true`.
 
-`verifyPassport` does **not** check revocation. It checks only that `status` is a Token
-Status List reference; it does not fetch the status list, so a revoked or
-suspended passport passes it. Before you accept a passport, resolve
-`passport.status.status_list` (`uri`, `idx`) with your own status-list
-component
-([draft-ietf-oauth-status-list](https://datatracker.ietf.org/doc/draft-ietf-oauth-status-list/))
-and refuse with `passport_revoked` when the value is not `VALID`, or with
-`status_stale` when you have no fresh status list. See section 4 of the
+`verifyPassport` requires a status decision and fails closed without one. Pass
+`statusResolver`, a function `(uri, idx) => 'valid' | 'invalid' | 'suspended'`
+(sync or async) backed by your own status-list component
+([draft-ietf-oauth-status-list](https://datatracker.ietf.org/doc/draft-ietf-oauth-status-list/)
+sections 7.1 and 8.3: it fetches the Status List Token, verifies it with the
+issuer's keys from your trust configuration and reads the value at `idx`).
+`verifyPassport` calls it last, after every other rule holds, and refuses
+`'invalid'` and `'suspended'` with `passport_revoked`, and a resolver that
+throws or answers anything else with `status_stale`. If you check status
+yourself, pass `statusCheckedBy: 'caller'` instead; you must then resolve
+`passport.status.status_list` before accepting the passport. With neither
+option, or both, `verifyPassport` rejects with a `TypeError`. The result's
+`statusCheckedBy` says which applied. See section 4 of the
 [spec](../../spec/agent-passport-1.0.md).
 
 ## Present selected claims

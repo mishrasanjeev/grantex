@@ -66,7 +66,8 @@ export async function signAndVerify(agentPassport: string, agentGrant: string): 
 
 `verify()` answers a request that fails with `{ ok: false, code, reason }`.
 It throws when the key resolver or the nonce store fails; refuse the request
-then. `InMemoryNonceStore` is for one process and for tests: a deployment
+then. It also throws when `now` is not a finite, non-negative number of
+seconds. `InMemoryNonceStore` is for one process and for tests: a deployment
 with several instances needs a shared, atomic store (see section 4.4 of the
 specification).
 

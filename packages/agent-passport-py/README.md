@@ -26,6 +26,8 @@ try:
         presentation,
         # Issuer keys come only from your own trust configuration, never from the token.
         issuer_keys=registry.issuer_keys,
+        # Revoked, suspended or unresolvable status is refused (passport_revoked, status_stale).
+        status_resolver=status_lists.status,
         key_binding=KeyBindingRequirement(aud="https://merchant.example", nonce=nonce),
         payments_rails=True,
     )
@@ -43,14 +45,19 @@ private key members, a non-P-256 `cnf` key when `payments_rails` is set, a
 header that names a key (`jku`, `x5u`, `jwk`, `x5c`), and every Key Binding
 failure. EdDSA is accepted only with `allow_eddsa=True`.
 
-`verify_passport` does **not** check revocation. It checks only that `status` is a Token
-Status List reference; it does not fetch the status list, so a revoked or
-suspended passport passes it. Before you accept a passport, resolve
-`passport.status["status_list"]` (`uri`, `idx`) with your own status-list
-component
-([draft-ietf-oauth-status-list](https://datatracker.ietf.org/doc/draft-ietf-oauth-status-list/))
-and refuse with `passport_revoked` when the value is not `VALID`, or with
-`status_stale` when you have no fresh status list. See section 4 of the
+`verify_passport` requires a status decision and fails closed without one. Pass
+`status_resolver`, a function `(uri, idx) -> "valid" | "invalid" | "suspended"`
+backed by your own status-list component
+([draft-ietf-oauth-status-list](https://datatracker.ietf.org/doc/draft-ietf-oauth-status-list/)
+sections 7.1 and 8.3: it fetches the Status List Token, verifies it with the
+issuer's keys from your trust configuration and reads the value at `idx`).
+`verify_passport` calls it last, after every other rule holds, and refuses
+`"invalid"` and `"suspended"` with `passport_revoked`, and a resolver that
+raises or answers anything else with `status_stale`. If you check status
+yourself, pass `status_checked_by="caller"` instead; you must then resolve
+`passport.status["status_list"]` before accepting the passport. With neither
+option, or both, `verify_passport` raises `ValueError`. The result's
+`status_checked_by` says which applied. See section 4 of the
 [spec](../../spec/agent-passport-1.0.md).
 
 ## Present selected claims

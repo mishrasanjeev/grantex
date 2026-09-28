@@ -1434,6 +1434,7 @@ the pull request that references it.
   limit answers 429 and that another address is unaffected. Owner: the
   registry maintainers. Exit criterion: every unauthenticated registry read
   has a route limit, with tests.
+
 ## G-85 — The single-key token paths do not read the agent key history
 
 - **Found:** agent key history work (Agent Trust Registry, PRD §8.8),
@@ -1475,11 +1476,38 @@ the pull request that references it.
   after a compromise is closed: `compromised_agent_keys` records every
   compromised thumbprint, outlives the agent, and is checked on every path
   that writes a key.)
+  after a compromise is closed on every path that writes the history:
+  `compromised_agent_keys` records every compromised thumbprint and outlives
+  the agent. `POST` and `PATCH /v1/agents` check it only with the history
+  mirror on; see G-87.)
 - **Impact:** narrow. It needs one key to move between developers and then be
   reported compromised while grants from the earlier holder are still active.
 - **Proposal:** decide with the owner whether a compromise should revoke
   grants bound to the key in every tenant, or whether a released key should
   stay reserved to its developer.
+
+## G-87 — With the history mirror off, the agents routes do not consult the key history
+
+- **Found:** review of the agent key history work, 2026-09-28.
+- **What:** mirroring the key `POST` and `PATCH /v1/agents` write into
+  `agent_keys` is behind `AGENT_KEY_HISTORY_MIRROR_ENABLED`, default off, so
+  those routes keep their earlier behaviour. With it off they do not add the
+  key to the history, do not end the replaced key there, and do not refuse a
+  key another agent holds in its history, a key in `compromised_agent_keys`,
+  or a non-P-256 key for an agent that declares a payments rail. The history
+  of an agent whose registered key changed through them can therefore list a
+  key it no longer registers as pending or active, and a compromised key can
+  be registered again as `publicJwk`.
+- **Impact:** a key registered again that way is still refused by the key
+  routes and by delegation (`routes/delegate.ts` checks
+  `compromised_agent_keys` under the cascade lock), but `POST /v1/token` and
+  the OAuth profile bind grants to the registered key and do not check it
+  (G-85).
+- **Proposal:** turn the flag on once its exit criterion is green (the flag-on
+  suite in `tests/agent-keys-postgres.integration.test.ts`) and the owner has
+  approved the runbook; then make it the default in a release that records the
+  flip as a breaking change with the flag as the opt-out.
+
 ## G-90 — The grant credential status list is served unsigned, as a superseded format
 
 - **Found:** registry attestation-acceptance status lists (Stage 1), 2026-09-28,
@@ -1523,6 +1551,7 @@ the pull request that references it.
   range, and return `valid: false` otherwise; test each of the three cases.
   Behind a flag that defaults off, since it can turn today's `valid: true`
   into a denial.
+
 ## G-95 — The agent request signature does not cover the query string
 
 - **Found:** agent request signing libraries (S1-4), 2026-09-28, while
@@ -1559,6 +1588,7 @@ the pull request that references it.
   that consumes trust statements (Phase 1 attestation checks) refuse a
   statement whose subject is not the signature's `keyid` or Agent Passport,
   with `key_binding_mismatch`.
+
 ## G-100 — The auth service's SD-JWT verifier does not follow RFC 9901 section 7.1
 
 - **Found:** building the Agent Passport verifier (`packages/agent-passport`),
@@ -1600,6 +1630,59 @@ the pull request that references it.
   `typ`, and change it behind a flag with the SDKs' format string, recorded in
   `CHANGELOG.md`. The Agent Passport profile is not affected: it already uses
   `dc+sd-jwt`.
+
+## G-105 — The public registry search lists unverified, self-asserted organizations
+
+- **Found:** trust registry listing fix (`GET /v1/trust-registry` can be made
+  to take the admin key), 2026-09-28, reviewing the other registry reads.
+- **What:** `GET /v1/registry/orgs` is public (`skipAuth`) and returns every
+  `trust_registry` row, including `basic` records that were registered with a
+  developer API key and never proved control of their domain. The name and
+  description are whatever the registrant typed, and `verified=false` lists
+  exactly those records. With no filter a caller can page through the whole
+  registry (up to 100 a page, with a total count). `GET /v1/registry/orgs/:did`
+  and the legacy `GET /v1/trust-registry/:orgDID` likewise answer for an
+  unverified record. The `GET /v1/registry/orgs/:did` detail also includes
+  the security and DPO contacts the registrant supplied; the legacy route
+  returns no contact fields. The routes carry only the service-wide per-address
+  limit, not a limit of their own.
+- **Impact:** a public lookup that should answer with the minimum a relying
+  party needs about an organization that has proved something instead
+  publishes self-asserted records. Anyone can register `did:web:` for a
+  domain they do not control, under any display name, and have it appear in
+  search next to verified organizations (`verificationLevel: basic` is the
+  only difference), and the whole registry, contacts included, can be
+  enumerated. The behaviour is unchanged by the listing fix, which kept these
+  routes as they were.
+- **Proposal:** behind a flag that defaults off, have the public search and
+  detail return only records that completed verification (or return an
+  unverified record's DID and `verificationLevel` alone), leave the contacts
+  out of the public detail, and give the public reads a per-client rate limit
+  of their own; the registrant keeps full access to its own records through
+  an authenticated route.
+
+## G-106 — The cross-tenant trust registry listing stays open to developer keys until the flag is turned on
+
+- **Found:** trust registry listing fix, 2026-09-28, when the admin-key check
+  on `GET /v1/trust-registry` was put behind a flag that defaults off, as
+  `AGENTS.md` ("Feature flags") requires for a behaviour change on an existing
+  path.
+- **What:** `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED` defaults to off, and only
+  the exact value `true` turns the check on. While it is off,
+  `GET /v1/trust-registry` still takes any developer API key and returns the
+  100 newest registry records of every developer, unverified ones included.
+- **Risk:** on a deployment that has not set the flag, one tenant can list
+  every other tenant's registry records (DIDs, domains, names, descriptions,
+  trust levels and verification state), including organizations that have not
+  published themselves as verified. The route is documented as an operator
+  route, so a deployment may assume it is already restricted.
+- **Fix:** operators set `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` once
+  their callers have moved to `GET /v1/registry/orgs` and
+  `GET /v1/registry/orgs/:did`, or to `ADMIN_API_KEY`; then, in a release
+  recorded in `CHANGELOG.md` as a breaking change, make the check on by
+  default with `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=false` as the explicit
+  opt-out. Owner: the auth-service maintainers. Exit criterion: flag default
+  flipped with an explicit opt-out once operators have moved.
 
 ## G-111 — An agent's provider is inferred from its developer
 
