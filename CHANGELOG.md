@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Dashboard passkey removal
+- Send JSON content type only when the dashboard request has a JSON body.
+  Bodyless DELETE requests now reach the API instead of failing its JSON parser.
+- Add a hosted-dashboard Chromium regression covering login, enrollment-link
+  issuance, passkey registration, credential listing and confirmed removal.
+
 ### Passkey sandbox/live parity and retained credential history
 - Preserve an interactively selected principal before replacing the hosted
   consent form, so live OAuth approval and denial can complete WebAuthn.
