@@ -45,7 +45,14 @@ let revoked = false;
 let statusUnavailable = false;
 let statusCalls = 0;
 let userAgent;
+let upstreamCalls = 0;
 const server = createServer((req, res) => {
+  if (req.url.startsWith('/upstream/')) {
+    upstreamCalls++;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
   if (req.url === '/.well-known/jwks.json') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ keys: [publicJwk] }));
@@ -71,7 +78,7 @@ try {
   const token = await new jose.SignJWT({
     scope: 'tool:payments:write:*:capped:100',
     'urn:grantex:grant': { agent_did: 'did:grantex:ag_release', developer_id: 'dev_release', grant_id: 'grnt_release', delegation_depth: 0 },
-  }).setProtectedHeader({ alg: 'RS256', kid: 'release-key', typ: 'grantex-grant+jwt' })
+  }).setProtectedHeader({ alg: 'RS256', kid: 'release-key', typ: 'at+jwt' })
     .setIssuer(issuer).setAudience(audience).setSubject('principal_release')
     .setJti('tok_release').setIssuedAt().setExpirationTime('5m').sign(key.privateKey);
   const call = { grantToken: token, connector: 'payments', tool: 'pay' };
@@ -97,15 +104,59 @@ try {
   assert.equal(await wrapped.invoke({ amount: 10 }), 1);
   await assert.rejects(wrapped.invoke({}), /amount/i);
   assert.equal(executions, 1, 'Missing amount must prevent side effects');
+  const strands = await load('@grantex/strands');
+  const { z } = await load('zod');
+  let strandExecutions = 0;
+  const strandTool = strands.createGrantexTool({
+    name: 'pay', description: 'Synthetic payment', inputSchema: z.object({}),
+    grantToken: token, requiredScope: 'tool:payments:write', online: true,
+    client, connector: 'payments', amount: 10, audience,
+    callback: () => ++strandExecutions,
+  });
+  assert.equal(await strandTool.invoke({}), 1, 'Real installed Strands tool invocation');
+  const wrongStrand = strands.createGrantexTool({
+    name: 'pay', description: 'Synthetic payment', inputSchema: z.object({}),
+    grantToken: token, requiredScope: 'tool:payments:write', online: true,
+    client, connector: 'payments', amount: 10, audience: 'https://other.example',
+    callback: () => ++strandExecutions,
+  });
+  await assert.rejects(wrongStrand.invoke({}));
+  assert.equal(strandExecutions, 1);
+  const adapters = await load('@grantex/adapters');
+  class ProbeAdapter extends adapters.BaseAdapter {
+    async probe(value) { return this.verifyAndCheckScope(value, 'tool:payments:write'); }
+  }
+  const badAdapter = new ProbeAdapter({ jwksUri: `${issuer}/.well-known/jwks.json`, credentials: 'synthetic', audience: 'https://other.example' });
+  await assert.rejects(badAdapter.probe(token), (err) => err.code === 'AUDIENCE_MISMATCH');
+  const noAudienceAdapter = new ProbeAdapter({ jwksUri: `${issuer}/.well-known/jwks.json`, credentials: 'synthetic' });
+  await assert.rejects(noAudienceAdapter.probe(token), (err) => err.code === 'AUDIENCE_UNCONFIGURED');
+  const gateway = await load('@grantex/gateway');
+  const gatewayServer = gateway.createGatewayServer({
+    upstream: `${issuer}/upstream`, jwksUri: `${issuer}/.well-known/jwks.json`,
+    audience: 'https://other.example', port: 0,
+    routes: [{ path: '/probe', methods: ['GET'], requiredScopes: [] }],
+  });
+  try {
+    const response = await gatewayServer.inject({ method: 'GET', url: '/probe', headers: { authorization: `Bearer ${token}` } });
+    assert.equal(response.statusCode, 401);
+    assert.equal(response.json().error, 'AUDIENCE_MISMATCH');
+    assert.equal(upstreamCalls, 0);
+  } finally { await gatewayServer.close(); }
+  const guard = mcp.createMcpResourceGuard({ issuer, audience, jwksUri: `${issuer}/.well-known/jwks.json`, revocations: { isTokenRevoked: async () => revoked } });
+  const guardedRequest = { method: 'GET', header: (name) => name.toLowerCase() === 'authorization' ? `Bearer ${token}` : undefined };
+  assert.equal((await guard(guardedRequest)).ok, true);
   revoked = true;
   const denial = await client.enforce({ ...call, amount: 10 });
   assert.equal(denial.allowed, false);
   assert.equal(denial.reasonCode, 'grant_revoked');
+  await assert.rejects(strandTool.invoke({}));
+  assert.equal(strandExecutions, 1);
+  assert.equal((await guard(guardedRequest)).ok, false, 'Packaged MCP guard rejects recorded revocation');
   statusUnavailable = true;
   const unavailable = await client.enforce({ ...call, amount: 10 });
   assert.equal(unavailable.allowed, false);
   assert.equal(unavailable.subReason, 'status_unavailable');
-  console.log('Enforcement artifact verification passed: exact versions, imports, audience, amount, side-effect prevention, default revocation and outage refusal.');
+  console.log('Enforcement artifact verification passed: exact versions, imports, audience, amount, side-effect prevention, default revocation, outage refusal and real installed integration guards.');
 } finally {
   await new Promise((done) => server.close(done));
 }
