@@ -412,7 +412,7 @@ export function createMcpApp(options: {
 ```
 
 `requireMcpAuth` (Express; the Hono version takes the same options) requires
-`audience` and answers:
+`audience` and `revocations`, and answers:
 
 | Situation | Response |
 |---|---|
@@ -471,8 +471,17 @@ never act on a call the guard did not check. Every refusal is reported to
 `onDenial` with a low-cardinality reason (`missing_token`, `invalid_token`,
 `grant_revoked`, `insufficient_scope`, `tool_not_granted`,
 `manifest_unknown_tool`, `body_not_parsed`, `decision_required`,
-`decision_invalid`, ...) for metrics. Creating the middleware without
-`revocations` logs a warning. The MCP server must also never forward the
+`decision_invalid`, ...) for metrics.
+
+From 3.0.0 (the next release) the guard refuses to start without a revocation
+configuration: `requireMcpAuth`, the Hono version and
+`createMcpResourceGuard()` throw when `revocations` is missing, or is neither
+an object with an `isTokenRevoked(jti)` function nor `'none'`. A guard that
+cannot see revocations accepts a revoked token until it expires, so running
+without one has to be a stated choice: `revocations: 'none'` is the explicit
+opt-out. It starts, logs a warning, and neither checks revocation nor
+requires a `jti`, as a 2.x guard without `revocations` did. The MCP server
+must also never forward the
 client's access token to upstream APIs; the guard exposes the verified grant
 on the request, not a token to pass on.
 `filterToolsForGrant()` can also hide ungranted tools from `tools/list`.
@@ -636,7 +645,7 @@ tests/conformance`.
 | Any requested scope forwarded | Scopes outside `scopes`/`manifests` are `invalid_scope`. |
 | Any redirect URI at `/register` | https or loopback http only. |
 | `allowedRedirectUris` (not enforced) | Removed. |
-| `requireMcpAuth({ issuer })` | `audience` is required; responses carry `WWW-Authenticate`. Add `revocations: storage` and `tools` to enforce revocation and tool grants. |
+| `requireMcpAuth({ issuer })` | `audience` and `revocations` are required; responses carry `WWW-Authenticate`. Pass `revocations: storage` (or `revocations: 'none'` to opt out explicitly) and `tools` to enforce revocation and tool grants. |
 | `requireMcpAuth`, `/introspect` and `/revoke` accepted RS256, ES256, PS256 and EdDSA; `algorithms` could name any algorithm | RS256 and ES256 only. `algorithms` naming anything else throws at start-up. `typ` must be `at+jwt` (absent only on a pre-0.6 token). |
 | `requireMcpAuth` read `scp`, `agt`, `dev`, `grnt` and `delegationDepth` only | Reads `scope` and `urn:grantex:grant` first, the legacy claims as a fallback; refuses a 0.6 token whose claims disagree. |
 | Upstream exchange without `redirectUri` | Sends the callback URL, which Grantex requires. |

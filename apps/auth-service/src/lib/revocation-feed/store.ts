@@ -255,13 +255,25 @@ export async function revocationStatus(
   return { status: 'active', revoked: false, grantId: row.id, jti, expiresAt };
 }
 
-/** Delete entries whose credential expired longer than `retentionHours` ago. */
-export async function pruneFeed(sql: Sql, retentionHours: number): Promise<number> {
+/**
+ * Delete at most `limit` entries whose credential expired longer than
+ * `retentionHours` ago, oldest first, and return how many went.
+ *
+ * One bounded statement: the subquery walks `idx_grant_revocation_events_created`
+ * (migration 112) and stops after `limit` matches, so a large backlog is never
+ * removed in one long transaction. The caller loops (FINDINGS G-66).
+ */
+export async function pruneFeedBatch(sql: Sql, retentionHours: number, limit: number): Promise<number> {
   const rows = await sql<{ deleted: string }[]>`
     WITH removed AS (
       DELETE FROM grant_revocation_events
-       WHERE created_at < NOW() - make_interval(hours => ${retentionHours})
-         AND (expires_at IS NULL OR expires_at < NOW() - make_interval(hours => ${retentionHours}))
+       WHERE seq IN (
+         SELECT seq FROM grant_revocation_events
+          WHERE created_at < NOW() - make_interval(hours => ${retentionHours})
+            AND (expires_at IS NULL OR expires_at < NOW() - make_interval(hours => ${retentionHours}))
+          ORDER BY created_at
+          LIMIT ${limit}
+       )
       RETURNING seq
     )
     SELECT COUNT(*)::text AS deleted FROM removed`;

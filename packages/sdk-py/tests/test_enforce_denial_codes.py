@@ -56,7 +56,7 @@ def verify() -> Iterator[MagicMock]:
 
 
 def _client(mode: str = "strict") -> Grantex:
-    c = Grantex(api_key="test-key", enforce_mode=mode)
+    c = Grantex(api_key="test-key", revocation_check="offline", enforce_mode=mode)
     c.load_manifest(ACME_KYB)
     return c
 
@@ -151,7 +151,7 @@ class TestDeclaredConstraintsFailClosed:
             tools={"case_decision": {"permission": "write", "requires_decision": True}},
         )
         manifest.tools["case_decision"] = Permission.READ
-        c = Grantex(api_key="test-key")
+        c = Grantex(api_key="test-key", revocation_check="offline")
         c.load_manifest(manifest)
         assert _codes(c.enforce("t", "acme_kyb", "case_decision")) == (
             False, DenialReason.MANIFEST_UNKNOWN_TOOL, ManifestSubReason.INVALID_DECLARATION)

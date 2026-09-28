@@ -53,6 +53,8 @@ import { MALFORMED_GRANT_CAPS, buildCapLimits, type BuildCapLimitsOptions } from
 import { ToolManifest, parseManifestJson, permissionCovers, type WouldDeny, type ToolSpec, type EnforceOptions, type EnforceResult, type WrapToolOptions, type EnforceMiddlewareOptions } from './manifest.js';
 import { verifyGrantToken } from './verify.js';
 import {
+  DEFAULT_REVOCATION_CHECK,
+  REVOCATION_CHECK_STRENGTH,
   RevocationFeed,
   isRevocationCheckMode,
   type CredentialRef,
@@ -89,6 +91,25 @@ function checkDecisionsMode(mode: unknown): 'enforce' | 'warn' {
 function checkRevocationCheck(mode: unknown): RevocationCheckMode {
   if (!isRevocationCheckMode(mode)) {
     throw new Error(`revocationCheck must be offline, online or feed, not ${JSON.stringify(mode)}`);
+  }
+  return mode;
+}
+
+/**
+ * The mode one `enforce()` call uses: the client's, or a stricter one. A
+ * per-call value may tighten the client's mode, never loosen it, so code that
+ * reaches `enforce()` cannot switch off what the deployment chose. A weaker
+ * value is refused with an error rather than quietly ignored: the caller
+ * asked for something it will not get, and must find out.
+ */
+function perCallRevocationCheck(configured: RevocationCheckMode, requested: unknown): RevocationCheckMode {
+  if (requested === undefined) return configured;
+  const mode = checkRevocationCheck(requested);
+  if (REVOCATION_CHECK_STRENGTH[mode] < REVOCATION_CHECK_STRENGTH[configured]) {
+    throw new Error(
+      `revocationCheck '${mode}' cannot loosen this client's revocationCheck '${configured}'; `
+      + 'a per-call value may only be as strict or stricter (offline < feed < online)',
+    );
   }
   return mode;
 }
@@ -256,7 +277,7 @@ export class Grantex {
     this.#enforceMode = (options as Record<string, unknown>)['enforceMode'] as 'strict' | 'permissive' ?? 'strict';
     this.#capsMeter = options.capsMeter;
     this.#capsMode = checkCapsMode(options.capsMode ?? 'enforce');
-    this.#revocationCheck = checkRevocationCheck(options.revocationCheck ?? 'offline');
+    this.#revocationCheck = checkRevocationCheck(options.revocationCheck ?? DEFAULT_REVOCATION_CHECK);
     this.#revocationFeedOptions = options.revocationFeed ?? {};
     if (this.#revocationCheck === 'feed') this.#feed().start();
     this.#decisionsMode = checkDecisionsMode(options.decisionsMode ?? 'enforce');
@@ -483,6 +504,9 @@ export class Grantex {
     const { grantToken, connector, tool, amount, caseId, costComponents, reserve = true, capsTenantId } = options;
     const capsMode = options.capsMode === undefined ? this.#capsMode : checkCapsMode(options.capsMode);
     const decisionsMode = options.decisionsMode === undefined ? this.#decisionsMode : checkDecisionsMode(options.decisionsMode);
+    // A per-call revocation check may only tighten the client's. Checked
+    // before anything else so a refused override has no side effects.
+    const revocationCheck = perCallRevocationCheck(this.#revocationCheck, options.revocationCheck);
     const expectedAudience = options.audience === undefined
       ? this.#audience
       : checkExpectedAudience(options.audience, this.#audienceCheck);
@@ -551,9 +575,6 @@ export class Grantex {
 
     // 1b. Revocation. The token verifies offline whether or not the grant
     //     still stands, so this is the only place a revocation can be seen.
-    const revocationCheck = options.revocationCheck === undefined
-      ? this.#revocationCheck
-      : checkRevocationCheck(options.revocationCheck);
     if (revocationCheck !== 'offline') {
       const denial = await this.#revocationDenial(revocationCheck, {
         grantId: grant.grantId,

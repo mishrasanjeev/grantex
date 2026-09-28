@@ -59,7 +59,7 @@ def _github_manifest() -> ToolManifest:
 
 @pytest.fixture()
 def client() -> Grantex:
-    c = Grantex(api_key="test-key")
+    c = Grantex(api_key="test-key", revocation_check="offline")
     c.load_manifest(_salesforce_manifest())
     return c
 
@@ -456,7 +456,7 @@ class TestEnforceCappedScopes:
 class TestManifestLoading:
     @patch("grantex._client.verify_grant_token")
     def test_load_manifest_enables_enforcement(self, mock_verify: object) -> None:
-        client = Grantex(api_key="test-key")
+        client = Grantex(api_key="test-key", revocation_check="offline")
         mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
             scopes=("tool:salesforce:write",)
         )
@@ -473,7 +473,7 @@ class TestManifestLoading:
 
     @patch("grantex._client.verify_grant_token")
     def test_load_manifests_loads_multiple(self, mock_verify: object) -> None:
-        client = Grantex(api_key="test-key")
+        client = Grantex(api_key="test-key", revocation_check="offline")
         client.load_manifests([_salesforce_manifest(), _github_manifest()])
 
         mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
@@ -490,7 +490,7 @@ class TestManifestLoading:
 
     @patch("grantex._client.verify_grant_token")
     def test_load_manifest_overwrites_existing(self, mock_verify: object) -> None:
-        client = Grantex(api_key="test-key")
+        client = Grantex(api_key="test-key", revocation_check="offline")
         original = ToolManifest(
             connector="salesforce",
             tools={"query": Permission.READ},
@@ -722,7 +722,7 @@ class TestPermissiveMode:
         mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
             scopes=("tool:salesforce:read",)
         )
-        client = Grantex(api_key="test", enforce_mode="permissive")
+        client = Grantex(api_key="test", revocation_check="offline", enforce_mode="permissive")
         client.load_manifest(
             ToolManifest(
                 connector="salesforce",
@@ -737,7 +737,7 @@ class TestPermissiveMode:
         mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
             scopes=("tool:salesforce:read",)
         )
-        client = Grantex(api_key="test")
+        client = Grantex(api_key="test", revocation_check="offline")
         client.load_manifest(
             ToolManifest(
                 connector="salesforce",
@@ -763,7 +763,7 @@ class TestGrantexEnforcer:
         mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
             scopes=("tool:salesforce:write",)
         )
-        client = Grantex(api_key="test")
+        client = Grantex(api_key="test", revocation_check="offline")
         client.load_manifest(
             ToolManifest(connector="salesforce", tools={"create_lead": Permission.WRITE})
         )
@@ -798,7 +798,7 @@ class TestGrantexEnforcer:
         mock_verify.return_value = _make_verified_grant(  # type: ignore[attr-defined]
             scopes=("tool:salesforce:write",)
         )
-        client = Grantex(api_key="test")
+        client = Grantex(api_key="test", revocation_check="offline")
         client.load_manifest(
             ToolManifest(
                 connector="salesforce",
