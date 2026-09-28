@@ -30,7 +30,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   B.2.4, B.2.5 and B.2.6 with the B.2.4 and B.2.6 signatures verified), and
   are in `make check`, `make test` and CI. `verify()` refuses an expected
   authority that carries the default port (`:80` or `:443`), which
-  `@authority` never does.
+  `@authority` never does, and a `now` that is not a finite, non-negative
+  number (NaN or an infinity). The Python `InMemoryNonceStore` checks and
+  records a nonce under a lock, so threads sharing one store cannot both
+  accept the same nonce. The signature base builders accept a covered field
+  only when its name is a lowercased RFC 9110 field name (a token), as
+  RFC 9421 section 2.1 requires.
 - `scripts/check-docs-integrity.mjs --live` skips a Python project that
   carries the `Private :: Do Not Upload` classifier, as it already skipped an
   npm package marked `"private": true`.

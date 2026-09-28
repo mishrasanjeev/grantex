@@ -416,9 +416,17 @@ function serializeInteger(value: number): string {
 function serializeDecimal(value: string): string {
   const m = /^(-?)(\d{1,12})\.(\d{1,3})$/.exec(value);
   if (!m) return fail('invalid decimal');
-  const integer = m[2]!.replace(/^0+(?=\d)/, '');
-  const fraction = m[3]!.replace(/0+$/, '') || '0';
-  const zero = /^0+$/.test(m[2]!) && /^0+$/.test(m[3]!);
+  // Zeros are stripped by scanning rather than by a regular expression, so
+  // the time taken is linear in the number of digits.
+  const digits = m[2]!;
+  const fractionDigits = m[3]!;
+  let first = 0;
+  while (first < digits.length - 1 && digits[first] === '0') first++;
+  const integer = digits.slice(first);
+  let last = fractionDigits.length;
+  while (last > 0 && fractionDigits[last - 1] === '0') last--;
+  const fraction = fractionDigits.slice(0, last) || '0';
+  const zero = integer === '0' && last === 0;
   return `${m[1] === '-' && !zero ? '-' : ''}${integer}.${fraction}`;
 }
 
