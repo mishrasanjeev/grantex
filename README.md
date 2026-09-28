@@ -230,6 +230,37 @@ flowchart LR
 
 Start with the [OACP runtime launch closure PRD](docs/guides/oacp/runtime-launch-closure-prd.mdx), [OACP authority overview](docs/guides/oacp/overview.mdx), [merchant self-service config boundary](docs/guides/oacp/merchant-self-service-config.mdx), [truth inventory](docs/guides/oacp/truth-inventory.mdx), [AgenticOrg integration guide](docs/guides/oacp/agenticorg-integration.mdx), [POS bridge boundary](docs/guides/oacp/pos-bridge-boundary.mdx), and [operator runbook](docs/guides/oacp/operator-runbook.mdx). The older [Commerce V1 overview](docs/guides/commerce-v1-overview.mdx) remains historical/contextual and should not be used to imply that Grantex owns AgenticOrg merchant connector runtime.
 
+## Agent Trust Registry: accredited issuers and Agent Passports
+
+The registry lets a relying party, such as a merchant, a payment service provider or an API, check an AI agent before it acts. It answers three questions: which software the agent is, which key it holds, and which accredited issuer vouches for it. The answer comes as a computed trust level, not a claim the agent makes about itself. The grant still says what the agent may do; the passport says who the agent is. See [Passport vs grant](docs/concepts/passport-vs-grant.md).
+
+| Piece | What is on `main` |
+| --- | --- |
+| Accredited issuers | The registry operator accredits issuers, each with a static JWKS, a `status_list_base` and the trust-mark types it may attest. They are managed with `POST` and `PATCH /v1/registry/issuers` under an operator key (`REGISTRY_OPERATOR_API_KEYS`). An issuer can be suspended; while it is, its attestations stop counting. |
+| Agent keys | Each agent has a key history (`/v1/agents/{id}/keys`). A key must prove possession by answering a challenge before anything can attest it. Keys can be rotated with an overlap, or reported compromised, which is final. |
+| Attestations | An accredited issuer posts a compact JWS to `POST /v1/registry/attestations`. The registry checks the issuer, the signature, the agent and its proven key, the hash rule, the validity times and the issuer's own Token Status List. Every refusal carries a stable code and a reason. |
+| Trust levels | `basic`, `verified`, `attested` or `attested_verified`, with flags such as `key_compromised`, `issuer_suspended` and `attestation_expiring`. Anything suspended reads `basic`: the registry fails closed. |
+| Acceptance status lists | The registry publishes its own acceptance of each attestation in two formats: as a Token Status List (`/status/attestations/{list}`) and as a Bitstring Status List. |
+| Lookup and manifest | `GET /v1/registry/agents/{did}` and the thumbprint and credential forms return a minimised record. `/.well-known/agent-registry.json` is a signed manifest of the issuers, their keys, the trust-mark taxonomy and the status lists, for relying parties without Federation support. |
+| Passport-bound grants | `POST /v1/authorize` can take an Agent Passport (SD-JWT VC). The grant is bound to the passport's key and to the registry's acceptance entry, and the binding is checked again at every code exchange and refresh. A passport-bound grant cannot be delegated yet. |
+| Libraries | RFC 9421 request signing (`@grantex/agent-httpsig`, `grantex-agent-httpsig`) and the Agent Passport profile (`@grantex/agent-passport`, `grantex-agent-passport`). They are tested against shared vectors and not yet published. |
+| Local testing | `@grantex/mock-issuer` (private) runs an accredited issuer at `https://mock-issuer.example` with no network. See [Running the mock issuer](docs/issuers/running-the-mock-issuer.md). |
+
+New behaviour on existing paths is off by default. Turn it on per deployment:
+
+- `REGISTRY_PUBLIC_ENDPOINTS_ENABLED` serves the unauthenticated reads: the issuer list, the status lists, the lookup without an API key and the manifest.
+- `PASSPORT_BOUND_GRANTS_ENABLED` turns on passport-bound grants.
+- `AGENT_KEY_HISTORY_MIRROR_ENABLED` makes `POST` and `PATCH /v1/agents` write the agent's key into the key history, and refuse a key that is compromised or belongs to another agent.
+- `REGISTRY_ATTESTATION_EDDSA_ENABLED` accepts EdDSA attestations as well as ES256.
+
+[Self-hosting](docs/self-hosting.md) lists every variable. Guides for each audience:
+
+- [Becoming an accredited issuer](docs/issuers/becoming-an-accredited-issuer.md)
+- [Registering agents](docs/providers/registering-agents.md), for providers
+- [Verifying agents](docs/relying-parties/verifying-agents.md), for relying parties
+
+The specifications are [registry federation](spec/registry-federation.md), [attestations](spec/attestation-1.0.md), [agent keys](spec/agent-keys.md), [Agent Passport 1.0](spec/agent-passport-1.0.md), [passport binding](spec/passport-binding.md) and [verification](spec/verification.md). This Agent Passport, an SD-JWT VC issued by an accredited issuer, is separate from the MPP `AgentPassportCredential` described [below](#mpp-agent-identity).
+
 ## Current Releases
 
 Grantex components are independently versioned. The protocol specification remains **v1.0 Final**; SDK, MCP package, and roadmap milestone versions are separate release lines and do not represent a monorepo-wide version.

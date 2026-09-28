@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Agent Trust Registry documentation
+- The README has a section on the Agent Trust Registry: accredited issuers,
+  agent keys, attestations and trust levels, the acceptance status lists, the
+  lookup and signed manifest, passport-bound grants, the request-signing and
+  Agent Passport libraries and the mock issuer, with the flags that turn each
+  on and links to the guides and specifications.
+- The Trust Registry feature page links the issuer, provider and relying-party
+  guides, and the docs navigation now lists Verifying Agents.
+
 ### Passport binding at grant issuance (auth service)
 - `POST /v1/authorize` takes an Agent Passport in `passport` when
   `PASSPORT_BOUND_GRANTS_ENABLED=true` (off by default; off, the member is
