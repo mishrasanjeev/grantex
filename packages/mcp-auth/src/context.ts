@@ -115,6 +115,30 @@ export function serverContext(config: McpAuthConfig): ServerContext {
   }
   const clientMetadata = createClientMetadataResolver(config.clientIdMetadataDocuments);
   assertGrantAndBranding(config);
+  if (config.resolvePrincipal !== undefined && typeof config.resolvePrincipal !== 'function') {
+    throw new Error('createMcpAuthServer: resolvePrincipal must be a function');
+  }
+  if (config.allowLegacyClientPrincipal !== undefined && typeof config.allowLegacyClientPrincipal !== 'boolean') {
+    throw new Error('createMcpAuthServer: allowLegacyClientPrincipal must be a boolean');
+  }
+  if (config.allowUnauthenticatedIntrospection !== undefined && typeof config.allowUnauthenticatedIntrospection !== 'boolean') {
+    throw new Error('createMcpAuthServer: allowUnauthenticatedIntrospection must be a boolean');
+  }
+  if (config.introspectionCurrentGrant !== undefined && config.introspectionCurrentGrant !== 'none'
+    && (!config.introspectionCurrentGrant || typeof config.introspectionCurrentGrant.verify !== 'function')) {
+    throw new Error('createMcpAuthServer: introspectionCurrentGrant must implement verify(token), or be "none"');
+  }
+  if (config.allowUnauthenticatedIntrospection === true || config.introspectionCurrentGrant === 'none') {
+    try { (config.warn ?? console.warn)('mcp-auth: evaluation-only introspection opt-out enabled; authentication or current issuer authority checks are weakened'); } catch { /* Observability only. */ }
+  }
+  if (!config.resolvePrincipal && config.allowLegacyClientPrincipal !== true) {
+    throw new Error('createMcpAuthServer: resolvePrincipal is required to bind consent to an authenticated human; allowLegacyClientPrincipal is an insecure evaluation-only migration opt-out');
+  }
+  if (!config.resolvePrincipal) {
+    try {
+      (config.warn ?? console.warn)('mcp-auth: allowLegacyClientPrincipal uses the OAuth client ID, not an authenticated human. Evaluation only; do not use this mode for production consent.');
+    } catch { /* Logging must not change the configured authorization behavior. */ }
+  }
   const consentPage = prepareConsentPage(config.consentPage);
   const storage = config.storage;
 

@@ -3,13 +3,22 @@ import type { McpAuthStorage } from './storage/types.js';
 import type { ClientIdMetadataDocumentOptions } from './lib/client-metadata.js';
 import type { LoadedManifest } from './resource/tool-policy.js';
 import type { ConsentPageOptions } from './consent/page.js';
+import type { FastifyRequest } from 'fastify';
+import type { CurrentGrantVerifier } from './resource/guard.js';
+
+export interface AuthenticatedPrincipal {
+  /** Tenant-scoped external principal ID derived from a verified host session. */
+  principalId: string;
+}
+
+export type PrincipalResolver = (request: FastifyRequest) => Promise<AuthenticatedPrincipal | undefined>;
 
 export interface TokenIssuedEvent {
   accessToken: string;
   clientId: string;
   scopes: string[];
   grantId: string;
-  agentDid: string;
+  agentDid?: string;
 }
 
 export interface McpAuthConfig {
@@ -17,6 +26,14 @@ export interface McpAuthConfig {
   grantex: Grantex;
   /** Agent ID to use for Grantex authorization */
   agentId: string;
+  /** Resolve only from verified host credentials, never query/body parameters. */
+  resolvePrincipal?: PrincipalResolver;
+  /** Explicit insecure v3 migration opt-out; evaluation only, with a warning. */
+  allowLegacyClientPrincipal?: boolean;
+  /** Defaults to online Grantex verification; 'none' is an evaluation-only opt-out. */
+  introspectionCurrentGrant?: CurrentGrantVerifier | 'none';
+  /** Explicit evaluation-only opt-out from authenticated token introspection. */
+  allowUnauthenticatedIntrospection?: boolean;
   /**
    * Scopes clients may request (`scopes_supported`). A request for any other
    * scope is refused with `invalid_scope`. Optional when `manifests` is set:
@@ -223,6 +240,8 @@ export interface RegisterClientRequest {
  * Grantex. Keyed in storage by the opaque `state` sent to Grantex.
  */
 export interface PendingAuthorization {
+  principalId?: string;
+  grantexPrincipalId?: string;
   clientId: string;
   redirectUri: string;
   /** PKCE S256 code challenge presented by the client. */
@@ -243,6 +262,8 @@ export interface PendingAuthorization {
 
 /** Keyed in storage by the authorization code handed to the client. */
 export interface AuthorizationCode {
+  principalId?: string;
+  grantexPrincipalId?: string;
   clientId: string;
   redirectUri: string;
   /** PKCE S256 code challenge the `code_verifier` must match at `/token`. */
@@ -261,6 +282,7 @@ export interface AuthorizationCode {
  * of the record.
  */
 export interface RefreshTokenBinding {
+  grantexPrincipalId?: string;
   clientId: string;
   resource?: string;
   expiresAt: number;
@@ -272,6 +294,8 @@ export interface RefreshTokenBinding {
  * exactly once, when the consent form is submitted.
  */
 export interface ConsentRecord {
+  principalId?: string;
+  grantContextHash?: string;
   clientId: string;
   redirectUri: string;
   codeChallenge: string;

@@ -18,7 +18,9 @@ export type {
   DecisionVerifier,
   DecisionCheck,
   DecisionOutcome,
+  CurrentGrantVerifier,
 } from './resource/guard.js';
+export { grantexCurrentGrantVerifier } from './resource/grantex-current-grant.js';
 export { grantexDecisionVerifier, DECISION_GRANT_HEADER } from './resource/grantex-decisions.js';
 export type { GrantexDecisionVerifierOptions, SemanticAction, VerifiedDecisionGrants } from './resource/grantex-decisions.js';
 export {
@@ -54,6 +56,8 @@ export type { ConsentTheme } from './consent/theme.js';
 export type { SafeHtml } from './consent/html.js';
 export type {
   McpAuthConfig,
+  PrincipalResolver,
+  AuthenticatedPrincipal,
   ClientRegistration,
   RegisterClientRequest,
   AuthorizationCode,

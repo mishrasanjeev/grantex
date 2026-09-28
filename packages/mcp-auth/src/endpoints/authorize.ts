@@ -7,6 +7,7 @@ import { resolveRequestedResource } from '../lib/resource.js';
 import { renderConsent } from './consent.js';
 import { appendCookie, bindingCookie, bindingCookieName, hashesMatch, readCookie, sha256 } from '../lib/cookies.js';
 import { renderMessagePage } from '../consent/page.js';
+import { resolvePrincipal } from '../lib/principal.js';
 
 interface CallbackQuery {
   code?: string;
@@ -34,6 +35,7 @@ export interface ValidatedAuthorization {
   scopes: string[];
   resource: string;
   clientState?: string;
+  principalId?: string;
 }
 
 export type AuthorizationValidation =
@@ -148,6 +150,8 @@ export function clientRedirect(ctx: ServerContext, redirectUri: string, params: 
 }
 
 interface IssueCodeInput {
+  principalId?: string;
+  grantexPrincipalId?: string;
   clientId: string;
   redirectUri: string;
   codeChallenge: string;
@@ -167,6 +171,8 @@ async function issueCodeAndRedirect(ctx: ServerContext, reply: FastifyReply, inp
   const code = generateCode();
   const codeExpiration = ctx.config.codeExpirationSeconds ?? 600;
   await ctx.storage.putAuthorizationCode(code, {
+    ...(input.principalId !== undefined ? { principalId: input.principalId } : {}),
+    ...(input.grantexPrincipalId !== undefined ? { grantexPrincipalId: input.grantexPrincipalId } : {}),
     clientId: input.clientId,
     redirectUri: input.redirectUri,
     codeChallenge: input.codeChallenge,
@@ -245,6 +251,9 @@ export async function startUpstreamAuthorization(
   status = 302,
 ): Promise<FastifyReply> {
   const { config } = ctx;
+  if (config.resolvePrincipal && !request.principalId) {
+    return reply.status(403).send({ error: 'access_denied', error_description: 'No authenticated principal is bound to this consent' });
+  }
   const purpose = config.grant?.purpose;
   const pendingId = generateCode();
   const codeExpiration = config.codeExpirationSeconds ?? 600;
@@ -268,6 +277,9 @@ export async function startUpstreamAuthorization(
         error_description: 'grant.authorizeParams returned a purpose other than grant.purpose; only grant.purpose, which the consent page shows, is sent',
       });
     }
+    if (extra['expiresIn'] !== undefined && extra['expiresIn'] !== config.grant?.duration) {
+      return reply.status(500).send({ error: 'server_error', error_description: 'grant.authorizeParams cannot change the lifetime shown on the consent page' });
+    }
     grantexAuth = await config.grantex.authorize({
       // Extension parameters first: the fields below always win.
       ...extra,
@@ -277,7 +289,7 @@ export async function startUpstreamAuthorization(
       // AuthorizeParams.
       ...(purpose !== undefined ? { purpose } : {}),
       agentId: config.agentId,
-      userId: request.client.clientId, // Use client_id as principal for MCP flow
+      userId: request.principalId ?? request.client.clientId,
       scopes: request.scopes,
       audience: request.resource,
       redirectUri: resolveCallbackUrl(config),
@@ -327,6 +339,9 @@ export async function startUpstreamAuthorization(
   const inlineCode = typeof grantexAuth.code === 'string' && grantexAuth.code.length > 0
     ? grantexAuth.code
     : undefined;
+  if (config.resolvePrincipal && (typeof grantexAuth.principalId !== 'string' || !grantexAuth.principalId)) {
+    return reply.status(502).send({ error: 'server_error', error_description: 'Grantex did not identify the principal for this authorization' });
+  }
 
   if (inlineCode !== undefined) {
     // Grantex auto-approved the request (sandbox developer key). Only take
@@ -340,6 +355,8 @@ export async function startUpstreamAuthorization(
       });
     }
     return issueCodeAndRedirect(ctx, reply, {
+      ...(request.principalId !== undefined ? { principalId: request.principalId } : {}),
+      ...(config.resolvePrincipal ? { grantexPrincipalId: grantexAuth.principalId } : {}),
       clientId: request.client.clientId,
       redirectUri: request.redirectUri,
       codeChallenge: request.codeChallenge,
@@ -357,6 +374,8 @@ export async function startUpstreamAuthorization(
   // and receive that person's code at their redirect URI.
   const callbackBinding = generateCode();
   const pending: PendingAuthorization = {
+    ...(request.principalId !== undefined ? { principalId: request.principalId } : {}),
+    ...(config.resolvePrincipal ? { grantexPrincipalId: grantexAuth.principalId } : {}),
     clientId: request.client.clientId,
     redirectUri: request.redirectUri,
     codeChallenge: request.codeChallenge,
@@ -383,6 +402,14 @@ export function registerAuthorizeEndpoint(app: FastifyInstance, ctx: ServerConte
   app.get<{ Querystring: Record<string, unknown> }>('/authorize', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const validation = await validateAuthorizationRequest(ctx, request.query);
     if (!validation.ok) return reply.status(validation.status).send(validation.body);
+    let principalId;
+    try {
+      principalId = await resolvePrincipal(ctx, request, validation.request.client.clientId);
+    } catch {
+      return reply.status(503).send({ error: 'temporarily_unavailable', error_description: 'Principal authentication could not be checked' });
+    }
+    if (principalId === undefined) return reply.status(401).send({ error: 'login_required', error_description: 'Authenticate with the host before approving agent access' });
+    validation.request.principalId = principalId;
     return renderConsent(ctx, reply, validation.request);
   });
 
@@ -420,6 +447,17 @@ export function registerAuthorizeEndpoint(app: FastifyInstance, ctx: ServerConte
       );
       return reply.status(403).headers(page.headers).send(page.body);
     }
+    if (config.resolvePrincipal) {
+      let principalId;
+      try {
+        principalId = await resolvePrincipal(ctx, request, pending.clientId);
+      } catch {
+        return reply.status(503).send({ error: 'temporarily_unavailable', error_description: 'Principal authentication could not be checked' });
+      }
+      if (!principalId || principalId !== pending.principalId || !pending.grantexPrincipalId) {
+        return reply.status(403).send({ error: 'access_denied', error_description: 'The authenticated principal changed; start a new authorization' });
+      }
+    }
 
     if (error || typeof code !== 'string' || code.length === 0) {
       // Only a fixed error code is forwarded; upstream text is not reflected.
@@ -436,6 +474,8 @@ export function registerAuthorizeEndpoint(app: FastifyInstance, ctx: ServerConte
     }
 
     return issueCodeAndRedirect(ctx, reply, {
+      ...(pending.principalId !== undefined ? { principalId: pending.principalId } : {}),
+      ...(pending.grantexPrincipalId !== undefined ? { grantexPrincipalId: pending.grantexPrincipalId } : {}),
       clientId: pending.clientId,
       redirectUri: pending.redirectUri,
       codeChallenge: pending.codeChallenge,
