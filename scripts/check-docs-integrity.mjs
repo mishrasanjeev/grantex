@@ -822,8 +822,6 @@ async function validatePublishedVersions(releaseSnapshot) {
     // An unpublished project carries the classifier PyPI refuses to upload,
     // as an unpublished npm package carries "private": true.
     if (/"Private :: Do Not Upload"/.test(project?.[1] ?? '')) continue;
-    // Unpublished packages carry this classifier (indexes refuse it), as private npm packages carry "private": true.
-    if (project[1].includes('"Private :: Do Not Upload"')) continue;
     const advertised = releaseByName.get(name);
     const registryUrl = advertised?.registryUrl || pypiRegistryUrls.get(name);
     if (!registryUrl) {
