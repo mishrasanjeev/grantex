@@ -340,7 +340,9 @@ describe('DELETE /v1/agents/:id', () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // SELECT existence check
     sqlMock.mockResolvedValueOnce([]); // agent lifecycle advisory lock
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // agent row lock
     sqlMock.mockResolvedValueOnce([]); // prepaid-wallet financial history check
+    sqlMock.mockResolvedValueOnce([]); // issued credential history check
     sqlMock.mockResolvedValueOnce([]); // DELETE budget_transactions
     sqlMock.mockResolvedValueOnce([]); // DELETE budget_allocations
     sqlMock.mockResolvedValueOnce([]); // DELETE refresh_tokens
@@ -365,6 +367,7 @@ describe('DELETE /v1/agents/:id', () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // SELECT existence check
     sqlMock.mockResolvedValueOnce([]); // agent lifecycle advisory lock
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // agent row lock
     sqlMock.mockResolvedValueOnce([{ '?column?': 1 }]); // financial history exists
 
     const res = await app.inject({
@@ -376,6 +379,25 @@ describe('DELETE /v1/agents/:id', () => {
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ code: 'AGENT_HAS_FINANCIAL_HISTORY' });
     expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n')).not.toContain('DELETE FROM agents');
+  });
+
+  it('preserves issued credential status and history instead of failing a hard delete', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]);
+    sqlMock.mockResolvedValueOnce([]); // advisory lock
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // row lock
+    sqlMock.mockResolvedValueOnce([]); // no financial history
+    sqlMock.mockResolvedValueOnce([{ '?column?': 1 }]); // credential history
+    const response = await app.inject({
+      method: 'DELETE', url: `/v1/agents/${TEST_AGENT.id}`, headers: authHeader(),
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ code: 'AGENT_HAS_CREDENTIAL_HISTORY' });
+    const queries = sqlMock.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(queries).toContain('FOR UPDATE');
+    expect(queries).toContain('g.developer_id =');
+    expect(queries).not.toContain('DELETE FROM grants');
+    expect(queries).not.toContain('DELETE FROM agents');
   });
 
   it('returns 404 when agent not found', async () => {

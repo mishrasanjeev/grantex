@@ -92,8 +92,8 @@ This function does not require a `Grantex` client instance.
 <ParamField body="boundedJwksFetch" type="boolean">
   Apply the [JWKS fetch limits](#jwks-fetch-limits) and the
   [DID issuer](#did-issuers) checks. Defaults to `false` in these releases; a
-  later major release makes `true` the default, with `false` as the opt-out.
-  Not in `@grantex/sdk` 0.7.0; in the next release.
+  later major release may make `true` the default, with `false` as the opt-out.
+  Available in `@grantex/sdk@0.7.1`.
 </ParamField>
 
 <ParamField body="clockTolerance" type="number">
@@ -127,11 +127,9 @@ This function does not require a `Grantex` client instance.
 ## JWKS fetch limits
 
 <Note>
-  Not in `@grantex/sdk` 0.7.0; the next release includes these limits and the
-  [DID issuer](#did-issuers) checks, which apply when `boundedJwksFetch: true`
-  is set. The option is off by default in these releases. A later major
-  release turns it on by default, with `boundedJwksFetch: false` as the
-  opt-out.
+  `@grantex/sdk@0.7.1` includes these limits and the [DID issuer](#did-issuers)
+  checks when `boundedJwksFetch: true` is set. The option remains off by
+  default; choose it explicitly when verifying untrusted remote issuers.
 </Note>
 
 The key set comes from whichever endpoint the verifier is pointed at. With
@@ -231,6 +229,12 @@ checks above (so a percent-encoded port is not decoded).
 
 <ResponseField name="expiresAt" type="number">
   Token expiry timestamp in seconds since the Unix epoch.
+</ResponseField>
+
+<ResponseField name="webauthnEvidence" type="WebAuthnGrantEvidence | undefined">
+  Signed issuer reference to the original passkey assertion, when portable
+  evidence was captured. This does not replace online revocation checks or
+  independent verification of the opt-in VC's assertion.
 </ResponseField>
 
 <ResponseField name="parentAgentDid" type="string">

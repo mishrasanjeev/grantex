@@ -180,7 +180,7 @@ for (const [name, url, make] of backends) {
         expiresAt: 9999999999,
       });
       try {
-        const c = new Grantex({ apiKey: 'test-key', capsMeter: new CapsMeter(await make()) });
+        const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', capsMeter: new CapsMeter(await make()) });
         c.loadManifest(
           ToolManifest.fromJSON({ connector: 'acme_kyb', tools: { resolve_business: { permission: 'read', caps: { per_hour: 10 } } } }),
         );

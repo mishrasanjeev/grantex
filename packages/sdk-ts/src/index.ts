@@ -22,6 +22,8 @@ export {
   RevocationFeed,
   RevokedSet,
   REVOCATION_CHECK_MODES,
+  REVOCATION_CHECK_STRENGTH,
+  DEFAULT_REVOCATION_CHECK,
   isRevocationCheckMode,
 } from './revocations/index.js';
 export type {

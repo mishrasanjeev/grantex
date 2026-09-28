@@ -18,7 +18,7 @@ import {
   TEST_DEVELOPER,
   TEST_GRANT,
 } from './helpers.js';
-import { CONTAINMENT_RATE_LIMIT, PLAN_RATE_LIMITS } from '../src/plugins/dynamicRateLimit.js';
+import { CONTAINMENT_RATE_LIMIT, PLAN_RATE_LIMITS, STATUS_RATE_LIMIT } from '../src/plugins/dynamicRateLimit.js';
 import { resetFeedReadyCache } from '../src/lib/revocation-feed/store.js';
 
 let app: FastifyInstance;
@@ -232,6 +232,81 @@ describe('revocation feed and status reads', () => {
     expect(bucketsCounted()).toEqual(['status']);
   });
 
+  // FINDINGS G-65. A default SDK client calls /v1/revocations/status once per
+  // enforce(), so a server running many tools behind one address makes many
+  // status calls from that address. The per-address limit used to be 1,200 a
+  // minute, below the developer's 6,000-a-minute status budget: the SDK was
+  // answered 429, retried, and denied with status_unavailable.
+  it('serves many status calls from one address within a minute while the developer is under its status budget', async () => {
+    // A fresh app, so no other test's calls count against this address.
+    const fresh = await buildTestApp();
+    try {
+      const counts = new Map<string, number>();
+      mockRedis.incr.mockImplementation(async (key: string) => {
+        const next = (counts.get(key) ?? 0) + 1;
+        counts.set(key, next);
+        return next;
+      });
+      const calls = 1_500; // above the old per-address limit of 1,200
+      const refused: number[] = [];
+      for (let i = 0; i < calls; i++) {
+        const res = await fresh.inject({
+          method: 'GET',
+          url: `/v1/revocations/status?grantId=${TEST_GRANT.id}`,
+          headers: authHeader(),
+          remoteAddress: '203.0.113.7',
+        });
+        if (res.statusCode !== 200) refused.push(res.statusCode);
+      }
+      expect(refused).toEqual([]);
+      // Every one of them drew on the developer's status bucket.
+      expect([...counts.entries()].filter(([key]) => key.includes(':status:'))
+        .map(([, count]) => count)).toEqual([calls]);
+    } finally {
+      await fresh.close();
+    }
+  }, 60_000);
+
+  it('still refuses status calls past the per-developer status budget', async () => {
+    countPerBucket({ status: STATUS_RATE_LIMIT + 1 });
+
+    const res = await app.inject({ method: 'GET', url: `/v1/revocations/status?grantId=${TEST_GRANT.id}`, headers: authHeader() });
+
+    expect(res.statusCode).toBe(429);
+    expect(res.json()).toMatchObject({ code: 'RATE_LIMIT_EXCEEDED' });
+    expect(res.json().message).toMatch(/^Revocation status rate limit exceeded/);
+    expect(res.headers['x-ratelimit-limit']).toBe(String(STATUS_RATE_LIMIT));
+    expect(res.headers['retry-after']).toBeDefined();
+  });
+
+  it('keeps an abuse ceiling per address on the status route, before authentication', async () => {
+    // Unauthenticated calls are refused by the auth plugin, but only after the
+    // per-address policy has counted them: past the ceiling they are answered
+    // 429 without reaching authentication at all.
+    const fresh = await buildTestApp();
+    try {
+      const statuses = new Map<number, number>();
+      for (let i = 0; i < STATUS_RATE_LIMIT + 1; i++) {
+        const res = await fresh.inject({
+          method: 'GET',
+          url: `/v1/revocations/status?grantId=${TEST_GRANT.id}`,
+          remoteAddress: '203.0.113.8',
+        });
+        statuses.set(res.statusCode, (statuses.get(res.statusCode) ?? 0) + 1);
+      }
+      expect(Object.fromEntries(statuses)).toEqual({ 401: STATUS_RATE_LIMIT, 429: 1 });
+      // Another address is not affected.
+      const other = await fresh.inject({
+        method: 'GET',
+        url: `/v1/revocations/status?grantId=${TEST_GRANT.id}`,
+        remoteAddress: '203.0.113.9',
+      });
+      expect(other.statusCode).toBe(401);
+    } finally {
+      await fresh.close();
+    }
+  }, 120_000);
+
   it('keep their per-address limits, and still fail closed when the limiter is down', async () => {
     // With the status bucket unreachable the plugin sets no headers of its
     // own, so the limit headers left on the response are the per-address
@@ -239,7 +314,9 @@ describe('revocation feed and status reads', () => {
     mockRedis.incr.mockRejectedValue(new Error('redis unavailable'));
     for (const [url, limit] of [
       ['/v1/revocations', '600'],
-      [`/v1/revocations/status?grantId=${TEST_GRANT.id}`, '1200'],
+      // The status route's per-address limit is the developer's status
+      // budget (FINDINGS G-65); it was 1,200.
+      [`/v1/revocations/status?grantId=${TEST_GRANT.id}`, String(STATUS_RATE_LIMIT)],
       ['/v1/revocations/stream', '120'],
     ] as const) {
       const res = await app.inject({ method: 'GET', url, headers: authHeader() });

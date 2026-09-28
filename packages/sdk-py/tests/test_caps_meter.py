@@ -326,7 +326,7 @@ def verify() -> Iterator[MagicMock]:
 
 
 def _client(meter: Optional[CapsMeter] = None) -> Grantex:
-    client = Grantex(api_key="test-key", caps_meter=meter if meter is not None else _meter())
+    client = Grantex(api_key="test-key", revocation_check="offline", caps_meter=meter if meter is not None else _meter())
     client.load_manifest(ACME_KYB)
     return client
 
@@ -360,7 +360,7 @@ class TestSpendCapsAcceptanceCriteria:
         manifest = ToolManifest.from_dict(
             {"connector": "acme_kyb", "tools": {"resolve_business": {"permission": "read", "caps": {"per_hour": 10}}}}
         )
-        client = Grantex(api_key="test-key", caps_meter=CapsMeter(InMemoryCapsBackend()))
+        client = Grantex(api_key="test-key", revocation_check="offline", caps_meter=CapsMeter(InMemoryCapsBackend()))
         client.load_manifest(manifest)
         barrier = threading.Barrier(50)
 
@@ -439,7 +439,7 @@ class TestEnforceMetering:
         assert (result.allowed, result.reason_code, result.sub_reason) == (False, "cap_exceeded", "meter_unavailable")
 
     def test_no_meter_configured_fails_closed(self, verify: MagicMock) -> None:
-        client = Grantex(api_key="test-key")
+        client = Grantex(api_key="test-key", revocation_check="offline")
         client.load_manifest(ACME_KYB)
         assert client.enforce("t", "acme_kyb", "resolve_business").sub_reason == "meter_unavailable"
 
@@ -488,7 +488,7 @@ class TestCheckOnlyAndCapsModes:
 
     def test_warn_mode_allows_and_reports_what_it_would_deny(self, verify: MagicMock) -> None:
         meter = _meter()
-        client = Grantex(api_key="test-key", caps_meter=meter, caps_mode="warn")
+        client = Grantex(api_key="test-key", revocation_check="offline", caps_meter=meter, caps_mode="warn")
         client.load_manifest(ACME_KYB)
         first = [client.enforce("t", "acme_kyb", "resolve_business") for _ in range(2)]
         assert all(r.allowed and r.would_deny is None and r.reservation is not None for r in first)
@@ -500,7 +500,7 @@ class TestCheckOnlyAndCapsModes:
         assert meter.usage("dev_01", over.cap_limits)[0].used == 2  # the over-cap call reserved nothing
 
     def test_warn_mode_reports_a_missing_meter(self, verify: MagicMock) -> None:
-        client = Grantex(api_key="test-key", caps_mode="warn")
+        client = Grantex(api_key="test-key", revocation_check="offline", caps_mode="warn")
         client.load_manifest(ACME_KYB)
         result = client.enforce("t", "acme_kyb", "resolve_business")
         assert result.allowed is True
@@ -510,13 +510,13 @@ class TestCheckOnlyAndCapsModes:
         verify.return_value = _grant(
             [{"type": "urn:grantex:tools:v1", "connector": "acme_kyb", "caps": {"resolve_business": {"per_week": 1}}}]
         )
-        client = Grantex(api_key="test-key", caps_meter=_meter(), caps_mode="warn")
+        client = Grantex(api_key="test-key", revocation_check="offline", caps_meter=_meter(), caps_mode="warn")
         client.load_manifest(ACME_KYB)
         assert client.enforce("t", "acme_kyb", "resolve_business").reason_code == "token_invalid"
 
     def test_off_mode_skips_caps_and_the_meter(self, verify: MagicMock) -> None:
         backend = MagicMock()
-        client = Grantex(api_key="test-key", caps_meter=CapsMeter(backend), caps_mode="off")
+        client = Grantex(api_key="test-key", revocation_check="offline", caps_meter=CapsMeter(backend), caps_mode="off")
         client.load_manifest(ACME_KYB)
         for _ in range(3):
             result = client.enforce("t", "acme_kyb", "screen_person")
@@ -547,7 +547,7 @@ class TestCheckOnlyAndCapsModes:
     def test_permissive_mode_turns_cap_denials_into_allows(self, verify: MagicMock) -> None:
         import warnings
 
-        client = Grantex(api_key="test-key", enforce_mode="permissive")
+        client = Grantex(api_key="test-key", revocation_check="offline", enforce_mode="permissive")
         client.load_manifest(ACME_KYB)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")

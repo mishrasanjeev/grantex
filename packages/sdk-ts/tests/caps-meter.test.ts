@@ -320,7 +320,7 @@ const acmeKyb = ToolManifest.fromJSON({
 });
 
 function client(meter: CapsMeter | undefined = new CapsMeter(new InMemoryCapsBackend())) {
-  const c = new Grantex({ apiKey: 'test-key', ...(meter !== undefined ? { capsMeter: meter } : {}) });
+  const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', ...(meter !== undefined ? { capsMeter: meter } : {}) });
   c.loadManifest(acmeKyb);
   return c;
 }
@@ -365,7 +365,7 @@ describe('spend caps acceptance criteria', () => {
       connector: 'acme_kyb',
       tools: { resolve_business: { permission: 'read', caps: { per_hour: 10 } } },
     });
-    const c = new Grantex({ apiKey: 'test-key', capsMeter: new CapsMeter(new InMemoryCapsBackend()) });
+    const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', capsMeter: new CapsMeter(new InMemoryCapsBackend()) });
     c.loadManifest(manifest);
     const results = await Promise.all(Array.from({ length: 50 }, () => enforce(c, 'resolve_business')));
     expect(results.filter((r) => r.allowed)).toHaveLength(10);
@@ -447,7 +447,7 @@ describe('enforce() metering', () => {
   });
 
   it('fails closed without a meter', async () => {
-    const c = new Grantex({ apiKey: 'test-key' });
+    const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline' });
     c.loadManifest(acmeKyb);
     expect((await enforce(c, 'resolve_business')).subReason).toBe('meter_unavailable');
   });
@@ -501,7 +501,7 @@ describe('check-only and caps modes', () => {
 
   it('warn mode allows and reports what it would deny', async () => {
     const meter = new CapsMeter(new InMemoryCapsBackend());
-    const c = new Grantex({ apiKey: 'test-key', capsMeter: meter, capsMode: 'warn' });
+    const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', capsMeter: meter, capsMode: 'warn' });
     c.loadManifest(acmeKyb);
     for (let i = 0; i < 2; i += 1) {
       const r = await enforce(c, 'resolve_business');
@@ -514,7 +514,7 @@ describe('check-only and caps modes', () => {
   });
 
   it('warn mode reports a missing meter', async () => {
-    const c = new Grantex({ apiKey: 'test-key', capsMode: 'warn' });
+    const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', capsMode: 'warn' });
     c.loadManifest(acmeKyb);
     const r = await enforce(c, 'resolve_business');
     expect([r.allowed, r.wouldDeny?.sub_reason]).toEqual([true, 'meter_unavailable']);
@@ -524,14 +524,14 @@ describe('check-only and caps modes', () => {
     vi.mocked(verifyGrantToken).mockResolvedValue(
       grant([{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', caps: { resolve_business: { per_week: 1 } } }]),
     );
-    const c = new Grantex({ apiKey: 'test-key', capsMeter: new CapsMeter(new InMemoryCapsBackend()), capsMode: 'warn' });
+    const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', capsMeter: new CapsMeter(new InMemoryCapsBackend()), capsMode: 'warn' });
     c.loadManifest(acmeKyb);
     expect((await enforce(c, 'resolve_business')).reasonCode).toBe('token_invalid');
   });
 
   it('off mode skips caps and the meter', async () => {
     const backend = failingBackend(new Error('unused'));
-    const c = new Grantex({ apiKey: 'test-key', capsMeter: new CapsMeter(backend), capsMode: 'off' });
+    const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', capsMeter: new CapsMeter(backend), capsMode: 'off' });
     c.loadManifest(acmeKyb);
     for (let i = 0; i < 3; i += 1) {
       const r = await enforce(c, 'screen_person');
@@ -562,7 +562,7 @@ describe('check-only and caps modes', () => {
 
   it('permissive mode turns cap denials into allows', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const c = new Grantex({ apiKey: 'test-key', enforceMode: 'permissive' } as ConstructorParameters<typeof Grantex>[0]);
+    const c = new Grantex({ apiKey: 'test-key', revocationCheck: 'offline', enforceMode: 'permissive' } as ConstructorParameters<typeof Grantex>[0]);
     c.loadManifest(acmeKyb);
     const r = await enforce(c, 'resolve_business');
     expect([r.allowed, r.reasonCode, r.subReason]).toEqual([true, 'cap_exceeded', 'meter_unavailable']);

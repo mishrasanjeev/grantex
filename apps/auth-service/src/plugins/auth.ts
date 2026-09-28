@@ -12,6 +12,7 @@ export interface Developer {
   name: string;
   mode: 'live' | 'sandbox';
   plan: PlanName;
+  fidoRequired?: boolean;
 }
 
 declare module 'fastify' {
@@ -53,8 +54,8 @@ async function authenticateRequest(
   const keyHash = hashApiKey(apiKey);
 
   const sql = getSql();
-  const rows = await sql<{ id: string; name: string; mode: string; plan: string }[]>`
-    SELECT d.id, d.name, d.mode,
+  const rows = await sql<{ id: string; name: string; mode: string; plan: string; fido_required: boolean }[]>`
+    SELECT d.id, d.name, d.mode, d.fido_required,
            COALESCE((
              SELECT s.plan
              FROM subscriptions s
@@ -81,6 +82,7 @@ async function authenticateRequest(
     name: dev.name,
     mode: dev.mode === 'sandbox' ? 'sandbox' : 'live',
     plan: isPlanName(dev.plan) ? dev.plan : 'free',
+    fidoRequired: dev.fido_required === true,
   };
 }
 

@@ -36,11 +36,11 @@ export interface GrantexClientOptions {
   /** `enforce` (default) denies over-cap calls, `warn` allows them and reports `wouldDeny` / `wouldDenyAll`, `off` skips caps. */
   capsMode?: CapsMode;
   /**
-   * How `enforce()` finds out about revocations (PRD G-6). `offline` (the
-   * default) does not check: a revoked grant's token stays valid until it
-   * expires. `feed` follows the revocation feed and denies within seconds,
-   * failing closed when the feed goes stale. `online` asks the auth service
-   * about every call, and denies if it cannot.
+   * How `enforce()` finds out about revocations (PRD G-6). `online` (the
+   * default) asks the auth service about every call, and denies if it cannot.
+   * `feed` follows the revocation feed and denies within seconds, failing
+   * closed when the feed goes stale. `offline` is the explicit opt-out: a
+   * revoked grant's token stays valid until it expires.
    */
   revocationCheck?: RevocationCheckMode;
   /** Settings for `revocationCheck: 'feed'`. */
