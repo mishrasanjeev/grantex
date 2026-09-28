@@ -186,3 +186,5 @@ f71ee3999f1001bd055da6db6fe8eb5755d75b27:packages/sdk-ts/tests/verify-jwks-fetch
 f71ee3999f1001bd055da6db6fe8eb5755d75b27:packages/sdk-py/tests/test_verify_jwks_fetch.py:generic-api-key:472
 # Synthetic key thumbprint in the agent-key mirror flag test.
 c5de005c7806c575008632103c76625acafd35dc:apps/auth-service/tests/agent-key-mirror-flag.test.ts:generic-api-key:19
+# The squash merge of #1446 re-added the synthetic key thumbprint in the mirror flag test under its own commit.
+cef81ce2dbfda0967aaf05064edf29564f100807:apps/auth-service/tests/agent-key-mirror-flag.test.ts:generic-api-key:19
