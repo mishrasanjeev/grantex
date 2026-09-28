@@ -22,6 +22,11 @@
       }
     ]
   },
+  "statusLists": {
+    "https://mock-issuer.example/status/1": {
+      "42": "valid"
+    }
+  },
   "verify": [
     {
       "name": "every claim disclosed",
@@ -972,6 +977,86 @@
         "ok": false,
         "code": "key_unproven",
         "reason": "kb_malformed"
+      }
+    }
+  ],
+  "status": [
+    {
+      "name": "status VALID",
+      "vector": "every claim disclosed",
+      "statusLists": {
+        "https://mock-issuer.example/status/1": {
+          "42": "valid"
+        }
+      },
+      "expect": {
+        "ok": true
+      }
+    },
+    {
+      "name": "status INVALID (revoked)",
+      "vector": "every claim disclosed",
+      "statusLists": {
+        "https://mock-issuer.example/status/1": {
+          "42": "invalid"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "code": "passport_revoked",
+        "reason": "status_invalid"
+      }
+    },
+    {
+      "name": "status SUSPENDED",
+      "vector": "every claim disclosed",
+      "statusLists": {
+        "https://mock-issuer.example/status/1": {
+          "42": "suspended"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "code": "passport_revoked",
+        "reason": "status_suspended"
+      }
+    },
+    {
+      "name": "status INVALID on an SD-JWT+KB presentation",
+      "vector": "SD-JWT+KB presentation",
+      "statusLists": {
+        "https://mock-issuer.example/status/1": {
+          "42": "invalid"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "code": "passport_revoked",
+        "reason": "status_invalid"
+      }
+    },
+    {
+      "name": "status value outside section 7.1",
+      "vector": "every claim disclosed",
+      "statusLists": {
+        "https://mock-issuer.example/status/1": {
+          "42": "unknown"
+        }
+      },
+      "expect": {
+        "ok": false,
+        "code": "status_stale",
+        "reason": "status_unknown"
+      }
+    },
+    {
+      "name": "status resolver fails (no status list entry)",
+      "vector": "every claim disclosed",
+      "statusLists": {},
+      "expect": {
+        "ok": false,
+        "code": "status_stale",
+        "reason": "status_unresolved"
       }
     }
   ],

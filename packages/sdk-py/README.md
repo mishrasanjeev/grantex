@@ -1,5 +1,13 @@
 # grantex
 
+**Version 0.7.0:** `enforce()` checks the grant audience,
+requires an amount for capped scopes, and checks current revocation online by
+default. Per-call revocation settings cannot weaken the client setting.
+Python 3.9+ remains supported. These are breaking changes: follow the
+[enforcement migration guide](https://docs.grantex.dev/migration-enforcement).
+`verify_grant_token()` alone does not check current revocation. Verify
+publication in Release Status before installing.
+
 **Version 0.6.1:** exposes the signed WebAuthn grant evidence reference and
 `webauthn_verified` VC attestation field. An evidence reference is not the raw
 assertion or a current revocation check. Verify issuer, enrollment, RP ID,
@@ -39,7 +47,7 @@ Grantex lets humans authorize AI agents with **verifiable, revocable, audited gr
 ## Install
 
 ```bash
-pip install grantex==0.6.1
+pip install grantex==0.7.0
 ```
 
 ## Quick start
@@ -47,14 +55,20 @@ pip install grantex==0.6.1
 ```python
 from grantex import AuthorizeParams, ExchangeTokenParams, Grantex, VerifyGrantTokenOptions, verify_grant_token
 
-client = Grantex(api_key="YOUR_API_KEY")
+client = Grantex(api_key="YOUR_API_KEY", audience="https://api.merchant.example")
 
-# 1. Start the authorization flow
+# 1. Register the agent and its allowed resource, then request authorization
+agent = client.agents.register(
+    name="Email Assistant",
+    description="Reads files and sends email for the principal",
+    scopes=["files:read", "email:send"],
+    resource_servers=["https://api.merchant.example"],
+)
 request = client.authorize(AuthorizeParams(
-    agent_id="ag_01HXYZ...",
+    agent_id=agent.id,
     user_id="usr_01HXYZ...",
     scopes=["files:read", "email:send"],
-    audience="https://api.example.com",  # optional; becomes the JWT aud claim
+    audience="https://api.merchant.example",  # must match the relying party
 ))
 
 # Redirect the user to the consent page — they approve in plain language
@@ -62,8 +76,8 @@ print(request.consent_url)
 
 # 2. Exchange the authorization code for a grant token
 # (your redirect callback receives the `code` after user approves)
-token = client.tokens.exchange(ExchangeTokenParams(code=code, agent_id="ag_01HXYZ..."))
-print(token.grant_token)  # RS256-signed JWT
+token = client.tokens.exchange(ExchangeTokenParams(code=code, agent_id=agent.id))
+# Deliver token.grant_token securely to the agent; do not log it.
 print(token.scopes)       # ('files:read', 'email:send')
 
 # 3. Verify locally using keys retrieved from the issuer's JWKS
@@ -71,6 +85,7 @@ grant = verify_grant_token(
     token=token.grant_token,
     options=VerifyGrantTokenOptions(
         jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+        audience="https://api.merchant.example",
     ),
 )
 print(grant.principal_id)  # 'usr_01HXYZ...'
@@ -82,7 +97,8 @@ client.tokens.revoke(grant.token_id)
 ## Local JWKS verification
 
 Verify grant-token signatures locally using the issuer's public JWKS. The verifier
-retrieves the current JWKS over the network for each call:
+fetches signing keys when needed and caches them; it does not query current
+grant revocation status. Configure the expected audience for audience-bound tokens:
 
 ```python
 from grantex import VerifyGrantTokenOptions, verify_grant_token
@@ -91,6 +107,7 @@ verified = verify_grant_token(
     token="eyJhbGciOiJSUzI1NiIs...",
     options=VerifyGrantTokenOptions(
         jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+        audience="https://api.merchant.example",
     ),
 )
 

@@ -48,6 +48,7 @@ def verify(compact: str, **extra: Any) -> Any:
     kwargs: Dict[str, Any] = {
         "issuer_keys": resolver_for(ISSUER_KEYS.public_jwk),
         "now": NOW,
+        "status_resolver": lambda uri, idx: "valid",
     }
     kwargs.update(extra)
     return verify_passport(compact, **kwargs)
@@ -558,3 +559,162 @@ def test_disclosure_encoding_matches_the_typescript_library() -> None:
     # serialise without whitespace and keep non-ASCII characters unescaped.
     d = encode_disclosure("c2FsdA", "name", "Café Ö")
     assert base64.urlsafe_b64decode(d + "==").decode("utf-8") == '["c2FsdA","name","Café Ö"]'
+
+
+# Status (draft-ietf-oauth-status-list section 7.1): verify_passport fails closed.
+
+STATUS_URI = "https://mock-issuer.example/status/1"
+
+
+def bare(compact: str, **extra: Any) -> Any:
+    """verify_passport without any status decision, so each test states its own."""
+    kwargs: Dict[str, Any] = {"issuer_keys": resolver_for(ISSUER_KEYS.public_jwk), "now": NOW}
+    kwargs.update(extra)
+    return verify_passport(compact, **kwargs)
+
+
+def bare_refusal(compact: str, **extra: Any) -> Tuple[str, str]:
+    with pytest.raises(PassportError) as info:
+        bare(compact, **extra)
+    return info.value.code, info.value.reason
+
+
+def test_status_neither_resolver_nor_acknowledgement_is_a_configuration_error() -> None:
+    issued = issue()
+    with pytest.raises(ValueError, match="status_resolver.*status_checked_by"):
+        bare(issued.compact)
+
+
+def test_status_both_options_or_another_acknowledgement_is_a_configuration_error() -> None:
+    issued = issue()
+    with pytest.raises(ValueError):
+        bare(issued.compact, status_resolver=lambda uri, idx: "valid", status_checked_by="caller")
+    with pytest.raises(ValueError):
+        bare(issued.compact, status_checked_by="verifier")
+    with pytest.raises(ValueError):
+        bare(issued.compact, status_resolver="valid")
+
+
+def test_status_resolver_gets_the_reference_and_valid_is_accepted() -> None:
+    issued = issue()
+    calls: List[Tuple[str, int]] = []
+
+    def resolver(uri: str, idx: int) -> str:
+        calls.append((uri, idx))
+        return "valid"
+
+    result = bare(issued.compact, status_resolver=resolver)
+    assert calls == [(STATUS_URI, 42)]
+    assert result.status_checked_by == "resolver"
+
+
+def test_status_invalid_and_suspended_are_passport_revoked() -> None:
+    issued = issue()
+    assert bare_refusal(issued.compact, status_resolver=lambda uri, idx: "invalid") == (
+        "passport_revoked",
+        "status_invalid",
+    )
+    assert bare_refusal(issued.compact, status_resolver=lambda uri, idx: "suspended") == (
+        "passport_revoked",
+        "status_suspended",
+    )
+
+
+def test_status_failing_or_unknown_answer_is_status_stale() -> None:
+    issued = issue()
+    cause = RuntimeError("status list unreachable")
+
+    def failing(uri: str, idx: int) -> str:
+        raise cause
+
+    with pytest.raises(PassportError) as info:
+        bare(issued.compact, status_resolver=failing)
+    assert (info.value.code, info.value.reason) == ("status_stale", "status_unresolved")
+    assert info.value.__cause__ is cause
+    for answer in ("unknown", "VALID", 0, None, True):
+        assert bare_refusal(issued.compact, status_resolver=lambda uri, idx, a=answer: a) == (
+            "status_stale",
+            "status_unknown",
+        )
+
+
+def test_status_checked_by_caller_is_accepted_and_reported() -> None:
+    issued = issue()
+    result = bare(issued.compact, status_checked_by="caller")
+    assert result.status_checked_by == "caller"
+    assert result.status == {"status_list": {"uri": STATUS_URI, "idx": 42}}
+
+
+def test_status_resolver_is_not_called_for_a_passport_refused_on_another_rule() -> None:
+    issued = issue()
+    called: List[bool] = []
+
+    def resolver(uri: str, idx: int) -> str:
+        called.append(True)
+        return "valid"
+
+    assert bare_refusal(
+        issued.compact, now=IAT + 31 * 86_400, status_resolver=resolver
+    ) == ("passport_expired", "expired")
+    assert called == []
+
+
+# DID syntax (W3C DID Core section 3.1).
+
+VALID_DIDS = [
+    "did:web:provider.example",
+    "did:web:provider.example:agents:shopper-01",
+    "did:web:provider.example%3A8443:agents:shopper-01",
+    "did:example:123456789abcdefghi",
+    "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+    "did:example:a::b",
+    "did:example:A.b-c_d",
+]
+
+INVALID_DIDS = [
+    "xdid:web:provider.example",
+    "did:web:provider.example agent",
+    "did:web:provider.example\n",
+    "did:web:provider.example/agents",
+    "did:web:provider.example?service=x",
+    "did:web:provider.example#key-1",
+    "did:web:",
+    "did:web:provider.example:",
+    "did:Web:provider.example",
+    "did::provider.example",
+    "did:web",
+    "did:web:provider%2",
+    "did:web:provider%zz",
+    "did:web:café.example",
+]
+
+
+@pytest.mark.parametrize("sub", VALID_DIDS)
+def test_did_every_did_the_abnf_allows_is_issued_and_verified(sub: str) -> None:
+    assert verify(issue(sub=sub).compact).sub == sub
+
+
+@pytest.mark.parametrize("sub", INVALID_DIDS)
+def test_did_a_sub_that_is_not_a_did_in_full_is_refused(sub: str) -> None:
+    with pytest.raises(PassportError):
+        issue(sub=sub)
+    compact = resign(issue().compact, lambda _h, p: p.__setitem__("sub", sub))
+    assert refusal(compact) == ("passport_malformed", "bad_claim")
+
+
+@pytest.mark.parametrize("did", INVALID_DIDS)
+def test_did_a_provider_did_that_is_not_a_did_in_full_is_refused(did: str) -> None:
+    claims = copy.deepcopy(PROFILE_CLAIMS)
+    claims["provider"]["did"] = did
+    assert refusal(issue(claims=claims).compact) == ("passport_malformed", "bad_claim")
+
+
+@pytest.mark.parametrize(
+    "value", [float("nan"), float("inf"), float("-inf"), -1, True, "60"]
+)
+def test_time_options_must_be_finite_non_negative_numbers(value: Any) -> None:
+    issued = issue()
+    with pytest.raises(ValueError, match="finite number"):
+        verify(issued.compact, now=value)
+    with pytest.raises(ValueError, match="finite number"):
+        verify(issued.compact, clock_skew_seconds=value)

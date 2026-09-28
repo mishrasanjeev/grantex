@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WebAuthnList } from '../webauthn/WebAuthnList';
+import type { EnrollmentSession } from '../../api/webauthn';
 
 const mockCreateEnrollmentSession = vi.fn();
 const mockListWebAuthnCredentials = vi.fn();
@@ -46,5 +47,27 @@ describe('WebAuthnList', () => {
     await user.click(screen.getByRole('button', { name: 'View passkeys' }));
     expect(await screen.findByText('Laptop')).toBeInTheDocument();
     expect(mockListWebAuthnCredentials).toHaveBeenCalledWith('person_1');
+  });
+
+  it('keeps the enrollment target fixed until issuance completes and clears the link on a later change', async () => {
+    let resolve!: (value: EnrollmentSession) => void;
+    mockCreateEnrollmentSession.mockReturnValueOnce(new Promise<EnrollmentSession>((done) => { resolve = done; }));
+    const user = userEvent.setup();
+    render(<WebAuthnList />);
+    const principal = screen.getByLabelText('Principal ID');
+    const request = screen.getByLabelText('Authorization request ID (optional)');
+    await user.type(principal, 'person_1');
+    await user.click(screen.getByRole('button', { name: 'Create enrollment link' }));
+    expect(principal).toBeDisabled();
+    expect(request).toBeDisabled();
+    await user.type(principal, 'different-person');
+    expect(principal).toHaveValue('person_1');
+    await act(async () => resolve({
+      enrollmentUrl: 'https://grantex.dev/passkey-enroll#ticket=test', expiresAt: '2026-12-01T00:00:00Z',
+    }));
+    expect(principal).toBeEnabled();
+    expect(screen.getByLabelText('One-use enrollment link')).toBeInTheDocument();
+    await user.clear(principal);
+    expect(screen.queryByLabelText('One-use enrollment link')).not.toBeInTheDocument();
   });
 });

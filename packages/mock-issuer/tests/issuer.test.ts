@@ -207,6 +207,8 @@ describe('Agent Passport issuance', () => {
     const passport = await verifyPassport({
       compact: issued.compact,
       issuerKeys: (iss) => (iss === MOCK_ISSUER_ENTITY_ID ? issuer.jwks().keys : []),
+      // The issuer's own status store answers for the entry the passport names.
+      statusResolver: () => issuer.passportStatus(issued.attestationId),
       paymentsRails: true,
     });
     expect(passport.iss).toBe(MOCK_ISSUER_ENTITY_ID);
@@ -231,14 +233,18 @@ describe('Agent Passport issuance', () => {
     const { issued } = issueFor(MockIssuer.create());
     const other = MockIssuer.create();
     await expect(
-      verifyPassport({ compact: issued.compact, issuerKeys: () => other.jwks().keys }),
+      verifyPassport({ compact: issued.compact, issuerKeys: () => other.jwks().keys, statusCheckedBy: 'caller' }),
     ).rejects.toBeInstanceOf(PassportError);
   });
 
   it('binds an Ed25519 agent key too', async () => {
     const issuer = MockIssuer.create();
     const { issued } = issueFor(issuer, agentKeyPair('ed25519'));
-    const passport = await verifyPassport({ compact: issued.compact, issuerKeys: () => issuer.jwks().keys });
+    const passport = await verifyPassport({
+      compact: issued.compact,
+      issuerKeys: () => issuer.jwks().keys,
+      statusCheckedBy: 'caller',
+    });
     expect(passport.cnfJwk.crv).toBe('Ed25519');
   });
 

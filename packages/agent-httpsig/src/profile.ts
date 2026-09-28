@@ -381,7 +381,15 @@ export async function verify(request: AgentRequest, options: VerifyOptions): Pro
   // @authority omits the default port (RFC 9421 section 2.2.3), so a
   // configured :80 or :443 would deny every request; refuse it here.
   if (/:(?:80|443)$/.test(expectedAuthority)) fail('expectedAuthority must omit the default port (80 or 443)');
-  const now = Math.floor(options.now ?? nowSeconds());
+  // NaN compares false with everything, so both time checks below would
+  // pass a stale signature, and an infinity makes the window meaningless. A
+  // clock that is not a finite, non-negative number is a configuration
+  // error: refuse to answer rather than decide on it (fail closed).
+  const clock: unknown = options.now ?? nowSeconds();
+  if (typeof clock !== 'number' || !Number.isFinite(clock) || clock < 0) {
+    fail('now must be a finite, non-negative number (UNIX seconds)');
+  }
+  const now = Math.floor(clock);
   const deny = (reason: DenialReason, code: DenialCode = 'request_signature_invalid'): VerifyFailure => ({
     ok: false,
     code,

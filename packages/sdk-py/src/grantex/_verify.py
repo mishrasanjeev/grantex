@@ -51,7 +51,7 @@ _T = TypeVar("_T")
 class LegacyClaimsWarning(FutureWarning):
     """A grant token was read through a legacy claim alias.
 
-    Reading aliases is deprecated in 0.6 and off by default from 0.7.
+    Reading aliases is deprecated; set legacy_claims=False for standard claims.
     """
 
 
@@ -198,7 +198,8 @@ def verify_grant_token(
         warnings.warn(
             f"Grant token claim {alias!r} is a legacy alias of "
             f"{LEGACY_CLAIM_ALIASES[alias]}. Reading legacy claim aliases is "
-            "deprecated and stops by default in 0.7; see docs/migration-0.6.md.",
+            "deprecated; set legacy_claims=False to require standard claims. "
+            "See docs/migration-0.6.md.",
             LegacyClaimsWarning,
             stacklevel=2,
         )

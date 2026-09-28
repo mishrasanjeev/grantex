@@ -512,7 +512,9 @@ export async function signTokenStatusList(snapshot: AcceptanceSnapshot, now: Dat
  * one purpose, secured as a VC-JWT (W3C VC-JOSE-COSE §3.1.1: the credential
  * is the claims set, typ `vc+jwt`, cty `vc`, no `vc` claim). `iat` and `exp`
  * are the signature's; `validFrom` and `validUntil` say the same of the list.
- * `ttl` is in milliseconds (§2.2) and matches Cache-Control.
+ * `ttl` is in milliseconds (§2.2) and matches Cache-Control. §2.2 makes it
+ * OPTIONAL, assumes no default when absent and sets no lower bound, so the
+ * cascade window's 60 s is stated exactly as 60000.
  */
 export async function signBitstringStatusListCredential(
   snapshot: AcceptanceSnapshot,

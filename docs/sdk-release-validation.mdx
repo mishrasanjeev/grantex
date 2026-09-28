@@ -1,0 +1,130 @@
+---
+title: "Enforcement release validation"
+description: "Publication, registry integrity, validation evidence and explicit limits for the enforcement SDK and integration releases."
+---
+
+## Status
+
+Updated September 28, 2026. All eight releases below were uploaded after
+[PR #1452](https://github.com/mishrasanjeev/grantex/pull/1452) merged with green
+checks. Main CI also passed on merge commit `2ec5cea4`.
+CI and registry publication are separate gates. [Release Status](/release-status) is the source of truth
+for installable versions; [Migration](/migration-enforcement) covers breaking
+defaults, runtime requirements and rollout.
+
+## Registry Verification
+
+All six npm archives have registry SHA-512 integrity values matching the
+tested archives. A clean exact-version public npm installation passed the
+installed-artifact verifier below, including real adapter, gateway, Strands
+and MCP guard invocation. Its dependency audit reported zero vulnerabilities.
+The installed TypeScript SDK also passed the production enforcement probe.
+
+Both Python wheels and both source distributions have PyPI SHA-256 hashes
+matching the tested files. Fresh installations from those public PyPI file
+URLs passed all 1,584 SDK tests with real Postgres/Redis and all 12 Strands
+tests; the installed SDK passed the production enforcement probe. These are
+registry downloads, not local-wheel substitutions.
+
+**Normal index installation passed:** after an initial propagation delay,
+fresh uncached exact-version installation of both packages from the public
+PyPI simple index succeeded on Windows and in workstation Docker on Python
+3.11. These checks used no local wheels or file-URL substitutions. The fresh
+index-installed Windows environment then passed all 1,584 SDK tests with real
+Postgres/Redis, all 12 Strands tests and the production enforcement probe.
+Earlier file-URL verification is recorded separately above.
+
+| Python registry distribution | SHA-256 |
+|---|---|
+| `grantex-0.7.0-py3-none-any.whl` | `2f2178cabb073727d58c271b573b0f02da78b337507a42421d9a300dd193d16b` |
+| `grantex-0.7.0.tar.gz` | `be49568b038c5dc5798b6780f3c928bcbe6536ed292b761a0256e5b0c41a1aa5` |
+| `grantex_strands-0.2.0-py3-none-any.whl` | `598a8f51f7f520a46a2c0e645d7611b197113eb34b78061c51d44f3b4c648a17` |
+| `grantex_strands-0.2.0.tar.gz` | `90ce6243fefa733cf3e2fc108ac1d2caf8ad685e121f273f6985938f26004c58` |
+
+## Package Validation
+
+| Release | Completed pre-publication verification |
+| --- | --- |
+| `@grantex/sdk@0.8.0` | Typecheck, build, all 1,351 tests with real Postgres and Redis |
+| `grantex==0.7.0` | Lint, strict typing of 121 source files, wheel/sdist build, metadata checks, all 1,584 installed-wheel tests with real Postgres and Redis |
+| `@grantex/cli@0.4.0` | Typecheck, build, all 556 tests and installed CLI version check |
+| `@grantex/gateway@0.2.0` | Typecheck, build, all 111 tests |
+| `@grantex/adapters@0.2.0` | Typecheck, build, all 164 tests |
+| `@grantex/strands@0.2.0` | Typecheck, build, all 11 tests and real installed tool invocation |
+| `grantex-strands==0.2.0` | Build, metadata checks, all 12 installed-wheel tests |
+| `@grantex/mcp-auth@3.0.0` | Typecheck, build, 359 unit tests; 63 real Postgres/Redis integration tests; 7 Chromium browser tests |
+
+MCP Auth has two unit skips for storage-contract inspection when an adapter
+does not expose a dump operation. They are not counted as passing. The real
+Postgres/Redis suite separately exercises durable storage and server restart.
+
+Unchanged packages were compatibility-tested rather than republished:
+`@grantex/x402@0.4.1` passed its 210 tests, typecheck and build;
+Go `v0.4.1` passed `go test ./...` and `go vet ./...`.
+
+## Installed Artifact and Runtime Checks
+
+Installed-artifact verification uses distributions, not source imports.
+It passed for packed candidates before publication and public npm downloads
+after publication.
+Its executable verification is
+[`scripts/verify-enforcement-artifacts.mjs`](https://github.com/mishrasanjeev/grantex/blob/main/scripts/verify-enforcement-artifacts.mjs).
+It checks exact versions, runtime declarations, public exports, package
+licenses/NOTICE files and migration documentation, then uses real signed
+tokens against a synthetic issuer to test:
+
+1. Correct audience and trusted amount succeed.
+2. Wrong or unconfigured audience, omitted amount and excessive amount fail.
+3. Rejected calls do not reach the tool callback or gateway upstream.
+4. Default enforcement queries current revocation state.
+5. Revocation and a status-service outage refuse execution.
+6. A per-call offline downgrade is rejected.
+7. Installed Strands, adapter, gateway and MCP guards enforce their respective
+   contracts, including mandatory MCP revocation configuration.
+
+This check also passed in workstation Docker on Node.js 22.12, the minimum
+runtime for the changed npm packages. Python Strands passed all 12 tests in
+Docker on Python 3.11. The installed Python SDK passed 1,582 tests in Docker
+on Python 3.9, with two runtime-specific skips. Following correction of stale
+deprecation text, its 53 claim-compatibility regressions were repeated on
+Python 3.9. The rebuilt Python wheel passed the full 1,584-test suite again.
+
+## Hosted Passkey Verification
+
+The production Chromium suite passed six tests across three files, covering
+sandbox/live enrollment and consent parity, multiple devices, removal,
+replay and unauthorized request rejection, OAuth consent, portable evidence,
+revocation status, account response policy and the hosted dashboard.
+These tests use disposable accounts and Chromium virtual authenticators.
+They do not certify physical hardware, every browser or independent vendor
+interoperability.
+
+## Security and Documentation Checks
+
+Documentation integrity, navigation compilation, SEO/AEO checks, the vendor
+denylist, pinned secret scanning and its scanner self-test passed locally.
+Packed licenses and Python distribution metadata were inspected.
+Before publication, the Python Strands candidate's resolved third-party
+dependencies passed vulnerability and license checks using the same-checkout
+SDK wheel. The Python dependency audit uses the supported OSV backend after
+the PyPI per-version API repeatedly returned HTTP 503 during candidate validation.
+It still resolves the complete dependency graph, fails on advisory findings
+or audit errors, and retains the existing license policy. A known-vulnerable
+fixture was separately verified to return failure. See the
+[auditor's supported backends](https://github.com/pypa/pip-audit#usage).
+An advisory audit does not certify absence of vulnerabilities in a new release;
+source-level security checks and functional tests are distinct from registry
+advisories.
+
+## Boundaries
+
+- A packed-artifact test is not a registry install. npm clean-install checks,
+  public Python-file installation and normal pinned PyPI index installs passed
+  after publication as recorded above.
+- Local JWT verification does not imply current revocation. Gateway,
+  adapters and default Strands verification remain local unless explicitly
+  combined with current-state enforcement.
+- SDK tests do not prove custody-provider availability, funded mainnet
+  payment settlement, external merchant acceptance or regulatory compliance.
+- Passing the suites is evidence for the tested cases, not a guarantee that
+  every possible execution is flawless.

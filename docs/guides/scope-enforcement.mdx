@@ -211,7 +211,7 @@ const protectedTool = grantex.wrapTool(myLangChainTool, {
 
 </CodeGroup>
 
-From the next release, a grant with a `capped:N` scope needs the call's amount:
+From version TypeScript 0.8.0 / Python 0.7.0, a grant with a `capped:N` scope needs the call's amount:
 pass an amount extractor (`extract_amount=lambda arguments: arguments["amount"]`
 / `extractAmount: (input) => input.amount`, and `extractAmount` on
 `enforceMiddleware`), or every call is denied with `amount_missing`. See

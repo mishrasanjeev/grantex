@@ -263,7 +263,8 @@ export interface VerifiedGrant {
   /**
    * Legacy claim aliases this result was read from because the token had no
    * standard claim for them (for example `scp` without `scope`). Empty for
-   * 0.6 tokens. Reading aliases is deprecated and off by default from 0.7.
+   * standard-claim tokens. Reading aliases is deprecated; disable legacyClaims
+   * to require standard claims.
    */
   legacyClaimsUsed?: string[];
 }
@@ -457,8 +458,8 @@ export interface VerifyGrantTokenOptions {
   /**
    * Read legacy claim aliases (`agt`, `dev`, `grnt`, `scp`, `parentAgt`,
    * `parentGrnt`, `delegationDepth`) when a token lacks the standard claim.
-   * Defaults to `true` in 0.6, with a deprecation warning when an alias is
-   * used; the default becomes `false` in 0.7. With `false`, only standard
+   * Defaults to `true`, with a deprecation warning when an alias is
+   * used. With `false`, only standard
    * claims are read and the token must have `typ: at+jwt`.
    */
   legacyClaims?: boolean;

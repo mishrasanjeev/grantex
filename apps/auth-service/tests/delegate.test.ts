@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { buildTestApp, authHeader, seedAuth, sqlMock, mockRedis, TEST_AGENT, TEST_DEVELOPER } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 import { signGrantToken, initKeys } from '../src/lib/crypto.js';
@@ -559,5 +559,46 @@ describe('POST /v1/grants/delegate — delegation depth limit', () => {
     await delegateFrom(await tokenAtDepth(5));
 
     expect(sqlMock.begin).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /v1/grants/delegate of a passport-bound grant', () => {
+  afterEach(() => { vi.unstubAllEnvs(); });
+
+  const bindingQueries = () => sqlMock.mock.calls.filter(([parts]) =>
+    (Array.isArray(parts) ? parts.join('') : String(parts)).includes('grant_passport_bindings'));
+
+  it('is refused with the flag on, before anything is written', async () => {
+    vi.stubEnv('PASSPORT_BOUND_GRANTS_ENABLED', 'true');
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
+    // The parent grant has a passport binding.
+    sqlMock.mockResolvedValueOnce([{ '?column?': 1 }]);
+
+    const res = await app.inject({
+      method: 'POST', url: '/v1/grants/delegate', headers: authHeader(),
+      payload: { parentGrantToken: parentToken, subAgentId: SUB_AGENT.id, scopes: ['read'] },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PASSPORT_BOUND_DELEGATION_UNSUPPORTED');
+    expect(bindingQueries().length).toBeGreaterThan(0);
+    expect(sqlMock.mock.calls.some(([parts]) =>
+      (Array.isArray(parts) ? parts.join('') : String(parts)).includes('INSERT INTO grants'))).toBe(false);
+  });
+
+  it('does not read bindings with the flag off', async () => {
+    sqlMock.mockClear();
+    seedAuth();
+    mockRedis.get.mockResolvedValue(null);
+    sqlMock.mockResolvedValueOnce([ACTIVE_PARENT_ROW]);
+    // Sub-agent not found: the request ends before any write.
+    sqlMock.mockResolvedValueOnce([]);
+
+    await app.inject({
+      method: 'POST', url: '/v1/grants/delegate', headers: authHeader(),
+      payload: { parentGrantToken: parentToken, subAgentId: 'ag_MISSING', scopes: ['read'] },
+    });
+    expect(bindingQueries()).toHaveLength(0);
   });
 });

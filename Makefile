@@ -27,10 +27,10 @@ endif
 NPM ?= npm
 
 PY_SDK := packages/sdk-py
-PY_HTTPSIG := packages/agent-httpsig-py
-TS_PACKAGES := packages/sdk-ts packages/mcp-auth apps/auth-service packages/agent-httpsig packages/agent-passport packages/mock-issuer
 PY_AGENT_PASSPORT := packages/agent-passport-py
 PY_VERIFIER := packages/verifier-py
+TS_PACKAGES := packages/sdk-ts packages/mcp-auth packages/agent-passport apps/auth-service packages/agent-httpsig packages/mock-issuer
+PY_HTTPSIG := packages/agent-httpsig-py
 
 .PHONY: help install check test check-docs check-denylist check-py check-ts test-py test-scripts test-ts
 
@@ -49,9 +49,9 @@ install:
 	$(NPM) --prefix packages/sdk-ts run build
 	# @grantex/mock-issuer resolves @grantex/agent-passport from the local build.
 	$(NPM) --prefix packages/agent-passport run build
-	$(PYTHON) -m pip install --disable-pip-version-check -e "$(PY_SDK)[dev]" -e "$(PY_HTTPSIG)[dev]" ruff
 	$(PYTHON) -m pip install --disable-pip-version-check -e "$(PY_SDK)[dev]" -e "$(PY_AGENT_PASSPORT)[dev]" ruff
 	$(PYTHON) -m pip install --disable-pip-version-check -e "$(PY_AGENT_PASSPORT)" -e "$(PY_HTTPSIG)" -e "$(PY_VERIFIER)[dev]"
+	$(PYTHON) -m pip install --disable-pip-version-check -e "$(PY_SDK)[dev]" -e "$(PY_HTTPSIG)[dev]" ruff
 
 check: check-docs check-denylist check-py check-ts
 
@@ -67,12 +67,12 @@ check-denylist:
 check-py:
 	cd $(PY_SDK) && $(PYTHON) -m ruff check src tests
 	cd $(PY_SDK) && $(PYTHON) -m mypy --strict src/grantex
-	cd $(PY_HTTPSIG) && $(PYTHON) -m ruff check src tests
-	cd $(PY_HTTPSIG) && $(PYTHON) -m mypy --strict src
 	cd $(PY_AGENT_PASSPORT) && $(PYTHON) -m ruff check src tests
 	cd $(PY_AGENT_PASSPORT) && $(PYTHON) -m mypy --strict src
 	cd $(PY_VERIFIER) && $(PYTHON) -m ruff check src tests
 	cd $(PY_VERIFIER) && $(PYTHON) -m mypy --strict src
+	cd $(PY_HTTPSIG) && $(PYTHON) -m ruff check src tests
+	cd $(PY_HTTPSIG) && $(PYTHON) -m mypy --strict src
 
 check-ts:
 	@for pkg in $(TS_PACKAGES); do \
@@ -84,9 +84,9 @@ test: test-py test-scripts test-ts
 
 test-py:
 	cd $(PY_SDK) && $(PYTHON) -m pytest -q
-	cd $(PY_HTTPSIG) && $(PYTHON) -m pytest -q
 	cd $(PY_AGENT_PASSPORT) && $(PYTHON) -m pytest -q
 	cd $(PY_VERIFIER) && $(PYTHON) -m pytest -q
+	cd $(PY_HTTPSIG) && $(PYTHON) -m pytest -q
 
 # Tests of the repository scripts (the vendor denylist check).
 test-scripts:

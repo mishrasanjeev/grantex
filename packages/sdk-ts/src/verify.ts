@@ -9,7 +9,7 @@ export const GRANT_CLAIM = 'urn:grantex:grant';
 
 /**
  * Legacy claim aliases and the standard claims that replace them. Reading an
- * alias is deprecated in 0.6 and off by default from 0.7.
+ * alias is deprecated; set legacyClaims: false to require standard claims.
  */
 export const LEGACY_CLAIM_ALIASES: Readonly<Record<string, string>> = Object.freeze({
   agt: `${GRANT_CLAIM}.agent_did`,
@@ -34,7 +34,7 @@ function warnLegacyAliases(aliases: readonly string[]): void {
     if (warnedLegacyAliases.has(alias)) continue;
     warnedLegacyAliases.add(alias);
     const message = `Grant token claim "${alias}" is a legacy alias of ${LEGACY_CLAIM_ALIASES[alias]}. `
-      + 'Reading legacy claim aliases is deprecated and stops by default in 0.7; see docs/migration-0.6.md.';
+      + 'Reading legacy claim aliases is deprecated; set legacyClaims: false to require standard claims. See docs/migration-0.6.md.';
     if (typeof process !== 'undefined' && typeof process.emitWarning === 'function') {
       process.emitWarning(message, { type: 'DeprecationWarning', code: 'GRANTEX_LEGACY_CLAIM' });
     } else if (typeof console !== 'undefined') {

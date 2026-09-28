@@ -119,6 +119,19 @@ function relative(root, file) {
   return path.relative(root, file).split(path.sep).join('/');
 }
 
+export function expectedMcpLimitationIds(version) {
+  if (version === '2.0.2') return [
+    'mcp-process-local-codes', 'mcp-consent-metadata-only',
+    'mcp-code-handoff-incomplete', 'mcp-no-live-revocation-lookup',
+    'mcp-token-issued-hook-unused', 'mcp-redirect-allowlist-not-global',
+  ];
+  if (version?.startsWith('3.')) return [
+    'mcp-shared-storage-configuration', 'mcp-upstream-authority-check',
+    'mcp-principal-handoff',
+  ];
+  return [];
+}
+
 export async function validateSeoAeo(options = {}) {
   const root = options.root || defaultRoot;
   const docsRoot = options.docsRoot || path.join(root, 'docs');
@@ -154,17 +167,10 @@ export async function validateSeoAeo(options = {}) {
   }
   if (rootRelease) {
     const mcp = rootRelease.artifacts?.find((artifact) => artifact.id === 'mcp-auth');
-    const expected = new Set([
-      'mcp-process-local-codes',
-      'mcp-consent-metadata-only',
-      'mcp-code-handoff-incomplete',
-      'mcp-no-live-revocation-lookup',
-      'mcp-token-issued-hook-unused',
-      'mcp-redirect-allowlist-not-global',
-    ]);
+    const expected = new Set(expectedMcpLimitationIds(mcp?.version));
     const actual = new Set((mcp?.limitations || []).map((item) => item.id));
-    if (actual.size !== expected.size || [...expected].some((id) => !actual.has(id))) {
-      failures.push('release-status.json must publish all six MCP Auth 2.0.2 limitations');
+    if (!expected.size || actual.size !== expected.size || [...expected].some((id) => !actual.has(id))) {
+      failures.push('release-status.json must publish the limitations for its advertised MCP Auth version');
     }
 
     const goSdk = rootRelease.artifacts?.find((artifact) => artifact.id === 'go-sdk');

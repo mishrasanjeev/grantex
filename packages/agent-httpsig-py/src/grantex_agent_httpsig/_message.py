@@ -168,6 +168,8 @@ def _derived_value(message: HttpMessage, name: str) -> str:
     raise AgentHttpSigError("derived component " + name + " is not implemented")
 
 
+# RFC 9110 section 5.6.2 tchar without uppercase ALPHA (RFC 9421 section 2.1).
+_FIELD_NAME = re.compile(r"[!#$%&'*+\-.^_`|~0-9a-z]+")
 _PRINTABLE = re.compile(r"[\x20-\x7e]*")
 
 
@@ -212,8 +214,9 @@ def create_signature_base(
             if value is None:
                 value = _derived_value(message, name)
         else:
-            # Section 2.1: lowercased field names only.
-            if name != name.lower() or name == "":
+            # Section 2.1: the lowercased form of an RFC 9110 section 5.1
+            # field name (token = 1*tchar, section 5.6.2).
+            if not _FIELD_NAME.fullmatch(name):
                 raise AgentHttpSigError("invalid field name %r" % name)
             v = field_value(message.headers, name)
             if v is None:
