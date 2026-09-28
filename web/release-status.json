@@ -82,8 +82,8 @@
       "limitations": [
         {
           "id": "enforce-source-only-hardening",
-          "summary": "This passkey release predates PRs #1440 and #1441: enforce() audience checks and denial of capped calls without an amount are not included.",
-          "workaround": "Validate the intended token audience at the service boundary and pass a validated amount for capped calls. Do not rely on wrappers that omit amounts. The breaking source fixes require a separately versioned release.",
+          "summary": "This passkey release predates PRs #1440, #1441 and #1442: audience checks, denial of capped calls without an amount, and online revocation by default are not included.",
+          "workaround": "Validate the intended token audience at the service boundary, pass a validated amount for capped calls, and explicitly set revocationCheck: 'online'. Do not rely on wrappers that omit amounts. The breaking source fixes require a separately versioned release.",
           "workaroundUrl": "https://docs.grantex.dev/release-status#known-limitations-in-the-current-published-artifacts"
         }
       ]
@@ -124,8 +124,8 @@
       "limitations": [
         {
           "id": "enforce-source-only-hardening",
-          "summary": "This passkey release predates PRs #1440 and #1441: enforce() audience checks and denial of capped calls without an amount are not included.",
-          "workaround": "Validate the intended token audience at the service boundary and pass a validated amount for capped calls. Do not rely on wrappers that omit amounts. The breaking source fixes require a separately versioned release.",
+          "summary": "This passkey release predates PRs #1440, #1441 and #1442: audience checks, denial of capped calls without an amount, and online revocation by default are not included.",
+          "workaround": "Validate the intended token audience at the service boundary, pass a validated amount for capped calls, and explicitly set revocation_check='online'. Do not rely on wrappers that omit amounts. The breaking source fixes require a separately versioned release.",
           "workaroundUrl": "https://docs.grantex.dev/release-status#known-limitations-in-the-current-published-artifacts"
         }
       ]

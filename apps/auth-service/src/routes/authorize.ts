@@ -288,7 +288,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     const isPolicyAllow = policyEffect === 'allow';
     // Policy may deny, narrow, or flag a request, but it must never stand in
     // for the Principal's approval in live mode.
-    const autoApprove = isSandbox;
+    const autoApprove = isSandbox && !request.developer.fidoRequired;
     const autoCode = autoApprove ? ulid() : null;
 
     await sql`
@@ -322,7 +322,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
     if (isSandbox) {
       responseBody['sandbox'] = true;
-      responseBody['code'] = autoCode;
+      if (autoCode !== null) responseBody['code'] = autoCode;
     } else if (isPolicyAllow) {
       responseBody['policyEnforced'] = true;
       responseBody['effect'] = 'allow';
@@ -339,9 +339,9 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /v1/authorize/:id/approve (internal/test endpoint)
   app.post<{ Params: { id: string } }>('/v1/authorize/:id/approve', async (request, reply) => {
-    if (request.developer.mode !== 'sandbox') {
+    if (request.developer.mode !== 'sandbox' || request.developer.fidoRequired) {
       return reply.status(403).send({
-        message: 'Live authorization requests must be approved through the consent flow',
+        message: 'Live or passkey-required authorization requests must be approved through the consent flow',
         code: 'CONSENT_REQUIRED',
         requestId: request.id,
       });
@@ -370,9 +370,9 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
 
   // POST /v1/authorize/:id/deny
   app.post<{ Params: { id: string } }>('/v1/authorize/:id/deny', async (request, reply) => {
-    if (request.developer.mode !== 'sandbox') {
+    if (request.developer.mode !== 'sandbox' || request.developer.fidoRequired) {
       return reply.status(403).send({
-        message: 'Live authorization requests must be denied through the consent flow',
+        message: 'Live or passkey-required authorization requests must be denied through the consent flow',
         code: 'CONSENT_REQUIRED',
         requestId: request.id,
       });

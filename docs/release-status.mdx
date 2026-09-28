@@ -149,11 +149,14 @@ Custody](/guides/base-usdc-custody) for the custody and RPC prerequisites.
 <Warning>
   **TypeScript `0.7.1` and Python `0.6.1`:** these passkey releases were built
   from `a919ea8a`. The later `enforce()` audience checks and denial of capped
-  calls without an amount (PRs #1440 and #1441) are source-only, not included
+  calls without an amount (PRs #1440 and #1441), and online revocation by
+  default (PR #1442), are source-only, not included
   in these registry artifacts. Until a separately versioned release ships,
   validate the intended token audience at your service boundary and always
   supply and validate the transaction amount for a capped scope. Do not rely
-  on wrapper calls that omit it. The corresponding source docs mark these
+  on wrapper calls that omit it. Set `revocationCheck: 'online'` in TypeScript
+  or `revocation_check='online'` in Python explicitly to check current grant
+  status; these published versions still default to offline checks. The corresponding source docs mark these
   changes as "next release".
 </Warning>
 

@@ -374,7 +374,7 @@ export async function oauthRoutes(app: FastifyInstance): Promise<void> {
 
       const sql = getSql();
       const rows = await sql`
-        SELECT p.*, a.name AS agent_name, d.mode
+        SELECT p.*, a.name AS agent_name, d.mode, d.fido_required
         FROM oauth_par_requests p
         JOIN agents a ON a.id = p.client_id
         JOIN developers d ON d.id = p.developer_id
@@ -410,7 +410,8 @@ export async function oauthRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const authRequestId = newAuthRequestId();
-      const code = par['mode'] === 'sandbox' ? newAuthorizationCode() : null;
+      const autoApprove = par['mode'] === 'sandbox' && par['fido_required'] !== true;
+      const code = autoApprove ? newAuthorizationCode() : null;
       const authExpiresAt = new Date(Date.now() + config.authRequestLifetimeSeconds * 1000);
       let claimed = false;
       await sql.begin(async (_tx) => {
@@ -438,7 +439,7 @@ export async function oauthRoutes(app: FastifyInstance): Promise<void> {
             ${par['developer_id'] as string}, ${par['scopes'] as string[]},
             ${par['redirect_uri'] as string}, ${par['state'] as string},
             '24h', ${authExpiresAt}, ${par['resource'] as string},
-            ${par['mode'] === 'sandbox' ? 'approved' : 'pending'}, ${code},
+            ${autoApprove ? 'approved' : 'pending'}, ${code},
             ${par['code_challenge'] as string}, 'S256', ${par['dpop_jkt'] as string},
             ${OAUTH_PROTOCOL},
             ${par['authorization_details'] === null || par['authorization_details'] === undefined
