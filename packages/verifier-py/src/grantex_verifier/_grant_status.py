@@ -46,7 +46,6 @@ class GrantStatusSource(Protocol):
         self, *, grant_id: str, token_id: str, parent_grant_id: Optional[str]
     ) -> GrantStatus:
         """The grant's revocation state. May raise; the verifier then refuses."""
-        ...
 
 
 class OnlineGrantStatus:

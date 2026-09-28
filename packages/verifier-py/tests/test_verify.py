@@ -20,10 +20,10 @@ from conftest import (
     tx,
 )
 
-from grantex_verifier import CHECK_ORDER, GrantStatus, VerificationResult, verify
+from grantex_verifier import CHECK_ORDER, GrantStatus, VerifierDecision, verify
 
 
-def run(world: World, *, transaction: Any = None, config: Any = None, **request: Any) -> VerificationResult:
+def run(world: World, *, transaction: Any = None, config: Any = None, **request: Any) -> VerifierDecision:
     req, passport, grant = world.signed_request(**request)
     return verify(
         passport,
@@ -34,7 +34,7 @@ def run(world: World, *, transaction: Any = None, config: Any = None, **request:
     )
 
 
-def failed(result: VerificationResult, check: str, code: str) -> None:
+def failed(result: VerifierDecision, check: str, code: str) -> None:
     assert not result.ok
     assert result.checks[check].ok is False, result.checks[check]
     assert result.checks[check].code == code, result.checks[check]
@@ -528,6 +528,46 @@ def test_the_level_meeting_the_minimum_passes(world: World) -> None:
 def test_a_transaction_outside_the_constraints_is_refused(world: World, transaction: Any, code: str) -> None:
     result = run(world, transaction=tx(**transaction))
     failed(result, "constraints", code)
+
+
+def _windowed_grant(world: World, not_before: float, not_after: float) -> str:
+    entry = world.commerce_entry()
+    entry["constraints"]["window"] = {"not_before": int(not_before), "not_after": int(not_after)}
+    budget = world.grant_claims()["authorization_details"][0]
+    return world.grant(authorization_details=[budget, entry])
+
+
+def test_a_historical_at_inside_a_closed_window_is_refused(world: World) -> None:
+    # The window closed ten seconds before the verifier's clock; the
+    # agent-supplied ``at`` points back inside it and must not reopen it.
+    grant = _windowed_grant(world, world.now - 3600, world.now - 10)
+    result = run(world, grant=grant, transaction=tx(at=world.now - 100))
+    failed(result, "constraints", "cap_exceeded")
+    assert "after the grant's window" in result.checks["constraints"].detail
+
+
+def test_a_window_not_yet_open_at_verification_time_is_refused(world: World) -> None:
+    grant = _windowed_grant(world, world.now + 60, world.now + 3600)
+    result = run(world, grant=grant, transaction=tx(at=world.now + 120))
+    failed(result, "constraints", "cap_exceeded")
+    assert "before the grant's window" in result.checks["constraints"].detail
+
+
+def test_a_transaction_at_in_the_future_beyond_the_skew_is_refused(world: World) -> None:
+    # Inside the window, but later than the verifier's clock allows.
+    result = run(world, transaction=tx(at=world.now + 60))
+    failed(result, "constraints", "cap_exceeded")
+    assert "in the future" in result.checks["constraints"].detail
+
+
+def test_a_transaction_at_within_the_skew_passes(world: World) -> None:
+    assert run(world, transaction=tx(at=world.now + 5)).checks["constraints"].ok
+
+
+def test_a_transaction_at_before_the_window_is_refused(world: World) -> None:
+    result = run(world, transaction=tx(at=world.now - 7200))
+    failed(result, "constraints", "cap_exceeded")
+    assert "before the grant's window" in result.checks["constraints"].detail
 
 
 def test_unreadable_constraints_are_refused(world: World) -> None:

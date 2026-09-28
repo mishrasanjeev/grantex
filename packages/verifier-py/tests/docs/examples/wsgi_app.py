@@ -12,7 +12,7 @@ from grantex_verifier import (
 
 
 def checkout(environ: Dict[str, Any], start_response: Callable[..., Any]) -> Iterable[bytes]:
-    result = environ["grantex.verification"]  # the VerificationResult, always ok here
+    result = environ["grantex.verification"]  # the VerifierDecision, always ok here
     start_response("200 OK", [("Content-Type", "text/plain")])
     return [("accepted at level " + str(result.level)).encode()]
 

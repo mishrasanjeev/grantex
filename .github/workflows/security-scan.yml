@@ -86,13 +86,18 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install --disable-pip-version-check pip-audit==2.10.1 'build>=1,<2'
-      - name: Build the SDK dependency candidate for pre-publication audits
+      - name: Build the unpublished local dependency candidates for pre-publication audits
+        # The SDK, grantex-agent-passport and grantex-agent-httpsig are not on
+        # PyPI (the last two are dependencies of packages/verifier-py), so
+        # projects that depend on them resolve these local wheels instead.
         run: |
-          python -m build packages/sdk-py --wheel --outdir "$RUNNER_TEMP/sdk-audit-dependencies"
+          for package in packages/sdk-py packages/agent-passport-py packages/agent-httpsig-py; do
+            python -m build "$package" --wheel --outdir "$RUNNER_TEMP/sdk-audit-dependencies"
+          done
           echo "PIP_FIND_LINKS=$RUNNER_TEMP/sdk-audit-dependencies" >> "$GITHUB_ENV"
       - name: Audit every tracked Python dependency and license surface
         env:
-          # Query advisory version ranges even when the SDK candidate is unpublished.
+          # Query advisory version ranges even when the local candidates are unpublished.
           PIP_AUDIT_VULNERABILITY_SERVICE: osv
         run: python scripts/audit-python-dependencies.py
 

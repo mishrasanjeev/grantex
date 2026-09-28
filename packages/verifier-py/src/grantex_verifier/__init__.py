@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from grantex_agent_httpsig import HttpRequest, InMemoryNonceStore, NonceStore
 
-from ._adapters import render_acp_delegate_payment, render_ap2_mandate
 from ._codes import APPENDIX_C_CODES, CAP_EXCEEDED, CHECK_ORDER, GRANT_REVOKED, TOKEN_INVALID
 from ._grant_status import FeedGrantStatus, GrantStatus, GrantStatusSource, OnlineGrantStatus
 from ._middleware import AsgiVerifierMiddleware, WsgiVerifierMiddleware, presentations_from_request
@@ -33,8 +32,8 @@ from ._verify import (
     TRUST_LEVELS,
     CheckResult,
     Transaction,
-    VerificationResult,
     VerifierConfig,
+    VerifierDecision,
     verify,
 )
 
@@ -65,13 +64,11 @@ __all__ = [
     "NonceStore",
     "OnlineGrantStatus",
     "Transaction",
-    "VerificationResult",
     "VerifierConfig",
+    "VerifierDecision",
     "WsgiVerifierMiddleware",
     "compute_tier",
     "presentations_from_request",
-    "render_acp_delegate_payment",
-    "render_ap2_mandate",
     "status_staleness_bound",
     "verify",
     "verify_manifest",

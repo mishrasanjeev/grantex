@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import threading
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pytest
@@ -15,12 +16,12 @@ from grantex_agent_httpsig import HttpRequest, sign
 from grantex_verifier import (
     AsgiVerifierMiddleware,
     Transaction,
-    VerificationResult,
+    VerifierDecision,
     WsgiVerifierMiddleware,
     presentations_from_request,
 )
 
-SEEN: List[Optional[VerificationResult]] = []
+SEEN: List[Optional[VerifierDecision]] = []
 
 
 def wsgi_app(environ: Dict[str, Any], start_response: Callable[..., Any]) -> List[bytes]:
@@ -229,6 +230,54 @@ def test_asgi_status_codes_are_configurable(world: World) -> None:
     )
     status, _ = call_asgi(app, req)
     assert status == 401
+
+
+def test_asgi_verifies_off_the_event_loop(world: World) -> None:
+    """A slow fetcher on a cold cache must not stall other coroutines."""
+    ticked = threading.Event()
+    waited: List[bool] = []
+    inner = world.fetcher
+
+    def slow_fetch(url: str) -> str:
+        # Blocks until a concurrent coroutine has run, or gives up: if
+        # verification ran on the event loop, that coroutine cannot run.
+        if not waited:
+            waited.append(ticked.wait(timeout=2.0))
+        return inner(url)
+
+    SEEN.clear()
+    req, _, _ = world.signed_request()
+    app = AsgiVerifierMiddleware(asgi_app, config=world.config(fetch=slow_fetch), transaction=lambda r: tx())
+    body = req.body if isinstance(req.body, bytes) else b""
+    assert isinstance(req.headers, dict)
+    scope = {
+        "type": "http",
+        "method": req.method,
+        "path": req.url,
+        "raw_path": req.url.encode(),
+        "query_string": b"",
+        "headers": [(k.lower().encode("latin-1"), v.encode("latin-1")) for k, v in req.headers.items()],
+    }
+    messages = [{"type": "http.request", "body": body, "more_body": False}]
+    sent: List[Dict[str, Any]] = []
+
+    async def receive() -> Dict[str, Any]:
+        return messages.pop(0) if messages else {"type": "http.disconnect"}
+
+    async def send(message: Dict[str, Any]) -> None:
+        sent.append(message)
+
+    async def ticker() -> None:
+        await asyncio.sleep(0.01)
+        ticked.set()
+
+    async def main() -> None:
+        await asyncio.gather(app(scope, receive, send), ticker())
+
+    asyncio.run(main())
+    assert waited == [True], "the event loop was blocked while the fetcher ran"
+    assert next(m["status"] for m in sent if m["type"] == "http.response.start") == 200
+    assert SEEN[-1] is not None and SEEN[-1].ok
 
 
 def test_asgi_leaves_other_scopes_alone(world: World) -> None:

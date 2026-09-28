@@ -30,8 +30,8 @@ from grantex_verifier import (
     HttpRequest,
     InMemoryNonceStore,
     Transaction,
-    VerificationResult,
     VerifierConfig,
+    VerifierDecision,
     presentations_from_request,
     verify,
 )
@@ -61,7 +61,7 @@ def make_config(
     )
 
 
-def verify_checkout(request: HttpRequest, *, config: VerifierConfig) -> VerificationResult:
+def verify_checkout(request: HttpRequest, *, config: VerifierConfig) -> VerifierDecision:
     passport, grant = presentations_from_request(request)
     result = verify(
         passport or "",
@@ -81,7 +81,7 @@ refuses a replayed request (`request_signature_invalid`); a configuration
 built per request starts with an empty store and accepts every replay. If
 several processes serve the same origin, give them one shared nonce store.
 
-`verify()` returns a `VerificationResult`: `ok`, `denial_code`, `checks` (for
+`verify()` returns a `VerifierDecision`: `ok`, `denial_code`, `checks` (for
 each named check `ok`, `detail`, `cached_at` and, when it failed, `code`),
 the registry's `level` and `flags`, the informational `tier` and an
 `evidence` record of what the decision rested on (the passport's hash, the
@@ -124,7 +124,7 @@ from grantex_verifier import (
 
 
 def checkout(environ: Dict[str, Any], start_response: Callable[..., Any]) -> Iterable[bytes]:
-    result = environ["grantex.verification"]  # the VerificationResult, always ok here
+    result = environ["grantex.verification"]  # the VerifierDecision, always ok here
     start_response("200 OK", [("Content-Type", "text/plain")])
     return [("accepted at level " + str(result.level)).encode()]
 
@@ -142,20 +142,11 @@ def build_app(config: VerifierConfig) -> WsgiVerifierMiddleware:
 ```
 
 `AsgiVerifierMiddleware` does the same for ASGI applications and puts the
-result in `scope["grantex.verification"]`. Pass `reject=False` to receive
-every request with its result and decide yourself, and `status_for` to
-change the HTTP status per denial code.
-
-## ACP and AP2 (Phase 1 preview)
-
-`render_acp_delegate_payment(grant_claims, merchant_id=...)` renders a
-per-merchant child grant's limits as an ACP delegated payment `allowance` and
-a Stripe Shared Payment Token `usage_limits`; `render_ap2_mandate(grant_claims,
-agent_did=..., agent_jwk=...)` renders claims for AP2 v0.2 open Checkout and
-Payment Mandates bound to the agent's key, with the passport reference as a
-selectively disclosable claim. Both are pure functions: no network call, no
-signature. Check the output against the current ACP and AP2 texts before
-relying on it.
+decision in `scope["grantex.verification"]`; it runs `verify()` (and so the
+fetcher, registry lookup and grant-status client you inject) in the event
+loop's default executor, so a cold cache does not block the loop. Pass
+`reject=False` to receive every request with its decision attached and act
+on it yourself, and `status_for` to change the HTTP status per denial code.
 
 ## Development
 

@@ -32,14 +32,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   revocation feed; the key's status through an injected registry lookup.
 - WSGI and ASGI middleware read the `Agent-Passport`, `Agent-Grant` and
   signature headers (and presentations over 6 KB from the content), attach
-  the result and refuse with `401` (request signature), `503`
+  the verifier decision and refuse with `401` (request signature), `503`
   (`status_stale`) or `403` and the denial code; `reject=False` reports
-  only.
-- `render_acp_delegate_payment` and `render_ap2_mandate` render a verified
-  grant as an ACP delegated payment allowance with Stripe Shared Payment
-  Token usage limits, and as AP2 v0.2 open mandate claims bound to the
-  agent's key (Phase 1 preview, pure functions; the AP2 member names are
-  placeholders until checked against the AP2 text).
+  only. The ASGI middleware verifies in the event loop's default executor,
+  so a slow fetcher or status client does not block the loop.
+- A grant's constraint window is judged by the verifier's clock, not by the
+  transaction time the agent supplies; a transaction time before the window
+  or later than the verifier's clock plus the allowed skew is refused
+  (`cap_exceeded`).
+- No payment-protocol rendering: ACP and AP2 renderers are withheld until
+  their member names can be checked against the protocols' texts (FINDINGS
+  G-137).
 - Specified in `spec/verification.md` section 7; the relying-party guide
   `docs/relying-parties/verifying-agents.md` has a Python section whose
   examples the package's tests run. Wired into `make check`, `make test` and

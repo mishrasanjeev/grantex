@@ -8,8 +8,8 @@ from grantex_verifier import (
     HttpRequest,
     InMemoryNonceStore,
     Transaction,
-    VerificationResult,
     VerifierConfig,
+    VerifierDecision,
     presentations_from_request,
     verify,
 )
@@ -39,7 +39,7 @@ def make_config(
     )
 
 
-def verify_checkout(request: HttpRequest, *, config: VerifierConfig) -> VerificationResult:
+def verify_checkout(request: HttpRequest, *, config: VerifierConfig) -> VerifierDecision:
     passport, grant = presentations_from_request(request)
     result = verify(
         passport or "",

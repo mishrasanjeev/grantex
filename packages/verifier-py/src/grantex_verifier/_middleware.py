@@ -4,7 +4,7 @@
 Each reads the ``Agent-Passport`` and ``Agent-Grant`` headers (spec/verification.md
 section 1.1; a presentation over 6 KB is carried in the JSON content under
 ``agent_credentials``, section 1.2), the signature fields and the content,
-calls :func:`verify`, attaches the :class:`VerificationResult` to the request
+calls :func:`verify`, attaches the :class:`VerifierDecision` to the request
 (``environ["grantex.verification"]``, or ``scope["grantex.verification"]``)
 and, unless ``reject=False``, answers a failed verification itself:
 
@@ -15,11 +15,12 @@ and, unless ``reject=False``, answers a failed verification itself:
 with a JSON body ``{"denial_code": ..., "check": ...}``. ``status_for`` maps
 codes to other statuses. A request without both presentations is 401; a
 content larger than ``max_body_bytes`` is 413. With ``reject=False`` the
-application receives every request with the result attached and decides.
+application receives every request with the decision attached and acts on it.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 from urllib.parse import quote
@@ -27,7 +28,7 @@ from urllib.parse import quote
 from grantex_agent_httpsig import HttpRequest, Item, Token, parse_item
 
 from ._codes import REQUEST_SIGNATURE_INVALID, REQUEST_SIGNATURE_STALE, STATUS_STALE
-from ._verify import Transaction, VerificationResult, VerifierConfig, verify
+from ._verify import Transaction, VerifierConfig, VerifierDecision, verify
 
 INLINE_PRESENTATION_MAX_OCTETS = 6144
 DEFAULT_MAX_BODY_BYTES = 1_048_576
@@ -117,8 +118,8 @@ class _Base:
         self.status_for.update(status_for or {})
         self.max_body_bytes = max_body_bytes
 
-    def decide(self, request: HttpRequest) -> Tuple[Optional[VerificationResult], Optional[Tuple[int, bytes]]]:
-        """The result, and the refusal to send (status, JSON body) if any."""
+    def decide(self, request: HttpRequest) -> Tuple[Optional[VerifierDecision], Optional[Tuple[int, bytes]]]:
+        """The verifier decision, and the refusal to send (status, JSON body) if any."""
         passport, grant = presentations_from_request(request)
         if passport is None or grant is None:
             body = {"denial_code": REQUEST_SIGNATURE_INVALID, "check": "request.signature"}
@@ -190,8 +191,9 @@ Send = Callable[[Dict[str, Any]], Awaitable[None]]
 class AsgiVerifierMiddleware(_Base):
     """ASGI 3 middleware for HTTP scopes; other scopes pass through untouched.
 
-    ``verify()`` runs synchronously (it may call the injected fetcher and
-    clients); run it in a worker thread when those block on the network.
+    ``verify()`` is synchronous and may call the injected fetcher, registry
+    lookup and grant-status client, so it runs in the event loop's default
+    executor: a cold cache does not block other requests.
     """
 
     async def __call__(self, scope: Dict[str, Any], receive: Receive, send: Send) -> None:
@@ -218,7 +220,8 @@ class AsgiVerifierMiddleware(_Base):
         query = scope.get("query_string", b"").decode("latin-1")
         headers = [(k.decode("latin-1"), v.decode("latin-1")) for k, v in scope.get("headers", [])]
         request = HttpRequest(scope.get("method", "GET"), path + ("?" + query if query else ""), headers, body)
-        result, refusal = self.decide(request)
+        loop = asyncio.get_running_loop()
+        result, refusal = await loop.run_in_executor(None, self.decide, request)
         scope[RESULT_KEY] = result
         if refusal is not None and self.reject:
             await self._refuse(send, *refusal)

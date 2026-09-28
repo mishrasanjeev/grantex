@@ -499,8 +499,8 @@ never from the query string (section 4.5).
 Every check is evaluated and reported with `ok`, a `detail` and `cached_at`
 (when the data it relied on was read). A check that depends on one that
 failed is reported as failed and "not evaluated", without a code of its own.
-The **first failing check in this order sets the denial code**; the result is
-`ok` only when every check passes.
+The **first failing check in this order sets the denial code**; the verifier decision
+is `ok` only when every check passes.
 
 | # | Check | Rule | Denial codes |
 |---|---|---|---|
@@ -574,8 +574,12 @@ a grant with commerce limits, `constraints`, an object with these members:
 
 Every member is optional. A member the verifier does not know, or one of the
 wrong type, makes the constraints unreadable (`token_invalid`): a
-restriction is never ignored. The transaction must be inside the window
-(`not_before` inclusive, `not_after` exclusive), its merchant (default: the
+restriction is never ignored. The window (`not_before` inclusive,
+`not_after` exclusive) is judged by the verifier's own clock, the one every
+other check uses, not by the transaction time the agent supplies: a
+historical time cannot reopen a closed window. The transaction time must
+also be inside the window and no later than the verifier's clock plus the
+allowed clock skew. Its merchant (default: the
 relying party's origin) in `allowed_merchants`, its currency the
 `currency`, and its amount within `amount_range`; an unknown amount against
 an `amount_range` is refused. A grant without `constraints` is limited by
@@ -599,7 +603,7 @@ above the threshold whatever the tier.
 
 ### 7.7 Evidence
 
-With every result the verifier returns an evidence record (PRD §8.10): the
+With every decision the verifier returns an evidence record (PRD §8.10): the
 time of verification and of the transaction, the agent's DID, the issuer,
 the passport's hash, the attestation id, the key thumbprint, the grant id,
 both status results (`uri`, `idx`, the status read and when it was read),
@@ -608,15 +612,9 @@ manifest's `iat` and the denial code. The hash identifies the exact bytes of
 the issuer-signed JWT; do not key a deny list on it alone
 ([agent-passport-1.0.md](agent-passport-1.0.md) §6).
 
-### 7.8 Payment-protocol rendering (Phase 1 preview)
+### 7.8 Payment-protocol rendering (withheld)
 
-The library renders a verified grant into two payment protocols, as pure
-functions with no network call and no signature: a per-merchant child
-grant's limits as an ACP delegated payment `allowance` and a Stripe Shared
-Payment Token `usage_limits` (the earlier of the grant's `exp` and its
-window's end), and claims for AP2 v0.2 open Checkout and Payment Mandates
-whose `cnf` is the agent's key (RFC 7800 §3.2), with the grant's passport
-reference as a selectively disclosable claim (RFC 9901 §4.2). They are
-previews: their member names follow those public specifications as
-published and must be checked against the current texts before a later
-phase relies on them (FINDINGS G-137).
+The library does not render a verified grant into payment-protocol objects
+(an ACP delegated payment allowance or AP2 mandates). Renderers are withheld
+until their member names can be checked against the protocols' texts, so
+that the library ships no invented protocol output (FINDINGS G-137).

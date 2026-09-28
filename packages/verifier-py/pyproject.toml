@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "grantex-verifier"
 version = "0.1.0"
-description = "Relying-party verifier for agent requests: Agent Passport, grant, request signature and registry status, with ACP and AP2 rendering and WSGI/ASGI middleware"
+description = "Relying-party verifier for agent requests: Agent Passport, grant, request signature and registry status, with WSGI/ASGI middleware"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.9"
@@ -68,3 +68,7 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py39"
+
+[tool.ruff.lint]
+# Preserve the release gate used before Ruff 0.16 expanded its implicit defaults.
+select = ["E4", "E7", "E9", "F"]

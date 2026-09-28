@@ -50,7 +50,7 @@ CREDENTIAL_CLOCK_SKEW_SECONDS = 60
 TierRules = Callable[..., str]
 
 
-# ── inputs and results ───────────────────────────────────────────────────────
+# ── inputs and decisions ─────────────────────────────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -62,6 +62,10 @@ class Transaction:
     the merchant's origin (default the verifier's own) and ``human_present``
     whether the Principal is present (default: what the grant says, else no).
     Read them from the signed content, never from the query string.
+
+    The grant's window is judged by the verifier's clock, not by ``at``;
+    ``at`` must also fall inside the window and be no later than the
+    verifier's clock plus ``clock_skew_seconds``.
     """
 
     at: Optional[float] = None
@@ -85,7 +89,7 @@ class CheckResult:
 
 
 @dataclass(frozen=True)
-class VerificationResult:
+class VerifierDecision:
     ok: bool
     denial_code: Optional[str]
     checks: Dict[str, CheckResult]
@@ -752,10 +756,18 @@ class _Run:
         if c is None:
             return "the grant carries no commerce constraints", None
         tx = self.tx
-        if c.not_before is not None and self.at < c.not_before:
+        # The window is judged by the verifier's own clock: ``at`` comes from
+        # the agent and cannot move a closed window back open.
+        if c.not_before is not None and self.now < c.not_before:
             raise Refusal(C.CAP_EXCEEDED, "outside_window: before the grant's window")
-        if c.not_after is not None and self.at >= c.not_after:
+        if c.not_after is not None and self.now >= c.not_after:
             raise Refusal(C.CAP_EXCEEDED, "outside_window: after the grant's window")
+        if self.at > self.now + self.config.clock_skew_seconds:
+            raise Refusal(C.CAP_EXCEEDED, "outside_window: the transaction time is in the future")
+        if c.not_before is not None and self.at < c.not_before:
+            raise Refusal(C.CAP_EXCEEDED, "outside_window: the transaction time is before the grant's window")
+        if c.not_after is not None and self.at >= c.not_after:
+            raise Refusal(C.CAP_EXCEEDED, "outside_window: the transaction time is after the grant's window")
         merchant = tx.merchant if tx.merchant is not None else self.config.origin
         if c.merchants is not None and merchant not in c.merchants:
             raise Refusal(C.AUDIENCE_MISMATCH, "merchant_not_allowed: %s" % merchant)
@@ -794,7 +806,7 @@ def verify(
     tx: Transaction,
     *,
     config: VerifierConfig,
-) -> VerificationResult:
+) -> VerifierDecision:
     """Verify an agent's request: its Agent Passport, its grant, the request
     signature, both status sources and the transaction's fit with the grant.
 
@@ -832,7 +844,7 @@ def verify(
     raw_flags = run.lookup.get("flags") if run.lookup is not None else None
     flags = tuple(f for f in raw_flags if isinstance(f, str)) if isinstance(raw_flags, list) else ()
     evidence = _evidence(run, level, flags, denial)
-    return VerificationResult(
+    return VerifierDecision(
         ok=ok,
         denial_code=None if ok else denial,
         checks=checks,

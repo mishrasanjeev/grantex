@@ -1829,26 +1829,26 @@ the pull request that references it.
   criterion: a grant issued by the auth service carries `constraints` and a
   test verifies it with `grantex-verifier`.
 
-## G-137 — The ACP and AP2 renderings are not checked against the protocols' texts
+## G-137 — ACP and AP2 renderers withheld until checked against the protocols' texts
 
-- **Found:** building `render_acp_delegate_payment` and
-  `render_ap2_mandate` in `packages/verifier-py`, 2026-09-28.
-- **What:** the member names of the ACP delegated payment `allowance` and
-  the Stripe Shared Payment Token `usage_limits` follow those public
-  specifications as published, but no test checks them against the
-  specifications' schemas, which are not in this repository. The AP2 v0.2
-  mandate object and member names (`checkout_mandate`, `payment_mandate`,
-  `mode`, `max_amount_minor`, `merchants`, `payees` and the rest) are
-  placeholders chosen in the package, not checked against any section of
-  the AP2 text; the docstring says so.
-- **Impact:** a renamed or added required member would go unnoticed until
-  an integration fails. The functions are marked Phase 1 preview for this
-  reason.
+- **Found:** building the Python relying-party verifier
+  (`packages/verifier-py`), 2026-09-28.
+- **What:** PRD section 10 asks for a verified grant rendered as an ACP
+  delegated payment allowance and as AP2 mandates. Draft renderers were
+  written, but their member names were not checked against the protocols'
+  texts: the AP2 mandate object and member names were placeholders chosen in
+  the package, and the ACP names were not validated against the published
+  schemas, which are not in this repository. The renderers were withheld
+  from the package rather than ship invented protocol output; the package
+  has no rendering API.
+- **Impact:** a relying party maps a verified grant's limits to ACP or AP2
+  itself until the renderers ship.
 - **Proposal:** vendor the relevant published JSON schemas (with their
-  licences) under `spec/examples/` and validate the rendered objects
-  against them in the verifier's tests. Owner: payments integration
-  maintainers. Exit criterion: both renderings validate against the
-  published schemas in CI.
+  licences) under `spec/examples/`, cite the sections each member comes
+  from, and add the renderers back with tests that validate their output
+  against those schemas. Owner: payments integration maintainers. Exit
+  criterion: both renderings validate against the published schemas in
+  CI.
 
 ## G-138 — The manifest cannot say whether an issuer is suspended at a given time
 
