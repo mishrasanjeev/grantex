@@ -345,7 +345,12 @@ describePostgres('the migration ledger against real Postgres', () => {
       const dry = await baselineMigrations(sql, { dryRun: true });
       expect(dry.head.atHead).toBe(false);
       expect(dry.verdict).toMatch(/NOT at head/);
-      expect(dry.verdict).toMatch(/evidence_records/);
+      // The verdict names the first 20 missing objects, tables first; check
+      // each one it shows rather than one fixed name, which later migrations
+      // can push past the first 20.
+      for (const table of check.missingTables.slice(0, 20)) {
+        expect(dry.verdict).toContain(`table ${table}`);
+      }
 
       // Starting the service normally is the way out, and then it is fine.
       await runMigrations(sql);
