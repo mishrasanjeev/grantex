@@ -339,6 +339,8 @@ updates:
       interval: weekly
     open-pull-requests-limit: 3
     labels: [dependencies, python, agent-passport]
+
+  - package-ecosystem: pip
     directory: /packages/agent-httpsig-py
     schedule:
       interval: weekly
