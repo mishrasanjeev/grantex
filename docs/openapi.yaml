@@ -8964,6 +8964,51 @@ paths:
         "409": { description: "`KID_REVOKED`: the replacement jwks carries a revoked kid" }
         "503": { description: REGISTRY_OPERATOR_API_KEYS is not configured, or holds a key shorter than 32 characters }
 
+  /v1/trust-registry:
+    get:
+      operationId: listTrustRegistryRecords
+      tags: [Trust Registry]
+      summary: List every developer's registry records (operator)
+      description: |
+        The 100 newest registry records, across every developer, verified or not. By default
+        any developer API key can read it, under its plan budget. With
+        `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` (read at startup, recommended because the
+        listing crosses tenants) it is for the platform operator only: it takes `ADMIN_API_KEY`,
+        never a developer API key, answers 503 while `ADMIN_API_KEY` is unset, and is limited to
+        20 calls a minute per address.
+      security:
+        - bearerAuth: []
+        - adminAuth: []
+      responses:
+        "200":
+          description: Registry records, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [records]
+                properties:
+                  records:
+                    type: array
+                    maxItems: 100
+                    items:
+                      type: object
+                      properties:
+                        organizationDID: { type: string, example: "did:web:issuer.example" }
+                        verifiedAt: { type: [string, "null"], format: date-time }
+                        verificationMethod: { type: [string, "null"], example: dns-txt }
+                        trustLevel: { type: string, description: The stored trust level, example: verified }
+                        domains: { type: array, items: { type: string } }
+                        name: { type: [string, "null"] }
+                        description: { type: [string, "null"] }
+                        badges: { type: array, items: { type: string } }
+        "401":
+          description: Missing or invalid developer API key; when enforced, a missing or wrong admin key, or a developer API key
+        "429":
+          description: Over the plan budget; when enforced, more than 20 calls a minute from one address
+        "503":
+          description: Enforced and ADMIN_API_KEY is not configured
+
   /v1/registry/orgs:
     get:
       operationId: searchRegistryOrganizations
