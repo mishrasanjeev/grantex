@@ -50,6 +50,7 @@ func startJWKSServer(t *testing.T, key *rsa.PrivateKey) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(jwks)
 	}))
+	forgetJwksOnCleanup(t, server.URL)
 	return server
 }
 
@@ -451,6 +452,7 @@ func countingJWKSServer(t *testing.T, keys func() []*rsa.PrivateKey, kids func()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{"keys": set})
 	}))
+	forgetJwksOnCleanup(t, server.URL)
 	return server, &fetches
 }
 
