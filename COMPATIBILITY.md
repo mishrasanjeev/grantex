@@ -20,7 +20,7 @@ This repository uses package-specific versions; there is no monorepo-wide SDK or
 
 ## Package Versions
 
-The repository contains 34 packages under `packages/`. Each row maps a directory to its artifact name and repository version. A `published` status means the exact version has been verified on its public registry; other rows describe the package's role without claiming registry publication. Python public-file tests and normal pinned PyPI index installations passed.
+The repository contains 35 packages under `packages/`. Each row maps a directory to its artifact name and repository version. A `published` status means the exact version has been verified on its public registry; other rows describe the package's role without claiming registry publication. Python public-file tests and normal pinned PyPI index installations passed.
 
 | # | Directory | Published name | Version | Status |
 | ---: | --- | --- | ---: | --- |

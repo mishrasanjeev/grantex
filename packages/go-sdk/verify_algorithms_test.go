@@ -49,6 +49,7 @@ func serveKeys(t *testing.T, keys ...map[string]interface{}) *httptest.Server {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{"keys": keys})
 	}))
 	t.Cleanup(server.Close)
+	forgetJwksOnCleanup(t, server.URL)
 	return server
 }
 
