@@ -55,6 +55,9 @@ def create_a2a_auth_middleware(
                     audience=options.audience,
                     clock_tolerance=options.clock_tolerance,
                     required_scopes=required_scopes,
+                    current_authority=options.current_authority,
+                    expected_principal_id=options.expected_principal_id,
+                    expected_agent_did=options.expected_agent_did,
                 ),
             )
         except GrantexTokenError as exc:

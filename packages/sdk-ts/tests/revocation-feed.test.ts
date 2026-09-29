@@ -388,6 +388,17 @@ describe('reconnecting', () => {
 });
 
 describe('enforce() with revocationCheck: online', () => {
+  it.each(['unknown', 'suspended', 'revoked', 'garbage', undefined])(
+    'denies a contradictory or incomplete non-revoked status %s', async (status) => {
+      vi.mocked(verifyGrantToken).mockResolvedValue(grant());
+      vi.stubGlobal('fetch', statusFetch({ status, revoked: false }));
+      const client = new Grantex({ apiKey: 'test', revocationCheck: 'online' });
+      client.loadManifest(manifest);
+      const result = await client.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' });
+      expect(result.allowed).toBe(false);
+      expect(result.subReason).toBe(RevocationSubReason.STATUS_UNAVAILABLE);
+    },
+  );
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();

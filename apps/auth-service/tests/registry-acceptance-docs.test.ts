@@ -29,8 +29,8 @@ const EXAMPLE_HOST = 'https://registry.example';
 const LIST_ID = 'racl_01J8Z3K4M5N6P7Q8R9S0T1V2W3';
 const NOW = new Date('2026-09-28T12:00:00Z');
 
-function example(name: string): Record<string, unknown> {
-  const match = SPEC.match(new RegExp(`<!-- example: ${name} -->\\s*\`\`\`json\\n([\\s\\S]*?)\\n\`\`\``));
+function example(name: string, source: string = SPEC): Record<string, unknown> {
+  const match = source.replace(/\r\n/g, '\n').match(new RegExp(`<!-- example: ${name} -->\\s*\`\`\`json\\n([\\s\\S]*?)\\n\`\`\``));
   if (!match) throw new Error(`spec/registry-federation.md has no example ${name}`);
   return JSON.parse(match[1]!) as Record<string, unknown>;
 }
@@ -57,6 +57,13 @@ beforeAll(async () => {
 });
 
 describe('spec/registry-federation.md examples', () => {
+  it('extracts identical examples from LF and CRLF checkouts', () => {
+    const lf = SPEC.replace(/\r\n/g, '\n');
+    const crlf = lf.replace(/\n/g, '\r\n');
+    for (const name of ['tsl-header', 'tsl-payload', 'bsl-header', 'bsl-payload']) {
+      expect(example(name, crlf)).toEqual(example(name, lf));
+    }
+  });
   it('Token Status List header and claims', async () => {
     const signed = await signTokenStatusList(snapshot, NOW);
     const header = decodeProtectedHeader(signed.token);

@@ -54,6 +54,12 @@ async function assertAuthorized<
   RESULT extends JSONValue,
 >(options: CreateGrantexToolOptions<INPUT, RESULT>): Promise<void> {
   const { grantToken, requiredScope } = options;
+  const bound = options.currentAuthority !== undefined || options.expectedPrincipalId !== undefined
+    || options.expectedAgentDid !== undefined;
+  if (options.online === true && bound) {
+    const grant = await verifyGrantToken(grantToken, buildVerifyOptions(options));
+    if (!grant.scopes.includes(requiredScope)) throw new GrantexScopeError(requiredScope, grant.scopes);
+  }
 
   if (options.online === true) {
     if (options.client === undefined) {
@@ -72,7 +78,7 @@ async function assertAuthorized<
       ...(options.amount !== undefined ? { amount: options.amount } : {}),
       ...(options.audience !== undefined ? { audience: options.audience } : {}),
     });
-    if (!result.allowed) {
+    if (result.allowed !== true) {
       throw new GrantexScopeError(requiredScope, result.scopes, result.reason);
     }
     return;
@@ -91,6 +97,9 @@ function buildVerifyOptions<
 >(options: CreateGrantexToolOptions<INPUT, RESULT>): VerifyGrantTokenOptions {
   return {
     jwksUri: options.jwksUri ?? DEFAULT_JWKS_URI,
+    ...(options.currentAuthority !== undefined ? { currentAuthority: options.currentAuthority } : {}),
+    ...(options.expectedPrincipalId !== undefined ? { expectedPrincipalId: options.expectedPrincipalId } : {}),
+    ...(options.expectedAgentDid !== undefined ? { expectedAgentDid: options.expectedAgentDid } : {}),
     ...(options.issuer !== undefined ? { issuer: options.issuer } : {}),
     ...(options.issuerDid !== undefined ? { issuerDid: options.issuerDid } : {}),
     ...(options.audience !== undefined ? { audience: options.audience } : {}),

@@ -117,6 +117,10 @@ export async function verifyGrantToken(
   token: string,
   options: VerifyGrantTokenOptions,
 ): Promise<VerifiedGrant> {
+  if (options.currentAuthority !== undefined && (typeof options.currentAuthority !== 'function'
+    || typeof options.audience !== 'string' || options.audience.length === 0)) {
+    throw new GrantexTokenError('Current authority verification requires a callback and a non-empty audience');
+  }
   const algorithms = resolveAlgorithms(options.algorithms);
   const bounded = options.boundedJwksFetch ?? false;
   let jwksUri = options.jwksUri;
@@ -195,6 +199,30 @@ export async function verifyGrantToken(
     }
   }
 
+  if (options.expectedPrincipalId !== undefined && (options.expectedPrincipalId.length === 0
+    || verified.principalId !== options.expectedPrincipalId)) {
+    throw new GrantexTokenError('Grant token does not belong to the authenticated principal');
+  }
+  if (options.expectedAgentDid !== undefined && (options.expectedAgentDid.length === 0
+    || verified.agentDid !== options.expectedAgentDid)) {
+    throw new GrantexTokenError('Grant token does not belong to the expected agent');
+  }
+  if (options.currentAuthority !== undefined) {
+    let current: VerifiedGrant;
+    try {
+      current = await options.currentAuthority(token);
+    } catch {
+      throw new GrantexTokenError('Current grant authority could not be verified');
+    }
+    const fields = ['issuer', 'tokenId', 'grantId', 'principalId', 'agentDid', 'developerId', 'issuedAt', 'expiresAt'] as const;
+    const audiences = (value: VerifiedGrant['audience']) => typeof value === 'string' ? [value] : value;
+    if (!current || fields.some((field) => current[field] !== verified[field])
+      || JSON.stringify(audiences(current.audience)) !== JSON.stringify(audiences(verified.audience))
+      || !Array.isArray(current.scopes) || current.scopes.some((scope) => typeof scope !== 'string')
+      || JSON.stringify([...current.scopes].sort()) !== JSON.stringify([...verified.scopes].sort())) {
+      throw new GrantexTokenError('Current grant authority does not match the verified token');
+    }
+  }
   return verified;
 }
 
@@ -362,7 +390,8 @@ function normalizeGrantClaims(payload: Record<string, unknown>, legacyClaims: bo
   const iat = payload['iat'];
   const exp = payload['exp'];
   if (
-    typeof jti !== 'string' || typeof sub !== 'string' || typeof iat !== 'number' || typeof exp !== 'number'
+    typeof jti !== 'string' || jti.length === 0 || typeof sub !== 'string' || sub.length === 0
+    || typeof iat !== 'number' || !Number.isFinite(iat) || typeof exp !== 'number' || !Number.isFinite(exp)
     || scopes === undefined || agentDid === undefined || developerId === undefined
   ) {
     throw new GrantexTokenError(
@@ -386,6 +415,7 @@ function normalizeGrantClaims(payload: Record<string, unknown>, legacyClaims: bo
   }
 
   return {
+    ...(typeof payload['iss'] === 'string' ? { issuer: payload['iss'] } : {}),
     tokenId: jti,
     grantId: grantId ?? jti,
     principalId: sub,

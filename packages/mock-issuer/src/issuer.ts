@@ -7,7 +7,7 @@
 // registry. Everything runs in process with no network; startMockIssuerServer
 // (server.ts) serves the JWKS and the lists on 127.0.0.1.
 
-import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   MAX_PASSPORT_LIFETIME_SECONDS,
@@ -140,7 +140,7 @@ export class MockIssuer {
   readonly #possession: PossessionVerifier;
   #store = new PassportStatusStore();
   #records = new Map<string, AttestationRecord>();
-  #stateStamp = '';
+  #stateText = '';
 
   private constructor(options: MockIssuerOptions) {
     this.dir = options.dir;
@@ -176,24 +176,24 @@ export class MockIssuer {
   refresh(): void {
     if (this.dir === undefined) return;
     const file = join(this.dir, STATE_FILE);
-    // One open file for the stamp and the read, so both describe the same file.
+    // Compare contents: coarse filesystem timestamps can hide revocation writes.
     let fd: number;
     try {
       fd = openSync(file, 'r');
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT' && this.#stateText === '') return;
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new MockIssuerError('state_unreadable', `${STATE_FILE} disappeared after being loaded`, { cause: error });
+      }
       throw error;
     }
-    let stamp: string;
     let text: string;
     try {
-      const stat = fstatSync(fd);
-      stamp = `${stat.mtimeMs}:${stat.size}`;
-      if (stamp === this.#stateStamp) return;
       text = readFileSync(fd, 'utf8');
     } finally {
       closeSync(fd);
     }
+    if (text === this.#stateText) return;
     let state: SerializedState;
     try {
       state = JSON.parse(text) as SerializedState;
@@ -205,7 +205,7 @@ export class MockIssuer {
     }
     this.#store = new PassportStatusStore({ lists: state.lists });
     this.#records = new Map(state.records.map((record) => [record.attestationId, record]));
-    this.#stateStamp = stamp;
+    this.#stateText = text;
   }
 
   #save(): void {
@@ -215,10 +215,10 @@ export class MockIssuer {
     const state: SerializedState = { version: STATE_VERSION, lists: this.#store.toJSON(), records: [...this.#records.values()] };
     const temp = `${file}.${process.pid}.tmp`;
     // Write then rename, so a reader never sees half a file.
-    writeFileSync(temp, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+    const text = `${JSON.stringify(state)}\n`;
+    writeFileSync(temp, text, { mode: 0o600 });
     renameSync(temp, file);
-    const stat = statSync(file);
-    this.#stateStamp = `${stat.mtimeMs}:${stat.size}`;
+    this.#stateText = text;
   }
 
   #record(attestationId: string): AttestationRecord {

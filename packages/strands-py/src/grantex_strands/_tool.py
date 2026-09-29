@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from grantex import GrantexTokenError, VerifyGrantTokenOptions, verify_grant_token
+from grantex import GrantexTokenError, VerifiedGrant, VerifyGrantTokenOptions, verify_grant_token
 
 from ._jwt import decode_jwt_payload
 
@@ -26,6 +26,9 @@ def create_grantex_tool(
     issuer_did: str | None = None,
     audience: str | None = None,
     clock_tolerance: int = 0,
+    current_authority: Callable[[str], VerifiedGrant] | None = None,
+    expected_principal_id: str | None = None,
+    expected_agent_did: str | None = None,
 ) -> Any:
     """Create a Strands-compatible tool with Grantex scope enforcement.
 
@@ -90,10 +93,29 @@ def create_grantex_tool(
         issuer_did=issuer_did,
         audience=audience,
         clock_tolerance=clock_tolerance,
+        current_authority=current_authority,
+        expected_principal_id=expected_principal_id,
+        expected_agent_did=expected_agent_did,
     )
 
-    def _verify_required_scope() -> None:
+    bound = current_authority is not None or expected_principal_id is not None or expected_agent_did is not None
+
+    def _verify_token_scope() -> None:
+        try:
+            grant = verify_grant_token(grant_token, verify_options)
+        except GrantexTokenError as exc:
+            raise ValueError(f"Could not verify grant_token: {exc}") from exc
+        scopes = list(grant.scopes)
+        if required_scope not in scopes:
+            raise PermissionError(f"Grant token is missing required scope '{required_scope}'. Granted scopes: {scopes}")
+
+    def _verify_required_scope(*, invocation: bool = True) -> None:
         if online:
+            if bound:
+                _verify_token_scope()
+                # Creating a tool is not execution: do not reserve caps or consume a decision.
+                if not invocation:
+                    return
             # enforce() checks the grant token audience; the tool's audience
             # is the one it expects, as in offline verification. Without one
             # the call is left as it was, so older clients keep working.
@@ -102,27 +124,14 @@ def create_grantex_tool(
             else:
                 result = client.enforce(grant_token, connector, name, audience=audience)
             allowed = result.allowed if hasattr(result, "allowed") else result.get("allowed")
-            if not allowed:
+            if allowed is not True:
                 reason = result.reason if hasattr(result, "reason") else result.get("reason", "")
                 raise PermissionError(
                     f"Grant token scope check failed for tool '{name}' on "
                     f"connector '{connector}': {reason}"
                 )
             return
-
-        try:
-            grant = verify_grant_token(
-                grant_token,
-                verify_options,
-            )
-        except GrantexTokenError as exc:
-            raise ValueError(f"Could not verify grant_token: {exc}") from exc
-        scopes = list(grant.scopes)
-        if required_scope not in scopes:
-            raise PermissionError(
-                f"Grant token is missing required scope '{required_scope}'. "
-                f"Granted scopes: {scopes}"
-            )
+        _verify_token_scope()
 
     if online:
         # Online mode: use client.enforce() for full verification.
@@ -131,7 +140,7 @@ def create_grantex_tool(
         if connector is None:
             raise ValueError("online=True requires a 'connector' name")
 
-    _verify_required_scope()
+    _verify_required_scope(invocation=False)
 
     # Wrap func so the Strands decorator sees a proper function
     def _wrapper(**kwargs: Any) -> str:

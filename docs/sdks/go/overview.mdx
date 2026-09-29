@@ -5,12 +5,12 @@ description: "Official Go SDK for the Grantex delegated authorization protocol"
 
 ## Installation
 
-Published release: **`github.com/mishrasanjeev/grantex-go@v0.4.1`**. The tag,
+Published release: **`github.com/mishrasanjeev/grantex-go@v0.4.2`**. The tag,
 public Go proxy, downloaded-module tests, standard tests, and race tests were
-verified on September 28, 2026.
+verified on September 29, 2026.
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.4.1
+go get github.com/mishrasanjeev/grantex-go@v0.4.2
 ```
 
 The unpinned `go get github.com/mishrasanjeev/grantex-go` command follows Go's
@@ -33,6 +33,12 @@ verification responses and the updated VC WebAuthn attestation. It does not
 enable hosted server flags or add custom assertion UI helper methods.
 
 ## Configuration
+
+Version `v0.4.2` adds `client.Grants.Verify` and opt-in
+`VerifyOptions.CurrentAuthority`, `ExpectedPrincipalID` and `ExpectedAgentDID`.
+The callback must query the trusted issuer on each operation and fail closed
+on inactive, unavailable or inconsistent authority. Local signature checks
+alone do not prove current revocation. See [SDK execution authority](/guides/sdk-execution-authority).
 
 ```go
 import grantex "github.com/mishrasanjeev/grantex-go"

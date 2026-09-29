@@ -5,11 +5,11 @@ description: "Bind MCP consent to an authenticated human, preserve principal ide
 
 # `@grantex/mcp-auth` 4.0
 
-> **Status.** Version 4.0.0 is the security upgrade described here; check
-> [release status](/release-status) for publication. Real storage and browser
-> validation are required before publication. The immutable 2.0.2
+> **Status.** Version 4.0.0 is published and registry verified as of
+> September 29, 2026. Real storage/restart, Chromium and clean registry
+> consumer validation passed. See [release status](/release-status). The immutable 2.0.2
 > behavior remains in [the historical guide](/legacy/mcp-auth-server-2).
-> Node.js 22.12+ and SDK 0.8+ are required.
+> Node.js 22.12+ and SDK 0.8.1+ are required.
 
 `@grantex/mcp-auth` puts an OAuth 2.1 authorization server in front of an MCP
 server and hands the actual grant to Grantex. Configure every boundary below:
@@ -62,7 +62,7 @@ server and hands the actual grant to Grantex. Configure every boundary below:
 Install the version documented here after confirming registry publication, on Node.js 22.12 or newer:
 
 ```bash
-npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.0
+npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1
 ```
 
 Also install the database driver you use (`pg` or `postgres`, or `ioredis`).

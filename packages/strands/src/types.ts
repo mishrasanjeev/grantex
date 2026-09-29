@@ -33,6 +33,10 @@ export interface CreateGrantexToolOptions<
    * `client.enforce()` as the per-call audience in online mode.
    */
   audience?: string;
+  /** Opt-in current issuer authority and trusted host identity binding. Requires audience. */
+  currentAuthority?: (token: string) => Promise<import('@grantex/sdk').VerifiedGrant>;
+  expectedPrincipalId?: string;
+  expectedAgentDid?: string;
   /** Clock tolerance in seconds for token verification. */
   clockTolerance?: number;
   /** Grantex client instance for online manifest enforcement. */

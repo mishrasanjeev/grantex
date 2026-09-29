@@ -38,6 +38,10 @@ export interface CreateGrantexToolOptions<
   issuerDid?: string;
   /** Expected JWT audience. */
   audience?: string;
+  /** Opt-in current issuer authority and trusted host identity binding. Requires audience. */
+  currentAuthority?: (token: string) => Promise<import('@grantex/sdk').VerifiedGrant>;
+  expectedPrincipalId?: string;
+  expectedAgentDid?: string;
   /** Clock tolerance in seconds for token verification. */
   clockTolerance?: number;
   /** The scope that must be present in the grant token's `scp` claim. */

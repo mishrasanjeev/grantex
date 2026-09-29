@@ -41,6 +41,39 @@ const VALID_PAYLOAD = {
 };
 
 describe('verifyGrantToken', () => {
+  it.each(['jti', 'sub'])('rejects an empty %s claim', async (field) => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({ payload: { ...VALID_PAYLOAD, [field]: '' }, protectedHeader: { alg: 'RS256' } } as never);
+    await expect(verifyGrantToken('token', { jwksUri: 'https://grantex.dev/.well-known/jwks.json' })).rejects.toBeInstanceOf(GrantexTokenError);
+  });
+
+  it('checks current authority on every invocation and denies revocation', async () => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({ payload: VALID_PAYLOAD, protectedHeader: { alg: 'RS256' } } as never);
+    const local = await verifyGrantToken('token', { jwksUri: 'https://grantex.dev/.well-known/jwks.json' });
+    const currentAuthority = vi.fn().mockResolvedValueOnce(local).mockRejectedValueOnce(new Error('revoked'));
+    const options = { jwksUri: 'https://grantex.dev/.well-known/jwks.json', audience: 'tool-service', currentAuthority };
+    await expect(verifyGrantToken('token', options)).resolves.toMatchObject({ principalId: VALID_PAYLOAD.sub });
+    await expect(verifyGrantToken('token', options)).rejects.toThrow('Current grant authority');
+    expect(currentAuthority).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['issuer', 'audience', 'tokenId', 'grantId', 'principalId', 'agentDid', 'developerId', 'issuedAt', 'expiresAt', 'scopes'])(
+    'denies an authority response for different %s', async (field) => {
+      vi.mocked(jose.jwtVerify).mockResolvedValue({ payload: VALID_PAYLOAD, protectedHeader: { alg: 'RS256' } } as never);
+      const local = await verifyGrantToken('token', { jwksUri: 'https://grantex.dev/.well-known/jwks.json' });
+      const currentAuthority = vi.fn().mockResolvedValue({ ...local, [field]: field === 'scopes' ? ['admin:all'] : 'different' });
+      await expect(verifyGrantToken('token', { jwksUri: 'https://grantex.dev/.well-known/jwks.json', audience: 'tool-service', currentAuthority })).rejects.toThrow('does not match');
+    },
+  );
+
+  it('rejects missing audience and mismatched host identities before calling authority', async () => {
+    vi.mocked(jose.jwtVerify).mockResolvedValue({ payload: VALID_PAYLOAD, protectedHeader: { alg: 'RS256' } } as never);
+    const currentAuthority = vi.fn();
+    const options = { jwksUri: 'https://grantex.dev/.well-known/jwks.json', currentAuthority };
+    await expect(verifyGrantToken('token', options)).rejects.toThrow('audience');
+    await expect(verifyGrantToken('token', { ...options, audience: 'tool-service', expectedPrincipalId: 'another-human' })).rejects.toThrow('authenticated principal');
+    await expect(verifyGrantToken('token', { ...options, audience: 'tool-service', expectedAgentDid: 'did:grantex:another' })).rejects.toThrow('expected agent');
+    expect(currentAuthority).not.toHaveBeenCalled();
+  });
   afterEach(() => {
     clearRemoteJwksCache();
     vi.clearAllMocks();

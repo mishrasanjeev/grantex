@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import wraps
 from typing import Any, Callable
 
-from grantex import GrantexTokenError, VerifyGrantTokenOptions, verify_grant_token
+from grantex import GrantexTokenError, VerifiedGrant, VerifyGrantTokenOptions, verify_grant_token
 
 from ._jwt import decode_jwt_payload
 
@@ -22,6 +22,9 @@ def create_grantex_tool(
     issuer_did: str | None = None,
     audience: str | None = None,
     clock_tolerance: int = 0,
+    current_authority: Callable[[str], VerifiedGrant] | None = None,
+    expected_principal_id: str | None = None,
+    expected_agent_did: str | None = None,
 ) -> Any:
     """Create an OpenAI Agents SDK tool with Grantex scope enforcement.
 
@@ -41,6 +44,9 @@ def create_grantex_tool(
         issuer_did=issuer_did,
         audience=audience,
         clock_tolerance=clock_tolerance,
+        current_authority=current_authority,
+        expected_principal_id=expected_principal_id,
+        expected_agent_did=expected_agent_did,
     )
 
     def _verify_required_scope() -> None:

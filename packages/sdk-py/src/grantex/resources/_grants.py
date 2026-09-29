@@ -46,9 +46,10 @@ class GrantsClient:
 
     def verify(self, token: str) -> VerifiedGrant:
         response = self._http.post("/v1/grants/verify", {"token": token})
-        if not isinstance(response, dict) or not response.get("active") or not response.get("claims"):
+        if (not isinstance(response, dict) or response.get("active") is not True
+                or not isinstance(response.get("claims"), dict)):
             reason = response.get("reason") if isinstance(response, dict) else None
-            suffix = f": {reason}" if reason else ""
+            suffix = f": {reason}" if isinstance(reason, str) and reason else ""
             raise GrantexTokenError(f"Grant token is not active{suffix}")
         claims: dict[str, Any] = response["claims"]
         return _payload_to_verified_grant(_build_payload(claims))

@@ -422,6 +422,17 @@ def test_feed_applies_an_entry_that_arrives_on_the_stream() -> None:
 
 # ── enforce(revocation_check="online") ───────────────────────────────────────
 
+@pytest.mark.parametrize("status", ["unknown", "suspended", "revoked", "garbage", None])
+@respx.mock
+def test_online_denies_contradictory_non_revoked_status(status: object) -> None:
+    respx.get(f"{BASE_URL}/v1/revocations/status").mock(
+        return_value=httpx.Response(200, json={"status": status, "revoked": False})
+    )
+    with patch("grantex._client.verify_grant_token", return_value=_grant()):
+        result = _client(revocation_check="online").enforce("jwt", "acme_kyb", "resolve_business")
+    assert result.allowed is False
+    assert result.sub_reason == RevocationSubReason.STATUS_UNAVAILABLE
+
 
 @respx.mock
 def test_online_asks_the_auth_service_and_allows_an_active_grant() -> None:

@@ -18,10 +18,16 @@ export abstract class BaseAdapter {
   protected readonly timeout: number;
   protected readonly audienceCheck: AudienceCheck;
   protected readonly audience: string | undefined;
+  private readonly currentAuthority: AdapterConfig['currentAuthority'];
+  private readonly expectedPrincipalId: string | undefined;
+  private readonly expectedAgentDid: string | undefined;
 
   constructor(config: AdapterConfig) {
     this.jwksUri = config.jwksUri;
     this.credentials = config.credentials;
+    this.currentAuthority = config.currentAuthority;
+    this.expectedPrincipalId = config.expectedPrincipalId;
+    this.expectedAgentDid = config.expectedAgentDid;
     this.auditLogger = config.auditLogger;
     this.clockTolerance = config.clockTolerance;
     this.timeout = config.timeout ?? 30_000;
@@ -29,6 +35,10 @@ export abstract class BaseAdapter {
     // than being read as "no audience", which would accept tokens meant elsewhere.
     this.audienceCheck = checkAudienceCheck(config.audienceCheck === undefined ? 'on' : config.audienceCheck);
     this.audience = checkExpectedAudience(config.audience, this.audienceCheck);
+    if (this.currentAuthority !== undefined && (typeof this.currentAuthority !== 'function'
+      || this.audienceCheck !== 'on' || !this.audience)) {
+      throw new Error('Current authority verification requires a callback, audience and audienceCheck on');
+    }
   }
 
   /**
@@ -56,6 +66,10 @@ export abstract class BaseAdapter {
     try {
       grant = await verifyGrantToken(token, {
         jwksUri: this.jwksUri,
+        ...(this.currentAuthority !== undefined ? { currentAuthority: this.currentAuthority } : {}),
+        ...(this.currentAuthority !== undefined && this.audience !== undefined ? { audience: this.audience } : {}),
+        ...(this.expectedPrincipalId !== undefined ? { expectedPrincipalId: this.expectedPrincipalId } : {}),
+        ...(this.expectedAgentDid !== undefined ? { expectedAgentDid: this.expectedAgentDid } : {}),
         ...(this.clockTolerance !== undefined ? { clockTolerance: this.clockTolerance } : {}),
       });
     } catch {
