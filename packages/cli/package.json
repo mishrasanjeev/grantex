@@ -29,7 +29,7 @@
     "dev": "node --loader ts-node/esm src/index.ts"
   },
   "dependencies": {
-    "@grantex/sdk": ">=0.8.0 <1",
+    "@grantex/sdk": ">=0.8.1 <1",
     "chalk": "^6.0.0",
     "commander": "^15.0.0",
     "jose": "^6.2.3"

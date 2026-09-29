@@ -126,3 +126,9 @@ MIT
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+> Unreleased authority hardening requires Python SDK 0.7.1 (`current_authority`),
+> not just a valid JWT signature. Bind the audience and trusted human/agent
+> identities, and check the issuer before every execution. This does not
+> create human consent or automatically consume action decisions/spend caps.
+> Existing offline defaults remain offline. The candidate is not yet published.
+> See the [SDK execution authority guide](../../docs/guides/sdk-execution-authority.mdx).

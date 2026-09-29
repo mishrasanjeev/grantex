@@ -1,0 +1,163 @@
+---
+title: SDK Execution Authority
+description: Keep human identity, consent, current grant authority and execution policy separate at every SDK boundary.
+---
+
+<Warning>
+TypeScript SDK 0.8.1 is npm-published and registry-integrity verified.
+Python SDK 0.7.1 and the changed framework integrations remain source candidates.
+Do not assume older or unreleased packages contain these controls. Go's
+`Grants.Verify` and `CurrentAuthority` options also require the audited source
+revision until a new Go tag is released. No registry publication is implied.
+</Warning>
+
+## Four Different Checks
+
+1. **Human identity:** the authenticated host session identifies the principal.
+   An OAuth client ID, agent DID, submitted principal hint, or model argument
+   is not proof that a human signed in.
+2. **Consent:** use the issuer's live hosted consent/passkey flow or MCP Auth's
+   authenticated principal resolver and rendered consent flow. SDK clients,
+   passports and signature helpers do not manufacture human approval.
+3. **Current authority:** a valid signature is not evidence that a grant is
+   still active. Check the issuer before every operation. Deny if that check
+   is unavailable, inactive, malformed, or identifies a different grant/actor.
+4. **Execution policy:** bind authorization to the real operation and inputs.
+   Use strict manifest enforcement, action-bound decision grants and atomic
+   caps reservations/settlement where required. Scope-only wrappers do not
+   implement these checks automatically.
+
+## TypeScript
+
+```typescript
+import { Grantex, verifyGrantToken } from '@grantex/sdk';
+
+const issuer = new Grantex({ apiKey: process.env.GRANTEX_API_KEY! });
+const grant = await verifyGrantToken(token, {
+  jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+  audience: 'calendar-service',
+  requiredScopes: ['calendar:read'],
+  currentAuthority: (token) => issuer.grants.verify(token),
+  expectedPrincipalId: authenticatedSession.principalId,
+  expectedAgentDid: authorizedAgent.did,
+});
+```
+
+The authority callback is server-owned configuration. It must call the
+trusted issuer, throw on inactive grants or transport failure, and return the
+verified grant. Never return locally decoded claims or use a positive cache.
+Verification compares the current response's issuer, audience, token ID, grant ID, principal,
+agent, developer/tenant, issued/expiry times and scopes with the signed token.
+The signed token remains the source of audience and action context.
+
+The same three fields are supported by the source-candidate framework tool
+factories, Express, A2A, adapters and the programmatic gateway. The human
+binding must come from the host session or authorized resource owner, not
+from the tool's submitted arguments. Multi-user servers must bind it per
+request, not reuse one user's value for every caller.
+
+## Python
+
+```python
+from grantex import Grantex, VerifyGrantTokenOptions, verify_grant_token
+
+issuer = Grantex(api_key=server_api_key)
+grant = verify_grant_token(token, VerifyGrantTokenOptions(
+    jwks_uri="https://api.grantex.dev/.well-known/jwks.json",
+    audience="calendar-service",
+    required_scopes=["calendar:read"],
+    current_authority=issuer.grants.verify,
+    expected_principal_id=authenticated_session.principal_id,
+    expected_agent_did=authorized_agent.did,
+))
+```
+
+The Python tool factories, FastAPI dependency and A2A options expose the
+corresponding snake-case fields. FastAPI performs the blocking verification
+in its worker thread. These APIs are synchronous; do not pass an async
+authority callback that returns an unevaluated coroutine.
+
+## Go
+
+```go
+grant, err := grantex.VerifyGrantToken(ctx, token, grantex.VerifyOptions{
+    JwksURI: "https://api.grantex.dev/.well-known/jwks.json",
+    Audience: "calendar-service",
+    RequiredScopes: []string{"calendar:read"},
+    CurrentAuthority: client.Grants.Verify,
+    ExpectedPrincipalID: authenticatedPrincipalID,
+    ExpectedAgentDID: authorizedAgentDID,
+})
+if err != nil {
+    // Return a denial before invoking the resource or tool.
+    return err
+}
+```
+
+Go's grant authority check is not a Go implementation of the TypeScript /
+Python manifest `enforce()` engine. Go hosts must separately enforce
+action-bound decisions and atomic caps through their trusted authorization
+service. Do not label signature verification as equivalent policy coverage.
+
+## Gateway YAML
+
+```yaml
+upstream: https://calendar.internal.example
+jwksUri: https://api.grantex.dev/.well-known/jwks.json
+audience: calendar-service
+currentAuthorityCheck: true
+routes:
+  - path: /calendar
+    methods: [GET]
+    requiredScopes: [calendar:read]
+```
+
+Set `GRANTEX_API_KEY` in the server environment, not in a committed YAML
+file or browser. For self-hosting, `grantexBaseUrl` selects the trusted
+issuer API. Every route must have a global or route-specific audience;
+`audienceCheck: off` cannot be combined with current authority. Programmatic
+callbacks are not serializable YAML and are explicitly rejected by the loader.
+For a dedicated single-principal resource, YAML also preserves non-empty
+`expectedPrincipalId` and `expectedAgentDid` bindings. These are fixed host
+configuration, not end-user login. Multi-user gateways need per-request host
+authentication and binding rather than one shared static principal.
+
+## Capability Boundaries
+
+| Package family | What it proves | Additional production requirements |
+| --- | --- | --- |
+| Primary SDK verifiers | Signed issuer/scopes; opt-in current authority and expected identities | Hosted human consent; strict execution policy |
+| Framework wrappers / HTTP guards / adapters / gateway | Token and declared scope before callback/proxy; optional current authority | Action/input binding, decision consumption, atomic caps, server-owned identity |
+| MCP Auth | Authenticated human consent and resource guards with configured issuer authority | Host login/session resolver, storage, issuer, policy engine and account lifecycle |
+| Management MCP / CLI / Terraform | Privileged account administration using the operator's API key | Private administrative access; do not expose principal-session creation to arbitrary end-user agents |
+| Agent Passport / HTTP Signatures | Credential identity/status or request-key possession | Trusted issuer/key/status/nonce stores plus separate human grants and execution policy |
+| Legacy MPP Passport | Passport transport/verification | Configure trusted issuer/current status; not a human-consent or spend-authorization proof |
+| x402 legacy GDT | Delegation signature and configured token registry | Durable shared revocation and accounting; the default in-memory registry is not cross-process issuer status |
+| x402 managed prepaid wallet | Issuer-managed wallet authorization | Issuer/custody/facilitator settlement and real-wallet testing remain separate dependencies |
+| Gemma offline | Snapshot signature and configured local scopes | Cannot promise immediate revocation or fresh human confirmation; never use alone where current authority is required |
+| DPDP / destinations / conformance / mock issuer | Purpose helpers, audit export or testing | Not authentication or human-consent guards |
+
+## Unsafe Evaluation Modes
+
+Signature-only/offline verification, permissive enforcement, warning-only caps
+or decisions, and MCP Auth evaluation opt-outs do not provide the production
+guarantees above. Defaults on existing offline APIs are retained for
+compatibility, not certified as complete authorization.
+
+No SDK can make revocation atomic with an unrelated external side effect by
+checking first. For irreversible work, bind and consume the decision/reservation
+at the authoritative execution boundary; settle or cancel it appropriately.
+Enforce credential rotation, issuer timeouts and outage behavior in the host.
+
+## Tests and Release Order
+
+The source regression suites test real signed JWTs, a local HTTP JWKS/issuer,
+revocation between calls, issuer outages, malformed `active` flags, identity
+substitution and zero denied callback/proxy effects. Optional Python vendor
+objects use test doubles; this is not certification of every vendor runtime,
+browser/passkey device, issuer deployment or payment rail.
+
+Release and verify the primary SDKs first, then the changed integration
+packages. A source version bump is not evidence that npm, PyPI or Go module
+consumers have received a fix. Keep registry release status separate from
+source-candidate validation and production deployment.

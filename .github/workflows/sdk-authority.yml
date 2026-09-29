@@ -1,0 +1,81 @@
+name: SDK Authority Boundaries
+
+on:
+  pull_request:
+    paths:
+      - 'packages/**'
+      - 'scripts/verify-sdk-authority.mjs'
+      - 'tests/sdk-authority/**'
+      - '.github/workflows/sdk-authority.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/**'
+      - 'scripts/verify-sdk-authority.mjs'
+      - 'tests/sdk-authority/**'
+      - '.github/workflows/sdk-authority.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-authority-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  authority:
+    name: Authority (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: node
+            image: node:24.20.0-bookworm-slim
+            script: run-node.sh
+          - language: python
+            image: python:3.12-slim
+            script: run-python.sh
+          - language: go
+            image: golang:1.26.1@sha256:cd78d88e00afadbedd272f977d375a6247455f3a4b1178f8ae8bbcb201743a8a
+            script: run-go.sh
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start isolated SDK test services
+        run: |
+          docker network create sdk-authority
+          docker run -d --name authority-pg --network sdk-authority \
+            -e POSTGRES_PASSWORD=synthetic-audit-only -e POSTGRES_DB=sdk_authority postgres:16-alpine
+          docker run -d --name authority-redis --network sdk-authority redis:7-alpine
+          for _ in $(seq 1 30); do
+            if docker exec authority-pg pg_isready -U postgres; then break; fi
+            sleep 1
+          done
+          docker exec authority-pg pg_isready -U postgres
+          mkdir -p results
+      - name: Verify signatures, issuer authority and zero denied execution
+        env:
+          IMAGE: ${{ matrix.image }}
+          SCRIPT: ${{ matrix.script }}
+        run: |
+          docker run --rm --network sdk-authority \
+            --mount "type=bind,source=$GITHUB_WORKSPACE,target=/source,readonly" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/results,target=/results" \
+            -e GRANTEX_CAPS_REDIS_URL=redis://authority-redis:6379/0 \
+            -e GRANTEX_CAPS_POSTGRES_URL=postgres://postgres:synthetic-audit-only@authority-pg:5432/sdk_authority \
+            -e GRANTEX_CAPS_REQUIRE_INTEGRATION=1 \
+            --entrypoint bash "$IMAGE" "/source/tests/sdk-authority/$SCRIPT"
+      - name: Retain test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-authority-${{ matrix.language }}
+          path: results/
+          if-no-files-found: error
+      - name: Stop SDK test services
+        if: always()
+        run: |
+          docker rm -f authority-pg authority-redis || true
+          docker network rm sdk-authority || true

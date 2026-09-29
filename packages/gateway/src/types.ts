@@ -7,6 +7,13 @@ export interface RouteDefinition {
 }
 
 export interface GatewayConfig {
+  /** Programmatic opt-in issuer authority callback. Requires a route/global audience. Not JSON-serializable. */
+  currentAuthority?: (token: string) => Promise<import('@grantex/sdk').VerifiedGrant>;
+  /** Enable authenticated /v1/grants/verify calls from YAML/CLI configuration. Defaults false. */
+  currentAuthorityCheck?: boolean;
+  grantexBaseUrl?: string;
+  expectedPrincipalId?: string;
+  expectedAgentDid?: string;
   upstream: string;
   jwksUri: string;
   port: number;

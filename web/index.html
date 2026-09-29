@@ -245,7 +245,7 @@
             "name": "Which Grantex SDK should I install?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Use the registry-verified @grantex/sdk@0.8.0 for TypeScript, grantex==0.7.0 for Python, and github.com/mishrasanjeev/grantex-go@v0.4.1 for Go. See release status for exact evidence and limitations."
+              "text": "Use the registry-verified @grantex/sdk@0.8.1 for TypeScript, grantex==0.7.0 for Python, and github.com/mishrasanjeev/grantex-go@v0.4.1 for Go. See release status for exact evidence and limitations."
             }
           },
           {
@@ -266,10 +266,10 @@
           },
           {
             "@type": "Question",
-            "name": "What must I configure for MCP Auth 3.0?",
+            "name": "What must I configure for MCP Auth 4.0?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "MCP Auth 3.0.0 supports durable storage and rendered consent. Configure shared state, authenticated principal handoff, resource binding and explicit token revocation, then enforce upstream grant authority. Independent cross-vendor certification is not claimed."
+              "text": "MCP Auth 4.0.0 requires a host-authenticated human-principal resolver and trusted current-grant verification. Configure durable shared state, resource binding and explicit local token revocation. Rendered consent does not replace human login or passkeys. Independent cross-vendor certification is not claimed."
             }
           },
           {
@@ -1632,7 +1632,7 @@
         <div class="section-label">Release state</div>
         <h2 class="section-title">Primary SDK release state</h2>
         <p class="release-intro">
-          Release snapshot verified on 28 September 2026. TypeScript 0.8.0,
+          Release snapshot verified on 29 September 2026. TypeScript 0.8.1,
           Python 0.7.0, Go v0.4.1, and x402 0.4.1 are registry-verified.
           The three primary SDKs include hosted passkey enrollment, typed
           portable evidence, and account-level irregularity response controls.
@@ -1658,10 +1658,10 @@
         <strong class="release-version">0.4.0</strong>
         <span class="release-meta">npm &middot; Node.js 22.12+ &middot; Agent Skills</span>
       </a>
-      <a class="release-card" href="https://www.npmjs.com/package/@grantex/sdk/v/0.8.0">
+      <a class="release-card" href="https://www.npmjs.com/package/@grantex/sdk/v/0.8.1">
         <span class="release-language">TypeScript SDK</span>
         <span class="release-name">@grantex/sdk</span>
-        <strong class="release-version">0.8.0</strong>
+        <strong class="release-version">0.8.1</strong>
         <span class="release-meta">npm &middot; hosted passkeys &amp; response policy</span>
       </a>
       <a class="release-card" href="https://www.npmjs.com/package/@grantex/x402/v/0.4.1">
@@ -1682,10 +1682,10 @@
         <strong class="release-version">v0.4.1</strong>
         <span class="release-meta">Go proxy &middot; hosted passkeys &amp; response policy</span>
       </a>
-      <a class="release-card" href="https://www.npmjs.com/package/@grantex/mcp-auth/v/3.0.0">
+      <a class="release-card" href="https://www.npmjs.com/package/@grantex/mcp-auth/v/4.0.0">
         <span class="release-language">MCP Auth</span>
         <span class="release-name">@grantex/mcp-auth</span>
-        <strong class="release-version">3.0.0</strong>
+        <strong class="release-version">4.0.0</strong>
         <span class="release-meta">npm &middot; independently versioned</span>
       </a>
       <a class="release-card" href="https://www.npmjs.com/package/@grantex/gateway/v/0.2.0">
@@ -1716,7 +1716,7 @@
 
     <div class="release-caveat" role="note">
       <strong>Known published-package limits:</strong>
-      MCP Auth 3.0 requires configured shared storage, principal handoff,
+      MCP Auth 4.0 requires configured shared storage, principal handoff,
       resource binding and explicit revocation. Python registry hashes, public-file
       tests and normal pinned index installations passed.
       <span class="release-progress">External issuer/custody, principal notification delivery,
@@ -1816,7 +1816,7 @@
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Which Grantex SDK should I install?</summary>
-        <p>Use the registry-verified <code>@grantex/sdk@0.8.0</code> for TypeScript, <code>grantex==0.7.0</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.4.1</code> for Go. See <a href="https://docs.grantex.dev/release-status">release status</a> for exact evidence and limitations.</p>
+        <p>Use the registry-verified <code>@grantex/sdk@0.8.1</code> for TypeScript, <code>grantex==0.7.0</code> for Python, and <code>github.com/mishrasanjeev/grantex-go@v0.4.1</code> for Go. See <a href="https://docs.grantex.dev/release-status">release status</a> for exact evidence and limitations.</p>
       </details>
       <details class="answer-card" data-faq-item>
         <summary>Does local Grantex token verification check current revocation?</summary>
@@ -1827,8 +1827,8 @@
         <p>Use a primary Grantex SDK to register the agent, request a grant, and exchange the authorization code, then enforce scopes at the service boundary with an SDK verifier or direct JWKS validation. Hermes, OpenClaw, and other shell-capable agents can install the portable Grantex Agent Skills and use the JSON CLI; no agent-specific SDK is required. Framework adapters are available for OpenAI Agents SDK, Anthropic, LangChain, CrewAI, Google ADK, Vercel AI, AutoGen, Express, FastAPI, and MCP.</p>
       </details>
       <details class="answer-card" data-faq-item>
-        <summary>What must I configure for MCP Auth 3.0?</summary>
-        <p><a href="https://docs.grantex.dev/features/mcp-auth-server">MCP Auth 3.0.0</a> supports durable storage and rendered consent. Configure shared state, authenticated principal handoff, resource binding and explicit token revocation, then enforce upstream grant authority. Independent cross-vendor certification is not claimed.</p>
+        <summary>What must I configure for MCP Auth 4.0?</summary>
+        <p><a href="https://docs.grantex.dev/features/mcp-auth-server">MCP Auth 4.0.0</a> requires a host-authenticated human-principal resolver and trusted current-grant verification. Configure durable shared state, resource binding and explicit local token revocation. Rendered consent does not replace human login or passkeys. Independent cross-vendor certification is not claimed.</p>
       </details>
       <details class="answer-card" data-faq-item>
         <summary>What is OACP in Grantex?</summary>
@@ -2283,10 +2283,10 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
     </p>
 
     <div class="install-commands">
-      <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/sdk@0.8.0', this)"
+      <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/sdk@0.8.1', this)"
               aria-label="Copy the TypeScript SDK install command">
         <span class="install-label">npm</span>
-        <code>npm install @grantex/sdk@0.8.0</code>
+        <code>npm install @grantex/sdk@0.8.1</code>
         <span class="install-copy">Copy</span>
       </button>
       <button type="button" class="install-cmd" onclick="copyInstall('python -m pip install grantex==0.7.0', this)"
@@ -2326,7 +2326,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         <div class="code-block">
           <button type="button" class="copy-btn" aria-label="Copy the Node.js quickstart"
                   onclick="copyCode('code-node', this, 'node_quickstart_copy')">Copy</button>
-          <pre id="code-node"><span class="cm">// npm install @grantex/sdk@0.8.0</span>
+          <pre id="code-node"><span class="cm">// npm install @grantex/sdk@0.8.1</span>
 <span class="kw">import</span> <span class="op">{ </span><span class="id">Grantex</span><span class="op">,</span> <span class="id">verifyGrantToken</span><span class="op"> }</span> <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
 
 <span class="kw">const</span> <span class="id">grantex</span> <span class="op">=</span> <span class="kw">new</span> <span class="fn">Grantex</span><span class="op">({</span> <span class="id">apiKey</span><span class="op">:</span> <span class="str">'YOUR_API_KEY'</span> <span class="op">});</span>
@@ -2626,7 +2626,7 @@ func main() {
       and stop one wallet or every wallet without loosening the x402 protocol.
     </p>
     <div class="release-caveat" style="max-width:760px;margin:-24px 0 36px;">
-      <strong>Registry releases:</strong> install <code>@grantex/sdk@0.8.0</code> and
+      <strong>Registry releases:</strong> install <code>@grantex/sdk@0.8.1</code> and
       <code>@grantex/x402@0.4.1</code> for the managed-wallet flow. External custody remains
       fail-closed until a self-hosting operator installs and verifies a provider adapter.
       Grantex governs delegated agent authority and reservation; the issuer or custodian still owns

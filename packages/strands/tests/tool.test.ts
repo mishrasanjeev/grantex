@@ -174,6 +174,40 @@ describe('createGrantexTool', () => {
     expect(verifyGrantToken).not.toHaveBeenCalled();
   });
 
+  it.each(['false', 'true', 1])('rejects non-boolean online authorization %j', async (allowed) => {
+    const client: GrantexEnforcer = { enforce: vi.fn().mockResolvedValue({ ...makeEnforceResult({}), allowed }) };
+    const callback = vi.fn();
+    const tool = createGrantexTool({ name: 'read_calendar', description: 'Read', inputSchema: INPUT,
+      grantToken: TOKEN_WITH_READ, requiredScope: 'calendar:read', client, connector: 'calendar', online: true, callback });
+    await expect(tool.invoke({ date: '2026-06-20' })).rejects.toThrow(GrantexScopeError);
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('checks bound identity before online enforcement or execution', async () => {
+    vi.mocked(verifyGrantToken).mockRejectedValue(new Error('wrong authenticated human'));
+    const client: GrantexEnforcer = { enforce: vi.fn().mockResolvedValue(makeEnforceResult({})) };
+    const callback = vi.fn();
+    const tool = createGrantexTool({ name: 'read_calendar', description: 'Read', inputSchema: INPUT,
+      grantToken: TOKEN_WITH_READ, requiredScope: 'calendar:read', client, connector: 'calendar', online: true,
+      expectedPrincipalId: 'another-human', callback });
+    expect(client.enforce).not.toHaveBeenCalled();
+    await expect(tool.invoke({ date: '2026-06-20' })).rejects.toThrow('wrong authenticated human');
+    expect(client.enforce).not.toHaveBeenCalled();
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it('checks declared scope before bound online enforcement', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(makeGrant(['profile:read']));
+    const client: GrantexEnforcer = { enforce: vi.fn().mockResolvedValue(makeEnforceResult({})) };
+    const callback = vi.fn();
+    const tool = createGrantexTool({ name: 'read_calendar', description: 'Read', inputSchema: INPUT,
+      grantToken: TOKEN_WITH_READ, requiredScope: 'calendar:read', client, connector: 'calendar', online: true,
+      expectedPrincipalId: 'user_01', callback });
+    await expect(tool.invoke({ date: '2026-06-20' })).rejects.toThrow(GrantexScopeError);
+    expect(client.enforce).not.toHaveBeenCalled();
+    expect(callback).not.toHaveBeenCalled();
+  });
+
   it('passes the audience to client.enforce in online mode', async () => {
     // enforce() checks the grant token audience; the tool's audience is the
     // one it expects, as in offline verification.

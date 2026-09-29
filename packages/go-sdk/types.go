@@ -238,6 +238,8 @@ type WebAuthnGrantEvidence struct {
 
 // VerifiedGrant represents a verified JWT grant token's claims.
 type VerifiedGrant struct {
+	// Issuer is retained to bind current authority to the signed trust domain.
+	Issuer          string   `json:"issuer,omitempty"`
 	TokenID         string   `json:"tokenId"`
 	GrantID         string   `json:"grantId"`
 	PrincipalID     string   `json:"principalId"`

@@ -16,6 +16,29 @@ const VALID_CONFIG = {
 };
 
 describe('validateConfig', () => {
+  it('preserves fixed-resource human and agent bindings', () => {
+    const config = validateConfig({ ...VALID_CONFIG, expectedPrincipalId: 'human-1', expectedAgentDid: 'did:grantex:agent-1' });
+    expect(config.expectedPrincipalId).toBe('human-1');
+    expect(config.expectedAgentDid).toBe('did:grantex:agent-1');
+  });
+
+  it.each(['', null, false, 1])('rejects malformed fixed identity bindings %j', (value) => {
+    expect(() => validateConfig({ ...VALID_CONFIG, expectedPrincipalId: value })).toThrow('non-empty string');
+    expect(() => validateConfig({ ...VALID_CONFIG, expectedAgentDid: value })).toThrow('non-empty string');
+  });
+  it('preserves an explicit current authority flag and issuer API URL', () => {
+    const config = validateConfig({ ...VALID_CONFIG, currentAuthorityCheck: true, grantexBaseUrl: 'https://issuer.example' });
+    expect(config.currentAuthorityCheck).toBe(true);
+    expect(config.grantexBaseUrl).toBe('https://issuer.example');
+  });
+
+  it.each(['true', 'false', null, 1])('rejects a non-boolean current authority flag %j', (value) => {
+    expect(() => validateConfig({ ...VALID_CONFIG, currentAuthorityCheck: value })).toThrow('must be a boolean');
+  });
+
+  it('does not silently discard a YAML authority callback', () => {
+    expect(() => validateConfig({ ...VALID_CONFIG, currentAuthority: 'not-a-function' })).toThrow('programmatic only');
+  });
   it('validates a correct config', () => {
     const config = validateConfig(VALID_CONFIG);
     expect(config.upstream).toBe('https://api.internal.example.com');

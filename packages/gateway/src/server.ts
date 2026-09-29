@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
-import { verifyGrantToken, GrantexTokenError } from '@grantex/sdk';
+import { Grantex, verifyGrantToken, GrantexTokenError } from '@grantex/sdk';
 import type { GatewayConfig } from './types.js';
 import { matchRoute, isSafeRequestPath } from './matcher.js';
 import { proxyRequest } from './proxy.js';
@@ -13,6 +13,21 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
   const audienceCheck = checkAudienceCheck(config.audienceCheck === undefined ? 'on' : config.audienceCheck);
   const audience = checkExpectedAudience(config.audience, audienceCheck);
   for (const route of config.routes) checkExpectedAudience(route.audience, audienceCheck);
+  if (config.currentAuthorityCheck !== undefined && typeof config.currentAuthorityCheck !== 'boolean') {
+    throw new Error('currentAuthorityCheck must be a boolean');
+  }
+  let currentAuthority = config.currentAuthority;
+  if (config.currentAuthorityCheck === true && currentAuthority === undefined) {
+    const apiKey = config.grantexApiKey ?? process.env['GRANTEX_API_KEY'];
+    if (!apiKey) throw new Error('Current authority verification requires GRANTEX_API_KEY');
+    const issuer = new Grantex({ apiKey, maxRetries: 0,
+      ...(config.grantexBaseUrl !== undefined ? { baseUrl: config.grantexBaseUrl } : {}) });
+    currentAuthority = (token) => issuer.grants.verify(token);
+  }
+  if (currentAuthority !== undefined && (typeof currentAuthority !== 'function' || audienceCheck !== 'on'
+    || config.routes.some((route) => !(route.audience ?? audience)))) {
+    throw new Error('Current authority verification requires a callback and an audience for every route, with audienceCheck on');
+  }
 
   /**
    * Sends the audience denial for a verified grant token and returns true, or
@@ -110,6 +125,12 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
       const grant = await verifyGrantToken(token, {
         jwksUri: config.jwksUri,
         requiredScopes: match.route.requiredScopes,
+        ...(currentAuthority !== undefined ? {
+          currentAuthority,
+          ...((match.route.audience ?? audience) !== undefined ? { audience: (match.route.audience ?? audience)! } : {}),
+        } : {}),
+        ...(config.expectedPrincipalId !== undefined ? { expectedPrincipalId: config.expectedPrincipalId } : {}),
+        ...(config.expectedAgentDid !== undefined ? { expectedAgentDid: config.expectedAgentDid } : {}),
       });
 
       // 3a. Audience (RFC 7519 section 4.1.3), with the same semantics as the
@@ -139,7 +160,7 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
       }
 
       if (err instanceof GrantexTokenError) {
-        const isExpired = err.message.toLowerCase().includes('exp');
+        const isExpired = /expired|expiration|\bexp\b["']? claim/i.test(err.message);
         const code = isExpired ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID';
         const isScopeError = err.message.toLowerCase().includes('scope');
 

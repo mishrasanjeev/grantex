@@ -202,7 +202,7 @@
           "name": "Which Grantex SDK should I install?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Use the registry-verified @grantex/sdk@0.8.0 for TypeScript, grantex==0.7.0 for Python, and github.com/mishrasanjeev/grantex-go@v0.4.1 for Go. See release status for exact evidence and limitations."
+            "text": "Use the registry-verified @grantex/sdk@0.8.1 for TypeScript, grantex==0.7.0 for Python, and github.com/mishrasanjeev/grantex-go@v0.4.1 for Go. See release status for exact evidence and limitations."
           }
         },
         {
@@ -223,10 +223,10 @@
         },
         {
           "@type": "Question",
-          "name": "What must I configure for MCP Auth 3.0?",
+          "name": "What must I configure for MCP Auth 4.0?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "MCP Auth 3.0.0 supports durable storage and rendered consent. Configure shared state, authenticated principal handoff, resource binding and explicit token revocation, then enforce upstream grant authority. Independent cross-vendor certification is not claimed."
+            "text": "MCP Auth 4.0.0 requires a host-authenticated human-principal resolver and trusted current-grant verification. Configure durable shared state, resource binding and explicit local token revocation. Rendered consent does not replace human login or passkeys. Independent cross-vendor certification is not claimed."
           }
         },
         {

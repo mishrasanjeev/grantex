@@ -2,13 +2,33 @@ package grantex
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // GrantsService handles grant management and delegation.
 type GrantsService struct {
 	http *httpClient
+}
+
+// Verify checks current issuer authority. Unlike VerifyGrantToken, this calls
+// the issuer for every token, without a positive authorization cache.
+func (s *GrantsService) Verify(ctx context.Context, token string) (*VerifiedGrant, error) {
+	data, err := s.http.post(ctx, "/v1/grants/verify", map[string]string{"token": token})
+	if err != nil {
+		return nil, err
+	}
+	var response struct {
+		Active bool          `json:"active"`
+		Claims jwt.MapClaims `json:"claims"`
+	}
+	if err := json.Unmarshal(data, &response); err != nil || !response.Active || response.Claims == nil {
+		return nil, &TokenError{Message: "grant token is not active or authority response is malformed", Cause: err}
+	}
+	return normalizeGrantClaims(response.Claims, true)
 }
 
 // Get retrieves a grant by ID.

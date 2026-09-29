@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "grantex>=0.7.0,<1",
+    "grantex>=0.7.1,<1",
     "strands-agents>=0.1",
 ]
 

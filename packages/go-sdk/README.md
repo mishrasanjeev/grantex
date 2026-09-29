@@ -248,3 +248,7 @@ Apache 2.0
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+> Unreleased source: `Grants.Verify` and `VerifyOptions.CurrentAuthority` add
+> per-operation issuer authority with trusted principal/agent binding. This is
+> not a Go manifest/decision/caps enforcement engine. See the
+> [SDK execution authority guide](../../docs/guides/sdk-execution-authority.mdx).

@@ -12,6 +12,28 @@ from conftest import TOKEN_WITH_SCOPES, TOKEN_WITH_READ, make_grant_token
 from grantex_strands import create_grantex_tool, get_tool_scopes
 
 
+def test_bound_online_profile_does_not_enforce_at_creation() -> None:
+    client = MagicMock()
+    client.enforce.return_value = SimpleNamespace(allowed=True, scopes=["data:read"], reason="")
+    tool = create_grantex_tool(name="read", description="Synthetic read", grant_token=TOKEN_WITH_READ,
+        required_scope="data:read", func=lambda: "ok", online=True, client=client, connector="data",
+        audience="data-service", current_authority=MagicMock())
+    client.enforce.assert_not_called()
+    assert tool() == "ok"
+    client.enforce.assert_called_once()
+
+
+@pytest.mark.parametrize("allowed", ["false", "true", 1, None])
+def test_online_refuses_non_boolean_allowed(allowed: object) -> None:
+    client = MagicMock()
+    client.enforce.return_value = SimpleNamespace(allowed=allowed, scopes=[], reason="invalid response")
+    callback = MagicMock()
+    with pytest.raises(PermissionError):
+        create_grantex_tool(name="read", description="Synthetic read", grant_token=TOKEN_WITH_READ,
+            required_scope="data:read", func=callback, online=True, client=client, connector="data")
+    callback.assert_not_called()
+
+
 # ─── Tool creation and scope enforcement ─────────────────────────────────────
 
 

@@ -6,6 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### SDK Execution Authority Audit
+- TypeScript SDK 0.8.1 is npm-published and registry-integrity verified;
+  Python SDK 0.7.1 remains an unpublished source candidate. Online grant verification requires a
+  literal `active: true` and valid claim objects. Empty principal/token IDs
+  and contradictory non-revoked status responses are refused.
+- TypeScript, Python and Go token verification gain opt-in, uncached issuer
+  authority callbacks plus trusted principal/agent binding. Online authority
+  requires an explicit audience and matching token, grant, tenant and identity.
+  Go adds `Grants.Verify` for `/v1/grants/verify`; legacy `Tokens.Verify` is not
+  a replacement for this check.
+- Framework wrappers, HTTP middleware, adapters and gateway expose the same
+  opt-in controls. Their candidate dependency minimums are SDK 0.8.1 / Python
+  0.7.1, so older verifiers cannot silently ignore authority options in a
+  supported installation. Signature-only defaults are unchanged; these are
+  not current-authority or human-consent guarantees.
+- Bound Strands online tools check identity before enforcement; the Python
+  bound profile does not consume decisions or reserve caps during creation.
+  Both wrappers require a literal `allowed: true` from online enforcement.
+- The gateway adds `currentAuthorityCheck: true` for YAML/CLI configuration,
+  requires server-held credentials and route audiences, and refuses malformed
+  configuration instead of silently ignoring a requested authority check.
+- Regression suites cover issuer revocation/outage, malformed authorization
+  responses, token/principal/agent/tenant substitution, and denied callbacks.
+  See the SDK execution authority guide for host-owned consent, action-bound
+  decisions, caps accounting, and offline-verifier limitations.
+- CLI and MCP Auth source candidates require SDK 0.8.1 as their minimum
+  dependency; earlier prepared archives must be rebuilt before publication.
+- The private mock issuer compares persisted state contents rather than
+  file timestamps, so same-size/coarse-timestamp revocations are observed.
+  Missing previously loaded state fails closed. Documentation example tests
+  accept both Windows and Unix line endings.
+
 ### MCP Auth 4.0.0 (Breaking)
 - Introspection requires authenticated confidential clients and checks current
   issuer authority by default. Evaluation-only opt-outs are

@@ -120,6 +120,46 @@ describe('mock issuer server', () => {
     expect(post.headers.get('allow')).toBe('GET, HEAD');
   });
 
+  it('observes same-size revocations even when the file timestamp is unchanged', async () => {
+    const { mkdtempSync, readFileSync, rmSync, statSync, utimesSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'mock-issuer-stamp-'));
+    try {
+      const serving = MockIssuer.create({ dir });
+      const issued = issue(serving);
+      const file = join(dir, 'state.json');
+      const before = statSync(file);
+      const previous = readFileSync(file, 'utf8');
+      const server = await start(serving);
+      MockIssuer.create({ dir }).revokePassport(issued.attestationId);
+      expect(readFileSync(file, 'utf8').length).toBe(previous.length);
+      utimesSync(file, before.atime, before.mtime);
+      const path = new URL(issued.status.status_list.uri).pathname;
+      const claims = decodeJws(await (await fetch(`${server.origin}${path}`)).text()).payload;
+      expect(decodeTokenStatusList(claims.status_list as { bits: number; lst: string }).statusAt(issued.status.status_list.idx)).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to serve cached active status when loaded state disappears', async () => {
+    const { mkdtempSync, rmSync, unlinkSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'mock-issuer-missing-'));
+    try {
+      const serving = MockIssuer.create({ dir });
+      const issued = issue(serving);
+      const server = await start(serving);
+      unlinkSync(join(dir, 'state.json'));
+      const path = new URL(issued.status.status_list.uri).pathname;
+      expect((await fetch(`${server.origin}${path}`)).status).toBe(503);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('limits requests per client', async () => {
     const server = await start(MockIssuer.create(), { rateLimitPerMinute: 3 });
     const statuses: number[] = [];

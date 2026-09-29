@@ -48,11 +48,17 @@ class GrantexAuth:
         clock_tolerance: int = 0,
         audience: Optional[str] = None,
         token_extractor: Optional[Callable[[Request], Optional[str]]] = None,
+        current_authority: Callable[[str], VerifiedGrant] | None = None,
+        expected_principal_id: str | None = None,
+        expected_agent_did: str | None = None,
     ) -> None:
         self._jwks_uri = jwks_uri
         self._clock_tolerance = clock_tolerance
         self._audience = audience
         self._token_extractor = token_extractor
+        self._current_authority = current_authority
+        self._expected_principal_id = expected_principal_id
+        self._expected_agent_did = expected_agent_did
 
     async def __call__(self, request: Request) -> VerifiedGrant:
         """FastAPI dependency that verifies the grant token and returns a VerifiedGrant."""
@@ -85,13 +91,16 @@ class GrantexAuth:
             jwks_uri=self._jwks_uri,
             clock_tolerance=self._clock_tolerance,
             audience=self._audience,
+            current_authority=self._current_authority,
+            expected_principal_id=self._expected_principal_id,
+            expected_agent_did=self._expected_agent_did,
         )
 
         try:
             return verify_grant_token(token, opts)
         except GrantexTokenError as exc:
             msg = str(exc)
-            is_expired = "exp" in msg.lower()
+            is_expired = "expired" in msg.lower() or "expiration" in msg.lower() or '"exp" claim' in msg.lower()
             code: ErrorCode = "TOKEN_EXPIRED" if is_expired else "TOKEN_INVALID"
             raise GrantexFastAPIError(code, msg, 401) from exc
 

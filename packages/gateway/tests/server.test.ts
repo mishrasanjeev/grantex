@@ -116,6 +116,14 @@ describe('createGatewayServer', () => {
     expect(JSON.parse(response.body).error).toBe('TOKEN_EXPIRED');
   });
 
+  it('does not mislabel an expected-agent mismatch as token expiry', async () => {
+    vi.mocked(verifyGrantToken).mockRejectedValue(new GrantexTokenError('Grant token does not belong to the expected agent'));
+    const response = await server.inject({ method: 'GET', url: '/calendar/events', headers: { authorization: 'Bearer invalid-token' } });
+    expect(response.statusCode).toBe(401);
+    expect(JSON.parse(response.body).error).toBe('TOKEN_INVALID');
+    expect(proxyRequest).not.toHaveBeenCalled();
+  });
+
   it('returns 403 for insufficient scopes', async () => {
     vi.mocked(verifyGrantToken).mockRejectedValue(
       new GrantexTokenError('Missing required scope: payments:initiate'),

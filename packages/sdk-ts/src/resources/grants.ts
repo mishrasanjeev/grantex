@@ -50,9 +50,12 @@ export class GrantsClient {
       '/v1/grants/verify',
       { token },
     );
-    if (!response.active || !response.claims) {
+    if (!response || typeof response !== 'object' || Array.isArray(response)
+      || response.active !== true || !response.claims
+      || typeof response.claims !== 'object' || Array.isArray(response.claims)) {
+      const reason = response && typeof response.reason === 'string' ? response.reason : undefined;
       throw new GrantexTokenError(
-        `Grant token is not active${response.reason ? `: ${response.reason}` : ''}`,
+        `Grant token is not active${reason ? `: ${reason}` : ''}`,
       );
     }
     return claimsToVerifiedGrant(response.claims);

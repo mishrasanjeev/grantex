@@ -248,3 +248,9 @@ Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kum
 Use Node.js 24 LTS and `npm ci` to build or test this checkout with Vitest 5.
 Repository validation steps are in [the dependency upgrade guide](https://docs.grantex.dev/guides/dependency-updates).
 Source-tooling requirements are separate from published package runtime support.
+> Unreleased authority hardening requires TypeScript SDK 0.8.1 (`currentAuthority`),
+> not just a valid JWT signature. Bind the audience and trusted human/agent
+> identities, and check the issuer before every execution. This does not
+> create human consent or automatically consume action decisions/spend caps.
+> Existing offline defaults remain offline. The candidate is not yet published.
+> See the [SDK execution authority guide](../../docs/guides/sdk-execution-authority.mdx).
