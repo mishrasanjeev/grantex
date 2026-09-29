@@ -249,3 +249,7 @@ aba24def493c875a77e4494eef4549fb741c3d6a:spec/passport-binding.md:generic-api-ke
 39265b2569185124cf0799404e8e9b298121e938:apps/auth-service/tests/passport-binding-docs.test.ts:generic-api-key:45
 39265b2569185124cf0799404e8e9b298121e938:docs/concepts/passport-vs-grant.md:generic-api-key:65
 39265b2569185124cf0799404e8e9b298121e938:spec/passport-binding.md:generic-api-key:161
+
+# Synthetic child-grant examples (a public key thumbprint) in the #1484 squash commit
+05ab4760ab156f8f99ee1c4a7620614a6775c70a:apps/auth-service/tests/child-grant-docs.test.ts:generic-api-key:42
+05ab4760ab156f8f99ee1c4a7620614a6775c70a:spec/passport-binding.md:generic-api-key:461
