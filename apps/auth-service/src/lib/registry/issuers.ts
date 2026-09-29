@@ -800,6 +800,31 @@ export async function isAccreditedFor(
 }
 
 /**
+ * Whether a read of the issuer's status list, verified with `kid`, may
+ * still be recorded (status reconciliation, recordIssuerStatusReads): the
+ * issuer is active at `at` and `kid` is one of its keys and not revoked.
+ * Called inside the recording transaction after the registry chain's lock,
+ * the order updateAccreditedIssuer takes them in; the issuer row is locked
+ * FOR SHARE so no operator change to it commits until the read is written
+ * or discarded, and a change committed during the fetch is seen here.
+ */
+export async function issuerReadStillInForce(tx: TxSql, issuerId: string, kid: string, at: Date): Promise<boolean> {
+  const rows = await tx`
+    SELECT status, suspended_effective_from, jwks FROM accredited_issuers WHERE id = ${issuerId} FOR SHARE`;
+  const row = rows[0] as Record<string, unknown> | undefined;
+  if (!row) return false;
+  const status = effectiveIssuerStatus({
+    status: row['status'] as IssuerStatus,
+    suspendedEffectiveFrom: row['suspended_effective_from'] ? toDate(row['suspended_effective_from']) : null,
+  }, at);
+  if (status !== 'active') return false;
+  if (!toJwks(row['jwks']).keys.some((key) => key['kid'] === kid)) return false;
+  const revoked = await tx`
+    SELECT 1 FROM accredited_issuer_revoked_keys WHERE issuer_id = ${issuerId} AND kid = ${kid}`;
+  return revoked.length === 0;
+}
+
+/**
  * The public key `kid` of `entityId`, or null when the issuer is unknown or
  * withdrawn, the kid is revoked, or the set has no such kid. It does not
  * check suspension: whether the issuer may be relied on is isAccreditedFor's

@@ -121,6 +121,11 @@ export function acceptanceListUri(listId: string): string {
   return `${baseUrl()}${ACCEPTANCE_LIST_PATH}/${listId}`;
 }
 
+/** What every one of the registry's list URIs starts with: the URI is this followed by the list id. */
+export function acceptanceListUriPrefix(): string {
+  return `${baseUrl()}${ACCEPTANCE_LIST_PATH}/`;
+}
+
 /** The list id in one of the registry's own list URIs, or null for any other URI. */
 export function acceptanceListIdFromUri(uri: string): string | null {
   const prefix = `${baseUrl()}${ACCEPTANCE_LIST_PATH}/`;

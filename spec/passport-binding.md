@@ -220,6 +220,13 @@ its own passport and the parent's binding is carried in `act.passport`, is
 later work. With the flag off, a delegated grant does not inherit the binding
 (FINDINGS G-130). The refusal covers per-merchant children too (§8.6).
 
+With `REGISTRY_STATUS_RECONCILIATION_ENABLED=true`, a bound grant also follows
+its passport after issuance: when the registry's acceptance entry in the
+binding becomes INVALID the grant, and with it every token issued from it, is
+revoked; when it becomes SUSPENDED the grant is suspended; and when it is VALID
+again what the registry suspended is resumed. The revocation feed carries each
+change. See `spec/registry-federation.md`, "Status reconciliation".
+
 ## 6. Consent
 
 `GET /v1/consent/{id}` returns `agentPassport` for a request that carries a

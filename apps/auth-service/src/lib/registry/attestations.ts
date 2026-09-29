@@ -39,15 +39,18 @@
  * issuer never holds a registry lock.
  *
  * The issuer's list is read at acceptance and then again before each read
- * goes stale (issuer_status_fresh_until, workers/registryIssuerStatusRecheck.ts).
- * A read past its freshness no longer counts toward a level.
+ * goes stale (issuer_status_fresh_until, workers/registryIssuerStatusRecheck.ts,
+ * or, with REGISTRY_STATUS_RECONCILIATION_ENABLED=true, status-reconciliation.ts,
+ * which reads each list once for all its attestations and cascades what it
+ * reads to the acceptance entries and the bound grants). A read past its
+ * freshness no longer counts toward a level.
  */
 import type postgres from 'postgres';
 import { config } from '../../config.js';
 import { queries, type TxSql } from '../../db/client.js';
-import { appendPlatformAuditEntries, lockAuditChain } from '../audit-chain.js';
+import { appendPlatformAuditEntries, lockAuditChain, type AuditChainHead } from '../audit-chain.js';
 import { newRegistryAttestationId } from '../ids.js';
-import { allocateAcceptanceEntry, setAcceptance } from './acceptance-status.js';
+import { acceptanceListIdFromUri, allocateAcceptanceEntry, setAcceptance } from './acceptance-status.js';
 import {
   AttestationError,
   CLOCK_SKEW_SECONDS,
@@ -59,6 +62,7 @@ import {
   parseAttestationPayload,
   parseCompactJws,
   readIssuerAndType,
+  readStatusListEntries,
   readStatusListEntry,
   statusUriUnderBase,
   verifyAttestationRequest,
@@ -72,6 +76,7 @@ import {
   REGISTRY_AUDIT_CHAIN,
   getAccreditedIssuer,
   isAccreditedFor,
+  issuerReadStillInForce,
   issuerVerificationKey,
   type IssuerRecord,
 } from './issuers.js';
@@ -296,8 +301,43 @@ async function readIssuerStatusList(
   });
 }
 
+/**
+ * readIssuerStatusList for every attestation pointing into one list: one
+ * fetch, one verification, every entry read from the same token. Every way
+ * of failing to read the list is status_stale, with the IssuerFetchError
+ * reason as the AttestationError's reason for a failed fetch; an index the
+ * list does not have is null for that index alone.
+ */
+export async function readIssuerStatusListEntries(
+  sql: Sql,
+  issuer: IssuerRecord,
+  uri: string,
+  idxs: readonly number[],
+  now: Date,
+): Promise<{ values: Map<number, number | null>; freshUntil: Date; kid: string }> {
+  if (!statusUriUnderBase(uri, issuer.statusListBase)) {
+    throw new AttestationError('status_stale', 'status_list_not_under_base',
+      'status.status_list.uri is not under the issuer\'s status_list_base');
+  }
+  let token: string;
+  try {
+    token = await fetchIssuerStatusList(uri);
+  } catch (err) {
+    // An unreadable list is reported as such, never read as any status.
+    if (err instanceof IssuerFetchError) throw new AttestationError('status_stale', err.reason, err.message);
+    throw err;
+  }
+  return readStatusListEntries(token, {
+    uri,
+    idxs,
+    now,
+    resolveKey: (kid) => issuerVerificationKey(sql, issuer.entityId, kid),
+    eddsaEnabled: config.registryAttestationEddsaEnabled,
+  });
+}
+
 /** What the registry records for an entry's value. Anything but VALID or SUSPENDED is revoked: fail closed. */
-function issuerStatusOf(value: number): IssuerStatus {
+export function issuerStatusOf(value: number): IssuerStatus {
   if (value === TOKEN_STATUS.VALID) return 'valid';
   if (value === TOKEN_STATUS.SUSPENDED) return 'suspended';
   return 'revoked';
@@ -620,18 +660,209 @@ export async function recheckIssuerStatus(sql: Sql, id: string, now: Date = new 
   return sql.begin(async (tx) => {
     const head = await lockAuditChain(tx, REGISTRY_AUDIT_CHAIN);
     const current = requireRecord(await selectRecord(tx, id, true));
-    await tx`
-      UPDATE registry_attestations
-      SET issuer_status = ${status}, issuer_status_checked_at = ${now},
-          issuer_status_fresh_until = ${read.freshUntil}, updated_at = NOW()
-      WHERE id = ${id}`;
-    if (current.issuerStatus !== status) {
-      await appendPlatformAuditEntries(tx, REGISTRY_AUDIT_CHAIN, head, [{
-        action: 'grantex.registry.attestation_issuer_status_changed',
-        metadata: { ...auditMetadata(current, 'registry'), from: current.issuerStatus, to: status },
-      }]);
-    }
-    await recompute(tx, current, now);
+    await writeIssuerStatus(tx, head, current, status, read.freshUntil, now);
     return status;
   }) as Promise<IssuerStatus>;
 }
+
+/** Record one read of the issuer's list for one attestation; audit a change of status. */
+async function writeIssuerStatus(
+  tx: TxSql,
+  head: AuditChainHead,
+  current: AttestationRecord,
+  status: IssuerStatus,
+  freshUntil: Date,
+  now: Date,
+): Promise<AuditChainHead> {
+  await tx`
+    UPDATE registry_attestations
+    SET issuer_status = ${status}, issuer_status_checked_at = ${now},
+        issuer_status_fresh_until = ${freshUntil}, updated_at = NOW()
+    WHERE id = ${current.id}`;
+  let next = head;
+  if (current.issuerStatus !== status) {
+    next = (await appendPlatformAuditEntries(tx, REGISTRY_AUDIT_CHAIN, head, [{
+      action: 'grantex.registry.attestation_issuer_status_changed',
+      metadata: { ...auditMetadata(current, 'registry'), from: current.issuerStatus, to: status },
+    }])).head;
+  }
+  await recompute(tx, current, now);
+  return next;
+}
+
+export interface IssuerStatusFlip {
+  id: string;
+  from: IssuerStatus;
+  to: IssuerStatus;
+}
+
+/**
+ * Record what one read of an issuer's list said for each attestation
+ * pointing into it (status reconciliation), in one transaction under the
+ * registry chain's lock: issuer_status, until when the read stays fresh, the
+ * attempt, and an audit entry for each change. Returns the changes, or null
+ * when the read is discarded.
+ *
+ * `source` is the issuer whose list was read and the kid it was verified
+ * with. The list is fetched outside any transaction, so an operator may have
+ * suspended or withdrawn the issuer, or revoked that kid, while it was in
+ * flight: inside the transaction, with the issuer row locked
+ * (issuerReadStillInForce), the read is discarded, and nothing at all is
+ * written, unless the issuer is still active (at `now` and at the time of
+ * writing) and the kid still one of its keys in force. A suspension exists
+ * to stop acting on a faulty list, so a read that started before it never
+ * lands after it.
+ *
+ * A record that is no longer accepted, or whose issuer status is already
+ * revoked, is left alone: INVALID is final (draft-ietf-oauth-status-list-21
+ * §7.1, "revoked, annulled, taken back, recalled or cancelled"), so a list
+ * that later shows the entry VALID again does not bring it back.
+ */
+export async function recordIssuerStatusReads(
+  sql: Sql,
+  reads: ReadonlyArray<{ id: string; value: number }>,
+  freshUntil: Date,
+  now: Date,
+  source: { issuerId: string; kid: string },
+): Promise<IssuerStatusFlip[] | null> {
+  if (reads.length === 0) return [];
+  return sql.begin(async (tx) => {
+    let head = await lockAuditChain(tx, REGISTRY_AUDIT_CHAIN);
+    // Fail closed: judged at the later of the run's time and the clock now.
+    const at = new Date(Math.max(now.getTime(), Date.now()));
+    if (!await issuerReadStillInForce(tx, source.issuerId, source.kid, at)) return null;
+    const flips: IssuerStatusFlip[] = [];
+    for (const read of reads) {
+      const current = await selectRecord(tx, read.id, true);
+      if (!current || current.state !== 'accepted' || current.issuerStatus === 'revoked') continue;
+      const status = issuerStatusOf(read.value);
+      head = await writeIssuerStatus(tx, head, current, status, freshUntil, now);
+      if (current.issuerStatus !== status) flips.push({ id: current.id, from: current.issuerStatus, to: status });
+    }
+    return flips;
+  }) as Promise<IssuerStatusFlip[] | null>;
+}
+
+/**
+ * Record an attempt to read the issuer's list that failed: only
+ * issuer_status_checked_at moves. The recorded status is not overwritten by
+ * a guess, and its freshness is not extended, so it stops counting (and a
+ * bound grant's refresh refuses with status_stale) once it runs out.
+ */
+export async function recordIssuerStatusAttempts(sql: Sql, ids: readonly string[], now: Date): Promise<void> {
+  if (ids.length === 0) return;
+  await queries(sql)`
+    UPDATE registry_attestations SET issuer_status_checked_at = ${now}
+    WHERE id = ANY(${ids as string[]})`;
+}
+
+/**
+ * The kid in the protected header of an attestation's JWS: the key of its
+ * issuer that signed it. The registry stores the JWS byte for byte, so this
+ * is read from the stored bytes rather than kept in a column of its own.
+ * Null for bytes that do not parse, which ingestion never stores.
+ */
+export function attestationSigningKid(jws: string): string | null {
+  try {
+    const kid = parseCompactJws(jws).header['kid'];
+    return typeof kid === 'string' ? kid : null;
+  } catch (err) {
+    if (err instanceof AttestationError) return null;
+    throw err;
+  }
+}
+
+/**
+ * Withdraw an accepted attestation because the issuer key that signed it has
+ * been revoked (PATCH /v1/registry/issuers/:id with revoke_kids): its record
+ * becomes `withdrawn` and its acceptance entry INVALID, which is final, with
+ * an audit entry on the registry chain. False when it is no longer accepted.
+ */
+export async function withdrawForRevokedKey(sql: Sql, id: string, kid: string, now: Date = new Date()): Promise<boolean> {
+  return sql.begin(async (tx) => {
+    const head = await lockAuditChain(tx, REGISTRY_AUDIT_CHAIN);
+    const record = await selectRecord(tx, id, true);
+    if (!record || record.state !== 'accepted') return false;
+    await tx`
+      UPDATE registry_attestations
+      SET state = 'withdrawn', withdrawn_at = ${now}, updated_at = NOW()
+      WHERE id = ${id}`;
+    await setAcceptance(record.acceptanceListUri, record.acceptanceListIdx, 'invalid', tx);
+    await appendPlatformAuditEntries(tx, REGISTRY_AUDIT_CHAIN, head, [{
+      action: 'grantex.registry.attestation_withdrawn',
+      metadata: { ...auditMetadata(record, 'registry:key_revoked'), kid },
+    }]);
+    await recompute(tx, record, now);
+    return true;
+  }) as Promise<boolean>;
+}
+
+export interface AcceptanceDecision {
+  status: 'valid' | 'suspended' | 'invalid';
+  /** Why, for the audit entry and the metric: issuer_status, issuer or key_revoked. */
+  cause: string;
+}
+
+/**
+ * Bring one accepted attestation's acceptance entry in line with the
+ * registry's decision (status reconciliation), in one transaction under the
+ * registry chain's lock: the record and its issuer are read again inside
+ * it, `decide` is asked on what they say now, and a change is written with
+ * setAcceptance (which opens the cascade window) and audited as
+ * grantex.registry.attestation_acceptance_changed. INVALID is final; a
+ * record that is no longer accepted, or whose entry is already where the
+ * decision puts it, or for which the decision is null (leave it as it is),
+ * is left alone. Returns the change, or null.
+ */
+export async function applyAcceptanceDecision(
+  sql: Sql,
+  id: string,
+  decide: (record: AttestationRecord, issuer: IssuerRecord) => AcceptanceDecision | null,
+  now: Date = new Date(),
+): Promise<{ from: number; to: AcceptanceDecision } | null> {
+  return sql.begin(async (tx) => {
+    const head = await lockAuditChain(tx, REGISTRY_AUDIT_CHAIN);
+    const record = await selectRecord(tx, id, true);
+    if (!record || record.state !== 'accepted') return null;
+    const issuer = await getAccreditedIssuer(tx as unknown as Sql, record.issuerEntityId);
+    // An attestation whose issuer record is gone cannot be relied on: suspend it.
+    const decision = issuer ? decide(record, issuer) : { status: 'suspended' as const, cause: 'issuer' };
+    if (decision === null) return null;
+    const listId = acceptanceListIdFromUri(record.acceptanceListUri);
+    if (listId === null) {
+      throw new AttestationError('attestation_not_registered', 'acceptance_entry_missing',
+        'the attestation\'s acceptance entry is not one of this registry\'s lists');
+    }
+    const [entry] = await tx`
+      SELECT status FROM registry_acceptance_entries WHERE list_id = ${listId} AND idx = ${record.acceptanceListIdx}`;
+    if (!entry) {
+      throw new AttestationError('attestation_not_registered', 'acceptance_entry_missing', 'the attestation has no acceptance entry');
+    }
+    const from = Number(entry['status']);
+    const to = ACCEPTANCE_VALUE[decision.status];
+    if (from === to || from === TOKEN_STATUS.INVALID) return null;
+    await setAcceptance(record.acceptanceListUri, record.acceptanceListIdx, decision.status, tx);
+    await appendPlatformAuditEntries(tx, REGISTRY_AUDIT_CHAIN, head, [{
+      action: 'grantex.registry.attestation_acceptance_changed',
+      metadata: {
+        ...auditMetadata(record, 'registry'),
+        from: ACCEPTANCE_NAME[from] ?? String(from),
+        to: decision.status,
+        cause: decision.cause,
+      },
+    }]);
+    await recompute(tx, record, now);
+    return { from, to: decision };
+  }) as Promise<{ from: number; to: AcceptanceDecision } | null>;
+}
+
+const ACCEPTANCE_VALUE: Record<AcceptanceDecision['status'], number> = {
+  valid: TOKEN_STATUS.VALID,
+  invalid: TOKEN_STATUS.INVALID,
+  suspended: TOKEN_STATUS.SUSPENDED,
+};
+const ACCEPTANCE_NAME: Record<number, string> = {
+  [TOKEN_STATUS.VALID]: 'valid',
+  [TOKEN_STATUS.INVALID]: 'invalid',
+  [TOKEN_STATUS.SUSPENDED]: 'suspended',
+};

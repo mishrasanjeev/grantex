@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Status-list reconciliation with cascade (auth service)
+- With `REGISTRY_STATUS_RECONCILIATION_ENABLED=true` (off by default), one
+  instance at a time, under a Postgres advisory lock and after a random start
+  delay, reads every active accredited issuer's Token Status List that an accepted
+  attestation points into at the list's `ttl` (draft-ietf-oauth-status-list-21
+  §13.7), never sooner than `REGISTRY_STATUS_POLL_MIN_INTERVAL_MS` after the
+  last attempt, with one fetch per list however many attestations use it. A
+  changed entry is recorded and audited; an unreadable list changes nothing
+  and is counted, and once the last good read runs out bound grants refuse to
+  refresh with `status_stale`. Off, the per-attestation recheck worker runs
+  as before.
+- The registry's acceptance entry follows what it read: INVALID for a revoked
+  passport, SUSPENDED while the passport or its issuer is suspended or the
+  issuer withdrawn, VALID again on reinstatement once a fresh read confirms
+  it (a suspended issuer's lists are not read), each change audited
+  (`grantex.registry.attestation_acceptance_changed`) and opening the
+  acceptance lists' cascade window. An attestation signed with a revoked
+  issuer kid is withdrawn (`requestedBy: registry:key_revoked`), however long
+  ago the kid was revoked: the loop pages through every accepted attestation
+  of an issuer with a revoked kid, a bounded number a run, so a kid revoked
+  while reconciliation was off or whose cascade kept failing is still acted on.
+- A status list read in flight when an operator suspends or withdraws its
+  issuer, or revokes the key it was signed with, is discarded: the read is
+  recorded only after checking again, under the issuer row's lock, that the
+  issuer is active and the key still in force (poll failure reason
+  `issuer_changed`).
+- `REGISTRY_STATUS_RECONCILIATION_ENABLED=true` with `DATABASE_POOL_MAX=1`
+  stops the service from starting: a run holds one connection for its lock
+  and works through another, and with one it would stall every request.
+- Grants bound to a passport follow the acceptance entry: INVALID revokes the
+  grant and its delegated grants, SUSPENDED suspends them (cause `registry`),
+  VALID resumes only what the registry suspended; the revocation feed, the
+  audit chains and the `grant.revoked` / `grant.suspended` webhooks carry the
+  change. `PATCH /v1/registry/issuers/{id}` cascades a suspension,
+  reinstatement, withdrawal or revoked kid before it answers when the flag is
+  on. The integration tests measure an issuer's flip reaching the revocation
+  feed within 2 s with the mock issuer's 1 s `ttl`.
+- `REGISTRY_STATUS_POLL_MIN_INTERVAL_MS` (default `30000`) may go below 30 s
+  only when `NODE_ENV` is `development` or `test`, and never below `1000`;
+  any other value stops the service from starting.
+- New metrics (`grantex_registry_status_list_polls_total`,
+  `grantex_registry_status_list_poll_failures_total`,
+  `grantex_registry_status_flips_total`,
+  `grantex_registry_acceptance_changes_total`,
+  `grantex_registry_cascade_grants_total`,
+  `grantex_registry_status_reconcile_runs_total`,
+  `grantex_registry_status_reconcile_failures_total`,
+  `grantex_registry_status_poll_lag_seconds`,
+  `grantex_registry_status_lists_stale`), alert rules in
+  `deploy/prometheus/registry-status-alerts.yml`, and the runbook
+  `docs/runbooks/status-list-incident.md`.
 ### Per-merchant child grants (auth service)
 - With `PASSPORT_BOUND_GRANTS_ENABLED=true`, `POST /v1/authorize` with a
   `passport` takes `authorization_details` with one `urn:grantex:commerce:v1`
