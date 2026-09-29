@@ -108,6 +108,25 @@ To look up one organization, use the public detail endpoints above.
 | `POST` | `/v1/registry/orgs/:orgId/verify-dns` | Developer API key | Verify its DNS challenge |
 | `GET` | `/v1/trust-registry` | Developer API key; admin key (`ADMIN_API_KEY`) when `TRUST_REGISTRY_ADMIN_LISTING_ENFORCED=true` | List every developer's records (operator) |
 
+## Accredited Issuers and Agent Attestations
+
+The organization registry above is self-service, and its strongest check is DNS ownership. A separate layer of the registry lets accredited issuers vouch for agents:
+
+- **Accredited issuers.** The registry operator accredits each issuer for specific trust-mark types, with a static JWKS and a `status_list_base`.
+- **Attestations.** An issuer posts an attestation, a compact JWS, only for an agent key whose possession has been proven.
+- **Trust levels.** The registry computes a level (`basic`, `verified`, `attested` or `attested_verified`) and flags, publishes its acceptance of each attestation on its own status lists, and fails closed: anything suspended reads `basic`.
+- **Reads.** Relying parties read the result through the minimised agent lookup or the signed manifest `/.well-known/agent-registry.json`.
+- **Passport-bound grants.** A grant can be bound to an Agent Passport, an SD-JWT VC from an accredited issuer, so it stops working when the registry no longer stands behind the passport.
+
+Unauthenticated reads are behind `REGISTRY_PUBLIC_ENDPOINTS_ENABLED`, and passport-bound grants are behind `PASSPORT_BOUND_GRANTS_ENABLED`. Both are off by default; see [Self-Hosting](/self-hosting).
+
+| Audience | Start here |
+|----------|------------|
+| Issuers | [Becoming an Accredited Issuer](/issuers/becoming-an-accredited-issuer), then [Running the Mock Issuer](/issuers/running-the-mock-issuer) |
+| Providers | [Registering Agents](/providers/registering-agents) |
+| Relying parties | [Verifying Agents](/relying-parties/verifying-agents) |
+| Everyone | [Passport vs Grant](/concepts/passport-vs-grant) |
+
 ## Related
 
 - [Trust Registry Setup](/guides/trust-registry-setup)
