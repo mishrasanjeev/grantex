@@ -110,7 +110,7 @@ try {
   const allowed = await client.enforce({ ...call, amount: 10 });
   assert.equal(allowed.allowed, true, JSON.stringify(allowed));
   assert.equal(statusCalls, 1, 'Default must query current status');
-  assert.equal(userAgent, '@grantex/sdk/0.8.0');
+  assert.equal(userAgent, '@grantex/sdk/0.8.1');
   const missing = await client.enforce(call);
   assert.equal(missing.allowed, false);
   assert.equal(missing.subReason, 'amount_missing');
