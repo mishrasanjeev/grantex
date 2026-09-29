@@ -28,7 +28,7 @@ Official Go SDK for the [Grantex](https://grantex.dev) delegated authorization p
 ## Installation
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.4.1
+go get github.com/mishrasanjeev/grantex-go@v0.4.2
 ```
 
 Requires Go 1.26.1 or newer, matching the module's `go.mod` directive.

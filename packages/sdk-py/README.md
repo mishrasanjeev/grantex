@@ -47,7 +47,7 @@ Grantex lets humans authorize AI agents with **verifiable, revocable, audited gr
 ## Install
 
 ```bash
-pip install grantex==0.7.0
+pip install grantex==0.7.1
 ```
 
 ## Quick start

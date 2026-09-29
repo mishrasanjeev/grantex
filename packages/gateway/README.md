@@ -14,7 +14,7 @@ current-state enforcement where needed. See the
 [migration guide](https://docs.grantex.dev/migration-enforcement).
 
 ```bash
-npm install @grantex/gateway@0.2.0 @grantex/sdk@0.8.0
+npm install @grantex/gateway@0.2.1 @grantex/sdk@0.8.1
 ```
 
 ## Quick Start
@@ -143,9 +143,9 @@ Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kum
 Use Node.js 24 LTS and `npm ci` to build or test this checkout with Vitest 5.
 Repository validation steps are in [the dependency upgrade guide](https://docs.grantex.dev/guides/dependency-updates).
 Source-tooling requirements are separate from published package runtime support.
-> Unreleased authority hardening requires TypeScript SDK 0.8.1 (`currentAuthority`),
+> Authority hardening requires TypeScript SDK 0.8.1 (`currentAuthority`),
 > not just a valid JWT signature. Bind the audience and trusted human/agent
 > identities, and check the issuer before every execution. This does not
 > create human consent or automatically consume action decisions/spend caps.
-> Existing offline defaults remain offline. The candidate is not yet published.
+> Existing offline defaults remain offline. Verify registry availability before installation.
 > See the [SDK execution authority guide](https://docs.grantex.dev/guides/sdk-execution-authority).
