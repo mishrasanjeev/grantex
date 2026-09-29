@@ -158,3 +158,67 @@ func TestCurrentAuthorityRejectsSubstitutedClaims(t *testing.T) {
 		})
 	}
 }
+
+func TestRequiredIdentityBindingRejectsEmptyExpectedValues(t *testing.T) {
+	key := generateTestKey(t)
+	server := startJWKSServer(t, key)
+	defer server.Close()
+	claims := authorityClaims()
+	claims["iss"], claims["aud"] = server.URL, "tool-service"
+	token := signTestToken(t, key, claims)
+	base := VerifyOptions{JwksURI: server.URL, Audience: "tool-service"}
+
+	// Empty values without the opt-in flags keep the released v0.4.2 meaning:
+	// no binding was configured.
+	if _, err := VerifyGrantToken(context.Background(), token, base); err != nil {
+		t.Fatalf("unbound verification rejected: %v", err)
+	}
+
+	cases := []struct {
+		name    string
+		opts    func(VerifyOptions) VerifyOptions
+		allowed bool
+	}{
+		{"principal_required_empty", func(o VerifyOptions) VerifyOptions { o.RequireExpectedPrincipalID = true; return o }, false},
+		{"agent_required_empty", func(o VerifyOptions) VerifyOptions { o.RequireExpectedAgentDID = true; return o }, false},
+		{"principal_required_match", func(o VerifyOptions) VerifyOptions {
+			o.RequireExpectedPrincipalID, o.ExpectedPrincipalID = true, "human-1"
+			return o
+		}, true},
+		{"agent_required_match", func(o VerifyOptions) VerifyOptions {
+			o.RequireExpectedAgentDID, o.ExpectedAgentDID = true, "did:grantex:agent-1"
+			return o
+		}, true},
+		{"principal_required_mismatch", func(o VerifyOptions) VerifyOptions {
+			o.RequireExpectedPrincipalID, o.ExpectedPrincipalID = true, "different-human"
+			return o
+		}, false},
+		{"agent_required_mismatch", func(o VerifyOptions) VerifyOptions {
+			o.RequireExpectedAgentDID, o.ExpectedAgentDID = true, "did:grantex:other"
+			return o
+		}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			opts := tc.opts(base)
+			opts.CurrentAuthority = func(context.Context, string) (*VerifiedGrant, error) {
+				calls++
+				return normalizeGrantClaims(claims, true)
+			}
+			_, err := VerifyGrantToken(context.Background(), token, opts)
+			if (err == nil) != tc.allowed {
+				t.Fatalf("allowed=%v error=%v", tc.allowed, err)
+			}
+			if !tc.allowed {
+				var tokenErr *TokenError
+				if !errors.As(err, &tokenErr) {
+					t.Fatalf("expected *TokenError, got %T", err)
+				}
+				if calls != 0 {
+					t.Fatal("refused identity binding reached the issuer")
+				}
+			}
+		})
+	}
+}

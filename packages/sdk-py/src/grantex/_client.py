@@ -476,8 +476,16 @@ class Grantex:
                 "denying rather than authorising without it.",
                 RevocationSubReason.STATUS_UNAVAILABLE,
             )
+        # ``revoked`` is authoritative and must be a boolean. ``status`` is
+        # optional, so an older endpoint answering ``{"revoked": false}`` stays
+        # readable, but a status that is present must agree with it:
+        # ``revoked: false`` only with ``active``, and ``revoked: true`` never
+        # with ``active``. A contradiction is unreadable and denied as
+        # unavailable rather than guessed at.
         if (not isinstance(status, dict) or not isinstance(status.get("revoked"), bool)
-                or (status["revoked"] is False and status.get("status") != "active")):
+                or (status["revoked"] is False and "status" in status
+                    and status["status"] != "active")
+                or (status["revoked"] is True and status.get("status") == "active")):
             return (
                 "The revocation status endpoint returned something this client cannot "
                 "read; denying rather than assuming the grant is live.",

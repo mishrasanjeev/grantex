@@ -18,12 +18,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - TypeScript SDK 0.8.1 is npm-published and registry-integrity verified;
   Python SDK 0.7.1 is published on PyPI. Online grant verification requires a
   literal `active: true` and valid claim objects. Empty principal/token IDs
-  and contradictory non-revoked status responses are refused.
+  are refused. The online revocation status check (TypeScript and Python)
+  needs an object with a boolean `revoked`; `status` stays optional, so the
+  older `{ "revoked": false }` answer is still accepted, but a present status
+  that contradicts `revoked` (`revoked: false` with anything but `active`, or
+  `revoked: true` with `active`) is denied as `status_unavailable`, as are
+  arrays and non-boolean `revoked` values.
 - TypeScript, Python and Go token verification gain opt-in, uncached issuer
   authority callbacks plus trusted principal/agent binding. Online authority
   requires an explicit audience and matching token, grant, tenant and identity.
   Go adds `Grants.Verify` for `/v1/grants/verify`; legacy `Tokens.Verify` is not
   a replacement for this check.
+- Go: `VerifyOptions.RequireExpectedPrincipalID` and `RequireExpectedAgentDID`
+  (unreleased; after v0.4.2) request principal/agent binding explicitly, so an
+  empty `ExpectedPrincipalID` / `ExpectedAgentDID` taken from a host session is
+  refused with a `TokenError` instead of silently skipping the check, matching
+  the TypeScript and Python SDKs. Without the flags an empty value still means
+  "no binding", as released in v0.4.2.
 - Framework wrappers, HTTP middleware, adapters and gateway expose the same
   opt-in controls. Their dependency minimums are SDK 0.8.1 / Python
   0.7.1, so older verifiers cannot silently ignore authority options in a

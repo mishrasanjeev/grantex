@@ -422,7 +422,7 @@ def test_feed_applies_an_entry_that_arrives_on_the_stream() -> None:
 
 # ── enforce(revocation_check="online") ───────────────────────────────────────
 
-@pytest.mark.parametrize("status", ["unknown", "suspended", "revoked", "garbage", None])
+@pytest.mark.parametrize("status", ["unknown", "suspended", "revoked", "expired", "garbage", None, 1])
 @respx.mock
 def test_online_denies_contradictory_non_revoked_status(status: object) -> None:
     respx.get(f"{BASE_URL}/v1/revocations/status").mock(
@@ -433,6 +433,49 @@ def test_online_denies_contradictory_non_revoked_status(status: object) -> None:
     assert result.allowed is False
     assert result.sub_reason == RevocationSubReason.STATUS_UNAVAILABLE
 
+
+@respx.mock
+def test_online_allows_the_older_answer_without_a_status() -> None:
+    respx.get(f"{BASE_URL}/v1/revocations/status").mock(
+        return_value=httpx.Response(200, json={"revoked": False})
+    )
+    with patch("grantex._client.verify_grant_token", return_value=_grant()):
+        result = _client(revocation_check="online").enforce("jwt", "acme_kyb", "resolve_business")
+    assert result.allowed is True
+
+
+@respx.mock
+def test_online_denies_a_revoked_answer_whose_status_says_active() -> None:
+    respx.get(f"{BASE_URL}/v1/revocations/status").mock(
+        return_value=httpx.Response(200, json={"status": "active", "revoked": True})
+    )
+    with patch("grantex._client.verify_grant_token", return_value=_grant()):
+        result = _client(revocation_check="online").enforce("jwt", "acme_kyb", "resolve_business")
+    assert result.allowed is False
+    assert result.reason_code == DenialReason.GRANT_REVOKED
+    assert result.sub_reason == RevocationSubReason.STATUS_UNAVAILABLE
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        [{"status": "active", "revoked": False}],
+        None,
+        "active",
+        {"status": "active", "revoked": "false"},
+        {"status": "active", "revoked": 0},
+        {"status": "active"},
+    ],
+)
+@respx.mock
+def test_online_denies_an_unreadable_status_body(body: object) -> None:
+    respx.get(f"{BASE_URL}/v1/revocations/status").mock(
+        return_value=httpx.Response(200, json=body)
+    )
+    with patch("grantex._client.verify_grant_token", return_value=_grant()):
+        result = _client(revocation_check="online").enforce("jwt", "acme_kyb", "resolve_business")
+    assert result.allowed is False
+    assert result.sub_reason == RevocationSubReason.STATUS_UNAVAILABLE
 
 @respx.mock
 def test_online_asks_the_auth_service_and_allows_an_active_grant() -> None:

@@ -256,3 +256,9 @@ Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kum
 > per-operation issuer authority with trusted principal/agent binding. This is
 > not a Go manifest/decision/caps enforcement engine. See the
 > [SDK execution authority guide](https://docs.grantex.dev/guides/sdk-execution-authority).
+>
+> Unreleased (next Go release): `VerifyOptions.RequireExpectedPrincipalID` and
+> `RequireExpectedAgentDID` refuse an empty `ExpectedPrincipalID` /
+> `ExpectedAgentDID` with a `TokenError`. Without them, an empty expected value
+> still means "no binding", so with v0.4.2 reject an empty host session
+> principal or agent ID before verifying.

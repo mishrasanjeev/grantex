@@ -480,9 +480,15 @@ export class Grantex {
         subReason: RevocationSubReason.STATUS_UNAVAILABLE,
       };
     }
+    // `revoked` is authoritative and must be a boolean. `status` is optional,
+    // so an older endpoint answering `{ "revoked": false }` stays readable, but
+    // a status that is present must agree with it: `revoked: false` only with
+    // `active`, and `revoked: true` never with `active`. A contradiction is
+    // unreadable, and denied as unavailable rather than guessed at.
     if (typeof status !== 'object' || status === null || Array.isArray(status)
       || typeof status.revoked !== 'boolean'
-      || (!status.revoked && status.status !== 'active')) {
+      || (!status.revoked && status.status !== undefined && status.status !== 'active')
+      || (status.revoked && status.status === 'active')) {
       return {
         reason: 'The revocation status endpoint returned something this client cannot read; '
           + 'denying rather than assuming the grant is live.',

@@ -135,8 +135,20 @@ type VerifyOptions struct {
 	// CurrentAuthority is an opt-in, uncached issuer check. Requires Audience.
 	CurrentAuthority func(context.Context, string) (*VerifiedGrant, error)
 	// ExpectedPrincipalID comes from the trusted host session, not OAuth client ID.
+	// An empty value means no principal binding unless RequireExpectedPrincipalID is set.
 	ExpectedPrincipalID string
-	ExpectedAgentDID    string
+	// ExpectedAgentDID is the agent DID the host authorized. An empty value
+	// means no agent binding unless RequireExpectedAgentDID is set.
+	ExpectedAgentDID string
+	// RequireExpectedPrincipalID requests principal binding explicitly: the
+	// token's subject must equal ExpectedPrincipalID, and an empty
+	// ExpectedPrincipalID (for example an unauthenticated host session) is
+	// refused with a TokenError instead of skipping the check.
+	RequireExpectedPrincipalID bool
+	// RequireExpectedAgentDID requests agent binding explicitly: the token's
+	// agent DID must equal ExpectedAgentDID, and an empty ExpectedAgentDID is
+	// refused with a TokenError instead of skipping the check.
+	RequireExpectedAgentDID bool
 	// JwksURI is the URL to fetch the JSON Web Key Set from.
 	JwksURI string
 
@@ -270,6 +282,12 @@ func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*V
 	if opts.CurrentAuthority != nil && opts.Audience == "" {
 		return nil, &TokenError{Message: "current authority verification requires a non-empty audience"}
 	}
+	if opts.RequireExpectedPrincipalID && opts.ExpectedPrincipalID == "" {
+		return nil, &TokenError{Message: "principal binding was requested with an empty expected principal"}
+	}
+	if opts.RequireExpectedAgentDID && opts.ExpectedAgentDID == "" {
+		return nil, &TokenError{Message: "agent binding was requested with an empty expected agent"}
+	}
 	algorithms, err := resolveAlgorithms(opts.Algorithms)
 	if err != nil {
 		return nil, err
@@ -365,10 +383,10 @@ func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*V
 		}
 	}
 
-	if opts.ExpectedPrincipalID != "" && grant.PrincipalID != opts.ExpectedPrincipalID {
+	if (opts.RequireExpectedPrincipalID || opts.ExpectedPrincipalID != "") && grant.PrincipalID != opts.ExpectedPrincipalID {
 		return nil, &TokenError{Message: "grant token does not belong to the authenticated principal"}
 	}
-	if opts.ExpectedAgentDID != "" && grant.AgentDID != opts.ExpectedAgentDID {
+	if (opts.RequireExpectedAgentDID || opts.ExpectedAgentDID != "") && grant.AgentDID != opts.ExpectedAgentDID {
 		return nil, &TokenError{Message: "grant token does not belong to the expected agent"}
 	}
 	if opts.CurrentAuthority != nil {

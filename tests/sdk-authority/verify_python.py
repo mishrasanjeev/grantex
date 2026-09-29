@@ -31,7 +31,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.respond({"keys": [jwk]})
 
-    def do_POST(self):
+    def do_POST(self) -> None:
         global authority_calls
         authority_calls += 1
         assert self.path == "/v1/grants/verify"
@@ -39,11 +39,14 @@ class Handler(BaseHTTPRequestHandler):
         request = json.loads(self.rfile.read(int(self.headers["content-length"])))
         claims = jwt.decode(request["token"], options={"verify_signature": False})
         if mode == "outage":
-            return self.respond({}, 503)
+            self.respond({}, 503)
+            return None
         if mode == "revoked":
-            return self.respond({"active": False})
+            self.respond({"active": False})
+            return None
         if mode == "malformed":
-            return self.respond({"active": "false", "claims": claims})
+            self.respond({"active": "false", "claims": claims})
+            return None
         if mode == "principal":
             claims["sub"] = "another-human"
         if mode == "agent":
@@ -54,7 +57,8 @@ class Handler(BaseHTTPRequestHandler):
             claims["iss"] = "https://other-issuer.example"
         if mode == "audience":
             claims["aud"] = "other-service"
-        return self.respond({"active": True, "claims": claims})
+        self.respond({"active": True, "claims": claims})
+        return None
 
 
 server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)

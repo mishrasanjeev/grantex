@@ -388,8 +388,8 @@ describe('reconnecting', () => {
 });
 
 describe('enforce() with revocationCheck: online', () => {
-  it.each(['unknown', 'suspended', 'revoked', 'garbage', undefined])(
-    'denies a contradictory or incomplete non-revoked status %s', async (status) => {
+  it.each(['unknown', 'suspended', 'revoked', 'expired', 'garbage', null, 1])(
+    'denies a non-revoked answer whose present status contradicts it: %s', async (status) => {
       vi.mocked(verifyGrantToken).mockResolvedValue(grant());
       vi.stubGlobal('fetch', statusFetch({ status, revoked: false }));
       const client = new Grantex({ apiKey: 'test', revocationCheck: 'online' });
@@ -399,6 +399,42 @@ describe('enforce() with revocationCheck: online', () => {
       expect(result.subReason).toBe(RevocationSubReason.STATUS_UNAVAILABLE);
     },
   );
+
+  it('allows the older { revoked: false } answer that carries no status', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(grant());
+    vi.stubGlobal('fetch', statusFetch({ revoked: false }));
+    const client = new Grantex({ apiKey: 'test', revocationCheck: 'online' });
+    client.loadManifest(manifest);
+    const result = await client.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' });
+    expect(result.allowed).toBe(true);
+  });
+
+  it('denies a revoked answer whose status says active, as unreadable', async () => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(grant());
+    vi.stubGlobal('fetch', statusFetch({ status: 'active', revoked: true }));
+    const client = new Grantex({ apiKey: 'test', revocationCheck: 'online' });
+    client.loadManifest(manifest);
+    const result = await client.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' });
+    expect(result.allowed).toBe(false);
+    expect(result.reasonCode).toBe(DenialReason.GRANT_REVOKED);
+    expect(result.subReason).toBe(RevocationSubReason.STATUS_UNAVAILABLE);
+  });
+
+  it.each([
+    ['an array', [{ status: 'active', revoked: false }]],
+    ['null', null],
+    ['a string', 'active'],
+    ['a string revoked flag', { status: 'active', revoked: 'false' }],
+    ['a missing revoked flag', { status: 'active' }],
+  ])('denies a status body that is %s', async (_label, body) => {
+    vi.mocked(verifyGrantToken).mockResolvedValue(grant());
+    vi.stubGlobal('fetch', statusFetch(body));
+    const client = new Grantex({ apiKey: 'test', revocationCheck: 'online' });
+    client.loadManifest(manifest);
+    const result = await client.enforce({ grantToken: 'jwt', connector: 'acme_kyb', tool: 'resolve_business' });
+    expect(result.allowed).toBe(false);
+    expect(result.subReason).toBe(RevocationSubReason.STATUS_UNAVAILABLE);
+  });
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();

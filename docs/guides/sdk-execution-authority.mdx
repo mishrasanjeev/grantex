@@ -87,12 +87,22 @@ grant, err := grantex.VerifyGrantToken(ctx, token, grantex.VerifyOptions{
     CurrentAuthority: client.Grants.Verify,
     ExpectedPrincipalID: authenticatedPrincipalID,
     ExpectedAgentDID: authorizedAgentDID,
+    RequireExpectedPrincipalID: true,
+    RequireExpectedAgentDID: true,
 })
 if err != nil {
     // Return a denial before invoking the resource or tool.
     return err
 }
 ```
+
+In Go an empty `ExpectedPrincipalID` or `ExpectedAgentDID` means "no binding",
+as released in v0.4.2. `RequireExpectedPrincipalID` and
+`RequireExpectedAgentDID` (in source, not yet in a published Go release) make
+the binding explicit: an empty expected value is then refused with a
+`TokenError` instead of skipping the check, matching the TypeScript and Python
+SDKs, which refuse an explicitly empty expected identity. With v0.4.2, reject
+an empty host principal or agent ID yourself and omit the two flags.
 
 Go's grant authority check is not a Go implementation of the TypeScript /
 Python manifest `enforce()` engine. Go hosts must separately enforce

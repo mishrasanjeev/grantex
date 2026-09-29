@@ -36,6 +36,11 @@ enable hosted server flags or add custom assertion UI helper methods.
 
 Version `v0.4.2` adds `client.Grants.Verify` and opt-in
 `VerifyOptions.CurrentAuthority`, `ExpectedPrincipalID` and `ExpectedAgentDID`.
+In v0.4.2 an empty expected value means no binding. The next Go release (not
+yet published) adds `RequireExpectedPrincipalID` / `RequireExpectedAgentDID`,
+which refuse an empty value from the host session with a `TokenError` instead
+of skipping the check. Until then, reject an empty host principal or agent ID
+before calling `VerifyGrantToken`.
 The callback must query the trusted issuer on each operation and fail closed
 on inactive, unavailable or inconsistent authority. Local signature checks
 alone do not prove current revocation. See [SDK execution authority](/guides/sdk-execution-authority).
