@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
+from grantex import VerifiedGrant as SDKVerifiedGrant
 
 
 @dataclass
@@ -79,6 +80,7 @@ class GrantexAuthConfig:
     jwks_uri: str
     issuer: str
     required_scopes: Optional[List[str]] = None
+
     delegation_allowed: Optional[bool] = None
 
 
@@ -119,6 +121,9 @@ class A2AAuthMiddlewareOptions:
     audience: Optional[str] = None
     clock_tolerance: int = 0
     required_scopes: Optional[List[str]] = None
+    current_authority: Callable[[str], SDKVerifiedGrant] | None = None
+    expected_principal_id: str | None = None
+    expected_agent_did: str | None = None
 
 
 @dataclass

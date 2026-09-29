@@ -77,6 +77,19 @@ describe('requireGrantToken', () => {
     });
   });
 
+  it.each([
+    ['Grant token does not belong to the expected agent', 'TOKEN_INVALID'],
+    ['Token exp claim is in the past', 'TOKEN_EXPIRED'],
+  ])('classifies a denial without allowing execution: %s', async (message, error) => {
+    vi.mocked(verifyGrantToken).mockRejectedValue(new GrantexTokenError(message));
+    const res = mockRes();
+    const next = vi.fn();
+    await requireGrantToken({ jwksUri: JWKS_URI })(mockReq({ authorization: 'Bearer invalid-token' }), res, next);
+    expect(res.statusCode).toBe(401);
+    expect(res._body).toMatchObject({ error });
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it('returns 401 JSON when no Authorization header', async () => {
     const middleware = requireGrantToken({ jwksUri: JWKS_URI });
     const req = mockReq();

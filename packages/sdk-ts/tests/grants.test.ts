@@ -37,6 +37,17 @@ function makeFetch(status: number, body: unknown) {
 }
 
 describe('GrantsClient', () => {
+  it.each([false, 'false', 'true', 1, 0, null, {}, []])('verify refuses a non-true active value: %j', async (active) => {
+    vi.stubGlobal('fetch', makeFetch(200, { active, claims: MOCK_PAYLOAD }));
+    await expect(new Grantex({ apiKey: 'test' }).grants.verify('token')).rejects.toBeInstanceOf(GrantexTokenError);
+  });
+
+  it.each([null, [], {}, { active: true, claims: [] }, { active: true, claims: 'claims' }])(
+    'verify refuses a malformed authority response: %j', async (body) => {
+      vi.stubGlobal('fetch', makeFetch(200, body));
+      await expect(new Grantex({ apiKey: 'test' }).grants.verify('token')).rejects.toBeInstanceOf(GrantexTokenError);
+    },
+  );
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();

@@ -23,7 +23,7 @@ on:
         default: false
         type: boolean
       publish_integrations:
-        description: 'Publish validated CLI, gateway, adapters, Strands and MCP Auth packages'
+        description: 'Publish changed CLI and execution integrations; MCP Auth is selected separately'
         required: true
         default: false
         type: boolean
@@ -172,7 +172,7 @@ jobs:
             echo "::error::Publish the required Python SDK in this run or verify it exists first"
             exit 1
           fi
-          for package in cli gateway adapters strands mcp-auth; do
+          for package in cli gateway adapters strands anthropic autogen langchain vercel-ai express a2a; do
             name=$(node -p "require('./packages/$package/package.json').name")
             version=$(node -p "require('./packages/$package/package.json').version")
             if npm view "$name@$version" version >/dev/null 2>&1; then
@@ -180,11 +180,14 @@ jobs:
               exit 1
             fi
           done
-          version=$(grep -Eo '^version = "[^"]+"' packages/strands-py/pyproject.toml | cut -d'"' -f2)
-          if curl -fsSL "https://pypi.org/pypi/grantex-strands/$version/json" >/dev/null 2>&1; then
-            echo "::error::grantex-strands $version already exists"
-            exit 1
-          fi
+          for package in strands-py crewai openai-agents google-adk fastapi a2a-py; do
+            name=$(grep -Eo '^name = "[^"]+"' "packages/$package/pyproject.toml" | cut -d'"' -f2)
+            version=$(grep -Eo '^version = "[^"]+"' "packages/$package/pyproject.toml" | cut -d'"' -f2)
+            if curl -fsSL "https://pypi.org/pypi/$name/$version/json" >/dev/null 2>&1; then
+              echo "::error::$name $version already exists"
+              exit 1
+            fi
+          done
 
       - name: Verify the TypeScript SDK
         working-directory: packages/sdk-ts
@@ -219,7 +222,7 @@ jobs:
       - name: Verify and pack changed integrations
         run: |
           set -euo pipefail
-          for package in cli gateway adapters strands mcp-auth; do
+          for package in cli gateway adapters strands anthropic autogen langchain vercel-ai express a2a mcp-auth; do
             (cd "packages/$package" && npm ci && npm run typecheck && npm test && npm run build && npm pack --pack-destination ../../release-artifacts/npm)
           done
           (cd packages/mcp-auth && npm run test:integration && npx playwright install --with-deps chromium && npm run test:e2e)
@@ -245,12 +248,14 @@ jobs:
           test "$(grep -Eo 'sdkVersion = "[^"]+"' http.go | cut -d'"' -f2)" = "${{ steps.versions.outputs.go }}"
           go test ./...
 
-      - name: Verify and build Python Strands
+      - name: Verify and build changed Python integrations
         run: |
           set -euo pipefail
-          python -m pip install -e 'packages/strands-py[dev]'
-          python -m pytest packages/strands-py/tests
-          python -m build packages/strands-py --outdir release-artifacts/integration-pypi
+          for package in strands-py crewai openai-agents google-adk fastapi a2a-py; do
+            python -m pip install -e "packages/$package[dev]"
+            (cd "packages/$package" && python -m mypy --strict src && python -m pytest)
+            python -m build "packages/$package" --outdir release-artifacts/integration-pypi
+          done
           python -m twine check release-artifacts/integration-pypi/*
 
       - name: Upload immutable release candidates
@@ -295,11 +300,11 @@ jobs:
         if: ${{ inputs.publish_integrations }}
         run: |
           set -euo pipefail
-          for package in cli gateway adapters strands mcp-auth; do
+          for package in cli gateway adapters strands anthropic autogen langchain vercel-ai express a2a; do
             npm publish release-artifacts/npm/grantex-$package-*.tgz --access public
           done
       - name: Publish only MCP Auth
-        if: ${{ inputs.publish_mcp_auth && !inputs.publish_integrations }}
+        if: ${{ inputs.publish_mcp_auth }}
         run: npm publish release-artifacts/npm/grantex-mcp-auth-*.tgz --access public
 
   pypi:

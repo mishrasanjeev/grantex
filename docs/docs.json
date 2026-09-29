@@ -171,6 +171,7 @@
               "guides/operations",
               "guides/security-best-practices",
               "guides/token-verification",
+              "guides/sdk-execution-authority",
               "guides/troubleshooting",
               "guides/end-user-permissions",
               "guides/migration",

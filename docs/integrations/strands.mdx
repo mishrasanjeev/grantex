@@ -7,7 +7,7 @@ description: "Scope-enforced tools for Strands Agents SDK in TypeScript and Pyth
 ## TypeScript Install
 
 ```bash
-npm install @grantex/strands@0.2.0 @grantex/sdk@0.8.0 @strands-agents/sdk zod
+npm install @grantex/strands@0.2.1 @grantex/sdk@0.8.1 @strands-agents/sdk zod
 ```
 
 ## TypeScript Quick Start
@@ -45,7 +45,7 @@ set `audience` to the identifier your service is issued tokens for (see
 ## Python Install
 
 ```bash
-python -m pip install grantex-strands==0.2.0 grantex==0.7.0 strands-agents
+python -m pip install grantex-strands==0.2.1 grantex==0.7.1 strands-agents
 ```
 
 ## Python Quick Start
@@ -76,3 +76,12 @@ installations passed; see [release validation](/sdk-release-validation).
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+
+## Current Authority and Human Identity
+
+Use the exact integration version and minimum primary SDK in [Release Status](/release-status).
+Per-invocation issuer authority and trusted principal/agent binding are opt-in.
+Configure the callback with the trusted issuer and derive identity from the host's
+authenticated session; signature and scope checks alone do not prove current
+revocation or human consent. See [SDK execution authority](/guides/sdk-execution-authority)
+for configuration, denial behavior and manifest/decision/caps boundaries.

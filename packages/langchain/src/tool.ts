@@ -16,6 +16,10 @@ export interface GrantexToolOptions {
   issuerDid?: string;
   /** Expected JWT audience. */
   audience?: string;
+  /** Opt-in current issuer authority and trusted host identity binding. Requires audience. */
+  currentAuthority?: (token: string) => Promise<import('@grantex/sdk').VerifiedGrant>;
+  expectedPrincipalId?: string;
+  expectedAgentDid?: string;
   /** Clock tolerance in seconds for token verification. */
   clockTolerance?: number;
   /** Scope the agent must hold to invoke this tool (e.g. `'calendar:read'`). */
@@ -69,6 +73,9 @@ export function createGrantexTool(options: GrantexToolOptions): DynamicTool {
 function buildVerifyOptions(options: GrantexToolOptions): VerifyGrantTokenOptions {
   return {
     jwksUri: options.jwksUri ?? DEFAULT_JWKS_URI,
+    ...(options.currentAuthority !== undefined ? { currentAuthority: options.currentAuthority } : {}),
+    ...(options.expectedPrincipalId !== undefined ? { expectedPrincipalId: options.expectedPrincipalId } : {}),
+    ...(options.expectedAgentDid !== undefined ? { expectedAgentDid: options.expectedAgentDid } : {}),
     ...(options.issuer !== undefined ? { issuer: options.issuer } : {}),
     ...(options.issuerDid !== undefined ? { issuerDid: options.issuerDid } : {}),
     ...(options.audience !== undefined ? { audience: options.audience } : {}),

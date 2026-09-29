@@ -37,6 +37,10 @@ export interface GrantexFunctionOptions<T extends Record<string, unknown>> {
   issuerDid?: string;
   /** Expected JWT audience. */
   audience?: string;
+  /** Opt-in current issuer authority and trusted host identity binding. Requires audience. */
+  currentAuthority?: (token: string) => Promise<import('@grantex/sdk').VerifiedGrant>;
+  expectedPrincipalId?: string;
+  expectedAgentDid?: string;
   /** Clock tolerance in seconds for token verification. */
   clockTolerance?: number;
   /** Scope the agent must hold to invoke this function (e.g. `'calendar:read'`). */

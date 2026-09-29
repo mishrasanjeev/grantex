@@ -1,5 +1,9 @@
 # Grantex Go SDK
 
+Version v0.4.2 adds opt-in per-invocation current-authority checks and trusted
+principal/agent binding. Offline defaults remain unchanged. Verify public
+module availability before upgrading; see the execution-authority guide below.
+
 **Version v0.4.1:** exposes the signed WebAuthn evidence reference on grants
 and the VC attestation field. A signed reference is not the raw assertion or
 a current revocation check; verify the issuer, enrollment, RP ID, origin,
@@ -24,7 +28,7 @@ Official Go SDK for the [Grantex](https://grantex.dev) delegated authorization p
 ## Installation
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.4.1
+go get github.com/mishrasanjeev/grantex-go@v0.4.2
 ```
 
 Requires Go 1.26.1 or newer, matching the module's `go.mod` directive.
@@ -248,3 +252,7 @@ Apache 2.0
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+> Released in v0.4.2: `Grants.Verify` and `VerifyOptions.CurrentAuthority` add
+> per-operation issuer authority with trusted principal/agent binding. This is
+> not a Go manifest/decision/caps enforcement engine. See the
+> [SDK execution authority guide](https://docs.grantex.dev/guides/sdk-execution-authority).

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 
 # ─── Rate Limits ──────────────────────────────────────────────────────────────
@@ -316,6 +316,8 @@ class VerifiedGrant:
     """Legacy claim aliases read because the token had no standard claim for
     them (for example ``scp`` without ``scope``). Empty for standard-claim tokens.
     Reading aliases is deprecated; disable ``legacy_claims`` for standard claims."""
+    issuer: str | None = None
+    """Signed issuer retained to bind current authority to this trust domain."""
 
 
 # ─── Tokens ───────────────────────────────────────────────────────────────────
@@ -602,6 +604,11 @@ class VerifyGrantTokenOptions:
     ``False`` by default: a later major release makes ``True`` the default,
     with ``False`` as the opt-out. The last field, so that options built
     positionally keep their meaning."""
+    current_authority: Callable[[str], VerifiedGrant] | None = None
+    """Opt-in issuer authority callback, uncached per call. Requires audience."""
+    expected_principal_id: str | None = None
+    """Trusted authenticated human identity, never an agent-provided client ID."""
+    expected_agent_did: str | None = None
 
 
 # ─── Raw JWT payload shape ────────────────────────────────────────────────────

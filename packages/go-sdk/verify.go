@@ -12,6 +12,8 @@ import (
 	"log"
 	"math"
 	"net/url"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -130,6 +132,11 @@ func refreshJwksForUnknownKid(ctx context.Context, jwksURI string) (jwk.Set, boo
 
 // VerifyOptions configures local grant token verification using remotely retrieved JWKS.
 type VerifyOptions struct {
+	// CurrentAuthority is an opt-in, uncached issuer check. Requires Audience.
+	CurrentAuthority func(context.Context, string) (*VerifiedGrant, error)
+	// ExpectedPrincipalID comes from the trusted host session, not OAuth client ID.
+	ExpectedPrincipalID string
+	ExpectedAgentDID    string
 	// JwksURI is the URL to fetch the JSON Web Key Set from.
 	JwksURI string
 
@@ -260,6 +267,9 @@ func publicKeyForAlgorithm(key jwk.Key, alg string) (interface{}, error) {
 // JWK Set entry named by the token's kid, of the key type its algorithm
 // requires.
 func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*VerifiedGrant, error) {
+	if opts.CurrentAuthority != nil && opts.Audience == "" {
+		return nil, &TokenError{Message: "current authority verification requires a non-empty audience"}
+	}
 	algorithms, err := resolveAlgorithms(opts.Algorithms)
 	if err != nil {
 		return nil, err
@@ -355,6 +365,30 @@ func VerifyGrantToken(ctx context.Context, token string, opts VerifyOptions) (*V
 		}
 	}
 
+	if opts.ExpectedPrincipalID != "" && grant.PrincipalID != opts.ExpectedPrincipalID {
+		return nil, &TokenError{Message: "grant token does not belong to the authenticated principal"}
+	}
+	if opts.ExpectedAgentDID != "" && grant.AgentDID != opts.ExpectedAgentDID {
+		return nil, &TokenError{Message: "grant token does not belong to the expected agent"}
+	}
+	if opts.CurrentAuthority != nil {
+		current, err := opts.CurrentAuthority(ctx, token)
+		if err != nil {
+			return nil, &TokenError{Message: "current grant authority could not be verified"}
+		}
+		if current == nil || current.Issuer != grant.Issuer || !reflect.DeepEqual(current.Audience, grant.Audience) ||
+			current.TokenID != grant.TokenID || current.GrantID != grant.GrantID ||
+			current.PrincipalID != grant.PrincipalID || current.AgentDID != grant.AgentDID ||
+			current.DeveloperID != grant.DeveloperID || current.IssuedAt != grant.IssuedAt || current.ExpiresAt != grant.ExpiresAt {
+			return nil, &TokenError{Message: "current grant authority does not match the verified token"}
+		}
+		localScopes, currentScopes := append([]string{}, grant.Scopes...), append([]string{}, current.Scopes...)
+		sort.Strings(localScopes)
+		sort.Strings(currentScopes)
+		if !reflect.DeepEqual(localScopes, currentScopes) {
+			return nil, &TokenError{Message: "current grant authority does not match the verified token"}
+		}
+	}
 	return grant, nil
 }
 
@@ -660,7 +694,7 @@ func normalizeGrantClaims(claims jwt.MapClaims, legacy bool) (*VerifiedGrant, er
 	sub, subOK := claims["sub"].(string)
 	iat, iatErr := claims.GetIssuedAt()
 	exp, expErr := claims.GetExpirationTime()
-	if !jtiOK || !subOK || iatErr != nil || iat == nil || expErr != nil || exp == nil ||
+	if !jtiOK || jti == "" || !subOK || sub == "" || iatErr != nil || iat == nil || expErr != nil || exp == nil ||
 		!scopePresent || agentDID == nil || developerID == nil {
 		if legacy {
 			return nil, &TokenError{Message: "token is missing or has invalid required claims (jti, sub, iat, exp, scope or scp, agent_did or agt, developer_id or dev)"}
@@ -668,7 +702,9 @@ func normalizeGrantClaims(claims jwt.MapClaims, legacy bool) (*VerifiedGrant, er
 		return nil, &TokenError{Message: "token is missing or has invalid required claims (jti, sub, iat, exp, scope, " + GrantClaim + ".agent_did, " + GrantClaim + ".developer_id)"}
 	}
 
+	issuer, _ := claims["iss"].(string)
 	grant := &VerifiedGrant{
+		Issuer:           issuer,
 		TokenID:          jti,
 		GrantID:          jti,
 		PrincipalID:      sub,

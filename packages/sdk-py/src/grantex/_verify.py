@@ -128,6 +128,10 @@ def verify_grant_token(
         GrantexTokenError: if the token is invalid, expired, tampered, or
             missing required scopes.
     """
+    if options.current_authority is not None and (
+        not callable(options.current_authority) or not isinstance(options.audience, str) or not options.audience
+    ):
+        raise GrantexTokenError("Current authority verification requires a callback and a non-empty audience")
     allowed = _resolve_algorithms(options.algorithms)
     try:
         header = jwt.get_unverified_header(token)
@@ -212,7 +216,28 @@ def verify_grant_token(
                 f"Grant token is missing required scopes: {', '.join(missing)}"
             )
 
-    return _payload_to_verified_grant(payload)
+    verified = _payload_to_verified_grant(payload)
+    if options.expected_principal_id is not None and (
+        not options.expected_principal_id or verified.principal_id != options.expected_principal_id
+    ):
+        raise GrantexTokenError("Grant token does not belong to the authenticated principal")
+    if options.expected_agent_did is not None and (
+        not options.expected_agent_did or verified.agent_did != options.expected_agent_did
+    ):
+        raise GrantexTokenError("Grant token does not belong to the expected agent")
+    if options.current_authority is not None:
+        try:
+            current = options.current_authority(token)
+        except Exception as exc:
+            raise GrantexTokenError("Current grant authority could not be verified") from exc
+        fields = ("issuer", "token_id", "grant_id", "principal_id", "agent_did", "developer_id", "issued_at", "expires_at", "audience")
+        if (not isinstance(current, VerifiedGrant)
+                or any(getattr(current, field) != getattr(verified, field) for field in fields)
+                or not isinstance(current.scopes, (tuple, list))
+                or not all(isinstance(scope, str) for scope in current.scopes)
+                or sorted(current.scopes) != sorted(verified.scopes)):
+            raise GrantexTokenError("Current grant authority does not match the verified token")
+    return verified
 
 
 def _resolve_algorithms(requested: list[str] | None) -> tuple[str, ...]:
@@ -747,8 +772,8 @@ def _build_payload(data: dict[str, Any], *, legacy_claims: bool = True) -> Grant
 
     jti, sub, iat, exp = data.get("jti"), data.get("sub"), data.get("iat"), data.get("exp")
     if (
-        not isinstance(jti, str)
-        or not isinstance(sub, str)
+        not isinstance(jti, str) or not jti
+        or not isinstance(sub, str) or not sub
         or isinstance(iat, bool) or not isinstance(iat, (int, float))
         or isinstance(exp, bool) or not isinstance(exp, (int, float))
         or scopes is None
@@ -798,6 +823,7 @@ def _build_payload(data: dict[str, Any], *, legacy_claims: bool = True) -> Grant
 
 def _payload_to_verified_grant(payload: GrantTokenPayload) -> VerifiedGrant:
     return VerifiedGrant(
+        issuer=payload.iss,
         token_id=payload.jti,
         grant_id=payload.grnt if payload.grnt is not None else payload.jti,
         principal_id=payload.sub,

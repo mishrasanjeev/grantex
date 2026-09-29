@@ -7,7 +7,7 @@ Enforce scopes, log audit trails, and inspect grant tokens when using Claude mod
 ## Install
 
 ```bash
-npm install @grantex/anthropic @grantex/sdk @anthropic-ai/sdk
+npm install @grantex/anthropic@0.1.2 @grantex/sdk @anthropic-ai/sdk
 ```
 
 ## Quick Start
@@ -65,3 +65,9 @@ Apache-2.0
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+> Authority hardening requires TypeScript SDK 0.8.1 (`currentAuthority`),
+> not just a valid JWT signature. Bind the audience and trusted human/agent
+> identities, and check the issuer before every execution. This does not
+> create human consent or automatically consume action decisions/spend caps.
+> Existing offline defaults remain offline. Verify registry availability before installation.
+> See the [SDK execution authority guide](https://docs.grantex.dev/guides/sdk-execution-authority).

@@ -7,7 +7,7 @@ Verify Grantex JWTs and enforce scopes on any FastAPI route with a single `Depen
 ## Install
 
 ```bash
-pip install grantex-fastapi
+pip install grantex-fastapi==0.1.6
 ```
 
 ## Quick Start
@@ -145,3 +145,9 @@ Apache-2.0
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+> Authority hardening requires Python SDK 0.7.1 (`current_authority`),
+> not just a valid JWT signature. Bind the audience and trusted human/agent
+> identities, and check the issuer before every execution. This does not
+> create human consent or automatically consume action decisions/spend caps.
+> Existing offline defaults remain offline. Verify registry availability before installation.
+> See the [SDK execution authority guide](https://docs.grantex.dev/guides/sdk-execution-authority).

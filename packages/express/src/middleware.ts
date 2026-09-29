@@ -76,6 +76,9 @@ export function requireGrantToken(options: GrantexMiddlewareOptions): RequestHan
     try {
       const grant = await verifyGrantToken(token, {
         jwksUri,
+        ...(options.currentAuthority !== undefined ? { currentAuthority: options.currentAuthority } : {}),
+        ...(options.expectedPrincipalId !== undefined ? { expectedPrincipalId: options.expectedPrincipalId } : {}),
+        ...(options.expectedAgentDid !== undefined ? { expectedAgentDid: options.expectedAgentDid } : {}),
         ...(clockTolerance !== undefined ? { clockTolerance } : {}),
         ...(audience !== undefined ? { audience } : {}),
       });
@@ -84,7 +87,7 @@ export function requireGrantToken(options: GrantexMiddlewareOptions): RequestHan
       next();
     } catch (err) {
       if (err instanceof GrantexTokenError) {
-        const isExpired = err.message.includes('exp');
+        const isExpired = /expired|expiration|\bexp\b["']? claim/i.test(err.message);
         const code = isExpired ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID';
         const statusCode = 401;
         const mwErr = new GrantexMiddlewareError(code, err.message, statusCode);

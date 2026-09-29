@@ -3,12 +3,18 @@
 OAuth authorization and human-confirmed delegation for MCP resources.
 
 **Version 4.0.0 is a breaking security upgrade.** Node.js 22.12+ and
-`@grantex/sdk` 0.8+ are required. Check
+`@grantex/sdk` 0.8.1+ is required. Check
 [release status](https://docs.grantex.dev/release-status) for registry publication.
 
 ```bash
-npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.0 pg
+# Check registry availability before installation:
+npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1 pg
 ```
+
+Release artifacts must be built and validated with the SDK 0.8.1 dependency
+baseline; an earlier prepared MCP archive does not contain this dependency update. Human identity
+must still come from the authenticated host principal resolver. See
+[execution authority boundaries](../../docs/guides/sdk-execution-authority.mdx).
 
 ## What a human confirms
 

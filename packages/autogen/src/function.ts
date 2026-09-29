@@ -65,6 +65,9 @@ function buildVerifyOptions<T extends Record<string, unknown>>(
 ): VerifyGrantTokenOptions {
   return {
     jwksUri: options.jwksUri ?? DEFAULT_JWKS_URI,
+    ...(options.currentAuthority !== undefined ? { currentAuthority: options.currentAuthority } : {}),
+    ...(options.expectedPrincipalId !== undefined ? { expectedPrincipalId: options.expectedPrincipalId } : {}),
+    ...(options.expectedAgentDid !== undefined ? { expectedAgentDid: options.expectedAgentDid } : {}),
     ...(options.issuer !== undefined ? { issuer: options.issuer } : {}),
     ...(options.issuerDid !== undefined ? { issuerDid: options.issuerDid } : {}),
     ...(options.audience !== undefined ? { audience: options.audience } : {}),

@@ -1,6 +1,6 @@
 {
   "name": "@grantex/gateway",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Zero-code reverse-proxy gateway that enforces Grantex grant tokens via YAML config",
   "author": {
     "name": "Sanjeev Kumar",
@@ -39,7 +39,7 @@
     "yaml": "^2.3.4"
   },
   "peerDependencies": {
-    "@grantex/sdk": ">=0.8.0 <1"
+    "@grantex/sdk": ">=0.8.1 <1"
   },
   "devDependencies": {
     "@grantex/sdk": "file:../sdk-ts",

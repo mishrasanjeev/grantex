@@ -143,6 +143,10 @@ export interface A2AGrantexClientOptions {
 }
 
 export interface A2AAuthMiddlewareOptions {
+  /** Opt-in current issuer authority and trusted host identity binding. Requires audience. */
+  currentAuthority?: (token: string) => Promise<import('@grantex/sdk').VerifiedGrant>;
+  expectedPrincipalId?: string;
+  expectedAgentDid?: string;
   jwksUri: string;
   issuer?: string;
   issuerDid?: string;
