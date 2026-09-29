@@ -1,7 +1,7 @@
 # SDK Authority Regression Suite
 
-These suites validate the local source candidates, not registry releases.
-They run all 34 package suites plus signed-token/HTTP authority boundary
+The source suites validate the checkout, not registry releases.
+They run all 35 package suites plus signed-token/HTTP authority boundary
 regressions. The dedicated workflow is `.github/workflows/sdk-authority.yml`.
 
 Use disposable services only. From a Linux shell at the repository root:
@@ -54,3 +54,18 @@ issuer HTTP fixtures. Some optional Python framework objects use test doubles.
 Neither suite performs production account changes, real wallet payments, or
 physical authenticator enrollment. Hosts must configure the optional authority
 profile; this suite does not change historical offline defaults.
+
+## Release and Public Registry Checks
+
+`run-integration-release.sh` validates and packs the ten changed npm
+integration/CLI packages. `run-python-release.sh` validates Python source,
+builds seven wheel/sdist pairs and tests their installed wheels.
+`run-python39.sh` separately checks minimum-version compatibility.
+
+After publication, `verify-integration-registry.sh` installs the exact
+September 29 npm releases into a clean consumer and runs 101 authority
+checks. `verify-python-registry.sh` installs the exact PyPI releases from
+the public index, tests the installed SDK and six integrations, then runs
+54 authority checks. Use the disposable Postgres/Redis environment above;
+backend-dependent tests must not be counted as passes when skipped.
+The Python relying-party verifier is private and is tested only from source.

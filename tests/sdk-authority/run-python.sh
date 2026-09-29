@@ -5,7 +5,7 @@ cp -a /source/. /audit/
 cd /audit
 python -m pip install --disable-pip-version-check -e 'packages/sdk-py[dev]' fastapi pydantic starlette strands-agents
 failed=0
-for package in sdk-py crewai openai-agents google-adk strands-py fastapi a2a-py agent-passport-py agent-httpsig-py gemma-py; do
+for package in sdk-py crewai openai-agents google-adk strands-py fastapi a2a-py agent-passport-py agent-httpsig-py gemma-py verifier-py; do
   echo "VALIDATE $package"
   cd "/audit/packages/$package"
   if ! (python -m pip install -e '.[dev]' && python -m pytest --junitxml="/results/$package.xml") >"/results/$package.log" 2>&1; then
