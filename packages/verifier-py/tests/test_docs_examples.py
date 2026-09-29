@@ -20,6 +20,9 @@ EXAMPLES = [
     "packages/verifier-py/tests/docs/examples/wsgi_app.py",
 ]
 SNIPPET = re.compile(r"<!-- snippet: (\S+) -->\n```python\n(.*?)\n```", re.S)
+# The guide is published as MDX, which has no HTML comments, so it marks
+# each snippet with an MDX comment instead.
+GUIDE_SNIPPET = re.compile(r"\{/\* snippet: (\S+) \*/\}\n```python\n(.*?)\n```", re.S)
 
 
 def _read(path: str) -> str:
@@ -32,7 +35,7 @@ def _without_spdx(code: str) -> str:
 
 
 def test_the_guide_embeds_the_examples_verbatim() -> None:
-    found = SNIPPET.findall(_read("docs/relying-parties/verifying-agents.md"))
+    found = GUIDE_SNIPPET.findall(_read("docs/relying-parties/verifying-agents.md"))
     assert [path for path, _ in found] == EXAMPLES
     for path, code in found:
         assert code == _without_spdx(_read(path))
