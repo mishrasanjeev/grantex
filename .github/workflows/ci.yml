@@ -376,6 +376,9 @@ jobs:
       - name: Test FastAPI middleware
         working-directory: packages/fastapi
         run: pip install -e ".[dev]" && mypy --strict src && pytest
+      - name: Test relying-party verifier Python
+        working-directory: packages/verifier-py
+        run: pip install -e ../agent-passport-py -e ../agent-httpsig-py -e ".[dev]" && mypy --strict src && pytest
       - name: Test CrewAI integration
         working-directory: packages/crewai
         run: pip install -e ".[dev]" && mypy --strict src && pytest
