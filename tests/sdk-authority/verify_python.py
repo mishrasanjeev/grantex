@@ -54,7 +54,7 @@ class Handler(BaseHTTPRequestHandler):
             claims["iss"] = "https://other-issuer.example"
         if mode == "audience":
             claims["aud"] = "other-service"
-        self.respond({"active": True, "claims": claims})
+        return self.respond({"active": True, "claims": claims})
 
 
 server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)

@@ -157,4 +157,4 @@ Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kum
 > identities, and check the issuer before every execution. This does not
 > create human consent or automatically consume action decisions/spend caps.
 > Existing offline defaults remain offline. The candidate is not yet published.
-> See the [SDK execution authority guide](../../docs/guides/sdk-execution-authority.mdx).
+> See the [SDK execution authority guide](https://docs.grantex.dev/guides/sdk-execution-authority).

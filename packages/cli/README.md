@@ -12,7 +12,7 @@ The audited source candidate now requires TypeScript SDK 0.8.1+, which has not
 been published by this audit. Rebuild release artifacts after that primary SDK
 release. Operator API keys and submitted principal IDs are administrative
 inputs, not proof of a signed-in human. See
-[execution authority boundaries](../../docs/guides/sdk-execution-authority.mdx).
+[execution authority boundaries](https://docs.grantex.dev/guides/sdk-execution-authority).
 
 Version 0.4.0 is a breaking release requiring Node.js 22.12+ and
 `@grantex/sdk` 0.8+. The `enforce` command checks the requested audience and

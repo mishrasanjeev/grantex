@@ -1,5 +1,9 @@
 # Grantex Go SDK
 
+Version v0.4.2 adds opt-in per-invocation current-authority checks and trusted
+principal/agent binding. Offline defaults remain unchanged. Verify public
+module availability before upgrading; see the execution-authority guide below.
+
 **Version v0.4.1:** exposes the signed WebAuthn evidence reference on grants
 and the VC attestation field. A signed reference is not the raw assertion or
 a current revocation check; verify the issuer, enrollment, RP ID, origin,
@@ -251,4 +255,4 @@ Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kum
 > Unreleased source: `Grants.Verify` and `VerifyOptions.CurrentAuthority` add
 > per-operation issuer authority with trusted principal/agent binding. This is
 > not a Go manifest/decision/caps enforcement engine. See the
-> [SDK execution authority guide](../../docs/guides/sdk-execution-authority.mdx).
+> [SDK execution authority guide](https://docs.grantex.dev/guides/sdk-execution-authority).

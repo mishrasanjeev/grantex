@@ -1,6 +1,6 @@
 {
   "name": "@grantex/express",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Express.js middleware for Grantex grant token verification and scope-based authorization",
   "author": {
     "name": "Sanjeev Kumar",

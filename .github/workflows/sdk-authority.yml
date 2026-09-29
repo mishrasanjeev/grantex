@@ -33,22 +33,22 @@ jobs:
       matrix:
         include:
           - language: node
-            image: node:24.20.0-bookworm-slim
+            image: node:24.20.0-bookworm-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
             script: run-node.sh
           - language: python
-            image: python:3.12-slim
+            image: python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
             script: run-python.sh
           - language: go
             image: golang:1.26.1@sha256:cd78d88e00afadbedd272f977d375a6247455f3a4b1178f8ae8bbcb201743a8a
             script: run-go.sh
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Start isolated SDK test services
         run: |
           docker network create sdk-authority
           docker run -d --name authority-pg --network sdk-authority \
-            -e POSTGRES_PASSWORD=synthetic-audit-only -e POSTGRES_DB=sdk_authority postgres:16-alpine
-          docker run -d --name authority-redis --network sdk-authority redis:7-alpine
+            -e POSTGRES_PASSWORD=synthetic-audit-only -e POSTGRES_DB=sdk_authority postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+          docker run -d --name authority-redis --network sdk-authority redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
           for _ in $(seq 1 30); do
             if docker exec authority-pg pg_isready -U postgres; then break; fi
             sleep 1
@@ -69,7 +69,7 @@ jobs:
             --entrypoint bash "$IMAGE" "/source/tests/sdk-authority/$SCRIPT"
       - name: Retain test evidence
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sdk-authority-${{ matrix.language }}
           path: results/

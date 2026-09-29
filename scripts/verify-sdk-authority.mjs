@@ -2,11 +2,20 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const requireSdk = createRequire(new URL('../packages/sdk-ts/package.json', import.meta.url));
+const consumer = process.env.GRANTEX_AUTHORITY_CONSUMER_DIR;
+const requireSdk = createRequire(consumer ? resolve(consumer, 'package.json') : new URL('../packages/sdk-ts/package.json', import.meta.url));
+async function loadPackage(directory, name) {
+  if (!consumer) return import(`../packages/${directory}/dist/index.js`);
+  const root = resolve(consumer, 'node_modules', '@grantex', name);
+  const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
+  return import(pathToFileURL(resolve(root, manifest.exports['.'].import)).href);
+}
 const { SignJWT, exportJWK, generateKeyPair, decodeJwt } = await import(pathToFileURL(requireSdk.resolve('jose')).href);
-const { Grantex } = await import('../packages/sdk-ts/dist/index.js');
+const { Grantex } = await loadPackage('sdk-ts', 'sdk');
 const pair = await generateKeyPair('RS256', { extractable: true });
 const jwk = { ...await exportJWK(pair.publicKey), kid: 'audit-key', alg: 'RS256', use: 'sig' };
 let mode = 'active';
@@ -56,7 +65,7 @@ const common = {
 const jsonSchema = { type: 'object', properties: {} };
 const factories = [];
 for (const name of ['anthropic', 'autogen', 'langchain', 'vercel-ai', 'strands', 'a2a', 'express', 'adapters', 'gateway']) {
-  const module = await import(`../packages/${name}/dist/index.js`);
+  const module = await loadPackage(name, name);
   factories.push([name, async (options, execute) => {
     if (name === 'anthropic') { const tool = module.createGrantexTool({ ...options, inputSchema: jsonSchema, execute }); return () => tool.execute({}); }
     if (name === 'autogen') { const tool = module.createGrantexFunction({ ...options, parameters: jsonSchema, func: execute }); return () => tool.execute({}); }

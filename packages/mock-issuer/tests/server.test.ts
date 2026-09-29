@@ -121,7 +121,7 @@ describe('mock issuer server', () => {
   });
 
   it('observes same-size revocations even when the file timestamp is unchanged', async () => {
-    const { mkdtempSync, readFileSync, rmSync, statSync, utimesSync } = await import('node:fs');
+    const { mkdtempSync, openSync, closeSync, readFileSync, rmSync, fstatSync, futimesSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
     const dir = mkdtempSync(join(tmpdir(), 'mock-issuer-stamp-'));
@@ -129,12 +129,24 @@ describe('mock issuer server', () => {
       const serving = MockIssuer.create({ dir });
       const issued = issue(serving);
       const file = join(dir, 'state.json');
-      const before = statSync(file);
-      const previous = readFileSync(file, 'utf8');
+      const initial = openSync(file, 'r');
+      let before;
+      let previous;
+      try {
+        before = fstatSync(initial);
+        previous = readFileSync(initial, 'utf8');
+      } finally {
+        closeSync(initial);
+      }
       const server = await start(serving);
       MockIssuer.create({ dir }).revokePassport(issued.attestationId);
-      expect(readFileSync(file, 'utf8').length).toBe(previous.length);
-      utimesSync(file, before.atime, before.mtime);
+      const updated = openSync(file, 'r+');
+      try {
+        expect(readFileSync(updated, 'utf8').length).toBe(previous.length);
+        futimesSync(updated, before.atime, before.mtime);
+      } finally {
+        closeSync(updated);
+      }
       const path = new URL(issued.status.status_list.uri).pathname;
       const claims = decodeJws(await (await fetch(`${server.origin}${path}`)).text()).payload;
       expect(decodeTokenStatusList(claims.status_list as { bits: number; lst: string }).statusAt(issued.status.status_list.idx)).toBe(1);

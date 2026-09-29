@@ -48,9 +48,9 @@ class GrantexAuth:
         clock_tolerance: int = 0,
         audience: Optional[str] = None,
         token_extractor: Optional[Callable[[Request], Optional[str]]] = None,
-        current_authority: Callable[[str], VerifiedGrant] | None = None,
-        expected_principal_id: str | None = None,
-        expected_agent_did: str | None = None,
+        current_authority: Optional[Callable[[str], VerifiedGrant]] = None,
+        expected_principal_id: Optional[str] = None,
+        expected_agent_did: Optional[str] = None,
     ) -> None:
         self._jwks_uri = jwks_uri
         self._clock_tolerance = clock_tolerance

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Cross-language Authority Release Candidates
+- Prepare Python 0.7.1 and Go v0.4.2 with opt-in per-invocation issuer authority
+  and trusted human/agent binding; offline defaults remain unchanged.
+- Prepare distinct patch versions for the changed execution integrations and
+  CLI. Registry publication is recorded only after exact artifact verification.
+- Restore Python 3.9-compatible FastAPI annotations, pin authority CI actions
+  and images, and update affected ip-address, fast-uri and undici lockfile entries.
+
 ### SDK Execution Authority Audit
 - TypeScript SDK 0.8.1 is npm-published and registry-integrity verified;
   Python SDK 0.7.1 remains an unpublished source candidate. Online grant verification requires a

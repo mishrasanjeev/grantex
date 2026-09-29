@@ -1,6 +1,6 @@
 {
   "name": "@grantex/strands",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Strands Agents SDK integration for the Grantex delegated authorization protocol",
   "author": {
     "name": "Sanjeev Kumar",
