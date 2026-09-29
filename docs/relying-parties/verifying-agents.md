@@ -158,7 +158,7 @@ signature and the transaction's fit with the grant. The checks, their order,
 the staleness matrix and the denial codes are specified in
 `spec/verification.md` section 7.
 
-<!-- snippet: packages/verifier-py/tests/docs/examples/verify_checkout.py -->
+{/* snippet: packages/verifier-py/tests/docs/examples/verify_checkout.py */}
 ```python
 from __future__ import annotations
 
@@ -228,7 +228,7 @@ attestation id, both status results and the level when you verified.
 To verify in front of a WSGI application (an ASGI middleware is included
 too):
 
-<!-- snippet: packages/verifier-py/tests/docs/examples/wsgi_app.py -->
+{/* snippet: packages/verifier-py/tests/docs/examples/wsgi_app.py */}
 ```python
 from __future__ import annotations
 
