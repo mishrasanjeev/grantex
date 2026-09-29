@@ -58,6 +58,7 @@ The repository contains 35 packages under `packages/`. Each row maps a directory
 | 32 | `packages/agent-httpsig` | @grantex/agent-httpsig | 0.1.0 | Private source package; not part of this registry release |
 | 33 | `packages/agent-httpsig-py` | grantex-agent-httpsig | 0.1.0 | Source package; not part of this registry release |
 | 34 | `packages/mock-issuer` | @grantex/mock-issuer | 0.1.0 | Private source package; not part of this registry release |
+| 35 | `packages/verifier-py` | grantex-verifier | 0.1.0 | Private source package; not part of this registry release |
 
 ## Known Published-Package Limitations
 
