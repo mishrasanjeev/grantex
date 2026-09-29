@@ -46,6 +46,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Missing previously loaded state fails closed. Documentation example tests
   accept both Windows and Unix line endings.
 
+### Agent Trust Registry documentation
+- The README has a section on the Agent Trust Registry: accredited issuers,
+  agent keys, attestations and trust levels, the acceptance status lists, the
+  lookup and signed manifest and passport-bound grants, with the flags that
+  turn each on and links to the guides and specifications. The unpublished
+  libraries and the mock issuer stay out of the README until they are released.
+- The Trust Registry feature page links the issuer, provider and relying-party
+  guides, and the docs navigation now lists Verifying Agents.
 ### Relying-party verifier for Python (`grantex-verifier`, not published)
 - New package `packages/verifier-py` (`grantex-verifier` 0.1.0, not
   published; `Private :: Do Not Upload`; Python 3.9+), built on the local

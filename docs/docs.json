@@ -72,6 +72,7 @@
               "issuers/becoming-an-accredited-issuer",
               "issuers/running-the-mock-issuer",
               "providers/registering-agents",
+              "relying-parties/verifying-agents",
               "features/fido-webauthn",
               "features/verifiable-credentials",
               "features/sd-jwt",
