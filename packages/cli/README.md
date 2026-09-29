@@ -8,6 +8,11 @@ Command-line tool for the [Grantex](https://grantex.dev) delegated authorization
 
 ## Install
 
+Version 0.4.1 requires registry-verified TypeScript SDK 0.8.1+.
+Operator API keys and submitted principal IDs are administrative
+inputs, not proof of a signed-in human. See
+[execution authority boundaries](https://docs.grantex.dev/guides/sdk-execution-authority).
+
 Version 0.4.0 is a breaking release requiring Node.js 22.12+ and
 `@grantex/sdk` 0.8+. The `enforce` command checks the requested audience and
 current revocation by default. Run `grantex enforce test --help` for audience
@@ -15,7 +20,7 @@ and amount options; the client uses the SDK's online revocation default. Follow 
 [migration guide](https://docs.grantex.dev/migration-enforcement).
 
 ```bash
-npm install -g @grantex/cli@0.4.0
+npm install -g @grantex/cli@0.4.1
 ```
 
 ## Configure

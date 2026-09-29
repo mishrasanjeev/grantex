@@ -1,6 +1,6 @@
 {
   "name": "@grantex/adapters",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Pre-built service provider adapters for Grantex — Google Calendar, Gmail, Drive, Stripe, Slack, GitHub, Notion, HubSpot, Salesforce, Linear, Jira",
   "author": {
     "name": "Sanjeev Kumar",
@@ -31,7 +31,7 @@
     "test": "vitest run"
   },
   "peerDependencies": {
-    "@grantex/sdk": ">=0.8.0 <1"
+    "@grantex/sdk": ">=0.8.1 <1"
   },
   "devDependencies": {
     "@grantex/sdk": "file:../sdk-ts",

@@ -480,7 +480,9 @@ export class Grantex {
         subReason: RevocationSubReason.STATUS_UNAVAILABLE,
       };
     }
-    if (typeof status !== 'object' || status === null || typeof status.revoked !== 'boolean') {
+    if (typeof status !== 'object' || status === null || Array.isArray(status)
+      || typeof status.revoked !== 'boolean'
+      || (!status.revoked && status.status !== 'active')) {
       return {
         reason: 'The revocation status endpoint returned something this client cannot read; '
           + 'denying rather than assuming the grant is live.',

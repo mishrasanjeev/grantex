@@ -1,6 +1,6 @@
 {
   "name": "@grantex/vercel-ai",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Vercel AI SDK integration for the Grantex delegated authorization protocol",
   "author": {
     "name": "Sanjeev Kumar",
@@ -22,7 +22,8 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -31,7 +32,7 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@grantex/sdk": ">=0.3.11",
+    "@grantex/sdk": ">=0.8.1 <1",
     "ai": ">=4.0.0",
     "zod": ">=3.0.0"
   },

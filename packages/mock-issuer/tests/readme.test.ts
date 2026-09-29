@@ -48,7 +48,7 @@ describe('README example', () => {
   });
 
   it('matches the README block line for line', () => {
-    const readme = readFileSync(README, 'utf8');
+    const readme = readFileSync(README, 'utf8').replaceAll('\r\n', '\n');
     const block = readme.match(/## Use it from a test[\s\S]*?```ts\n([\s\S]*?)```/)?.[1];
     expect(block).toBeDefined();
     const source = readFileSync(SELF, 'utf8');

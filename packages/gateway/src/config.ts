@@ -28,6 +28,20 @@ export function validateConfig(raw: unknown): GatewayConfig {
   }
 
   const obj = raw as Record<string, unknown>;
+  if ('currentAuthority' in obj) {
+    throw new GatewayError('CONFIG_INVALID', 'currentAuthority callbacks are programmatic only; use currentAuthorityCheck in YAML', 500);
+  }
+  if ('currentAuthorityCheck' in obj && typeof obj['currentAuthorityCheck'] !== 'boolean') {
+    throw new GatewayError('CONFIG_INVALID', 'currentAuthorityCheck must be a boolean', 500);
+  }
+  if ('grantexBaseUrl' in obj && (typeof obj['grantexBaseUrl'] !== 'string' || !obj['grantexBaseUrl'])) {
+    throw new GatewayError('CONFIG_INVALID', 'grantexBaseUrl must be a non-empty URL', 500);
+  }
+  for (const field of ['expectedPrincipalId', 'expectedAgentDid']) {
+    if (field in obj && (typeof obj[field] !== 'string' || !obj[field])) {
+      throw new GatewayError('CONFIG_INVALID', `${field} must be a non-empty string`, 500);
+    }
+  }
 
   if (typeof obj['upstream'] !== 'string' || !obj['upstream']) {
     throw new GatewayError('CONFIG_INVALID', 'Config must include a non-empty "upstream" URL', 500);
@@ -107,6 +121,10 @@ export function validateConfig(raw: unknown): GatewayConfig {
     jwksUri: obj['jwksUri'] as string,
     port,
     routes,
+    ...('currentAuthorityCheck' in obj ? { currentAuthorityCheck: obj['currentAuthorityCheck'] as boolean } : {}),
+    ...(typeof obj['grantexBaseUrl'] === 'string' ? { grantexBaseUrl: obj['grantexBaseUrl'] } : {}),
+    ...(typeof obj['expectedPrincipalId'] === 'string' ? { expectedPrincipalId: obj['expectedPrincipalId'] } : {}),
+    ...(typeof obj['expectedAgentDid'] === 'string' ? { expectedAgentDid: obj['expectedAgentDid'] } : {}),
     ...(upstreamHeaders !== undefined ? { upstreamHeaders } : {}),
     ...(typeof obj['grantexApiKey'] === 'string' ? { grantexApiKey: obj['grantexApiKey'] } : {}),
     ...(audience !== undefined ? { audience } : {}),

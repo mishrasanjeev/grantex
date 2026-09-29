@@ -30,6 +30,10 @@ export interface GrantexMiddlewareOptions {
    * Expected JWT audience claim. Leave undefined to skip audience check.
    */
   audience?: string;
+  /** Opt-in current issuer authority and trusted host identity binding. Requires audience. */
+  currentAuthority?: (token: string) => Promise<VerifiedGrant>;
+  expectedPrincipalId?: string;
+  expectedAgentDid?: string;
 
   /**
    * Custom error handler. Called when token verification fails.

@@ -286,3 +286,12 @@ import type {
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+
+## Current Authority and Human Identity
+
+Use the exact integration version and minimum primary SDK in [Release Status](/release-status).
+Per-invocation issuer authority and trusted principal/agent binding are opt-in.
+Configure the callback with the trusted issuer and derive identity from the host's
+authenticated session; signature and scope checks alone do not prove current
+revocation or human consent. See [SDK execution authority](/guides/sdk-execution-authority)
+for configuration, denial behavior and manifest/decision/caps boundaries.

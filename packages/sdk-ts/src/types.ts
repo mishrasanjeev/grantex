@@ -226,6 +226,8 @@ export interface WebAuthnGrantEvidence {
 }
 
 export interface VerifiedGrant {
+  /** Signed issuer URL, retained for binding online authority responses. */
+  issuer?: string;
   /** Grant/token unique ID (jti claim) */
   tokenId: string;
   /** Grant record ID */
@@ -415,6 +417,12 @@ export interface ListWebhooksResponse {
 // ─── Verify ───────────────────────────────────────────────────────────────────
 
 export interface VerifyGrantTokenOptions {
+  /** Opt-in online authority check, called for every verification, never cached. Requires audience. */
+  currentAuthority?: (token: string) => Promise<VerifiedGrant>;
+  /** Trusted host-session identity, not an agent-supplied OAuth client ID. */
+  expectedPrincipalId?: string;
+  /** Trusted expected agent identity, separate from the human principal. */
+  expectedAgentDid?: string;
   jwksUri: string;
   requiredScopes?: string[];
   audience?: string;

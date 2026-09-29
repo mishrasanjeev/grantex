@@ -36,7 +36,7 @@ function run(args: string[], env: Record<string, string> = {}) {
 
 /** The fenced block after the MDX comment "example: <name>" in the docs page. */
 function docExample(name: string): string {
-  const text = readFileSync(DOC, 'utf8');
+  const text = readFileSync(DOC, 'utf8').replaceAll('\r\n', '\n');
   const match = text.match(new RegExp(`\\{/\\* example: ${name} \\*/\\}\\s*\`\`\`bash\\n([\\s\\S]*?)\`\`\``));
   if (!match) throw new Error(`no example ${name} in ${DOC}`);
   return match[1] as string;
@@ -85,7 +85,11 @@ describe('docs/issuers/running-the-mock-issuer.md', () => {
   it('runs the issue, attest, suspend, reinstate and revoke sequence', () => {
     const dir = scratch();
     const script = withScratchDir(docExample('mock-issuer-cli'), dir);
-    const result = spawnSync('bash', ['-euo', 'pipefail', '-c', script], { cwd: PACKAGE, encoding: 'utf8' });
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-euo', 'pipefail', '-c', script], {
+      cwd: PACKAGE,
+      encoding: 'utf8',
+      env: { ...process.env, BASH_ENV: '' },
+    });
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
     const issuer = MockIssuer.create({ dir });

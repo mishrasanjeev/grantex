@@ -1,0 +1,169 @@
+{
+  "verifiedAt": "2026-09-29",
+  "npm": [
+    {
+      "Name": "@grantex/a2a",
+      "Version": "0.1.4",
+      "SHA1": "948174d9070f5cb5a2a965fd97e0b6241e046ac3",
+      "Integrity": "sha512-JpVTyH047K9fl64m5V+6RK90XU0rgOqhEG7IRWVL38qZy2vC8m9xAooJgXZGTvVMp/4G/az4qhasw3KuWQt59g==",
+      "Latest": "0.1.4"
+    },
+    {
+      "Name": "@grantex/adapters",
+      "Version": "0.2.1",
+      "SHA1": "84fd9bf197e2937c3c8d91c1c995c945a4ff76ae",
+      "Integrity": "sha512-1OgEtWTKmvdBcW4Y1ue+mmescSRgbufMAa00fcTyrEbPYciCFkPMfZfOILpEO/lps/rKPklFQpQlGeShN0IcCg==",
+      "Latest": "0.2.1"
+    },
+    {
+      "Name": "@grantex/anthropic",
+      "Version": "0.1.2",
+      "SHA1": "1abe070081ee89f7b653daf42f7816c7208dfbb4",
+      "Integrity": "sha512-oeqiGa3Ph9nv7LwHLJZne+r3vOu2WwkaGIfq7hpBxYpRbU48V7UsN2eXy/YlzTLH7ZiSqSKXCYj8fDD5wfc46A==",
+      "Latest": "0.1.2"
+    },
+    {
+      "Name": "@grantex/autogen",
+      "Version": "0.1.7",
+      "SHA1": "87f0f638c8e956ecb24cbf7a30d1de736ba3edf0",
+      "Integrity": "sha512-dF+yg5FP02M7XmQ3ulwGv/QE34JAljr9s5J1hiexfi0knj0ZL7SdthcA/IwN73yhGo6HPQTjUCExb6ltYCtF7g==",
+      "Latest": "0.1.7"
+    },
+    {
+      "Name": "@grantex/cli",
+      "Version": "0.4.1",
+      "SHA1": "9d6e51f5af76408f3a1267ad99adcd2d931983f0",
+      "Integrity": "sha512-xv+PYrMIOrM/1y5h29UDx9EOhBaHRvZrRHZ1S+D/Y+v9B2YCeOch1atZYQbplfi51OK4PvXdXG9gwNz4G6IoAQ==",
+      "Latest": "0.4.1"
+    },
+    {
+      "Name": "@grantex/express",
+      "Version": "0.1.6",
+      "SHA1": "0bfad13b333bfeb560c10f2955451a334da64ab0",
+      "Integrity": "sha512-fZlO77HhjUBYSTBECPj0KhTy7K2Hra9pQsbUiEGQ4KRKDCVpjRjzdt6d1GZjR9tZXdeKY44seb1KEdGDY4Gh9w==",
+      "Latest": "0.1.6"
+    },
+    {
+      "Name": "@grantex/gateway",
+      "Version": "0.2.1",
+      "SHA1": "25d662f78ea6198307d2a56bb0381620babfe1c9",
+      "Integrity": "sha512-9O85XOHzOkiAIjGPiY8yQuX6iuMUByiK6WOVWSvlio1c5CzuH9pQcP37Pe11iQXBo+KUIlUW7FDanA+qh7lufw==",
+      "Latest": "0.2.1"
+    },
+    {
+      "Name": "@grantex/langchain",
+      "Version": "0.1.8",
+      "SHA1": "7f2934ec64007e36605d83bbc4596b3f29a253d8",
+      "Integrity": "sha512-OWu4QRy5WBa97NirL6lc/t6VRUU9c2kZOw1r1pO71s57tnYCz04Zh12M03lFVZCmPWMCrH29WUG3d78U4+JFyQ==",
+      "Latest": "0.1.8"
+    },
+    {
+      "Name": "@grantex/strands",
+      "Version": "0.2.1",
+      "SHA1": "c515d911f3079e89e789e05713f57b88a63e67e2",
+      "Integrity": "sha512-J2rVjTgpoU5ccWk5KyKN7/Xtl307qpnj/2o0FvRqGkiwdk2X2TYWvGNY7GeounIf72CsGma5YnHsw5lGfmy/Ig==",
+      "Latest": "0.2.1"
+    },
+    {
+      "Name": "@grantex/vercel-ai",
+      "Version": "0.1.7",
+      "SHA1": "c86a2bf9a4bcc1ca9ee50d470e21f8099026593b",
+      "Integrity": "sha512-L1SjJh4UJQ2B4L8lnTxfJd+/42dvQvnXEWqj0XPZHCPE0VD+mdF6vhttBMlRq2NoMs+wTY+lt1DD8sVCsRBx3w==",
+      "Latest": "0.1.7"
+    }
+  ],
+  "pypi": [
+    {
+      "Name": "grantex-a2a",
+      "Version": "0.1.5",
+      "File": "grantex_a2a-0.1.5-py3-none-any.whl",
+      "SHA256": "a7777da28abe6dc8f828a015cb5446dbcdef4ac0cfa68d55cdeb8f721ff8cfe2"
+    },
+    {
+      "Name": "grantex-a2a",
+      "Version": "0.1.5",
+      "File": "grantex_a2a-0.1.5.tar.gz",
+      "SHA256": "ea5abdb34d99a28cf7e0bb8d8408124b7a041dea94aa92a0ac30286e534b9e0c"
+    },
+    {
+      "Name": "grantex-adk",
+      "Version": "0.1.7",
+      "File": "grantex_adk-0.1.7-py3-none-any.whl",
+      "SHA256": "6d2cf7815f65ab79baa9650738a02d2c59520324cc9e9691f0838b3113064f36"
+    },
+    {
+      "Name": "grantex-adk",
+      "Version": "0.1.7",
+      "File": "grantex_adk-0.1.7.tar.gz",
+      "SHA256": "610c3e2ef0122e303bd51c30bd0896dd0479251a3516123113e162f544c09e35"
+    },
+    {
+      "Name": "grantex-crewai",
+      "Version": "0.1.8",
+      "File": "grantex_crewai-0.1.8-py3-none-any.whl",
+      "SHA256": "faa36e908cab7b0240df607459a2735a1161f2ebbd367e76aa53e75d6b54c40f"
+    },
+    {
+      "Name": "grantex-crewai",
+      "Version": "0.1.8",
+      "File": "grantex_crewai-0.1.8.tar.gz",
+      "SHA256": "278daad3025d18ca416ab0367107c83ec79211fa46d520397060b0eaa9c0f21c"
+    },
+    {
+      "Name": "grantex-fastapi",
+      "Version": "0.1.6",
+      "File": "grantex_fastapi-0.1.6-py3-none-any.whl",
+      "SHA256": "8ccec1d59cb483e8926379426b3e602be51499d5c7fa6e0795eb609331eaa388"
+    },
+    {
+      "Name": "grantex-fastapi",
+      "Version": "0.1.6",
+      "File": "grantex_fastapi-0.1.6.tar.gz",
+      "SHA256": "13541b437c0172b9e2e213c54d05ee23ee8c9bc0516217037166bd162b589d15"
+    },
+    {
+      "Name": "grantex-openai-agents",
+      "Version": "0.1.7",
+      "File": "grantex_openai_agents-0.1.7-py3-none-any.whl",
+      "SHA256": "5a27be1dd3977aaca34b00e7d8e54eaca22d004e61ff5365b18d8f36f5b8bf64"
+    },
+    {
+      "Name": "grantex-openai-agents",
+      "Version": "0.1.7",
+      "File": "grantex_openai_agents-0.1.7.tar.gz",
+      "SHA256": "fa6b738bb59033ff172277dc4b45e6917a66dcffaa19496df31235766d81cc5b"
+    },
+    {
+      "Name": "grantex-strands",
+      "Version": "0.2.1",
+      "File": "grantex_strands-0.2.1-py3-none-any.whl",
+      "SHA256": "46b105cf6856035f4b587d8c52b963054b41449887ec31aa4e28400481afda27"
+    },
+    {
+      "Name": "grantex-strands",
+      "Version": "0.2.1",
+      "File": "grantex_strands-0.2.1.tar.gz",
+      "SHA256": "05d65e0a45860e0dfde79f89d71aa9f4b89cdef1e5667e42e96943558b3e9f6f"
+    },
+    {
+      "Name": "grantex",
+      "Version": "0.7.1",
+      "File": "grantex-0.7.1-py3-none-any.whl",
+      "SHA256": "db3d447a1c5d452983e597df1f718d1e311fced79c264ccac35f9f9f7053120d"
+    },
+    {
+      "Name": "grantex",
+      "Version": "0.7.1",
+      "File": "grantex-0.7.1.tar.gz",
+      "SHA256": "efb2e3b3e9ae92891ffcb748a44a833f94206f1aec87e4f55f095bd1b2afc284"
+    }
+  ],
+  "go": {
+    "path": "github.com/mishrasanjeev/grantex-go",
+    "version": "v0.4.2",
+    "sum": "h1:MK8lxLxv1lWy6dHfhDnfZibVEHcW859JjXJIqJ6y3xk=",
+    "goModSum": "h1:7BM+UtkV7b79UusuhBSkqAqndvNZlbswEh6UYxWVQDs=",
+    "commit": "47faaff7ca40e9c6a1597cb8bcca8ca0105b14df",
+    "ref": "refs/tags/v0.4.2"
+  }
+}

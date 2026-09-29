@@ -18,9 +18,9 @@ const load = async (name) => {
   return import(pathToFileURL(resolve(directory, entry.import)).href);
 };
 const versions = new Map([
-  ['@grantex/sdk', '0.8.0'], ['@grantex/cli', '0.4.0'],
-  ['@grantex/gateway', '0.2.0'], ['@grantex/adapters', '0.2.0'],
-  ['@grantex/strands', '0.2.0'], ['@grantex/mcp-auth', '4.0.0'],
+  ['@grantex/sdk', '0.8.1'], ['@grantex/cli', '0.4.1'],
+  ['@grantex/gateway', '0.2.1'], ['@grantex/adapters', '0.2.1'],
+  ['@grantex/strands', '0.2.1'], ['@grantex/mcp-auth', '4.0.0'],
 ]);
 for (const [name, version] of versions) {
   const manifest = JSON.parse(readFileSync(resolve(root, 'node_modules', name, 'package.json'), 'utf8'));
@@ -110,7 +110,7 @@ try {
   const allowed = await client.enforce({ ...call, amount: 10 });
   assert.equal(allowed.allowed, true, JSON.stringify(allowed));
   assert.equal(statusCalls, 1, 'Default must query current status');
-  assert.equal(userAgent, '@grantex/sdk/0.8.0');
+  assert.equal(userAgent, '@grantex/sdk/0.8.1');
   const missing = await client.enforce(call);
   assert.equal(missing.allowed, false);
   assert.equal(missing.subReason, 'amount_missing');

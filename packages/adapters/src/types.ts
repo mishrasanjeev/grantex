@@ -5,6 +5,10 @@ export type CredentialProvider = string | (() => string | Promise<string>);
 export type AuditLogger = (params: LogAuditParams) => Promise<void>;
 
 export interface AdapterConfig {
+  /** Opt-in current issuer authority and trusted host identity binding. Requires audience. */
+  currentAuthority?: (token: string) => Promise<VerifiedGrant>;
+  expectedPrincipalId?: string;
+  expectedAgentDid?: string;
   jwksUri: string;
   credentials: CredentialProvider;
   auditLogger?: AuditLogger;

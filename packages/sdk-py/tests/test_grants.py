@@ -124,6 +124,26 @@ def test_verify_raises_when_inactive(client: Grantex) -> None:
         client.grants.verify("any.caller.supplied.token")
 
 
+@pytest.mark.parametrize("active", [False, "false", "true", 1, 0, None, {}, []])
+@respx.mock
+def test_verify_refuses_non_boolean_active(client: Grantex, active: object) -> None:
+    respx.post("https://api.grantex.dev/v1/grants/verify").mock(
+        return_value=httpx.Response(200, json={"active": active, "claims": {}})
+    )
+    with pytest.raises(GrantexTokenError):
+        client.grants.verify("token")
+
+
+@pytest.mark.parametrize("body", [None, [], {}, {"active": True, "claims": []}, {"active": True, "claims": "claims"}])
+@respx.mock
+def test_verify_refuses_malformed_response(client: Grantex, body: object) -> None:
+    respx.post("https://api.grantex.dev/v1/grants/verify").mock(
+        return_value=httpx.Response(200, content=json.dumps(body), headers={"content-type": "application/json"})
+    )
+    with pytest.raises(GrantexTokenError):
+        client.grants.verify("token")
+
+
 def _build_verified_grant():
     from grantex._types import VerifiedGrant
 

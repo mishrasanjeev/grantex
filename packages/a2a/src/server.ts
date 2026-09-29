@@ -43,6 +43,9 @@ export function createA2AAuthMiddleware(options: A2AAuthMiddlewareOptions) {
     try {
       grant = await verifyGrantToken(token, {
         jwksUri: options.jwksUri,
+        ...(options.currentAuthority !== undefined ? { currentAuthority: options.currentAuthority } : {}),
+        ...(options.expectedPrincipalId !== undefined ? { expectedPrincipalId: options.expectedPrincipalId } : {}),
+        ...(options.expectedAgentDid !== undefined ? { expectedAgentDid: options.expectedAgentDid } : {}),
         ...(options.issuer !== undefined ? { issuer: options.issuer } : {}),
         ...(options.issuerDid !== undefined ? { issuerDid: options.issuerDid } : {}),
         ...(options.audience !== undefined ? { audience: options.audience } : {}),
