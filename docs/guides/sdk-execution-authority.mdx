@@ -4,11 +4,11 @@ description: Keep human identity, consent, current grant authority and execution
 ---
 
 <Warning>
-TypeScript SDK 0.8.1 is npm-published and registry-integrity verified.
-Python SDK 0.7.1 and the changed framework integrations remain source candidates.
-Do not assume older or unreleased packages contain these controls. Go's
-`Grants.Verify` and `CurrentAuthority` options also require the audited source
-revision until a new Go tag is released. No registry publication is implied.
+TypeScript SDK 0.8.1, Python SDK 0.7.1, Go SDK v0.4.2 and the changed
+framework integrations are published. Use the exact versions listed in
+[Release Status](/release-status); older packages can lack these controls.
+These releases do not enable authority callbacks automatically or provision
+human login. Configure and test every execution boundary before production.
 </Warning>
 
 ## Four Different Checks
@@ -50,7 +50,7 @@ Verification compares the current response's issuer, audience, token ID, grant I
 agent, developer/tenant, issued/expiry times and scopes with the signed token.
 The signed token remains the source of audience and action context.
 
-The same three fields are supported by the source-candidate framework tool
+The same three fields are supported by the released framework tool
 factories, Express, A2A, adapters and the programmatic gateway. The human
 binding must come from the host session or authorized resource owner, not
 from the tool's submitted arguments. Multi-user servers must bind it per
@@ -160,4 +160,4 @@ browser/passkey device, issuer deployment or payment rail.
 Release and verify the primary SDKs first, then the changed integration
 packages. A source version bump is not evidence that npm, PyPI or Go module
 consumers have received a fix. Keep registry release status separate from
-source-candidate validation and production deployment.
+registry-artifact validation and production deployment.

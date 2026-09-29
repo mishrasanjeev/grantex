@@ -121,7 +121,7 @@ describe('mock issuer server', () => {
   });
 
   it('observes same-size revocations even when the file timestamp is unchanged', async () => {
-    const { mkdtempSync, openSync, closeSync, readFileSync, rmSync, fstatSync, futimesSync } = await import('node:fs');
+    const { mkdtempSync, openSync, closeSync, readFileSync, rmSync, futimesSync } = await import('node:fs');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
     const dir = mkdtempSync(join(tmpdir(), 'mock-issuer-stamp-'));
@@ -129,12 +129,12 @@ describe('mock issuer server', () => {
       const serving = MockIssuer.create({ dir });
       const issued = issue(serving);
       const file = join(dir, 'state.json');
-      const initial = openSync(file, 'r');
-      let before;
+      const unchangedTime = new Date('2026-01-01T00:00:00Z');
+      const initial = openSync(file, 'r+');
       let previous;
       try {
-        before = fstatSync(initial);
         previous = readFileSync(initial, 'utf8');
+        futimesSync(initial, unchangedTime, unchangedTime);
       } finally {
         closeSync(initial);
       }
@@ -143,7 +143,7 @@ describe('mock issuer server', () => {
       const updated = openSync(file, 'r+');
       try {
         expect(readFileSync(updated, 'utf8').length).toBe(previous.length);
-        futimesSync(updated, before.atime, before.mtime);
+        futimesSync(updated, unchangedTime, unchangedTime);
       } finally {
         closeSync(updated);
       }

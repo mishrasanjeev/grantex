@@ -71,7 +71,9 @@ for (const name of ['anthropic', 'autogen', 'langchain', 'vercel-ai', 'strands',
     if (name === 'autogen') { const tool = module.createGrantexFunction({ ...options, parameters: jsonSchema, func: execute }); return () => tool.execute({}); }
     if (name === 'langchain') { const tool = module.createGrantexTool({ ...options, func: execute }); return () => tool.invoke('synthetic'); }
     if (name === 'vercel-ai' || name === 'strands') {
-      const req = createRequire(new URL(`../packages/${name}/package.json`, import.meta.url));
+      const req = createRequire(consumer
+        ? resolve(consumer, 'node_modules', '@grantex', name, 'package.json')
+        : new URL(`../packages/${name}/package.json`, import.meta.url));
       const { z } = await import(pathToFileURL(req.resolve('zod')).href);
       const tool = module.createGrantexTool({ ...options, parameters: z.object({}), inputSchema: z.object({}), execute, callback: execute });
       return name === 'strands' ? () => tool.invoke({}) : () => tool.execute({}, { toolCallId: 'audit', messages: [] });
@@ -132,7 +134,7 @@ try {
     checks++;
     console.log(`PASS ${name}: active, revoked, outage, malformed authority, human/agent/tenant/token substitution, trusted host identity`);
   }
-  const gateway = await import('../packages/gateway/dist/index.js');
+  const gateway = await loadPackage('gateway', 'gateway');
   const yamlConfig = gateway.validateConfig({ upstream: upstreamUrl, jwksUri: common.jwksUri,
     audience: common.audience, currentAuthorityCheck: true, grantexBaseUrl: baseUrl,
     grantexApiKey: 'synthetic-audit-key', expectedPrincipalId: common.expectedPrincipalId,

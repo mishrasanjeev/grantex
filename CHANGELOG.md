@@ -6,17 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-### Cross-language Authority Release Candidates
-- Prepare Python 0.7.1 and Go v0.4.2 with opt-in per-invocation issuer authority
+### Cross-language Authority Releases (2026-09-29)
+- Publish Python 0.7.1 and Go v0.4.2 with opt-in per-invocation issuer authority
   and trusted human/agent binding; offline defaults remain unchanged.
-- Prepare distinct patch versions for the changed execution integrations and
-  CLI. Registry publication is recorded only after exact artifact verification.
+- Publish distinct patch versions for ten changed npm integrations/CLI and six
+  Python integrations. See the September 29 release receipt for artifact evidence.
 - Restore Python 3.9-compatible FastAPI annotations, pin authority CI actions
   and images, and update affected ip-address, fast-uri and undici lockfile entries.
 
 ### SDK Execution Authority Audit
 - TypeScript SDK 0.8.1 is npm-published and registry-integrity verified;
-  Python SDK 0.7.1 remains an unpublished source candidate. Online grant verification requires a
+  Python SDK 0.7.1 is published on PyPI. Online grant verification requires a
   literal `active: true` and valid claim objects. Empty principal/token IDs
   and contradictory non-revoked status responses are refused.
 - TypeScript, Python and Go token verification gain opt-in, uncached issuer
@@ -25,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Go adds `Grants.Verify` for `/v1/grants/verify`; legacy `Tokens.Verify` is not
   a replacement for this check.
 - Framework wrappers, HTTP middleware, adapters and gateway expose the same
-  opt-in controls. Their candidate dependency minimums are SDK 0.8.1 / Python
+  opt-in controls. Their dependency minimums are SDK 0.8.1 / Python
   0.7.1, so older verifiers cannot silently ignore authority options in a
   supported installation. Signature-only defaults are unchanged; these are
   not current-authority or human-consent guarantees.

@@ -11,8 +11,8 @@ This repository uses package-specific versions; there is no monorepo-wide SDK or
 | --- | --- | --- |
 | Repository changelog | v0.3.12 | Latest top-level release entry in `CHANGELOG.md`. |
 | TypeScript SDK | @grantex/sdk 0.8.1 published | Adds opt-in current-authority verification and trusted principal/agent binding; retains hosted passkey enrollment, account policy, EVM responses and refresh recovery. npm integrity and clean-install verified. |
-| Python SDK | grantex 0.7.0 published | Audience and trusted-amount enforcement with default online revocation; wheel/sdist hashes, public-file tests, normal pinned index installs and production probes verified. No automatic x402 HTTP wrapper. |
-| Go SDK | github.com/mishrasanjeev/grantex-go v0.4.1 published | Adds hosted passkey enrollment and account irregularity response policy clients; retains typed EVM responses and bounded refresh recovery. Public proxy, downloaded-module tests and race suite verified. Go 1.26.1 is required; no automatic x402 HTTP wrapper. |
+| Python SDK | grantex 0.7.1 published | Adds opt-in current-authority verification and trusted principal/agent binding. Wheel/sdist hashes and public-index installed tests with real Postgres/Redis are verified. No automatic x402 HTTP wrapper. |
+| Go SDK | github.com/mishrasanjeev/grantex-go v0.4.2 published | Adds Grants.Verify, opt-in current authority and trusted principal/agent binding. Public proxy, downloaded-module race tests and vet are verified. Go 1.26.1 is required; no automatic x402 HTTP wrapper. |
 | x402 | @grantex/x402 0.4.1 published | Retains opt-in request-bound Base USDC 402/sign/retry and layered wallet governance; npm integrity and fresh-install verified. Custody and trusted RPC remain operator-provisioned. |
 | OpenAPI | 0.5.0 | Repository API contract including layered prepaid-wallet governance; independent of the deployed/public snapshot. |
 | MCP Auth | @grantex/mcp-auth 4.0.0 published | Breaking host-authenticated human-principal resolver requirement, rendered consent and current-grant checks; durable state must be configured. Registry consumer, storage/restart and Chromium tests passed. |
@@ -25,31 +25,31 @@ The repository contains 34 packages under `packages/`. Each row maps a directory
 | # | Directory | Published name | Version | Status |
 | ---: | --- | --- | ---: | --- |
 | 1 | `packages/sdk-ts` | @grantex/sdk | 0.8.1 | Primary SDK (TypeScript); published and registry verified |
-| 2 | `packages/sdk-py` | grantex | 0.7.1 source / 0.7.0 published | New authority hardening remains unpublished; 0.7.0 registry verified |
-| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.4.1 (Go 1.26.1) | Primary SDK (Go); tag and public proxy verified |
-| 4 | `packages/cli` | @grantex/cli | 0.4.0 | Tooling; published with bundled Agent Skills |
+| 2 | `packages/sdk-py` | grantex | 0.7.1 | Published; registry verified |
+| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.4.2 (Go 1.26.1) | Primary SDK (Go); tag and public proxy verified |
+| 4 | `packages/cli` | @grantex/cli | 0.4.1 | Published; registry verified |
 | 5 | `packages/mcp-auth` | @grantex/mcp-auth | 4.0.0 | Published and registry verified; deployment configuration required |
 | 6 | `packages/mcp` | @grantex/mcp | 0.1.10 | Adapter |
-| 7 | `packages/langchain` | @grantex/langchain | 0.1.7 | Adapter |
-| 8 | `packages/autogen` | @grantex/autogen | 0.1.6 | Adapter |
-| 9 | `packages/vercel-ai` | @grantex/vercel-ai | 0.1.6 | Adapter |
-| 10 | `packages/anthropic` | @grantex/anthropic | 0.1.1 | Adapter |
-| 11 | `packages/crewai` | grantex-crewai | 0.1.7 | Adapter |
-| 12 | `packages/openai-agents` | grantex-openai-agents | 0.1.6 | Adapter |
-| 13 | `packages/google-adk` | grantex-adk | 0.1.6 | Adapter |
-| 14 | `packages/strands-py` | grantex-strands | 0.2.0 | Published; public-wheel tests and normal pinned index installs passed |
-| 15 | `packages/strands` | @grantex/strands | 0.2.0 | Published; installed-tool enforcement checked |
-| 16 | `packages/express` | @grantex/express | 0.1.5 | Middleware |
-| 17 | `packages/fastapi` | grantex-fastapi | 0.1.5 | Middleware |
-| 18 | `packages/gateway` | @grantex/gateway | 0.2.0 | Published; configured audience and trusted amount required |
+| 7 | `packages/langchain` | @grantex/langchain | 0.1.8 | Published; registry verified |
+| 8 | `packages/autogen` | @grantex/autogen | 0.1.7 | Published; registry verified |
+| 9 | `packages/vercel-ai` | @grantex/vercel-ai | 0.1.7 | Published; registry verified |
+| 10 | `packages/anthropic` | @grantex/anthropic | 0.1.2 | Published; registry verified |
+| 11 | `packages/crewai` | grantex-crewai | 0.1.8 | Published; registry verified |
+| 12 | `packages/openai-agents` | grantex-openai-agents | 0.1.7 | Published; registry verified |
+| 13 | `packages/google-adk` | grantex-adk | 0.1.7 | Published; registry verified |
+| 14 | `packages/strands-py` | grantex-strands | 0.2.1 | Published; registry verified |
+| 15 | `packages/strands` | @grantex/strands | 0.2.1 | Published; registry verified |
+| 16 | `packages/express` | @grantex/express | 0.1.6 | Published; registry verified |
+| 17 | `packages/fastapi` | grantex-fastapi | 0.1.6 | Published; registry verified |
+| 18 | `packages/gateway` | @grantex/gateway | 0.2.1 | Published; registry verified |
 | 19 | `packages/conformance` | @grantex/conformance | 0.1.8 | Test suite |
-| 20 | `packages/adapters` | @grantex/adapters | 0.2.0 | Published; configured audience and trusted amount required |
+| 20 | `packages/adapters` | @grantex/adapters | 0.2.1 | Published; registry verified |
 | 21 | `packages/destinations` | @grantex/destinations | 0.1.2 | Event destinations |
 | 22 | `packages/dpdp` | @grantex/dpdp | 0.1.1 | Compliance controls |
 | 23 | `packages/gemma` | @grantex/gemma | 0.1.1 | Offline authorization (TS) |
 | 24 | `packages/gemma-py` | grantex-gemma | 0.1.1 | Offline authorization (Python) |
-| 25 | `packages/a2a` | @grantex/a2a | 0.1.3 | A2A bridge (TS) |
-| 26 | `packages/a2a-py` | grantex-a2a | 0.1.4 | A2A bridge (Python) |
+| 25 | `packages/a2a` | @grantex/a2a | 0.1.4 | Published; registry verified |
+| 26 | `packages/a2a-py` | grantex-a2a | 0.1.5 | Published; registry verified |
 | 27 | `packages/mpp` | @grantex/mpp | 0.1.2 | MPP support |
 | 28 | `packages/x402` | @grantex/x402 | 0.4.1 | Official x402 v2 layered-wallet integration with opt-in Base USDC |
 | 29 | `packages/terraform-provider-grantex` | terraform-provider-grantex | Go module (Go 1.25.0) | Source-only Terraform provider; public registry returned 404 on 2026-09-07 |
@@ -86,8 +86,8 @@ Install the verified public releases needed by your application:
 ```bash
 npm install @grantex/sdk@0.8.1
 npm install @grantex/x402@0.4.1 @grantex/sdk@0.8.1
-pip install grantex==0.7.0
-go get github.com/mishrasanjeev/grantex-go@v0.4.1
+pip install grantex==0.7.1
+go get github.com/mishrasanjeev/grantex-go@v0.4.2
 npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1
 ```
 

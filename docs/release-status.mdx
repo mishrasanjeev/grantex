@@ -8,16 +8,17 @@ keywords: ["Grantex CLI version", "Grantex SDK versions", "AI agent authorizatio
 ## Current releases
 
 The enforcement releases are TypeScript `0.8.1`, Python
-`0.7.0`, CLI `0.4.0`, gateway/adapters/Strands `0.2.0` and MCP Auth `4.0.0`.
-The September 29 SDK 0.8.1 and MCP Auth 4.0.0 registry hashes and clean npm
+`0.7.1`, CLI `0.4.1`, gateway/adapters/Strands `0.2.1` and MCP Auth `4.0.0`.
+The September 29 cross-language registry hashes and clean npm
 consumer flows are verified. The earlier eight-package release remains documented
 separately; Python public-file and normal pinned PyPI index installations passed
 on the workstation and in Docker. See [the validation report](/sdk-release-validation)
 and [the complete migration guide](/migration-enforcement), including
 runtime requirements, default revocation, trusted amounts and integration limits.
 
-Latest npm publication verified: **September 29, 2026**. Other release and
-hosted-service evidence retains its original verification dates.
+Latest registry publication verified: **September 29, 2026**. Hosted-service
+evidence retains its original verification dates. See the
+[cross-language release receipt](https://github.com/mishrasanjeev/grantex/blob/main/docs/reports/cross-language-authority-release-2026-09-29.md).
 
 Server feature availability is deployment-specific; confirm the rollout with
 the authenticated policy endpoint and an enrollment test on the public origin.
@@ -28,11 +29,11 @@ hosted service also has `PASSKEY_ENROLLMENT_ENABLED=true` with the production
 origin and RP ID; SDK installation alone does not enable either feature.
 
 TypeScript `@grantex/sdk@0.8.1` and x402 `@grantex/x402@0.4.1` are published
-on npm. Python `grantex==0.7.0` is published on PyPI and the Go SDK `v0.4.1`
+on npm. Python `grantex==0.7.1` is published on PyPI and the Go SDK `v0.4.2`
 resolves through the public Go proxy. Each exact artifact was verified against
 its registry before this page was updated.
 
-TypeScript `0.8.1`, Python `0.7.0`, and Go `v0.4.1` include hosted passkey
+TypeScript `0.8.1`, Python `0.7.1`, and Go `v0.4.2` include hosted passkey
 enrollment and the account irregularity response policy. Their server routes are default-off
 for self-hosted deployments (`PASSKEY_ENROLLMENT_ENABLED` and
 `IRREGULARITY_RESPONSE_POLICY_ENABLED`). The Grantex-hosted service has both
@@ -53,21 +54,21 @@ repository.
 
 | Surface | Release | Verification | Runtime requirement |
 |---|---|---|---|
-| CLI | `@grantex/cli@0.4.0` | Registry integrity and clean install | Node.js 22.12+; ESM |
+| CLI | `@grantex/cli@0.4.1` | Registry integrity and clean install | Node.js 22.12+; ESM |
 | TypeScript SDK | `@grantex/sdk@0.8.1` | Registry integrity, clean install and local authority-boundary checks | Node.js 22.12+; ESM |
-| Python SDK | `grantex==0.7.0` | PyPI hashes, normal pinned installs, public-wheel tests and production enforcement | Python 3.9+ |
+| Python SDK | `grantex==0.7.1` | PyPI hashes, normal pinned installs, public-wheel tests and production enforcement | Python 3.9+ |
 | MCP Auth | `@grantex/mcp-auth@4.0.0` | Registry integrity, clean install and storage/browser tests | Node.js 22.12+; ESM |
-| Gateway | `@grantex/gateway@0.2.0` | Registry integrity and installed gateway invocation | Node.js 22.12+; SDK 0.8+ |
-| Adapters | `@grantex/adapters@0.2.0` | Registry integrity and installed adapter invocation | Node.js 22.12+; SDK 0.8+ |
-| Strands TypeScript | `@grantex/strands@0.2.0` | Registry integrity and installed tool invocation | Node.js 22.12+; SDK 0.8+ |
-| Strands Python | `grantex-strands==0.2.0` | PyPI hashes, normal pinned installs and public-wheel tests | Python 3.11+; grantex 0.7+ |
+| Gateway | `@grantex/gateway@0.2.1` | Registry integrity and installed gateway invocation | Node.js 22.12+; SDK 0.8+ |
+| Adapters | `@grantex/adapters@0.2.1` | Registry integrity and installed adapter invocation | Node.js 22.12+; SDK 0.8+ |
+| Strands TypeScript | `@grantex/strands@0.2.1` | Registry integrity and installed tool invocation | Node.js 22.12+; SDK 0.8+ |
+| Strands Python | `grantex-strands==0.2.1` | PyPI hashes, normal pinned installs and public-wheel tests | Python 3.11+; grantex 0.7+ |
 | x402 | `@grantex/x402@0.4.1` | Unchanged, compatibility-tested; custody remains external | Node.js 20+ standalone; 22.12+ with SDK 0.8 |
-| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.4.1` | Unchanged, compatibility-tested | Go 1.26.1+ |
+| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.4.2` | Unchanged, compatibility-tested | Go 1.26.1+ |
 | OpenAPI | `0.5.0` | Repository contract, independently versioned | Independent of SDK versions |
 | Terraform provider | Source only | Public registry returned 404 on September 7, 2026; [local evaluation](/guides/terraform) | Provider module toolchain |
 
 <Note>
-TypeScript `0.8.1`, Python `0.7.0`, Go `v0.4.1`, and x402 `0.4.1` are
+TypeScript `0.8.1`, Python `0.7.1`, Go `v0.4.2`, and x402 `0.4.1` are
 published and registry verified. Installing any SDK does not provision external
 custody, principal notification delivery, or merchant idempotency storage; see
 [Prepaid Wallet Production Readiness](/guides/prepaid-wallet-production).
@@ -93,7 +94,7 @@ the audited Go changes and changed execution integrations remain unpublished
 source candidates. Their existing registry versions do not contain the audit's
 new authority forwarding. See [execution authority](/guides/sdk-execution-authority).
 
-On September 28, 2026, TypeScript `0.7.1`, Python `0.6.1`, and Go `v0.4.1`
+On September 28, 2026, TypeScript `0.7.1`, Python `0.6.1`, and Go `v0.4.2`
 were built and tested from merged `main` snapshot `a919ea8a`. Their registry artifacts were
 independently installed or downloaded and checked against the release
 artifacts. These updates expose typed portable WebAuthn grant evidence and VC
@@ -102,12 +103,12 @@ flags. The primary-SDK release workflow verified and packed the artifacts,
 but registry publication required the maintainer's authenticated workstation
 because trusted-publisher setup is not yet complete.
 
-On September 27, 2026, TypeScript `0.7.0` and x402 `0.4.1` were installed
+On September 27, 2026, TypeScript `0.7.1` and x402 `0.4.1` were installed
 together in a clean npm consumer. Their registry SHA-512 integrity values
 exactly match the verified main-branch tarballs, and the passkey, irregularity
 policy, and x402 public exports were present. Python `0.6.0` was installed from the public PyPI index
 in a clean environment. Its published wheel and sdist SHA-256 values match the
-verified main-branch release artifacts. Go `v0.4.0` was tagged from the synced,
+verified main-branch release artifacts. Go `v0.4.1` was tagged from the synced,
 tested SDK source; the public Go proxy resolved the tag and the downloaded
 module's full test suite passed. These packages include hosted passkey
 enrollment and account irregularity response policy clients. Neither SDK
@@ -141,7 +142,7 @@ retain bounded refresh recovery. Full tests passed against a clean PyPI wheel
 and the public Go module, including Go race tests. Neither language adds an
 automatic x402 HTTP payment-and-retry wrapper.
 
-TypeScript `0.6.0` and x402 `0.4.0` were published on September 7, 2026.
+TypeScript `0.6.0` and x402 `0.4.1` were published on September 7, 2026.
 Both registry integrity hashes match the tested tarballs. A clean npm install
 passed public-export, license/notice, Base safety, and authenticated reconciliation
 checks with zero reported consumer vulnerabilities. The x402 adapter provides
@@ -152,19 +153,19 @@ Custody](/guides/base-usdc-custody) for the custody and RPC prerequisites.
   As of August 10, 2026, published `@grantex/cli@0.3.0` includes the Hermes,
   OpenClaw, and portable Agent Skills installer. Repository source on `main`
   includes corrected Go Agent/Audit read/write contracts and layered prepaid
-  wallet clients across TypeScript, Python, and Go. TypeScript `0.7.0`, Python
-  `0.6.0`, and Go `v0.4.0` include matching bounded refresh-recovery behavior.
+  wallet clients across TypeScript, Python, and Go. TypeScript `0.7.1`, Python
+  `0.6.0`, and Go `v0.4.1` include matching bounded refresh-recovery behavior.
   Standard developer API-key plan throughput and custom-auth quotas
   remain separate from SDK publication.
 </Info>
 
 ## Which Grantex package should I use?
 
-- **Hermes, OpenClaw, or another shell-capable agent:** use published `@grantex/cli@0.4.0`; install its bundled skills with `grantex agent install`. No agent-specific SDK is required.
+- **Hermes, OpenClaw, or another shell-capable agent:** use published `@grantex/cli@0.4.1`; install its bundled skills with `grantex agent install`. No agent-specific SDK is required.
 - **TypeScript application:** use npm-verified `@grantex/sdk@0.8.1` for hosted passkey enrollment, account irregularity response policy, bounded refresh recovery, layered prepaid-wallet governance, and OAuth Agent Grants.
 - **x402 prepaid-wallet application:** use published `@grantex/x402@0.4.1` with published `@grantex/sdk@0.8.1`; keep external custody disabled until an operator adapter passes review.
-- **Python application:** use PyPI-verified `grantex==0.7.0` for hosted passkey enrollment, account-level irregularity response policy, bounded refresh recovery, layered prepaid-wallet governance, and fail-closed `enforce()` budget checks.
-- **Go application:** use public-proxy-verified `github.com/mishrasanjeev/grantex-go@v0.4.1` for hosted passkey enrollment, account-level irregularity response policy, bounded refresh recovery, corrected Agent/Audit contracts, and layered prepaid-wallet governance.
+- **Python application:** use PyPI-verified `grantex==0.7.1` for hosted passkey enrollment, account-level irregularity response policy, bounded refresh recovery, layered prepaid-wallet governance, and fail-closed `enforce()` budget checks.
+- **Go application:** use public-proxy-verified `github.com/mishrasanjeev/grantex-go@v0.4.2` for hosted passkey enrollment, account-level irregularity response policy, bounded refresh recovery, corrected Agent/Audit contracts, and layered prepaid-wallet governance.
 - **MCP HTTP transport authorization:** use an established MCP-compatible authorization server and maintained MCP SDK that implement the current MCP authorization specification.
 - **Agent-specific MCP tool enforcement:** configure MCP Auth 4.0 durable state, a required authenticated human-principal resolver, resource binding and trusted current-grant verification. Host login and WebAuthn remain separate responsibilities.
 - **Current revocation:** local JWT verification is insufficient by itself; perform an online state check or synchronize revocation data.
@@ -173,7 +174,7 @@ Custody](/guides/base-usdc-custody) for the custody and RPC prerequisites.
 ## Known limitations in the current published artifacts
 
 <Warning>
-  **TypeScript `0.8.1` and Python `0.7.0`:** `enforce()` binds the expected
+  **TypeScript `0.8.1` and Python `0.7.1`:** `enforce()` binds the expected
   audience, denies capped calls without trusted amounts, and checks current
   revocation online by default. Configure the service audience and agent's
   resource servers, and keep the status/feed service operational. Plain token
@@ -196,7 +197,7 @@ Pin exact versions in applications, examples, CI, and deployment manifests:
 
 <CodeGroup>
 ```bash CLI
-npm install -g @grantex/cli@0.4.0
+npm install -g @grantex/cli@0.4.1
 ```
 
 ```bash TypeScript
@@ -208,11 +209,11 @@ npm install @grantex/x402@0.4.1 @grantex/sdk@0.8.1
 ```
 
 ```bash Python
-python -m pip install grantex==0.7.0
+python -m pip install grantex==0.7.1
 ```
 
 ```bash Go
-go get github.com/mishrasanjeev/grantex-go@v0.4.1
+go get github.com/mishrasanjeev/grantex-go@v0.4.2
 ```
 
 ```bash MCP Auth

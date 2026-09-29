@@ -6,12 +6,12 @@ description: "Install and configure the Grantex Python SDK for delegated authori
 
 ## Installation
 
-Published release: **`grantex==0.7.0`**. The published wheel and sdist hashes
+Published release: **`grantex==0.7.1`**. The published wheel and sdist hashes
 match the tested artifacts. Clean pinned public-index installation passed
 on the workstation and in Docker; see [Release Status](/release-status).
 
 ```bash
-python -m pip install grantex==0.7.0
+python -m pip install grantex==0.7.1
 ```
 
 The unpinned `python -m pip install grantex` command follows PyPI's current
@@ -20,9 +20,14 @@ release. Keep the exact version above in reproducible builds. See
 
 ### Requirements
 
+Version `0.7.1` adds opt-in `current_authority`, `expected_principal_id` and
+`expected_agent_did` verification options. Use host-authenticated identity and
+an uncached trusted-issuer callback; local signature checks alone do not prove
+current revocation. See [SDK execution authority](/guides/sdk-execution-authority).
+
 - Python 3.9 or higher
 - [httpx](https://www.python-httpx.org/) (sync HTTP client)
-- [PyJWT](https://pyjwt.readthedocs.io/) >= 2.8 with [cryptography](https://cryptography.io/) (for offline token verification)
+- [PyJWT](https://pyjwt.readthedocs.io/) >= 2.13 with [cryptography](https://cryptography.io/) >= 48.0.1 (for offline token verification)
 
 All dependencies are installed automatically with the SDK.
 

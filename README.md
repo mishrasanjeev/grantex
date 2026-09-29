@@ -49,7 +49,7 @@ For AgenticOrg business onboarding cases, Grantex grants provide delegated
 tool authority while AgenticOrg owns tenant isolation, case state, the local
 case-purpose allowlist, human review and the provider call boundary. The
 last verified AgenticOrg integration does not enforce token-level case
-purpose or per-case caps. Published Python `grantex==0.7.0` contains purpose
+purpose or per-case caps. Published Python `grantex==0.7.1` contains purpose
 and cap APIs, but that integration has not been verified
 to use them. See the [governed-case integration boundary](docs/guides/agenticorg-governed-cases.mdx)
 and [release status](docs/release-status.mdx). Neither this repository nor an
@@ -72,8 +72,8 @@ identity and the policy-evaluated semantic context.
 external custody records deliberately fail closed unless a configured provider
 can verify funding and settlement. The source checkout now includes opt-in
 Base native USDC EIP-3009 payments with policy-gated signing, verified funding,
-durable signature retries and finalized-chain reconciliation. Python `0.7.0`
-and Go `v0.4.1` publish the EVM response and reconciliation APIs; neither adds
+durable signature retries and finalized-chain reconciliation. Python `0.7.1`
+and Go `v0.4.2` publish the EVM response and reconciliation APIs; neither adds
 an automatic HTTP payment wrapper. Published TypeScript `0.8.1` and x402 `0.4.1`
 include the opt-in automatic Base 402/sign/retry flow. All four releases are
 registry verified. See the
@@ -123,7 +123,7 @@ complete responsibility matrix, policy composition, exact approval protocol,
 and honest residual gap list.
 
 The managed clients are implemented in registry-verified `@grantex/sdk@0.8.1`,
-`@grantex/x402@0.4.1`, Python `grantex==0.7.0`, and Go `v0.4.1`. External
+`@grantex/x402@0.4.1`, Python `grantex==0.7.1`, and Go `v0.4.2`. External
 custody, principal notification delivery, and
 merchant result idempotency remain operator responsibilities.
 See the [x402 integration
@@ -236,13 +236,13 @@ Grantex components are independently versioned. The protocol specification remai
 
 Current public releases and repository versions, verified 2026-09-29:
 
-The enforcement releases are TypeScript `0.8.1`, Python `0.7.0`, CLI
-`0.4.0`, gateway/adapters/Strands `0.2.0` and MCP Auth `4.0.0`. See the complete
+The enforcement releases are TypeScript `0.8.1`, Python `0.7.1`, CLI
+`0.4.1`, gateway/adapters/Strands `0.2.1` and MCP Auth `4.0.0`. See the complete
 [migration guide](https://docs.grantex.dev/migration-enforcement) before
 upgrading: Node.js requirements, audience binding, capped-call amounts and
 online revocation defaults are breaking changes.
 
-TypeScript `0.8.1` and Python `0.7.0` include service-side `enforce()` audience
+TypeScript `0.8.1` and Python `0.7.1` include service-side `enforce()` audience
 binding, denial of capped calls without trusted amounts, and online revocation
 by default. Register the agent's resource servers before audience-bound
 authorization, configure the intended audience at the service boundary, and
@@ -255,14 +255,14 @@ See [release limitations](https://docs.grantex.dev/release-status#known-limitati
 | --- | ---: | ---: | --- |
 | TypeScript SDK | `@grantex/sdk` `0.8.1` | `0.8.1` | `npm install @grantex/sdk@0.8.1` |
 | x402 Payment Protocol | `@grantex/x402` `0.4.1` | `0.4.1` | `npm install @grantex/x402@0.4.1 @grantex/sdk@0.8.1` |
-| Python SDK | `grantex` `0.7.0` | - | `python -m pip install grantex==0.7.0` |
-| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.4.1` (Go 1.26.1+) | - | `go get github.com/mishrasanjeev/grantex-go@v0.4.1` |
+| Python SDK | `grantex` `0.7.1` | - | `python -m pip install grantex==0.7.1` |
+| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.4.2` (Go 1.26.1+) | - | `go get github.com/mishrasanjeev/grantex-go@v0.4.2` |
 | MCP Authorization Server | `@grantex/mcp-auth` `4.0.0` | `4.0.0` | `npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1` |
-| CLI | `@grantex/cli` `0.4.0` | `0.4.0` | `npm install -g @grantex/cli@0.4.0` |
-| Gateway | `@grantex/gateway` `0.2.0` | `0.2.0` | `npm install @grantex/gateway@0.2.0 @grantex/sdk@0.8.1` |
-| Service adapters | `@grantex/adapters` `0.2.0` | `0.2.0` | `npm install @grantex/adapters@0.2.0 @grantex/sdk@0.8.1` |
-| Strands TypeScript | `@grantex/strands` `0.2.0` | `0.2.0` | `npm install @grantex/strands@0.2.0 @grantex/sdk@0.8.1` |
-| Strands Python | `grantex-strands` `0.2.0` | `0.2.0` | `python -m pip install grantex-strands==0.2.0 grantex==0.7.0` |
+| CLI | `@grantex/cli` `0.4.1` | `0.4.1` | `npm install -g @grantex/cli@0.4.1` |
+| Gateway | `@grantex/gateway` `0.2.1` | `0.2.1` | `npm install @grantex/gateway@0.2.1 @grantex/sdk@0.8.1` |
+| Service adapters | `@grantex/adapters` `0.2.1` | `0.2.1` | `npm install @grantex/adapters@0.2.1 @grantex/sdk@0.8.1` |
+| Strands TypeScript | `@grantex/strands` `0.2.1` | `0.2.1` | `npm install @grantex/strands@0.2.1 @grantex/sdk@0.8.1` |
+| Strands Python | `grantex-strands` `0.2.1` | `0.2.1` | `python -m pip install grantex-strands==0.2.1 grantex==0.7.1` |
 
 Python registry hashes, public-file tests and normal pinned PyPI index
 installations are verified on the workstation and in Docker. See the
@@ -347,10 +347,10 @@ if (!auth.code) {
 ```
 
 ```bash
-python -m pip install grantex==0.7.0               # Python SDK
-go get github.com/mishrasanjeev/grantex-go@v0.4.1 # Go SDK (Go 1.26.1+)
+python -m pip install grantex==0.7.1               # Python SDK
+go get github.com/mishrasanjeev/grantex-go@v0.4.2 # Go SDK (Go 1.26.1+)
 npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1 # MCP endpoint evaluation
-npm install -g @grantex/cli@0.4.0                   # Optional CLI tooling
+npm install -g @grantex/cli@0.4.1                   # Optional CLI tooling
 ```
 
 ### Hermes, OpenClaw, and any agent CLI
@@ -358,7 +358,7 @@ npm install -g @grantex/cli@0.4.0                   # Optional CLI tooling
 Shell-capable agents use the same JSON-first CLI; no agent-specific SDK is required:
 
 ```bash
-npm install -g @grantex/cli@0.4.0
+npm install -g @grantex/cli@0.4.1
 grantex agent install --target openclaw  # writes ./skills
 grantex agent install --target hermes    # writes ~/.hermes/skills/grantex
 grantex agent install --target portable  # writes ./.agents/skills
@@ -751,7 +751,7 @@ Grantex supports passkey-based human presence verification using FIDO2/WebAuthn.
 ### SDK Usage
 
 Hosted enrollment is included in published `@grantex/sdk@0.8.1`,
-`grantex==0.7.0`, and `github.com/mishrasanjeev/grantex-go@v0.4.1`.
+`grantex==0.7.1`, and `github.com/mishrasanjeev/grantex-go@v0.4.2`.
 The Grantex-hosted service has `PASSKEY_ENROLLMENT_ENABLED=true` and uses
 `grantex.dev` as its WebAuthn RP ID; self-hosted operators must configure
 their own HTTPS origin and enable the flag. Publishing an SDK does not enable
@@ -1612,7 +1612,7 @@ curl -s -X POST http://localhost:3001/v1/token \
 
 **Developer portal** is available at [grantex.dev/dashboard](https://grantex.dev/dashboard) — sign up or enter an API key to manage agents, grants, policies, anomalies, compliance exports, and billing from the browser.
 
-**Account settings for live consent and irregularities:** The Billing page shows your account's actual plan. The source limits are 1,000 active grants on Free, 50,000 on Pro, and unlimited on Enterprise, counted across the developer account rather than per agent. Check the deployed account with authenticated `GET /v1/billing/subscription`; an agent ID alone cannot reveal its plan. The Irregularities page offers an account-wide `alert_only` response to findings from `POST /v1/anomalies/detect` when `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`. Without that server flag, the detector retains its existing agent-wide revocation of active grants on high/critical findings. Alert-only preserves alerts and does not bypass manual revocation or independent security gates. See the [setup guide](https://docs.grantex.dev/guides/anomaly-detection-setup). Server availability depends on deployment and rollout flags. TypeScript `@grantex/sdk@0.8.1`, Python `grantex==0.7.0`, and Go `v0.4.1` publish the new client methods.
+**Account settings for live consent and irregularities:** The Billing page shows your account's actual plan. The source limits are 1,000 active grants on Free, 50,000 on Pro, and unlimited on Enterprise, counted across the developer account rather than per agent. Check the deployed account with authenticated `GET /v1/billing/subscription`; an agent ID alone cannot reveal its plan. The Irregularities page offers an account-wide `alert_only` response to findings from `POST /v1/anomalies/detect` when `IRREGULARITY_RESPONSE_POLICY_ENABLED=true`. Without that server flag, the detector retains its existing agent-wide revocation of active grants on high/critical findings. Alert-only preserves alerts and does not bypass manual revocation or independent security gates. See the [setup guide](https://docs.grantex.dev/guides/anomaly-detection-setup). Server availability depends on deployment and rollout flags. TypeScript `@grantex/sdk@0.8.1`, Python `grantex==0.7.1`, and Go `v0.4.2` publish the new client methods.
 
 For local development, the auth service also serves a lightweight dashboard at `http://localhost:3001/dashboard`.
 
@@ -1679,9 +1679,9 @@ check its registry page and compatibility notes before choosing a version.
 | **Anthropic SDK** | `@grantex/anthropic` | `npm install @grantex/anthropic` | Published package |
 | **Vercel AI SDK** | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | Published package |
 | **TypeScript SDK** | `@grantex/sdk` (`0.8.1`) | `npm install @grantex/sdk@0.8.1` | Registry-verified published package |
-| **Python SDK** | `grantex` (`0.7.0`) | `python -m pip install grantex==0.7.0` | Registry-verified published package |
-| **Go SDK** | `grantex-go` (`v0.4.1`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.4.1` | Tag and public Go-proxy verified |
-| **CLI** | `@grantex/cli` (`0.4.0`) | `npm install -g @grantex/cli@0.4.0` | Registry-verified published package; Node.js 22.12+ |
+| **Python SDK** | `grantex` (`0.7.1`) | `python -m pip install grantex==0.7.1` | Registry-verified published package |
+| **Go SDK** | `grantex-go` (`v0.4.2`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.4.2` | Tag and public Go-proxy verified |
+| **CLI** | `@grantex/cli` (`0.4.1`) | `npm install -g @grantex/cli@0.4.1` | Registry-verified published package; Node.js 22.12+ |
 | **Hermes Agent** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target hermes` | Published in 0.3.0; no dedicated SDK needed |
 | **OpenClaw** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target openclaw` | Published in 0.3.0; no dedicated SDK needed |
 | **Portable Agent Skills** | `@grantex/cli` 0.3.0+ + `SKILL.md` | `grantex agent install --target portable` | Published in 0.3.0 |
