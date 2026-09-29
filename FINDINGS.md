@@ -1829,6 +1829,89 @@ the pull request that references it.
   Exit criterion: a debit outside `amount_range`, or an allocation above
   `budget`, is refused in a Postgres integration test.
 
+## G-135 — PRD Appendix C has no code for a bad grant, a revoked grant or a transaction outside the grant
+
+- **Found:** building the Python relying-party verifier
+  (`packages/verifier-py`), 2026-09-28.
+- **What:** Appendix C lists codes for the Agent Passport, the attestation,
+  the issuer, the key, the audience, the request signature and staleness,
+  but none for a grant token that does not verify (bad signature, expired,
+  another issuer), a grant that has been revoked, or a transaction outside
+  the grant's commerce constraints (amount, currency, window).
+- **Impact:** a relying party has no Appendix C code to refuse with. The
+  verifier uses the codes the grantex SDKs' `enforce()` already returns
+  (`token_invalid`, `grant_revoked`, `cap_exceeded`) and maps a merchant
+  outside `allowed_merchants` to `audience_mismatch`
+  (`spec/verification.md` section 7.4); another implementation could choose
+  differently.
+- **Proposal:** add these codes to Appendix C (or confirm the SDK codes as
+  the Appendix C codes for them) and keep `spec/verification.md` section
+  7.4 in step. Owner: protocol maintainers. Exit criterion: every code the
+  verifier returns is listed in Appendix C or in the SDK taxonomy the spec
+  cites.
+
+## G-136 — No grant carries the commerce constraints the verifier reads
+
+- **Found:** building the Python relying-party verifier, 2026-09-28.
+- **What:** `spec/verification.md` section 7.5 defines the `constraints`
+  member of the `urn:grantex:commerce:v1` entry (`amount_range`, `currency`,
+  `allowed_merchants`, `window`, `human_present`, `hitl_threshold_minor`),
+  which the verifier enforces. The auth service's passport binding
+  (`apps/auth-service/src/lib/registry/passport-binding.ts`) writes only
+  `passport` and `acceptance_status`, and per-merchant child grants, which
+  would issue the constraints, are not in this tree.
+- **Impact:** today every bound grant reads as unconstrained beyond its
+  scopes and budget; the constraint checks are exercised only by the
+  verifier's fixtures, and the issuing side could choose other member
+  names.
+- **Proposal:** when per-merchant child grants land, issue exactly the
+  members of section 7.5 (or change the section and the verifier together)
+  and add an end-to-end test that a grant the auth service issues passes
+  the verifier's constraint check. Owner: registry maintainers. Exit
+  criterion: a grant issued by the auth service carries `constraints` and a
+  test verifies it with `grantex-verifier`.
+
+## G-137 — ACP and AP2 renderers withheld until checked against the protocols' texts
+
+- **Found:** building the Python relying-party verifier
+  (`packages/verifier-py`), 2026-09-28.
+- **What:** PRD section 10 asks for a verified grant rendered as an ACP
+  delegated payment allowance and as AP2 mandates. Draft renderers were
+  written, but their member names were not checked against the protocols'
+  texts: the AP2 mandate object and member names were placeholders chosen in
+  the package, and the ACP names were not validated against the published
+  schemas, which are not in this repository. The renderers were withheld
+  from the package rather than ship invented protocol output; the package
+  has no rendering API.
+- **Impact:** a relying party maps a verified grant's limits to ACP or AP2
+  itself until the renderers ship.
+- **Proposal:** vendor the relevant published JSON schemas (with their
+  licences) under `spec/examples/`, cite the sections each member comes
+  from, and add the renderers back with tests that validate their output
+  against those schemas. Owner: payments integration maintainers. Exit
+  criterion: both renderings validate against the published schemas in
+  CI.
+
+## G-138 — The manifest cannot say whether an issuer is suspended at a given time
+
+- **Found:** building the Python relying-party verifier, 2026-09-28.
+- **What:** the manifest's issuer entry carries only the status in effect
+  when it was signed (`toPublicIssuer` in
+  `apps/auth-service/src/lib/registry/issuers.ts` leaves out
+  `suspended_effective_from`). A relying party checking a transaction at
+  another time than the manifest's `iat` (a scheduled suspension, or a
+  transaction dated earlier) cannot tell whether the issuer was suspended
+  then.
+- **Impact:** the verifier evaluates the issuer's status as of the manifest
+  (at most an hour old, `spec/verification.md` section 7.2 row 1), so a
+  suspension scheduled within the hour is seen only when the manifest is
+  re-signed.
+- **Proposal:** publish `suspended_effective_from` in the manifest's issuer
+  entries (additive) and evaluate it at the transaction time in the
+  verifier. Owner: registry maintainers. Exit criterion: a test where a
+  suspension scheduled after the manifest's `iat` refuses a transaction
+  dated after it.
+
 ## G-140 — `resumeSuspendedGrants` counts every resume as `cause="api"`
 
 - **Found:** adding the registry's status reconciliation, which resumes the

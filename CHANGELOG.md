@@ -103,6 +103,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Migration 126: `grant_passport_bindings.commerce_constraints` and
   `grant_child_tokens` (child `jti`, parent grant, `parent_jti`, merchant,
   constraints, expiry).
+### Relying-party verifier for Python (`grantex-verifier`, not published)
+- New package `packages/verifier-py` (`grantex-verifier` 0.1.0, not
+  published; `Private :: Do Not Upload`; Python 3.9+), built on the local
+  `grantex-agent-passport` and `grantex-agent-httpsig`. `verify(passport,
+  grant, request, tx, config=...)` reports fourteen named checks
+  (`issuer.accredited`, `passport.signature`, `passport.status`,
+  `attestation.registered`, `attestation.accepted`, `grant.signature`,
+  `grant.status`, `grant.audience`, `key.binding`, `key.status`,
+  `request.signature`, `level`, `constraints`, `budget.remaining`), each with
+  `ok`, `detail` and `cached_at`; the first that fails sets `denial_code`.
+  It also returns the registry's level and flags, an informational tier and
+  an evidence record (passport hash, attestation id, both status results and
+  the level at verification time).
+- Issuer keys come only from the signed registry manifest, verified with the
+  registry JWK Set the relying party configures, as `verifyRegistryManifest`
+  does. Both status sources are read (the issuer's Token Status List and the
+  registry's acceptance list), and the staleness matrix applies: registry
+  keys 24 hours, the manifest one hour, status lists their `ttl` and at most
+  five minutes (60 seconds above the HITL threshold or for a
+  human-not-present Tier A transaction), the revocation feed ten seconds
+  after its last heartbeat. Anything older, or unreadable, is
+  `status_stale`. Every document is read through an injected fetcher; the
+  grant's revocation through an injected online status client or the
+  revocation feed; the key's status through an injected registry lookup.
+- WSGI and ASGI middleware read the `Agent-Passport`, `Agent-Grant` and
+  signature headers (and presentations over 6 KB from the content), attach
+  the verifier decision and refuse with `401` (request signature), `503`
+  (`status_stale`) or `403` and the denial code; `reject=False` reports
+  only. The ASGI middleware verifies in the event loop's default executor,
+  so a slow fetcher or status client does not block the loop.
+- A grant's constraint window is judged by the verifier's clock, not by the
+  transaction time the agent supplies; a transaction time before the window
+  or later than the verifier's clock plus the allowed skew is refused
+  (`cap_exceeded`).
+- No payment-protocol rendering: ACP and AP2 renderers are withheld until
+  their member names can be checked against the protocols' texts (FINDINGS
+  G-137).
+- Specified in `spec/verification.md` section 7; the relying-party guide
+  `docs/relying-parties/verifying-agents.md` has a Python section whose
+  examples the package's tests run. Wired into `make check`, `make test` and
+  the Python integrations CI job (3.9 and 3.12). FINDINGS G-135 to G-138.
 ### MCP Auth 4.0.0 (Breaking)
 - Introspection requires authenticated confidential clients and checks current
   issuer authority by default. Evaluation-only opt-outs are
