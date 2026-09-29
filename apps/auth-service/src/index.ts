@@ -20,6 +20,10 @@ import {
   stopRegistryIssuerStatusRecheckWorker,
 } from './workers/registryIssuerStatusRecheck.js';
 import {
+  startRegistryStatusReconciliationWorker,
+  stopRegistryStatusReconciliationWorker,
+} from './workers/registryStatusReconciliation.js';
+import {
   startEventBridgeReceiptPruneWorker,
   stopEventBridgeReceiptPruneWorker,
 } from './workers/eventBridgeReceiptPrune.js';
@@ -117,7 +121,10 @@ async function main() {
   if (revocationFeedSettings().enabled) startRevocationFeedPruneWorker(sql);
   // Rereads issuers' status lists for accepted registry attestations before
   // each read goes stale; a stale read stops counting toward a trust level.
-  startRegistryIssuerStatusRecheckWorker(sql);
+  // With reconciliation on, its worker does that one fetch per list and
+  // also cascades to the acceptance lists and the bound grants.
+  if (config.registryStatusReconciliationEnabled) startRegistryStatusReconciliationWorker(sql);
+  else startRegistryIssuerStatusRecheckWorker(sql);
   if (config.commerceReconciliationWorkerEnabled) {
     startCommercePaymentReconciliationWorker(sql, {
       intervalMs: config.commerceReconciliationIntervalMs,
@@ -135,6 +142,7 @@ async function main() {
     stopRevocationFeedPruneWorker();
     stopCommercePaymentReconciliationWorker();
     stopRegistryIssuerStatusRecheckWorker();
+    stopRegistryStatusReconciliationWorker();
     await app.close();
     await closeRedis();
     await closeSql();

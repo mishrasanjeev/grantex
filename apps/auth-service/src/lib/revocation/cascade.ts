@@ -24,7 +24,11 @@ import type { TxSql } from '../../db/client.js';
 
 type Sql = ReturnType<typeof postgres>;
 
-export type RevocationCause = 'api' | 'event' | 'emergency_stop';
+/**
+ * `registry`: the Agent Trust Registry's status reconciliation acting on the
+ * grants bound to a passport (lib/registry/status-reconciliation.ts).
+ */
+export type RevocationCause = 'api' | 'event' | 'emergency_stop' | 'registry';
 export type GrantAction = 'revoke' | 'suspend';
 
 /** Longest delegation chain the cascade walks; a defence against bad parent data, not a policy. */
@@ -84,7 +88,11 @@ export const AUDIT_ACTIONS = {
 /** The evidence-package revocation vocabulary (`admin`, `api`, `cascade`, `event`, `expiry`). */
 function trigger(cause: RevocationCause, depth: number): string {
   if (depth > 0) return 'cascade';
-  return cause === 'emergency_stop' ? 'admin' : cause;
+  if (cause === 'emergency_stop') return 'admin';
+  // A flip on an issuer's status list, or an issuer's suspension, is an
+  // event from outside the developer's own calls.
+  if (cause === 'registry') return 'event';
+  return cause;
 }
 
 export async function cascadeGrantAction(sql: Sql, input: CascadeInput): Promise<CascadeOutcome> {

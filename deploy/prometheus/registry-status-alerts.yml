@@ -1,0 +1,66 @@
+# Prometheus alerting rules for registry status reconciliation
+# (spec/registry-federation.md, "Status reconciliation").
+# Load with `rule_files`, or wrap the group in a PrometheusRule for the Prometheus Operator.
+#
+# When an accredited issuer's status list cannot be read, nothing about its
+# passports changes, but once the last good read runs out every attestation on
+# the list stops counting and every grant bound to one of its passports refuses
+# to refresh with status_stale. What to do is in docs/runbooks/status-list-incident.md.
+groups:
+  - name: grantex-registry-status
+    rules:
+      - alert: GrantexRegistryStatusListStale
+        expr: max(grantex_registry_status_lists_stale) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: An issuer status list has been unreadable past its staleness
+          description: >-
+            The registry's last good read of at least one accredited issuer's status list has run
+            out. Its attestations no longer count toward trust levels, and bound grants refuse to
+            refresh with status_stale. Find the issuer in the auth service logs
+            (worker=registry-status-reconciliation) and follow the status list incident runbook.
+      - alert: GrantexRegistryStatusPollFailures
+        expr: sum by (reason) (increase(grantex_registry_status_list_poll_failures_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Issuer status list polls are failing ({{ $labels.reason }})"
+          description: >-
+            One or more issuer status lists could not be read. Nothing changes until a read
+            succeeds; if it keeps failing past the list's freshness, GrantexRegistryStatusListStale
+            follows.
+      - alert: GrantexRegistryStatusPollLagging
+        expr: max(grantex_registry_status_poll_lag_seconds) > 60
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Issuer status list polls are running late
+          description: >-
+            A list was read more than a minute after it was due. Revocations on issuer lists reach
+            the acceptance lists and bound grants late by as much. Check the database, the number of
+            lists (at most 200 are read per run) and slow issuers.
+      - alert: GrantexRegistryStatusMassFlip
+        expr: sum(increase(grantex_registry_status_flips_total[10m])) > 100
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 100 passport statuses flipped on issuer lists in ten minutes
+          description: >-
+            An issuer revoked or suspended many passports at once, or published a list it did not
+            mean to. Bound grants are being revoked or suspended in step. Confirm with the issuer
+            before anything else; see the status list incident runbook.
+      - alert: GrantexRegistryStatusReconcileFailing
+        expr: sum(increase(grantex_registry_status_reconcile_runs_total{outcome="failed"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: Registry status reconciliation runs are failing
+          description: >-
+            Runs are failing at a step (grantex_registry_status_reconcile_failures_total by step):
+            acceptance entries and bound grants may lag what issuers publish. Issuance and refresh
+            still fail closed on stale reads. Check the database and the auth service logs.
