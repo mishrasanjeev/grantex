@@ -6,6 +6,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Per-merchant child grants (auth service)
+- With `PASSPORT_BOUND_GRANTS_ENABLED=true`, `POST /v1/authorize` with a
+  `passport` takes `authorization_details` with one `urn:grantex:commerce:v1`
+  entry naming the merchants the grant is for: `allowed_merchants` (exact
+  https origins) and optional `amount_range` and `budget`. A malformed entry,
+  or the member without a passport, is refused `400
+  invalid_authorization_details`. The grant token's commerce entry carries
+  them after `acceptance_status`, at issuance and refresh. Off, the member is
+  ignored as before.
+- With the flag on, `GET /v1/consent/{id}` returns those constraints as
+  `commerceConstraints` (`allowedMerchants`, and `amountRange` and `budget`
+  when named) next to `agentPassport`, and the consent page shows the
+  merchants, the amount per payment and the total budget before the
+  Principal decides. Absent when the request named none, and with the flag
+  off.
+- With the flag on, `POST /v1/token` takes an RFC 8693 token exchange
+  (`grant_type=urn:ietf:params:oauth:grant-type:token-exchange`,
+  form-encoded or JSON) whose subject token is a passport-bound grant's
+  token, with a `DPoP` proof (RFC 9449) signed with the key the subject
+  token is bound to (`cnf.jkt`): `htm` `POST`, `htu` the token endpoint,
+  fresh, and not replayed. A missing, invalid, stale or replayed proof, or
+  one for another key, is refused `400 invalid_dpop_proof` with a `reason`,
+  before anything is written. It then issues a child grant for one merchant: `aud` the merchant
+  (`audience_mismatch` unless it is one of `allowed_merchants`), at most
+  900 s and never beyond the parent, the passport or its attestation, the
+  parent's `cnf.jkt`, passport reference, acceptance status and `act`,
+  `urn:grantex:grant.parent_jti`, a fresh `jti`, and constraints attenuated
+  to that merchant (wider requests are refused
+  `invalid_authorization_details`). Every exchange checks the binding again,
+  both status sources included. A child is a token of its parent grant:
+  revoking the grant revokes it, and a budget debit made with its grant id is
+  taken from the parent. Refusals are RFC 6749 §5.2 error responses, `400`
+  with the Appendix C code in `code` (`503` for `status_stale`). Off, a token
+  exchange is answered as before (`400`, and `415` for a form body). A child
+  exchange is counted in `grantex_token_exchange_total` (`status` `success`
+  or `failed`) and timed in `grantex_token_exchange_duration_seconds`, as a
+  code exchange is.
+- `POST /v1/tokens/revoke` also revokes, in the same transaction, the child
+  grants exchanged from the revoked token, including one whose exchange was
+  still committing (none exist until the flag issues one).
+- The refusal of `POST /v1/grants/delegate` for a passport-bound grant
+  (`403 PASSPORT_BOUND_DELEGATION_UNSUPPORTED`) covers its per-merchant
+  children too, since a child's grant id is its parent's.
+- Migration 126: `grant_passport_bindings.commerce_constraints` and
+  `grant_child_tokens` (child `jti`, parent grant, `parent_jti`, merchant,
+  constraints, expiry).
 ### Cross-language Authority Releases (2026-09-29)
 - Publish Python 0.7.1 and Go v0.4.2 with opt-in per-invocation issuer authority
   and trusted human/agent binding; offline defaults remain unchanged.

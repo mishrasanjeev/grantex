@@ -1787,6 +1787,48 @@ the pull request that references it.
   maintainers. Exit criterion: one row per variable (a check in
   `scripts/check-docs-integrity.mjs` could enforce it).
 
+## G-130 — A passport-bound grant cannot be delegated to a sub-agent, and with the flag off its delegation drops the binding
+
+- **Found:** building per-merchant child grants (PRD §8.5, §8.6), 2026-09-28.
+- **What:** PRD §8.6 has a sub-agent of a passport-bound grant bind its own
+  (the leaf agent's) Agent Passport, with the parent's binding carried in
+  `act.passport`. `POST /v1/grants/delegate` has no way to take the leaf
+  agent's passport, so with `PASSPORT_BOUND_GRANTS_ENABLED=true` it now
+  refuses a passport-bound parent, or a child of one
+  (`403 PASSPORT_BOUND_DELEGATION_UNSUPPORTED`), and the token exchange
+  refuses `actor_token`. With the flag off the route is unchanged: a
+  delegated grant of a bound parent is issued without any binding
+  (spec/passport-binding.md §5), so it outlives a revocation of the
+  passport and carries no `cnf.jkt` of the passport's key.
+- **Impact:** multi-agent commerce flows cannot use a bound grant yet; and a
+  deployment that turns the flag off after issuing bound grants lets them be
+  delegated into unbound ones.
+- **Proposal:** add the sub-agent's passport to the delegation request,
+  check it as `POST /v1/authorize` does, record a binding for the delegated
+  grant and put the parent's binding in `act.passport`; until then refuse
+  delegation of a grant with a `grant_passport_bindings` row whatever the
+  flag says. Owner: registry maintainers. Exit criterion: a delegated grant
+  of a bound parent is either bound to the leaf agent's passport or refused,
+  with the flag on or off.
+
+## G-131 — The commerce limits of a grant are carried but not enforced by the service
+
+- **Found:** building per-merchant child grants, 2026-09-28.
+- **What:** a passport-bound grant's `urn:grantex:commerce:v1` entry now
+  carries `amount_range` and `budget`, and a child grant carries them
+  attenuated. Nothing in the auth service compares an amount with them:
+  `POST /v1/budget/debit` checks only the allocation made through
+  `POST /v1/budget/allocate`, which is independent of the consented
+  `budget`, and no enforce path reads `amount_range`.
+- **Impact:** a relying party that does not read the entry itself can charge
+  outside the range the Principal consented to; an allocation larger than
+  the consented `budget` is accepted.
+- **Proposal:** refuse an allocation above the grant's consented `budget`
+  (same currency), and check a debit's amount against `amount_range` when
+  the grant carries one, behind a flag. Owner: auth-service maintainers.
+  Exit criterion: a debit outside `amount_range`, or an allocation above
+  `budget`, is refused in a Postgres integration test.
+
 ## G-135 — PRD Appendix C has no code for a bad grant, a revoked grant or a transaction outside the grant
 
 - **Found:** building the Python relying-party verifier
@@ -1869,4 +1911,3 @@ the pull request that references it.
   verifier. Owner: registry maintainers. Exit criterion: a test where a
   suspension scheduled after the manifest's `iat` refuses a transaction
   dated after it.
-

@@ -97,7 +97,8 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
 
     // PRD §8.6: a sub-agent of a passport-bound grant must bind its own
     // passport, with the parent's binding carried in act.passport. Until that
-    // exists, a passport-bound grant is not delegated: an unbound delegated
+    // exists, a passport-bound grant, or a per-merchant child of one (whose
+    // grnt is the parent grant's id), is not delegated: an unbound delegated
     // grant would escape the binding and its rechecks (spec/passport-binding.md
     // §5). Read only with the flag on, so nothing changes with it off.
     if (config.passportBoundGrantsEnabled) {

@@ -24,8 +24,9 @@ checked, and how the grant is bound to it. Two rules frame it:
   token's `cnf.jkt` are the same key: their RFC 7638 SHA-256 thumbprints are
   equal.
 
-Normative references: RFC 9396 (Rich Authorization Requests) §2 and §9.1;
-RFC 9449 §6.1 (`cnf.jkt`); RFC 7638 §3; RFC 9901 §4 and §7.1;
+Normative references: RFC 9396 (Rich Authorization Requests) §2, §5, §6 and
+§9.1; RFC 8693 (Token Exchange) §2.1, §2.2 and §4.1; RFC 6749 §5.2 and
+Appendix B; RFC 6454 §6.2; RFC 9449 §6.1 (`cnf.jkt`); RFC 7638 §3; RFC 9901 §4 and §7.1;
 draft-ietf-oauth-sd-jwt-vc-19 §2.2.1 and §2.2.2.3;
 draft-ietf-oauth-status-list-21 §6.2 and §7.1.
 
@@ -127,6 +128,7 @@ request, so a refused passport is never `401`.
 `level_below_policy`, `audience_mismatch`, `request_signature_invalid` and
 `request_signature_stale` are not produced here: no trust-level policy applies
 at authorization in Phase 1, and the request is authenticated by the API key.
+`audience_mismatch` is the child grant exchange's (§8).
 
 Every step fails closed. A database or network error is an error (`500`), and
 an issuer list that cannot be read is `status_stale`, never a pass.
@@ -215,7 +217,8 @@ A passport-bound grant is not delegated in Phase 1. With the flag on,
 grant would carry no binding, so it would escape the rechecks above and outlive
 a revoked or suspended passport. PRD §8.6 delegation, where the sub-agent binds
 its own passport and the parent's binding is carried in `act.passport`, is
-later work.
+later work. With the flag off, a delegated grant does not inherit the binding
+(FINDINGS G-130). The refusal covers per-merchant children too (§8.6).
 
 ## 6. Consent
 
@@ -239,10 +242,285 @@ was checked; `verificationLevel` the issuer's level from the attestation,
 verbatim; `issuers` the passport's issuer and the issuers of the attestations
 the level counts; `declaredLimits` the attestation's.
 
+With the flag on, a request whose `authorization_details` named commerce
+constraints (§8.1) also returns them, next to `agentPassport`, as
+`commerceConstraints`, and the consent page shows them (the merchants, the
+amount per payment and the total budget) before the Principal decides:
+
+<!-- example: consent-commerce-constraints -->
+```json
+{
+  "allowedMerchants": ["https://merchant.example", "https://shop.merchant.example"],
+  "amountRange": { "currency": "EUR", "max": "250.00" },
+  "budget": { "amount": "500.00", "currency": "EUR" }
+}
+```
+
+`allowedMerchants` is always present; `amountRange` and `budget` only when
+the request named them. A request without commerce constraints, or any
+request with the flag off, has no `commerceConstraints`.
+
 ## 7. Configuration
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PASSPORT_BOUND_GRANTS_ENABLED` | `false` | `true` (exactly) reads `passport` on `POST /v1/authorize` as this annex describes. Any other value, or unset, ignores it. |
+| `PASSPORT_BOUND_GRANTS_ENABLED` | `false` | `true` (exactly) reads `passport` and `authorization_details` on `POST /v1/authorize` and takes the token exchange on `POST /v1/token` (§8), as this annex describes. Any other value, or unset, ignores them and answers a token exchange as before. |
 
 No new endpoint is added.
+
+## 8. Per-merchant child grants
+
+Status: PRD §8.5 and §8.6, Appendix B (child grant); owner decision 3.
+
+A bound grant may be for more than one merchant. Before it is used at one, it
+is exchanged (RFC 8693) for a **child grant** for that merchant alone: a
+short-lived token whose `aud` is the merchant, sender-constrained to the same
+key, bound to the same passport, and never wider than its parent.
+
+### 8.1 Naming the merchants
+
+With the flag on, `POST /v1/authorize` with a `passport` may carry
+`authorization_details` (RFC 9396 §2): an array with exactly one entry of type
+`urn:grantex:commerce:v1`:
+
+<!-- example: authorize-commerce-details -->
+```json
+[
+  {
+    "type": "urn:grantex:commerce:v1",
+    "allowed_merchants": ["https://merchant.example", "https://shop.merchant.example"],
+    "amount_range": { "currency": "EUR", "max": "250.00" },
+    "budget": { "amount": "500.00", "currency": "EUR" }
+  }
+]
+```
+
+| Member | Rule |
+|---|---|
+| `allowed_merchants` | Required. 1 to 50 distinct `https` origins, each exactly as it serializes (RFC 6454 §6.2): lower case, no path, no trailing slash, no default port. Decision 3: a child's `aud` must equal one of them. |
+| `amount_range` | Optional. `currency` (ISO 4217), `max` and an optional `min`: decimal strings with at most 6 decimals, `min` at most `max`. |
+| `budget` | Optional. `amount` (a decimal string) and `currency`: the most the grant may spend in all. |
+
+An entry of another type, a second entry, an unknown member (`passport` and
+`acceptance_status` included: the registry sets them) or a malformed value is
+refused `400 invalid_authorization_details` (RFC 9396 §5) before anything is
+read, and no request is recorded. With the flag on, `authorization_details`
+without a `passport` is refused the same way (`passport_required`): there
+would be no binding to carry it. With the flag off it is ignored, as every
+unknown member is.
+
+The constraints are kept with the binding
+(`grant_passport_bindings.commerce_constraints`, migration 126) and added to
+the grant token's `urn:grantex:commerce:v1` entry, after `acceptance_status`,
+at every issuance and refresh. A bound grant authorized without them names no
+merchant: it cannot be exchanged for a child (`audience_mismatch`).
+
+### 8.2 The exchange
+
+`POST /v1/token`, authenticated by the developer's API key, with the RFC 8693
+§2.1 parameters, form-encoded (RFC 6749 Appendix B) or as the members of a
+JSON object, and a `DPoP` header (RFC 9449 §4) proving possession of the key
+the parent is bound to. In a form body `authorization_details` is a JSON
+string; a JSON body may carry the array itself:
+
+<!-- example: exchange-request -->
+```json
+{
+  "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+  "subject_token": "<the parent grant token>",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "resource": "https://merchant.example",
+  "scope": "read",
+  "authorization_details": [
+    { "type": "urn:grantex:commerce:v1", "amount_range": { "currency": "EUR", "max": "20.00" } }
+  ]
+}
+```
+
+| Parameter | Rule |
+|---|---|
+| `grant_type` | `urn:ietf:params:oauth:grant-type:token-exchange`. |
+| `subject_token` | A token of a passport-bound grant of this developer, not itself a child. |
+| `subject_token_type` | `urn:ietf:params:oauth:token-type:access_token`. |
+| `resource`, `audience` | Together they name exactly one merchant (the same value may be given as both): an `https` origin as it serializes. Several distinct values, or a value that is not an origin, are `invalid_target` (RFC 8693 §2.1.1, §2.2.2). |
+| `requested_token_type` | Optional; `urn:ietf:params:oauth:token-type:access_token` when given. |
+| `scope` | Optional; a subset of the parent's scopes (`invalid_scope`, RFC 6749 §5.2). By default, the parent's. |
+| `authorization_details` | Optional; one `urn:grantex:commerce:v1` entry asking for narrower constraints (RFC 9396 §6). |
+| `actor_token`, `actor_token_type` | Not accepted (`invalid_request`): a child is for the same agent; see §8.6. |
+
+| Header | Rule |
+|---|---|
+| `DPoP` | Required. One DPoP proof JWT (RFC 9449 §4.2): `typ` `dpop+jwt`, an asymmetric `alg`, the public `jwk` in its header; `htm` `POST`; `htu` this endpoint, `<PUBLIC_BASE_URL>/v1/token`; `iat` within the last 300 seconds (30 seconds of clock skew); a `jti` not used before with the same key (the registry records it for 330 seconds, §11.1). Its key's thumbprint (RFC 7638) must equal the subject token's `cnf.jkt`, which is the passport's key. |
+
+The API key says which developer asks; the proof says the agent holding the
+passport's key asks. Neither the developer's credential nor a copy of the
+parent token is enough without the other.
+
+A form body is taken on this route only for the token exchange, and only with
+the flag on; a form-encoded code exchange is `415`, as before. With the flag
+off a token exchange is answered as a code exchange without a code (`400
+BAD_REQUEST`), and a form body `415`, exactly as before.
+
+The registry then, in this order:
+
+1. verifies the DPoP proof: present, well formed, signed, for `POST` at this
+   endpoint, fresh, and not replayed (`invalid_dpop_proof`), before the
+   subject token is read;
+2. verifies the subject token and its developer, and that neither it nor its
+   grant is revoked or expired (`invalid_request`), and that the proof's key
+   is the one its `cnf.jkt` names (`invalid_dpop_proof`);
+3. requires the grant to be passport-bound, and the subject token not to be a
+   child (`invalid_request`), and the proof's key to be the binding's;
+4. applies an emergency stop's lockout (`ISSUANCE_FROZEN`);
+5. checks the binding again exactly as the code exchange and the refresh do
+   (§5), both status sources included, and refuses with that table's codes
+   when the passport, its attestation or its issuer is revoked, suspended or
+   expired, or the key is no longer usable;
+6. requires the merchant to equal one of the parent's `allowed_merchants`
+   (`audience_mismatch`, decision 3);
+7. attenuates the constraints (§8.3) and the scope.
+
+Nothing is recorded for a refused request. A refused proof is answered
+before the subject token is read; a replayed proof is refused even when the
+first request that carried it succeeded.
+
+Refusals are RFC 6749 §5.2 error responses (RFC 8693 §2.2.2), with
+`Cache-Control: no-store`, `error`, `error_description`, and `code` (the PRD
+Appendix C code where one applies, else `error`) and `reason`:
+
+| `code` | HTTP | `error` |
+|---|---|---|
+| `invalid_request` | 400 | `invalid_request` |
+| `invalid_target` | 400 | `invalid_target` |
+| `invalid_scope` | 400 | `invalid_scope` |
+| `invalid_authorization_details` | 400 | `invalid_authorization_details` |
+| `audience_mismatch` | 400 | `invalid_target` |
+| `invalid_dpop_proof` | 400 | `invalid_dpop_proof` |
+| a code of §5 | 400 | `invalid_request` |
+| `status_stale` | 503 | `invalid_request` |
+
+`invalid_dpop_proof` is RFC 9449 §5's error code for a token request whose
+proof is refused. Its `reason` says why: `dpop_proof_missing` (no `DPoP`
+header), `dpop_proof_invalid` (not a proof JWT, a bad signature, an
+unsupported `alg` or `jwk`, or a missing `jti` or `iat`),
+`dpop_htm_mismatch`, `dpop_htu_mismatch`, `dpop_proof_stale` (`iat` outside
+the window), `dpop_proof_replayed` (its `jti` was used before),
+`dpop_replay_unavailable` (the replay store cannot be reached: the request is
+refused rather than let through), or `dpop_key_mismatch` (the proof is not
+signed with the subject token's `cnf.jkt` key).
+
+Every refusal is `400`, as RFC 6749 §5.2 specifies for an error response
+unless otherwise stated, and not the `403` of §4: the token endpoint answers
+in OAuth's terms, and the Appendix C code in `code` carries the reason.
+`status_stale` is the exception, `503` as in §4: the request is not refused,
+the registry cannot answer it now, and a client retries.
+
+The response (RFC 8693 §2.2.1), `200`:
+
+<!-- example: exchange-response -->
+```json
+{
+  "access_token": "<the child grant token>",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "DPoP",
+  "expires_in": 900,
+  "scope": "read"
+}
+```
+
+`token_type` is `DPoP` because the child is sender-constrained by `cnf.jkt`
+(RFC 9449 §6.1). No refresh token is issued: a new child is exchanged from
+the parent.
+
+### 8.3 The child grant token
+
+| Claim | Value |
+|---|---|
+| `aud` | The merchant origin. |
+| `exp` | The earliest of: issuance + 900 seconds, the subject token's `exp`, the grant's expiry, the passport's `exp` and the attestation's `exp`. |
+| `jti` | Fresh. |
+| `cnf.jkt` | The parent's: the passport's key (key equality). |
+| `sub`, `client_id`, `urn:grantex:grant.agent_did` | The parent's. |
+| `urn:grantex:grant.grant_id` | The parent grant's id: a child is a token of its parent grant. |
+| `urn:grantex:grant.parent_jti` | The subject token's `jti`. |
+| `act` | The parent's, unchanged, when it has one (RFC 8693 §4.1): the same agent acts with the same key, so no actor is added. |
+| `scope` | The requested scope, else the parent's. |
+| `authorization_details` | The parent's tools entries for the child's scopes, then the `urn:grantex:commerce:v1` entry below. |
+
+The commerce entry keeps the parent's `passport` and `acceptance_status`, and
+attenuates its constraints. For the request above:
+
+<!-- example: child-commerce-detail -->
+```json
+{
+  "type": "urn:grantex:commerce:v1",
+  "passport": {
+    "issuer": "https://issuer.example",
+    "id": "att-01",
+    "hash": "sha-256:vDGKR0eipzfsrEgKMqXzI0NWGjZnjYVkBXW4Vf6PjcE",
+    "key_thumbprint": "gzr6dlS40bV-rn_SVrIuqv36jX1W6ZnTeGkVbXr-SgY"
+  },
+  "acceptance_status": {
+    "uri": "https://registry.example/status/attestations/racl_01J8Z3K4M5N6P7Q8R9S0T1V2W3",
+    "idx": 4127
+  },
+  "allowed_merchants": ["https://merchant.example"],
+  "amount_range": { "currency": "EUR", "max": "20.00" },
+  "budget": { "amount": "500.00", "currency": "EUR" }
+}
+```
+
+- `allowed_merchants` is exactly the merchant. A request that lists any other
+  is refused.
+- `amount_range` and `budget` are the parent's unless the request asks for
+  narrower ones: the same currency, a `max` (or `amount`) no higher, a `min`
+  no lower. A parent without a limit takes any limit the child asks for.
+- Anything wider is refused `invalid_authorization_details` (RFC 9396 §6: the
+  grant does not allow the requested authorization details). The Appendix C
+  code `attestation_mismatch` is not used: the request is wider than the
+  grant, not inconsistent with the attestation.
+
+### 8.4 Records and budget
+
+The child is recorded in `grant_tokens` against the parent grant, and in
+`grant_child_tokens` (migration 126): its `jti`, the parent grant, the
+subject token's `jti` (`parent_jti`), the merchant, its constraints and its
+expiry. A child creates no grant, so it does not count against the plan's
+active grants.
+
+Budget is the parent's. `POST /v1/budget/allocate` and `POST /v1/budget/debit`
+take a grant id; a relying party that debits at enforce time uses the token's
+`urn:grantex:grant.grant_id`, which for a child is the parent grant's, so the
+debit lands on the parent's allocation and every child of a grant draws on
+one balance. `budget` in the commerce entry is the limit the Principal
+consented to; the allocation is what is left of it. The service does not yet
+compare an allocation with `budget`, or a debit with `amount_range`: a
+relying party checks the amount it charges against the child's entry.
+
+### 8.5 Revocation
+
+- Revoking the parent grant (`DELETE /v1/grants/{id}`, a cascade, an
+  emergency stop) revokes every child with it: the children are its tokens,
+  and every check of a token reads its grant's status. New exchanges are
+  refused.
+- Revoking the subject token (`POST /v1/tokens/revoke`) revokes, in the same
+  transaction, every child exchanged from it (RFC 8693 §2.1 leaves propagating
+  revocation to the deployment). Revoking a child touches nothing else. An
+  exchange holds a share lock on the subject token's row until its child is
+  committed, so a revocation that arrives during an exchange waits for it,
+  and then revokes the children in a second statement whose snapshot includes
+  that child; an exchange that arrives after the revocation reads the token as
+  revoked and is refused.
+- When the passport, its attestation or its issuer is revoked or suspended,
+  new exchanges are refused (§8.2 step 4). Children already issued end within
+  900 seconds; revoking them at once is the registry cascade, a later
+  milestone, which finds them through the binding of their grant.
+
+### 8.6 Sub-agents
+
+PRD §8.6: a sub-agent of a passport-bound grant binds its own (the leaf
+agent's) passport, and the parent's binding travels in `act.passport`. That
+delegation is not implemented yet. Until it is, with the flag on,
+`POST /v1/grants/delegate` refuses a passport-bound grant, or a child of one,
+as the parent: `403 PASSPORT_BOUND_DELEGATION_UNSUPPORTED`, and nothing is
+written. The exchange refuses `actor_token` for the same reason.

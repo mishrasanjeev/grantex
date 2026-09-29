@@ -15,10 +15,23 @@ const DPOP_MAX_AGE_SECONDS = 300;
 const DPOP_CLOCK_SKEW_SECONDS = 30;
 const DPOP_REPLAY_TTL_SECONDS = DPOP_MAX_AGE_SECONDS + DPOP_CLOCK_SKEW_SECONDS;
 
+/** Why a DPoP proof was refused, for callers that report it. */
+export type DpopRefusalReason =
+  | 'dpop_proof_missing'
+  | 'dpop_proof_invalid'
+  | 'dpop_htm_mismatch'
+  | 'dpop_htu_mismatch'
+  | 'dpop_proof_stale'
+  | 'dpop_proof_replayed'
+  | 'dpop_replay_unavailable';
+
 export class DpopError extends Error {
-  constructor(message: string) {
+  readonly reason: DpopRefusalReason;
+
+  constructor(message: string, reason: DpopRefusalReason = 'dpop_proof_invalid') {
     super(message);
     this.name = 'DpopError';
+    this.reason = reason;
   }
 }
 
@@ -45,7 +58,7 @@ export async function verifyDpopProof(
   options: VerifyDpopOptions,
 ): Promise<VerifiedDpopProof> {
   if (typeof proof !== 'string' || proof.length === 0 || proof.length > 16_384) {
-    throw new DpopError('A DPoP proof is required');
+    throw new DpopError('A DPoP proof is required', 'dpop_proof_missing');
   }
 
   let header: ReturnType<typeof decodeProtectedHeader>;
@@ -85,10 +98,10 @@ export async function verifyDpopProof(
   }
 
   if (typeof payload.htm !== 'string' || payload.htm.toUpperCase() !== options.method.toUpperCase()) {
-    throw new DpopError('The DPoP proof HTTP method does not match this request');
+    throw new DpopError('The DPoP proof HTTP method does not match this request', 'dpop_htm_mismatch');
   }
   if (typeof payload.htu !== 'string' || payload.htu !== options.targetUri) {
-    throw new DpopError('The DPoP proof target URI does not match this endpoint');
+    throw new DpopError('The DPoP proof target URI does not match this endpoint', 'dpop_htu_mismatch');
   }
   if (typeof payload.jti !== 'string' || payload.jti.length < 16 || payload.jti.length > 256) {
     throw new DpopError('The DPoP proof jti is missing or invalid');
@@ -99,7 +112,7 @@ export async function verifyDpopProof(
 
   const now = Math.floor(Date.now() / 1000);
   if (payload.iat < now - DPOP_MAX_AGE_SECONDS || payload.iat > now + DPOP_CLOCK_SKEW_SECONDS) {
-    throw new DpopError('The DPoP proof is outside the accepted freshness window');
+    throw new DpopError('The DPoP proof is outside the accepted freshness window', 'dpop_proof_stale');
   }
 
   if (options.accessToken !== undefined) {
@@ -123,10 +136,10 @@ export async function verifyDpopProof(
         'NX',
       );
     } catch {
-      throw new DpopError('DPoP replay protection is temporarily unavailable');
+      throw new DpopError('DPoP replay protection is temporarily unavailable', 'dpop_replay_unavailable');
     }
     if (recorded !== 'OK') {
-      throw new DpopError('The DPoP proof has already been used');
+      throw new DpopError('The DPoP proof has already been used', 'dpop_proof_replayed');
     }
   }
 

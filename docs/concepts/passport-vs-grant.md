@@ -90,3 +90,49 @@ registry's last read of it is no longer fresh; if the issuer's list cannot be
 read, no token is issued (`status_stale`). Revoking grants that were
 already issued when that happens is the registry cascade, a later milestone;
 it finds them through the binding recorded for each grant.
+
+## One merchant at a time: child grants
+
+A Principal may let an agent shop at more than one merchant. The developer
+names them, as exact origins, in the authorization request's
+`authorization_details`, next to the passport:
+
+```json
+[
+  {
+    "type": "urn:grantex:commerce:v1",
+    "allowed_merchants": ["https://merchant.example", "https://shop.merchant.example"],
+    "amount_range": { "currency": "EUR", "max": "250.00" },
+    "budget": { "amount": "500.00", "currency": "EUR" }
+  }
+]
+```
+
+The grant token carries them in its commerce entry. It is not what the agent
+shows a merchant. Before it checks out at one, the agent's developer
+exchanges the grant token (RFC 8693 token exchange on `POST /v1/token`) for a
+**child grant** for that merchant alone. The request carries a `DPoP` proof
+(RFC 9449) signed with the passport's key, the parent's `cnf.jkt`: the
+developer's API key and a copy of the parent token are not enough.
+
+```json
+{
+  "grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+  "subject_token": "<the parent grant token>",
+  "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "resource": "https://merchant.example"
+}
+```
+
+The child's `aud` is the merchant, which must be one of `allowed_merchants`
+(else `audience_mismatch`). It lives at most 15 minutes, and never longer
+than its parent, the passport or the attestation. It keeps the parent's key
+(`cnf.jkt`), passport reference and acceptance status, and its limits are the
+parent's or narrower, never wider: its `allowed_merchants` is that one
+merchant. Each exchange checks the passport again, so none is issued once the
+passport, its attestation or its issuer is revoked or suspended.
+
+A child is a token of its parent grant: revoking the grant revokes every
+child, and a budget debit made with the child's grant id is taken from the
+parent's budget. A passport-bound grant is not delegated to a sub-agent yet;
+a sub-agent will bind its own passport.

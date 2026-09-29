@@ -241,6 +241,9 @@ f9058614edae929d3ca591405e9d46725aa2549f:spec/registry-federation.md:generic-api
 # Public example did:key identifier in the DID syntax test, feat/passport-bound-grants
 b02cb69a538d544a9f74995eea060c64365426c8:apps/auth-service/tests/passport-verify-did.test.ts:generic-api-key:21
 
+# Synthetic child-grant examples (a public key thumbprint), feat/per-merchant-child-grants
+aba24def493c875a77e4494eef4549fb741c3d6a:apps/auth-service/tests/child-grant-docs.test.ts:generic-api-key:41
+aba24def493c875a77e4494eef4549fb741c3d6a:spec/passport-binding.md:generic-api-key:408
 # Synthetic passport-binding examples (a public key thumbprint, the example did:key) in the #1481 squash commit
 39265b2569185124cf0799404e8e9b298121e938:apps/auth-service/tests/passport-verify-did.test.ts:generic-api-key:21
 39265b2569185124cf0799404e8e9b298121e938:apps/auth-service/tests/passport-binding-docs.test.ts:generic-api-key:45

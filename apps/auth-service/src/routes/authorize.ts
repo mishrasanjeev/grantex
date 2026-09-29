@@ -20,6 +20,11 @@ import {
   evaluatePassportForAuthorization,
   type PassportBinding,
 } from '../lib/registry/passport-binding.js';
+import {
+  ChildGrantError,
+  parseAuthorizeCommerceDetails,
+  type CommerceConstraints,
+} from '../lib/registry/child-grant.js';
 
 const AUTHORIZE_MAX_PER_MINUTE = 10;
 const AUTHORIZE_WINDOW_SECONDS = 60;
@@ -37,6 +42,12 @@ interface AuthorizeBody {
   purpose?: string;
   /** An Agent Passport SD-JWT; read only when PASSPORT_BOUND_GRANTS_ENABLED=true (spec/passport-binding.md). */
   passport?: unknown;
+  /**
+   * RFC 9396 authorization_details: one urn:grantex:commerce:v1 entry naming
+   * the merchants a passport-bound grant is for. Read only when
+   * PASSPORT_BOUND_GRANTS_ENABLED=true (spec/passport-binding.md §8.1).
+   */
+  authorization_details?: unknown;
 }
 
 function passportRefusal(err: PassportBindingError, requestId: string) {
@@ -151,6 +162,26 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
+    }
+
+    // Off, `authorization_details` is ignored like `passport`. On, it names
+    // the merchants of a passport-bound grant (decision 3), so without a
+    // passport it is refused rather than dropped: the caller asked for a
+    // constraint the grant would not carry.
+    let commerce: CommerceConstraints | null = null;
+    if (config.passportBoundGrantsEnabled && body.authorization_details !== undefined) {
+      try {
+        if (body.passport === undefined) {
+          throw new ChildGrantError('invalid_authorization_details', 'passport_required',
+            'authorization_details names the merchants of a passport-bound grant and requires a passport');
+        }
+        commerce = parseAuthorizeCommerceDetails(body.authorization_details);
+      } catch (err) {
+        if (err instanceof ChildGrantError) {
+          return reply.status(err.statusCode).send({ message: err.message, code: err.code, reason: err.reason, requestId: request.id });
+        }
+        throw err;
+      }
     }
 
     let passport: string | null = null;
@@ -282,6 +313,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     if (passport !== null) {
       try {
         binding = await evaluatePassportForAuthorization(sql, { passport, developerId, agentId, scopes });
+        if (commerce !== null) binding = { ...binding, commerce };
       } catch (err) {
         if (err instanceof PassportBindingError) return reply.status(err.statusCode).send(passportRefusal(err, request.id));
         throw err;
