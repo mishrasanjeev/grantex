@@ -144,7 +144,8 @@ describe('E2E: DPDP Consent Records', () => {
     expect(record.status).toBe('active');
     expect(record.consentNoticeHash).toBeDefined();
     expect(typeof record.consentNoticeHash).toBe('string');
-    expect(record.consentProof).toBeDefined();
+    expect(record.consentProof).toMatchObject({ type: 'JWS-EdDSA', alg: 'EdDSA' });
+    expect(record.consentNoticeVersion).toBe('2.0');
     expect(record.processingExpiresAt).toBeDefined();
     expect(record.retentionUntil).toBeDefined();
     expect(record.createdAt).toBeDefined();
@@ -195,7 +196,9 @@ describe('E2E: DPDP Consent Records', () => {
     expect(record).toHaveProperty('scopes');
     expect(record).toHaveProperty('status');
     expect(record).toHaveProperty('accessCount');
-    expect(record.accessCount).toBeGreaterThanOrEqual(1);
+    // A developer read is not the principal's access: nothing is counted.
+    expect(record.accessCount).toBe(0);
+    expect(record.lastAccessedAt).toBeNull();
   });
 
   it('withdraws consent', async () => {
@@ -215,7 +218,10 @@ describe('E2E: DPDP Consent Records', () => {
     expect(result.status).toBe('withdrawn');
     expect(result.withdrawnAt).toBeDefined();
     expect(result.grantRevoked).toBe(false);
-    expect(result.dataDeleted).toBe(true);
+    // Grantex holds none of the fiduciary's processed data: deletion is
+    // requested of the developer (dpdp.data_deletion.requested), not done.
+    expect(result.dataDeleted).toBe(false);
+    expect(result.dataDeletionRequested).toBe(true);
   });
 
   it('rejects double withdrawal', async () => {

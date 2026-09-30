@@ -1,5 +1,5 @@
 import { initTracing } from './lib/tracing.js';
-import { config, signingKeyConfigWarnings, validateConfig } from './config.js';
+import { config, ed25519ConfigWarnings, signingKeyConfigWarnings, validateConfig } from './config.js';
 import { grantTokenClaimsStartupNotices } from './lib/grant-token-claims.js';
 import { initKeys, initEdKey } from './lib/crypto.js';
 import { getSql } from './db/client.js';
@@ -35,6 +35,10 @@ import {
   startCommercePaymentReconciliationWorker,
   stopCommercePaymentReconciliationWorker,
 } from './workers/commercePaymentReconciliation.js';
+import {
+  startDpdpConsentExpiryWorker,
+  stopDpdpConsentExpiryWorker,
+} from './workers/dpdpConsentExpiry.js';
 import { closeSql } from './db/client.js';
 import { closeRedis } from './redis/client.js';
 
@@ -53,7 +57,11 @@ async function main() {
   // counted rather than discarded.
   reportMigrationSummary(await runMigrations(sql), 'startup');
 
-  for (const warning of [...signingKeyConfigWarnings(config), ...grantTokenClaimsStartupNotices(config)]) {
+  for (const warning of [
+    ...signingKeyConfigWarnings(config),
+    ...grantTokenClaimsStartupNotices(config),
+    ...ed25519ConfigWarnings(config, process.env['NODE_ENV']),
+  ]) {
     console.warn(`[config] Warning: ${warning}`);
   }
 
@@ -132,6 +140,11 @@ async function main() {
     });
   }
 
+  // Marks DPDP consent records past processing_expires_at expired (and, with
+  // DPDP_CONSENT_EXPIRY_REVOKES_GRANT=true, revokes their grants). Off unless
+  // DPDP_CONSENT_EXPIRY_ENABLED=true.
+  if (config.dpdpConsentExpiryEnabled) startDpdpConsentExpiryWorker(sql);
+
   // Graceful shutdown: stop workers, close server, then close DB/Redis connections
   const shutdown = async (signal: string) => {
     app.log.info(`Received ${signal}, shutting down gracefully...`);
@@ -141,6 +154,7 @@ async function main() {
     stopEventBridgeReceiptPruneWorker();
     stopRevocationFeedPruneWorker();
     stopCommercePaymentReconciliationWorker();
+    stopDpdpConsentExpiryWorker();
     stopRegistryIssuerStatusRecheckWorker();
     stopRegistryStatusReconciliationWorker();
     await app.close();

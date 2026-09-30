@@ -243,6 +243,21 @@ export const config = {
   // cascades at once. Off by default; off, the per-attestation recheck
   // worker runs as before and nothing is cascaded.
   get registryStatusReconciliationEnabled() { return process.env['REGISTRY_STATUS_RECONCILIATION_ENABLED'] === 'true'; },
+  // DPDP consent routes (routes/dpdp.ts). Each is off unless exactly 'true',
+  // and read at request time.
+  // A withdrawal without `revokeGrant` revokes the record's grant (and its
+  // delegated grants) as if `revokeGrant: true` had been sent: after a
+  // withdrawal the fiduciary must cease processing (DPDP Act s.6(6)). An
+  // explicit `revokeGrant: false` still leaves the grant alone.
+  get dpdpWithdrawalRevokesGrant() { return process.env['DPDP_WITHDRAWAL_REVOKES_GRANT'] === 'true'; },
+  // A consent record's dataPrincipalId must equal its grant's principal_id,
+  // or the record is refused with 400 PRINCIPAL_MISMATCH.
+  get dpdpEnforceGrantPrincipal() { return process.env['DPDP_ENFORCE_GRANT_PRINCIPAL'] === 'true'; },
+  // The consent expiry worker (workers/dpdpConsentExpiry.ts) marks active
+  // records past processing_expires_at 'expired'. Read at boot.
+  get dpdpConsentExpiryEnabled() { return process.env['DPDP_CONSENT_EXPIRY_ENABLED'] === 'true'; },
+  // With the worker on, an expired record's grant is revoked too.
+  get dpdpConsentExpiryRevokesGrant() { return process.env['DPDP_CONSENT_EXPIRY_REVOKES_GRANT'] === 'true'; },
   // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
   ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
   // CORS: comma-separated list of browser origins allowed to call the API
@@ -332,6 +347,28 @@ export function signingKeyConfigErrors(settings: SigningKeySettings, nodeEnv: st
     errors.push('SSO_STATE_SECRET is required in production when no RSA_PRIVATE_KEY, EC_PRIVATE_KEY or VAULT_ENCRYPTION_KEY is configured');
   }
   return errors;
+}
+
+/**
+ * Startup warnings for the Ed25519 key (ED25519_PRIVATE_KEY).
+ *
+ * Without it, each process generates its own Ed25519 key at boot. DPDP
+ * consent proofs and Ed25519 credentials signed by one instance then cannot be
+ * verified against the JWKS another instance, or the same one after a
+ * restart, publishes: the proof outlives the key that verifies it. A warning,
+ * not an error, so a deployment that has never set it still starts.
+ */
+export function ed25519ConfigWarnings(
+  settings: Pick<typeof config, 'ed25519PrivateKey'>,
+  nodeEnv: string | undefined,
+): string[] {
+  if (nodeEnv === 'production' && !settings.ed25519PrivateKey) {
+    return [
+      'ED25519_PRIVATE_KEY is not set: an Ed25519 key is generated per process, so DPDP consent proofs and '
+      + 'Ed25519 credentials signed before a restart, or by another instance, cannot be verified against the published JWKS',
+    ];
+  }
+  return [];
 }
 
 /** Startup warnings for signing-key settings that are valid but risky. */

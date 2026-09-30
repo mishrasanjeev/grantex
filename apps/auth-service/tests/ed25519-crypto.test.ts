@@ -81,6 +81,17 @@ describe('signWithEd25519', () => {
     expect(payload.exp).toBeDefined();
     expect(payload.iat).toBeDefined();
   });
+
+  it('signs without exp when expiresInSeconds is null (evidence such as a DPDP consent proof)', async () => {
+    const kp = getEdKeyPair()!;
+    const jwt = await signWithEd25519({ test: 'evidence' }, { expiresInSeconds: null });
+
+    const { payload, protectedHeader } = await jwtVerify(jwt, kp.publicKey, { algorithms: ['EdDSA'] });
+
+    expect(payload.exp).toBeUndefined();
+    expect(payload.iat).toBeDefined();
+    expect(protectedHeader.kid).toBe(kp.kid);
+  });
 });
 
 describe('initEdKey with PEM import', () => {

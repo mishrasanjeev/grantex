@@ -409,15 +409,29 @@ export function getEdKeyPair(): EdKeyPair | null {
   return _edKeyPair;
 }
 
-export async function signWithEd25519(payload: Record<string, unknown>): Promise<string> {
+export interface Ed25519SignOptions {
+  /**
+   * Lifetime in seconds; null signs without an `exp` claim. Default one hour.
+   * Evidence that must stay verifiable for as long as it is retained (a DPDP
+   * consent proof, DPDP Act s.6(10)) is signed without one.
+   */
+  expiresInSeconds?: number | null;
+}
+
+/** A compact JWS (RFC 7515 §7.1) over the payload, EdDSA with the Ed25519 key, `kid` in the header. */
+export async function signWithEd25519(
+  payload: Record<string, unknown>,
+  options: Ed25519SignOptions = {},
+): Promise<string> {
   if (!_edKeyPair) throw new Error('Ed25519 key not initialized — call initEdKey() first');
   const { privateKey, kid } = _edKeyPair;
-  return new SignJWT(payload)
+  const expiresInSeconds = options.expiresInSeconds === undefined ? 3600 : options.expiresInSeconds;
+  const jwt = new SignJWT(payload)
     .setProtectedHeader({ alg: 'EdDSA', kid })
     .setIssuer(config.jwtIssuer)
-    .setIssuedAt()
-    .setExpirationTime(Math.floor(Date.now() / 1000) + 3600)
-    .sign(privateKey);
+    .setIssuedAt();
+  if (expiresInSeconds !== null) jwt.setExpirationTime(Math.floor(Date.now() / 1000) + expiresInSeconds);
+  return jwt.sign(privateKey);
 }
 
 // ─── End Ed25519 ─────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   config,
+  ed25519ConfigWarnings,
   parseIntegerSetting,
   parsePolicyBackend,
   passkeyOriginConfigError,
@@ -9,6 +10,35 @@ import {
 } from '../src/config.js';
 
 describe('configuration parsing', () => {
+  it('warns in production when ED25519_PRIVATE_KEY is unset, since the key would be per process', () => {
+    expect(ed25519ConfigWarnings({ ed25519PrivateKey: null }, 'production')).toEqual([
+      expect.stringContaining('ED25519_PRIVATE_KEY is not set'),
+    ]);
+    expect(ed25519ConfigWarnings({ ed25519PrivateKey: 'placeholder-pem' }, 'production')).toEqual([]);
+    expect(ed25519ConfigWarnings({ ed25519PrivateKey: null }, 'development')).toEqual([]);
+  });
+  it('reads the DPDP flags at call time, on only for exactly true', () => {
+    const names = {
+      DPDP_WITHDRAWAL_REVOKES_GRANT: () => config.dpdpWithdrawalRevokesGrant,
+      DPDP_ENFORCE_GRANT_PRINCIPAL: () => config.dpdpEnforceGrantPrincipal,
+      DPDP_CONSENT_EXPIRY_ENABLED: () => config.dpdpConsentExpiryEnabled,
+      DPDP_CONSENT_EXPIRY_REVOKES_GRANT: () => config.dpdpConsentExpiryRevokesGrant,
+    };
+    for (const [name, read] of Object.entries(names)) {
+      const previous = process.env[name];
+      try {
+        delete process.env[name];
+        expect(read()).toBe(false);
+        process.env[name] = 'TRUE';
+        expect(read()).toBe(false);
+        process.env[name] = 'true';
+        expect(read()).toBe(true);
+      } finally {
+        if (previous === undefined) delete process.env[name];
+        else process.env[name] = previous;
+      }
+    }
+  });
   it('validates the hosted passkey origin and relying-party binding', () => {
     expect(passkeyOriginConfigError('https://grantex.dev', 'grantex.dev', true)).toBeNull();
     expect(passkeyOriginConfigError('https://login.example.com', 'example.com', true)).toBeNull();
