@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### DPDP consent notice content (auth service)
+- `POST /v1/dpdp/consent-notices` takes optional structured fields for DPDP
+  Act s.5 and DPDP Rules 2025 r.3: `itemisedPersonalData`, `purposeDetails`
+  (with `goodsOrServices`), `withdrawalUrl`, `rightsUrl`,
+  `boardComplaintUrl` and `contact` (s.8(9), r.9). The create response and
+  both notice reads gain a `validation` block listing which r.3 elements are
+  present or missing, and the reads return the new fields (`null` on older
+  notices).
+- New flag `DPDP_NOTICE_REQUIRE_RULE3` (off; exactly `true`): a notice missing
+  an element, or in a language other than English or an Eighth Schedule
+  language (ISO 639 codes, listed in the API reference), is refused with
+  `400 NOTICE_INCOMPLETE`.
+- One `noticeId` and `version` may now be registered once per `language`
+  (the unique key includes the language; `409 CONFLICT` is per language).
+  `POST /v1/dpdp/consent-records` takes an optional `consentNoticeLanguage`,
+  needed only when the chosen version exists in several languages
+  (`400 NOTICE_LANGUAGE_REQUIRED` otherwise); records return
+  `consentNoticeLanguage`.
+- Migration 129 adds the notice columns and the record's notice language
+  (backfilled from the matching notice), and replaces the unique index
+  `(developer_id, notice_id, version)` with one that includes `language`;
+  existing rows stay valid.
+
 ### DPDP breach register (auth service)
 - New routes to keep a register of personal data breaches (DPDP Act s.8(6);
   DPDP Rules 2025 r.7, in force from 13 May 2027):

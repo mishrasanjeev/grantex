@@ -790,6 +790,9 @@ components:
           items: { type: string }
         consentNoticeId: { type: string }
         consentNoticeVersion: { type: [string, "null"] }
+        consentNoticeLanguage:
+          type: [string, "null"]
+          description: The language of the notice version the consent was given against; null when not known (records from before migration 129 without a matching notice).
         status: { type: string, enum: [active, withdrawn, expired, erased] }
         consentGivenAt: { type: string, format: date-time }
         processingExpiresAt: { type: string, format: date-time }
@@ -802,6 +805,73 @@ components:
         withdrawnReason: { type: [string, "null"] }
         erasedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+
+    DpdpNoticeStructure:
+      type: object
+      description: >-
+        Structured notice content (DPDP Act s.5; DPDP Rules 2025 r.3). Each field is optional
+        and null when not given, including on notices created before these fields existed.
+      properties:
+        itemisedPersonalData:
+          type: [array, "null"]
+          maxItems: 100
+          items:
+            type: object
+            required: [category, description]
+            properties:
+              category: { type: string, maxLength: 128 }
+              description: { type: string, maxLength: 1000 }
+        purposeDetails:
+          type: [array, "null"]
+          maxItems: 50
+          description: One entry per specific purpose; each code must be one of the notice's purposes codes.
+          items:
+            type: object
+            required: [code, description, goodsOrServices]
+            properties:
+              code: { type: string, maxLength: 128 }
+              description: { type: string, maxLength: 1000 }
+              goodsOrServices: { type: string, maxLength: 1000, description: The goods, services or uses the purpose enables. }
+        withdrawalUrl: { type: [string, "null"], format: uri, maxLength: 2048, description: Where consent is withdrawn (http or https). }
+        rightsUrl: { type: [string, "null"], format: uri, maxLength: 2048, description: Where the principal exercises their rights. }
+        boardComplaintUrl: { type: [string, "null"], format: uri, maxLength: 2048, description: How to complain to the Data Protection Board. }
+        contact:
+          type: [object, "null"]
+          description: The Data Protection Officer or person able to answer questions (DPDP Act s.8(9); DPDP Rules 2025 r.9). Needs an email or a phone.
+          properties:
+            name: { type: string, maxLength: 128 }
+            designation: { type: string, maxLength: 128 }
+            email: { type: string, maxLength: 256 }
+            phone: { type: string, maxLength: 64 }
+            address: { type: string, maxLength: 1000 }
+
+    DpdpNoticeValidation:
+      type: object
+      description: >-
+        Which DPDP Rules 2025 r.3 elements the notice has. Informational unless
+        DPDP_NOTICE_REQUIRE_RULE3=true, which refuses a notice missing any of them.
+        Presence only: whether the text is clear is for the fiduciary's own review.
+      required: [basis, enforced, complete, present, missing, language]
+      properties:
+        basis: { type: string, enum: ["DPDP Rules 2025 r.3"] }
+        enforced: { type: boolean }
+        complete: { type: boolean }
+        present:
+          type: array
+          items: { $ref: "#/components/schemas/DpdpRule3Element" }
+        missing:
+          type: array
+          items: { $ref: "#/components/schemas/DpdpRule3Element" }
+        language:
+          type: object
+          properties:
+            tag: { type: string }
+            name: { type: [string, "null"], description: The language's English name when it is English or an Eighth Schedule language. }
+            englishOrEighthSchedule: { type: boolean }
+
+    DpdpRule3Element:
+      type: string
+      enum: [itemisedPersonalData, specificPurposes, withdrawalMeans, rightsMeans, boardComplaintMeans, language]
 
     DpdpConsentRecordPage:
       type: object
@@ -837,6 +907,7 @@ components:
         dataPrincipalId: { type: string }
         consentNoticeId: { type: string }
         consentNoticeVersion: { type: string }
+        consentNoticeLanguage: { type: string }
         consentNoticeHash: { type: string }
         consentProof: { $ref: "#/components/schemas/DpdpConsentProof" }
         processingExpiresAt: { type: string, format: date-time }
@@ -9196,6 +9267,12 @@ paths:
                   type: string
                   maxLength: 128
                   description: The notice version shown. Default, the latest version.
+                consentNoticeLanguage:
+                  type: string
+                  maxLength: 35
+                  description: >-
+                    The language of the notice shown. Required when the chosen version exists in
+                    more than one language (400 NOTICE_LANGUAGE_REQUIRED otherwise).
                 processingExpiresAt:
                   type: string
                   format: date-time
@@ -9207,7 +9284,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpConsentRecordCreated" }
         "400":
-          description: BAD_REQUEST, INVALID_GRANT (unknown, revoked, suspended or expired grant), PRINCIPAL_MISMATCH or INVALID_NOTICE
+          description: BAD_REQUEST, INVALID_GRANT (unknown, revoked, suspended or expired grant), PRINCIPAL_MISMATCH, INVALID_NOTICE (no such notice, version or language) or NOTICE_LANGUAGE_REQUIRED
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }
@@ -9372,15 +9449,18 @@ paths:
                   notices:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        id: { type: string }
-                        noticeId: { type: string }
-                        version: { type: string }
-                        language: { type: string }
-                        title: { type: string }
-                        contentHash: { type: string }
-                        createdAt: { type: string, format: date-time }
+                      allOf:
+                        - type: object
+                          properties:
+                            id: { type: string }
+                            noticeId: { type: string }
+                            version: { type: string }
+                            language: { type: string }
+                            title: { type: string }
+                            contentHash: { type: string }
+                            createdAt: { type: string, format: date-time }
+                            validation: { $ref: "#/components/schemas/DpdpNoticeValidation" }
+                        - $ref: "#/components/schemas/DpdpNoticeStructure"
                   nextCursor: { type: [string, "null"] }
         "400":
           description: Invalid limit or cursor
@@ -9410,8 +9490,48 @@ paths:
                   minItems: 1
                   maxItems: 50
                   items: { $ref: "#/components/schemas/DpdpPurpose" }
-                language: { type: string, default: en }
+                language:
+                  type: string
+                  default: en
+                  maxLength: 35
+                  description: >-
+                    A BCP 47 tag. With DPDP_NOTICE_REQUIRE_RULE3=true it must be English or an
+                    Eighth Schedule language by its ISO 639 code (see the consent notice content page).
                 dataFiduciaryContact: { type: string }
+                itemisedPersonalData:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [category, description]
+                    properties:
+                      category: { type: string, maxLength: 128 }
+                      description: { type: string, maxLength: 1000 }
+                purposeDetails:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  description: Each code must be one of the notice's purposes codes.
+                  items:
+                    type: object
+                    required: [code, description, goodsOrServices]
+                    properties:
+                      code: { type: string, maxLength: 128 }
+                      description: { type: string, maxLength: 1000 }
+                      goodsOrServices: { type: string, maxLength: 1000 }
+                withdrawalUrl: { type: string, format: uri, maxLength: 2048 }
+                rightsUrl: { type: string, format: uri, maxLength: 2048 }
+                boardComplaintUrl: { type: string, format: uri, maxLength: 2048 }
+                contact:
+                  type: object
+                  description: The DPO or contact person (DPDP Act s.8(9); DPDP Rules 2025 r.9). Needs an email or a phone.
+                  properties:
+                    name: { type: string, maxLength: 128 }
+                    designation: { type: string, maxLength: 128 }
+                    email: { type: string, maxLength: 256 }
+                    phone: { type: string, maxLength: 64 }
+                    address: { type: string, maxLength: 1000 }
                 grievanceOfficer:
                   type: object
                   required: [name, email]
@@ -9420,14 +9540,30 @@ paths:
                     email: { type: string }
                     phone: { type: string }
       responses:
-        "201": { description: Consent notice version created }
+        "201":
+          description: Consent notice version created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  noticeId: { type: string }
+                  version: { type: string }
+                  language: { type: string }
+                  contentHash: { type: string }
+                  createdAt: { type: string, format: date-time }
+                  validation: { $ref: "#/components/schemas/DpdpNoticeValidation" }
         "400":
-          description: Missing or malformed fields
+          description: >-
+            BAD_REQUEST (missing or malformed fields), or NOTICE_INCOMPLETE when
+            DPDP_NOTICE_REQUIRE_RULE3=true and an r.3 element is missing or the language is
+            not English or an Eighth Schedule language
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }
         "409":
-          description: This noticeId already has this version (unique violation only)
+          description: This noticeId already has this version in this language (unique violation only)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }
@@ -9457,20 +9593,23 @@ paths:
                   versions:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        id: { type: string }
-                        version: { type: string }
-                        language: { type: string }
-                        title: { type: string }
-                        content: { type: string }
-                        purposes:
-                          type: array
-                          items: { $ref: "#/components/schemas/DpdpPurpose" }
-                        dataFiduciaryContact: { type: [string, "null"] }
-                        grievanceOfficer: { type: [object, "null"] }
-                        contentHash: { type: string }
-                        createdAt: { type: string, format: date-time }
+                      allOf:
+                        - type: object
+                          properties:
+                            id: { type: string }
+                            version: { type: string }
+                            language: { type: string }
+                            title: { type: string }
+                            content: { type: string }
+                            purposes:
+                              type: array
+                              items: { $ref: "#/components/schemas/DpdpPurpose" }
+                            dataFiduciaryContact: { type: [string, "null"] }
+                            grievanceOfficer: { type: [object, "null"] }
+                            contentHash: { type: string }
+                            createdAt: { type: string, format: date-time }
+                            validation: { $ref: "#/components/schemas/DpdpNoticeValidation" }
+                        - $ref: "#/components/schemas/DpdpNoticeStructure"
         "404":
           description: Consent notice not found
           content:

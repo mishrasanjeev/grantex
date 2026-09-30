@@ -751,6 +751,7 @@
               "api-reference/dpdp/create-consent-notice",
               "api-reference/dpdp/list-consent-notices",
               "api-reference/dpdp/get-consent-notice",
+              "api-reference/dpdp/consent-notice-content",
               "api-reference/dpdp/file-grievance",
               "api-reference/dpdp/list-grievances",
               "api-reference/dpdp/get-grievance",

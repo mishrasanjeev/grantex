@@ -15,6 +15,7 @@ import { getEdKeyPair, signWithEd25519 } from '../lib/crypto.js';
 import { emitEvent } from '../lib/events.js';
 import { appendPlatformAuditEntries, lockAuditChain, type PlatformAuditEntry } from '../lib/audit-chain.js';
 import { publishGrantRevocation, revokeGrantInTx, type RevokedGrantTree } from '../lib/revoke.js';
+import { noticeValidation } from '../lib/dpdp-notice.js';
 
 // ── Limits ─────────────────────────────────────────────────────────────────
 
@@ -214,6 +215,7 @@ function consentRecordResponse(r: Record<string, unknown>) {
     scopes: r['scopes'],
     consentNoticeId: r['consent_notice_id'],
     consentNoticeVersion: r['consent_notice_version'] ?? null,
+    consentNoticeLanguage: r['consent_notice_language'] ?? null,
     status: r['status'],
     consentGivenAt: r['consent_given_at'],
     processingExpiresAt: r['processing_expires_at'],
@@ -302,9 +304,98 @@ function retainedAfterErasure(recordCount: number, grievanceCount: number): Arra
 
 const CONSENT_RECORD_COLUMNS = (sql: ReturnType<typeof getSql>) => sql`
   id, grant_id, data_principal_id, data_fiduciary_name, purposes, scopes,
-  consent_notice_id, consent_notice_version, status, consent_given_at,
+  consent_notice_id, consent_notice_version, consent_notice_language, status, consent_given_at,
   processing_expires_at, retention_until, access_count, last_accessed_at,
   withdrawn_at, withdrawn_reason, erased_at, created_at, created_at::text AS created_at_cursor`;
+
+// ── Notice structure (DPDP Act s.5; DPDP Rules 2025 r.3) ───────────────────
+
+const MAX_URL = 2_048;
+const MAX_NOTICE_ITEMS = 100;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function optionalHttpUrl(value: unknown, field: string): string | null {
+  const raw = optionalString(value, field, MAX_URL);
+  if (raw === undefined) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new InputError(`${field} must be an absolute http or https URL`);
+  }
+  if ((url.protocol !== 'https:' && url.protocol !== 'http:') || !url.hostname || url.username || url.password) {
+    throw new InputError(`${field} must be an absolute http or https URL`);
+  }
+  return raw;
+}
+
+function optionalItems<T>(value: unknown, field: string, max: number, parse: (item: Body, index: number) => T): T[] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value) || value.length === 0) throw new InputError(`${field} must be a non-empty array`);
+  if (value.length > max) throw new InputError(`${field} must have at most ${max} entries`);
+  return value.map((item, index) => {
+    if (!isPlainObject(item)) throw new InputError(`${field}[${index}] must be an object`);
+    return parse(item, index);
+  });
+}
+
+/** The optional structured notice fields; each is validated when present. */
+function parseNoticeStructure(body: Body, purposes: Purpose[]) {
+  const codes = new Set(purposes.map((p) => p.code));
+  const contact = body['contact'];
+  let parsedContact: Record<string, string> | null = null;
+  if (contact !== undefined && contact !== null) {
+    if (!isPlainObject(contact)) throw new InputError('contact must be an object { name?, designation?, email?, phone?, address? }');
+    const entry = {
+      name: optionalString(contact['name'], 'contact.name', MAX_CODE),
+      designation: optionalString(contact['designation'], 'contact.designation', MAX_CODE),
+      email: optionalString(contact['email'], 'contact.email', MAX_ID),
+      phone: optionalString(contact['phone'], 'contact.phone', 64),
+      address: optionalString(contact['address'], 'contact.address', MAX_SHORT_TEXT),
+    };
+    if (!entry.email && !entry.phone) throw new InputError('contact needs an email or a phone');
+    if (entry.email && !EMAIL.test(entry.email)) throw new InputError('contact.email must be an email address');
+    parsedContact = Object.fromEntries(Object.entries(entry).filter(([, v]) => v !== undefined)) as Record<string, string>;
+  }
+  return {
+    itemisedPersonalData: optionalItems(body['itemisedPersonalData'], 'itemisedPersonalData', MAX_NOTICE_ITEMS, (item, i) => ({
+      category: requireString(item['category'], `itemisedPersonalData[${i}].category`, MAX_CODE),
+      description: requireString(item['description'], `itemisedPersonalData[${i}].description`, MAX_SHORT_TEXT),
+    })),
+    purposeDetails: optionalItems(body['purposeDetails'], 'purposeDetails', MAX_PURPOSES, (item, i) => {
+      const code = requireString(item['code'], `purposeDetails[${i}].code`, MAX_CODE);
+      if (!codes.has(code)) throw new InputError(`purposeDetails[${i}].code must be one of the notice's purposes codes`);
+      return {
+        code,
+        description: requireString(item['description'], `purposeDetails[${i}].description`, MAX_SHORT_TEXT),
+        goodsOrServices: requireString(item['goodsOrServices'], `purposeDetails[${i}].goodsOrServices`, MAX_SHORT_TEXT),
+      };
+    }),
+    withdrawalUrl: optionalHttpUrl(body['withdrawalUrl'], 'withdrawalUrl'),
+    rightsUrl: optionalHttpUrl(body['rightsUrl'], 'rightsUrl'),
+    boardComplaintUrl: optionalHttpUrl(body['boardComplaintUrl'], 'boardComplaintUrl'),
+    contact: parsedContact,
+  };
+}
+
+const NOTICE_STRUCTURE_COLUMNS = (sql: ReturnType<typeof getSql>) => sql`
+  itemised_personal_data, purpose_details, withdrawal_url, rights_url, board_complaint_url, contact`;
+
+/** The structured fields of a stored notice, and the r.3 check over them as they are now. */
+function noticeStructureResponse(n: Record<string, unknown>) {
+  const structure = {
+    itemisedPersonalData: (n['itemised_personal_data'] as unknown[] | null) ?? null,
+    purposeDetails: (n['purpose_details'] as unknown[] | null) ?? null,
+    withdrawalUrl: (n['withdrawal_url'] as string | null) ?? null,
+    rightsUrl: (n['rights_url'] as string | null) ?? null,
+    boardComplaintUrl: (n['board_complaint_url'] as string | null) ?? null,
+    contact: (n['contact'] as Record<string, unknown> | null) ?? null,
+  };
+  return {
+    ...structure,
+    validation: noticeValidation({ ...structure, language: n['language'] as string }, { enforced: config.dpdpNoticeRequireRule3 }),
+  };
+}
 
 // ── Routes ─────────────────────────────────────────────────────────────────
 
@@ -322,11 +413,14 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         purposes: requirePurposes(body['purposes']),
         consentNoticeId: requireString(body['consentNoticeId'], 'consentNoticeId', MAX_ID),
         consentNoticeVersion: optionalString(body['consentNoticeVersion'], 'consentNoticeVersion', MAX_CODE),
+        consentNoticeLanguage: optionalString(body['consentNoticeLanguage'], 'consentNoticeLanguage', 35),
         processingExpiresAt,
       };
     });
     if (!input) return reply;
-    const { grantId, dataPrincipalId, purposes, consentNoticeId, consentNoticeVersion, processingExpiresAt } = input;
+    const {
+      grantId, dataPrincipalId, purposes, consentNoticeId, consentNoticeVersion, consentNoticeLanguage, processingExpiresAt,
+    } = input;
 
     const sql = getSql();
 
@@ -349,27 +443,45 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       return sendError(reply, request, 400, 'PRINCIPAL_MISMATCH', "dataPrincipalId must be the grant's principal");
     }
 
-    // The notice version shown to the principal: the pinned one, or the latest.
+    // The notice version shown to the principal: the pinned one, or the
+    // latest; in the language given. A version that exists in several
+    // languages needs consentNoticeLanguage, since each language is its own
+    // text with its own hash.
     const noticeRows = consentNoticeVersion !== undefined
       ? await sql`
-          SELECT id, version, content_hash FROM dpdp_consent_notices
+          SELECT id, version, language, content_hash FROM dpdp_consent_notices
           WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId} AND version = ${consentNoticeVersion}
+          ORDER BY created_at DESC, id DESC
         `
       : await sql`
-          SELECT id, version, content_hash FROM dpdp_consent_notices
+          SELECT id, version, language, content_hash FROM dpdp_consent_notices
           WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
+            AND version = (
+              SELECT version FROM dpdp_consent_notices
+              WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
+              ORDER BY created_at DESC, id DESC
+              LIMIT 1
+            )
           ORDER BY created_at DESC, id DESC
-          LIMIT 1
         `;
-    const notice = noticeRows[0];
+    const candidates = consentNoticeLanguage !== undefined
+      ? noticeRows.filter((row) => row['language'] === consentNoticeLanguage)
+      : noticeRows;
+    if (consentNoticeLanguage === undefined && candidates.length > 1) {
+      return sendError(reply, request, 400, 'NOTICE_LANGUAGE_REQUIRED',
+        `The notice version exists in several languages (${candidates.map((row) => row['language'] as string).join(', ')}); pass consentNoticeLanguage`);
+    }
+    const notice = candidates[0];
     if (!notice) {
       return sendError(reply, request, 400, 'INVALID_NOTICE',
-        consentNoticeVersion !== undefined ? 'Consent notice version not found' : 'Consent notice not found');
+        noticeRows.length > 0 ? 'Consent notice version not found in this language'
+          : consentNoticeVersion !== undefined ? 'Consent notice version not found' : 'Consent notice not found');
     }
 
     const id = newConsentRecordId();
     const consentNoticeHash = notice['content_hash'] as string;
     const noticeVersion = notice['version'] as string;
+    const noticeLanguage = (notice['language'] as string | undefined) ?? null;
     const scopes = grant['scopes'] as string[];
     // Default retention: 30 days after processing expires
     const retentionUntil = new Date(processingExpiresAt.getTime() + 30 * 86400_000);
@@ -413,13 +525,13 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
           id, developer_id, grant_id, data_principal_id,
           data_fiduciary_id, data_fiduciary_name,
           purposes, scopes, consent_notice_id, consent_notice_version, consent_notice_hash,
-          consent_given_at, processing_expires_at, retention_until, consent_proof
+          consent_given_at, processing_expires_at, retention_until, consent_proof, consent_notice_language
         )
         VALUES (
           ${id}, ${developerId}, ${grantId}, ${dataPrincipalId},
           ${developerId}, ${request.developer.name ?? 'Unknown'},
           ${json(tx, purposes)}, ${scopes}, ${consentNoticeId}, ${noticeVersion}, ${consentNoticeHash},
-          ${consentGivenAt}, ${processingExpiresAt}, ${retentionUntil}, ${json(tx, consentProof)}
+          ${consentGivenAt}, ${processingExpiresAt}, ${retentionUntil}, ${json(tx, consentProof)}, ${noticeLanguage}
         )
       `;
       await appendDpdpAudit(tx, developerId, [{
@@ -445,6 +557,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       dataPrincipalId,
       consentNoticeId,
       consentNoticeVersion: noticeVersion,
+      consentNoticeLanguage: noticeLanguage,
       consentNoticeHash,
       consentProof,
       processingExpiresAt: processingExpiresAt.toISOString(),
@@ -606,18 +719,29 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         requireString(grievanceOfficer['email'], 'grievanceOfficer.email', MAX_ID);
         optionalString(grievanceOfficer['phone'], 'grievanceOfficer.phone', 64);
       }
+      const purposes = requirePurposes(body['purposes']);
       return {
         noticeId: requireString(body['noticeId'], 'noticeId', MAX_ID),
         version: requireString(body['version'], 'version', MAX_CODE),
         title: requireString(body['title'], 'title', MAX_SHORT_TEXT),
         content: requireString(body['content'], 'content', MAX_NOTICE_CONTENT),
-        purposes: requirePurposes(body['purposes']),
+        purposes,
         language: optionalString(body['language'], 'language', 35) ?? 'en',
         dataFiduciaryContact: optionalString(body['dataFiduciaryContact'], 'dataFiduciaryContact', MAX_SHORT_TEXT) ?? null,
         grievanceOfficer: isPlainObject(grievanceOfficer) ? grievanceOfficer : null,
+        ...parseNoticeStructure(body, purposes),
       };
     });
     if (!input) return reply;
+
+    // DPDP Rules 2025 r.3: reported always, refused only under the flag.
+    const enforced = config.dpdpNoticeRequireRule3;
+    const validation = noticeValidation(input, { enforced });
+    if (enforced && !validation.complete) {
+      return sendError(reply, request, 400, 'NOTICE_INCOMPLETE',
+        `The notice is missing DPDP Rules 2025 r.3 elements: ${validation.missing.join(', ')}`
+        + (validation.language.englishOrEighthSchedule ? '' : ' (language must be English or an Eighth Schedule language, as an ISO 639 code)'));
+    }
 
     const sql = getSql();
     const id = newNoticeId();
@@ -630,25 +754,33 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         await tx`
           INSERT INTO dpdp_consent_notices (
             id, developer_id, notice_id, language, version, title, content,
-            purposes, data_fiduciary_contact, grievance_officer, content_hash, created_at
+            purposes, data_fiduciary_contact, grievance_officer, content_hash, created_at,
+            itemised_personal_data, purpose_details, withdrawal_url, rights_url, board_complaint_url, contact
           )
           VALUES (
             ${id}, ${developerId}, ${input.noticeId}, ${input.language}, ${input.version},
             ${input.title}, ${input.content}, ${json(tx, input.purposes)},
             ${input.dataFiduciaryContact}, ${input.grievanceOfficer ? json(tx, input.grievanceOfficer) : null},
-            ${contentHash}, ${createdAt}
+            ${contentHash}, ${createdAt},
+            ${input.itemisedPersonalData ? json(tx, input.itemisedPersonalData) : null},
+            ${input.purposeDetails ? json(tx, input.purposeDetails) : null},
+            ${input.withdrawalUrl}, ${input.rightsUrl}, ${input.boardComplaintUrl},
+            ${input.contact ? json(tx, input.contact) : null}
           )
         `;
         await appendDpdpAudit(tx, developerId, [{
           action: DPDP_AUDIT_ACTIONS.noticeCreated,
-          metadata: { notice_id: input.noticeId, version: input.version, content_hash: contentHash },
+          metadata: {
+            notice_id: input.noticeId, version: input.version, language: input.language, content_hash: contentHash,
+            rule3_missing: validation.missing,
+          },
         }]);
       });
     } catch (err) {
-      // Only the (developer, notice, version) unique index is a conflict;
-      // anything else is a real failure and propagates.
+      // Only the (developer, notice, version, language) unique index is a
+      // conflict; anything else is a real failure and propagates.
       if ((err as { code?: string }).code === '23505') {
-        return sendError(reply, request, 409, 'CONFLICT', 'Notice version already exists');
+        return sendError(reply, request, 409, 'CONFLICT', 'Notice version already exists in this language');
       }
       throw err;
     }
@@ -660,6 +792,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       language: input.language,
       contentHash,
       createdAt: createdAt.toISOString(),
+      validation,
     });
   });
 
@@ -670,7 +803,8 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
     if (!page) return reply;
     const sql = getSql();
     const rows = await sql`
-      SELECT id, notice_id, language, version, title, content_hash, created_at, created_at::text AS created_at_cursor
+      SELECT id, notice_id, language, version, title, content_hash, created_at, created_at::text AS created_at_cursor,
+             ${NOTICE_STRUCTURE_COLUMNS(sql)}
       FROM dpdp_consent_notices
       WHERE developer_id = ${developerId}
         ${page.cursor ? sql`AND (created_at, id) < (${page.cursor.t}::timestamptz, ${page.cursor.id})` : sql``}
@@ -686,6 +820,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         title: n['title'],
         contentHash: n['content_hash'],
         createdAt: n['created_at'],
+        ...noticeStructureResponse(n),
       })),
       nextCursor: nextCursor(rows, page.limit),
     });
@@ -697,7 +832,8 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
     const sql = getSql();
     const rows = await sql`
       SELECT id, notice_id, language, version, title, content, purposes,
-             data_fiduciary_contact, grievance_officer, content_hash, created_at
+             data_fiduciary_contact, grievance_officer, content_hash, created_at,
+             ${NOTICE_STRUCTURE_COLUMNS(sql)}
       FROM dpdp_consent_notices
       WHERE developer_id = ${developerId} AND notice_id = ${request.params.noticeId}
       ORDER BY created_at DESC, id DESC
@@ -716,6 +852,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         grievanceOfficer: n['grievance_officer'] ?? null,
         contentHash: n['content_hash'],
         createdAt: n['created_at'],
+        ...noticeStructureResponse(n),
       })),
     });
   });

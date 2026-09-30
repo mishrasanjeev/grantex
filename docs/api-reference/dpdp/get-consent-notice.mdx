@@ -73,6 +73,11 @@ curl https://api.grantex.dev/v1/dpdp/consent-notices/data-processing \
 | `contentHash` | `string` | SHA-256 hash of `content`; a consent record's `consentNoticeHash` matches the version it was given against |
 | `createdAt` | `string` | ISO-8601 creation timestamp |
 
+Each version also carries the structured fields (`itemisedPersonalData`,
+`purposeDetails`, `withdrawalUrl`, `rightsUrl`, `boardComplaintUrl`,
+`contact`; `null` when not given) and a `validation` block computed as of the
+read; see [Consent Notice Content](/api-reference/dpdp/consent-notice-content).
+
 ## Error Responses
 
 | Status | Code | Description |

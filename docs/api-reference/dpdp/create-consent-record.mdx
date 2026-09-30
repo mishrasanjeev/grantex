@@ -30,6 +30,7 @@ Requires a developer API key in the `Authorization` header.
 | `purposes` | `object[]` | Yes | Array of purpose objects (`{ code, description }`) |
 | `consentNoticeId` | `string` | Yes | ID of the consent notice shown to the principal |
 | `consentNoticeVersion` | `string` | No | The notice version shown to the principal. Default: the latest version of `consentNoticeId` |
+| `consentNoticeLanguage` | `string` | When the version exists in several languages | The language of the notice shown. Without it, a version registered in more than one language answers `400 NOTICE_LANGUAGE_REQUIRED` |
 | `processingExpiresAt` | `string` | Yes | ISO-8601 date-time, in the future, when data processing permission expires |
 
 The grant must be the developer's and active (not revoked, suspended or
@@ -103,6 +104,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-records \
 | `dataPrincipalId` | `string` | The data principal who gave consent |
 | `consentNoticeId` | `string` | The consent notice ID |
 | `consentNoticeVersion` | `string` | The notice version the record was given against |
+| `consentNoticeLanguage` | `string` | The language of that notice version |
 | `consentNoticeHash` | `string` | SHA-256 hash of that notice version's content |
 | `consentProof` | `object` | Signed proof of consent (see below) |
 | `processingExpiresAt` | `string` | ISO-8601 timestamp when processing permission expires |
@@ -135,7 +137,8 @@ The creation is recorded on the developer's audit chain as
 | 400 | `BAD_REQUEST` | Missing or malformed fields: `purposes` not a non-empty array of `{ code, description }`, `processingExpiresAt` not a future ISO-8601 date-time, a field over its length limit |
 | 400 | `INVALID_GRANT` | Grant not found, not owned by the developer, or not active (revoked, suspended or expired) |
 | 400 | `PRINCIPAL_MISMATCH` | `dataPrincipalId` is not the grant's principal (only with `DPDP_ENFORCE_GRANT_PRINCIPAL=true`) |
-| 400 | `INVALID_NOTICE` | Consent notice, or the pinned `consentNoticeVersion`, not found |
+| 400 | `INVALID_NOTICE` | Consent notice, the pinned `consentNoticeVersion`, or that version in `consentNoticeLanguage`, not found |
+| 400 | `NOTICE_LANGUAGE_REQUIRED` | The notice version exists in several languages and `consentNoticeLanguage` was not given |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
 | 503 | `CONSENT_PROOF_UNAVAILABLE` | The consent proof could not be signed; nothing was stored |
 

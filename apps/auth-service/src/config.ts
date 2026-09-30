@@ -258,6 +258,10 @@ export const config = {
   get dpdpConsentExpiryEnabled() { return process.env['DPDP_CONSENT_EXPIRY_ENABLED'] === 'true'; },
   // With the worker on, an expired record's grant is revoked too.
   get dpdpConsentExpiryRevokesGrant() { return process.env['DPDP_CONSENT_EXPIRY_REVOKES_GRANT'] === 'true'; },
+  // Refuse a consent notice missing a DPDP Rules 2025 r.3 element, or in a
+  // language other than English or an Eighth Schedule language
+  // (lib/dpdp-notice.ts). Off, the response only reports what is missing.
+  get dpdpNoticeRequireRule3() { return process.env['DPDP_NOTICE_REQUIRE_RULE3'] === 'true'; },
   // The breach deadline worker (workers/dpdpBreachDeadlines.ts) emits
   // dpdp.breach.board_report_due before and after the 72-hour Board deadline
   // of DPDP Rules 2025 r.7(2)(b). Off unless exactly 'true'.

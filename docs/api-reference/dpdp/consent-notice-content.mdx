@@ -1,0 +1,101 @@
+---
+title: "Consent Notice Content"
+sidebarTitle: "Consent Notice Content"
+description: "The structured fields of a DPDP consent notice, the r.3 validation block, and the languages a notice may use."
+---
+
+A consent notice ([Create Consent Notice](/api-reference/dpdp/create-consent-notice))
+can carry structured fields for what DPDP Rules 2025 r.3 asks a notice under
+DPDP Act 2023 s.5 to contain. Every notice response and read reports which of
+those elements are present in a `validation` block. These obligations apply
+from 13 May 2027 (Rules r.1).
+
+## What r.3 asks for
+
+A notice is to be understandable on its own and give an itemised description
+of the personal data, the specific purposes and the goods, services or uses
+they enable, and a link and means to withdraw consent (as easily as it was
+given), to exercise the principal's rights and to complain to the Data
+Protection Board, in English or a language of the Eighth Schedule to the
+Constitution.
+
+## Fields
+
+| Field | Element | Description |
+|---|---|---|
+| `itemisedPersonalData` | `itemisedPersonalData` | `[{ category, description }]`, one per item of personal data (up to 100) |
+| `purposeDetails` | `specificPurposes` | `[{ code, description, goodsOrServices }]`, one per specific purpose; each `code` must be one of the notice's `purposes` |
+| `withdrawalUrl` | `withdrawalMeans` | An http or https URL where consent is withdrawn |
+| `rightsUrl` | `rightsMeans` | Where the principal exercises their rights |
+| `boardComplaintUrl` | `boardComplaintMeans` | How to complain to the Board |
+| `language` | `language` | English or an Eighth Schedule language (below) |
+| `contact` | (not an r.3 element) | The Data Protection Officer or person able to answer questions (DPDP Act s.8(9); DPDP Rules 2025 r.9): `{ name?, designation?, email?, phone?, address? }` with an email or a phone |
+
+All are optional. Notices created before these fields existed return them as
+`null`.
+
+## The validation block
+
+```json
+{
+  "basis": "DPDP Rules 2025 r.3",
+  "enforced": false,
+  "complete": false,
+  "present": ["itemisedPersonalData", "specificPurposes", "language"],
+  "missing": ["withdrawalMeans", "rightsMeans", "boardComplaintMeans"],
+  "language": { "tag": "hi-IN", "name": "Hindi", "englishOrEighthSchedule": true }
+}
+```
+
+It checks that each element is present, not that the text is clear or
+accurate: it is evidence for the fiduciary's own review, not a verdict.
+
+By default the block is informational and a notice missing elements is still
+created. With `DPDP_NOTICE_REQUIRE_RULE3=true` (off by default), a notice
+missing any element, or in a language outside the list below, is refused with
+`400 NOTICE_INCOMPLETE` and `enforced` is `true`.
+
+## Languages
+
+`language` is a BCP 47 tag. For the `language` element, its primary subtag is
+compared with the ISO 639 codes below, case-insensitively, so `hi`, `hin` and
+`hi-IN` are all Hindi.
+
+| Language | ISO 639 codes accepted |
+|---|---|
+| English | `en`, `eng` |
+| Assamese | `as`, `asm` |
+| Bengali | `bn`, `ben` |
+| Bodo | `brx` |
+| Dogri | `doi` |
+| Gujarati | `gu`, `guj` |
+| Hindi | `hi`, `hin` |
+| Kannada | `kn`, `kan` |
+| Kashmiri | `ks`, `kas` |
+| Konkani | `kok`, `gom` |
+| Maithili | `mai` |
+| Malayalam | `ml`, `mal` |
+| Manipuri | `mni` |
+| Marathi | `mr`, `mar` |
+| Nepali | `ne`, `nep` |
+| Odia | `or`, `ori`, `ory` |
+| Punjabi | `pa`, `pan` |
+| Sanskrit | `sa`, `san` |
+| Santali | `sat` |
+| Sindhi | `sd`, `snd` |
+| Tamil | `ta`, `tam` |
+| Telugu | `te`, `tel` |
+| Urdu | `ur`, `urd` |
+
+## One version, several languages
+
+The same `noticeId` and `version` may be registered once per `language`, each
+with its own content and hash. A consent record against a version that exists
+in more than one language names the one shown in `consentNoticeLanguage`
+([Create Consent Record](/api-reference/dpdp/create-consent-record)); without
+it the request answers `400 NOTICE_LANGUAGE_REQUIRED`. A version in a single
+language needs no `consentNoticeLanguage`, as before.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
