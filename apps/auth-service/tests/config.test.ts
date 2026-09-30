@@ -23,6 +23,9 @@ describe('configuration parsing', () => {
       DPDP_ENFORCE_GRANT_PRINCIPAL: () => config.dpdpEnforceGrantPrincipal,
       DPDP_CONSENT_EXPIRY_ENABLED: () => config.dpdpConsentExpiryEnabled,
       DPDP_CONSENT_EXPIRY_REVOKES_GRANT: () => config.dpdpConsentExpiryRevokesGrant,
+      DPDP_REQUIRE_PERSISTENT_PROOF_KEY: () => config.dpdpRequirePersistentProofKey,
+      DPDP_REVOCATION_CASCADE: () => config.dpdpRevocationCascade,
+      DPDP_ERASURE_EXPANDED: () => config.dpdpErasureExpanded,
     };
     for (const [name, read] of Object.entries(names)) {
       const previous = process.env[name];

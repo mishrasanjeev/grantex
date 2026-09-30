@@ -122,7 +122,8 @@ filtered.)
 Creating an export is recorded on the audit chain as
 `grantex.dpdp.export_created`. Exports expire after 7 days; reading one after
 that answers `410 GONE` and its data is purged. An erasure of a principal
-deletes the stored exports about that principal.
+deletes the stored exports about that principal when the server sets
+`DPDP_ERASURE_EXPANDED=true`; otherwise they are kept until they expire.
 
 ## Export Types
 

@@ -1,7 +1,7 @@
 ---
 title: "Request Erasure"
 sidebarTitle: "Request Erasure"
-description: "Exercise the right to erasure for a data principal: revokes active grants, marks consent records erased, redacts grievances, deletes stored exports, and reports what is retained and why."
+description: "Exercise the right to erasure for a data principal: revokes active grants, marks consent records erased, and reports what is retained and why."
 ---
 
 ## Endpoint
@@ -46,13 +46,14 @@ creating another.
   "status": "completed",
   "recordsErased": 3,
   "grantsRevoked": 2,
-  "delegatedGrantsRevoked": 1,
-  "grievancesRedacted": 1,
-  "exportsDeleted": 1,
+  "delegatedGrantsRevoked": 0,
+  "grievancesRedacted": 0,
+  "exportsDeleted": 0,
   "retained": [
     { "category": "consent_records", "count": 3, "reason": "Kept and marked erased, not deleted: ..." },
     { "category": "audit_log", "reason": "Audit entries are neither modified nor deleted: ..." },
-    { "category": "grievances", "count": 1, "reason": "Kept as the record of grievance handling ..." },
+    { "category": "grievances", "count": 1, "reason": "Kept unchanged, description and evidence included, ... Expanded erasure is not enabled on this deployment (DPDP_ERASURE_EXPANDED), so they were not redacted." },
+    { "category": "stored_exports", "count": 1, "reason": "Stored compliance exports about the data principal are kept until they expire ... so they were not deleted." },
     { "category": "fiduciary_data", "reason": "Grantex holds no personal data the Data Fiduciary processed ..." }
   ],
   "submittedAt": "2026-04-05T14:00:00.000Z",
@@ -70,9 +71,9 @@ creating another.
 | `status` | `string` | Request status: `completed` |
 | `recordsErased` | `number` | Consent records this request marked erased |
 | `grantsRevoked` | `number` | The principal's grants this request revoked (only grants that were still active are counted) |
-| `delegatedGrantsRevoked` | `number` | Grants delegated from those, revoked in the same cascade |
-| `grievancesRedacted` | `number` | Grievances whose description and evidence were replaced by a fixed marker |
-| `exportsDeleted` | `number` | Stored exports deleted: those filtered to the principal and any whose data contains the principal id |
+| `delegatedGrantsRevoked` | `number` | Grants delegated from those, revoked in the same cascade; `0` unless the server sets `DPDP_REVOCATION_CASCADE=true` |
+| `grievancesRedacted` | `number` | Grievances whose description and evidence were replaced by a fixed marker; `0` unless the server sets `DPDP_ERASURE_EXPANDED=true` |
+| `exportsDeleted` | `number` | Stored exports deleted: those filtered to the principal and any whose data contains the principal id; `0` unless the server sets `DPDP_ERASURE_EXPANDED=true` |
 | `retained` | `object[]` | What was kept rather than erased, as `{ category, count?, reason }` |
 | `submittedAt` | `string` | ISO-8601 timestamp of the request |
 | `completedAt` | `string` | ISO-8601 timestamp the erasure completed |
@@ -82,17 +83,18 @@ creating another.
 
 In one transaction:
 
-1. The principal's active grants, and the grants delegated from them, are revoked through the grant cascade (credentials, wallet reservations, the revocation cache and `grant.revoked` events follow).
+1. The grants of the principal's consent records that are still active are revoked, with `revokedAt`, the revocation cache and a `grant.revoked` event each. By default only those grants are revoked, as this endpoint always did; with `DPDP_REVOCATION_CASCADE=true` the grants delegated from them, their credentials and wallet reservations are revoked through the grant cascade too.
 2. The principal's consent records are set to `status: 'erased'` with `erasedAt`; they are **retained**, not deleted.
-3. The principal's grievances keep their reference, type, status and dates; their description and evidence are replaced by a fixed marker.
-4. Stored exports filtered to the principal, or containing the principal id, are deleted.
+3. With `DPDP_ERASURE_EXPANDED=true` only: the principal's grievances keep their reference, type, status and dates, and their description and evidence are replaced by a fixed marker.
+4. With `DPDP_ERASURE_EXPANDED=true` only: stored exports filtered to the principal, or containing the principal id, are deleted.
 5. The request is stored and recorded on the audit chain as `grantex.dpdp.erasure_completed`, and a `dpdp.erasure.completed` event is emitted.
 
 What is retained, and why, is returned in `retained`:
 
 - **Consent records** are kept, marked erased, because the Data Fiduciary bears the burden of proving consent (DPDP Act s.6(10)) and DPDP Rules 2025 r.8(3) require processing logs and associated data to be retained for at least one year.
 - **Audit entries** are neither modified nor deleted: DPDP Rules 2025 r.6(1)(e) and r.8(3) require logs to be retained for at least one year, and the entries form a tamper-evident hash chain.
-- **Grievances** are kept, redacted, as the record of grievance handling.
+- **Grievances** are kept as the record of grievance handling: redacted with `DPDP_ERASURE_EXPANDED=true`, otherwise unchanged, and the reason says expanded erasure is not enabled.
+- **Stored exports** (`stored_exports`, only without `DPDP_ERASURE_EXPANDED=true`) about the principal are kept until they expire, seven days after creation, and the reason says expanded erasure is not enabled.
 - **The fiduciary's processed data** is not held by Grantex; erasing it in the fiduciary's own systems and its processors' (DPDP Act s.8(7)) is the fiduciary's step.
 
 These obligations apply from the commencement of the DPDP Rules' substantive provisions (13 May 2027); the endpoint behaves the same before then.

@@ -258,6 +258,21 @@ export const config = {
   get dpdpConsentExpiryEnabled() { return process.env['DPDP_CONSENT_EXPIRY_ENABLED'] === 'true'; },
   // With the worker on, an expired record's grant is revoked too.
   get dpdpConsentExpiryRevokesGrant() { return process.env['DPDP_CONSENT_EXPIRY_REVOKES_GRANT'] === 'true'; },
+  // Refuse to create a consent record (503 CONSENT_PROOF_KEY_NOT_PERSISTENT,
+  // nothing stored) while the Ed25519 key is ephemeral, i.e. generated in
+  // process because ED25519_PRIVATE_KEY is unset: its proof would not verify
+  // on another instance or after a restart.
+  get dpdpRequirePersistentProofKey() { return process.env['DPDP_REQUIRE_PERSISTENT_PROOF_KEY'] === 'true'; },
+  // A DPDP-triggered revocation (withdrawal with revokeGrant, erasure, and the
+  // expiry worker's DPDP_CONSENT_EXPIRY_REVOKES_GRANT) revokes the grant's
+  // delegated grants, wallet reservations and credentials too
+  // (lib/revoke.ts revokeGrantInTx). Off, only the record's own grant is
+  // revoked, as these routes always did.
+  get dpdpRevocationCascade() { return process.env['DPDP_REVOCATION_CASCADE'] === 'true'; },
+  // Erasure also replaces the principal's grievance description and evidence
+  // with a marker and deletes stored exports about the principal. Off, both
+  // are kept and the erasure's `retained` list says so.
+  get dpdpErasureExpanded() { return process.env['DPDP_ERASURE_EXPANDED'] === 'true'; },
   // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
   ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
   // CORS: comma-separated list of browser origins allowed to call the API

@@ -88,7 +88,7 @@ Every consent created through the DPDP module produces a `DPDPConsentRecord`:
 
 1. **Created:** `dpdp.createConsentRecord()` creates the consent record and the underlying Grantex grant. The consent notice is stored and the data principal receives the withdrawal URL.
 2. **Active:** The agent operates with the granted scopes. All actions are logged in the audit trail linked to this consent.
-3. **Withdrawn:** Your authenticated application calls the withdrawal API or SDK method. When the withdrawal asks for it (`revokeGrant: true`, the default when the server sets `DPDP_WITHDRAWAL_REVOKES_GRANT=true`), the grant is revoked and delegated grants are cascade-revoked; the withdrawal is logged. No separate DPDP end-user portal is included.
+3. **Withdrawn:** Your authenticated application calls the withdrawal API or SDK method. When the withdrawal asks for it (`revokeGrant: true`, the default when the server sets `DPDP_WITHDRAWAL_REVOKES_GRANT=true`), the grant is revoked (and, when the server sets `DPDP_REVOCATION_CASCADE=true`, the grants delegated from it are cascade-revoked); the withdrawal is logged. No separate DPDP end-user portal is included.
 4. **Expired:** The processing period (`processingExpiresAt`) lapses. With `DPDP_CONSENT_EXPIRY_ENABLED=true` the auth service marks the consent expired, and with `DPDP_CONSENT_EXPIRY_REVOKES_GRANT=true` it also revokes the grant; both are off by default. Processing history is retained for audit purposes.
 
 ## Creating Consent Records
@@ -218,7 +218,7 @@ await dpdp.withdrawConsent(consent.id);
 
 // After withdrawal:
 // - Grant token is revoked (< 1 second)
-// - All sub-agent delegations are cascade-revoked
+// - Sub-agent delegations are cascade-revoked when the server sets DPDP_REVOCATION_CASCADE=true
 // - Audit entry records the withdrawal
 // - Developer receives webhook notification
 ```
