@@ -67,6 +67,21 @@ describe('AgentForm', () => {
     expect(mockShow).toHaveBeenCalledWith('Agent created', 'success');
   });
 
+  it('creates an agent with multiple callback URIs', async () => {
+    mockCreateAgent.mockResolvedValueOnce({ agentId: 'new-id', name: 'Test' });
+    const user = userEvent.setup();
+    renderCreate();
+    await user.type(screen.getByLabelText('Name'), 'Test Agent');
+    await user.click(screen.getByRole('button', { name: 'Add callback URI' }));
+    await user.type(screen.getByLabelText('Callback 1'), 'https://client.example/first');
+    await user.click(screen.getByRole('button', { name: 'Add callback URI' }));
+    await user.type(screen.getByLabelText('Callback 2'), 'https://client.example/second');
+    await user.click(screen.getByRole('button', { name: 'Create Agent' }));
+    await waitFor(() => expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({
+      redirectUris: ['https://client.example/first', 'https://client.example/second'],
+    })));
+  });
+
   it('shows error toast on create failure', async () => {
     mockCreateAgent.mockRejectedValueOnce(new Error('fail'));
     const user = userEvent.setup();
@@ -79,16 +94,21 @@ describe('AgentForm', () => {
   it('loads agent data in edit mode', async () => {
     mockGetAgent.mockResolvedValueOnce({
       agentId: 'a1', name: 'Existing', description: 'Desc', scopes: ['read'],
+      redirectUris: ['https://client.example/callback'],
     });
     renderEdit();
     await waitFor(() => expect(screen.getByDisplayValue('Existing')).toBeInTheDocument());
     expect(screen.getByDisplayValue('Desc')).toBeInTheDocument();
     expect(screen.getByText('read')).toBeInTheDocument();
     expect(screen.getByText('Edit Agent')).toBeInTheDocument();
+    expect(screen.getByLabelText('Callback 1')).toHaveValue('https://client.example/callback');
   });
 
   it('updates agent in edit mode', async () => {
-    mockGetAgent.mockResolvedValueOnce({ agentId: 'a1', name: 'Old', description: '', scopes: [] });
+    mockGetAgent.mockResolvedValueOnce({
+      agentId: 'a1', name: 'Old', description: '', scopes: [],
+      redirectUris: ['https://client.example/unchanged'],
+    });
     mockUpdateAgent.mockResolvedValueOnce({ agentId: 'a1', name: 'New' });
     const user = userEvent.setup();
     renderEdit();
@@ -97,7 +117,53 @@ describe('AgentForm', () => {
     await user.type(screen.getByLabelText('Name'), 'New');
     await user.click(screen.getByRole('button', { name: 'Save Changes' }));
     await waitFor(() => expect(mockUpdateAgent).toHaveBeenCalled());
+    expect(mockUpdateAgent).toHaveBeenCalledWith('a1', expect.not.objectContaining({ redirectUris: expect.anything() }));
     expect(mockShow).toHaveBeenCalledWith('Agent updated', 'success');
+  });
+
+  it('replaces a callback URI on edit', async () => {
+    mockGetAgent.mockResolvedValueOnce({
+      agentId: 'a1', name: 'Existing', description: '', scopes: [],
+      redirectUris: ['https://client.example/old'],
+    });
+    mockUpdateAgent.mockResolvedValueOnce({ agentId: 'a1', name: 'Existing' });
+    const user = userEvent.setup();
+    renderEdit();
+    await waitFor(() => expect(screen.getByLabelText('Callback 1')).toHaveValue('https://client.example/old'));
+    await user.clear(screen.getByLabelText('Callback 1'));
+    await user.type(screen.getByLabelText('Callback 1'), 'https://client.example/new');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() => expect(mockUpdateAgent).toHaveBeenCalledWith('a1', expect.objectContaining({
+      redirectUris: ['https://client.example/new'],
+    })));
+
+  });
+
+  it('clears callback URIs on edit', async () => {
+    mockGetAgent.mockResolvedValueOnce({
+      agentId: 'a1', name: 'Existing', description: '', scopes: [],
+      redirectUris: ['https://client.example/old'],
+    });
+    mockUpdateAgent.mockResolvedValueOnce({ agentId: 'a1', name: 'Existing' });
+    const user = userEvent.setup();
+    renderEdit();
+    await waitFor(() => expect(screen.getByLabelText('Callback 1')).toHaveValue('https://client.example/old'));
+    await user.click(screen.getByRole('button', { name: 'Remove callback 1' }));
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+    await waitFor(() => expect(mockUpdateAgent).toHaveBeenLastCalledWith('a1', expect.objectContaining({ redirectUris: [] })));
+  });
+
+  it('rejects duplicate callback URIs before submission', async () => {
+    const user = userEvent.setup();
+    renderCreate();
+    await user.type(screen.getByLabelText('Name'), 'Test Agent');
+    await user.click(screen.getByRole('button', { name: 'Add callback URI' }));
+    await user.type(screen.getByLabelText('Callback 1'), 'https://client.example/callback');
+    await user.click(screen.getByRole('button', { name: 'Add callback URI' }));
+    await user.type(screen.getByLabelText('Callback 2'), 'https://client.example/callback');
+    await user.click(screen.getByRole('button', { name: 'Create Agent' }));
+    expect(mockShow).toHaveBeenCalledWith('Redirect URIs must be unique', 'error');
+    expect(mockCreateAgent).not.toHaveBeenCalled();
   });
 
   it('navigates back on agent not found in edit', async () => {

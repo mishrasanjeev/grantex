@@ -1917,6 +1917,7 @@ read_calendar = create_grantex_tool(
 grantex config set --url https://api.grantex.dev --key YOUR_API_KEY
 grantex me                                            # check identity
 grantex agents register --name "Bot" --description "..." --scopes email:read
+grantex agents update ag_... --redirect-uri https://client.example/grants/callback
 grantex authorize --agent ag_... --principal user@example.com --scopes email:read
 grantex tokens exchange --code <code> --agent-id ag_...
 grantex tokens verify <jwt>

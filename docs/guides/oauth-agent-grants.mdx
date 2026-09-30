@@ -69,6 +69,34 @@ requirement, and RFC 9207 issuer-response support before starting a flow.
 9. Present the access token using `Authorization: DPoP <token>` and a proof
    containing the matching `ath` claim.
 
+### Registering a callback on an existing agent
+
+You do not need to recreate an agent if it was registered without callbacks.
+In the dashboard, open the agent's **Edit** page and add its HTTPS callback
+under **Redirect URIs**. The same update is available through the developer
+API and the TypeScript SDK:
+
+```typescript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({
+  apiKey: process.env.GRANTEX_KEY!,
+  baseUrl: 'https://api.grantex.dev',
+});
+await grantex.agents.update(process.env.GRANTEX_AGENT_ID!, {
+  redirectUris: ['https://client.example/grants/callback'],
+});
+```
+
+The API is `PATCH /v1/agents/{agentId}` with a JSON `redirectUris` array.
+The CLI 0.4.2 command is
+`grantex agents update ag_... --redirect-uri https://client.example/grants/callback`.
+Repeat the option to register multiple callbacks. Updating `redirectUris`
+replaces the **entire** list; a name-only edit leaves it unchanged. The
+authorization request's `redirectUri` must match a registered value exactly,
+including the path and trailing slash. Production rejects insecure callback
+URLs, and an empty list does not permit a redirect callback.
+
 ## TypeScript client
 
 `@grantex/sdk@0.7.1` includes `OAuthAgentClient`, which handles discovery, PAR,
