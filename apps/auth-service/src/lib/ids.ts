@@ -50,6 +50,8 @@ export const newExportId = (): string => `exp_${ulid()}`;
 // entropy + monotonic time prefix) while still being short and copy-friendly.
 export const newGrievanceReference = (): string =>
   `GRV-${new Date().getUTCFullYear()}-${ulid()}`;
+export const newBreachId = (): string => `brch_${ulid()}`;
+export const newBreachIntimationId = (): string => `bint_${ulid()}`;
 export const newErasureRequestId = (): string =>
   `ER-${new Date().getUTCFullYear()}-${ulid()}`;
 export const newRegistryAgentId = (): string => `ragent_${ulid()}`;

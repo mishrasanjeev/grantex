@@ -39,6 +39,10 @@ import {
   startDpdpConsentExpiryWorker,
   stopDpdpConsentExpiryWorker,
 } from './workers/dpdpConsentExpiry.js';
+import {
+  startDpdpBreachDeadlineWorker,
+  stopDpdpBreachDeadlineWorker,
+} from './workers/dpdpBreachDeadlines.js';
 import { closeSql } from './db/client.js';
 import { closeRedis } from './redis/client.js';
 
@@ -144,6 +148,9 @@ async function main() {
   // DPDP_CONSENT_EXPIRY_REVOKES_GRANT=true, revokes their grants). Off unless
   // DPDP_CONSENT_EXPIRY_ENABLED=true.
   if (config.dpdpConsentExpiryEnabled) startDpdpConsentExpiryWorker(sql);
+  // Emits dpdp.breach.board_report_due before and after a recorded breach's
+  // 72-hour Board deadline. Off unless DPDP_BREACH_DEADLINE_ALERTS_ENABLED=true.
+  if (config.dpdpBreachDeadlineAlertsEnabled) startDpdpBreachDeadlineWorker(sql);
 
   // Graceful shutdown: stop workers, close server, then close DB/Redis connections
   const shutdown = async (signal: string) => {
@@ -155,6 +162,7 @@ async function main() {
     stopRevocationFeedPruneWorker();
     stopCommercePaymentReconciliationWorker();
     stopDpdpConsentExpiryWorker();
+    stopDpdpBreachDeadlineWorker();
     stopRegistryIssuerStatusRecheckWorker();
     stopRegistryStatusReconciliationWorker();
     await app.close();

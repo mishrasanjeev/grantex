@@ -790,6 +790,12 @@ components:
           items: { type: string }
         consentNoticeId: { type: string }
         consentNoticeVersion: { type: [string, "null"] }
+        consentNoticeLanguage:
+          type: [string, "null"]
+          description: The language of the notice version the consent was given against; null when not known (records from before migration 129 without a matching notice).
+        noticeHash:
+          type: [string, "null"]
+          description: The notice hash of the notice row the consent was given against (see the consent notice noticeHash), also signed into the proof; null for records created before it was kept.
         status: { type: string, enum: [active, withdrawn, expired, erased] }
         consentGivenAt: { type: string, format: date-time }
         processingExpiresAt: { type: string, format: date-time }
@@ -802,6 +808,73 @@ components:
         withdrawnReason: { type: [string, "null"] }
         erasedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
+
+    DpdpNoticeStructure:
+      type: object
+      description: >-
+        Structured notice content (DPDP Act s.5; DPDP Rules 2025 r.3). Each field is optional
+        and null when not given, including on notices created before these fields existed.
+      properties:
+        itemisedPersonalData:
+          type: [array, "null"]
+          maxItems: 100
+          items:
+            type: object
+            required: [category, description]
+            properties:
+              category: { type: string, maxLength: 128 }
+              description: { type: string, maxLength: 1000 }
+        purposeDetails:
+          type: [array, "null"]
+          maxItems: 50
+          description: One entry per specific purpose; each code must be one of the notice's purposes codes.
+          items:
+            type: object
+            required: [code, description, goodsOrServices]
+            properties:
+              code: { type: string, maxLength: 128 }
+              description: { type: string, maxLength: 1000 }
+              goodsOrServices: { type: string, maxLength: 1000, description: The goods, services or uses the purpose enables. }
+        withdrawalUrl: { type: [string, "null"], format: uri, maxLength: 2048, description: Where consent is withdrawn (http or https). }
+        rightsUrl: { type: [string, "null"], format: uri, maxLength: 2048, description: Where the principal exercises their rights. }
+        boardComplaintUrl: { type: [string, "null"], format: uri, maxLength: 2048, description: How to complain to the Data Protection Board. }
+        contact:
+          type: [object, "null"]
+          description: The Data Protection Officer or person able to answer questions (DPDP Act s.8(9); DPDP Rules 2025 r.9). Needs an email or a phone.
+          properties:
+            name: { type: string, maxLength: 128 }
+            designation: { type: string, maxLength: 128 }
+            email: { type: string, maxLength: 256 }
+            phone: { type: string, maxLength: 64 }
+            address: { type: string, maxLength: 1000 }
+
+    DpdpNoticeValidation:
+      type: object
+      description: >-
+        Which DPDP Rules 2025 r.3 elements the notice has. Informational unless
+        DPDP_NOTICE_REQUIRE_RULE3=true, which refuses a notice missing any of them.
+        Presence only: whether the text is clear is for the fiduciary's own review.
+      required: [basis, enforced, complete, present, missing, language]
+      properties:
+        basis: { type: string, enum: ["DPDP Rules 2025 r.3"] }
+        enforced: { type: boolean }
+        complete: { type: boolean }
+        present:
+          type: array
+          items: { $ref: "#/components/schemas/DpdpRule3Element" }
+        missing:
+          type: array
+          items: { $ref: "#/components/schemas/DpdpRule3Element" }
+        language:
+          type: object
+          properties:
+            tag: { type: string }
+            name: { type: [string, "null"], description: The language's English name when it is English or an Eighth Schedule language. }
+            englishOrEighthSchedule: { type: boolean }
+
+    DpdpRule3Element:
+      type: string
+      enum: [itemisedPersonalData, specificPurposes, withdrawalMeans, rightsMeans, boardComplaintMeans, language]
 
     DpdpConsentRecordPage:
       type: object
@@ -837,7 +910,12 @@ components:
             proof; ephemeral when the serving process generated its key at
             boot, in which case the proof is not verifiable across instances
             or restarts.
-        proofJwt: { type: string, description: No exp claim; the proof is kept as evidence. }
+        proofJwt:
+          type: string
+          description: >-
+            No exp claim; the proof is kept as evidence. Claims: recordId, grantId, dataPrincipalId,
+            consentNoticeId, consentNoticeVersion, consentNoticeHash (the content hash),
+            consentNoticeLanguage, noticeHash (the whole notice), purposes (codes) and consentGivenAt.
         jwksUri: { type: string, format: uri }
         signedAt: { type: string, format: date-time }
 
@@ -849,7 +927,14 @@ components:
         dataPrincipalId: { type: string }
         consentNoticeId: { type: string }
         consentNoticeVersion: { type: string }
-        consentNoticeHash: { type: string }
+        consentNoticeLanguage: { type: string, description: The language of the notice row bound. }
+        consentNoticeHash: { type: string, description: SHA-256 (hex) of the bound notice's content only. }
+        noticeHash:
+          type: string
+          description: >-
+            The bound notice's notice hash (the whole notice, see the consent notice noticeHash).
+            The proof's claims carry it as noticeHash, with consentNoticeLanguage, next to
+            consentNoticeHash.
         consentProof: { $ref: "#/components/schemas/DpdpConsentProof" }
         processingExpiresAt: { type: string, format: date-time }
         retentionUntil: { type: string, format: date-time }
@@ -878,18 +963,177 @@ components:
       type: object
       properties:
         exportId: { type: string }
-        type: { type: string, enum: [dpdp-audit, gdpr-article-15, eu-ai-act-conformance] }
+        type: { type: string, enum: [dpdp-audit, gdpr-article-15, eu-ai-act-evidence, eu-ai-act-conformance] }
         format: { type: string, enum: [json] }
         status: { type: string, enum: [complete] }
         recordCount: { type: integer }
         truncated:
           type: boolean
-          description: True when the audit log exceeded auditLogLimit and only the newest entries are included.
+          description: True when the audit log exceeded auditLogLimit and only the newest entries are included; for eu-ai-act-evidence, when any section left rows out; for gdpr-article-15 with dataPrincipalId, also when the grievances exceeded 1,000.
         auditLogLimit: { type: integer }
         dataPrincipalId: { type: [string, "null"] }
-        data: { type: object }
+        data:
+          type: object
+          description: >-
+            dpdp-audit, gdpr-article-15 and eu-ai-act-conformance carry consentRecords and auditLog
+            (and grievances for dpdp-audit). gdpr-article-15 with dataPrincipalId adds article15 and
+            the principal's own grievances filed in the period (grievances, up to 1,000, newest first,
+            with their description), counted in recordCount; if more exist, truncated is true.
+            eu-ai-act-evidence carries the DpdpEuAiActEvidence sections instead of the generic keys;
+            eu-ai-act-conformance adds them when not filtered to a principal.
+          properties:
+            exportType: { type: string }
+            article15: { $ref: "#/components/schemas/DpdpGdprArticle15" }
+            truncated: { type: boolean }
+          additionalProperties: true
         expiresAt: { type: string, format: date-time }
         createdAt: { type: string, format: date-time }
+
+    DpdpEuAiActEvidence:
+      type: object
+      description: >-
+        The sections of an eu-ai-act-evidence export (inside data), mapped to Regulation (EU)
+        2024/1689 as amended by Regulation (EU) 2026/1744. Evidence for the operator's own
+        assessment, not a conformity assessment or certification. Each section names its source
+        and whether it was truncated.
+      required: [applicability, disclaimer, art12RecordKeeping, art14HumanOversight, art26Deployer, art50Transparency, art73Incidents]
+      properties:
+        applicability:
+          type: object
+          properties:
+            regulation: { type: string }
+            art50TransparencyFrom: { type: string, format: date, enum: ["2026-08-02"] }
+            highRiskAnnexIIIFrom: { type: string, format: date, enum: ["2027-12-02"] }
+            highRiskAnnexIFrom: { type: string, format: date, enum: ["2028-08-02"] }
+            note: { type: string }
+        disclaimer: { type: string }
+        art12RecordKeeping:
+          type: object
+          properties:
+            article: { type: string }
+            source: { type: string }
+            eventCount: { type: integer }
+            firstEventAt: { type: [string, "null"], format: date-time }
+            lastEventAt: { type: [string, "null"], format: date-time }
+            chainIntegrity:
+              type: object
+              properties:
+                valid: { type: boolean }
+                checkedEntries: { type: integer }
+                firstBrokenAt: { type: [string, "null"] }
+                reason: { type: [string, "null"], enum: [link, content, null] }
+                complete: { type: boolean, description: False when more than verifiedLimit entries were in the period. }
+                verifiedLimit: { type: integer }
+                method: { type: string }
+            actions: { type: object, additionalProperties: { type: integer } }
+            events: { type: array, maxItems: 1000, items: { type: object } }
+            eventsLimit: { type: integer }
+            retention:
+              type: object
+              properties:
+                oldestRetainedEventAt: { type: [string, "null"], format: date-time }
+                retainedDays: { type: integer }
+                statement: { type: string }
+            truncated: { type: boolean }
+        art14HumanOversight:
+          type: object
+          properties:
+            article: { type: string }
+            sources: { type: array, items: { type: string } }
+            consentDecisions: { type: object }
+            decisionApprovals: { type: object }
+            paymentApprovals: { type: object }
+            revocations: { type: object }
+            emergencyStops: { type: object }
+            consentWithdrawals: { type: object }
+            truncated: { type: boolean }
+        art26Deployer:
+          type: object
+          properties:
+            article: { type: string }
+            source: { type: string }
+            agentCount: { type: integer }
+            grantCount: { type: integer }
+            agents:
+              type: array
+              maxItems: 500
+              items:
+                type: object
+                properties:
+                  agentId: { type: string }
+                  agentName: { type: [string, "null"] }
+                  agentDid: { type: [string, "null"] }
+                  grantsIssued: { type: integer }
+                  activeGrants: { type: integer }
+                  revokedGrants: { type: integer }
+                  scopes: { type: array, items: { type: string } }
+            truncated: { type: boolean }
+        art50Transparency:
+          type: object
+          properties:
+            article: { type: string }
+            applicableFrom: { type: string, format: date }
+            source: { type: string }
+            recorded: { type: boolean, description: Always false; nothing in Grantex records Art. 50 disclosures. }
+            statement: { type: string }
+            truncated: { type: boolean }
+        art73Incidents:
+          type: object
+          properties:
+            article: { type: string }
+            source: { type: string }
+            count: { type: integer }
+            items: { type: array, maxItems: 500, items: { type: object } }
+            note: { type: string }
+            truncated: { type: boolean }
+
+    DpdpGdprArticle15:
+      type: object
+      description: >-
+        GDPR Art. 15(1) information for one data subject, from the consent records (up to 1,000),
+        grants and agents Grantex holds for the developer.
+      properties:
+        basis: { type: string }
+        dataPrincipalId: { type: string }
+        scope: { type: string }
+        purposes:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              description: { type: string }
+              recordIds: { type: array, items: { type: string } }
+        grantPurposes: { type: array, items: { type: string } }
+        recipients:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [agent] }
+              agentId: { type: string }
+              agentName: { type: [string, "null"] }
+              agentDid: { type: [string, "null"] }
+              grantIds: { type: array, items: { type: string } }
+              scopes: { type: array, items: { type: string } }
+              audiences: { type: array, items: { type: string } }
+        recipientsNote: { type: string }
+        retention: { type: object }
+        source: { type: object }
+        grievances:
+          type: object
+          description: The grievances copy in data.grievances (the principal's, filed in the export period).
+          properties:
+            count: { type: integer }
+            limit: { type: integer }
+            truncated: { type: boolean }
+            statement: { type: string }
+        automatedDecisionMaking:
+          type: object
+          properties:
+            recorded: { type: boolean }
+            statement: { type: string }
+        truncated: { type: boolean, description: True when the block, or the grievances copy, left rows out. }
 
     DpdpErasureRequest:
       type: object
@@ -933,6 +1177,105 @@ components:
           format: date-time
           deprecated: true
           description: Equal to completedAt.
+
+    DpdpBreach:
+      type: object
+      description: >-
+        A personal data breach in the fiduciary's register (DPDP Act s.8(6);
+        DPDP Rules 2025 r.7). Grantex computes the deadlines and records what
+        the fiduciary says it sent; it does not intimate principals or file
+        with the Board.
+      required: [breachId, status, description, nature, extent, awareAt, affectedCount,
+                 boardDetailedReportDueAt, boardDetailedReportOverdue, principalIntimationRequired]
+      properties:
+        breachId: { type: string }
+        status: { type: string, enum: [open, initial_intimated, reported, closed] }
+        description: { type: string }
+        nature: { type: string }
+        extent: { type: string }
+        occurredAt: { type: [string, "null"], format: date-time }
+        awareAt: { type: string, format: date-time }
+        location: { type: [string, "null"] }
+        likelyImpact: { type: [string, "null"] }
+        affectedCount: { type: integer, minimum: 0 }
+        affectedDataPrincipalIds:
+          type: array
+          items: { type: string }
+          description: On the single-breach read and the create and update responses; not in the list.
+        mitigation: { type: [string, "null"] }
+        detailedReport: { $ref: "#/components/schemas/DpdpBreachDetailedReport" }
+        boardInitialIntimationRequired:
+          type: boolean
+          description: Always true; the initial intimation to the Board is due without delay (r.7(2)).
+        boardInitialIntimationSentAt: { type: [string, "null"], format: date-time }
+        boardDetailedReportDueAt:
+          type: string
+          format: date-time
+          description: awareAt + 72 hours (r.7(2)(b)), or extension.newDueAt once an extension is granted.
+        boardDetailedReportSentAt: { type: [string, "null"], format: date-time }
+        boardDetailedReportOverdue: { type: boolean, description: Not sent and past boardDetailedReportDueAt. }
+        boardDetailedReportLate: { type: boolean, description: Sent after boardDetailedReportDueAt. }
+        extension:
+          type: [object, "null"]
+          properties:
+            requestedAt: { type: [string, "null"], format: date-time }
+            granted: { type: [boolean, "null"], description: Null while the request is undecided. }
+            newDueAt: { type: [string, "null"], format: date-time }
+        principalIntimationRequired:
+          type: boolean
+          description: Always true; each affected Data Principal is to be intimated without delay (r.7(1)).
+        principalIntimation: { $ref: "#/components/schemas/DpdpBreachIntimationSummary" }
+        principalIntimations:
+          type: array
+          description: The newest 200 intimations, on GET /v1/dpdp/breaches/{breachId}.
+          items: { $ref: "#/components/schemas/DpdpBreachIntimation" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: [string, "null"], format: date-time }
+        closedAt: { type: [string, "null"], format: date-time }
+
+    DpdpBreachDetailedReport:
+      type: object
+      description: The detailed report to the Board (DPDP Rules 2025 r.7(2)(b)). All five are needed to move to reported.
+      properties:
+        updatedDetails: { type: [string, "null"], maxLength: 5000 }
+        factsCircumstancesReasons: { type: [string, "null"], maxLength: 5000 }
+        mitigation: { type: [string, "null"], maxLength: 5000 }
+        causeFindings: { type: [string, "null"], maxLength: 5000, description: Findings about the person who caused the breach. }
+        remedialMeasures: { type: [string, "null"], maxLength: 5000 }
+
+    DpdpBreachIntimationSummary:
+      type: object
+      properties:
+        due: { type: string, enum: [without_delay] }
+        intimatedCount: { type: integer, description: Distinct principals recorded as intimated. }
+        pendingCount:
+          type: [integer, "null"]
+          description: Listed affected principals not yet intimated; null when the breach recorded only a count.
+        lastIntimatedAt: { type: [string, "null"], format: date-time }
+
+    DpdpBreachIntimation:
+      type: object
+      properties:
+        intimationId: { type: string }
+        channel: { type: string }
+        intimatedAt: { type: string, format: date-time }
+        principalCount: { type: integer }
+        contentIncluded:
+          type: array
+          items: { $ref: "#/components/schemas/DpdpBreachIntimationContent" }
+        contentMissing:
+          type: array
+          items: { $ref: "#/components/schemas/DpdpBreachIntimationContent" }
+        createdAt: { type: string, format: date-time }
+
+    DpdpBreachIntimationContent:
+      type: string
+      description: >-
+        The r.7(1)(a)-(e) elements of an intimation to a Data Principal:
+        description (nature, extent, timing and location), likely
+        consequences, mitigation, safety measures the principal can take,
+        and contact information.
+      enum: [description, likely_consequences, mitigation, safety_measures, contact]
 
     PrepaidWallet:
       type: object
@@ -9126,6 +9469,16 @@ paths:
                   type: string
                   maxLength: 128
                   description: The notice version shown. Default, the latest version.
+                consentNoticeLanguage:
+                  type: string
+                  maxLength: 35
+                  description: >-
+                    The language of the notice shown. With it, the pinned version in this language,
+                    or without a pinned version the newest notice row in this language. Without it,
+                    the pinned version, or the version of the newest notice row in any language, and
+                    the newest row of that version is bound (its language is recorded). With
+                    DPDP_REQUIRE_NOTICE_LANGUAGE=true, a version in more than one language needs it
+                    (400 NOTICE_LANGUAGE_REQUIRED otherwise).
                 processingExpiresAt:
                   type: string
                   format: date-time
@@ -9137,7 +9490,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpConsentRecordCreated" }
         "400":
-          description: BAD_REQUEST, INVALID_GRANT (unknown, revoked, suspended or expired grant), PRINCIPAL_MISMATCH or INVALID_NOTICE
+          description: BAD_REQUEST, INVALID_GRANT (unknown, revoked, suspended or expired grant), PRINCIPAL_MISMATCH, INVALID_NOTICE (no such notice, version or language) or NOTICE_LANGUAGE_REQUIRED (only with DPDP_REQUIRE_NOTICE_LANGUAGE=true)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }
@@ -9309,15 +9662,26 @@ paths:
                   notices:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        id: { type: string }
-                        noticeId: { type: string }
-                        version: { type: string }
-                        language: { type: string }
-                        title: { type: string }
-                        contentHash: { type: string }
-                        createdAt: { type: string, format: date-time }
+                      allOf:
+                        - type: object
+                          properties:
+                            id: { type: string }
+                            noticeId: { type: string }
+                            version: { type: string }
+                            language: { type: string }
+                            title: { type: string }
+                            contentHash: { type: string, description: SHA-256 (hex) of content only. }
+                            noticeHash:
+                              type: string
+                              description: >-
+                                SHA-256 (hex) of the RFC 8785 canonical JSON of the whole notice: noticeId, version,
+                                language, title, content, purposes, dataFiduciaryContact, grievanceOfficer,
+                                itemisedPersonalData, purposeDetails, withdrawalUrl, rightsUrl, boardComplaintUrl
+                                and contact (absent members as null). Computed from the stored row for notices
+                                created before it was kept.
+                            createdAt: { type: string, format: date-time }
+                            validation: { $ref: "#/components/schemas/DpdpNoticeValidation" }
+                        - $ref: "#/components/schemas/DpdpNoticeStructure"
                   nextCursor: { type: [string, "null"] }
         "400":
           description: Invalid limit or cursor
@@ -9347,8 +9711,48 @@ paths:
                   minItems: 1
                   maxItems: 50
                   items: { $ref: "#/components/schemas/DpdpPurpose" }
-                language: { type: string, default: en }
+                language:
+                  type: string
+                  default: en
+                  maxLength: 35
+                  description: >-
+                    A BCP 47 tag. With DPDP_NOTICE_REQUIRE_RULE3=true it must be English or an
+                    Eighth Schedule language by its ISO 639 code (see the consent notice content page).
                 dataFiduciaryContact: { type: string }
+                itemisedPersonalData:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [category, description]
+                    properties:
+                      category: { type: string, maxLength: 128 }
+                      description: { type: string, maxLength: 1000 }
+                purposeDetails:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  description: Each code must be one of the notice's purposes codes.
+                  items:
+                    type: object
+                    required: [code, description, goodsOrServices]
+                    properties:
+                      code: { type: string, maxLength: 128 }
+                      description: { type: string, maxLength: 1000 }
+                      goodsOrServices: { type: string, maxLength: 1000 }
+                withdrawalUrl: { type: string, format: uri, maxLength: 2048 }
+                rightsUrl: { type: string, format: uri, maxLength: 2048 }
+                boardComplaintUrl: { type: string, format: uri, maxLength: 2048 }
+                contact:
+                  type: object
+                  description: The DPO or contact person (DPDP Act s.8(9); DPDP Rules 2025 r.9). Needs an email or a phone.
+                  properties:
+                    name: { type: string, maxLength: 128 }
+                    designation: { type: string, maxLength: 128 }
+                    email: { type: string, maxLength: 256 }
+                    phone: { type: string, maxLength: 64 }
+                    address: { type: string, maxLength: 1000 }
                 grievanceOfficer:
                   type: object
                   required: [name, email]
@@ -9357,14 +9761,38 @@ paths:
                     email: { type: string }
                     phone: { type: string }
       responses:
-        "201": { description: Consent notice version created }
+        "201":
+          description: Consent notice version created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  noticeId: { type: string }
+                  version: { type: string }
+                  language: { type: string }
+                  contentHash: { type: string, description: SHA-256 (hex) of content only. }
+                  noticeHash:
+                    type: string
+                    description: >-
+                      SHA-256 (hex) of the RFC 8785 canonical JSON of the whole notice: noticeId, version,
+                      language, title, content, purposes, dataFiduciaryContact, grievanceOfficer,
+                      itemisedPersonalData, purposeDetails, withdrawalUrl, rightsUrl, boardComplaintUrl
+                      and contact (absent members as null). Computed from the stored row for notices
+                      created before it was kept.
+                  createdAt: { type: string, format: date-time }
+                  validation: { $ref: "#/components/schemas/DpdpNoticeValidation" }
         "400":
-          description: Missing or malformed fields
+          description: >-
+            BAD_REQUEST (missing or malformed fields), or NOTICE_INCOMPLETE when
+            DPDP_NOTICE_REQUIRE_RULE3=true and an r.3 element is missing or the language is
+            not English or an Eighth Schedule language
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }
         "409":
-          description: This noticeId already has this version (unique violation only)
+          description: This noticeId already has this version in this language (unique violation only)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }
@@ -9394,20 +9822,31 @@ paths:
                   versions:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        id: { type: string }
-                        version: { type: string }
-                        language: { type: string }
-                        title: { type: string }
-                        content: { type: string }
-                        purposes:
-                          type: array
-                          items: { $ref: "#/components/schemas/DpdpPurpose" }
-                        dataFiduciaryContact: { type: [string, "null"] }
-                        grievanceOfficer: { type: [object, "null"] }
-                        contentHash: { type: string }
-                        createdAt: { type: string, format: date-time }
+                      allOf:
+                        - type: object
+                          properties:
+                            id: { type: string }
+                            version: { type: string }
+                            language: { type: string }
+                            title: { type: string }
+                            content: { type: string }
+                            purposes:
+                              type: array
+                              items: { $ref: "#/components/schemas/DpdpPurpose" }
+                            dataFiduciaryContact: { type: [string, "null"] }
+                            grievanceOfficer: { type: [object, "null"] }
+                            contentHash: { type: string, description: SHA-256 (hex) of content only. }
+                            noticeHash:
+                              type: string
+                              description: >-
+                                SHA-256 (hex) of the RFC 8785 canonical JSON of the whole notice: noticeId, version,
+                                language, title, content, purposes, dataFiduciaryContact, grievanceOfficer,
+                                itemisedPersonalData, purposeDetails, withdrawalUrl, rightsUrl, boardComplaintUrl
+                                and contact (absent members as null). Computed from the stored row for notices
+                                created before it was kept.
+                            createdAt: { type: string, format: date-time }
+                            validation: { $ref: "#/components/schemas/DpdpNoticeValidation" }
+                        - $ref: "#/components/schemas/DpdpNoticeStructure"
         "404":
           description: Consent notice not found
           content:
@@ -9586,13 +10025,19 @@ paths:
               type: object
               required: [type, dateFrom, dateTo]
               properties:
-                type: { type: string, enum: [dpdp-audit, gdpr-article-15, eu-ai-act-conformance] }
+                type: { type: string, enum: [dpdp-audit, gdpr-article-15, eu-ai-act-evidence, eu-ai-act-conformance] }
                 dateFrom: { type: string, description: ISO-8601 date or date-time; not after dateTo. }
                 dateTo: { type: string, description: ISO-8601 date or date-time. }
                 format: { type: string, enum: [json], default: json }
                 includeActionLog: { type: boolean, default: true }
                 includeConsentRecords: { type: boolean, default: true }
-                dataPrincipalId: { type: string, maxLength: 256 }
+                dataPrincipalId:
+                  type: string
+                  maxLength: 256
+                  description: >-
+                    Filters the export to one data principal. For gdpr-article-15 it adds the
+                    article15 block, and it is required for that type when
+                    DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL=true. Not accepted for eu-ai-act-evidence.
       responses:
         "201":
           description: Export created
@@ -9600,7 +10045,10 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpExport" }
         "400":
-          description: Missing fields, invalid type, invalid dates, dateFrom after dateTo, or a format other than json
+          description: >-
+            Missing fields, invalid type, invalid dates, dateFrom after dateTo, a format other than
+            json, dataPrincipalId with eu-ai-act-evidence, or gdpr-article-15 without dataPrincipalId
+            under DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL=true
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }
@@ -9692,6 +10140,238 @@ paths:
               schema: { $ref: "#/components/schemas/DpdpErasureRequest" }
         "404":
           description: Erasure request not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+
+  /v1/dpdp/breaches:
+    get:
+      operationId: listDpdpBreaches
+      tags: [DPDP]
+      summary: List breaches
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, initial_intimated, reported, closed] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          description: The nextCursor of the previous page.
+          schema: { type: string }
+      responses:
+        "200":
+          description: One page of breaches (without affectedDataPrincipalIds), newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [breaches, nextCursor]
+                properties:
+                  breaches:
+                    type: array
+                    items: { $ref: "#/components/schemas/DpdpBreach" }
+                  nextCursor: { type: [string, "null"] }
+        "400":
+          description: Unknown status, invalid limit or cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+    post:
+      operationId: recordDpdpBreach
+      tags: [DPDP]
+      summary: Record a personal data breach
+      description: >-
+        Records a breach in the register (DPDP Act s.8(6); DPDP Rules 2025
+        r.7) with status open, and emits dpdp.breach.recorded and
+        dpdp.breach.principal_intimation_due. The Board's detailed report is
+        due 72 hours after awareAt. Grantex sends nothing to principals or
+        the Board.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description, nature, extent]
+              description: One of affectedDataPrincipalIds and affectedCount is required.
+              properties:
+                description: { type: string, maxLength: 5000 }
+                nature: { type: string, maxLength: 1000 }
+                extent: { type: string, maxLength: 5000 }
+                occurredAt: { type: string, format: date-time, description: Not in the future and not after awareAt. }
+                awareAt: { type: string, format: date-time, description: When the fiduciary became aware. Default now; not in the future. }
+                location: { type: string, maxLength: 1000 }
+                likelyImpact: { type: string, maxLength: 5000 }
+                affectedDataPrincipalIds:
+                  type: array
+                  maxItems: 10000
+                  items: { type: string, maxLength: 256 }
+                affectedCount:
+                  type: integer
+                  minimum: 0
+                  description: Defaults to the number of affectedDataPrincipalIds and may not be smaller.
+                mitigation: { type: string, maxLength: 5000 }
+      responses:
+        "201":
+          description: Breach recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpBreach" }
+        "400":
+          description: BAD_REQUEST
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+
+  /v1/dpdp/breaches/{breachId}:
+    get:
+      operationId: getDpdpBreach
+      tags: [DPDP]
+      summary: Get a breach with its principal intimations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: breachId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Breach
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpBreach" }
+        "404":
+          description: Breach not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+    patch:
+      operationId: updateDpdpBreach
+      tags: [DPDP]
+      summary: Update the detailed report, Board times, extension or status
+      description: >-
+        open -> initial_intimated -> reported -> closed, one step at a time.
+        initial_intimated records boardInitialIntimationSentAt (default now);
+        reported needs all five detailedReport fields and records
+        boardDetailedReportSentAt (default now). A closed breach cannot be
+        changed. A granted extension moves boardDetailedReportDueAt.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: breachId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                status: { type: string, enum: [initial_intimated, reported, closed] }
+                detailedReport:
+                  type: object
+                  description: Any of the fields; each replaces the stored value.
+                  properties:
+                    updatedDetails: { type: string, maxLength: 5000 }
+                    factsCircumstancesReasons: { type: string, maxLength: 5000 }
+                    mitigation: { type: string, maxLength: 5000 }
+                    causeFindings: { type: string, maxLength: 5000 }
+                    remedialMeasures: { type: string, maxLength: 5000 }
+                boardInitialIntimationSentAt: { type: string, format: date-time, description: Not before awareAt, not in the future. }
+                boardDetailedReportSentAt: { type: string, format: date-time, description: Not before awareAt, not in the future. }
+                extension:
+                  type: object
+                  properties:
+                    requestedAt: { type: string, format: date-time, description: Default now. }
+                    granted: { type: [boolean, "null"] }
+                    newDueAt: { type: string, format: date-time, description: Required when granted is true; after awareAt. }
+      responses:
+        "200":
+          description: The updated breach
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpBreach" }
+        "400":
+          description: BAD_REQUEST, or REPORT_INCOMPLETE when moving to reported without the full detailed report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "404":
+          description: Breach not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "409":
+          description: INVALID_TRANSITION, or BREACH_CLOSED
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+
+  /v1/dpdp/breaches/{breachId}/principal-intimations:
+    post:
+      operationId: recordDpdpBreachPrincipalIntimation
+      tags: [DPDP]
+      summary: Record that affected principals were intimated
+      description: >-
+        Records that the fiduciary informed the listed Data Principals, by
+        which channel and when, and which r.7(1)(a)-(e) content the
+        intimation carried. When the breach lists its affected principals,
+        every id must be among them.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: breachId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dataPrincipalIds, channel, contentIncluded]
+              properties:
+                dataPrincipalIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 10000
+                  items: { type: string, maxLength: 256 }
+                channel: { type: string, maxLength: 128, description: "For example email, sms, in_app or post." }
+                intimatedAt: { type: string, format: date-time, description: Default now; not before awareAt, not in the future. }
+                contentIncluded:
+                  type: array
+                  minItems: 1
+                  items: { $ref: "#/components/schemas/DpdpBreachIntimationContent" }
+      responses:
+        "201":
+          description: Intimation recorded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DpdpBreachIntimation"
+                  - type: object
+                    properties:
+                      breachId: { type: string }
+                      principalIntimation: { $ref: "#/components/schemas/DpdpBreachIntimationSummary" }
+        "400":
+          description: BAD_REQUEST
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "404":
+          description: Breach not found
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }

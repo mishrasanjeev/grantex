@@ -6,6 +6,95 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### DPDP exports: EU AI Act evidence pack and per-person GDPR Art. 15 (auth service)
+- New export type `eu-ai-act-evidence` (`POST /v1/dpdp/exports`): structured
+  sections mapped to Regulation (EU) 2024/1689 as amended by Regulation (EU)
+  2026/1744, each naming its data source and whether it was truncated:
+  `art12RecordKeeping` (audit-chain events for the period, their count and
+  time span, chain integrity by the same check as the compliance evidence
+  pack, and a retention statement: Arts. 19(1) and 26(6), at least six
+  months), `art14HumanOversight` (authorisation decisions, decision-grant
+  approvals, payment approvals, revocations, emergency stops, consent
+  withdrawals), `art26Deployer` (grants and scopes per agent),
+  `art50Transparency` (states that no Art. 50 disclosure is recorded) and
+  `art73Incidents` (breaches from the breach register), with an
+  `applicability` block (Art. 50 from 2 August 2026, Annex III high-risk from
+  2 December 2027, Annex I from 2 August 2028) and a `disclaimer` that the
+  pack is evidence for the operator's own assessment, not a conformity
+  assessment or certification. It does not take `dataPrincipalId`.
+- `eu-ai-act-conformance` is kept: it returns the same keys as before and,
+  when not filtered to a principal, the new sections alongside them.
+- A `gdpr-article-15` export with `dataPrincipalId` adds an `article15` block:
+  purposes, recipients (the agents authorised through grants and the grant
+  audiences), retention (`retentionUntil` per record) and source, and states
+  that automated decision-making is not recorded. It also carries the
+  principal's own grievances filed in the period (`grievances`, newest first,
+  at most 1,000), counted in `recordCount` and in `article15.grievances`; more
+  than 1,000 sets `truncated` and `article15.truncated`.
+- New flag `DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL` (off; exactly `true`) refuses
+  a `gdpr-article-15` export without `dataPrincipalId` with `400`.
+
+### DPDP consent notice content (auth service)
+- `POST /v1/dpdp/consent-notices` takes optional structured fields for DPDP
+  Act s.5 and DPDP Rules 2025 r.3: `itemisedPersonalData`, `purposeDetails`
+  (with `goodsOrServices`), `withdrawalUrl`, `rightsUrl`,
+  `boardComplaintUrl` and `contact` (s.8(9), r.9). The create response and
+  both notice reads gain a `validation` block listing which r.3 elements are
+  present or missing, and the reads return the new fields (`null` on older
+  notices).
+- New flag `DPDP_NOTICE_REQUIRE_RULE3` (off; exactly `true`): a notice missing
+  an element, or in a language other than English or an Eighth Schedule
+  language (ISO 639 codes, listed in the API reference), is refused with
+  `400 NOTICE_INCOMPLETE`.
+- One `noticeId` and `version` may now be registered once per `language`
+  (the unique key includes the language; `409 CONFLICT` is per language).
+  `POST /v1/dpdp/consent-records` takes an optional `consentNoticeLanguage`:
+  with it, the pinned version in that language, or the newest notice row in
+  that language, is bound. Without it the record binds, as before, the pinned
+  version (or the version of the newest notice row) through its newest row,
+  and records that row's language. Records return `consentNoticeLanguage`.
+- New flag `DPDP_REQUIRE_NOTICE_LANGUAGE` (off; exactly `true`): a consent
+  record without `consentNoticeLanguage` against a version that exists in
+  several languages is refused with `400 NOTICE_LANGUAGE_REQUIRED`.
+- Notices gain `noticeHash`: SHA-256 over the RFC 8785 canonical JSON of the
+  whole notice (id, version, language, title, content, purposes, contacts and
+  the structured fields). `contentHash` stays the hash of `content` alone. A
+  consent record stores and returns the `noticeHash` of the notice it binds,
+  and its signed proof gains the claims `noticeHash` and
+  `consentNoticeLanguage` (additive; existing claims unchanged).
+- Migration 129 adds the notice columns, the notice hash on notices and
+  records (not backfilled: computed from the row for older notices, `null`
+  on older records), and the record's notice language
+  (backfilled from the matching notice), and replaces the unique index
+  `(developer_id, notice_id, version)` with one that includes `language`;
+  existing rows stay valid.
+
+### DPDP breach register (auth service)
+- New routes to keep a register of personal data breaches (DPDP Act s.8(6);
+  DPDP Rules 2025 r.7, in force from 13 May 2027):
+  `POST /v1/dpdp/breaches`, `GET /v1/dpdp/breaches` (paged, `status` filter),
+  `GET /v1/dpdp/breaches/{breachId}`, `PATCH /v1/dpdp/breaches/{breachId}`
+  (the r.7(2)(b) detailed report fields, Board intimation times, an
+  extension, and `open -> initial_intimated -> reported -> closed`, other
+  moves `409 INVALID_TRANSITION`) and
+  `POST /v1/dpdp/breaches/{breachId}/principal-intimations` (who was told, by
+  which channel, when, and which r.7(1)(a)-(e) content was included).
+  Responses carry `boardDetailedReportDueAt` (`awareAt` + 72 hours, or a
+  granted extension), `boardDetailedReportOverdue` and
+  `principalIntimationRequired: true`. Grantex does not notify principals or
+  file with the Board.
+- New webhook events `dpdp.breach.recorded`,
+  `dpdp.breach.principal_intimation_due` and `dpdp.breach.board_report_due`,
+  and audit actions `grantex.dpdp.breach_recorded`,
+  `grantex.dpdp.breach_updated`, `grantex.dpdp.breach_principals_intimated`
+  and `grantex.dpdp.breach_deadline_alerted`.
+- New flag `DPDP_BREACH_DEADLINE_ALERTS_ENABLED` (off; exactly `true`) runs a
+  worker that emits `dpdp.breach.board_report_due` once
+  `DPDP_BREACH_ALERT_LEAD_MINUTES` (default 720) before the deadline and once
+  when it has passed.
+- Migration 128 adds `dpdp_breaches` and `dpdp_breach_principal_intimations`
+  (new, empty tables; no backfill).
+
 ### DPDP routes: correctness, erasure and audit (auth service)
 - Withdrawal (`POST /v1/dpdp/consent-records/{id}/withdraw`) runs in one
   transaction and withdraws only an `active` record, so of two concurrent

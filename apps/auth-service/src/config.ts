@@ -258,6 +258,27 @@ export const config = {
   get dpdpConsentExpiryEnabled() { return process.env['DPDP_CONSENT_EXPIRY_ENABLED'] === 'true'; },
   // With the worker on, an expired record's grant is revoked too.
   get dpdpConsentExpiryRevokesGrant() { return process.env['DPDP_CONSENT_EXPIRY_REVOKES_GRANT'] === 'true'; },
+  // Refuse a consent notice missing a DPDP Rules 2025 r.3 element, or in a
+  // language other than English or an Eighth Schedule language
+  // (lib/dpdp-notice.ts). Off, the response only reports what is missing.
+  get dpdpNoticeRequireRule3() { return process.env['DPDP_NOTICE_REQUIRE_RULE3'] === 'true'; },
+  // Refuse a consent record without consentNoticeLanguage when the notice
+  // version it binds exists in several languages (400
+  // NOTICE_LANGUAGE_REQUIRED). Off, the newest notice row of that version is
+  // bound, as before notices had several languages, and its language recorded.
+  get dpdpRequireNoticeLanguage() { return process.env['DPDP_REQUIRE_NOTICE_LANGUAGE'] === 'true'; },
+  // Refuse a gdpr-article-15 export without dataPrincipalId (400). Off, such
+  // an export is produced as before, without the per-person article15 block.
+  get dpdpExportGdprRequiresPrincipal() { return process.env['DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL'] === 'true'; },
+  // The breach deadline worker (workers/dpdpBreachDeadlines.ts) emits
+  // dpdp.breach.board_report_due before and after the 72-hour Board deadline
+  // of DPDP Rules 2025 r.7(2)(b). Off unless exactly 'true'.
+  get dpdpBreachDeadlineAlertsEnabled() { return process.env['DPDP_BREACH_DEADLINE_ALERTS_ENABLED'] === 'true'; },
+  // How long before the deadline the first alert goes out, in minutes
+  // (1 to 4320; default 720, twelve hours).
+  get dpdpBreachAlertLeadMinutes() {
+    return parseIntegerSetting('DPDP_BREACH_ALERT_LEAD_MINUTES', optional('DPDP_BREACH_ALERT_LEAD_MINUTES', '720'), 1, 4_320);
+  },
   // Refuse to create a consent record (503 CONSENT_PROOF_KEY_NOT_PERSISTENT,
   // nothing stored) while the Ed25519 key is ephemeral, i.e. generated in
   // process because ED25519_PRIVATE_KEY is unset: its proof would not verify

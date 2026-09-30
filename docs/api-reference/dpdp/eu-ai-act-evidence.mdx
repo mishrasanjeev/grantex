@@ -1,0 +1,134 @@
+---
+title: "EU AI Act Evidence Pack"
+sidebarTitle: "EU AI Act Evidence Pack"
+description: "An export that maps what Grantex records to the record-keeping, human oversight, deployer, transparency and incident articles of the EU AI Act."
+---
+
+## Endpoint
+
+```
+POST /v1/dpdp/exports
+```
+
+with `"type": "eu-ai-act-evidence"`. It takes `dateFrom`, `dateTo` and
+`format` as [Create Export](/api-reference/dpdp/create-export) describes; it
+covers the developer's records, so `dataPrincipalId` is refused with `400`.
+The export is stored, read back and expires like any other.
+
+## What it is, and is not
+
+The pack draws on Grantex's records to help evidence obligations under
+Regulation (EU) 2024/1689 (the AI Act), as amended by Regulation (EU)
+2026/1744. **It is not a conformity assessment, a certification or a
+statement that a system complies**; it supports the operator's own
+assessment and covers only what Grantex records. Every export carries this
+as `data.disclaimer`.
+
+Whether an obligation applies depends on the operator's role (provider or
+deployer) and on how its AI system is classified. An authorisation layer is
+not itself a high-risk AI system; an agent doing work listed in Annex III may
+be. `data.applicability` gives the dates:
+
+| Field | Date | What applies |
+|---|---|---|
+| `art50TransparencyFrom` | 2 August 2026 | Art. 50 transparency obligations |
+| `highRiskAnnexIIIFrom` | 2 December 2027 | High-risk obligations for Annex III (stand-alone) systems |
+| `highRiskAnnexIFrom` | 2 August 2028 | High-risk obligations for Annex I (product) systems |
+
+## Sections
+
+Each section names its data source (`source`, or `sources`) and has a
+`truncated` flag; the export's top-level `truncated` is `true` when any
+section left rows out. Periods use `dateFrom` and `dateTo`.
+
+### `art12RecordKeeping`
+
+Art. 12 (automatic recording of events) and the log-keeping duties of
+Art. 19(1) (providers) and Art. 26(6) (deployers).
+
+| Field | Description |
+|---|---|
+| `source` | `audit_entries`, the developer's hash-chained audit log |
+| `eventCount` | Exact number of entries in the period |
+| `firstEventAt`, `lastEventAt` | The time span of those entries |
+| `chainIntegrity` | The same check as the compliance evidence pack: each entry's hash recomputed and linked to the previous one (`valid`, `checkedEntries`, `firstBrokenAt`, `reason`), with `complete: false` when the period holds more than 50,000 entries and only the oldest were checked |
+| `actions` | Entry counts by action |
+| `events` | The newest 1,000 entries |
+| `retention` | `oldestRetainedEventAt`, `retainedDays` and a statement: Arts. 19(1) and 26(6) require logs to be kept for at least six months, a minimum rather than a maximum; Grantex does not delete or rewrite audit entries, so how long they are kept is the operator's database retention |
+
+### `art14HumanOversight`
+
+Art. 14 (human oversight), and Art. 26 for deployers. `sources` lists every
+table read:
+
+| Field | Source | Description |
+|---|---|---|
+| `consentDecisions` | `auth_requests` | Authorisation requests created in the period, by status, and how many were FIDO-verified. In sandbox mode requests are approved automatically, and the note says those are not human decisions |
+| `decisionApprovals` | `decision_requests`, `decision_grants` | Human approvals of individual agent actions: requests by status, approvals issued, consumed and revoked, second approvals |
+| `paymentApprovals` | `wallet_payment_approval_requests` | Payment approvals decided in the period, by status |
+| `revocations` | `grants`, `grant_revocation_events` | Grants revoked in the period, and revocation events by action |
+| `emergencyStops` | `emergency_stops` | Operator overrides in the period (up to 500 listed) |
+| `consentWithdrawals` | `dpdp_consent_records` | Consents withdrawn in the period |
+
+### `art26Deployer`
+
+Art. 26 (obligations of deployers). From `grants` and `agents`: for each
+agent given grants in the period (up to 500), its name and DID, the grants
+issued, active and revoked, and the scopes granted.
+
+### `art50Transparency`
+
+`recorded: false`. Grantex does not record whether people were told they were
+interacting with an AI system (Art. 50(1)), whether generated content was
+marked (Art. 50(2)) or other Art. 50 disclosures; that evidence has to come
+from the operator's own systems.
+
+### `art73Incidents`
+
+From the [breach register](/api-reference/dpdp/record-breach): breaches the
+fiduciary became aware of in the period (up to 500). These are personal data
+breaches under DPDP Act 2023 s.8(6), not an Art. 73 classification. Whether
+any is a serious incident is the operator's decision; under Art. 73 a serious
+incident is reported not later than 15 days after awareness (2 days for a
+widespread infringement or one affecting critical infrastructure, 10 days in
+the event of a death). Grantex does not classify or report incidents.
+
+## Example
+
+```bash
+curl -X POST https://api.grantex.dev/v1/dpdp/exports \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "type": "eu-ai-act-evidence", "dateFrom": "2026-08-01", "dateTo": "2026-09-01" }'
+```
+
+```json
+{
+  "exportId": "exp_01HXYZ...",
+  "type": "eu-ai-act-evidence",
+  "format": "json",
+  "recordCount": 214,
+  "truncated": false,
+  "data": {
+    "exportType": "eu-ai-act-evidence",
+    "applicability": { "regulation": "Regulation (EU) 2024/1689 ..., as amended by Regulation (EU) 2026/1744", "art50TransparencyFrom": "2026-08-02", "highRiskAnnexIIIFrom": "2027-12-02", "highRiskAnnexIFrom": "2028-08-02" },
+    "disclaimer": "This pack is evidence drawn from Grantex records to support the operator's own assessment ...",
+    "art12RecordKeeping": { "eventCount": 180, "chainIntegrity": { "valid": true, "complete": true }, "truncated": false },
+    "art14HumanOversight": { "sources": ["auth_requests", "..."], "truncated": false },
+    "art26Deployer": { "agentCount": 3, "truncated": false },
+    "art50Transparency": { "recorded": false, "truncated": false },
+    "art73Incidents": { "count": 0, "truncated": false }
+  }
+}
+```
+
+## `eu-ai-act-conformance`
+
+The older type is kept for compatibility. It returns the generic keys
+(`consentRecords`, `auditLog`) as before and, when the export is not
+filtered to a data principal, the sections, `applicability` and `disclaimer`
+above as well. Prefer `eu-ai-act-evidence`.
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

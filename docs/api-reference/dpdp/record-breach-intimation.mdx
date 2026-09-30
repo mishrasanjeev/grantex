@@ -1,0 +1,87 @@
+---
+title: "Record Principal Intimation"
+sidebarTitle: "Record Principal Intimation"
+description: "Record that the Data Fiduciary informed affected Data Principals of a breach: who, by which channel, when, and with which content."
+---
+
+## Endpoint
+
+```
+POST /v1/dpdp/breaches/:breachId/principal-intimations
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+Grantex does not send the intimation. The fiduciary sends it through its own
+channels and records here that it did.
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `breachId` | `string` | Yes | The breach ID |
+
+## Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `dataPrincipalIds` | `string[]` | Yes | 1 to 10,000 principal ids. When the breach lists its affected principals, each must be among them |
+| `channel` | `string` | Yes | How they were told, for example `email`, `sms`, `in_app` or `post` |
+| `intimatedAt` | `string` | No | ISO 8601 date-time; default now; not before the breach's `awareAt`, not in the future |
+| `contentIncluded` | `string[]` | Yes | Which of the DPDP Rules 2025 r.7(1)(a)-(e) elements the intimation carried (below) |
+
+| Value | Element |
+|---|---|
+| `description` | A description of the breach: its nature, extent, and the timing and location of its occurrence |
+| `likely_consequences` | The consequences relevant to the principal that are likely to arise |
+| `mitigation` | The mitigation measures implemented or being implemented |
+| `safety_measures` | Safety measures the principal may take |
+| `contact` | Business contact information of a person able to respond on the fiduciary's behalf |
+
+## Example Request
+
+```bash
+curl -X POST https://api.grantex.dev/v1/dpdp/breaches/brch_01HXYZ.../principal-intimations \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataPrincipalIds": ["user_abc123", "user_def456"],
+    "channel": "email",
+    "contentIncluded": ["description", "likely_consequences", "mitigation", "safety_measures", "contact"]
+  }'
+```
+
+## Response -- 201 Created
+
+```json
+{
+  "breachId": "brch_01HXYZ...",
+  "intimationId": "bint_01HXYZ...",
+  "channel": "email",
+  "intimatedAt": "2027-06-01T12:00:00.000Z",
+  "principalCount": 2,
+  "contentIncluded": ["description", "likely_consequences", "mitigation", "safety_measures", "contact"],
+  "contentMissing": [],
+  "createdAt": "2027-06-01T12:00:00.000Z",
+  "principalIntimation": { "due": "without_delay", "intimatedCount": 2, "pendingCount": 1, "lastIntimatedAt": "2027-06-01T12:00:00.000Z" }
+}
+```
+
+`contentMissing` lists the elements the intimation did not carry.
+The intimation is recorded on the audit chain as
+`grantex.dpdp.breach_principals_intimated`, with the count of principals,
+not their ids.
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | Missing or malformed fields, unknown content element, a principal not listed on the breach, or a time before `awareAt` or in the future |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `NOT_FOUND` | Breach not found |
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
