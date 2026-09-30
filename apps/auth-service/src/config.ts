@@ -262,6 +262,9 @@ export const config = {
   // language other than English or an Eighth Schedule language
   // (lib/dpdp-notice.ts). Off, the response only reports what is missing.
   get dpdpNoticeRequireRule3() { return process.env['DPDP_NOTICE_REQUIRE_RULE3'] === 'true'; },
+  // Refuse a gdpr-article-15 export without dataPrincipalId (400). Off, such
+  // an export is produced as before, without the per-person article15 block.
+  get dpdpExportGdprRequiresPrincipal() { return process.env['DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL'] === 'true'; },
   // The breach deadline worker (workers/dpdpBreachDeadlines.ts) emits
   // dpdp.breach.board_report_due before and after the 72-hour Board deadline
   // of DPDP Rules 2025 r.7(2)(b). Off unless exactly 'true'.

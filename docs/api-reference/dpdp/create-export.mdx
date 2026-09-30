@@ -1,7 +1,7 @@
 ---
 title: "Create Export"
 sidebarTitle: "Create Export"
-description: "Generate a compliance export for DPDP, GDPR Article 15, or EU AI Act conformance. Bundles consent records, audit logs, and grievances into a single report."
+description: "Generate a compliance export: a DPDP audit, a GDPR Article 15 access report for one person, or an EU AI Act evidence pack."
 ---
 
 ## Endpoint
@@ -25,13 +25,13 @@ Requires a developer API key in the `Authorization` header.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `type` | `string` | Yes | Export type: `dpdp-audit`, `gdpr-article-15`, or `eu-ai-act-conformance` |
+| `type` | `string` | Yes | Export type: `dpdp-audit`, `gdpr-article-15`, `eu-ai-act-evidence`, or `eu-ai-act-conformance` (see Export Types) |
 | `dateFrom` | `string` | Yes | ISO-8601 start date or date-time for the export window |
 | `dateTo` | `string` | Yes | ISO-8601 end date or date-time; not before `dateFrom` |
 | `format` | `string` | No | Output format. Only `"json"` (the default) is produced; any other value is `400` |
 | `includeActionLog` | `boolean` | No | Include audit log entries (default: `true`) |
 | `includeConsentRecords` | `boolean` | No | Include consent records (default: `true`) |
-| `dataPrincipalId` | `string` | No | Filter the export to one data principal (see below) |
+| `dataPrincipalId` | `string` | No | Filter the export to one data principal (see below). Needed for the `article15` block of `gdpr-article-15`, and required for that type when `DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL=true`. Not accepted for `eu-ai-act-evidence` |
 
 ## Example Request
 
@@ -86,7 +86,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/exports \
 | `type` | `string` | Export type |
 | `format` | `string` | Output format |
 | `recordCount` | `number` | Total number of records in the export |
-| `truncated` | `boolean` | `true` when the audit log had more than `auditLogLimit` entries in the window and only the newest `auditLogLimit` are included |
+| `truncated` | `boolean` | `true` when the audit log had more than `auditLogLimit` entries in the window and only the newest `auditLogLimit` are included. For `eu-ai-act-evidence`, `true` when any section left rows out; the sections and the `article15` block also carry their own `truncated` |
 | `auditLogLimit` | `number` | The audit log cap (1000) |
 | `dataPrincipalId` | `string \| null` | The principal the export is filtered to, if any |
 | `data` | `object` | The export data payload (see below) |
@@ -128,15 +128,39 @@ deletes the stored exports about that principal.
 
 | Type | Description | Includes Grievances |
 |---|---|---|
-| `dpdp-audit` | India DPDP Act compliance audit | Yes |
-| `gdpr-article-15` | GDPR right of access (Article 15) report | No |
-| `eu-ai-act-conformance` | EU AI Act conformance assessment | No |
+| `dpdp-audit` | India DPDP Act audit export | Yes |
+| `gdpr-article-15` | GDPR right of access (Article 15) report; with `dataPrincipalId` it adds the `article15` block below | No |
+| `eu-ai-act-evidence` | EU AI Act evidence pack: structured sections instead of the generic keys; see [EU AI Act Evidence Pack](/api-reference/dpdp/eu-ai-act-evidence) | No |
+| `eu-ai-act-conformance` | Kept for compatibility: the generic keys as before, plus the evidence pack's sections when the export is not filtered to a principal. It is not a conformity assessment | No |
+
+### The GDPR Article 15 block
+
+A `gdpr-article-15` export with `dataPrincipalId` adds `data.article15`, the
+information GDPR Art. 15(1) lists, as far as Grantex's records allow. It
+covers all of the principal's consent records for the developer (up to
+1,000), not only those in the date window:
+
+| Field | Description |
+|---|---|
+| `purposes` | Each purpose code the principal consented to, with the records that name it; `grantPurposes` lists the purposes recorded on the grants |
+| `recipients` | The agents the principal authorised through grants (consent-record grants and grants whose principal is the data principal), each with its grant ids, scopes and the resource servers (`audiences`) the grants name |
+| `retention` | Per record `processingExpiresAt`, `retentionUntil`, `withdrawnAt` and `erasedAt`, and how audit entries are kept |
+| `source` | Per record the consent notice id, version and language, and when consent was given |
+| `automatedDecisionMaking` | `recorded: false`: Grantex does not record GDPR Art. 22 decisions |
+| `truncated` | `true` when more than 1,000 records or grants exist |
+
+The copy of the data itself is in `consentRecords` and `auditLog`. Personal
+data the controller processes in its own systems is not held by Grantex.
+
+Without `dataPrincipalId` the export is produced as before, without the
+block. With `DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL=true` (off by default) a
+`gdpr-article-15` export without `dataPrincipalId` answers `400`.
 
 ## Error Responses
 
 | Status | Code | Description |
 |---|---|---|
-| 400 | `BAD_REQUEST` | Missing required fields, invalid `type`, an invalid date, `dateFrom` after `dateTo`, or a `format` other than `json` |
+| 400 | `BAD_REQUEST` | Missing required fields, invalid `type`, an invalid date, `dateFrom` after `dateTo`, a `format` other than `json`, `dataPrincipalId` with `eu-ai-act-evidence`, or (under `DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL=true`) `gdpr-article-15` without `dataPrincipalId` |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
 
 ## SDK Examples

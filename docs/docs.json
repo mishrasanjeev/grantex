@@ -762,6 +762,7 @@
               "api-reference/dpdp/update-breach",
               "api-reference/dpdp/record-breach-intimation",
               "api-reference/dpdp/create-export",
+              "api-reference/dpdp/eu-ai-act-evidence",
               "api-reference/dpdp/get-export"
             ]
           },

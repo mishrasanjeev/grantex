@@ -5,7 +5,7 @@ import { matchStoredAuditHash } from '../lib/hash.js';
 
 type Framework = 'soc2' | 'gdpr' | 'all';
 
-interface ChainIntegrity {
+export interface ChainIntegrity {
   valid: boolean;
   checkedEntries: number;
   firstBrokenAt: string | null;
@@ -25,7 +25,7 @@ interface ChainIntegrity {
  * database leaves every stored hash and link untouched, so the export still
  * reports `valid: true` while the record it attests to has been rewritten.
  */
-function verifyChain(entries: Array<Record<string, unknown>>): ChainIntegrity {
+export function verifyChain(entries: Array<Record<string, unknown>>): ChainIntegrity {
   let prevHash: string | null = null;
 
   for (let i = 0; i < entries.length; i++) {

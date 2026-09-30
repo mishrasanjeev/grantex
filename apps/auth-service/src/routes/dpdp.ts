@@ -16,6 +16,7 @@ import { emitEvent } from '../lib/events.js';
 import { appendPlatformAuditEntries, lockAuditChain, type PlatformAuditEntry } from '../lib/audit-chain.js';
 import { publishGrantRevocation, revokeGrantInTx, type RevokedGrantTree } from '../lib/revoke.js';
 import { noticeValidation } from '../lib/dpdp-notice.js';
+import { euAiActSections, gdprArticle15, sectionsSummary } from '../lib/dpdp-evidence.js';
 
 // ── Limits ─────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,11 @@ const GRIEVANCE_TRANSITIONS: Record<Exclude<GrievanceStatus, 'submitted'>, Griev
   rejected: ['in_review'],
 };
 
-const EXPORT_TYPES = ['dpdp-audit', 'gdpr-article-15', 'eu-ai-act-conformance'] as const;
+/**
+ * eu-ai-act-evidence is the structured EU AI Act pack (lib/dpdp-evidence.ts);
+ * eu-ai-act-conformance keeps its generic keys and gains the same sections.
+ */
+const EXPORT_TYPES = ['dpdp-audit', 'gdpr-article-15', 'eu-ai-act-conformance', 'eu-ai-act-evidence'] as const;
 const EXPORT_FORMATS = ['json'] as const;
 
 /** Reserved (`grantex.`) audit actions: a tenant cannot write them through POST /v1/audit/log. */
@@ -1095,6 +1100,15 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       if (!EXPORT_FORMATS.includes(format as (typeof EXPORT_FORMATS)[number])) {
         throw new InputError(`format must be one of: ${EXPORT_FORMATS.join(', ')}`);
       }
+      const principal = optionalString(body['dataPrincipalId'], 'dataPrincipalId', MAX_ID);
+      if (type === 'eu-ai-act-evidence' && principal !== undefined) {
+        throw new InputError('dataPrincipalId is not accepted for eu-ai-act-evidence: the pack covers the operator, not one person');
+      }
+      // GDPR Art. 15 is a data subject's access right: an export for nobody
+      // in particular is not one. Refused only under the flag.
+      if (type === 'gdpr-article-15' && principal === undefined && config.dpdpExportGdprRequiresPrincipal) {
+        throw new InputError('dataPrincipalId is required for a gdpr-article-15 export');
+      }
       return {
         type: type as (typeof EXPORT_TYPES)[number],
         from,
@@ -1102,7 +1116,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         format: format as string,
         includeActionLog: optionalBoolean(body['includeActionLog'], 'includeActionLog') ?? true,
         includeConsentRecords: optionalBoolean(body['includeConsentRecords'], 'includeConsentRecords') ?? true,
-        dataPrincipalId: optionalString(body['dataPrincipalId'], 'dataPrincipalId', MAX_ID) ?? null,
+        dataPrincipalId: principal ?? null,
       };
     });
     if (!input) return reply;
@@ -1129,8 +1143,10 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
 
     let recordCount = 0;
     let truncated = false;
+    // The structured pack replaces the generic keys; every other type keeps them.
+    const generic = type !== 'eu-ai-act-evidence';
 
-    if (input.includeConsentRecords) {
+    if (generic && input.includeConsentRecords) {
       const consentRows = await sql`
         SELECT id, grant_id, data_principal_id, purposes, scopes, status,
                consent_notice_id, consent_notice_version,
@@ -1145,7 +1161,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       recordCount += consentRows.length;
     }
 
-    if (input.includeActionLog) {
+    if (generic && input.includeActionLog) {
       // audit_entries.principal_id is the principal namespace of the grant
       // the entry was written under, which is the DPDP data principal only
       // when the integration keys both the same way (enforced by
@@ -1187,6 +1203,27 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       `;
       exportData['grievances'] = grievanceRows;
       recordCount += grievanceRows.length;
+    }
+
+    // Regulation (EU) 2024/1689 sections, over the developer's records. Not
+    // added to a conformance export filtered to one principal, since the
+    // sections are not per person.
+    if (type === 'eu-ai-act-evidence' || (type === 'eu-ai-act-conformance' && !dataPrincipalId)) {
+      const sections = await euAiActSections(sql, developerId, from, to);
+      Object.assign(exportData, sections);
+      // Each section has its own truncated flag. For eu-ai-act-conformance
+      // the top-level flag keeps meaning what it meant: the audit log cap.
+      if (type === 'eu-ai-act-evidence') {
+        const summary = sectionsSummary(sections);
+        truncated = summary.truncated;
+        recordCount += summary.itemCount;
+      }
+    }
+
+    if (type === 'gdpr-article-15' && dataPrincipalId) {
+      const article15 = await gdprArticle15(sql, developerId, dataPrincipalId);
+      // article15.truncated says whether the block left rows out.
+      exportData['article15'] = article15;
     }
 
     exportData['truncated'] = truncated;

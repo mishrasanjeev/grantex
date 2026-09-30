@@ -937,18 +937,167 @@ components:
       type: object
       properties:
         exportId: { type: string }
-        type: { type: string, enum: [dpdp-audit, gdpr-article-15, eu-ai-act-conformance] }
+        type: { type: string, enum: [dpdp-audit, gdpr-article-15, eu-ai-act-evidence, eu-ai-act-conformance] }
         format: { type: string, enum: [json] }
         status: { type: string, enum: [complete] }
         recordCount: { type: integer }
         truncated:
           type: boolean
-          description: True when the audit log exceeded auditLogLimit and only the newest entries are included.
+          description: True when the audit log exceeded auditLogLimit and only the newest entries are included; for eu-ai-act-evidence, when any section left rows out.
         auditLogLimit: { type: integer }
         dataPrincipalId: { type: [string, "null"] }
-        data: { type: object }
+        data:
+          type: object
+          description: >-
+            dpdp-audit, gdpr-article-15 and eu-ai-act-conformance carry consentRecords and auditLog
+            (and grievances for dpdp-audit). gdpr-article-15 with dataPrincipalId adds article15.
+            eu-ai-act-evidence carries the DpdpEuAiActEvidence sections instead of the generic keys;
+            eu-ai-act-conformance adds them when not filtered to a principal.
+          properties:
+            exportType: { type: string }
+            article15: { $ref: "#/components/schemas/DpdpGdprArticle15" }
+            truncated: { type: boolean }
+          additionalProperties: true
         expiresAt: { type: string, format: date-time }
         createdAt: { type: string, format: date-time }
+
+    DpdpEuAiActEvidence:
+      type: object
+      description: >-
+        The sections of an eu-ai-act-evidence export (inside data), mapped to Regulation (EU)
+        2024/1689 as amended by Regulation (EU) 2026/1744. Evidence for the operator's own
+        assessment, not a conformity assessment or certification. Each section names its source
+        and whether it was truncated.
+      required: [applicability, disclaimer, art12RecordKeeping, art14HumanOversight, art26Deployer, art50Transparency, art73Incidents]
+      properties:
+        applicability:
+          type: object
+          properties:
+            regulation: { type: string }
+            art50TransparencyFrom: { type: string, format: date, enum: ["2026-08-02"] }
+            highRiskAnnexIIIFrom: { type: string, format: date, enum: ["2027-12-02"] }
+            highRiskAnnexIFrom: { type: string, format: date, enum: ["2028-08-02"] }
+            note: { type: string }
+        disclaimer: { type: string }
+        art12RecordKeeping:
+          type: object
+          properties:
+            article: { type: string }
+            source: { type: string }
+            eventCount: { type: integer }
+            firstEventAt: { type: [string, "null"], format: date-time }
+            lastEventAt: { type: [string, "null"], format: date-time }
+            chainIntegrity:
+              type: object
+              properties:
+                valid: { type: boolean }
+                checkedEntries: { type: integer }
+                firstBrokenAt: { type: [string, "null"] }
+                reason: { type: [string, "null"], enum: [link, content, null] }
+                complete: { type: boolean, description: False when more than verifiedLimit entries were in the period. }
+                verifiedLimit: { type: integer }
+                method: { type: string }
+            actions: { type: object, additionalProperties: { type: integer } }
+            events: { type: array, maxItems: 1000, items: { type: object } }
+            eventsLimit: { type: integer }
+            retention:
+              type: object
+              properties:
+                oldestRetainedEventAt: { type: [string, "null"], format: date-time }
+                retainedDays: { type: integer }
+                statement: { type: string }
+            truncated: { type: boolean }
+        art14HumanOversight:
+          type: object
+          properties:
+            article: { type: string }
+            sources: { type: array, items: { type: string } }
+            consentDecisions: { type: object }
+            decisionApprovals: { type: object }
+            paymentApprovals: { type: object }
+            revocations: { type: object }
+            emergencyStops: { type: object }
+            consentWithdrawals: { type: object }
+            truncated: { type: boolean }
+        art26Deployer:
+          type: object
+          properties:
+            article: { type: string }
+            source: { type: string }
+            agentCount: { type: integer }
+            grantCount: { type: integer }
+            agents:
+              type: array
+              maxItems: 500
+              items:
+                type: object
+                properties:
+                  agentId: { type: string }
+                  agentName: { type: [string, "null"] }
+                  agentDid: { type: [string, "null"] }
+                  grantsIssued: { type: integer }
+                  activeGrants: { type: integer }
+                  revokedGrants: { type: integer }
+                  scopes: { type: array, items: { type: string } }
+            truncated: { type: boolean }
+        art50Transparency:
+          type: object
+          properties:
+            article: { type: string }
+            applicableFrom: { type: string, format: date }
+            source: { type: string }
+            recorded: { type: boolean, description: Always false; nothing in Grantex records Art. 50 disclosures. }
+            statement: { type: string }
+            truncated: { type: boolean }
+        art73Incidents:
+          type: object
+          properties:
+            article: { type: string }
+            source: { type: string }
+            count: { type: integer }
+            items: { type: array, maxItems: 500, items: { type: object } }
+            note: { type: string }
+            truncated: { type: boolean }
+
+    DpdpGdprArticle15:
+      type: object
+      description: >-
+        GDPR Art. 15(1) information for one data subject, from the consent records (up to 1,000),
+        grants and agents Grantex holds for the developer.
+      properties:
+        basis: { type: string }
+        dataPrincipalId: { type: string }
+        scope: { type: string }
+        purposes:
+          type: array
+          items:
+            type: object
+            properties:
+              code: { type: string }
+              description: { type: string }
+              recordIds: { type: array, items: { type: string } }
+        grantPurposes: { type: array, items: { type: string } }
+        recipients:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string, enum: [agent] }
+              agentId: { type: string }
+              agentName: { type: [string, "null"] }
+              agentDid: { type: [string, "null"] }
+              grantIds: { type: array, items: { type: string } }
+              scopes: { type: array, items: { type: string } }
+              audiences: { type: array, items: { type: string } }
+        recipientsNote: { type: string }
+        retention: { type: object }
+        source: { type: object }
+        automatedDecisionMaking:
+          type: object
+          properties:
+            recorded: { type: boolean }
+            statement: { type: string }
+        truncated: { type: boolean }
 
     DpdpErasureRequest:
       type: object
@@ -9788,13 +9937,19 @@ paths:
               type: object
               required: [type, dateFrom, dateTo]
               properties:
-                type: { type: string, enum: [dpdp-audit, gdpr-article-15, eu-ai-act-conformance] }
+                type: { type: string, enum: [dpdp-audit, gdpr-article-15, eu-ai-act-evidence, eu-ai-act-conformance] }
                 dateFrom: { type: string, description: ISO-8601 date or date-time; not after dateTo. }
                 dateTo: { type: string, description: ISO-8601 date or date-time. }
                 format: { type: string, enum: [json], default: json }
                 includeActionLog: { type: boolean, default: true }
                 includeConsentRecords: { type: boolean, default: true }
-                dataPrincipalId: { type: string, maxLength: 256 }
+                dataPrincipalId:
+                  type: string
+                  maxLength: 256
+                  description: >-
+                    Filters the export to one data principal. For gdpr-article-15 it adds the
+                    article15 block, and it is required for that type when
+                    DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL=true. Not accepted for eu-ai-act-evidence.
       responses:
         "201":
           description: Export created
@@ -9802,7 +9957,10 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpExport" }
         "400":
-          description: Missing fields, invalid type, invalid dates, dateFrom after dateTo, or a format other than json
+          description: >-
+            Missing fields, invalid type, invalid dates, dateFrom after dateTo, a format other than
+            json, dataPrincipalId with eu-ai-act-evidence, or gdpr-article-15 without dataPrincipalId
+            under DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL=true
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }

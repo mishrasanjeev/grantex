@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### DPDP exports: EU AI Act evidence pack and per-person GDPR Art. 15 (auth service)
+- New export type `eu-ai-act-evidence` (`POST /v1/dpdp/exports`): structured
+  sections mapped to Regulation (EU) 2024/1689 as amended by Regulation (EU)
+  2026/1744, each naming its data source and whether it was truncated:
+  `art12RecordKeeping` (audit-chain events for the period, their count and
+  time span, chain integrity by the same check as the compliance evidence
+  pack, and a retention statement: Arts. 19(1) and 26(6), at least six
+  months), `art14HumanOversight` (authorisation decisions, decision-grant
+  approvals, payment approvals, revocations, emergency stops, consent
+  withdrawals), `art26Deployer` (grants and scopes per agent),
+  `art50Transparency` (states that no Art. 50 disclosure is recorded) and
+  `art73Incidents` (breaches from the breach register), with an
+  `applicability` block (Art. 50 from 2 August 2026, Annex III high-risk from
+  2 December 2027, Annex I from 2 August 2028) and a `disclaimer` that the
+  pack is evidence for the operator's own assessment, not a conformity
+  assessment or certification. It does not take `dataPrincipalId`.
+- `eu-ai-act-conformance` is kept: it returns the same keys as before and,
+  when not filtered to a principal, the new sections alongside them.
+- A `gdpr-article-15` export with `dataPrincipalId` adds an `article15` block:
+  purposes, recipients (the agents authorised through grants and the grant
+  audiences), retention (`retentionUntil` per record) and source, and states
+  that automated decision-making is not recorded.
+- New flag `DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL` (off; exactly `true`) refuses
+  a `gdpr-article-15` export without `dataPrincipalId` with `400`.
+
 ### DPDP consent notice content (auth service)
 - `POST /v1/dpdp/consent-notices` takes optional structured fields for DPDP
   Act s.5 and DPDP Rules 2025 r.3: `itemisedPersonalData`, `purposeDetails`
