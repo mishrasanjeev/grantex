@@ -1,0 +1,95 @@
+---
+title: "Update Breach"
+sidebarTitle: "Update Breach"
+description: "Record the detailed report to the Board, the Board intimation times, an extension, and move a breach through its statuses."
+---
+
+## Endpoint
+
+```
+PATCH /v1/dpdp/breaches/:breachId
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `breachId` | `string` | Yes | The breach ID |
+
+## Request Body
+
+At least one field. Each field given replaces the stored value.
+
+| Field | Type | Description |
+|---|---|---|
+| `status` | `string` | `initial_intimated`, `reported` or `closed` (see below) |
+| `detailedReport` | `object` | Any of `updatedDetails`, `factsCircumstancesReasons`, `mitigation`, `causeFindings`, `remedialMeasures` (each up to 5,000 characters) |
+| `boardInitialIntimationSentAt` | `string` | When the fiduciary sent the Board its initial intimation; not before `awareAt`, not in the future |
+| `boardDetailedReportSentAt` | `string` | When it sent the detailed report; not before `awareAt`, not in the future |
+| `extension` | `object` | `requestedAt` (default now), `granted` (`true`, `false` or `null` while undecided), `newDueAt` (required when `granted` is `true`; after `awareAt`) |
+
+The detailed report fields follow DPDP Rules 2025 r.7(2)(b): updated and
+detailed information on the description; the broad facts, circumstances and
+reasons leading to the breach; the mitigation measures implemented or
+proposed; any findings about the person who caused it; and the remedial
+measures taken to prevent recurrence.
+
+## Transitions
+
+| From | To | Also |
+|---|---|---|
+| `open` | `initial_intimated` | Sets `boardInitialIntimationSentAt` to now unless given or already set |
+| `initial_intimated` | `reported` | Needs all five `detailedReport` fields (stored or in this request); sets `boardDetailedReportSentAt` to now unless given or already set |
+| `reported` | `closed` | Sets `closedAt` |
+
+Any other move answers `409 INVALID_TRANSITION`. A closed breach cannot be
+changed (`409 BREACH_CLOSED`). A request that fails changes nothing.
+
+## Deadline
+
+`boardDetailedReportDueAt` is `awareAt` + 72 hours. Once an extension is
+recorded with `granted: true`, it is the extension's `newDueAt`. A moved
+deadline is alerted afresh by the deadline worker.
+
+## Example Request
+
+```bash
+curl -X PATCH https://api.grantex.dev/v1/dpdp/breaches/brch_01HXYZ... \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "reported",
+    "detailedReport": {
+      "updatedDetails": "Three customer records were read by an expired credential",
+      "factsCircumstancesReasons": "The credential was not revoked when the contract ended",
+      "mitigation": "Credential revoked, storage policy narrowed",
+      "causeFindings": "Former contractor account; no onward disclosure found",
+      "remedialMeasures": "Offboarding now revokes storage credentials"
+    }
+  }'
+```
+
+## Response -- 200 OK
+
+The updated breach, as [Get Breach](/api-reference/dpdp/get-breach) returns
+it (without `principalIntimations`). Each change is recorded on the audit
+chain as `grantex.dpdp.breach_updated`.
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | Nothing to update, unknown field, malformed time, a time before `awareAt` or in the future, or an extension granted without `newDueAt` |
+| 400 | `REPORT_INCOMPLETE` | Moving to `reported` without the full detailed report |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `NOT_FOUND` | Breach not found |
+| 409 | `INVALID_TRANSITION` | The breach is not in the status this move starts from |
+| 409 | `BREACH_CLOSED` | The breach is closed |
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

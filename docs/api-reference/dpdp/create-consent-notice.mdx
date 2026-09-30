@@ -30,9 +30,18 @@ Requires a developer API key in the `Authorization` header.
 | `title` | `string` | Yes | Human-readable notice title |
 | `content` | `string` | Yes | Full consent notice content (HTML or plain text) |
 | `purposes` | `object[]` | Yes | Array of purpose objects (`{ code, description }`) |
-| `language` | `string` | No | ISO language code (default: `"en"`) |
+| `language` | `string` | No | ISO language code (default: `"en"`). One `noticeId` and `version` may be registered once per language |
 | `dataFiduciaryContact` | `string` | No | Contact information for the data fiduciary |
 | `grievanceOfficer` | `object` | No | Grievance officer details (`{ name, email, phone? }`) |
+| `itemisedPersonalData` | `object[]` | No | `{ category, description }` for each item of personal data |
+| `purposeDetails` | `object[]` | No | `{ code, description, goodsOrServices }` for each specific purpose; `code` must be one of `purposes` |
+| `withdrawalUrl` | `string` | No | Where consent is withdrawn (http or https URL) |
+| `rightsUrl` | `string` | No | Where the principal exercises their rights |
+| `boardComplaintUrl` | `string` | No | How to complain to the Data Protection Board |
+| `contact` | `object` | No | DPO or contact person: `{ name?, designation?, email?, phone?, address? }`, with an email or a phone |
+
+The structured fields and the `validation` block in the response are
+described in [Consent Notice Content](/api-reference/dpdp/consent-notice-content).
 
 ## Example Request
 
@@ -67,7 +76,16 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices \
   "version": "2.0",
   "language": "en",
   "contentHash": "a1b2c3d4e5f6...",
-  "createdAt": "2026-04-05T12:00:00.000Z"
+  "noticeHash": "9f8e7d6c5b4a...",
+  "createdAt": "2026-04-05T12:00:00.000Z",
+  "validation": {
+    "basis": "DPDP Rules 2025 r.3",
+    "enforced": false,
+    "complete": false,
+    "present": ["language"],
+    "missing": ["itemisedPersonalData", "specificPurposes", "withdrawalMeans", "rightsMeans", "boardComplaintMeans"],
+    "language": { "tag": "en", "name": "English", "englishOrEighthSchedule": true }
+  }
 }
 ```
 
@@ -80,15 +98,18 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices \
 | `version` | `string` | Version string |
 | `language` | `string` | ISO language code |
 | `contentHash` | `string` | SHA-256 hash of the notice content |
+| `noticeHash` | `string` | SHA-256 over the canonical JSON of the whole notice, structured fields, language and version included (see [Consent Notice Content](/api-reference/dpdp/consent-notice-content#the-notice-hash)) |
 | `createdAt` | `string` | ISO-8601 creation timestamp |
+| `validation` | `object` | Which DPDP Rules 2025 r.3 elements the notice has; see [Consent Notice Content](/api-reference/dpdp/consent-notice-content) |
 
 ## Error Responses
 
 | Status | Code | Description |
 |---|---|---|
-| 400 | `BAD_REQUEST` | Missing or malformed fields (`noticeId`, `version`, `title`, `content`, a non-empty `purposes` array of `{ code, description }`; `content` up to 100,000 characters) |
+| 400 | `BAD_REQUEST` | Missing or malformed fields (`noticeId`, `version`, `title`, `content`, a non-empty `purposes` array of `{ code, description }`; `content` up to 100,000 characters; malformed structured fields) |
+| 400 | `NOTICE_INCOMPLETE` | Only with `DPDP_NOTICE_REQUIRE_RULE3=true`: an r.3 element is missing, or the language is not English or an Eighth Schedule language |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
-| 409 | `CONFLICT` | This `noticeId` already has this `version`. Only that conflict is a 409; other failures are errors, not conflicts |
+| 409 | `CONFLICT` | This `noticeId` already has this `version` in this `language`. Only that conflict is a 409; other failures are errors, not conflicts |
 
 The notice is recorded on the audit chain as `grantex.dpdp.notice_created`.
 List notices with [List Consent Notices](/api-reference/dpdp/list-consent-notices)

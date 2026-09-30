@@ -1,0 +1,136 @@
+---
+title: "Record Breach"
+sidebarTitle: "Record Breach"
+description: "Record a personal data breach in the DPDP breach register, with the Board and Data Principal deadlines computed."
+---
+
+## Endpoint
+
+```
+POST /v1/dpdp/breaches
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## What this does and does not do
+
+Under the Digital Personal Data Protection Act, 2023, s.8(6) and the DPDP
+Rules, 2025, r.7, a Data Fiduciary that becomes aware of a personal data
+breach informs each affected Data Principal without delay, informs the Data
+Protection Board without delay, and sends the Board a detailed report within
+72 hours of becoming aware (extendable on written request). There is no risk
+threshold. These obligations apply from 13 May 2027 (Rules r.1).
+
+This endpoint keeps the fiduciary's register and computes the deadlines.
+**Grantex does not notify Data Principals and does not file anything with
+the Board.** It records what the fiduciary tells it it sent, and emits
+webhook events the fiduciary can act on.
+
+## Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `description` | `string` | Yes | What happened (up to 5,000 characters) |
+| `nature` | `string` | Yes | The nature of the breach, for example `confidentiality` (up to 1,000 characters) |
+| `extent` | `string` | Yes | Its extent (up to 5,000 characters) |
+| `occurredAt` | `string` | No | ISO 8601 date-time the breach occurred; not in the future and not after `awareAt` |
+| `awareAt` | `string` | No | When the fiduciary became aware. Defaults to now; not in the future. The 72-hour period runs from here |
+| `location` | `string` | No | Where it occurred (up to 1,000 characters) |
+| `likelyImpact` | `string` | No | Likely consequences for Data Principals (up to 5,000 characters) |
+| `affectedDataPrincipalIds` | `string[]` | One of these two | Up to 10,000 affected principal ids |
+| `affectedCount` | `integer` | One of these two | Number affected; defaults to the number of ids and may not be smaller |
+| `mitigation` | `string` | No | Mitigation measures taken (up to 5,000 characters) |
+
+## Example Request
+
+```bash
+curl -X POST https://api.grantex.dev/v1/dpdp/breaches \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Unauthorised read of an order history export",
+    "nature": "confidentiality",
+    "extent": "Order history of three customers",
+    "occurredAt": "2027-06-01T08:00:00Z",
+    "awareAt": "2027-06-01T10:00:00Z",
+    "affectedDataPrincipalIds": ["user_abc123", "user_def456", "user_ghi789"],
+    "mitigation": "Credential revoked and storage policy narrowed"
+  }'
+```
+
+## Response -- 201 Created
+
+```json
+{
+  "breachId": "brch_01HXYZ...",
+  "status": "open",
+  "description": "Unauthorised read of an order history export",
+  "nature": "confidentiality",
+  "extent": "Order history of three customers",
+  "occurredAt": "2027-06-01T08:00:00.000Z",
+  "awareAt": "2027-06-01T10:00:00.000Z",
+  "location": null,
+  "likelyImpact": null,
+  "affectedCount": 3,
+  "affectedDataPrincipalIds": ["user_abc123", "user_def456", "user_ghi789"],
+  "mitigation": "Credential revoked and storage policy narrowed",
+  "detailedReport": {
+    "updatedDetails": null,
+    "factsCircumstancesReasons": null,
+    "mitigation": null,
+    "causeFindings": null,
+    "remedialMeasures": null
+  },
+  "boardInitialIntimationRequired": true,
+  "boardInitialIntimationSentAt": null,
+  "boardDetailedReportDueAt": "2027-06-04T10:00:00.000Z",
+  "boardDetailedReportSentAt": null,
+  "boardDetailedReportOverdue": false,
+  "boardDetailedReportLate": false,
+  "extension": null,
+  "principalIntimationRequired": true,
+  "principalIntimation": { "due": "without_delay", "intimatedCount": 0, "pendingCount": 3, "lastIntimatedAt": null },
+  "principalIntimations": [],
+  "createdAt": "2027-06-01T10:05:00.000Z",
+  "updatedAt": null,
+  "closedAt": null
+}
+```
+
+| Field | Description |
+|---|---|
+| `boardDetailedReportDueAt` | `awareAt` + 72 hours, or the granted extension's `newDueAt` |
+| `boardDetailedReportOverdue` | `true` when no detailed report is recorded as sent and the due time has passed |
+| `principalIntimationRequired` | Always `true`: each affected principal is to be informed without delay |
+| `principalIntimation.pendingCount` | Listed principals not yet recorded as intimated; `null` when only a count was given |
+
+## Events and audit
+
+The breach is recorded on the audit chain as `grantex.dpdp.breach_recorded`,
+and two webhook events are emitted: `dpdp.breach.recorded` (`breachId`,
+`status`, `awareAt`, `affectedCount`, `boardDetailedReportDueAt`) and
+`dpdp.breach.principal_intimation_due` (`breachId`, `awareAt`,
+`affectedCount`, `due: "without_delay"`). Neither carries principal ids or
+the breach text. With `DPDP_BREACH_DEADLINE_ALERTS_ENABLED=true`, a worker
+emits `dpdp.breach.board_report_due` before and after the 72-hour deadline
+(see [Self-hosting](/guides/self-hosting)).
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | Missing or malformed fields, a time in the future, `occurredAt` after `awareAt`, neither ids nor a count, or a count below the number of ids |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+
+## Related
+
+[List Breaches](/api-reference/dpdp/list-breaches),
+[Get Breach](/api-reference/dpdp/get-breach),
+[Update Breach](/api-reference/dpdp/update-breach),
+[Record Principal Intimation](/api-reference/dpdp/record-breach-intimation).
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

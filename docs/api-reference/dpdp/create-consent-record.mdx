@@ -29,7 +29,8 @@ Requires a developer API key in the `Authorization` header.
 | `dataPrincipalId` | `string` | Yes | The data principal (end-user) providing consent |
 | `purposes` | `object[]` | Yes | Array of purpose objects (`{ code, description }`) |
 | `consentNoticeId` | `string` | Yes | ID of the consent notice shown to the principal |
-| `consentNoticeVersion` | `string` | No | The notice version shown to the principal. Default: the latest version of `consentNoticeId` |
+| `consentNoticeVersion` | `string` | No | The notice version shown to the principal. Default: the latest version of `consentNoticeId` (in `consentNoticeLanguage` when given) |
+| `consentNoticeLanguage` | `string` | Only with `DPDP_REQUIRE_NOTICE_LANGUAGE=true` and a version in several languages | The language of the notice shown. With it and no pinned version, the newest notice row in this language is bound. Without it, the pinned version (or the version of the newest notice row) is bound through its newest row, whose language is recorded; with `DPDP_REQUIRE_NOTICE_LANGUAGE=true` a version registered in more than one language answers `400 NOTICE_LANGUAGE_REQUIRED` instead |
 | `processingExpiresAt` | `string` | Yes | ISO-8601 date-time, in the future, when data processing permission expires |
 
 The grant must be the developer's and active (not revoked, suspended or
@@ -78,7 +79,9 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-records \
   "dataPrincipalId": "user_abc123",
   "consentNoticeId": "notice_v2",
   "consentNoticeVersion": "2.0",
+  "consentNoticeLanguage": "en",
   "consentNoticeHash": "a1b2c3d4e5f6...",
+  "noticeHash": "9f8e7d6c5b4a...",
   "consentProof": {
     "type": "JWS-EdDSA",
     "alg": "EdDSA",
@@ -104,7 +107,9 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-records \
 | `dataPrincipalId` | `string` | The data principal who gave consent |
 | `consentNoticeId` | `string` | The consent notice ID |
 | `consentNoticeVersion` | `string` | The notice version the record was given against |
+| `consentNoticeLanguage` | `string` | The language of that notice version |
 | `consentNoticeHash` | `string` | SHA-256 hash of that notice version's content |
+| `noticeHash` | `string` | The notice hash of that notice: the whole notice, structured fields and language included (see [Consent Notice Content](/api-reference/dpdp/consent-notice-content#the-notice-hash)); stored on the record |
 | `consentProof` | `object` | Signed proof of consent (see below) |
 | `processingExpiresAt` | `string` | ISO-8601 timestamp when processing permission expires |
 | `retentionUntil` | `string` | ISO-8601 timestamp for data retention limit (30 days after processing expiry) |
@@ -115,7 +120,8 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-records \
 
 `proofJwt` is a compact JWS (RFC 7515) signed with EdDSA over Ed25519
 (RFC 8037). Its payload carries `recordId`, `grantId`, `dataPrincipalId`,
-`consentNoticeId`, `consentNoticeVersion`, `consentNoticeHash`, the purpose
+`consentNoticeId`, `consentNoticeVersion`, `consentNoticeHash` (the content
+hash), `consentNoticeLanguage`, `noticeHash` (the whole notice), the purpose
 codes, `consentGivenAt`, `iss` and `iat`, and no `exp`: the proof is evidence
 the Data Fiduciary may need for as long as it keeps the record (DPDP Act
 s.6(10) puts the burden of proving consent on the fiduciary). Verify it with
@@ -147,7 +153,8 @@ The creation is recorded on the developer's audit chain as
 | 400 | `BAD_REQUEST` | Missing or malformed fields: `purposes` not a non-empty array of `{ code, description }`, `processingExpiresAt` not a future ISO-8601 date-time, a field over its length limit |
 | 400 | `INVALID_GRANT` | Grant not found, not owned by the developer, or not active (revoked, suspended or expired) |
 | 400 | `PRINCIPAL_MISMATCH` | `dataPrincipalId` is not the grant's principal (only with `DPDP_ENFORCE_GRANT_PRINCIPAL=true`) |
-| 400 | `INVALID_NOTICE` | Consent notice, or the pinned `consentNoticeVersion`, not found |
+| 400 | `INVALID_NOTICE` | Consent notice, the pinned `consentNoticeVersion`, or that version in `consentNoticeLanguage`, not found |
+| 400 | `NOTICE_LANGUAGE_REQUIRED` | The notice version exists in several languages and `consentNoticeLanguage` was not given (only with `DPDP_REQUIRE_NOTICE_LANGUAGE=true`) |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
 | 503 | `CONSENT_PROOF_UNAVAILABLE` | The consent proof could not be signed; nothing was stored |
 | 503 | `CONSENT_PROOF_KEY_NOT_PERSISTENT` | The signing key is ephemeral and the server sets `DPDP_REQUIRE_PERSISTENT_PROOF_KEY=true`; nothing was stored |

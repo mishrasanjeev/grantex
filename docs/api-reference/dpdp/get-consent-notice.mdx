@@ -45,6 +45,7 @@ curl https://api.grantex.dev/v1/dpdp/consent-notices/data-processing \
       "dataFiduciaryContact": "privacy@merchant.example",
       "grievanceOfficer": { "name": "Grievance Officer", "email": "grievance@merchant.example" },
       "contentHash": "a1b2c3d4e5f6...",
+      "noticeHash": "9f8e7d6c5b4a...",
       "createdAt": "2026-04-05T12:00:00.000Z"
     }
   ]
@@ -71,7 +72,13 @@ curl https://api.grantex.dev/v1/dpdp/consent-notices/data-processing \
 | `dataFiduciaryContact` | `string \| null` | Contact given when the version was created |
 | `grievanceOfficer` | `object \| null` | `{ name, email, phone? }` given when the version was created |
 | `contentHash` | `string` | SHA-256 hash of `content`; a consent record's `consentNoticeHash` matches the version it was given against |
+| `noticeHash` | `string` | SHA-256 over the canonical JSON of the whole notice (see [Consent Notice Content](/api-reference/dpdp/consent-notice-content#the-notice-hash)); a consent record's `noticeHash` matches the notice it was given against |
 | `createdAt` | `string` | ISO-8601 creation timestamp |
+
+Each version also carries the structured fields (`itemisedPersonalData`,
+`purposeDetails`, `withdrawalUrl`, `rightsUrl`, `boardComplaintUrl`,
+`contact`; `null` when not given) and a `validation` block computed as of the
+read; see [Consent Notice Content](/api-reference/dpdp/consent-notice-content).
 
 ## Error Responses
 
