@@ -1,0 +1,47 @@
+---
+title: "Get Erasure Request"
+sidebarTitle: "Get Erasure Request"
+description: "Read a completed DPDP erasure request: what was erased, what was revoked, and what was retained and why."
+---
+
+## Endpoint
+
+```
+GET /v1/dpdp/erasure-requests/:requestId
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `requestId` | `string` | Yes | The `requestId` [Request Erasure](/api-reference/dpdp/request-erasure) returned |
+
+## Example Request
+
+```bash
+curl https://api.grantex.dev/v1/dpdp/erasure-requests/ER-2026-01J9Z6ZC4Q8F2V1K3M5N7P9R0S \
+  -H "Authorization: Bearer gx_..."
+```
+
+## Response -- 200 OK
+
+The same object [Request Erasure](/api-reference/dpdp/request-erasure)
+returned: `requestId`, `dataPrincipalId`, `status`, `recordsErased`,
+`grantsRevoked`, `delegatedGrantsRevoked`, `grievancesRedacted`,
+`exportsDeleted`, `retained`, `submittedAt`, `completedAt` and the deprecated
+`expectedCompletionBy` (equal to `completedAt`).
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `NOT_FOUND` | No such request for this developer |
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

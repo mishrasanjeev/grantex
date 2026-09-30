@@ -29,7 +29,20 @@ Requires a developer API key in the `Authorization` header.
 | `dataPrincipalId` | `string` | Yes | The data principal (end-user) providing consent |
 | `purposes` | `object[]` | Yes | Array of purpose objects (`{ code, description }`) |
 | `consentNoticeId` | `string` | Yes | ID of the consent notice shown to the principal |
-| `processingExpiresAt` | `string` | Yes | ISO-8601 timestamp when data processing permission expires |
+| `consentNoticeVersion` | `string` | No | The notice version shown to the principal. Default: the latest version of `consentNoticeId` |
+| `processingExpiresAt` | `string` | Yes | ISO-8601 date-time, in the future, when data processing permission expires |
+
+The grant must be the developer's and active (not revoked, suspended or
+expired). `dataPrincipalId` is the end user who gave consent, which in the
+documented model is the grant's principal (`principal_id`). With
+`DPDP_ENFORCE_GRANT_PRINCIPAL=true` a record whose `dataPrincipalId` differs
+from the grant's principal is refused with `PRINCIPAL_MISMATCH`; with the flag
+off (the default) the two are not compared, and an integration that keys its
+data principals differently from its grant principals keeps working.
+
+Limits: `grantId`, `dataPrincipalId` and `consentNoticeId` up to 256
+characters; `consentNoticeVersion` and each purpose `code` up to 128; each
+purpose `description` up to 1,000; at most 50 purposes.
 
 ### Purpose Object
 
@@ -63,10 +76,15 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-records \
   "recordId": "cr_01HXYZ...",
   "grantId": "grnt_01HXYZ...",
   "dataPrincipalId": "user_abc123",
+  "consentNoticeId": "notice_v2",
+  "consentNoticeVersion": "2.0",
   "consentNoticeHash": "a1b2c3d4e5f6...",
   "consentProof": {
-    "type": "Ed25519Signature2020",
+    "type": "JWS-EdDSA",
+    "alg": "EdDSA",
+    "kid": "grantex-ed25519-2026-04",
     "proofJwt": "eyJ...",
+    "jwksUri": "https://api.grantex.dev/.well-known/jwks.json",
     "signedAt": "2026-04-05T12:00:00.000Z"
   },
   "processingExpiresAt": "2027-01-01T00:00:00.000Z",
@@ -83,21 +101,43 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-records \
 | `recordId` | `string` | Unique consent record ID |
 | `grantId` | `string` | The grant this consent is attached to |
 | `dataPrincipalId` | `string` | The data principal who gave consent |
-| `consentNoticeHash` | `string` | SHA-256 hash of the consent notice content |
-| `consentProof` | `object` | Cryptographic proof of consent (Ed25519 signature or `none` if key unavailable) |
+| `consentNoticeId` | `string` | The consent notice ID |
+| `consentNoticeVersion` | `string` | The notice version the record was given against |
+| `consentNoticeHash` | `string` | SHA-256 hash of that notice version's content |
+| `consentProof` | `object` | Signed proof of consent (see below) |
 | `processingExpiresAt` | `string` | ISO-8601 timestamp when processing permission expires |
 | `retentionUntil` | `string` | ISO-8601 timestamp for data retention limit (30 days after processing expiry) |
 | `status` | `string` | Record status: `active` |
 | `createdAt` | `string` | ISO-8601 creation timestamp |
 
+### Consent Proof
+
+`proofJwt` is a compact JWS (RFC 7515) signed with EdDSA over Ed25519
+(RFC 8037). Its payload carries `recordId`, `grantId`, `dataPrincipalId`,
+`consentNoticeId`, `consentNoticeVersion`, `consentNoticeHash`, the purpose
+codes, `consentGivenAt`, `iss` and `iat`, and no `exp`: the proof is evidence
+the Data Fiduciary may need for as long as it keeps the record (DPDP Act
+s.6(10) puts the burden of proving consent on the fiduciary). Verify it with
+the key the header's `kid` names in the JWKS at `jwksUri`. Set
+`ED25519_PRIVATE_KEY` in production: without it each process generates its
+own key, and a proof cannot be verified after a restart or by another instance.
+
+If the proof cannot be signed, no record is created and the request fails
+with `503 CONSENT_PROOF_UNAVAILABLE`.
+
+The creation is recorded on the developer's audit chain as
+`grantex.dpdp.consent_created`.
+
 ## Error Responses
 
 | Status | Code | Description |
 |---|---|---|
-| 400 | `BAD_REQUEST` | Missing required fields |
-| 400 | `INVALID_GRANT` | Grant not found or not owned by developer |
-| 400 | `INVALID_NOTICE` | Consent notice not found |
+| 400 | `BAD_REQUEST` | Missing or malformed fields: `purposes` not a non-empty array of `{ code, description }`, `processingExpiresAt` not a future ISO-8601 date-time, a field over its length limit |
+| 400 | `INVALID_GRANT` | Grant not found, not owned by the developer, or not active (revoked, suspended or expired) |
+| 400 | `PRINCIPAL_MISMATCH` | `dataPrincipalId` is not the grant's principal (only with `DPDP_ENFORCE_GRANT_PRINCIPAL=true`) |
+| 400 | `INVALID_NOTICE` | Consent notice, or the pinned `consentNoticeVersion`, not found |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 503 | `CONSENT_PROOF_UNAVAILABLE` | The consent proof could not be signed; nothing was stored |
 
 ## SDK Examples
 

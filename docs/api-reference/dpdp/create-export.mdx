@@ -26,12 +26,12 @@ Requires a developer API key in the `Authorization` header.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `type` | `string` | Yes | Export type: `dpdp-audit`, `gdpr-article-15`, or `eu-ai-act-conformance` |
-| `dateFrom` | `string` | Yes | ISO-8601 start date for the export window |
-| `dateTo` | `string` | Yes | ISO-8601 end date for the export window |
-| `format` | `string` | No | Output format (default: `"json"`) |
+| `dateFrom` | `string` | Yes | ISO-8601 start date or date-time for the export window |
+| `dateTo` | `string` | Yes | ISO-8601 end date or date-time; not before `dateFrom` |
+| `format` | `string` | No | Output format. Only `"json"` (the default) is produced; any other value is `400` |
 | `includeActionLog` | `boolean` | No | Include audit log entries (default: `true`) |
 | `includeConsentRecords` | `boolean` | No | Include consent records (default: `true`) |
-| `dataPrincipalId` | `string` | No | Filter export to a specific data principal |
+| `dataPrincipalId` | `string` | No | Filter the export to one data principal (see below) |
 
 ## Example Request
 
@@ -56,6 +56,9 @@ curl -X POST https://api.grantex.dev/v1/dpdp/exports \
   "type": "dpdp-audit",
   "format": "json",
   "recordCount": 42,
+  "truncated": false,
+  "auditLogLimit": 1000,
+  "dataPrincipalId": null,
   "data": {
     "exportType": "dpdp-audit",
     "dateRange": {
@@ -66,7 +69,9 @@ curl -X POST https://api.grantex.dev/v1/dpdp/exports \
     "developerId": "dev_01HXYZ...",
     "consentRecords": [...],
     "auditLog": [...],
-    "grievances": [...]
+    "grievances": [...],
+    "truncated": false,
+    "auditLogLimit": 1000
   },
   "expiresAt": "2026-04-12T14:00:00.000Z",
   "createdAt": "2026-04-05T14:00:00.000Z"
@@ -81,6 +86,9 @@ curl -X POST https://api.grantex.dev/v1/dpdp/exports \
 | `type` | `string` | Export type |
 | `format` | `string` | Output format |
 | `recordCount` | `number` | Total number of records in the export |
+| `truncated` | `boolean` | `true` when the audit log had more than `auditLogLimit` entries in the window and only the newest `auditLogLimit` are included |
+| `auditLogLimit` | `number` | The audit log cap (1000) |
+| `dataPrincipalId` | `string \| null` | The principal the export is filtered to, if any |
 | `data` | `object` | The export data payload (see below) |
 | `expiresAt` | `string` | ISO-8601 expiry timestamp (7 days from creation) |
 | `createdAt` | `string` | ISO-8601 creation timestamp |
@@ -94,8 +102,27 @@ curl -X POST https://api.grantex.dev/v1/dpdp/exports \
 | `generatedAt` | `string` | ISO-8601 generation timestamp |
 | `developerId` | `string` | Developer who generated the export |
 | `consentRecords` | `object[]` | Consent records in the date range (if `includeConsentRecords`) |
-| `auditLog` | `object[]` | Audit log entries in the date range (if `includeActionLog`, max 1000) |
+| `auditLog` | `object[]` | Audit log entries in the date range (if `includeActionLog`, newest first, at most 1000; see `truncated`) |
 | `grievances` | `object[]` | Grievances in the date range (only for `dpdp-audit` type) |
+| `truncated` | `boolean` | As above |
+| `auditLogLimit` | `number` | As above |
+
+### Filtering to a data principal
+
+With `dataPrincipalId`, consent records and grievances are those of that
+principal. `audit_entries.principal_id` is the principal of the grant the
+entry was written under, which is the DPDP data principal only when an
+integration keys both the same way (`DPDP_ENFORCE_GRANT_PRINCIPAL=true`
+enforces it). The audit log therefore includes entries written under the
+grants of the principal's consent records, entries whose principal is
+`dataPrincipalId`, and the platform's DPDP audit entries about the principal.
+(Grievances used to be included for every principal even when the export was
+filtered.)
+
+Creating an export is recorded on the audit chain as
+`grantex.dpdp.export_created`. Exports expire after 7 days; reading one after
+that answers `410 GONE` and its data is purged. An erasure of a principal
+deletes the stored exports about that principal.
 
 ## Export Types
 
@@ -109,7 +136,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/exports \
 
 | Status | Code | Description |
 |---|---|---|
-| 400 | `BAD_REQUEST` | Missing required fields or invalid `type` |
+| 400 | `BAD_REQUEST` | Missing required fields, invalid `type`, an invalid date, `dateFrom` after `dateTo`, or a `format` other than `json` |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
 
 ## SDK Examples

@@ -28,8 +28,9 @@ Requires a developer API key in the `Authorization` header.
 | `dataPrincipalId` | `string` | Yes | The data principal filing the grievance |
 | `type` | `string` | Yes | Grievance type (e.g., `"consent-violation"`, `"data-breach"`, `"unauthorized-processing"`) |
 | `description` | `string` | Yes | Detailed description of the grievance |
-| `recordId` | `string` | No | Related consent record ID (if applicable) |
-| `evidence` | `object` | No | Supporting evidence as a JSON object |
+| `recordId` | `string` | No | Related consent record ID. It must be one of the developer's records, about this `dataPrincipalId` |
+| `evidence` | `object` | No | Supporting evidence as a JSON object (up to 16 KB) |
+| `responsePeriodDays` | `integer` | No | The response period the Data Fiduciary publishes, 1 to 90 days (default 7). DPDP Rules 2025 r.14(3) cap a published period at 90 days |
 
 ## Example Request
 
@@ -57,6 +58,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/grievances \
   "referenceNumber": "GRV-2026-00042",
   "type": "unauthorized-processing",
   "status": "submitted",
+  "responsePeriodDays": 7,
   "expectedResolutionBy": "2026-04-12T14:00:00.000Z",
   "createdAt": "2026-04-05T14:00:00.000Z"
 }
@@ -70,15 +72,21 @@ curl -X POST https://api.grantex.dev/v1/dpdp/grievances \
 | `referenceNumber` | `string` | Human-readable reference number (format: `GRV-YYYY-NNNNN`) |
 | `type` | `string` | Grievance type |
 | `status` | `string` | Initial status: `submitted` |
-| `expectedResolutionBy` | `string` | ISO-8601 deadline for resolution (7 days from filing) |
+| `responsePeriodDays` | `integer` | The response period applied |
+| `expectedResolutionBy` | `string` | ISO-8601 deadline: filing time plus `responsePeriodDays` |
 | `createdAt` | `string` | ISO-8601 creation timestamp |
 
 ## Error Responses
 
 | Status | Code | Description |
 |---|---|---|
-| 400 | `BAD_REQUEST` | Missing required fields (`dataPrincipalId`, `type`, `description`) |
+| 400 | `BAD_REQUEST` | Missing required fields (`dataPrincipalId`, `type`, `description`), `responsePeriodDays` outside 1 to 90, or malformed `evidence` |
+| 400 | `INVALID_RECORD` | `recordId` is not one of the developer's records, or is about another data principal |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
+
+Filing is recorded on the audit chain as `grantex.dpdp.grievance_filed`. Move
+a grievance through review with [Update Grievance](/api-reference/dpdp/update-grievance)
+and list grievances with [List Grievances](/api-reference/dpdp/list-grievances).
 
 ## SDK Examples
 

@@ -94,7 +94,8 @@ Each purpose in a consent record is a separate, specific scope. The consent UI s
 Every consent record can be withdrawn through the authenticated DPDP API or SDK.
 Your application is responsible for presenting an accessible withdrawal control
 to the data principal; Grantex does not currently ship a separate DPDP portal or
-one-click withdrawal UI. Withdrawal triggers:
+one-click withdrawal UI. A withdrawal with `revokeGrant: true` (the default
+when the server sets `DPDP_WITHDRAWAL_REVOKES_GRANT=true`) triggers:
 
 1. Instant revocation of the underlying Grantex grant token
 2. Cascade revocation to all delegated sub-agent tokens
@@ -252,7 +253,7 @@ No. Grantex provides the technical infrastructure for consent management, audit 
 
 ### What happens if a data principal withdraws consent?
 
-The underlying Grantex grant is revoked instantly. All delegated sub-agent tokens are cascade-revoked. The agent can no longer access the data principal's resources. A withdrawal audit entry is created. The developer receives a webhook notification.
+When the withdrawal asks for it (`revokeGrant: true`, or by default with `DPDP_WITHDRAWAL_REVOKES_GRANT=true`), the underlying Grantex grant is revoked instantly and all delegated sub-agent tokens are cascade-revoked. The agent can no longer access the data principal's resources. A withdrawal audit entry is created. The developer receives a webhook notification.
 
 ### Does the DPDP Act apply if my users are outside India?
 

@@ -747,9 +747,14 @@
               "api-reference/dpdp/withdraw-consent",
               "api-reference/dpdp/list-principal-records",
               "api-reference/dpdp/request-erasure",
+              "api-reference/dpdp/get-erasure-request",
               "api-reference/dpdp/create-consent-notice",
+              "api-reference/dpdp/list-consent-notices",
+              "api-reference/dpdp/get-consent-notice",
               "api-reference/dpdp/file-grievance",
+              "api-reference/dpdp/list-grievances",
               "api-reference/dpdp/get-grievance",
+              "api-reference/dpdp/update-grievance",
               "api-reference/dpdp/create-export",
               "api-reference/dpdp/get-export"
             ]

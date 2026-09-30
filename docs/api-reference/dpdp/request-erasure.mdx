@@ -1,7 +1,7 @@
 ---
 title: "Request Erasure"
 sidebarTitle: "Request Erasure"
-description: "Exercise the right to erasure for a data principal. Marks all consent records as erased, revokes associated grants, and anonymizes audit entries (DPDP Section 11)."
+description: "Exercise the right to erasure for a data principal: revokes active grants, marks consent records erased, redacts grievances, deletes stored exports, and reports what is retained and why."
 ---
 
 ## Endpoint
@@ -35,15 +35,29 @@ curl -X POST https://api.grantex.dev/v1/dpdp/data-principals/user_abc123/erasure
 
 ## Response -- 201 Created
 
+`201` for a new erasure. Repeating the request for a principal whose records
+are all erased already returns the completed request with `200` instead of
+creating another.
+
 ```json
 {
-  "requestId": "ER-2026-00042",
+  "requestId": "ER-2026-01J9Z6ZC4Q8F2V1K3M5N7P9R0S",
   "dataPrincipalId": "user_abc123",
   "status": "completed",
   "recordsErased": 3,
   "grantsRevoked": 2,
+  "delegatedGrantsRevoked": 1,
+  "grievancesRedacted": 1,
+  "exportsDeleted": 1,
+  "retained": [
+    { "category": "consent_records", "count": 3, "reason": "Kept and marked erased, not deleted: ..." },
+    { "category": "audit_log", "reason": "Audit entries are neither modified nor deleted: ..." },
+    { "category": "grievances", "count": 1, "reason": "Kept as the record of grievance handling ..." },
+    { "category": "fiduciary_data", "reason": "Grantex holds no personal data the Data Fiduciary processed ..." }
+  ],
   "submittedAt": "2026-04-05T14:00:00.000Z",
-  "expectedCompletionBy": "2026-04-12T14:00:00.000Z"
+  "completedAt": "2026-04-05T14:00:00.120Z",
+  "expectedCompletionBy": "2026-04-05T14:00:00.120Z"
 }
 ```
 
@@ -51,25 +65,43 @@ curl -X POST https://api.grantex.dev/v1/dpdp/data-principals/user_abc123/erasure
 
 | Field | Type | Description |
 |---|---|---|
-| `requestId` | `string` | Erasure request reference number (format: `ER-YYYY-NNNNN`) |
-| `dataPrincipalId` | `string` | The data principal whose data was erased |
+| `requestId` | `string` | Erasure request reference (format: `ER-YYYY-<ULID>`); read it back with [Get Erasure Request](/api-reference/dpdp/get-erasure-request) |
+| `dataPrincipalId` | `string` | The data principal |
 | `status` | `string` | Request status: `completed` |
-| `recordsErased` | `number` | Number of consent records marked as erased |
-| `grantsRevoked` | `number` | Number of grants revoked as part of erasure |
-| `submittedAt` | `string` | ISO-8601 timestamp of the erasure request |
-| `expectedCompletionBy` | `string` | ISO-8601 timestamp for full completion (7 days from submission) |
+| `recordsErased` | `number` | Consent records this request marked erased |
+| `grantsRevoked` | `number` | The principal's grants this request revoked (only grants that were still active are counted) |
+| `delegatedGrantsRevoked` | `number` | Grants delegated from those, revoked in the same cascade |
+| `grievancesRedacted` | `number` | Grievances whose description and evidence were replaced by a fixed marker |
+| `exportsDeleted` | `number` | Stored exports deleted: those filtered to the principal and any whose data contains the principal id |
+| `retained` | `object[]` | What was kept rather than erased, as `{ category, count?, reason }` |
+| `submittedAt` | `string` | ISO-8601 timestamp of the request |
+| `completedAt` | `string` | ISO-8601 timestamp the erasure completed |
+| `expectedCompletionBy` | `string` | Deprecated; equal to `completedAt`. It used to be seven days after submission while `status` already said `completed` |
 
 ## What Happens on Erasure
 
-1. All consent records for the data principal are set to `status: 'erased'`
-2. All associated grants are revoked
-3. Audit entries are annotated with an `erasedAt` timestamp (anonymized)
-4. A `dpdp.erasure.completed` event is emitted
+In one transaction:
+
+1. The principal's active grants, and the grants delegated from them, are revoked through the grant cascade (credentials, wallet reservations, the revocation cache and `grant.revoked` events follow).
+2. The principal's consent records are set to `status: 'erased'` with `erasedAt`; they are **retained**, not deleted.
+3. The principal's grievances keep their reference, type, status and dates; their description and evidence are replaced by a fixed marker.
+4. Stored exports filtered to the principal, or containing the principal id, are deleted.
+5. The request is stored and recorded on the audit chain as `grantex.dpdp.erasure_completed`, and a `dpdp.erasure.completed` event is emitted.
+
+What is retained, and why, is returned in `retained`:
+
+- **Consent records** are kept, marked erased, because the Data Fiduciary bears the burden of proving consent (DPDP Act s.6(10)) and DPDP Rules 2025 r.8(3) require processing logs and associated data to be retained for at least one year.
+- **Audit entries** are neither modified nor deleted: DPDP Rules 2025 r.6(1)(e) and r.8(3) require logs to be retained for at least one year, and the entries form a tamper-evident hash chain.
+- **Grievances** are kept, redacted, as the record of grievance handling.
+- **The fiduciary's processed data** is not held by Grantex; erasing it in the fiduciary's own systems and its processors' (DPDP Act s.8(7)) is the fiduciary's step.
+
+These obligations apply from the commencement of the DPDP Rules' substantive provisions (13 May 2027); the endpoint behaves the same before then.
 
 ## Error Responses
 
 | Status | Code | Description |
 |---|---|---|
+| 400 | `BAD_REQUEST` | `principalId` longer than 256 characters |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
 | 404 | `NOT_FOUND` | No consent records found for this data principal |
 

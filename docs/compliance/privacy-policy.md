@@ -42,7 +42,7 @@ We do **not** ask you for payment-card data, government identifiers, biometrics,
 | Authorization audit trail | Operator-configurable; default 365 days on the hosted service. |
 | Operational logs | 30 days. |
 | Backups | 30 days, rolling. |
-| DPDP / GDPR erasure records | Indefinitely, anonymized — required as proof the erasure occurred. |
+| DPDP / GDPR erasure records | Indefinitely — required as proof the erasure occurred. The record keeps the data principal identifier and counts, not the erased content. |
 
 ## 5. Sub-processors and international transfers
 

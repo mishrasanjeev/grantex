@@ -42,8 +42,11 @@ curl https://api.grantex.dev/v1/dpdp/exports/exp_01HXYZ... \
   "dateFrom": "2026-01-01T00:00:00.000Z",
   "dateTo": "2026-04-01T00:00:00.000Z",
   "format": "json",
-  "status": "completed",
+  "status": "complete",
   "recordCount": 42,
+  "truncated": false,
+  "auditLogLimit": 1000,
+  "dataPrincipalId": null,
   "data": {
     "exportType": "dpdp-audit",
     "dateRange": {
@@ -70,8 +73,11 @@ curl https://api.grantex.dev/v1/dpdp/exports/exp_01HXYZ... \
 | `dateFrom` | `string` | ISO-8601 start date of the export window |
 | `dateTo` | `string` | ISO-8601 end date of the export window |
 | `format` | `string` | Output format |
-| `status` | `string` | Export status: `completed` |
+| `status` | `string` | Export status: `complete` |
 | `recordCount` | `number` | Total number of records in the export |
+| `truncated` | `boolean` | Whether the audit log hit the 1000-entry cap |
+| `auditLogLimit` | `number` | The audit log cap (1000) |
+| `dataPrincipalId` | `string \| null` | The principal the export is filtered to, if any |
 | `data` | `object` | The export data payload |
 | `expiresAt` | `string` | ISO-8601 expiry timestamp (exports expire after 7 days) |
 | `createdAt` | `string` | ISO-8601 creation timestamp |
@@ -81,7 +87,8 @@ curl https://api.grantex.dev/v1/dpdp/exports/exp_01HXYZ... \
 | Status | Code | Description |
 |---|---|---|
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
-| 404 | `NOT_FOUND` | Export not found |
+| 404 | `NOT_FOUND` | Export not found (or deleted by an erasure) |
+| 410 | `GONE` | The export has expired; its data was purged and is not served |
 
 ## SDK Examples
 

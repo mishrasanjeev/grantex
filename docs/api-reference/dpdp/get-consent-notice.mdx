@@ -1,0 +1,85 @@
+---
+title: "Get Consent Notice"
+sidebarTitle: "Get Consent Notice"
+description: "Read every version of one DPDP consent notice, with its content, newest first."
+---
+
+## Endpoint
+
+```
+GET /v1/dpdp/consent-notices/:noticeId
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `noticeId` | `string` | Yes | The notice ID given when the notice was created |
+
+## Example Request
+
+```bash
+curl https://api.grantex.dev/v1/dpdp/consent-notices/data-processing \
+  -H "Authorization: Bearer gx_..."
+```
+
+## Response -- 200 OK
+
+```json
+{
+  "noticeId": "data-processing",
+  "versions": [
+    {
+      "id": "notice_01HXYZ...",
+      "version": "2.0",
+      "language": "en",
+      "title": "Data Processing Notice",
+      "content": "We process your data for service delivery and analytics.",
+      "purposes": [
+        { "code": "service", "description": "Service delivery" }
+      ],
+      "dataFiduciaryContact": "privacy@merchant.example",
+      "grievanceOfficer": { "name": "Grievance Officer", "email": "grievance@merchant.example" },
+      "contentHash": "a1b2c3d4e5f6...",
+      "createdAt": "2026-04-05T12:00:00.000Z"
+    }
+  ]
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `noticeId` | `string` | The notice ID |
+| `versions` | `object[]` | Every version of the notice, newest first |
+
+### Version Object
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | The stored version's ID |
+| `version` | `string` | The version |
+| `language` | `string` | Language code |
+| `title` | `string` | Title |
+| `content` | `string` | The notice text |
+| `purposes` | `object[]` | `{ code, description }` purposes |
+| `dataFiduciaryContact` | `string \| null` | Contact given when the version was created |
+| `grievanceOfficer` | `object \| null` | `{ name, email, phone? }` given when the version was created |
+| `contentHash` | `string` | SHA-256 hash of `content`; a consent record's `consentNoticeHash` matches the version it was given against |
+| `createdAt` | `string` | ISO-8601 creation timestamp |
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `NOT_FOUND` | The developer has no notice with this ID |
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
