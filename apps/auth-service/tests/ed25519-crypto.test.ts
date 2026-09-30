@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
-  initKeys, initEdKey, getEdKeyPair, getEdKeyPersistence, buildJwks, signWithEd25519,
+  initKeys, initEdKey, getEdKeyPair, getEdKeyPersistence, getEdKidAliases, buildJwks, signWithEd25519,
 } from '../src/lib/crypto.js';
-import { jwtVerify, generateKeyPair, exportPKCS8 } from 'jose';
+import { jwtVerify, generateKeyPair, exportPKCS8, exportJWK, calculateJwkThumbprint, createLocalJWKSet, SignJWT } from 'jose';
 import { config } from '../src/config.js';
 
 beforeAll(async () => {
@@ -130,5 +130,112 @@ describe('initEdKey with PEM import', () => {
       await initEdKey();
     }
     expect(getEdKeyPersistence()).toBe('ephemeral');
+  });
+});
+
+describe('ED25519_STABLE_KID', () => {
+  const settable = config as { ed25519PrivateKey: string | null; ed25519StableKid: boolean; jwtLegacyKidMonths: number };
+
+  async function withKey(stableKid: boolean, fn: (pem: string) => Promise<void>): Promise<void> {
+    const { privateKey } = await generateKeyPair('EdDSA', { crv: 'Ed25519', extractable: true });
+    const pem = await exportPKCS8(privateKey);
+    settable.ed25519PrivateKey = pem;
+    settable.ed25519StableKid = stableKid;
+    try {
+      await initEdKey();
+      await fn(pem);
+    } finally {
+      settable.ed25519PrivateKey = null;
+      settable.ed25519StableKid = false;
+      await initEdKey();
+    }
+  }
+
+  function monthKid(monthsBack: number): string {
+    const now = new Date();
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - monthsBack, 1));
+    return `grantex-ed25519-${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  }
+
+  it('gives a configured key a kid derived from its RFC 7638 thumbprint, the same on every start', async () => {
+    await withKey(true, async () => {
+      const kp = getEdKeyPair()!;
+      const jwk = await exportJWK(kp.publicKey);
+      const thumbprint = await calculateJwkThumbprint({ kty: 'OKP', crv: jwk.crv!, x: jwk.x! }, 'sha256');
+      expect(kp.kid).toBe(`grantex-ed25519-${thumbprint}`);
+      await initEdKey();
+      expect(getEdKeyPair()!.kid).toBe(kp.kid);
+      expect(getEdKeyPersistence()).toBe('persistent');
+    });
+  });
+
+  it('publishes the key under its stable kid and the month kids of the last JWT_LEGACY_KID_MONTHS months', async () => {
+    await withKey(true, async () => {
+      const kp = getEdKeyPair()!;
+      const jwks = await buildJwks();
+      const edKeys = jwks.keys.filter((k) => k['alg'] === 'EdDSA');
+      const kids = edKeys.map((k) => k['kid']);
+      expect(kids[0]).toBe(kp.kid);
+      expect(kids).toContain(monthKid(0));
+      expect(kids).toContain(monthKid(config.jwtLegacyKidMonths));
+      expect(kids).not.toContain(monthKid(config.jwtLegacyKidMonths + 1));
+      expect(edKeys).toHaveLength(config.jwtLegacyKidMonths + 2);
+      expect(new Set(edKeys.map((k) => k['x'])).size).toBe(1);
+      expect(edKeys.every((k) => k['d'] === undefined)).toBe(true);
+      expect(getEdKidAliases()).toEqual(kids.slice(1));
+    });
+  });
+
+  it('verifies against the JWKS a proof signed now and one signed under an earlier month kid', async () => {
+    await withKey(true, async () => {
+      const kp = getEdKeyPair()!;
+      const jwks = createLocalJWKSet(await buildJwks() as Parameters<typeof createLocalJWKSet>[0]);
+
+      const now = await signWithEd25519({ proof: 'now' }, { expiresInSeconds: null });
+      const verifiedNow = await jwtVerify(now, jwks, { algorithms: ['EdDSA'] });
+      expect(verifiedNow.protectedHeader.kid).toBe(kp.kid);
+
+      // A proof the same key signed last month, before the flag was turned on.
+      const earlier = await new SignJWT({ proof: 'earlier' })
+        .setProtectedHeader({ alg: 'EdDSA', kid: monthKid(1) })
+        .setIssuedAt()
+        .sign(kp.privateKey);
+      const verifiedEarlier = await jwtVerify(earlier, jwks, { algorithms: ['EdDSA'] });
+      expect(verifiedEarlier.payload['proof']).toBe('earlier');
+    });
+  });
+
+  it('honours JWT_LEGACY_KID_MONTHS=0 by publishing only this month as an alias', async () => {
+    const months = config.jwtLegacyKidMonths;
+    settable.jwtLegacyKidMonths = 0;
+    try {
+      await withKey(true, async () => {
+        expect(getEdKidAliases()).toEqual([monthKid(0)]);
+      });
+    } finally {
+      settable.jwtLegacyKidMonths = months;
+    }
+  });
+
+  it('leaves a configured key on the month kid, with no aliases, when the flag is off', async () => {
+    await withKey(false, async () => {
+      expect(getEdKeyPair()!.kid).toBe(monthKid(0));
+      expect(getEdKidAliases()).toEqual([]);
+      const edKeys = (await buildJwks()).keys.filter((k) => k['alg'] === 'EdDSA');
+      expect(edKeys.map((k) => k['kid'])).toEqual([monthKid(0)]);
+    });
+  });
+
+  it('keeps a generated (ephemeral) key on the month kid even with the flag on', async () => {
+    settable.ed25519StableKid = true;
+    try {
+      await initEdKey();
+      expect(getEdKeyPersistence()).toBe('ephemeral');
+      expect(getEdKeyPair()!.kid).toBe(monthKid(0));
+      expect(getEdKidAliases()).toEqual([]);
+    } finally {
+      settable.ed25519StableKid = false;
+      await initEdKey();
+    }
   });
 });

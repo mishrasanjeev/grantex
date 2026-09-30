@@ -420,7 +420,9 @@ All default off and take the exact value `true`.
 | `DPDP_BREACH_DEADLINE_ALERTS_ENABLED` | Run the breach deadline worker (`DPDP_BREACH_ALERT_LEAD_MINUTES`, default 720) |
 
 Set `ED25519_PRIVATE_KEY` in production so consent proofs stay verifiable
-across restarts and instances. See [Self-Hosting](/guides/self-hosting).
+across restarts and instances, and `ED25519_STABLE_KID=true` so the key id
+does not change with the month the service restarts in. See
+[Self-Hosting](/guides/self-hosting).
 
 ## What remains your responsibility
 
