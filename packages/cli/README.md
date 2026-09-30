@@ -328,18 +328,51 @@ grantex registry lookup did:web:agent.example.com
 grantex registry verify-dns did:web:agent.example.com
 ```
 
-### DPDP Act Compliance
+### DPDP Act (India)
 
 ```bash
-grantex dpdp consent list --principal user@example.com
-grantex dpdp consent get cr_...
-grantex dpdp consent withdraw cr_... --reason "Consent withdrawn"
+# Consent notices (s.5). The version option is --notice-version: --version
+# anywhere on the command line prints the CLI version.
+grantex dpdp notices create --notice-id privacy-notice --notice-version 2.0 \
+  --title "Data Processing Consent Notice" --content "We process your data for..." \
+  --purposes '[{"code":"analytics","description":"Usage analytics"}]' \
+  --grievance-officer '{"name":"Grievance Officer","email":"grievance@example.com"}'
+grantex dpdp notices list [--limit 50] [--cursor <nextCursor>]
+grantex dpdp notices get privacy-notice
+
+# Consent records
+grantex dpdp consent create --grant-id grnt_... --principal-id user_123 \
+  --notice-id privacy-notice [--notice-version 2.0] \
+  --processing-expires-at 2027-09-30T00:00:00Z \
+  --purposes '[{"code":"analytics","description":"Usage analytics"}]'
+grantex dpdp consent list [--principal user_123] [--limit 50] [--cursor <nextCursor>]
+grantex dpdp consent get crec_...
+grantex dpdp consent withdraw crec_... --reason "Consent withdrawn" \
+  [--revoke-grant | --no-revoke-grant] [--delete-processed-data]
+
+# Right to access (s.11) and erasure (s.12)
+grantex dpdp principal-records user_123 [--limit 50] [--cursor <nextCursor>]
+grantex dpdp erasure user_123                 # or: grantex dpdp erasure request user_123
+grantex dpdp erasure status ER-...
+
+# Grievances (s.13)
+grantex dpdp grievances file --principal-id user_123 --type unauthorized-processing \
+  --description "..." [--record-id crec_...] [--evidence '{"note":"..."}'] [--response-period-days 7]
+grantex dpdp grievances list [--status submitted|in_review|resolved|rejected] [--principal user_123]
 grantex dpdp grievances get grv_...
-grantex dpdp erasure user@example.com
-grantex dpdp principal-records user@example.com
+grantex dpdp grievances update grv_... --status resolved --resolution "Processing stopped"
+
+# Exports (JSON only; a bare YYYY-MM-DD means 00:00Z of that day)
+grantex dpdp exports create --type dpdp-audit --date-from 2026-09-01 \
+  --date-to 2026-09-30T23:59:59.999Z [--no-include-action-log] [--no-include-consent-records]
+grantex dpdp exports get exp_...
 ```
 
-Run `grantex dpdp --help` for the create, notice, grievance, and export options.
+List commands print `Next cursor:` when there is another page (with `--json`, the page
+information is written to stderr and the records array to stdout). Errors print the
+server's message with its `code` and `requestId`. Erasure prints what was erased and what
+was retained, with the reason for each retained category. An erasure principal ID of
+literally `status` or `request` needs the explicit `grantex dpdp erasure request <id>` form.
 
 ### Tool Manifests and Scope Enforcement
 

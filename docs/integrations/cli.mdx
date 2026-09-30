@@ -341,28 +341,35 @@ grantex sso callback --code AUTH_CODE --state STATE_PARAM
 ### DPDP Compliance
 
 ```bash
-# Consent notices
-grantex dpdp notices create --notice-id privacy-v1 --version 1.0 --title "Privacy Notice" \
+# Consent notices (DPDP §5). The version option is --notice-version:
+# --version anywhere on the command line prints the CLI version.
+grantex dpdp notices create --notice-id privacy-v1 --notice-version 1.0 --title "Privacy Notice" \
   --content "We process your data for..." --purposes '[{"code":"analytics","description":"Usage analytics"}]'
+grantex dpdp notices list
+grantex dpdp notices get privacy-v1
 
 # Consent records
 grantex dpdp consent create --grant-id grnt_01ABC... --principal-id user@example.com \
   --purposes '[{"code":"analytics","description":"Usage analytics"}]' \
-  --consent-notice-id privacy-v1 --processing-expires-at 2027-01-01T00:00:00Z
+  --notice-id privacy-v1 --processing-expires-at 2027-01-01T00:00:00Z
 grantex dpdp consent get crec_01ABC...
-grantex dpdp consent list --principal-id user@example.com
+grantex dpdp consent list --principal user@example.com --limit 50
 grantex dpdp consent withdraw crec_01ABC... --reason "No longer needed" --revoke-grant
 
-# Data principal rights (DPDP §11)
+# Right to access (DPDP §11) and erasure (DPDP §12)
 grantex dpdp principal-records user@example.com
 grantex dpdp erasure user@example.com
+grantex dpdp erasure status ER-2026-...
 
-# Grievances (DPDP §13(6))
-grantex dpdp grievances file --principal-id user@example.com --type violation --description "Unauthorized access"
+# Grievances (DPDP §13)
+grantex dpdp grievances file --principal-id user@example.com --type unauthorized-processing --description "Unauthorized access"
+grantex dpdp grievances list --status submitted
 grantex dpdp grievances get grv_01ABC...
+grantex dpdp grievances update grv_01ABC... --status resolved --resolution "Processing stopped"
 
-# Compliance exports
-grantex dpdp exports create --type dpdp-audit --date-from 2026-01-01 --date-to 2026-04-01
+# Compliance exports (JSON only; a bare YYYY-MM-DD means 00:00Z, so give an
+# end-of-day time to include the last day)
+grantex dpdp exports create --type dpdp-audit --date-from 2026-01-01 --date-to 2026-03-31T23:59:59Z
 grantex dpdp exports get exp_01ABC...
 ```
 
