@@ -14,8 +14,8 @@ The Grantex DPDP routes help a Data Fiduciary keep evidence for its obligations 
 
 - **Consent records** bind a data principal's consent to an active grant and a versioned consent notice, with a signed proof (JWS, EdDSA)
 - **Consent notices** are versioned per language and content-hashed; a `validation` block reports which DPDP Rules 2025 r.3 elements a notice carries
-- **Withdrawal** marks the record withdrawn, can revoke the grant through the grant cascade, and can emit a `dpdp.data_deletion.requested` webhook to your application
-- **Erasure** revokes the principal's grants, marks records erased, redacts grievances, deletes stored exports, and reports what is retained and why
+- **Withdrawal** marks the record withdrawn, can revoke the record's grant (the full grant cascade with `DPDP_REVOCATION_CASCADE=true`), and can emit a `dpdp.data_deletion.requested` webhook to your application
+- **Erasure** revokes the principal's grants, marks records erased, and reports what is retained and why; with `DPDP_ERASURE_EXPANDED=true` it also redacts grievances and deletes stored exports
 - **Grievances** carry a reference number, the response period you publish (1 to 90 days) as `responsePeriodDays`, an `expectedResolutionBy` date, and a `submitted` -> `in_review` -> `resolved` or `rejected` workflow. Grantex computes and stores these dates; meeting them is your process
 - **Breach register** records breaches and computes `boardDetailedReportDueAt` (awareness + 72 hours, or a granted extension), tracks principal intimations, and emits deadline webhooks
 - **Exports**: `dpdp-audit`, `gdpr-article-15` (with a per-person Art. 15 block), and the `eu-ai-act-evidence` pack
@@ -25,7 +25,7 @@ The Grantex DPDP routes help a Data Fiduciary keep evidence for its obligations 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/v1/dpdp/consent-records` | [Create consent record](/api-reference/dpdp/create-consent-record) |
-| `GET` | `/v1/dpdp/consent-records` | [List consent records](/api-reference/dpdp/list-consent-records) (paginated) |
+| `GET` | `/v1/dpdp/consent-records` | [List consent records](/api-reference/dpdp/list-consent-records) (pages when `limit` or `cursor` is sent) |
 | `GET` | `/v1/dpdp/consent-records/:recordId` | [Get consent record](/api-reference/dpdp/get-consent-record) |
 | `POST` | `/v1/dpdp/consent-records/:recordId/withdraw` | [Withdraw consent](/api-reference/dpdp/withdraw-consent) |
 | `GET` | `/v1/dpdp/data-principals/:principalId/records` | [List a principal's records](/api-reference/dpdp/list-principal-records) |

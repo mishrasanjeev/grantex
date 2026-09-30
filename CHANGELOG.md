@@ -47,7 +47,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A `gdpr-article-15` export with `dataPrincipalId` adds an `article15` block:
   purposes, recipients (the agents authorised through grants and the grant
   audiences), retention (`retentionUntil` per record) and source, and states
-  that automated decision-making is not recorded.
+  that automated decision-making is not recorded. It also carries the
+  principal's own grievances filed in the period (`grievances`, newest first,
+  at most 1,000), counted in `recordCount` and in `article15.grievances`; more
+  than 1,000 sets `truncated` and `article15.truncated`.
 - New flag `DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL` (off; exactly `true`) refuses
   a `gdpr-article-15` export without `dataPrincipalId` with `400`.
 
@@ -65,11 +68,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `400 NOTICE_INCOMPLETE`.
 - One `noticeId` and `version` may now be registered once per `language`
   (the unique key includes the language; `409 CONFLICT` is per language).
-  `POST /v1/dpdp/consent-records` takes an optional `consentNoticeLanguage`,
-  needed only when the chosen version exists in several languages
-  (`400 NOTICE_LANGUAGE_REQUIRED` otherwise); records return
-  `consentNoticeLanguage`.
-- Migration 129 adds the notice columns and the record's notice language
+  `POST /v1/dpdp/consent-records` takes an optional `consentNoticeLanguage`:
+  with it, the pinned version in that language, or the newest notice row in
+  that language, is bound. Without it the record binds, as before, the pinned
+  version (or the version of the newest notice row) through its newest row,
+  and records that row's language. Records return `consentNoticeLanguage`.
+- New flag `DPDP_REQUIRE_NOTICE_LANGUAGE` (off; exactly `true`): a consent
+  record without `consentNoticeLanguage` against a version that exists in
+  several languages is refused with `400 NOTICE_LANGUAGE_REQUIRED`.
+- Notices gain `noticeHash`: SHA-256 over the RFC 8785 canonical JSON of the
+  whole notice (id, version, language, title, content, purposes, contacts and
+  the structured fields). `contentHash` stays the hash of `content` alone. A
+  consent record stores and returns the `noticeHash` of the notice it binds,
+  and its signed proof gains the claims `noticeHash` and
+  `consentNoticeLanguage` (additive; existing claims unchanged).
+- Migration 129 adds the notice columns, the notice hash on notices and
+  records (not backfilled: computed from the row for older notices, `null`
+  on older records), and the record's notice language
   (backfilled from the matching notice), and replaces the unique index
   `(developer_id, notice_id, version)` with one that includes `language`;
   existing rows stay valid.
@@ -105,10 +120,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   transaction and withdraws only an `active` record, so of two concurrent
   withdrawals exactly one succeeds (`409 ALREADY_WITHDRAWN` for the other); an
   erased record answers `409 CONSENT_ERASED`, an expired one
-  `409 CONSENT_EXPIRED`. With `revokeGrant: true` the grant is revoked through
-  the grant cascade (delegated grants, credentials, wallet reservations, the
-  revocation cache, `grant.revoked`), and only an active grant is revoked. A
-  missing or non-object body is `400` instead of `500`.
+  `409 CONSENT_EXPIRED`. With `revokeGrant: true` the record's grant is
+  revoked, as before, and only if it is still active; the revocation cache
+  entry and `grant.revoked` for that grant now follow the commit. A missing
+  or non-object body is `400` instead of `500`.
+- New flag `DPDP_REVOCATION_CASCADE` (off; exactly `true`): a DPDP revocation
+  (withdrawal with `revokeGrant`, erasure, and the expiry worker's
+  `DPDP_CONSENT_EXPIRY_REVOKES_GRANT`) goes through the grant cascade: the
+  grants delegated from the record's grant, their credentials and wallet
+  reservations are revoked too. Off, only the record's own grant is revoked,
+  as these routes always did.
 - New flag `DPDP_WITHDRAWAL_REVOKES_GRANT` (off; exactly `true`): an omitted
   `revokeGrant` then means `true`, since after a withdrawal processing must
   cease (DPDP Act s.6(6)). An explicit `revokeGrant: false` still wins.
@@ -119,13 +140,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   event to the developer instead. Erasure no longer rewrites audit entries
   either.
 - Erasure (`POST /v1/dpdp/data-principals/{id}/erasure`) is one transaction:
-  it revokes the principal's active grants through the grant cascade, marks
-  the consent records `erased` (retained, with `erasedAt`), replaces the
-  principal's grievance description and evidence with a fixed marker, deletes
-  stored exports about the principal, and stores the request (migration 127,
-  `dpdp_erasure_requests`). A repeat for a principal with nothing left to erase
-  returns the completed request with `200`. New
-  `GET /v1/dpdp/erasure-requests/{requestId}`.
+  it revokes the grants of the principal's records that are still active
+  (root-only, as before; the cascade under `DPDP_REVOCATION_CASCADE=true`),
+  marks the consent records `erased` (retained, with `erasedAt`), and stores
+  the request (migration 127, `dpdp_erasure_requests`). A repeat for a
+  principal with nothing left to erase returns the completed request with
+  `200`. New `GET /v1/dpdp/erasure-requests/{requestId}`. The response's
+  `retained` says what was kept and why, grievances and stored exports
+  included.
+- New flag `DPDP_ERASURE_EXPANDED` (off; exactly `true`): erasure also
+  replaces the principal's grievance description and evidence with a fixed
+  marker and deletes stored exports about the principal. Off, both are kept
+  (`grievancesRedacted` and `exportsDeleted` are `0`) and `retained` lists
+  them as kept because expanded erasure is not enabled.
 - Consent record creation validates its input (`400` instead of `500`),
   refuses a grant that is not active or has expired (`400 INVALID_GRANT`),
   takes an optional `consentNoticeVersion` (default the latest, as before)
@@ -136,7 +163,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   s.6(10)) and names its `kid`; when it cannot be signed no record is created
   (`503 CONSENT_PROOF_UNAVAILABLE`) instead of storing `type: 'none'`.
   With `NODE_ENV=production` and no `ED25519_PRIVATE_KEY`, startup logs a
-  warning: a per-process key cannot verify proofs after a restart.
+  warning: a per-process key cannot verify proofs after a restart. The proof
+  says which it was signed with, `keyPersistence: 'persistent'` (the
+  configured `ED25519_PRIVATE_KEY`) or `'ephemeral'` (generated in-process;
+  not verifiable on another instance or after a restart).
+- New flag `DPDP_REQUIRE_PERSISTENT_PROOF_KEY` (off; exactly `true`): while
+  the Ed25519 key is ephemeral, consent record creation is refused with
+  `503 CONSENT_PROOF_KEY_NOT_PERSISTENT` and nothing is stored.
 - `GET /v1/dpdp/consent-records/{id}` and
   `GET /v1/dpdp/data-principals/{id}/records` no longer increment
   `accessCount` or set `lastAccessedAt`: a developer read is not the
@@ -160,7 +193,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   consent records as well as entries naming the principal.
 - Lists (`GET /v1/dpdp/consent-records`, `.../data-principals/{id}/records`
   and the new lists) take `limit` (default 50, at most 200) and `cursor` and
-  return `nextCursor`; `totalRecords` counts every matching record.
+  return `nextCursor`; `totalRecords` counts every matching record. The two
+  consent-record lists paginate only when the caller sends `limit` or
+  `cursor`; without either they return what they did before: the newest 100
+  records unfiltered, every matching record filtered by `dataPrincipalId`,
+  and every record of the principal on `.../data-principals/{id}/records`.
+  The new notice and grievance lists paginate by default.
 - Every DPDP state change appends a platform entry to the developer's audit
   chain (`grantex.dpdp.consent_created`, `consent_withdrawn`,
   `consent_expired`, `erasure_completed`, `grievance_filed`,
@@ -172,26 +210,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - New consent expiry worker, off unless `DPDP_CONSENT_EXPIRY_ENABLED=true`:
   active records past `processingExpiresAt` become `expired`
   (`dpdp.consent.expired`), and with `DPDP_CONSENT_EXPIRY_REVOKES_GRANT=true`
-  their grants are revoked.
+  their grants are revoked. A run takes developers in `developer_id` order
+  from a cursor that resumes after the previous run's last developer and
+  wraps, so no developer waits more than
+  ceil(due developers / 100) runs.
 - Migration 127 also adds CHECK constraints on the DPDP status columns and
   indexes, including `dpdp_exports(developer_id)`.
 
 Response changes (clients may need updating):
 - `consentProof.type` is `JWS-EdDSA`, not `Ed25519Signature2020` (the proof
   is a compact JWS, not a Data Integrity proof); `consentProof` gains `alg`,
-  `kid` and `jwksUri`; the proof JWT has no `exp`.
+  `kid`, `jwksUri` and `keyPersistence`; the proof JWT has no `exp`.
 - Withdrawal: `dataDeleted` is always `false`; new `dataDeletionRequested`;
   `grantRevoked` is `true` only when an active grant was revoked.
 - Erasure: `expectedCompletionBy` (deprecated) equals the new `completedAt`
   instead of submission plus seven days; new `delegatedGrantsRevoked`,
-  `grievancesRedacted`, `exportsDeleted` and `retained`; `grantsRevoked`
-  counts only grants that were active; a repeat returns `200` with the
-  existing request.
+  `grievancesRedacted`, `exportsDeleted` (the last three `0` unless the
+  matching flag is on) and `retained`; `grantsRevoked` counts only grants
+  that were active; a repeat returns `200` with the existing request.
 - Consent records: `accessCount` and `lastAccessedAt` are the stored values
   (no longer incremented or set to the read time); new `consentNoticeVersion`
-  and `erasedAt`; lists return 50 records by default with `nextCursor`, where
-  a principal-filtered list used to return every record and an unfiltered one
-  100.
+  and `erasedAt`; lists gain `nextCursor` (`null` when every record was
+  returned) and return the same records as before unless `limit` or `cursor`
+  is sent.
 - Grievances: new `responsePeriodDays` and `updatedAt`; the in-progress status
   is `in_review`.
 - Exports: new `truncated`, `auditLogLimit` and `dataPrincipalId`; `410` after

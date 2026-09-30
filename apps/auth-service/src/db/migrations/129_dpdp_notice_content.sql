@@ -17,6 +17,13 @@
 -- notice row whose version and content hash the record stored; a record with
 -- no matching row keeps NULL (unknown). The new notice columns stay NULL for
 -- existing notices, which the routes report as missing elements.
+--
+-- notice_hash (on notices, and on a consent record for the notice it was
+-- given against) is the SHA-256 of the RFC 8785 canonical JSON of the whole
+-- notice (lib/dpdp-notice.ts noticeHash): content_hash covers only the text.
+-- It is computed by the service, so it is not backfilled here; for a notice
+-- without one the routes compute it from the row, and existing consent
+-- records keep NULL (their proofs were signed without it).
 
 ALTER TABLE dpdp_consent_notices
   ADD COLUMN IF NOT EXISTS itemised_personal_data JSONB;
@@ -30,6 +37,8 @@ ALTER TABLE dpdp_consent_notices
   ADD COLUMN IF NOT EXISTS board_complaint_url TEXT;
 ALTER TABLE dpdp_consent_notices
   ADD COLUMN IF NOT EXISTS contact JSONB;
+ALTER TABLE dpdp_consent_notices
+  ADD COLUMN IF NOT EXISTS notice_hash TEXT;
 
 DO $$
 BEGIN
@@ -53,6 +62,8 @@ DROP INDEX IF EXISTS idx_dpdp_notices_id_version;
 
 ALTER TABLE dpdp_consent_records
   ADD COLUMN IF NOT EXISTS consent_notice_language TEXT;
+ALTER TABLE dpdp_consent_records
+  ADD COLUMN IF NOT EXISTS notice_hash TEXT;
 
 UPDATE dpdp_consent_records r
 SET consent_notice_language = (

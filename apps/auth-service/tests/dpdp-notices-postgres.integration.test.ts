@@ -36,6 +36,9 @@ let app: FastifyInstance;
 let dropTestDatabase: (() => Promise<void>) | undefined;
 let addressCounter = 0;
 
+/** Lets the clock move on, so rows created one after another order by created_at. */
+const tick = () => new Promise((resolve) => setTimeout(resolve, 5));
+
 function suffix(): string {
   return randomUUID().replace(/-/g, '').slice(0, 12);
 }
@@ -88,6 +91,12 @@ const structured = {
   contact: { name: 'Data Protection Officer', email: 'dpo@merchant.example', phone: '+91-00000-00000' },
 };
 
+/** The claims of a consent proof (a compact JWS), decoded without verifying. */
+function proofClaims(body: Record<string, unknown>): Record<string, unknown> {
+  const jwt = (body['consentProof'] as { proofJwt: string }).proofJwt;
+  return JSON.parse(Buffer.from(jwt.split('.')[1]!, 'base64url').toString('utf8')) as Record<string, unknown>;
+}
+
 function record(grantId: string, noticeId: string, extra: Record<string, unknown> = {}) {
   return {
     grantId, dataPrincipalId: 'user_ntc_1', purposes: [{ code: 'orders', description: 'Fulfil orders' }],
@@ -133,7 +142,8 @@ describePostgres('migration 129', () => {
     expect(names('dpdp_consent_notices')).toEqual(expect.arrayContaining([
       'itemised_personal_data', 'purpose_details', 'withdrawal_url', 'rights_url', 'board_complaint_url', 'contact',
     ]));
-    expect(names('dpdp_consent_records')).toEqual(expect.arrayContaining(['consent_notice_language']));
+    expect(names('dpdp_consent_notices')).toContain('notice_hash');
+    expect(names('dpdp_consent_records')).toEqual(expect.arrayContaining(['consent_notice_language', 'notice_hash']));
     const indexes = await sql<{ indexname: string; indexdef: string }[]>`
       SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'dpdp_consent_notices'`;
     expect(indexes.map((i) => i.indexname)).not.toContain('idx_dpdp_notices_id_version');
@@ -158,6 +168,11 @@ describePostgres('migration 129', () => {
       boardComplaintUrl: null, contact: null,
     });
     expect(version['validation']).toMatchObject({ complete: false, enforced: false });
+    // No stored notice hash: it is computed from the row as it stands.
+    expect(version['noticeHash']).toMatch(/^[0-9a-f]{64}$/);
+    const bound = await call(tenant, 'POST', '/v1/dpdp/consent-records', record(await newGrant(tenant), noticeId));
+    expect(bound.statusCode, bound.body).toBe(201);
+    expect(bound.json()['noticeHash']).toBe(version['noticeHash']);
   });
 });
 
@@ -238,6 +253,7 @@ describePostgres('one notice version in several languages', () => {
     expect(duplicate.statusCode).toBe(409);
     expect(duplicate.json()['code']).toBe('CONFLICT');
 
+    vi.stubEnv('DPDP_REQUIRE_NOTICE_LANGUAGE', 'true');
     const ambiguous = await call(tenant, 'POST', '/v1/dpdp/consent-records', record(await newGrant(tenant), noticeId));
     expect(ambiguous.statusCode).toBe(400);
     expect(ambiguous.json()['code']).toBe('NOTICE_LANGUAGE_REQUIRED');
@@ -269,5 +285,164 @@ describePostgres('one notice version in several languages', () => {
     const res = await call(tenant, 'POST', '/v1/dpdp/consent-records', record(await newGrant(tenant), noticeId));
     expect(res.statusCode, res.body).toBe(201);
     expect(res.json()['consentNoticeLanguage']).toBe('en');
+  });
+});
+
+describePostgres('the notice hash binds the whole notice', () => {
+  it('differs for the same content with other structured fields, and is signed into the proof', async () => {
+    const tenant = await newTenant();
+    const plain = baseNotice({ content: 'Same words' });
+    const rich = baseNotice({ content: 'Same words', ...structured });
+    const other = baseNotice({ content: 'Same words', ...structured, withdrawalUrl: 'https://merchant.example/elsewhere' });
+    const created: Array<Record<string, unknown>> = [];
+    for (const payload of [plain, rich, other]) {
+      const res = await call(tenant, 'POST', '/v1/dpdp/consent-notices', payload);
+      expect(res.statusCode, res.body).toBe(201);
+      created.push(res.json());
+    }
+    expect(new Set(created.map((c) => c['contentHash'])).size).toBe(1);
+    const hashes = created.map((c) => c['noticeHash'] as string);
+    for (const hash of hashes) expect(hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(new Set(hashes).size).toBe(3);
+
+    // Reads return the stored hash.
+    const read = await call(tenant, 'GET', `/v1/dpdp/consent-notices/${rich.noticeId}`);
+    expect(read.json()['versions'][0]['noticeHash']).toBe(hashes[1]);
+    const list = await call(tenant, 'GET', '/v1/dpdp/consent-notices');
+    const listed = (list.json()['notices'] as Array<Record<string, unknown>>).find((n) => n['noticeId'] === rich.noticeId);
+    expect(listed?.['noticeHash']).toBe(hashes[1]);
+
+    const records: Array<Record<string, unknown>> = [];
+    for (const payload of [plain, rich]) {
+      const res = await call(tenant, 'POST', '/v1/dpdp/consent-records', record(await newGrant(tenant), payload.noticeId));
+      expect(res.statusCode, res.body).toBe(201);
+      records.push(res.json());
+    }
+    expect(records[0]!['consentNoticeHash']).toBe(records[1]!['consentNoticeHash']);
+    expect(records.map((r) => r['noticeHash'])).toEqual([hashes[0], hashes[1]]);
+    const claims = records.map(proofClaims);
+    expect(claims[0]).toMatchObject({
+      noticeHash: hashes[0], consentNoticeLanguage: 'en', consentNoticeHash: created[0]!['contentHash'],
+    });
+    expect(claims[1]).toMatchObject({ noticeHash: hashes[1], consentNoticeLanguage: 'en' });
+    expect(claims[0]!['noticeHash']).not.toBe(claims[1]!['noticeHash']);
+
+    const stored = await call(tenant, 'GET', `/v1/dpdp/consent-records/${records[1]!['recordId'] as string}`);
+    expect(stored.json()['noticeHash']).toBe(hashes[1]);
+    const [row] = await sql`SELECT notice_hash FROM dpdp_consent_records WHERE id = ${records[1]!['recordId'] as string}`;
+    expect(row?.['notice_hash']).toBe(hashes[1]);
+  });
+
+  it('differs per language for the same text, and the proof names the language bound', async () => {
+    const tenant = await newTenant();
+    const noticeId = `notice-${suffix()}`;
+    const english = await call(tenant, 'POST', '/v1/dpdp/consent-notices', baseNotice({ noticeId, language: 'en', ...structured }));
+    const hindi = await call(tenant, 'POST', '/v1/dpdp/consent-notices', baseNotice({ noticeId, language: 'hi', ...structured }));
+    expect(english.json()['contentHash']).toBe(hindi.json()['contentHash']);
+    expect(english.json()['noticeHash']).not.toBe(hindi.json()['noticeHash']);
+
+    const claims: Array<Record<string, unknown>> = [];
+    for (const language of ['en', 'hi']) {
+      await tick();
+      const res = await call(tenant, 'POST', '/v1/dpdp/consent-records',
+        record(await newGrant(tenant), noticeId, { consentNoticeLanguage: language }));
+      expect(res.statusCode, res.body).toBe(201);
+      claims.push(proofClaims(res.json()));
+    }
+    expect(claims[0]).toMatchObject({ consentNoticeLanguage: 'en', noticeHash: english.json()['noticeHash'] });
+    expect(claims[1]).toMatchObject({ consentNoticeLanguage: 'hi', noticeHash: hindi.json()['noticeHash'] });
+  });
+});
+
+describePostgres('choosing the notice version', () => {
+  it('takes the latest version within the requested language, not the newest row of any language', async () => {
+    const tenant = await newTenant();
+    const noticeId = `notice-${suffix()}`;
+    for (const [version, language] of [['1.0', 'en'], ['2.0', 'en'], ['1.0', 'hi']] as const) {
+      await tick();
+      const res = await call(tenant, 'POST', '/v1/dpdp/consent-notices',
+        baseNotice({ noticeId, version, language, content: `${language} ${version}` }));
+      expect(res.statusCode, res.body).toBe(201);
+    }
+    const english = await call(tenant, 'POST', '/v1/dpdp/consent-records',
+      record(await newGrant(tenant), noticeId, { consentNoticeLanguage: 'en' }));
+    expect(english.statusCode, english.body).toBe(201);
+    expect(english.json()).toMatchObject({ consentNoticeVersion: '2.0', consentNoticeLanguage: 'en' });
+    const hindi = await call(tenant, 'POST', '/v1/dpdp/consent-records',
+      record(await newGrant(tenant), noticeId, { consentNoticeLanguage: 'hi' }));
+    expect(hindi.json()).toMatchObject({ consentNoticeVersion: '1.0', consentNoticeLanguage: 'hi' });
+    const pinned = await call(tenant, 'POST', '/v1/dpdp/consent-records',
+      record(await newGrant(tenant), noticeId, { consentNoticeLanguage: 'en', consentNoticeVersion: '1.0' }));
+    expect(pinned.json()).toMatchObject({ consentNoticeVersion: '1.0', consentNoticeLanguage: 'en' });
+    const unknown = await call(tenant, 'POST', '/v1/dpdp/consent-records',
+      record(await newGrant(tenant), noticeId, { consentNoticeLanguage: 'hi', consentNoticeVersion: '2.0' }));
+    expect(unknown.statusCode).toBe(400);
+    expect(unknown.json()).toMatchObject({ code: 'INVALID_NOTICE', message: 'Consent notice version not found in this language' });
+  });
+
+  it('without a language and DPDP_REQUIRE_NOTICE_LANGUAGE off, binds the newest row as before and records its language', async () => {
+    const tenant = await newTenant();
+    const noticeId = `notice-${suffix()}`;
+    for (const language of ['en', 'hi']) {
+      await tick();
+      const res = await call(tenant, 'POST', '/v1/dpdp/consent-notices', baseNotice({ noticeId, language, content: `${language} text` }));
+      expect(res.statusCode, res.body).toBe(201);
+    }
+    const [hindiRow] = await sql`
+      SELECT content_hash, notice_hash FROM dpdp_consent_notices
+      WHERE developer_id = ${tenant.id} AND notice_id = ${noticeId} AND language = 'hi'`;
+
+    const unpinned = await call(tenant, 'POST', '/v1/dpdp/consent-records', record(await newGrant(tenant), noticeId));
+    expect(unpinned.statusCode, unpinned.body).toBe(201);
+    expect(unpinned.json()).toMatchObject({
+      consentNoticeVersion: '1.0', consentNoticeLanguage: 'hi',
+      consentNoticeHash: hindiRow?.['content_hash'], noticeHash: hindiRow?.['notice_hash'],
+    });
+    expect(proofClaims(unpinned.json())).toMatchObject({ consentNoticeLanguage: 'hi', noticeHash: hindiRow?.['notice_hash'] });
+    const pinned = await call(tenant, 'POST', '/v1/dpdp/consent-records',
+      record(await newGrant(tenant), noticeId, { consentNoticeVersion: '1.0' }));
+    expect(pinned.statusCode, pinned.body).toBe(201);
+    expect(pinned.json()['consentNoticeLanguage']).toBe('hi');
+    const [stored] = await sql`SELECT consent_notice_language FROM dpdp_consent_records WHERE id = ${pinned.json()['recordId'] as string}`;
+    expect(stored?.['consent_notice_language']).toBe('hi');
+  });
+
+  it('without a language and the flag off, the newest row decides the version, as before', async () => {
+    const tenant = await newTenant();
+    const noticeId = `notice-${suffix()}`;
+    for (const [version, language] of [['2.0', 'en'], ['1.0', 'hi']] as const) {
+      await tick();
+      expect((await call(tenant, 'POST', '/v1/dpdp/consent-notices', baseNotice({ noticeId, version, language }))).statusCode).toBe(201);
+    }
+    const res = await call(tenant, 'POST', '/v1/dpdp/consent-records', record(await newGrant(tenant), noticeId));
+    expect(res.statusCode, res.body).toBe(201);
+    expect(res.json()).toMatchObject({ consentNoticeVersion: '1.0', consentNoticeLanguage: 'hi' });
+  });
+
+  it('refuses the ambiguous request only under DPDP_REQUIRE_NOTICE_LANGUAGE=true', async () => {
+    const tenant = await newTenant();
+    const noticeId = `notice-${suffix()}`;
+    for (const language of ['en', 'hi']) {
+      await tick();
+      expect((await call(tenant, 'POST', '/v1/dpdp/consent-notices', baseNotice({ noticeId, language }))).statusCode).toBe(201);
+    }
+    vi.stubEnv('DPDP_REQUIRE_NOTICE_LANGUAGE', 'yes');
+    const notExactlyTrue = await call(tenant, 'POST', '/v1/dpdp/consent-records', record(await newGrant(tenant), noticeId));
+    expect(notExactlyTrue.statusCode, notExactlyTrue.body).toBe(201);
+
+    vi.stubEnv('DPDP_REQUIRE_NOTICE_LANGUAGE', 'true');
+    const refused = await call(tenant, 'POST', '/v1/dpdp/consent-records', record(await newGrant(tenant), noticeId));
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json()['code']).toBe('NOTICE_LANGUAGE_REQUIRED');
+    const chosen = await call(tenant, 'POST', '/v1/dpdp/consent-records',
+      record(await newGrant(tenant), noticeId, { consentNoticeLanguage: 'en' }));
+    expect(chosen.statusCode, chosen.body).toBe(201);
+    expect(chosen.json()['consentNoticeLanguage']).toBe('en');
+
+    // A version in one language needs no language, even with the flag on.
+    const single = `notice-${suffix()}`;
+    expect((await call(tenant, 'POST', '/v1/dpdp/consent-notices', baseNotice({ noticeId: single }))).statusCode).toBe(201);
+    const ok = await call(tenant, 'POST', '/v1/dpdp/consent-records', record(await newGrant(tenant), single));
+    expect(ok.statusCode, ok.body).toBe(201);
   });
 });

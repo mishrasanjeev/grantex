@@ -19,6 +19,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { runMigrations } from '../src/db/migrate.js';
 import { hashApiKey } from '../src/lib/hash.js';
 import { initEdKey } from '../src/lib/crypto.js';
+import { ARTICLE15_RECORD_LIMIT } from '../src/lib/dpdp-evidence.js';
 import { buildTestApp, sqlMock } from './helpers.js';
 import { createTestDatabase } from './helpers/database.js';
 
@@ -305,6 +306,69 @@ describePostgres('the gdpr-article-15 export', () => {
     expect(art15['automatedDecisionMaking']).toMatchObject({ recorded: false });
     expect(JSON.stringify(art15)).not.toContain('user_evd_other');
     expect(JSON.stringify(art15)).not.toContain('other.merchant.example');
+  });
+
+  it("includes the data principal's grievances, and only theirs, and counts them", async () => {
+    const tenant = await newTenant();
+    const noticeId = await notice(tenant);
+    const grant = await newGrant(tenant, tenant.agents[0]!, { principal: 'user_evd_griever' });
+    const recordId = await consentRecord(tenant, grant, 'user_evd_griever', noticeId, ['orders']);
+    const grievance = async (principal: string, description: string, extra: Json = {}) => {
+      const res = await call(tenant, 'POST', '/v1/dpdp/grievances', { dataPrincipalId: principal, type: 'access', description, ...extra });
+      expect(res.statusCode, res.body).toBe(202);
+      return res.json<{ grievanceId: string }>().grievanceId;
+    };
+    const mine = [await grievance('user_evd_griever', 'Where is my data?', { recordId }), await grievance('user_evd_griever', 'Please correct it')];
+    await grievance('user_evd_bystander', 'Someone else entirely');
+
+    const body = await exportOf(tenant, { type: 'gdpr-article-15', dataPrincipalId: 'user_evd_griever' });
+
+    const data = body['data'] as Json;
+    const grievances = data['grievances'] as Json[];
+    expect(grievances.map((g) => g['id']).sort()).toEqual([...mine].sort());
+    expect(grievances.find((g) => g['id'] === mine[0])).toMatchObject({
+      record_id: recordId, type: 'access', status: 'submitted', description: 'Where is my data?',
+    });
+    expect(JSON.stringify(data)).not.toContain('user_evd_bystander');
+    expect(JSON.stringify(data)).not.toContain('Someone else entirely');
+    const consentRecords = data['consentRecords'] as Json[];
+    const auditLog = data['auditLog'] as Json[];
+    expect(body['recordCount']).toBe(consentRecords.length + auditLog.length + 2);
+    expect(body['truncated']).toBe(false);
+    const art15 = data['article15'] as Json;
+    expect(art15['grievances']).toMatchObject({ count: 2, truncated: false, limit: expect.any(Number) });
+    expect(art15['truncated']).toBe(false);
+    expect(art15['scope']).toContain('grievances');
+
+    const stored = await call(tenant, 'GET', `/v1/dpdp/exports/${body['exportId'] as string}`);
+    expect(stored.json()['recordCount']).toBe(body['recordCount']);
+  });
+
+  it('leaves grievances out of a gdpr-article-15 export without dataPrincipalId, as before', async () => {
+    const tenant = await newTenant();
+    const res = await call(tenant, 'POST', '/v1/dpdp/grievances', { dataPrincipalId: 'user_evd_z', type: 'access', description: 'x' });
+    expect(res.statusCode, res.body).toBe(202);
+    const legacy = await exportOf(tenant, { type: 'gdpr-article-15' });
+    expect((legacy['data'] as Json)['grievances']).toBeUndefined();
+  });
+
+  it('marks the export truncated when the grievances exceed the cap', async () => {
+    const tenant = await newTenant();
+    const values = Array.from({ length: ARTICLE15_RECORD_LIMIT + 1 }, (_, i) => ({
+      id: `grv_evd_${suffix()}_${i}`, developer_id: tenant.id, data_principal_id: 'user_evd_many', type: 'access',
+      description: 'many', reference_number: `GRV-EVD-${suffix()}-${i}`,
+      expected_resolution_by: new Date(Date.now() + 7 * 86_400_000),
+    }));
+    for (let i = 0; i < values.length; i += 500) await sql`INSERT INTO dpdp_grievances ${sql(values.slice(i, i + 500))}`;
+
+    const body = await exportOf(tenant, { type: 'gdpr-article-15', dataPrincipalId: 'user_evd_many', includeActionLog: false });
+
+    const data = body['data'] as Json;
+    expect(data['grievances'] as Json[]).toHaveLength(ARTICLE15_RECORD_LIMIT);
+    expect(body['truncated']).toBe(true);
+    expect(body['recordCount']).toBe(ARTICLE15_RECORD_LIMIT);
+    expect((data['article15'] as Json)['grievances']).toMatchObject({ count: ARTICLE15_RECORD_LIMIT, truncated: true });
+    expect((data['article15'] as Json)['truncated']).toBe(true);
   });
 
   it('keeps working without dataPrincipalId unless DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL=true', async () => {

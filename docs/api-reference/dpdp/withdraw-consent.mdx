@@ -1,7 +1,7 @@
 ---
 title: "Withdraw Consent"
 sidebarTitle: "Withdraw Consent"
-description: "Withdraw a DPDP consent record. Optionally revokes the underlying grant and its delegated grants, and asks the developer to delete processed data."
+description: "Withdraw a DPDP consent record. Optionally revokes the underlying grant, and asks the developer to delete processed data."
 ---
 
 ## Endpoint
@@ -32,7 +32,7 @@ Requires a developer API key in the `Authorization` header.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `reason` | `string` | Yes | Reason for consent withdrawal (up to 1,000 characters) |
-| `revokeGrant` | `boolean` | No | If `true`, revokes the underlying grant and every grant delegated from it. Default `false`, or `true` when the server sets `DPDP_WITHDRAWAL_REVOKES_GRANT=true` |
+| `revokeGrant` | `boolean` | No | If `true`, revokes the underlying grant (and every grant delegated from it when the server sets `DPDP_REVOCATION_CASCADE=true`). Default `false`, or `true` when the server sets `DPDP_WITHDRAWAL_REVOKES_GRANT=true` |
 | `deleteProcessedData` | `boolean` | No | If `true`, emits a `dpdp.data_deletion.requested` webhook event asking the developer to delete the data it processed under this consent |
 
 The body must be a JSON object; a missing or malformed body is `400`.
@@ -42,10 +42,14 @@ as easy as giving consent (DPDP Act s.6(4)); offering that means is the
 fiduciary's user interface, which calls this endpoint. After a withdrawal the
 Data Fiduciary, and its processors, must cease processing within a reasonable
 time (s.6(6)). These provisions apply from 13 May 2027 (DPDP Rules 2025 r.1).
-Revoking the grant stops Grantex-mediated processing: the revocation
-goes through the same cascade as `DELETE /v1/grants/:id` (delegated grants,
-credentials, wallet reservations, the revocation cache and a `grant.revoked`
-event). Only an active grant is revoked. A server operator who wants every
+Revoking the grant stops Grantex-mediated processing under that
+grant: it is marked revoked with `revokedAt`, the revocation cache is updated
+and a `grant.revoked` event is emitted. By default only the record's own grant
+is revoked, as this endpoint always did; grants delegated from it keep
+working. A server that sets `DPDP_REVOCATION_CASCADE=true` revokes through the
+same cascade as `DELETE /v1/grants/:id` instead (delegated grants,
+credentials, wallet reservations). Only an active grant is revoked. A server
+operator who wants every
 withdrawal to revoke unless the caller says otherwise sets
 `DPDP_WITHDRAWAL_REVOKES_GRANT=true`; an explicit `revokeGrant: false` still
 wins.

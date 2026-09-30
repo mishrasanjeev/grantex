@@ -11,12 +11,13 @@ import {
   newGrievanceReference,
   newErasureRequestId,
 } from '../lib/ids.js';
-import { getEdKeyPair, signWithEd25519 } from '../lib/crypto.js';
+import { getEdKeyPair, getEdKeyPersistence, signWithEd25519 } from '../lib/crypto.js';
 import { emitEvent } from '../lib/events.js';
 import { appendPlatformAuditEntries, lockAuditChain, type PlatformAuditEntry } from '../lib/audit-chain.js';
-import { publishGrantRevocation, revokeGrantInTx, type RevokedGrantTree } from '../lib/revoke.js';
-import { noticeValidation } from '../lib/dpdp-notice.js';
-import { euAiActSections, gdprArticle15, sectionsSummary } from '../lib/dpdp-evidence.js';
+import { publishGrantRevocation, revokeDpdpGrantInTx, type RevokedGrantTree } from '../lib/revoke.js';
+import { noticeHash, noticeHashOfRow, noticeValidation } from '../lib/dpdp-notice.js';
+import { CanonicalizationError } from '../lib/decisions/canonical.js';
+import { ARTICLE15_RECORD_LIMIT, euAiActSections, gdprArticle15, sectionsSummary } from '../lib/dpdp-evidence.js';
 
 // ── Limits ─────────────────────────────────────────────────────────────────
 
@@ -31,6 +32,13 @@ const MAX_EVIDENCE_BYTES = 16_384;
 export const EXPORT_AUDIT_LOG_LIMIT = 1_000;
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
+/**
+ * What GET /v1/dpdp/consent-records returned without a dataPrincipalId
+ * before it paginated, and still returns when the caller sends neither
+ * `limit` nor `cursor`. Filtered by principal, and on
+ * GET /v1/dpdp/data-principals/:id/records, such a call returns every match.
+ */
+const LEGACY_UNFILTERED_LIST_SIZE = 100;
 const DEFAULT_RESPONSE_PERIOD_DAYS = 7;
 /** DPDP Rules 2025 r.14(3): a published grievance response period may not exceed 90 days. */
 const MAX_RESPONSE_PERIOD_DAYS = 90;
@@ -132,7 +140,12 @@ export function requireDate(value: unknown, field: string, options: { dateOnly?:
   return date;
 }
 
-export interface PageRequest { limit: number; cursor: { t: string; id: string } | null }
+export interface PageRequest {
+  limit: number;
+  cursor: { t: string; id: string } | null;
+  /** Whether the caller sent `limit` or `cursor`, i.e. asked for pages. */
+  paged: boolean;
+}
 
 export function parsePage(query: Record<string, unknown>): PageRequest {
   let limit = DEFAULT_PAGE_SIZE;
@@ -155,7 +168,16 @@ export function parsePage(query: Record<string, unknown>): PageRequest {
       throw new InputError('cursor is not valid; pass the nextCursor of a previous page');
     }
   }
-  return { limit, cursor };
+  return { limit, cursor, paged: query['limit'] !== undefined || query['cursor'] !== undefined };
+}
+
+/**
+ * The row limit of a consent-record list: the requested page when the caller
+ * paginates, otherwise what the route returned before pagination
+ * (`legacyLimit`, null for every row).
+ */
+function listLimit(page: PageRequest, legacyLimit: number | null): number | null {
+  return page.paged ? page.limit : legacyLimit;
 }
 
 /** The cursor after the last row of a page, or null when there is no further page. */
@@ -221,6 +243,8 @@ function consentRecordResponse(r: Record<string, unknown>) {
     consentNoticeId: r['consent_notice_id'],
     consentNoticeVersion: r['consent_notice_version'] ?? null,
     consentNoticeLanguage: r['consent_notice_language'] ?? null,
+    // null for records made before the notice hash was kept.
+    noticeHash: r['notice_hash'] ?? null,
     status: r['status'],
     consentGivenAt: r['consent_given_at'],
     processingExpiresAt: r['processing_expires_at'],
@@ -279,7 +303,12 @@ function erasureResponse(row: Record<string, unknown>) {
  * What an erasure keeps, and why. Grantex holds the consent artefacts and
  * logs, not the fiduciary's processed personal data.
  */
-function retainedAfterErasure(recordCount: number, grievanceCount: number): Array<Record<string, unknown>> {
+function retainedAfterErasure(
+  recordCount: number,
+  grievanceCount: number,
+  options: { expanded: boolean; storedExportCount: number },
+): Array<Record<string, unknown>> {
+  const notExpanded = 'Expanded erasure is not enabled on this deployment (DPDP_ERASURE_EXPANDED)';
   return [
     {
       category: 'consent_records',
@@ -293,12 +322,25 @@ function retainedAfterErasure(recordCount: number, grievanceCount: number): Arra
       reason: 'Audit entries are neither modified nor deleted: DPDP Rules 2025 r.6(1)(e) and r.8(3) require logs '
         + 'to be retained for at least one year, and the entries form a tamper-evident hash chain.',
     },
-    {
-      category: 'grievances',
-      count: grievanceCount,
-      reason: 'Kept as the record of grievance handling (DPDP Act s.13), with the description and evidence '
-        + 'replaced by a fixed marker.',
-    },
+    options.expanded
+      ? {
+          category: 'grievances',
+          count: grievanceCount,
+          reason: 'Kept as the record of grievance handling (DPDP Act s.13), with the description and evidence '
+            + 'replaced by a fixed marker.',
+        }
+      : {
+          category: 'grievances',
+          count: grievanceCount,
+          reason: 'Kept unchanged, description and evidence included, as the record of grievance handling '
+            + `(DPDP Act s.13). ${notExpanded}, so they were not redacted.`,
+        },
+    ...(options.expanded ? [] : [{
+      category: 'stored_exports',
+      count: options.storedExportCount,
+      reason: 'Stored compliance exports about the data principal are kept until they expire, seven days after '
+        + `creation. ${notExpanded}, so they were not deleted.`,
+    }]),
     {
       category: 'fiduciary_data',
       reason: 'Grantex holds no personal data the Data Fiduciary processed under these consents; erasing it in '
@@ -309,7 +351,7 @@ function retainedAfterErasure(recordCount: number, grievanceCount: number): Arra
 
 const CONSENT_RECORD_COLUMNS = (sql: ReturnType<typeof getSql>) => sql`
   id, grant_id, data_principal_id, data_fiduciary_name, purposes, scopes,
-  consent_notice_id, consent_notice_version, consent_notice_language, status, consent_given_at,
+  consent_notice_id, consent_notice_version, consent_notice_language, notice_hash, status, consent_given_at,
   processing_expires_at, retention_until, access_count, last_accessed_at,
   withdrawn_at, withdrawn_reason, erased_at, created_at, created_at::text AS created_at_cursor`;
 
@@ -386,6 +428,11 @@ function parseNoticeStructure(body: Body, purposes: Purpose[]) {
 const NOTICE_STRUCTURE_COLUMNS = (sql: ReturnType<typeof getSql>) => sql`
   itemised_personal_data, purpose_details, withdrawal_url, rights_url, board_complaint_url, contact`;
 
+/** Every column the notice hash covers, with the stored hash and the content hash. */
+const NOTICE_BIND_COLUMNS = (sql: ReturnType<typeof getSql>) => sql`
+  id, notice_id, version, language, title, content, purposes, data_fiduciary_contact, grievance_officer,
+  content_hash, notice_hash, ${NOTICE_STRUCTURE_COLUMNS(sql)}`;
+
 /** The structured fields of a stored notice, and the r.3 check over them as they are now. */
 function noticeStructureResponse(n: Record<string, unknown>) {
   const structure = {
@@ -427,6 +474,16 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       grantId, dataPrincipalId, purposes, consentNoticeId, consentNoticeVersion, consentNoticeLanguage, processingExpiresAt,
     } = input;
 
+    // A proof signed by a key generated in this process (ED25519_PRIVATE_KEY
+    // unset) verifies only against this instance's JWKS, and only until it
+    // restarts. With DPDP_REQUIRE_PERSISTENT_PROOF_KEY=true no record is
+    // created on such a key; otherwise the proof says which kind it is.
+    const keyPersistence = getEdKeyPersistence();
+    if (config.dpdpRequirePersistentProofKey && keyPersistence === 'ephemeral') {
+      return sendError(reply, request, 503, 'CONSENT_PROOF_KEY_NOT_PERSISTENT',
+        'The consent proof key is not persistent (ED25519_PRIVATE_KEY is not set); no consent record was created');
+    }
+
     const sql = getSql();
 
     // The grant must be the developer's, active and unexpired: a consent
@@ -448,45 +505,91 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       return sendError(reply, request, 400, 'PRINCIPAL_MISMATCH', "dataPrincipalId must be the grant's principal");
     }
 
-    // The notice version shown to the principal: the pinned one, or the
-    // latest; in the language given. A version that exists in several
-    // languages needs consentNoticeLanguage, since each language is its own
-    // text with its own hash.
-    const noticeRows = consentNoticeVersion !== undefined
+    // The notice shown to the principal. With consentNoticeLanguage: the
+    // pinned version in that language, or the newest notice row in that
+    // language (a translation of an older version registered later does not
+    // displace a newer version in this language). Without it: the pinned
+    // version, or the version of the newest row of any language, as before
+    // notices had several languages; the newest row of that version is bound
+    // and its language recorded. Under DPDP_REQUIRE_NOTICE_LANGUAGE a version
+    // in several languages needs consentNoticeLanguage instead, since each
+    // language is its own text with its own hash.
+    // Plain queries (no nested fragments), one per case.
+    const noticeRows = consentNoticeLanguage !== undefined && consentNoticeVersion !== undefined
       ? await sql`
-          SELECT id, version, language, content_hash FROM dpdp_consent_notices
-          WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId} AND version = ${consentNoticeVersion}
-          ORDER BY created_at DESC, id DESC
-        `
-      : await sql`
-          SELECT id, version, language, content_hash FROM dpdp_consent_notices
+          SELECT id, notice_id, version, language, title, content, purposes, data_fiduciary_contact, grievance_officer,
+                 content_hash, notice_hash, itemised_personal_data, purpose_details, withdrawal_url, rights_url,
+                 board_complaint_url, contact
+          FROM dpdp_consent_notices
           WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
-            AND version = (
-              SELECT version FROM dpdp_consent_notices
-              WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
+            AND version = ${consentNoticeVersion} AND language = ${consentNoticeLanguage}
+        `
+      : consentNoticeLanguage !== undefined
+        ? await sql`
+            SELECT id, notice_id, version, language, title, content, purposes, data_fiduciary_contact, grievance_officer,
+                   content_hash, notice_hash, itemised_personal_data, purpose_details, withdrawal_url, rights_url,
+                   board_complaint_url, contact
+            FROM dpdp_consent_notices
+            WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId} AND language = ${consentNoticeLanguage}
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+          `
+        : consentNoticeVersion !== undefined
+          ? await sql`
+              SELECT id, notice_id, version, language, title, content, purposes, data_fiduciary_contact, grievance_officer,
+                     content_hash, notice_hash, itemised_personal_data, purpose_details, withdrawal_url, rights_url,
+                     board_complaint_url, contact
+              FROM dpdp_consent_notices
+              WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId} AND version = ${consentNoticeVersion}
               ORDER BY created_at DESC, id DESC
-              LIMIT 1
-            )
-          ORDER BY created_at DESC, id DESC
-        `;
-    const candidates = consentNoticeLanguage !== undefined
-      ? noticeRows.filter((row) => row['language'] === consentNoticeLanguage)
-      : noticeRows;
-    if (consentNoticeLanguage === undefined && candidates.length > 1) {
+            `
+          : await sql`
+              SELECT id, notice_id, version, language, title, content, purposes, data_fiduciary_contact, grievance_officer,
+                     content_hash, notice_hash, itemised_personal_data, purpose_details, withdrawal_url, rights_url,
+                     board_complaint_url, contact
+              FROM dpdp_consent_notices
+              WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
+                AND version = (
+                  SELECT version FROM dpdp_consent_notices
+                  WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
+                  ORDER BY created_at DESC, id DESC
+                  LIMIT 1
+                )
+              ORDER BY created_at DESC, id DESC
+            `;
+    if (consentNoticeLanguage === undefined && noticeRows.length > 1 && config.dpdpRequireNoticeLanguage) {
       return sendError(reply, request, 400, 'NOTICE_LANGUAGE_REQUIRED',
-        `The notice version exists in several languages (${candidates.map((row) => row['language'] as string).join(', ')}); pass consentNoticeLanguage`);
+        `The notice version exists in several languages (${noticeRows.map((row) => row['language'] as string).join(', ')}); pass consentNoticeLanguage`);
     }
-    const notice = candidates[0];
+    const notice = noticeRows[0];
     if (!notice) {
-      return sendError(reply, request, 400, 'INVALID_NOTICE',
-        noticeRows.length > 0 ? 'Consent notice version not found in this language'
-          : consentNoticeVersion !== undefined ? 'Consent notice version not found' : 'Consent notice not found');
+      let message = consentNoticeVersion !== undefined ? 'Consent notice version not found' : 'Consent notice not found';
+      if (consentNoticeLanguage !== undefined) {
+        // Say whether the notice (or version) exists in another language.
+        const other = consentNoticeVersion !== undefined
+          ? await sql`
+              SELECT 1 FROM dpdp_consent_notices
+              WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId} AND version = ${consentNoticeVersion}
+              LIMIT 1
+            `
+          : await sql`
+              SELECT 1 FROM dpdp_consent_notices
+              WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
+              LIMIT 1
+            `;
+        if (other.length > 0) {
+          message = consentNoticeVersion !== undefined ? 'Consent notice version not found in this language'
+            : 'Consent notice not found in this language';
+        }
+      }
+      return sendError(reply, request, 400, 'INVALID_NOTICE', message);
     }
 
     const id = newConsentRecordId();
     const consentNoticeHash = notice['content_hash'] as string;
     const noticeVersion = notice['version'] as string;
     const noticeLanguage = (notice['language'] as string | undefined) ?? null;
+    const boundNoticeHash = noticeHashOfRow(notice);
     const scopes = grant['scopes'] as string[];
     // Default retention: 30 days after processing expires
     const retentionUntil = new Date(processingExpiresAt.getTime() + 30 * 86400_000);
@@ -504,6 +607,10 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         consentNoticeId,
         consentNoticeVersion: noticeVersion,
         consentNoticeHash,
+        // The whole notice (lib/dpdp-notice.ts noticeHash) and its language;
+        // consentNoticeHash covers the text only.
+        consentNoticeLanguage: noticeLanguage,
+        noticeHash: boundNoticeHash,
         purposes: purposes.map((p) => p.code),
         consentGivenAt: consentGivenAt.toISOString(),
       }, { expiresInSeconds: null });
@@ -518,6 +625,9 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       type: 'JWS-EdDSA',
       alg: 'EdDSA',
       kid,
+      // 'ephemeral': the key was generated in-process, so the proof cannot be
+      // verified on another instance or after a restart.
+      keyPersistence: keyPersistence ?? 'ephemeral',
       proofJwt,
       jwksUri: `${config.publicBaseUrl.replace(/\/$/, '')}/.well-known/jwks.json`,
       signedAt: consentGivenAt.toISOString(),
@@ -530,13 +640,15 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
           id, developer_id, grant_id, data_principal_id,
           data_fiduciary_id, data_fiduciary_name,
           purposes, scopes, consent_notice_id, consent_notice_version, consent_notice_hash,
-          consent_given_at, processing_expires_at, retention_until, consent_proof, consent_notice_language
+          consent_given_at, processing_expires_at, retention_until, consent_proof, consent_notice_language,
+          notice_hash
         )
         VALUES (
           ${id}, ${developerId}, ${grantId}, ${dataPrincipalId},
           ${developerId}, ${request.developer.name ?? 'Unknown'},
           ${json(tx, purposes)}, ${scopes}, ${consentNoticeId}, ${noticeVersion}, ${consentNoticeHash},
-          ${consentGivenAt}, ${processingExpiresAt}, ${retentionUntil}, ${json(tx, consentProof)}, ${noticeLanguage}
+          ${consentGivenAt}, ${processingExpiresAt}, ${retentionUntil}, ${json(tx, consentProof)}, ${noticeLanguage},
+          ${boundNoticeHash}
         )
       `;
       await appendDpdpAudit(tx, developerId, [{
@@ -545,6 +657,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         metadata: {
           record_id: id, data_principal_id: dataPrincipalId,
           consent_notice_id: consentNoticeId, consent_notice_version: noticeVersion,
+          consent_notice_language: noticeLanguage, notice_hash: boundNoticeHash,
           purposes: purposes.map((p) => p.code),
         },
       }]);
@@ -564,6 +677,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       consentNoticeVersion: noticeVersion,
       consentNoticeLanguage: noticeLanguage,
       consentNoticeHash,
+      noticeHash: boundNoticeHash,
       consentProof,
       processingExpiresAt: processingExpiresAt.toISOString(),
       retentionUntil: retentionUntil.toISOString(),
@@ -573,8 +687,9 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // POST /v1/dpdp/consent-records/:recordId/withdraw — Withdraw consent
-  // It can revoke the record's grant (with the grants delegated from it,
-  // through lib/revoke.ts), but it stays in the plan rate-limit bucket and
+  // It can revoke the record's grant (only that grant, as it always did; with
+  // DPDP_REVOCATION_CASCADE=true also the grants delegated from it, through
+  // lib/revoke.ts), but it stays in the plan rate-limit bucket and
   // fails closed, unlike the containment routes (plugins/dynamicRateLimit.ts):
   // it is a compliance operation, not the incident path.
   app.post<{ Params: { recordId: string } }>(
@@ -621,7 +736,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         }
         grantId = row['grant_id'] as string;
         dataPrincipalId = row['data_principal_id'] as string;
-        if (revokeGrant) tree = await revokeGrantInTx(tx, grantId, developerId);
+        if (revokeGrant) tree = await revokeDpdpGrantInTx(tx, grantId, developerId);
         const revoked = tree as RevokedGrantTree | null;
         await appendDpdpAudit(tx, developerId, [{
           action: DPDP_AUDIT_ACTIONS.consentWithdrawn,
@@ -690,13 +805,15 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       if (!page) return reply;
       const sql = getSql();
 
+      // Without limit or cursor, every record of the principal, as before.
+      const limit = listLimit(page, null);
       const rows = await sql`
         SELECT ${CONSENT_RECORD_COLUMNS(sql)}
         FROM dpdp_consent_records
         WHERE data_principal_id = ${principalId} AND developer_id = ${developerId}
           ${page.cursor ? sql`AND (created_at, id) < (${page.cursor.t}::timestamptz, ${page.cursor.id})` : sql``}
         ORDER BY created_at DESC, id DESC
-        LIMIT ${page.limit + 1}
+        ${limit !== null ? sql`LIMIT ${limit + 1}` : sql``}
       `;
       const [count] = await sql`
         SELECT COUNT(*)::int AS total FROM dpdp_consent_records
@@ -705,9 +822,9 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
 
       return reply.send({
         dataPrincipalId: principalId,
-        records: rows.slice(0, page.limit).map(consentRecordResponse),
+        records: (limit !== null ? rows.slice(0, limit) : rows).map(consentRecordResponse),
         totalRecords: Number(count?.['total'] ?? 0),
-        nextCursor: nextCursor(rows, page.limit),
+        nextCursor: limit !== null ? nextCursor(rows, limit) : null,
       });
     },
   );
@@ -751,6 +868,15 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
     const sql = getSql();
     const id = newNoticeId();
     const contentHash = sha256(input.content);
+    let hash: string;
+    try {
+      hash = noticeHash(input);
+    } catch (err) {
+      if (err instanceof CanonicalizationError) {
+        return sendError(reply, request, 400, 'BAD_REQUEST', `The notice has no canonical JSON form: ${err.message}`);
+      }
+      throw err;
+    }
     const createdAt = new Date();
 
     try {
@@ -760,7 +886,8 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
           INSERT INTO dpdp_consent_notices (
             id, developer_id, notice_id, language, version, title, content,
             purposes, data_fiduciary_contact, grievance_officer, content_hash, created_at,
-            itemised_personal_data, purpose_details, withdrawal_url, rights_url, board_complaint_url, contact
+            itemised_personal_data, purpose_details, withdrawal_url, rights_url, board_complaint_url, contact,
+            notice_hash
           )
           VALUES (
             ${id}, ${developerId}, ${input.noticeId}, ${input.language}, ${input.version},
@@ -770,13 +897,15 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
             ${input.itemisedPersonalData ? json(tx, input.itemisedPersonalData) : null},
             ${input.purposeDetails ? json(tx, input.purposeDetails) : null},
             ${input.withdrawalUrl}, ${input.rightsUrl}, ${input.boardComplaintUrl},
-            ${input.contact ? json(tx, input.contact) : null}
+            ${input.contact ? json(tx, input.contact) : null},
+            ${hash}
           )
         `;
         await appendDpdpAudit(tx, developerId, [{
           action: DPDP_AUDIT_ACTIONS.noticeCreated,
           metadata: {
             notice_id: input.noticeId, version: input.version, language: input.language, content_hash: contentHash,
+            notice_hash: hash,
             rule3_missing: validation.missing,
           },
         }]);
@@ -796,6 +925,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       version: input.version,
       language: input.language,
       contentHash,
+      noticeHash: hash,
       createdAt: createdAt.toISOString(),
       validation,
     });
@@ -808,8 +938,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
     if (!page) return reply;
     const sql = getSql();
     const rows = await sql`
-      SELECT id, notice_id, language, version, title, content_hash, created_at, created_at::text AS created_at_cursor,
-             ${NOTICE_STRUCTURE_COLUMNS(sql)}
+      SELECT ${NOTICE_BIND_COLUMNS(sql)}, created_at, created_at::text AS created_at_cursor
       FROM dpdp_consent_notices
       WHERE developer_id = ${developerId}
         ${page.cursor ? sql`AND (created_at, id) < (${page.cursor.t}::timestamptz, ${page.cursor.id})` : sql``}
@@ -824,6 +953,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         language: n['language'],
         title: n['title'],
         contentHash: n['content_hash'],
+        noticeHash: noticeHashOfRow(n),
         createdAt: n['created_at'],
         ...noticeStructureResponse(n),
       })),
@@ -836,9 +966,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
     const developerId = request.developer.id;
     const sql = getSql();
     const rows = await sql`
-      SELECT id, notice_id, language, version, title, content, purposes,
-             data_fiduciary_contact, grievance_officer, content_hash, created_at,
-             ${NOTICE_STRUCTURE_COLUMNS(sql)}
+      SELECT ${NOTICE_BIND_COLUMNS(sql)}, created_at
       FROM dpdp_consent_notices
       WHERE developer_id = ${developerId} AND notice_id = ${request.params.noticeId}
       ORDER BY created_at DESC, id DESC
@@ -856,6 +984,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         dataFiduciaryContact: n['data_fiduciary_contact'] ?? null,
         grievanceOfficer: n['grievance_officer'] ?? null,
         contentHash: n['content_hash'],
+        noticeHash: noticeHashOfRow(n),
         createdAt: n['created_at'],
         ...noticeStructureResponse(n),
       })),
@@ -1221,8 +1350,26 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (type === 'gdpr-article-15' && dataPrincipalId) {
-      const article15 = await gdprArticle15(sql, developerId, dataPrincipalId);
-      // article15.truncated says whether the block left rows out.
+      // The data principal's own grievances for the period, as the copy the
+      // article15 scope names; capped like the article15 records.
+      const grievanceRows = await sql`
+        SELECT id, reference_number, record_id, type, description, status, response_period_days,
+               expected_resolution_by, created_at, resolved_at
+        FROM dpdp_grievances
+        WHERE developer_id = ${developerId} AND data_principal_id = ${dataPrincipalId}
+          AND created_at >= ${from} AND created_at <= ${to}
+        ORDER BY created_at DESC, id DESC
+        LIMIT ${ARTICLE15_RECORD_LIMIT + 1}
+      `;
+      const grievancesTruncated = grievanceRows.length > ARTICLE15_RECORD_LIMIT;
+      const grievances = grievanceRows.slice(0, ARTICLE15_RECORD_LIMIT);
+      exportData['grievances'] = grievances;
+      recordCount += grievances.length;
+      truncated = truncated || grievancesTruncated;
+      const article15 = await gdprArticle15(sql, developerId, dataPrincipalId, {
+        grievanceCount: grievances.length, grievancesTruncated,
+      });
+      // article15.truncated says whether the block, or the grievances copy, left rows out.
       exportData['article15'] = article15;
     }
 
@@ -1342,6 +1489,9 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       const { page, dataPrincipalId } = input;
       const sql = getSql();
 
+      // Without limit or cursor, what this route returned before it paginated:
+      // the newest 100 unfiltered, every match filtered by principal.
+      const limit = listLimit(page, dataPrincipalId ? null : LEGACY_UNFILTERED_LIST_SIZE);
       const rows = await sql`
         SELECT ${CONSENT_RECORD_COLUMNS(sql)}
         FROM dpdp_consent_records
@@ -1349,7 +1499,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
           ${dataPrincipalId ? sql`AND data_principal_id = ${dataPrincipalId}` : sql``}
           ${page.cursor ? sql`AND (created_at, id) < (${page.cursor.t}::timestamptz, ${page.cursor.id})` : sql``}
         ORDER BY created_at DESC, id DESC
-        LIMIT ${page.limit + 1}
+        ${limit !== null ? sql`LIMIT ${limit + 1}` : sql``}
       `;
       const [count] = await sql`
         SELECT COUNT(*)::int AS total FROM dpdp_consent_records
@@ -1358,9 +1508,9 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       `;
 
       return reply.send({
-        records: rows.slice(0, page.limit).map(consentRecordResponse),
+        records: (limit !== null ? rows.slice(0, limit) : rows).map(consentRecordResponse),
         totalRecords: Number(count?.['total'] ?? 0),
-        nextCursor: nextCursor(rows, page.limit),
+        nextCursor: limit !== null ? nextCursor(rows, limit) : null,
       });
     },
   );
@@ -1369,19 +1519,24 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
   // Plan rate-limit bucket, failing closed, as for withdrawal above: it
   // revokes the principal's grants.
   //
-  // What it does, in one transaction: revokes the principal's active grants
-  // (with their delegated grants), marks the consent records erased, redacts
-  // the principal's grievance text and deletes stored exports about the
-  // principal, and records the request. What it keeps, and why, is in
-  // `retained`: the consent records and the audit log stay (DPDP Rules 2025
-  // r.8(3) and r.6(1)(e); DPDP Act s.6(10)). A repeat for a principal with
-  // nothing left to erase returns the completed request instead of a new one.
+  // What it does, in one transaction: revokes the grants of the principal's
+  // records that are still active (only those grants, as it always did; with
+  // DPDP_REVOCATION_CASCADE=true their delegated grants too), marks the
+  // consent records erased, and records the request. With
+  // DPDP_ERASURE_EXPANDED=true it also redacts the principal's grievance text
+  // and deletes stored exports about the principal. What it keeps, and why,
+  // is in `retained`: the consent records and the audit log stay (DPDP Rules
+  // 2025 r.8(3) and r.6(1)(e); DPDP Act s.6(10)), and without the expanded
+  // flag the grievances and stored exports too. A repeat for a principal
+  // with nothing left to erase returns the completed request instead of a
+  // new one.
   app.post<{ Params: { principalId: string } }>(
     '/v1/dpdp/data-principals/:principalId/erasure',
     async (request, reply) => {
       const { principalId } = request.params;
       const developerId = request.developer.id;
       if (principalId.length > MAX_ID) return sendError(reply, request, 400, 'BAD_REQUEST', `principalId must be at most ${MAX_ID} characters`);
+      const expanded = config.dpdpErasureExpanded;
       const sql = getSql();
 
       let outcome: 'not_found' | 'existing' | 'completed' = 'not_found';
@@ -1416,7 +1571,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         const grantIds = [...new Set(records.map((r) => r['grant_id'] as string).filter(Boolean))].sort();
         for (const grantId of grantIds) {
           // Only active grants are revoked, and only those are counted.
-          const tree = await revokeGrantInTx(tx, grantId, developerId);
+          const tree = await revokeDpdpGrantInTx(tx, grantId, developerId);
           if (tree) trees.push(tree);
         }
         const pendingIds = pending.map((r) => r['id'] as string);
@@ -1429,30 +1584,47 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
             WHERE id = ANY(${pendingIds}) AND developer_id = ${developerId}
           `;
         }
-        const grievances = await tx`
-          UPDATE dpdp_grievances
-          SET description = ${ERASED_TEXT_MARKER}, evidence = ${json(tx, { redacted: true })}, updated_at = NOW()
-          WHERE developer_id = ${developerId} AND data_principal_id = ${principalId}
-            AND description <> ${ERASED_TEXT_MARKER}
-          RETURNING id
-        `;
+        const grievances = expanded
+          ? await tx`
+              UPDATE dpdp_grievances
+              SET description = ${ERASED_TEXT_MARKER}, evidence = ${json(tx, { redacted: true })}, updated_at = NOW()
+              WHERE developer_id = ${developerId} AND data_principal_id = ${principalId}
+                AND description <> ${ERASED_TEXT_MARKER}
+              RETURNING id
+            `
+          : [];
         const [grievanceTotal] = await tx`
           SELECT COUNT(*)::int AS total FROM dpdp_grievances
           WHERE developer_id = ${developerId} AND data_principal_id = ${principalId}
         `;
         // Stored exports filtered to the principal, or carrying the principal
-        // id anywhere in their data (matched as a whole JSON string).
-        const exports = await tx`
-          DELETE FROM dpdp_exports
-          WHERE developer_id = ${developerId}
-            AND (data_principal_id = ${principalId}
-                 OR (data IS NOT NULL AND position(${JSON.stringify(principalId)} IN data::text) > 0))
-          RETURNING id
-        `;
+        // id anywhere in their data (matched as a whole JSON string): deleted
+        // under DPDP_ERASURE_EXPANDED=true, otherwise counted as retained.
+        const principalJson = JSON.stringify(principalId);
+        const exports = expanded
+          ? await tx`
+              DELETE FROM dpdp_exports
+              WHERE developer_id = ${developerId}
+                AND (data_principal_id = ${principalId}
+                     OR (data IS NOT NULL AND position(${principalJson} IN data::text) > 0))
+              RETURNING id
+            `
+          : [];
+        const [storedExports] = expanded
+          ? [{ total: 0 }]
+          : await tx`
+              SELECT COUNT(*)::int AS total FROM dpdp_exports
+              WHERE developer_id = ${developerId}
+                AND (data_principal_id = ${principalId}
+                     OR (data IS NOT NULL AND position(${principalJson} IN data::text) > 0))
+            `;
         const completedAt = new Date();
         const grantsRevoked = trees.length;
         const delegatedGrantsRevoked = trees.reduce((sum, tree) => sum + tree.rows.length - 1, 0);
-        const retained = retainedAfterErasure(records.length, Number(grievanceTotal?.['total'] ?? 0));
+        const retained = retainedAfterErasure(records.length, Number(grievanceTotal?.['total'] ?? 0), {
+          expanded,
+          storedExportCount: Number(storedExports?.['total'] ?? 0),
+        });
         requestRow = {
           id: newErasureRequestId(),
           data_principal_id: principalId,

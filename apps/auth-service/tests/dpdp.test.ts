@@ -320,8 +320,29 @@ describe('POST /v1/dpdp/data-principals/:principalId/erasure', () => {
     const body = res.json();
     expect(body).toMatchObject({ status: 'completed', recordsErased: 1, grantsRevoked: 0 });
     expect(body.expectedCompletionBy).toBe(body.completedAt);
+    // Without DPDP_ERASURE_EXPANDED, grievances and stored exports are kept, and said to be.
     expect(body.retained.map((item: { category: string }) => item.category))
+      .toEqual(['consent_records', 'audit_log', 'grievances', 'stored_exports', 'fiduciary_data']);
+    expect(body).toMatchObject({ grievancesRedacted: 0, exportsDeleted: 0 });
+    const statements = sqlMock.mock.calls.map((args) => (Array.isArray(args[0]) ? (args[0] as string[]).join('?') : ''));
+    expect(statements.some((text) => /UPDATE\s+dpdp_grievances/i.test(text))).toBe(false);
+    expect(statements.some((text) => /DELETE\s+FROM\s+dpdp_exports/i.test(text))).toBe(false);
+  });
+
+  it('under DPDP_ERASURE_EXPANDED=true redacts grievances and deletes stored exports', async () => {
+    vi.stubEnv('DPDP_ERASURE_EXPANDED', 'true');
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]); // principal lock
+    sqlMock.mockResolvedValueOnce([{ id: 'crec_1', grant_id: null, status: 'withdrawn' }]);
+
+    const res = await app.inject({ method: 'POST', url: '/v1/dpdp/data-principals/user_456/erasure', headers: authHeader() });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().retained.map((item: { category: string }) => item.category))
       .toEqual(['consent_records', 'audit_log', 'grievances', 'fiduciary_data']);
+    const statements = sqlMock.mock.calls.map((args) => (Array.isArray(args[0]) ? (args[0] as string[]).join('?') : ''));
+    expect(statements.some((text) => /UPDATE\s+dpdp_grievances/i.test(text))).toBe(true);
+    expect(statements.some((text) => /DELETE\s+FROM\s+dpdp_exports/i.test(text))).toBe(true);
   });
 });
 

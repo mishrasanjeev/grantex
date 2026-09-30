@@ -40,6 +40,7 @@ curl "https://api.grantex.dev/v1/dpdp/consent-notices?limit=20" \
       "language": "en",
       "title": "Data Processing Notice",
       "contentHash": "a1b2c3d4e5f6...",
+      "noticeHash": "9f8e7d6c5b4a...",
       "createdAt": "2026-04-05T12:00:00.000Z"
     }
   ],
@@ -64,6 +65,7 @@ curl "https://api.grantex.dev/v1/dpdp/consent-notices?limit=20" \
 | `language` | `string` | Language code |
 | `title` | `string` | Title |
 | `contentHash` | `string` | SHA-256 hash of the content |
+| `noticeHash` | `string` | SHA-256 over the canonical JSON of the whole notice (see [Consent Notice Content](/api-reference/dpdp/consent-notice-content#the-notice-hash)) |
 | `createdAt` | `string` | ISO-8601 creation timestamp |
 
 Read a notice's full text with [Get Consent Notice](/api-reference/dpdp/get-consent-notice).

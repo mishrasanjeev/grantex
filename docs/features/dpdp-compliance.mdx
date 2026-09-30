@@ -177,8 +177,10 @@ grant can carry a purpose that tools check (see
 match the consented purposes is your design decision.
 
 Reads (`GET /v1/dpdp/consent-records`, `/v1/dpdp/consent-records/{recordId}`
-and `/v1/dpdp/data-principals/{principalId}/records`) have no side effects, and
-lists are paginated (`limit` up to 200, `cursor`, `nextCursor`).
+and `/v1/dpdp/data-principals/{principalId}/records`) have no side effects. Record lists return what they always did (up to 100
+records unfiltered, every match for a data principal) unless you send `limit`
+(up to 200) or `cursor`, in which case they page and return `nextCursor`;
+`totalRecords` is always the full count.
 
 ## Withdrawal
 
@@ -215,9 +217,11 @@ grantex dpdp consent withdraw crec_01HXYZ... \
 - `reason` is required. Only an `active` record can be withdrawn: a second
   withdrawal is `409 ALREADY_WITHDRAWN`, and erased or expired records answer
   `409 CONSENT_ERASED` or `409 CONSENT_EXPIRED`.
-- `revokeGrant: true` revokes the grant through the same cascade as
-  `DELETE /v1/grants/{id}`: delegated grants, credentials, wallet
-  reservations, the revocation cache and a `grant.revoked` event. Without it
+- `revokeGrant: true` revokes the record's own grant (`revokedAt`, the
+  revocation cache and a `grant.revoked` event); grants delegated from it keep
+  working. An operator who sets `DPDP_REVOCATION_CASCADE=true` gets the same
+  cascade as `DELETE /v1/grants/{id}` instead: delegated grants, credentials
+  and wallet reservations. Without `revokeGrant`
   the grant stays active, unless the operator sets
   `DPDP_WITHDRAWAL_REVOKES_GRANT=true`, which makes an omitted `revokeGrant`
   mean `true`. After a withdrawal the fiduciary and its processors must cease
@@ -234,16 +238,19 @@ grantex dpdp consent withdraw crec_01HXYZ... \
 
 `POST /v1/dpdp/data-principals/{principalId}/erasure` acts on a Data
 Principal's erasure request (DPDP Act s.12). In one transaction it revokes the
-principal's active grants and their delegated grants, marks the consent
-records `erased`, replaces grievance descriptions and evidence with a fixed
-marker, deletes stored exports about the principal, and stores an erasure
-request (`ER-YYYY-<ULID>`) that says what was **retained** and why:
+principal's active grants (their delegated grants too only with
+`DPDP_REVOCATION_CASCADE=true`), marks the consent records `erased`, and stores
+an erasure request (`ER-YYYY-<ULID>`) that says what was **retained** and why.
+With `DPDP_ERASURE_EXPANDED=true` it also replaces grievance descriptions and
+evidence with a fixed marker and deletes stored exports about the principal;
+without it, both are kept and listed as retained:
 
 | Retained | Why |
 |---|---|
 | Consent records, marked `erased` | The fiduciary must be able to prove consent (s.6(10)), and DPDP Rules r.8(3) require personal data, associated traffic data and processing logs to be kept for at least one year from processing, for the purposes in the Seventh Schedule |
 | Audit entries, never modified | The one-year log retention in r.6(1)(e) and r.8(3); the entries also form a hash chain that any rewrite would break |
-| Grievances, redacted | The record of grievance handling |
+| Grievances (redacted with `DPDP_ERASURE_EXPANDED=true`) | The record of grievance handling; without the flag the text is kept too |
+| Stored exports (only without `DPDP_ERASURE_EXPANDED`) | Expanded erasure is not enabled on the deployment |
 | Your processed data | Not held by Grantex; erasing it is your step |
 
 A repeat call returns the completed request with `200`. The request can be
@@ -406,6 +413,10 @@ All default off and take the exact value `true`.
 | `DPDP_CONSENT_EXPIRY_REVOKES_GRANT` | With the expiry worker, also revoke the grant |
 | `DPDP_NOTICE_REQUIRE_RULE3` | Refuse notices missing an r.3 element or in another language |
 | `DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL` | Refuse a `gdpr-article-15` export without `dataPrincipalId` |
+| `DPDP_REVOCATION_CASCADE` | Withdrawal, erasure and the expiry worker revoke through the full grant cascade instead of only the record's own grant |
+| `DPDP_ERASURE_EXPANDED` | Erasure also redacts grievances and deletes stored exports |
+| `DPDP_REQUIRE_PERSISTENT_PROOF_KEY` | Refuse consent records (`503`) while the proof key is ephemeral (`ED25519_PRIVATE_KEY` unset) |
+| `DPDP_REQUIRE_NOTICE_LANGUAGE` | Require `consentNoticeLanguage` when a notice version exists in several languages |
 | `DPDP_BREACH_DEADLINE_ALERTS_ENABLED` | Run the breach deadline worker (`DPDP_BREACH_ALERT_LEAD_MINUTES`, default 720) |
 
 Set `ED25519_PRIVATE_KEY` in production so consent proofs stay verifiable

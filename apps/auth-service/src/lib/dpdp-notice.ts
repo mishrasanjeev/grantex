@@ -11,6 +11,9 @@
  * review, not a verdict.
  */
 
+import { createHash } from 'node:crypto';
+import { canonicalize } from './decisions/canonical.js';
+
 /**
  * English and the 22 languages of the Eighth Schedule, keyed by ISO 639 code:
  * the 639-1 code where one exists, and the 639-2/639-3 codes as well.
@@ -105,4 +108,65 @@ export function noticeValidation(notice: NoticeContent, options: { enforced: boo
     missing,
     language: { tag: notice.language, name, englishOrEighthSchedule: name !== null },
   };
+}
+
+/**
+ * The members of a notice that its notice hash covers: everything the data
+ * principal is shown, and which notice, version and language it is. A member
+ * the notice does not have counts as null.
+ */
+export const NOTICE_HASH_MEMBERS = [
+  'noticeId',
+  'version',
+  'language',
+  'title',
+  'content',
+  'purposes',
+  'dataFiduciaryContact',
+  'grievanceOfficer',
+  'itemisedPersonalData',
+  'purposeDetails',
+  'withdrawalUrl',
+  'rightsUrl',
+  'boardComplaintUrl',
+  'contact',
+] as const;
+export type NoticeHashInput = { [K in (typeof NOTICE_HASH_MEMBERS)[number]]?: unknown };
+
+/**
+ * The notice hash: lowercase hex SHA-256 of the UTF-8 bytes of the RFC 8785
+ * canonical JSON of an object holding NOTICE_HASH_MEMBERS. Member order does
+ * not matter, and each value is taken as JSON (and the notice's JSONB
+ * columns) holds it, so a notice hashes the same when it is created and when
+ * it is read back. Unlike contentHash (SHA-256 of `content` alone), it
+ * changes when any structured field, the language, the version or the notice
+ * id does. Throws CanonicalizationError for a value with no JSON form.
+ */
+export function noticeHash(notice: NoticeHashInput): string {
+  const document: Record<string, unknown> = {};
+  for (const member of NOTICE_HASH_MEMBERS) document[member] = notice[member] ?? null;
+  const asStored = JSON.parse(JSON.stringify(document)) as unknown;
+  return createHash('sha256').update(canonicalize(asStored), 'utf8').digest('hex');
+}
+
+/** The notice hash of a dpdp_consent_notices row: the stored one, or computed from the row (notices from before it). */
+export function noticeHashOfRow(row: Record<string, unknown>): string {
+  const stored = row['notice_hash'];
+  if (typeof stored === 'string' && stored.length > 0) return stored;
+  return noticeHash({
+    noticeId: row['notice_id'],
+    version: row['version'],
+    language: row['language'],
+    title: row['title'],
+    content: row['content'],
+    purposes: row['purposes'],
+    dataFiduciaryContact: row['data_fiduciary_contact'],
+    grievanceOfficer: row['grievance_officer'],
+    itemisedPersonalData: row['itemised_personal_data'],
+    purposeDetails: row['purpose_details'],
+    withdrawalUrl: row['withdrawal_url'],
+    rightsUrl: row['rights_url'],
+    boardComplaintUrl: row['board_complaint_url'],
+    contact: row['contact'],
+  });
 }
