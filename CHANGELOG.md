@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Release preparation: DPDP clients
+- Versions prepared for the DPDP client changes: `@grantex/sdk` 0.8.2,
+  `grantex` (Python) 0.7.2, Go SDK v0.4.3 and `@grantex/dpdp` 0.2.0
+  (minor: its types follow the server's grievance statuses, inline exports
+  and consent proofs). These versions are not yet published;
+  `@grantex/cli` 0.4.2 is already published.
+
 ### Agent callback URI management
 - Dashboard agent create/edit now exposes registered redirect URIs, including
   adding, replacing, and removing callbacks without recreating the agent.
