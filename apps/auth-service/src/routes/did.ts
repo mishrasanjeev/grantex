@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { buildJwks, getEdKeyPair } from '../lib/crypto.js';
+import { buildJwks, getEdKeyPair, getEdKidAliases } from '../lib/crypto.js';
 import { getSigningKeyRing } from '../lib/signing-keys.js';
 import { exportJWK } from 'jose';
 import { config } from '../config.js';
@@ -79,6 +79,16 @@ export async function didRoutes(app: FastifyInstance): Promise<void> {
         controller: didId,
         publicKeyJwk: { ...edJwk, alg: 'EdDSA', use: 'sig', kid: edKeyPair.kid },
       });
+      // The same key under the month ids it signed with before it had a stable kid.
+      for (const alias of getEdKidAliases()) {
+        if (alias === edKeyPair.kid) continue;
+        verificationMethods.push({
+          id: `${didId}#${alias}`,
+          type: 'JsonWebKey2020',
+          controller: didId,
+          publicKeyJwk: { ...edJwk, alg: 'EdDSA', use: 'sig', kid: alias },
+        });
+      }
     }
 
     const doc = {

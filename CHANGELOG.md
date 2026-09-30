@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Stable Ed25519 key id
+- `ED25519_STABLE_KID=true` (default off) gives a configured
+  `ED25519_PRIVATE_KEY` the key id `grantex-ed25519-<RFC 7638 thumbprint>`.
+  Previously the id was the month the process started in, so after a restart
+  in a later month the JWKS no longer carried the id a stored DPDP consent
+  proof or credential named, and it stopped verifying. With the flag on, the
+  key is also published under the month ids of this month and the previous
+  `JWT_LEGACY_KID_MONTHS` months, in the JWKS and the DID document. A
+  generated key keeps the month id.
+
 ### DPDP and EU AI Act documentation
 - Rewrote `docs/features/dpdp-compliance.mdx` to document the shipped DPDP
   routes (the page described a `DPDPClient` API that does not exist), and

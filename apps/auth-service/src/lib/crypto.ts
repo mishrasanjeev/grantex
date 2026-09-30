@@ -3,6 +3,7 @@ import {
   importPKCS8,
   importSPKI,
   exportJWK,
+  calculateJwkThumbprint,
   SignJWT,
   jwtVerify,
   decodeJwt,
@@ -374,12 +375,31 @@ export interface EdKeyPair {
 let _edKeyPair: EdKeyPair | null = null;
 /** Whether the Ed25519 key came from ED25519_PRIVATE_KEY (persistent) or was generated at boot (ephemeral). */
 let _edKeyPersistence: 'persistent' | 'ephemeral' | null = null;
+/** Other key ids the Ed25519 key is published under (ED25519_STABLE_KID), newest month first. */
+let _edKidAliases: string[] = [];
+
+function monthEdKid(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  return `grantex-ed25519-${year}-${month}`;
+}
 
 function buildEdKid(): string {
+  return monthEdKid(new Date());
+}
+
+/**
+ * The month key ids a persistent key signed under before it had a stable kid:
+ * this month and the `months` before it, so a proof whose header names one of
+ * them still finds the key.
+ */
+function monthEdKidAliases(months: number): string[] {
   const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-  return `grantex-ed25519-${year}-${month}`;
+  const aliases: string[] = [];
+  for (let i = 0; i <= months; i++) {
+    aliases.push(monthEdKid(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1))));
+  }
+  return aliases;
 }
 
 export async function initEdKey(): Promise<void> {
@@ -395,7 +415,14 @@ export async function initEdKey(): Promise<void> {
     });
     const spkiPem = nodePk.export({ type: 'spki', format: 'pem' }) as string;
     const publicKey = await importSPKI(spkiPem, 'EdDSA');
-    _edKeyPair = { privateKey, publicKey, kid: buildEdKid() };
+    if (config.ed25519StableKid) {
+      const thumbprint = await calculateJwkThumbprint({ kty: 'OKP', crv: jwk.crv, x: jwk.x }, 'sha256');
+      _edKeyPair = { privateKey, publicKey, kid: `grantex-ed25519-${thumbprint}` };
+      _edKidAliases = monthEdKidAliases(config.jwtLegacyKidMonths);
+    } else {
+      _edKeyPair = { privateKey, publicKey, kid: buildEdKid() };
+      _edKidAliases = [];
+    }
     _edKeyPersistence = 'persistent';
     return;
   }
@@ -406,11 +433,21 @@ export async function initEdKey(): Promise<void> {
     extractable: true,
   });
   _edKeyPair = { privateKey, publicKey, kid: buildEdKid() };
+  _edKidAliases = [];
   _edKeyPersistence = 'ephemeral';
 }
 
 export function getEdKeyPair(): EdKeyPair | null {
   return _edKeyPair;
+}
+
+/**
+ * Key ids the Ed25519 key is published under besides its own kid: the
+ * grantex-ed25519-YYYY-MM ids of recent months when ED25519_STABLE_KID gave a
+ * configured key a stable kid, otherwise none.
+ */
+export function getEdKidAliases(): readonly string[] {
+  return _edKidAliases;
 }
 
 /**
@@ -464,6 +501,9 @@ export async function buildJwks(): Promise<{ keys: Record<string, unknown>[] }> 
       use: 'sig',
       kid: _edKeyPair.kid,
     });
+    for (const alias of _edKidAliases) {
+      if (alias !== _edKeyPair.kid) keys.push({ ...edJwk, alg: 'EdDSA', use: 'sig', kid: alias });
+    }
   }
 
   // Commerce Passport ES256 keys (M2). Include both active and retired so

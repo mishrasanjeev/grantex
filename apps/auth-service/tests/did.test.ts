@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { generateKeyPair, exportPKCS8 } from 'jose';
 import { buildTestApp, sqlMock } from './helpers.js';
-import { initEdKey } from '../src/lib/crypto.js';
+import { initEdKey, getEdKeyPair } from '../src/lib/crypto.js';
+import { config } from '../src/config.js';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
@@ -152,5 +154,33 @@ describe('GET /agents/:id/did.json', () => {
 
     const res = await app.inject({ method: 'GET', url: '/agents/ag_SUSPENDED/did.json' });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('GET /.well-known/did.json with ED25519_STABLE_KID', () => {
+  it('lists the configured Ed25519 key under its stable kid and its recent month kids', async () => {
+    const settable = config as { ed25519PrivateKey: string | null; ed25519StableKid: boolean };
+    const { privateKey } = await generateKeyPair('EdDSA', { crv: 'Ed25519', extractable: true });
+    settable.ed25519PrivateKey = await exportPKCS8(privateKey);
+    settable.ed25519StableKid = true;
+    try {
+      await initEdKey();
+      const kid = getEdKeyPair()!.kid;
+      const now = new Date();
+      const thisMonth = `grantex-ed25519-${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+
+      const body = (await app.inject({ method: 'GET', url: '/.well-known/did.json' })).json();
+      const edMethods = (body.verificationMethod as Array<Record<string, unknown>>)
+        .filter((m) => (m['publicKeyJwk'] as Record<string, unknown>)['alg'] === 'EdDSA');
+      const ids = edMethods.map((m) => m['id']);
+      expect(ids[0]).toBe(`did:web:grantex.dev#${kid}`);
+      expect(ids).toContain(`did:web:grantex.dev#${thisMonth}`);
+      expect(new Set(edMethods.map((m) => (m['publicKeyJwk'] as Record<string, unknown>)['x'])).size).toBe(1);
+      expect(body.assertionMethod).toEqual(expect.arrayContaining(ids));
+    } finally {
+      settable.ed25519PrivateKey = null;
+      settable.ed25519StableKid = false;
+      await initEdKey();
+    }
   });
 });
