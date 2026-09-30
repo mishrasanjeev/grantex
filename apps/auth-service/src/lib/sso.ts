@@ -580,13 +580,12 @@ export function normalizeGroupMappings(value: unknown): Record<string, string[]>
   }
   if (mappings === null || typeof mappings !== 'object' || Array.isArray(mappings)) return {};
   const entries = mappings as Record<string, unknown>;
-  const result: Record<string, string[]> = Object.create(null);
-  for (const [group, scopes] of Object.entries(entries)) {
-    if (Array.isArray(scopes) && scopes.every((scope) => typeof scope === 'string')) {
-      result[group] = scopes;
-    }
-  }
-  return result;
+  return Object.fromEntries(
+    Object.entries(entries).filter(([group, scopes]) =>
+      group !== '__proto__' && group !== 'constructor' && group !== 'prototype' &&
+      Array.isArray(scopes) && scopes.every((scope) => typeof scope === 'string'),
+    ),
+  ) as Record<string, string[]>;
 }
 
 // ── JIT provisioning ──────────────────────────────────────────────────────
