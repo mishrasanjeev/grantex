@@ -25,6 +25,8 @@ Requires a developer API key in the `Authorization` header.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `dataPrincipalId` | `string` | No | Filter records by data principal ID |
+| `limit` | `integer` | No | Page size, 1 to 200 (default 50 once paging). Sending `limit` or `cursor` turns paging on |
+| `cursor` | `string` | No | The `nextCursor` of the previous page |
 
 ## Example Request
 
@@ -48,16 +50,21 @@ curl "https://api.grantex.dev/v1/dpdp/consent-records?dataPrincipalId=user_abc12
       ],
       "scopes": ["calendar:read"],
       "consentNoticeId": "notice_v2",
+      "consentNoticeVersion": "2.0",
       "status": "active",
       "consentGivenAt": "2026-04-05T12:00:00.000Z",
       "processingExpiresAt": "2027-01-01T00:00:00.000Z",
       "retentionUntil": "2027-01-31T00:00:00.000Z",
-      "accessCount": 2,
+      "accessCount": 0,
+      "lastAccessedAt": null,
       "withdrawnAt": null,
+      "withdrawnReason": null,
+      "erasedAt": null,
       "createdAt": "2026-04-05T12:00:00.000Z"
     }
   ],
-  "totalRecords": 1
+  "totalRecords": 1,
+  "nextCursor": null
 }
 ```
 
@@ -65,8 +72,15 @@ curl "https://api.grantex.dev/v1/dpdp/consent-records?dataPrincipalId=user_abc12
 
 | Field | Type | Description |
 |---|---|---|
-| `records` | `object[]` | Array of consent record objects |
-| `totalRecords` | `number` | Total number of records returned |
+| `records` | `object[]` | One page of consent records, newest first |
+| `totalRecords` | `number` | Total number of records matching the filter, across all pages |
+| `nextCursor` | `string \| null` | Pass as `cursor` for the next page; `null` on the last page |
+
+Without `limit` or `cursor` the list returns what it always did: the newest
+100 records unfiltered (with a `nextCursor` when there are more), and every
+matching record with `dataPrincipalId` (`nextCursor` is `null`). Sending
+`limit` or `cursor` pages: 50 records by default and at most 200; follow
+`nextCursor` to read them all.
 
 ### Record Object
 
@@ -79,12 +93,16 @@ curl "https://api.grantex.dev/v1/dpdp/consent-records?dataPrincipalId=user_abc12
 | `purposes` | `object[]` | Array of purpose objects (`{ code, description }`) |
 | `scopes` | `string[]` | Scopes from the associated grant |
 | `consentNoticeId` | `string` | ID of the consent notice |
+| `consentNoticeVersion` | `string \| null` | The notice version the record was given against (`null` for an older record whose version could not be recovered) |
 | `status` | `string` | Record status: `active`, `withdrawn`, `expired`, or `erased` |
 | `consentGivenAt` | `string` | ISO-8601 timestamp of original consent |
 | `processingExpiresAt` | `string` | ISO-8601 processing expiry timestamp |
 | `retentionUntil` | `string` | ISO-8601 data retention limit |
-| `accessCount` | `number` | Number of times this record has been accessed |
+| `accessCount` | `number` | The stored access count. Developer reads through this API do not change it |
+| `lastAccessedAt` | `string \| null` | The stored last-access timestamp, `null` if never set. Developer reads do not change it |
 | `withdrawnAt` | `string \| null` | ISO-8601 timestamp of withdrawal (if withdrawn) |
+| `withdrawnReason` | `string \| null` | Reason for withdrawal (if withdrawn) |
+| `erasedAt` | `string \| null` | ISO-8601 timestamp of erasure (if erased) |
 | `createdAt` | `string` | ISO-8601 creation timestamp |
 
 ## Error Responses

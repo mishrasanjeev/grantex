@@ -1,7 +1,7 @@
 ---
 title: "Withdraw Consent"
 sidebarTitle: "Withdraw Consent"
-description: "Withdraw a DPDP consent record. Optionally revokes the underlying grant and deletes processed data."
+description: "Withdraw a DPDP consent record. Optionally revokes the underlying grant, and asks the developer to delete processed data."
 ---
 
 ## Endpoint
@@ -31,9 +31,34 @@ Requires a developer API key in the `Authorization` header.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `reason` | `string` | Yes | Reason for consent withdrawal |
-| `revokeGrant` | `boolean` | No | If `true`, revokes the underlying Grantex grant |
-| `deleteProcessedData` | `boolean` | No | If `true`, anonymizes audit entries related to this consent (DPDP Section 6(6), GDPR Article 17) |
+| `reason` | `string` | Yes | Reason for consent withdrawal (up to 1,000 characters) |
+| `revokeGrant` | `boolean` | No | If `true`, revokes the underlying grant (and every grant delegated from it when the server sets `DPDP_REVOCATION_CASCADE=true`). Default `false`, or `true` when the server sets `DPDP_WITHDRAWAL_REVOKES_GRANT=true` |
+| `deleteProcessedData` | `boolean` | No | If `true`, emits a `dpdp.data_deletion.requested` webhook event asking the developer to delete the data it processed under this consent |
+
+The body must be a JSON object; a missing or malformed body is `400`.
+
+After a withdrawal the Data Fiduciary must cease processing (DPDP Act
+s.6(6)). Revoking the grant stops Grantex-mediated processing under that
+grant: it is marked revoked with `revokedAt`, the revocation cache is updated
+and a `grant.revoked` event is emitted. By default only the record's own grant
+is revoked, as this endpoint always did; grants delegated from it keep
+working. A server that sets `DPDP_REVOCATION_CASCADE=true` revokes through the
+same cascade as `DELETE /v1/grants/:id` instead (delegated grants,
+credentials, wallet reservations). Only an active grant is revoked. A server
+operator who wants every
+withdrawal to revoke unless the caller says otherwise sets
+`DPDP_WITHDRAWAL_REVOKES_GRANT=true`; an explicit `revokeGrant: false` still
+wins.
+
+Grantex holds no personal data the fiduciary processed. `deleteProcessedData`
+therefore does not delete or rewrite anything in Grantex (the audit log is a
+tamper-evident hash chain and is never modified); it asks the developer, by
+webhook, to delete the data in its own systems.
+
+The withdrawal, the grant revocation and the audit entry
+(`grantex.dpdp.consent_withdrawn`) are one transaction. Only an `active`
+record can be withdrawn, so of two concurrent withdrawals exactly one
+succeeds.
 
 ## Example Request
 
@@ -56,7 +81,8 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-records/cr_01HXYZ.../withdr
   "status": "withdrawn",
   "withdrawnAt": "2026-04-05T14:00:00.000Z",
   "grantRevoked": true,
-  "dataDeleted": true
+  "dataDeleted": false,
+  "dataDeletionRequested": true
 }
 ```
 
@@ -67,17 +93,20 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-records/cr_01HXYZ.../withdr
 | `recordId` | `string` | The consent record ID |
 | `status` | `string` | Updated status: `withdrawn` |
 | `withdrawnAt` | `string` | ISO-8601 timestamp of withdrawal |
-| `grantRevoked` | `boolean` | Whether the underlying grant was revoked |
-| `dataDeleted` | `boolean` | Whether processed data was anonymized |
+| `grantRevoked` | `boolean` | Whether this withdrawal revoked the grant (`false` if it was not asked to, or the grant was no longer active) |
+| `dataDeleted` | `boolean` | Whether Grantex itself deleted data. Always `false`: Grantex holds none of the fiduciary's processed data |
+| `dataDeletionRequested` | `boolean` | Whether a `dpdp.data_deletion.requested` event was sent to the developer |
 
 ## Error Responses
 
 | Status | Code | Description |
 |---|---|---|
-| 400 | `BAD_REQUEST` | Missing `reason` field |
+| 400 | `BAD_REQUEST` | Missing or non-object body, missing `reason`, or a non-boolean flag |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
 | 404 | `NOT_FOUND` | Consent record not found |
 | 409 | `ALREADY_WITHDRAWN` | Consent has already been withdrawn |
+| 409 | `CONSENT_ERASED` | The record was erased |
+| 409 | `CONSENT_EXPIRED` | The record has expired |
 
 ## SDK Examples
 

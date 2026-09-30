@@ -1,0 +1,80 @@
+---
+title: "List Consent Notices"
+sidebarTitle: "List Consent Notices"
+description: "List the developer's DPDP consent notice versions, newest first, one page at a time."
+---
+
+## Endpoint
+
+```
+GET /v1/dpdp/consent-notices
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Query Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `limit` | `integer` | No | Page size, 1 to 200 (default 50) |
+| `cursor` | `string` | No | The `nextCursor` of the previous page |
+
+## Example Request
+
+```bash
+curl "https://api.grantex.dev/v1/dpdp/consent-notices?limit=20" \
+  -H "Authorization: Bearer gx_..."
+```
+
+## Response -- 200 OK
+
+```json
+{
+  "notices": [
+    {
+      "id": "notice_01HXYZ...",
+      "noticeId": "data-processing",
+      "version": "2.0",
+      "language": "en",
+      "title": "Data Processing Notice",
+      "contentHash": "a1b2c3d4e5f6...",
+      "createdAt": "2026-04-05T12:00:00.000Z"
+    }
+  ],
+  "nextCursor": null
+}
+```
+
+## Response Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `notices` | `object[]` | One page of notice versions, newest first; each version of a notice is its own entry |
+| `nextCursor` | `string \| null` | Pass as `cursor` for the next page; `null` on the last page |
+
+### Notice Object
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `string` | The stored notice version's ID |
+| `noticeId` | `string` | The notice ID consent records refer to |
+| `version` | `string` | The version |
+| `language` | `string` | Language code |
+| `title` | `string` | Title |
+| `contentHash` | `string` | SHA-256 hash of the content |
+| `createdAt` | `string` | ISO-8601 creation timestamp |
+
+Read a notice's full text with [Get Consent Notice](/api-reference/dpdp/get-consent-notice).
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | `limit` outside 1 to 200, or an invalid `cursor` |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

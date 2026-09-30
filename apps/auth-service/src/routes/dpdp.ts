@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
-import { getSql } from '../db/client.js';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type postgres from 'postgres';
+import { config } from '../config.js';
+import { getSql, type TxSql } from '../db/client.js';
 import {
   newConsentRecordId,
   newNoticeId,
@@ -9,52 +11,193 @@ import {
   newGrievanceReference,
   newErasureRequestId,
 } from '../lib/ids.js';
-import { signWithEd25519 } from '../lib/crypto.js';
+import { getEdKeyPair, getEdKeyPersistence, signWithEd25519 } from '../lib/crypto.js';
 import { emitEvent } from '../lib/events.js';
+import { appendPlatformAuditEntries, lockAuditChain, type PlatformAuditEntry } from '../lib/audit-chain.js';
+import { publishGrantRevocation, revokeDpdpGrantInTx, type RevokedGrantTree } from '../lib/revoke.js';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// ── Limits ─────────────────────────────────────────────────────────────────
 
-interface CreateConsentRecordBody {
-  grantId: string;
-  dataPrincipalId: string;
-  purposes: { code: string; description: string }[];
-  consentNoticeId: string;
-  processingExpiresAt: string;
+const MAX_ID = 256;
+const MAX_CODE = 128;
+const MAX_SHORT_TEXT = 1_000;
+const MAX_LONG_TEXT = 5_000;
+const MAX_NOTICE_CONTENT = 100_000;
+const MAX_PURPOSES = 50;
+const MAX_EVIDENCE_BYTES = 16_384;
+/** Rows of the audit log an export carries; `truncated` says when there were more. */
+export const EXPORT_AUDIT_LOG_LIMIT = 1_000;
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 200;
+/**
+ * What GET /v1/dpdp/consent-records returned without a dataPrincipalId
+ * before it paginated, and still returns when the caller sends neither
+ * `limit` nor `cursor`. Filtered by principal, and on
+ * GET /v1/dpdp/data-principals/:id/records, such a call returns every match.
+ */
+const LEGACY_UNFILTERED_LIST_SIZE = 100;
+const DEFAULT_RESPONSE_PERIOD_DAYS = 7;
+/** DPDP Rules 2025 r.14(3): a published grievance response period may not exceed 90 days. */
+const MAX_RESPONSE_PERIOD_DAYS = 90;
+const EXPORT_LIFETIME_MS = 7 * 86_400_000;
+
+/** What replaces a grievance's free text when its data principal is erased. */
+export const ERASED_TEXT_MARKER = '[erased at the request of the data principal]';
+
+const GRIEVANCE_STATUSES = ['submitted', 'in_review', 'resolved', 'rejected'] as const;
+type GrievanceStatus = (typeof GRIEVANCE_STATUSES)[number];
+/** submitted -> in_review -> resolved | rejected; nothing leaves resolved or rejected. */
+const GRIEVANCE_TRANSITIONS: Record<Exclude<GrievanceStatus, 'submitted'>, GrievanceStatus[]> = {
+  in_review: ['submitted'],
+  resolved: ['in_review'],
+  rejected: ['in_review'],
+};
+
+const EXPORT_TYPES = ['dpdp-audit', 'gdpr-article-15', 'eu-ai-act-conformance'] as const;
+const EXPORT_FORMATS = ['json'] as const;
+
+/** Reserved (`grantex.`) audit actions: a tenant cannot write them through POST /v1/audit/log. */
+export const DPDP_AUDIT_ACTIONS = {
+  consentCreated: 'grantex.dpdp.consent_created',
+  consentWithdrawn: 'grantex.dpdp.consent_withdrawn',
+  consentExpired: 'grantex.dpdp.consent_expired',
+  erasureCompleted: 'grantex.dpdp.erasure_completed',
+  grievanceFiled: 'grantex.dpdp.grievance_filed',
+  grievanceUpdated: 'grantex.dpdp.grievance_updated',
+  noticeCreated: 'grantex.dpdp.notice_created',
+  exportCreated: 'grantex.dpdp.export_created',
+} as const;
+
+// ── Validation ─────────────────────────────────────────────────────────────
+
+class InputError extends Error {
+  constructor(message: string, readonly code = 'BAD_REQUEST') {
+    super(message);
+  }
 }
 
-interface WithdrawConsentBody {
-  reason: string;
-  revokeGrant?: boolean;
-  deleteProcessedData?: boolean;
+type Body = Record<string, unknown>;
+
+function isPlainObject(value: unknown): value is Body {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-interface CreateNoticeBody {
-  noticeId: string;
-  language?: string;
-  version: string;
-  title: string;
-  content: string;
-  purposes: { code: string; description: string }[];
-  dataFiduciaryContact?: string;
-  grievanceOfficer?: { name: string; email: string; phone?: string };
+function requireBody(value: unknown): Body {
+  if (!isPlainObject(value)) throw new InputError('Request body must be a JSON object');
+  return value;
 }
 
-interface FileGrievanceBody {
-  dataPrincipalId: string;
-  recordId?: string;
-  type: string;
-  description: string;
-  evidence?: Record<string, unknown>;
+function requireString(value: unknown, field: string, max: number): string {
+  if (typeof value !== 'string' || value.trim().length === 0) throw new InputError(`${field} is required and must be a non-empty string`);
+  if (value.length > max) throw new InputError(`${field} must be at most ${max} characters`);
+  return value;
 }
 
-interface CreateExportBody {
-  type: 'dpdp-audit' | 'gdpr-article-15' | 'eu-ai-act-conformance';
-  dateFrom: string;
-  dateTo: string;
-  format?: string;
-  includeActionLog?: boolean;
-  includeConsentRecords?: boolean;
-  dataPrincipalId?: string;
+function optionalString(value: unknown, field: string, max: number): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  return requireString(value, field, max);
+}
+
+function optionalBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'boolean') throw new InputError(`${field} must be a boolean`);
+  return value;
+}
+
+interface Purpose { code: string; description: string }
+
+function requirePurposes(value: unknown): Purpose[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new InputError('purposes must be a non-empty array of { code, description }');
+  }
+  if (value.length > MAX_PURPOSES) throw new InputError(`purposes must have at most ${MAX_PURPOSES} entries`);
+  return value.map((item, index) => {
+    if (!isPlainObject(item)) throw new InputError(`purposes[${index}] must be an object { code, description }`);
+    return {
+      code: requireString(item['code'], `purposes[${index}].code`, MAX_CODE),
+      description: requireString(item['description'], `purposes[${index}].description`, MAX_SHORT_TEXT),
+    };
+  });
+}
+
+/** An RFC 3339 date-time (as Date.toISOString() writes it, with or without fractional seconds or an offset). */
+const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function requireDate(value: unknown, field: string, options: { dateOnly?: boolean } = {}): Date {
+  if (typeof value !== 'string' || !(ISO_DATE_TIME.test(value) || (options.dateOnly && ISO_DATE.test(value)))) {
+    throw new InputError(`${field} must be an ISO 8601 date-time`);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new InputError(`${field} must be a valid date`);
+  return date;
+}
+
+interface PageRequest {
+  limit: number;
+  cursor: { t: string; id: string } | null;
+  /** Whether the caller sent `limit` or `cursor`, i.e. asked for pages. */
+  paged: boolean;
+}
+
+function parsePage(query: Record<string, unknown>): PageRequest {
+  let limit = DEFAULT_PAGE_SIZE;
+  if (query['limit'] !== undefined) {
+    const raw = String(query['limit']);
+    if (!/^\d+$/.test(raw)) throw new InputError(`limit must be an integer between 1 and ${MAX_PAGE_SIZE}`);
+    limit = Number(raw);
+    if (limit < 1 || limit > MAX_PAGE_SIZE) throw new InputError(`limit must be an integer between 1 and ${MAX_PAGE_SIZE}`);
+  }
+  let cursor: PageRequest['cursor'] = null;
+  if (query['cursor'] !== undefined) {
+    try {
+      const decoded = JSON.parse(Buffer.from(String(query['cursor']), 'base64url').toString('utf8')) as unknown;
+      if (!isPlainObject(decoded) || typeof decoded['t'] !== 'string' || typeof decoded['id'] !== 'string'
+          || decoded['id'].length > MAX_ID || Number.isNaN(new Date(decoded['t']).getTime())) {
+        throw new Error('shape');
+      }
+      cursor = { t: decoded['t'], id: decoded['id'] };
+    } catch {
+      throw new InputError('cursor is not valid; pass the nextCursor of a previous page');
+    }
+  }
+  return { limit, cursor, paged: query['limit'] !== undefined || query['cursor'] !== undefined };
+}
+
+/**
+ * The row limit of a consent-record list: the requested page when the caller
+ * paginates, otherwise what the route returned before pagination
+ * (`legacyLimit`, null for every row).
+ */
+function listLimit(page: PageRequest, legacyLimit: number | null): number | null {
+  return page.paged ? page.limit : legacyLimit;
+}
+
+
+/** The cursor after the last row of a page, or null when there is no further page. */
+function nextCursor(rows: Record<string, unknown>[], limit: number): string | null {
+  if (rows.length <= limit) return null;
+  const last = rows[limit - 1]!;
+  // created_at_cursor is created_at as text, so the cursor keeps Postgres's
+  // microseconds and a page boundary inside one millisecond loses nothing.
+  return Buffer.from(JSON.stringify({ t: last['created_at_cursor'], id: last['id'] }), 'utf8').toString('base64url');
+}
+
+function sendError(reply: FastifyReply, request: FastifyRequest, status: number, code: string, message: string) {
+  return reply.status(status).send({ message, code, requestId: request.id });
+}
+
+/** Run `parse`; an InputError becomes a 400 and `undefined` is returned. */
+function parseOr400<T>(reply: FastifyReply, request: FastifyRequest, parse: () => T): T | undefined {
+  try {
+    return parse();
+  } catch (err) {
+    if (err instanceof InputError) {
+      void sendError(reply, request, 400, err.code, err.message);
+      return undefined;
+    }
+    throw err;
+  }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -63,368 +206,698 @@ function sha256(input: string): string {
   return createHash('sha256').update(input).digest('hex');
 }
 
+function iso(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  return value instanceof Date ? value.toISOString() : new Date(value as string).toISOString();
+}
+
+/**
+ * A JSONB parameter. Passing JSON.stringify(value) instead stores a JSON
+ * *string* (the driver encodes the string again), which is what these routes
+ * used to do; migration 127 repairs the rows written that way.
+ */
+function json(tx: TxSql, value: unknown) {
+  return tx.json(value as postgres.JSONValue);
+}
+
+/** Append platform entries to the developer's audit chain, inside the caller's transaction. */
+async function appendDpdpAudit(tx: TxSql, developerId: string, entries: PlatformAuditEntry[]): Promise<void> {
+  const head = await lockAuditChain(tx, developerId);
+  await appendPlatformAuditEntries(tx, developerId, head, entries);
+}
+
+function consentRecordResponse(r: Record<string, unknown>) {
+  return {
+    recordId: r['id'],
+    grantId: r['grant_id'],
+    dataPrincipalId: r['data_principal_id'],
+    dataFiduciaryName: r['data_fiduciary_name'],
+    purposes: r['purposes'],
+    scopes: r['scopes'],
+    consentNoticeId: r['consent_notice_id'],
+    consentNoticeVersion: r['consent_notice_version'] ?? null,
+    status: r['status'],
+    consentGivenAt: r['consent_given_at'],
+    processingExpiresAt: r['processing_expires_at'],
+    retentionUntil: r['retention_until'],
+    // Principal access is not tracked by these developer reads; the stored
+    // values are returned as they are.
+    accessCount: r['access_count'],
+    lastAccessedAt: r['last_accessed_at'] ?? null,
+    withdrawnAt: r['withdrawn_at'] ?? null,
+    withdrawnReason: r['withdrawn_reason'] ?? null,
+    erasedAt: r['erased_at'] ?? null,
+    createdAt: r['created_at'],
+  };
+}
+
+function grievanceResponse(g: Record<string, unknown>, options: { detail: boolean }) {
+  return {
+    grievanceId: g['id'],
+    dataPrincipalId: g['data_principal_id'],
+    recordId: g['record_id'] ?? null,
+    type: g['type'],
+    ...(options.detail ? { description: g['description'], evidence: g['evidence'] } : {}),
+    status: g['status'],
+    referenceNumber: g['reference_number'],
+    expectedResolutionBy: g['expected_resolution_by'],
+    responsePeriodDays: g['response_period_days'],
+    resolvedAt: g['resolved_at'] ?? null,
+    resolution: g['resolution'] ?? null,
+    createdAt: g['created_at'],
+    updatedAt: g['updated_at'] ?? null,
+  };
+}
+
+function erasureResponse(row: Record<string, unknown>) {
+  const completedAt = iso(row['completed_at']);
+  return {
+    requestId: row['id'],
+    dataPrincipalId: row['data_principal_id'],
+    status: row['status'],
+    recordsErased: row['records_erased'],
+    grantsRevoked: row['grants_revoked'],
+    delegatedGrantsRevoked: row['delegated_grants_revoked'],
+    grievancesRedacted: row['grievances_redacted'],
+    exportsDeleted: row['exports_deleted'],
+    retained: row['retained'],
+    submittedAt: iso(row['submitted_at']),
+    completedAt,
+    // Deprecated: erasure completes synchronously, so this is completedAt.
+    // It used to be seven days after submission while status already said
+    // 'completed'.
+    expectedCompletionBy: completedAt,
+  };
+}
+
+/**
+ * What an erasure keeps, and why. Grantex holds the consent artefacts and
+ * logs, not the fiduciary's processed personal data.
+ */
+function retainedAfterErasure(
+  recordCount: number,
+  grievanceCount: number,
+  options: { expanded: boolean; storedExportCount: number },
+): Array<Record<string, unknown>> {
+  const notExpanded = 'Expanded erasure is not enabled on this deployment (DPDP_ERASURE_EXPANDED)';
+  return [
+    {
+      category: 'consent_records',
+      count: recordCount,
+      reason: 'Kept and marked erased, not deleted: the Data Fiduciary bears the burden of proving that consent '
+        + 'was given (DPDP Act s.6(10)), and DPDP Rules 2025 r.8(3) require processing logs and associated data '
+        + 'to be retained for at least one year.',
+    },
+    {
+      category: 'audit_log',
+      reason: 'Audit entries are neither modified nor deleted: DPDP Rules 2025 r.6(1)(e) and r.8(3) require logs '
+        + 'to be retained for at least one year, and the entries form a tamper-evident hash chain.',
+    },
+    options.expanded
+      ? {
+          category: 'grievances',
+          count: grievanceCount,
+          reason: 'Kept as the record of grievance handling (DPDP Act s.13), with the description and evidence '
+            + 'replaced by a fixed marker.',
+        }
+      : {
+          category: 'grievances',
+          count: grievanceCount,
+          reason: 'Kept unchanged, description and evidence included, as the record of grievance handling '
+            + `(DPDP Act s.13). ${notExpanded}, so they were not redacted.`,
+        },
+    ...(options.expanded ? [] : [{
+      category: 'stored_exports',
+      count: options.storedExportCount,
+      reason: 'Stored compliance exports about the data principal are kept until they expire, seven days after '
+        + `creation. ${notExpanded}, so they were not deleted.`,
+    }]),
+    {
+      category: 'fiduciary_data',
+      reason: 'Grantex holds no personal data the Data Fiduciary processed under these consents; erasing it in '
+        + "the fiduciary's own systems and its processors' (DPDP Act s.8(7)) remains the fiduciary's step.",
+    },
+  ];
+}
+
+const CONSENT_RECORD_COLUMNS = (sql: ReturnType<typeof getSql>) => sql`
+  id, grant_id, data_principal_id, data_fiduciary_name, purposes, scopes,
+  consent_notice_id, consent_notice_version, status, consent_given_at,
+  processing_expires_at, retention_until, access_count, last_accessed_at,
+  withdrawn_at, withdrawn_reason, erased_at, created_at, created_at::text AS created_at_cursor`;
+
 // ── Routes ─────────────────────────────────────────────────────────────────
 
 export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/dpdp/consent-records — Create DPDP consent record
-  app.post<{ Body: CreateConsentRecordBody }>(
-    '/v1/dpdp/consent-records',
-    async (request, reply) => {
-      const { grantId, dataPrincipalId, purposes, consentNoticeId, processingExpiresAt } = request.body;
-      const developerId = request.developer.id;
+  app.post('/v1/dpdp/consent-records', async (request, reply) => {
+    const developerId = request.developer.id;
+    const input = parseOr400(reply, request, () => {
+      const body = requireBody(request.body);
+      const processingExpiresAt = requireDate(body['processingExpiresAt'], 'processingExpiresAt');
+      if (processingExpiresAt.getTime() <= Date.now()) throw new InputError('processingExpiresAt must be in the future');
+      return {
+        grantId: requireString(body['grantId'], 'grantId', MAX_ID),
+        dataPrincipalId: requireString(body['dataPrincipalId'], 'dataPrincipalId', MAX_ID),
+        purposes: requirePurposes(body['purposes']),
+        consentNoticeId: requireString(body['consentNoticeId'], 'consentNoticeId', MAX_ID),
+        consentNoticeVersion: optionalString(body['consentNoticeVersion'], 'consentNoticeVersion', MAX_CODE),
+        processingExpiresAt,
+      };
+    });
+    if (!input) return reply;
+    const { grantId, dataPrincipalId, purposes, consentNoticeId, consentNoticeVersion, processingExpiresAt } = input;
 
-      if (!grantId || !dataPrincipalId || !purposes || !consentNoticeId || !processingExpiresAt) {
-        return reply.status(400).send({
-          message: 'grantId, dataPrincipalId, purposes, consentNoticeId, and processingExpiresAt are required',
-          code: 'BAD_REQUEST',
-          requestId: request.id,
-        });
-      }
+    // A proof signed by a key generated in this process (ED25519_PRIVATE_KEY
+    // unset) verifies only against this instance's JWKS, and only until it
+    // restarts. With DPDP_REQUIRE_PERSISTENT_PROOF_KEY=true no record is
+    // created on such a key; otherwise the proof says which kind it is.
+    const keyPersistence = getEdKeyPersistence();
+    if (config.dpdpRequirePersistentProofKey && keyPersistence === 'ephemeral') {
+      return sendError(reply, request, 503, 'CONSENT_PROOF_KEY_NOT_PERSISTENT',
+        'The consent proof key is not persistent (ED25519_PRIVATE_KEY is not set); no consent record was created');
+    }
 
-      const sql = getSql();
+    const sql = getSql();
 
-      // Validate grant belongs to developer
-      const grantRows = await sql`
-        SELECT id, scopes, principal_id FROM grants
-        WHERE id = ${grantId} AND developer_id = ${developerId}
-      `;
-      const grant = grantRows[0];
-      if (!grant) {
-        return reply.status(400).send({
-          message: 'Grant not found or not owned by developer',
-          code: 'INVALID_GRANT',
-          requestId: request.id,
-        });
-      }
+    // The grant must be the developer's, active and unexpired: a consent
+    // record over a grant that no longer authorises anything would record
+    // consent for processing that cannot happen. Fail closed.
+    const grantRows = await sql`
+      SELECT id, scopes, principal_id, status, expires_at FROM grants
+      WHERE id = ${grantId} AND developer_id = ${developerId}
+    `;
+    const grant = grantRows[0];
+    if (!grant) return sendError(reply, request, 400, 'INVALID_GRANT', 'Grant not found or not owned by developer');
+    if (grant['status'] !== 'active' || new Date(grant['expires_at'] as string).getTime() <= Date.now()) {
+      return sendError(reply, request, 400, 'INVALID_GRANT', 'Grant is not active (revoked, suspended or expired)');
+    }
+    // The documented model: the data principal is the grant's principal (the
+    // end user who gave consent). Enforced only under the flag, because
+    // existing integrations may key their data principals differently.
+    if (config.dpdpEnforceGrantPrincipal && grant['principal_id'] !== dataPrincipalId) {
+      return sendError(reply, request, 400, 'PRINCIPAL_MISMATCH', "dataPrincipalId must be the grant's principal");
+    }
 
-      // Fetch the consent notice to compute hash
-      const noticeRows = await sql`
-        SELECT id, content, content_hash FROM dpdp_consent_notices
-        WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
-        ORDER BY created_at DESC
-        LIMIT 1
-      `;
-      const notice = noticeRows[0];
-      if (!notice) {
-        return reply.status(400).send({
-          message: 'Consent notice not found',
-          code: 'INVALID_NOTICE',
-          requestId: request.id,
-        });
-      }
+    // The notice version shown to the principal: the pinned one, or the latest.
+    const noticeRows = consentNoticeVersion !== undefined
+      ? await sql`
+          SELECT id, version, content_hash FROM dpdp_consent_notices
+          WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId} AND version = ${consentNoticeVersion}
+        `
+      : await sql`
+          SELECT id, version, content_hash FROM dpdp_consent_notices
+          WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1
+        `;
+    const notice = noticeRows[0];
+    if (!notice) {
+      return sendError(reply, request, 400, 'INVALID_NOTICE',
+        consentNoticeVersion !== undefined ? 'Consent notice version not found' : 'Consent notice not found');
+    }
 
-      const id = newConsentRecordId();
-      const consentNoticeHash = notice['content_hash'] as string;
-      const scopes = grant['scopes'] as string[];
-      const processingExpiresDate = new Date(processingExpiresAt);
-      // Default retention: 30 days after processing expires
-      const retentionUntil = new Date(processingExpiresDate.getTime() + 30 * 86400_000);
+    const id = newConsentRecordId();
+    const consentNoticeHash = notice['content_hash'] as string;
+    const noticeVersion = notice['version'] as string;
+    const scopes = grant['scopes'] as string[];
+    // Default retention: 30 days after processing expires
+    const retentionUntil = new Date(processingExpiresAt.getTime() + 30 * 86400_000);
+    const consentGivenAt = new Date();
 
-      // Sign consent proof with Ed25519
-      let consentProof: Record<string, unknown> = {};
-      try {
-        const proofJwt = await signWithEd25519({
-          recordId: id,
-          grantId,
-          dataPrincipalId,
-          consentNoticeHash,
-          purposes: purposes.map((p) => p.code),
-          consentGivenAt: new Date().toISOString(),
-        });
-        consentProof = {
-          type: 'Ed25519Signature2020',
-          proofJwt,
-          signedAt: new Date().toISOString(),
-        };
-      } catch {
-        // Ed25519 key may not be initialized — proceed without cryptographic proof
-        consentProof = { type: 'none', reason: 'ed25519-key-unavailable' };
-      }
+    // The proof is evidence the fiduciary may need for as long as the record
+    // is kept (DPDP Act s.6(10)), so it carries no exp. Without a signing key
+    // no record is created: a record without its proof is not evidence.
+    let proofJwt: string;
+    try {
+      proofJwt = await signWithEd25519({
+        recordId: id,
+        grantId,
+        dataPrincipalId,
+        consentNoticeId,
+        consentNoticeVersion: noticeVersion,
+        consentNoticeHash,
+        purposes: purposes.map((p) => p.code),
+        consentGivenAt: consentGivenAt.toISOString(),
+      }, { expiresInSeconds: null });
+    } catch {
+      return sendError(reply, request, 503, 'CONSENT_PROOF_UNAVAILABLE',
+        'The consent proof could not be signed; no consent record was created');
+    }
+    const kid = getEdKeyPair()?.kid ?? null;
+    const consentProof = {
+      // A compact JWS (RFC 7515 §7.1) signed with EdDSA over Ed25519
+      // (RFC 8037), verifiable with the key `kid` names in the JWKS.
+      type: 'JWS-EdDSA',
+      alg: 'EdDSA',
+      kid,
+      // 'ephemeral': the key was generated in-process, so the proof cannot be
+      // verified on another instance or after a restart.
+      keyPersistence: keyPersistence ?? 'ephemeral',
+      proofJwt,
+      jwksUri: `${config.publicBaseUrl.replace(/\/$/, '')}/.well-known/jwks.json`,
+      signedAt: consentGivenAt.toISOString(),
+    };
 
-      await sql`
+    await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      await tx`
         INSERT INTO dpdp_consent_records (
           id, developer_id, grant_id, data_principal_id,
           data_fiduciary_id, data_fiduciary_name,
-          purposes, scopes, consent_notice_id, consent_notice_hash,
-          processing_expires_at, retention_until, consent_proof
+          purposes, scopes, consent_notice_id, consent_notice_version, consent_notice_hash,
+          consent_given_at, processing_expires_at, retention_until, consent_proof
         )
         VALUES (
           ${id}, ${developerId}, ${grantId}, ${dataPrincipalId},
           ${developerId}, ${request.developer.name ?? 'Unknown'},
-          ${JSON.stringify(purposes)}, ${scopes}, ${consentNoticeId}, ${consentNoticeHash},
-          ${processingExpiresDate}, ${retentionUntil}, ${JSON.stringify(consentProof)}
+          ${json(tx, purposes)}, ${scopes}, ${consentNoticeId}, ${noticeVersion}, ${consentNoticeHash},
+          ${consentGivenAt}, ${processingExpiresAt}, ${retentionUntil}, ${json(tx, consentProof)}
         )
       `;
-
-      emitEvent(developerId, 'dpdp.consent.created', {
-        recordId: id,
+      await appendDpdpAudit(tx, developerId, [{
+        action: DPDP_AUDIT_ACTIONS.consentCreated,
         grantId,
-        dataPrincipalId,
-      }).catch(() => {});
+        metadata: {
+          record_id: id, data_principal_id: dataPrincipalId,
+          consent_notice_id: consentNoticeId, consent_notice_version: noticeVersion,
+          purposes: purposes.map((p) => p.code),
+        },
+      }]);
+    });
 
-      return reply.status(201).send({
-        recordId: id,
-        grantId,
-        dataPrincipalId,
-        consentNoticeHash,
-        consentProof,
-        processingExpiresAt: processingExpiresDate.toISOString(),
-        retentionUntil: retentionUntil.toISOString(),
-        status: 'active',
-        createdAt: new Date().toISOString(),
-      });
-    },
-  );
+    emitEvent(developerId, 'dpdp.consent.created', {
+      recordId: id,
+      grantId,
+      dataPrincipalId,
+    }).catch(() => {});
+
+    return reply.status(201).send({
+      recordId: id,
+      grantId,
+      dataPrincipalId,
+      consentNoticeId,
+      consentNoticeVersion: noticeVersion,
+      consentNoticeHash,
+      consentProof,
+      processingExpiresAt: processingExpiresAt.toISOString(),
+      retentionUntil: retentionUntil.toISOString(),
+      status: 'active',
+      createdAt: consentGivenAt.toISOString(),
+    });
+  });
 
   // POST /v1/dpdp/consent-records/:recordId/withdraw — Withdraw consent
-  // It can revoke the record's grant, but it stays in the plan rate-limit
-  // bucket and fails closed, unlike the containment routes
-  // (plugins/dynamicRateLimit.ts): it is a compliance operation, not the
-  // incident path, and revokes only that grant, without the cascade that
-  // DELETE /v1/grants/:id performs.
-  app.post<{ Params: { recordId: string }; Body: WithdrawConsentBody }>(
+  // It can revoke the record's grant (only that grant, as it always did; with
+  // DPDP_REVOCATION_CASCADE=true also the grants delegated from it, through
+  // lib/revoke.ts), but it stays in the plan rate-limit bucket and
+  // fails closed, unlike the containment routes (plugins/dynamicRateLimit.ts):
+  // it is a compliance operation, not the incident path.
+  app.post<{ Params: { recordId: string } }>(
     '/v1/dpdp/consent-records/:recordId/withdraw',
     async (request, reply) => {
       const { recordId } = request.params;
-      const { reason, revokeGrant, deleteProcessedData } = request.body;
       const developerId = request.developer.id;
-
-      if (!reason) {
-        return reply.status(400).send({
-          message: 'reason is required',
-          code: 'BAD_REQUEST',
-          requestId: request.id,
-        });
-      }
-
+      const input = parseOr400(reply, request, () => {
+        const body = requireBody(request.body);
+        return {
+          reason: requireString(body['reason'], 'reason', MAX_SHORT_TEXT),
+          revokeGrant: optionalBoolean(body['revokeGrant'], 'revokeGrant'),
+          deleteProcessedData: optionalBoolean(body['deleteProcessedData'], 'deleteProcessedData') ?? false,
+        };
+      });
+      if (!input) return reply;
+      // DPDP Act s.6(6): after a withdrawal, processing must cease. With
+      // DPDP_WITHDRAWAL_REVOKES_GRANT=true an omitted revokeGrant means true.
+      const revokeGrant = input.revokeGrant ?? config.dpdpWithdrawalRevokesGrant;
+      const withdrawnAt = new Date();
       const sql = getSql();
 
-      const rows = await sql`
-        SELECT id, grant_id, status FROM dpdp_consent_records
-        WHERE id = ${recordId} AND developer_id = ${developerId}
-      `;
-      const record = rows[0];
-      if (!record) {
-        return reply.status(404).send({
-          message: 'Consent record not found',
-          code: 'NOT_FOUND',
-          requestId: request.id,
-        });
-      }
-
-      if (record['status'] === 'withdrawn') {
-        return reply.status(409).send({
-          message: 'Consent already withdrawn',
-          code: 'ALREADY_WITHDRAWN',
-          requestId: request.id,
-        });
-      }
-
-      const withdrawnAt = new Date();
-
-      await sql`
-        UPDATE dpdp_consent_records
-        SET status = 'withdrawn', withdrawn_at = ${withdrawnAt}, withdrawn_reason = ${reason}
-        WHERE id = ${recordId}
-      `;
-
-      // Optionally revoke the underlying grant
-      if (revokeGrant) {
-        await sql`
-          UPDATE grants SET status = 'revoked', revoked_at = ${withdrawnAt}
-          WHERE id = ${record['grant_id'] as string} AND developer_id = ${developerId}
+      let refusedStatus: string | null | undefined;
+      let grantId = '';
+      let dataPrincipalId = '';
+      let tree: RevokedGrantTree | null = null;
+      await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        // Only an active record is withdrawn, so of two concurrent
+        // withdrawals the second waits on the row and then matches nothing.
+        const rows = await tx`
+          UPDATE dpdp_consent_records
+          SET status = 'withdrawn', withdrawn_at = ${withdrawnAt}, withdrawn_reason = ${input.reason}
+          WHERE id = ${recordId} AND developer_id = ${developerId} AND status = 'active'
+          RETURNING grant_id, data_principal_id
         `;
+        const row = rows[0];
+        if (!row) {
+          const existing = await tx`
+            SELECT status FROM dpdp_consent_records WHERE id = ${recordId} AND developer_id = ${developerId}
+          `;
+          refusedStatus = (existing[0]?.['status'] as string | undefined) ?? null;
+          return;
+        }
+        grantId = row['grant_id'] as string;
+        dataPrincipalId = row['data_principal_id'] as string;
+        if (revokeGrant) tree = await revokeDpdpGrantInTx(tx, grantId, developerId);
+        const revoked = tree as RevokedGrantTree | null;
+        await appendDpdpAudit(tx, developerId, [{
+          action: DPDP_AUDIT_ACTIONS.consentWithdrawn,
+          grantId,
+          metadata: {
+            record_id: recordId,
+            data_principal_id: dataPrincipalId,
+            grant_revoked: revoked !== null,
+            delegated_grants_revoked: revoked ? revoked.rows.length - 1 : 0,
+            data_deletion_requested: input.deleteProcessedData,
+          },
+        }]);
+      });
+
+      if (refusedStatus !== undefined) {
+        if (refusedStatus === null) return sendError(reply, request, 404, 'NOT_FOUND', 'Consent record not found');
+        if (refusedStatus === 'withdrawn') return sendError(reply, request, 409, 'ALREADY_WITHDRAWN', 'Consent already withdrawn');
+        if (refusedStatus === 'erased') return sendError(reply, request, 409, 'CONSENT_ERASED', 'Consent record was erased');
+        return sendError(reply, request, 409, 'CONSENT_EXPIRED', 'Consent record has expired');
       }
 
-      // Delete processed data if requested (DPDP Section 6(6), GDPR Article 17)
-      if (deleteProcessedData) {
-        const grantId = record['grant_id'] as string;
-        // Anonymize audit entries related to this consent
-        if (grantId) {
-          await sql`
-            UPDATE audit_entries
-            SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{dataDeletedAt}', ${JSON.stringify(withdrawnAt.toISOString())}::jsonb)
-            WHERE grant_id = ${grantId} AND developer_id = ${developerId}
-          `;
-        }
-      }
+      const revocation = await publishGrantRevocation(developerId, tree);
 
       emitEvent(developerId, 'dpdp.consent.withdrawn', {
         recordId,
-        reason,
-        grantRevoked: !!revokeGrant,
-        dataDeleted: !!deleteProcessedData,
+        reason: input.reason,
+        grantRevoked: revocation.revoked,
+        dataDeleted: false,
+        dataDeletionRequested: input.deleteProcessedData,
       }).catch(() => {});
+
+      // Grantex holds no processed personal data of the fiduciary: deleting
+      // it is the fiduciary's step (DPDP Act s.8(7)), so the request goes to
+      // the developer rather than rewriting the tamper-evident audit log.
+      if (input.deleteProcessedData) {
+        emitEvent(developerId, 'dpdp.data_deletion.requested', {
+          recordId,
+          grantId,
+          dataPrincipalId,
+          requestedAt: withdrawnAt.toISOString(),
+        }).catch(() => {});
+      }
 
       return reply.send({
         recordId,
         status: 'withdrawn',
         withdrawnAt: withdrawnAt.toISOString(),
-        grantRevoked: !!revokeGrant,
-        dataDeleted: !!deleteProcessedData,
+        grantRevoked: revocation.revoked,
+        // True only when Grantex deleted something itself; it holds none of
+        // the fiduciary's processed data, so a withdrawal never does.
+        dataDeleted: false,
+        dataDeletionRequested: input.deleteProcessedData,
       });
     },
   );
 
   // GET /v1/dpdp/data-principals/:principalId/records — Right to access (DPDP section 11)
-  app.get<{ Params: { principalId: string } }>(
+  // A developer read: it does not count as the principal's own access, so
+  // access_count and last_accessed_at are returned as stored, not bumped.
+  app.get<{ Params: { principalId: string }; Querystring: Record<string, unknown> }>(
     '/v1/dpdp/data-principals/:principalId/records',
     async (request, reply) => {
       const { principalId } = request.params;
       const developerId = request.developer.id;
+      const page = parseOr400(reply, request, () => parsePage(request.query));
+      if (!page) return reply;
       const sql = getSql();
 
+      // Without limit or cursor, every record of the principal, as before.
+      const limit = listLimit(page, null);
       const rows = await sql`
-        SELECT id, grant_id, data_fiduciary_name, purposes, scopes,
-               consent_notice_id, status, consent_given_at,
-               processing_expires_at, retention_until, access_count,
-               last_accessed_at, withdrawn_at, withdrawn_reason, created_at
+        SELECT ${CONSENT_RECORD_COLUMNS(sql)}
         FROM dpdp_consent_records
         WHERE data_principal_id = ${principalId} AND developer_id = ${developerId}
-        ORDER BY created_at DESC
+          ${page.cursor ? sql`AND (created_at, id) < (${page.cursor.t}::timestamptz, ${page.cursor.id})` : sql``}
+        ORDER BY created_at DESC, id DESC
+        ${limit !== null ? sql`LIMIT ${limit + 1}` : sql``}
       `;
-
-      // Update access counts for all returned records
-      if (rows.length > 0) {
-        const ids = rows.map((r) => r['id'] as string);
-        await sql`
-          UPDATE dpdp_consent_records
-          SET access_count = access_count + 1, last_accessed_at = NOW()
-          WHERE id = ANY(${ids})
-        `;
-      }
-
-      const records = rows.map((r) => ({
-        recordId: r['id'],
-        grantId: r['grant_id'],
-        dataFiduciaryName: r['data_fiduciary_name'],
-        purposes: r['purposes'],
-        scopes: r['scopes'],
-        consentNoticeId: r['consent_notice_id'],
-        status: r['status'],
-        consentGivenAt: r['consent_given_at'],
-        processingExpiresAt: r['processing_expires_at'],
-        retentionUntil: r['retention_until'],
-        accessCount: (r['access_count'] as number) + 1,
-        lastAccessedAt: new Date().toISOString(),
-        withdrawnAt: r['withdrawn_at'] ?? null,
-        withdrawnReason: r['withdrawn_reason'] ?? null,
-        createdAt: r['created_at'],
-      }));
+      const [count] = await sql`
+        SELECT COUNT(*)::int AS total FROM dpdp_consent_records
+        WHERE data_principal_id = ${principalId} AND developer_id = ${developerId}
+      `;
 
       return reply.send({
         dataPrincipalId: principalId,
-        records,
-        totalRecords: records.length,
+        records: (limit !== null ? rows.slice(0, limit) : rows).map(consentRecordResponse),
+        totalRecords: Number(count?.['total'] ?? 0),
+        nextCursor: limit !== null ? nextCursor(rows, limit) : null,
       });
     },
   );
 
   // POST /v1/dpdp/consent-notices — Register consent notice version
-  app.post<{ Body: CreateNoticeBody }>(
-    '/v1/dpdp/consent-notices',
-    async (request, reply) => {
-      const { noticeId, version, title, content, purposes } = request.body;
-      const language = request.body.language ?? 'en';
-      const dataFiduciaryContact = request.body.dataFiduciaryContact ?? null;
-      const grievanceOfficer = request.body.grievanceOfficer ?? null;
-      const developerId = request.developer.id;
-
-      if (!noticeId || !version || !title || !content || !purposes) {
-        return reply.status(400).send({
-          message: 'noticeId, version, title, content, and purposes are required',
-          code: 'BAD_REQUEST',
-          requestId: request.id,
-        });
+  app.post('/v1/dpdp/consent-notices', async (request, reply) => {
+    const developerId = request.developer.id;
+    const input = parseOr400(reply, request, () => {
+      const body = requireBody(request.body);
+      const grievanceOfficer = body['grievanceOfficer'];
+      if (grievanceOfficer !== undefined && grievanceOfficer !== null) {
+        if (!isPlainObject(grievanceOfficer)) throw new InputError('grievanceOfficer must be an object { name, email, phone? }');
+        requireString(grievanceOfficer['name'], 'grievanceOfficer.name', MAX_CODE);
+        requireString(grievanceOfficer['email'], 'grievanceOfficer.email', MAX_ID);
+        optionalString(grievanceOfficer['phone'], 'grievanceOfficer.phone', 64);
       }
+      return {
+        noticeId: requireString(body['noticeId'], 'noticeId', MAX_ID),
+        version: requireString(body['version'], 'version', MAX_CODE),
+        title: requireString(body['title'], 'title', MAX_SHORT_TEXT),
+        content: requireString(body['content'], 'content', MAX_NOTICE_CONTENT),
+        purposes: requirePurposes(body['purposes']),
+        language: optionalString(body['language'], 'language', 35) ?? 'en',
+        dataFiduciaryContact: optionalString(body['dataFiduciaryContact'], 'dataFiduciaryContact', MAX_SHORT_TEXT) ?? null,
+        grievanceOfficer: isPlainObject(grievanceOfficer) ? grievanceOfficer : null,
+      };
+    });
+    if (!input) return reply;
 
-      const sql = getSql();
-      const id = newNoticeId();
-      const contentHash = sha256(content);
+    const sql = getSql();
+    const id = newNoticeId();
+    const contentHash = sha256(input.content);
+    const createdAt = new Date();
 
-      try {
-        await sql`
+    try {
+      await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        await tx`
           INSERT INTO dpdp_consent_notices (
             id, developer_id, notice_id, language, version, title, content,
-            purposes, data_fiduciary_contact, grievance_officer, content_hash
+            purposes, data_fiduciary_contact, grievance_officer, content_hash, created_at
           )
           VALUES (
-            ${id}, ${developerId}, ${noticeId}, ${language}, ${version},
-            ${title}, ${content}, ${JSON.stringify(purposes)},
-            ${dataFiduciaryContact}, ${grievanceOfficer ? JSON.stringify(grievanceOfficer) : null},
-            ${contentHash}
+            ${id}, ${developerId}, ${input.noticeId}, ${input.language}, ${input.version},
+            ${input.title}, ${input.content}, ${json(tx, input.purposes)},
+            ${input.dataFiduciaryContact}, ${input.grievanceOfficer ? json(tx, input.grievanceOfficer) : null},
+            ${contentHash}, ${createdAt}
           )
         `;
-      } catch {
-        return reply.status(409).send({
-          message: 'Notice version already exists',
-          code: 'CONFLICT',
-          requestId: request.id,
-        });
-      }
-
-      return reply.status(201).send({
-        id,
-        noticeId,
-        version,
-        language,
-        contentHash,
-        createdAt: new Date().toISOString(),
+        await appendDpdpAudit(tx, developerId, [{
+          action: DPDP_AUDIT_ACTIONS.noticeCreated,
+          metadata: { notice_id: input.noticeId, version: input.version, content_hash: contentHash },
+        }]);
       });
-    },
-  );
-
-  // POST /v1/dpdp/grievances — File grievance (DPDP section 13(6))
-  app.post<{ Body: FileGrievanceBody }>(
-    '/v1/dpdp/grievances',
-    async (request, reply) => {
-      const { dataPrincipalId, type, description } = request.body;
-      const recordId = request.body.recordId ?? null;
-      const evidence = request.body.evidence ?? {};
-      const developerId = request.developer.id;
-
-      if (!dataPrincipalId || !type || !description) {
-        return reply.status(400).send({
-          message: 'dataPrincipalId, type, and description are required',
-          code: 'BAD_REQUEST',
-          requestId: request.id,
-        });
+    } catch (err) {
+      // Only the (developer, notice, version) unique index is a conflict;
+      // anything else is a real failure and propagates.
+      if ((err as { code?: string }).code === '23505') {
+        return sendError(reply, request, 409, 'CONFLICT', 'Notice version already exists');
       }
+      throw err;
+    }
 
-      const sql = getSql();
-      const id = newGrievanceId();
-      const referenceNumber = newGrievanceReference();
-      const expectedResolutionBy = new Date(Date.now() + 7 * 86400_000); // 7 days
+    return reply.status(201).send({
+      id,
+      noticeId: input.noticeId,
+      version: input.version,
+      language: input.language,
+      contentHash,
+      createdAt: createdAt.toISOString(),
+    });
+  });
 
-      await sql`
+  // GET /v1/dpdp/consent-notices — List notice versions, newest first
+  app.get<{ Querystring: Record<string, unknown> }>('/v1/dpdp/consent-notices', async (request, reply) => {
+    const developerId = request.developer.id;
+    const page = parseOr400(reply, request, () => parsePage(request.query));
+    if (!page) return reply;
+    const sql = getSql();
+    const rows = await sql`
+      SELECT id, notice_id, language, version, title, content_hash, created_at, created_at::text AS created_at_cursor
+      FROM dpdp_consent_notices
+      WHERE developer_id = ${developerId}
+        ${page.cursor ? sql`AND (created_at, id) < (${page.cursor.t}::timestamptz, ${page.cursor.id})` : sql``}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${page.limit + 1}
+    `;
+    return reply.send({
+      notices: rows.slice(0, page.limit).map((n) => ({
+        id: n['id'],
+        noticeId: n['notice_id'],
+        version: n['version'],
+        language: n['language'],
+        title: n['title'],
+        contentHash: n['content_hash'],
+        createdAt: n['created_at'],
+      })),
+      nextCursor: nextCursor(rows, page.limit),
+    });
+  });
+
+  // GET /v1/dpdp/consent-notices/:noticeId — Every version of one notice, newest first
+  app.get<{ Params: { noticeId: string } }>('/v1/dpdp/consent-notices/:noticeId', async (request, reply) => {
+    const developerId = request.developer.id;
+    const sql = getSql();
+    const rows = await sql`
+      SELECT id, notice_id, language, version, title, content, purposes,
+             data_fiduciary_contact, grievance_officer, content_hash, created_at
+      FROM dpdp_consent_notices
+      WHERE developer_id = ${developerId} AND notice_id = ${request.params.noticeId}
+      ORDER BY created_at DESC, id DESC
+    `;
+    if (rows.length === 0) return sendError(reply, request, 404, 'NOT_FOUND', 'Consent notice not found');
+    return reply.send({
+      noticeId: request.params.noticeId,
+      versions: rows.map((n) => ({
+        id: n['id'],
+        version: n['version'],
+        language: n['language'],
+        title: n['title'],
+        content: n['content'],
+        purposes: n['purposes'],
+        dataFiduciaryContact: n['data_fiduciary_contact'] ?? null,
+        grievanceOfficer: n['grievance_officer'] ?? null,
+        contentHash: n['content_hash'],
+        createdAt: n['created_at'],
+      })),
+    });
+  });
+
+  // POST /v1/dpdp/grievances — File grievance (DPDP section 13)
+  app.post('/v1/dpdp/grievances', async (request, reply) => {
+    const developerId = request.developer.id;
+    const input = parseOr400(reply, request, () => {
+      const body = requireBody(request.body);
+      const evidence = body['evidence'];
+      if (evidence !== undefined && evidence !== null) {
+        if (!isPlainObject(evidence)) throw new InputError('evidence must be an object');
+        if (Buffer.byteLength(JSON.stringify(evidence), 'utf8') > MAX_EVIDENCE_BYTES) {
+          throw new InputError(`evidence must be at most ${MAX_EVIDENCE_BYTES} bytes as JSON`);
+        }
+      }
+      const period = body['responsePeriodDays'];
+      if (period !== undefined && period !== null
+          && (typeof period !== 'number' || !Number.isInteger(period) || period < 1 || period > MAX_RESPONSE_PERIOD_DAYS)) {
+        throw new InputError(`responsePeriodDays must be an integer from 1 to ${MAX_RESPONSE_PERIOD_DAYS} (DPDP Rules 2025 r.14(3))`);
+      }
+      return {
+        dataPrincipalId: requireString(body['dataPrincipalId'], 'dataPrincipalId', MAX_ID),
+        recordId: optionalString(body['recordId'], 'recordId', MAX_ID) ?? null,
+        type: requireString(body['type'], 'type', MAX_CODE),
+        description: requireString(body['description'], 'description', MAX_LONG_TEXT),
+        evidence: isPlainObject(evidence) ? evidence : {},
+        responsePeriodDays: typeof period === 'number' ? period : DEFAULT_RESPONSE_PERIOD_DAYS,
+      };
+    });
+    if (!input) return reply;
+
+    const sql = getSql();
+    if (input.recordId !== null) {
+      // The record must be this developer's, and about this principal.
+      const records = await sql`
+        SELECT data_principal_id FROM dpdp_consent_records
+        WHERE id = ${input.recordId} AND developer_id = ${developerId}
+      `;
+      if (!records[0]) return sendError(reply, request, 400, 'INVALID_RECORD', 'Consent record not found');
+      if (records[0]['data_principal_id'] !== input.dataPrincipalId) {
+        return sendError(reply, request, 400, 'INVALID_RECORD', 'Consent record belongs to another data principal');
+      }
+    }
+
+    const id = newGrievanceId();
+    const referenceNumber = newGrievanceReference();
+    const createdAt = new Date();
+    // The fiduciary's published response period (7 days unless it says otherwise).
+    const expectedResolutionBy = new Date(createdAt.getTime() + input.responsePeriodDays * 86400_000);
+
+    await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      await tx`
         INSERT INTO dpdp_grievances (
           id, developer_id, data_principal_id, record_id,
-          type, description, evidence, reference_number, expected_resolution_by
+          type, description, evidence, reference_number, expected_resolution_by,
+          response_period_days, created_at
         )
         VALUES (
-          ${id}, ${developerId}, ${dataPrincipalId}, ${recordId},
-          ${type}, ${description}, ${JSON.stringify(evidence)},
-          ${referenceNumber}, ${expectedResolutionBy}
+          ${id}, ${developerId}, ${input.dataPrincipalId}, ${input.recordId},
+          ${input.type}, ${input.description}, ${json(tx, input.evidence)},
+          ${referenceNumber}, ${expectedResolutionBy}, ${input.responsePeriodDays}, ${createdAt}
         )
       `;
+      await appendDpdpAudit(tx, developerId, [{
+        action: DPDP_AUDIT_ACTIONS.grievanceFiled,
+        metadata: {
+          grievance_id: id, reference_number: referenceNumber, type: input.type,
+          data_principal_id: input.dataPrincipalId, record_id: input.recordId,
+        },
+      }]);
+    });
 
-      emitEvent(developerId, 'dpdp.grievance.filed', {
-        grievanceId: id,
-        referenceNumber,
-        type,
-        dataPrincipalId,
-      }).catch(() => {});
+    emitEvent(developerId, 'dpdp.grievance.filed', {
+      grievanceId: id,
+      referenceNumber,
+      type: input.type,
+      dataPrincipalId: input.dataPrincipalId,
+    }).catch(() => {});
 
-      return reply.status(202).send({
-        grievanceId: id,
-        referenceNumber,
-        type,
-        status: 'submitted',
-        expectedResolutionBy: expectedResolutionBy.toISOString(),
-        createdAt: new Date().toISOString(),
-      });
-    },
-  );
+    return reply.status(202).send({
+      grievanceId: id,
+      referenceNumber,
+      type: input.type,
+      status: 'submitted',
+      responsePeriodDays: input.responsePeriodDays,
+      expectedResolutionBy: expectedResolutionBy.toISOString(),
+      createdAt: createdAt.toISOString(),
+    });
+  });
+
+  // GET /v1/dpdp/grievances — List grievances, newest first
+  app.get<{ Querystring: Record<string, unknown> }>('/v1/dpdp/grievances', async (request, reply) => {
+    const developerId = request.developer.id;
+    const input = parseOr400(reply, request, () => {
+      const status = request.query['status'];
+      if (status !== undefined && !GRIEVANCE_STATUSES.includes(status as GrievanceStatus)) {
+        throw new InputError(`status must be one of: ${GRIEVANCE_STATUSES.join(', ')}`);
+      }
+      return {
+        page: parsePage(request.query),
+        status: status as GrievanceStatus | undefined,
+        dataPrincipalId: optionalString(request.query['dataPrincipalId'], 'dataPrincipalId', MAX_ID),
+      };
+    });
+    if (!input) return reply;
+    const { page } = input;
+    const sql = getSql();
+    const rows = await sql`
+      SELECT id, data_principal_id, record_id, type, status, reference_number, expected_resolution_by,
+             response_period_days, resolved_at, resolution, created_at, updated_at,
+             created_at::text AS created_at_cursor
+      FROM dpdp_grievances
+      WHERE developer_id = ${developerId}
+        ${input.status ? sql`AND status = ${input.status}` : sql``}
+        ${input.dataPrincipalId ? sql`AND data_principal_id = ${input.dataPrincipalId}` : sql``}
+        ${page.cursor ? sql`AND (created_at, id) < (${page.cursor.t}::timestamptz, ${page.cursor.id})` : sql``}
+      ORDER BY created_at DESC, id DESC
+      LIMIT ${page.limit + 1}
+    `;
+    return reply.send({
+      grievances: rows.slice(0, page.limit).map((g) => grievanceResponse(g, { detail: false })),
+      nextCursor: nextCursor(rows, page.limit),
+    });
+  });
 
   // GET /v1/dpdp/grievances/:grievanceId — Get grievance status
   app.get<{ Params: { grievanceId: string } }>(
@@ -436,145 +909,243 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
 
       const rows = await sql`
         SELECT id, data_principal_id, record_id, type, description, evidence,
-               status, reference_number, expected_resolution_by,
-               resolved_at, resolution, created_at
+               status, reference_number, expected_resolution_by, response_period_days,
+               resolved_at, resolution, created_at, updated_at
         FROM dpdp_grievances
         WHERE id = ${grievanceId} AND developer_id = ${developerId}
       `;
 
       const grievance = rows[0];
-      if (!grievance) {
-        return reply.status(404).send({
-          message: 'Grievance not found',
-          code: 'NOT_FOUND',
-          requestId: request.id,
-        });
+      if (!grievance) return sendError(reply, request, 404, 'NOT_FOUND', 'Grievance not found');
+      return reply.send(grievanceResponse(grievance, { detail: true }));
+    },
+  );
+
+  // PATCH /v1/dpdp/grievances/:grievanceId — Move a grievance along
+  // submitted -> in_review -> resolved | rejected.
+  app.patch<{ Params: { grievanceId: string } }>(
+    '/v1/dpdp/grievances/:grievanceId',
+    async (request, reply) => {
+      const { grievanceId } = request.params;
+      const developerId = request.developer.id;
+      const input = parseOr400(reply, request, () => {
+        const body = requireBody(request.body);
+        const status = body['status'];
+        if (status !== 'in_review' && status !== 'resolved' && status !== 'rejected') {
+          throw new InputError('status must be one of: in_review, resolved, rejected');
+        }
+        const final = status !== 'in_review';
+        return {
+          status: status as keyof typeof GRIEVANCE_TRANSITIONS,
+          resolution: final ? requireString(body['resolution'], 'resolution', MAX_LONG_TEXT) : null,
+        };
+      });
+      if (!input) return reply;
+      const from = GRIEVANCE_TRANSITIONS[input.status];
+      const sql = getSql();
+
+      let updated: Record<string, unknown> | undefined;
+      let current: string | null = null;
+      await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        const rows = input.resolution !== null
+          ? await tx`
+              UPDATE dpdp_grievances
+              SET status = ${input.status}, resolution = ${input.resolution}, resolved_at = NOW(), updated_at = NOW()
+              WHERE id = ${grievanceId} AND developer_id = ${developerId} AND status = ANY(${from})
+              RETURNING *
+            `
+          : await tx`
+              UPDATE dpdp_grievances
+              SET status = ${input.status}, updated_at = NOW()
+              WHERE id = ${grievanceId} AND developer_id = ${developerId} AND status = ANY(${from})
+              RETURNING *
+            `;
+        updated = rows[0];
+        if (!updated) {
+          const existing = await tx`SELECT status FROM dpdp_grievances WHERE id = ${grievanceId} AND developer_id = ${developerId}`;
+          current = (existing[0]?.['status'] as string | undefined) ?? null;
+          return;
+        }
+        await appendDpdpAudit(tx, developerId, [{
+          action: DPDP_AUDIT_ACTIONS.grievanceUpdated,
+          metadata: {
+            grievance_id: grievanceId,
+            reference_number: updated['reference_number'],
+            data_principal_id: updated['data_principal_id'],
+            previous_status: from[0],
+            status: input.status,
+          },
+        }]);
+      });
+
+      if (!updated) {
+        if (current === null) return sendError(reply, request, 404, 'NOT_FOUND', 'Grievance not found');
+        return sendError(reply, request, 409, 'INVALID_TRANSITION',
+          `A grievance cannot move from ${current as string} to ${input.status}`);
       }
 
-      return reply.send({
-        grievanceId: grievance['id'],
-        dataPrincipalId: grievance['data_principal_id'],
-        recordId: grievance['record_id'] ?? null,
-        type: grievance['type'],
-        description: grievance['description'],
-        evidence: grievance['evidence'],
-        status: grievance['status'],
-        referenceNumber: grievance['reference_number'],
-        expectedResolutionBy: grievance['expected_resolution_by'],
-        resolvedAt: grievance['resolved_at'] ?? null,
-        resolution: grievance['resolution'] ?? null,
-        createdAt: grievance['created_at'],
-      });
+      emitEvent(developerId, 'dpdp.grievance.updated', {
+        grievanceId,
+        referenceNumber: updated['reference_number'],
+        previousStatus: from[0],
+        status: input.status,
+      }).catch(() => {});
+
+      return reply.send(grievanceResponse(updated, { detail: true }));
     },
   );
 
   // POST /v1/dpdp/exports — Generate compliance export
-  app.post<{ Body: CreateExportBody }>(
-    '/v1/dpdp/exports',
-    async (request, reply) => {
-      const { type, dateFrom, dateTo } = request.body;
-      const format = request.body.format ?? 'json';
-      const includeActionLog = request.body.includeActionLog ?? true;
-      const includeConsentRecords = request.body.includeConsentRecords ?? true;
-      const dataPrincipalId = request.body.dataPrincipalId ?? null;
-      const developerId = request.developer.id;
-
-      if (!type || !dateFrom || !dateTo) {
-        return reply.status(400).send({
-          message: 'type, dateFrom, and dateTo are required',
-          code: 'BAD_REQUEST',
-          requestId: request.id,
-        });
+  app.post('/v1/dpdp/exports', async (request, reply) => {
+    const developerId = request.developer.id;
+    const input = parseOr400(reply, request, () => {
+      const body = requireBody(request.body);
+      const type = body['type'];
+      if (typeof type !== 'string' || !EXPORT_TYPES.includes(type as (typeof EXPORT_TYPES)[number])) {
+        throw new InputError(`Invalid type. Must be one of: ${EXPORT_TYPES.join(', ')}`);
       }
-
-      const validTypes = ['dpdp-audit', 'gdpr-article-15', 'eu-ai-act-conformance'];
-      if (!validTypes.includes(type)) {
-        return reply.status(400).send({
-          message: `Invalid type. Must be one of: ${validTypes.join(', ')}`,
-          code: 'BAD_REQUEST',
-          requestId: request.id,
-        });
+      const from = requireDate(body['dateFrom'], 'dateFrom', { dateOnly: true });
+      const to = requireDate(body['dateTo'], 'dateTo', { dateOnly: true });
+      if (from.getTime() > to.getTime()) throw new InputError('dateFrom must not be after dateTo');
+      const format = body['format'] ?? 'json';
+      // Only JSON is produced; accepting another format and returning JSON
+      // anyway would misreport what the export is.
+      if (!EXPORT_FORMATS.includes(format as (typeof EXPORT_FORMATS)[number])) {
+        throw new InputError(`format must be one of: ${EXPORT_FORMATS.join(', ')}`);
       }
-
-      const sql = getSql();
-      const id = newExportId();
-      const from = new Date(dateFrom);
-      const to = new Date(dateTo);
-      const expiresAt = new Date(Date.now() + 7 * 86400_000);
-
-      // Build export data
-      const exportData: Record<string, unknown> = {
-        exportType: type,
-        dateRange: { from: from.toISOString(), to: to.toISOString() },
-        generatedAt: new Date().toISOString(),
-        developerId,
+      return {
+        type: type as (typeof EXPORT_TYPES)[number],
+        from,
+        to,
+        format: format as string,
+        includeActionLog: optionalBoolean(body['includeActionLog'], 'includeActionLog') ?? true,
+        includeConsentRecords: optionalBoolean(body['includeConsentRecords'], 'includeConsentRecords') ?? true,
+        dataPrincipalId: optionalString(body['dataPrincipalId'], 'dataPrincipalId', MAX_ID) ?? null,
       };
+    });
+    if (!input) return reply;
+    const { type, from, to, format, dataPrincipalId } = input;
 
-      let recordCount = 0;
+    const sql = getSql();
+    // Exports past their expiry keep no data; purge this developer's now.
+    await sql`
+      UPDATE dpdp_exports SET data = NULL, status = 'expired'
+      WHERE developer_id = ${developerId} AND expires_at <= NOW() AND status <> 'expired'
+    `;
 
-      if (includeConsentRecords) {
-        const consentRows = await sql`
-          SELECT id, grant_id, data_principal_id, purposes, scopes, status,
-                 consent_given_at, processing_expires_at, withdrawn_at
-          FROM dpdp_consent_records
-          WHERE developer_id = ${developerId}
-            AND created_at >= ${from} AND created_at <= ${to}
-            ${dataPrincipalId ? sql`AND data_principal_id = ${dataPrincipalId}` : sql``}
-          ORDER BY created_at DESC
-        `;
-        exportData['consentRecords'] = consentRows;
-        recordCount += consentRows.length;
-      }
+    const id = newExportId();
+    const createdAt = new Date();
+    const expiresAt = new Date(createdAt.getTime() + EXPORT_LIFETIME_MS);
 
-      if (includeActionLog) {
-        const auditRows = await sql`
-          SELECT id, action, status, metadata, timestamp
-          FROM audit_entries
-          WHERE developer_id = ${developerId}
-            AND timestamp >= ${from} AND timestamp <= ${to}
-            ${dataPrincipalId ? sql`AND principal_id = ${dataPrincipalId}` : sql``}
-          ORDER BY timestamp DESC
-          LIMIT 1000
-        `;
-        exportData['auditLog'] = auditRows;
-        recordCount += auditRows.length;
-      }
+    const exportData: Record<string, unknown> = {
+      exportType: type,
+      dateRange: { from: from.toISOString(), to: to.toISOString() },
+      generatedAt: createdAt.toISOString(),
+      developerId,
+      ...(dataPrincipalId ? { dataPrincipalId } : {}),
+    };
 
-      // Add grievances for DPDP exports
-      if (type === 'dpdp-audit') {
-        const grievanceRows = await sql`
-          SELECT id, reference_number, type, status, created_at, resolved_at
-          FROM dpdp_grievances
-          WHERE developer_id = ${developerId}
-            AND created_at >= ${from} AND created_at <= ${to}
-          ORDER BY created_at DESC
-        `;
-        exportData['grievances'] = grievanceRows;
-        recordCount += grievanceRows.length;
-      }
+    let recordCount = 0;
+    let truncated = false;
 
-      await sql`
+    if (input.includeConsentRecords) {
+      const consentRows = await sql`
+        SELECT id, grant_id, data_principal_id, purposes, scopes, status,
+               consent_notice_id, consent_notice_version,
+               consent_given_at, processing_expires_at, withdrawn_at, erased_at
+        FROM dpdp_consent_records
+        WHERE developer_id = ${developerId}
+          AND created_at >= ${from} AND created_at <= ${to}
+          ${dataPrincipalId ? sql`AND data_principal_id = ${dataPrincipalId}` : sql``}
+        ORDER BY created_at DESC
+      `;
+      exportData['consentRecords'] = consentRows;
+      recordCount += consentRows.length;
+    }
+
+    if (input.includeActionLog) {
+      // audit_entries.principal_id is the principal namespace of the grant
+      // the entry was written under, which is the DPDP data principal only
+      // when the integration keys both the same way (enforced by
+      // DPDP_ENFORCE_GRANT_PRINCIPAL). A principal export therefore takes the
+      // entries written under the grants of that principal's consent
+      // records, entries naming the principal directly, and the platform's
+      // DPDP entries about the principal.
+      const auditRows = await sql`
+        SELECT id, action, status, metadata, timestamp
+        FROM audit_entries
+        WHERE developer_id = ${developerId}
+          AND timestamp >= ${from} AND timestamp <= ${to}
+          ${dataPrincipalId ? sql`AND (
+            principal_id = ${dataPrincipalId}
+            OR grant_id IN (
+              SELECT grant_id FROM dpdp_consent_records
+              WHERE developer_id = ${developerId} AND data_principal_id = ${dataPrincipalId}
+            )
+            OR (principal_id = 'platform' AND metadata->>'data_principal_id' = ${dataPrincipalId})
+          )` : sql``}
+        ORDER BY timestamp DESC, id DESC
+        LIMIT ${EXPORT_AUDIT_LOG_LIMIT + 1}
+      `;
+      truncated = auditRows.length > EXPORT_AUDIT_LOG_LIMIT;
+      const kept = auditRows.slice(0, EXPORT_AUDIT_LOG_LIMIT);
+      exportData['auditLog'] = kept;
+      recordCount += kept.length;
+    }
+
+    // Add grievances for DPDP exports
+    if (type === 'dpdp-audit') {
+      const grievanceRows = await sql`
+        SELECT id, reference_number, type, status, response_period_days, created_at, resolved_at
+        FROM dpdp_grievances
+        WHERE developer_id = ${developerId}
+          AND created_at >= ${from} AND created_at <= ${to}
+          ${dataPrincipalId ? sql`AND data_principal_id = ${dataPrincipalId}` : sql``}
+        ORDER BY created_at DESC
+      `;
+      exportData['grievances'] = grievanceRows;
+      recordCount += grievanceRows.length;
+    }
+
+    exportData['truncated'] = truncated;
+    exportData['auditLogLimit'] = EXPORT_AUDIT_LOG_LIMIT;
+
+    await sql.begin(async (_tx) => {
+      const tx = _tx as unknown as TxSql;
+      await tx`
         INSERT INTO dpdp_exports (
           id, developer_id, type, date_from, date_to,
-          format, record_count, data, expires_at
+          format, record_count, data, expires_at, data_principal_id, truncated, created_at
         )
         VALUES (
           ${id}, ${developerId}, ${type}, ${from}, ${to},
-          ${format}, ${recordCount}, ${JSON.stringify(exportData)}, ${expiresAt}
+          ${format}, ${recordCount}, ${json(tx, exportData)}, ${expiresAt},
+          ${dataPrincipalId}, ${truncated}, ${createdAt}
         )
       `;
+      await appendDpdpAudit(tx, developerId, [{
+        action: DPDP_AUDIT_ACTIONS.exportCreated,
+        metadata: {
+          export_id: id, type, record_count: recordCount, truncated,
+          ...(dataPrincipalId ? { data_principal_id: dataPrincipalId } : {}),
+        },
+      }]);
+    });
 
-      return reply.status(201).send({
-        exportId: id,
-        type,
-        format,
-        recordCount,
-        data: exportData,
-        expiresAt: expiresAt.toISOString(),
-        createdAt: new Date().toISOString(),
-      });
-    },
-  );
+    return reply.status(201).send({
+      exportId: id,
+      type,
+      format,
+      recordCount,
+      truncated,
+      auditLogLimit: EXPORT_AUDIT_LOG_LIMIT,
+      dataPrincipalId,
+      data: exportData,
+      expiresAt: expiresAt.toISOString(),
+      createdAt: createdAt.toISOString(),
+    });
+  });
 
   // GET /v1/dpdp/exports/:exportId — Get export status/data
   app.get<{ Params: { exportId: string } }>(
@@ -585,19 +1156,22 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       const sql = getSql();
 
       const rows = await sql`
-        SELECT id, type, date_from, date_to, format, status,
-               record_count, data, expires_at, created_at
+        SELECT id, type, date_from, date_to, format, status, record_count, truncated,
+               data_principal_id, data, expires_at, created_at
         FROM dpdp_exports
         WHERE id = ${exportId} AND developer_id = ${developerId}
       `;
 
       const exp = rows[0];
-      if (!exp) {
-        return reply.status(404).send({
-          message: 'Export not found',
-          code: 'NOT_FOUND',
-          requestId: request.id,
-        });
+      if (!exp) return sendError(reply, request, 404, 'NOT_FOUND', 'Export not found');
+
+      if (exp['status'] === 'expired' || new Date(exp['expires_at'] as string).getTime() <= Date.now()) {
+        // Past its expiry the export's data is purged, not served.
+        await sql`
+          UPDATE dpdp_exports SET data = NULL, status = 'expired'
+          WHERE id = ${exportId} AND developer_id = ${developerId}
+        `;
+        return sendError(reply, request, 410, 'GONE', 'Export has expired and its data was purged');
       }
 
       return reply.send({
@@ -608,6 +1182,9 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         format: exp['format'],
         status: exp['status'],
         recordCount: exp['record_count'],
+        truncated: exp['truncated'] ?? false,
+        auditLogLimit: EXPORT_AUDIT_LOG_LIMIT,
+        dataPrincipalId: exp['data_principal_id'] ?? null,
         data: exp['data'],
         expiresAt: exp['expires_at'],
         createdAt: exp['created_at'],
@@ -616,6 +1193,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // GET /v1/dpdp/consent-records/:recordId — Fetch single consent record by ID
+  // A developer read: access_count and last_accessed_at are not bumped.
   app.get<{ Params: { recordId: string } }>(
     '/v1/dpdp/consent-records/:recordId',
     async (request, reply) => {
@@ -624,173 +1202,235 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       const sql = getSql();
 
       const rows = await sql`
-        SELECT id, grant_id, data_principal_id, data_fiduciary_name, purposes,
-               scopes, consent_notice_id, status, consent_given_at,
-               processing_expires_at, retention_until, access_count,
-               last_accessed_at, withdrawn_at, withdrawn_reason, created_at
+        SELECT ${CONSENT_RECORD_COLUMNS(sql)}
         FROM dpdp_consent_records
         WHERE id = ${recordId} AND developer_id = ${developerId}
       `;
-
-      if (rows.length === 0) {
-        return reply.status(404).send({
-          message: 'Consent record not found',
-          code: 'NOT_FOUND',
-          requestId: request.id,
-        });
-      }
-
-      const r = rows[0]!;
-
-      // Update access count
-      await sql`
-        UPDATE dpdp_consent_records
-        SET access_count = access_count + 1, last_accessed_at = NOW()
-        WHERE id = ${recordId}
-      `;
-
-      return reply.send({
-        recordId: r['id'],
-        grantId: r['grant_id'],
-        dataPrincipalId: r['data_principal_id'],
-        dataFiduciaryName: r['data_fiduciary_name'],
-        purposes: r['purposes'],
-        scopes: r['scopes'],
-        consentNoticeId: r['consent_notice_id'],
-        status: r['status'],
-        consentGivenAt: r['consent_given_at'],
-        processingExpiresAt: r['processing_expires_at'],
-        retentionUntil: r['retention_until'],
-        accessCount: (r['access_count'] as number) + 1,
-        lastAccessedAt: new Date().toISOString(),
-        withdrawnAt: r['withdrawn_at'] ?? null,
-        withdrawnReason: r['withdrawn_reason'] ?? null,
-        createdAt: r['created_at'],
-      });
+      if (rows.length === 0) return sendError(reply, request, 404, 'NOT_FOUND', 'Consent record not found');
+      return reply.send(consentRecordResponse(rows[0]!));
     },
   );
 
   // GET /v1/dpdp/consent-records — List consent records with optional dataPrincipalId filter
-  app.get<{ Querystring: { dataPrincipalId?: string } }>(
+  app.get<{ Querystring: Record<string, unknown> }>(
     '/v1/dpdp/consent-records',
     async (request, reply) => {
-      const { dataPrincipalId } = request.query;
       const developerId = request.developer.id;
+      const input = parseOr400(reply, request, () => ({
+        page: parsePage(request.query),
+        dataPrincipalId: optionalString(request.query['dataPrincipalId'], 'dataPrincipalId', MAX_ID),
+      }));
+      if (!input) return reply;
+      const { page, dataPrincipalId } = input;
       const sql = getSql();
 
-      const rows = dataPrincipalId
-        ? await sql`
-            SELECT id, grant_id, data_principal_id, data_fiduciary_name, purposes,
-                   scopes, consent_notice_id, status, consent_given_at,
-                   processing_expires_at, retention_until, access_count,
-                   last_accessed_at, withdrawn_at, withdrawn_reason, created_at
-            FROM dpdp_consent_records
-            WHERE developer_id = ${developerId} AND data_principal_id = ${dataPrincipalId}
-            ORDER BY created_at DESC
-          `
-        : await sql`
-            SELECT id, grant_id, data_principal_id, data_fiduciary_name, purposes,
-                   scopes, consent_notice_id, status, consent_given_at,
-                   processing_expires_at, retention_until, access_count,
-                   last_accessed_at, withdrawn_at, withdrawn_reason, created_at
-            FROM dpdp_consent_records
-            WHERE developer_id = ${developerId}
-            ORDER BY created_at DESC
-            LIMIT 100
-          `;
+      // Without limit or cursor, what this route returned before it paginated:
+      // the newest 100 unfiltered, every match filtered by principal.
+      const limit = listLimit(page, dataPrincipalId ? null : LEGACY_UNFILTERED_LIST_SIZE);
+      const rows = await sql`
+        SELECT ${CONSENT_RECORD_COLUMNS(sql)}
+        FROM dpdp_consent_records
+        WHERE developer_id = ${developerId}
+          ${dataPrincipalId ? sql`AND data_principal_id = ${dataPrincipalId}` : sql``}
+          ${page.cursor ? sql`AND (created_at, id) < (${page.cursor.t}::timestamptz, ${page.cursor.id})` : sql``}
+        ORDER BY created_at DESC, id DESC
+        ${limit !== null ? sql`LIMIT ${limit + 1}` : sql``}
+      `;
+      const [count] = await sql`
+        SELECT COUNT(*)::int AS total FROM dpdp_consent_records
+        WHERE developer_id = ${developerId}
+          ${dataPrincipalId ? sql`AND data_principal_id = ${dataPrincipalId}` : sql``}
+      `;
 
-      const records = rows.map((r) => ({
-        recordId: r['id'],
-        grantId: r['grant_id'],
-        dataPrincipalId: r['data_principal_id'],
-        dataFiduciaryName: r['data_fiduciary_name'],
-        purposes: r['purposes'],
-        scopes: r['scopes'],
-        consentNoticeId: r['consent_notice_id'],
-        status: r['status'],
-        consentGivenAt: r['consent_given_at'],
-        processingExpiresAt: r['processing_expires_at'],
-        retentionUntil: r['retention_until'],
-        accessCount: r['access_count'],
-        withdrawnAt: r['withdrawn_at'] ?? null,
-        createdAt: r['created_at'],
-      }));
-
-      return reply.send({ records, totalRecords: records.length });
+      return reply.send({
+        records: (limit !== null ? rows.slice(0, limit) : rows).map(consentRecordResponse),
+        totalRecords: Number(count?.['total'] ?? 0),
+        nextCursor: limit !== null ? nextCursor(rows, limit) : null,
+      });
     },
   );
 
-  // POST /v1/dpdp/data-principals/:principalId/erasure — Right to erasure (DPDP Section 11)
-  // Plan rate-limit bucket, failing closed, as for withdrawal above; it also
-  // rewrites the principal's audit entries, which must not run unmetered
-  // while the limiter is down.
+  // POST /v1/dpdp/data-principals/:principalId/erasure — Right to erasure (DPDP Act s.12)
+  // Plan rate-limit bucket, failing closed, as for withdrawal above: it
+  // revokes the principal's grants.
+  //
+  // What it does, in one transaction: revokes the grants of the principal's
+  // records that are still active (only those grants, as it always did; with
+  // DPDP_REVOCATION_CASCADE=true their delegated grants too), marks the
+  // consent records erased, and records the request. With
+  // DPDP_ERASURE_EXPANDED=true it also redacts the principal's grievance text
+  // and deletes stored exports about the principal. What it keeps, and why,
+  // is in `retained`: the consent records and the audit log stay (DPDP Rules
+  // 2025 r.8(3) and r.6(1)(e); DPDP Act s.6(10)), and without the expanded
+  // flag the grievances and stored exports too. A repeat for a principal
+  // with nothing left to erase returns the completed request instead of a
+  // new one.
   app.post<{ Params: { principalId: string } }>(
     '/v1/dpdp/data-principals/:principalId/erasure',
     async (request, reply) => {
       const { principalId } = request.params;
       const developerId = request.developer.id;
+      if (principalId.length > MAX_ID) return sendError(reply, request, 400, 'BAD_REQUEST', `principalId must be at most ${MAX_ID} characters`);
+      const expanded = config.dpdpErasureExpanded;
       const sql = getSql();
 
-      // Verify principal has records
-      const records = await sql`
-        SELECT id, grant_id FROM dpdp_consent_records
-        WHERE data_principal_id = ${principalId} AND developer_id = ${developerId}
-      `;
-
-      if (records.length === 0) {
-        return reply.status(404).send({
-          message: 'No consent records found for this data principal',
-          code: 'NOT_FOUND',
-          requestId: request.id,
-        });
-      }
-
-      const erasedAt = new Date();
-      const requestId = newErasureRequestId();
-
-      // Mark all consent records as erased
-      const ids = records.map((r) => r['id'] as string);
-      await sql`
-        UPDATE dpdp_consent_records
-        SET status = 'erased', withdrawn_at = ${erasedAt}, withdrawn_reason = 'Data erasure request'
-        WHERE id = ANY(${ids})
-      `;
-
-      // Revoke all associated grants
-      const grantIds = records.map((r) => r['grant_id'] as string).filter(Boolean);
-      if (grantIds.length > 0) {
-        await sql`
-          UPDATE grants SET status = 'revoked', revoked_at = ${erasedAt}
-          WHERE id = ANY(${grantIds}) AND developer_id = ${developerId}
+      let outcome: 'not_found' | 'existing' | 'completed' = 'not_found';
+      let requestRow: Record<string, unknown> | undefined;
+      const trees: RevokedGrantTree[] = [];
+      await sql.begin(async (_tx) => {
+        const tx = _tx as unknown as TxSql;
+        // One erasure of a principal at a time, so a repeat waits for the
+        // first and then finds it.
+        await tx`SELECT pg_advisory_xact_lock(hashtextextended(${`dpdp-erasure:${developerId}:${principalId}`}, 0))`;
+        const records = await tx`
+          SELECT id, grant_id, status FROM dpdp_consent_records
+          WHERE data_principal_id = ${principalId} AND developer_id = ${developerId}
+          ORDER BY id
+          FOR UPDATE
         `;
+        if (records.length === 0) return;
+        const pending = records.filter((r) => r['status'] !== 'erased');
+        const previous = await tx`
+          SELECT * FROM dpdp_erasure_requests
+          WHERE developer_id = ${developerId} AND data_principal_id = ${principalId}
+          ORDER BY submitted_at DESC, id DESC
+          LIMIT 1
+        `;
+        if (previous[0] && pending.length === 0) {
+          outcome = 'existing';
+          requestRow = previous[0];
+          return;
+        }
+
+        const submittedAt = new Date();
+        const grantIds = [...new Set(records.map((r) => r['grant_id'] as string).filter(Boolean))].sort();
+        for (const grantId of grantIds) {
+          // Only active grants are revoked, and only those are counted.
+          const tree = await revokeDpdpGrantInTx(tx, grantId, developerId);
+          if (tree) trees.push(tree);
+        }
+        const pendingIds = pending.map((r) => r['id'] as string);
+        if (pendingIds.length > 0) {
+          await tx`
+            UPDATE dpdp_consent_records
+            SET status = 'erased', erased_at = ${submittedAt},
+                withdrawn_at = COALESCE(withdrawn_at, ${submittedAt}),
+                withdrawn_reason = COALESCE(withdrawn_reason, 'Data erasure request')
+            WHERE id = ANY(${pendingIds}) AND developer_id = ${developerId}
+          `;
+        }
+        const grievances = expanded
+          ? await tx`
+              UPDATE dpdp_grievances
+              SET description = ${ERASED_TEXT_MARKER}, evidence = ${json(tx, { redacted: true })}, updated_at = NOW()
+              WHERE developer_id = ${developerId} AND data_principal_id = ${principalId}
+                AND description <> ${ERASED_TEXT_MARKER}
+              RETURNING id
+            `
+          : [];
+        const [grievanceTotal] = await tx`
+          SELECT COUNT(*)::int AS total FROM dpdp_grievances
+          WHERE developer_id = ${developerId} AND data_principal_id = ${principalId}
+        `;
+        // Stored exports filtered to the principal, or carrying the principal
+        // id anywhere in their data (matched as a whole JSON string): deleted
+        // under DPDP_ERASURE_EXPANDED=true, otherwise counted as retained.
+        const principalJson = JSON.stringify(principalId);
+        const exports = expanded
+          ? await tx`
+              DELETE FROM dpdp_exports
+              WHERE developer_id = ${developerId}
+                AND (data_principal_id = ${principalId}
+                     OR (data IS NOT NULL AND position(${principalJson} IN data::text) > 0))
+              RETURNING id
+            `
+          : [];
+        const [storedExports] = expanded
+          ? [{ total: 0 }]
+          : await tx`
+              SELECT COUNT(*)::int AS total FROM dpdp_exports
+              WHERE developer_id = ${developerId}
+                AND (data_principal_id = ${principalId}
+                     OR (data IS NOT NULL AND position(${principalJson} IN data::text) > 0))
+            `;
+        const completedAt = new Date();
+        const grantsRevoked = trees.length;
+        const delegatedGrantsRevoked = trees.reduce((sum, tree) => sum + tree.rows.length - 1, 0);
+        const retained = retainedAfterErasure(records.length, Number(grievanceTotal?.['total'] ?? 0), {
+          expanded,
+          storedExportCount: Number(storedExports?.['total'] ?? 0),
+        });
+        requestRow = {
+          id: newErasureRequestId(),
+          data_principal_id: principalId,
+          status: 'completed',
+          records_erased: pendingIds.length,
+          grants_revoked: grantsRevoked,
+          delegated_grants_revoked: delegatedGrantsRevoked,
+          grievances_redacted: grievances.length,
+          exports_deleted: exports.length,
+          retained,
+          submitted_at: submittedAt,
+          completed_at: completedAt,
+        };
+        await tx`
+          INSERT INTO dpdp_erasure_requests (
+            id, developer_id, data_principal_id, status, records_erased, grants_revoked,
+            delegated_grants_revoked, grievances_redacted, exports_deleted, retained,
+            submitted_at, completed_at
+          )
+          VALUES (
+            ${requestRow['id'] as string}, ${developerId}, ${principalId}, 'completed', ${pendingIds.length}, ${grantsRevoked},
+            ${delegatedGrantsRevoked}, ${grievances.length}, ${exports.length}, ${json(tx, retained)},
+            ${submittedAt}, ${completedAt}
+          )
+        `;
+        await appendDpdpAudit(tx, developerId, [{
+          action: DPDP_AUDIT_ACTIONS.erasureCompleted,
+          metadata: {
+            request_id: requestRow!['id'],
+            data_principal_id: principalId,
+            records_erased: pendingIds.length,
+            grants_revoked: grantsRevoked,
+            delegated_grants_revoked: delegatedGrantsRevoked,
+            grievances_redacted: grievances.length,
+            exports_deleted: exports.length,
+          },
+        }]);
+        outcome = 'completed';
+      });
+
+      if (outcome === 'not_found') {
+        return sendError(reply, request, 404, 'NOT_FOUND', 'No consent records found for this data principal');
       }
+      const body = erasureResponse(requestRow!);
+      if (outcome === 'existing') return reply.status(200).send(body);
 
-      // Delete personal data from audit entries (anonymize)
-      await sql`
-        UPDATE audit_entries
-        SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{erasedAt}', ${JSON.stringify(erasedAt.toISOString())}::jsonb)
-        WHERE principal_id = ${principalId} AND developer_id = ${developerId}
-      `;
-
-      // Log the erasure
+      for (const tree of trees) await publishGrantRevocation(developerId, tree);
       emitEvent(developerId, 'dpdp.erasure.completed', {
-        requestId,
+        requestId: body.requestId,
         dataPrincipalId: principalId,
-        recordsErased: ids.length,
-        grantsRevoked: grantIds.length,
+        recordsErased: body.recordsErased,
+        grantsRevoked: body.grantsRevoked,
+        delegatedGrantsRevoked: body.delegatedGrantsRevoked,
       }).catch(() => {});
 
-      const expectedCompletionBy = new Date(erasedAt.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+      return reply.status(201).send(body);
+    },
+  );
 
-      return reply.status(201).send({
-        requestId,
-        dataPrincipalId: principalId,
-        status: 'completed',
-        recordsErased: ids.length,
-        grantsRevoked: grantIds.length,
-        submittedAt: erasedAt.toISOString(),
-        expectedCompletionBy: expectedCompletionBy.toISOString(),
-      });
+  // GET /v1/dpdp/erasure-requests/:requestId — A completed erasure request
+  app.get<{ Params: { requestId: string } }>(
+    '/v1/dpdp/erasure-requests/:requestId',
+    async (request, reply) => {
+      const developerId = request.developer.id;
+      const sql = getSql();
+      const rows = await sql`
+        SELECT * FROM dpdp_erasure_requests
+        WHERE id = ${request.params.requestId} AND developer_id = ${developerId}
+      `;
+      if (!rows[0]) return sendError(reply, request, 404, 'NOT_FOUND', 'Erasure request not found');
+      return reply.send(erasureResponse(rows[0]));
     },
   );
 }

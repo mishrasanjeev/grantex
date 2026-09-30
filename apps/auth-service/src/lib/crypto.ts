@@ -372,6 +372,8 @@ export interface EdKeyPair {
 }
 
 let _edKeyPair: EdKeyPair | null = null;
+/** Whether the Ed25519 key came from ED25519_PRIVATE_KEY (persistent) or was generated at boot (ephemeral). */
+let _edKeyPersistence: 'persistent' | 'ephemeral' | null = null;
 
 function buildEdKid(): string {
   const now = new Date();
@@ -394,6 +396,7 @@ export async function initEdKey(): Promise<void> {
     const spkiPem = nodePk.export({ type: 'spki', format: 'pem' }) as string;
     const publicKey = await importSPKI(spkiPem, 'EdDSA');
     _edKeyPair = { privateKey, publicKey, kid: buildEdKid() };
+    _edKeyPersistence = 'persistent';
     return;
   }
 
@@ -403,21 +406,46 @@ export async function initEdKey(): Promise<void> {
     extractable: true,
   });
   _edKeyPair = { privateKey, publicKey, kid: buildEdKid() };
+  _edKeyPersistence = 'ephemeral';
 }
 
 export function getEdKeyPair(): EdKeyPair | null {
   return _edKeyPair;
 }
 
-export async function signWithEd25519(payload: Record<string, unknown>): Promise<string> {
+/**
+ * 'persistent' when the Ed25519 key was imported from ED25519_PRIVATE_KEY,
+ * 'ephemeral' when this process generated it at boot, null before initEdKey().
+ * A signature by an ephemeral key verifies only against the JWKS of the
+ * process that made it, and only until that process restarts.
+ */
+export function getEdKeyPersistence(): 'persistent' | 'ephemeral' | null {
+  return _edKeyPersistence;
+}
+
+export interface Ed25519SignOptions {
+  /**
+   * Lifetime in seconds; null signs without an `exp` claim. Default one hour.
+   * Evidence that must stay verifiable for as long as it is retained (a DPDP
+   * consent proof, DPDP Act s.6(10)) is signed without one.
+   */
+  expiresInSeconds?: number | null;
+}
+
+/** A compact JWS (RFC 7515 §7.1) over the payload, EdDSA with the Ed25519 key, `kid` in the header. */
+export async function signWithEd25519(
+  payload: Record<string, unknown>,
+  options: Ed25519SignOptions = {},
+): Promise<string> {
   if (!_edKeyPair) throw new Error('Ed25519 key not initialized — call initEdKey() first');
   const { privateKey, kid } = _edKeyPair;
-  return new SignJWT(payload)
+  const expiresInSeconds = options.expiresInSeconds === undefined ? 3600 : options.expiresInSeconds;
+  const jwt = new SignJWT(payload)
     .setProtectedHeader({ alg: 'EdDSA', kid })
     .setIssuer(config.jwtIssuer)
-    .setIssuedAt()
-    .setExpirationTime(Math.floor(Date.now() / 1000) + 3600)
-    .sign(privateKey);
+    .setIssuedAt();
+  if (expiresInSeconds !== null) jwt.setExpirationTime(Math.floor(Date.now() / 1000) + expiresInSeconds);
+  return jwt.sign(privateKey);
 }
 
 // ─── End Ed25519 ─────────────────────────────────────────────────────────────

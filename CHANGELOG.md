@@ -6,6 +6,131 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### DPDP routes: correctness, erasure and audit (auth service)
+- Withdrawal (`POST /v1/dpdp/consent-records/{id}/withdraw`) runs in one
+  transaction and withdraws only an `active` record, so of two concurrent
+  withdrawals exactly one succeeds (`409 ALREADY_WITHDRAWN` for the other); an
+  erased record answers `409 CONSENT_ERASED`, an expired one
+  `409 CONSENT_EXPIRED`. With `revokeGrant: true` the record's grant is
+  revoked, as before, and only if it is still active; the revocation cache
+  entry and `grant.revoked` for that grant now follow the commit. A missing
+  or non-object body is `400` instead of `500`.
+- New flag `DPDP_REVOCATION_CASCADE` (off; exactly `true`): a DPDP revocation
+  (withdrawal with `revokeGrant`, erasure, and the expiry worker's
+  `DPDP_CONSENT_EXPIRY_REVOKES_GRANT`) goes through the grant cascade: the
+  grants delegated from the record's grant, their credentials and wallet
+  reservations are revoked too. Off, only the record's own grant is revoked,
+  as these routes always did.
+- New flag `DPDP_WITHDRAWAL_REVOKES_GRANT` (off; exactly `true`): an omitted
+  `revokeGrant` then means `true`, since after a withdrawal processing must
+  cease (DPDP Act s.6(6)). An explicit `revokeGrant: false` still wins.
+- `deleteProcessedData` no longer rewrites `audit_entries` metadata, which
+  broke the tamper-evident hash chain (the compliance evidence pack then
+  reported the chain as tampered). Grantex holds none of the fiduciary's
+  processed data, so it emits a new `dpdp.data_deletion.requested` webhook
+  event to the developer instead. Erasure no longer rewrites audit entries
+  either.
+- Erasure (`POST /v1/dpdp/data-principals/{id}/erasure`) is one transaction:
+  it revokes the grants of the principal's records that are still active
+  (root-only, as before; the cascade under `DPDP_REVOCATION_CASCADE=true`),
+  marks the consent records `erased` (retained, with `erasedAt`), and stores
+  the request (migration 127, `dpdp_erasure_requests`). A repeat for a
+  principal with nothing left to erase returns the completed request with
+  `200`. New `GET /v1/dpdp/erasure-requests/{requestId}`. The response's
+  `retained` says what was kept and why, grievances and stored exports
+  included.
+- New flag `DPDP_ERASURE_EXPANDED` (off; exactly `true`): erasure also
+  replaces the principal's grievance description and evidence with a fixed
+  marker and deletes stored exports about the principal. Off, both are kept
+  (`grievancesRedacted` and `exportsDeleted` are `0`) and `retained` lists
+  them as kept because expanded erasure is not enabled.
+- Consent record creation validates its input (`400` instead of `500`),
+  refuses a grant that is not active or has expired (`400 INVALID_GRANT`),
+  takes an optional `consentNoticeVersion` (default the latest, as before)
+  and stores the version on the record. New flag `DPDP_ENFORCE_GRANT_PRINCIPAL`
+  (off; exactly `true`) refuses a `dataPrincipalId` that is not the grant's
+  principal (`400 PRINCIPAL_MISMATCH`).
+- The consent proof is signed without `exp` (it is evidence, DPDP Act
+  s.6(10)) and names its `kid`; when it cannot be signed no record is created
+  (`503 CONSENT_PROOF_UNAVAILABLE`) instead of storing `type: 'none'`.
+  With `NODE_ENV=production` and no `ED25519_PRIVATE_KEY`, startup logs a
+  warning: a per-process key cannot verify proofs after a restart. The proof
+  says which it was signed with, `keyPersistence: 'persistent'` (the
+  configured `ED25519_PRIVATE_KEY`) or `'ephemeral'` (generated in-process;
+  not verifiable on another instance or after a restart).
+- New flag `DPDP_REQUIRE_PERSISTENT_PROOF_KEY` (off; exactly `true`): while
+  the Ed25519 key is ephemeral, consent record creation is refused with
+  `503 CONSENT_PROOF_KEY_NOT_PERSISTENT` and nothing is stored.
+- `GET /v1/dpdp/consent-records/{id}` and
+  `GET /v1/dpdp/data-principals/{id}/records` no longer increment
+  `accessCount` or set `lastAccessedAt`: a developer read is not the
+  principal's access.
+- Consent notices: only a unique violation is `409 CONFLICT`; other failures
+  propagate. New `GET /v1/dpdp/consent-notices` (paginated) and
+  `GET /v1/dpdp/consent-notices/{noticeId}` (every version).
+- Grievances: `recordId` must be one of the developer's records about the same
+  principal (`400 INVALID_RECORD` instead of a cross-tenant reference or a
+  `500`); an optional `responsePeriodDays` (1 to 90, DPDP Rules 2025 r.14(3);
+  default 7) sets `expectedResolutionBy`. New `GET /v1/dpdp/grievances`
+  (filter by `status`, `dataPrincipalId`; paginated) and
+  `PATCH /v1/dpdp/grievances/{id}` (`submitted` -> `in_review` -> `resolved` |
+  `rejected`, with a resolution; `409 INVALID_TRANSITION` otherwise), emitting
+  the new `dpdp.grievance.updated` event.
+- Exports: invalid dates, `dateFrom` after `dateTo`, and any `format` other
+  than `json` are `400`; the response says `truncated` and `auditLogLimit`
+  when the 1000-entry audit cap is hit; an export past `expiresAt` answers
+  `410 GONE` and its data is purged. A principal-filtered export now filters
+  grievances too, and takes the audit entries of the grants of the principal's
+  consent records as well as entries naming the principal.
+- Lists (`GET /v1/dpdp/consent-records`, `.../data-principals/{id}/records`
+  and the new lists) take `limit` (default 50, at most 200) and `cursor` and
+  return `nextCursor`; `totalRecords` counts every matching record. The two
+  consent-record lists paginate only when the caller sends `limit` or
+  `cursor`; without either they return what they did before: the newest 100
+  records unfiltered, every matching record filtered by `dataPrincipalId`,
+  and every record of the principal on `.../data-principals/{id}/records`.
+  The new notice and grievance lists paginate by default.
+- Every DPDP state change appends a platform entry to the developer's audit
+  chain (`grantex.dpdp.consent_created`, `consent_withdrawn`,
+  `consent_expired`, `erasure_completed`, `grievance_filed`,
+  `grievance_updated`, `notice_created`, `export_created`).
+- JSONB values (purposes, the consent proof, grievance evidence, the
+  grievance officer, export data) are stored as JSON; they used to be stored
+  as JSON-encoded strings, so reads returned strings. Migration 127 decodes
+  the existing rows.
+- New consent expiry worker, off unless `DPDP_CONSENT_EXPIRY_ENABLED=true`:
+  active records past `processingExpiresAt` become `expired`
+  (`dpdp.consent.expired`), and with `DPDP_CONSENT_EXPIRY_REVOKES_GRANT=true`
+  their grants are revoked. A run takes developers in `developer_id` order
+  from a cursor that resumes after the previous run's last developer and
+  wraps, so no developer waits more than
+  ceil(due developers / 100) runs.
+- Migration 127 also adds CHECK constraints on the DPDP status columns and
+  indexes, including `dpdp_exports(developer_id)`.
+
+Response changes (clients may need updating):
+- `consentProof.type` is `JWS-EdDSA`, not `Ed25519Signature2020` (the proof
+  is a compact JWS, not a Data Integrity proof); `consentProof` gains `alg`,
+  `kid`, `jwksUri` and `keyPersistence`; the proof JWT has no `exp`.
+- Withdrawal: `dataDeleted` is always `false`; new `dataDeletionRequested`;
+  `grantRevoked` is `true` only when an active grant was revoked.
+- Erasure: `expectedCompletionBy` (deprecated) equals the new `completedAt`
+  instead of submission plus seven days; new `delegatedGrantsRevoked`,
+  `grievancesRedacted`, `exportsDeleted` (the last three `0` unless the
+  matching flag is on) and `retained`; `grantsRevoked` counts only grants
+  that were active; a repeat returns `200` with the existing request.
+- Consent records: `accessCount` and `lastAccessedAt` are the stored values
+  (no longer incremented or set to the read time); new `consentNoticeVersion`
+  and `erasedAt`; lists gain `nextCursor` (`null` when every record was
+  returned) and return the same records as before unless `limit` or `cursor`
+  is sent.
+- Grievances: new `responsePeriodDays` and `updatedAt`; the in-progress status
+  is `in_review`.
+- Exports: new `truncated`, `auditLogLimit` and `dataPrincipalId`; `410` after
+  expiry.
+- `purposes`, `evidence`, `grievanceOfficer` and export `data` read back as
+  JSON values rather than JSON-encoded strings.
+
 ### Status-list reconciliation with cascade (auth service)
 - With `REGISTRY_STATUS_RECONCILIATION_ENABLED=true` (off by default), one
   instance at a time, under a Postgres advisory lock and after a random start

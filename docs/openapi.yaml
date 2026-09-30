@@ -760,6 +760,180 @@ components:
           type: integer
       required: [error, code, statusCode]
 
+    DpdpError:
+      type: object
+      required: [message, code, requestId]
+      properties:
+        message: { type: string }
+        code: { type: string }
+        requestId: { type: string }
+
+    DpdpPurpose:
+      type: object
+      required: [code, description]
+      properties:
+        code: { type: string, maxLength: 128 }
+        description: { type: string, maxLength: 1000 }
+
+    DpdpConsentRecord:
+      type: object
+      properties:
+        recordId: { type: string }
+        grantId: { type: string }
+        dataPrincipalId: { type: string }
+        dataFiduciaryName: { type: string }
+        purposes:
+          type: array
+          items: { $ref: "#/components/schemas/DpdpPurpose" }
+        scopes:
+          type: array
+          items: { type: string }
+        consentNoticeId: { type: string }
+        consentNoticeVersion: { type: [string, "null"] }
+        status: { type: string, enum: [active, withdrawn, expired, erased] }
+        consentGivenAt: { type: string, format: date-time }
+        processingExpiresAt: { type: string, format: date-time }
+        retentionUntil: { type: string, format: date-time }
+        accessCount:
+          type: integer
+          description: Stored value; developer reads do not change it.
+        lastAccessedAt: { type: [string, "null"], format: date-time }
+        withdrawnAt: { type: [string, "null"], format: date-time }
+        withdrawnReason: { type: [string, "null"] }
+        erasedAt: { type: [string, "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    DpdpConsentRecordPage:
+      type: object
+      required: [records, totalRecords, nextCursor]
+      properties:
+        records:
+          type: array
+          items: { $ref: "#/components/schemas/DpdpConsentRecord" }
+        totalRecords:
+          type: integer
+          description: Every record matching the filter, across all pages.
+        nextCursor:
+          type: [string, "null"]
+          description: >-
+            Pass as cursor for the next page; null when no further record
+            exists or when the call returned every matching record.
+
+    DpdpConsentProof:
+      type: object
+      required: [type, alg, kid, keyPersistence, proofJwt, jwksUri, signedAt]
+      properties:
+        type:
+          type: string
+          enum: [JWS-EdDSA]
+          description: A compact JWS (RFC 7515) signed with EdDSA over Ed25519 (RFC 8037). Formerly labelled Ed25519Signature2020.
+        alg: { type: string, enum: [EdDSA] }
+        kid: { type: string, description: The key in the JWKS at jwksUri. }
+        keyPersistence:
+          type: string
+          enum: [persistent, ephemeral]
+          description: >-
+            persistent when the configured ED25519_PRIVATE_KEY signed the
+            proof; ephemeral when the serving process generated its key at
+            boot, in which case the proof is not verifiable across instances
+            or restarts.
+        proofJwt: { type: string, description: No exp claim; the proof is kept as evidence. }
+        jwksUri: { type: string, format: uri }
+        signedAt: { type: string, format: date-time }
+
+    DpdpConsentRecordCreated:
+      type: object
+      properties:
+        recordId: { type: string }
+        grantId: { type: string }
+        dataPrincipalId: { type: string }
+        consentNoticeId: { type: string }
+        consentNoticeVersion: { type: string }
+        consentNoticeHash: { type: string }
+        consentProof: { $ref: "#/components/schemas/DpdpConsentProof" }
+        processingExpiresAt: { type: string, format: date-time }
+        retentionUntil: { type: string, format: date-time }
+        status: { type: string, enum: [active] }
+        createdAt: { type: string, format: date-time }
+
+    DpdpGrievance:
+      type: object
+      properties:
+        grievanceId: { type: string }
+        dataPrincipalId: { type: string }
+        recordId: { type: [string, "null"] }
+        type: { type: string }
+        description: { type: string, description: Replaced by a fixed marker once the principal is erased with DPDP_ERASURE_EXPANDED=true. }
+        evidence: { type: object }
+        status: { type: string, enum: [submitted, in_review, resolved, rejected] }
+        referenceNumber: { type: string }
+        expectedResolutionBy: { type: string, format: date-time }
+        responsePeriodDays: { type: integer, minimum: 1, maximum: 90 }
+        resolvedAt: { type: [string, "null"], format: date-time }
+        resolution: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: [string, "null"], format: date-time }
+
+    DpdpExport:
+      type: object
+      properties:
+        exportId: { type: string }
+        type: { type: string, enum: [dpdp-audit, gdpr-article-15, eu-ai-act-conformance] }
+        format: { type: string, enum: [json] }
+        status: { type: string, enum: [complete] }
+        recordCount: { type: integer }
+        truncated:
+          type: boolean
+          description: True when the audit log exceeded auditLogLimit and only the newest entries are included.
+        auditLogLimit: { type: integer }
+        dataPrincipalId: { type: [string, "null"] }
+        data: { type: object }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    DpdpErasureRequest:
+      type: object
+      required: [requestId, dataPrincipalId, status, recordsErased, grantsRevoked, retained, submittedAt, completedAt]
+      properties:
+        requestId: { type: string }
+        dataPrincipalId: { type: string }
+        status: { type: string, enum: [completed] }
+        recordsErased: { type: integer }
+        grantsRevoked:
+          type: integer
+          description: The principal's grants this request revoked; only grants that were active are counted.
+        delegatedGrantsRevoked:
+          type: integer
+          description: 0 unless the server sets DPDP_REVOCATION_CASCADE=true.
+        grievancesRedacted:
+          type: integer
+          description: 0 unless the server sets DPDP_ERASURE_EXPANDED=true.
+        exportsDeleted:
+          type: integer
+          description: 0 unless the server sets DPDP_ERASURE_EXPANDED=true.
+        retained:
+          type: array
+          description: What was kept rather than erased, and why.
+          items:
+            type: object
+            required: [category, reason]
+            properties:
+              category:
+                type: string
+                enum: [consent_records, audit_log, grievances, stored_exports, fiduciary_data]
+                description: >-
+                  stored_exports appears only without DPDP_ERASURE_EXPANDED=true,
+                  when stored exports about the principal are kept.
+              count: { type: integer }
+              reason: { type: string }
+        submittedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+        expectedCompletionBy:
+          type: string
+          format: date-time
+          deprecated: true
+          description: Equal to completedAt.
+
     PrepaidWallet:
       type: object
       required: [walletId, principalId, name, custodyMode, network, asset, decimals, availableAmount, reservedAmount, lowBalanceThreshold, maxBalance, maxReloadAmount, reloadCumulativeLimit, reloadPeriodSeconds, reloadCountLimit, status]
@@ -8887,18 +9061,49 @@ paths:
       operationId: listDpdpConsentRecords
       tags: [DPDP]
       summary: List DPDP consent records
+      description: >-
+        Newest first. Without limit or cursor, as before pagination: the
+        newest 100 records unfiltered (nextCursor set when there are more) and
+        every matching record with dataPrincipalId (nextCursor null). With
+        limit or cursor, one page at a time (default 50, at most 200).
+        totalRecords counts every record matching the filter. A developer
+        read: it does not change accessCount or lastAccessedAt.
       security:
         - bearerAuth: []
       parameters:
         - name: dataPrincipalId
           in: query
+          schema: { type: string, maxLength: 256 }
+        - name: limit
+          in: query
+          description: Page size once paging; sending limit or cursor turns paging on.
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          description: The nextCursor of the previous page.
           schema: { type: string }
       responses:
-        "200": { description: Consent records and total count }
+        "200":
+          description: Consent records
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpConsentRecordPage" }
+        "400":
+          description: Invalid limit or cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
     post:
       operationId: createDpdpConsentRecord
       tags: [DPDP]
       summary: Create a DPDP consent record
+      description: >-
+        The grant must be the developer's and active. With
+        DPDP_ENFORCE_GRANT_PRINCIPAL=true, dataPrincipalId must be the grant's
+        principal. The record carries a JWS-EdDSA consent proof without an
+        expiry and says whether its key is persistent; when the proof cannot
+        be signed, or the key is ephemeral and the server sets
+        DPDP_REQUIRE_PERSISTENT_PROOF_KEY=true, no record is created (503).
       security:
         - bearerAuth: []
       requestBody:
@@ -8907,16 +9112,47 @@ paths:
           application/json:
             schema:
               type: object
-              required: [dataPrincipalId, purposes]
-              additionalProperties: true
+              required: [grantId, dataPrincipalId, purposes, consentNoticeId, processingExpiresAt]
+              properties:
+                grantId: { type: string, maxLength: 256 }
+                dataPrincipalId: { type: string, maxLength: 256 }
+                purposes:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items: { $ref: "#/components/schemas/DpdpPurpose" }
+                consentNoticeId: { type: string, maxLength: 256 }
+                consentNoticeVersion:
+                  type: string
+                  maxLength: 128
+                  description: The notice version shown. Default, the latest version.
+                processingExpiresAt:
+                  type: string
+                  format: date-time
+                  description: Must be in the future.
       responses:
-        "201": { description: Consent record created }
+        "201":
+          description: Consent record created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpConsentRecordCreated" }
+        "400":
+          description: BAD_REQUEST, INVALID_GRANT (unknown, revoked, suspended or expired grant), PRINCIPAL_MISMATCH or INVALID_NOTICE
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "503":
+          description: CONSENT_PROOF_UNAVAILABLE or CONSENT_PROOF_KEY_NOT_PERSISTENT; nothing was stored
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
 
   /v1/dpdp/consent-records/{recordId}:
     get:
       operationId: getDpdpConsentRecord
       tags: [DPDP]
       summary: Get a DPDP consent record
+      description: A developer read without side effects.
       security:
         - bearerAuth: []
       parameters:
@@ -8925,14 +9161,32 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        "200": { description: Consent record }
-        "404": { description: Consent record not found }
+        "200":
+          description: Consent record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpConsentRecord" }
+        "404":
+          description: Consent record not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
 
   /v1/dpdp/consent-records/{recordId}/withdraw:
     post:
       operationId: withdrawDpdpConsent
       tags: [DPDP]
       summary: Withdraw consent
+      description: >-
+        One transaction: the active record is withdrawn, the record's grant is
+        revoked when revokeGrant is true (the default when the server sets
+        DPDP_WITHDRAWAL_REVOKES_GRANT=true), and an audit entry is appended.
+        Only the record's own grant is revoked, as before, unless the server
+        sets DPDP_REVOCATION_CASCADE=true, when its delegated grants,
+        credentials and wallet reservations are revoked through the grant
+        cascade too.
+        deleteProcessedData emits dpdp.data_deletion.requested to the
+        developer; Grantex deletes nothing itself, so dataDeleted is false.
       security:
         - bearerAuth: []
       parameters:
@@ -8941,18 +9195,60 @@ paths:
           required: true
           schema: { type: string }
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, maxLength: 1000 }
+                revokeGrant: { type: boolean }
+                deleteProcessedData: { type: boolean, default: false }
       responses:
-        "200": { description: Consent withdrawn }
-        "404": { description: Consent record not found }
+        "200":
+          description: Consent withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recordId, status, withdrawnAt, grantRevoked, dataDeleted, dataDeletionRequested]
+                properties:
+                  recordId: { type: string }
+                  status: { type: string, enum: [withdrawn] }
+                  withdrawnAt: { type: string, format: date-time }
+                  grantRevoked:
+                    type: boolean
+                    description: Whether this withdrawal revoked an active grant.
+                  dataDeleted:
+                    type: boolean
+                    description: Always false; Grantex holds none of the fiduciary's processed data.
+                  dataDeletionRequested: { type: boolean }
+        "400":
+          description: Missing or non-object body, missing reason, or a non-boolean flag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "404":
+          description: Consent record not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "409":
+          description: ALREADY_WITHDRAWN, CONSENT_ERASED or CONSENT_EXPIRED
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
 
   /v1/dpdp/data-principals/{principalId}/records:
     get:
       operationId: listDpdpPrincipalRecords
       tags: [DPDP]
-      summary: List all records for a data principal
+      summary: List a data principal's consent records
+      description: >-
+        A developer read without side effects; newest first. Without limit or
+        cursor, every record of the principal, as before (nextCursor null);
+        with limit or cursor, one page at a time (default 50, at most 200).
       security:
         - bearerAuth: []
       parameters:
@@ -8960,25 +9256,203 @@ paths:
           in: path
           required: true
           schema: { type: string }
+        - name: limit
+          in: query
+          description: Page size once paging; sending limit or cursor turns paging on.
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          description: The nextCursor of the previous page.
+          schema: { type: string }
       responses:
-        "200": { description: Principal consent, grievance, export, and audit records }
+        "200":
+          description: The principal's consent records
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DpdpConsentRecordPage"
+                  - type: object
+                    required: [dataPrincipalId]
+                    properties:
+                      dataPrincipalId: { type: string }
+        "400":
+          description: Invalid limit or cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
 
   /v1/dpdp/consent-notices:
+    get:
+      operationId: listDpdpConsentNotices
+      tags: [DPDP]
+      summary: List consent notice versions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          description: The nextCursor of the previous page.
+          schema: { type: string }
+      responses:
+        "200":
+          description: One page of notice versions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [notices, nextCursor]
+                properties:
+                  notices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        noticeId: { type: string }
+                        version: { type: string }
+                        language: { type: string }
+                        title: { type: string }
+                        contentHash: { type: string }
+                        createdAt: { type: string, format: date-time }
+                  nextCursor: { type: [string, "null"] }
+        "400":
+          description: Invalid limit or cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
     post:
       operationId: createDpdpConsentNotice
       tags: [DPDP]
-      summary: Create a consent notice
+      summary: Create a consent notice version
       security:
         - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema:
+              type: object
+              required: [noticeId, version, title, content, purposes]
+              properties:
+                noticeId: { type: string, maxLength: 256 }
+                version: { type: string, maxLength: 128 }
+                title: { type: string, maxLength: 1000 }
+                content: { type: string, maxLength: 100000 }
+                purposes:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items: { $ref: "#/components/schemas/DpdpPurpose" }
+                language: { type: string, default: en }
+                dataFiduciaryContact: { type: string }
+                grievanceOfficer:
+                  type: object
+                  required: [name, email]
+                  properties:
+                    name: { type: string }
+                    email: { type: string }
+                    phone: { type: string }
       responses:
-        "201": { description: Consent notice created }
+        "201": { description: Consent notice version created }
+        "400":
+          description: Missing or malformed fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "409":
+          description: This noticeId already has this version (unique violation only)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+
+  /v1/dpdp/consent-notices/{noticeId}:
+    get:
+      operationId: getDpdpConsentNotice
+      tags: [DPDP]
+      summary: Get every version of a consent notice
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: noticeId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The notice's versions with their content, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [noticeId, versions]
+                properties:
+                  noticeId: { type: string }
+                  versions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        version: { type: string }
+                        language: { type: string }
+                        title: { type: string }
+                        content: { type: string }
+                        purposes:
+                          type: array
+                          items: { $ref: "#/components/schemas/DpdpPurpose" }
+                        dataFiduciaryContact: { type: [string, "null"] }
+                        grievanceOfficer: { type: [object, "null"] }
+                        contentHash: { type: string }
+                        createdAt: { type: string, format: date-time }
+        "404":
+          description: Consent notice not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
 
   /v1/dpdp/grievances:
+    get:
+      operationId: listDpdpGrievances
+      tags: [DPDP]
+      summary: List grievances
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [submitted, in_review, resolved, rejected] }
+        - name: dataPrincipalId
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          description: The nextCursor of the previous page.
+          schema: { type: string }
+      responses:
+        "200":
+          description: One page of grievances (without description and evidence), newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grievances, nextCursor]
+                properties:
+                  grievances:
+                    type: array
+                    items: { $ref: "#/components/schemas/DpdpGrievance" }
+                  nextCursor: { type: [string, "null"] }
+        "400":
+          description: Unknown status, invalid limit or cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
     post:
       operationId: fileDpdpGrievance
       tags: [DPDP]
@@ -8989,9 +9463,43 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema:
+              type: object
+              required: [dataPrincipalId, type, description]
+              properties:
+                dataPrincipalId: { type: string, maxLength: 256 }
+                recordId:
+                  type: string
+                  description: One of the developer's consent records, about this data principal.
+                type: { type: string, maxLength: 128 }
+                description: { type: string, maxLength: 5000 }
+                evidence: { type: object, description: At most 16 KB as JSON. }
+                responsePeriodDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 90
+                  default: 7
+                  description: The published response period; DPDP Rules 2025 r.14(3) cap it at 90 days.
       responses:
-        "202": { description: Grievance filed }
+        "202":
+          description: Grievance filed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  grievanceId: { type: string }
+                  referenceNumber: { type: string }
+                  type: { type: string }
+                  status: { type: string, enum: [submitted] }
+                  responsePeriodDays: { type: integer }
+                  expectedResolutionBy: { type: string, format: date-time }
+                  createdAt: { type: string, format: date-time }
+        "400":
+          description: BAD_REQUEST or INVALID_RECORD
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
 
   /v1/dpdp/grievances/{grievanceId}:
     get:
@@ -9006,29 +9514,102 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        "200": { description: Grievance }
-        "404": { description: Grievance not found }
+        "200":
+          description: Grievance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpGrievance" }
+        "404":
+          description: Grievance not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+    patch:
+      operationId: updateDpdpGrievance
+      tags: [DPDP]
+      summary: Move a grievance through review
+      description: submitted -> in_review -> resolved | rejected. Emits dpdp.grievance.updated.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: grievanceId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [in_review, resolved, rejected] }
+                resolution:
+                  type: string
+                  maxLength: 5000
+                  description: Required for resolved and rejected.
+      responses:
+        "200":
+          description: The updated grievance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpGrievance" }
+        "400":
+          description: Unknown status, or a final status without a resolution
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "404":
+          description: Grievance not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "409":
+          description: INVALID_TRANSITION
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
 
   /v1/dpdp/exports:
     post:
       operationId: createDpdpExport
       tags: [DPDP]
-      summary: Create a data export
+      summary: Create a compliance export
       security:
         - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema:
+              type: object
+              required: [type, dateFrom, dateTo]
+              properties:
+                type: { type: string, enum: [dpdp-audit, gdpr-article-15, eu-ai-act-conformance] }
+                dateFrom: { type: string, description: ISO-8601 date or date-time; not after dateTo. }
+                dateTo: { type: string, description: ISO-8601 date or date-time. }
+                format: { type: string, enum: [json], default: json }
+                includeActionLog: { type: boolean, default: true }
+                includeConsentRecords: { type: boolean, default: true }
+                dataPrincipalId: { type: string, maxLength: 256 }
       responses:
-        "201": { description: Export created }
+        "201":
+          description: Export created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpExport" }
+        "400":
+          description: Missing fields, invalid type, invalid dates, dateFrom after dateTo, or a format other than json
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
 
   /v1/dpdp/exports/{exportId}:
     get:
       operationId: getDpdpExport
       tags: [DPDP]
-      summary: Get a data export
+      summary: Get a compliance export
       security:
         - bearerAuth: []
       parameters:
@@ -9037,27 +9618,83 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        "200": { description: Export record and result when complete }
-        "404": { description: Export not found }
+        "200":
+          description: Export record and data
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpExport" }
+        "404":
+          description: Export not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "410":
+          description: GONE; the export expired and its data was purged
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
 
   /v1/dpdp/data-principals/{principalId}/erasure:
     post:
       operationId: requestDpdpErasure
       tags: [DPDP]
-      summary: Request data erasure
+      summary: Erase a data principal
+      description: >-
+        One transaction: revokes the still-active grants of the principal's
+        records (only those grants, as before; with DPDP_REVOCATION_CASCADE=true
+        their delegated grants too), marks consent records erased (retained)
+        and stores the request. With DPDP_ERASURE_EXPANDED=true it also
+        redacts grievance text and deletes stored exports about the principal;
+        without it both are kept and listed in retained. retained says what
+        is kept and why. A repeat for a principal with nothing left to erase
+        returns the completed request with 200.
       security:
         - bearerAuth: []
       parameters:
         - name: principalId
           in: path
           required: true
-          schema: { type: string }
-      requestBody:
-        content:
-          application/json:
-            schema: { type: object, additionalProperties: true }
+          schema: { type: string, maxLength: 256 }
       responses:
-        "201": { description: Erasure request created }
+        "200":
+          description: The existing completed request (idempotent repeat)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpErasureRequest" }
+        "201":
+          description: Erasure completed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpErasureRequest" }
+        "404":
+          description: No consent records found for this data principal
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+
+  /v1/dpdp/erasure-requests/{requestId}:
+    get:
+      operationId: getDpdpErasureRequest
+      tags: [DPDP]
+      summary: Get an erasure request
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Erasure request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpErasureRequest" }
+        "404":
+          description: Erasure request not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
 
   /v1/consent-bundles:
     get:

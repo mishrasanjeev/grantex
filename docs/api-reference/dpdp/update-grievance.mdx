@@ -1,0 +1,71 @@
+---
+title: "Update Grievance"
+sidebarTitle: "Update Grievance"
+description: "Move a DPDP grievance through review: submitted to in_review, then resolved or rejected with a resolution."
+---
+
+## Endpoint
+
+```
+PATCH /v1/dpdp/grievances/:grievanceId
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `grievanceId` | `string` | Yes | The grievance ID |
+
+## Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `status` | `string` | Yes | `in_review`, `resolved` or `rejected` |
+| `resolution` | `string` | For `resolved` and `rejected` | What was done, or why the grievance was rejected (up to 5,000 characters) |
+
+## Transitions
+
+| From | To |
+|---|---|
+| `submitted` | `in_review` |
+| `in_review` | `resolved` or `rejected` |
+
+Nothing leaves `resolved` or `rejected`. Moving to `resolved` or `rejected`
+sets `resolvedAt` and `resolution`. The Data Fiduciary answers within the
+response period it publishes, at most 90 days (DPDP Rules 2025 r.14(3)); the
+grievance's `expectedResolutionBy` reflects the period given when it was filed.
+
+## Example Request
+
+```bash
+curl -X PATCH https://api.grantex.dev/v1/dpdp/grievances/grv_01HXYZ... \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "resolved", "resolution": "Processing for marketing stopped and the data deleted." }'
+```
+
+## Response -- 200 OK
+
+The updated grievance, as [Get Grievance](/api-reference/dpdp/get-grievance)
+returns it.
+
+Each change is recorded on the audit chain as `grantex.dpdp.grievance_updated`
+and emits a `dpdp.grievance.updated` event with `grievanceId`,
+`referenceNumber`, `previousStatus` and `status`.
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | Unknown `status`, or `resolved` / `rejected` without a `resolution` |
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `NOT_FOUND` | Grievance not found |
+| 409 | `INVALID_TRANSITION` | The grievance is not in the status this move starts from |
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

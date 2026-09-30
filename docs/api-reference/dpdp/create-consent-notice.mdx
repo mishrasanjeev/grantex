@@ -86,9 +86,13 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices \
 
 | Status | Code | Description |
 |---|---|---|
-| 400 | `BAD_REQUEST` | Missing required fields (`noticeId`, `version`, `title`, `content`, `purposes`) |
+| 400 | `BAD_REQUEST` | Missing or malformed fields (`noticeId`, `version`, `title`, `content`, a non-empty `purposes` array of `{ code, description }`; `content` up to 100,000 characters) |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
-| 409 | `CONFLICT` | Notice version already exists |
+| 409 | `CONFLICT` | This `noticeId` already has this `version`. Only that conflict is a 409; other failures are errors, not conflicts |
+
+The notice is recorded on the audit chain as `grantex.dpdp.notice_created`.
+List notices with [List Consent Notices](/api-reference/dpdp/list-consent-notices)
+and read every version of one with [Get Consent Notice](/api-reference/dpdp/get-consent-notice).
 
 ## SDK Examples
 

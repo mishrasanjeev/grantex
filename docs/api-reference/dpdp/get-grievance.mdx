@@ -49,9 +49,11 @@ curl https://api.grantex.dev/v1/dpdp/grievances/grv_01HXYZ... \
   "status": "submitted",
   "referenceNumber": "GRV-2026-00042",
   "expectedResolutionBy": "2026-04-12T14:00:00.000Z",
+  "responsePeriodDays": 7,
   "resolvedAt": null,
   "resolution": null,
-  "createdAt": "2026-04-05T14:00:00.000Z"
+  "createdAt": "2026-04-05T14:00:00.000Z",
+  "updatedAt": null
 }
 ```
 
@@ -65,12 +67,17 @@ curl https://api.grantex.dev/v1/dpdp/grievances/grv_01HXYZ... \
 | `type` | `string` | Grievance type |
 | `description` | `string` | Detailed description |
 | `evidence` | `object` | Supporting evidence |
-| `status` | `string` | Current status: `submitted`, `in-progress`, `resolved`, or `rejected` |
+| `status` | `string` | Current status: `submitted`, `in_review`, `resolved`, or `rejected` |
 | `referenceNumber` | `string` | Human-readable reference number |
 | `expectedResolutionBy` | `string` | ISO-8601 resolution deadline |
+| `responsePeriodDays` | `integer` | The published response period applied (days) |
 | `resolvedAt` | `string \| null` | ISO-8601 resolution timestamp (if resolved) |
 | `resolution` | `string \| null` | Resolution details (if resolved) |
 | `createdAt` | `string` | ISO-8601 creation timestamp |
+| `updatedAt` | `string \| null` | ISO-8601 timestamp of the last status change or redaction |
+
+If the data principal's data was erased, `description` and `evidence` hold a
+fixed marker instead of the original text.
 
 ## Error Responses
 
