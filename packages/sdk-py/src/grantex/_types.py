@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Literal, TypedDict
 
 
 # ─── Rate Limits ──────────────────────────────────────────────────────────────
@@ -2252,38 +2253,119 @@ class ListPassportsResponse:
 
 
 # ─── DPDP (Digital Personal Data Protection Act 2023) ─────────────────────────
+#
+# Shapes follow the auth-service /v1/dpdp routes. A field a route does not send
+# is optional here, so decoding never raises KeyError on a real response.
+
+ConsentRecordStatus = Literal["active", "withdrawn", "erased", "expired"]
+"""Consent record lifecycle."""
+
+GrievanceStatus = Literal["submitted", "in_review", "resolved", "rejected"]
+"""Grievance lifecycle: submitted -> in_review -> resolved | rejected."""
+
+DpdpExportType = Literal["dpdp-audit", "gdpr-article-15", "eu-ai-act-conformance"]
+
+DpdpExportStatus = Literal["complete", "expired"]
+"""``complete`` on GET; an expired export answers 410 GONE instead."""
+
+
+class DpdpPurpose(TypedDict):
+    """A processing purpose: ``{"code": ..., "description": ...}``."""
+
+    code: str
+    description: str
+
+
+class DpdpConsentProof(TypedDict):
+    """Detached EdDSA proof over a consent record, returned only by create."""
+
+    type: str
+    """``"JWS-EdDSA"``."""
+    alg: str
+    """``"EdDSA"``."""
+    kid: str | None
+    proofJwt: str
+    jwksUri: str
+    signedAt: str
+
+
+class _GrievanceOfficerRequired(TypedDict):
+    name: str
+    email: str
+
+
+class DpdpGrievanceOfficer(_GrievanceOfficerRequired, total=False):
+    phone: str
+
+
+class _ErasureRetainedRequired(TypedDict):
+    category: str
+    reason: str
+
+
+class ErasureRetainedCategory(_ErasureRetainedRequired, total=False):
+    """Data an erasure kept, and why. ``count`` is absent for uncounted categories."""
+
+    count: int
+
+
+def _purposes_to_json(
+    purposes: Sequence[DpdpPurpose | Mapping[str, str]],
+) -> list[dict[str, str]]:
+    return [{"code": p["code"], "description": p["description"]} for p in purposes]
+
+
+def _purposes_from_json(value: Any) -> list[DpdpPurpose] | None:
+    if value is None:
+        return None
+    return [
+        DpdpPurpose(code=p.get("code", ""), description=p.get("description", ""))
+        for p in value
+    ]
 
 
 @dataclass
 class CreateConsentRecordParams:
     grant_id: str
     data_principal_id: str
-    purposes: list[dict[str, str]]
+    purposes: Sequence[DpdpPurpose | Mapping[str, str]]
     consent_notice_id: str
     processing_expires_at: str
+    consent_notice_version: str | None = None
+    """Notice version to bind; the server uses the latest version when omitted."""
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        body: dict[str, Any] = {
             "grantId": self.grant_id,
             "dataPrincipalId": self.data_principal_id,
-            "purposes": self.purposes,
+            "purposes": _purposes_to_json(self.purposes),
             "consentNoticeId": self.consent_notice_id,
             "processingExpiresAt": self.processing_expires_at,
         }
+        if self.consent_notice_version is not None:
+            body["consentNoticeVersion"] = self.consent_notice_version
+        return body
 
 
 @dataclass(frozen=True)
 class ConsentRecord:
+    """A consent record.
+
+    ``consent_proof`` and ``consent_notice_hash`` are only returned by create;
+    create in turn omits ``purposes``, ``scopes``, ``consent_given_at`` and
+    ``data_fiduciary_name``.
+    """
+
     record_id: str
     grant_id: str
     data_principal_id: str
-    status: str
+    status: ConsentRecordStatus
     consent_notice_hash: str | None = None
-    consent_proof: dict[str, Any] | None = None
+    consent_proof: DpdpConsentProof | None = None
     processing_expires_at: str | None = None
     retention_until: str | None = None
     data_fiduciary_name: str | None = None
-    purposes: list[dict[str, str]] | None = None
+    purposes: list[DpdpPurpose] | None = None
     scopes: list[str] | None = None
     consent_notice_id: str | None = None
     consent_given_at: str | None = None
@@ -2292,28 +2374,38 @@ class ConsentRecord:
     withdrawn_at: str | None = None
     withdrawn_reason: str | None = None
     created_at: str | None = None
+    consent_notice_version: str | None = None
+    """``None`` on records written before notice versions were tracked."""
+    erased_at: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ConsentRecord":
+    def from_dict(
+        cls, data: dict[str, Any], default_data_principal_id: str = ""
+    ) -> ConsentRecord:
+        principal = data.get("dataPrincipalId")
         return cls(
             record_id=data["recordId"],
-            grant_id=data["grantId"],
-            data_principal_id=data["dataPrincipalId"],
+            grant_id=data.get("grantId", ""),
+            data_principal_id=(
+                principal if isinstance(principal, str) else default_data_principal_id
+            ),
             status=data["status"],
             consent_notice_hash=data.get("consentNoticeHash"),
             consent_proof=data.get("consentProof"),
             processing_expires_at=data.get("processingExpiresAt"),
             retention_until=data.get("retentionUntil"),
             data_fiduciary_name=data.get("dataFiduciaryName"),
-            purposes=data.get("purposes"),
+            purposes=_purposes_from_json(data.get("purposes")),
             scopes=data.get("scopes"),
             consent_notice_id=data.get("consentNoticeId"),
             consent_given_at=data.get("consentGivenAt"),
-            access_count=data.get("accessCount", 0),
+            access_count=data.get("accessCount") or 0,
             last_accessed_at=data.get("lastAccessedAt"),
             withdrawn_at=data.get("withdrawnAt"),
             withdrawn_reason=data.get("withdrawnReason"),
             created_at=data.get("createdAt"),
+            consent_notice_version=data.get("consentNoticeVersion"),
+            erased_at=data.get("erasedAt"),
         )
 
 
@@ -2321,14 +2413,17 @@ class ConsentRecord:
 class ListConsentRecordsResponse:
     records: tuple[ConsentRecord, ...]
     total_records: int
+    next_cursor: str | None = None
+    """Pass as ``cursor`` for the next page; ``None`` on the last page."""
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ListConsentRecordsResponse":
+    def from_dict(cls, data: dict[str, Any]) -> ListConsentRecordsResponse:
         return cls(
             records=tuple(
                 ConsentRecord.from_dict(r) for r in data.get("records", [])
             ),
             total_records=data.get("totalRecords", 0),
+            next_cursor=data.get("nextCursor"),
         )
 
 
@@ -2339,15 +2434,18 @@ class WithdrawConsentResponse:
     withdrawn_at: str
     grant_revoked: bool
     data_deleted: bool
+    """Always ``False``: see ``data_deletion_requested``."""
+    data_deletion_requested: bool = False
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "WithdrawConsentResponse":
+    def from_dict(cls, data: dict[str, Any]) -> WithdrawConsentResponse:
         return cls(
             record_id=data["recordId"],
             status=data["status"],
-            withdrawn_at=data["withdrawnAt"],
+            withdrawn_at=data.get("withdrawnAt", ""),
             grant_revoked=data.get("grantRevoked", False),
             data_deleted=data.get("dataDeleted", False),
+            data_deletion_requested=data.get("dataDeletionRequested", False),
         )
 
 
@@ -2356,20 +2454,28 @@ class PrincipalRecordsResponse:
     data_principal_id: str
     records: tuple[ConsentRecord, ...]
     total_records: int
+    next_cursor: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PrincipalRecordsResponse":
+    def from_dict(cls, data: dict[str, Any]) -> PrincipalRecordsResponse:
+        principal = data.get("dataPrincipalId", "")
         return cls(
-            data_principal_id=data["dataPrincipalId"],
+            data_principal_id=principal,
+            # Older servers omit the per-record dataPrincipalId; it is the
+            # top-level one.
             records=tuple(
-                ConsentRecord.from_dict(r) for r in data.get("records", [])
+                ConsentRecord.from_dict(r, default_data_principal_id=principal)
+                for r in data.get("records", [])
             ),
             total_records=data.get("totalRecords", 0),
+            next_cursor=data.get("nextCursor"),
         )
 
 
 @dataclass(frozen=True)
 class ErasureResponse:
+    """The result of an erasure (DPDP Act s.12), which completes synchronously."""
+
     request_id: str
     data_principal_id: str
     status: str
@@ -2377,17 +2483,29 @@ class ErasureResponse:
     grants_revoked: int
     submitted_at: str
     expected_completion_by: str
+    """Deprecated: equal to ``completed_at``."""
+    delegated_grants_revoked: int = 0
+    grievances_redacted: int = 0
+    exports_deleted: int = 0
+    retained: tuple[ErasureRetainedCategory, ...] = ()
+    completed_at: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ErasureResponse":
+    def from_dict(cls, data: dict[str, Any]) -> ErasureResponse:
+        completed_at = data.get("completedAt")
         return cls(
             request_id=data["requestId"],
-            data_principal_id=data["dataPrincipalId"],
+            data_principal_id=data.get("dataPrincipalId", ""),
             status=data["status"],
             records_erased=data.get("recordsErased", 0),
             grants_revoked=data.get("grantsRevoked", 0),
-            submitted_at=data["submittedAt"],
-            expected_completion_by=data["expectedCompletionBy"],
+            submitted_at=data.get("submittedAt", ""),
+            expected_completion_by=data.get("expectedCompletionBy") or completed_at or "",
+            delegated_grants_revoked=data.get("delegatedGrantsRevoked", 0),
+            grievances_redacted=data.get("grievancesRedacted", 0),
+            exports_deleted=data.get("exportsDeleted", 0),
+            retained=tuple(data.get("retained") or ()),
+            completed_at=completed_at,
         )
 
 
@@ -2397,10 +2515,10 @@ class CreateConsentNoticeParams:
     version: str
     title: str
     content: str
-    purposes: list[dict[str, str]]
+    purposes: Sequence[DpdpPurpose | Mapping[str, str]]
     language: str | None = None
     data_fiduciary_contact: str | None = None
-    grievance_officer: dict[str, str] | None = None
+    grievance_officer: DpdpGrievanceOfficer | Mapping[str, str] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -2408,19 +2526,21 @@ class CreateConsentNoticeParams:
             "version": self.version,
             "title": self.title,
             "content": self.content,
-            "purposes": self.purposes,
+            "purposes": _purposes_to_json(self.purposes),
         }
         if self.language is not None:
             body["language"] = self.language
         if self.data_fiduciary_contact is not None:
             body["dataFiduciaryContact"] = self.data_fiduciary_contact
         if self.grievance_officer is not None:
-            body["grievanceOfficer"] = self.grievance_officer
+            body["grievanceOfficer"] = dict(self.grievance_officer)
         return body
 
 
 @dataclass(frozen=True)
 class ConsentNotice:
+    """The result of registering a consent notice version."""
+
     id: str
     notice_id: str
     version: str
@@ -2429,14 +2549,98 @@ class ConsentNotice:
     created_at: str
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ConsentNotice":
+    def from_dict(cls, data: dict[str, Any]) -> ConsentNotice:
         return cls(
             id=data["id"],
             notice_id=data["noticeId"],
             version=data["version"],
             language=data.get("language", "en"),
-            content_hash=data["contentHash"],
-            created_at=data["createdAt"],
+            content_hash=data.get("contentHash", ""),
+            created_at=data.get("createdAt", ""),
+        )
+
+
+@dataclass(frozen=True)
+class ConsentNoticeSummary:
+    id: str
+    notice_id: str
+    version: str
+    language: str
+    title: str
+    content_hash: str
+    created_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ConsentNoticeSummary:
+        return cls(
+            id=data["id"],
+            notice_id=data["noticeId"],
+            version=data["version"],
+            language=data.get("language", "en"),
+            title=data.get("title", ""),
+            content_hash=data.get("contentHash", ""),
+            created_at=data.get("createdAt", ""),
+        )
+
+
+@dataclass(frozen=True)
+class ListConsentNoticesResponse:
+    notices: tuple[ConsentNoticeSummary, ...]
+    next_cursor: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ListConsentNoticesResponse:
+        return cls(
+            notices=tuple(
+                ConsentNoticeSummary.from_dict(n) for n in data.get("notices", [])
+            ),
+            next_cursor=data.get("nextCursor"),
+        )
+
+
+@dataclass(frozen=True)
+class ConsentNoticeVersion:
+    id: str
+    version: str
+    language: str
+    title: str
+    content: str
+    purposes: list[DpdpPurpose]
+    content_hash: str
+    created_at: str
+    data_fiduciary_contact: str | None = None
+    grievance_officer: DpdpGrievanceOfficer | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ConsentNoticeVersion:
+        return cls(
+            id=data["id"],
+            version=data["version"],
+            language=data.get("language", "en"),
+            title=data.get("title", ""),
+            content=data.get("content", ""),
+            purposes=_purposes_from_json(data.get("purposes")) or [],
+            content_hash=data.get("contentHash", ""),
+            created_at=data.get("createdAt", ""),
+            data_fiduciary_contact=data.get("dataFiduciaryContact"),
+            grievance_officer=data.get("grievanceOfficer"),
+        )
+
+
+@dataclass(frozen=True)
+class ConsentNoticeDetail:
+    """Every version of a consent notice, newest first."""
+
+    notice_id: str
+    versions: tuple[ConsentNoticeVersion, ...]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ConsentNoticeDetail:
+        return cls(
+            notice_id=data["noticeId"],
+            versions=tuple(
+                ConsentNoticeVersion.from_dict(v) for v in data.get("versions", [])
+            ),
         )
 
 
@@ -2444,9 +2648,13 @@ class ConsentNotice:
 class FileGrievanceParams:
     data_principal_id: str
     type: str
+    """Free text up to 128 characters, e.g. ``consent-violation``,
+    ``data-breach``, ``unauthorized-processing``."""
     description: str
     record_id: str | None = None
     evidence: dict[str, Any] | None = None
+    response_period_days: int | None = None
+    """1..90 days; the server default is 7 (a product default, not statutory)."""
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -2458,13 +2666,18 @@ class FileGrievanceParams:
             body["recordId"] = self.record_id
         if self.evidence is not None:
             body["evidence"] = self.evidence
+        if self.response_period_days is not None:
+            body["responsePeriodDays"] = self.response_period_days
         return body
 
 
 @dataclass(frozen=True)
 class Grievance:
+    """A grievance. List items omit ``description`` and ``evidence``; the file
+    response (202) also omits ``data_principal_id``."""
+
     grievance_id: str
-    status: str
+    status: GrievanceStatus
     type: str | None = None
     reference_number: str | None = None
     data_principal_id: str | None = None
@@ -2475,9 +2688,11 @@ class Grievance:
     resolved_at: str | None = None
     resolution: str | None = None
     created_at: str | None = None
+    response_period_days: int | None = None
+    updated_at: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Grievance":
+    def from_dict(cls, data: dict[str, Any]) -> Grievance:
         return cls(
             grievance_id=data["grievanceId"],
             status=data["status"],
@@ -2491,15 +2706,33 @@ class Grievance:
             resolved_at=data.get("resolvedAt"),
             resolution=data.get("resolution"),
             created_at=data.get("createdAt"),
+            response_period_days=data.get("responsePeriodDays"),
+            updated_at=data.get("updatedAt"),
+        )
+
+
+@dataclass(frozen=True)
+class ListGrievancesResponse:
+    grievances: tuple[Grievance, ...]
+    next_cursor: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ListGrievancesResponse:
+        return cls(
+            grievances=tuple(Grievance.from_dict(g) for g in data.get("grievances", [])),
+            next_cursor=data.get("nextCursor"),
         )
 
 
 @dataclass
 class CreateExportParams:
-    type: str
+    type: DpdpExportType
     date_from: str
+    """ISO date-time. A bare YYYY-MM-DD means 00:00Z of that day."""
     date_to: str
+    """ISO date-time. Send an end-of-day time to include the whole last day."""
     format: str | None = None
+    """Only ``json`` is produced."""
     include_action_log: bool | None = None
     include_consent_records: bool | None = None
     data_principal_id: str | None = None
@@ -2523,9 +2756,12 @@ class CreateExportParams:
 
 @dataclass(frozen=True)
 class ComplianceExport:
+    """A compliance export. ``status``, ``date_from`` and ``date_to`` are only
+    returned by GET; create returns no status."""
+
     export_id: str
-    type: str
-    status: str | None = None
+    type: DpdpExportType
+    status: DpdpExportStatus | None = None
     format: str | None = None
     record_count: int = 0
     data: dict[str, Any] | None = None
@@ -2533,9 +2769,13 @@ class ComplianceExport:
     date_to: str | None = None
     expires_at: str | None = None
     created_at: str | None = None
+    truncated: bool | None = None
+    """True when the audit log hit ``audit_log_limit`` and was cut off."""
+    audit_log_limit: int | None = None
+    data_principal_id: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ComplianceExport":
+    def from_dict(cls, data: dict[str, Any]) -> ComplianceExport:
         return cls(
             export_id=data["exportId"],
             type=data["type"],
@@ -2547,4 +2787,11 @@ class ComplianceExport:
             date_to=data.get("dateTo"),
             expires_at=data.get("expiresAt"),
             created_at=data.get("createdAt"),
+            truncated=data.get("truncated"),
+            audit_log_limit=data.get("auditLogLimit"),
+            data_principal_id=data.get("dataPrincipalId"),
         )
+
+
+DpdpExport = ComplianceExport
+"""Alias matching the TypeScript SDK name."""

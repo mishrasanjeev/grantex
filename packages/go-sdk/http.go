@@ -97,6 +97,12 @@ func (h *httpClient) postNoRetry(ctx context.Context, path string, body interfac
 	return h.do(ctx, http.MethodPost, path, body, nil, 0)
 }
 
+// patchNoRetry issues exactly one PATCH, for non-idempotent updates whose
+// replay after a timeout or 5xx could apply twice or fail spuriously.
+func (h *httpClient) patchNoRetry(ctx context.Context, path string, body interface{}) ([]byte, error) {
+	return h.do(ctx, http.MethodPatch, path, body, nil, 0)
+}
+
 func (h *httpClient) doWithHeaders(ctx context.Context, method, path string, body interface{}, headers map[string]string) ([]byte, error) {
 	maxRetries := h.maxRetries
 	if !h.maxRetriesSet {

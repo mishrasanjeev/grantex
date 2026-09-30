@@ -1198,79 +1198,147 @@ export interface SDJWTPresentResult {
 }
 
 // ─── DPDP Compliance ────────────────────────────────────────────────────────
+// Shapes follow the auth-service /v1/dpdp routes. Fields a route does not send
+// are optional; `null` is kept where the server sends an explicit null.
 
 export interface DpdpPurpose {
   code: string;
   description: string;
 }
 
+/** Consent record lifecycle. */
+export type ConsentRecordStatus = 'active' | 'withdrawn' | 'erased' | 'expired';
+
+/** Grievance lifecycle: submitted -> in_review -> resolved | rejected. */
+export type GrievanceStatus = 'submitted' | 'in_review' | 'resolved' | 'rejected';
+
+/** `complete` on GET; an expired export answers 410 GONE instead. */
+export type DpdpExportStatus = 'complete' | 'expired';
+
 export interface CreateConsentRecordParams {
   grantId: string;
   dataPrincipalId: string;
   purposes: DpdpPurpose[];
   consentNoticeId: string;
+  /** Notice version to bind; the server uses the latest version when omitted. */
+  consentNoticeVersion?: string;
   processingExpiresAt: string;
+}
+
+/** Detached EdDSA proof over the consent record, returned only by create. */
+export interface DpdpConsentProof {
+  type: 'JWS-EdDSA';
+  alg: 'EdDSA';
+  kid: string | null;
+  proofJwt: string;
+  jwksUri: string;
+  signedAt: string;
 }
 
 export interface ConsentRecord {
   recordId: string;
   grantId: string;
   dataPrincipalId: string;
+  /** Not sent by create. */
   dataFiduciaryName?: string;
+  /** Not sent by create. */
   purposes?: DpdpPurpose[];
+  /** Not sent by create. */
   scopes?: string[];
   consentNoticeId?: string;
+  /** `null` on records written before notice versions were tracked. */
+  consentNoticeVersion?: string | null;
+  /** Only sent by create. */
   consentNoticeHash?: string;
-  consentProof?: {
-    type: string;
-    proofJwt?: string;
-    signedAt?: string;
-    reason?: string;
-  };
-  status: string;
+  /** Only sent by create. */
+  consentProof?: DpdpConsentProof;
+  status: ConsentRecordStatus;
+  /** Not sent by create. */
   consentGivenAt?: string;
   processingExpiresAt?: string;
   retentionUntil?: string;
   accessCount?: number;
-  lastAccessedAt?: string;
+  lastAccessedAt?: string | null;
   withdrawnAt?: string | null;
   withdrawnReason?: string | null;
+  erasedAt?: string | null;
   createdAt: string;
+}
+
+/** The 201 body of `POST /v1/dpdp/consent-records`. */
+export interface CreateConsentRecordResponse extends ConsentRecord {
+  consentNoticeHash: string;
+  consentProof: DpdpConsentProof;
+}
+
+/** Cursor pagination: `limit` 1..200 (server default 50), `cursor` = previous `nextCursor`. */
+export interface DpdpPageParams {
+  limit?: number;
+  cursor?: string;
+}
+
+export interface ListConsentRecordsParams extends DpdpPageParams {
+  dataPrincipalId?: string;
 }
 
 export interface ListConsentRecordsResponse {
   records: ConsentRecord[];
   totalRecords: number;
+  /** `null` on the last page; absent on servers without pagination. */
+  nextCursor?: string | null;
 }
 
 export interface WithdrawConsentParams {
   reason: string;
+  /** Omit to use the server default. */
   revokeGrant?: boolean;
+  /** Records a deletion request for the Data Fiduciary; Grantex deletes nothing itself. */
   deleteProcessedData?: boolean;
 }
 
 export interface WithdrawConsentResponse {
   recordId: string;
-  status: string;
+  status: 'withdrawn';
   withdrawnAt: string;
   grantRevoked: boolean;
+  /** Always `false`: see `dataDeletionRequested`. */
   dataDeleted: boolean;
+  dataDeletionRequested?: boolean;
 }
 
 export interface PrincipalRecordsResponse {
   dataPrincipalId: string;
   records: ConsentRecord[];
   totalRecords: number;
+  nextCursor?: string | null;
+}
+
+export interface ErasureRetainedCategory {
+  category: string;
+  count?: number;
+  reason: string;
 }
 
 export interface ErasureResponse {
   requestId: string;
   dataPrincipalId: string;
-  status: string;
+  status: 'completed';
   recordsErased: number;
   grantsRevoked: number;
+  delegatedGrantsRevoked: number;
+  grievancesRedacted: number;
+  exportsDeleted: number;
+  retained: ErasureRetainedCategory[];
   submittedAt: string;
-  expectedCompletionBy: string;
+  completedAt: string;
+  /** @deprecated Equal to `completedAt`; erasure completes synchronously. */
+  expectedCompletionBy?: string;
+}
+
+export interface DpdpGrievanceOfficer {
+  name: string;
+  email: string;
+  phone?: string;
 }
 
 export interface CreateConsentNoticeParams {
@@ -1281,9 +1349,10 @@ export interface CreateConsentNoticeParams {
   purposes: DpdpPurpose[];
   language?: string;
   dataFiduciaryContact?: string;
-  grievanceOfficer?: { name: string; email: string; phone?: string };
+  grievanceOfficer?: DpdpGrievanceOfficer;
 }
 
+/** The 201 body of `POST /v1/dpdp/consent-notices`. */
 export interface ConsentNotice {
   id: string;
   noticeId: string;
@@ -1293,35 +1362,90 @@ export interface ConsentNotice {
   createdAt: string;
 }
 
+export interface ConsentNoticeSummary extends ConsentNotice {
+  title: string;
+}
+
+export interface ListConsentNoticesResponse {
+  notices: ConsentNoticeSummary[];
+  nextCursor: string | null;
+}
+
+export interface ConsentNoticeVersion {
+  id: string;
+  version: string;
+  language: string;
+  title: string;
+  content: string;
+  purposes: DpdpPurpose[];
+  dataFiduciaryContact: string | null;
+  grievanceOfficer: DpdpGrievanceOfficer | null;
+  contentHash: string;
+  createdAt: string;
+}
+
+export interface ConsentNoticeDetail {
+  noticeId: string;
+  /** Newest first. */
+  versions: ConsentNoticeVersion[];
+}
+
 export interface FileGrievanceParams {
   dataPrincipalId: string;
+  /** Free text up to 128 characters, e.g. `consent-violation`, `data-breach`, `unauthorized-processing`. */
   type: string;
   description: string;
   recordId?: string;
   evidence?: Record<string, unknown>;
+  /** 1..90 days; the server default is 7 (a product default, not a statutory period). */
+  responsePeriodDays?: number;
 }
 
 export interface Grievance {
   grievanceId: string;
+  /** Not sent by file (202). */
   dataPrincipalId?: string;
   recordId?: string | null;
   type: string;
+  /** Only on the single-grievance routes. */
   description?: string;
+  /** Only on the single-grievance routes. */
   evidence?: Record<string, unknown>;
-  status: string;
+  status: GrievanceStatus;
   referenceNumber: string;
   expectedResolutionBy: string;
+  responsePeriodDays?: number;
   resolvedAt?: string | null;
   resolution?: string | null;
   createdAt: string;
+  updatedAt?: string | null;
+}
+
+export interface ListGrievancesParams extends DpdpPageParams {
+  status?: GrievanceStatus;
+  dataPrincipalId?: string;
+}
+
+export interface ListGrievancesResponse {
+  grievances: Grievance[];
+  nextCursor: string | null;
+}
+
+export interface UpdateGrievanceParams {
+  status: Exclude<GrievanceStatus, 'submitted'>;
+  /** Required for `resolved` and `rejected`. */
+  resolution?: string;
 }
 
 export type DpdpExportType = 'dpdp-audit' | 'gdpr-article-15' | 'eu-ai-act-conformance';
 
 export interface CreateDpdpExportParams {
   type: DpdpExportType;
+  /** ISO date-time. A bare YYYY-MM-DD means 00:00Z of that day. */
   dateFrom: string;
+  /** ISO date-time. Send an end-of-day time to include the whole last day. */
   dateTo: string;
+  /** Only `json` is produced. */
   format?: string;
   includeActionLog?: boolean;
   includeConsentRecords?: boolean;
@@ -1330,16 +1454,26 @@ export interface CreateDpdpExportParams {
 
 export interface DpdpExport {
   exportId: string;
-  type: string;
+  type: DpdpExportType;
   format?: string;
+  /** GET only. */
   dateFrom?: string;
+  /** GET only. */
   dateTo?: string;
   recordCount?: number;
+  /** True when the audit log hit `auditLogLimit` and was cut off. */
+  truncated?: boolean;
+  auditLogLimit?: number;
+  dataPrincipalId?: string | null;
   data?: Record<string, unknown>;
-  status?: string;
+  /** GET only; the create response has no status. */
+  status?: DpdpExportStatus;
   expiresAt?: string;
   createdAt: string;
 }
+
+/** Alias matching the Python and Go SDK name. */
+export type ComplianceExport = DpdpExport;
 
 // ─── Developer Settings ──────────────────────────────────────────────────────
 

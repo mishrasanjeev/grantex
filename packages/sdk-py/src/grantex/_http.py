@@ -84,8 +84,16 @@ class HttpClient:
     def put(self, path: str, body: Any = None, headers: dict[str, str] | None = None) -> Any:
         return self._request("PUT", path, body=body, headers=headers)
 
-    def patch(self, path: str, body: Any = None, headers: dict[str, str] | None = None) -> Any:
-        return self._request("PATCH", path, body=body, headers=headers)
+    def patch(
+        self,
+        path: str,
+        body: Any = None,
+        headers: dict[str, str] | None = None,
+        *,
+        retry: bool = True,
+    ) -> Any:
+        """PATCH ``body`` to ``path``; ``retry=False`` sends it exactly once."""
+        return self._request("PATCH", path, body=body, headers=headers, retry=retry)
 
     def delete(self, path: str, headers: dict[str, str] | None = None) -> Any:
         return self._request("DELETE", path, headers=headers)
@@ -148,6 +156,8 @@ class HttpClient:
 
                 message = _extract_error_message(body_data, response.status_code)
                 error_code = _extract_error_code(body_data)
+                if request_id is None:
+                    request_id = _extract_request_id(body_data)
 
                 if response.status_code in (401, 403):
                     raise GrantexAuthError(
@@ -210,6 +220,14 @@ def _parse_retry_after(headers: httpx.Headers) -> float | None:
         return max(0.0, delta)
     except (ValueError, TypeError):
         return None
+
+
+def _extract_request_id(body: Any) -> str | None:
+    """Request id from an error body such as ``{message, code, requestId}``;
+    the ``x-request-id`` header wins when both are present."""
+    if isinstance(body, dict) and isinstance(body.get("requestId"), str):
+        return str(body["requestId"])
+    return None
 
 
 def _extract_error_code(body: Any) -> str | None:
