@@ -15,11 +15,12 @@ import httpx
 import pytest
 import respx
 
-import grantex
 from grantex import (
+    ComplianceExport,
     CreateConsentNoticeParams,
     CreateConsentRecordParams,
     CreateExportParams,
+    DpdpExport,
     FileGrievanceParams,
     Grantex,
     GrantexApiError,
@@ -551,7 +552,7 @@ def test_get_export(client: Grantex) -> None:
 
 
 def test_dpdp_export_alias() -> None:
-    assert grantex.DpdpExport is grantex.ComplianceExport
+    assert DpdpExport is ComplianceExport
 
 
 # ── Path encoding ────────────────────────────────────────────────────────────
