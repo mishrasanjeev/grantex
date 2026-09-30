@@ -8,7 +8,7 @@ keywords: ["Grantex CLI version", "Grantex SDK versions", "AI agent authorizatio
 ## Current releases
 
 The enforcement releases are TypeScript `0.8.1`, Python
-`0.7.1`, CLI `0.4.1`, gateway/adapters/Strands `0.2.1` and MCP Auth `4.0.0`.
+`0.7.1`, CLI `0.4.2`, gateway/adapters/Strands `0.2.1` and MCP Auth `4.0.0`.
 The September 29 cross-language registry hashes and clean npm
 consumer flows are verified. The earlier eight-package release remains documented
 separately; Python public-file and normal pinned PyPI index installations passed
@@ -16,7 +16,8 @@ on the workstation and in Docker. See [the validation report](/sdk-release-valid
 and [the complete migration guide](/migration-enforcement), including
 runtime requirements, default revocation, trusted amounts and integration limits.
 
-Latest registry publication verified: **September 29, 2026**. Hosted-service
+Latest registry publication verified: **September 30, 2026**. CLI 0.4.2 was
+installed from the public npm registry and its executable verified. Hosted-service
 evidence retains its original verification dates. See the
 [cross-language release receipt](https://github.com/mishrasanjeev/grantex/blob/main/docs/reports/cross-language-authority-release-2026-09-29.md).
 
@@ -54,7 +55,7 @@ repository.
 
 | Surface | Release | Verification | Runtime requirement |
 |---|---|---|---|
-| CLI | `@grantex/cli@0.4.1` | Registry integrity and clean install | Node.js 22.12+; ESM |
+| CLI | `@grantex/cli@0.4.2` | Registry integrity and clean install | Node.js 22.12+; ESM |
 | TypeScript SDK | `@grantex/sdk@0.8.1` | Registry integrity, clean install and local authority-boundary checks | Node.js 22.12+; ESM |
 | Python SDK | `grantex==0.7.1` | PyPI hashes, normal pinned installs, public-wheel tests and production enforcement | Python 3.9+ |
 | MCP Auth | `@grantex/mcp-auth@4.0.0` | Registry integrity, clean install and storage/browser tests | Node.js 22.12+; ESM |
@@ -161,7 +162,7 @@ Custody](/guides/base-usdc-custody) for the custody and RPC prerequisites.
 
 ## Which Grantex package should I use?
 
-- **Hermes, OpenClaw, or another shell-capable agent:** use published `@grantex/cli@0.4.1`; install its bundled skills with `grantex agent install`. No agent-specific SDK is required.
+- **Hermes, OpenClaw, or another shell-capable agent:** use published `@grantex/cli@0.4.2`; install its bundled skills with `grantex agent install`. No agent-specific SDK is required.
 - **TypeScript application:** use npm-verified `@grantex/sdk@0.8.1` for hosted passkey enrollment, account irregularity response policy, bounded refresh recovery, layered prepaid-wallet governance, and OAuth Agent Grants.
 - **x402 prepaid-wallet application:** use published `@grantex/x402@0.4.1` with published `@grantex/sdk@0.8.1`; keep external custody disabled until an operator adapter passes review.
 - **Python application:** use PyPI-verified `grantex==0.7.1` for hosted passkey enrollment, account-level irregularity response policy, bounded refresh recovery, layered prepaid-wallet governance, and fail-closed `enforce()` budget checks.
@@ -197,7 +198,7 @@ Pin exact versions in applications, examples, CI, and deployment manifests:
 
 <CodeGroup>
 ```bash CLI
-npm install -g @grantex/cli@0.4.1
+npm install -g @grantex/cli@0.4.2
 ```
 
 ```bash TypeScript

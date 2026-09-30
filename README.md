@@ -263,10 +263,10 @@ The specifications are [registry federation](spec/registry-federation.md), [atte
 
 Grantex components are independently versioned. The protocol specification remains **v1.0 Final**; SDK, MCP package, and roadmap milestone versions are separate release lines and do not represent a monorepo-wide version.
 
-Current public releases and repository versions, verified 2026-09-29:
+Current public releases and repository versions, verified 2026-09-30:
 
 The enforcement releases are TypeScript `0.8.1`, Python `0.7.1`, CLI
-`0.4.1`, gateway/adapters/Strands `0.2.1` and MCP Auth `4.0.0`. See the complete
+`0.4.2`, gateway/adapters/Strands `0.2.1` and MCP Auth `4.0.0`. See the complete
 [migration guide](https://docs.grantex.dev/migration-enforcement) before
 upgrading: Node.js requirements, audience binding, capped-call amounts and
 online revocation defaults are breaking changes.
@@ -287,7 +287,7 @@ See [release limitations](https://docs.grantex.dev/release-status#known-limitati
 | Python SDK | `grantex` `0.7.1` | - | `python -m pip install grantex==0.7.1` |
 | Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.4.2` (Go 1.26.1+) | - | `go get github.com/mishrasanjeev/grantex-go@v0.4.2` |
 | MCP Authorization Server | `@grantex/mcp-auth` `4.0.0` | `4.0.0` | `npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1` |
-| CLI | `@grantex/cli` `0.4.1` | `0.4.1` | `npm install -g @grantex/cli@0.4.1` |
+| CLI | `@grantex/cli` `0.4.2` | `0.4.2` | `npm install -g @grantex/cli@0.4.2` |
 | Gateway | `@grantex/gateway` `0.2.1` | `0.2.1` | `npm install @grantex/gateway@0.2.1 @grantex/sdk@0.8.1` |
 | Service adapters | `@grantex/adapters` `0.2.1` | `0.2.1` | `npm install @grantex/adapters@0.2.1 @grantex/sdk@0.8.1` |
 | Strands TypeScript | `@grantex/strands` `0.2.1` | `0.2.1` | `npm install @grantex/strands@0.2.1 @grantex/sdk@0.8.1` |
@@ -379,7 +379,7 @@ if (!auth.code) {
 python -m pip install grantex==0.7.1               # Python SDK
 go get github.com/mishrasanjeev/grantex-go@v0.4.2 # Go SDK (Go 1.26.1+)
 npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1 # MCP endpoint evaluation
-npm install -g @grantex/cli@0.4.1                   # Optional CLI tooling
+npm install -g @grantex/cli@0.4.2                   # Optional CLI tooling
 ```
 
 ### Hermes, OpenClaw, and any agent CLI
@@ -387,7 +387,7 @@ npm install -g @grantex/cli@0.4.1                   # Optional CLI tooling
 Shell-capable agents use the same JSON-first CLI; no agent-specific SDK is required:
 
 ```bash
-npm install -g @grantex/cli@0.4.1
+npm install -g @grantex/cli@0.4.2
 grantex agent install --target openclaw  # writes ./skills
 grantex agent install --target hermes    # writes ~/.hermes/skills/grantex
 grantex agent install --target portable  # writes ./.agents/skills
@@ -1493,7 +1493,7 @@ bundles = client.policies.bundles()
 
 DPDP Act 2023 support includes consent records bound to grants and versioned notices with a signed proof, withdrawal with optional grant revocation, erasure that reports what is retained and why, grievances with a published response period, a breach register, and exports (DPDP audit, per-person GDPR Art. 15, EU AI Act evidence). This is a technical control mapping, not a legal certification: Grantex is not a registered Consent Manager and does not notify the Data Protection Board or data principals. Most DPDP obligations apply from 13 May 2027 (DPDP Rules 2025). See [DPDP Compliance](https://docs.grantex.dev/features/dpdp-compliance).
 
-The published SDKs (`@grantex/sdk@0.8.1`, `grantex==0.7.1`, `grantex-go@v0.4.2`) and CLI (`@grantex/cli@0.4.1`) cover the routes in the first table below; call the routes in the second table over REST unless your SDK version lists them.
+The published SDKs (`@grantex/sdk@0.8.1`, `grantex==0.7.1`, `grantex-go@v0.4.2`) and CLI (`@grantex/cli@0.4.2`) cover the routes in the first table below; call the routes in the second table over REST unless your SDK version lists them.
 
 ```typescript
 import { Grantex } from '@grantex/sdk';
@@ -1748,7 +1748,7 @@ check its registry page and compatibility notes before choosing a version.
 | **TypeScript SDK** | `@grantex/sdk` (`0.8.1`) | `npm install @grantex/sdk@0.8.1` | Registry-verified published package |
 | **Python SDK** | `grantex` (`0.7.1`) | `python -m pip install grantex==0.7.1` | Registry-verified published package |
 | **Go SDK** | `grantex-go` (`v0.4.2`, Go 1.26.1+) | `go get github.com/mishrasanjeev/grantex-go@v0.4.2` | Tag and public Go-proxy verified |
-| **CLI** | `@grantex/cli` (`0.4.1`) | `npm install -g @grantex/cli@0.4.1` | Registry-verified published package; Node.js 22.12+ |
+| **CLI** | `@grantex/cli` (`0.4.2`) | `npm install -g @grantex/cli@0.4.2` | Registry-verified published package; Node.js 22.12+ |
 | **Hermes Agent** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target hermes` | Published in 0.3.0; no dedicated SDK needed |
 | **OpenClaw** | `@grantex/cli` 0.3.0+ + Agent Skills | `grantex agent install --target openclaw` | Published in 0.3.0; no dedicated SDK needed |
 | **Portable Agent Skills** | `@grantex/cli` 0.3.0+ + `SKILL.md` | `grantex agent install --target portable` | Published in 0.3.0 |
@@ -1932,9 +1932,8 @@ grantex dpdp consent create --grant-id grnt_... --principal-id user@example.com 
 grantex dpdp consent get <recordId>
 grantex dpdp consent list --principal user@example.com
 grantex dpdp consent withdraw <recordId> --reason "No longer needed"
-# Consent notices: @grantex/cli 0.4.1 cannot create them (its notice --version option is taken by the
-# CLI's own --version flag); use the API until the next CLI release adds `notices create --notice-version`:
-curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices -H "Authorization: Bearer $GRANTEX_API_KEY" -H "Content-Type: application/json" -d '{"noticeId":"privacy-v1","version":"1.0","title":"Privacy Notice","content":"We process your data for...","purposes":[{"code":"analytics","description":"Usage analytics"}]}'
+# Create a consent notice with the released --notice-version option:
+grantex dpdp notices create --notice-id privacy-v1 --notice-version 1.0 --title "Privacy Notice" --content "We process your data for..." --purposes '[{"code":"analytics","description":"Usage analytics"}]'
 grantex dpdp grievances file --principal-id user@example.com --type unauthorized-processing   --description "Data used beyond the consented purpose"
 grantex dpdp grievances get <grievanceId>
 grantex dpdp erasure user@example.com

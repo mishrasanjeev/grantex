@@ -1,7 +1,7 @@
 # Grantex Compatibility Matrix
 
-Last updated: 2026-09-29
-Release snapshot verified: 2026-09-29
+Last updated: 2026-09-30
+Release snapshot verified: 2026-09-30
 
 This repository uses package-specific versions; there is no monorepo-wide SDK or package release number. The protocol specification remains v1.0 Final, while repository metadata and package registries can move independently during a release.
 
@@ -27,7 +27,7 @@ The repository contains 35 packages under `packages/`. Each row maps a directory
 | 1 | `packages/sdk-ts` | @grantex/sdk | 0.8.1 | Primary SDK (TypeScript); published and registry verified |
 | 2 | `packages/sdk-py` | grantex | 0.7.1 | Published; registry verified |
 | 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.4.2 (Go 1.26.1) | Primary SDK (Go); tag and public proxy verified |
-| 4 | `packages/cli` | @grantex/cli | 0.4.1 | Published; registry verified |
+| 4 | `packages/cli` | @grantex/cli | 0.4.2 | Published; registry and clean-install verified |
 | 5 | `packages/mcp-auth` | @grantex/mcp-auth | 4.0.0 | Published and registry verified; deployment configuration required |
 | 6 | `packages/mcp` | @grantex/mcp | 0.1.10 | Adapter |
 | 7 | `packages/langchain` | @grantex/langchain | 0.1.8 | Published; registry verified |

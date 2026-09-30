@@ -8,7 +8,7 @@ Use Grantex when an AI agent acts for a person or organization and a service mus
 
 Ownership: Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: sanjeev@orchestrum.in or mishra.sanjeev@gmail.com.
 
-Release snapshot verified: 2026-09-29. Packages are independently versioned. TypeScript @grantex/sdk 0.8.1, Python grantex 0.7.1, Go v0.4.2, and x402 0.4.1 are published and registry verified. The protocol specification is frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft, not an IETF-adopted or endorsed standard.
+Release snapshot verified: 2026-09-30. Packages are independently versioned. TypeScript @grantex/sdk 0.8.1, Python grantex 0.7.1, Go v0.4.2, and x402 0.4.1 are published and registry verified. The protocol specification is frozen at v1.0. The related Delegated Agent Authorization Protocol (DAAP) document is an individual IETF Internet-Draft, not an IETF-adopted or endorsed standard.
 
 ## Start Here
 
@@ -26,8 +26,8 @@ Release snapshot verified: 2026-09-29. Packages are independently versioned. Typ
 - [Python SDK](https://docs.grantex.dev/sdks/python/overview): `python -m pip install grantex==0.7.1` for Python 3.9+; PyPI hashes, public-wheel tests and normal pinned index installs verified.
 - [Go SDK](https://docs.grantex.dev/sdks/go/overview): `go get github.com/mishrasanjeev/grantex-go@v0.4.2` for Go 1.26.1+; tag, public proxy, and clean-install verified.
 - [MCP Authorization Server](https://docs.grantex.dev/features/mcp-auth-server): `npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1`; Node.js 22.12+, durable state adapters, rendered consent and explicit revocation configuration.
-- [CLI](https://docs.grantex.dev/integrations/cli): Install `@grantex/cli@0.4.1` to manage agents, grants, tokens, audit records, manifests, and portable Agent Skills from a terminal.
-- [Agent CLIs and Skills](https://docs.grantex.dev/integrations/agent-cli): Published `@grantex/cli@0.4.1` bundles portable Grantex skills for Hermes, OpenClaw, or any shell-capable agent; no agent-specific SDK is required.
+- [CLI](https://docs.grantex.dev/integrations/cli): Install `@grantex/cli@0.4.2` to manage agents, grants, tokens, audit records, manifests, and portable Agent Skills from a terminal.
+- [Agent CLIs and Skills](https://docs.grantex.dev/integrations/agent-cli): Published `@grantex/cli@0.4.2` bundles portable Grantex skills for Hermes, OpenClaw, or any shell-capable agent; no agent-specific SDK is required.
 - [Machine-Readable Release Status](https://grantex.dev/release-status.json): Canonical versions, install commands, package URLs, limitations, and workaround links.
 
 For MCP HTTP transport authorization, configure a compatible authorization server and maintained MCP SDK. MCP Auth 4.0.0 requires durable shared state, a host-authenticated human-principal resolver, resource binding, explicit local revocation and trusted current-grant verification. Host login and WebAuthn are separate responsibilities. SDK 0.8.1 adds opt-in authority and identity checks; offline verification defaults are unchanged. Python, Go and changed integration authority hardening remain unpublished source changes. Historical MCP Auth 2.0.2 remains evaluation-only.
