@@ -192,6 +192,12 @@ export const config = {
   emailFrom: optional('EMAIL_FROM', 'Grantex <sanjeev@orchestrum.in>'),
   // Ed25519 key for VC Data Integrity proofs (optional)
   ed25519PrivateKey: process.env['ED25519_PRIVATE_KEY'] ?? null,
+  // `true` (exactly): a configured ED25519_PRIVATE_KEY gets a key id derived
+  // from the key itself (RFC 7638 thumbprint), stable across restarts and
+  // months, and is also published under its grantex-ed25519-YYYY-MM ids for
+  // the last JWT_LEGACY_KID_MONTHS months. Off, the key id is the month the
+  // process started in.
+  ed25519StableKid: process.env['ED25519_STABLE_KID'] === 'true',
   // DID Web domain
   didWebDomain: optional('DID_WEB_DOMAIN', 'grantex.dev'),
   // FIDO/WebAuthn

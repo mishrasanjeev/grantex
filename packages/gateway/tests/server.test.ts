@@ -142,7 +142,7 @@ describe('createGatewayServer', () => {
   it('proxies request on valid token', async () => {
     vi.mocked(verifyGrantToken).mockResolvedValue(MOCK_GRANT);
 
-    const response = await server.inject({
+    await server.inject({
       method: 'GET',
       url: '/calendar/events',
       headers: { authorization: `Bearer ${GRANT_TOKEN}` },
