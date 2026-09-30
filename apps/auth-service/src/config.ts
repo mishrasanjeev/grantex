@@ -262,6 +262,11 @@ export const config = {
   // language other than English or an Eighth Schedule language
   // (lib/dpdp-notice.ts). Off, the response only reports what is missing.
   get dpdpNoticeRequireRule3() { return process.env['DPDP_NOTICE_REQUIRE_RULE3'] === 'true'; },
+  // Refuse a consent record without consentNoticeLanguage when the notice
+  // version it binds exists in several languages (400
+  // NOTICE_LANGUAGE_REQUIRED). Off, the newest notice row of that version is
+  // bound, as before notices had several languages, and its language recorded.
+  get dpdpRequireNoticeLanguage() { return process.env['DPDP_REQUIRE_NOTICE_LANGUAGE'] === 'true'; },
   // Refuse a gdpr-article-15 export without dataPrincipalId (400). Off, such
   // an export is produced as before, without the per-person article15 block.
   get dpdpExportGdprRequiresPrincipal() { return process.env['DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL'] === 'true'; },

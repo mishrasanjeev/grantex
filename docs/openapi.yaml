@@ -793,6 +793,9 @@ components:
         consentNoticeLanguage:
           type: [string, "null"]
           description: The language of the notice version the consent was given against; null when not known (records from before migration 129 without a matching notice).
+        noticeHash:
+          type: [string, "null"]
+          description: The notice hash of the notice row the consent was given against (see the consent notice noticeHash), also signed into the proof; null for records created before it was kept.
         status: { type: string, enum: [active, withdrawn, expired, erased] }
         consentGivenAt: { type: string, format: date-time }
         processingExpiresAt: { type: string, format: date-time }
@@ -895,7 +898,12 @@ components:
           description: A compact JWS (RFC 7515) signed with EdDSA over Ed25519 (RFC 8037). Formerly labelled Ed25519Signature2020.
         alg: { type: string, enum: [EdDSA] }
         kid: { type: string, description: The key in the JWKS at jwksUri. }
-        proofJwt: { type: string, description: No exp claim; the proof is kept as evidence. }
+        proofJwt:
+          type: string
+          description: >-
+            No exp claim; the proof is kept as evidence. Claims: recordId, grantId, dataPrincipalId,
+            consentNoticeId, consentNoticeVersion, consentNoticeHash (the content hash),
+            consentNoticeLanguage, noticeHash (the whole notice), purposes (codes) and consentGivenAt.
         jwksUri: { type: string, format: uri }
         signedAt: { type: string, format: date-time }
 
@@ -907,8 +915,14 @@ components:
         dataPrincipalId: { type: string }
         consentNoticeId: { type: string }
         consentNoticeVersion: { type: string }
-        consentNoticeLanguage: { type: string }
-        consentNoticeHash: { type: string }
+        consentNoticeLanguage: { type: string, description: The language of the notice row bound. }
+        consentNoticeHash: { type: string, description: SHA-256 (hex) of the bound notice's content only. }
+        noticeHash:
+          type: string
+          description: >-
+            The bound notice's notice hash (the whole notice, see the consent notice noticeHash).
+            The proof's claims carry it as noticeHash, with consentNoticeLanguage, next to
+            consentNoticeHash.
         consentProof: { $ref: "#/components/schemas/DpdpConsentProof" }
         processingExpiresAt: { type: string, format: date-time }
         retentionUntil: { type: string, format: date-time }
@@ -943,14 +957,16 @@ components:
         recordCount: { type: integer }
         truncated:
           type: boolean
-          description: True when the audit log exceeded auditLogLimit and only the newest entries are included; for eu-ai-act-evidence, when any section left rows out.
+          description: True when the audit log exceeded auditLogLimit and only the newest entries are included; for eu-ai-act-evidence, when any section left rows out; for gdpr-article-15 with dataPrincipalId, also when the grievances exceeded 1,000.
         auditLogLimit: { type: integer }
         dataPrincipalId: { type: [string, "null"] }
         data:
           type: object
           description: >-
             dpdp-audit, gdpr-article-15 and eu-ai-act-conformance carry consentRecords and auditLog
-            (and grievances for dpdp-audit). gdpr-article-15 with dataPrincipalId adds article15.
+            (and grievances for dpdp-audit). gdpr-article-15 with dataPrincipalId adds article15 and
+            the principal's own grievances filed in the period (grievances, up to 1,000, newest first,
+            with their description), counted in recordCount; if more exist, truncated is true.
             eu-ai-act-evidence carries the DpdpEuAiActEvidence sections instead of the generic keys;
             eu-ai-act-conformance adds them when not filtered to a principal.
           properties:
@@ -1092,12 +1108,20 @@ components:
         recipientsNote: { type: string }
         retention: { type: object }
         source: { type: object }
+        grievances:
+          type: object
+          description: The grievances copy in data.grievances (the principal's, filed in the export period).
+          properties:
+            count: { type: integer }
+            limit: { type: integer }
+            truncated: { type: boolean }
+            statement: { type: string }
         automatedDecisionMaking:
           type: object
           properties:
             recorded: { type: boolean }
             statement: { type: string }
-        truncated: { type: boolean }
+        truncated: { type: boolean, description: True when the block, or the grievances copy, left rows out. }
 
     DpdpErasureRequest:
       type: object
@@ -9420,8 +9444,12 @@ paths:
                   type: string
                   maxLength: 35
                   description: >-
-                    The language of the notice shown. Required when the chosen version exists in
-                    more than one language (400 NOTICE_LANGUAGE_REQUIRED otherwise).
+                    The language of the notice shown. With it, the pinned version in this language,
+                    or without a pinned version the newest notice row in this language. Without it,
+                    the pinned version, or the version of the newest notice row in any language, and
+                    the newest row of that version is bound (its language is recorded). With
+                    DPDP_REQUIRE_NOTICE_LANGUAGE=true, a version in more than one language needs it
+                    (400 NOTICE_LANGUAGE_REQUIRED otherwise).
                 processingExpiresAt:
                   type: string
                   format: date-time
@@ -9433,7 +9461,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpConsentRecordCreated" }
         "400":
-          description: BAD_REQUEST, INVALID_GRANT (unknown, revoked, suspended or expired grant), PRINCIPAL_MISMATCH, INVALID_NOTICE (no such notice, version or language) or NOTICE_LANGUAGE_REQUIRED
+          description: BAD_REQUEST, INVALID_GRANT (unknown, revoked, suspended or expired grant), PRINCIPAL_MISMATCH, INVALID_NOTICE (no such notice, version or language) or NOTICE_LANGUAGE_REQUIRED (only with DPDP_REQUIRE_NOTICE_LANGUAGE=true)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }
@@ -9606,7 +9634,15 @@ paths:
                             version: { type: string }
                             language: { type: string }
                             title: { type: string }
-                            contentHash: { type: string }
+                            contentHash: { type: string, description: SHA-256 (hex) of content only. }
+                            noticeHash:
+                              type: string
+                              description: >-
+                                SHA-256 (hex) of the RFC 8785 canonical JSON of the whole notice: noticeId, version,
+                                language, title, content, purposes, dataFiduciaryContact, grievanceOfficer,
+                                itemisedPersonalData, purposeDetails, withdrawalUrl, rightsUrl, boardComplaintUrl
+                                and contact (absent members as null). Computed from the stored row for notices
+                                created before it was kept.
                             createdAt: { type: string, format: date-time }
                             validation: { $ref: "#/components/schemas/DpdpNoticeValidation" }
                         - $ref: "#/components/schemas/DpdpNoticeStructure"
@@ -9700,7 +9736,15 @@ paths:
                   noticeId: { type: string }
                   version: { type: string }
                   language: { type: string }
-                  contentHash: { type: string }
+                  contentHash: { type: string, description: SHA-256 (hex) of content only. }
+                  noticeHash:
+                    type: string
+                    description: >-
+                      SHA-256 (hex) of the RFC 8785 canonical JSON of the whole notice: noticeId, version,
+                      language, title, content, purposes, dataFiduciaryContact, grievanceOfficer,
+                      itemisedPersonalData, purposeDetails, withdrawalUrl, rightsUrl, boardComplaintUrl
+                      and contact (absent members as null). Computed from the stored row for notices
+                      created before it was kept.
                   createdAt: { type: string, format: date-time }
                   validation: { $ref: "#/components/schemas/DpdpNoticeValidation" }
         "400":
@@ -9755,7 +9799,15 @@ paths:
                               items: { $ref: "#/components/schemas/DpdpPurpose" }
                             dataFiduciaryContact: { type: [string, "null"] }
                             grievanceOfficer: { type: [object, "null"] }
-                            contentHash: { type: string }
+                            contentHash: { type: string, description: SHA-256 (hex) of content only. }
+                            noticeHash:
+                              type: string
+                              description: >-
+                                SHA-256 (hex) of the RFC 8785 canonical JSON of the whole notice: noticeId, version,
+                                language, title, content, purposes, dataFiduciaryContact, grievanceOfficer,
+                                itemisedPersonalData, purposeDetails, withdrawalUrl, rightsUrl, boardComplaintUrl
+                                and contact (absent members as null). Computed from the stored row for notices
+                                created before it was kept.
                             createdAt: { type: string, format: date-time }
                             validation: { $ref: "#/components/schemas/DpdpNoticeValidation" }
                         - $ref: "#/components/schemas/DpdpNoticeStructure"

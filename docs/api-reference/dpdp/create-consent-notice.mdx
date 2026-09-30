@@ -76,6 +76,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices \
   "version": "2.0",
   "language": "en",
   "contentHash": "a1b2c3d4e5f6...",
+  "noticeHash": "9f8e7d6c5b4a...",
   "createdAt": "2026-04-05T12:00:00.000Z",
   "validation": {
     "basis": "DPDP Rules 2025 r.3",
@@ -97,6 +98,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices \
 | `version` | `string` | Version string |
 | `language` | `string` | ISO language code |
 | `contentHash` | `string` | SHA-256 hash of the notice content |
+| `noticeHash` | `string` | SHA-256 over the canonical JSON of the whole notice, structured fields, language and version included (see [Consent Notice Content](/api-reference/dpdp/consent-notice-content#the-notice-hash)) |
 | `createdAt` | `string` | ISO-8601 creation timestamp |
 | `validation` | `object` | Which DPDP Rules 2025 r.3 elements the notice has; see [Consent Notice Content](/api-reference/dpdp/consent-notice-content) |
 

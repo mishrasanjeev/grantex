@@ -346,7 +346,12 @@ export function sectionsSummary(sections: EuAiActSections): { truncated: boolean
  * for this developer (all of them, not only those in the export's period:
  * Art. 15 is about the processing as it stands).
  */
-export async function gdprArticle15(sql: Sql, developerId: string, dataPrincipalId: string) {
+export async function gdprArticle15(
+  sql: Sql,
+  developerId: string,
+  dataPrincipalId: string,
+  copy: { grievanceCount: number; grievancesTruncated: boolean },
+) {
   const records = await sql`
     SELECT id, grant_id, purposes, status, consent_notice_id, consent_notice_version, consent_notice_language,
            consent_given_at, processing_expires_at, retention_until, withdrawn_at, erased_at
@@ -433,11 +438,17 @@ export async function gdprArticle15(sql: Sql, developerId: string, dataPrincipal
       statement: 'The consent records were created by the controller through the Grantex API when the data subject '
         + 'gave consent against the notice named. Grantex does not collect personal data from other sources.',
     },
+    grievances: {
+      count: copy.grievanceCount,
+      limit: ARTICLE15_RECORD_LIMIT,
+      truncated: copy.grievancesTruncated,
+      statement: 'The grievances the data subject filed in the export period are in grievances, newest first.',
+    },
     automatedDecisionMaking: {
       recorded: false,
       statement: 'Not recorded: Grantex does not record whether the controller makes decisions based solely on '
         + 'automated processing (GDPR Art. 22); that information must come from the controller.',
     },
-    truncated: truncated || grantsTruncated,
+    truncated: truncated || grantsTruncated || copy.grievancesTruncated,
   };
 }

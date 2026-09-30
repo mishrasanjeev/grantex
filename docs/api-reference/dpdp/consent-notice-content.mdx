@@ -90,11 +90,30 @@ compared with the ISO 639 codes below, case-insensitively, so `hi`, `hin` and
 ## One version, several languages
 
 The same `noticeId` and `version` may be registered once per `language`, each
-with its own content and hash. A consent record against a version that exists
-in more than one language names the one shown in `consentNoticeLanguage`
-([Create Consent Record](/api-reference/dpdp/create-consent-record)); without
-it the request answers `400 NOTICE_LANGUAGE_REQUIRED`. A version in a single
-language needs no `consentNoticeLanguage`, as before.
+with its own content and hash. A consent record names the language shown in
+`consentNoticeLanguage` ([Create Consent Record](/api-reference/dpdp/create-consent-record)):
+without a pinned version it binds the newest notice row in that language, so a
+translation of an older version registered later does not displace a newer
+version. Without `consentNoticeLanguage` the record binds, as before, the
+pinned version (or the version of the newest notice row in any language) and
+the newest row of that version, and records that row's language. With
+`DPDP_REQUIRE_NOTICE_LANGUAGE=true` (off by default) a version that exists in
+more than one language needs `consentNoticeLanguage` instead
+(`400 NOTICE_LANGUAGE_REQUIRED`). A version in a single language never needs it.
+
+## The notice hash
+
+`contentHash` is the SHA-256 of `content` alone, as before. `noticeHash`
+covers the whole notice: it is the SHA-256 (lowercase hex) of the UTF-8 bytes
+of the RFC 8785 canonical JSON of an object with the members `noticeId`,
+`version`, `language`, `title`, `content`, `purposes`, `dataFiduciaryContact`,
+`grievanceOfficer`, `itemisedPersonalData`, `purposeDetails`, `withdrawalUrl`,
+`rightsUrl`, `boardComplaintUrl` and `contact`, each as stored and `null` when
+absent. Two notices with the same text but different structured fields,
+language or version have different notice hashes. A consent record stores the
+notice hash of the notice it was given against, and its signed proof carries
+it as `noticeHash` with `consentNoticeLanguage`. Notices created before the
+notice hash was kept have it computed from the stored row when read.
 
 ## Ownership
 

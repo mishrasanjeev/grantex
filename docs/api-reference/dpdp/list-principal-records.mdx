@@ -56,6 +56,8 @@ curl https://api.grantex.dev/v1/dpdp/data-principals/user_abc123/records \
       "scopes": ["calendar:read"],
       "consentNoticeId": "notice_v2",
       "consentNoticeVersion": "2.0",
+      "consentNoticeLanguage": "en",
+      "noticeHash": "9f8e7d6c5b4a...",
       "status": "active",
       "consentGivenAt": "2026-04-05T12:00:00.000Z",
       "processingExpiresAt": "2027-01-01T00:00:00.000Z",
@@ -93,6 +95,8 @@ curl https://api.grantex.dev/v1/dpdp/data-principals/user_abc123/records \
 | `scopes` | `string[]` | Scopes from the associated grant |
 | `consentNoticeId` | `string` | ID of the consent notice |
 | `consentNoticeVersion` | `string \| null` | The notice version the record was given against (`null` for an older record whose version could not be recovered) |
+| `consentNoticeLanguage` | `string \| null` | The language of that notice (`null` when not known for an older record) |
+| `noticeHash` | `string \| null` | The notice hash of that notice, also signed into the proof ([Consent Notice Content](/api-reference/dpdp/consent-notice-content#the-notice-hash)); `null` for records created before it was kept |
 | `status` | `string` | Record status: `active`, `withdrawn`, `expired`, or `erased` |
 | `consentGivenAt` | `string` | ISO-8601 timestamp of original consent |
 | `processingExpiresAt` | `string` | ISO-8601 processing expiry timestamp |

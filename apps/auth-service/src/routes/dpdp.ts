@@ -15,8 +15,9 @@ import { getEdKeyPair, signWithEd25519 } from '../lib/crypto.js';
 import { emitEvent } from '../lib/events.js';
 import { appendPlatformAuditEntries, lockAuditChain, type PlatformAuditEntry } from '../lib/audit-chain.js';
 import { publishGrantRevocation, revokeGrantInTx, type RevokedGrantTree } from '../lib/revoke.js';
-import { noticeValidation } from '../lib/dpdp-notice.js';
-import { euAiActSections, gdprArticle15, sectionsSummary } from '../lib/dpdp-evidence.js';
+import { noticeHash, noticeHashOfRow, noticeValidation } from '../lib/dpdp-notice.js';
+import { CanonicalizationError } from '../lib/decisions/canonical.js';
+import { ARTICLE15_RECORD_LIMIT, euAiActSections, gdprArticle15, sectionsSummary } from '../lib/dpdp-evidence.js';
 
 // ── Limits ─────────────────────────────────────────────────────────────────
 
@@ -221,6 +222,8 @@ function consentRecordResponse(r: Record<string, unknown>) {
     consentNoticeId: r['consent_notice_id'],
     consentNoticeVersion: r['consent_notice_version'] ?? null,
     consentNoticeLanguage: r['consent_notice_language'] ?? null,
+    // null for records made before the notice hash was kept.
+    noticeHash: r['notice_hash'] ?? null,
     status: r['status'],
     consentGivenAt: r['consent_given_at'],
     processingExpiresAt: r['processing_expires_at'],
@@ -309,7 +312,7 @@ function retainedAfterErasure(recordCount: number, grievanceCount: number): Arra
 
 const CONSENT_RECORD_COLUMNS = (sql: ReturnType<typeof getSql>) => sql`
   id, grant_id, data_principal_id, data_fiduciary_name, purposes, scopes,
-  consent_notice_id, consent_notice_version, consent_notice_language, status, consent_given_at,
+  consent_notice_id, consent_notice_version, consent_notice_language, notice_hash, status, consent_given_at,
   processing_expires_at, retention_until, access_count, last_accessed_at,
   withdrawn_at, withdrawn_reason, erased_at, created_at, created_at::text AS created_at_cursor`;
 
@@ -386,6 +389,11 @@ function parseNoticeStructure(body: Body, purposes: Purpose[]) {
 const NOTICE_STRUCTURE_COLUMNS = (sql: ReturnType<typeof getSql>) => sql`
   itemised_personal_data, purpose_details, withdrawal_url, rights_url, board_complaint_url, contact`;
 
+/** Every column the notice hash covers, with the stored hash and the content hash. */
+const NOTICE_BIND_COLUMNS = (sql: ReturnType<typeof getSql>) => sql`
+  id, notice_id, version, language, title, content, purposes, data_fiduciary_contact, grievance_officer,
+  content_hash, notice_hash, ${NOTICE_STRUCTURE_COLUMNS(sql)}`;
+
 /** The structured fields of a stored notice, and the r.3 check over them as they are now. */
 function noticeStructureResponse(n: Record<string, unknown>) {
   const structure = {
@@ -448,45 +456,91 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       return sendError(reply, request, 400, 'PRINCIPAL_MISMATCH', "dataPrincipalId must be the grant's principal");
     }
 
-    // The notice version shown to the principal: the pinned one, or the
-    // latest; in the language given. A version that exists in several
-    // languages needs consentNoticeLanguage, since each language is its own
-    // text with its own hash.
-    const noticeRows = consentNoticeVersion !== undefined
+    // The notice shown to the principal. With consentNoticeLanguage: the
+    // pinned version in that language, or the newest notice row in that
+    // language (a translation of an older version registered later does not
+    // displace a newer version in this language). Without it: the pinned
+    // version, or the version of the newest row of any language, as before
+    // notices had several languages; the newest row of that version is bound
+    // and its language recorded. Under DPDP_REQUIRE_NOTICE_LANGUAGE a version
+    // in several languages needs consentNoticeLanguage instead, since each
+    // language is its own text with its own hash.
+    // Plain queries (no nested fragments), one per case.
+    const noticeRows = consentNoticeLanguage !== undefined && consentNoticeVersion !== undefined
       ? await sql`
-          SELECT id, version, language, content_hash FROM dpdp_consent_notices
-          WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId} AND version = ${consentNoticeVersion}
-          ORDER BY created_at DESC, id DESC
-        `
-      : await sql`
-          SELECT id, version, language, content_hash FROM dpdp_consent_notices
+          SELECT id, notice_id, version, language, title, content, purposes, data_fiduciary_contact, grievance_officer,
+                 content_hash, notice_hash, itemised_personal_data, purpose_details, withdrawal_url, rights_url,
+                 board_complaint_url, contact
+          FROM dpdp_consent_notices
           WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
-            AND version = (
-              SELECT version FROM dpdp_consent_notices
-              WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
+            AND version = ${consentNoticeVersion} AND language = ${consentNoticeLanguage}
+        `
+      : consentNoticeLanguage !== undefined
+        ? await sql`
+            SELECT id, notice_id, version, language, title, content, purposes, data_fiduciary_contact, grievance_officer,
+                   content_hash, notice_hash, itemised_personal_data, purpose_details, withdrawal_url, rights_url,
+                   board_complaint_url, contact
+            FROM dpdp_consent_notices
+            WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId} AND language = ${consentNoticeLanguage}
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+          `
+        : consentNoticeVersion !== undefined
+          ? await sql`
+              SELECT id, notice_id, version, language, title, content, purposes, data_fiduciary_contact, grievance_officer,
+                     content_hash, notice_hash, itemised_personal_data, purpose_details, withdrawal_url, rights_url,
+                     board_complaint_url, contact
+              FROM dpdp_consent_notices
+              WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId} AND version = ${consentNoticeVersion}
               ORDER BY created_at DESC, id DESC
-              LIMIT 1
-            )
-          ORDER BY created_at DESC, id DESC
-        `;
-    const candidates = consentNoticeLanguage !== undefined
-      ? noticeRows.filter((row) => row['language'] === consentNoticeLanguage)
-      : noticeRows;
-    if (consentNoticeLanguage === undefined && candidates.length > 1) {
+            `
+          : await sql`
+              SELECT id, notice_id, version, language, title, content, purposes, data_fiduciary_contact, grievance_officer,
+                     content_hash, notice_hash, itemised_personal_data, purpose_details, withdrawal_url, rights_url,
+                     board_complaint_url, contact
+              FROM dpdp_consent_notices
+              WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
+                AND version = (
+                  SELECT version FROM dpdp_consent_notices
+                  WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
+                  ORDER BY created_at DESC, id DESC
+                  LIMIT 1
+                )
+              ORDER BY created_at DESC, id DESC
+            `;
+    if (consentNoticeLanguage === undefined && noticeRows.length > 1 && config.dpdpRequireNoticeLanguage) {
       return sendError(reply, request, 400, 'NOTICE_LANGUAGE_REQUIRED',
-        `The notice version exists in several languages (${candidates.map((row) => row['language'] as string).join(', ')}); pass consentNoticeLanguage`);
+        `The notice version exists in several languages (${noticeRows.map((row) => row['language'] as string).join(', ')}); pass consentNoticeLanguage`);
     }
-    const notice = candidates[0];
+    const notice = noticeRows[0];
     if (!notice) {
-      return sendError(reply, request, 400, 'INVALID_NOTICE',
-        noticeRows.length > 0 ? 'Consent notice version not found in this language'
-          : consentNoticeVersion !== undefined ? 'Consent notice version not found' : 'Consent notice not found');
+      let message = consentNoticeVersion !== undefined ? 'Consent notice version not found' : 'Consent notice not found';
+      if (consentNoticeLanguage !== undefined) {
+        // Say whether the notice (or version) exists in another language.
+        const other = consentNoticeVersion !== undefined
+          ? await sql`
+              SELECT 1 FROM dpdp_consent_notices
+              WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId} AND version = ${consentNoticeVersion}
+              LIMIT 1
+            `
+          : await sql`
+              SELECT 1 FROM dpdp_consent_notices
+              WHERE notice_id = ${consentNoticeId} AND developer_id = ${developerId}
+              LIMIT 1
+            `;
+        if (other.length > 0) {
+          message = consentNoticeVersion !== undefined ? 'Consent notice version not found in this language'
+            : 'Consent notice not found in this language';
+        }
+      }
+      return sendError(reply, request, 400, 'INVALID_NOTICE', message);
     }
 
     const id = newConsentRecordId();
     const consentNoticeHash = notice['content_hash'] as string;
     const noticeVersion = notice['version'] as string;
     const noticeLanguage = (notice['language'] as string | undefined) ?? null;
+    const boundNoticeHash = noticeHashOfRow(notice);
     const scopes = grant['scopes'] as string[];
     // Default retention: 30 days after processing expires
     const retentionUntil = new Date(processingExpiresAt.getTime() + 30 * 86400_000);
@@ -504,6 +558,10 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         consentNoticeId,
         consentNoticeVersion: noticeVersion,
         consentNoticeHash,
+        // The whole notice (lib/dpdp-notice.ts noticeHash) and its language;
+        // consentNoticeHash covers the text only.
+        consentNoticeLanguage: noticeLanguage,
+        noticeHash: boundNoticeHash,
         purposes: purposes.map((p) => p.code),
         consentGivenAt: consentGivenAt.toISOString(),
       }, { expiresInSeconds: null });
@@ -530,13 +588,15 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
           id, developer_id, grant_id, data_principal_id,
           data_fiduciary_id, data_fiduciary_name,
           purposes, scopes, consent_notice_id, consent_notice_version, consent_notice_hash,
-          consent_given_at, processing_expires_at, retention_until, consent_proof, consent_notice_language
+          consent_given_at, processing_expires_at, retention_until, consent_proof, consent_notice_language,
+          notice_hash
         )
         VALUES (
           ${id}, ${developerId}, ${grantId}, ${dataPrincipalId},
           ${developerId}, ${request.developer.name ?? 'Unknown'},
           ${json(tx, purposes)}, ${scopes}, ${consentNoticeId}, ${noticeVersion}, ${consentNoticeHash},
-          ${consentGivenAt}, ${processingExpiresAt}, ${retentionUntil}, ${json(tx, consentProof)}, ${noticeLanguage}
+          ${consentGivenAt}, ${processingExpiresAt}, ${retentionUntil}, ${json(tx, consentProof)}, ${noticeLanguage},
+          ${boundNoticeHash}
         )
       `;
       await appendDpdpAudit(tx, developerId, [{
@@ -545,6 +605,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         metadata: {
           record_id: id, data_principal_id: dataPrincipalId,
           consent_notice_id: consentNoticeId, consent_notice_version: noticeVersion,
+          consent_notice_language: noticeLanguage, notice_hash: boundNoticeHash,
           purposes: purposes.map((p) => p.code),
         },
       }]);
@@ -564,6 +625,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       consentNoticeVersion: noticeVersion,
       consentNoticeLanguage: noticeLanguage,
       consentNoticeHash,
+      noticeHash: boundNoticeHash,
       consentProof,
       processingExpiresAt: processingExpiresAt.toISOString(),
       retentionUntil: retentionUntil.toISOString(),
@@ -751,6 +813,15 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
     const sql = getSql();
     const id = newNoticeId();
     const contentHash = sha256(input.content);
+    let hash: string;
+    try {
+      hash = noticeHash(input);
+    } catch (err) {
+      if (err instanceof CanonicalizationError) {
+        return sendError(reply, request, 400, 'BAD_REQUEST', `The notice has no canonical JSON form: ${err.message}`);
+      }
+      throw err;
+    }
     const createdAt = new Date();
 
     try {
@@ -760,7 +831,8 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
           INSERT INTO dpdp_consent_notices (
             id, developer_id, notice_id, language, version, title, content,
             purposes, data_fiduciary_contact, grievance_officer, content_hash, created_at,
-            itemised_personal_data, purpose_details, withdrawal_url, rights_url, board_complaint_url, contact
+            itemised_personal_data, purpose_details, withdrawal_url, rights_url, board_complaint_url, contact,
+            notice_hash
           )
           VALUES (
             ${id}, ${developerId}, ${input.noticeId}, ${input.language}, ${input.version},
@@ -770,13 +842,15 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
             ${input.itemisedPersonalData ? json(tx, input.itemisedPersonalData) : null},
             ${input.purposeDetails ? json(tx, input.purposeDetails) : null},
             ${input.withdrawalUrl}, ${input.rightsUrl}, ${input.boardComplaintUrl},
-            ${input.contact ? json(tx, input.contact) : null}
+            ${input.contact ? json(tx, input.contact) : null},
+            ${hash}
           )
         `;
         await appendDpdpAudit(tx, developerId, [{
           action: DPDP_AUDIT_ACTIONS.noticeCreated,
           metadata: {
             notice_id: input.noticeId, version: input.version, language: input.language, content_hash: contentHash,
+            notice_hash: hash,
             rule3_missing: validation.missing,
           },
         }]);
@@ -796,6 +870,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
       version: input.version,
       language: input.language,
       contentHash,
+      noticeHash: hash,
       createdAt: createdAt.toISOString(),
       validation,
     });
@@ -808,8 +883,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
     if (!page) return reply;
     const sql = getSql();
     const rows = await sql`
-      SELECT id, notice_id, language, version, title, content_hash, created_at, created_at::text AS created_at_cursor,
-             ${NOTICE_STRUCTURE_COLUMNS(sql)}
+      SELECT ${NOTICE_BIND_COLUMNS(sql)}, created_at, created_at::text AS created_at_cursor
       FROM dpdp_consent_notices
       WHERE developer_id = ${developerId}
         ${page.cursor ? sql`AND (created_at, id) < (${page.cursor.t}::timestamptz, ${page.cursor.id})` : sql``}
@@ -824,6 +898,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         language: n['language'],
         title: n['title'],
         contentHash: n['content_hash'],
+        noticeHash: noticeHashOfRow(n),
         createdAt: n['created_at'],
         ...noticeStructureResponse(n),
       })),
@@ -836,9 +911,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
     const developerId = request.developer.id;
     const sql = getSql();
     const rows = await sql`
-      SELECT id, notice_id, language, version, title, content, purposes,
-             data_fiduciary_contact, grievance_officer, content_hash, created_at,
-             ${NOTICE_STRUCTURE_COLUMNS(sql)}
+      SELECT ${NOTICE_BIND_COLUMNS(sql)}, created_at
       FROM dpdp_consent_notices
       WHERE developer_id = ${developerId} AND notice_id = ${request.params.noticeId}
       ORDER BY created_at DESC, id DESC
@@ -856,6 +929,7 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
         dataFiduciaryContact: n['data_fiduciary_contact'] ?? null,
         grievanceOfficer: n['grievance_officer'] ?? null,
         contentHash: n['content_hash'],
+        noticeHash: noticeHashOfRow(n),
         createdAt: n['created_at'],
         ...noticeStructureResponse(n),
       })),
@@ -1221,8 +1295,26 @@ export async function dpdpRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (type === 'gdpr-article-15' && dataPrincipalId) {
-      const article15 = await gdprArticle15(sql, developerId, dataPrincipalId);
-      // article15.truncated says whether the block left rows out.
+      // The data principal's own grievances for the period, as the copy the
+      // article15 scope names; capped like the article15 records.
+      const grievanceRows = await sql`
+        SELECT id, reference_number, record_id, type, description, status, response_period_days,
+               expected_resolution_by, created_at, resolved_at
+        FROM dpdp_grievances
+        WHERE developer_id = ${developerId} AND data_principal_id = ${dataPrincipalId}
+          AND created_at >= ${from} AND created_at <= ${to}
+        ORDER BY created_at DESC, id DESC
+        LIMIT ${ARTICLE15_RECORD_LIMIT + 1}
+      `;
+      const grievancesTruncated = grievanceRows.length > ARTICLE15_RECORD_LIMIT;
+      const grievances = grievanceRows.slice(0, ARTICLE15_RECORD_LIMIT);
+      exportData['grievances'] = grievances;
+      recordCount += grievances.length;
+      truncated = truncated || grievancesTruncated;
+      const article15 = await gdprArticle15(sql, developerId, dataPrincipalId, {
+        grievanceCount: grievances.length, grievancesTruncated,
+      });
+      // article15.truncated says whether the block, or the grievances copy, left rows out.
       exportData['article15'] = article15;
     }
 

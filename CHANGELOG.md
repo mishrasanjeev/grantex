@@ -27,7 +27,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - A `gdpr-article-15` export with `dataPrincipalId` adds an `article15` block:
   purposes, recipients (the agents authorised through grants and the grant
   audiences), retention (`retentionUntil` per record) and source, and states
-  that automated decision-making is not recorded.
+  that automated decision-making is not recorded. It also carries the
+  principal's own grievances filed in the period (`grievances`, newest first,
+  at most 1,000), counted in `recordCount` and in `article15.grievances`; more
+  than 1,000 sets `truncated` and `article15.truncated`.
 - New flag `DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL` (off; exactly `true`) refuses
   a `gdpr-article-15` export without `dataPrincipalId` with `400`.
 
@@ -45,11 +48,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `400 NOTICE_INCOMPLETE`.
 - One `noticeId` and `version` may now be registered once per `language`
   (the unique key includes the language; `409 CONFLICT` is per language).
-  `POST /v1/dpdp/consent-records` takes an optional `consentNoticeLanguage`,
-  needed only when the chosen version exists in several languages
-  (`400 NOTICE_LANGUAGE_REQUIRED` otherwise); records return
-  `consentNoticeLanguage`.
-- Migration 129 adds the notice columns and the record's notice language
+  `POST /v1/dpdp/consent-records` takes an optional `consentNoticeLanguage`:
+  with it, the pinned version in that language, or the newest notice row in
+  that language, is bound. Without it the record binds, as before, the pinned
+  version (or the version of the newest notice row) through its newest row,
+  and records that row's language. Records return `consentNoticeLanguage`.
+- New flag `DPDP_REQUIRE_NOTICE_LANGUAGE` (off; exactly `true`): a consent
+  record without `consentNoticeLanguage` against a version that exists in
+  several languages is refused with `400 NOTICE_LANGUAGE_REQUIRED`.
+- Notices gain `noticeHash`: SHA-256 over the RFC 8785 canonical JSON of the
+  whole notice (id, version, language, title, content, purposes, contacts and
+  the structured fields). `contentHash` stays the hash of `content` alone. A
+  consent record stores and returns the `noticeHash` of the notice it binds,
+  and its signed proof gains the claims `noticeHash` and
+  `consentNoticeLanguage` (additive; existing claims unchanged).
+- Migration 129 adds the notice columns, the notice hash on notices and
+  records (not backfilled: computed from the row for older notices, `null`
+  on older records), and the record's notice language
   (backfilled from the matching notice), and replaces the unique index
   `(developer_id, notice_id, version)` with one that includes `language`;
   existing rows stay valid.
