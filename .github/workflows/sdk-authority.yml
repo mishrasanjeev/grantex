@@ -50,10 +50,10 @@ jobs:
             -e POSTGRES_PASSWORD=synthetic-audit-only -e POSTGRES_DB=sdk_authority postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
           docker run -d --name authority-redis --network sdk-authority redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
           for _ in $(seq 1 30); do
-            if docker exec authority-pg pg_isready -U postgres; then break; fi
+            if docker exec authority-pg pg_isready -h 127.0.0.1 -U postgres; then break; fi
             sleep 1
           done
-          docker exec authority-pg pg_isready -U postgres
+          docker exec authority-pg pg_isready -h 127.0.0.1 -U postgres
           mkdir -p results
       - name: Verify signatures, issuer authority and zero denied execution
         env:
