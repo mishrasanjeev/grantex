@@ -17,14 +17,24 @@ import respx
 
 from grantex import (
     ComplianceExport,
+    ConsentNotice,
+    ConsentNoticeDetail,
+    ConsentRecord,
     CreateConsentNoticeParams,
     CreateConsentRecordParams,
     CreateExportParams,
     DpdpExport,
+    ErasureResponse,
     FileGrievanceParams,
     Grantex,
     GrantexApiError,
     GrantexNetworkError,
+    Grievance,
+    ListConsentNoticesResponse,
+    ListConsentRecordsResponse,
+    ListGrievancesResponse,
+    PrincipalRecordsResponse,
+    WithdrawConsentResponse,
 )
 
 BASE = "https://api.grantex.dev"
@@ -775,20 +785,19 @@ def test_error_request_id_header_wins(client: Grantex) -> None:
 
 def test_models_tolerate_every_fixture() -> None:
     """Every server body decodes into its model without KeyError."""
-    g = grantex
-    g.ConsentRecord.from_dict(fx("createConsentRecord_201"))
-    g.ConsentRecord.from_dict(fx("consentRecord_200"))
-    g.ConsentRecord.from_dict(fx("consentRecord_erased_legacy_200"))
-    g.ListConsentRecordsResponse.from_dict(fx("listConsentRecords_200"))
-    g.PrincipalRecordsResponse.from_dict(fx("principalRecords_200"))
-    g.WithdrawConsentResponse.from_dict(fx("withdrawConsent_200"))
-    g.ConsentNotice.from_dict(fx("createConsentNotice_201"))
-    g.ListConsentNoticesResponse.from_dict(fx("listConsentNotices_200"))
-    g.ConsentNoticeDetail.from_dict(fx("getConsentNotice_200"))
-    g.Grievance.from_dict(fx("fileGrievance_202"))
-    g.ListGrievancesResponse.from_dict(fx("listGrievances_200"))
-    g.Grievance.from_dict(fx("getGrievance_200"))
-    g.Grievance.from_dict(fx("updateGrievance_200"))
-    g.ComplianceExport.from_dict(fx("createExport_201"))
-    g.ComplianceExport.from_dict(fx("getExport_200"))
-    g.ErasureResponse.from_dict(fx("erasure_201"))
+    ConsentRecord.from_dict(fx("createConsentRecord_201"))
+    ConsentRecord.from_dict(fx("consentRecord_200"))
+    ConsentRecord.from_dict(fx("consentRecord_erased_legacy_200"))
+    ListConsentRecordsResponse.from_dict(fx("listConsentRecords_200"))
+    PrincipalRecordsResponse.from_dict(fx("principalRecords_200"))
+    WithdrawConsentResponse.from_dict(fx("withdrawConsent_200"))
+    ConsentNotice.from_dict(fx("createConsentNotice_201"))
+    ListConsentNoticesResponse.from_dict(fx("listConsentNotices_200"))
+    ConsentNoticeDetail.from_dict(fx("getConsentNotice_200"))
+    Grievance.from_dict(fx("fileGrievance_202"))
+    ListGrievancesResponse.from_dict(fx("listGrievances_200"))
+    Grievance.from_dict(fx("getGrievance_200"))
+    Grievance.from_dict(fx("updateGrievance_200"))
+    ComplianceExport.from_dict(fx("createExport_201"))
+    ComplianceExport.from_dict(fx("getExport_200"))
+    ErasureResponse.from_dict(fx("erasure_201"))
