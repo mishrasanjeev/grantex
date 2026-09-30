@@ -41,34 +41,28 @@ function makeRecord(overrides?: Partial<DPDPConsentRecord>): DPDPConsentRecord {
     recordId: 'rec_001',
     grantId: 'grant_abc',
     dataPrincipalId: 'principal_1',
-    dataFiduciaryId: 'fid_1',
     dataFiduciaryName: 'Acme Corp',
-    purposes: [
-      {
-        purposeId: 'p1',
-        name: 'Email Access',
-        description: 'Read and send emails on behalf of the user',
-        legalBasis: 'consent',
-        dataCategories: ['email', 'contacts'],
-        retentionPeriod: '1 year',
-        thirdPartySharing: false,
-      },
-    ],
+    purposes: [{ code: 'p1', description: 'Read and send emails on behalf of the user' }],
     scopes: ['email:read', 'email:send'],
     consentNoticeId: 'notice_1',
-    consentNoticeHash: 'abc123hash',
+    status: 'active',
     consentGivenAt: new Date('2026-01-01T00:00:00Z'),
-    consentMethod: 'explicit-click',
     processingExpiresAt: new Date('2027-01-01T00:00:00Z'),
     retentionUntil: new Date('2028-01-01T00:00:00Z'),
-    consentProof: {
-      signedAt: new Date('2026-01-01T00:00:00Z'),
-      signature: 'ed25519sig==',
-    },
-    status: 'active',
     accessCount: 0,
-    actions: [],
     ...overrides,
+  };
+}
+
+/** The 201 body of POST /v1/dpdp/consent-notices. */
+function noticeCreatedBody(noticeId = 'notice_01'): Record<string, unknown> {
+  return {
+    id: 'notice_row_01',
+    noticeId,
+    version: '1.0',
+    language: 'en',
+    contentHash: 'a'.repeat(64),
+    createdAt: '2026-01-01T00:00:00.000Z',
   };
 }
 
@@ -188,7 +182,7 @@ describe('consent-notice', () => {
 
   describe('createConsentNotice', () => {
     it('sends correct request body to the API', async () => {
-      const serverResponse = makeNotice({ noticeId: 'notice_from_server' });
+      const serverResponse = noticeCreatedBody('notice_01');
 
       let capturedBody: Record<string, unknown> | null = null;
       vi.stubGlobal(
@@ -203,6 +197,7 @@ describe('consent-notice', () => {
       );
 
       const result = await createConsentNotice({
+        noticeId: 'notice_01',
         language: 'en',
         version: '1.0',
         title: 'Data Processing Notice',
@@ -223,15 +218,22 @@ describe('consent-notice', () => {
         baseUrl: 'https://api.test.local',
       });
 
-      expect(result.noticeId).toBe('notice_from_server');
+      expect(result.noticeId).toBe('notice_01');
+      expect(result.id).toBe('notice_row_01');
+      expect(result.contentHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.createdAt).toBeInstanceOf(Date);
+      expect(capturedBody!.noticeId).toBe('notice_01');
       expect(capturedBody!.language).toBe('en');
-      expect(capturedBody!.contentHash).toBeTruthy();
-      expect(typeof capturedBody!.contentHash).toBe('string');
+      // The server computes the content hash; the client does not send one.
+      expect(capturedBody!.contentHash).toBeUndefined();
+      // Purposes go on the wire as { code, description }.
+      expect(capturedBody!.purposes).toEqual([{ code: 'p1', description: 'Read email' }]);
     });
 
     it('throws DpdpError for invalid notice', async () => {
       await expect(
         createConsentNotice({
+          noticeId: 'notice_01',
           language: 'en',
           version: '1.0',
           title: '',
@@ -256,6 +258,7 @@ describe('consent-notice', () => {
 
       await expect(
         createConsentNotice({
+          noticeId: 'notice_01',
           language: 'en',
           version: '1.0',
           title: 'Notice',
@@ -279,7 +282,7 @@ describe('consent-notice', () => {
     });
 
     it('includes grievanceOfficer when provided', async () => {
-      const serverResponse = makeNotice();
+      const serverResponse = noticeCreatedBody();
 
       let capturedBody: Record<string, unknown> | null = null;
       vi.stubGlobal(
@@ -294,6 +297,7 @@ describe('consent-notice', () => {
       );
 
       await createConsentNotice({
+        noticeId: 'notice_01',
         language: 'en',
         version: '1.0',
         title: 'Notice',
@@ -313,7 +317,7 @@ describe('consent-notice', () => {
         grievanceOfficer: {
           name: 'Officer Name',
           email: 'grievance@test.com',
-          address: '123 Street',
+          phone: '+91-00000-00000',
         },
         apiKey: 'key',
         baseUrl: 'https://api.test.local',
@@ -322,7 +326,7 @@ describe('consent-notice', () => {
       expect(capturedBody!.grievanceOfficer).toEqual({
         name: 'Officer Name',
         email: 'grievance@test.com',
-        address: '123 Street',
+        phone: '+91-00000-00000',
       });
     });
   });

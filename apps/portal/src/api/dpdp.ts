@@ -1,18 +1,55 @@
 import { api } from './client';
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Types mirror the auth-service DPDP routes (apps/auth-service/src/routes/dpdp.ts).
+// Fields that only some routes send are optional.
 
+// ── Shared ─────────────────────────────────────────────────────────────────
+
+export interface Purpose {
+  code: string;
+  description: string;
+}
+
+export type ConsentRecordStatus = 'active' | 'withdrawn' | 'expired' | 'erased';
+export type GrievanceStatus = 'submitted' | 'in_review' | 'resolved' | 'rejected';
+
+export interface PageParams {
+  /**
+   * 1..200, server default 50. The consent-record lists paginate only when
+   * `limit` or `cursor` is sent; without either they return the newest 100
+   * (every match when filtered by principal) with `nextCursor: null`.
+   */
+  limit?: number;
+  /** The previous page's `nextCursor`. */
+  cursor?: string;
+}
+
+function query(params: Record<string, string | number | undefined>): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') qs.set(key, String(value));
+  }
+  const s = qs.toString();
+  return s ? `?${s}` : '';
+}
+
+const seg = encodeURIComponent;
+
+// ── Consent records ────────────────────────────────────────────────────────
+
+/** GET /v1/dpdp/consent-records/:id and list items. No consentProof or consentNoticeHash on reads. */
 export interface ConsentRecord {
   recordId: string;
   grantId: string;
-  dataPrincipalId: string;
+  /** Absent per record on older servers' principal-records route. */
+  dataPrincipalId?: string;
   dataFiduciaryName: string;
-  purposes: { code: string; description: string }[];
+  purposes: Purpose[];
   scopes: string[];
   consentNoticeId: string;
-  consentNoticeHash: string;
-  consentProof: Record<string, unknown>;
-  status: 'active' | 'withdrawn' | 'expired' | 'erased';
+  /** Null for records written before notice versions were stored. */
+  consentNoticeVersion: string | null;
+  status: ConsentRecordStatus;
   consentGivenAt: string;
   processingExpiresAt: string;
   retentionUntil: string;
@@ -20,27 +57,56 @@ export interface ConsentRecord {
   lastAccessedAt: string | null;
   withdrawnAt: string | null;
   withdrawnReason: string | null;
+  erasedAt: string | null;
   createdAt: string;
 }
 
 export interface CreateConsentRecordRequest {
   grantId: string;
   dataPrincipalId: string;
-  purposes: { code: string; description: string }[];
+  purposes: Purpose[];
   consentNoticeId: string;
+  consentNoticeVersion?: string;
   processingExpiresAt: string;
+}
+
+export interface ConsentProof {
+  type: 'JWS-EdDSA';
+  alg: 'EdDSA';
+  kid: string | null;
+  /**
+   * `'persistent'` when the signing key comes from the server's configuration;
+   * `'ephemeral'` when it was generated in-process, so the proof cannot be
+   * verified on another instance or after a restart. Absent from older servers.
+   */
+  keyPersistence?: 'persistent' | 'ephemeral';
+  proofJwt: string;
+  jwksUri: string;
+  signedAt: string;
 }
 
 export interface CreateConsentRecordResponse {
   recordId: string;
   grantId: string;
   dataPrincipalId: string;
+  consentNoticeId: string;
+  consentNoticeVersion: string | null;
   consentNoticeHash: string;
-  consentProof: Record<string, unknown>;
+  consentProof: ConsentProof;
   processingExpiresAt: string;
   retentionUntil: string;
-  status: string;
+  status: 'active';
   createdAt: string;
+}
+
+export interface ListConsentRecordsParams extends PageParams {
+  dataPrincipalId?: string;
+}
+
+export interface ConsentRecordPage {
+  records: ConsentRecord[];
+  totalRecords: number;
+  nextCursor: string | null;
 }
 
 export interface WithdrawConsentRequest {
@@ -51,18 +117,44 @@ export interface WithdrawConsentRequest {
 
 export interface WithdrawConsentResponse {
   recordId: string;
-  status: string;
+  status: 'withdrawn';
   withdrawnAt: string;
   grantRevoked: boolean;
   dataDeleted: boolean;
+  dataDeletionRequested: boolean;
 }
 
-export interface DataPrincipalRecordsResponse {
+export interface DataPrincipalRecordsResponse extends ConsentRecordPage {
   dataPrincipalId: string;
-  records: ConsentRecord[];
-  totalRecords: number;
 }
 
+// ── Erasure ────────────────────────────────────────────────────────────────
+
+export interface RetainedCategory {
+  category: string;
+  count?: number;
+  reason: string;
+}
+
+export interface ErasureRequest {
+  requestId: string;
+  dataPrincipalId: string;
+  status: 'completed';
+  recordsErased: number;
+  grantsRevoked: number;
+  delegatedGrantsRevoked: number;
+  grievancesRedacted: number;
+  exportsDeleted: number;
+  retained: RetainedCategory[];
+  submittedAt: string;
+  completedAt: string;
+  /** Deprecated: equals completedAt. */
+  expectedCompletionBy?: string;
+}
+
+// ── Consent notices ────────────────────────────────────────────────────────
+
+/** POST /v1/dpdp/consent-notices response. */
 export interface ConsentNotice {
   id: string;
   noticeId: string;
@@ -72,64 +164,141 @@ export interface ConsentNotice {
   createdAt: string;
 }
 
+export interface ConsentNoticeSummary extends ConsentNotice {
+  title: string;
+}
+
+export interface ConsentNoticePage {
+  notices: ConsentNoticeSummary[];
+  nextCursor: string | null;
+}
+
+export interface GrievanceOfficer {
+  name: string;
+  email: string;
+  phone?: string;
+}
+
+export interface ConsentNoticeVersion {
+  id: string;
+  version: string;
+  language: string;
+  title: string;
+  content: string;
+  purposes: Purpose[];
+  dataFiduciaryContact: string | null;
+  grievanceOfficer: GrievanceOfficer | null;
+  contentHash: string;
+  createdAt: string;
+}
+
+export interface ConsentNoticeDetail {
+  noticeId: string;
+  /** Newest first. */
+  versions: ConsentNoticeVersion[];
+}
+
 export interface CreateConsentNoticeRequest {
   noticeId: string;
   language?: string;
   version: string;
   title: string;
   content: string;
-  purposes: { code: string; description: string }[];
+  purposes: Purpose[];
   dataFiduciaryContact?: string;
-  grievanceOfficer?: { name: string; email: string; phone?: string };
+  grievanceOfficer?: GrievanceOfficer;
 }
 
-export interface Grievance {
+// ── Grievances ─────────────────────────────────────────────────────────────
+
+/** List item: no description or evidence. */
+export interface GrievanceSummary {
   grievanceId: string;
   dataPrincipalId: string;
   recordId: string | null;
   type: string;
-  description: string;
-  evidence: Record<string, unknown>;
-  status: 'submitted' | 'in-progress' | 'resolved' | 'rejected';
+  status: GrievanceStatus;
   referenceNumber: string;
   expectedResolutionBy: string;
+  responsePeriodDays: number;
   resolvedAt: string | null;
   resolution: string | null;
   createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface Grievance extends GrievanceSummary {
+  description: string;
+  evidence: Record<string, unknown>;
+}
+
+export interface GrievancePage {
+  grievances: GrievanceSummary[];
+  nextCursor: string | null;
+}
+
+export interface ListGrievancesParams extends PageParams {
+  status?: GrievanceStatus;
+  dataPrincipalId?: string;
 }
 
 export interface FileGrievanceRequest {
   dataPrincipalId: string;
   recordId?: string;
+  /** Free text, up to 128 characters (e.g. 'consent-violation'). */
   type: string;
   description: string;
   evidence?: Record<string, unknown>;
+  /** 1..90 days; the server defaults to 7. */
+  responsePeriodDays?: number;
 }
 
 export interface FileGrievanceResponse {
   grievanceId: string;
   referenceNumber: string;
   type: string;
-  status: string;
+  status: 'submitted';
+  responsePeriodDays: number;
   expectedResolutionBy: string;
   createdAt: string;
 }
 
+export interface UpdateGrievanceRequest {
+  status: Exclude<GrievanceStatus, 'submitted'>;
+  /** Required for resolved and rejected. */
+  resolution?: string;
+}
+
+// ── Exports ────────────────────────────────────────────────────────────────
+
+export type ExportType = 'dpdp-audit' | 'gdpr-article-15' | 'eu-ai-act-conformance';
+
 export interface DpdpExport {
   exportId: string;
-  type: string;
-  format: string;
+  type: ExportType;
+  format: 'json';
   recordCount: number;
+  truncated: boolean;
+  auditLogLimit: number;
+  dataPrincipalId: string | null;
   data: Record<string, unknown>;
   expiresAt: string;
   createdAt: string;
+  /** GET only. */
+  dateFrom?: string;
+  /** GET only. */
+  dateTo?: string;
+  /** GET only; always 'complete' (an expired export is 410 GONE). */
+  status?: 'complete';
 }
 
 export interface CreateExportRequest {
-  type: 'dpdp-audit' | 'gdpr-article-15' | 'eu-ai-act-conformance';
+  type: ExportType;
+  /** ISO date-time. A bare YYYY-MM-DD means 00:00Z of that day. */
   dateFrom: string;
+  /** ISO date-time. Send an end-of-day time to include the whole last day. */
   dateTo: string;
-  format?: string;
+  format?: 'json';
   includeActionLog?: boolean;
   includeConsentRecords?: boolean;
   dataPrincipalId?: string;
@@ -141,24 +310,68 @@ export function createConsentRecord(data: CreateConsentRecordRequest): Promise<C
   return api.post<CreateConsentRecordResponse>('/v1/dpdp/consent-records', data);
 }
 
-export function withdrawConsent(recordId: string, data: WithdrawConsentRequest): Promise<WithdrawConsentResponse> {
-  return api.post<WithdrawConsentResponse>(`/v1/dpdp/consent-records/${encodeURIComponent(recordId)}/withdraw`, data);
+export function getConsentRecord(recordId: string): Promise<ConsentRecord> {
+  return api.get<ConsentRecord>(`/v1/dpdp/consent-records/${seg(recordId)}`);
 }
 
-export function getDataPrincipalRecords(principalId: string): Promise<DataPrincipalRecordsResponse> {
-  return api.get<DataPrincipalRecordsResponse>(`/v1/dpdp/data-principals/${encodeURIComponent(principalId)}/records`);
+export function listConsentRecords(params: ListConsentRecordsParams = {}): Promise<ConsentRecordPage> {
+  return api.get<ConsentRecordPage>(
+    `/v1/dpdp/consent-records${query({ dataPrincipalId: params.dataPrincipalId, limit: params.limit, cursor: params.cursor })}`,
+  );
+}
+
+export function withdrawConsent(recordId: string, data: WithdrawConsentRequest): Promise<WithdrawConsentResponse> {
+  return api.post<WithdrawConsentResponse>(`/v1/dpdp/consent-records/${seg(recordId)}/withdraw`, data);
+}
+
+export function getDataPrincipalRecords(principalId: string, params: PageParams = {}): Promise<DataPrincipalRecordsResponse> {
+  return api.get<DataPrincipalRecordsResponse>(
+    `/v1/dpdp/data-principals/${seg(principalId)}/records${query({ limit: params.limit, cursor: params.cursor })}`,
+  );
+}
+
+/** Erases a data principal. Takes no body; repeating it returns the earlier request. */
+export function requestErasure(principalId: string): Promise<ErasureRequest> {
+  return api.post<ErasureRequest>(`/v1/dpdp/data-principals/${seg(principalId)}/erasure`);
+}
+
+export function getErasureRequest(requestId: string): Promise<ErasureRequest> {
+  return api.get<ErasureRequest>(`/v1/dpdp/erasure-requests/${seg(requestId)}`);
 }
 
 export function createConsentNotice(data: CreateConsentNoticeRequest): Promise<ConsentNotice> {
   return api.post<ConsentNotice>('/v1/dpdp/consent-notices', data);
 }
 
+export function listConsentNotices(params: PageParams = {}): Promise<ConsentNoticePage> {
+  return api.get<ConsentNoticePage>(`/v1/dpdp/consent-notices${query({ limit: params.limit, cursor: params.cursor })}`);
+}
+
+export function getConsentNotice(noticeId: string): Promise<ConsentNoticeDetail> {
+  return api.get<ConsentNoticeDetail>(`/v1/dpdp/consent-notices/${seg(noticeId)}`);
+}
+
 export function fileGrievance(data: FileGrievanceRequest): Promise<FileGrievanceResponse> {
   return api.post<FileGrievanceResponse>('/v1/dpdp/grievances', data);
 }
 
+export function listGrievances(params: ListGrievancesParams = {}): Promise<GrievancePage> {
+  return api.get<GrievancePage>(
+    `/v1/dpdp/grievances${query({
+      status: params.status,
+      dataPrincipalId: params.dataPrincipalId,
+      limit: params.limit,
+      cursor: params.cursor,
+    })}`,
+  );
+}
+
 export function getGrievance(grievanceId: string): Promise<Grievance> {
-  return api.get<Grievance>(`/v1/dpdp/grievances/${encodeURIComponent(grievanceId)}`);
+  return api.get<Grievance>(`/v1/dpdp/grievances/${seg(grievanceId)}`);
+}
+
+export function updateGrievance(grievanceId: string, data: UpdateGrievanceRequest): Promise<Grievance> {
+  return api.patch<Grievance>(`/v1/dpdp/grievances/${seg(grievanceId)}`, data);
 }
 
 export function createExport(data: CreateExportRequest): Promise<DpdpExport> {
@@ -166,5 +379,5 @@ export function createExport(data: CreateExportRequest): Promise<DpdpExport> {
 }
 
 export function getExport(exportId: string): Promise<DpdpExport> {
-  return api.get<DpdpExport>(`/v1/dpdp/exports/${encodeURIComponent(exportId)}`);
+  return api.get<DpdpExport>(`/v1/dpdp/exports/${seg(exportId)}`);
 }

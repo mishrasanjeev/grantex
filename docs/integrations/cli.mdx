@@ -344,30 +344,36 @@ These commands keep the records described in [DPDP Compliance](/features/dpdp-co
 they help evidence DPDP Act obligations and are not legal advice.
 
 ```bash
-# Consent notices: @grantex/cli 0.4.1 cannot create them (its notice --version option is taken by the
-# CLI's own --version flag). Use the API until the next CLI release adds `notices create --notice-version`:
-curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices \
-  -H "Authorization: Bearer $GRANTEX_API_KEY" -H "Content-Type: application/json" \
-  -d '{"noticeId":"privacy-v1","version":"1.0","title":"Privacy Notice","content":"We process your data for...","purposes":[{"code":"analytics","description":"Usage analytics"}]}'
+# Consent notices (DPDP s.5, DPDP Rules 2025 r.3). The version option is --notice-version:
+# --version anywhere on the command line prints the CLI version. Published @grantex/cli 0.4.1
+# predates --notice-version and cannot create notices; with it, use the API:
+#   curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices #     -H "Authorization: Bearer $GRANTEX_API_KEY" -H "Content-Type: application/json" #     -d '{"noticeId":"privacy-v1","version":"1.0","title":"Privacy Notice","content":"We process your data for...","purposes":[{"code":"analytics","description":"Usage analytics"}]}'
+grantex dpdp notices create --notice-id privacy-v1 --notice-version 1.0 --title "Privacy Notice"   --content "We process your data for..." --purposes '[{"code":"analytics","description":"Usage analytics"}]'
+grantex dpdp notices list
+grantex dpdp notices get privacy-v1
 
 # Consent records
 grantex dpdp consent create --grant-id grnt_01ABC... --principal-id user@example.com \
   --purposes '[{"code":"analytics","description":"Usage analytics"}]' \
   --notice-id privacy-v1 --processing-expires-at 2027-01-01T00:00:00Z
 grantex dpdp consent get crec_01ABC...
-grantex dpdp consent list --principal user@example.com
+grantex dpdp consent list --principal user@example.com --limit 50
 grantex dpdp consent withdraw crec_01ABC... --reason "No longer needed" --revoke-grant
 
 # Data principal rights: access (DPDP s.11) and erasure (s.12)
 grantex dpdp principal-records user@example.com
 grantex dpdp erasure user@example.com
+grantex dpdp erasure status ER-2026-...
 
 # Grievances (DPDP s.13)
 grantex dpdp grievances file --principal-id user@example.com --type unauthorized-processing --description "Data used beyond the consented purpose"
+grantex dpdp grievances list --status submitted
 grantex dpdp grievances get grv_01ABC...
+grantex dpdp grievances update grv_01ABC... --status resolved --resolution "Processing stopped"
 
-# Exports
-grantex dpdp exports create --type dpdp-audit --date-from 2026-01-01 --date-to 2026-04-01
+# Compliance exports (JSON only; a bare YYYY-MM-DD means 00:00Z, so give an
+# end-of-day time to include the last day)
+grantex dpdp exports create --type dpdp-audit --date-from 2026-01-01 --date-to 2026-03-31T23:59:59Z
 grantex dpdp exports get exp_01ABC...
 ```
 

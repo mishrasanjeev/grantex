@@ -125,27 +125,31 @@ describe('dpdp-export', () => {
       expect(capturedBody!.dateTo).toBe('2026-03-31T23:59:59.000Z');
     });
 
-    it('returns deserialized export result with downloadExpiresAt as Date', async () => {
-      const expiresAt = new Date(Date.now() + 24 * 3600_000).toISOString();
+    it('returns deserialized export result with expiresAt as Date (data inline, no download URL)', async () => {
+      const expiresAt = new Date(Date.now() + 7 * 86400_000).toISOString();
 
       vi.stubGlobal(
         'fetch',
         mockFetchOk({
           exportId: 'exp_01',
           type: 'dpdp-audit',
-          status: 'complete',
+          format: 'json',
           recordCount: 42,
+          truncated: false,
+          auditLogLimit: 1000,
+          dataPrincipalId: null,
           data: { records: [] },
-          downloadUrl: 'https://downloads.test/exp_01',
-          downloadExpiresAt: expiresAt,
+          expiresAt,
+          createdAt: new Date().toISOString(),
         }),
       );
 
       const result = await requestDpdpExport(makeExportParams(), 'key', 'https://api.test.local');
       expect(result.exportId).toBe('exp_01');
       expect(result.recordCount).toBe(42);
-      expect(result.downloadUrl).toBe('https://downloads.test/exp_01');
-      expect(result.downloadExpiresAt).toBeInstanceOf(Date);
+      expect(result.data).toEqual({ records: [] });
+      expect(result.expiresAt).toBeInstanceOf(Date);
+      expect(result).not.toHaveProperty('downloadUrl');
     });
 
     it('throws ExportError on HTTP error', async () => {
@@ -297,13 +301,12 @@ describe('eu-ai-act-export', () => {
         status: 'complete',
         recordCount: 1,
         data: { overallStatus: 'compliant' },
-        downloadUrl: 'https://downloads.test/eu',
       }),
     );
 
     const result = await requestEuAiActExport(makeExportParams(), 'key', 'https://api.test.local');
     expect(result.type).toBe('eu-ai-act-conformance');
-    expect(result.downloadUrl).toBe('https://downloads.test/eu');
+    expect(result.data).toEqual({ overallStatus: 'compliant' });
   });
 
   it('throws ExportError on HTTP error', async () => {
@@ -314,7 +317,7 @@ describe('eu-ai-act-export', () => {
     ).rejects.toThrow(ExportError);
   });
 
-  it('deserializes downloadExpiresAt as Date', async () => {
+  it('deserializes expiresAt as Date', async () => {
     const expires = new Date(Date.now() + 86400_000).toISOString();
 
     vi.stubGlobal(
@@ -325,12 +328,12 @@ describe('eu-ai-act-export', () => {
         status: 'complete',
         recordCount: 1,
         data: {},
-        downloadExpiresAt: expires,
+        expiresAt: expires,
       }),
     );
 
     const result = await requestEuAiActExport(makeExportParams(), 'key', 'https://api.test.local');
-    expect(result.downloadExpiresAt).toBeInstanceOf(Date);
+    expect(result.expiresAt).toBeInstanceOf(Date);
   });
 });
 
@@ -425,7 +428,7 @@ describe('gdpr-export', () => {
     expect(typeof capturedBody!.dateTo).toBe('string');
   });
 
-  it('handles export without downloadUrl', async () => {
+  it('returns no download URL (the data is inline)', async () => {
     vi.stubGlobal(
       'fetch',
       mockFetchOk({
@@ -438,7 +441,7 @@ describe('gdpr-export', () => {
     );
 
     const result = await requestGdprExport(makeExportParams(), 'key', 'https://api.test.local');
-    expect(result.downloadUrl).toBeUndefined();
-    expect(result.downloadExpiresAt).toBeUndefined();
+    expect(result).not.toHaveProperty('downloadUrl');
+    expect(result).not.toHaveProperty('downloadExpiresAt');
   });
 });

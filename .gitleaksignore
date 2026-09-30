@@ -253,3 +253,11 @@ aba24def493c875a77e4494eef4549fb741c3d6a:spec/passport-binding.md:generic-api-ke
 # Synthetic child-grant examples (a public key thumbprint) in the #1484 squash commit
 05ab4760ab156f8f99ee1c4a7620614a6775c70a:apps/auth-service/tests/child-grant-docs.test.ts:generic-api-key:42
 05ab4760ab156f8f99ee1c4a7620614a6775c70a:spec/passport-binding.md:generic-api-key:461
+
+# Synthetic DPDP consent-proof JWT in the shared server-response fixtures, fix/dpdp-client-parity
+9567bcd3d5f84f4314534d0ef170ecab49f4e3f6:apps/portal/src/api/__tests__/fixtures/dpdpServer.ts:jwt:16
+219d810efb1848f8a0362e9fa6f8ad6b9e06b076:packages/cli/tests/fixtures/dpdp-server-fixtures.json:jwt:14
+c951f7bc24b43706a3203e6475b215b7c9773c58:packages/go-sdk/testdata/dpdp-server-fixtures.json:jwt:14
+c951f7bc24b43706a3203e6475b215b7c9773c58:packages/sdk-py/tests/fixtures/dpdp_server_fixtures.json:jwt:14
+c951f7bc24b43706a3203e6475b215b7c9773c58:packages/sdk-ts/tests/fixtures/dpdp-server-fixtures.json:jwt:14
+6cd3ba0b03c431fc7a728a290c0baa45aed3ca73:packages/dpdp/tests/fixtures/dpdp-server-fixtures.json:jwt:14

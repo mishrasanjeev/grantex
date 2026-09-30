@@ -120,7 +120,7 @@ describe('grievance', () => {
             recordId: 'rec_001',
             type: 'data_breach',
             description: 'Breach detected',
-            status: 'under_review',
+            status: 'in_review',
             referenceNumber: 'GRV-2026-00099',
             expectedResolutionBy: new Date(Date.now() + 5 * 86400000).toISOString(),
           }),
@@ -128,7 +128,7 @@ describe('grievance', () => {
     );
 
     const status = await getGrievanceStatus('grv_001', 'test-key', 'https://api.test.local');
-    expect(status.status).toBe('under_review');
+    expect(status.status).toBe('in_review');
     expect(status.type).toBe('data_breach');
   });
 });

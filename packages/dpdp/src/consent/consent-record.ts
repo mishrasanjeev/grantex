@@ -1,58 +1,88 @@
 /**
  * Consent record creation and retrieval.
  *
- * DPDP Act 2023, Sections 5-6 (Consent & Notice).
+ * DPDP Act 2023, s.6 (consent) given against a notice under s.5.
  */
 
+import { createHash } from 'node:crypto';
 import type {
+  ConsentRecordPage,
   CreateConsentRecordOptions,
+  CreatedConsentRecord,
   DPDPConsentRecord,
+  ListConsentRecordsOptions,
+  LocalConsentEvidence,
 } from '../types.js';
 import { ConsentRequiredError, DpdpError } from '../errors.js';
 import { computeNoticeHash } from './consent-notice.js';
+import { asObject, dpdpRequest, dpdpUrl, nextCursorOf, num, opt, seg, str, toDate, type HttpFailure } from '../http.js';
+import { decodeConsentRecord } from '../decode.js';
+import { missingWireFields, purposeLabel, toWirePurpose } from '../purpose/wire.js';
+
+const RECORDS = seg('consent-records');
+
+function failure(fallback: string, code: string) {
+  return (f: HttpFailure) =>
+    new DpdpError(f.message ?? `${fallback} (${f.statusCode})`, f.code ?? code, f.statusCode, f.requestId);
+}
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Local-only evidence
 // ---------------------------------------------------------------------------
+
+/** The proof's `keyPersistence`, when the server sent a known value (older servers omit it). */
+function keyPersistenceOf(value: unknown): 'persistent' | 'ephemeral' | undefined {
+  return value === 'persistent' || value === 'ephemeral' ? value : undefined;
+}
 
 function hashIpAddress(ip: string): string {
-  // We compute a simple hex-encoded SHA-256 hash synchronously using the
-  // Web Crypto API. Because `crypto.subtle.digest` is async we provide a
-  // sync fallback using Node's built-in crypto module which is available in
-  // Node 18+.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { createHash } = require('node:crypto') as typeof import('node:crypto');
   return createHash('sha256').update(ip).digest('hex');
 }
 
-async function signRecord(
-  payload: string,
-  signingKey: unknown,
-): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(payload);
+async function signPayload(payload: string, signingKey: unknown): Promise<string> {
   const sig = await crypto.subtle.sign(
     { name: 'Ed25519' },
     signingKey as Parameters<typeof crypto.subtle.sign>[1],
-    data,
+    new TextEncoder().encode(payload),
   );
   return Buffer.from(sig).toString('base64');
 }
 
-function buildSignaturePayload(
+/**
+ * Evidence built on the client from the local-only options. Returned to the
+ * caller; never sent to the server. Undefined when no local-only input was given.
+ */
+async function buildLocalEvidence(
   opts: CreateConsentRecordOptions,
-  noticeHash: string,
-  consentGivenAt: Date,
-): string {
-  return JSON.stringify({
-    grantId: opts.grantId,
-    dataPrincipalId: opts.dataPrincipalId,
-    dataFiduciaryId: opts.dataFiduciaryId,
-    purposes: opts.purposes.map((p) => p.purposeId),
-    scopes: opts.scopes,
-    consentNoticeHash: noticeHash,
-    consentGivenAt: consentGivenAt.toISOString(),
-  });
+): Promise<LocalConsentEvidence | undefined> {
+  const evidence: LocalConsentEvidence = {
+    ...opt('ipAddressHash', opts.proofIpAddress !== undefined ? hashIpAddress(opts.proofIpAddress) : undefined),
+    ...opt('userAgent', opts.proofUserAgent),
+    ...opt('sessionId', opts.proofSessionId),
+    ...opt(
+      'consentNoticeHash',
+      opts.consentNoticeContent !== undefined ? await computeNoticeHash(opts.consentNoticeContent) : undefined,
+    ),
+  };
+
+  if (opts.signingKey) {
+    const signedPayload = JSON.stringify({
+      grantId: opts.grantId,
+      dataPrincipalId: opts.dataPrincipalId,
+      ...opt('dataFiduciaryId', opts.dataFiduciaryId),
+      purposes: opts.purposes.map((p) => toWirePurpose(p).code),
+      ...opt('scopes', opts.scopes),
+      consentNoticeId: opts.consentNoticeId,
+      ...opt('consentNoticeVersion', opts.consentNoticeVersion),
+      ...opt('consentNoticeHash', evidence.consentNoticeHash),
+      processingExpiresAt: opts.processingExpiresAt.toISOString(),
+      signedAt: new Date().toISOString(),
+    });
+    evidence.signedPayload = signedPayload;
+    evidence.signature = await signPayload(signedPayload, opts.signingKey);
+  }
+
+  return Object.keys(evidence).length > 0 ? evidence : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,18 +95,11 @@ function validatePurposes(purposes: CreateConsentRecordOptions['purposes']): voi
   }
 
   for (const p of purposes) {
-    const missing: string[] = [];
-    if (!p.purposeId) missing.push('purposeId');
-    if (!p.name) missing.push('name');
-    if (!p.description) missing.push('description');
-    if (!p.legalBasis) missing.push('legalBasis');
-    if (!p.dataCategories || p.dataCategories.length === 0) missing.push('dataCategories');
-    if (!p.retentionPeriod) missing.push('retentionPeriod');
-    if (p.thirdPartySharing === undefined) missing.push('thirdPartySharing');
-
+    const missing = missingWireFields(p);
     if (missing.length > 0) {
+      const label = purposeLabel(p);
       throw new DpdpError(
-        `Purpose "${p.purposeId || '(unnamed)'}" is missing mandatory fields: ${missing.join(', ')}`,
+        `Purpose "${label === '?' ? '(unnamed)' : label}" is missing mandatory fields: ${missing.join(', ')}`,
         'INVALID_PURPOSE',
         400,
       );
@@ -89,169 +112,120 @@ function validatePurposes(purposes: CreateConsentRecordOptions['purposes']): voi
 // ---------------------------------------------------------------------------
 
 /**
- * Create a DPDP consent record linked to a Grantex grant token.
+ * Create a DPDP consent record linked to a Grantex grant.
  *
- * The record is persisted server-side via `POST /v1/dpdp/consent-records`
- * and includes an Ed25519 signature over the canonical payload.
+ * `POST /v1/dpdp/consent-records` with `{ grantId, dataPrincipalId, purposes,
+ * consentNoticeId, consentNoticeVersion?, processingExpiresAt }`. The server
+ * hashes the notice version and signs the consent proof (a JWS, EdDSA); the
+ * result carries both. Local-only options (IP address, user agent, session,
+ * notice content, signing key) are never sent: they produce `localEvidence`.
  */
 export async function createConsentRecord(
   opts: CreateConsentRecordOptions,
-): Promise<DPDPConsentRecord> {
+): Promise<CreatedConsentRecord> {
   validatePurposes(opts.purposes);
 
-  const consentGivenAt = new Date();
-  const noticeHash = await computeNoticeHash(opts.consentNoticeContent);
-
-  // Build the signature payload
-  const payload = buildSignaturePayload(opts, noticeHash, consentGivenAt);
-
-  let signature = '';
-  if (opts.signingKey) {
-    signature = await signRecord(payload, opts.signingKey);
-  }
+  const localEvidence = await buildLocalEvidence(opts);
 
   const body = {
     grantId: opts.grantId,
     dataPrincipalId: opts.dataPrincipalId,
-    ...(opts.dataPrincipalDID !== undefined ? { dataPrincipalDID: opts.dataPrincipalDID } : {}),
-    dataFiduciaryId: opts.dataFiduciaryId,
-    dataFiduciaryName: opts.dataFiduciaryName,
-    purposes: opts.purposes,
-    scopes: opts.scopes,
+    purposes: opts.purposes.map(toWirePurpose),
     consentNoticeId: opts.consentNoticeId,
-    consentNoticeHash: noticeHash,
-    consentGivenAt: consentGivenAt.toISOString(),
-    consentMethod: opts.consentMethod,
+    ...opt('consentNoticeVersion', opts.consentNoticeVersion),
     processingExpiresAt: opts.processingExpiresAt.toISOString(),
-    retentionUntil: opts.retentionUntil.toISOString(),
-    consentProof: {
-      ...(opts.proofIpAddress !== undefined
-        ? { ipAddress: hashIpAddress(opts.proofIpAddress) }
-        : {}),
-      ...(opts.proofUserAgent !== undefined ? { userAgent: opts.proofUserAgent } : {}),
-      ...(opts.proofSessionId !== undefined ? { sessionId: opts.proofSessionId } : {}),
-      signedAt: consentGivenAt.toISOString(),
-      signature,
-    },
   };
 
-  const res = await fetch(`${opts.baseUrl}/v1/dpdp/consent-records`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${opts.apiKey}`,
+  const { data } = await dpdpRequest(
+    { method: 'POST', url: dpdpUrl(opts.baseUrl, [RECORDS]), apiKey: opts.apiKey, body },
+    failure('Failed to create consent record', 'CREATE_FAILED'),
+  );
+
+  const raw = asObject(data);
+  const proof = asObject(raw.consentProof);
+  return {
+    recordId: raw.recordId as string,
+    grantId: raw.grantId as string,
+    dataPrincipalId: raw.dataPrincipalId as string,
+    consentNoticeId: raw.consentNoticeId as string,
+    ...opt('consentNoticeVersion', str(raw.consentNoticeVersion)),
+    consentNoticeHash: raw.consentNoticeHash as string,
+    consentProof: {
+      type: proof.type as 'JWS-EdDSA',
+      alg: proof.alg as string,
+      kid: str(proof.kid) ?? null,
+      ...opt('keyPersistence', keyPersistenceOf(proof.keyPersistence)),
+      proofJwt: proof.proofJwt as string,
+      jwksUri: proof.jwksUri as string,
+      signedAt: toDate(proof.signedAt) as Date,
     },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({})) as Record<string, unknown>;
-    throw new DpdpError(
-      (errBody.message as string) ?? `Failed to create consent record (${res.status})`,
-      'CREATE_FAILED',
-      res.status,
-    );
-  }
-
-  const data = (await res.json()) as Record<string, unknown>;
-  return deserializeRecord(data);
+    processingExpiresAt: toDate(raw.processingExpiresAt) as Date,
+    retentionUntil: toDate(raw.retentionUntil) as Date,
+    status: raw.status as CreatedConsentRecord['status'],
+    createdAt: toDate(raw.createdAt) as Date,
+    ...opt('localEvidence', localEvidence),
+  };
 }
 
 /**
  * Fetch a single consent record by ID.
+ *
+ * `GET /v1/dpdp/consent-records/:recordId`
  */
 export async function getConsentRecord(
   recordId: string,
   apiKey: string,
   baseUrl: string,
 ): Promise<DPDPConsentRecord> {
-  const res = await fetch(`${baseUrl}/v1/dpdp/consent-records/${recordId}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-
-  if (!res.ok) {
-    throw new DpdpError(
-      `Failed to get consent record ${recordId} (${res.status})`,
-      'GET_FAILED',
-      res.status,
-    );
-  }
-
-  const data = (await res.json()) as Record<string, unknown>;
-  return deserializeRecord(data);
+  const { data } = await dpdpRequest(
+    { method: 'GET', url: dpdpUrl(baseUrl, [RECORDS, recordId]), apiKey },
+    failure(`Failed to get consent record ${recordId}`, 'GET_FAILED'),
+  );
+  return decodeConsentRecord(data);
 }
 
 /**
- * List all consent records for a data principal.
+ * List consent records, newest first, optionally for one data principal.
+ *
+ * `GET /v1/dpdp/consent-records?dataPrincipalId=&limit=&cursor=`
+ */
+export async function listConsentRecordsPage(
+  options: ListConsentRecordsOptions,
+  apiKey: string,
+  baseUrl: string,
+): Promise<ConsentRecordPage> {
+  const { data } = await dpdpRequest(
+    {
+      method: 'GET',
+      url: dpdpUrl(baseUrl, [RECORDS], {
+        dataPrincipalId: options.dataPrincipalId,
+        limit: options.limit,
+        cursor: options.cursor,
+      }),
+      apiKey,
+    },
+    failure('Failed to list consent records', 'LIST_FAILED'),
+  );
+  const raw = asObject(data);
+  const records = Array.isArray(raw.records) ? raw.records : [];
+  return {
+    records: records.map((r) => decodeConsentRecord(r)),
+    totalRecords: num(raw.totalRecords) ?? records.length,
+    nextCursor: nextCursorOf(raw),
+  };
+}
+
+/**
+ * List one page of consent records for a data principal (the first page unless
+ * `page.cursor` is given). Use {@link listConsentRecordsPage} for `totalRecords`
+ * and `nextCursor`.
  */
 export async function listConsentRecords(
   principalId: string,
   apiKey: string,
   baseUrl: string,
+  page: { limit?: number; cursor?: string } = {},
 ): Promise<DPDPConsentRecord[]> {
-  const res = await fetch(
-    `${baseUrl}/v1/dpdp/consent-records?dataPrincipalId=${encodeURIComponent(principalId)}`,
-    { headers: { Authorization: `Bearer ${apiKey}` } },
-  );
-
-  if (!res.ok) {
-    throw new DpdpError(
-      `Failed to list consent records (${res.status})`,
-      'LIST_FAILED',
-      res.status,
-    );
-  }
-
-  const body = (await res.json()) as { records: Record<string, unknown>[] };
-  return (body.records ?? []).map(deserializeRecord);
-}
-
-// ---------------------------------------------------------------------------
-// Deserialization
-// ---------------------------------------------------------------------------
-
-function deserializeRecord(raw: Record<string, unknown>): DPDPConsentRecord {
-  const proof = raw.consentProof as Record<string, unknown> | undefined;
-  const actions = (raw.actions as Record<string, unknown>[] | undefined) ?? [];
-
-  return {
-    recordId: raw.recordId as string,
-    grantId: raw.grantId as string,
-    dataPrincipalId: raw.dataPrincipalId as string,
-    ...(raw.dataPrincipalDID !== undefined
-      ? { dataPrincipalDID: raw.dataPrincipalDID as string }
-      : {}),
-    dataFiduciaryId: raw.dataFiduciaryId as string,
-    dataFiduciaryName: raw.dataFiduciaryName as string,
-    purposes: raw.purposes as DPDPConsentRecord['purposes'],
-    scopes: raw.scopes as string[],
-    consentNoticeId: raw.consentNoticeId as string,
-    consentNoticeHash: raw.consentNoticeHash as string,
-    consentGivenAt: new Date(raw.consentGivenAt as string),
-    consentMethod: raw.consentMethod as DPDPConsentRecord['consentMethod'],
-    processingExpiresAt: new Date(raw.processingExpiresAt as string),
-    retentionUntil: new Date(raw.retentionUntil as string),
-    consentProof: {
-      ...(proof?.ipAddress !== undefined ? { ipAddress: proof.ipAddress as string } : {}),
-      ...(proof?.userAgent !== undefined ? { userAgent: proof.userAgent as string } : {}),
-      ...(proof?.sessionId !== undefined ? { sessionId: proof.sessionId as string } : {}),
-      signedAt: new Date((proof?.signedAt as string) ?? (raw.consentGivenAt as string)),
-      signature: (proof?.signature as string) ?? '',
-    },
-    status: raw.status as DPDPConsentRecord['status'],
-    ...(raw.withdrawnAt !== undefined ? { withdrawnAt: new Date(raw.withdrawnAt as string) } : {}),
-    ...(raw.withdrawnReason !== undefined ? { withdrawnReason: raw.withdrawnReason as string } : {}),
-    ...(raw.lastAccessedAt !== undefined
-      ? { lastAccessedAt: new Date(raw.lastAccessedAt as string) }
-      : {}),
-    accessCount: (raw.accessCount as number) ?? 0,
-    actions: actions.map((a) => ({
-      actionId: a.actionId as string,
-      timestamp: new Date(a.timestamp as string),
-      action: a.action as string,
-      agentId: a.agentId as string,
-      result: a.result as string,
-      ...(a.metadata !== undefined ? { metadata: a.metadata as Record<string, unknown> } : {}),
-    })),
-  };
+  const result = await listConsentRecordsPage({ dataPrincipalId: principalId, ...page }, apiKey, baseUrl);
+  return result.records;
 }

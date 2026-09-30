@@ -12,6 +12,7 @@ export interface ConsentRegistryStats {
   activeRecords: number;
   withdrawnRecords: number;
   expiredRecords: number;
+  erasedRecords: number;
   principalCount: number;
 }
 
@@ -84,6 +85,7 @@ export class ConsentRegistry {
     let active = 0;
     let withdrawn = 0;
     let expired = 0;
+    let erased = 0;
 
     for (const record of this.records.values()) {
       switch (record.status) {
@@ -96,6 +98,9 @@ export class ConsentRegistry {
         case 'expired':
           expired++;
           break;
+        case 'erased':
+          erased++;
+          break;
       }
     }
 
@@ -104,6 +109,7 @@ export class ConsentRegistry {
       activeRecords: active,
       withdrawnRecords: withdrawn,
       expiredRecords: expired,
+      erasedRecords: erased,
       principalCount: this.byPrincipal.size,
     };
   }

@@ -7,6 +7,8 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Spinner } from '../../components/ui/Spinner';
+import { DpdpIndicators } from './DpdpIndicators';
+import { dpdpDashboardIndicatorsEnabled } from '../../lib/flags';
 
 function downloadJson(data: unknown, filename: string) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -18,47 +20,12 @@ function downloadJson(data: unknown, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function ScoreCard({ label, score, variant }: { label: string; score: number; variant: 'success' | 'warning' | 'danger' }) {
-  const color =
-    variant === 'success'
-      ? 'text-gx-accent'
-      : variant === 'warning'
-        ? 'text-gx-warning'
-        : 'text-gx-danger';
-  const bgColor =
-    variant === 'success'
-      ? 'bg-gx-accent/10'
-      : variant === 'warning'
-        ? 'bg-gx-warning/10'
-        : 'bg-gx-danger/10';
-  return (
-    <Card className="relative overflow-hidden">
-      <div className={`absolute inset-0 ${bgColor} opacity-50`} />
-      <div className="relative">
-        <p className="text-xs text-gx-muted mb-1">{label}</p>
-        <p className={`text-3xl font-bold font-mono ${color}`}>{score}%</p>
-        <div className="mt-2 h-1.5 bg-gx-border/50 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all ${
-              variant === 'success'
-                ? 'bg-gx-accent'
-                : variant === 'warning'
-                  ? 'bg-gx-warning'
-                  : 'bg-gx-danger'
-            }`}
-            style={{ width: `${score}%` }}
-          />
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 export function ComplianceDashboard() {
   const [summary, setSummary] = useState<ComplianceSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<string | null>(null);
   const { show } = useToast();
+  const showDpdpIndicators = dpdpDashboardIndicatorsEnabled();
 
   useEffect(() => {
     getComplianceSummary()
@@ -96,7 +63,6 @@ export function ComplianceDashboard() {
     );
   }
 
-  // Compute compliance scores based on summary data
   const hasPolicies = summary.policies.total > 0;
   const hasAudit = summary.auditEntries.total > 0;
   const lowFailureRate =
@@ -104,38 +70,11 @@ export function ComplianceDashboard() {
       ? summary.auditEntries.failure / summary.auditEntries.total < 0.1
       : true;
 
-  const dpdpScore = Math.min(
-    100,
-    (hasPolicies ? 30 : 0) + (hasAudit ? 30 : 0) + (lowFailureRate ? 20 : 0) + (summary.grants.active > 0 ? 20 : 0),
-  );
-  const euAiScore = Math.min(
-    100,
-    (hasAudit ? 35 : 0) + (hasPolicies ? 35 : 0) + (summary.agents.total > 0 ? 30 : 0),
-  );
-  const owaspScore = Math.min(
-    100,
-    (hasPolicies ? 25 : 0) +
-      (hasAudit ? 25 : 0) +
-      (lowFailureRate ? 25 : 0) +
-      (summary.grants.revoked + summary.grants.expired > 0 || summary.grants.active > 0 ? 25 : 0),
-  );
-
-  const dpdpVariant = dpdpScore >= 80 ? 'success' : dpdpScore >= 50 ? 'warning' : 'danger';
-  const euAiVariant = euAiScore >= 80 ? 'success' : euAiScore >= 50 ? 'warning' : 'danger';
-  const owaspVariant = owaspScore >= 80 ? 'success' : owaspScore >= 50 ? 'warning' : 'danger';
-
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-semibold text-gx-text">Compliance</h1>
         <Badge>{summary.plan} plan</Badge>
-      </div>
-
-      {/* Compliance Scores */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <ScoreCard label="DPDP 2023" score={dpdpScore} variant={dpdpVariant} />
-        <ScoreCard label="EU AI Act" score={euAiScore} variant={euAiVariant} />
-        <ScoreCard label="OWASP Agentic Top 10" score={owaspScore} variant={owaspVariant} />
       </div>
 
       {/* Summary stats */}
@@ -191,7 +130,7 @@ export function ComplianceDashboard() {
             <div className="flex items-center justify-between p-3 bg-gx-warning/5 rounded-md border border-gx-warning/20">
               <div className="flex items-center gap-3">
                 <Badge variant="warning">Action</Badge>
-                <span className="text-sm text-gx-text">Enable audit logging for compliance tracking</span>
+                <span className="text-sm text-gx-text">Enable audit logging to record agent actions</span>
               </div>
               <Link to="/dashboard/audit">
                 <Button variant="secondary" size="sm">View Audit</Button>
@@ -215,12 +154,15 @@ export function ComplianceDashboard() {
         </div>
       </Card>
 
+      {/* DPDP records: factual counts from the DPDP endpoints, behind a default-off flag */}
+      {showDpdpIndicators && <DpdpIndicators />}
+
       {/* DPDP Consent Records & Grievances quick links */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <Card>
           <h2 className="text-sm font-semibold text-gx-text mb-3">DPDP Consent Records</h2>
           <p className="text-xs text-gx-muted mb-4">
-            Manage data principal consent records under the DPDP Act 2023.
+            Manage data principal consent records under the DPDP Act 2023 (s.6).
           </p>
           <Link to="/dashboard/dpdp/records">
             <Button variant="secondary" size="sm">View Records</Button>
@@ -229,7 +171,7 @@ export function ComplianceDashboard() {
         <Card>
           <h2 className="text-sm font-semibold text-gx-text mb-3">Grievances</h2>
           <p className="text-xs text-gx-muted mb-4">
-            Track and resolve data principal grievances per DPDP section 13(6).
+            Track and resolve data principal grievances under DPDP s.13.
           </p>
           <Link to="/dashboard/dpdp/grievances">
             <Button variant="secondary" size="sm">View Grievances</Button>
@@ -286,7 +228,7 @@ export function ComplianceDashboard() {
           <div className="flex items-center justify-between p-3 bg-gx-bg rounded-md border border-gx-border">
             <div>
               <p className="text-sm font-medium text-gx-text">GDPR Evidence Pack</p>
-              <p className="text-xs text-gx-muted">Full evidence pack for GDPR compliance</p>
+              <p className="text-xs text-gx-muted">Evidence pack to help evidence GDPR accountability</p>
             </div>
             <Button
               variant="secondary"
@@ -299,8 +241,8 @@ export function ComplianceDashboard() {
           </div>
           <div className="flex items-center justify-between p-3 bg-gx-bg rounded-md border border-gx-border">
             <div>
-              <p className="text-sm font-medium text-gx-text">DPDP Compliance Export</p>
-              <p className="text-xs text-gx-muted">Consent records, grievances, and audit log for DPDP Act</p>
+              <p className="text-sm font-medium text-gx-text">DPDP Audit Export</p>
+              <p className="text-xs text-gx-muted">Consent records, grievances and audit log to help evidence DPDP Act obligations</p>
             </div>
             <Link to="/dashboard/dpdp/exports">
               <Button variant="secondary" size="sm">Configure</Button>

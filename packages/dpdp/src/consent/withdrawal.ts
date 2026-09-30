@@ -1,12 +1,14 @@
 /**
  * Consent withdrawal flow.
  *
- * DPDP Act 2023, Section 6(4) — a data principal may withdraw consent
- * at any time with the same ease as it was given.
+ * DPDP Act 2023, s.6(4) — a data principal may withdraw consent at any time,
+ * with the same ease as it was given; s.6(6) — the data fiduciary must then
+ * cease processing within a reasonable time.
  */
 
 import type { WithdrawConsentOptions, WithdrawalConfirmation } from '../types.js';
 import { WithdrawalError } from '../errors.js';
+import { asObject, dpdpRequest, dpdpUrl, opt, seg, toDate } from '../http.js';
 
 /**
  * Withdraw consent for a specific consent record.
@@ -14,8 +16,12 @@ import { WithdrawalError } from '../errors.js';
  * `POST /v1/dpdp/consent-records/:id/withdraw`
  *
  * Options:
- *  - `revokeGrant` — also revoke the linked Grantex grant token
- *  - `deleteProcessedData` — request deletion of all data processed under this consent
+ *  - `revokeGrant` — also revoke the linked Grantex grant
+ *  - `deleteProcessedData` — record a request to delete data processed under
+ *    this consent (the data fiduciary carries it out; `dataDeleted` is always false)
+ *
+ * Fails with a `WithdrawalError` whose `code` is the server's: `NOT_FOUND` (404),
+ * `ALREADY_WITHDRAWN`, `CONSENT_ERASED` or `CONSENT_EXPIRED` (409).
  */
 export async function withdrawConsent(
   recordId: string,
@@ -35,32 +41,23 @@ export async function withdrawConsent(
     deleteProcessedData: options.deleteProcessedData ?? false,
   };
 
-  const res = await fetch(
-    `${options.baseUrl}/v1/dpdp/consent-records/${encodeURIComponent(recordId)}/withdraw`,
+  const { data } = await dpdpRequest(
     {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${options.apiKey}`,
-      },
-      body: JSON.stringify(body),
+      url: dpdpUrl(options.baseUrl, [seg('consent-records'), recordId, seg('withdraw')]),
+      apiKey: options.apiKey,
+      body,
     },
+    (f) => new WithdrawalError(f.message ?? `Withdrawal failed (${f.statusCode})`, f),
   );
 
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({})) as Record<string, unknown>;
-    throw new WithdrawalError(
-      (errBody.message as string) ?? `Withdrawal failed (${res.status})`,
-    );
-  }
-
-  const data = (await res.json()) as Record<string, unknown>;
-
+  const raw = asObject(data);
   return {
-    recordId: data.recordId as string,
+    recordId: raw.recordId as string,
     status: 'withdrawn',
-    withdrawnAt: new Date(data.withdrawnAt as string),
-    grantRevoked: (data.grantRevoked as boolean) ?? false,
-    dataDeleted: (data.dataDeleted as boolean) ?? false,
+    withdrawnAt: toDate(raw.withdrawnAt) as Date,
+    grantRevoked: raw.grantRevoked === true,
+    dataDeleted: raw.dataDeleted === true,
+    ...opt('dataDeletionRequested', typeof raw.dataDeletionRequested === 'boolean' ? raw.dataDeletionRequested : undefined),
   };
 }

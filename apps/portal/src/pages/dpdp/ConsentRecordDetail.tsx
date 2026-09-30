@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { withdrawConsent } from '../../api/dpdp';
-import type { ConsentRecord } from '../../api/dpdp';
+import { getConsentRecord, withdrawConsent } from '../../api/dpdp';
+import type { ConsentRecord, WithdrawConsentRequest } from '../../api/dpdp';
+import { ApiError } from '../../api/client';
 import { useToast } from '../../store/toast';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -9,17 +10,9 @@ import { Badge } from '../../components/ui/Badge';
 import { Spinner } from '../../components/ui/Spinner';
 import { CopyButton } from '../../components/ui/CopyButton';
 import { ScopePills } from '../../components/ui/ScopePills';
-import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { formatDateTime } from '../../lib/format';
-
-function statusVariant(status: string): 'success' | 'warning' | 'danger' | 'default' {
-  switch (status) {
-    case 'active': return 'success';
-    case 'withdrawn': return 'danger';
-    case 'expired': return 'warning';
-    default: return 'default';
-  }
-}
+import { consentStatusVariant } from './status';
+import { WithdrawConsentDialog, withdrawErrorMessage, withdrawSuccessMessage } from './WithdrawConsentDialog';
 
 export function ConsentRecordDetail() {
   const { recordId } = useParams<{ recordId: string }>();
@@ -27,37 +20,48 @@ export function ConsentRecordDetail() {
 
   const [record, setRecord] = useState<ConsentRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (!recordId) return;
-    // We need to search by a data principal to find the record.
-    // Since we don't know the principalId from the URL, we'll try to find
-    // the record across all principals. In production, there would be a
-    // direct GET /v1/dpdp/consent-records/:id endpoint.
-    // For now, the record data should be passed via navigation state or cached.
-    setLoading(false);
-  }, [recordId]);
+    try {
+      const rec = await getConsentRecord(recordId);
+      setRecord(rec);
+      setNotFound(false);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        setRecord(null);
+        setNotFound(true);
+      } else {
+        show('Failed to load consent record', 'error');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [recordId, show]);
 
-  // If navigated from list, record might be in location state
   useEffect(() => {
-    if (!recordId) return;
-    // Attempt to look up record — in a real implementation we'd have a direct endpoint
-    setLoading(false);
-  }, [recordId]);
+    setLoading(true);
+    void load();
+  }, [load]);
 
-  async function handleWithdraw() {
+  async function handleWithdraw(request: WithdrawConsentRequest) {
     if (!record) return;
     setWithdrawing(true);
     try {
-      await withdrawConsent(record.recordId, { reason: 'Consent withdrawn by data fiduciary' });
+      const res = await withdrawConsent(record.recordId, request);
       setRecord((prev) =>
-        prev ? { ...prev, status: 'withdrawn' as const, withdrawnAt: new Date().toISOString() } : prev,
+        prev
+          ? { ...prev, status: res.status, withdrawnAt: res.withdrawnAt, withdrawnReason: request.reason }
+          : prev,
       );
-      show('Consent withdrawn', 'success');
-    } catch {
-      show('Failed to withdraw consent', 'error');
+      show(withdrawSuccessMessage(res.grantRevoked), 'success');
+    } catch (err) {
+      const { message, conflict } = withdrawErrorMessage(err);
+      show(message, 'error');
+      if (conflict) void load();
     } finally {
       setWithdrawing(false);
       setShowWithdraw(false);
@@ -80,11 +84,13 @@ export function ConsentRecordDetail() {
         </Link>
         <Card className="mt-4">
           <div className="text-center py-8">
-            <p className="text-sm text-gx-muted mb-2">
-              Record details are available when navigating from the consent records list.
+            <p className="text-sm text-gx-text mb-2">
+              {notFound ? 'Consent record not found' : 'Consent record unavailable'}
             </p>
             <p className="text-xs text-gx-muted mb-4">
-              Search by Data Principal ID to view detailed record information.
+              {notFound
+                ? <>No consent record <span className="font-mono">{recordId}</span> exists for this account.</>
+                : 'The record could not be loaded. Try again later.'}
             </p>
             <Link to="/dashboard/dpdp/records">
               <Button variant="secondary" size="sm">Go to Consent Records</Button>
@@ -126,7 +132,7 @@ export function ConsentRecordDetail() {
             </div>
             <div>
               <dt className="text-xs text-gx-muted">Data Principal</dt>
-              <dd className="text-sm font-mono text-gx-text mt-0.5">{record.dataPrincipalId}</dd>
+              <dd className="text-sm font-mono text-gx-text mt-0.5">{record.dataPrincipalId ?? '-'}</dd>
             </div>
             <div>
               <dt className="text-xs text-gx-muted">Data Fiduciary</dt>
@@ -136,7 +142,7 @@ export function ConsentRecordDetail() {
               <dt className="text-xs text-gx-muted">Grant</dt>
               <dd className="mt-0.5">
                 <Link
-                  to={`/dashboard/grants/${record.grantId}`}
+                  to={`/dashboard/grants/${encodeURIComponent(record.grantId)}`}
                   className="text-sm font-mono text-gx-accent2 hover:underline"
                 >
                   {record.grantId}
@@ -146,9 +152,15 @@ export function ConsentRecordDetail() {
             <div>
               <dt className="text-xs text-gx-muted">Status</dt>
               <dd className="mt-0.5">
-                <Badge variant={statusVariant(record.status)}>{record.status}</Badge>
+                <Badge variant={consentStatusVariant(record.status)}>{record.status}</Badge>
               </dd>
             </div>
+            {record.withdrawnReason && (
+              <div>
+                <dt className="text-xs text-gx-muted">Withdrawal reason</dt>
+                <dd className="text-sm text-gx-text mt-0.5">{record.withdrawnReason}</dd>
+              </div>
+            )}
           </dl>
         </Card>
 
@@ -156,13 +168,26 @@ export function ConsentRecordDetail() {
           <h2 className="text-xs font-medium text-gx-muted mb-4">Consent Metadata</h2>
           <dl className="space-y-3">
             <div>
+              <dt className="text-xs text-gx-muted">Consent Notice</dt>
+              <dd className="text-sm text-gx-text mt-0.5">
+                <span className="font-mono">{record.consentNoticeId}</span>
+                <span className="text-gx-muted"> version </span>
+                {record.consentNoticeVersion
+                  ? <span className="font-mono">{record.consentNoticeVersion}</span>
+                  : <span className="text-gx-muted">not recorded</span>}
+              </dd>
+            </div>
+            <div>
               <dt className="text-xs text-gx-muted">Purposes</dt>
               <dd className="mt-1">
-                <div className="flex flex-wrap gap-1">
+                <ul className="space-y-1">
                   {record.purposes.map((p) => (
-                    <Badge key={p.code}>{p.code}</Badge>
+                    <li key={p.code} className="flex items-baseline gap-2">
+                      <Badge>{p.code}</Badge>
+                      <span className="text-sm text-gx-text">{p.description}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               </dd>
             </div>
             <div>
@@ -217,9 +242,15 @@ export function ConsentRecordDetail() {
               <div>
                 <p className="text-sm text-gx-text">Consent withdrawn</p>
                 <p className="text-xs text-gx-muted">{formatDateTime(record.withdrawnAt)}</p>
-                {record.withdrawnReason && (
-                  <p className="text-xs text-gx-muted mt-0.5">Reason: {record.withdrawnReason}</p>
-                )}
+              </div>
+            </div>
+          )}
+          {record.erasedAt && (
+            <div className="flex items-start gap-3">
+              <div className="w-2 h-2 rounded-full bg-gx-danger mt-1.5 shrink-0" />
+              <div>
+                <p className="text-sm text-gx-text">Data erased</p>
+                <p className="text-xs text-gx-muted">{formatDateTime(record.erasedAt)}</p>
               </div>
             </div>
           )}
@@ -240,24 +271,13 @@ export function ConsentRecordDetail() {
         </div>
       </Card>
 
-      {/* Consent Proof */}
-      {record.consentProof && Object.keys(record.consentProof).length > 0 && (
-        <Card className="mt-4">
-          <h2 className="text-sm font-semibold text-gx-text mb-4">Consent Proof</h2>
-          <pre className="text-xs text-gx-muted bg-gx-bg p-3 rounded-md overflow-x-auto">
-            {JSON.stringify(record.consentProof, null, 2)}
-          </pre>
-        </Card>
-      )}
-
-      <ConfirmDialog
+      <WithdrawConsentDialog
         open={showWithdraw}
+        recordId={record.recordId}
+        grantId={record.grantId}
+        loading={withdrawing}
         onClose={() => setShowWithdraw(false)}
         onConfirm={handleWithdraw}
-        title="Withdraw Consent"
-        message="Are you sure you want to withdraw this consent record? The data principal's processing consent will be revoked. This action cannot be undone."
-        confirmLabel="Withdraw"
-        loading={withdrawing}
       />
     </div>
   );

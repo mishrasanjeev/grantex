@@ -1,7 +1,8 @@
 import { type ReactNode } from 'react';
 import { cn } from '../../lib/cn';
 
-type Variant = 'default' | 'success' | 'warning' | 'danger';
+export type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info';
+type Variant = BadgeVariant;
 
 interface BadgeProps {
   children: ReactNode;
@@ -13,6 +14,7 @@ const variants: Record<Variant, string> = {
   success: 'bg-gx-accent/15 text-gx-accent',
   warning: 'bg-gx-warning/15 text-gx-warning',
   danger: 'bg-gx-danger/15 text-gx-danger',
+  info: 'bg-gx-accent2/15 text-gx-accent2',
 };
 
 export function Badge({ children, variant = 'default' }: BadgeProps) {

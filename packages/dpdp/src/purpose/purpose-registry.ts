@@ -1,11 +1,15 @@
 /**
  * Named purpose registry — maps purpose definitions to required scopes.
  *
- * DPDP Act 2023, Section 4 — processing must be for a specific, clear,
- * and lawful purpose communicated to the data principal.
+ * DPDP Act 2023, s.4 — personal data may be processed only for a lawful
+ * purpose (s.4(2): one not expressly forbidden by law), with the data
+ * principal's consent or for a legitimate use.
+ *
+ * The registry holds the local purpose model. Only `{ code: purposeId,
+ * description }` is ever sent to the server (see `toWirePurpose`).
  */
 
-import type { RegisteredPurpose, ConsentPurpose } from '../types.js';
+import type { RegisteredPurpose, ConsentPurpose, WirePurpose } from '../types.js';
 
 export class PurposeRegistry {
   private readonly purposes = new Map<string, RegisteredPurpose>();
@@ -40,7 +44,8 @@ export class PurposeRegistry {
   }
 
   /**
-   * Convert a registered purpose into a ConsentPurpose suitable for consent records.
+   * Convert a registered purpose into the local `ConsentPurpose` model.
+   * Its fields beyond `purposeId` and `description` are local-only.
    */
   toConsentPurpose(purposeId: string): ConsentPurpose | undefined {
     const rp = this.purposes.get(purposeId);
@@ -56,5 +61,15 @@ export class PurposeRegistry {
       thirdPartySharing: rp.thirdPartySharing,
       ...(rp.thirdParties !== undefined ? { thirdParties: rp.thirdParties } : {}),
     };
+  }
+
+  /**
+   * The wire shape `{ code, description }` of a registered purpose, as the
+   * server stores it. Returns `undefined` if the purpose is not registered.
+   */
+  toWirePurpose(purposeId: string): WirePurpose | undefined {
+    const rp = this.purposes.get(purposeId);
+    if (!rp) return undefined;
+    return { code: rp.purposeId, description: rp.description };
   }
 }
