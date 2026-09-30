@@ -66,8 +66,13 @@ The repository contains 35 packages under `packages/`. Each row maps a directory
   human-principal resolver and trusted current-grant verification. The consent
   page does not replace human login or passkeys. Memory storage and explicitly
   disabled current-grant checks remain evaluation-only.
-- **Unpublished audit changes:** Python 0.7.1, Go authority hardening and changed
-  integration source are not new registry releases. Existing integration
+- **Prepared, not yet published:** `@grantex/sdk` 0.8.2, `grantex` 0.7.2, Go
+  v0.4.3, `@grantex/cli` 0.4.2 and `@grantex/dpdp` 0.2.0 carry the DPDP client
+  changes (the DPDP routes as shipped, `--notice-version`, `keyPersistence`,
+  expanded erasure results). Until they are on the registries, install the
+  versions listed above; CLI 0.4.1 cannot create consent notices.
+- **Unpublished audit changes:** changed
+  integration source is not a new registry release. Existing integration
   versions do not contain the audit's new opt-in authority forwarding.
 - **Current SDK enforcement:** Node.js 22.12+ is required for changed npm
   packages. Local verification is not current-state enforcement; legacy aliases

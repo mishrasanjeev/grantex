@@ -232,7 +232,7 @@ describe('dpdp command', () => {
       const { program, output } = realProgram();
       await program.parseAsync(noticeCreateArgs, { from: 'user' });
 
-      expect(output()).not.toContain('0.4.1');
+      expect(output()).not.toContain('0.4.2');
       expect(fetchUrl()).toBe(`${BASE}/v1/dpdp/consent-notices`);
       expect(sentBody().version).toBe('2.0');
       expect(sentBody().noticeId).toBe('privacy-notice');
@@ -243,14 +243,14 @@ describe('dpdp command', () => {
       const err = await program.parseAsync(['--version'], { from: 'user' }).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(CommanderError);
       expect((err as CommanderError).code).toBe('commander.version');
-      expect(output()).toContain('0.4.1');
+      expect(output()).toContain('0.4.2');
     });
 
     it('still prints the CLI version for grantex -V', async () => {
       const { program, output } = realProgram();
       const err = await program.parseAsync(['-V'], { from: 'user' }).catch((e: unknown) => e);
       expect((err as CommanderError).code).toBe('commander.version');
-      expect(output()).toContain('0.4.1');
+      expect(output()).toContain('0.4.2');
     });
   });
 

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Release preparation: DPDP clients
+- Versions bumped for the DPDP client changes: `@grantex/sdk` 0.8.2,
+  `grantex` (Python) 0.7.2, Go SDK v0.4.3, `@grantex/cli` 0.4.2 and
+  `@grantex/dpdp` 0.2.0 (minor: its types follow the server's grievance
+  statuses, inline exports and consent proofs). Not yet published.
+
 ### DPDP and EU AI Act documentation
 - Rewrote `docs/features/dpdp-compliance.mdx` to document the shipped DPDP
   routes (the page described a `DPDPClient` API that does not exist), and

@@ -1,6 +1,6 @@
 {
   "name": "@grantex/dpdp",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "DPDP Act 2023 & EU AI Act compliance module for AI agents using the Grantex authorization protocol",
   "author": {
     "name": "Sanjeev Kumar",
