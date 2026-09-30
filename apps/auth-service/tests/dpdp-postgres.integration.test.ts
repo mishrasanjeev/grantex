@@ -4,18 +4,22 @@
  *
  * Covered: migration 127 (erasure requests, the notice version on a record,
  * the grievance response period, the status CHECK constraints); consent
- * withdrawal in one transaction, revoking through the grant cascade, racing a
+ * withdrawal in one transaction, revoking only the record's grant by default
+ * and through the grant cascade under DPDP_REVOCATION_CASCADE, racing a
  * second withdrawal, refusing an erased record, and the
  * DPDP_WITHDRAWAL_REVOKES_GRANT default; deleteProcessedData leaving the
- * audit hash chain intact; erasure (revocation of live grants only, records
- * marked erased and retained, grievance redaction, stored exports deleted,
- * the persisted and idempotent request, GET /v1/dpdp/erasure-requests/:id);
+ * audit hash chain intact; erasure (revocation of live grants only, root-only
+ * by default, records marked erased and retained, grievances and stored
+ * exports kept and listed as retained by default, redacted and deleted under
+ * DPDP_ERASURE_EXPANDED, the persisted and idempotent request,
+ * GET /v1/dpdp/erasure-requests/:id);
  * record creation refusing inactive and expired grants, the principal check
  * behind DPDP_ENFORCE_GRANT_PRINCIPAL, notice version pinning and a consent
  * proof without an expiry; reads without side effects; notice and grievance
  * lists; grievance transitions; export validation, truncation, expiry and
- * the principal filter; pagination; the platform audit entries; and the
- * consent expiry worker. The SQL mock forwards to a database of this file's
+ * the principal filter; pagination, and the pre-pagination cardinality of the
+ * record lists without limit or cursor; the platform audit entries; and the
+ * consent expiry worker, including its developer rotation. The SQL mock forwards to a database of this file's
  * own, so constraints, locks and the audit chain are the production ones.
  */
 import { randomUUID } from 'node:crypto';
@@ -243,7 +247,32 @@ describePostgres('migration 127 repairs double-encoded JSON', () => {
 });
 
 describePostgres('withdrawing consent', () => {
-  it('revokes the grant through the cascade: descendants, the revocation cache and the grant.revoked event', async () => {
+  it('by default revokes only the record\'s own grant, as before: no delegated grant is touched', async () => {
+    const tenant = await newTenant();
+    const grantId = await newGrant(tenant);
+    const child = await newGrant(tenant, { parent: grantId });
+    const { recordId } = await newRecord(tenant, { grantId });
+    mockRedis.set.mockClear();
+
+    const res = await call(tenant, 'POST', `/v1/dpdp/consent-records/${recordId}/withdraw`, { reason: 'No longer wanted', revokeGrant: true });
+
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({ recordId, status: 'withdrawn', grantRevoked: true, dataDeleted: false });
+    const [root] = await sql`SELECT status, revoked_at FROM grants WHERE id = ${grantId}`;
+    expect(root).toMatchObject({ status: 'revoked', revoked_at: expect.any(Date) });
+    expect(await grantStatus(child)).toBe('active');
+    const cached = mockRedis.set.mock.calls.map((args) => args[0]);
+    expect(cached).toContain(`revoked:grant:${grantId}`);
+    expect(cached).not.toContain(`revoked:grant:${child}`);
+    const revoked = await waitFor(() => deliveries(tenant, 'grant.revoked'), (rows) => rows.length > 0);
+    expect(revoked).toHaveLength(1);
+    expect(revoked[0]!['data']).toMatchObject({ grantId, cascade: false });
+    expect(await auditActions(tenant)).toContain('grantex.dpdp.consent_withdrawn');
+    expect((await chainIntegrity(tenant))['valid']).toBe(true);
+  });
+
+  it('under DPDP_REVOCATION_CASCADE=true revokes through the cascade: descendants, the revocation cache and the grant.revoked event', async () => {
+    vi.stubEnv('DPDP_REVOCATION_CASCADE', 'true');
     const tenant = await newTenant();
     const grantId = await newGrant(tenant);
     const child = await newGrant(tenant, { parent: grantId });
@@ -355,7 +384,72 @@ describePostgres('withdrawing consent', () => {
 });
 
 describePostgres('erasure', () => {
-  it('revokes live grants, retains the marked records, redacts grievances, deletes exports and keeps the chain valid', async () => {
+  it('by default revokes the records\' grants root-only and keeps grievances and stored exports, saying so in retained', async () => {
+    const tenant = await newTenant();
+    const principal = `user_dpdp_erase_${suffix()}`;
+    const live = await newRecord(tenant, { principal });
+    const child = await newGrant(tenant, { parent: live.grantId });
+    const entryId = await tenantAuditEntry(tenant, live.grantId, principal);
+    const [entryBefore] = await sql`SELECT metadata, hash FROM audit_entries WHERE id = ${entryId}`;
+    const grievance = await call(tenant, 'POST', '/v1/dpdp/grievances', {
+      dataPrincipalId: principal, recordId: live.recordId, type: 'access-request',
+      description: 'Contact me at a private address', evidence: { note: 'personal detail' },
+    });
+    expect(grievance.statusCode, grievance.body).toBe(202);
+    const range = { dateFrom: new Date(Date.now() - 86_400_000).toISOString(), dateTo: new Date(Date.now() + 86_400_000).toISOString() };
+    const filtered = await call(tenant, 'POST', '/v1/dpdp/exports', { type: 'gdpr-article-15', ...range, dataPrincipalId: principal });
+    expect(filtered.statusCode, filtered.body).toBe(201);
+
+    const res = await call(tenant, 'POST', `/v1/dpdp/data-principals/${principal}/erasure`);
+
+    expect(res.statusCode, res.body).toBe(201);
+    const body = res.json<Record<string, unknown>>();
+    expect(body).toMatchObject({
+      status: 'completed', recordsErased: 1, grantsRevoked: 1, delegatedGrantsRevoked: 0,
+      grievancesRedacted: 0, exportsDeleted: 0,
+    });
+    expect(await grantStatus(live.grantId)).toBe('revoked');
+    expect(await grantStatus(child)).toBe('active');
+    const [storedGrievance] = await sql`SELECT description, evidence FROM dpdp_grievances WHERE data_principal_id = ${principal}`;
+    expect(storedGrievance!['description']).toBe('Contact me at a private address');
+    expect(storedGrievance!['evidence']).toEqual({ note: 'personal detail' });
+    expect((await sql`SELECT id FROM dpdp_exports WHERE developer_id = ${tenant.id}`).map((row) => row['id']))
+      .toEqual([filtered.json()['exportId']]);
+
+    const retained = body['retained'] as Array<Record<string, unknown>>;
+    const byCategory = Object.fromEntries(retained.map((item) => [item['category'], item]));
+    expect(byCategory['grievances']).toMatchObject({ count: 1 });
+    expect(byCategory['grievances']!['reason']).toMatch(/expanded erasure is not enabled/i);
+    expect(byCategory['stored_exports']).toMatchObject({ count: 1 });
+    expect(byCategory['stored_exports']!['reason']).toMatch(/expanded erasure is not enabled/i);
+    const [stored] = await sql`SELECT retained FROM dpdp_erasure_requests WHERE id = ${body['requestId'] as string}`;
+    expect(stored!['retained']).toEqual(retained);
+
+    const [entryAfter] = await sql`SELECT metadata, hash FROM audit_entries WHERE id = ${entryId}`;
+    expect(entryAfter).toEqual(entryBefore);
+    expect(await chainIntegrity(tenant)).toMatchObject({ valid: true });
+    const again = await call(tenant, 'POST', `/v1/dpdp/data-principals/${principal}/erasure`);
+    expect(again.statusCode, again.body).toBe(200);
+    expect(again.json()['requestId']).toBe(body['requestId']);
+  });
+
+  it('under DPDP_REVOCATION_CASCADE=true revokes the records\' grants with their delegated grants', async () => {
+    vi.stubEnv('DPDP_REVOCATION_CASCADE', 'true');
+    const tenant = await newTenant();
+    const principal = `user_dpdp_erase_${suffix()}`;
+    const live = await newRecord(tenant, { principal });
+    const child = await newGrant(tenant, { parent: live.grantId });
+
+    const res = await call(tenant, 'POST', `/v1/dpdp/data-principals/${principal}/erasure`);
+
+    expect(res.statusCode, res.body).toBe(201);
+    expect(res.json()).toMatchObject({ grantsRevoked: 1, delegatedGrantsRevoked: 1 });
+    expect(await grantStatus(live.grantId)).toBe('revoked');
+    expect(await grantStatus(child)).toBe('revoked');
+  });
+
+  it('under DPDP_ERASURE_EXPANDED=true revokes live grants, retains the marked records, redacts grievances, deletes exports and keeps the chain valid', async () => {
+    vi.stubEnv('DPDP_ERASURE_EXPANDED', 'true');
     const tenant = await newTenant();
     const principal = `user_dpdp_erase_${suffix()}`;
     const live = await newRecord(tenant, { principal });
@@ -387,6 +481,8 @@ describePostgres('erasure', () => {
     const retained = body['retained'] as Array<Record<string, unknown>>;
     expect(retained.map((item) => item['category'])).toEqual(expect.arrayContaining(['consent_records', 'audit_log']));
     for (const item of retained) expect(typeof item['reason']).toBe('string');
+    expect(retained.map((item) => item['category'])).not.toContain('stored_exports');
+    expect(body).toMatchObject({ grievancesRedacted: 1, exportsDeleted: 2 });
 
     expect(await grantStatus(live.grantId)).toBe('revoked');
     expect(await grantStatus(other.grantId)).toBe('active');
@@ -548,6 +644,50 @@ describePostgres('reads', () => {
     for (const query of ['limit=0', 'limit=201', 'limit=abc', 'cursor=not-a-cursor']) {
       expect((await call(tenant, 'GET', `/v1/dpdp/consent-records?${query}`)).statusCode).toBe(400);
     }
+  });
+
+  it('without limit or cursor return what they returned before: 100 unfiltered, every match filtered', async () => {
+    const tenant = await newTenant();
+    const principal = `user_dpdp_bulk_${suffix()}`;
+    const { recordId } = await newRecord(tenant, { principal });
+    await sql`
+      INSERT INTO dpdp_consent_records (
+        id, developer_id, grant_id, data_principal_id, data_fiduciary_id, data_fiduciary_name,
+        purposes, scopes, consent_notice_id, consent_notice_version, consent_notice_hash,
+        consent_given_at, processing_expires_at, retention_until, consent_proof, created_at
+      )
+      SELECT 'crec_bulk_' || ${suffix()} || '_' || g, developer_id, grant_id, data_principal_id, data_fiduciary_id,
+             data_fiduciary_name, purposes, scopes, consent_notice_id, consent_notice_version, consent_notice_hash,
+             consent_given_at, processing_expires_at, retention_until, consent_proof,
+             created_at - (g || ' milliseconds')::interval
+      FROM dpdp_consent_records, generate_series(1, 119) AS g
+      WHERE id = ${recordId}`;
+
+    const unfiltered = await call(tenant, 'GET', '/v1/dpdp/consent-records');
+    expect(unfiltered.statusCode, unfiltered.body).toBe(200);
+    expect(unfiltered.json()['records']).toHaveLength(100);
+    expect(unfiltered.json()['totalRecords']).toBe(120);
+    expect(unfiltered.json()['nextCursor']).toEqual(expect.any(String));
+
+    const filtered = await call(tenant, 'GET', `/v1/dpdp/consent-records?dataPrincipalId=${principal}`);
+    expect(filtered.json()['records']).toHaveLength(120);
+    expect(filtered.json()['totalRecords']).toBe(120);
+    expect(filtered.json()['nextCursor']).toBeNull();
+
+    const access = await call(tenant, 'GET', `/v1/dpdp/data-principals/${principal}/records`);
+    expect(access.json()['records']).toHaveLength(120);
+    expect(access.json()['totalRecords']).toBe(120);
+    expect(access.json()['nextCursor']).toBeNull();
+
+    // Sending limit or cursor pages: 50 by default, at most 200.
+    const paged = await call(tenant, 'GET', `/v1/dpdp/data-principals/${principal}/records?limit=200`);
+    expect(paged.json()['records']).toHaveLength(120);
+    const firstPage = await call(tenant, 'GET', `/v1/dpdp/consent-records?dataPrincipalId=${principal}&limit=60`);
+    expect(firstPage.json()['records']).toHaveLength(60);
+    const cursor = firstPage.json()['nextCursor'] as string;
+    const cursorOnly = await call(tenant, 'GET', `/v1/dpdp/consent-records?dataPrincipalId=${principal}&cursor=${encodeURIComponent(cursor)}`);
+    expect(cursorOnly.json()['records']).toHaveLength(50);
+    expect(cursorOnly.json()['nextCursor']).toEqual(expect.any(String));
   });
 });
 
@@ -730,5 +870,32 @@ describePostgres('the consent expiry worker', () => {
     expect(await grantStatus(current.grantId)).toBe('active');
     expect((await auditActions(tenant)).filter((a) => a === 'grantex.dpdp.consent_expired')).toHaveLength(2);
     expect(await chainIntegrity(tenant)).toMatchObject({ valid: true });
+  });
+
+  it('rotates through developers, so more due developers than maxDevelopers cannot starve one', async () => {
+    const tenants = [await newTenant(), await newTenant(), await newTenant()];
+    for (const tenant of tenants) {
+      const noticeId = await newNotice(tenant);
+      for (let i = 0; i < 3; i += 1) {
+        const { recordId } = await newRecord(tenant, { noticeId });
+        await sql`UPDATE dpdp_consent_records SET processing_expires_at = NOW() - INTERVAL '1 minute' WHERE id = ${recordId}`;
+      }
+    }
+    const expiredFor = async (tenant: Tenant) => Number((await sql`
+      SELECT COUNT(*)::int AS n FROM dpdp_consent_records WHERE developer_id = ${tenant.id} AND status = 'expired'`)[0]!['n']);
+
+    // Each developer keeps due records after a pass (batch size 1), so a
+    // selection that always takes the same two developers would never reach
+    // the third. Rotating, two passes of two reach all three.
+    for (let pass = 0; pass < 2; pass += 1) {
+      await expireConsentRecordsOnce(sql, quiet, { batchSize: 1, maxDevelopers: 2 });
+    }
+    for (const tenant of tenants) expect(await expiredFor(tenant), tenant.id).toBeGreaterThanOrEqual(1);
+
+    // And it drains: every due record is expired within a bounded number of passes.
+    for (let pass = 0; pass < 6; pass += 1) {
+      await expireConsentRecordsOnce(sql, quiet, { batchSize: 1, maxDevelopers: 2 });
+    }
+    for (const tenant of tenants) expect(await expiredFor(tenant), tenant.id).toBe(3);
   });
 });

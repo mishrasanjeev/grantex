@@ -372,6 +372,8 @@ export interface EdKeyPair {
 }
 
 let _edKeyPair: EdKeyPair | null = null;
+/** Whether the Ed25519 key came from ED25519_PRIVATE_KEY (persistent) or was generated at boot (ephemeral). */
+let _edKeyPersistence: 'persistent' | 'ephemeral' | null = null;
 
 function buildEdKid(): string {
   const now = new Date();
@@ -394,6 +396,7 @@ export async function initEdKey(): Promise<void> {
     const spkiPem = nodePk.export({ type: 'spki', format: 'pem' }) as string;
     const publicKey = await importSPKI(spkiPem, 'EdDSA');
     _edKeyPair = { privateKey, publicKey, kid: buildEdKid() };
+    _edKeyPersistence = 'persistent';
     return;
   }
 
@@ -403,10 +406,21 @@ export async function initEdKey(): Promise<void> {
     extractable: true,
   });
   _edKeyPair = { privateKey, publicKey, kid: buildEdKid() };
+  _edKeyPersistence = 'ephemeral';
 }
 
 export function getEdKeyPair(): EdKeyPair | null {
   return _edKeyPair;
+}
+
+/**
+ * 'persistent' when the Ed25519 key was imported from ED25519_PRIVATE_KEY,
+ * 'ephemeral' when this process generated it at boot, null before initEdKey().
+ * A signature by an ephemeral key verifies only against the JWKS of the
+ * process that made it, and only until that process restarts.
+ */
+export function getEdKeyPersistence(): 'persistent' | 'ephemeral' | null {
+  return _edKeyPersistence;
 }
 
 export interface Ed25519SignOptions {

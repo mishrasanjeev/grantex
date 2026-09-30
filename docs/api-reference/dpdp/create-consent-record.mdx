@@ -83,6 +83,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-records \
     "type": "JWS-EdDSA",
     "alg": "EdDSA",
     "kid": "grantex-ed25519-2026-04",
+    "keyPersistence": "persistent",
     "proofJwt": "eyJ...",
     "jwksUri": "https://api.grantex.dev/.well-known/jwks.json",
     "signedAt": "2026-04-05T12:00:00.000Z"
@@ -122,6 +123,17 @@ the key the header's `kid` names in the JWKS at `jwksUri`. Set
 `ED25519_PRIVATE_KEY` in production: without it each process generates its
 own key, and a proof cannot be verified after a restart or by another instance.
 
+`keyPersistence` says which kind of key signed the proof:
+
+| Value | Meaning |
+|---|---|
+| `persistent` | The server's configured `ED25519_PRIVATE_KEY`. The proof verifies against the published JWKS on every instance and across restarts, for as long as the key is published |
+| `ephemeral` | A key the serving process generated at boot because `ED25519_PRIVATE_KEY` is not set. The proof is **not verifiable across instances or restarts**: once that process restarts, or on any other instance, the JWKS no longer carries its key. Ask the operator to set `ED25519_PRIVATE_KEY` if proofs must stay verifiable |
+
+A server started with `DPDP_REQUIRE_PERSISTENT_PROOF_KEY=true` refuses to
+create a record while its key is ephemeral (`503
+CONSENT_PROOF_KEY_NOT_PERSISTENT`, nothing stored).
+
 If the proof cannot be signed, no record is created and the request fails
 with `503 CONSENT_PROOF_UNAVAILABLE`.
 
@@ -138,6 +150,7 @@ The creation is recorded on the developer's audit chain as
 | 400 | `INVALID_NOTICE` | Consent notice, or the pinned `consentNoticeVersion`, not found |
 | 401 | `UNAUTHORIZED` | Invalid or missing API key |
 | 503 | `CONSENT_PROOF_UNAVAILABLE` | The consent proof could not be signed; nothing was stored |
+| 503 | `CONSENT_PROOF_KEY_NOT_PERSISTENT` | The signing key is ephemeral and the server sets `DPDP_REQUIRE_PERSISTENT_PROOF_KEY=true`; nothing was stored |
 
 ## SDK Examples
 

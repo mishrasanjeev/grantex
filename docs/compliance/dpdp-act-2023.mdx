@@ -98,7 +98,7 @@ one-click withdrawal UI. A withdrawal with `revokeGrant: true` (the default
 when the server sets `DPDP_WITHDRAWAL_REVOKES_GRANT=true`) triggers:
 
 1. Instant revocation of the underlying Grantex grant token
-2. Cascade revocation to all delegated sub-agent tokens
+2. With `DPDP_REVOCATION_CASCADE=true` on the server, cascade revocation of all delegated sub-agent grants (by default only the record's own grant is revoked)
 3. Immutable audit entry recording the withdrawal timestamp
 4. Notification to the agent developer via webhook
 
@@ -253,7 +253,7 @@ No. Grantex provides the technical infrastructure for consent management, audit 
 
 ### What happens if a data principal withdraws consent?
 
-When the withdrawal asks for it (`revokeGrant: true`, or by default with `DPDP_WITHDRAWAL_REVOKES_GRANT=true`), the underlying Grantex grant is revoked instantly and all delegated sub-agent tokens are cascade-revoked. The agent can no longer access the data principal's resources. A withdrawal audit entry is created. The developer receives a webhook notification.
+When the withdrawal asks for it (`revokeGrant: true`, or by default with `DPDP_WITHDRAWAL_REVOKES_GRANT=true`), the underlying Grantex grant is revoked instantly; with `DPDP_REVOCATION_CASCADE=true` on the server, all delegated sub-agent grants are cascade-revoked too (by default only the record's own grant is). The agent can no longer access the data principal's resources. A withdrawal audit entry is created. The developer receives a webhook notification.
 
 ### Does the DPDP Act apply if my users are outside India?
 
