@@ -5,7 +5,7 @@ import {
   checkPurposeCompliance,
   PurposeViolationError,
 } from '../src/index.js';
-import type { DPDPConsentRecord, RegisteredPurpose } from '../src/index.js';
+import type { ConsentPurpose, DPDPConsentRecord, RegisteredPurpose } from '../src/index.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -30,30 +30,15 @@ function makeRecord(overrides?: Partial<DPDPConsentRecord>): DPDPConsentRecord {
     recordId: 'rec_001',
     grantId: 'grant_abc',
     dataPrincipalId: 'principal_1',
-    dataFiduciaryId: 'fid_1',
     dataFiduciaryName: 'Acme Corp',
-    purposes: [
-      {
-        purposeId: 'email-access',
-        name: 'Email Access',
-        description: 'Read and send emails',
-        legalBasis: 'consent',
-        dataCategories: ['email'],
-        retentionPeriod: '1 year',
-        thirdPartySharing: false,
-      },
-    ],
+    purposes: [{ code: 'email-access', description: 'Read and send emails' }],
     scopes: ['email:read', 'email:send'],
     consentNoticeId: 'notice_1',
-    consentNoticeHash: 'hash123',
     consentGivenAt: new Date(),
-    consentMethod: 'explicit-click',
     processingExpiresAt: new Date(Date.now() + 86400000),
     retentionUntil: new Date(Date.now() + 86400000 * 365),
-    consentProof: { signedAt: new Date(), signature: 'sig' },
     status: 'active',
     accessCount: 0,
-    actions: [],
     ...overrides,
   };
 }
@@ -116,21 +101,20 @@ describe('purpose-enforcer', () => {
     const validRecord = makeRecord();
     expect(checkPurposeCompliance(validRecord)).toEqual([]);
 
-    // Record with missing purpose fields
-    const badRecord = makeRecord({
-      purposes: [
-        {
-          purposeId: '',
-          name: '',
-          description: '',
-          legalBasis: 'consent',
-          dataCategories: [],
-          retentionPeriod: '',
-          thirdPartySharing: false,
-        },
-      ],
-    });
-    const errors = checkPurposeCompliance(badRecord);
+    // A local record whose purposes use the local ConsentPurpose model, with
+    // missing fields.
+    const badPurposes: ConsentPurpose[] = [
+      {
+        purposeId: '',
+        name: '',
+        description: '',
+        legalBasis: 'consent',
+        dataCategories: [],
+        retentionPeriod: '',
+        thirdPartySharing: false,
+      },
+    ];
+    const errors = checkPurposeCompliance({ ...makeRecord(), purposes: badPurposes });
     expect(errors.length).toBeGreaterThan(0);
     expect(errors.some((e) => e.includes('purposeId'))).toBe(true);
     expect(errors.some((e) => e.includes('name'))).toBe(true);

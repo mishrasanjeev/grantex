@@ -10,38 +10,64 @@ import type { CreateConsentRecordOptions, DPDPConsentRecord } from '../src/index
 // Mocks
 // ---------------------------------------------------------------------------
 
+// A consent record as GET /v1/dpdp/consent-records/:id returns it (decoded).
 const MOCK_RECORD: DPDPConsentRecord = {
   recordId: 'rec_001',
   grantId: 'grant_abc',
   dataPrincipalId: 'principal_1',
-  dataFiduciaryId: 'fid_1',
   dataFiduciaryName: 'Acme Corp',
-  purposes: [
-    {
-      purposeId: 'p1',
-      name: 'Email Access',
-      description: 'Read and send emails on behalf of the user',
-      legalBasis: 'consent',
-      dataCategories: ['email', 'contacts'],
-      retentionPeriod: '1 year',
-      thirdPartySharing: false,
-    },
-  ],
+  purposes: [{ code: 'p1', description: 'Read and send emails on behalf of the user' }],
   scopes: ['email:read', 'email:send'],
   consentNoticeId: 'notice_1',
-  consentNoticeHash: 'abc123hash',
+  consentNoticeVersion: '1.0',
+  status: 'active',
   consentGivenAt: new Date('2026-01-01T00:00:00Z'),
-  consentMethod: 'explicit-click',
   processingExpiresAt: new Date('2027-01-01T00:00:00Z'),
   retentionUntil: new Date('2028-01-01T00:00:00Z'),
-  consentProof: {
-    signedAt: new Date('2026-01-01T00:00:00Z'),
-    signature: 'ed25519sig==',
-  },
-  status: 'active',
   accessCount: 0,
-  actions: [],
+  createdAt: new Date('2026-01-01T00:00:00Z'),
 };
+
+/** The GET body the server sends for MOCK_RECORD. */
+function recordBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    ...MOCK_RECORD,
+    consentGivenAt: MOCK_RECORD.consentGivenAt.toISOString(),
+    processingExpiresAt: MOCK_RECORD.processingExpiresAt.toISOString(),
+    retentionUntil: MOCK_RECORD.retentionUntil.toISOString(),
+    createdAt: MOCK_RECORD.createdAt!.toISOString(),
+    lastAccessedAt: null,
+    withdrawnAt: null,
+    withdrawnReason: null,
+    erasedAt: null,
+    ...overrides,
+  };
+}
+
+/** The 201 body of POST /v1/dpdp/consent-records. */
+function createdBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    recordId: 'rec_001',
+    grantId: 'grant_abc',
+    dataPrincipalId: 'principal_1',
+    consentNoticeId: 'notice_1',
+    consentNoticeVersion: '1.0',
+    consentNoticeHash: 'serverhash',
+    consentProof: {
+      type: 'JWS-EdDSA',
+      alg: 'EdDSA',
+      kid: 'key-1',
+      proofJwt: 'h.p.s',
+      jwksUri: 'https://api.test.local/.well-known/jwks.json',
+      signedAt: '2026-01-01T00:00:00.000Z',
+    },
+    processingExpiresAt: '2027-01-01T00:00:00.000Z',
+    retentionUntil: '2028-01-01T00:00:00.000Z',
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
 
 function mockFetchSuccess(data: unknown) {
   return vi.fn().mockResolvedValue({
@@ -89,18 +115,7 @@ describe('consent-record', () => {
   });
 
   it('creates consent record linked to grant token', async () => {
-    const serverResponse = {
-      ...MOCK_RECORD,
-      consentGivenAt: MOCK_RECORD.consentGivenAt.toISOString(),
-      processingExpiresAt: MOCK_RECORD.processingExpiresAt.toISOString(),
-      retentionUntil: MOCK_RECORD.retentionUntil.toISOString(),
-      consentProof: {
-        ...MOCK_RECORD.consentProof,
-        signedAt: MOCK_RECORD.consentProof.signedAt.toISOString(),
-      },
-    };
-
-    vi.stubGlobal('fetch', mockFetchSuccess(serverResponse));
+    vi.stubGlobal('fetch', mockFetchSuccess(createdBody()));
 
     const record = await createConsentRecord(makeOptions());
 
@@ -125,31 +140,32 @@ describe('consent-record', () => {
       'verify',
     ]);
 
-    const serverResponse = {
-      ...MOCK_RECORD,
-      consentGivenAt: MOCK_RECORD.consentGivenAt.toISOString(),
-      processingExpiresAt: MOCK_RECORD.processingExpiresAt.toISOString(),
-      retentionUntil: MOCK_RECORD.retentionUntil.toISOString(),
-      consentProof: {
-        signedAt: new Date().toISOString(),
-        signature: 'test-sig-value',
-      },
-    };
-
-    vi.stubGlobal('fetch', mockFetchSuccess(serverResponse));
+    vi.stubGlobal('fetch', mockFetchSuccess(createdBody()));
 
     const record = await createConsentRecord(
       makeOptions({ signingKey: (keyPair as any).privateKey }),
     );
 
-    // The server response has the signature
-    expect(record.consentProof.signature).toBeTruthy();
+    // The server's own proof (JWS, EdDSA) comes back on the record.
+    expect(record.consentProof.type).toBe('JWS-EdDSA');
+    expect(record.consentProof.proofJwt).toBeTruthy();
 
-    // The body sent to the API should include a signature in consentProof
+    // The caller's Ed25519 signature is local-only evidence, verifiable with
+    // the caller's public key; it is not sent (the server signs its own proof).
+    const ev = record.localEvidence!;
+    expect(ev.signature).toBeTruthy();
+    expect(ev.signature!.length).toBeGreaterThan(0);
+    const valid = await crypto.subtle.verify(
+      'Ed25519',
+      (keyPair as any).publicKey,
+      Buffer.from(ev.signature!, 'base64'),
+      new TextEncoder().encode(ev.signedPayload!),
+    );
+    expect(valid).toBe(true);
+
     const fetchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(fetchCall[1].body);
-    expect(body.consentProof.signature).toBeTruthy();
-    expect(body.consentProof.signature.length).toBeGreaterThan(0);
+    expect(body.consentProof).toBeUndefined();
   });
 
   it('rejects creation without mandatory purpose fields', async () => {
@@ -183,28 +199,19 @@ describe('consent-record', () => {
     const hash2 = await computeNoticeHash(noticeContent);
     expect(hash).toBe(hash2);
 
-    // Verify the hash is sent to the server
-    const serverResponse = {
-      ...MOCK_RECORD,
-      consentNoticeHash: hash,
-      consentGivenAt: MOCK_RECORD.consentGivenAt.toISOString(),
-      processingExpiresAt: MOCK_RECORD.processingExpiresAt.toISOString(),
-      retentionUntil: MOCK_RECORD.retentionUntil.toISOString(),
-      consentProof: {
-        ...MOCK_RECORD.consentProof,
-        signedAt: MOCK_RECORD.consentProof.signedAt.toISOString(),
-      },
-    };
+    // The server hashes the stored notice version itself; the client hash of
+    // the notice content is kept as local evidence and not sent.
+    vi.stubGlobal('fetch', mockFetchSuccess(createdBody({ consentNoticeHash: hash })));
 
-    vi.stubGlobal('fetch', mockFetchSuccess(serverResponse));
-
-    await createConsentRecord(
+    const record = await createConsentRecord(
       makeOptions({ consentNoticeContent: noticeContent }),
     );
 
     const fetchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     const body = JSON.parse(fetchCall[1].body);
-    expect(body.consentNoticeHash).toBe(hash);
+    expect(body.consentNoticeHash).toBeUndefined();
+    expect(record.localEvidence!.consentNoticeHash).toBe(hash);
+    expect(record.consentNoticeHash).toBe(hash);
   });
 
   it('consent record is immutable after creation', () => {
@@ -233,18 +240,7 @@ describe('getConsentRecord', () => {
   it('fetches a single consent record by ID', async () => {
     const { getConsentRecord } = await import('../src/index.js');
 
-    const serverResponse = {
-      ...MOCK_RECORD,
-      consentGivenAt: MOCK_RECORD.consentGivenAt.toISOString(),
-      processingExpiresAt: MOCK_RECORD.processingExpiresAt.toISOString(),
-      retentionUntil: MOCK_RECORD.retentionUntil.toISOString(),
-      consentProof: {
-        ...MOCK_RECORD.consentProof,
-        signedAt: MOCK_RECORD.consentProof.signedAt.toISOString(),
-      },
-    };
-
-    vi.stubGlobal('fetch', mockFetchSuccess(serverResponse));
+    vi.stubGlobal('fetch', mockFetchSuccess(recordBody()));
 
     const record = await getConsentRecord('rec_001', 'test-api-key', 'https://api.test.local');
 
@@ -289,16 +285,7 @@ describe('listConsentRecords', () => {
   it('lists consent records for a data principal', async () => {
     const { listConsentRecords } = await import('../src/index.js');
 
-    const record1 = {
-      ...MOCK_RECORD,
-      consentGivenAt: MOCK_RECORD.consentGivenAt.toISOString(),
-      processingExpiresAt: MOCK_RECORD.processingExpiresAt.toISOString(),
-      retentionUntil: MOCK_RECORD.retentionUntil.toISOString(),
-      consentProof: {
-        ...MOCK_RECORD.consentProof,
-        signedAt: MOCK_RECORD.consentProof.signedAt.toISOString(),
-      },
-    };
+    const record1 = recordBody();
 
     const record2 = {
       ...record1,
@@ -367,8 +354,15 @@ describe('requestDataErasure', () => {
       requestId: 'ER-2026-00001',
       dataPrincipalId: 'principal_1',
       status: 'completed',
+      recordsErased: 1,
+      grantsRevoked: 1,
+      delegatedGrantsRevoked: 0,
+      grievancesRedacted: 0,
+      exportsDeleted: 0,
+      retained: [],
       submittedAt: '2026-04-05T10:00:00.000Z',
-      expectedCompletionBy: '2026-04-12T10:00:00.000Z',
+      completedAt: '2026-04-05T10:00:00.050Z',
+      expectedCompletionBy: '2026-04-05T10:00:00.050Z',
     };
 
     vi.stubGlobal('fetch', mockFetchSuccess(serverResponse));
@@ -389,9 +383,10 @@ describe('requestDataErasure', () => {
     expect(fetchCall[1].method).toBe('POST');
     expect(fetchCall[1].headers.Authorization).toBe('Bearer test-api-key');
 
-    // Verify request body includes dataPrincipalId
-    const body = JSON.parse(fetchCall[1].body);
-    expect(body.dataPrincipalId).toBe('principal_1');
+    // The principal is in the path; the server reads no body.
+    expect(fetchCall[1].body).toBeUndefined();
+    expect(result.recordsErased).toBe(1);
+    expect(result.grantsRevoked).toBe(1);
   });
 
   it('throws DpdpError on non-ok response', async () => {

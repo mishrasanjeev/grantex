@@ -27,7 +27,6 @@ function makeDpdpExportResult(): Record<string, unknown> {
   return {
     exportId: 'exp_001',
     type: 'dpdp-audit',
-    status: 'complete',
     recordCount: 42,
     data: {
       consentRecords: [
@@ -57,8 +56,11 @@ function makeDpdpExportResult(): Record<string, unknown> {
         period: { from: '2026-01-01', to: '2026-03-31' },
       },
     },
-    downloadUrl: 'https://exports.grantex.dev/exp_001/download?token=abc',
-    downloadExpiresAt: new Date(Date.now() + 24 * 3600000).toISOString(),
+    format: 'json',
+    truncated: false,
+    auditLogLimit: 1000,
+    expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -66,7 +68,6 @@ function makeGdprExportResult(): Record<string, unknown> {
   return {
     exportId: 'exp_002',
     type: 'gdpr-article-15',
-    status: 'complete',
     recordCount: 10,
     data: {
       dataSubject: { id: 'principal_1' },
@@ -86,8 +87,11 @@ function makeGdprExportResult(): Record<string, unknown> {
         objection: true,
       },
     },
-    downloadUrl: 'https://exports.grantex.dev/exp_002/download?token=def',
-    downloadExpiresAt: new Date(Date.now() + 24 * 3600000).toISOString(),
+    format: 'json',
+    truncated: false,
+    auditLogLimit: 1000,
+    expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -104,7 +108,6 @@ function makeEuAiActResult(): Record<string, unknown> {
   return {
     exportId: 'exp_003',
     type: 'eu-ai-act-conformance',
-    status: 'complete',
     recordCount: 1,
     data: {
       systemDescription: 'AI agent authorization system',
@@ -112,8 +115,11 @@ function makeEuAiActResult(): Record<string, unknown> {
       articles: articleCoverage,
       overallStatus: 'compliant',
     },
-    downloadUrl: 'https://exports.grantex.dev/exp_003/download?token=ghi',
-    downloadExpiresAt: new Date(Date.now() + 24 * 3600000).toISOString(),
+    format: 'json',
+    truncated: false,
+    auditLogLimit: 1000,
+    expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -139,7 +145,8 @@ describe('exports', () => {
 
     expect(result.exportId).toBe('exp_001');
     expect(result.type).toBe('dpdp-audit');
-    expect(result.status).toBe('complete');
+    // POST /v1/dpdp/exports returns no status (only the GET does).
+    expect(result).not.toHaveProperty('status');
     expect(result.recordCount).toBe(42);
     expect(result.data).toBeDefined();
 
@@ -169,7 +176,8 @@ describe('exports', () => {
     const result = await requestGdprExport(makeExportParams(), 'test-key', 'https://api.test.local');
 
     expect(result.type).toBe('gdpr-article-15');
-    expect(result.status).toBe('complete');
+    // POST /v1/dpdp/exports returns no status (only the GET does).
+    expect(result).not.toHaveProperty('status');
 
     // GDPR Article 15 must include: purposes, recipients, retention periods,
     // data categories, and data subject rights
@@ -202,7 +210,8 @@ describe('exports', () => {
     );
 
     expect(result.type).toBe('eu-ai-act-conformance');
-    expect(result.status).toBe('complete');
+    // POST /v1/dpdp/exports returns no status (only the GET does).
+    expect(result).not.toHaveProperty('status');
 
     const data = result.data as Record<string, unknown>;
     const articles = data.articles as Record<string, unknown>;
@@ -216,8 +225,9 @@ describe('exports', () => {
     }
   });
 
-  it('export download URL expires after 24h', async () => {
-    const expiresAt = new Date(Date.now() + 24 * 3600000);
+  it('export expires 7 days after creation and carries its data inline', async () => {
+    const createdAt = new Date();
+    const expiresAt = new Date(createdAt.getTime() + 7 * 86400000);
 
     vi.stubGlobal(
       'fetch',
@@ -226,21 +236,17 @@ describe('exports', () => {
         json: () =>
           Promise.resolve({
             ...makeDpdpExportResult(),
-            downloadExpiresAt: expiresAt.toISOString(),
+            createdAt: createdAt.toISOString(),
+            expiresAt: expiresAt.toISOString(),
           }),
       }),
     );
 
     const result = await requestDpdpExport(makeExportParams(), 'test-key', 'https://api.test.local');
 
-    expect(result.downloadUrl).toBeTruthy();
-    expect(result.downloadExpiresAt).toBeDefined();
-
-    // Download expiry should be within ~24 hours from now
-    const expiryMs = result.downloadExpiresAt!.getTime() - Date.now();
-    const twentyFourHoursMs = 24 * 3600000;
-    expect(expiryMs).toBeLessThanOrEqual(twentyFourHoursMs + 5000); // 5s tolerance
-    expect(expiryMs).toBeGreaterThan(twentyFourHoursMs - 60000); // within 1 minute
+    expect(result).not.toHaveProperty('downloadUrl');
+    expect(result.data).toBeDefined();
+    expect(result.expiresAt.getTime() - result.createdAt.getTime()).toBe(7 * 86400000);
   });
 
   it('getExportStatus fetches export by ID', async () => {

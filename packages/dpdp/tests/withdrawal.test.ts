@@ -15,38 +15,16 @@ function makeRecord(): DPDPConsentRecord {
     recordId: 'rec_001',
     grantId: 'grant_abc',
     dataPrincipalId: 'principal_1',
-    dataFiduciaryId: 'fid_1',
     dataFiduciaryName: 'Acme Corp',
-    purposes: [
-      {
-        purposeId: 'p1',
-        name: 'Email Access',
-        description: 'Read and send emails',
-        legalBasis: 'consent',
-        dataCategories: ['email'],
-        retentionPeriod: '1 year',
-        thirdPartySharing: false,
-      },
-    ],
+    purposes: [{ code: 'p1', description: 'Read and send emails' }],
     scopes: ['email:read'],
     consentNoticeId: 'notice_1',
-    consentNoticeHash: 'hash123',
     consentGivenAt: new Date('2026-01-01T00:00:00Z'),
-    consentMethod: 'explicit-click',
     processingExpiresAt: new Date('2027-01-01T00:00:00Z'),
     retentionUntil: new Date('2028-01-01T00:00:00Z'),
-    consentProof: { signedAt: new Date('2026-01-01T00:00:00Z'), signature: 'sig' },
     status: 'active',
     accessCount: 5,
-    actions: [
-      {
-        actionId: 'act_1',
-        timestamp: new Date('2026-03-01T00:00:00Z'),
-        action: 'email:read',
-        agentId: 'agent_x',
-        result: 'success',
-      },
-    ],
+    lastAccessedAt: new Date('2026-03-01T00:00:00Z'),
   };
 }
 
