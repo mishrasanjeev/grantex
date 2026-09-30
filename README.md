@@ -667,7 +667,7 @@ delegated = grantex.grants.delegate(
 
 ## Enterprise SSO
 
-Grantex provides OIDC and SAML 2.0 enterprise SSO with multiple identity-provider connections, email-domain routing, enforcement, JIT provisioning, and group-to-scope mapping from identity-provider claims. The LDAP surface is a direct-bind preview: it authenticates a supplied directory identity but does not search directories or retrieve LDAP groups.
+Grantex provides OIDC and SAML 2.0 enterprise SSO with multiple identity-provider connections, email-domain routing, JIT provisioning, and group-to-scope mapping from identity-provider claims. The LDAP surface is a direct-bind preview: it authenticates a supplied directory identity but does not search directories or retrieve LDAP groups. The hosted dashboard sign-in currently supports OIDC; SAML and LDAP callback flows are for custom integrations.
 
 **Key capabilities:**
 - **Multi-IdP connections** - Configure multiple OIDC and SAML 2.0 identity providers per organization; LDAP connection records support the direct-bind preview
@@ -677,7 +677,7 @@ Grantex provides OIDC and SAML 2.0 enterprise SSO with multiple identity-provide
 - **Domain-based routing** — Automatically route users to the correct IdP based on their email domain
 - **JIT provisioning** — Auto-create or update principals on first SSO login
 - **Group-to-scope mapping** - Map OIDC or SAML group/role claims to Grantex scopes; this does not retrieve LDAP groups
-- **SSO enforcement** — Require SSO authentication for all users in an organization
+- **Human SSO enforcement** — With the server feature enabled and an organization opt-in, require a matching SSO session for hosted dashboard sign-in and principal consent; live consent still requires a passkey. Machine API keys remain valid for API automation.
 - **Session management** — Track, list, and revoke active SSO sessions
 
 ### TypeScript
@@ -710,11 +710,14 @@ await grantex.sso.createConnection({
 });
 
 // Enforce SSO for the organization
+// First complete an OIDC login that maps an administrator to the admin scope.
+// The server must have SSO_HUMAN_ENFORCEMENT_ENABLED=true.
 await grantex.sso.setEnforcement({ enforce: true });
 
 // Handle OIDC callback with verified ID token
 const result = await grantex.sso.handleOidcCallback({ code, state });
 console.log(result.email, result.mappedScopes, result.sessionId);
+// result.sessionToken is an opaque bearer credential when enabled. Keep it secret.
 
 // List and revoke sessions
 const { sessions } = await grantex.sso.listSessions();
@@ -760,6 +763,15 @@ grantex sso connections test sso_01HXYZ...
 # Enforce SSO
 grantex sso enforce --enable
 ```
+
+Enabling invalidates prior browser SSO sessions and safely migrates only
+unambiguous, session-proven JIT identities. If a principal was mapped to
+multiple IdP subjects, enablement fails with `SSO_IDENTITY_CONFLICT` until
+resolved. An active JIT-enabled OIDC connection and a recent successful admin
+SSO login are required. The developer API key is a deliberate machine-access
+exception: it can still call management APIs and disable enforcement, so store
+it as a privileged secret. See the [enterprise SSO guide](https://docs.grantex.dev/guides/enterprise-sso)
+for the rollout and local signed-IdP test procedure.
 
 </details>
 

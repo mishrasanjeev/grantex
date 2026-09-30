@@ -16,6 +16,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `JWT_LEGACY_KID_MONTHS` months, in the JWKS and the DID document. A
   generated key keeps the month id.
 
+### Enterprise SSO human enforcement
+- Added server-gated, organization-level SSO enforcement for hosted dashboard
+  humans and grant consent decisions. Consent requires an SSO bearer session
+  bound to the same organization and principal; live passkey checks remain.
+- Added opaque, hashed, revocable SSO session credentials to enterprise
+  callbacks, with response types in the TypeScript, Python, and Go SDKs.
+- Enabling enforcement requires an active JIT-enabled OIDC connection and a
+  successful administrator login. It invalidates prior sessions and migrates
+  only unambiguous, session-proven JIT subject bindings. Machine API keys
+  intentionally remain valid for programmatic management.
+- Added a signed local OIDC Docker integration fixture and corrected the
+  legacy JSONB group-mapping representation.
+
 ### DPDP and EU AI Act documentation
 - Rewrote `docs/features/dpdp-compliance.mdx` to document the shipped DPDP
   routes (the page described a `DPDPClient` API that does not exist), and

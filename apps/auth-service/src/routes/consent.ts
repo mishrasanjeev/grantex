@@ -6,6 +6,14 @@ import { config } from '../config.js';
 import { newAuthorizationCode } from '../lib/ids.js';
 import { consentViewOf, constraintsOfStoredBinding } from '../lib/registry/passport-binding.js';
 import type { CommerceConstraints } from '../lib/registry/child-grant.js';
+import { hashSsoToken } from '../lib/sso.js';
+import type { FastifyRequest } from 'fastify';
+
+function consentSsoTokenHash(request: FastifyRequest): string | null {
+  const header = request.headers.authorization;
+  const token = typeof header === 'string' ? /^Bearer[ \t]+([^\s]+)$/i.exec(header)?.[1] : undefined;
+  return token ? hashSsoToken(token) : null;
+}
 
 /**
  * The commerce constraints an authorization request named
@@ -105,6 +113,19 @@ const CONSENT_HTML = `<!DOCTYPE html>
   function showError(msg) {
     el.innerHTML = '<div class="error-msg">' + esc(msg) + '</div>' +
       '<p class="enroll-note">No passkey yet? Ask your application for a one-use enrollment link, then return to this request.</p>';
+  }
+
+  function showSsoSignIn(org) {
+    const returnTo = '/consent?req=' + encodeURIComponent(reqId);
+    const href = '/dashboard/login?org=' + encodeURIComponent(org) + '&return=' + encodeURIComponent(returnTo);
+    el.innerHTML = '<div class="header"><h1>Organization sign-in required</h1></div>' +
+      '<p class="enroll-note">Sign in with your organization before reviewing this request.</p>' +
+      '<p class="enroll-note"><a href="' + href + '">Continue with SSO</a></p>';
+  }
+
+  function consentHeaders() {
+    const token = sessionStorage.getItem('grantex_principal_sso_token') || sessionStorage.getItem('grantex_api_key');
+    return token && token.startsWith('gx_sso_') ? { Authorization: 'Bearer ' + token } : {};
   }
 
   function showStatus(title, msg) {
@@ -223,12 +244,16 @@ const CONSENT_HTML = `<!DOCTYPE html>
   }
 
   async function approveRequest(allowVerificationRetry) {
-    const res = await fetch('/v1/consent/' + encodeURIComponent(reqId) + '/approve', { method: 'POST' });
+    const res = await fetch('/v1/consent/' + encodeURIComponent(reqId) + '/approve', { method: 'POST', headers: consentHeaders() });
+    let forbidden = null;
+    if (res.status === 403) {
+      forbidden = await res.json().catch(() => ({}));
+      if (forbidden.code === 'SSO_REQUIRED') { showSsoSignIn(data.ssoOrg); return; }
+    }
     if (res.status === 410) { showError('This request has expired or was already processed.'); return; }
     if (res.status === 404) { showError('Authorization request not found.'); return; }
     if (res.status === 403) {
-      let body = {};
-      try { body = await res.json(); } catch (e) {}
+      const body = forbidden || {};
       if (allowVerificationRetry && (body.code === 'FIDO_REQUIRED' || body.code === 'PRINCIPAL_VERIFICATION_REQUIRED')) {
         await verifyPrincipalPresence();
         return approveRequest(false);
@@ -256,10 +281,14 @@ const CONSENT_HTML = `<!DOCTYPE html>
   }
 
   async function denyRequest(allowVerificationRetry) {
-    const res = await fetch('/v1/consent/' + encodeURIComponent(reqId) + '/deny', { method: 'POST' });
+    const res = await fetch('/v1/consent/' + encodeURIComponent(reqId) + '/deny', { method: 'POST', headers: consentHeaders() });
+    let forbidden = null;
     if (res.status === 403) {
-      let body = {};
-      try { body = await res.json(); } catch (e) {}
+      forbidden = await res.json().catch(() => ({}));
+      if (forbidden.code === 'SSO_REQUIRED') { showSsoSignIn(data.ssoOrg); return; }
+    }
+    if (res.status === 403) {
+      const body = forbidden || {};
       if (allowVerificationRetry && (body.code === 'FIDO_REQUIRED' || body.code === 'PRINCIPAL_VERIFICATION_REQUIRED')) {
         await verifyPrincipalPresence();
         return denyRequest(false);
@@ -296,6 +325,11 @@ const CONSENT_HTML = `<!DOCTYPE html>
     data = await res.json();
   } catch (e) {
     showError('Network error. Please try again.');
+    return;
+  }
+
+  if (data.ssoRequired && !Object.keys(consentHeaders()).length) {
+    showSsoSignIn(data.ssoOrg);
     return;
   }
 
@@ -423,10 +457,13 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         developer_name: string;
         authorization_details: unknown;
         principal_id: string;
+        sso_enforced: boolean;
+        developer_id: string;
         purpose: string | null;
         passport_binding?: unknown;
       }[]>`
         SELECT ar.id, ar.scopes, ar.expires_at, ar.status, ar.redirect_uri, ar.state, ar.principal_id,
+               ar.developer_id, d.sso_enforced,
                ar.audience, ar.expires_in, ar.protocol, ar.authorization_details, ar.purpose, ar.passport_binding,
                a.name AS agent_name, a.description AS agent_description, a.did AS agent_did,
                d.fido_required, d.mode, d.name AS developer_name
@@ -461,6 +498,8 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
         expiresAt: row.expires_at,
         status: row.status,
         fidoRequired: row.mode === 'live' || Boolean(row.fido_required),
+        ssoRequired: config.ssoHumanEnforcementEnabled && row.sso_enforced === true,
+        ...(config.ssoHumanEnforcementEnabled && row.sso_enforced === true ? { ssoOrg: row.developer_id } : {}),
         principalSelectionRequired: row.protocol === 'oauth-agent-grants-03'
           && row.mode === 'live'
           && typeof row.principal_id === 'string'
@@ -493,6 +532,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const sql = getSql();
       const code = newAuthorizationCode();
+      const ssoTokenHash = consentSsoTokenHash(request);
 
       const rows = await sql<{ id: string; code: string; redirect_uri: string | null; state: string | null; protocol: string }[]>`
         UPDATE auth_requests
@@ -508,19 +548,52 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
                 OR auth_requests.fido_verified = TRUE
               )
           )
+          AND (
+            ${!config.ssoHumanEnforcementEnabled}
+            OR NOT EXISTS (
+              SELECT 1 FROM developers d
+              WHERE d.id = auth_requests.developer_id AND d.sso_enforced = TRUE
+            )
+            OR EXISTS (
+              SELECT 1 FROM sso_sessions ss
+              JOIN sso_connections sc ON sc.id = ss.connection_id
+              WHERE ss.token_hash = ${ssoTokenHash}
+                AND ss.subject_namespace_version = 1
+                AND ss.developer_id = auth_requests.developer_id
+                AND ss.principal_id = auth_requests.principal_id
+                AND ss.principal_id IS NOT NULL
+                AND ss.expires_at > NOW()
+                AND sc.status = 'active'
+                AND sc.developer_id = ss.developer_id
+            )
+          )
         RETURNING id, code, redirect_uri, state, protocol
       `;
 
       const row = rows[0];
       if (!row) {
         const fidoCheck = await sql`
-          SELECT d.fido_required, d.mode, ar.fido_verified, ar.status, ar.expires_at
+          SELECT d.fido_required, d.mode, d.sso_enforced, ar.fido_verified, ar.status, ar.expires_at,
+                 EXISTS (
+                   SELECT 1 FROM sso_sessions ss
+                   JOIN sso_connections sc ON sc.id = ss.connection_id
+                   WHERE ss.token_hash = ${ssoTokenHash}
+                     AND ss.subject_namespace_version = 1
+                     AND ss.developer_id = ar.developer_id
+                     AND ss.principal_id = ar.principal_id
+                     AND ss.principal_id IS NOT NULL
+                     AND ss.expires_at > NOW()
+                     AND sc.status = 'active'
+                 ) AS sso_valid
           FROM auth_requests ar
           JOIN developers d ON d.id = ar.developer_id
           WHERE ar.id = ${request.params.id}
         `;
         const fc = fidoCheck[0];
         if (fc && fc['status'] === 'pending' && new Date(fc['expires_at'] as string) > new Date()) {
+          if (config.ssoHumanEnforcementEnabled && fc['sso_enforced'] === true && fc['sso_valid'] !== true) {
+            return reply.status(403).send({ message: 'A matching, active SSO session is required', code: 'SSO_REQUIRED', requestId: request.id });
+          }
           if ((fc['mode'] === 'live' || fc['fido_required']) && !fc['fido_verified']) {
             return reply.status(403).send({
               message: 'Principal passkey verification is required before approval',
@@ -547,6 +620,7 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
     { config: { skipAuth: true } },
     async (request, reply) => {
       const sql = getSql();
+      const ssoTokenHash = consentSsoTokenHash(request);
 
       const rows = await sql<{ id: string; redirect_uri: string | null; state: string | null; protocol: string }[]>`
         UPDATE auth_requests
@@ -561,18 +635,53 @@ export async function consentRoutes(app: FastifyInstance): Promise<void> {
                 OR auth_requests.fido_verified = TRUE
               )
           )
+          AND (
+            ${!config.ssoHumanEnforcementEnabled}
+            OR NOT EXISTS (
+              SELECT 1 FROM developers d
+              WHERE d.id = auth_requests.developer_id AND d.sso_enforced = TRUE
+            )
+            OR EXISTS (
+              SELECT 1 FROM sso_sessions ss
+              JOIN sso_connections sc ON sc.id = ss.connection_id
+              WHERE ss.token_hash = ${ssoTokenHash}
+                AND ss.subject_namespace_version = 1
+                AND ss.developer_id = auth_requests.developer_id
+                AND ss.principal_id = auth_requests.principal_id
+                AND ss.principal_id IS NOT NULL
+                AND ss.expires_at > NOW()
+                AND sc.status = 'active'
+                AND sc.developer_id = ss.developer_id
+            )
+          )
         RETURNING id, redirect_uri, state, protocol
       `;
 
       const row = rows[0];
       if (!row) {
         const proofCheck = await sql`
-          SELECT d.fido_required, d.mode, ar.fido_verified, ar.status, ar.expires_at
+          SELECT d.fido_required, d.mode, d.sso_enforced, ar.fido_verified, ar.status, ar.expires_at,
+                 EXISTS (
+                   SELECT 1 FROM sso_sessions ss
+                   JOIN sso_connections sc ON sc.id = ss.connection_id
+                   WHERE ss.token_hash = ${ssoTokenHash}
+                     AND ss.subject_namespace_version = 1
+                     AND ss.developer_id = ar.developer_id
+                     AND ss.principal_id = ar.principal_id
+                     AND ss.principal_id IS NOT NULL
+                     AND ss.expires_at > NOW()
+                     AND sc.status = 'active'
+                 ) AS sso_valid
           FROM auth_requests ar
           JOIN developers d ON d.id = ar.developer_id
           WHERE ar.id = ${request.params.id}
         `;
         const pc = proofCheck[0];
+        if (pc && pc['status'] === 'pending' && new Date(pc['expires_at'] as string) > new Date()) {
+          if (config.ssoHumanEnforcementEnabled && pc['sso_enforced'] === true && pc['sso_valid'] !== true) {
+            return reply.status(403).send({ message: 'A matching, active SSO session is required', code: 'SSO_REQUIRED', requestId: request.id });
+          }
+        }
         if (pc && pc['status'] === 'pending' && new Date(pc['expires_at'] as string) > new Date()
             && (pc['mode'] === 'live' || pc['fido_required']) && !pc['fido_verified']) {
           return reply.status(403).send({

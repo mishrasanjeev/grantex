@@ -1,0 +1,6 @@
+services:
+  auth-service:
+    environment:
+      SSO_HUMAN_ENFORCEMENT_ENABLED: "true"
+      SSO_ALLOW_INSECURE_URLS: "true"
+      SSO_ALLOW_PRIVATE_HOSTS: "true"

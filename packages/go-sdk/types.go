@@ -858,6 +858,7 @@ type SsoLdapCallbackParams struct {
 // SsoCallbackResult is the result from an enterprise SSO callback (OIDC, SAML, or LDAP).
 type SsoCallbackResult struct {
 	SessionID    string   `json:"sessionId"`
+	SessionToken string   `json:"sessionToken,omitempty"`
 	Email        *string  `json:"email"`
 	Name         *string  `json:"name"`
 	Sub          *string  `json:"sub"`

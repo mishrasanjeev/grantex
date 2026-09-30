@@ -112,6 +112,13 @@ client := grantex.NewClient("api-key",
 | `client.Anomalies` | Detect, List, Acknowledge |
 | `client.SCIM` | CreateToken, ListTokens, RevokeToken, ListUsers, GetUser, CreateUser, ReplaceUser, UpdateUser, DeleteUser |
 | `client.SSO` | Enterprise connections, enforcement, sessions, login, OIDC/SAML/LDAP callbacks, and legacy config methods |
+
+The repository source adds optional `SsoCallbackResult.SessionToken`; a
+subsequent module release is needed for consumers to receive this field. The
+server returns it only when human SSO sessions are enabled. It is an opaque
+bearer credential, not the audit `SessionID`; keep it secret. Hosted dashboard
+login currently uses OIDC, and enforcement does not revoke machine API keys.
+See the [enterprise SSO guide](https://docs.grantex.dev/guides/enterprise-sso).
 | `client.PrincipalSessions` | Create |
 | `client.Budgets` | Allocate, Debit, Balance, Allocations, Transactions |
 | `client.Events` | Stream |

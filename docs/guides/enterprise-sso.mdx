@@ -1,7 +1,7 @@
 ---
 title: "Enterprise SSO"
 sidebarTitle: "Enterprise SSO"
-description: "Set up OIDC and SAML single sign-on, plus the current LDAP direct-bind preview, with multi-IdP routing and JIT provisioning."
+description: "Configure enterprise identity providers and enforce human SSO for dashboard and consent decisions."
 ---
 
 ## Overview
@@ -23,8 +23,16 @@ Grantex scopes. The built-in LDAP preview has the limitations described below.
 | Domain routing | Route users to the correct IdP based on email domain |
 | JIT provisioning | Auto-create principals on first SSO login |
 | Group mapping | Map OIDC/SAML groups or roles to Grantex scopes; the default LDAP client does not retrieve groups |
-| SSO enforcement | Require SSO for all users in an organization |
-| Session management | Track, list, and revoke active SSO sessions |
+| Human SSO enforcement | Organization opt-in gates dashboard humans and grant consent decisions; machine API keys remain valid |
+| Session management | Track and revoke opaque, expiring SSO bearer sessions |
+
+<Warning>
+  The hosted dashboard sign-in currently completes **OIDC** only. SAML and
+  LDAP callbacks are available to custom integrations, but they are not a
+  browser sign-in path in the hosted dashboard. Do not turn on organization
+  enforcement unless a JIT-enabled OIDC connection has already completed a
+  successful login that maps an administrator to the `admin` scope.
+</Warning>
 
 ---
 
@@ -35,7 +43,7 @@ Grantex scopes. The built-in LDAP preview has the limitations described below.
 In your identity provider (Okta, Azure AD, Google Workspace, Auth0, etc.), create a new application:
 
 - **Application type:** Web application
-- **Sign-in redirect URI:** `https://yourapp.com/sso/callback/oidc`
+- **Sign-in redirect URI:** `https://grantex.dev/dashboard/sso/callback` for the hosted dashboard, or your own callback URL for a custom integration
 - **Scopes:** `openid email profile`
 - **Grant type:** Authorization Code
 
@@ -69,6 +77,10 @@ const result = await grantex.sso.testConnection(connection.id);
 // result.issuer, result.authorizationEndpoint, result.tokenEndpoint, result.jwksUri
 ```
 
+This checks provider metadata and connectivity, **not** a human login, group
+mapping, dashboard authorization, or consent. Complete an actual OIDC login
+with a test administrator before enabling enforcement.
+
 ### Step 4: Handle the login flow
 
 ```typescript
@@ -87,6 +99,8 @@ console.log(result.email);        // 'alice@mycompany.com'
 console.log(result.mappedScopes); // ['read', 'write', 'deploy']
 console.log(result.sessionId);    // 'ssosess_01HXYZ...'
 console.log(result.principalId);  // 'scimuser_01HXYZ...' (JIT-provisioned)
+// result.sessionToken is an opaque bearer credential when the server's
+// human-session feature is enabled. Never log or expose it to another user.
 ```
 
 ---
@@ -257,7 +271,8 @@ When a user logs in with the groups `['Engineering', 'ReadOnly']`, they receive 
 When `jitProvisioning` is enabled, Grantex automatically creates or updates a principal (SCIM user) on each SSO login. This eliminates the need for manual user provisioning:
 
 1. User authenticates via SSO
-2. Grantex checks if a SCIM user exists with the IdP's subject identifier
+2. Grantex checks the IdP subject; after organization enforcement is enabled,
+   it is namespaced by the connection ID to prevent cross-provider collisions
 3. If not found, creates a new SCIM user with the IdP's email and display name
 4. If found, updates the existing user's details
 5. Returns the `principalId` in the callback result
@@ -266,7 +281,9 @@ When `jitProvisioning` is enabled, Grantex automatically creates or updates a pr
 
 ## SSO enforcement
 
-Require all users in your organization to authenticate via SSO:
+Human SSO enforcement is opt-in at **two** levels. The server operator sets
+`SSO_HUMAN_ENFORCEMENT_ENABLED=true` (source default: off). The organization
+then enables its own policy in Dashboard > Settings > SSO or via the API:
 
 ```typescript
 // Enable SSO enforcement
@@ -277,8 +294,36 @@ await grantex.sso.setEnforcement({ enforce: false });
 ```
 
 <Warning>
-  Enabling SSO enforcement marks all active connections as enforced. Ensure you have at least one active, tested SSO connection before enabling.
+  Enabling requires a recent, successful OIDC administrator session with JIT
+  provisioning and the mapped `admin` scope. Existing browser SSO sessions are
+  invalidated. Legacy JIT identities are migrated only when a prior SSO session
+  proves their exact connection and subject; ambiguous mappings return
+  `SSO_IDENTITY_CONFLICT` and require manual resolution. Re-authenticate after
+  enabling. Keep a recovery machine API key secured outside the browser.
 </Warning>
+
+The hosted dashboard rejects API-key **human sign-in** for an enforced
+organization. Its OIDC callback exchanges the code and uses an opaque SSO
+session with `admin` scope. The hosted consent page requires a separate active
+SSO session bound to the exact organization and principal for both approval
+and denial. In live mode, the existing passkey requirement still applies;
+SSO does not replace a WebAuthn assertion. Sessions expire after eight hours
+and may be revoked earlier. Consent fails closed on missing, expired,
+revoked, or other-principal sessions.
+
+The developer API key deliberately continues to authorize programmatic
+management API calls. It cannot impersonate a principal SSO session for
+consent, but a key holder can still manage the organization, including
+turning enforcement off. Protect it as a privileged machine credential;
+this policy is **not** a blanket ban on non-SSO API access.
+
+For a local end-to-end check, start the dedicated Docker stack with
+`docker compose -p grantex-sso-e2e -f docker-compose.yml -f docker-compose.sso-test.yml up -d --build`,
+then run `node apps/auth-service/scripts/sso-local-idp-e2e.mjs` from the
+repository root. This uses a disposable, locally signed OIDC test provider.
+It does not certify any external identity provider or prove a live tenant's
+redirect and claim configuration. Validate the intended provider in staging
+before enabling a production organization.
 
 ---
 
@@ -298,7 +343,9 @@ for (const session of sessions) {
 await grantex.sso.revokeSession(sessions[0].id);
 ```
 
-Sessions expire after 8 hours by default.
+Sessions expire after 8 hours by default. A session ID is an audit identifier,
+not an authentication credential; use the returned `sessionToken` as a bearer
+credential and keep it secret.
 
 ---
 
@@ -350,14 +397,7 @@ grantex sso sessions revoke ssosess_01HXYZ...
 
 | Provider | OIDC | SAML 2.0 |
 |----------|------|----------|
-| Okta | Yes | Yes |
-| Azure AD / Entra ID | Yes | Yes |
-| Google Workspace | Yes | Yes |
-| Auth0 | Yes | Yes |
-| OneLogin | Yes | Yes |
-| PingFederate | Yes | Yes |
-| JumpCloud | Yes | Yes |
-| Any standards-compliant provider | OIDC discovery/JWKS required | Signed SAML responses required |
+| Standards-compliant IdP | OIDC discovery, JWKS and Authorization Code flow required; validate issuer, claims, redirect and groups in staging | Signed SAML responses and a configured trust certificate required; custom integration callback only |
 
 LDAP provider compatibility is not currently certified. The preview works only
 when the configured filter and base construct the directory's exact user DN;
@@ -376,6 +416,8 @@ test the intended server and schema before production use.
 | `/v1/sso/connections/:id` | DELETE | Delete SSO connection |
 | `/v1/sso/connections/:id/test` | POST | Test SSO connection |
 | `/v1/sso/enforce` | POST | Set SSO enforcement |
+| `/v1/sso/enforce` | GET | Read effective organization enforcement |
+| `/sso/capabilities` | GET | Read server human-session availability |
 | `/v1/sso/sessions` | GET | List SSO sessions |
 | `/v1/sso/sessions/:id` | DELETE | Revoke SSO session |
 | `/sso/login` | GET | Get IdP authorization URL |

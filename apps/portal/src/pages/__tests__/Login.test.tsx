@@ -26,7 +26,10 @@ function renderLogin() {
 }
 
 describe('Login', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ humanSessionsEnabled: false }) }));
+  });
 
   it('renders the login form with API key input', () => {
     renderLogin();
@@ -84,7 +87,7 @@ describe('Login', () => {
     renderLogin();
     await user.type(screen.getByLabelText('API Key'), 'gx_live_bad');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
-    await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Invalid API key', 'error'));
+    await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Invalid API key or SSO is required for this organization', 'error'));
   });
 
   it('does not navigate on login failure', async () => {

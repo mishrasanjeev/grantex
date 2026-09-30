@@ -6,6 +6,8 @@ export interface Developer {
   mode: 'live' | 'sandbox';
   plan: string;
   fidoRequired: boolean;
+  ssoEnforced?: boolean;
+  humanSession?: boolean;
   fidoRpName: string | null;
   createdAt: string;
 }
