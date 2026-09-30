@@ -159,6 +159,11 @@ describe('escapeLdapFilter', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('mapGroupsToScopes', () => {
+  it('reads legacy double-encoded JSONB mappings without granting malformed entries', () => {
+    const legacy = '{"admins":["admin"],"bad":"admin"}' as unknown as Record<string, string[]>;
+    expect(mapGroupsToScopes(['admins'], legacy, ['read'])).toEqual(['admin']);
+    expect(mapGroupsToScopes(['bad'], legacy, ['read'])).toEqual(['read']);
+  });
   const mappings = {
     Engineering: ['read', 'write', 'deploy'],
     Admins: ['admin', 'read', 'write'],

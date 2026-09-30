@@ -37,6 +37,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setApiKey(key);
     try {
       const dev = await getMe();
+      if (dev.ssoEnforced && !dev.humanSession) {
+        throw new Error('SSO_REQUIRED');
+      }
       replaceApiKey(key);
       setDeveloper(dev);
     } catch (error) {
@@ -59,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setApiKey(stored);
     getMe()
       .then((dev) => {
+        if (dev.ssoEnforced && !dev.humanSession) throw new Error('SSO_REQUIRED');
         setDeveloper(dev);
       })
       .catch(() => {

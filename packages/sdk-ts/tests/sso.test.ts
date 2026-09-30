@@ -199,6 +199,7 @@ describe('SsoClient', () => {
   it('handleOidcCallback() POSTs to /sso/callback/oidc', async () => {
     const mockResult = {
       sessionId: 'ssosess_01',
+      sessionToken: 'gx_sso_test_token',
       email: 'alice@corp.com',
       name: 'Alice Smith',
       sub: 'idp_user_01',
@@ -215,6 +216,7 @@ describe('SsoClient', () => {
     const result = await grantex.sso.handleOidcCallback({ code: 'abc', state: 'state123' });
 
     expect(result.sessionId).toBe('ssosess_01');
+    expect(result.sessionToken).toBe('gx_sso_test_token');
     expect(result.email).toBe('alice@corp.com');
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(/\/sso\/callback\/oidc$/);

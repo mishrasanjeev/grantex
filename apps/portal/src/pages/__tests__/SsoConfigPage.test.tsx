@@ -7,6 +7,8 @@ const mockListConnections = vi.fn();
 const mockCreateConnection = vi.fn();
 const mockDeleteConnection = vi.fn();
 const mockTestConnection = vi.fn();
+const mockGetEnforcement = vi.fn();
+const mockSetEnforcement = vi.fn();
 const mockShow = vi.fn();
 
 vi.mock('../../api/sso', () => ({
@@ -14,6 +16,8 @@ vi.mock('../../api/sso', () => ({
   createSsoConnection: (...a: unknown[]) => mockCreateConnection(...a),
   deleteSsoConnection: (...a: unknown[]) => mockDeleteConnection(...a),
   testSsoConnection: (...a: unknown[]) => mockTestConnection(...a),
+  getSsoEnforcement: () => mockGetEnforcement(),
+  setSsoEnforcement: (...a: unknown[]) => mockSetEnforcement(...a),
 }));
 vi.mock('../../api/client', () => ({
   ApiError: class extends Error { status: number; constructor(m: string, s: number) { super(m); this.status = s; } },
@@ -28,6 +32,7 @@ describe('SsoConfigPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockListConnections.mockResolvedValue({ connections });
+    mockGetEnforcement.mockResolvedValue({ enforce: false });
   });
 
   it('renders SSO connections table', async () => {
@@ -85,8 +90,9 @@ describe('SsoConfigPage', () => {
     await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Connection test passed', 'success'));
   });
 
-  it('has About SSO section', async () => {
+  it('shows organization-level enforcement separately from connection setup', async () => {
     render(<SsoConfigPage />);
-    await waitFor(() => expect(screen.getByText('About SSO')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Human SSO enforcement')).toBeInTheDocument());
+    expect(screen.getByRole('checkbox', { name: /Require an active SSO session/ })).toBeDisabled();
   });
 });

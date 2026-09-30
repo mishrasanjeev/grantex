@@ -5,6 +5,7 @@
  */
 import * as jose from 'jose';
 import { X509Certificate } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   SAML,
   ValidateInResponseTo,
@@ -89,6 +90,32 @@ export interface SsoSessionRow {
   mapped_scopes: string[];
   expires_at: string;
   created_at: string;
+  subject_namespace_version: number;
+}
+
+export const SSO_TOKEN_PREFIX = 'gx_sso_';
+
+export function hashSsoToken(token: string): string | null {
+  if (!/^gx_sso_[A-Za-z0-9_-]{43}$/.test(token)) return null;
+  return createHash('sha256').update(token).digest('hex');
+}
+
+export async function findSsoSession(token: string): Promise<SsoSessionRow | null> {
+  const tokenHash = hashSsoToken(token);
+  if (!tokenHash) return null;
+  const sql = getSql();
+  const rows = await sql<SsoSessionRow[]>`
+    SELECT ss.* FROM sso_sessions ss
+    JOIN sso_connections sc ON sc.id = ss.connection_id
+    JOIN developers d ON d.id = ss.developer_id
+    WHERE ss.token_hash = ${tokenHash}
+      AND ss.expires_at > NOW()
+      AND sc.status = 'active'
+      AND sc.developer_id = ss.developer_id
+      AND (${!config.ssoHumanEnforcementEnabled} OR d.sso_enforced = FALSE OR ss.subject_namespace_version = 1)
+    LIMIT 1
+  `;
+  return rows[0] ?? null;
 }
 
 // ── Discovery cache (in-memory, 1 hour TTL) ──────────────────────────────
@@ -532,20 +559,34 @@ export function mapGroupsToScopes(
   defaultScopes: string[],
 ): string[] {
   const scopes = new Set<string>();
+  const entries = normalizeGroupMappings(groupMappings);
 
   for (const group of groups) {
-    const mapped = groupMappings[group];
-    if (mapped) {
-      for (const scope of mapped) scopes.add(scope);
-    }
+    const mapped = Object.hasOwn(entries, group) ? entries[group] : undefined;
+    if (mapped) for (const scope of mapped) scopes.add(scope);
   }
 
-  // If no groups matched, fall back to default scopes
   if (scopes.size === 0) {
     for (const scope of defaultScopes) scopes.add(scope);
   }
 
   return [...scopes];
+}
+
+export function normalizeGroupMappings(value: unknown): Record<string, string[]> {
+  let mappings: unknown = value;
+  if (typeof mappings === 'string') {
+    try { mappings = JSON.parse(mappings); } catch { mappings = null; }
+  }
+  if (mappings === null || typeof mappings !== 'object' || Array.isArray(mappings)) return {};
+  const entries = mappings as Record<string, unknown>;
+  const result: Record<string, string[]> = Object.create(null);
+  for (const [group, scopes] of Object.entries(entries)) {
+    if (Array.isArray(scopes) && scopes.every((scope) => typeof scope === 'string')) {
+      result[group] = scopes;
+    }
+  }
+  return result;
 }
 
 // ── JIT provisioning ──────────────────────────────────────────────────────
@@ -557,6 +598,7 @@ export function mapGroupsToScopes(
 export async function jitProvision(
   developerId: string,
   userInfo: { sub: string; email?: string; name?: string },
+  legacyBinding?: { connectionId: string; subject: string },
 ): Promise<string> {
   const sql = getSql();
 
@@ -580,6 +622,38 @@ export async function jitProvision(
     return existing[0].id;
   }
 
+  if (legacyBinding) {
+    const promoted = await sql<Array<{ id: string }>>`
+      UPDATE scim_users u
+      SET external_id = ${userInfo.sub},
+          display_name = ${userInfo.name ?? null},
+          updated_at = NOW()
+      WHERE u.developer_id = ${developerId}
+        AND u.external_id = ${legacyBinding.subject}
+        AND NOT EXISTS (
+          SELECT 1 FROM scim_users other
+          WHERE other.developer_id = u.developer_id
+            AND other.external_id = u.external_id AND other.id <> u.id
+        )
+        AND EXISTS (
+          SELECT 1 FROM sso_sessions ss
+          WHERE ss.developer_id = u.developer_id
+            AND ss.principal_id = u.id
+            AND ss.connection_id = ${legacyBinding.connectionId}
+            AND ss.idp_subject = ${legacyBinding.subject}
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM sso_sessions ss
+          WHERE ss.developer_id = u.developer_id
+            AND ss.principal_id = u.id
+            AND (ss.connection_id <> ${legacyBinding.connectionId}
+              OR ss.idp_subject <> ${legacyBinding.subject})
+        )
+      RETURNING id
+    `;
+    if (promoted.length === 1) return promoted[0]!.id;
+  }
+
   // Create new user
   const id = newScimUserId();
   await sql`
@@ -601,15 +675,20 @@ export interface CreateSsoSessionParams {
   groups: string[];
   mappedScopes: string[];
   expiresInSeconds?: number;
+  subjectNamespaceVersion?: 0 | 1;
 }
 
 /**
  * Create an SSO session record for tracking and audit purposes.
  * Default session duration: 8 hours.
  */
-export async function createSsoSession(params: CreateSsoSessionParams): Promise<SsoSessionRow> {
+export async function createSsoSession(params: CreateSsoSessionParams): Promise<SsoSessionRow & { token?: string }> {
   const sql = getSql();
   const id = newSsoSessionId();
+  const token = config.ssoHumanEnforcementEnabled
+    ? `${SSO_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`
+    : undefined;
+  const tokenHash = token ? hashSsoToken(token) : null;
   const expiresAt = new Date(
     Date.now() + (params.expiresInSeconds ?? 28800) * 1000,
   ).toISOString();
@@ -617,14 +696,14 @@ export async function createSsoSession(params: CreateSsoSessionParams): Promise<
   const rows = await sql<SsoSessionRow[]>`
     INSERT INTO sso_sessions (
       id, developer_id, connection_id, principal_id, email, name,
-      idp_subject, groups, mapped_scopes, expires_at
+      idp_subject, groups, mapped_scopes, expires_at, token_hash, subject_namespace_version
     ) VALUES (
       ${id}, ${params.developerId}, ${params.connectionId},
       ${params.principalId ?? null}, ${params.email ?? null}, ${params.name ?? null},
-      ${params.idpSubject}, ${params.groups}, ${params.mappedScopes}, ${expiresAt}
+      ${params.idpSubject}, ${params.groups}, ${params.mappedScopes}, ${expiresAt}, ${tokenHash}, ${params.subjectNamespaceVersion ?? 0}
     )
     RETURNING *
   `;
 
-  return rows[0]!;
+  return { ...rows[0]!, ...(token ? { token } : {}) };
 }

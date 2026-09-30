@@ -10,6 +10,7 @@ import {
   parseSamlResponse,
   resolveConnection,
   mapGroupsToScopes,
+  normalizeGroupMappings,
   jitProvision,
   createSsoSession,
   saveOidcAuthRequest,
@@ -109,7 +110,7 @@ function connectionToResponse(row: SsoConnectionRow) {
     jitProvisioning: row.jit_provisioning,
     enforce: row.enforce,
     groupAttribute: row.group_attribute,
-    groupMappings: row.group_mappings,
+    groupMappings: normalizeGroupMappings(row.group_mappings),
     defaultScopes: row.default_scopes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -174,6 +175,21 @@ function validateOptionalRedirectUri(value: string, field: string): string | nul
     return `${field}: ${err instanceof Error ? err.message : 'invalid URL'}`;
   }
 }
+
+async function subjectNamespaceVersion(developerId: string): Promise<0 | 1> {
+  if (!config.ssoHumanEnforcementEnabled) return 0;
+  const sql = getSql();
+  const rows = await sql<Array<{ sso_subject_namespace: boolean }>>`
+    SELECT sso_subject_namespace FROM developers WHERE id = ${developerId}
+  `;
+  return rows[0]?.sso_subject_namespace === true ? 1 : 0;
+}
+
+function jitSubject(connectionId: string, subject: string, namespaceVersion: 0 | 1): string {
+  return namespaceVersion === 1 ? `${connectionId}:${subject}` : subject;
+}
+
+class SsoIdentityMigrationConflict extends Error {}
 
 const SSO_SECRET_PREFIX = 'vault:v1:';
 
@@ -336,7 +352,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         ${b.ldapGroupSearchBase ?? null}, ${b.ldapGroupSearchFilter ?? '(member={{dn}})'},
         ${b.ldapTlsEnabled ?? false},
         ${b.domains ?? []}, ${b.jitProvisioning ?? false}, ${b.enforce ?? false},
-        ${b.groupAttribute ?? null}, ${JSON.stringify(b.groupMappings ?? {})},
+        ${b.groupAttribute ?? null}, ${sql.json(b.groupMappings ?? {})},
         ${b.defaultScopes ?? []}
       )
       RETURNING *
@@ -471,7 +487,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         jit_provisioning = ${b.jitProvisioning ?? cur.jit_provisioning},
         enforce         = ${b.enforce ?? cur.enforce},
         group_attribute = ${b.groupAttribute ?? cur.group_attribute},
-        group_mappings  = ${JSON.stringify(b.groupMappings ?? cur.group_mappings)},
+        group_mappings  = ${sql.json(normalizeGroupMappings(b.groupMappings ?? cur.group_mappings))},
         default_scopes  = ${b.defaultScopes ?? cur.default_scopes},
         updated_at      = NOW()
       WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
@@ -589,14 +605,115 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     if (typeof enforce !== 'boolean') {
       return reply.status(400).send({ message: 'enforce (boolean) is required', code: 'BAD_REQUEST', requestId: request.id });
     }
-    // Update all active connections for this org
+    if (enforce && !config.ssoHumanEnforcementEnabled) {
+      return reply.status(409).send({
+        message: 'Human SSO enforcement is not enabled on this server',
+        code: 'SSO_ENFORCEMENT_DISABLED',
+        requestId: request.id,
+      });
+    }
     const sql = getSql();
-    await sql`
-      UPDATE sso_connections
-      SET enforce = ${enforce}, updated_at = NOW()
-      WHERE developer_id = ${request.developer.id} AND status = 'active'
-    `;
+    const outcome = await sql.begin(async (tx) => {
+      const developers = await tx<Array<{ sso_subject_namespace: boolean }>>`
+        SELECT sso_subject_namespace FROM developers
+        WHERE id = ${request.developer.id} FOR UPDATE
+      `;
+      if (enforce) {
+        const active = await tx`
+          SELECT id FROM sso_connections
+          WHERE developer_id = ${request.developer.id}
+            AND status = 'active' AND jit_provisioning = TRUE
+          LIMIT 1
+        `;
+        if (!active[0]) return 'SSO_CONNECTION_REQUIRED';
+        const adminLogin = await tx`
+          SELECT ss.id FROM sso_sessions ss
+          JOIN sso_connections sc ON sc.id = ss.connection_id
+          WHERE ss.developer_id = ${request.developer.id}
+            AND ss.principal_id IS NOT NULL
+            AND ss.expires_at > NOW()
+            AND 'admin' = ANY(ss.mapped_scopes)
+            AND sc.developer_id = ss.developer_id
+            AND sc.status = 'active' AND sc.protocol = 'oidc'
+            AND sc.jit_provisioning = TRUE
+          LIMIT 1
+        `;
+        if (!adminLogin[0]) return 'SSO_ADMIN_LOGIN_REQUIRED';
+
+        if (!developers[0]?.sso_subject_namespace) {
+          const bindings = await tx<Array<{
+            principal_id: string; connection_id: string; idp_subject: string;
+          }>>`
+            SELECT DISTINCT principal_id, connection_id, idp_subject
+            FROM sso_sessions
+            WHERE developer_id = ${request.developer.id}
+              AND principal_id IS NOT NULL AND idp_subject IS NOT NULL
+              AND subject_namespace_version = 0
+            ORDER BY principal_id, connection_id, idp_subject
+          `;
+          const byPrincipal = new Map<string, string>();
+          const bySubject = new Map<string, string>();
+          for (const binding of bindings) {
+            const subject = jitSubject(binding.connection_id, binding.idp_subject, 1);
+            if ((byPrincipal.has(binding.principal_id) && byPrincipal.get(binding.principal_id) !== subject)
+              || (bySubject.has(subject) && bySubject.get(subject) !== binding.principal_id)) {
+              throw new SsoIdentityMigrationConflict();
+            }
+            byPrincipal.set(binding.principal_id, subject);
+            bySubject.set(subject, binding.principal_id);
+          }
+          for (const binding of bindings) {
+            const updated = await tx`
+              UPDATE scim_users SET external_id = ${jitSubject(binding.connection_id, binding.idp_subject, 1)},
+                updated_at = NOW()
+              WHERE id = ${binding.principal_id}
+                AND developer_id = ${request.developer.id}
+                AND external_id = ${binding.idp_subject}
+              RETURNING id
+            `;
+            if (updated.length !== 1) throw new SsoIdentityMigrationConflict();
+          }
+        }
+      }
+      await tx`
+        UPDATE developers
+        SET sso_enforced = ${enforce},
+            sso_subject_namespace = sso_subject_namespace OR ${enforce}
+        WHERE id = ${request.developer.id}
+      `;
+      if (enforce) {
+        await tx`DELETE FROM sso_sessions WHERE developer_id = ${request.developer.id}`;
+      }
+      await tx`
+        UPDATE sso_connections
+        SET enforce = ${enforce}, updated_at = NOW()
+        WHERE developer_id = ${request.developer.id} AND status = 'active'
+      `;
+      return null;
+    }).catch((error: unknown) => {
+      if (error instanceof SsoIdentityMigrationConflict) return 'SSO_IDENTITY_CONFLICT';
+      throw error;
+    });
+    if (outcome) {
+      return reply.status(409).send({
+        message: outcome === 'SSO_CONNECTION_REQUIRED'
+          ? 'An active SSO connection with JIT provisioning is required before enforcement'
+          : outcome === 'SSO_ADMIN_LOGIN_REQUIRED'
+            ? 'Complete a successful OIDC login with the admin scope before enforcement'
+          : 'Existing SSO identities cannot be uniquely bound to an IdP connection; resolve them before enforcement',
+        code: outcome,
+        requestId: request.id,
+      });
+    }
     return reply.send({ enforce, developerId: request.developer.id });
+  });
+
+  app.get('/v1/sso/enforce', async (request, reply) => {
+    const sql = getSql();
+    const rows = await sql<Array<{ sso_enforced: boolean }>>`
+      SELECT sso_enforced FROM developers WHERE id = ${request.developer.id}
+    `;
+    return reply.send({ enforce: rows[0]?.sso_enforced === true && config.ssoHumanEnforcementEnabled });
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -645,6 +762,10 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
   // ══════════════════════════════════════════════════════════════════════════
   // SSO login flow (public — no API-key auth)
   // ══════════════════════════════════════════════════════════════════════════
+
+  app.get('/sso/capabilities', { config: { skipAuth: true } }, async (_request, reply) => {
+    return reply.send({ humanSessionsEnabled: config.ssoHumanEnforcementEnabled });
+  });
 
   /**
    * GET /sso/login?org=<developerId>&domain=<emailDomain>
@@ -918,12 +1039,18 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
       const claimName = typeof claims['name'] === 'string' ? claims['name'] : undefined;
 
       let principalId: string | undefined;
+      const namespaceVersion = await subjectNamespaceVersion(stateData.org);
       if (conn.jit_provisioning) {
-        principalId = await jitProvision(stateData.org, {
-          sub: String(claims['sub']),
-          ...(claimEmail !== undefined ? { email: claimEmail } : {}),
-          ...(claimName !== undefined ? { name: claimName } : {}),
-        });
+        try {
+          principalId = await jitProvision(stateData.org, {
+            sub: jitSubject(conn.id, String(claims['sub']), namespaceVersion),
+            ...(claimEmail !== undefined ? { email: claimEmail } : {}),
+            ...(claimName !== undefined ? { name: claimName } : {}),
+          }, namespaceVersion === 1 ? { connectionId: conn.id, subject: String(claims['sub']) } : undefined);
+        } catch (error) {
+          if ((error as { code?: string }).code !== '23505') throw error;
+          return reply.status(409).send({ message: 'SSO identity conflicts with an existing principal', code: 'SSO_IDENTITY_CONFLICT', requestId: request.id });
+        }
       }
 
       // Create SSO session
@@ -936,6 +1063,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         idpSubject: String(claims['sub']),
         groups,
         mappedScopes,
+        subjectNamespaceVersion: namespaceVersion,
       });
 
       await emitEvent(stateData.org, 'sso.login', {
@@ -947,6 +1075,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
 
       return reply.send({
         sessionId: session.id,
+        ...(session.token ? { sessionToken: session.token } : {}),
         email: claims['email'] ?? null,
         name: claims['name'] ?? null,
         sub: claims['sub'] ?? null,
@@ -1013,12 +1142,18 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
 
       // JIT provisioning
       let principalId: string | undefined;
+      const namespaceVersion = await subjectNamespaceVersion(stateData.org);
       if (conn.jit_provisioning) {
-        principalId = await jitProvision(stateData.org, {
-          sub: attributes.sub,
-          ...(attributes.email !== undefined ? { email: attributes.email } : {}),
-          ...(attributes.name !== undefined ? { name: attributes.name } : {}),
-        });
+        try {
+          principalId = await jitProvision(stateData.org, {
+            sub: jitSubject(conn.id, attributes.sub, namespaceVersion),
+            ...(attributes.email !== undefined ? { email: attributes.email } : {}),
+            ...(attributes.name !== undefined ? { name: attributes.name } : {}),
+          }, namespaceVersion === 1 ? { connectionId: conn.id, subject: attributes.sub } : undefined);
+        } catch (error) {
+          if ((error as { code?: string }).code !== '23505') throw error;
+          return reply.status(409).send({ message: 'SSO identity conflicts with an existing principal', code: 'SSO_IDENTITY_CONFLICT', requestId: request.id });
+        }
       }
 
       // Create SSO session
@@ -1031,6 +1166,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         idpSubject: attributes.sub,
         groups,
         mappedScopes,
+        subjectNamespaceVersion: namespaceVersion,
       });
 
       await emitEvent(stateData.org, 'sso.login', {
@@ -1042,6 +1178,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
 
       return reply.send({
         sessionId: session.id,
+        ...(session.token ? { sessionToken: session.token } : {}),
         email: attributes.email ?? null,
         name: attributes.name ?? null,
         sub: attributes.sub,
@@ -1108,12 +1245,18 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
 
       // JIT provisioning
       let principalId: string | undefined;
+      const namespaceVersion = await subjectNamespaceVersion(org);
       if (conn.jit_provisioning) {
-        principalId = await jitProvision(org, {
-          sub: userInfo.dn,
-          ...(userInfo.email !== undefined ? { email: userInfo.email } : {}),
-          ...(userInfo.displayName !== undefined ? { name: userInfo.displayName } : {}),
-        });
+        try {
+          principalId = await jitProvision(org, {
+            sub: jitSubject(conn.id, userInfo.dn, namespaceVersion),
+            ...(userInfo.email !== undefined ? { email: userInfo.email } : {}),
+            ...(userInfo.displayName !== undefined ? { name: userInfo.displayName } : {}),
+          }, namespaceVersion === 1 ? { connectionId: conn.id, subject: userInfo.dn } : undefined);
+        } catch (error) {
+          if ((error as { code?: string }).code !== '23505') throw error;
+          return reply.status(409).send({ message: 'SSO identity conflicts with an existing principal', code: 'SSO_IDENTITY_CONFLICT', requestId: request.id });
+        }
       }
 
       // Create SSO session
@@ -1126,6 +1269,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
         idpSubject: userInfo.dn,
         groups: userInfo.groups,
         mappedScopes,
+        subjectNamespaceVersion: namespaceVersion,
       });
 
       await emitEvent(org, 'sso.login', {
@@ -1137,6 +1281,7 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
 
       return reply.send({
         sessionId: session.id,
+        ...(session.token ? { sessionToken: session.token } : {}),
         email: userInfo.email ?? null,
         name: userInfo.displayName ?? null,
         sub: userInfo.dn,

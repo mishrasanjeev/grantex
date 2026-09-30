@@ -4,6 +4,7 @@ import { Shell } from './components/layout/Shell';
 import { RequireAuth } from './RequireAuth';
 
 const Login = lazy(() => import('./pages/Login').then(({ Login }) => ({ default: Login })));
+const SsoCallback = lazy(() => import('./pages/SsoCallback').then(({ SsoCallback }) => ({ default: SsoCallback })));
 const Signup = lazy(() => import('./pages/Signup').then(({ Signup }) => ({ default: Signup })));
 const Dashboard = lazy(() => import('./pages/Dashboard').then(({ Dashboard }) => ({ default: Dashboard })));
 const AgentList = lazy(() => import('./pages/agents/AgentList').then(({ AgentList }) => ({ default: AgentList })));
@@ -61,6 +62,7 @@ const NotFound = lazy(() => import('./pages/NotFound').then(({ NotFound }) => ({
 
 export const routes: RouteObject[] = [
   { path: '/dashboard/login', element: <Login /> },
+  { path: '/dashboard/sso/callback', element: <SsoCallback /> },
   { path: '/dashboard/signup', element: <Signup /> },
   { path: '/dashboard/admin', element: <AdminPage /> },
   {

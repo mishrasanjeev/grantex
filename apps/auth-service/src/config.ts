@@ -205,6 +205,7 @@ export const config = {
   fidoRpName: optional('FIDO_RP_NAME', 'Grantex'),
   fidoOrigin: optional('FIDO_ORIGIN', 'https://grantex.dev'),
   get passkeyEnrollmentEnabled() { return process.env['PASSKEY_ENROLLMENT_ENABLED'] === 'true'; },
+  get ssoHumanEnforcementEnabled() { return process.env['SSO_HUMAN_ENFORCEMENT_ENABLED'] === 'true'; },
   get portableWebAuthnEvidenceEnabled() { return process.env['PORTABLE_WEBAUTHN_EVIDENCE_ENABLED'] === 'true'; },
   get portableWebAuthnEvidenceStatusCheckEnabled() { return process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'] === 'true'; },
   get irregularityResponsePolicyEnabled() { return process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'] === 'true'; },

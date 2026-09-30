@@ -938,6 +938,8 @@ export interface SsoSamlCallbackParams {
 
 export interface SsoCallbackResult {
   sessionId: string;
+  /** Opaque bearer credential, returned only when human SSO sessions are enabled. Keep secret. */
+  sessionToken?: string;
   email: string | null;
   name: string | null;
   sub: string | null;

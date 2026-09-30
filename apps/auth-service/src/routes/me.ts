@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
+import { config } from '../config.js';
 
 export async function meRoutes(app: FastifyInstance): Promise<void> {
   app.get('/v1/me', async (request, reply) => {
@@ -13,10 +14,11 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
       mode: string;
       plan: string | null;
       fido_required: boolean;
+      sso_enforced: boolean;
       fido_rp_name: string | null;
       created_at: string;
     }[]>`
-      SELECT d.id, d.name, d.email, d.mode,
+      SELECT d.id, d.name, d.email, d.mode, d.sso_enforced,
              s.plan, d.fido_required, d.fido_rp_name,
              d.created_at
       FROM developers d
@@ -41,6 +43,8 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
       mode: dev.mode,
       plan: dev.plan ?? 'free',
       fidoRequired: dev.fido_required,
+      ssoEnforced: config.ssoHumanEnforcementEnabled && dev.sso_enforced === true,
+      humanSession: request.developer.authKind === 'sso',
       fidoRpName: dev.fido_rp_name,
       createdAt: dev.created_at,
     });
