@@ -41,10 +41,10 @@ curl "https://api.grantex.dev/v1/dpdp/consent-records?dataPrincipalId=user_abc12
 {
   "records": [
     {
-      "recordId": "cr_01HXYZ...",
+      "recordId": "crec_01HXYZ...",
       "grantId": "grnt_01HXYZ...",
       "dataPrincipalId": "user_abc123",
-      "dataFiduciaryName": "Acme Corp",
+      "dataFiduciaryName": "Example Retail Ltd",
       "purposes": [
         { "code": "analytics", "description": "Usage analytics" }
       ],
@@ -114,7 +114,7 @@ record; follow `nextCursor` to read them all.
 <CodeGroup>
 
 ```typescript TypeScript
-import Grantex from '@grantex/sdk';
+import { Grantex } from '@grantex/sdk';
 
 const grantex = new Grantex({ apiKey: 'gx_...' });
 
@@ -122,9 +122,7 @@ const grantex = new Grantex({ apiKey: 'gx_...' });
 const all = await grantex.dpdp.listConsentRecords();
 
 // Filter by data principal
-const filtered = await grantex.dpdp.listConsentRecords({
-  dataPrincipalId: 'user_abc123',
-});
+const filtered = await grantex.dpdp.listConsentRecords('user_abc123');
 ```
 
 ```python Python
@@ -136,12 +134,13 @@ grantex = Grantex(api_key="gx_...")
 all_records = grantex.dpdp.list_consent_records()
 
 # Filter by data principal
-filtered = grantex.dpdp.list_consent_records(
-    data_principal_id="user_abc123",
-)
+filtered = grantex.dpdp.list_consent_records(principal_id="user_abc123")
 ```
 
 </CodeGroup>
+
+These SDK calls read the first page. To pass `limit` and `cursor`, use the
+REST call above unless your SDK version lists them.
 
 ## Ownership
 

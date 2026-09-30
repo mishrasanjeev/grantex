@@ -76,7 +76,7 @@ On termination of the underlying agreement, the Controller may, within 30 days, 
 - **Export** — a JSON export of all personal data the Processor holds about the Controller's tenants; or
 - **Deletion** — irreversible deletion of that data and a written confirmation.
 
-The DPDP erasure endpoint (`POST /v1/dpdp/data-principals/:id/erasure`, see `apps/auth-service/src/routes/dpdp.ts`) is available throughout the term for per-principal deletion.
+The DPDP erasure endpoint (`POST /v1/dpdp/data-principals/:id/erasure`, see `apps/auth-service/src/routes/dpdp.ts`) is available throughout the term for per-principal erasure: it revokes the principal's grants, marks consent records erased, redacts grievance text and deletes stored exports, and retains consent records and audit entries as evidence where retention is required (for example DPDP Rules 2025 r.8(3)); its response lists what was retained and why.
 
 ## 11. International transfers
 

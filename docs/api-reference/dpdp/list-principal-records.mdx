@@ -1,7 +1,7 @@
 ---
 title: "List Principal Records"
 sidebarTitle: "List Principal Records"
-description: "Retrieve all consent records for a specific data principal. Implements the right to access under DPDP Section 11."
+description: "List the consent records held about one data principal. Supports a response to an access request under DPDP Act s.11."
 ---
 
 ## Endpoint
@@ -47,9 +47,9 @@ curl https://api.grantex.dev/v1/dpdp/data-principals/user_abc123/records \
   "dataPrincipalId": "user_abc123",
   "records": [
     {
-      "recordId": "cr_01HXYZ...",
+      "recordId": "crec_01HXYZ...",
       "grantId": "grnt_01HXYZ...",
-      "dataFiduciaryName": "Acme Corp",
+      "dataFiduciaryName": "Example Retail Ltd",
       "purposes": [
         { "code": "analytics", "description": "Usage analytics" }
       ],
@@ -121,7 +121,7 @@ increment them on every call.)
 <CodeGroup>
 
 ```typescript TypeScript
-import Grantex from '@grantex/sdk';
+import { Grantex } from '@grantex/sdk';
 
 const grantex = new Grantex({ apiKey: 'gx_...' });
 

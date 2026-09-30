@@ -1479,10 +1479,16 @@ bundles = client.policies.bundles()
 
 ## DPDP Act 2023 Compliance
 
-DPDP Act 2023 support includes structured consent records, purpose limitation, data principal rights workflows (access, erasure, grievance), and audit-ready exports. Available in all SDKs and the CLI. This is a technical control mapping, not a legal certification.
+DPDP Act 2023 support includes consent records bound to grants and versioned notices with a signed proof, withdrawal with optional grant revocation, erasure that reports what is retained and why, grievances with a published response period, a breach register, and exports (DPDP audit, per-person GDPR Art. 15, EU AI Act evidence). This is a technical control mapping, not a legal certification: Grantex is not a registered Consent Manager and does not notify the Data Protection Board or data principals. Most DPDP obligations apply from 13 May 2027 (DPDP Rules 2025). See [DPDP Compliance](https://docs.grantex.dev/features/dpdp-compliance).
+
+The published SDKs (`@grantex/sdk@0.8.1`, `grantex==0.7.1`, `grantex-go@v0.4.2`) and CLI (`@grantex/cli@0.4.1`) cover the routes in the first table below; call the routes in the second table over REST unless your SDK version lists them.
 
 ```typescript
-// Register a consent notice
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+// Register a consent notice version
 const notice = await grantex.dpdp.createConsentNotice({
   noticeId: 'privacy-v1',
   version: '1.0',
@@ -1491,7 +1497,7 @@ const notice = await grantex.dpdp.createConsentNotice({
   purposes: [{ code: 'analytics', description: 'Usage analytics' }],
 });
 
-// Create a consent record linked to a grant
+// Record consent against an existing, active grant
 const record = await grantex.dpdp.createConsentRecord({
   grantId: 'grnt_01HXYZ...',
   dataPrincipalId: 'user@example.com',
@@ -1500,27 +1506,28 @@ const record = await grantex.dpdp.createConsentRecord({
   processingExpiresAt: '2027-01-01T00:00:00Z',
 });
 
-// Data principal exercises right to access (DPDP §11)
+// Records held about a principal, for an access request (DPDP s.11)
 const { records } = await grantex.dpdp.listPrincipalRecords('user@example.com');
 
-// Withdraw consent — optionally revoke grant and delete data
+// Withdraw consent (s.6(4)); optionally revoke the grant and ask your
+// application, by webhook, to delete the data it processed
 const withdrawal = await grantex.dpdp.withdrawConsent(record.recordId, {
   reason: 'No longer needed',
   revokeGrant: true,
   deleteProcessedData: true,
 });
 
-// File a grievance (DPDP §13(6))
+// Record a grievance (DPDP s.13)
 const grievance = await grantex.dpdp.fileGrievance({
   dataPrincipalId: 'user@example.com',
-  type: 'data_breach',
-  description: 'Unauthorized data access',
+  type: 'unauthorized-processing',
+  description: 'Data used beyond the consented purpose',
 });
 
-// Request data erasure (DPDP §11)
+// Act on an erasure request (DPDP s.12)
 const erasure = await grantex.dpdp.requestErasure('user@example.com');
 
-// Generate compliance export
+// Generate a DPDP audit export
 const report = await grantex.dpdp.createExport({
   type: 'dpdp-audit',
   dateFrom: '2026-01-01T00:00:00Z',
@@ -1530,6 +1537,10 @@ const report = await grantex.dpdp.createExport({
 
 ```python
 # Python SDK
+from grantex import CreateConsentRecordParams, Grantex
+
+client = Grantex(api_key="gx_...")
+
 record = client.dpdp.create_consent_record(CreateConsentRecordParams(
     grant_id="grnt_01HXYZ...",
     data_principal_id="user@example.com",
@@ -1545,17 +1556,32 @@ erasure = client.dpdp.request_erasure("user@example.com")
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/v1/dpdp/consent-notices` | Register a consent notice |
+| `POST` | `/v1/dpdp/consent-notices` | Register a consent notice version |
 | `POST` | `/v1/dpdp/consent-records` | Create a consent record |
 | `GET` | `/v1/dpdp/consent-records/:id` | Get a consent record |
 | `GET` | `/v1/dpdp/consent-records` | List consent records |
-| `POST` | `/v1/dpdp/consent-records/:id/withdraw` | Withdraw consent |
-| `GET` | `/v1/dpdp/data-principals/:id/records` | Right to access (§11) |
-| `POST` | `/v1/dpdp/data-principals/:id/erasure` | Right to erasure (§11) |
-| `POST` | `/v1/dpdp/grievances` | File a grievance (§13(6)) |
-| `GET` | `/v1/dpdp/grievances/:id` | Get grievance status |
-| `POST` | `/v1/dpdp/exports` | Generate compliance export |
-| `GET` | `/v1/dpdp/exports/:id` | Get export data |
+| `POST` | `/v1/dpdp/consent-records/:id/withdraw` | Withdraw consent (s.6(4)) |
+| `GET` | `/v1/dpdp/data-principals/:id/records` | Records held about a principal (s.11) |
+| `POST` | `/v1/dpdp/data-principals/:id/erasure` | Erasure request (s.12) |
+| `POST` | `/v1/dpdp/grievances` | Record a grievance (s.13) |
+| `GET` | `/v1/dpdp/grievances/:id` | Get a grievance |
+| `POST` | `/v1/dpdp/exports` | Generate an export |
+| `GET` | `/v1/dpdp/exports/:id` | Get an export (7 days) |
+
+Newer routes, over REST:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/dpdp/consent-notices` | List consent notice versions |
+| `GET` | `/v1/dpdp/consent-notices/:noticeId` | Every version of a notice |
+| `GET` | `/v1/dpdp/grievances` | List grievances |
+| `PATCH` | `/v1/dpdp/grievances/:id` | Move a grievance through review |
+| `GET` | `/v1/dpdp/erasure-requests/:requestId` | Get an erasure request |
+| `POST` | `/v1/dpdp/breaches` | Record a breach (Board detailed report due 72 hours after awareness) |
+| `GET` | `/v1/dpdp/breaches` | List breaches |
+| `GET` | `/v1/dpdp/breaches/:breachId` | Get a breach |
+| `PATCH` | `/v1/dpdp/breaches/:breachId` | Record the report, intimation times, extension and status |
+| `POST` | `/v1/dpdp/breaches/:breachId/principal-intimations` | Record that principals were informed |
 
 </details>
 
@@ -1659,7 +1685,7 @@ Grantex is built as an **open protocol**, not a closed SaaS product. Here's why 
 
 **Offline-verifiable signatures.** Services verify token signatures locally using published JWKS. Applications should plan for JWKS retrieval and key rotation; availability during an issuer outage depends on their verifier's cache behavior.
 
-**Compliance-oriented controls.** The EU AI Act, GDPR, and emerging US AI regulations will mandate auditable agent actions. Grantex provides technical controls that can support those programs from day one.
+**Compliance-oriented controls.** The EU AI Act, GDPR, and emerging AI regulations increasingly expect records of what automated systems did and who authorised it. Grantex provides technical controls that can support those programs from day one.
 
 ---
 
@@ -1888,13 +1914,13 @@ grantex budgets allocate --grant-id grnt_... --amount 100
 grantex audit list --agent ag_...
 grantex grants revoke grnt_...
 
-# DPDP Act 2023 compliance (11 subcommands)
-grantex dpdp consent create --grant-id grnt_... --principal-id user@example.com
+# DPDP Act 2023 records (11 subcommands)
+grantex dpdp consent create --grant-id grnt_... --principal-id user@example.com   --notice-id privacy-v1 --processing-expires-at 2027-01-01T00:00:00Z   --purposes '[{"code":"analytics","description":"Usage analytics"}]'
 grantex dpdp consent get <recordId>
-grantex dpdp consent list --principal-id user@example.com
+grantex dpdp consent list --principal user@example.com
 grantex dpdp consent withdraw <recordId> --reason "No longer needed"
-grantex dpdp notices create --notice-id privacy-v1 --version 1.0 --title "Privacy Notice"
-grantex dpdp grievances file --principal-id user@example.com --type violation
+grantex dpdp notices create --notice-id privacy-v1 --notice-version 1.0 --title "Privacy Notice"   --content "We process your data for..." --purposes '[{"code":"analytics","description":"Usage analytics"}]'
+grantex dpdp grievances file --principal-id user@example.com --type unauthorized-processing   --description "Data used beyond the consented purpose"
 grantex dpdp grievances get <grievanceId>
 grantex dpdp erasure user@example.com
 grantex dpdp exports create --type dpdp-audit --date-from 2026-01-01 --date-to 2026-04-01
@@ -2014,7 +2040,7 @@ Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRI
 | | |
 |---|---|
 | **OWASP** | Covers ASI-01, ASI-03, ASI-05, ASI-10 from the [Agentic Security Top 10](https://docs.grantex.dev/blog/owasp-agentic-top-10-compliance) (Dec 2025) |
-| **EU AI Act** | Technical control mapping only, not legal advice. Application is phased: transparency rules from Aug 2026, certain high-risk rules from Dec 2027, and product-integrated high-risk rules from Aug 2028 under the political agreement. See the [European Commission timeline](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai). |
+| **EU AI Act** | Technical control mapping only, not legal advice or a conformity assessment. Under Regulation (EU) 2024/1689 as amended by Regulation (EU) 2026/1744 (in force 27 July 2026), Art. 50 transparency obligations apply from 2 Aug 2026, Annex III high-risk obligations from 2 Dec 2027, and Annex I (product-embedded) high-risk obligations from 2 Aug 2028. See the [European Commission timeline](https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai). |
 | **NIST AI RMF** | Govern 1.1, Map 5.1, Measure 2.5 — repository comment draft; no public submission receipt or endorsement |
 | **IETF** | Active individual Internet-Draft; revision -02 is published. Revision -03 and its self-assessed client/authorization-server/resource-server implementation are under review in [`docs/ietf-draft/`](docs/ietf-draft/), with no upload before 2026-09-09. This is not independent certification, adoption, or IETF endorsement ([Datatracker](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
 | **AuthZEN** | Conformance mapped |

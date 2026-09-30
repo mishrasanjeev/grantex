@@ -54,7 +54,7 @@ Depending on where you live, you have some or all of the following rights:
 
 - **Access** — request a copy of the data we hold about you.
 - **Rectification** — correct inaccurate data.
-- **Erasure** — ask us to delete your data. For agent-authorization records this is implemented programmatically via `POST /v1/dpdp/data-principals/:principalId/erasure` (see `apps/auth-service/src/routes/dpdp.ts`); your developer can also trigger this on your behalf.
+- **Erasure** — ask us to delete your data. For agent-authorization records this is implemented programmatically via `POST /v1/dpdp/data-principals/:principalId/erasure` (see `apps/auth-service/src/routes/dpdp.ts`); your developer can also trigger this on your behalf. Records that must be kept as evidence, such as consent records marked erased and the tamper-evident audit log, are retained and not deleted; the erasure response lists them.
 - **Portability** — receive your data in JSON.
 - **Restriction** and **objection** to certain processing.
 - **Withdrawal of consent** at any time, with no effect on lawfulness of earlier processing.

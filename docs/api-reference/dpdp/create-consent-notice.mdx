@@ -1,7 +1,7 @@
 ---
 title: "Create Consent Notice"
 sidebarTitle: "Create Consent Notice"
-description: "Register a versioned consent notice. Required before creating consent records — the notice content is hashed and linked to each record."
+description: "Register a version of a consent notice (DPDP Act s.5, DPDP Rules 2025 r.3). Consent records name the version shown; its content hash is bound into the record's signed proof."
 ---
 
 ## Endpoint
@@ -61,8 +61,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices \
     "language": "en",
     "grievanceOfficer": {
       "name": "Jane Doe",
-      "email": "grievance@acme.com",
-      "phone": "+91-9876543210"
+      "email": "grievance@example.com"
     }
   }'
 ```
@@ -71,7 +70,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices \
 
 ```json
 {
-  "id": "ntc_01HXYZ...",
+  "id": "notice_01HXYZ...",
   "noticeId": "privacy-notice",
   "version": "2.0",
   "language": "en",
@@ -118,7 +117,7 @@ and read every version of one with [Get Consent Notice](/api-reference/dpdp/get-
 <CodeGroup>
 
 ```typescript TypeScript
-import Grantex from '@grantex/sdk';
+import { Grantex } from '@grantex/sdk';
 
 const grantex = new Grantex({ apiKey: 'gx_...' });
 
@@ -132,27 +131,33 @@ const notice = await grantex.dpdp.createConsentNotice({
   ],
   grievanceOfficer: {
     name: 'Jane Doe',
-    email: 'grievance@acme.com',
+    email: 'grievance@example.com',
   },
 });
 ```
 
 ```python Python
-from grantex import Grantex
+from grantex import CreateConsentNoticeParams, Grantex
 
 grantex = Grantex(api_key="gx_...")
 
 notice = grantex.dpdp.create_consent_notice(
-    notice_id="privacy-notice",
-    version="2.0",
-    title="Data Processing Consent Notice",
-    content="We collect and process your data...",
-    purposes=[{"code": "analytics", "description": "Usage analytics"}],
-    grievance_officer={"name": "Jane Doe", "email": "grievance@acme.com"},
+    CreateConsentNoticeParams(
+        notice_id="privacy-notice",
+        version="2.0",
+        title="Data Processing Consent Notice",
+        content="We collect and process your data...",
+        purposes=[{"code": "analytics", "description": "Usage analytics"}],
+        grievance_officer={"name": "Jane Doe", "email": "grievance@example.com"},
+    )
 )
 ```
 
 </CodeGroup>
+
+To send the structured r.3 fields (`itemisedPersonalData`, `purposeDetails`,
+`withdrawalUrl`, `rightsUrl`, `boardComplaintUrl`, `contact`), use the REST
+call above unless your SDK version lists them.
 
 ## Ownership
 

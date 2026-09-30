@@ -37,8 +37,12 @@ Requires a developer API key in the `Authorization` header.
 
 The body must be a JSON object; a missing or malformed body is `400`.
 
-After a withdrawal the Data Fiduciary must cease processing (DPDP Act
-s.6(6)). Revoking the grant stops Grantex-mediated processing: the revocation
+A Data Principal may withdraw consent at any time, and withdrawing is to be
+as easy as giving consent (DPDP Act s.6(4)); offering that means is the
+fiduciary's user interface, which calls this endpoint. After a withdrawal the
+Data Fiduciary, and its processors, must cease processing within a reasonable
+time (s.6(6)). These provisions apply from 13 May 2027 (DPDP Rules 2025 r.1).
+Revoking the grant stops Grantex-mediated processing: the revocation
 goes through the same cascade as `DELETE /v1/grants/:id` (delegated grants,
 credentials, wallet reservations, the revocation cache and a `grant.revoked`
 event). Only an active grant is revoked. A server operator who wants every
@@ -59,7 +63,7 @@ succeeds.
 ## Example Request
 
 ```bash
-curl -X POST https://api.grantex.dev/v1/dpdp/consent-records/cr_01HXYZ.../withdraw \
+curl -X POST https://api.grantex.dev/v1/dpdp/consent-records/crec_01HXYZ.../withdraw \
   -H "Authorization: Bearer gx_..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -73,7 +77,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-records/cr_01HXYZ.../withdr
 
 ```json
 {
-  "recordId": "cr_01HXYZ...",
+  "recordId": "crec_01HXYZ...",
   "status": "withdrawn",
   "withdrawnAt": "2026-04-05T14:00:00.000Z",
   "grantRevoked": true,
@@ -109,11 +113,11 @@ curl -X POST https://api.grantex.dev/v1/dpdp/consent-records/cr_01HXYZ.../withdr
 <CodeGroup>
 
 ```typescript TypeScript
-import Grantex from '@grantex/sdk';
+import { Grantex } from '@grantex/sdk';
 
 const grantex = new Grantex({ apiKey: 'gx_...' });
 
-const result = await grantex.dpdp.withdrawConsent('cr_01HXYZ...', {
+const result = await grantex.dpdp.withdrawConsent('crec_01HXYZ...', {
   reason: 'No longer wish to share data',
   revokeGrant: true,
   deleteProcessedData: true,
@@ -126,7 +130,7 @@ from grantex import Grantex
 grantex = Grantex(api_key="gx_...")
 
 result = grantex.dpdp.withdraw_consent(
-    record_id="cr_01HXYZ...",
+    "crec_01HXYZ...",
     reason="No longer wish to share data",
     revoke_grant=True,
     delete_processed_data=True,

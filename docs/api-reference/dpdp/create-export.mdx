@@ -168,7 +168,7 @@ block. With `DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL=true` (off by default) a
 <CodeGroup>
 
 ```typescript TypeScript
-import Grantex from '@grantex/sdk';
+import { Grantex } from '@grantex/sdk';
 
 const grantex = new Grantex({ apiKey: 'gx_...' });
 
@@ -182,14 +182,16 @@ const report = await grantex.dpdp.createExport({
 ```
 
 ```python Python
-from grantex import Grantex
+from grantex import CreateExportParams, Grantex
 
 grantex = Grantex(api_key="gx_...")
 
 report = grantex.dpdp.create_export(
-    type="dpdp-audit",
-    date_from="2026-01-01T00:00:00.000Z",
-    date_to="2026-04-01T00:00:00.000Z",
+    CreateExportParams(
+        type="dpdp-audit",
+        date_from="2026-01-01T00:00:00.000Z",
+        date_to="2026-04-01T00:00:00.000Z",
+    )
 )
 ```
 

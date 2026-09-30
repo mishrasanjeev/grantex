@@ -21,15 +21,19 @@ Published December 2025 — the first industry-standard threat taxonomy for auto
 
 ## EU AI Act
 
-The Act applies in phases. Current Commission guidance places transparency rules
-in August 2026, listed high-risk areas in December 2027, and product-integrated
-high-risk systems in August 2028. The controls below are technical mappings, not
-a determination that a deployment satisfies the regulation.
+The Act applies in phases. Under Regulation (EU) 2024/1689 as amended by
+Regulation (EU) 2026/1744, Art. 50 transparency obligations apply from
+2 August 2026, Annex III high-risk obligations from 2 December 2027, and
+product-embedded Annex I high-risk obligations from 2 August 2028. The controls
+below are technical mappings, not a determination that a deployment satisfies
+the regulation; see [EU AI Act](/compliance/eu-ai-act) for provider and
+deployer duties and the limits of each mapping.
 
 | Article | Requirement | Grantex Control | Implementation |
 |---------|------------|----------------|----------------|
 | **Art. 9** | Risk management per AI system | Budget controls + anomaly detection | `POST /v1/budget/allocate` sets spending limits. Anomaly detection flags unusual patterns. Policy-as-code (OPA, Cedar) for fine-grained rules. |
 | **Art. 13** | Transparency for autonomous actions | Consent flow + Verifiable Credentials | Human sees plain-English consent screen. VC-JWTs provide portable proof of authorization. SD-JWT enables selective disclosure. |
+| **Art. 12** | Record-keeping (logs kept at least six months, Arts. 19(1) and 26(6)) | Hash-chained audit log | Authorisation, delegation and revocation events; the `eu-ai-act-evidence` export reports chain integrity. Not the AI system's own logs. |
 | **Art. 14** | Human oversight — logged & auditable | Principal dashboard + event streaming + revocation | `GET /v1/events/stream` (SSE) surfaces actions in real time. Principal Sessions dashboard. One-click cascade revocation. |
 
 ## NIST AI Risk Management Framework

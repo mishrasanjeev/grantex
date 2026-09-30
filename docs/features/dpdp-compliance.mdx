@@ -1,385 +1,440 @@
 ---
-title: "DPDP & GDPR Compliance Module"
+title: "DPDP & GDPR Evidence Module"
 sidebarTitle: "DPDP Compliance"
-description: "Structured consent records, purpose limitation, right to withdrawal, and audit-ready exports for AI agent deployments."
+description: "Consent records bound to grants and versioned notices, withdrawal, erasure, grievances, a breach register and exports that help a Data Fiduciary evidence its DPDP Act, GDPR and EU AI Act obligations."
 ---
 
 ## Overview
 
-The `@grantex/dpdp` package provides a compliance layer on top of the Grantex authorization protocol. It adds structured consent records, purpose enforcement, data principal rights management, grievance tracking, and audit-ready exports — mapping directly to India's DPDP Act 2023, the EU's GDPR, and the EU AI Act.
+Grantex's DPDP routes keep the records a Data Fiduciary needs to evidence its
+obligations under India's Digital Personal Data Protection Act 2023 (DPDP Act)
+and the Digital Personal Data Protection Rules 2025 (DPDP Rules), and to answer
+GDPR access requests, for AI agent deployments. Each consent record is tied to
+the Grantex grant that authorised the agent, and every DPDP state change is
+written to the developer's tamper-evident audit chain.
 
-The key insight: **authorization is compliance**. Every Grantex grant already captures who authorized what agent to do what. The DPDP module adds the regulatory metadata — purpose descriptions, retention periods, consent notices, withdrawal mechanisms, and framework-specific export formats — that transforms authorization records into compliance evidence.
+<Warning>
+  **What Grantex is, and is not.** Grantex is a technical control that helps a
+  Data Fiduciary keep and produce evidence. It is **not** a Consent Manager
+  registered with the Data Protection Board of India, it does **not** notify
+  the Board or Data Principals on your behalf, it does not decide whether your
+  processing is lawful, and this page is not legal advice. The obligations
+  stay with the Data Fiduciary. Consult qualified counsel.
+</Warning>
 
-<Info>
-  The DPDP compliance module works alongside your existing Grantex setup. It does not replace the core SDK — it extends it with compliance-specific features.
-</Info>
+As of 30 September 2026 most DPDP obligations are **not yet in force**. The
+[DPDP Rules 2025](https://www.meity.gov.in/static/uploads/2025/11/53450e6e5dc0bfa85ebd78686cadad39.pdf)
+(G.S.R. 846(E), notified 13 November 2025) bring the notice, consent,
+security, breach, erasure, rights and penalty provisions into force on
+**13 May 2027**, and Consent Manager registration on 13 November 2026. See
+[DPDP Act 2023](/compliance/dpdp-act-2023) for the section-by-section mapping
+and [EU AI Act](/compliance/eu-ai-act) for the EU timeline.
 
-## Installation
+## Where the features live
+
+| Surface | How to reach it | Notes |
+|---|---|---|
+| REST API | `https://api.grantex.dev/v1/dpdp/*`, or your self-hosted auth service | Every feature on this page. See the [API reference](/api-reference/dpdp/create-consent-record) |
+| TypeScript SDK | `import { Grantex } from '@grantex/sdk'`, then `grantex.dpdp.*` | Consent records, notices, withdrawal, erasure, grievances, exports |
+| Python SDK | `from grantex import Grantex`, then `client.dpdp.*` | The same set; create calls take a params dataclass |
+| Go SDK | `client.DPDP.*` | The same set |
+| CLI | `grantex dpdp ...` | See [CLI](/integrations/cli) |
+| `@grantex/dpdp` | Standalone functions and local helpers | See the package README |
+
+The SDKs and CLI cover the original routes. The newer routes and fields (notice
+lists and reads, grievance lists and updates, erasure request reads, the breach
+register, `responsePeriodDays`, `consentNoticeVersion`, the structured notice
+fields and the `eu-ai-act-evidence` export) are shown below as REST calls; call
+them that way unless your SDK version lists them. [Release
+Status](/release-status) says which versions are published.
+
+## Consent notices
+
+A consent notice is registered once per `noticeId`, `version` and `language`.
+Grantex stores its content and a SHA-256 `contentHash`. A consent record names
+the version shown and carries that hash in its signed proof, so a later change
+to the notice text is detectable.
+
+A notice can carry structured fields for what DPDP Rules r.3 asks a notice
+under DPDP Act s.5 to contain: `itemisedPersonalData`, `purposeDetails` (with
+the goods or services each purpose enables), `withdrawalUrl`, `rightsUrl`,
+`boardComplaintUrl`, and a `contact` for the person able to answer questions
+(s.8(9), r.9). Every response includes a `validation` block listing which r.3
+elements are present or missing, and whether the language is English or an
+Eighth Schedule language. The check is for presence, not quality: it is
+evidence for your own review. With `DPDP_NOTICE_REQUIRE_RULE3=true` an
+incomplete notice is refused with `400 NOTICE_INCOMPLETE`. Details:
+[Consent Notice Content](/api-reference/dpdp/consent-notice-content).
+
+```bash
+curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "noticeId": "shopping-assistant",
+    "version": "3",
+    "language": "hi-IN",
+    "title": "Shopping assistant: how we use your data",
+    "content": "...the full notice text shown to the user...",
+    "purposes": [{ "code": "order_placement", "description": "Place orders you approve" }],
+    "itemisedPersonalData": [
+      { "category": "contact", "description": "Email address for order confirmations" },
+      { "category": "order_history", "description": "Items you ordered through the assistant" }
+    ],
+    "purposeDetails": [
+      { "code": "order_placement", "description": "Place orders you approve", "goodsOrServices": "Ordering from merchant.example" }
+    ],
+    "withdrawalUrl": "https://app.example.com/privacy/withdraw",
+    "rightsUrl": "https://app.example.com/privacy/rights",
+    "boardComplaintUrl": "https://app.example.com/privacy/complain-to-the-board",
+    "contact": { "designation": "Data Protection Officer", "email": "dpo@example.com" }
+  }'
+```
+
+Grantex does not render the notice to the user. Showing it, in the language
+the user chose, before asking for consent is your application's job.
+
+## Consent records
+
+A consent record binds a Data Principal's consent to an **active grant** and to
+the **notice version** shown. Create the grant first, through the normal
+Grantex authorisation flow, then record the consent:
 
 <CodeGroup>
-```bash npm
-npm install @grantex/dpdp
+
+```typescript TypeScript
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+const record = await grantex.dpdp.createConsentRecord({
+  grantId: 'grnt_01HXYZ...',
+  dataPrincipalId: 'user_abc123',
+  purposes: [{ code: 'order_placement', description: 'Place orders you approve' }],
+  consentNoticeId: 'shopping-assistant',
+  processingExpiresAt: '2027-12-31T23:59:59Z',
+});
+
+console.log(record.recordId, record.consentProof?.proofJwt);
 ```
 
-```bash pip
-pip install grantex-dpdp
+```python Python
+from grantex import CreateConsentRecordParams, Grantex
+
+client = Grantex(api_key="gx_...")
+
+record = client.dpdp.create_consent_record(
+    CreateConsentRecordParams(
+        grant_id="grnt_01HXYZ...",
+        data_principal_id="user_abc123",
+        purposes=[{"code": "order_placement", "description": "Place orders you approve"}],
+        consent_notice_id="shopping-assistant",
+        processing_expires_at="2027-12-31T23:59:59Z",
+    )
+)
 ```
+
+```bash CLI
+grantex dpdp consent create \
+  --grant-id grnt_01HXYZ... \
+  --principal-id user_abc123 \
+  --notice-id shopping-assistant \
+  --processing-expires-at 2027-12-31T23:59:59Z \
+  --purposes '[{"code":"order_placement","description":"Place orders you approve"}]'
+```
+
 </CodeGroup>
 
-## DPDPConsentRecord Schema
+What the server does:
 
-Every consent created through the DPDP module produces a `DPDPConsentRecord`:
+- Refuses a grant that is not the developer's, or is revoked, suspended or
+  expired (`400 INVALID_GRANT`). With `DPDP_ENFORCE_GRANT_PRINCIPAL=true` it
+  also refuses a `dataPrincipalId` that is not the grant's principal.
+- Uses the latest version of the notice unless `consentNoticeVersion` pins
+  one; `consentNoticeLanguage` picks the language when that version exists in
+  several.
+- Signs a **consent proof**: a compact JWS (EdDSA over Ed25519) covering the
+  record id, grant, principal, notice id, version and hash, the purpose codes
+  and the consent time. It has no `exp`, because it is evidence the fiduciary
+  may need for as long as it keeps the record (DPDP Act s.6(10) puts the
+  burden of proving consent on the fiduciary). Verify it with the key its
+  `kid` names in the JWKS at `jwksUri`. If it cannot be signed, no record is
+  created (`503 CONSENT_PROOF_UNAVAILABLE`).
+- Sets `retentionUntil` to 30 days after `processingExpiresAt`. This is a
+  product default, not a legal retention period, and Grantex does not delete
+  anything when it passes.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | Unique consent record ID (`cns_...`) |
-| `principalId` | `string` | The data principal (user) who granted consent |
-| `agentId` | `string` | The agent receiving access |
-| `grantId` | `string` | Linked Grantex grant ID |
-| `status` | `string` | `active`, `withdrawn`, `expired` |
-| `purposes` | `Purpose[]` | Array of declared processing purposes |
-| `consentNotice` | `ConsentNotice` | The notice shown to the data principal |
-| `dataCategories` | `string[]` | Categories of personal data processed |
-| `crossBorder` | `boolean` | Whether data may be transferred outside India |
-| `withdrawUrl` | `string` | URL for the data principal to withdraw consent |
-| `createdAt` | `string` | ISO 8601 timestamp of consent |
-| `withdrawnAt` | `string \| null` | ISO 8601 timestamp of withdrawal, if any |
-| `expiresAt` | `string` | ISO 8601 expiry based on retention period |
+Record statuses are `active`, `withdrawn`, `expired` and `erased`. A record
+becomes `expired` only when the consent expiry worker is on
+(`DPDP_CONSENT_EXPIRY_ENABLED=true`); with `DPDP_CONSENT_EXPIRY_REVOKES_GRANT=true`
+the worker also revokes the grant.
 
-### Purpose Object
+**Purpose limitation.** The record stores the purposes the principal agreed to
+and the grant's scopes. Grantex does not compare an agent's later actions with
+those purposes. What an agent can do is bounded by the grant's scopes, and a
+grant can carry a purpose that tools check (see
+[Purpose-Bound Grants](/concepts/purpose-bound-grants)). Choosing scopes that
+match the consented purposes is your design decision.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `code` | `string` | Scope code (e.g., `calendar:read`) |
-| `description` | `string` | Human-readable purpose description |
-| `dpdpSection` | `string` | DPDP Act section reference (e.g., `S.4`) |
-| `gdprArticle` | `string?` | GDPR article reference (e.g., `Art.6(1)(a)`) |
-| `retention` | `string` | Retention period (e.g., `30d`, `90d`, `1y`) |
+Reads (`GET /v1/dpdp/consent-records`, `/v1/dpdp/consent-records/{recordId}`
+and `/v1/dpdp/data-principals/{principalId}/records`) have no side effects, and
+lists are paginated (`limit` up to 200, `cursor`, `nextCursor`).
 
-### ConsentNotice Object
+## Withdrawal
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `language` | `string` | ISO 639-1 language code |
-| `text` | `string` | Plain-language notice shown to the user |
-| `version` | `string?` | Notice version for tracking changes |
+Under DPDP Act s.6(4) a Data Principal may withdraw consent at any time, as
+easily as it was given. Offering that means, for example a control next to the
+one that gave consent, is your application's job; it then calls:
 
-## Consent Lifecycle
+<CodeGroup>
 
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Created    │────▶│   Active     │────▶│  Withdrawn   │
-│              │     │              │     │              │
-│  Record is   │     │  Agent has   │     │  Grant is    │
-│  created     │     │  access via  │     │  revoked,    │
-│  with grant  │     │  grant token │     │  sub-agents  │
-│              │     │              │     │  cascade     │
-└──────────────┘     └──────┬───────┘     └──────────────┘
-                            │
-                            ▼
-                     ┌──────────────┐
-                     │   Expired    │
-                     │              │
-                     │  Retention   │
-                     │  period      │
-                     │  lapsed      │
-                     └──────────────┘
-```
-
-1. **Created:** `dpdp.createConsentRecord()` creates the consent record and the underlying Grantex grant. The consent notice is stored and the data principal receives the withdrawal URL.
-2. **Active:** The agent operates with the granted scopes. All actions are logged in the audit trail linked to this consent.
-3. **Withdrawn:** Your authenticated application calls the withdrawal API or SDK method. When the withdrawal asks for it (`revokeGrant: true`, the default when the server sets `DPDP_WITHDRAWAL_REVOKES_GRANT=true`), the grant is revoked and delegated grants are cascade-revoked; the withdrawal is logged. No separate DPDP end-user portal is included.
-4. **Expired:** The processing period (`processingExpiresAt`) lapses. With `DPDP_CONSENT_EXPIRY_ENABLED=true` the auth service marks the consent expired, and with `DPDP_CONSENT_EXPIRY_REVOKES_GRANT=true` it also revokes the grant; both are off by default. Processing history is retained for audit purposes.
-
-## Creating Consent Records
-
-### TypeScript
-
-```typescript
-import { DPDPClient } from '@grantex/dpdp';
-
-const dpdp = new DPDPClient({
-  apiKey: process.env.GRANTEX_API_KEY,
-  dpoContact: {
-    name: 'Data Protection Officer',
-    email: 'dpo@yourcompany.com',
-  },
-  defaultRetention: '90d',
+```typescript TypeScript
+const result = await grantex.dpdp.withdrawConsent('crec_01HXYZ...', {
+  reason: 'Principal withdrew consent in account settings',
+  revokeGrant: true,
+  deleteProcessedData: true,
 });
-
-const consent = await dpdp.createConsentRecord({
-  principalId: 'user_rajesh_kumar',
-  agentId: 'ag_email_summarizer',
-  purposes: [
-    {
-      code: 'email:read',
-      description: 'Read email subjects and bodies to generate daily summaries',
-      dpdpSection: 'S.4',
-      gdprArticle: 'Art.6(1)(a)',
-      retention: '7d',
-    },
-  ],
-  consentNotice: {
-    language: 'en',
-    text: 'This agent reads your emails to create daily summaries. Email content is processed in memory and not stored beyond 7 days.',
-    version: '1.0',
-  },
-  dataCategories: ['communications', 'contacts'],
-  crossBorder: false,
-});
-
-console.log(consent.id);          // "cns_01HZ..."
-console.log(consent.grantId);     // "grt_01HZ..."
-console.log(consent.status);      // "active"
-console.log(consent.withdrawUrl); // "https://..."
+// result.status === 'withdrawn'; result.dataDeleted === false
 ```
 
-### Python
-
-```python
-from grantex_dpdp import DPDPClient, CreateConsentParams, Purpose, ConsentNotice
-
-dpdp = DPDPClient(
-    api_key=os.environ["GRANTEX_API_KEY"],
-    dpo_contact={"name": "Data Protection Officer", "email": "dpo@yourcompany.com"},
-    default_retention="90d",
+```python Python
+result = client.dpdp.withdraw_consent(
+    "crec_01HXYZ...",
+    reason="Principal withdrew consent in account settings",
+    revoke_grant=True,
 )
-
-consent = dpdp.create_consent_record(CreateConsentParams(
-    principal_id="user_rajesh_kumar",
-    agent_id="ag_email_summarizer",
-    purposes=[
-        Purpose(
-            code="email:read",
-            description="Read email subjects and bodies to generate daily summaries",
-            dpdp_section="S.4",
-            gdpr_article="Art.6(1)(a)",
-            retention="7d",
-        ),
-    ],
-    consent_notice=ConsentNotice(
-        language="en",
-        text="This agent reads your emails to create daily summaries.",
-        version="1.0",
-    ),
-    data_categories=["communications", "contacts"],
-    cross_border=False,
-))
 ```
 
-## Purpose Enforcement
-
-The DPDP module enforces purpose limitation at two levels:
-
-### 1. Grant Token Scopes
-
-When a consent record is created, the underlying grant token's `scp` claim contains only the scopes from the declared purposes. The agent cannot request or use scopes that were not declared in the consent.
-
-### 2. Purpose Audit
-
-Every token verification logs the scope that was checked. The compliance dashboard shows whether agents are staying within their declared purposes. If an agent attempts to access a scope not in its consent record, the access is denied and the attempt is logged as a potential violation.
-
-```typescript
-// List consent records for an agent
-const records = await dpdp.listConsentRecords({
-  agentId: 'ag_email_summarizer',
-  status: 'active',
-});
-
-// Check purpose adherence
-const adherence = await dpdp.checkPurposeAdherence({
-  consentId: consent.id,
-  dateRange: { from: '2026-03-01', to: '2026-04-01' },
-});
-
-console.log(adherence.compliant);  // true
-console.log(adherence.violations); // []
+```bash CLI
+grantex dpdp consent withdraw crec_01HXYZ... \
+  --reason "Principal withdrew consent in account settings" --revoke-grant
 ```
 
-## Data Principal Rights
+</CodeGroup>
 
-### Viewing Consents
+- `reason` is required. Only an `active` record can be withdrawn: a second
+  withdrawal is `409 ALREADY_WITHDRAWN`, and erased or expired records answer
+  `409 CONSENT_ERASED` or `409 CONSENT_EXPIRED`.
+- `revokeGrant: true` revokes the grant through the same cascade as
+  `DELETE /v1/grants/{id}`: delegated grants, credentials, wallet
+  reservations, the revocation cache and a `grant.revoked` event. Without it
+  the grant stays active, unless the operator sets
+  `DPDP_WITHDRAWAL_REVOKES_GRANT=true`, which makes an omitted `revokeGrant`
+  mean `true`. After a withdrawal the fiduciary and its processors must cease
+  processing within a reasonable time (s.6(6)). Revoking the grant stops
+  processing that goes through Grantex; a service that verifies tokens offline
+  sees the revocation only once it checks revocation state.
+- `deleteProcessedData: true` emits a `dpdp.data_deletion.requested` webhook
+  (`recordId`, `grantId`, `dataPrincipalId`, `requestedAt`). Grantex holds none
+  of the data your application processed, so it deletes nothing itself
+  (`dataDeleted` is always `false`); deleting that data in your systems and
+  your processors' is your step (s.8(7)).
 
-Your application can retrieve a data principal's active consents through the
-authenticated API or SDK and render its own end-user experience:
+## Erasure
 
-```typescript
-// Get all consents for a data principal
-const consents = await dpdp.listConsentRecords({
-  principalId: 'user_rajesh_kumar',
-});
+`POST /v1/dpdp/data-principals/{principalId}/erasure` acts on a Data
+Principal's erasure request (DPDP Act s.12). In one transaction it revokes the
+principal's active grants and their delegated grants, marks the consent
+records `erased`, replaces grievance descriptions and evidence with a fixed
+marker, deletes stored exports about the principal, and stores an erasure
+request (`ER-YYYY-<ULID>`) that says what was **retained** and why:
+
+| Retained | Why |
+|---|---|
+| Consent records, marked `erased` | The fiduciary must be able to prove consent (s.6(10)), and DPDP Rules r.8(3) require personal data, associated traffic data and processing logs to be kept for at least one year from processing, for the purposes in the Seventh Schedule |
+| Audit entries, never modified | The one-year log retention in r.6(1)(e) and r.8(3); the entries also form a hash chain that any rewrite would break |
+| Grievances, redacted | The record of grievance handling |
+| Your processed data | Not held by Grantex; erasing it is your step |
+
+A repeat call returns the completed request with `200`. The request can be
+read again from `GET /v1/dpdp/erasure-requests/{requestId}`.
+
+<Note>
+  The DPDP Rules' three-year inactivity erasure and its 48-hour advance notice
+  (r.8(1) and r.8(2), Third Schedule) apply only to large e-commerce, online
+  gaming and social media platforms. Grantex does not track inactivity or send
+  that notice.
+</Note>
+
+## Grievances
+
+A Data Fiduciary must offer a grievance mechanism and publish its response
+period, which may not exceed 90 days (DPDP Act s.13; DPDP Rules r.14(3)).
+Grantex records each grievance with a non-sequential reference
+(`GRV-YYYY-<ULID>`), the period you publish (`responsePeriodDays`, 1 to 90; the
+default of 7 is a product default, not a statutory period) and
+`expectedResolutionBy`:
+
+```bash
+curl -X POST https://api.grantex.dev/v1/dpdp/grievances \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataPrincipalId": "user_abc123",
+    "recordId": "crec_01HXYZ...",
+    "type": "unauthorized-processing",
+    "description": "Order history used for recommendations I did not agree to",
+    "responsePeriodDays": 30
+  }'
 ```
 
-### Withdrawing Consent
+Move it through review with `PATCH /v1/dpdp/grievances/{grievanceId}`:
+`submitted` to `in_review`, then `resolved` or `rejected` with a `resolution`;
+any other move is `409 INVALID_TRANSITION`. List grievances with
+`GET /v1/dpdp/grievances?status=in_review`. Each change emits
+`dpdp.grievance.updated`. Grantex stores the due date; it does not chase it,
+route the grievance to a person, or reply to the principal.
 
-```typescript
-// Withdraw consent — triggers instant grant revocation
-await dpdp.withdrawConsent(consent.id);
+## Breach register
 
-// After withdrawal:
-// - Grant token is revoked (< 1 second)
-// - All sub-agent delegations are cascade-revoked
-// - Audit entry records the withdrawal
-// - Developer receives webhook notification
+Under DPDP Act s.8(6) and DPDP Rules r.7, a fiduciary that becomes aware of a
+personal data breach informs each affected Data Principal without delay,
+informs the Board without delay, and sends the Board a detailed report
+**within 72 hours** of becoming aware (extendable on written request). There
+is no risk threshold. Separately, the CERT-In directions of 28 April 2022
+require cyber incidents to be reported to CERT-In within 6 hours.
+
+The breach register keeps your record of this:
+
+```bash
+curl -X POST https://api.grantex.dev/v1/dpdp/breaches \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Unauthorised read of an order history export",
+    "nature": "confidentiality",
+    "extent": "Order history of three customers",
+    "awareAt": "2027-06-01T10:00:00Z",
+    "affectedDataPrincipalIds": ["user_abc123", "user_def456", "user_ghi789"]
+  }'
 ```
 
-### Exporting Data
+- The response carries `boardDetailedReportDueAt` (`awareAt` plus 72 hours, or
+  a granted extension's date), `boardDetailedReportOverdue`, and
+  `principalIntimation` (`intimatedCount`, `pendingCount`).
+- `PATCH /v1/dpdp/breaches/{breachId}` records the Board intimation times, the
+  r.7(2)(b) detailed report fields, an extension, and the status (`open`,
+  `initial_intimated`, `reported`, `closed`, in that order).
+- `POST /v1/dpdp/breaches/{breachId}/principal-intimations` records who was
+  told, by which channel, when, and which r.7(1)(a)-(e) content the message
+  carried.
+- Webhooks: `dpdp.breach.recorded`, `dpdp.breach.principal_intimation_due`,
+  and, with `DPDP_BREACH_DEADLINE_ALERTS_ENABLED=true`,
+  `dpdp.breach.board_report_due` before and after the 72-hour deadline.
 
-```typescript
-// Export all data for a data principal (DPDP S.11 / GDPR Art.20)
-const export = await dpdp.exportPrincipalData({
-  principalId: 'user_rajesh_kumar',
-  format: 'json',
-});
-// Returns: consent records, processing history, agent metadata
-```
+**Grantex does not notify Data Principals and files nothing with the Board.**
+It records what you tell it you sent. See
+[Record Breach](/api-reference/dpdp/record-breach).
 
-### Filing Grievances
+## Exports
 
-```typescript
-// Submit a grievance (DPDP S.13)
-const grievance = await dpdp.submitGrievance({
-  principalId: 'user_rajesh_kumar',
-  consentId: consent.id,
-  description: 'Agent accessed contacts that were not part of the declared purpose.',
-  category: 'purpose_violation',
-});
+`POST /v1/dpdp/exports` produces a JSON export, stored for 7 days
+(`410 GONE` after that). Audit entries are capped at 1,000 per export, and
+`truncated` says when the cap was hit.
 
-console.log(grievance.id);          // "grv_01HZ..."
-console.log(grievance.status);      // "open"
-```
+| `type` | What it contains |
+|---|---|
+| `dpdp-audit` | Consent records, audit entries and grievances for the period, optionally for one principal |
+| `gdpr-article-15` | The same records; with `dataPrincipalId`, an `article15` block with the purposes, recipients (agents and grant audiences), retention and source Grantex holds for that person, and `automatedDecisionMaking: { recorded: false }` |
+| `eu-ai-act-evidence` | Sections mapped to Arts. 12, 14, 26, 50 and 73 of the EU AI Act, with an audit-chain integrity check, an `applicability` block and a disclaimer; see [EU AI Act Evidence Pack](/api-reference/dpdp/eu-ai-act-evidence) |
+| `eu-ai-act-conformance` | Kept for compatibility; prefer `eu-ai-act-evidence`. Despite its name it is not a conformity assessment |
 
-## Grievance Mechanism
+<CodeGroup>
 
-The DPDP module includes a full grievance tracking system:
-
-| Feature | Description |
-|---------|-------------|
-| **Submission** | Your authenticated application submits grievances through the API or SDK |
-| **Routing** | Your application is responsible for notifying and routing work to the configured contact |
-| **Deadline tracking** | Your application is responsible for regulatory response-deadline monitoring |
-| **Status updates** | DPO can update status: `open`, `investigating`, `resolved`, `escalated` |
-| **Escalation** | Your compliance process must implement any required escalation workflow |
-| **Audit trail** | All grievance actions are logged for regulatory inspection |
-
-## Export Types
-
-The DPDP module supports three export frameworks:
-
-### DPDP Audit Export
-
-```typescript
-const pack = await dpdp.exportAudit({
-  framework: 'dpdp',
-  dateRange: { from: '2026-01-01', to: '2026-04-01' },
-  format: 'json',
-});
-```
-
-Includes: consent records, consent notices, withdrawal log, grievance log, retention compliance status, cross-border transfer declarations.
-
-### GDPR Article 15 Export
-
-```typescript
-const pack = await dpdp.exportAudit({
-  framework: 'gdpr',
-  principalId: 'user_rajesh_kumar',
-  format: 'json',
-});
-```
-
-Includes: processing purposes and legal basis, categories of data, recipients and third parties, retention periods, delegation chains, automated decision-making disclosure.
-
-### EU AI Act Conformance Report
-
-```typescript
-const pack = await dpdp.exportAudit({
-  framework: 'eu-ai-act',
-  dateRange: { from: '2026-01-01', to: '2026-07-31' },
-  format: 'json',
+```typescript TypeScript
+const access = await grantex.dpdp.createExport({
+  type: 'gdpr-article-15',
+  dateFrom: '2027-01-01T00:00:00Z',
+  dateTo: '2027-06-30T23:59:59Z',
+  dataPrincipalId: 'user_abc123',
 });
 ```
 
-Includes: risk management controls (Art. 9), transparency evidence (Art. 13), human oversight mechanisms (Art. 14), quality management documentation (Art. 17), deployer obligation checklist (Art. 26).
+```python Python
+from grantex import CreateExportParams
 
-## SDK Quick Start
-
-### 1. Install and configure
-
-```typescript
-import { DPDPClient } from '@grantex/dpdp';
-
-const dpdp = new DPDPClient({
-  apiKey: process.env.GRANTEX_API_KEY,
-});
+access = client.dpdp.create_export(
+    CreateExportParams(
+        type="gdpr-article-15",
+        date_from="2027-01-01T00:00:00Z",
+        date_to="2027-06-30T23:59:59Z",
+        data_principal_id="user_abc123",
+    )
+)
 ```
 
-### 2. Create a consent record
+</CodeGroup>
 
-```typescript
-const consent = await dpdp.createConsentRecord({
-  principalId: 'user_123',
-  agentId: 'ag_my_agent',
-  purposes: [{ code: 'calendar:read', description: 'Read calendar', dpdpSection: 'S.4', retention: '30d' }],
-  consentNotice: { language: 'en', text: 'This agent reads your calendar.' },
-  dataCategories: ['schedule'],
-  crossBorder: false,
-});
-```
+An export contains only what Grantex holds. A GDPR Art. 15 response, or a
+summary under DPDP Act s.11, also needs the data your own systems process.
 
-### 3. Verify purpose adherence
+## Webhook events
 
-```typescript
-const adherence = await dpdp.checkPurposeAdherence({ consentId: consent.id });
-```
+| Event | When |
+|---|---|
+| `dpdp.consent.created` | A consent record was created |
+| `dpdp.consent.withdrawn` | A record was withdrawn |
+| `dpdp.consent.expired` | The expiry worker expired a record |
+| `dpdp.data_deletion.requested` | A withdrawal asked you to delete processed data |
+| `dpdp.erasure.completed` | An erasure request completed |
+| `dpdp.grievance.filed`, `dpdp.grievance.updated` | A grievance was filed or changed status |
+| `dpdp.breach.recorded`, `dpdp.breach.principal_intimation_due` | A breach was recorded |
+| `dpdp.breach.board_report_due` | The Board report deadline is near or has passed (worker flag) |
 
-### 4. Handle withdrawal
+Subscribe with [webhooks](/guides/webhooks). Breach events carry no principal
+ids or breach text.
 
-```typescript
-await dpdp.withdrawConsent(consent.id);
-```
+## Audit trail
 
-### 5. Export for audit
+Every DPDP state change appends an entry to the developer's hash-chained audit
+log: `grantex.dpdp.consent_created`, `consent_withdrawn`, `consent_expired`,
+`erasure_completed`, `grievance_filed`, `grievance_updated`, `notice_created`,
+`export_created`, `breach_recorded`, `breach_updated`,
+`breach_principals_intimated` and `breach_deadline_alerted`. Grantex never
+rewrites or deletes audit entries; how long they are kept is the retention of
+your database (the DPDP Rules ask for at least one year).
 
-```typescript
-const pack = await dpdp.exportAudit({ framework: 'dpdp', format: 'json' });
-```
+## Configuration flags
 
-## API Reference Summary
+All default off and take the exact value `true`.
 
-| Method | Description |
-|--------|-------------|
-| `createConsentRecord(params)` | Create a DPDP-compliant consent record with linked grant |
-| `getConsentRecord(id)` | Get a consent record by ID |
-| `listConsentRecords(params)` | List consent records with filters |
-| `withdrawConsent(id)` | Withdraw consent and revoke grant |
-| `checkPurposeAdherence(params)` | Check if agent stayed within declared purposes |
-| `exportPrincipalData(params)` | Export all data for a data principal |
-| `exportAudit(params)` | Generate framework-specific audit export |
-| `submitGrievance(params)` | Submit a data principal grievance |
-| `getGrievance(id)` | Get grievance by ID |
-| `updateGrievance(id, params)` | Update grievance status |
-| `listGrievances(params)` | List grievances with filters |
-| `getComplianceStats()` | Get compliance dashboard statistics |
+| Flag | Effect |
+|---|---|
+| `DPDP_WITHDRAWAL_REVOKES_GRANT` | An omitted `revokeGrant` on withdrawal means `true` |
+| `DPDP_ENFORCE_GRANT_PRINCIPAL` | Refuse a consent record whose `dataPrincipalId` is not the grant's principal |
+| `DPDP_CONSENT_EXPIRY_ENABLED` | Run the worker that marks records past `processingExpiresAt` as `expired` |
+| `DPDP_CONSENT_EXPIRY_REVOKES_GRANT` | With the expiry worker, also revoke the grant |
+| `DPDP_NOTICE_REQUIRE_RULE3` | Refuse notices missing an r.3 element or in another language |
+| `DPDP_EXPORT_GDPR_REQUIRES_PRINCIPAL` | Refuse a `gdpr-article-15` export without `dataPrincipalId` |
+| `DPDP_BREACH_DEADLINE_ALERTS_ENABLED` | Run the breach deadline worker (`DPDP_BREACH_ALERT_LEAD_MINUTES`, default 720) |
 
-## Configuration Options
+Set `ED25519_PRIVATE_KEY` in production so consent proofs stay verifiable
+across restarts and instances. See [Self-Hosting](/guides/self-hosting).
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `apiKey` | `string` | *required* | Grantex API key |
-| `baseUrl` | `string` | `https://api.grantex.dev` | Auth service URL |
-| `dpoContact` | `{ name, email }` | `undefined` | Data Protection Officer contact |
-| `defaultRetention` | `string` | `'90d'` | Default data retention period |
-| `autoExpire` | `boolean` | `true` | Auto-revoke grants when retention lapses |
-| `webhookUrl` | `string` | `undefined` | URL for consent lifecycle webhooks |
+## What remains your responsibility
+
+- Choosing the lawful basis (consent, or a legitimate use under s.7) and the
+  purposes, and showing a notice that meets s.5 and r.3.
+- Giving users a way to withdraw that is as easy as consenting, and ceasing
+  processing in your systems and your processors' after a withdrawal.
+- Erasing the data you and your processors hold, and giving the r.8(2)
+  48-hour notice where the Third Schedule applies.
+- Publishing your contact details and grievance response period, and
+  answering grievances within it.
+- Notifying affected principals and the Board of breaches, and CERT-In of
+  cyber incidents.
+- Verifiable parental consent for children (s.9, r.10), the duties of a
+  Significant Data Fiduciary (s.10, r.13), and any cross-border restriction
+  (s.16).
 
 ## Related Resources
 
-- [DPDP Act 2023 Compliance](/compliance/dpdp-act-2023) — detailed DPDP section mapping
-- [EU AI Act Compliance](/compliance/eu-ai-act) — EU AI Act article mapping
-- [Compliance Matrix](/guides/compliance-matrix) — cross-framework compliance mapping
+- [DPDP Act 2023](/compliance/dpdp-act-2023) — section and rule mapping
+- [EU AI Act](/compliance/eu-ai-act) — article mapping and timeline
+- [DPDP integration](/integrations/dpdp) — endpoint list
+- [Compliance Matrix](/guides/compliance-matrix) — cross-framework mapping
 - [Principal Sessions](/sdks/typescript/principal-sessions) — authenticated links for the core agent-permission dashboard; not a DPDP rights portal
-- [Blog: DPDP Act and AI Agents](/blog/dpdp-act-ai-agents) — what engineering teams need to know
+- [Blog: DPDP Act and AI Agents](/blog/dpdp-act-ai-agents)
 
 ## Ownership
 

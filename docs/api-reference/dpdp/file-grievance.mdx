@@ -1,7 +1,7 @@
 ---
 title: "File Grievance"
 sidebarTitle: "File Grievance"
-description: "File a grievance on behalf of a data principal. Implements the grievance mechanism required by DPDP Section 13(6)."
+description: "Record a grievance from a data principal, with the response period the Data Fiduciary publishes (DPDP Act s.13; DPDP Rules 2025 r.14(3): at most 90 days)."
 ---
 
 ## Endpoint
@@ -30,7 +30,7 @@ Requires a developer API key in the `Authorization` header.
 | `description` | `string` | Yes | Detailed description of the grievance |
 | `recordId` | `string` | No | Related consent record ID. It must be one of the developer's records, about this `dataPrincipalId` |
 | `evidence` | `object` | No | Supporting evidence as a JSON object (up to 16 KB) |
-| `responsePeriodDays` | `integer` | No | The response period the Data Fiduciary publishes, 1 to 90 days (default 7). DPDP Rules 2025 r.14(3) cap a published period at 90 days |
+| `responsePeriodDays` | `integer` | No | The response period the Data Fiduciary publishes, 1 to 90 days. The default of 7 is a product default, not a statutory period: DPDP Rules 2025 r.14(3) require the fiduciary to publish its period, which may not exceed 90 days |
 
 ## Example Request
 
@@ -42,7 +42,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/grievances \
     "dataPrincipalId": "user_abc123",
     "type": "unauthorized-processing",
     "description": "Data was processed beyond the consented purposes",
-    "recordId": "cr_01HXYZ...",
+    "recordId": "crec_01HXYZ...",
     "evidence": {
       "observedAction": "marketing emails sent without consent",
       "timestamp": "2026-04-04T10:00:00.000Z"
@@ -55,7 +55,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/grievances \
 ```json
 {
   "grievanceId": "grv_01HXYZ...",
-  "referenceNumber": "GRV-2026-00042",
+  "referenceNumber": "GRV-2026-01JAB3XK7Q9M2V5W8Y0Z4C6D1E",
   "type": "unauthorized-processing",
   "status": "submitted",
   "responsePeriodDays": 7,
@@ -69,7 +69,7 @@ curl -X POST https://api.grantex.dev/v1/dpdp/grievances \
 | Field | Type | Description |
 |---|---|---|
 | `grievanceId` | `string` | Unique grievance ID |
-| `referenceNumber` | `string` | Human-readable reference number (format: `GRV-YYYY-NNNNN`) |
+| `referenceNumber` | `string` | Human-readable reference number (format: `GRV-YYYY-<ULID>`, not sequential) |
 | `type` | `string` | Grievance type |
 | `status` | `string` | Initial status: `submitted` |
 | `responsePeriodDays` | `integer` | The response period applied |
@@ -93,7 +93,7 @@ and list grievances with [List Grievances](/api-reference/dpdp/list-grievances).
 <CodeGroup>
 
 ```typescript TypeScript
-import Grantex from '@grantex/sdk';
+import { Grantex } from '@grantex/sdk';
 
 const grantex = new Grantex({ apiKey: 'gx_...' });
 
@@ -101,25 +101,30 @@ const grievance = await grantex.dpdp.fileGrievance({
   dataPrincipalId: 'user_abc123',
   type: 'unauthorized-processing',
   description: 'Data was processed beyond consented purposes',
-  recordId: 'cr_01HXYZ...',
+  recordId: 'crec_01HXYZ...',
 });
-// grievance.referenceNumber → "GRV-2026-00042"
+// grievance.referenceNumber → "GRV-2026-01JAB3XK7Q9M2V5W8Y0Z4C6D1E"
 ```
 
 ```python Python
-from grantex import Grantex
+from grantex import FileGrievanceParams, Grantex
 
 grantex = Grantex(api_key="gx_...")
 
 grievance = grantex.dpdp.file_grievance(
-    data_principal_id="user_abc123",
-    type="unauthorized-processing",
-    description="Data was processed beyond consented purposes",
-    record_id="cr_01HXYZ...",
+    FileGrievanceParams(
+        data_principal_id="user_abc123",
+        type="unauthorized-processing",
+        description="Data was processed beyond consented purposes",
+        record_id="crec_01HXYZ...",
+    )
 )
 ```
 
 </CodeGroup>
+
+To send `responsePeriodDays`, use the REST call above unless your SDK version
+lists the field.
 
 ## Ownership
 

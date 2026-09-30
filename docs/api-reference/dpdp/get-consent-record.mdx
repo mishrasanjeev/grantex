@@ -1,7 +1,7 @@
 ---
 title: "Get Consent Record"
 sidebarTitle: "Get Consent Record"
-description: "Retrieve a single DPDP consent record by ID. Increments the access counter for audit purposes."
+description: "Retrieve a single DPDP consent record by ID. A developer read has no side effects."
 ---
 
 ## Endpoint
@@ -29,7 +29,7 @@ Requires a developer API key in the `Authorization` header.
 ## Example Request
 
 ```bash
-curl https://api.grantex.dev/v1/dpdp/consent-records/cr_01HXYZ... \
+curl https://api.grantex.dev/v1/dpdp/consent-records/crec_01HXYZ... \
   -H "Authorization: Bearer gx_..."
 ```
 
@@ -37,10 +37,10 @@ curl https://api.grantex.dev/v1/dpdp/consent-records/cr_01HXYZ... \
 
 ```json
 {
-  "recordId": "cr_01HXYZ...",
+  "recordId": "crec_01HXYZ...",
   "grantId": "grnt_01HXYZ...",
   "dataPrincipalId": "user_abc123",
-  "dataFiduciaryName": "Acme Corp",
+  "dataFiduciaryName": "Example Retail Ltd",
   "purposes": [
     { "code": "analytics", "description": "Usage analytics for service improvement" }
   ],
@@ -98,11 +98,11 @@ This is a developer read: it has no side effects. It used to increment
 <CodeGroup>
 
 ```typescript TypeScript
-import Grantex from '@grantex/sdk';
+import { Grantex } from '@grantex/sdk';
 
 const grantex = new Grantex({ apiKey: 'gx_...' });
 
-const record = await grantex.dpdp.getConsentRecord('cr_01HXYZ...');
+const record = await grantex.dpdp.getConsentRecord('crec_01HXYZ...');
 ```
 
 ```python Python
@@ -110,7 +110,7 @@ from grantex import Grantex
 
 grantex = Grantex(api_key="gx_...")
 
-record = grantex.dpdp.get_consent_record("cr_01HXYZ...")
+record = grantex.dpdp.get_consent_record("crec_01HXYZ...")
 ```
 
 </CodeGroup>

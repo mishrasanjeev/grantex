@@ -1,17 +1,31 @@
 ---
-title: "DPDP Act 2023 Compliance"
+title: "DPDP Act 2023 and DPDP Rules 2025"
 sidebarTitle: "DPDP Act 2023"
-description: "How Grantex maps to India's Digital Personal Data Protection Act 2023 for AI agent deployments."
+description: "How Grantex features map to India's Digital Personal Data Protection Act 2023 and the DPDP Rules 2025 for AI agent deployments, what Grantex provides and what remains the Data Fiduciary's responsibility."
 ---
 
 ## Overview
 
-The **Digital Personal Data Protection Act 2023** (DPDP Act) is India's comprehensive data protection legislation. It establishes rights for **data principals** (individuals whose data is processed), obligations for **data fiduciaries** (organizations that determine the purpose and means of processing), and a regulatory framework enforced by the **Data Protection Board of India**.
+The **Digital Personal Data Protection Act, 2023** (Act 22 of 2023, the DPDP
+Act) is India's data protection law. It sets duties for **Data Fiduciaries**
+(who decide the purpose and means of processing), rights and duties for **Data
+Principals** (the individuals the data is about), and a **Data Protection
+Board of India** to enforce it. The **Digital Personal Data Protection Rules,
+2025** (G.S.R. 846(E), notified 13 November 2025) are the final implementing
+rules; the January 2025 text (G.S.R. 02(E)) was a draft.
 
-For AI agent deployments, the DPDP Act creates specific obligations that go beyond traditional application compliance. When an AI agent reads emails, accesses calendars, processes documents, or takes actions on behalf of a user, it is processing digital personal data — and the developer deploying that agent is the data fiduciary.
+When an AI agent reads a mailbox, places an order or processes documents for a
+person, it processes that person's digital personal data. The organisation
+that decides why and how is usually the Data Fiduciary. The agent is software,
+not a Data Processor: a Data Processor is a person that processes data on a
+fiduciary's behalf (s.2(k)).
 
 <Warning>
-  This documentation explains how Grantex features map to DPDP Act requirements. It is not legal advice. Consult qualified legal counsel for your specific compliance obligations.
+  This page maps Grantex features to DPDP provisions. It is not legal advice
+  and not a certification. Grantex is a technical control that helps a Data
+  Fiduciary evidence some obligations; it is not a registered Consent Manager,
+  and it does not notify the Board or Data Principals. Consult qualified
+  counsel about your own obligations.
 </Warning>
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner:
@@ -19,262 +33,170 @@ Sanjeev Kumar. Ownership or IP questions may be sent to
 [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or
 [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
 
-## Which Sections Apply to AI Agents?
+## When the obligations apply
 
-Not every section of the DPDP Act is relevant to AI agent deployments. The following sections create direct obligations:
+The Rules bring the Act into force in three stages (Rules r.1). As of
+30 September 2026 only the first has started.
 
-| Section | Topic | Why It Applies to AI Agents |
-|---------|-------|----------------------------|
-| **S.4** | Lawful purpose | Agents must only process data for declared, specific purposes |
-| **S.5** | Notice | Users must receive clear notice before an agent processes their data |
-| **S.6** | Consent | Agent access must be based on free, specific, informed consent |
-| **S.6(6)** | Withdrawal | Users must be able to withdraw consent as easily as they granted it |
-| **S.8** | Fiduciary obligations | Accuracy, storage limitation, and security safeguards |
-| **S.8(7)** | Grievance redressal | A mechanism for users to raise data processing complaints |
-| **S.9** | Children's data | Additional protections when agents process data of minors |
-| **S.11** | Data principal rights | Access, correction, erasure, and portability rights |
-| **S.13** | Grievance mechanism | Respond to grievances within the prescribed period |
-| **S.16** | Cross-border transfer | Restrictions on transferring data outside India |
-| **S.17** | Data Protection Board | Regulatory oversight, audits, and penalties |
+| Date | What comes into force |
+|---|---|
+| **13 November 2025** | The Board and institutional provisions: Act ss.1(2), 2, 18-26, 35, 38-43, 44(1) and 44(3); Rules 1, 2 and 17-21 |
+| **13 November 2026** | Registration of Consent Managers: Rule 4 and the First Schedule; Act ss.6(9) and 27(1)(d) |
+| **13 May 2027** | The substantive obligations: notice, consent, security, breach intimation, erasure and retention, contact details, children, Significant Data Fiduciaries, Data Principal rights, cross-border transfer and penalties (Act ss.3-17 and 27-34, 36-37; Rules 3, 5-16, 22 and 23) |
 
-## How Grantex Maps to Each Section
+A proposal in January 2026 to shorten the transition was not adopted as of
+this writing. Check the current position before relying on these dates.
 
-### Section 4 — Lawful Purpose
+## Territorial scope (s.3)
 
-**Obligation:** Personal data shall be processed only for a lawful purpose for which the data principal has given consent, or for certain legitimate uses.
+The Act applies to the processing of digital personal data within India,
+whether the data was collected in digital form or collected otherwise and
+digitised. It also applies to processing outside India if it is in connection
+with offering goods or services to Data Principals within India. It does not
+apply to processing by an individual for a personal or domestic purpose, or to
+personal data the Data Principal made publicly available, or that another
+person made publicly available under a legal obligation. Whether it applies
+to your deployment depends on these facts, not on where your servers are.
 
-**Grantex implementation:**
+## Section and rule mapping
 
-Every Grantex consent record includes explicit `purposes` with DPDP section tags. The grant token's `scp` (scopes) claim maps directly to the declared purposes. At every API call, the service verifies that the requested action falls within the token's scopes. An agent cannot exceed its declared purposes — the protocol enforces it cryptographically.
+"Grantex provides" describes shipped behaviour of the auth service's
+`/v1/dpdp` routes and core grants. Everything else is yours.
+
+| Provision | Requirement (summary) | What Grantex provides | What remains your responsibility |
+|---|---|---|---|
+| **s.4** Grounds | Process only for a lawful purpose, with consent or for a legitimate use (s.7) | Consent records store the purposes agreed; grants bound agent authority by scope and can carry a [purpose](/concepts/purpose-bound-grants) | Choosing the lawful basis and purposes; Grantex does not check that agent actions stay within the consented purposes |
+| **s.5 + r.3** Notice | A notice that is understandable on its own: itemised personal data, specific purposes and the goods or services they enable, how to withdraw consent, exercise rights and complain to the Board; English or an Eighth Schedule language | Versioned, per-language [consent notices](/api-reference/dpdp/consent-notice-content) with a content hash, structured r.3 fields and a `validation` block; `DPDP_NOTICE_REQUIRE_RULE3=true` refuses incomplete notices | Writing the notice, showing it before consent, and judging that it is clear and accurate (the validation checks presence only) |
+| **s.6(1)** Consent | Free, specific, informed, unconditional, unambiguous, by clear affirmative action, limited to necessary data | Consent records bound to an active grant and the notice version shown | Designing the consent step so that it meets these conditions |
+| **s.6(4)** Withdrawal | Withdraw at any time, as easily as consent was given | [`POST .../withdraw`](/api-reference/dpdp/withdraw-consent) with a required reason | The user-facing control that makes withdrawal as easy as consent |
+| **s.6(6)** Cease processing | After withdrawal the fiduciary and its processors cease processing within a reasonable time | Optional grant revocation through the grant cascade (`revokeGrant`, or `DPDP_WITHDRAWAL_REVOKES_GRANT=true`), and a `dpdp.data_deletion.requested` webhook | Stopping processing in your systems and your processors' |
+| **s.6(10)** Proof of consent | The fiduciary bears the burden of proving notice and consent | A signed consent proof (compact JWS, EdDSA) binding the record, grant, principal, notice version and hash, and purposes; records are retained after withdrawal and erasure | Keeping the key (`ED25519_PRIVATE_KEY`) stable and the database retained |
+| **s.7** Legitimate uses | Grounds other than consent, (a) to (i) | Nothing specific | Deciding and documenting any legitimate use |
+| **s.8(5) + r.6** Security safeguards | Reasonable safeguards including encryption or masking, access control, logs and monitoring, backups, security terms in processor contracts; keep logs and personal data for **one year** to detect and remediate unauthorised access (r.6(1)(e)) | A hash-chained audit log that Grantex never rewrites or deletes; scoped, revocable grants | Your security programme, processor contracts, and database retention of at least one year |
+| **s.8(6) + r.7** Breach intimation | Inform each affected Data Principal and the Board **without delay**; send the Board a detailed report **within 72 hours** of becoming aware (extendable on written request); no risk threshold | A [breach register](/api-reference/dpdp/record-breach) with `boardDetailedReportDueAt`, overdue flags, principal intimation records and deadline webhooks | Sending the intimations and the report; Grantex files nothing. CERT-In reporting (6 hours) is separate |
+| **s.8(7), (8) + r.8** Erasure and retention | Erase when consent is withdrawn or the purpose is no longer served, and have processors erase. The three-year inactivity erasure and **48-hour** advance notice (r.8(1)-(2)) apply only to Third Schedule platforms (large e-commerce, online gaming and social media). r.8(3): keep personal data, traffic data and processing logs for **at least one year** from processing | [Erasure](/api-reference/dpdp/request-erasure) revokes grants, marks records erased, redacts grievances, deletes stored exports, and reports what is retained and why | Erasing your own and your processors' data; inactivity tracking and the 48-hour notice where they apply |
+| **s.8(9) + r.9** Contact details | Publish the contact of a DPO or a person able to answer questions, and include it in every response to a rights request | A `contact` field on notices | Publishing it and including it in responses |
+| **s.8(10), s.13 + r.14(3)** Grievance redressal | An effective grievance mechanism; publish a response period of **no more than 90 days**; the principal must use it before approaching the Board | [Grievances](/api-reference/dpdp/file-grievance) with a reference, `responsePeriodDays` (1 to 90), `expectedResolutionBy`, and a `submitted` / `in_review` / `resolved` / `rejected` workflow | Publishing the period, handling and answering grievances within it |
+| **s.9 + r.10-12** Children | Under 18; verifiable parental consent; no tracking, behavioural monitoring or targeted advertising directed at children; Fourth Schedule exemptions | Nothing specific | Age and parental consent checks, and restricting agent behaviour for children |
+| **s.10 + r.13** Significant Data Fiduciaries | DPO in India, independent data auditor, DPIA and audit every 12 months; localisation only where the Government specifies (r.13(4)) | Exports and the audit log as inputs to an audit | The designation-driven duties |
+| **s.11 + r.14** Access | A summary of the personal data and processing, and the fiduciaries and processors it was shared with | [Principal records](/api-reference/dpdp/list-principal-records) and principal-filtered exports of what Grantex holds | Assembling the full summary, including data in your systems |
+| **s.12** Correction and erasure | Correct, complete, update and erase on request, unless retention is required by law | Erasure as above | Correction and completion in your systems |
+| **s.14** Nominee | Nominate a person to exercise rights on death or incapacity | Nothing specific | Handling nominations |
+| **s.16 + r.15** Cross-border transfer | The Government may restrict transfer to countries it notifies (a negative list), and may set requirements by order; not a general localisation or adequacy regime | Self-hosting lets you choose where Grantex data sits (see [Data Residency](/compliance/data-residency)) | Checking transfers against any notified restriction |
+| **ss.6(7)-(9) + r.4** Consent Managers | A Board-registered, interoperable platform through which principals give, manage and withdraw consent | Not provided (see below) | Integrating with a registered Consent Manager if you use one |
+| **s.33 + Schedule** Penalties | Up to Rs 250 crore (security safeguards), Rs 200 crore (breach intimation; children), Rs 150 crore (SDF duties), Rs 50 crore (other provisions); Rs 10,000 for Data Principal duties | Not applicable | Not enforceable before 13 May 2027 |
+
+## Consent Managers, and why Grantex is not one
+
+A Consent Manager is a person registered with the Board through which Data
+Principals give, manage, review and withdraw consent (ss.6(7)-(9)). Under
+Rule 4 and the First Schedule, registration opens on 13 November 2026 and
+requires, among other things, an Indian company with a net worth of at least
+Rs 2 crore, an interoperable platform independently certified, data that the
+Consent Manager itself cannot read, a seven-year machine-readable record of
+consents, and no sub-contracting of its obligations.
+
+Grantex is not registered as a Consent Manager and is not built as one: it
+acts for the developer (the Data Fiduciary), not for the Data Principal, and
+it keeps consent records the developer can read. Use it to keep the
+fiduciary's own evidence.
+
+## Retention floors and erasure
+
+Two retention floors from 13 May 2027 shape what erasure can remove:
+
+- **r.6(1)(e)**: logs and personal data kept for one year to detect and
+  remediate unauthorised access.
+- **r.8(3)**: personal data, associated traffic data and processing logs kept
+  for at least one year from the date of processing, for the purposes in the
+  Seventh Schedule, even after an erasure request.
+
+Grantex's erasure therefore marks consent records `erased` and keeps them, and
+never modifies audit entries; its response lists what was retained and why.
+Deleting retained rows after the floor passes is your database retention
+decision.
+
+## Examples
+
+Record consent against an active grant:
 
 ```typescript
-const consent = await dpdp.createConsentRecord({
-  principalId: 'user_123',
-  agentId: 'ag_calendar',
-  purposes: [
-    {
-      code: 'calendar:read',
-      description: 'Read your calendar events to find available slots',
-      dpdpSection: 'S.4',
-      retention: '30d',
-    },
-  ],
+import { Grantex } from '@grantex/sdk';
+
+const grantex = new Grantex({ apiKey: process.env.GRANTEX_API_KEY });
+
+const record = await grantex.dpdp.createConsentRecord({
+  grantId: 'grnt_01HXYZ...',
+  dataPrincipalId: 'user_abc123',
+  purposes: [{ code: 'order_placement', description: 'Place orders you approve' }],
+  consentNoticeId: 'shopping-assistant',
+  processingExpiresAt: '2027-12-31T23:59:59Z',
 });
 ```
 
-### Section 5 — Notice
-
-**Obligation:** The data fiduciary must give the data principal a notice containing a description of personal data being processed, the purpose, and how to exercise rights.
-
-**Grantex implementation:**
-
-The `consentNotice` field in the DPDPConsentRecord stores the notice text in the user's language. The Grantex consent UI renders this notice before the user approves. The notice is stored immutably alongside the consent record — auditors can verify the exact text the user saw.
-
-```typescript
-consentNotice: {
-  language: 'en',
-  text: 'This agent will read your calendar events to suggest meeting times. It will not modify or delete any events.',
-},
-```
-
-### Section 6 — Consent
-
-**Obligation:** Consent must be free, specific, informed, unconditional, and unambiguous. It must relate to a specific purpose. Bundled consent across unrelated purposes is not valid.
-
-**Grantex implementation:**
-
-Each purpose in a consent record is a separate, specific scope. The consent UI shows each purpose individually with its description. The user can see exactly what access they are granting. The consent record is immutable and timestamped, providing evidence that consent was obtained before processing began.
-
-### Section 6(6) — Right to Withdraw
-
-**Obligation:** The data principal may withdraw consent at any time. Withdrawal must be as easy as giving consent.
-
-**Grantex implementation:**
-
-Every consent record can be withdrawn through the authenticated DPDP API or SDK.
-Your application is responsible for presenting an accessible withdrawal control
-to the data principal; Grantex does not currently ship a separate DPDP portal or
-one-click withdrawal UI. A withdrawal with `revokeGrant: true` (the default
-when the server sets `DPDP_WITHDRAWAL_REVOKES_GRANT=true`) triggers:
-
-1. Instant revocation of the underlying Grantex grant token
-2. Cascade revocation to all delegated sub-agent tokens
-3. Immutable audit entry recording the withdrawal timestamp
-4. Notification to the agent developer via webhook
-
-```typescript
-// Withdraw consent programmatically
-await dpdp.withdrawConsent(consentId);
-
-// Expose this operation through your own authenticated end-user workflow
-```
-
-### Section 8 — Data Fiduciary Obligations
-
-**Obligation:** The data fiduciary must ensure accuracy, implement storage limitation (delete data when purpose is fulfilled), and maintain security safeguards.
-
-**Grantex implementation:**
-
-- **Retention periods:** Each purpose in the consent record has a `retention` field. Grantex tracks expiry and can auto-revoke grants when retention periods lapse.
-- **Storage limitation:** Grant tokens have `exp` claims. The consent record's retention period is enforced independently.
-- **Security:** All data encrypted at rest, TLS in transit, HMAC-SHA256 webhook signatures, hash-chained audit trail.
-
-### Section 8(7) — Grievance Redressal
-
-**Obligation:** The data fiduciary must publish contact details of a Data Protection Officer or person responsible for grievance redressal.
-
-**Grantex implementation:**
-
-The authenticated DPDP API and SDK can create and retrieve grievance records.
-Your application must provide the submission UI, notify or route work to the
-responsible contact, and implement any required response-deadline monitoring.
-Grantex does not currently provide a grievance form, DPO routing, or SLA timers.
-
-### Section 11 — Data Principal Rights
-
-**Obligation:** Data principals have the right to access information about processing, seek correction or erasure of data, and nominate another person to exercise rights.
-
-**Grantex implementation:**
-
-Grantex exposes authenticated APIs and SDK methods for listing consent records,
-withdrawing consent, requesting erasure, generating data exports, and filing
-grievances. The data fiduciary must integrate those operations into its own
-verified end-user workflow and implement rights not represented by a Grantex
-endpoint. There is no separate Grantex DPDP data-principal portal.
-
-### Section 16 — Cross-Border Transfer
-
-**Obligation:** Personal data may only be transferred outside India to countries or territories notified by the Central Government.
-
-**Grantex implementation:**
-
-Consent records include a `crossBorder` flag. When set to `false`, the grant token signals that data must not leave India. Service providers can check this flag before processing requests that involve cross-border data movement.
-
-## Step-by-Step: Enabling DPDP Compliance
-
-### 1. Install the package
+Produce a DPDP audit export for a period:
 
 ```bash
-npm install @grantex/dpdp
+curl -X POST https://api.grantex.dev/v1/dpdp/exports \
+  -H "Authorization: Bearer $GRANTEX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "type": "dpdp-audit", "dateFrom": "2027-05-13T00:00:00Z", "dateTo": "2027-06-30T23:59:59Z" }'
 ```
 
-### 2. Configure the client
+The export's `data` holds `exportType`, `dateRange`, `generatedAt`,
+`developerId`, `consentRecords`, `auditLog` (at most 1,000 entries; see
+`truncated`) and `grievances`. It is not a format prescribed by the Board.
+See [DPDP Compliance](/features/dpdp-compliance) for every feature.
 
-```typescript
-import { DPDPClient } from '@grantex/dpdp';
+## FAQ
 
-const dpdp = new DPDPClient({
-  apiKey: process.env.GRANTEX_API_KEY,
-  dpoContact: {
-    name: 'Data Protection Officer',
-    email: 'dpo@yourcompany.com',
-  },
-  defaultRetention: '90d',
-});
-```
+### Do the DPDP obligations apply to us today?
 
-### 3. Create consent records for agent access
+As of 30 September 2026 the notice, consent, security, breach, erasure,
+rights and penalty provisions are not yet in force; they apply from
+13 May 2027. Building the controls now gives time to test them.
 
-```typescript
-const consent = await dpdp.createConsentRecord({
-  principalId: 'user_123',
-  agentId: 'ag_email_summarizer',
-  purposes: [
-    {
-      code: 'email:read',
-      description: 'Read email subjects and bodies to generate daily summaries',
-      dpdpSection: 'S.4',
-      retention: '7d',
-    },
-  ],
-  consentNotice: {
-    language: 'en',
-    text: 'This agent reads your emails to create daily summaries. Emails are processed but not stored beyond 7 days.',
-  },
-  dataCategories: ['communications'],
-  crossBorder: false,
-});
-```
+### Does Grantex handle grievances for us?
 
-### 4. Generate audit exports
+No. Grantex records grievances, the response period you publish and the due
+date, and a review workflow. Receiving, answering and meeting the period is
+your process, run by your DPO or designated person.
 
-```typescript
-const auditPack = await dpdp.exportAudit({
-  framework: 'dpdp',
-  dateRange: { from: '2026-01-01', to: '2026-04-01' },
-  format: 'json',
-});
-```
+### Does withdrawal revoke the agent's access immediately?
 
-## Consent Notice Requirements
+Only if you ask: pass `revokeGrant: true`, or set
+`DPDP_WITHDRAWAL_REVOKES_GRANT=true`. The revocation then cascades to
+delegated grants and is visible to services that check revocation state.
+Processing in your own systems must also stop.
 
-Under Section 5, a valid consent notice must include:
+### Is Grantex a Consent Manager?
 
-1. **Description of personal data** being processed
-2. **Purpose of processing** — specific, not vague
-3. **How to exercise rights** — link to portal or contact
-4. **Grievance mechanism** — how to file a complaint
-5. **Language** — in a language the data principal understands
+No. See [above](#consent-managers-and-why-grantex-is-not-one).
 
-Grantex's consent UI enforces these requirements. The `consentNotice` field is validated to include mandatory elements before the consent record is created.
+### How does this relate to GDPR?
 
-## Audit Export Format
+The same records support a GDPR Art. 15 access export (`gdpr-article-15` with
+`dataPrincipalId`). GDPR has its own rules, for example a one-month response
+time for access requests (Art. 12(3)) and breach notification to the
+supervisory authority within 72 hours unless the breach is unlikely to result
+in a risk (Art. 33).
 
-The DPDP audit export includes:
+### What are the penalties?
 
-```json
-{
-  "exportType": "dpdp",
-  "generatedAt": "2026-04-03T10:00:00Z",
-  "period": { "from": "2026-01-01", "to": "2026-04-01" },
-  "summary": {
-    "totalConsents": 847,
-    "activeConsents": 812,
-    "withdrawals": 23,
-    "grievances": 2,
-    "crossBorderTransfers": 0
-  },
-  "consentRecords": [...],
-  "withdrawalLog": [...],
-  "grievanceLog": [...],
-  "processingActivities": [...],
-  "retentionCompliance": {
-    "compliant": 845,
-    "overdue": 2
-  }
-}
-```
+The Schedule to the Act sets maximum penalties per breach of a duty, up to
+Rs 250 crore for failing to take reasonable security safeguards. They are not
+a percentage of turnover, and they cannot be imposed for conduct before the
+relevant provisions commence.
 
-## FAQs
+## Sources
 
-### Does Grantex replace a Data Protection Officer?
-
-No. Grantex provides the technical infrastructure for consent management, audit trails, and data principal rights. You still need a DPO (or designated person) to handle grievances, make compliance decisions, and interface with the Data Protection Board. Grantex routes grievances to your DPO and provides the audit evidence they need.
-
-### What happens if a data principal withdraws consent?
-
-When the withdrawal asks for it (`revokeGrant: true`, or by default with `DPDP_WITHDRAWAL_REVOKES_GRANT=true`), the underlying Grantex grant is revoked instantly and all delegated sub-agent tokens are cascade-revoked. The agent can no longer access the data principal's resources. A withdrawal audit entry is created. The developer receives a webhook notification.
-
-### Does the DPDP Act apply if my users are outside India?
-
-The DPDP Act applies to processing of digital personal data of individuals within India, regardless of where the data fiduciary is located. If your AI agents serve users in India, you need to comply.
-
-### How does this work with GDPR?
-
-Grantex consent records support multiple regulatory frameworks simultaneously. A single consent record can reference both DPDP sections and GDPR articles. The export system generates framework-specific reports from the same underlying data.
-
-### What are the penalties for non-compliance?
-
-The DPDP Act provides for penalties up to INR 250 crore (approximately USD 30 million) for significant data breaches and non-compliance. The Data Protection Board has the authority to impose penalties after due process.
-
-<Warning>
-  This documentation is for educational purposes. The DPDP Act's enforcement mechanisms and penalty structures may evolve as the Data Protection Board issues regulations and guidance. Always consult qualified legal counsel for your specific situation.
-</Warning>
+- [Digital Personal Data Protection Act, 2023](https://www.meity.gov.in/static/uploads/2024/06/2bf1f0e9f04e6fb4f8fef35e82c42aa5.pdf)
+- [Digital Personal Data Protection Rules, 2025 (G.S.R. 846(E))](https://www.meity.gov.in/static/uploads/2025/11/53450e6e5dc0bfa85ebd78686cadad39.pdf)
 
 ## Related Resources
 
-- [DPDP Compliance Module](/features/dpdp-compliance) — feature overview and SDK reference
-- [EU AI Act Compliance](/compliance/eu-ai-act) — EU AI Act mapping
-- [Compliance Evidence Pack API](/api-reference/compliance/generate-compliance-evidence-pack) — export API reference
-- [Compliance Matrix](/guides/compliance-matrix) — cross-framework compliance mapping
-- [Blog: DPDP Act and AI Agents](/blog/dpdp-act-ai-agents) — what engineering teams need to know
+- [DPDP Compliance Module](/features/dpdp-compliance) — what each feature does
+- [EU AI Act](/compliance/eu-ai-act) — EU AI Act mapping
+- [Compliance Evidence Pack API](/api-reference/compliance/generate-compliance-evidence-pack) — audit-chain evidence
+- [Compliance Matrix](/guides/compliance-matrix) — cross-framework mapping
+- [Blog: DPDP Act and AI Agents](/blog/dpdp-act-ai-agents)
