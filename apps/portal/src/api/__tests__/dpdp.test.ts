@@ -1,220 +1,300 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as fx from './fixtures/dpdpServer';
 
 vi.mock('../../lib/constants', () => ({ API_BASE_URL: 'http://localhost:3000' }));
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
+const BASE = 'http://localhost:3000';
+
 function ok(data: unknown, status = 200) {
   mockFetch.mockResolvedValueOnce({ ok: true, status, json: () => Promise.resolve(data) });
 }
-function err(status: number, code: string, msg: string) {
+/** Error bodies exactly as the DPDP routes send them: {message, code, requestId}. */
+function fail(status: number, body: { message: string; code: string; requestId: string }) {
   mockFetch.mockResolvedValueOnce({
     ok: false,
     status,
-    statusText: msg,
-    json: () => Promise.resolve({ code, message: msg }),
+    statusText: 'Error',
+    json: () => Promise.resolve(body),
   });
 }
+function call(i = 0): { url: string; method: string; body: unknown } {
+  const [url, opts] = mockFetch.mock.calls[i]!;
+  const init = opts as RequestInit;
+  return {
+    url: url as string,
+    method: init.method as string,
+    body: init.body === undefined ? undefined : JSON.parse(init.body as string),
+  };
+}
 
+import { ApiError } from '../client';
 import {
   createConsentRecord,
+  getConsentRecord,
+  listConsentRecords,
   withdrawConsent,
   getDataPrincipalRecords,
+  requestErasure,
+  getErasureRequest,
   createConsentNotice,
+  listConsentNotices,
+  getConsentNotice,
   fileGrievance,
+  listGrievances,
   getGrievance,
+  updateGrievance,
   createExport,
   getExport,
 } from '../dpdp';
 
-describe('dpdp', () => {
+describe('dpdp api (server response shapes)', () => {
   beforeEach(() => {
     mockFetch.mockReset();
   });
 
-  // ── createConsentRecord ───────────────────────────────────────────────
+  // ── errors ──────────────────────────────────────────────────────────────
 
-  it('createConsentRecord sends POST /v1/dpdp/consent-records', async () => {
+  it('preserves status, code and requestId from the error body', async () => {
+    fail(409, fx.errors['409_ALREADY_WITHDRAWN']);
+    const e = await withdrawConsent('crec_1', { reason: 'x', revokeGrant: true }).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(ApiError);
+    expect(e).toMatchObject({
+      status: 409,
+      code: 'ALREADY_WITHDRAWN',
+      requestId: 'req-7f40',
+      message: 'Consent already withdrawn',
+    });
+  });
+
+  // ── consent records ─────────────────────────────────────────────────────
+
+  it('createConsentRecord POSTs the request and returns the 201 body', async () => {
     const data = {
-      grantId: 'g1',
-      dataPrincipalId: 'dp1',
-      purposes: [{ code: 'P01', description: 'Analytics' }],
-      consentNoticeId: 'cn1',
-      processingExpiresAt: '2027-01-01T00:00:00Z',
+      grantId: 'grnt_1',
+      dataPrincipalId: 'user_123',
+      purposes: [{ code: 'analytics', description: 'Usage analytics' }],
+      consentNoticeId: 'privacy-notice',
+      consentNoticeVersion: '2.0',
+      processingExpiresAt: '2027-09-30T00:00:00.000Z',
     };
-    const resp = { recordId: 'cr1', grantId: 'g1', dataPrincipalId: 'dp1', status: 'active' };
-    ok(resp);
+    ok(fx.createConsentRecord_201, 201);
     const result = await createConsentRecord(data);
-    expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0]!;
-    expect(url).toBe('http://localhost:3000/v1/dpdp/consent-records');
-    expect(opts.method).toBe('POST');
-    expect(JSON.parse(opts.body)).toEqual(data);
+    expect(result).toEqual(fx.createConsentRecord_201);
+    expect(result.consentProof.proofJwt).toBeTruthy();
+    expect(call()).toEqual({ url: `${BASE}/v1/dpdp/consent-records`, method: 'POST', body: data });
   });
 
-  it('createConsentRecord throws on 400', async () => {
-    err(400, 'VALIDATION', 'Missing grantId');
-    await expect(createConsentRecord({} as any)).rejects.toThrow('Missing grantId');
+  it('createConsentRecord surfaces 503 CONSENT_PROOF_UNAVAILABLE', async () => {
+    fail(503, fx.errors['503_CONSENT_PROOF_UNAVAILABLE']);
+    await expect(createConsentRecord({} as never)).rejects.toMatchObject({ status: 503, code: 'CONSENT_PROOF_UNAVAILABLE' });
   });
 
-  // ── withdrawConsent ───────────────────────────────────────────────────
+  it('getConsentRecord GETs /v1/dpdp/consent-records/:id (encoded)', async () => {
+    ok(fx.consentRecord_200);
+    const result = await getConsentRecord('crec/1 ?');
+    expect(result).toEqual(fx.consentRecord_200);
+    expect(result.purposes[0]).toEqual({ code: 'analytics', description: 'Usage analytics for service improvement' });
+    expect(call()).toEqual({ url: `${BASE}/v1/dpdp/consent-records/crec%2F1%20%3F`, method: 'GET', body: undefined });
+  });
 
-  it('withdrawConsent sends POST /v1/dpdp/consent-records/:id/withdraw', async () => {
-    const data = { reason: 'No longer needed', revokeGrant: true };
-    const resp = { recordId: 'cr1', status: 'withdrawn', withdrawnAt: '2026-04-01', grantRevoked: true, dataDeleted: false };
-    ok(resp);
-    const result = await withdrawConsent('cr1', data);
-    expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0]!;
-    expect(url).toBe('http://localhost:3000/v1/dpdp/consent-records/cr1/withdraw');
-    expect(opts.method).toBe('POST');
-    expect(JSON.parse(opts.body)).toEqual(data);
+  it('getConsentRecord rejects with 404 NOT_FOUND', async () => {
+    fail(404, fx.errors['404_NOT_FOUND']);
+    await expect(getConsentRecord('missing')).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+  });
+
+  it('listConsentRecords GETs with dataPrincipalId, limit and cursor query', async () => {
+    ok(fx.listConsentRecords_200);
+    const result = await listConsentRecords({ dataPrincipalId: 'user 1&x', limit: 25, cursor: 'c/1=' });
+    expect(result.totalRecords).toBe(7);
+    expect(result.nextCursor).toBe(fx.listConsentRecords_200.nextCursor);
+    expect(result.records[1]!.status).toBe('erased');
+    expect(result.records[1]!.consentNoticeVersion).toBeNull();
+    const { url, method } = call();
+    expect(method).toBe('GET');
+    const u = new URL(url);
+    expect(u.pathname).toBe('/v1/dpdp/consent-records');
+    expect(u.searchParams.get('dataPrincipalId')).toBe('user 1&x');
+    expect(u.searchParams.get('limit')).toBe('25');
+    expect(u.searchParams.get('cursor')).toBe('c/1=');
+  });
+
+  it('listConsentRecords without params sends no query string', async () => {
+    ok(fx.listConsentRecords_200);
+    await listConsentRecords();
+    expect(call().url).toBe(`${BASE}/v1/dpdp/consent-records`);
+  });
+
+  it('withdrawConsent POSTs {reason, revokeGrant, deleteProcessedData}', async () => {
+    const data = { reason: 'No longer needed', revokeGrant: true, deleteProcessedData: true };
+    ok(fx.withdrawConsent_200);
+    const result = await withdrawConsent('crec_1', data);
+    expect(result).toEqual(fx.withdrawConsent_200);
+    expect(result.dataDeletionRequested).toBe(true);
+    expect(call()).toEqual({ url: `${BASE}/v1/dpdp/consent-records/crec_1/withdraw`, method: 'POST', body: data });
   });
 
   it('withdrawConsent encodes recordId', async () => {
-    ok({ recordId: 'cr/1', status: 'withdrawn' });
-    await withdrawConsent('cr/1', { reason: 'test' });
-    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/dpdp/consent-records/cr%2F1/withdraw');
+    ok(fx.withdrawConsent_200);
+    await withdrawConsent('cr/1', { reason: 'test', revokeGrant: false });
+    expect(call().url).toBe(`${BASE}/v1/dpdp/consent-records/cr%2F1/withdraw`);
   });
 
-  it('withdrawConsent throws on 404', async () => {
-    err(404, 'NOT_FOUND', 'Record not found');
-    await expect(withdrawConsent('missing', { reason: 'x' })).rejects.toThrow('Record not found');
+  it.each([
+    ['409_ALREADY_WITHDRAWN', 'ALREADY_WITHDRAWN'],
+    ['409_CONSENT_ERASED', 'CONSENT_ERASED'],
+    ['409_CONSENT_EXPIRED', 'CONSENT_EXPIRED'],
+  ] as const)('withdrawConsent rejects with %s', async (key, code) => {
+    fail(409, fx.errors[key]);
+    await expect(withdrawConsent('crec_1', { reason: 'x', revokeGrant: true })).rejects.toMatchObject({ status: 409, code });
   });
 
-  // ── getDataPrincipalRecords ───────────────────────────────────────────
-
-  it('getDataPrincipalRecords sends GET /v1/dpdp/data-principals/:id/records', async () => {
-    const resp = { dataPrincipalId: 'dp1', records: [{ recordId: 'cr1' }], totalRecords: 1 };
-    ok(resp);
-    const result = await getDataPrincipalRecords('dp1');
-    expect(result).toEqual(resp);
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3000/v1/dpdp/data-principals/dp1/records',
-      expect.objectContaining({ method: 'GET' }),
-    );
+  it('getDataPrincipalRecords GETs principal records (encoded) with pagination', async () => {
+    ok(fx.principalRecords_200);
+    const result = await getDataPrincipalRecords('dp/1', { limit: 10, cursor: 'abc' });
+    expect(result).toEqual(fx.principalRecords_200);
+    expect(result.nextCursor).toBeNull();
+    expect(call().url).toBe(`${BASE}/v1/dpdp/data-principals/dp%2F1/records?limit=10&cursor=abc`);
   });
 
-  it('getDataPrincipalRecords encodes principalId', async () => {
-    ok({ dataPrincipalId: 'dp/1', records: [], totalRecords: 0 });
-    await getDataPrincipalRecords('dp/1');
-    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/dpdp/data-principals/dp%2F1/records');
+  it('getDataPrincipalRecords tolerates records without per-record dataPrincipalId', async () => {
+    const { dataPrincipalId: _omit, ...legacyRecord } = fx.consentRecord_200;
+    void _omit;
+    ok({ ...fx.principalRecords_200, records: [legacyRecord] });
+    const result = await getDataPrincipalRecords('user_123');
+    expect(result.records[0]!.dataPrincipalId).toBeUndefined();
+    expect(result.dataPrincipalId).toBe('user_123');
   });
 
-  it('getDataPrincipalRecords throws on error', async () => {
-    err(404, 'NOT_FOUND', 'Principal not found');
-    await expect(getDataPrincipalRecords('missing')).rejects.toThrow('Principal not found');
+  // ── erasure ─────────────────────────────────────────────────────────────
+
+  it('requestErasure POSTs with no body to the encoded principal path', async () => {
+    ok(fx.erasure_201, 201);
+    const result = await requestErasure('user/1');
+    expect(result).toEqual(fx.erasure_201);
+    expect(result.retained.map((r) => r.category)).toEqual(['consent_records', 'audit_log', 'grievances', 'fiduciary_data']);
+    const [url, opts] = mockFetch.mock.calls[0]!;
+    expect(url).toBe(`${BASE}/v1/dpdp/data-principals/user%2F1/erasure`);
+    expect((opts as RequestInit).method).toBe('POST');
+    expect((opts as RequestInit).body).toBeUndefined();
   });
 
-  // ── createConsentNotice ───────────────────────────────────────────────
+  it('requestErasure rejects with 404 when the principal has no records', async () => {
+    fail(404, { message: 'No consent records for this data principal', code: 'NOT_FOUND', requestId: 'req-1' });
+    await expect(requestErasure('nobody')).rejects.toMatchObject({ status: 404, code: 'NOT_FOUND' });
+  });
 
-  it('createConsentNotice sends POST /v1/dpdp/consent-notices', async () => {
+  it('getErasureRequest GETs /v1/dpdp/erasure-requests/:id (encoded)', async () => {
+    ok(fx.erasure_201);
+    const result = await getErasureRequest('ER-2026/1');
+    expect(result.requestId).toBe(fx.erasure_201.requestId);
+    expect(call()).toEqual({ url: `${BASE}/v1/dpdp/erasure-requests/ER-2026%2F1`, method: 'GET', body: undefined });
+  });
+
+  // ── consent notices ─────────────────────────────────────────────────────
+
+  it('createConsentNotice POSTs /v1/dpdp/consent-notices and returns the 201 body', async () => {
     const data = {
-      noticeId: 'n1',
-      version: '1.0',
-      title: 'Consent Notice',
+      noticeId: 'privacy-notice',
+      version: '2.0',
+      title: 'Data Processing Consent Notice',
       content: 'We collect data...',
-      purposes: [{ code: 'P01', description: 'Analytics' }],
+      purposes: [{ code: 'analytics', description: 'Usage analytics' }],
+      grievanceOfficer: { name: 'Grievance Officer', email: 'grievance@acme.example', phone: '+91-00000-00000' },
     };
-    const resp = { id: 'cn1', noticeId: 'n1', version: '1.0', language: 'en' };
-    ok(resp);
+    ok(fx.createConsentNotice_201, 201);
     const result = await createConsentNotice(data);
-    expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0]!;
-    expect(url).toBe('http://localhost:3000/v1/dpdp/consent-notices');
-    expect(opts.method).toBe('POST');
-    expect(JSON.parse(opts.body)).toEqual(data);
+    expect(result).toEqual(fx.createConsentNotice_201);
+    expect(call()).toEqual({ url: `${BASE}/v1/dpdp/consent-notices`, method: 'POST', body: data });
   });
 
-  it('createConsentNotice throws on 400', async () => {
-    err(400, 'VALIDATION', 'Title required');
-    await expect(createConsentNotice({} as any)).rejects.toThrow('Title required');
+  it('createConsentNotice rejects with 409 CONFLICT', async () => {
+    fail(409, fx.errors['409_CONFLICT']);
+    await expect(createConsentNotice({} as never)).rejects.toMatchObject({ status: 409, code: 'CONFLICT' });
   });
 
-  // ── fileGrievance ─────────────────────────────────────────────────────
+  it('listConsentNotices GETs with pagination', async () => {
+    ok(fx.listConsentNotices_200);
+    const result = await listConsentNotices({ limit: 200 });
+    expect(result).toEqual(fx.listConsentNotices_200);
+    expect(call().url).toBe(`${BASE}/v1/dpdp/consent-notices?limit=200`);
+  });
 
-  it('fileGrievance sends POST /v1/dpdp/grievances', async () => {
-    const data = { dataPrincipalId: 'dp1', type: 'data-breach', description: 'Data exposed' };
-    const resp = { grievanceId: 'gr1', referenceNumber: 'GR-001', type: 'data-breach', status: 'submitted' };
-    ok(resp);
+  it('getConsentNotice GETs every version of an encoded notice id', async () => {
+    ok(fx.getConsentNotice_200);
+    const result = await getConsentNotice('privacy/notice');
+    expect(result.versions).toHaveLength(2);
+    expect(result.versions[1]!.grievanceOfficer).toBeNull();
+    expect(call().url).toBe(`${BASE}/v1/dpdp/consent-notices/privacy%2Fnotice`);
+  });
+
+  // ── grievances ──────────────────────────────────────────────────────────
+
+  it('fileGrievance POSTs with optional recordId and responsePeriodDays', async () => {
+    const data = { dataPrincipalId: 'user_123', type: 'unauthorized-processing', description: 'Data used without consent', responsePeriodDays: 7 };
+    ok(fx.fileGrievance_202, 202);
     const result = await fileGrievance(data);
-    expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0]!;
-    expect(url).toBe('http://localhost:3000/v1/dpdp/grievances');
-    expect(opts.method).toBe('POST');
-    expect(JSON.parse(opts.body)).toEqual(data);
+    expect(result).toEqual(fx.fileGrievance_202);
+    expect(call()).toEqual({ url: `${BASE}/v1/dpdp/grievances`, method: 'POST', body: data });
   });
 
-  it('fileGrievance throws on error', async () => {
-    err(400, 'VALIDATION', 'Description required');
-    await expect(fileGrievance({} as any)).rejects.toThrow('Description required');
+  it('listGrievances GETs with status, dataPrincipalId, limit and cursor', async () => {
+    ok(fx.listGrievances_200);
+    const result = await listGrievances({ status: 'in_review', dataPrincipalId: 'user_123', limit: 50, cursor: 'n1' });
+    expect(result).toEqual(fx.listGrievances_200);
+    const u = new URL(call().url);
+    expect(u.pathname).toBe('/v1/dpdp/grievances');
+    expect(Object.fromEntries(u.searchParams)).toEqual({ status: 'in_review', dataPrincipalId: 'user_123', limit: '50', cursor: 'n1' });
   });
 
-  // ── getGrievance ──────────────────────────────────────────────────────
-
-  it('getGrievance sends GET /v1/dpdp/grievances/:id', async () => {
-    const grievance = { grievanceId: 'gr1', status: 'submitted', referenceNumber: 'GR-001' };
-    ok(grievance);
-    const result = await getGrievance('gr1');
-    expect(result).toEqual(grievance);
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3000/v1/dpdp/grievances/gr1',
-      expect.objectContaining({ method: 'GET' }),
-    );
+  it('getGrievance GETs /v1/dpdp/grievances/:id (encoded)', async () => {
+    ok(fx.getGrievance_200);
+    const result = await getGrievance('grv/1');
+    expect(result).toEqual(fx.getGrievance_200);
+    expect(call().url).toBe(`${BASE}/v1/dpdp/grievances/grv%2F1`);
   });
 
-  it('getGrievance encodes id', async () => {
-    ok({ grievanceId: 'gr/1' });
-    await getGrievance('gr/1');
-    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/dpdp/grievances/gr%2F1');
+  it('updateGrievance PATCHes {status, resolution}', async () => {
+    ok(fx.updateGrievance_200);
+    const body = { status: 'resolved' as const, resolution: 'Marketing processing stopped and the data principal informed' };
+    const result = await updateGrievance('grv/1', body);
+    expect(result).toEqual(fx.updateGrievance_200);
+    expect(call()).toEqual({ url: `${BASE}/v1/dpdp/grievances/grv%2F1`, method: 'PATCH', body });
   });
 
-  it('getGrievance throws on 404', async () => {
-    err(404, 'NOT_FOUND', 'Grievance not found');
-    await expect(getGrievance('missing')).rejects.toThrow('Grievance not found');
+  it('updateGrievance rejects with 409 INVALID_TRANSITION', async () => {
+    fail(409, fx.errors['409_INVALID_TRANSITION']);
+    await expect(updateGrievance('grv_1', { status: 'in_review' })).rejects.toMatchObject({ status: 409, code: 'INVALID_TRANSITION' });
   });
 
-  // ── createExport ──────────────────────────────────────────────────────
+  // ── exports ─────────────────────────────────────────────────────────────
 
-  it('createExport sends POST /v1/dpdp/exports', async () => {
-    const data = { type: 'dpdp-audit' as const, dateFrom: '2026-01-01', dateTo: '2026-04-01' };
-    const resp = { exportId: 'ex1', type: 'dpdp-audit', format: 'json', recordCount: 10 };
-    ok(resp);
+  it('createExport POSTs /v1/dpdp/exports and returns the 201 body (no status)', async () => {
+    const data = {
+      type: 'dpdp-audit' as const,
+      dateFrom: '2026-09-01T00:00:00.000Z',
+      dateTo: '2026-09-30T23:59:59.999Z',
+    };
+    ok(fx.createExport_201, 201);
     const result = await createExport(data);
-    expect(result).toEqual(resp);
-    const [url, opts] = mockFetch.mock.calls[0]!;
-    expect(url).toBe('http://localhost:3000/v1/dpdp/exports');
-    expect(opts.method).toBe('POST');
-    expect(JSON.parse(opts.body)).toEqual(data);
+    expect(result).toEqual(fx.createExport_201);
+    expect(result.truncated).toBe(false);
+    expect(result.auditLogLimit).toBe(1000);
+    expect(call()).toEqual({ url: `${BASE}/v1/dpdp/exports`, method: 'POST', body: data });
   });
 
-  it('createExport throws on error', async () => {
-    err(400, 'VALIDATION', 'Invalid date range');
-    await expect(createExport({} as any)).rejects.toThrow('Invalid date range');
+  it('getExport GETs /v1/dpdp/exports/:id (encoded)', async () => {
+    ok(fx.getExport_200);
+    const result = await getExport('exp/1');
+    expect(result).toEqual(fx.getExport_200);
+    expect(result.status).toBe('complete');
+    expect(call().url).toBe(`${BASE}/v1/dpdp/exports/exp%2F1`);
   });
 
-  // ── getExport ─────────────────────────────────────────────────────────
-
-  it('getExport sends GET /v1/dpdp/exports/:id', async () => {
-    const exp = { exportId: 'ex1', type: 'dpdp-audit', format: 'json' };
-    ok(exp);
-    const result = await getExport('ex1');
-    expect(result).toEqual(exp);
-    expect(mockFetch).toHaveBeenCalledWith(
-      'http://localhost:3000/v1/dpdp/exports/ex1',
-      expect.objectContaining({ method: 'GET' }),
-    );
-  });
-
-  it('getExport encodes id', async () => {
-    ok({ exportId: 'ex/1' });
-    await getExport('ex/1');
-    expect(mockFetch.mock.calls[0]![0]).toBe('http://localhost:3000/v1/dpdp/exports/ex%2F1');
-  });
-
-  it('getExport throws on 404', async () => {
-    err(404, 'NOT_FOUND', 'Export not found');
-    await expect(getExport('missing')).rejects.toThrow('Export not found');
+  it('getExport rejects with 410 GONE once expired', async () => {
+    fail(410, fx.errors['410_GONE']);
+    await expect(getExport('exp_1')).rejects.toMatchObject({ status: 410, code: 'GONE' });
   });
 });

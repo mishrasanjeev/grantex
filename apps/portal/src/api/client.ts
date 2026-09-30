@@ -5,6 +5,8 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     message: string,
+    /** Server request id from the error body, when the route sends one. */
+    public requestId?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -49,7 +51,8 @@ async function request<T>(
       : typeof err['detail'] === 'string'
         ? err['detail']
         : res.statusText;
-    throw new ApiError(res.status, code, message);
+    const requestId = typeof err['requestId'] === 'string' ? err['requestId'] : undefined;
+    throw new ApiError(res.status, code, message, requestId);
   }
 
   if (res.status === 204) return undefined as T;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { createExport } from '../../api/dpdp';
-import type { DpdpExport, CreateExportRequest } from '../../api/dpdp';
+import { createExport, getExport } from '../../api/dpdp';
+import type { DpdpExport, CreateExportRequest, ExportType } from '../../api/dpdp';
+import { ApiError } from '../../api/client';
 import { useToast } from '../../store/toast';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -18,34 +19,49 @@ function downloadJson(data: unknown, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-const EXPORT_TYPES: { value: CreateExportRequest['type']; label: string; description: string }[] = [
-  { value: 'dpdp-audit', label: 'DPDP Audit', description: 'Consent records, grievances, and audit log for DPDP Act 2023 compliance' },
-  { value: 'gdpr-article-15', label: 'GDPR Article 15', description: 'Right of access export for GDPR compliance' },
-  { value: 'eu-ai-act-conformance', label: 'EU AI Act Conformance', description: 'AI system audit trail for EU AI Act compliance' },
+/** Start of a calendar day (YYYY-MM-DD) in UTC. */
+function startOfDayUtc(date: string): string {
+  return `${date}T00:00:00.000Z`;
+}
+
+/** End of a calendar day (YYYY-MM-DD) in UTC, so the whole day is included. */
+function endOfDayUtc(date: string): string {
+  return `${date}T23:59:59.999Z`;
+}
+
+const EXPORT_TYPES: { value: ExportType; label: string; description: string }[] = [
+  { value: 'dpdp-audit', label: 'DPDP Audit', description: 'Consent records, grievances and audit log to help evidence DPDP Act obligations' },
+  { value: 'gdpr-article-15', label: 'GDPR Article 15', description: 'Access export to help evidence answers to GDPR Art. 15 requests' },
+  { value: 'eu-ai-act-conformance', label: 'EU AI Act Conformance', description: 'AI system audit trail to help evidence EU AI Act record-keeping' },
 ];
 
 export function ExportPage() {
   const [exporting, setExporting] = useState(false);
   const [recentExports, setRecentExports] = useState<DpdpExport[]>([]);
+  const [lookupId, setLookupId] = useState('');
+  const [lookingUp, setLookingUp] = useState(false);
   const [form, setForm] = useState({
     type: 'dpdp-audit' as CreateExportRequest['type'],
     dateFrom: '',
     dateTo: '',
-    format: 'json',
     includeActionLog: true,
     includeConsentRecords: true,
     dataPrincipalId: '',
   });
   const { show } = useToast();
 
-  // Set default date range (last 30 days)
+  // Default date range: the last 30 days, including today (UTC dates).
   const today = new Date().toISOString().split('T')[0]!;
   const thirtyDaysAgo = new Date(Date.now() - 30 * 86400_000).toISOString().split('T')[0]!;
 
+  function remember(exp: DpdpExport) {
+    setRecentExports((prev) => [exp, ...prev.filter((e) => e.exportId !== exp.exportId)]);
+  }
+
   async function handleExport(e: React.FormEvent) {
     e.preventDefault();
-    const dateFrom = form.dateFrom || thirtyDaysAgo;
-    const dateTo = form.dateTo || today;
+    const dateFrom = startOfDayUtc(form.dateFrom || thirtyDaysAgo);
+    const dateTo = endOfDayUtc(form.dateTo || today);
 
     setExporting(true);
     try {
@@ -53,16 +69,14 @@ export function ExportPage() {
         type: form.type,
         dateFrom,
         dateTo,
-        format: form.format,
         includeActionLog: form.includeActionLog,
         includeConsentRecords: form.includeConsentRecords,
         ...(form.dataPrincipalId.trim() ? { dataPrincipalId: form.dataPrincipalId.trim() } : {}),
       });
 
-      setRecentExports((prev) => [result, ...prev]);
+      remember(result);
 
-      // Auto-download if JSON format
-      if (form.format === 'json' && result.data) {
+      if (result.data) {
         downloadJson(result.data, `grantex-${form.type}-${Date.now()}.json`);
       }
 
@@ -71,6 +85,26 @@ export function ExportPage() {
       show('Export failed', 'error');
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleLookup(e: React.FormEvent) {
+    e.preventDefault();
+    const id = lookupId.trim();
+    if (!id) return;
+    setLookingUp(true);
+    try {
+      remember(await getExport(id));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 410) {
+        show('This export has expired and its data was purged. Generate a new export.', 'error');
+      } else if (err instanceof ApiError && err.status === 404) {
+        show('Export not found', 'error');
+      } else {
+        show('Failed to load export', 'error');
+      }
+    } finally {
+      setLookingUp(false);
     }
   }
 
@@ -111,8 +145,9 @@ export function ExportPage() {
           {/* Date Range */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gx-muted mb-1">Date From</label>
+              <label htmlFor="export-date-from" className="block text-xs font-medium text-gx-muted mb-1">Date From</label>
               <input
+                id="export-date-from"
                 type="date"
                 value={form.dateFrom || thirtyDaysAgo}
                 onChange={(e) => setForm((prev) => ({ ...prev, dateFrom: e.target.value }))}
@@ -120,8 +155,9 @@ export function ExportPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gx-muted mb-1">Date To</label>
+              <label htmlFor="export-date-to" className="block text-xs font-medium text-gx-muted mb-1">Date To</label>
               <input
+                id="export-date-to"
                 type="date"
                 value={form.dateTo || today}
                 onChange={(e) => setForm((prev) => ({ ...prev, dateTo: e.target.value }))}
@@ -129,23 +165,16 @@ export function ExportPage() {
               />
             </div>
           </div>
+          <p className="text-xs text-gx-muted">
+            Dates are UTC and inclusive: the export covers the start of the first day to the end of the last day. Exports are JSON.
+          </p>
 
           {/* Options */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gx-muted mb-1">Format</label>
-              <select
-                value={form.format}
-                onChange={(e) => setForm((prev) => ({ ...prev, format: e.target.value }))}
-                className="w-full px-3 py-2 bg-gx-bg border border-gx-border rounded-md text-sm text-gx-text focus:outline-none focus:border-gx-accent"
-              >
-                <option value="json">JSON</option>
-                <option value="csv">CSV</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gx-muted mb-1">Data Principal ID (optional)</label>
+              <label htmlFor="export-principal" className="block text-xs font-medium text-gx-muted mb-1">Data Principal ID (optional)</label>
               <input
+                id="export-principal"
                 type="text"
                 value={form.dataPrincipalId}
                 onChange={(e) => setForm((prev) => ({ ...prev, dataPrincipalId: e.target.value }))}
@@ -192,6 +221,26 @@ export function ExportPage() {
         </form>
       </Card>
 
+      {/* Fetch an existing export */}
+      <Card className="mb-8">
+        <form onSubmit={handleLookup} className="flex items-end gap-3">
+          <div className="flex-1">
+            <label htmlFor="export-lookup" className="block text-xs font-medium text-gx-muted mb-1">Export ID</label>
+            <input
+              id="export-lookup"
+              type="text"
+              value={lookupId}
+              onChange={(e) => setLookupId(e.target.value)}
+              placeholder="e.g. exp_01ABCDEF..."
+              className="w-full px-3 py-2 bg-gx-bg border border-gx-border rounded-md text-sm text-gx-text placeholder:text-gx-muted focus:outline-none focus:border-gx-accent"
+            />
+          </div>
+          <Button type="submit" variant="secondary" size="sm" disabled={lookingUp || !lookupId.trim()}>
+            {lookingUp ? <Spinner className="h-3 w-3" /> : 'Fetch'}
+          </Button>
+        </form>
+      </Card>
+
       {/* Recent Exports */}
       <Card>
         <h2 className="text-sm font-semibold text-gx-text mb-4">Recent Exports</h2>
@@ -209,12 +258,13 @@ export function ExportPage() {
                     <span className="text-sm font-medium text-gx-text">
                       {EXPORT_TYPES.find((t) => t.value === exp.type)?.label ?? exp.type}
                     </span>
-                    <Badge variant="success">complete</Badge>
+                    {exp.truncated && <Badge variant="warning">truncated</Badge>}
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-gx-muted">
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-gx-muted">
                     <span>{exp.recordCount} records</span>
-                    <span>{exp.format.toUpperCase()}</span>
-                    <span>{formatDateTime(exp.createdAt)}</span>
+                    {exp.truncated && <span>Audit log capped at {exp.auditLogLimit} entries</span>}
+                    <span>Created {formatDateTime(exp.createdAt)}</span>
+                    <span>Expires {formatDateTime(exp.expiresAt)}</span>
                   </div>
                 </div>
                 <Button
