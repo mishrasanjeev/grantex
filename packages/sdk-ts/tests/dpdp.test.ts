@@ -84,6 +84,7 @@ describe('DpdpClient', () => {
       type: 'JWS-EdDSA',
       alg: 'EdDSA',
       kid: 'ed25519-2026-09',
+      keyPersistence: 'persistent',
       proofJwt: expect.any(String),
       jwksUri: 'https://issuer.example/.well-known/jwks.json',
       signedAt: '2026-09-30T10:15:00.000Z',
@@ -235,10 +236,13 @@ describe('DpdpClient', () => {
     expect(result.recordsErased).toBe(2);
     expect(result.grantsRevoked).toBe(1);
     expect(result.delegatedGrantsRevoked).toBe(0);
-    expect(result.grievancesRedacted).toBe(1);
+    expect(result.grievancesRedacted).toBe(0);
     expect(result.exportsDeleted).toBe(0);
     expect(result.completedAt).toBe('2026-09-30T14:00:00.120Z');
-    expect(result.retained).toHaveLength(4);
+    expect(result.retained.map((r) => r.category)).toEqual(
+      ['consent_records', 'audit_log', 'grievances', 'stored_exports', 'fiduciary_data'],
+    );
+    expect(result.retained[3]).toMatchObject({ category: 'stored_exports', count: 1 });
     expect(result.retained[0]).toMatchObject({ category: 'consent_records', count: 2 });
     expect(result.retained[1]!.count).toBeUndefined();
     const [url, init] = call(mockFetch);
@@ -553,6 +557,10 @@ describe('DpdpClient', () => {
     ['409_ALREADY_WITHDRAWN', 409, (g) => g.dpdp.withdrawConsent('crec_01', { reason: 'again' })],
     ['410_GONE', 410, (g) => g.dpdp.getExport('exp_old')],
     ['409_INVALID_TRANSITION', 409, (g) => g.dpdp.updateGrievance('grv_01', { status: 'in_review' })],
+    ['503_CONSENT_PROOF_KEY_NOT_PERSISTENT', 503, (g) => g.dpdp.createConsentRecord({
+      grantId: 'g', dataPrincipalId: 'p', purposes: [{ code: 'c', description: 'd' }],
+      consentNoticeId: 'n', processingExpiresAt: '2027-01-01T00:00:00.000Z',
+    })],
   ];
 
   for (const [name, status, invoke] of errorCases) {

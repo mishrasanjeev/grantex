@@ -1230,6 +1230,12 @@ export interface DpdpConsentProof {
   type: 'JWS-EdDSA';
   alg: 'EdDSA';
   kid: string | null;
+  /**
+   * `'persistent'` when the signing key comes from the server's configuration;
+   * `'ephemeral'` when it was generated in-process, so the proof cannot be
+   * verified on another instance or after a restart. Absent from older servers.
+   */
+  keyPersistence?: 'persistent' | 'ephemeral';
   proofJwt: string;
   jwksUri: string;
   signedAt: string;
@@ -1271,7 +1277,10 @@ export interface CreateConsentRecordResponse extends ConsentRecord {
   consentProof: DpdpConsentProof;
 }
 
-/** Cursor pagination: `limit` 1..200 (server default 50), `cursor` = previous `nextCursor`. */
+/**
+ * Cursor pagination: `limit` 1..200 (server default 50), `cursor` = previous `nextCursor`.
+ * The two consent-record lists paginate only when `limit` or `cursor` is sent; without either they return the newest 100 records (every match when filtered by principal, and every record on the principal-records route) with `nextCursor: null`.
+ */
 export interface DpdpPageParams {
   limit?: number;
   cursor?: string;

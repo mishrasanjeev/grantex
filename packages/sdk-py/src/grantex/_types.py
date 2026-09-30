@@ -2276,9 +2276,7 @@ class DpdpPurpose(TypedDict):
     description: str
 
 
-class DpdpConsentProof(TypedDict):
-    """Detached EdDSA proof over a consent record, returned only by create."""
-
+class _DpdpConsentProofRequired(TypedDict):
     type: str
     """``"JWS-EdDSA"``."""
     alg: str
@@ -2287,6 +2285,16 @@ class DpdpConsentProof(TypedDict):
     proofJwt: str
     jwksUri: str
     signedAt: str
+
+
+class DpdpConsentProof(_DpdpConsentProofRequired, total=False):
+    """Detached EdDSA proof over a consent record, returned only by create."""
+
+    keyPersistence: Literal["persistent", "ephemeral"]
+    """``"persistent"`` when the signing key comes from the server's
+    configuration; ``"ephemeral"`` when it was generated in-process, so the
+    proof cannot be verified on another instance or after a restart. Absent
+    from older servers."""
 
 
 class _GrievanceOfficerRequired(TypedDict):

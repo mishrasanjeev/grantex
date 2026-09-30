@@ -14,7 +14,11 @@ export type ConsentRecordStatus = 'active' | 'withdrawn' | 'expired' | 'erased';
 export type GrievanceStatus = 'submitted' | 'in_review' | 'resolved' | 'rejected';
 
 export interface PageParams {
-  /** 1..200, server default 50. */
+  /**
+   * 1..200, server default 50. The consent-record lists paginate only when
+   * `limit` or `cursor` is sent; without either they return the newest 100
+   * (every match when filtered by principal) with `nextCursor: null`.
+   */
   limit?: number;
   /** The previous page's `nextCursor`. */
   cursor?: string;
@@ -70,6 +74,12 @@ export interface ConsentProof {
   type: 'JWS-EdDSA';
   alg: 'EdDSA';
   kid: string | null;
+  /**
+   * `'persistent'` when the signing key comes from the server's configuration;
+   * `'ephemeral'` when it was generated in-process, so the proof cannot be
+   * verified on another instance or after a restart. Absent from older servers.
+   */
+  keyPersistence?: 'persistent' | 'ephemeral';
   proofJwt: string;
   jwksUri: string;
   signedAt: string;

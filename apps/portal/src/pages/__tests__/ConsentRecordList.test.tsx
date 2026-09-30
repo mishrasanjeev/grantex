@@ -187,10 +187,13 @@ describe('ConsentRecordList', () => {
     await search(user);
     await user.click(await screen.findByRole('button', { name: 'Erase data principal' }));
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText(/Grants for this data principal are revoked/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/active grants of this data principal.s consent records are revoked/)).toBeInTheDocument();
+    // Cascade and expanded erasure are server flags (off by default): the copy must not promise them.
+    expect(within(dialog).getByText(/where this deployment enables the revocation cascade/)).toBeInTheDocument();
     expect(within(dialog).getByText(/Consent records are marked erased/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/Grievance descriptions and evidence are redacted/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/Stored exports are deleted/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Where this deployment enables expanded erasure, grievance descriptions and evidence are redacted/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/stored exports are kept until they expire/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/^Stored exports are deleted\.$/)).not.toBeInTheDocument();
     expect(within(dialog).getByText(/audit log is retained/)).toBeInTheDocument();
     expect(mockRequestErasure).not.toHaveBeenCalled();
   });
@@ -207,13 +210,14 @@ describe('ConsentRecordList', () => {
     expect(within(result).getByText(fx.erasure_201.requestId)).toBeInTheDocument();
     expect(within(result).getByText('Records erased').nextSibling).toHaveTextContent('2');
     expect(within(result).getByText('Grants revoked').nextSibling).toHaveTextContent('1');
-    expect(within(result).getByText('Grievances redacted').nextSibling).toHaveTextContent('1');
+    expect(within(result).getByText('Grievances redacted').nextSibling).toHaveTextContent('0');
     expect(within(result).getByText('Exports deleted').nextSibling).toHaveTextContent('0');
     for (const item of fx.erasure_201.retained) {
       expect(within(result).getByText(item.category)).toBeInTheDocument();
       expect(within(result).getByText(item.reason)).toBeInTheDocument();
     }
     expect(within(result).getByText('consent_records').parentElement).toHaveTextContent('2');
+    expect(within(result).getByText('stored_exports').parentElement).toHaveTextContent('1');
     // The list is reloaded to show the erased status.
     await waitFor(() => expect(mockListConsentRecords).toHaveBeenCalledTimes(2));
   });

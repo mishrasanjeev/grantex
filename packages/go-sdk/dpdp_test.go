@@ -139,12 +139,13 @@ func TestDPDPCreateConsentRecord(t *testing.T) {
 		t.Error("expected consentNoticeHash")
 	}
 	want := &ConsentProof{
-		Type:     "JWS-EdDSA",
-		Alg:      "EdDSA",
-		Kid:      strPtr("ed25519-2026-09"),
-		ProofJWT: record.Proof.ProofJWT,
-		JWKSURI:  "https://issuer.example/.well-known/jwks.json",
-		SignedAt: "2026-09-30T10:15:00.000Z",
+		Type:           "JWS-EdDSA",
+		Alg:            "EdDSA",
+		Kid:            strPtr("ed25519-2026-09"),
+		KeyPersistence: "persistent",
+		ProofJWT:       record.Proof.ProofJWT,
+		JWKSURI:        "https://issuer.example/.well-known/jwks.json",
+		SignedAt:       "2026-09-30T10:15:00.000Z",
 	}
 	if record.Proof == nil || !reflect.DeepEqual(record.Proof, want) || record.Proof.ProofJWT == "" {
 		t.Errorf("unexpected proof %+v", record.Proof)
@@ -364,12 +365,18 @@ func TestDPDPRequestErasure(t *testing.T) {
 	}
 	if resp.RequestID != "ER-2026-01J9ZE7F8G9H0J1K2M3N4P5Q6R" || resp.Status != "completed" ||
 		resp.RecordsErased != 2 || resp.GrantsRevoked != 1 || resp.DelegatedGrantsRevoked != 0 ||
-		resp.GrievancesRedacted != 1 || resp.ExportsDeleted != 0 ||
+		resp.GrievancesRedacted != 0 || resp.ExportsDeleted != 0 ||
 		resp.CompletedAt != "2026-09-30T14:00:00.120Z" || resp.ExpectedCompletionBy != resp.CompletedAt {
 		t.Errorf("unexpected response %+v", resp)
 	}
-	if len(resp.Retained) != 4 || resp.Retained[0].Category != "consent_records" ||
-		resp.Retained[0].Count == nil || *resp.Retained[0].Count != 2 || resp.Retained[1].Count != nil {
+	var categories []string
+	for _, r := range resp.Retained {
+		categories = append(categories, r.Category)
+	}
+	wantCategories := []string{"consent_records", "audit_log", "grievances", "stored_exports", "fiduciary_data"}
+	if !reflect.DeepEqual(categories, wantCategories) ||
+		resp.Retained[0].Count == nil || *resp.Retained[0].Count != 2 || resp.Retained[1].Count != nil ||
+		resp.Retained[3].Count == nil || *resp.Retained[3].Count != 1 {
 		t.Errorf("unexpected retained %+v", resp.Retained)
 	}
 }
@@ -785,6 +792,13 @@ func TestDPDPErrorsSurfaceCodeAndRequestID(t *testing.T) {
 		{"410_GONE", 410, func(c *Client) error { _, err := c.DPDP.GetExport(ctx, "exp_old"); return err }},
 		{"409_INVALID_TRANSITION", 409, func(c *Client) error {
 			_, err := c.DPDP.UpdateGrievance(ctx, "grv_01", UpdateGrievanceParams{Status: GrievanceStatusInReview})
+			return err
+		}},
+		{"503_CONSENT_PROOF_KEY_NOT_PERSISTENT", 503, func(c *Client) error {
+			_, err := c.DPDP.CreateConsentRecord(ctx, CreateConsentRecordParams{
+				GrantID: "g", DataPrincipalID: "p", Purposes: []ConsentPurpose{{Code: "c", Description: "d"}},
+				ConsentNoticeID: "n", ProcessingExpiresAt: "2027-01-01T00:00:00.000Z",
+			})
 			return err
 		}},
 	}

@@ -181,6 +181,8 @@ interface ConsentProof {
   type: string;
   alg: string;
   kid: string | null;
+  /** Absent from older servers. */
+  keyPersistence?: 'persistent' | 'ephemeral';
   proofJwt: string;
   jwksUri: string;
   signedAt: string;
@@ -446,6 +448,7 @@ export function dpdpCommand(): Command {
           proofType: orDash(proof?.type),
           proofAlg: orDash(proof?.alg),
           proofKid: orDash(proof?.kid),
+          proofKeyPersistence: orDash(proof?.keyPersistence),
           proofJwksUri: orDash(proof?.jwksUri),
           proofSignedAt: dateOrDash(proof?.signedAt),
         });
@@ -484,7 +487,7 @@ export function dpdpCommand(): Command {
     .command('list')
     .description('List consent records')
     .option('--principal <principalId>', 'Filter by data principal ID')
-    .option('--limit <n>', 'Page size, 1 to 200 (server default: 50)')
+    .option('--limit <n>', 'Page size, 1 to 200; without --limit or --cursor the newest 100 (every match with --principal)')
     .option('--cursor <cursor>', 'Cursor from the previous page (nextCursor)')
     .action(async (opts: { principal?: string; limit?: string; cursor?: string }) => {
       const limit = limitOf(opts.limit);
@@ -920,7 +923,7 @@ export function dpdpCommand(): Command {
   cmd
     .command('principal-records <principalId>')
     .description('List all consent records for a data principal (right to access, DPDP Act s.11)')
-    .option('--limit <n>', 'Page size, 1 to 200 (server default: 50)')
+    .option('--limit <n>', 'Page size, 1 to 200; without --limit or --cursor every record')
     .option('--cursor <cursor>', 'Cursor from the previous page (nextCursor)')
     .action(async (principalId: string, opts: { limit?: string; cursor?: string }) => {
       const limit = limitOf(opts.limit);

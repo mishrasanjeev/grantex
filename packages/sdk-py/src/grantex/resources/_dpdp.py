@@ -87,7 +87,9 @@ class DpdpClient:
         """List consent records, newest first, optionally for one data principal.
 
         ``limit`` is 1..200 (server default 50); pass the previous page's
-        ``next_cursor`` as ``cursor``. ``principal_id`` is the original
+        ``next_cursor`` as ``cursor``. Without ``limit`` or ``cursor`` the
+        server does not paginate: it returns the newest 100 records (every
+        match when filtered by principal) and ``next_cursor`` is ``None``. ``principal_id`` is the original
         positional form of ``data_principal_id``.
 
         GET /v1/dpdp/consent-records

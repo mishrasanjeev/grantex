@@ -269,10 +269,15 @@ export function ConsentRecordList() {
           <div>
             <p className="text-xs font-medium text-gx-text mb-1">What is erased</p>
             <ul className="list-disc ml-5 space-y-1 text-gx-muted">
-              <li>Grants for this data principal are revoked, including grants delegated from them.</li>
+              <li>
+                The active grants of this data principal&apos;s consent records are revoked (and the grants delegated
+                from them, where this deployment enables the revocation cascade).
+              </li>
               <li>Consent records are marked erased; processing under them stops.</li>
-              <li>Grievance descriptions and evidence are redacted.</li>
-              <li>Stored exports are deleted.</li>
+              <li>
+                Where this deployment enables expanded erasure, grievance descriptions and evidence are redacted and
+                stored exports about the principal are deleted.
+              </li>
             </ul>
           </div>
           <div>
@@ -280,7 +285,11 @@ export function ConsentRecordList() {
             <ul className="list-disc ml-5 space-y-1 text-gx-muted">
               <li>Consent records are kept (marked erased) as proof that consent was given.</li>
               <li>The audit log is retained unchanged; its entries form a tamper-evident chain.</li>
-              <li>Grievances are kept as the record of grievance handling, with their text redacted.</li>
+              <li>
+                Grievances are kept as the record of grievance handling (their text redacted only with expanded
+                erasure), and without expanded erasure stored exports are kept until they expire.
+              </li>
+              <li>The result lists exactly what was kept, and why.</li>
               <li>Personal data held in your own systems and your processors&apos; must be erased there.</li>
             </ul>
           </div>

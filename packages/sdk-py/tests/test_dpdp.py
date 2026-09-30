@@ -98,6 +98,7 @@ def test_create_consent_record(client: Grantex) -> None:
     assert result.consent_proof["type"] == "JWS-EdDSA"
     assert result.consent_proof["alg"] == "EdDSA"
     assert result.consent_proof["kid"] == "ed25519-2026-09"
+    assert result.consent_proof.get("keyPersistence") == "persistent"
     assert result.consent_proof["jwksUri"] == "https://issuer.example/.well-known/jwks.json"
     assert result.consent_proof["signedAt"] == "2026-09-30T10:15:00.000Z"
     # Create sends none of these.
@@ -323,11 +324,14 @@ def test_request_erasure(client: Grantex) -> None:
     assert result.records_erased == 2
     assert result.grants_revoked == 1
     assert result.delegated_grants_revoked == 0
-    assert result.grievances_redacted == 1
+    assert result.grievances_redacted == 0
     assert result.exports_deleted == 0
     assert result.completed_at == "2026-09-30T14:00:00.120Z"
     assert result.expected_completion_by == "2026-09-30T14:00:00.120Z"
-    assert len(result.retained) == 4
+    assert [r["category"] for r in result.retained] == [
+        "consent_records", "audit_log", "grievances", "stored_exports", "fiduciary_data",
+    ]
+    assert result.retained[3].get("count") == 1
     assert result.retained[0]["category"] == "consent_records"
     assert result.retained[0].get("count") == 2
     assert "count" not in result.retained[1]
@@ -719,6 +723,16 @@ _ERRORS: list[tuple[str, int, str, str, Callable[[Grantex], object]]] = [
     (
         "409_INVALID_TRANSITION", 409, "PATCH", "/v1/dpdp/grievances/grv_01",
         lambda g: g.dpdp.update_grievance("grv_01", status="in_review"),
+    ),
+    (
+        "503_CONSENT_PROOF_KEY_NOT_PERSISTENT", 503, "POST", "/v1/dpdp/consent-records",
+        lambda g: g.dpdp.create_consent_record(
+            CreateConsentRecordParams(
+                grant_id="g", data_principal_id="p",
+                purposes=[{"code": "c", "description": "d"}],
+                consent_notice_id="n", processing_expires_at="2027-01-01T00:00:00.000Z",
+            )
+        ),
     ),
 ]
 

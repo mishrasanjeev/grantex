@@ -86,6 +86,12 @@ export interface ConsentProof {
   alg: string;
   /** Key id of the signing key; null when the server's key has no id. */
   kid: string | null;
+  /**
+   * `'persistent'` when the signing key comes from the server's configuration;
+   * `'ephemeral'` when it was generated in-process, so the proof cannot be
+   * verified on another instance or after a restart. Absent from older servers.
+   */
+  keyPersistence?: 'persistent' | 'ephemeral';
   proofJwt: string;
   jwksUri: string;
   signedAt: Date;
@@ -187,7 +193,10 @@ export interface CreateConsentRecordOptions {
 // Pagination
 // ---------------------------------------------------------------------------
 
-/** Page request for list routes: `limit` 1..200 (server default 50); `cursor` is the previous page's `nextCursor`. */
+/**
+ * Page request for list routes: `limit` 1..200 (server default 50); `cursor` is the previous page's `nextCursor`.
+ * The two consent-record lists paginate only when `limit` or `cursor` is sent; without either they return the newest 100 records (every match when filtered by principal, and every record on the principal-records route) with `nextCursor: null`.
+ */
 export interface PageOptions {
   limit?: number;
   cursor?: string;

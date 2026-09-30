@@ -196,6 +196,7 @@ describe('contract: consent records', () => {
         type: 'JWS-EdDSA',
         alg: 'EdDSA',
         kid: 'ed25519-2026-09',
+        keyPersistence: 'persistent',
         proofJwt: (fx('createConsentRecord_201').consentProof as Json).proofJwt,
         jwksUri: 'https://issuer.example/.well-known/jwks.json',
         signedAt: new Date('2026-09-30T10:15:00.000Z'),
@@ -251,6 +252,45 @@ describe('contract: consent records', () => {
       requestId: 'req-7f46',
       message: 'The consent proof could not be signed; no consent record was created',
     });
+  });
+
+  it('createConsentRecord surfaces 503 CONSENT_PROOF_KEY_NOT_PERSISTENT (nothing stored)', async () => {
+    const fn = serve(503, errorFx('503_CONSENT_PROOF_KEY_NOT_PERSISTENT'));
+    const err = await createConsentRecord({
+      grantId: 'g',
+      dataPrincipalId: 'p',
+      purposes: [{ code: 'analytics', description: 'd' }],
+      consentNoticeId: 'n',
+      processingExpiresAt: new Date('2027-01-01T00:00:00.000Z'),
+      apiKey: KEY,
+      baseUrl: API,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DpdpError);
+    expect(err).toMatchObject({ statusCode: 503, code: 'CONSENT_PROOF_KEY_NOT_PERSISTENT', requestId: 'req-7f47' });
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['ephemeral', 'ephemeral'],
+    ['absent (older server)', undefined],
+    ['an unknown value', 'rotating'],
+  ])('createConsentRecord decodes keyPersistence when %s', async (_label, value) => {
+    const body = fx('createConsentRecord_201');
+    const proof = { ...(body.consentProof as Json) };
+    if (value === undefined) delete proof.keyPersistence;
+    else proof.keyPersistence = value;
+    serve(201, { ...body, consentProof: proof });
+    const created = await createConsentRecord({
+      grantId: 'g',
+      dataPrincipalId: 'p',
+      purposes: [{ code: 'analytics', description: 'd' }],
+      consentNoticeId: 'n',
+      processingExpiresAt: new Date('2027-01-01T00:00:00.000Z'),
+      apiKey: KEY,
+      baseUrl: API,
+    });
+    if (value === 'ephemeral') expect(created.consentProof.keyPersistence).toBe('ephemeral');
+    else expect(created.consentProof).not.toHaveProperty('keyPersistence');
   });
 
   it.each([
@@ -412,7 +452,7 @@ describe('contract: data principal rights', () => {
       recordsErased: 2,
       grantsRevoked: 1,
       delegatedGrantsRevoked: 0,
-      grievancesRedacted: 1,
+      grievancesRedacted: 0,
       exportsDeleted: 0,
       retained,
       submittedAt: new Date('2026-09-30T14:00:00.000Z'),
@@ -448,7 +488,10 @@ describe('contract: data principal rights', () => {
     expect(req.method).toBe('GET');
     expect(req.url).toBe(`${API}/v1/dpdp/erasure-requests/ER-2026%2Fx`);
     expect(result.recordsErased).toBe(2);
-    expect(result.retained).toHaveLength(4);
+    expect(result.retained.map((r) => r.category)).toEqual(
+      ['consent_records', 'audit_log', 'grievances', 'stored_exports', 'fiduciary_data'],
+    );
+    expect(result.retained.find((r) => r.category === 'stored_exports')).toMatchObject({ count: 1 });
     expect(result.completedAt).toEqual(new Date('2026-09-30T14:00:00.120Z'));
     expect(result).not.toHaveProperty('httpStatus');
   });

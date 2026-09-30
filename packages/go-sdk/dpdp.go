@@ -161,7 +161,11 @@ type CreateExportParams struct {
 }
 
 // PageParams selects a page of a list. Limit is 1..200 (0 means the server
-// default, 50); Cursor is the previous page's NextCursor.
+// default, 50); Cursor is the previous page's NextCursor. The consent-record
+// lists paginate only when Limit or Cursor is set; with neither the server
+// returns the newest 100 records (every match when filtered by principal,
+// and every record of the principal on the principal-records route) and a nil
+// NextCursor.
 type PageParams struct {
 	Limit  int
 	Cursor string
@@ -187,12 +191,17 @@ type ListGrievancesParams struct {
 // ConsentProof is the detached EdDSA proof over a consent record, returned
 // only by CreateConsentRecord.
 type ConsentProof struct {
-	Type     string  `json:"type"`
-	Alg      string  `json:"alg"`
-	Kid      *string `json:"kid"`
-	ProofJWT string  `json:"proofJwt"`
-	JWKSURI  string  `json:"jwksUri"`
-	SignedAt string  `json:"signedAt"`
+	Type string  `json:"type"`
+	Alg  string  `json:"alg"`
+	Kid  *string `json:"kid"`
+	// KeyPersistence is "persistent" when the signing key comes from the
+	// server's configuration, or "ephemeral" when it was generated in-process,
+	// so the proof cannot be verified on another instance or after a restart.
+	// Empty when an older server omits it.
+	KeyPersistence string `json:"keyPersistence,omitempty"`
+	ProofJWT       string `json:"proofJwt"`
+	JWKSURI        string `json:"jwksUri"`
+	SignedAt       string `json:"signedAt"`
 }
 
 // ConsentRecord represents a DPDP consent record.

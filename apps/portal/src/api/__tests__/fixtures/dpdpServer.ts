@@ -13,6 +13,7 @@ export const createConsentRecord_201 = {
     "type": "JWS-EdDSA",
     "alg": "EdDSA",
     "kid": "ed25519-2026-09",
+    "keyPersistence": "persistent",
     "proofJwt": "eyJhbGciOiJFZERTQSIsImtpZCI6ImVkMjU1MTktMjAyNi0wOSJ9.eyJyZWNvcmRJZCI6ImNyZWNfMDFKOVpCNFk3UTJNOE4zUDVSNlM3VDhWOVcifQ.c2lnbmF0dXJl",
     "jwksUri": "https://issuer.example/.well-known/jwks.json",
     "signedAt": "2026-09-30T10:15:00.000Z"
@@ -388,7 +389,7 @@ export const erasure_201 = {
   "recordsErased": 2,
   "grantsRevoked": 1,
   "delegatedGrantsRevoked": 0,
-  "grievancesRedacted": 1,
+  "grievancesRedacted": 0,
   "exportsDeleted": 0,
   "retained": [
     {
@@ -403,7 +404,12 @@ export const erasure_201 = {
     {
       "category": "grievances",
       "count": 1,
-      "reason": "Kept as the record of grievance handling (DPDP Act s.13), with the description and evidence replaced by a fixed marker."
+      "reason": "Kept unchanged, description and evidence included, as the record of grievance handling (DPDP Act s.13). Expanded erasure is not enabled on this deployment (DPDP_ERASURE_EXPANDED), so they were not redacted."
+    },
+    {
+      "category": "stored_exports",
+      "count": 1,
+      "reason": "Stored compliance exports about the data principal are kept until they expire, seven days after creation. Expanded erasure is not enabled on this deployment (DPDP_ERASURE_EXPANDED), so they were not deleted."
     },
     {
       "category": "fiduciary_data",
@@ -480,6 +486,11 @@ export const errors = {
     "message": "The consent proof could not be signed; no consent record was created",
     "code": "CONSENT_PROOF_UNAVAILABLE",
     "requestId": "req-7f46"
+  },
+  "503_CONSENT_PROOF_KEY_NOT_PERSISTENT": {
+    "message": "The consent proof key is not persistent (ED25519_PRIVATE_KEY is not set); no consent record was created",
+    "code": "CONSENT_PROOF_KEY_NOT_PERSISTENT",
+    "requestId": "req-7f47"
   }
 };
 

@@ -84,12 +84,20 @@ describe('dpdp api (server response shapes)', () => {
     const result = await createConsentRecord(data);
     expect(result).toEqual(fx.createConsentRecord_201);
     expect(result.consentProof.proofJwt).toBeTruthy();
+    expect(result.consentProof.keyPersistence).toBe('persistent');
     expect(call()).toEqual({ url: `${BASE}/v1/dpdp/consent-records`, method: 'POST', body: data });
   });
 
   it('createConsentRecord surfaces 503 CONSENT_PROOF_UNAVAILABLE', async () => {
     fail(503, fx.errors['503_CONSENT_PROOF_UNAVAILABLE']);
     await expect(createConsentRecord({} as never)).rejects.toMatchObject({ status: 503, code: 'CONSENT_PROOF_UNAVAILABLE' });
+  });
+
+  it('createConsentRecord surfaces 503 CONSENT_PROOF_KEY_NOT_PERSISTENT', async () => {
+    fail(503, fx.errors['503_CONSENT_PROOF_KEY_NOT_PERSISTENT']);
+    await expect(createConsentRecord({} as never)).rejects.toMatchObject({
+      status: 503, code: 'CONSENT_PROOF_KEY_NOT_PERSISTENT', requestId: 'req-7f47',
+    });
   });
 
   it('getConsentRecord GETs /v1/dpdp/consent-records/:id (encoded)', async () => {
@@ -174,7 +182,7 @@ describe('dpdp api (server response shapes)', () => {
     ok(fx.erasure_201, 201);
     const result = await requestErasure('user/1');
     expect(result).toEqual(fx.erasure_201);
-    expect(result.retained.map((r) => r.category)).toEqual(['consent_records', 'audit_log', 'grievances', 'fiduciary_data']);
+    expect(result.retained.map((r) => r.category)).toEqual(['consent_records', 'audit_log', 'grievances', 'stored_exports', 'fiduciary_data']);
     const [url, opts] = mockFetch.mock.calls[0]!;
     expect(url).toBe(`${BASE}/v1/dpdp/data-principals/user%2F1/erasure`);
     expect((opts as RequestInit).method).toBe('POST');

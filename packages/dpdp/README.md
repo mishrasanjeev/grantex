@@ -313,7 +313,9 @@ Fetch a single consent record by ID. Reads carry no `consentProof` or `consentNo
 #### `listConsentRecordsPage(options: { dataPrincipalId?, limit?, cursor? }, apiKey, baseUrl): Promise<ConsentRecordPage>`
 
 List consent records, newest first: `{ records, totalRecords, nextCursor }`. `limit` is 1..200
-(default 50); pass `nextCursor` back as `cursor` for the next page.
+(default 50); pass `nextCursor` back as `cursor` for the next page. Without `limit` or `cursor`
+the server does not paginate: it returns the newest 100 records, or every record of
+`dataPrincipalId` when given, with `nextCursor: null`.
 
 #### `listConsentRecords(principalId: string, apiKey: string, baseUrl: string, page?: { limit?, cursor? }): Promise<DPDPConsentRecord[]>`
 
@@ -623,6 +625,7 @@ interface ConsentProof {
   type: 'JWS-EdDSA';
   alg: string;                          // 'EdDSA'
   kid: string | null;
+  keyPersistence?: 'persistent' | 'ephemeral'; // 'ephemeral': verifiable only on the signing instance until it restarts
   proofJwt: string;                     // compact JWS signed by the server
   jwksUri: string;                      // where to fetch the verification key
   signedAt: Date;

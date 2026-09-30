@@ -369,7 +369,9 @@ grantex dpdp exports get exp_...
 ```
 
 List commands print `Next cursor:` when there is another page (with `--json`, the page
-information is written to stderr and the records array to stdout). Errors print the
+information is written to stderr and the records array to stdout). Without `--limit` or `--cursor`,
+`consent list` returns the newest 100 records (every match with `--principal`) and
+`principal-records` every record of the principal, unpaginated. Errors print the
 server's message with its `code` and `requestId`. Erasure prints what was erased and what
 was retained, with the reason for each retained category. An erasure principal ID of
 literally `status` or `request` needs the explicit `grantex dpdp erasure request <id>` form.

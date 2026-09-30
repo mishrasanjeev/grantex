@@ -139,6 +139,12 @@ grievance). Erasure is idempotent on the server (a replay returns the earlier
 request), so it keeps the normal retry on transient failures. Every path
 parameter is percent-encoded. Test fixtures use the synthetic
 `https://issuer.example/.well-known/jwks.json` as the consent-proof `jwksUri`.
+Every client reads the consent proof's optional `keyPersistence`
+(`persistent` or `ephemeral`; absent from older servers), surfaces
+`503 CONSENT_PROOF_KEY_NOT_PERSISTENT` with its code and `requestId`, and
+passes through the erasure `retained` category `stored_exports`. The client
+docs say that the two consent-record lists paginate only when `limit` or
+`cursor` is sent.
 
 - `@grantex/dpdp`: `createConsentNotice` sends the required `noticeId` and no
   longer sends `contentHash` (the server computes it); the grievance officer is
@@ -186,13 +192,16 @@ parameter is percent-encoded. Test fixtures use the synthetic
   `--version` flag and never created the notice; the option is now
   `--notice-version`. The CSV export format is removed (the server only
   produces JSON); `--no-include-action-log` and `--no-include-consent-records`
-  work; errors print the `code` and `requestId`; requests time out after 30
+  work; errors print the `code` and `requestId`; `consent create` prints the
+  proof's `keyPersistence`; requests time out after 30
   seconds. New `notices list|get`, `grievances list|update`,
   `erasure status <requestId>` (and `erasure request <principalId>`), with
   `--limit`/`--cursor` on the lists.
 - Portal: the consent record page loads the record; the list searches consent
   records by data principal, pages, and can erase a data principal after a
-  confirmation that states what is erased and what is retained; the withdraw
+  confirmation that states what is erased and what is retained (the grant
+  cascade and grievance and export removal only where the deployment enables
+  them); the withdraw
   dialog requires a reason, offers to revoke the grant (checked by default) and
   explains 409 responses; grievances are listed from the server and move
   through review to resolved or rejected with a resolution (a row that leaves

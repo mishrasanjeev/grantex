@@ -294,7 +294,16 @@ describe('dpdp command', () => {
       expect(out).toContain(createConsent['consentNoticeHash'] as string);
       expect(out).toContain('JWS-EdDSA');
       expect(out).toContain('ed25519-2026-09');
+      expect(out).toMatch(/proofKeyPersistence\s+persistent/);
       expect(out).toContain('https://issuer.example/.well-known/jwks.json');
+    });
+
+    it('prints message, code and requestId when the proof key is not persistent', async () => {
+      mockFetchError(503, errors['503_CONSENT_PROOF_KEY_NOT_PERSISTENT']);
+      await runFails(consentCreateArgs);
+      expect(stderr()).toContain('The consent proof key is not persistent');
+      expect(stderr()).toContain('CONSENT_PROOF_KEY_NOT_PERSISTENT');
+      expect(stderr()).toContain('req-7f47');
     });
 
     it('prints JSON in --json mode', async () => {
@@ -764,10 +773,11 @@ describe('dpdp command', () => {
       expect(out).toMatch(/recordsErased\s+2/);
       expect(out).toMatch(/grantsRevoked\s+1/);
       expect(out).toMatch(/delegatedGrantsRevoked\s+0/);
-      expect(out).toMatch(/grievancesRedacted\s+1/);
+      expect(out).toMatch(/grievancesRedacted\s+0/);
       expect(out).toMatch(/exportsDeleted\s+0/);
       expect(out).toContain('consent_records (2)');
       expect(out).toContain('audit_log');
+      expect(out).toContain('stored_exports (1)');
       expect(out).toContain('fiduciary_data');
       expect(out).toContain('DPDP Rules 2025 r.8(3)');
     });
@@ -824,7 +834,9 @@ describe('dpdp command', () => {
       const parsed = JSON.parse(vi.mocked(console.log).mock.calls[0]![0] as string) as Json;
       expect(parsed.requestId).toBe(REQUEST_ID);
       expect(parsed.recordsErased).toBe(2);
-      expect(parsed.retained).toHaveLength(4);
+      expect((parsed.retained as Array<{ category: string }>).map((r) => r.category)).toEqual(
+        ['consent_records', 'audit_log', 'grievances', 'stored_exports', 'fiduciary_data'],
+      );
     });
   });
 

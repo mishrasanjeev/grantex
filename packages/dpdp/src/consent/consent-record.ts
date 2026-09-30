@@ -30,6 +30,11 @@ function failure(fallback: string, code: string) {
 // Local-only evidence
 // ---------------------------------------------------------------------------
 
+/** The proof's `keyPersistence`, when the server sent a known value (older servers omit it). */
+function keyPersistenceOf(value: unknown): 'persistent' | 'ephemeral' | undefined {
+  return value === 'persistent' || value === 'ephemeral' ? value : undefined;
+}
+
 function hashIpAddress(ip: string): string {
   return createHash('sha256').update(ip).digest('hex');
 }
@@ -149,6 +154,7 @@ export async function createConsentRecord(
       type: proof.type as 'JWS-EdDSA',
       alg: proof.alg as string,
       kid: str(proof.kid) ?? null,
+      ...opt('keyPersistence', keyPersistenceOf(proof.keyPersistence)),
       proofJwt: proof.proofJwt as string,
       jwksUri: proof.jwksUri as string,
       signedAt: toDate(proof.signedAt) as Date,
