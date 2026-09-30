@@ -1,3 +1,4 @@
+import { config } from '../config.js';
 import { getSql, type TxSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
 import { emitEvent } from './events.js';
@@ -86,6 +87,48 @@ export async function revokeGrantInTx(
   // reported it, because the promise's rejection was swallowed.
   await revokeVCsByGrantIds(revokedIds, developerId, tx);
   return { grantId, rows: [grant, ...descendantRows] };
+}
+
+/**
+ * Revoke one active grant, and nothing else, inside the caller's
+ * transaction: no delegated grant, wallet reservation or credential is
+ * touched. Returns null when the grant was not active. The result goes to
+ * `publishGrantRevocation` after the commit like `revokeGrantInTx`'s. Takes
+ * the same developer grant lock, so it orders with the cascade.
+ */
+export async function revokeGrantRootOnlyInTx(
+  tx: TxSql,
+  grantId: string,
+  developerId: string,
+): Promise<RevokedGrantTree | null> {
+  await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
+  const rows = await tx`
+    UPDATE grants
+    SET status = 'revoked', revoked_at = NOW()
+    WHERE id = ${grantId}
+      AND developer_id = ${developerId}
+      AND status = 'active'
+    RETURNING id, expires_at
+  `;
+  const grant = rows[0];
+  if (!grant) return null;
+  return { grantId, rows: [grant] };
+}
+
+/**
+ * The revocation a DPDP route or worker makes (a withdrawal with
+ * `revokeGrant`, an erasure, an expiry): the record's grant only, as these
+ * paths always did, or with DPDP_REVOCATION_CASCADE=true the full cascade of
+ * `revokeGrantInTx`.
+ */
+export function revokeDpdpGrantInTx(
+  tx: TxSql,
+  grantId: string,
+  developerId: string,
+): Promise<RevokedGrantTree | null> {
+  return config.dpdpRevocationCascade
+    ? revokeGrantInTx(tx, grantId, developerId)
+    : revokeGrantRootOnlyInTx(tx, grantId, developerId);
 }
 
 /**

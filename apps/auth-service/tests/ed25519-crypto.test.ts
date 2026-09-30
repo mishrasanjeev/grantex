@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
-  initKeys, initEdKey, getEdKeyPair, buildJwks, signWithEd25519,
+  initKeys, initEdKey, getEdKeyPair, getEdKeyPersistence, buildJwks, signWithEd25519,
 } from '../src/lib/crypto.js';
 import { jwtVerify, generateKeyPair, exportPKCS8 } from 'jose';
 import { config } from '../src/config.js';
@@ -122,11 +122,13 @@ describe('initEdKey with PEM import', () => {
         algorithms: ['EdDSA'],
       });
       expect(payload['pemTest']).toBe(true);
+      expect(getEdKeyPersistence()).toBe('persistent');
     } finally {
       // Reset config so other tests are not affected
       (config as { ed25519PrivateKey: string | null }).ed25519PrivateKey = null;
       // Re-initialize with auto-generated key
       await initEdKey();
     }
+    expect(getEdKeyPersistence()).toBe('ephemeral');
   });
 });

@@ -53,7 +53,7 @@ See `docs/self-hosting.md` for the full operator runbook.
 
 - **Backups:** WAL-archive backups recommended per the Cloud SQL default policy on hosted; operator-defined on self-hosted. A formal backup/restore runbook is **TBD** as a follow-up doc.
 - **Retention:** audit-log retention is operator-configurable; defaults documented in `apps/auth-service/src/config.ts`.
-- **Deletion:** DPDP erasure flow (`/v1/dpdp/data-principals/:id/erasure`) and consent withdrawal flows are implemented in `apps/auth-service/src/routes/dpdp.ts`. Erasure revokes the principal's active grants, marks the consent records erased (they are retained as evidence of consent), redacts grievance text and deletes stored exports about the principal; audit entries are retained unmodified, since they form a tamper-evident hash chain.
+- **Deletion:** DPDP erasure flow (`/v1/dpdp/data-principals/:id/erasure`) and consent withdrawal flows are implemented in `apps/auth-service/src/routes/dpdp.ts`. Erasure revokes the principal's active grants, marks the consent records erased (they are retained as evidence of consent), and, with `DPDP_ERASURE_EXPANDED=true`, redacts grievance text and deletes stored exports about the principal (otherwise the response lists them as retained); audit entries are retained unmodified, since they form a tamper-evident hash chain.
 
 ## Contact
 

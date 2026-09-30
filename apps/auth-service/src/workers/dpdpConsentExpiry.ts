@@ -4,15 +4,23 @@
  * An active record past `processing_expires_at` is marked `expired`, with a
  * `grantex.dpdp.consent_expired` entry on the developer's audit chain and a
  * `dpdp.consent.expired` event. With DPDP_CONSENT_EXPIRY_REVOKES_GRANT=true
- * the record's grant, and the grants delegated from it, are revoked in the
- * same transaction (lib/revoke.ts), the revocation cache and `grant.revoked`
- * following the commit.
+ * the record's grant is revoked in the same transaction (with
+ * DPDP_REVOCATION_CASCADE=true also the grants delegated from it;
+ * lib/revoke.ts), the revocation cache and `grant.revoked` following the
+ * commit.
  *
- * Runs only with DPDP_CONSENT_EXPIRY_ENABLED=true (index.ts). A run takes the
- * developers with due records one at a time, each in its own transaction, a
- * bounded batch per developer, rows claimed with FOR UPDATE SKIP LOCKED so
- * several instances never expire the same record twice. A failed batch is
- * logged and retried next interval; it never throws into the service.
+ * Runs only with DPDP_CONSENT_EXPIRY_ENABLED=true (index.ts). A run takes up
+ * to maxDevelopers developers with due records, one at a time, each in its
+ * own transaction, a bounded batch per developer, rows claimed with FOR
+ * UPDATE SKIP LOCKED so several instances never expire the same record
+ * twice. Developers are taken in developer_id order from a rotating cursor
+ * that resumes after the last developer of the previous run and wraps to the
+ * start, so a developer with more due records than one batch cannot keep
+ * the others waiting: every developer with due records is reached within
+ * ceil(due developers / maxDevelopers) runs. The cursor is per process; with
+ * several instances each rotates on its own, which only adds coverage. A
+ * failed batch is logged and retried next interval; it never throws into
+ * the service.
  */
 import type postgres from 'postgres';
 import { config } from '../config.js';
@@ -20,7 +28,7 @@ import type { TxSql } from '../db/client.js';
 import { appendPlatformAuditEntries, lockAuditChain } from '../lib/audit-chain.js';
 import { emitEvent } from '../lib/events.js';
 import { logger, type AppLogger } from '../lib/logger.js';
-import { publishGrantRevocation, revokeGrantInTx, type RevokedGrantTree } from '../lib/revoke.js';
+import { publishGrantRevocation, revokeDpdpGrantInTx, type RevokedGrantTree } from '../lib/revoke.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -39,6 +47,39 @@ export interface ExpiryRunResult {
 }
 
 let timer: NodeJS.Timeout | null = null;
+/** The last developer_id handled by the previous run; the next run starts after it. */
+let developerCursor: string | null = null;
+
+/** Restart the developer rotation from the first developer_id. */
+export function resetDpdpConsentExpiryCursor(): void {
+  developerCursor = null;
+}
+
+/**
+ * Up to `max` developers with due records, in developer_id order, starting
+ * after `cursor` and wrapping to the start.
+ */
+async function dueDevelopers(sql: Sql, cursor: string | null, max: number): Promise<string[]> {
+  const after = await sql<{ developer_id: string }[]>`
+    SELECT DISTINCT developer_id FROM dpdp_consent_records
+    WHERE status = 'active' AND processing_expires_at <= NOW()
+      ${cursor !== null ? sql`AND developer_id > ${cursor}` : sql``}
+    ORDER BY developer_id
+    LIMIT ${max}
+  `;
+  const developers = after.map((row) => row.developer_id);
+  if (cursor !== null && developers.length < max) {
+    const wrapped = await sql<{ developer_id: string }[]>`
+      SELECT DISTINCT developer_id FROM dpdp_consent_records
+      WHERE status = 'active' AND processing_expires_at <= NOW()
+        AND developer_id <= ${cursor}
+      ORDER BY developer_id
+      LIMIT ${max - developers.length}
+    `;
+    developers.push(...wrapped.map((row) => row.developer_id));
+  }
+  return developers;
+}
 
 interface DeveloperBatch {
   trees: RevokedGrantTree[];
@@ -73,7 +114,7 @@ async function expireForDeveloper(
     const grantRevoked = new Map<string, boolean>();
     if (revokeGrants) {
       for (const grantId of [...new Set(rows.map((row) => row['grant_id'] as string))].sort()) {
-        const tree = await revokeGrantInTx(tx, grantId, developerId);
+        const tree = await revokeDpdpGrantInTx(tx, grantId, developerId);
         grantRevoked.set(grantId, tree !== null);
         if (tree) batch.trees.push(tree);
       }
@@ -106,12 +147,10 @@ export async function expireConsentRecordsOnce(
 
   let developers: string[];
   try {
-    const due = await sql<{ developer_id: string }[]>`
-      SELECT DISTINCT developer_id FROM dpdp_consent_records
-      WHERE status = 'active' AND processing_expires_at <= NOW()
-      LIMIT ${maxDevelopers}
-    `;
-    developers = due.map((row) => row.developer_id).sort();
+    developers = await dueDevelopers(sql, developerCursor, maxDevelopers);
+    // The next run resumes after the last developer taken now (or from the
+    // start when none was due), whatever happens to this run's batches.
+    developerCursor = developers.length > 0 ? developers[developers.length - 1]! : null;
   } catch (err) {
     log.error({ err }, 'DPDP consent expiry could not list due records; it runs again next interval');
     return result;

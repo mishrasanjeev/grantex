@@ -886,11 +886,15 @@ components:
         totalRecords:
           type: integer
           description: Every record matching the filter, across all pages.
-        nextCursor: { type: [string, "null"] }
+        nextCursor:
+          type: [string, "null"]
+          description: >-
+            Pass as cursor for the next page; null when no further record
+            exists or when the call returned every matching record.
 
     DpdpConsentProof:
       type: object
-      required: [type, alg, kid, proofJwt, jwksUri, signedAt]
+      required: [type, alg, kid, keyPersistence, proofJwt, jwksUri, signedAt]
       properties:
         type:
           type: string
@@ -898,6 +902,14 @@ components:
           description: A compact JWS (RFC 7515) signed with EdDSA over Ed25519 (RFC 8037). Formerly labelled Ed25519Signature2020.
         alg: { type: string, enum: [EdDSA] }
         kid: { type: string, description: The key in the JWKS at jwksUri. }
+        keyPersistence:
+          type: string
+          enum: [persistent, ephemeral]
+          description: >-
+            persistent when the configured ED25519_PRIVATE_KEY signed the
+            proof; ephemeral when the serving process generated its key at
+            boot, in which case the proof is not verifiable across instances
+            or restarts.
         proofJwt:
           type: string
           description: >-
@@ -936,7 +948,7 @@ components:
         dataPrincipalId: { type: string }
         recordId: { type: [string, "null"] }
         type: { type: string }
-        description: { type: string, description: Replaced by a fixed marker once the principal is erased. }
+        description: { type: string, description: Replaced by a fixed marker once the principal is erased with DPDP_ERASURE_EXPANDED=true. }
         evidence: { type: object }
         status: { type: string, enum: [submitted, in_review, resolved, rejected] }
         referenceNumber: { type: string }
@@ -1134,9 +1146,15 @@ components:
         grantsRevoked:
           type: integer
           description: The principal's grants this request revoked; only grants that were active are counted.
-        delegatedGrantsRevoked: { type: integer }
-        grievancesRedacted: { type: integer }
-        exportsDeleted: { type: integer }
+        delegatedGrantsRevoked:
+          type: integer
+          description: 0 unless the server sets DPDP_REVOCATION_CASCADE=true.
+        grievancesRedacted:
+          type: integer
+          description: 0 unless the server sets DPDP_ERASURE_EXPANDED=true.
+        exportsDeleted:
+          type: integer
+          description: 0 unless the server sets DPDP_ERASURE_EXPANDED=true.
         retained:
           type: array
           description: What was kept rather than erased, and why.
@@ -1144,7 +1162,12 @@ components:
             type: object
             required: [category, reason]
             properties:
-              category: { type: string, enum: [consent_records, audit_log, grievances, fiduciary_data] }
+              category:
+                type: string
+                enum: [consent_records, audit_log, grievances, stored_exports, fiduciary_data]
+                description: >-
+                  stored_exports appears only without DPDP_ERASURE_EXPANDED=true,
+                  when stored exports about the principal are kept.
               count: { type: integer }
               reason: { type: string }
         submittedAt: { type: string, format: date-time }
@@ -9382,9 +9405,12 @@ paths:
       tags: [DPDP]
       summary: List DPDP consent records
       description: >-
-        Newest first, one page at a time. totalRecords counts every record
-        matching the filter. A developer read: it does not change accessCount
-        or lastAccessedAt.
+        Newest first. Without limit or cursor, as before pagination: the
+        newest 100 records unfiltered (nextCursor set when there are more) and
+        every matching record with dataPrincipalId (nextCursor null). With
+        limit or cursor, one page at a time (default 50, at most 200).
+        totalRecords counts every record matching the filter. A developer
+        read: it does not change accessCount or lastAccessedAt.
       security:
         - bearerAuth: []
       parameters:
@@ -9393,6 +9419,7 @@ paths:
           schema: { type: string, maxLength: 256 }
         - name: limit
           in: query
+          description: Page size once paging; sending limit or cursor turns paging on.
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
         - name: cursor
           in: query
@@ -9400,7 +9427,7 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: One page of consent records
+          description: Consent records
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpConsentRecordPage" }
@@ -9417,7 +9444,9 @@ paths:
         The grant must be the developer's and active. With
         DPDP_ENFORCE_GRANT_PRINCIPAL=true, dataPrincipalId must be the grant's
         principal. The record carries a JWS-EdDSA consent proof without an
-        expiry; when the proof cannot be signed no record is created (503).
+        expiry and says whether its key is persistent; when the proof cannot
+        be signed, or the key is ephemeral and the server sets
+        DPDP_REQUIRE_PERSISTENT_PROOF_KEY=true, no record is created (503).
       security:
         - bearerAuth: []
       requestBody:
@@ -9466,7 +9495,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }
         "503":
-          description: CONSENT_PROOF_UNAVAILABLE; nothing was stored
+          description: CONSENT_PROOF_UNAVAILABLE or CONSENT_PROOF_KEY_NOT_PERSISTENT; nothing was stored
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }
@@ -9502,10 +9531,13 @@ paths:
       tags: [DPDP]
       summary: Withdraw consent
       description: >-
-        One transaction: the active record is withdrawn, the grant and its
-        delegated grants are revoked through the grant cascade when
-        revokeGrant is true (the default when the server sets
+        One transaction: the active record is withdrawn, the record's grant is
+        revoked when revokeGrant is true (the default when the server sets
         DPDP_WITHDRAWAL_REVOKES_GRANT=true), and an audit entry is appended.
+        Only the record's own grant is revoked, as before, unless the server
+        sets DPDP_REVOCATION_CASCADE=true, when its delegated grants,
+        credentials and wallet reservations are revoked through the grant
+        cascade too.
         deleteProcessedData emits dpdp.data_deletion.requested to the
         developer; Grantex deletes nothing itself, so dataDeleted is false.
       security:
@@ -9566,7 +9598,10 @@ paths:
       operationId: listDpdpPrincipalRecords
       tags: [DPDP]
       summary: List a data principal's consent records
-      description: A developer read without side effects; newest first, paginated.
+      description: >-
+        A developer read without side effects; newest first. Without limit or
+        cursor, every record of the principal, as before (nextCursor null);
+        with limit or cursor, one page at a time (default 50, at most 200).
       security:
         - bearerAuth: []
       parameters:
@@ -9576,6 +9611,7 @@ paths:
           schema: { type: string }
         - name: limit
           in: query
+          description: Page size once paging; sending limit or cursor turns paging on.
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
         - name: cursor
           in: query
@@ -9583,7 +9619,7 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: One page of the principal's consent records
+          description: The principal's consent records
           content:
             application/json:
               schema:
@@ -10052,12 +10088,14 @@ paths:
       tags: [DPDP]
       summary: Erase a data principal
       description: >-
-        One transaction: revokes the principal's active grants (with their
-        delegated grants), marks consent records erased (retained), redacts
-        grievance text, deletes stored exports about the principal and stores
-        the request. retained says what is kept and why. A repeat for a
-        principal with nothing left to erase returns the completed request
-        with 200.
+        One transaction: revokes the still-active grants of the principal's
+        records (only those grants, as before; with DPDP_REVOCATION_CASCADE=true
+        their delegated grants too), marks consent records erased (retained)
+        and stores the request. With DPDP_ERASURE_EXPANDED=true it also
+        redacts grievance text and deletes stored exports about the principal;
+        without it both are kept and listed in retained. retained says what
+        is kept and why. A repeat for a principal with nothing left to erase
+        returns the completed request with 200.
       security:
         - bearerAuth: []
       parameters:

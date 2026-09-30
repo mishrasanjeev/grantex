@@ -30,7 +30,7 @@ Requires a developer API key in the `Authorization` header.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `limit` | `integer` | No | Page size, 1 to 200 (default 50) |
+| `limit` | `integer` | No | Page size, 1 to 200 (default 50 once paging). Sending `limit` or `cursor` turns paging on |
 | `cursor` | `string` | No | The `nextCursor` of the previous page |
 
 ## Example Request
@@ -83,6 +83,10 @@ curl https://api.grantex.dev/v1/dpdp/data-principals/user_abc123/records \
 | `records` | `object[]` | One page of consent records, newest first |
 | `totalRecords` | `number` | Total number of the principal's records, across all pages |
 | `nextCursor` | `string \| null` | Pass as `cursor` for the next page; `null` on the last page |
+
+Without `limit` or `cursor` every record of the principal is returned, as
+before, and `nextCursor` is `null`. Sending `limit` or `cursor` pages: 50
+records by default and at most 200.
 
 ### Record Object
 
