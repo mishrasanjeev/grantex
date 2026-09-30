@@ -33,7 +33,7 @@ CR_SERVICE="grantex-auth"         → us-central1
 A multi-region offering (EU and India) is on the public roadmap (`ROADMAP.md`, item "Managed Cloud"). **It is not available today.** Until then:
 
 - Customers with EU data-residency obligations under GDPR should evaluate the self-hosting option below.
-- Customers with DPDP Act (India) "significant data fiduciary" obligations may require self-hosting to keep data within India. See `docs/compliance/dpdp-act-2023.mdx` for the technical control mapping.
+- Customers designated as Significant Data Fiduciaries under the DPDP Act (India) may be required to keep specified personal data within India where the Central Government specifies it (DPDP Rules 2025 r.13(4), from 13 May 2027); self-hosting is one way to do that. The DPDP Act otherwise restricts transfers only to countries the Government notifies (s.16), not by general localisation. See `docs/compliance/dpdp-act-2023.mdx` for the technical control mapping.
 
 ## Self-hosted Grantex — operator-chosen residency
 

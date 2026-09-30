@@ -1,34 +1,50 @@
 ---
 title: "DPDP & GDPR Compliance"
 sidebarTitle: "DPDP / GDPR"
-description: "India DPDP Act 2023 and EU GDPR compliance module for AI agent deployments — consent records, purpose limitation, grievances, and audit exports."
+description: "DPDP Act 2023 and GDPR evidence tooling for AI agent deployments: consent records bound to grants, versioned notices, withdrawal, erasure, grievances, a breach register and exports."
 ---
 
 <Info>Full feature guide: [DPDP Compliance](/features/dpdp-compliance) | Regulatory reference: [DPDP Act 2023](/compliance/dpdp-act-2023)</Info>
 
 ## Overview
 
-The Grantex DPDP module provides structured compliance tooling for AI agent deployments under the India Digital Personal Data Protection Act 2023 and the EU GDPR. It manages consent records, purpose limitation, right to withdrawal, grievance handling, and audit-ready exports.
+The Grantex DPDP routes help a Data Fiduciary keep evidence for its obligations under India's Digital Personal Data Protection Act 2023 and the DPDP Rules 2025, and answer GDPR access requests, for AI agent deployments. They are a technical control, not legal advice: Grantex is not a registered Consent Manager and does not notify the Data Protection Board or data principals on your behalf. Most DPDP obligations apply from 13 May 2027.
 
 ### Key Capabilities
 
-- **Consent records** — link consent to grants with purpose codes, processing expiry, and retention periods
-- **Consent notices** — versioned, content-hashed notices with grievance officer details
-- **Right to withdrawal** — withdraw consent with optional grant revocation and a data deletion request to your application
-- **Grievance filing** — structured grievance workflow with reference numbers and SLA tracking
-- **Compliance exports** — DPDP audit, GDPR Article 15, and EU AI Act conformance reports
+- **Consent records** bind a data principal's consent to an active grant and a versioned consent notice, with a signed proof (JWS, EdDSA)
+- **Consent notices** are versioned per language and content-hashed; a `validation` block reports which DPDP Rules 2025 r.3 elements a notice carries
+- **Withdrawal** marks the record withdrawn, can revoke the record's grant (the full grant cascade with `DPDP_REVOCATION_CASCADE=true`), and can emit a `dpdp.data_deletion.requested` webhook to your application
+- **Erasure** revokes the principal's grants, marks records erased, and reports what is retained and why; with `DPDP_ERASURE_EXPANDED=true` it also redacts grievances and deletes stored exports
+- **Grievances** carry a reference number, the response period you publish (1 to 90 days) as `responsePeriodDays`, an `expectedResolutionBy` date, and a `submitted` -> `in_review` -> `resolved` or `rejected` workflow. Grantex computes and stores these dates; meeting them is your process
+- **Breach register** records breaches and computes `boardDetailedReportDueAt` (awareness + 72 hours, or a granted extension), tracks principal intimations, and emits deadline webhooks
+- **Exports**: `dpdp-audit`, `gdpr-article-15` (with a per-person Art. 15 block), and the `eu-ai-act-evidence` pack
 
 ## API Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/v1/dpdp/consent-records` | Create consent record |
-| `POST` | `/v1/dpdp/consent-records/:id/withdraw` | Withdraw consent |
-| `GET` | `/v1/dpdp/data-principals/:id/records` | Data principal access |
-| `POST` | `/v1/dpdp/consent-notices` | Create consent notice |
-| `POST` | `/v1/dpdp/grievances` | File grievance |
-| `GET` | `/v1/dpdp/grievances/:id` | Get grievance status |
-| `POST` | `/v1/dpdp/exports` | Generate compliance export |
+| `POST` | `/v1/dpdp/consent-records` | [Create consent record](/api-reference/dpdp/create-consent-record) |
+| `GET` | `/v1/dpdp/consent-records` | [List consent records](/api-reference/dpdp/list-consent-records) (pages when `limit` or `cursor` is sent) |
+| `GET` | `/v1/dpdp/consent-records/:recordId` | [Get consent record](/api-reference/dpdp/get-consent-record) |
+| `POST` | `/v1/dpdp/consent-records/:recordId/withdraw` | [Withdraw consent](/api-reference/dpdp/withdraw-consent) |
+| `GET` | `/v1/dpdp/data-principals/:principalId/records` | [List a principal's records](/api-reference/dpdp/list-principal-records) |
+| `POST` | `/v1/dpdp/data-principals/:principalId/erasure` | [Request erasure](/api-reference/dpdp/request-erasure) |
+| `GET` | `/v1/dpdp/erasure-requests/:requestId` | [Get erasure request](/api-reference/dpdp/get-erasure-request) |
+| `POST` | `/v1/dpdp/consent-notices` | [Create consent notice](/api-reference/dpdp/create-consent-notice) |
+| `GET` | `/v1/dpdp/consent-notices` | [List consent notices](/api-reference/dpdp/list-consent-notices) |
+| `GET` | `/v1/dpdp/consent-notices/:noticeId` | [Get consent notice](/api-reference/dpdp/get-consent-notice) (every version) |
+| `POST` | `/v1/dpdp/grievances` | [File grievance](/api-reference/dpdp/file-grievance) |
+| `GET` | `/v1/dpdp/grievances` | [List grievances](/api-reference/dpdp/list-grievances) |
+| `GET` | `/v1/dpdp/grievances/:grievanceId` | [Get grievance](/api-reference/dpdp/get-grievance) |
+| `PATCH` | `/v1/dpdp/grievances/:grievanceId` | [Update grievance](/api-reference/dpdp/update-grievance) |
+| `POST` | `/v1/dpdp/breaches` | [Record breach](/api-reference/dpdp/record-breach) |
+| `GET` | `/v1/dpdp/breaches` | [List breaches](/api-reference/dpdp/list-breaches) |
+| `GET` | `/v1/dpdp/breaches/:breachId` | [Get breach](/api-reference/dpdp/get-breach) |
+| `PATCH` | `/v1/dpdp/breaches/:breachId` | [Update breach](/api-reference/dpdp/update-breach) |
+| `POST` | `/v1/dpdp/breaches/:breachId/principal-intimations` | [Record principal intimation](/api-reference/dpdp/record-breach-intimation) |
+| `POST` | `/v1/dpdp/exports` | [Create export](/api-reference/dpdp/create-export) |
+| `GET` | `/v1/dpdp/exports/:exportId` | [Get export](/api-reference/dpdp/get-export) |
 
 ## Links
 

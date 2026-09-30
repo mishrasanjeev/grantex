@@ -39,7 +39,7 @@ curl https://api.grantex.dev/v1/dpdp/grievances/grv_01HXYZ... \
 {
   "grievanceId": "grv_01HXYZ...",
   "dataPrincipalId": "user_abc123",
-  "recordId": "cr_01HXYZ...",
+  "recordId": "crec_01HXYZ...",
   "type": "unauthorized-processing",
   "description": "Data was processed beyond the consented purposes",
   "evidence": {
@@ -47,7 +47,7 @@ curl https://api.grantex.dev/v1/dpdp/grievances/grv_01HXYZ... \
     "timestamp": "2026-04-04T10:00:00.000Z"
   },
   "status": "submitted",
-  "referenceNumber": "GRV-2026-00042",
+  "referenceNumber": "GRV-2026-01JAB3XK7Q9M2V5W8Y0Z4C6D1E",
   "expectedResolutionBy": "2026-04-12T14:00:00.000Z",
   "responsePeriodDays": 7,
   "resolvedAt": null,
@@ -91,12 +91,12 @@ fixed marker instead of the original text.
 <CodeGroup>
 
 ```typescript TypeScript
-import Grantex from '@grantex/sdk';
+import { Grantex } from '@grantex/sdk';
 
 const grantex = new Grantex({ apiKey: 'gx_...' });
 
 const grievance = await grantex.dpdp.getGrievance('grv_01HXYZ...');
-// grievance.status → "submitted" | "in-progress" | "resolved" | "rejected"
+// grievance.status → "submitted" | "in_review" | "resolved" | "rejected"
 ```
 
 ```python Python

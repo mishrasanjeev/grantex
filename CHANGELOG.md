@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### DPDP and EU AI Act documentation
+- Rewrote `docs/features/dpdp-compliance.mdx` to document the shipped DPDP
+  routes (the page described a `DPDPClient` API that does not exist), and
+  `docs/compliance/dpdp-act-2023.mdx` against the DPDP Act 2023 and the final
+  DPDP Rules 2025 (G.S.R. 846(E)): commencement on 13 November 2025,
+  13 November 2026 and 13 May 2027, a corrected section and rule mapping
+  (withdrawal s.6(4), cease processing s.6(6), grievances s.8(10) and s.13
+  with a published period of at most 90 days, access s.11, erasure s.12,
+  cross-border s.16 as a negative list), the one-year retention floors, and
+  why Grantex is not a Consent Manager.
+- Corrected `docs/compliance/eu-ai-act.mdx` to Regulation (EU) 2024/1689 as
+  amended by Regulation (EU) 2026/1744: exact dates, provider and deployer
+  duties, Art. 50 (not recorded by Grantex), Art. 73 timelines, the Art. 99
+  penalty tiers, and code examples that compile against `@grantex/sdk`.
+- API reference: named `Grantex` import, Python params dataclasses, real id
+  formats (`crec_`, `notice_`, `GRV-YYYY-<ULID>`, `ER-YYYY-<ULID>`), statuses
+  and legal citations. The integration page lists every DPDP route; the blog
+  post of 2026-04-03 carries a dated correction; README and CLI examples use
+  the required options.
+
 ### DPDP exports: EU AI Act evidence pack and per-person GDPR Art. 15 (auth service)
 - New export type `eu-ai-act-evidence` (`POST /v1/dpdp/exports`): structured
   sections mapped to Regulation (EU) 2024/1689 as amended by Regulation (EU)

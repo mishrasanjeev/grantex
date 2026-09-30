@@ -5,7 +5,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3%2B-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
-**DPDP Act 2023 & EU AI Act compliance module for AI agents using the [Grantex](https://grantex.dev) authorization protocol.**
+**DPDP Act 2023 and EU AI Act evidence helpers for AI agents using the [Grantex](https://grantex.dev) authorization protocol. A technical control mapping, not legal advice or a certification.**
 
 ---
 
@@ -41,27 +41,34 @@
 
 ## What is @grantex/dpdp?
 
-India's **Digital Personal Data Protection Act, 2023** (DPDP Act) and the **EU AI Act** impose
-strict requirements on how personal data is collected, processed, and governed — especially when
-AI agents act on behalf of humans.
+India's **Digital Personal Data Protection Act, 2023** (DPDP Act), with the **DPDP Rules 2025**,
+and the **EU AI Act** (Regulation (EU) 2024/1689, as amended by Regulation (EU) 2026/1744) set
+requirements on how personal data is collected and processed and how AI systems are governed,
+including when AI agents act on behalf of people. Most DPDP obligations apply from
+13 May 2027; the EU AI Act applies in stages (Art. 50 from 2 August 2026, Annex III high-risk
+obligations from 2 December 2027).
 
-`@grantex/dpdp` bridges the Grantex delegated authorization protocol with these regulations. It
-provides a purpose-linked consent management layer, grievance redressal, data principal rights
-enforcement, and machine-readable compliance exports that satisfy both Indian and European
-regulatory requirements.
+`@grantex/dpdp` connects the Grantex delegated authorization protocol to the Grantex DPDP API.
+It provides purpose-linked consent records, grievance records, data principal rights requests,
+and machine-readable exports that can help a Data Fiduciary or AI system operator evidence some
+of its obligations. It does not by itself meet any regulation: Grantex is not a registered
+Consent Manager, does not notify the Data Protection Board or data principals, and does not
+perform conformity assessments. See the
+[DPDP mapping](https://docs.grantex.dev/compliance/dpdp-act-2023) and the
+[EU AI Act mapping](https://docs.grantex.dev/compliance/eu-ai-act).
 
 ### Key capabilities
 
 | Capability | Description |
 |---|---|
-| **Consent Records** | Consent records linked to Grantex grants, each with a server-signed consent proof (JWS, EdDSA) |
-| **Purpose Enforcement** | Runtime checks that grant scopes satisfy declared processing purposes |
-| **Consent Withdrawal** | Immediate withdrawal with optional grant revocation and data deletion |
-| **Grievance Redressal** | File and track grievances per DPDP Act Section 13 |
-| **Data Principal Rights** | Access (Section 11) and erasure (Section 12) APIs |
-| **DPDP Audit Export** | Structured export for Data Protection Board of India submissions |
-| **GDPR Article 15 Export** | Machine-readable data subject access request response |
-| **EU AI Act Conformance** | Conformance report covering Articles 9-15, 26, and 50 |
+| **Consent Records** | Consent records linked to Grantex grants; the server signs a consent proof (JWS, EdDSA) over each |
+| **Purpose Checks** | Client-side checks that grant scopes cover declared processing purposes (the server does not enforce purposes) |
+| **Consent Withdrawal** | Withdrawal with optional grant revocation and a data-deletion request to your application by webhook (Grantex deletes none of your data) |
+| **Grievance Records** | Record grievances and their due dates (DPDP Act s.13) |
+| **Data Principal Rights** | Access (s.11) and erasure (s.12) requests; the DPDP Act has no portability right |
+| **DPDP Audit Export** | Structured export of consent records, audit entries and grievances (not a format prescribed by the Board) |
+| **GDPR Article 15 Export** | Machine-readable input to a data subject access response, covering what Grantex holds |
+| **EU AI Act Export** | Records mapped to EU AI Act articles; not a conformity assessment |
 | **Region Configuration** | India (IN) and EU region-specific settings |
 
 ---
@@ -72,31 +79,31 @@ regulatory requirements.
 
 | DPDP Section | Requirement | @grantex/dpdp Feature |
 |---|---|---|
-| Section 4 | Processing for lawful purpose | `enforcePurpose()` — runtime scope-to-purpose check |
-| Section 5 (DPDP Rules 2025 r.3) | Notice to data principal | `createConsentNotice()` — versioned, hashed notices |
-| Section 6 | Consent | `createConsentRecord()` — server-signed consent proof (JWS, EdDSA) |
-| Section 6(4), 6(6) | Withdrawal of consent; cease processing | `withdrawConsent()` — immediate, with grant revocation |
-| Section 8(7) | Retention limitation | `retentionUntil` field on consent records |
-| Section 11 | Right to information | `getDataPrincipalRecords()` — access API |
+| Section 4 | Processing for lawful purpose | `enforcePurpose()` — client-side scope-to-purpose check |
+| Section 5 (Rules r.3) | Notice to data principal | `createConsentNotice()` — versioned, hashed notices |
+| Section 6, 6(10) | Consent and proof of consent | `createConsentRecord()` — the server signs a consent proof |
+| Section 6(4), 6(6) | Withdrawal; cease processing | `withdrawConsent()` — optional grant revocation; stopping processing in your systems is yours |
+| Section 8(7) | Erasure when consent is withdrawn or the purpose is served | `retentionUntil` is recorded only; Grantex deletes nothing when it passes |
+| Section 11 | Right to access | `getDataPrincipalRecords()` — records Grantex holds |
 | Section 12 | Right to correction & erasure | `requestDataErasure()` — erasure request |
-| Section 13 | Grievance redressal | `fileGrievance()` — response-period tracking (7-day product default; the published period may be at most 90 days, DPDP Rules 2025 r.14(3)) |
-| DPDP Rules 2025 r.6(1)(e), r.8(3) | Log retention | `requestDpdpExport()` — audit trail export |
+| Section 13 (Rules r.14(3)) | Grievance redressal | `fileGrievance()` — records the grievance and a due date; the fiduciary publishes a period of up to 90 days |
+| Section 8(5); DPDP Rules 2025 r.6(1)(e), r.8(3) | Security safeguards; one-year log retention | `requestDpdpExport()` — audit trail export |
 
 ### EU AI Act Mapping
 
 | EU AI Act Article | Requirement | @grantex/dpdp Feature |
 |---|---|---|
-| Article 9 | Risk management | Covered in conformance report |
-| Article 10 | Data governance | Purpose limitation + consent records |
-| Article 11 | Technical documentation | Export includes system documentation |
-| Article 12 | Record-keeping | Full audit trail with action logs |
-| Article 13 | Transparency | Consent notices with purpose descriptions |
-| Article 14 | Human oversight | Consent withdrawal with grant revocation (`withdrawConsent()`) |
-| Article 15 | Accuracy & security | EdDSA-signed consent proofs, SHA-256 notice hashes |
-| Article 26 | Deployer obligations | Compliance exports for deployers |
-| Article 50 | Transparency obligations for providers and deployers of certain AI systems | Covered in conformance report |
+| Article 9 | Risk management (high-risk providers) | Not provided; grants and scopes are controls you can cite |
+| Article 10 | Data governance | Not provided |
+| Article 11 | Technical documentation | Not provided; exports can be annexed as records |
+| Article 12 | Record-keeping | Audit trail of authorisation events, not the AI system's own logs |
+| Article 13 | Transparency to deployers | Not provided |
+| Article 14 | Human oversight | Consent method and grant records |
+| Article 15 | Accuracy & security | Signed consent proofs and SHA-256 notice hashes support integrity |
+| Article 26 | Deployer obligations | Exports as records for deployers |
+| Article 50 | Transparency obligations for certain AI systems (applies from 2 August 2026) | Not recorded; GPAI model obligations are Arts. 53-55 |
 
-### GDPR Cross-Compliance
+### GDPR Mapping
 
 | GDPR Article | Requirement | @grantex/dpdp Feature |
 |---|---|---|
@@ -137,7 +144,7 @@ await createConsentNotice({
   dataFiduciaryContact: 'privacy@merchant.example',
   grievanceOfficer: { name: 'Grievance Officer', email: 'grievance@merchant.example', phone: '+91-00000-00000' },
   apiKey: process.env.GRANTEX_API_KEY!,
-  baseUrl: 'https://auth.grantex.dev',
+  baseUrl: 'https://api.grantex.dev',
 });
 
 const record = await createConsentRecord({
@@ -199,7 +206,7 @@ const confirmation = await withdrawConsent(
     revokeGrant: true,           // Also revoke the Grantex grant token
     deleteProcessedData: true,   // Request data deletion
     apiKey: process.env.GRANTEX_API_KEY!,
-    baseUrl: 'https://auth.grantex.dev',
+    baseUrl: 'https://api.grantex.dev',
   },
 );
 
@@ -223,7 +230,7 @@ const grievance = await fileGrievance(
     responsePeriodDays: 7,                // optional, 1..90; server default 7
   },
   process.env.GRANTEX_API_KEY!,
-  'https://auth.grantex.dev',
+  'https://api.grantex.dev',
 );
 
 console.log(grievance.referenceNumber);       // 'GRV-2026-...', assigned by the server
@@ -266,7 +273,7 @@ const gdpr = await requestGdprExport(
   baseUrl,
 );
 
-// EU AI Act conformance report
+// EU AI Act export (evidence for your own assessment)
 const euAiAct = await requestEuAiActExport(
   {
     dateFrom: new Date('2026-01-01'),
@@ -476,8 +483,9 @@ lowercase hex characters drawn from a cryptographically strong source (64 bits o
 
 #### `calculateExpectedResolution(fromDate?: Date, days?: number): Date`
 
-Calculate an expected resolution date: `days` calendar days (default 7, a product default rather
-than a statutory period) after the given date.
+Calculate an expected resolution date: `days` calendar days (default 7) after the given date.
+Seven days is a product default, not a statutory period: under DPDP Rules 2025 r.14(3) the
+fiduciary publishes its own response period, of at most 90 days.
 
 ---
 
@@ -493,7 +501,7 @@ Request a GDPR Article 15 data subject access request export.
 
 #### `requestEuAiActExport(params, apiKey, baseUrl): Promise<ComplianceExportResult>`
 
-Request an EU AI Act conformance report covering all defined articles.
+Request an EU AI Act export (`eu-ai-act-conformance`) mapped to the defined articles. It is evidence for your own assessment, not a conformity assessment.
 
 #### `getExportStatus(exportId, apiKey, baseUrl): Promise<ComplianceExportResult>`
 
@@ -507,7 +515,7 @@ there is no download URL.
 
 #### `EU_AI_ACT_ARTICLES`
 
-Constant array of EU AI Act articles covered by the conformance report:
+Constant array of EU AI Act articles the export is mapped to:
 
 | Article | Title |
 |---|---|
@@ -520,6 +528,10 @@ Constant array of EU AI Act articles covered by the conformance report:
 | 15 | Accuracy, Robustness, Cybersecurity |
 | 26 | Obligations of Deployers |
 | 50 | Transparency Obligations for Providers and Deployers of Certain AI Systems |
+
+The Article 50 label in this constant is inaccurate: Art. 50 sets transparency obligations for
+certain AI systems (disclosure of AI interaction, marking of generated content), while
+general-purpose AI model obligations are in Arts. 53-55.
 
 ---
 
@@ -730,9 +742,10 @@ This ensures that any modification to the notice text after consent was given is
 
 ### Immutability
 
-Consent records are immutable after creation. The `ConsentRegistry` enforces this by freezing
-records and rejecting duplicate registrations. Withdrawal creates a new state transition
-rather than modifying the original record.
+The in-memory `ConsentRegistry` freezes the records it holds and rejects duplicate
+registrations. On the server, withdrawal, expiry and erasure update the record's status and
+timestamps in place; the history of those changes is kept in the developer's hash-chained audit
+log, which Grantex never rewrites.
 
 ### Data Isolation
 
