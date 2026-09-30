@@ -16,33 +16,15 @@ function makeRecord(overrides?: Partial<DPDPConsentRecord>): DPDPConsentRecord {
     recordId: 'rec_001',
     grantId: 'grant_abc',
     dataPrincipalId: 'principal_1',
-    dataFiduciaryId: 'fid_1',
     dataFiduciaryName: 'Acme Corp',
-    purposes: [
-      {
-        purposeId: 'p1',
-        name: 'Email Access',
-        description: 'Read and send emails',
-        legalBasis: 'consent',
-        dataCategories: ['email'],
-        retentionPeriod: '1 year',
-        thirdPartySharing: false,
-      },
-    ],
+    purposes: [{ code: 'p1', description: 'Read and send emails' }],
     scopes: ['email:read'],
     consentNoticeId: 'notice_1',
-    consentNoticeHash: 'hash123',
     consentGivenAt: new Date('2026-01-01T00:00:00Z'),
-    consentMethod: 'explicit-click',
     processingExpiresAt: new Date('2027-01-01T00:00:00Z'),
     retentionUntil: new Date('2028-01-01T00:00:00Z'),
-    consentProof: {
-      signedAt: new Date('2026-01-01T00:00:00Z'),
-      signature: '',
-    },
     status: 'active',
     accessCount: 0,
-    actions: [],
     ...overrides,
   };
 }
@@ -151,38 +133,26 @@ describe('security', () => {
     const rawIp = '192.168.1.100';
     const expectedHash = createHash('sha256').update(rawIp).digest('hex');
 
+    // The 201 body of POST /v1/dpdp/consent-records.
     const serverResponse = {
       recordId: 'rec_pii',
       grantId: 'grant_abc',
       dataPrincipalId: 'principal_1',
-      dataFiduciaryId: 'fid_1',
-      dataFiduciaryName: 'Acme Corp',
-      purposes: [
-        {
-          purposeId: 'p1',
-          name: 'Test',
-          description: 'Test purpose',
-          legalBasis: 'consent',
-          dataCategories: ['test'],
-          retentionPeriod: '1 year',
-          thirdPartySharing: false,
-        },
-      ],
-      scopes: ['test:read'],
       consentNoticeId: 'notice_1',
+      consentNoticeVersion: '1.0',
       consentNoticeHash: 'hash',
-      consentGivenAt: new Date().toISOString(),
-      consentMethod: 'explicit-click',
+      consentProof: {
+        type: 'JWS-EdDSA',
+        alg: 'EdDSA',
+        kid: null,
+        proofJwt: 'h.p.s',
+        jwksUri: 'https://api.test.local/.well-known/jwks.json',
+        signedAt: new Date().toISOString(),
+      },
       processingExpiresAt: new Date(Date.now() + 86400000).toISOString(),
       retentionUntil: new Date(Date.now() + 86400000 * 365).toISOString(),
-      consentProof: {
-        ipAddress: expectedHash,
-        signedAt: new Date().toISOString(),
-        signature: 'sig',
-      },
       status: 'active',
-      accessCount: 0,
-      actions: [],
+      createdAt: new Date().toISOString(),
     };
 
     vi.stubGlobal(
@@ -201,7 +171,17 @@ describe('security', () => {
       dataPrincipalId: 'principal_1',
       dataFiduciaryId: 'fid_1',
       dataFiduciaryName: 'Acme Corp',
-      purposes: serverResponse.purposes as DPDPConsentRecord['purposes'],
+      purposes: [
+        {
+          purposeId: 'p1',
+          name: 'Test',
+          description: 'Test purpose',
+          legalBasis: 'consent',
+          dataCategories: ['test'],
+          retentionPeriod: '1 year',
+          thirdPartySharing: false,
+        },
+      ],
       scopes: ['test:read'],
       consentNoticeId: 'notice_1',
       consentNoticeContent: 'Test notice',
@@ -213,15 +193,17 @@ describe('security', () => {
       baseUrl: 'https://api.test.local',
     });
 
-    // The body sent to the API should contain the hashed IP, not the raw IP
+    // Neither the raw IP nor its hash is sent: the server does not read
+    // client-side proof fields.
     const fetchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-    const body = JSON.parse(fetchCall[1].body);
+    const sentBody = fetchCall[1].body as string;
+    expect(sentBody).not.toContain(rawIp);
+    expect(JSON.parse(sentBody).consentProof).toBeUndefined();
 
-    expect(body.consentProof.ipAddress).toBe(expectedHash);
-    expect(body.consentProof.ipAddress).not.toBe(rawIp);
-
-    // The ipAddress in the returned record should also be the hash
-    expect(record.consentProof.ipAddress).toBe(expectedHash);
+    // The hash (never the raw IP) is kept as local evidence on the result.
+    expect(record.localEvidence!.ipAddressHash).toBe(expectedHash);
+    expect(record.localEvidence!.ipAddressHash).not.toBe(rawIp);
+    expect(JSON.stringify(record)).not.toContain(rawIp);
   });
 
   it('consent withdrawal cannot be undone via API', async () => {

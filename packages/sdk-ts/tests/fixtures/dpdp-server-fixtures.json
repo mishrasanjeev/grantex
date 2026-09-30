@@ -1,0 +1,282 @@
+{
+  "_source": "Response bodies exactly as apps/auth-service/src/routes/dpdp.ts (branch fix/dpdp-server-correctness, 590873e5) sends them. Keys, nesting and absent/null fields match the route code; ids use the server id formats (lib/ids.ts).",
+  "createConsentRecord_201": {
+    "recordId": "crec_01J9ZB4Y7Q2M8N3P5R6S7T8V9W",
+    "grantId": "grnt_01J9ZB3X6P1L7M2N4Q5R6S7T8V",
+    "dataPrincipalId": "user_123",
+    "consentNoticeId": "privacy-notice",
+    "consentNoticeVersion": "2.0",
+    "consentNoticeHash": "9f2c1e7a4b3d5c6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6",
+    "consentProof": {
+      "type": "JWS-EdDSA",
+      "alg": "EdDSA",
+      "kid": "ed25519-2026-09",
+      "keyPersistence": "persistent",
+      "proofJwt": "eyJhbGciOiJFZERTQSIsImtpZCI6ImVkMjU1MTktMjAyNi0wOSJ9.eyJyZWNvcmRJZCI6ImNyZWNfMDFKOVpCNFk3UTJNOE4zUDVSNlM3VDhWOVcifQ.c2lnbmF0dXJl",
+      "jwksUri": "https://issuer.example/.well-known/jwks.json",
+      "signedAt": "2026-09-30T10:15:00.000Z"
+    },
+    "processingExpiresAt": "2027-09-30T00:00:00.000Z",
+    "retentionUntil": "2027-10-30T00:00:00.000Z",
+    "status": "active",
+    "createdAt": "2026-09-30T10:15:00.000Z"
+  },
+  "consentRecord_200": {
+    "recordId": "crec_01J9ZB4Y7Q2M8N3P5R6S7T8V9W",
+    "grantId": "grnt_01J9ZB3X6P1L7M2N4Q5R6S7T8V",
+    "dataPrincipalId": "user_123",
+    "dataFiduciaryName": "Acme Health",
+    "purposes": [
+      { "code": "analytics", "description": "Usage analytics for service improvement" },
+      { "code": "personalization", "description": "Personalized recommendations" }
+    ],
+    "scopes": ["read:profile", "write:preferences"],
+    "consentNoticeId": "privacy-notice",
+    "consentNoticeVersion": "2.0",
+    "status": "active",
+    "consentGivenAt": "2026-09-30T10:15:00.000Z",
+    "processingExpiresAt": "2027-09-30T00:00:00.000Z",
+    "retentionUntil": "2027-10-30T00:00:00.000Z",
+    "accessCount": 0,
+    "lastAccessedAt": null,
+    "withdrawnAt": null,
+    "withdrawnReason": null,
+    "erasedAt": null,
+    "createdAt": "2026-09-30T10:15:00.000Z"
+  },
+  "consentRecord_erased_legacy_200": {
+    "_note": "An erased record written before consent_notice_version existed: consentNoticeVersion is null.",
+    "recordId": "crec_01J9Z0AAAAAAAAAAAAAAAAAAAA",
+    "grantId": "grnt_01J9Z0BBBBBBBBBBBBBBBBBBBB",
+    "dataPrincipalId": "user_123",
+    "dataFiduciaryName": "Acme Health",
+    "purposes": [{ "code": "analytics", "description": "Usage analytics for service improvement" }],
+    "scopes": ["read:profile"],
+    "consentNoticeId": "privacy-notice",
+    "consentNoticeVersion": null,
+    "status": "erased",
+    "consentGivenAt": "2026-06-01T08:00:00.000Z",
+    "processingExpiresAt": "2027-06-01T00:00:00.000Z",
+    "retentionUntil": "2027-07-01T00:00:00.000Z",
+    "accessCount": 3,
+    "lastAccessedAt": "2026-07-01T09:00:00.000Z",
+    "withdrawnAt": "2026-09-29T12:00:00.000Z",
+    "withdrawnReason": "Data erasure request",
+    "erasedAt": "2026-09-29T12:00:00.000Z",
+    "createdAt": "2026-06-01T08:00:00.000Z"
+  },
+  "listConsentRecords_200": {
+    "_query": "GET /v1/dpdp/consent-records?dataPrincipalId=&limit=(1..200, default 50)&cursor=  (paginates only when limit or cursor is sent; without either: the newest 100 unfiltered, every match filtered by dataPrincipalId, nextCursor null)",
+    "records": ["<consentRecord_200>", "<consentRecord_erased_legacy_200>"],
+    "totalRecords": 7,
+    "nextCursor": "eyJ0IjoiMjAyNi0wNi0wMSAwODowMDowMCswMCIsImlkIjoiY3JlY18wMUo5WjBBQUFBQUFBQUFBQUFBQUFBQUFBQSJ9"
+  },
+  "principalRecords_200": {
+    "_query": "GET /v1/dpdp/data-principals/{principalId}/records?limit=&cursor=  (paginates only when limit or cursor is sent; without either: every record of the principal, nextCursor null)",
+    "_note": "Each record has the consentRecord_200 shape. Older servers omitted dataPrincipalId per record: clients must tolerate its absence (fall back to the top-level dataPrincipalId).",
+    "dataPrincipalId": "user_123",
+    "records": ["<consentRecord_200>"],
+    "totalRecords": 1,
+    "nextCursor": null
+  },
+  "withdrawConsent_200": {
+    "recordId": "crec_01J9ZB4Y7Q2M8N3P5R6S7T8V9W",
+    "status": "withdrawn",
+    "withdrawnAt": "2026-09-30T11:00:00.000Z",
+    "grantRevoked": true,
+    "dataDeleted": false,
+    "dataDeletionRequested": true
+  },
+  "createConsentNotice_201": {
+    "id": "notice_01J9ZA1B2C3D4E5F6G7H8J9K0M",
+    "noticeId": "privacy-notice",
+    "version": "2.0",
+    "language": "en",
+    "contentHash": "9f2c1e7a4b3d5c6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6",
+    "createdAt": "2026-09-30T09:00:00.000Z"
+  },
+  "listConsentNotices_200": {
+    "_query": "GET /v1/dpdp/consent-notices?limit=&cursor=  (no totalRecords on this route)",
+    "notices": [
+      {
+        "id": "notice_01J9ZA1B2C3D4E5F6G7H8J9K0M",
+        "noticeId": "privacy-notice",
+        "version": "2.0",
+        "language": "en",
+        "title": "Data Processing Consent Notice",
+        "contentHash": "9f2c1e7a4b3d5c6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6",
+        "createdAt": "2026-09-30T09:00:00.000Z"
+      }
+    ],
+    "nextCursor": null
+  },
+  "getConsentNotice_200": {
+    "_query": "GET /v1/dpdp/consent-notices/{noticeId} -> every version, newest first",
+    "noticeId": "privacy-notice",
+    "versions": [
+      {
+        "id": "notice_01J9ZA1B2C3D4E5F6G7H8J9K0M",
+        "version": "2.0",
+        "language": "en",
+        "title": "Data Processing Consent Notice",
+        "content": "We collect and process your data for the following purposes...",
+        "purposes": [{ "code": "analytics", "description": "Usage analytics for service improvement" }],
+        "dataFiduciaryContact": "privacy@acme.example",
+        "grievanceOfficer": { "name": "Grievance Officer", "email": "grievance@acme.example", "phone": "+91-00000-00000" },
+        "contentHash": "9f2c1e7a4b3d5c6e8f0a1b2c3d4e5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6",
+        "createdAt": "2026-09-30T09:00:00.000Z"
+      },
+      {
+        "id": "notice_01J9Z9ZZZZZZZZZZZZZZZZZZZZ",
+        "version": "1.0",
+        "language": "en",
+        "title": "Data Processing Consent Notice",
+        "content": "Earlier text",
+        "purposes": [{ "code": "analytics", "description": "Usage analytics" }],
+        "dataFiduciaryContact": null,
+        "grievanceOfficer": null,
+        "contentHash": "1111111111111111111111111111111111111111111111111111111111111111",
+        "createdAt": "2026-08-01T09:00:00.000Z"
+      }
+    ]
+  },
+  "fileGrievance_202": {
+    "grievanceId": "grv_01J9ZC5D6E7F8G9H0J1K2M3N4P",
+    "referenceNumber": "GRV-2026-01J9ZC5D6E7F8G9H0J1K2M3N4Q",
+    "type": "unauthorized-processing",
+    "status": "submitted",
+    "responsePeriodDays": 7,
+    "expectedResolutionBy": "2026-10-07T12:00:00.000Z",
+    "createdAt": "2026-09-30T12:00:00.000Z"
+  },
+  "listGrievances_200": {
+    "_query": "GET /v1/dpdp/grievances?status=(submitted|in_review|resolved|rejected)&dataPrincipalId=&limit=&cursor=  (no totalRecords; no description/evidence in list items)",
+    "grievances": [
+      {
+        "grievanceId": "grv_01J9ZC5D6E7F8G9H0J1K2M3N4P",
+        "dataPrincipalId": "user_123",
+        "recordId": null,
+        "type": "unauthorized-processing",
+        "status": "submitted",
+        "referenceNumber": "GRV-2026-01J9ZC5D6E7F8G9H0J1K2M3N4Q",
+        "expectedResolutionBy": "2026-10-07T12:00:00.000Z",
+        "responsePeriodDays": 7,
+        "resolvedAt": null,
+        "resolution": null,
+        "createdAt": "2026-09-30T12:00:00.000Z",
+        "updatedAt": null
+      }
+    ],
+    "nextCursor": null
+  },
+  "getGrievance_200": {
+    "grievanceId": "grv_01J9ZC5D6E7F8G9H0J1K2M3N4P",
+    "dataPrincipalId": "user_123",
+    "recordId": "crec_01J9ZB4Y7Q2M8N3P5R6S7T8V9W",
+    "type": "unauthorized-processing",
+    "description": "My data was used for marketing without consent",
+    "evidence": { "screenshots": ["https://files.example.com/s1.png"] },
+    "status": "in_review",
+    "referenceNumber": "GRV-2026-01J9ZC5D6E7F8G9H0J1K2M3N4Q",
+    "expectedResolutionBy": "2026-10-07T12:00:00.000Z",
+    "responsePeriodDays": 7,
+    "resolvedAt": null,
+    "resolution": null,
+    "createdAt": "2026-09-30T12:00:00.000Z",
+    "updatedAt": "2026-10-01T08:00:00.000Z"
+  },
+  "updateGrievance_200": {
+    "_request": "PATCH /v1/dpdp/grievances/{grievanceId} body {status: 'in_review'|'resolved'|'rejected', resolution: string (required for resolved/rejected)}; submitted->in_review->resolved|rejected; 409 INVALID_TRANSITION otherwise",
+    "grievanceId": "grv_01J9ZC5D6E7F8G9H0J1K2M3N4P",
+    "dataPrincipalId": "user_123",
+    "recordId": "crec_01J9ZB4Y7Q2M8N3P5R6S7T8V9W",
+    "type": "unauthorized-processing",
+    "description": "My data was used for marketing without consent",
+    "evidence": {},
+    "status": "resolved",
+    "referenceNumber": "GRV-2026-01J9ZC5D6E7F8G9H0J1K2M3N4Q",
+    "expectedResolutionBy": "2026-10-07T12:00:00.000Z",
+    "responsePeriodDays": 7,
+    "resolvedAt": "2026-10-02T09:30:00.000Z",
+    "resolution": "Marketing processing stopped and the data principal informed",
+    "createdAt": "2026-09-30T12:00:00.000Z",
+    "updatedAt": "2026-10-02T09:30:00.000Z"
+  },
+  "createExport_201": {
+    "_note": "No status, dateFrom/dateTo or downloadUrl on POST. format is always 'json'. dataPrincipalId is null unless the export was filtered.",
+    "exportId": "exp_01J9ZD6E7F8G9H0J1K2M3N4P5Q",
+    "type": "dpdp-audit",
+    "format": "json",
+    "recordCount": 3,
+    "truncated": false,
+    "auditLogLimit": 1000,
+    "dataPrincipalId": null,
+    "data": {
+      "exportType": "dpdp-audit",
+      "dateRange": { "from": "2026-09-01T00:00:00.000Z", "to": "2026-09-30T23:59:59.999Z" },
+      "generatedAt": "2026-09-30T13:00:00.000Z",
+      "developerId": "dev_01J9Z000000000000000000000",
+      "consentRecords": [],
+      "auditLog": [],
+      "grievances": [],
+      "truncated": false,
+      "auditLogLimit": 1000
+    },
+    "expiresAt": "2026-10-07T13:00:00.000Z",
+    "createdAt": "2026-09-30T13:00:00.000Z"
+  },
+  "getExport_200": {
+    "_note": "410 GONE once expired (data purged). status is 'complete' (never 'completed').",
+    "exportId": "exp_01J9ZD6E7F8G9H0J1K2M3N4P5Q",
+    "type": "dpdp-audit",
+    "dateFrom": "2026-09-01T00:00:00.000Z",
+    "dateTo": "2026-09-30T23:59:59.999Z",
+    "format": "json",
+    "status": "complete",
+    "recordCount": 1001,
+    "truncated": true,
+    "auditLogLimit": 1000,
+    "dataPrincipalId": "user_123",
+    "data": { "exportType": "dpdp-audit", "truncated": true, "auditLogLimit": 1000 },
+    "expiresAt": "2026-10-07T13:00:00.000Z",
+    "createdAt": "2026-09-30T13:00:00.000Z"
+  },
+  "erasure_201": {
+    "_note": "POST /v1/dpdp/data-principals/{principalId}/erasure takes no body. 201 when it erased something, 200 with the previous request when there was nothing left to erase (idempotent). 404 NOT_FOUND when the principal has no records. GET /v1/dpdp/erasure-requests/{requestId} returns the same shape. Without DPDP_ERASURE_EXPANDED=true (the default) grievances are kept unredacted and stored exports are kept (retained category stored_exports, present only then), so grievancesRedacted and exportsDeleted are 0.",
+    "requestId": "ER-2026-01J9ZE7F8G9H0J1K2M3N4P5Q6R",
+    "dataPrincipalId": "user_123",
+    "status": "completed",
+    "recordsErased": 2,
+    "grantsRevoked": 1,
+    "delegatedGrantsRevoked": 0,
+    "grievancesRedacted": 0,
+    "exportsDeleted": 0,
+    "retained": [
+      { "category": "consent_records", "count": 2, "reason": "Kept and marked erased, not deleted: the Data Fiduciary bears the burden of proving that consent was given (DPDP Act s.6(10)), and DPDP Rules 2025 r.8(3) require processing logs and associated data to be retained for at least one year." },
+      { "category": "audit_log", "reason": "Audit entries are neither modified nor deleted: DPDP Rules 2025 r.6(1)(e) and r.8(3) require logs to be retained for at least one year, and the entries form a tamper-evident hash chain." },
+      { "category": "grievances", "count": 1, "reason": "Kept unchanged, description and evidence included, as the record of grievance handling (DPDP Act s.13). Expanded erasure is not enabled on this deployment (DPDP_ERASURE_EXPANDED), so they were not redacted." },
+      { "category": "stored_exports", "count": 1, "reason": "Stored compliance exports about the data principal are kept until they expire, seven days after creation. Expanded erasure is not enabled on this deployment (DPDP_ERASURE_EXPANDED), so they were not deleted." },
+      { "category": "fiduciary_data", "reason": "Grantex holds no personal data the Data Fiduciary processed under these consents; erasing it in the fiduciary's own systems and its processors' (DPDP Act s.8(7)) remains the fiduciary's step." }
+    ],
+    "submittedAt": "2026-09-30T14:00:00.000Z",
+    "completedAt": "2026-09-30T14:00:00.120Z",
+    "expectedCompletionBy": "2026-09-30T14:00:00.120Z"
+  },
+  "errors": {
+    "_shape": "Every DPDP route error body is {message, code, requestId}. (Auth/rate-limit errors from plugins use {error, code, statusCode}.)",
+    "400_BAD_REQUEST": { "message": "purposes must be a non-empty array of { code, description }", "code": "BAD_REQUEST", "requestId": "req-7f3a" },
+    "400_INVALID_GRANT": { "message": "Grant not found or not owned by developer", "code": "INVALID_GRANT", "requestId": "req-7f3b" },
+    "400_PRINCIPAL_MISMATCH": { "message": "dataPrincipalId must be the grant's principal", "code": "PRINCIPAL_MISMATCH", "requestId": "req-7f3c" },
+    "400_INVALID_NOTICE": { "message": "Consent notice not found", "code": "INVALID_NOTICE", "requestId": "req-7f3d" },
+    "400_INVALID_RECORD": { "message": "Consent record not found", "code": "INVALID_RECORD", "requestId": "req-7f3e" },
+    "404_NOT_FOUND": { "message": "Consent record not found", "code": "NOT_FOUND", "requestId": "req-7f3f" },
+    "409_ALREADY_WITHDRAWN": { "message": "Consent already withdrawn", "code": "ALREADY_WITHDRAWN", "requestId": "req-7f40" },
+    "409_CONSENT_ERASED": { "message": "Consent record was erased", "code": "CONSENT_ERASED", "requestId": "req-7f41" },
+    "409_CONSENT_EXPIRED": { "message": "Consent record has expired", "code": "CONSENT_EXPIRED", "requestId": "req-7f42" },
+    "409_CONFLICT": { "message": "Notice version already exists", "code": "CONFLICT", "requestId": "req-7f43" },
+    "409_INVALID_TRANSITION": { "message": "A grievance cannot move from resolved to in_review", "code": "INVALID_TRANSITION", "requestId": "req-7f44" },
+    "410_GONE": { "message": "Export has expired and its data was purged", "code": "GONE", "requestId": "req-7f45" },
+    "503_CONSENT_PROOF_UNAVAILABLE": { "message": "The consent proof could not be signed; no consent record was created", "code": "CONSENT_PROOF_UNAVAILABLE", "requestId": "req-7f46" },
+    "503_CONSENT_PROOF_KEY_NOT_PERSISTENT": { "message": "The consent proof key is not persistent (ED25519_PRIVATE_KEY is not set); no consent record was created", "code": "CONSENT_PROOF_KEY_NOT_PERSISTENT", "requestId": "req-7f47" }
+  }
+}

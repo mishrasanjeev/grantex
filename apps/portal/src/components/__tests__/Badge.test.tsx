@@ -51,4 +51,11 @@ describe('Badge', () => {
     render(<Badge>small</Badge>);
     expect(screen.getByText('small')).toHaveClass('text-xs');
   });
+
+  it('applies info variant styles', () => {
+    render(<Badge variant="info">in review</Badge>);
+    const el = screen.getByText('in review');
+    expect(el).toHaveClass('bg-gx-accent2/15');
+    expect(el).toHaveClass('text-gx-accent2');
+  });
 });

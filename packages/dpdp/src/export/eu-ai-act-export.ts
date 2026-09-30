@@ -6,11 +6,12 @@
  * for AI systems operating under Grantex authorization.
  */
 
-import type { ComplianceExportRequest, ComplianceExportResult } from '../types.js';
-import { ExportError } from '../errors.js';
+import type { ComplianceExportResult } from '../types.js';
+import { requestExport, type ExportParams } from './request.js';
 
 /**
- * EU AI Act articles covered by the conformance report.
+ * EU AI Act (Regulation (EU) 2024/1689) articles covered by the conformance report.
+ * General-purpose AI model obligations are in Articles 53-55, not Article 50.
  */
 export const EU_AI_ACT_ARTICLES = [
   { article: '9', title: 'Risk Management System', description: 'Risk identification and mitigation for high-risk AI systems' },
@@ -21,7 +22,11 @@ export const EU_AI_ACT_ARTICLES = [
   { article: '14', title: 'Human Oversight', description: 'Human oversight measures for high-risk AI systems' },
   { article: '15', title: 'Accuracy, Robustness, Cybersecurity', description: 'Accuracy levels, resilience, and security measures' },
   { article: '26', title: 'Obligations of Deployers', description: 'Deployer responsibilities for high-risk AI systems' },
-  { article: '50', title: 'Transparency for GPAI', description: 'Transparency obligations for general-purpose AI' },
+  {
+    article: '50',
+    title: 'Transparency Obligations for Providers and Deployers of Certain AI Systems',
+    description: 'Disclosure when people interact with an AI system, marking of synthetic content, and disclosure of deep fakes and emotion recognition',
+  },
 ] as const;
 
 /**
@@ -30,45 +35,9 @@ export const EU_AI_ACT_ARTICLES = [
  * `POST /v1/dpdp/exports` with `type: 'eu-ai-act-conformance'`
  */
 export async function requestEuAiActExport(
-  params: Omit<ComplianceExportRequest, 'type'>,
+  params: ExportParams,
   apiKey: string,
   baseUrl: string,
 ): Promise<ComplianceExportResult> {
-  const body: ComplianceExportRequest = {
-    ...params,
-    type: 'eu-ai-act-conformance',
-  };
-
-  const res = await fetch(`${baseUrl}/v1/dpdp/exports`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      ...body,
-      dateFrom: body.dateFrom.toISOString(),
-      dateTo: body.dateTo.toISOString(),
-    }),
-  });
-
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({})) as Record<string, unknown>;
-    throw new ExportError(
-      (errBody.message as string) ?? `EU AI Act export failed (${res.status})`,
-    );
-  }
-
-  const data = (await res.json()) as Record<string, unknown>;
-  return {
-    exportId: data.exportId as string,
-    type: data.type as string,
-    status: data.status as ComplianceExportResult['status'],
-    recordCount: data.recordCount as number,
-    data: data.data,
-    ...(data.downloadUrl !== undefined ? { downloadUrl: data.downloadUrl as string } : {}),
-    ...(data.downloadExpiresAt !== undefined
-      ? { downloadExpiresAt: new Date(data.downloadExpiresAt as string) }
-      : {}),
-  };
+  return requestExport('eu-ai-act-conformance', params, apiKey, baseUrl, 'EU AI Act');
 }

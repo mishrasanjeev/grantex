@@ -174,19 +174,20 @@ export class HttpClient {
 
         const message = extractErrorMessage(responseBody, response.status);
         const errorCode = extractErrorCode(responseBody);
+        const errorRequestId = requestId ?? extractRequestId(responseBody);
 
         if (response.status === 401 || response.status === 403) {
           throw new GrantexAuthError(
             message,
             response.status as 401 | 403,
             responseBody,
-            requestId,
+            errorRequestId,
             errorCode,
             this.#lastRateLimit,
           );
         }
 
-        throw new GrantexApiError(message, response.status, responseBody, requestId, errorCode, this.#lastRateLimit);
+        throw new GrantexApiError(message, response.status, responseBody, errorRequestId, errorCode, this.#lastRateLimit);
       }
 
       if (response.status === 204) {
@@ -225,6 +226,14 @@ export class HttpClient {
   #sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+}
+
+// Error bodies such as the DPDP routes' {message, code, requestId} carry the
+// request id in the body; the x-request-id header wins when both are present.
+function extractRequestId(body: unknown): string | undefined {
+  if (body === null || typeof body !== 'object') return undefined;
+  const value = (body as Record<string, unknown>)['requestId'];
+  return typeof value === 'string' ? value : undefined;
 }
 
 function extractErrorCode(body: unknown): string | undefined {
