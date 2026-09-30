@@ -1919,7 +1919,9 @@ grantex dpdp consent create --grant-id grnt_... --principal-id user@example.com 
 grantex dpdp consent get <recordId>
 grantex dpdp consent list --principal user@example.com
 grantex dpdp consent withdraw <recordId> --reason "No longer needed"
-grantex dpdp notices create --notice-id privacy-v1 --notice-version 1.0 --title "Privacy Notice"   --content "We process your data for..." --purposes '[{"code":"analytics","description":"Usage analytics"}]'
+# Consent notices: @grantex/cli 0.4.1 cannot create them (its notice --version option is taken by the
+# CLI's own --version flag); use the API until the next CLI release adds `notices create --notice-version`:
+curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices -H "Authorization: Bearer $GRANTEX_API_KEY" -H "Content-Type: application/json" -d '{"noticeId":"privacy-v1","version":"1.0","title":"Privacy Notice","content":"We process your data for...","purposes":[{"code":"analytics","description":"Usage analytics"}]}'
 grantex dpdp grievances file --principal-id user@example.com --type unauthorized-processing   --description "Data used beyond the consented purpose"
 grantex dpdp grievances get <grievanceId>
 grantex dpdp erasure user@example.com
