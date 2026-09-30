@@ -911,6 +911,105 @@ components:
           deprecated: true
           description: Equal to completedAt.
 
+    DpdpBreach:
+      type: object
+      description: >-
+        A personal data breach in the fiduciary's register (DPDP Act s.8(6);
+        DPDP Rules 2025 r.7). Grantex computes the deadlines and records what
+        the fiduciary says it sent; it does not intimate principals or file
+        with the Board.
+      required: [breachId, status, description, nature, extent, awareAt, affectedCount,
+                 boardDetailedReportDueAt, boardDetailedReportOverdue, principalIntimationRequired]
+      properties:
+        breachId: { type: string }
+        status: { type: string, enum: [open, initial_intimated, reported, closed] }
+        description: { type: string }
+        nature: { type: string }
+        extent: { type: string }
+        occurredAt: { type: [string, "null"], format: date-time }
+        awareAt: { type: string, format: date-time }
+        location: { type: [string, "null"] }
+        likelyImpact: { type: [string, "null"] }
+        affectedCount: { type: integer, minimum: 0 }
+        affectedDataPrincipalIds:
+          type: array
+          items: { type: string }
+          description: On the single-breach read and the create and update responses; not in the list.
+        mitigation: { type: [string, "null"] }
+        detailedReport: { $ref: "#/components/schemas/DpdpBreachDetailedReport" }
+        boardInitialIntimationRequired:
+          type: boolean
+          description: Always true; the initial intimation to the Board is due without delay (r.7(2)).
+        boardInitialIntimationSentAt: { type: [string, "null"], format: date-time }
+        boardDetailedReportDueAt:
+          type: string
+          format: date-time
+          description: awareAt + 72 hours (r.7(2)(b)), or extension.newDueAt once an extension is granted.
+        boardDetailedReportSentAt: { type: [string, "null"], format: date-time }
+        boardDetailedReportOverdue: { type: boolean, description: Not sent and past boardDetailedReportDueAt. }
+        boardDetailedReportLate: { type: boolean, description: Sent after boardDetailedReportDueAt. }
+        extension:
+          type: [object, "null"]
+          properties:
+            requestedAt: { type: [string, "null"], format: date-time }
+            granted: { type: [boolean, "null"], description: Null while the request is undecided. }
+            newDueAt: { type: [string, "null"], format: date-time }
+        principalIntimationRequired:
+          type: boolean
+          description: Always true; each affected Data Principal is to be intimated without delay (r.7(1)).
+        principalIntimation: { $ref: "#/components/schemas/DpdpBreachIntimationSummary" }
+        principalIntimations:
+          type: array
+          description: The newest 200 intimations, on GET /v1/dpdp/breaches/{breachId}.
+          items: { $ref: "#/components/schemas/DpdpBreachIntimation" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: [string, "null"], format: date-time }
+        closedAt: { type: [string, "null"], format: date-time }
+
+    DpdpBreachDetailedReport:
+      type: object
+      description: The detailed report to the Board (DPDP Rules 2025 r.7(2)(b)). All five are needed to move to reported.
+      properties:
+        updatedDetails: { type: [string, "null"], maxLength: 5000 }
+        factsCircumstancesReasons: { type: [string, "null"], maxLength: 5000 }
+        mitigation: { type: [string, "null"], maxLength: 5000 }
+        causeFindings: { type: [string, "null"], maxLength: 5000, description: Findings about the person who caused the breach. }
+        remedialMeasures: { type: [string, "null"], maxLength: 5000 }
+
+    DpdpBreachIntimationSummary:
+      type: object
+      properties:
+        due: { type: string, enum: [without_delay] }
+        intimatedCount: { type: integer, description: Distinct principals recorded as intimated. }
+        pendingCount:
+          type: [integer, "null"]
+          description: Listed affected principals not yet intimated; null when the breach recorded only a count.
+        lastIntimatedAt: { type: [string, "null"], format: date-time }
+
+    DpdpBreachIntimation:
+      type: object
+      properties:
+        intimationId: { type: string }
+        channel: { type: string }
+        intimatedAt: { type: string, format: date-time }
+        principalCount: { type: integer }
+        contentIncluded:
+          type: array
+          items: { $ref: "#/components/schemas/DpdpBreachIntimationContent" }
+        contentMissing:
+          type: array
+          items: { $ref: "#/components/schemas/DpdpBreachIntimationContent" }
+        createdAt: { type: string, format: date-time }
+
+    DpdpBreachIntimationContent:
+      type: string
+      description: >-
+        The r.7(1)(a)-(e) elements of an intimation to a Data Principal:
+        description (nature, extent, timing and location), likely
+        consequences, mitigation, safety measures the principal can take,
+        and contact information.
+      enum: [description, likely_consequences, mitigation, safety_measures, contact]
+
     PrepaidWallet:
       type: object
       required: [walletId, principalId, name, custodyMode, network, asset, decimals, availableAmount, reservedAmount, lowBalanceThreshold, maxBalance, maxReloadAmount, reloadCumulativeLimit, reloadPeriodSeconds, reloadCountLimit, status]
@@ -9654,6 +9753,238 @@ paths:
               schema: { $ref: "#/components/schemas/DpdpErasureRequest" }
         "404":
           description: Erasure request not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+
+  /v1/dpdp/breaches:
+    get:
+      operationId: listDpdpBreaches
+      tags: [DPDP]
+      summary: List breaches
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, initial_intimated, reported, closed] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: cursor
+          in: query
+          description: The nextCursor of the previous page.
+          schema: { type: string }
+      responses:
+        "200":
+          description: One page of breaches (without affectedDataPrincipalIds), newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [breaches, nextCursor]
+                properties:
+                  breaches:
+                    type: array
+                    items: { $ref: "#/components/schemas/DpdpBreach" }
+                  nextCursor: { type: [string, "null"] }
+        "400":
+          description: Unknown status, invalid limit or cursor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+    post:
+      operationId: recordDpdpBreach
+      tags: [DPDP]
+      summary: Record a personal data breach
+      description: >-
+        Records a breach in the register (DPDP Act s.8(6); DPDP Rules 2025
+        r.7) with status open, and emits dpdp.breach.recorded and
+        dpdp.breach.principal_intimation_due. The Board's detailed report is
+        due 72 hours after awareAt. Grantex sends nothing to principals or
+        the Board.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [description, nature, extent]
+              description: One of affectedDataPrincipalIds and affectedCount is required.
+              properties:
+                description: { type: string, maxLength: 5000 }
+                nature: { type: string, maxLength: 1000 }
+                extent: { type: string, maxLength: 5000 }
+                occurredAt: { type: string, format: date-time, description: Not in the future and not after awareAt. }
+                awareAt: { type: string, format: date-time, description: When the fiduciary became aware. Default now; not in the future. }
+                location: { type: string, maxLength: 1000 }
+                likelyImpact: { type: string, maxLength: 5000 }
+                affectedDataPrincipalIds:
+                  type: array
+                  maxItems: 10000
+                  items: { type: string, maxLength: 256 }
+                affectedCount:
+                  type: integer
+                  minimum: 0
+                  description: Defaults to the number of affectedDataPrincipalIds and may not be smaller.
+                mitigation: { type: string, maxLength: 5000 }
+      responses:
+        "201":
+          description: Breach recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpBreach" }
+        "400":
+          description: BAD_REQUEST
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+
+  /v1/dpdp/breaches/{breachId}:
+    get:
+      operationId: getDpdpBreach
+      tags: [DPDP]
+      summary: Get a breach with its principal intimations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: breachId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Breach
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpBreach" }
+        "404":
+          description: Breach not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+    patch:
+      operationId: updateDpdpBreach
+      tags: [DPDP]
+      summary: Update the detailed report, Board times, extension or status
+      description: >-
+        open -> initial_intimated -> reported -> closed, one step at a time.
+        initial_intimated records boardInitialIntimationSentAt (default now);
+        reported needs all five detailedReport fields and records
+        boardDetailedReportSentAt (default now). A closed breach cannot be
+        changed. A granted extension moves boardDetailedReportDueAt.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: breachId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                status: { type: string, enum: [initial_intimated, reported, closed] }
+                detailedReport:
+                  type: object
+                  description: Any of the fields; each replaces the stored value.
+                  properties:
+                    updatedDetails: { type: string, maxLength: 5000 }
+                    factsCircumstancesReasons: { type: string, maxLength: 5000 }
+                    mitigation: { type: string, maxLength: 5000 }
+                    causeFindings: { type: string, maxLength: 5000 }
+                    remedialMeasures: { type: string, maxLength: 5000 }
+                boardInitialIntimationSentAt: { type: string, format: date-time, description: Not before awareAt, not in the future. }
+                boardDetailedReportSentAt: { type: string, format: date-time, description: Not before awareAt, not in the future. }
+                extension:
+                  type: object
+                  properties:
+                    requestedAt: { type: string, format: date-time, description: Default now. }
+                    granted: { type: [boolean, "null"] }
+                    newDueAt: { type: string, format: date-time, description: Required when granted is true; after awareAt. }
+      responses:
+        "200":
+          description: The updated breach
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpBreach" }
+        "400":
+          description: BAD_REQUEST, or REPORT_INCOMPLETE when moving to reported without the full detailed report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "404":
+          description: Breach not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "409":
+          description: INVALID_TRANSITION, or BREACH_CLOSED
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+
+  /v1/dpdp/breaches/{breachId}/principal-intimations:
+    post:
+      operationId: recordDpdpBreachPrincipalIntimation
+      tags: [DPDP]
+      summary: Record that affected principals were intimated
+      description: >-
+        Records that the fiduciary informed the listed Data Principals, by
+        which channel and when, and which r.7(1)(a)-(e) content the
+        intimation carried. When the breach lists its affected principals,
+        every id must be among them.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: breachId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dataPrincipalIds, channel, contentIncluded]
+              properties:
+                dataPrincipalIds:
+                  type: array
+                  minItems: 1
+                  maxItems: 10000
+                  items: { type: string, maxLength: 256 }
+                channel: { type: string, maxLength: 128, description: "For example email, sms, in_app or post." }
+                intimatedAt: { type: string, format: date-time, description: Default now; not before awareAt, not in the future. }
+                contentIncluded:
+                  type: array
+                  minItems: 1
+                  items: { $ref: "#/components/schemas/DpdpBreachIntimationContent" }
+      responses:
+        "201":
+          description: Intimation recorded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/DpdpBreachIntimation"
+                  - type: object
+                    properties:
+                      breachId: { type: string }
+                      principalIntimation: { $ref: "#/components/schemas/DpdpBreachIntimationSummary" }
+        "400":
+          description: BAD_REQUEST
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DpdpError" }
+        "404":
+          description: Breach not found
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DpdpError" }

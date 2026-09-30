@@ -18,10 +18,10 @@ import { publishGrantRevocation, revokeGrantInTx, type RevokedGrantTree } from '
 
 // ── Limits ─────────────────────────────────────────────────────────────────
 
-const MAX_ID = 256;
-const MAX_CODE = 128;
-const MAX_SHORT_TEXT = 1_000;
-const MAX_LONG_TEXT = 5_000;
+export const MAX_ID = 256;
+export const MAX_CODE = 128;
+export const MAX_SHORT_TEXT = 1_000;
+export const MAX_LONG_TEXT = 5_000;
 const MAX_NOTICE_CONTENT = 100_000;
 const MAX_PURPOSES = 50;
 const MAX_EVIDENCE_BYTES = 16_384;
@@ -63,35 +63,35 @@ export const DPDP_AUDIT_ACTIONS = {
 
 // ── Validation ─────────────────────────────────────────────────────────────
 
-class InputError extends Error {
+export class InputError extends Error {
   constructor(message: string, readonly code = 'BAD_REQUEST') {
     super(message);
   }
 }
 
-type Body = Record<string, unknown>;
+export type Body = Record<string, unknown>;
 
-function isPlainObject(value: unknown): value is Body {
+export function isPlainObject(value: unknown): value is Body {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function requireBody(value: unknown): Body {
+export function requireBody(value: unknown): Body {
   if (!isPlainObject(value)) throw new InputError('Request body must be a JSON object');
   return value;
 }
 
-function requireString(value: unknown, field: string, max: number): string {
+export function requireString(value: unknown, field: string, max: number): string {
   if (typeof value !== 'string' || value.trim().length === 0) throw new InputError(`${field} is required and must be a non-empty string`);
   if (value.length > max) throw new InputError(`${field} must be at most ${max} characters`);
   return value;
 }
 
-function optionalString(value: unknown, field: string, max: number): string | undefined {
+export function optionalString(value: unknown, field: string, max: number): string | undefined {
   if (value === undefined || value === null) return undefined;
   return requireString(value, field, max);
 }
 
-function optionalBoolean(value: unknown, field: string): boolean | undefined {
+export function optionalBoolean(value: unknown, field: string): boolean | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== 'boolean') throw new InputError(`${field} must be a boolean`);
   return value;
@@ -117,7 +117,7 @@ function requirePurposes(value: unknown): Purpose[] {
 const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-function requireDate(value: unknown, field: string, options: { dateOnly?: boolean } = {}): Date {
+export function requireDate(value: unknown, field: string, options: { dateOnly?: boolean } = {}): Date {
   if (typeof value !== 'string' || !(ISO_DATE_TIME.test(value) || (options.dateOnly && ISO_DATE.test(value)))) {
     throw new InputError(`${field} must be an ISO 8601 date-time`);
   }
@@ -126,9 +126,9 @@ function requireDate(value: unknown, field: string, options: { dateOnly?: boolea
   return date;
 }
 
-interface PageRequest { limit: number; cursor: { t: string; id: string } | null }
+export interface PageRequest { limit: number; cursor: { t: string; id: string } | null }
 
-function parsePage(query: Record<string, unknown>): PageRequest {
+export function parsePage(query: Record<string, unknown>): PageRequest {
   let limit = DEFAULT_PAGE_SIZE;
   if (query['limit'] !== undefined) {
     const raw = String(query['limit']);
@@ -153,7 +153,7 @@ function parsePage(query: Record<string, unknown>): PageRequest {
 }
 
 /** The cursor after the last row of a page, or null when there is no further page. */
-function nextCursor(rows: Record<string, unknown>[], limit: number): string | null {
+export function nextCursor(rows: Record<string, unknown>[], limit: number): string | null {
   if (rows.length <= limit) return null;
   const last = rows[limit - 1]!;
   // created_at_cursor is created_at as text, so the cursor keeps Postgres's
@@ -161,12 +161,12 @@ function nextCursor(rows: Record<string, unknown>[], limit: number): string | nu
   return Buffer.from(JSON.stringify({ t: last['created_at_cursor'], id: last['id'] }), 'utf8').toString('base64url');
 }
 
-function sendError(reply: FastifyReply, request: FastifyRequest, status: number, code: string, message: string) {
+export function sendError(reply: FastifyReply, request: FastifyRequest, status: number, code: string, message: string) {
   return reply.status(status).send({ message, code, requestId: request.id });
 }
 
 /** Run `parse`; an InputError becomes a 400 and `undefined` is returned. */
-function parseOr400<T>(reply: FastifyReply, request: FastifyRequest, parse: () => T): T | undefined {
+export function parseOr400<T>(reply: FastifyReply, request: FastifyRequest, parse: () => T): T | undefined {
   try {
     return parse();
   } catch (err) {
@@ -184,7 +184,7 @@ function sha256(input: string): string {
   return createHash('sha256').update(input).digest('hex');
 }
 
-function iso(value: unknown): string | null {
+export function iso(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   return value instanceof Date ? value.toISOString() : new Date(value as string).toISOString();
 }
@@ -194,12 +194,12 @@ function iso(value: unknown): string | null {
  * *string* (the driver encodes the string again), which is what these routes
  * used to do; migration 127 repairs the rows written that way.
  */
-function json(tx: TxSql, value: unknown) {
+export function json(tx: TxSql, value: unknown) {
   return tx.json(value as postgres.JSONValue);
 }
 
 /** Append platform entries to the developer's audit chain, inside the caller's transaction. */
-async function appendDpdpAudit(tx: TxSql, developerId: string, entries: PlatformAuditEntry[]): Promise<void> {
+export async function appendDpdpAudit(tx: TxSql, developerId: string, entries: PlatformAuditEntry[]): Promise<void> {
   const head = await lockAuditChain(tx, developerId);
   await appendPlatformAuditEntries(tx, developerId, head, entries);
 }

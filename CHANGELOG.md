@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### DPDP breach register (auth service)
+- New routes to keep a register of personal data breaches (DPDP Act s.8(6);
+  DPDP Rules 2025 r.7, in force from 13 May 2027):
+  `POST /v1/dpdp/breaches`, `GET /v1/dpdp/breaches` (paged, `status` filter),
+  `GET /v1/dpdp/breaches/{breachId}`, `PATCH /v1/dpdp/breaches/{breachId}`
+  (the r.7(2)(b) detailed report fields, Board intimation times, an
+  extension, and `open -> initial_intimated -> reported -> closed`, other
+  moves `409 INVALID_TRANSITION`) and
+  `POST /v1/dpdp/breaches/{breachId}/principal-intimations` (who was told, by
+  which channel, when, and which r.7(1)(a)-(e) content was included).
+  Responses carry `boardDetailedReportDueAt` (`awareAt` + 72 hours, or a
+  granted extension), `boardDetailedReportOverdue` and
+  `principalIntimationRequired: true`. Grantex does not notify principals or
+  file with the Board.
+- New webhook events `dpdp.breach.recorded`,
+  `dpdp.breach.principal_intimation_due` and `dpdp.breach.board_report_due`,
+  and audit actions `grantex.dpdp.breach_recorded`,
+  `grantex.dpdp.breach_updated`, `grantex.dpdp.breach_principals_intimated`
+  and `grantex.dpdp.breach_deadline_alerted`.
+- New flag `DPDP_BREACH_DEADLINE_ALERTS_ENABLED` (off; exactly `true`) runs a
+  worker that emits `dpdp.breach.board_report_due` once
+  `DPDP_BREACH_ALERT_LEAD_MINUTES` (default 720) before the deadline and once
+  when it has passed.
+- Migration 128 adds `dpdp_breaches` and `dpdp_breach_principal_intimations`
+  (new, empty tables; no backfill).
+
 ### DPDP routes: correctness, erasure and audit (auth service)
 - Withdrawal (`POST /v1/dpdp/consent-records/{id}/withdraw`) runs in one
   transaction and withdraws only an `active` record, so of two concurrent

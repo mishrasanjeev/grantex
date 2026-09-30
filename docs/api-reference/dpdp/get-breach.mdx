@@ -1,0 +1,60 @@
+---
+title: "Get Breach"
+sidebarTitle: "Get Breach"
+description: "Read one breach from the DPDP breach register, with its deadlines and the principal intimations recorded against it."
+---
+
+## Endpoint
+
+```
+GET /v1/dpdp/breaches/:breachId
+```
+
+## Authentication
+
+Requires a developer API key in the `Authorization` header.
+
+## Path Parameters
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `breachId` | `string` | Yes | The breach ID |
+
+## Response -- 200 OK
+
+The breach as [Record Breach](/api-reference/dpdp/record-breach) returns it,
+with the deadlines computed at the time of the read, `principalIntimation`
+counted over every intimation, and `principalIntimations` listing the newest
+200:
+
+```json
+{
+  "breachId": "brch_01HXYZ...",
+  "status": "initial_intimated",
+  "boardDetailedReportDueAt": "2027-06-04T10:00:00.000Z",
+  "boardDetailedReportOverdue": false,
+  "principalIntimation": { "due": "without_delay", "intimatedCount": 2, "pendingCount": 1, "lastIntimatedAt": "2027-06-01T12:00:00.000Z" },
+  "principalIntimations": [
+    {
+      "intimationId": "bint_01HXYZ...",
+      "channel": "email",
+      "intimatedAt": "2027-06-01T12:00:00.000Z",
+      "principalCount": 2,
+      "contentIncluded": ["description", "likely_consequences", "mitigation", "safety_measures", "contact"],
+      "contentMissing": [],
+      "createdAt": "2027-06-01T12:01:00.000Z"
+    }
+  ]
+}
+```
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 401 | `UNAUTHORIZED` | Invalid or missing API key |
+| 404 | `NOT_FOUND` | Breach not found |
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

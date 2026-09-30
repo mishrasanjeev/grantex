@@ -258,6 +258,15 @@ export const config = {
   get dpdpConsentExpiryEnabled() { return process.env['DPDP_CONSENT_EXPIRY_ENABLED'] === 'true'; },
   // With the worker on, an expired record's grant is revoked too.
   get dpdpConsentExpiryRevokesGrant() { return process.env['DPDP_CONSENT_EXPIRY_REVOKES_GRANT'] === 'true'; },
+  // The breach deadline worker (workers/dpdpBreachDeadlines.ts) emits
+  // dpdp.breach.board_report_due before and after the 72-hour Board deadline
+  // of DPDP Rules 2025 r.7(2)(b). Off unless exactly 'true'.
+  get dpdpBreachDeadlineAlertsEnabled() { return process.env['DPDP_BREACH_DEADLINE_ALERTS_ENABLED'] === 'true'; },
+  // How long before the deadline the first alert goes out, in minutes
+  // (1 to 4320; default 720, twelve hours).
+  get dpdpBreachAlertLeadMinutes() {
+    return parseIntegerSetting('DPDP_BREACH_ALERT_LEAD_MINUTES', optional('DPDP_BREACH_ALERT_LEAD_MINUTES', '720'), 1, 4_320);
+  },
   // SSO state HMAC key (optional — derived from RSA_PRIVATE_KEY if not set)
   ssoStateSecret: process.env['SSO_STATE_SECRET'] ?? null,
   // CORS: comma-separated list of browser origins allowed to call the API

@@ -51,6 +51,7 @@ import { registryLookupRoutes } from './routes/registry-lookup.js';
 import { consentBundlesRoutes } from './routes/consent-bundles.js';
 import { mcpServersRoutes } from './routes/mcp-servers.js';
 import { dpdpRoutes } from './routes/dpdp.js';
+import { dpdpBreachRoutes } from './routes/dpdp-breaches.js';
 import { commerceRoutes } from './routes/commerce.js';
 import { commerceWellKnownRoutes } from './routes/commerce-well-known.js';
 import { commerceMcpRoutes } from './routes/commerce-mcp.js';
@@ -244,6 +245,8 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(consentBundlesRoutes);
   await app.register(mcpServersRoutes);
   await app.register(dpdpRoutes);
+  // DPDP breach register (DPDP Act s.8(6); DPDP Rules 2025 r.7).
+  await app.register(dpdpBreachRoutes);
   // Event bridge (PRD G-6): source registration, and ingestion in its own
   // scope because signatures cover the raw request bytes.
   await app.register(eventSourcesRoutes);
