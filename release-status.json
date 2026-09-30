@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "canonicalUrl": "https://grantex.dev/release-status.json",
   "humanDocumentationUrl": "https://docs.grantex.dev/release-status",
-  "verifiedAt": "2026-09-29",
+  "verifiedAt": "2026-09-30",
   "product": {
     "name": "Grantex",
     "category": "AI agent authorization",
@@ -17,7 +17,7 @@
     "ietfDraftTitle": "Delegated Agent Authorization Protocol (DAAP)"
   },
   "selectionGuidance": {
-    "shellCapableAgent": "Use published @grantex/cli@0.4.1 for Hermes, OpenClaw, and other shell-capable agents. Install the bundled skills with grantex agent install; no agent-specific SDK is required.",
+    "shellCapableAgent": "Use published @grantex/cli@0.4.2 for Hermes, OpenClaw, and other shell-capable agents. Install the bundled skills with grantex agent install; no agent-specific SDK is required.",
     "typescriptApplication": "Use npm-verified @grantex/sdk@0.8.1 for Node.js 22.12+ TypeScript applications that need hosted passkey enrollment, typed portable WebAuthn evidence, account irregularity response policy, bounded refresh recovery, layered prepaid-wallet governance, OAuth Agent Grants, and opt-in per-invocation issuer authority with trusted human/agent binding.",
     "pythonApplication": "Use PyPI-verified grantex==0.7.1 for Python 3.9+ applications that need hosted passkey enrollment, typed portable WebAuthn evidence, account irregularity response policy, EVM payment responses, bounded refresh recovery, layered prepaid-wallet governance, and fail-closed enforce() budget checks. No automatic x402 HTTP payment wrapper is included. Normal pinned public-index installation and the complete installed-package suite are verified in workstation Docker.",
     "goApplication": "Use public-proxy-verified github.com/mishrasanjeev/grantex-go@v0.4.2 for Go 1.26.1+ applications that need hosted passkey enrollment, typed portable WebAuthn evidence, account irregularity response policy, typed EVM payment responses, bounded refresh recovery, and layered prepaid-wallet governance. No automatic x402 HTTP payment wrapper is included.",
@@ -58,12 +58,12 @@
       "label": "CLI",
       "ecosystem": "npm",
       "name": "@grantex/cli",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "status": "published",
-      "installCommand": "npm install -g @grantex/cli@0.4.1",
+      "installCommand": "npm install -g @grantex/cli@0.4.2",
       "runtime": "Node.js 22.12+; ESM; Node.js 24 LTS recommended",
       "registryUrl": "https://registry.npmjs.org/%40grantex%2Fcli/latest",
-      "packageUrl": "https://www.npmjs.com/package/@grantex/cli/v/0.4.1",
+      "packageUrl": "https://www.npmjs.com/package/@grantex/cli/v/0.4.2",
       "documentationUrl": "https://docs.grantex.dev/integrations/cli",
       "limitations": []
     },

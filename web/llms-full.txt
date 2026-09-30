@@ -1,7 +1,7 @@
 # Grantex — Full Implementation Brief for AI Assistants
 
-> Last updated: 2026-09-29
-> Release snapshot verified: 2026-09-29
+> Last updated: 2026-09-30
+> Release snapshot verified: 2026-09-30
 
 Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
@@ -78,7 +78,7 @@ Implementation guide: https://docs.grantex.dev/guides/oauth-agent-grants
 | Agent-specific enforcement in MCP tools | Primary Grantex SDK or direct JWKS-backed validation | Add after transport authorization when the tool must verify delegated agent authority |
 | MCP endpoints | `@grantex/mcp-auth@4.0.0` plus `@grantex/sdk@0.8.1` | Configure durable state, resource binding, authenticated principal handoff and revocation; Node.js 22.12+ |
 | Terminal automation | `@grantex/cli` | Optional operational tooling |
-| Hermes, OpenClaw, or another shell-capable agent | Published `@grantex/cli@0.4.1` plus the bundled Agent Skills | No agent-specific SDK required; enforce again at the protected service |
+| Hermes, OpenClaw, or another shell-capable agent | Published `@grantex/cli@0.4.2` plus the bundled Agent Skills | No agent-specific SDK required; enforce again at the protected service |
 | Framework-specific tools | Named Grantex adapter plus its primary SDK where required | Verify each package's registry status before pinning |
 
 Primary reproducible installs:
@@ -89,17 +89,17 @@ npm install @grantex/x402@0.4.1 @grantex/sdk@0.8.1
 python -m pip install grantex==0.7.1
 go get github.com/mishrasanjeev/grantex-go@v0.4.2
 npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1
-npm install -g @grantex/cli@0.4.1
+npm install -g @grantex/cli@0.4.2
 ```
 
 The SDKs, API contract, integrations, and protocol are independently versioned. Do not infer one artifact's version from another.
 
 ## Agent CLI and Skills
 
-Hermes, OpenClaw, and other shell-capable agents can share the same machine-readable CLI and portable `SKILL.md` bundle. The installer is published in `@grantex/cli@0.4.1`:
+Hermes, OpenClaw, and other shell-capable agents can share the same machine-readable CLI and portable `SKILL.md` bundle. The installer is published in `@grantex/cli@0.4.2`:
 
 ```bash
-npm install -g @grantex/cli@0.4.1
+npm install -g @grantex/cli@0.4.2
 grantex agent install --target openclaw
 grantex agent install --target hermes
 grantex agent install --target portable
