@@ -264,6 +264,36 @@ describe('GET /v1/agents/:id', () => {
 });
 
 describe('PATCH /v1/agents/:id', () => {
+  it('registers exact callback URIs on an existing agent', async () => {
+    seedAuth();
+    const redirectUris = ['https://client.example/first', 'https://client.example/second'];
+    sqlMock.mockResolvedValueOnce([{ ...TEST_AGENT, redirect_uris: redirectUris }]);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(),
+      payload: { redirectUris },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().redirectUris).toEqual(redirectUris);
+  });
+
+  it('rejects unsafe callback schemes without updating the agent', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(),
+      payload: { redirectUris: ['javascript:alert(1)'] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('BAD_REQUEST');
+    expect(sqlMock.mock.calls.some((call) => String(call[0]).includes('UPDATE agents'))).toBe(false);
+  });
+
   it('updates agent fields', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ ...TEST_AGENT, name: 'Updated Name' }]);

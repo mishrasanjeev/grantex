@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Agent callback URI management
+- Dashboard agent create/edit now exposes registered redirect URIs, including
+  adding, replacing, and removing callbacks without recreating the agent.
+- CLI 0.4.2 adds repeatable `--redirect-uri` to agent registration and updates,
+  plus explicit `--clear-redirect-uris` for updates. An update replaces the
+  complete callback list; unrelated agent edits leave it unchanged.
+- Added a live-mode regression test covering registration, exact authorization
+  matching, replacement, unsafe URI refusal, clearing, and tenant isolation.
+
 ### Stable Ed25519 key id
 - `ED25519_STABLE_KID=true` (default off) gives a configured
   `ED25519_PRIVATE_KEY` the key id `grantex-ed25519-<RFC 7638 thumbprint>`.

@@ -8,6 +8,10 @@ function agentId(a: Record<string, unknown>): string {
   return String(a.agentId ?? a.id ?? '');
 }
 
+function collectRedirectUri(value: string, previous: string[] = []): string[] {
+  return [...previous, value];
+}
+
 export function agentsCommand(): Command {
   const cmd = new Command('agents').description('Manage registered agents');
 
@@ -35,12 +39,14 @@ export function agentsCommand(): Command {
     .requiredOption('--name <name>', 'Human-readable agent name')
     .requiredOption('--description <desc>', 'Agent description')
     .requiredOption('--scopes <scopes>', 'Comma-separated list of requested scopes')
-    .action(async (opts: { name: string; description: string; scopes: string }) => {
+    .option('--redirect-uri <url>', 'Exact callback URI (repeat for multiple)', collectRedirectUri)
+    .action(async (opts: { name: string; description: string; scopes: string; redirectUri?: string[] }) => {
       const client = await requireClient();
       const agent = await client.agents.register({
         name: opts.name,
         description: opts.description,
         scopes: opts.scopes.split(',').map((s) => s.trim()),
+        ...(opts.redirectUri ? { redirectUris: opts.redirectUri } : {}),
       });
       if (isJsonMode()) {
         console.log(JSON.stringify(agent, null, 2));
@@ -53,6 +59,7 @@ export function agentsCommand(): Command {
         name: agent.name,
         did: agent.did,
         scopes: agent.scopes.join(', '),
+        redirectUris: (agent.redirectUris ?? []).join(', '),
         createdAt: shortDate(agent.createdAt),
       });
     });
@@ -73,6 +80,7 @@ export function agentsCommand(): Command {
         did: agent.did,
         description: agent.description,
         scopes: agent.scopes.join(', '),
+        redirectUris: (agent.redirectUris ?? []).join(', '),
         createdAt: shortDate(agent.createdAt),
       });
     });
@@ -83,12 +91,19 @@ export function agentsCommand(): Command {
     .option('--name <name>', 'New agent name')
     .option('--description <desc>', 'New agent description')
     .option('--scopes <scopes>', 'New comma-separated scopes')
-    .action(async (agentIdArg: string, opts: { name?: string; description?: string; scopes?: string }) => {
+    .option('--redirect-uri <url>', 'Replace callback URI list (repeat for multiple)', collectRedirectUri)
+    .option('--clear-redirect-uris', 'Remove all registered callback URIs')
+    .action(async (agentIdArg: string, opts: { name?: string; description?: string; scopes?: string; redirectUri?: string[]; clearRedirectUris?: boolean }) => {
+      if (opts.redirectUri && opts.clearRedirectUris) {
+        throw new Error('--redirect-uri and --clear-redirect-uris cannot be used together');
+      }
       const client = await requireClient();
       const updates: Record<string, unknown> = {};
       if (opts.name !== undefined) updates.name = opts.name;
       if (opts.description !== undefined) updates.description = opts.description;
       if (opts.scopes !== undefined) updates.scopes = opts.scopes.split(',').map((s) => s.trim());
+      if (opts.redirectUri) updates.redirectUris = opts.redirectUri;
+      if (opts.clearRedirectUris) updates.redirectUris = [];
       const agent = await client.agents.update(agentIdArg, updates);
       if (isJsonMode()) {
         console.log(JSON.stringify(agent, null, 2));

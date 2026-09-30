@@ -8,7 +8,7 @@ Command-line tool for the [Grantex](https://grantex.dev) delegated authorization
 
 ## Install
 
-Version 0.4.1 requires registry-verified TypeScript SDK 0.8.1+.
+Version 0.4.2 requires registry-verified TypeScript SDK 0.8.1+.
 Operator API keys and submitted principal IDs are administrative
 inputs, not proof of a signed-in human. See
 [execution authority boundaries](https://docs.grantex.dev/guides/sdk-execution-authority).
@@ -20,7 +20,7 @@ and amount options; the client uses the SDK's online revocation default. Follow 
 [migration guide](https://docs.grantex.dev/migration-enforcement).
 
 ```bash
-npm install -g @grantex/cli@0.4.1
+npm install -g @grantex/cli@0.4.2
 ```
 
 ## Configure
@@ -110,11 +110,20 @@ grantex grants revoke grnt_...
 
 ```bash
 grantex agents list
-grantex agents register --name bot --description "..." --scopes email:read,calendar:write
+grantex agents register --name bot --description "..." --scopes email:read,calendar:write \
+  --redirect-uri https://client.example/grants/callback
 grantex agents get ag_...
 grantex agents update ag_... --name new-name --scopes email:read
+grantex agents update ag_... --redirect-uri https://client.example/grants/callback
+grantex agents update ag_... --clear-redirect-uris
 grantex agents delete ag_...
 ```
+
+Repeat `--redirect-uri` for multiple callbacks. On update, it replaces the
+entire registered list; omitting it preserves the list. A live authorization
+request must use one of the registered URIs exactly, including its path and
+trailing slash. Production requires HTTPS. The dashboard Agent Edit page also
+manages this list.
 
 ### Grants
 

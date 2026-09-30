@@ -66,6 +66,16 @@ describe('AgentDetail', () => {
     expect(screen.getByText('a1')).toBeInTheDocument();
     expect(screen.getByText('did:web:a1')).toBeInTheDocument();
     expect(screen.getByText('A test agent')).toBeInTheDocument();
+    expect(screen.getByText('None registered')).toBeInTheDocument();
+  });
+
+  it('displays exact registered callback URIs', async () => {
+    mockGetAgent.mockResolvedValue({
+      ...agent,
+      redirectUris: ['https://client.example/grants/callback'],
+    });
+    renderDetail();
+    await waitFor(() => expect(screen.getByText('https://client.example/grants/callback')).toBeInTheDocument());
   });
 
   it('displays associated grants', async () => {

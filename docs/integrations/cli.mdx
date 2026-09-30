@@ -7,7 +7,7 @@ description: "Manage agents, grants, audit logs, and more from your terminal."
 ## Install
 
 ```bash
-npm install -g @grantex/cli@0.4.1
+npm install -g @grantex/cli@0.4.2
 ```
 
 Node.js 22.12+ is required. This release uses SDK 0.8 enforcement: expected
@@ -104,10 +104,19 @@ grantex authorize --agent ag_01ABC... --principal user@example.com --scopes emai
 ```bash
 grantex agents list
 grantex agents register --name travel-booker --description "Books travel" --scopes calendar:read,payments:initiate
+grantex agents register --name callback-agent --description "Uses an authorization callback" --scopes records:read \
+  --redirect-uri https://client.example/grants/callback
 grantex agents get ag_01ABC...
 grantex agents update ag_01ABC... --name new-name --scopes calendar:read,email:send
+grantex agents update ag_01ABC... --redirect-uri https://client.example/grants/callback
+grantex agents update ag_01ABC... --clear-redirect-uris
 grantex agents delete ag_01ABC...
 ```
+
+Repeat `--redirect-uri` for multiple callbacks. On update, these values replace
+the complete list. Omitting the option preserves existing callbacks, while
+`--clear-redirect-uris` removes all of them. Live authorization requires an
+exact match to a registered HTTPS URI.
 
 ### Tokens
 

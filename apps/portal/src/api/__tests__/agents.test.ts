@@ -85,7 +85,7 @@ describe('agents', () => {
   // ── updateAgent ────────────────────────────────────────────────────────
 
   it('updateAgent sends PATCH /v1/agents/:id with body', async () => {
-    const data = { name: 'Updated' };
+    const data = { redirectUris: ['https://client.example/callback'] };
     ok({ agentId: 'a1', name: 'Updated' });
     await updateAgent('a1', data);
     const [url, opts] = mockFetch.mock.calls[0]!;
