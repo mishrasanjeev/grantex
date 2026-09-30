@@ -167,6 +167,52 @@ describe('GrievanceList', () => {
     await waitFor(() => expect(mockUpdateGrievance).toHaveBeenCalledWith('grv_rev', { status: 'rejected', resolution: 'Not a personal data matter' }));
   });
 
+  it('removes a row that no longer matches the active status filter after a transition', async () => {
+    const other = { ...submitted, grievanceId: 'grv_sub2', referenceNumber: 'GRV-2026-SUB2' };
+    mockListGrievances.mockImplementation((p: { status?: string }) => Promise.resolve(
+      p.status === 'submitted'
+        ? { grievances: [submitted, other], nextCursor: null }
+        : { grievances: [submitted, other, inReview], nextCursor: null }));
+    mockUpdateGrievance.mockResolvedValue({ ...fx.getGrievance_200, grievanceId: 'grv_sub', referenceNumber: 'GRV-2026-SUB', status: 'in_review', expectedResolutionBy: FUTURE });
+    const user = userEvent.setup();
+    r();
+    await screen.findByText('GRV-2026-REV');
+    await user.selectOptions(screen.getByLabelText('Status'), 'submitted');
+    await waitFor(() => expect(screen.queryByText('GRV-2026-REV')).not.toBeInTheDocument());
+    await user.click(within(row('GRV-2026-SUB')).getByRole('button', { name: 'Start review' }));
+    await waitFor(() => expect(mockUpdateGrievance).toHaveBeenCalledWith('grv_sub', { status: 'in_review' }));
+    await waitFor(() => expect(screen.queryByText('GRV-2026-SUB')).not.toBeInTheDocument());
+    expect(screen.getByText('GRV-2026-SUB2')).toBeInTheDocument();
+    expect(mockShow).toHaveBeenCalledWith('Grievance GRV-2026-SUB is now in review', 'success');
+  });
+
+  it('keeps an updated row in place when it still matches the active status filter', async () => {
+    mockListGrievances.mockResolvedValue({ grievances: [inReview], nextCursor: null });
+    // A server that reports the row still in review keeps it under the in_review filter.
+    mockUpdateGrievance.mockResolvedValue({ ...fx.getGrievance_200, grievanceId: 'grv_rev', referenceNumber: 'GRV-2026-REV', status: 'in_review', expectedResolutionBy: FUTURE });
+    const user = userEvent.setup();
+    r();
+    await screen.findByText('GRV-2026-REV');
+    await user.selectOptions(screen.getByLabelText('Status'), 'in_review');
+    await waitFor(() => expect(mockListGrievances).toHaveBeenLastCalledWith({ status: 'in_review', limit: 50 }));
+    await user.click(within(row('GRV-2026-REV')).getByRole('button', { name: 'Resolve' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/Resolution/), 'Noted');
+    await user.click(within(dialog).getByRole('button', { name: 'Mark resolved' }));
+    await waitFor(() => expect(mockUpdateGrievance).toHaveBeenCalled());
+    await waitFor(() => expect(mockShow).toHaveBeenCalledWith('Grievance GRV-2026-REV is now in review', 'success'));
+    expect(screen.getByText('GRV-2026-REV')).toBeInTheDocument();
+  });
+
+  it('keeps the updated row with no status filter', async () => {
+    mockListGrievances.mockResolvedValue({ grievances: [submitted], nextCursor: null });
+    mockUpdateGrievance.mockResolvedValue({ ...fx.getGrievance_200, grievanceId: 'grv_sub', referenceNumber: 'GRV-2026-SUB', status: 'in_review', expectedResolutionBy: FUTURE });
+    const user = userEvent.setup();
+    r();
+    await user.click(await screen.findByRole('button', { name: 'Start review' }));
+    await waitFor(() => expect(within(row('GRV-2026-SUB')).getByText('in review')).toBeInTheDocument());
+  });
+
   it('handles 409 INVALID_TRANSITION by reloading the list', async () => {
     const e = fx.errors['409_INVALID_TRANSITION'];
     mockListGrievances.mockResolvedValue({ grievances: [submitted], nextCursor: null });

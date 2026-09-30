@@ -14,7 +14,7 @@ export const createConsentRecord_201 = {
     "alg": "EdDSA",
     "kid": "ed25519-2026-09",
     "proofJwt": "eyJhbGciOiJFZERTQSIsImtpZCI6ImVkMjU1MTktMjAyNi0wOSJ9.eyJyZWNvcmRJZCI6ImNyZWNfMDFKOVpCNFk3UTJNOE4zUDVSNlM3VDhWOVcifQ.c2lnbmF0dXJl",
-    "jwksUri": "https://api.grantex.dev/.well-known/jwks.json",
+    "jwksUri": "https://issuer.example/.well-known/jwks.json",
     "signedAt": "2026-09-30T10:15:00.000Z"
   },
   "processingExpiresAt": "2027-09-30T00:00:00.000Z",

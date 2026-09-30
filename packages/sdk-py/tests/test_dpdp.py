@@ -98,7 +98,7 @@ def test_create_consent_record(client: Grantex) -> None:
     assert result.consent_proof["type"] == "JWS-EdDSA"
     assert result.consent_proof["alg"] == "EdDSA"
     assert result.consent_proof["kid"] == "ed25519-2026-09"
-    assert result.consent_proof["jwksUri"] == "https://api.grantex.dev/.well-known/jwks.json"
+    assert result.consent_proof["jwksUri"] == "https://issuer.example/.well-known/jwks.json"
     assert result.consent_proof["signedAt"] == "2026-09-30T10:15:00.000Z"
     # Create sends none of these.
     assert result.purposes is None
@@ -588,7 +588,7 @@ def test_path_parameters_are_url_encoded(client: Grantex) -> None:
     ]
 
 
-# ── No auto-retry on writes ──────────────────────────────────────────────────
+# ── No auto-retry on non-idempotent writes ──────────────────────────────────────────────────
 
 
 _WRITES: list[tuple[str, str, str, Callable[[Grantex], object]]] = [
@@ -605,10 +605,6 @@ _WRITES: list[tuple[str, str, str, Callable[[Grantex], object]]] = [
     (
         "withdraw_consent", "POST", "/v1/dpdp/consent-records/r/withdraw",
         lambda g: g.dpdp.withdraw_consent("r", reason="x"),
-    ),
-    (
-        "request_erasure", "POST", "/v1/dpdp/data-principals/p/erasure",
-        lambda g: g.dpdp.request_erasure("p"),
     ),
     (
         "create_consent_notice", "POST", "/v1/dpdp/consent-notices",
@@ -672,6 +668,22 @@ def test_write_not_retried_after_timeout(
     with pytest.raises(GrantexNetworkError):
         invoke(client)
     assert route.call_count == 1
+
+
+@respx.mock
+def test_request_erasure_retries_transient_503(no_sleep: None) -> None:
+    """Erasure is idempotent on the server (a replay returns the earlier
+    request), so it keeps the client's normal retry behaviour."""
+    route = respx.post(f"{BASE}/v1/dpdp/data-principals/user_123/erasure").mock(
+        side_effect=[
+            httpx.Response(503, json=err_fx("503_CONSENT_PROOF_UNAVAILABLE")),
+            httpx.Response(201, json=fx("erasure_201")),
+        ]
+    )
+    client = Grantex(api_key="test-key", max_retries=1)
+    result = client.dpdp.request_erasure("user_123")
+    assert result.request_id == "ER-2026-01J9ZE7F8G9H0J1K2M3N4P5Q6R"
+    assert route.call_count == 2
 
 
 @respx.mock

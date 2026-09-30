@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { Spinner } from '../../components/ui/Spinner';
 import { DpdpIndicators } from './DpdpIndicators';
+import { dpdpDashboardIndicatorsEnabled } from '../../lib/flags';
 
 function downloadJson(data: unknown, filename: string) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -24,6 +25,7 @@ export function ComplianceDashboard() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState<string | null>(null);
   const { show } = useToast();
+  const showDpdpIndicators = dpdpDashboardIndicatorsEnabled();
 
   useEffect(() => {
     getComplianceSummary()
@@ -152,8 +154,8 @@ export function ComplianceDashboard() {
         </div>
       </Card>
 
-      {/* DPDP records: factual counts from the DPDP endpoints */}
-      <DpdpIndicators />
+      {/* DPDP records: factual counts from the DPDP endpoints, behind a default-off flag */}
+      {showDpdpIndicators && <DpdpIndicators />}
 
       {/* DPDP Consent Records & Grievances quick links */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">

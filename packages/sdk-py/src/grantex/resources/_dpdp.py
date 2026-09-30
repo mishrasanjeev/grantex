@@ -4,9 +4,11 @@ India's DPDP Act 2023 endpoints: consent records and withdrawal (s.6(4)),
 consent notices (s.5), the rights to access (s.11) and erasure (s.12),
 grievance redressal (s.13), and compliance exports.
 
-Writes (POST/PATCH) are sent exactly once: they are not idempotent, and a
-replay after a timeout or 5xx would duplicate a record, grievance, notice or
-export, or fail with a spurious 409. Reads keep the client's retry behaviour.
+Writes (POST/PATCH) other than erasure are sent exactly once: they are not
+idempotent, and a replay after a timeout or 5xx would duplicate a record,
+grievance, notice or export, or fail with a spurious 409. Erasure is
+idempotent on the server (a replay returns the earlier request), so it and the
+reads keep the client's retry behaviour.
 """
 from __future__ import annotations
 
@@ -165,13 +167,12 @@ class DpdpClient:
 
     def request_erasure(self, principal_id: str) -> ErasureResponse:
         """Erase a data principal's personal data (right to erasure, DPDP Act
-        s.12). Idempotent on the server: a repeat returns the earlier request.
+        s.12). Idempotent on the server: a repeat returns the earlier request,
+        so a transient failure is retried like a read.
 
         POST /v1/dpdp/data-principals/:principalId/erasure (no body)
         """
-        data = self._http.post(
-            f"/v1/dpdp/data-principals/{_seg(principal_id)}/erasure", retry=False
-        )
+        data = self._http.post(f"/v1/dpdp/data-principals/{_seg(principal_id)}/erasure")
         return ErasureResponse.from_dict(data)
 
     def get_erasure_request(self, request_id: str) -> ErasureResponse:

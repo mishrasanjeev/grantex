@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -60,80 +60,122 @@ describe('ComplianceDashboard', () => {
     mockListConsentNotices.mockResolvedValue(fx.listConsentNotices_200);
   });
 
-  it('shows no fabricated framework scores or compliance percentages', async () => {
-    r();
-    await screen.findByText('pro plan');
-    await screen.findByRole('region', { name: 'Consent records' });
-    expect(screen.queryByText('DPDP 2023')).not.toBeInTheDocument();
-    expect(screen.queryByText('EU AI Act')).not.toBeInTheDocument();
-    expect(screen.queryByText('OWASP Agentic Top 10')).not.toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/%/);
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
-  it('displays plan badge', async () => {
-    r();
-    await waitFor(() => expect(screen.getByText('pro plan')).toBeInTheDocument());
+  describe('with VITE_DPDP_DASHBOARD_INDICATORS off (default)', () => {
+    it('shows no percentage scores and no DPDP indicators, and makes no DPDP reads', async () => {
+      r();
+      await screen.findByText('pro plan');
+      await screen.findByText('Grants Export');
+      expect(screen.queryByText('DPDP 2023')).not.toBeInTheDocument();
+      expect(screen.queryByText('EU AI Act')).not.toBeInTheDocument();
+      expect(screen.queryByText('OWASP Agentic Top 10')).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(/%/);
+      expect(screen.queryByRole('region', { name: 'Consent records' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Open grievances' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Consent notice versions' })).not.toBeInTheDocument();
+      expect(mockListConsentRecords).not.toHaveBeenCalled();
+      expect(mockListGrievances).not.toHaveBeenCalled();
+      expect(mockListConsentNotices).not.toHaveBeenCalled();
+    });
+
+    it('stays off for any value other than exactly "true"', async () => {
+      vi.stubEnv('VITE_DPDP_DASHBOARD_INDICATORS', 'TRUE');
+      r();
+      await screen.findByText('Grants Export');
+      expect(screen.queryByRole('region', { name: 'Consent records' })).not.toBeInTheDocument();
+      expect(mockListConsentRecords).not.toHaveBeenCalled();
+    });
+
+    it('keeps the DPDP quick links', async () => {
+      r();
+      await waitFor(() => expect(screen.getByText('DPDP Consent Records')).toBeInTheDocument());
+      expect(screen.getByRole('heading', { name: 'Grievances' })).toBeInTheDocument();
+    });
   });
 
-  it('shows summary stats', async () => {
-    r();
-    await waitFor(() => expect(screen.getByText('5')).toBeInTheDocument()); // agents.total
-    expect(screen.getByText('10')).toBeInTheDocument(); // grants.total
-    expect(screen.getByText('100')).toBeInTheDocument(); // audit total
-    expect(screen.getByText('3')).toBeInTheDocument(); // policies total
-  });
+  describe('with VITE_DPDP_DASHBOARD_INDICATORS=true', () => {
+    beforeEach(() => {
+      vi.stubEnv('VITE_DPDP_DASHBOARD_INDICATORS', 'true');
+    });
 
-  it('shows consent record totals from totalRecords and labels a partial status breakdown honestly', async () => {
-    r();
-    const region = await screen.findByRole('region', { name: 'Consent records' });
-    await waitFor(() => expect(within(region).getByText('7')).toBeInTheDocument());
-    expect(mockListConsentRecords).toHaveBeenCalledWith({ limit: 200 });
-    expect(within(region).getByText('In the latest 2 records:')).toBeInTheDocument();
-    expect(within(region).getByText('1 active')).toBeInTheDocument();
-    expect(within(region).getByText('1 erased')).toBeInTheDocument();
-  });
+    it('shows no fabricated framework scores or compliance percentages', async () => {
+      r();
+      await screen.findByText('pro plan');
+      await screen.findByRole('region', { name: 'Consent records' });
+      expect(screen.queryByText('DPDP 2023')).not.toBeInTheDocument();
+      expect(screen.queryByText('EU AI Act')).not.toBeInTheDocument();
+      expect(screen.queryByText('OWASP Agentic Top 10')).not.toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(/%/);
+    });
 
-  it('labels the breakdown as complete when every record is loaded', async () => {
-    mockListConsentRecords.mockResolvedValue({ ...fx.listConsentRecords_200, totalRecords: 2, nextCursor: null });
-    r();
-    const region = await screen.findByRole('region', { name: 'Consent records' });
-    await waitFor(() => expect(within(region).getByText('By status:')).toBeInTheDocument());
-  });
+    it('displays plan badge', async () => {
+      r();
+      await waitFor(() => expect(screen.getByText('pro plan')).toBeInTheDocument());
+    });
 
-  it('shows open grievances (submitted + in review) with the nearest response deadline', async () => {
-    r();
-    const region = await screen.findByRole('region', { name: 'Open grievances' });
-    await waitFor(() => expect(within(region).getByText('2')).toBeInTheDocument());
-    expect(mockListGrievances).toHaveBeenCalledWith({ status: 'submitted', limit: 200 });
-    expect(mockListGrievances).toHaveBeenCalledWith({ status: 'in_review', limit: 200 });
-    expect(within(region).getByText(`Next response due ${formatDate('2999-01-02T12:00:00.000Z')}`)).toBeInTheDocument();
-    expect(within(region).getByText('1 submitted, 1 in review')).toBeInTheDocument();
-  });
+    it('shows summary stats', async () => {
+      r();
+      await waitFor(() => expect(screen.getByText('5')).toBeInTheDocument()); // agents.total
+      expect(screen.getByText('10')).toBeInTheDocument(); // grants.total
+      expect(screen.getByText('100')).toBeInTheDocument(); // audit total
+      expect(screen.getByText('3')).toBeInTheDocument(); // policies total
+    });
 
-  it('counts overdue open grievances', async () => {
-    mockListGrievances.mockImplementation((p: { status?: string }) => p.status === 'submitted'
-      ? Promise.resolve({ grievances: [{ ...g, expectedResolutionBy: '2020-01-01T00:00:00.000Z' }], nextCursor: null })
-      : Promise.resolve({ grievances: [], nextCursor: null }));
-    r();
-    const region = await screen.findByRole('region', { name: 'Open grievances' });
-    await waitFor(() => expect(within(region).getByText('1 overdue')).toBeInTheDocument());
-  });
+    it('shows consent record totals from totalRecords and labels a partial status breakdown honestly', async () => {
+      r();
+      const region = await screen.findByRole('region', { name: 'Consent records' });
+      await waitFor(() => expect(within(region).getByText('7')).toBeInTheDocument());
+      expect(mockListConsentRecords).toHaveBeenCalledWith({ limit: 200 });
+      expect(within(region).getByText('In the latest 2 records:')).toBeInTheDocument();
+      expect(within(region).getByText('1 active')).toBeInTheDocument();
+      expect(within(region).getByText('1 erased')).toBeInTheDocument();
+    });
 
-  it('shows consent notice versions and labels a partial first page', async () => {
-    mockListConsentNotices.mockResolvedValue({ ...fx.listConsentNotices_200, nextCursor: 'more' });
-    r();
-    const region = await screen.findByRole('region', { name: 'Consent notice versions' });
-    await waitFor(() => expect(within(region).getByText('1+')).toBeInTheDocument());
-    expect(within(region).getByText(/first page/)).toBeInTheDocument();
-    expect(mockListConsentNotices).toHaveBeenCalledWith({ limit: 200 });
-  });
+    it('labels the breakdown as complete when every record is loaded', async () => {
+      mockListConsentRecords.mockResolvedValue({ ...fx.listConsentRecords_200, totalRecords: 2, nextCursor: null });
+      r();
+      const region = await screen.findByRole('region', { name: 'Consent records' });
+      await waitFor(() => expect(within(region).getByText('By status:')).toBeInTheDocument());
+    });
 
-  it('shows an unavailable indicator when a DPDP endpoint fails, without breaking the page', async () => {
-    mockListConsentRecords.mockRejectedValue(new Error('fail'));
-    r();
-    const region = await screen.findByRole('region', { name: 'Consent records' });
-    await waitFor(() => expect(within(region).getByText('Unavailable')).toBeInTheDocument());
-    expect(screen.getByText('Grants Export')).toBeInTheDocument();
+    it('shows open grievances (submitted + in review) with the nearest response deadline', async () => {
+      r();
+      const region = await screen.findByRole('region', { name: 'Open grievances' });
+      await waitFor(() => expect(within(region).getByText('2')).toBeInTheDocument());
+      expect(mockListGrievances).toHaveBeenCalledWith({ status: 'submitted', limit: 200 });
+      expect(mockListGrievances).toHaveBeenCalledWith({ status: 'in_review', limit: 200 });
+      expect(within(region).getByText(`Next response due ${formatDate('2999-01-02T12:00:00.000Z')}`)).toBeInTheDocument();
+      expect(within(region).getByText('1 submitted, 1 in review')).toBeInTheDocument();
+    });
+
+    it('counts overdue open grievances', async () => {
+      mockListGrievances.mockImplementation((p: { status?: string }) => p.status === 'submitted'
+        ? Promise.resolve({ grievances: [{ ...g, expectedResolutionBy: '2020-01-01T00:00:00.000Z' }], nextCursor: null })
+        : Promise.resolve({ grievances: [], nextCursor: null }));
+      r();
+      const region = await screen.findByRole('region', { name: 'Open grievances' });
+      await waitFor(() => expect(within(region).getByText('1 overdue')).toBeInTheDocument());
+    });
+
+    it('shows consent notice versions and labels a partial first page', async () => {
+      mockListConsentNotices.mockResolvedValue({ ...fx.listConsentNotices_200, nextCursor: 'more' });
+      r();
+      const region = await screen.findByRole('region', { name: 'Consent notice versions' });
+      await waitFor(() => expect(within(region).getByText('1+')).toBeInTheDocument());
+      expect(within(region).getByText(/first page/)).toBeInTheDocument();
+      expect(mockListConsentNotices).toHaveBeenCalledWith({ limit: 200 });
+    });
+
+    it('shows an unavailable indicator when a DPDP endpoint fails, without breaking the page', async () => {
+      mockListConsentRecords.mockRejectedValue(new Error('fail'));
+      r();
+      const region = await screen.findByRole('region', { name: 'Consent records' });
+      await waitFor(() => expect(within(region).getByText('Unavailable')).toBeInTheDocument());
+      expect(screen.getByText('Grants Export')).toBeInTheDocument();
+    });
   });
 
   it('shows no action items when policies, audit and failure rate are fine', async () => {

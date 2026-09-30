@@ -85,7 +85,7 @@ describe('DpdpClient', () => {
       alg: 'EdDSA',
       kid: 'ed25519-2026-09',
       proofJwt: expect.any(String),
-      jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+      jwksUri: 'https://issuer.example/.well-known/jwks.json',
       signedAt: '2026-09-30T10:15:00.000Z',
     });
     const [url, init] = call(mockFetch);
@@ -483,7 +483,7 @@ describe('DpdpClient', () => {
     ]);
   });
 
-  // ─── No auto-retry on writes ────────────────────────────────────────
+  // ─── No auto-retry on non-idempotent writes ─────────────────────────
 
   const writes: Array<[string, (g: Grantex) => Promise<unknown>]> = [
     ['createConsentRecord', (g) => g.dpdp.createConsentRecord({
@@ -491,7 +491,6 @@ describe('DpdpClient', () => {
       consentNoticeId: 'n', processingExpiresAt: '2027-01-01T00:00:00.000Z',
     })],
     ['withdrawConsent', (g) => g.dpdp.withdrawConsent('r', { reason: 'x' })],
-    ['requestErasure', (g) => g.dpdp.requestErasure('p')],
     ['createConsentNotice', (g) => g.dpdp.createConsentNotice({
       noticeId: 'n', version: '1', title: 't', content: 'c', purposes: [{ code: 'c', description: 'd' }],
     })],
@@ -518,6 +517,22 @@ describe('DpdpClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   }
+
+  it('requestErasure() is idempotent server-side, so it retries a transient 503 and succeeds', async () => {
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce(response(503, errFx('503_CONSENT_PROOF_UNAVAILABLE')))
+      .mockResolvedValueOnce(response(201, fx('erasure_201')));
+    vi.stubGlobal('fetch', mockFetch);
+    const grantex = new Grantex({ apiKey: 'test_key', maxRetries: 1 });
+
+    const result = await grantex.dpdp.requestErasure('user_123');
+    expect(result.requestId).toBe('ER-2026-01J9ZE7F8G9H0J1K2M3N4P5Q6R');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    for (const call of mockFetch.mock.calls) {
+      expect(call[0]).toBe('https://api.grantex.dev/v1/dpdp/data-principals/user_123/erasure');
+      expect((call[1] as RequestInit).method).toBe('POST');
+    }
+  });
 
   it('GETs keep retrying a 503', async () => {
     const mockFetch = vi.fn()

@@ -1,12 +1,27 @@
 /**
  * Internal HTTP and decoding helpers shared by the API functions.
  *
- * DPDP calls are never retried: creating a record, notice, grievance or export
- * and withdrawing consent are not idempotent, so a retry after a timeout could
- * create a duplicate or fail with a spurious 409.
+ * DPDP calls are sent once by default: creating a record, notice, grievance or
+ * export, withdrawing consent and updating a grievance are not idempotent, so a
+ * retry after a timeout could create a duplicate or fail with a spurious 409.
+ * Erasure is idempotent on the server (a replay returns the earlier request),
+ * so it opts in to a bounded retry on network errors and 429/502/503/504.
  */
 
 import type { DpdpErrorDetails } from './errors.js';
+
+/** Total attempts for a request that opts in to retries. */
+export const RETRY_MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 500;
+const RETRY_MAX_DELAY_MS = 10_000;
+const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
+
+function retryDelayMs(retry: number): number {
+  const exponential = RETRY_BASE_DELAY_MS * 2 ** retry;
+  return Math.min(exponential + Math.random() * RETRY_BASE_DELAY_MS, RETRY_MAX_DELAY_MS);
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** A failed call: HTTP status plus whatever the `{message, code, requestId}` body carried. */
 export interface HttpFailure extends DpdpErrorDetails {
@@ -48,11 +63,15 @@ async function readJson(res: Response): Promise<unknown> {
 }
 
 /**
- * Perform one request. Resolves with the status and parsed JSON body on 2xx;
+ * Perform a request. Resolves with the status and parsed JSON body on 2xx;
  * otherwise throws the error built by `onError` from the server's error body.
+ *
+ * Sent once unless `retry` is true, which only idempotent calls may set: then a
+ * network error or a 429/502/503/504 is retried with backoff, up to
+ * `RETRY_MAX_ATTEMPTS` attempts in total.
  */
 export async function dpdpRequest(
-  init: { method: 'GET' | 'POST' | 'PATCH'; url: string; apiKey: string; body?: unknown },
+  init: { method: 'GET' | 'POST' | 'PATCH'; url: string; apiKey: string; body?: unknown; retry?: boolean },
   onError: (failure: HttpFailure) => Error,
 ): Promise<HttpResult> {
   const headers: Record<string, string> = { Authorization: `Bearer ${init.apiKey}` };
@@ -62,7 +81,24 @@ export async function dpdpRequest(
     requestInit.body = JSON.stringify(init.body);
   }
 
-  const res = await fetch(init.url, requestInit);
+  const maxAttempts = init.retry === true ? RETRY_MAX_ATTEMPTS : 1;
+  let res: Response | undefined;
+  for (let attempt = 1; ; attempt++) {
+    const last = attempt >= maxAttempts;
+    try {
+      res = await fetch(init.url, requestInit);
+    } catch (err) {
+      if (last) throw err;
+      await sleep(retryDelayMs(attempt - 1));
+      continue;
+    }
+    if (!res.ok && RETRYABLE_STATUS_CODES.has(res.status) && !last) {
+      await res.body?.cancel().catch(() => undefined);
+      await sleep(retryDelayMs(attempt - 1));
+      continue;
+    }
+    break;
+  }
 
   if (!res.ok) {
     const body = await readJson(res);

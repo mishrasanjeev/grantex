@@ -23,9 +23,11 @@ import type {
   DpdpPageParams,
 } from '../types.js';
 
-// DPDP writes are not idempotent (a replayed create, withdrawal, grievance,
-// notice or export duplicates it or fails with a spurious 409), so they are
-// sent exactly once. Reads keep the client's normal retry behaviour.
+// DPDP writes other than erasure are not idempotent (a replayed create,
+// withdrawal, grievance, notice or export duplicates it or fails with a
+// spurious 409), so they are sent exactly once. Erasure is idempotent on the
+// server (a replay returns the earlier request), so it and the reads keep the
+// client's normal retry behaviour.
 const NO_RETRY: RequestOptions = { retry: false };
 
 function seg(value: string): string {
@@ -98,13 +100,12 @@ export class DpdpClient {
 
   /**
    * Erase a data principal's personal data (right to erasure, DPDP Act s.12).
-   * Idempotent on the server: a repeat returns the earlier request.
+   * Idempotent on the server: a repeat returns the earlier request, so a
+   * transient failure is retried like a read.
    */
   requestErasure(principalId: string): Promise<ErasureResponse> {
     return this.#http.post<ErasureResponse>(
       `/v1/dpdp/data-principals/${seg(principalId)}/erasure`,
-      undefined,
-      NO_RETRY,
     );
   }
 

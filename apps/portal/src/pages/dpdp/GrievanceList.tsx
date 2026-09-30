@@ -114,7 +114,12 @@ export function GrievanceList() {
     setUpdatingId(g.grievanceId);
     try {
       const updated = await updateGrievance(g.grievanceId, request);
-      setGrievances((prev) => prev.map((x) => (x.grievanceId === updated.grievanceId ? { ...x, ...updated } : x)));
+      // Under a status filter, a row that moved to another status no longer belongs on this page.
+      setGrievances((prev) =>
+        statusFilter && updated.status !== statusFilter
+          ? prev.filter((x) => x.grievanceId !== updated.grievanceId)
+          : prev.map((x) => (x.grievanceId === updated.grievanceId ? { ...x, ...updated } : x)),
+      );
       if (lookedUp?.grievanceId === updated.grievanceId) setLookedUp(updated);
       show(`Grievance ${updated.referenceNumber} is now ${grievanceStatusLabel(updated.status)}`, 'success');
     } catch (err) {

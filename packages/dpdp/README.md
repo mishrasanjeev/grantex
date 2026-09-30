@@ -434,7 +434,8 @@ synchronously and is idempotent: `httpStatus` 201 (`created: true`) when somethi
 200 with the earlier request when nothing was left. Returns `requestId`, `status: 'completed'`,
 `recordsErased`, `grantsRevoked`, `delegatedGrantsRevoked`, `grievancesRedacted`, `exportsDeleted`,
 `retained` (what was kept, and why), `submittedAt` and `completedAt`. 404 `NOT_FOUND` when the
-principal has no records.
+principal has no records. Because a replay is safe, a network error or a 429/502/503/504 is retried
+with backoff (up to 3 attempts in total); the other DPDP writes are sent once.
 
 #### `getErasureRequest(requestId: string, apiKey: string, baseUrl: string): Promise<ErasureRequest>`
 

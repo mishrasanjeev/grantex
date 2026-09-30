@@ -294,7 +294,7 @@ describe('dpdp command', () => {
       expect(out).toContain(createConsent['consentNoticeHash'] as string);
       expect(out).toContain('JWS-EdDSA');
       expect(out).toContain('ed25519-2026-09');
-      expect(out).toContain('https://api.grantex.dev/.well-known/jwks.json');
+      expect(out).toContain('https://issuer.example/.well-known/jwks.json');
     });
 
     it('prints JSON in --json mode', async () => {

@@ -143,7 +143,7 @@ func TestDPDPCreateConsentRecord(t *testing.T) {
 		Alg:      "EdDSA",
 		Kid:      strPtr("ed25519-2026-09"),
 		ProofJWT: record.Proof.ProofJWT,
-		JWKSURI:  "https://api.grantex.dev/.well-known/jwks.json",
+		JWKSURI:  "https://issuer.example/.well-known/jwks.json",
 		SignedAt: "2026-09-30T10:15:00.000Z",
 	}
 	if record.Proof == nil || !reflect.DeepEqual(record.Proof, want) || record.Proof.ProofJWT == "" {
@@ -629,7 +629,7 @@ func TestDPDPPathParametersAreEscaped(t *testing.T) {
 	}
 }
 
-// ── No auto-retry on writes ──────────────────────────────────────────────────
+// ── No auto-retry on non-idempotent writes ──────────────────────────────────────────────────
 
 type dpdpWrite struct {
 	name   string
@@ -648,10 +648,6 @@ func dpdpWrites() []dpdpWrite {
 		}},
 		{"WithdrawConsent", func(c *Client) error {
 			_, err := c.DPDP.WithdrawConsent(ctx, "r", WithdrawConsentParams{Reason: "x"})
-			return err
-		}},
-		{"RequestErasure", func(c *Client) error {
-			_, err := c.DPDP.RequestErasure(ctx, "p")
 			return err
 		}},
 		{"CreateConsentNotice", func(c *Client) error {
@@ -715,6 +711,36 @@ func TestDPDPWritesAreNotRetriedAfterTimeout(t *testing.T) {
 				t.Errorf("expected exactly 1 request, got %d", got)
 			}
 		})
+	}
+}
+
+// Erasure is idempotent on the server (a replay returns the earlier request),
+// so RequestErasure keeps the client's normal retry behaviour.
+func TestDPDPRequestErasureRetriesTransient503(t *testing.T) {
+	var count int32
+	body := dpdpFixture(t, "erasure_201")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/dpdp/data-principals/user_123/erasure" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if atomic.AddInt32(&count, 1) == 1 {
+			w.WriteHeader(503)
+			_, _ = w.Write([]byte(`{"message":"unavailable"}`))
+			return
+		}
+		w.WriteHeader(201)
+		_ = json.NewEncoder(w).Encode(body)
+	}))
+	defer server.Close()
+	client := NewClient("test-key", WithBaseURL(server.URL), WithMaxRetries(1))
+
+	res, err := client.DPDP.RequestErasure(context.Background(), "user_123")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.RequestID != "ER-2026-01J9ZE7F8G9H0J1K2M3N4P5Q6R" || atomic.LoadInt32(&count) != 2 {
+		t.Errorf("expected a retried erasure, requestId=%s requests=%d", res.RequestID, count)
 	}
 }
 

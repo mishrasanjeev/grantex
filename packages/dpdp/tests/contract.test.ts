@@ -197,7 +197,7 @@ describe('contract: consent records', () => {
         alg: 'EdDSA',
         kid: 'ed25519-2026-09',
         proofJwt: (fx('createConsentRecord_201').consentProof as Json).proofJwt,
-        jwksUri: 'https://api.grantex.dev/.well-known/jwks.json',
+        jwksUri: 'https://issuer.example/.well-known/jwks.json',
         signedAt: new Date('2026-09-30T10:15:00.000Z'),
       },
       processingExpiresAt: new Date('2027-09-30T00:00:00.000Z'),
@@ -825,4 +825,103 @@ describe('contract: exports', () => {
       message: 'Export has expired and its data was purged',
     });
   });
+});
+
+// ---------------------------------------------------------------------------
+// Retries: erasure is idempotent on the server, the other writes are not
+// ---------------------------------------------------------------------------
+
+describe('contract: retries', () => {
+  function sequence(...replies: Array<[number, unknown] | Error>) {
+    const fn = vi.fn(async () => {
+      const next = replies.shift();
+      if (!next) throw new Error('no more replies');
+      if (next instanceof Error) throw next;
+      const [status, body] = next;
+      return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    });
+    vi.stubGlobal('fetch', fn);
+    return fn;
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('requestDataErasure retries a transient 503 and succeeds (the server returns the earlier request on a replay)', async () => {
+    vi.useFakeTimers();
+    const fn = sequence([503, errorFx('503_CONSENT_PROOF_UNAVAILABLE')], [201, fx('erasure_201')]);
+    const pending = requestDataErasure('user_123', KEY, API);
+    await vi.runAllTimersAsync();
+    const result = await pending;
+    expect(result.requestId).toBe('ER-2026-01J9ZE7F8G9H0J1K2M3N4P5Q6R');
+    expect(result.created).toBe(true);
+    expect(fn).toHaveBeenCalledTimes(2);
+    for (const call of fn.mock.calls as unknown as Array<[string, RequestInit]>) {
+      expect(call[0]).toBe(`${API}/v1/dpdp/data-principals/user_123/erasure`);
+      expect(call[1].method).toBe('POST');
+      expect(call[1].body).toBeUndefined();
+    }
+  });
+
+  it('requestDataErasure retries a network error and succeeds', async () => {
+    vi.useFakeTimers();
+    const fn = sequence(new TypeError('fetch failed'), [200, fx('erasure_201')]);
+    const pending = requestDataErasure('user_123', KEY, API);
+    await vi.runAllTimersAsync();
+    const result = await pending;
+    expect(result.created).toBe(false);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('requestDataErasure gives up after a bounded number of attempts and surfaces the 503', async () => {
+    vi.useFakeTimers();
+    const e = errorFx('503_CONSENT_PROOF_UNAVAILABLE');
+    const fn = sequence([503, e], [503, e], [503, e], [201, fx('erasure_201')]);
+    const pending = requestDataErasure('user_123', KEY, API).catch((err: unknown) => err);
+    await vi.runAllTimersAsync();
+    const err = await pending;
+    expect(err).toBeInstanceOf(DpdpError);
+    expect(err).toMatchObject({ statusCode: 503 });
+    expect(fn).toHaveBeenCalledTimes(3);
+  });
+
+  it('requestDataErasure does not retry a non-transient 404', async () => {
+    const fn = sequence([404, { message: 'No consent records found for this data principal', code: 'NOT_FOUND' }]);
+    await expect(requestDataErasure('nobody', KEY, API)).rejects.toMatchObject({ statusCode: 404 });
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  const nonIdempotentWrites: Array<[string, () => Promise<unknown>]> = [
+    ['createConsentRecord', () => createConsentRecord({
+      grantId: 'g', dataPrincipalId: 'p', purposes: [{ code: 'c', description: 'd' }],
+      consentNoticeId: 'n', processingExpiresAt: new Date('2027-01-01T00:00:00.000Z'), apiKey: KEY, baseUrl: API,
+    } as Parameters<typeof createConsentRecord>[0])],
+    ['withdrawConsent', () => withdrawConsent('r', 'x', { apiKey: KEY, baseUrl: API })],
+    ['createConsentNotice', () => createConsentNotice({
+      noticeId: 'n', version: '1', title: 't', content: 'c', purposes: [{ code: 'c', description: 'd' }],
+      dataFiduciaryContact: 'privacy@acme.example',
+      grievanceOfficer: { name: 'Grievance Officer', email: 'grievance@acme.example' },
+      apiKey: KEY, baseUrl: API,
+    } as Parameters<typeof createConsentNotice>[0])],
+    ['fileGrievance', () => fileGrievance({ dataPrincipalId: 'p', type: 't', description: 'd' }, KEY, API)],
+    ['updateGrievance', () => updateGrievance('grv', { status: 'in_review' }, KEY, API)],
+    ['requestDpdpExport', () => requestDpdpExport(
+      { dateFrom: new Date('2026-09-01T00:00:00.000Z'), dateTo: new Date('2026-09-30T23:59:59.999Z') }, KEY, API)],
+  ];
+
+  for (const [name, invoke] of nonIdempotentWrites) {
+    it(`${name} is sent once and not retried after a 503`, async () => {
+      const e = errorFx('503_CONSENT_PROOF_UNAVAILABLE');
+      const fn = sequence([503, e], [503, e], [503, e]);
+      await expect(invoke()).rejects.toMatchObject({ statusCode: 503 });
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+
+    it(`${name} is sent once and not retried after a network error`, async () => {
+      const fn = sequence(new TypeError('fetch failed'), new TypeError('fetch failed'));
+      await expect(invoke()).rejects.toThrow();
+      expect(fn).toHaveBeenCalledTimes(1);
+    });
+  }
 });

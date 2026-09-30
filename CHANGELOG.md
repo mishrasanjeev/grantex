@@ -107,9 +107,12 @@ Response changes (clients may need updating):
 
 ### DPDP clients match the server (@grantex/dpdp, SDKs, CLI, portal)
 The DPDP clients now send what the routes read and decode what they return,
-cover the new routes, and never retry a DPDP write (creating a record, notice,
-grievance or export and withdrawing consent are not idempotent). Every path
-parameter is percent-encoded.
+cover the new routes, and never retry a non-idempotent DPDP write (creating a
+record, notice, grievance or export, withdrawing consent and updating a
+grievance). Erasure is idempotent on the server (a replay returns the earlier
+request), so it keeps the normal retry on transient failures. Every path
+parameter is percent-encoded. Test fixtures use the synthetic
+`https://issuer.example/.well-known/jwks.json` as the consent-proof `jwksUri`.
 
 - `@grantex/dpdp`: `createConsentNotice` sends the required `noticeId` and no
   longer sends `contentHash` (the server computes it); the grievance officer is
@@ -124,7 +127,9 @@ parameter is percent-encoded.
   plain Node. Statuses include `erased`, `expired` and `in_review`;
   `getDataPrincipalRecords` returns `totalRecords` (`totalCount` is a
   deprecated alias) and pages with `limit`/`cursor`; erasure sends no body and
-  returns the full result, including `retained`; `fileGrievance` takes an
+  returns the full result, including `retained`, and is retried with backoff
+  (up to 3 attempts) on a network error or 429/502/503/504, the only DPDP call
+  that is; `fileGrievance` takes an
   optional `recordId`, a free-text `type`, `evidence` and `responsePeriodDays`;
   exports are JSON only, the include flags are optional, and an expired export
   raises `ExportExpiredError`. Errors carry `statusCode`, `code` and
@@ -142,8 +147,9 @@ parameter is percent-encoded.
   `totalRecords`, `nextCursor` and the erasure counts and `retained`. Fields
   only some routes return are optional, which fixes the Python `KeyError` on
   principal records without a per-record `dataPrincipalId`. DPDP POST and
-  PATCH calls are sent once (no retry on timeout or 5xx). Erasure no longer
-  sends an ignored body. The error `requestId` falls back to the response body
+  PATCH calls other than erasure are sent once (no retry on timeout or 5xx);
+  erasure keeps the client's normal retry. Erasure no longer sends an ignored
+  body. The error `requestId` falls back to the response body
   when there is no `x-request-id` header (TypeScript, Python). Python:
   `withdraw_consent(..., delete_processed_data=)` replaces `delete_data`, which
   is deprecated; explicit `False` flags are now sent. Go: `ListConsentRecords`
@@ -163,12 +169,16 @@ parameter is percent-encoded.
   confirmation that states what is erased and what is retained; the withdraw
   dialog requires a reason, offers to revoke the grant (checked by default) and
   explains 409 responses; grievances are listed from the server and move
-  through review to resolved or rejected with a resolution; exports include
+  through review to resolved or rejected with a resolution (a row that leaves
+  the active status filter is removed from the filtered list); exports include
   the whole of the end date, drop CSV, show truncation and report expiry. The
   compliance dashboard no longer shows "DPDP 2023", "EU AI Act" or "OWASP
-  Agentic Top 10" percentages computed from unrelated counts; it shows consent
-  record counts by status, open grievances with the next response due, and
-  consent notice versions.
+  Agentic Top 10" percentages computed from unrelated counts. With the build
+  flag `VITE_DPDP_DASHBOARD_INDICATORS=true` (off by default; only the exact
+  value `true` enables it) it also shows consent record counts by status, open
+  grievances with the next response due, and consent notice versions, which
+  costs four DPDP list reads per visit; off, the dashboard makes no DPDP reads
+  and shows no DPDP indicators.
 
 ### Status-list reconciliation with cascade (auth service)
 - With `REGISTRY_STATUS_RECONCILIATION_ENABLED=true` (off by default), one

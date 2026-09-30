@@ -14,10 +14,12 @@ import (
 // the rights to access (s.11) and erasure (s.12), grievance redressal (s.13)
 // and compliance exports.
 //
-// Writes (POST and PATCH) are sent exactly once, whatever WithMaxRetries
-// says: they are not idempotent, and a replay after a timeout or 5xx would
-// duplicate a record, grievance, notice or export, or fail with a spurious
-// 409. Reads keep the client's retry behaviour.
+// Writes (POST and PATCH) other than RequestErasure are sent exactly once,
+// whatever WithMaxRetries says: they are not idempotent, and a replay after a
+// timeout or 5xx would duplicate a record, grievance, notice or export, or
+// fail with a spurious 409. Erasure is idempotent on the server (a replay
+// returns the earlier request), so it and the reads keep the client's retry
+// behaviour.
 type DPDPService struct {
 	http *httpClient
 }
@@ -484,9 +486,10 @@ func (s *DPDPService) ListPrincipalRecordsPage(ctx context.Context, principalID 
 }
 
 // RequestErasure erases a data principal's personal data (right to erasure,
-// DPDP Act s.12). The server is idempotent: a repeat returns the earlier request.
+// DPDP Act s.12). The server is idempotent: a repeat returns the earlier
+// request, so a transient failure is retried like a read.
 func (s *DPDPService) RequestErasure(ctx context.Context, principalID string) (*ErasureResponse, error) {
-	return unmarshal[ErasureResponse](s.http.postNoRetry(ctx, fmt.Sprintf("/v1/dpdp/data-principals/%s/erasure", url.PathEscape(principalID)), nil))
+	return unmarshal[ErasureResponse](s.http.post(ctx, fmt.Sprintf("/v1/dpdp/data-principals/%s/erasure", url.PathEscape(principalID)), nil))
 }
 
 // GetErasureRequest fetches an erasure request by ID.

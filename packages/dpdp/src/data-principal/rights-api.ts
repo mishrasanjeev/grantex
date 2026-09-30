@@ -59,7 +59,9 @@ export async function getDataPrincipalRecords(
  * synchronously and is idempotent: 201 when something was erased now, 200 with
  * the earlier request when there was nothing left to erase (`created: false`).
  * `retained` lists what was kept and why. 404 `NOT_FOUND` when the principal
- * has no records.
+ * has no records. Because a replay is safe, a network error or a
+ * 429/502/503/504 is retried with backoff (up to 3 attempts in total); the
+ * other DPDP writes are sent once.
  */
 export async function requestDataErasure(
   principalId: string,
@@ -71,6 +73,8 @@ export async function requestDataErasure(
       method: 'POST',
       url: dpdpUrl(baseUrl, [seg('data-principals'), principalId, seg('erasure')]),
       apiKey,
+      // Idempotent on the server, so a transient failure is safe to retry.
+      retry: true,
     },
     failure(`Failed to submit erasure request for principal ${principalId}`, 'ERASURE_REQUEST_FAILED'),
   );
