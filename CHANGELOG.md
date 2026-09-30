@@ -105,6 +105,71 @@ Response changes (clients may need updating):
 - `purposes`, `evidence`, `grievanceOfficer` and export `data` read back as
   JSON values rather than JSON-encoded strings.
 
+### DPDP clients match the server (@grantex/dpdp, SDKs, CLI, portal)
+The DPDP clients now send what the routes read and decode what they return,
+cover the new routes, and never retry a DPDP write (creating a record, notice,
+grievance or export and withdrawing consent are not idempotent). Every path
+parameter is percent-encoded.
+
+- `@grantex/dpdp`: `createConsentNotice` sends the required `noticeId` and no
+  longer sends `contentHash` (the server computes it); the grievance officer is
+  `{ name, email, phone? }`. Purposes go on the wire as `{ code, description }`;
+  the richer `ConsentPurpose` is still accepted and its other fields are
+  local-only. `createConsentRecord` sends only the fields the server reads and
+  returns the server's `consentProof` (`JWS-EdDSA`: `proofJwt`, `alg`, `kid`,
+  `jwksUri`, `signedAt`); the IP, user-agent and notice-content hashes are
+  local evidence (`localEvidence`) and never sent. `hashIpAddress` no longer
+  calls `require`, which threw a `ReferenceError` in the published ES module
+  whenever `proofIpAddress` was set; a test now runs the built package in
+  plain Node. Statuses include `erased`, `expired` and `in_review`;
+  `getDataPrincipalRecords` returns `totalRecords` (`totalCount` is a
+  deprecated alias) and pages with `limit`/`cursor`; erasure sends no body and
+  returns the full result, including `retained`; `fileGrievance` takes an
+  optional `recordId`, a free-text `type`, `evidence` and `responsePeriodDays`;
+  exports are JSON only, the include flags are optional, and an expired export
+  raises `ExportExpiredError`. Errors carry `statusCode`, `code` and
+  `requestId`. New: `listConsentRecordsPage`, `listConsentNotices`,
+  `getConsentNotice`, `listGrievances`, `updateGrievance`, `getErasureRequest`.
+  Region data: India is not a data-localisation regime (DPDP Act s.16) and its
+  grievance period is the fiduciary's published period of at most 90 days; the
+  EU region no longer claims a residency requirement (GDPR Chapter V governs
+  transfers) and gains `consentMinAgeRange` 13 to 16 (GDPR Art. 8). EU AI Act
+  Art. 50 is described as transparency for certain AI systems.
+- TypeScript, Python and Go SDKs: new list/get consent notices, list and update
+  grievances, get erasure request, and `limit`/`cursor` on the consent-record
+  and principal-record lists; new fields `consentNoticeVersion`, `erasedAt`,
+  `responsePeriodDays`, `dataDeletionRequested`, `truncated`, `auditLogLimit`,
+  `totalRecords`, `nextCursor` and the erasure counts and `retained`. Fields
+  only some routes return are optional, which fixes the Python `KeyError` on
+  principal records without a per-record `dataPrincipalId`. DPDP POST and
+  PATCH calls are sent once (no retry on timeout or 5xx). Erasure no longer
+  sends an ignored body. The error `requestId` falls back to the response body
+  when there is no `x-request-id` header (TypeScript, Python). Python:
+  `withdraw_consent(..., delete_processed_data=)` replaces `delete_data`, which
+  is deprecated; explicit `False` flags are now sent. Go: `ListConsentRecords`
+  is deprecated in favour of `ListConsentRecordsPage`, which returns
+  `TotalRecords` and `NextCursor` (likewise `ListPrincipalRecordsPage`).
+  Export status is `complete`, not `completed`.
+- CLI: `grantex dpdp notices create --version` was swallowed by the root
+  `--version` flag and never created the notice; the option is now
+  `--notice-version`. The CSV export format is removed (the server only
+  produces JSON); `--no-include-action-log` and `--no-include-consent-records`
+  work; errors print the `code` and `requestId`; requests time out after 30
+  seconds. New `notices list|get`, `grievances list|update`,
+  `erasure status <requestId>` (and `erasure request <principalId>`), with
+  `--limit`/`--cursor` on the lists.
+- Portal: the consent record page loads the record; the list searches consent
+  records by data principal, pages, and can erase a data principal after a
+  confirmation that states what is erased and what is retained; the withdraw
+  dialog requires a reason, offers to revoke the grant (checked by default) and
+  explains 409 responses; grievances are listed from the server and move
+  through review to resolved or rejected with a resolution; exports include
+  the whole of the end date, drop CSV, show truncation and report expiry. The
+  compliance dashboard no longer shows "DPDP 2023", "EU AI Act" or "OWASP
+  Agentic Top 10" percentages computed from unrelated counts; it shows consent
+  record counts by status, open grievances with the next response due, and
+  consent notice versions.
+
 ### Status-list reconciliation with cascade (auth service)
 - With `REGISTRY_STATUS_RECONCILIATION_ENABLED=true` (off by default), one
   instance at a time, under a Postgres advisory lock and after a random start
