@@ -1640,6 +1640,7 @@ class SsoCallbackResult:
     mapped_scopes: tuple[str, ...]
     developer_id: str
     expires_at: str
+    session_token: str | None = None
     email: str | None = None
     name: str | None = None
     sub: str | None = None
@@ -1653,6 +1654,7 @@ class SsoCallbackResult:
             mapped_scopes=tuple(data.get("mappedScopes", [])),
             developer_id=data["developerId"],
             expires_at=data["expiresAt"],
+            session_token=data.get("sessionToken"),
             email=data.get("email"),
             name=data.get("name"),
             sub=data.get("sub"),

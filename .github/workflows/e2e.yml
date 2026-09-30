@@ -66,6 +66,11 @@ jobs:
           E2E_PUBLIC_BASE_URL: https://grantex.dev
         run: npx vitest run --testTimeout=120000 tests/e2e/live-mode.test.ts
 
+      - name: Agent callback registration and live authorization
+        env:
+          E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
+        run: npx vitest run --testTimeout=120000 tests/e2e/agent-redirect-uris.test.ts
+
       - name: Portal features (full API surface)
         env:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app

@@ -7,7 +7,7 @@ description: "Manage agents, grants, audit logs, and more from your terminal."
 ## Install
 
 ```bash
-npm install -g @grantex/cli@0.4.1
+npm install -g @grantex/cli@0.4.2
 ```
 
 Node.js 22.12+ is required. This release uses SDK 0.8 enforcement: expected
@@ -104,10 +104,19 @@ grantex authorize --agent ag_01ABC... --principal user@example.com --scopes emai
 ```bash
 grantex agents list
 grantex agents register --name travel-booker --description "Books travel" --scopes calendar:read,payments:initiate
+grantex agents register --name callback-agent --description "Uses an authorization callback" --scopes records:read \
+  --redirect-uri https://client.example/grants/callback
 grantex agents get ag_01ABC...
 grantex agents update ag_01ABC... --name new-name --scopes calendar:read,email:send
+grantex agents update ag_01ABC... --redirect-uri https://client.example/grants/callback
+grantex agents update ag_01ABC... --clear-redirect-uris
 grantex agents delete ag_01ABC...
 ```
+
+Repeat `--redirect-uri` for multiple callbacks. On update, these values replace
+the complete list. Omitting the option preserves existing callbacks, while
+`--clear-redirect-uris` removes all of them. Live authorization requires an
+exact match to a registered HTTPS URI.
 
 ### Tokens
 
@@ -344,10 +353,8 @@ These commands keep the records described in [DPDP Compliance](/features/dpdp-co
 they help evidence DPDP Act obligations and are not legal advice.
 
 ```bash
-# Consent notices (DPDP s.5, DPDP Rules 2025 r.3). The version option is --notice-version:
-# --version anywhere on the command line prints the CLI version. Published @grantex/cli 0.4.1
-# predates --notice-version and cannot create notices; with it, use the API:
-#   curl -X POST https://api.grantex.dev/v1/dpdp/consent-notices #     -H "Authorization: Bearer $GRANTEX_API_KEY" -H "Content-Type: application/json" #     -d '{"noticeId":"privacy-v1","version":"1.0","title":"Privacy Notice","content":"We process your data for...","purposes":[{"code":"analytics","description":"Usage analytics"}]}'
+# Consent notices (DPDP s.5, DPDP Rules 2025 r.3). Use --notice-version;
+# --version anywhere on the command line prints the CLI version.
 grantex dpdp notices create --notice-id privacy-v1 --notice-version 1.0 --title "Privacy Notice"   --content "We process your data for..." --purposes '[{"code":"analytics","description":"Usage analytics"}]'
 grantex dpdp notices list
 grantex dpdp notices get privacy-v1
@@ -412,7 +419,7 @@ grantex config set --url http://localhost:3001 --key dev-api-key-local
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 22.12+
 
 ## Ownership
 

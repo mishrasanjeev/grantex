@@ -6,6 +6,8 @@ import type {
 import { getSql } from '../db/client.js';
 import { hashApiKey } from '../lib/hash.js';
 import { isPlanName, type PlanName } from '../lib/plans.js';
+import { config } from '../config.js';
+import { findSsoSession, SSO_TOKEN_PREFIX, type SsoSessionRow } from '../lib/sso.js';
 
 export interface Developer {
   id: string;
@@ -13,6 +15,8 @@ export interface Developer {
   mode: 'live' | 'sandbox';
   plan: PlanName;
   fidoRequired?: boolean;
+  authKind?: 'api_key' | 'sso';
+  ssoSession?: SsoSessionRow;
 }
 
 declare module 'fastify' {
@@ -51,7 +55,16 @@ export async function authenticateRequest(
     });
     return;
   }
-  const keyHash = hashApiKey(apiKey);
+  const isSsoToken = apiKey.startsWith(SSO_TOKEN_PREFIX);
+  let session: SsoSessionRow | null = null;
+  if (isSsoToken) {
+    session = config.ssoHumanEnforcementEnabled ? await findSsoSession(apiKey) : null;
+    if (!session || !session.mapped_scopes.includes('admin')) {
+      await reply.status(401).send({ message: 'Invalid or unauthorized SSO session', code: 'UNAUTHORIZED', requestId: request.id });
+      return;
+    }
+  }
+  const keyHash = isSsoToken ? null : hashApiKey(apiKey);
 
   const sql = getSql();
   const rows = await sql<{ id: string; name: string; mode: string; plan: string; fido_required: boolean }[]>`
@@ -63,7 +76,8 @@ export async function authenticateRequest(
              LIMIT 1
            ), 'free') AS plan
     FROM developers d
-    WHERE d.api_key_hash = ${keyHash}
+    WHERE ${session ? session.developer_id : null} = d.id
+       OR (d.api_key_hash = ${keyHash} AND ${!isSsoToken})
     LIMIT 1
   `;
 
@@ -83,6 +97,8 @@ export async function authenticateRequest(
     mode: dev.mode === 'sandbox' ? 'sandbox' : 'live',
     plan: isPlanName(dev.plan) ? dev.plan : 'free',
     fidoRequired: dev.fido_required === true,
+    authKind: session ? 'sso' : 'api_key',
+    ...(session ? { ssoSession: session } : {}),
   };
 }
 

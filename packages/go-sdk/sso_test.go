@@ -419,6 +419,7 @@ func TestSSOHandleOidcCallback(t *testing.T) {
 			"mappedScopes": []string{"read", "admin"},
 			"principalId":  "prn-1",
 			"sessionId":    "sess-1",
+			"sessionToken": "gx_sso_test_token",
 			"expiresAt":    "2026-03-30T00:00:00Z",
 		})
 	}))
@@ -432,6 +433,9 @@ func TestSSOHandleOidcCallback(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.SessionToken != "gx_sso_test_token" {
+		t.Errorf("expected SSO bearer session token, got %q", result.SessionToken)
 	}
 	if result.Email == nil || *result.Email != "alice@acme.com" {
 		t.Errorf("expected alice@acme.com, got %v", result.Email)

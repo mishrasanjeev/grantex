@@ -78,6 +78,7 @@ MOCK_SESSION = {
 
 MOCK_CALLBACK_RESULT = {
     "sessionId": "sso_sess_01",
+    "sessionToken": "gx_sso_test_token",
     "email": "alice@corp.com",
     "name": "Alice Smith",
     "sub": "idp_user_01",
@@ -356,6 +357,7 @@ def test_handle_oidc_callback(client: Grantex) -> None:
     result = client.sso.handle_oidc_callback(params)
 
     assert result.session_id == "sso_sess_01"
+    assert result.session_token == "gx_sso_test_token"
     assert result.email == "alice@corp.com"
     assert result.name == "Alice Smith"
     assert result.sub == "idp_user_01"

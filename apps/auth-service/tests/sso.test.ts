@@ -4,6 +4,10 @@ import type { FastifyInstance } from 'fastify';
 
 // ── Mock the SSO library so routes are tested in isolation ────────────────
 vi.mock('../src/lib/sso.js', () => ({
+  SSO_TOKEN_PREFIX: 'gx_sso_',
+  findSsoSession: vi.fn().mockResolvedValue(null),
+  hashSsoToken: vi.fn().mockReturnValue(null),
+  normalizeGroupMappings: vi.fn((value: unknown) => value),
   discoverOidcProvider: vi.fn().mockResolvedValue({
     issuer: 'https://idp.example.com',
     authorization_endpoint: 'https://idp.example.com/authorize',
@@ -87,6 +91,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   setSafeFetchForTests(null);
   mockedResolveConnection.mockReset();
   mockedVerifyIdToken.mockReset().mockResolvedValue({
@@ -486,10 +491,8 @@ describe('POST /v1/sso/connections/:id/test', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('POST /v1/sso/enforce', () => {
-  it('enables SSO enforcement', async () => {
+  it('rejects enablement while the server feature is off', async () => {
     seedAuth();
-    sqlMock.mockResolvedValueOnce([]); // UPDATE sso_connections
-
     const res = await app.inject({
       method: 'POST',
       url: '/v1/sso/enforce',
@@ -497,8 +500,81 @@ describe('POST /v1/sso/enforce', () => {
       payload: { enforce: true },
     });
 
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('SSO_ENFORCEMENT_DISABLED');
+  });
+
+  it('requires an active JIT connection before enablement', async () => {
+    vi.stubEnv('SSO_HUMAN_ENFORCEMENT_ENABLED', 'true');
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'POST', url: '/v1/sso/enforce', headers: authHeader(), payload: { enforce: true },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('SSO_CONNECTION_REQUIRED');
+  });
+
+  it('enables SSO enforcement with an active JIT connection', async () => {
+    vi.stubEnv('SSO_HUMAN_ENFORCEMENT_ENABLED', 'true');
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ sso_subject_namespace: false }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'sso_CONN01' }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'ssosess_ADMIN01' }]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'POST', url: '/v1/sso/enforce', headers: authHeader(), payload: { enforce: true },
+    });
+
     expect(res.statusCode).toBe(200);
     expect(res.json().enforce).toBe(true);
+  });
+
+  it('preserves an unambiguous legacy principal at enablement', async () => {
+    vi.stubEnv('SSO_HUMAN_ENFORCEMENT_ENABLED', 'true');
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ sso_subject_namespace: false }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'sso_CONN01' }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'ssosess_ADMIN01' }]);
+    sqlMock.mockResolvedValueOnce([{ principal_id: 'scimuser_JIT01', connection_id: 'sso_CONN01', idp_subject: 'idp_user_01' }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'scimuser_JIT01' }]);
+    const res = await app.inject({
+      method: 'POST', url: '/v1/sso/enforce', headers: authHeader(), payload: { enforce: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.stringify(sqlMock.mock.calls)).toContain('sso_CONN01:idp_user_01');
+  });
+
+  it('refuses to enable when a principal has conflicting IdP subjects', async () => {
+    vi.stubEnv('SSO_HUMAN_ENFORCEMENT_ENABLED', 'true');
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ sso_subject_namespace: false }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'sso_CONN01' }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'ssosess_ADMIN01' }]);
+    sqlMock.mockResolvedValueOnce([
+      { principal_id: 'scimuser_JIT01', connection_id: 'sso_CONN01', idp_subject: 'one' },
+      { principal_id: 'scimuser_JIT01', connection_id: 'sso_CONN02', idp_subject: 'two' },
+    ]);
+    const res = await app.inject({
+      method: 'POST', url: '/v1/sso/enforce', headers: authHeader(), payload: { enforce: true },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('SSO_IDENTITY_CONFLICT');
+  });
+
+  it('requires a proven OIDC dashboard administrator before enabling', async () => {
+    vi.stubEnv('SSO_HUMAN_ENFORCEMENT_ENABLED', 'true');
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ sso_subject_namespace: false }]);
+    sqlMock.mockResolvedValueOnce([{ id: 'sso_CONN01' }]);
+    sqlMock.mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'POST', url: '/v1/sso/enforce', headers: authHeader(), payload: { enforce: true },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('SSO_ADMIN_LOGIN_REQUIRED');
   });
 
   it('returns 400 when enforce not boolean', async () => {

@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent, type KeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createAgent, getAgent, updateAgent } from '../../api/agents';
+import { ApiError } from '../../api/client';
 import { useToast } from '../../store/toast';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -17,6 +18,8 @@ export function AgentForm() {
   const [description, setDescription] = useState('');
   const [scopes, setScopes] = useState<string[]>([]);
   const [scopeInput, setScopeInput] = useState('');
+  const [redirectUris, setRedirectUris] = useState<string[]>([]);
+  const [originalRedirectUris, setOriginalRedirectUris] = useState<string[]>([]);
   const [loading, setLoading] = useState(isEdit);
   const [submitting, setSubmitting] = useState(false);
 
@@ -27,6 +30,8 @@ export function AgentForm() {
         setName(agent.name);
         setDescription(agent.description ?? '');
         setScopes(agent.scopes);
+        setRedirectUris(agent.redirectUris ?? []);
+        setOriginalRedirectUris(agent.redirectUris ?? []);
       })
       .catch(() => {
         show('Agent not found', 'error');
@@ -60,6 +65,11 @@ export function AgentForm() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    const callbacks = redirectUris.map((uri) => uri.trim());
+    if (new Set(callbacks).size !== callbacks.length) {
+      show('Redirect URIs must be unique', 'error');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -68,6 +78,7 @@ export function AgentForm() {
           name: name.trim(),
           description: description.trim() || undefined,
           scopes,
+          ...(JSON.stringify(callbacks) !== JSON.stringify(originalRedirectUris) ? { redirectUris: callbacks } : {}),
         });
         show('Agent updated', 'success');
         navigate(`/dashboard/agents/${id}`);
@@ -76,12 +87,13 @@ export function AgentForm() {
           name: name.trim(),
           description: description.trim() || undefined,
           scopes,
+          ...(callbacks.length > 0 ? { redirectUris: callbacks } : {}),
         });
         show('Agent created', 'success');
         navigate(`/dashboard/agents/${agent.agentId}`);
       }
-    } catch {
-      show(isEdit ? 'Failed to update agent' : 'Failed to create agent', 'error');
+    } catch (error) {
+      show(error instanceof ApiError ? error.message : isEdit ? 'Failed to update agent' : 'Failed to create agent', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -152,6 +164,51 @@ export function AgentForm() {
             </div>
             <p className="mt-1 text-xs text-gx-muted">
               Press Enter or comma to add a scope
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-gx-text mb-1.5">Redirect URIs</p>
+            <div className="space-y-2">
+              {redirectUris.map((uri, index) => (
+                <div key={index} className="flex items-end gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Input
+                      id={`redirect-uri-${index}`}
+                      label={`Callback ${index + 1}`}
+                      type="url"
+                      required
+                      maxLength={2048}
+                      value={uri}
+                      onChange={(e) => setRedirectUris((prev) => prev.map((value, i) => i === index ? e.target.value : value))}
+                      placeholder="https://client.example/callback"
+                    />
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    aria-label={`Remove callback ${index + 1}`}
+                    title={`Remove callback ${index + 1}`}
+                    onClick={() => setRedirectUris((prev) => prev.filter((_, i) => i !== index))}
+                    className="h-[38px]"
+                  >
+                    &times;
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="mt-2"
+              aria-label="Add callback URI"
+              disabled={redirectUris.length >= 20}
+              onClick={() => setRedirectUris((prev) => [...prev, ''])}
+            >
+              + Add callback URI
+            </Button>
+            <p className="mt-1 text-xs text-gx-muted">
+              HTTPS in production. Authorization callbacks must match a registered URI exactly.
             </p>
           </div>
 

@@ -159,6 +159,17 @@ describe('escapeLdapFilter', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe('mapGroupsToScopes', () => {
+  it('reads legacy double-encoded JSONB mappings without granting malformed entries', () => {
+    const legacy = '{"admins":["admin"],"bad":"admin"}' as unknown as Record<string, string[]>;
+    expect(mapGroupsToScopes(['admins'], legacy, ['read'])).toEqual(['admin']);
+    expect(mapGroupsToScopes(['bad'], legacy, ['read'])).toEqual(['read']);
+  });
+  it('ignores prototype-shaped group names without modifying object prototypes', () => {
+    const mappings = JSON.parse('{"__proto__":["admin"],"constructor":["admin"],"prototype":["admin"],"staff":["read"]}');
+    expect(mapGroupsToScopes(['__proto__', 'constructor', 'prototype'], mappings, ['fallback'])).toEqual(['fallback']);
+    expect(mapGroupsToScopes(['staff'], mappings, ['fallback'])).toEqual(['read']);
+    expect(({} as Record<string, unknown>)['admin']).toBeUndefined();
+  });
   const mappings = {
     Engineering: ['read', 'write', 'deploy'],
     Admins: ['admin', 'read', 'write'],

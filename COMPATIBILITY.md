@@ -1,7 +1,7 @@
 # Grantex Compatibility Matrix
 
-Last updated: 2026-09-29
-Release snapshot verified: 2026-09-29
+Last updated: 2026-09-30
+Release snapshot verified: 2026-09-30
 
 This repository uses package-specific versions; there is no monorepo-wide SDK or package release number. The protocol specification remains v1.0 Final, while repository metadata and package registries can move independently during a release.
 
@@ -27,7 +27,7 @@ The repository contains 35 packages under `packages/`. Each row maps a directory
 | 1 | `packages/sdk-ts` | @grantex/sdk | 0.8.1 | Primary SDK (TypeScript); published and registry verified |
 | 2 | `packages/sdk-py` | grantex | 0.7.1 | Published; registry verified |
 | 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.4.2 (Go 1.26.1) | Primary SDK (Go); tag and public proxy verified |
-| 4 | `packages/cli` | @grantex/cli | 0.4.1 | Published; registry verified |
+| 4 | `packages/cli` | @grantex/cli | 0.4.2 | Published; registry and clean-install verified |
 | 5 | `packages/mcp-auth` | @grantex/mcp-auth | 4.0.0 | Published and registry verified; deployment configuration required |
 | 6 | `packages/mcp` | @grantex/mcp | 0.1.10 | Adapter |
 | 7 | `packages/langchain` | @grantex/langchain | 0.1.8 | Published; registry verified |
@@ -67,10 +67,10 @@ The repository contains 35 packages under `packages/`. Each row maps a directory
   page does not replace human login or passkeys. Memory storage and explicitly
   disabled current-grant checks remain evaluation-only.
 - **Prepared, not yet published:** `@grantex/sdk` 0.8.2, `grantex` 0.7.2, Go
-  v0.4.3, `@grantex/cli` 0.4.2 and `@grantex/dpdp` 0.2.0 carry the DPDP client
-  changes (the DPDP routes as shipped, `--notice-version`, `keyPersistence`,
-  expanded erasure results). Until they are on the registries, install the
-  versions listed above; CLI 0.4.1 cannot create consent notices.
+  v0.4.3 and `@grantex/dpdp` 0.2.0 carry the DPDP client changes (the DPDP
+  routes as shipped, `keyPersistence`, expanded erasure results). Until they
+  are on the registries, install the published versions listed above.
+  `@grantex/cli` 0.4.2 is already published and supports `--notice-version`.
 - **Unpublished audit changes:** changed
   integration source is not a new registry release. Existing integration
   versions do not contain the audit's new opt-in authority forwarding.

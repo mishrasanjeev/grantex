@@ -6,6 +6,8 @@ export interface Developer {
   mode: 'live' | 'sandbox';
   plan: string;
   fidoRequired: boolean;
+  ssoEnforced?: boolean;
+  humanSession?: boolean;
   fidoRpName: string | null;
   createdAt: string;
 }
@@ -33,6 +35,7 @@ export interface Agent {
   description: string | null;
   scopes: string[];
   status: 'active' | 'suspended';
+  redirectUris?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -41,6 +44,7 @@ export interface CreateAgentRequest {
   name: string;
   description?: string;
   scopes: string[];
+  redirectUris?: string[];
 }
 
 // ── Grants ───────────────────────────────────────────────────────────────

@@ -159,6 +159,17 @@ describe('agentsCommand()', () => {
     expect(parsed.agentId).toBe('ag_2');
   });
 
+  it('registers multiple exact callback URIs', async () => {
+    mockClient.agents.register.mockResolvedValue({ agentId: 'ag_2', scopes: [], createdAt: '2026-01-01T00:00:00Z' });
+    await agentsCommand().parseAsync([
+      'node', 'test', 'register', '--name', 'Bot', '--description', 'Test', '--scopes', 'read',
+      '--redirect-uri', 'https://client.example/first', '--redirect-uri', 'https://client.example/second',
+    ]);
+    expect(mockClient.agents.register).toHaveBeenCalledWith(expect.objectContaining({
+      redirectUris: ['https://client.example/first', 'https://client.example/second'],
+    }));
+  });
+
   // ── get ───────────────────────────────────────────────────────────────
 
   it('get calls agents.get with agentId', async () => {
@@ -245,6 +256,30 @@ describe('agentsCommand()', () => {
     expect(mockClient.agents.update).toHaveBeenCalledWith('ag_1', {
       scopes: ['email:read', 'calendar:write'],
     });
+  });
+
+  it('updates only the supplied callback URIs', async () => {
+    mockClient.agents.update.mockResolvedValue({ agentId: 'ag_1' });
+    await agentsCommand().parseAsync([
+      'node', 'test', 'update', 'ag_1', '--redirect-uri', 'https://client.example/callback',
+    ]);
+    expect(mockClient.agents.update).toHaveBeenCalledWith('ag_1', {
+      redirectUris: ['https://client.example/callback'],
+    });
+  });
+
+  it('clears callback URIs only with an explicit option', async () => {
+    mockClient.agents.update.mockResolvedValue({ agentId: 'ag_1' });
+    await agentsCommand().parseAsync(['node', 'test', 'update', 'ag_1', '--clear-redirect-uris']);
+    expect(mockClient.agents.update).toHaveBeenCalledWith('ag_1', { redirectUris: [] });
+  });
+
+  it('rejects conflicting callback URI options', async () => {
+    await expect(agentsCommand().parseAsync([
+      'node', 'test', 'update', 'ag_1', '--clear-redirect-uris',
+      '--redirect-uri', 'https://client.example/callback',
+    ])).rejects.toThrow('--redirect-uri and --clear-redirect-uris cannot be used together');
+    expect(mockClient.agents.update).not.toHaveBeenCalled();
   });
 
   it('update --json outputs JSON', async () => {

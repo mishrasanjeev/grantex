@@ -4,6 +4,8 @@ import {
   createSsoConnection,
   deleteSsoConnection,
   testSsoConnection,
+  getSsoEnforcement,
+  setSsoEnforcement,
   type SsoConnection,
   type CreateConnectionData,
 } from '../../api/sso';
@@ -41,13 +43,14 @@ export function SsoConfigPage() {
   const [deleteTarget, setDeleteTarget] = useState<SsoConnection | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [orgEnforced, setOrgEnforced] = useState(false);
+  const [savingEnforcement, setSavingEnforcement] = useState(false);
 
   // Create form state
   const [name, setName] = useState('');
   const [protocol, setProtocol] = useState<Protocol>('oidc');
   const [domains, setDomains] = useState('');
   const [jitProvisioning, setJitProvisioning] = useState(false);
-  const [enforce, setEnforce] = useState(false);
 
   // OIDC fields
   const [issuerUrl, setIssuerUrl] = useState('');
@@ -75,6 +78,7 @@ export function SsoConfigPage() {
 
   useEffect(() => {
     loadConnections();
+    getSsoEnforcement().then((state) => setOrgEnforced(state.enforce)).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -99,7 +103,6 @@ export function SsoConfigPage() {
     setProtocol('oidc');
     setDomains('');
     setJitProvisioning(false);
-    setEnforce(false);
     setIssuerUrl('');
     setClientId('');
     setClientSecret('');
@@ -135,7 +138,6 @@ export function SsoConfigPage() {
         protocol,
         ...(domains ? { domains: domains.split(',').map((d) => d.trim()).filter(Boolean) } : {}),
         ...(jitProvisioning ? { jitProvisioning: true } : {}),
-        ...(enforce ? { enforce: true } : {}),
       };
 
       if (protocol === 'oidc') {
@@ -202,6 +204,19 @@ export function SsoConfigPage() {
     }
   }
 
+  async function handleEnforcement(enforce: boolean) {
+    setSavingEnforcement(true);
+    try {
+      const result = await setSsoEnforcement(enforce);
+      setOrgEnforced(result.enforce);
+      show(result.enforce ? 'Human SSO enforcement enabled' : 'Human SSO enforcement disabled', 'success');
+    } catch (err) {
+      show(err instanceof ApiError ? err.message : 'Could not update SSO enforcement', 'error');
+    } finally {
+      setSavingEnforcement(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -239,13 +254,6 @@ export function SsoConfigPage() {
       header: 'Domains',
       render: (row: SsoConnection) => (
         <span className="text-sm text-gx-muted">{row.domains.join(', ') || '\u2014'}</span>
-      ),
-    },
-    {
-      key: 'enforce',
-      header: 'Enforce',
-      render: (row: SsoConnection) => (
-        <span className="text-sm text-gx-muted">{row.enforce ? 'Yes' : 'No'}</span>
       ),
     },
     {
@@ -300,10 +308,17 @@ export function SsoConfigPage() {
       </Card>
 
       <Card>
-        <h2 className="text-sm font-semibold text-gx-text mb-2">About SSO</h2>
+        <div className="flex items-center justify-between gap-4 mb-3">
+          <h2 className="text-sm font-semibold text-gx-text">Human SSO enforcement</h2>
+          <input id="org-sso-enforcement" type="checkbox" checked={orgEnforced}
+            disabled={savingEnforcement || (!orgEnforced && !connections.some((c) => c.status === 'active' && c.protocol === 'oidc' && c.jitProvisioning))}
+            onChange={(event) => void handleEnforcement(event.target.checked)} />
+        </div>
+        <label htmlFor="org-sso-enforcement" className="text-xs text-gx-muted leading-relaxed block mb-3">
+          Require an active SSO session for dashboard sign-in and matching-principal consent. First complete an OIDC administrator login; enabling signs out existing browser sessions. Machine API keys remain valid.
+        </label>
         <p className="text-xs text-gx-muted leading-relaxed">
-          Single Sign-On allows members of your organization to log in using your existing identity
-          provider via OpenID Connect, SAML 2.0, or LDAP. SSO is available on the Enterprise plan.
+          Developer API keys remain authorized for machine API calls. Verify an administrator login and principal mapping before enabling.
         </p>
       </Card>
 
@@ -476,18 +491,6 @@ export function SsoConfigPage() {
               />
               <label htmlFor="jit-provisioning" className="text-sm font-medium text-gx-text">
                 JIT Provisioning
-              </label>
-            </div>
-            <div className="flex items-center gap-3">
-              <input
-                id="enforce-sso"
-                type="checkbox"
-                checked={enforce}
-                onChange={(e) => setEnforce(e.target.checked)}
-                className="h-4 w-4 rounded border-gx-border bg-gx-bg text-gx-accent focus:ring-gx-accent"
-              />
-              <label htmlFor="enforce-sso" className="text-sm font-medium text-gx-text">
-                Enforce SSO
               </label>
             </div>
           </div>

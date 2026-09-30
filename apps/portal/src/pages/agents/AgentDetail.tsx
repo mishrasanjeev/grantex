@@ -154,6 +154,21 @@ export function AgentDetail() {
               </dd>
             </div>
             <div>
+              <dt className="text-xs text-gx-muted">Redirect URIs</dt>
+              <dd className="mt-1">
+                {agent.redirectUris?.length ? (
+                  <ul className="space-y-1">
+                    {agent.redirectUris.map((uri) => (
+                      <li key={uri} className="flex items-center gap-2 min-w-0">
+                        <code className="text-xs font-mono text-gx-text break-all">{uri}</code>
+                        <CopyButton text={uri} />
+                      </li>
+                    ))}
+                  </ul>
+                ) : <span className="text-sm text-gx-muted">None registered</span>}
+              </dd>
+            </div>
+            <div>
               <dt className="text-xs text-gx-muted">Created</dt>
               <dd className="text-sm text-gx-text mt-0.5">{formatDateTime(agent.createdAt)}</dd>
             </div>

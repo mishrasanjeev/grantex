@@ -2,6 +2,10 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Command, CommanderError } from 'commander';
 
+const packageVersion = (
+  JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
+).version;
+
 vi.mock('../src/config.js', () => ({
   defaultConfigPath: vi.fn().mockReturnValue('/home/user/.grantex/config.json'),
   loadConfig: vi.fn(),
@@ -232,7 +236,7 @@ describe('dpdp command', () => {
       const { program, output } = realProgram();
       await program.parseAsync(noticeCreateArgs, { from: 'user' });
 
-      expect(output()).not.toContain('0.4.2');
+      expect(output()).not.toContain(packageVersion);
       expect(fetchUrl()).toBe(`${BASE}/v1/dpdp/consent-notices`);
       expect(sentBody().version).toBe('2.0');
       expect(sentBody().noticeId).toBe('privacy-notice');
@@ -243,14 +247,14 @@ describe('dpdp command', () => {
       const err = await program.parseAsync(['--version'], { from: 'user' }).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(CommanderError);
       expect((err as CommanderError).code).toBe('commander.version');
-      expect(output()).toContain('0.4.2');
+      expect(output()).toContain(packageVersion);
     });
 
     it('still prints the CLI version for grantex -V', async () => {
       const { program, output } = realProgram();
       const err = await program.parseAsync(['-V'], { from: 'user' }).catch((e: unknown) => e);
       expect((err as CommanderError).code).toBe('commander.version');
-      expect(output()).toContain('0.4.2');
+      expect(output()).toContain(packageVersion);
     });
   });
 

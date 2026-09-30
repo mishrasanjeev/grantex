@@ -117,3 +117,11 @@ export function deleteSsoConnection(id: string): Promise<void> {
 export function testSsoConnection(id: string): Promise<TestResult> {
   return api.post<TestResult>(`/v1/sso/connections/${encodeURIComponent(id)}/test`);
 }
+
+export function getSsoEnforcement(): Promise<{ enforce: boolean }> {
+  return api.get('/v1/sso/enforce');
+}
+
+export function setSsoEnforcement(enforce: boolean): Promise<{ enforce: boolean }> {
+  return api.post('/v1/sso/enforce', { enforce });
+}
