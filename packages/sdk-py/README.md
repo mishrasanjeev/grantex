@@ -254,6 +254,20 @@ products = client.commerce.search_catalog({
 })
 ```
 
+## Accredited issuer adapters
+
+The registry asks an accredited issuer to attest an agent through one seam,
+`grantex.issuers.AccreditedIssuerClient`: `issuer_metadata()`,
+`request_attestation(agent_record, proved_key)` and `fetch_status(credential_ref)`.
+`load_issuer_client()` builds the adapter named in `GRANTEX_ISSUER_ADAPTER`
+through the `grantex.issuers` entry point group; the SDK registers `mock`, which
+drives the repository's mock issuer with no network. A real issuer's adapter is
+its own package, configured by `GRANTEX_ISSUER_BASE_URL`,
+`GRANTEX_ISSUER_CLIENT_ID` / `GRANTEX_ISSUER_CLIENT_SECRET` (or
+`GRANTEX_ISSUER_TOKEN`) and `GRANTEX_ISSUER_SCOPES`; a name that is not
+installed fails closed. See
+[Implementing an Issuer Adapter](https://docs.grantex.dev/issuers/implementing-an-issuer-adapter).
+
 ## Configuration
 
 ```python

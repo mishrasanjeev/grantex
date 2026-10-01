@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Accredited issuer adapters (Python SDK)
+- `grantex.issuers`: the `AccreditedIssuerClient` seam between the registry
+  and an accredited issuer, with exactly three operations
+  (`issuer_metadata`, `request_attestation`, `fetch_status`), the records
+  they exchange, and `load_issuer_client()`, which selects an adapter by the
+  `grantex.issuers` entry point named in `GRANTEX_ISSUER_ADAPTER` and
+  configures it from `GRANTEX_ISSUER_BASE_URL`, `GRANTEX_ISSUER_CLIENT_ID`,
+  `GRANTEX_ISSUER_CLIENT_SECRET` (or `GRANTEX_ISSUER_TOKEN`) and
+  `GRANTEX_ISSUER_SCOPES`. The SDK registers `mock`, which drives the
+  repository's mock issuer CLI with no network. A name that is not installed
+  fails closed with `adapter_not_installed`; nothing falls back to the mock.
+  Documented for third parties in `docs/issuers/implementing-an-issuer-adapter.md`,
+  whose example adapter is a test.
+
 ### Release preparation: DPDP clients
 - Versions prepared for the DPDP client changes: `@grantex/sdk` 0.8.2,
   `grantex` (Python) 0.7.2, Go SDK v0.4.3 and `@grantex/dpdp` 0.2.0

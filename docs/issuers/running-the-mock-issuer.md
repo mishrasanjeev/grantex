@@ -114,6 +114,13 @@ refuses whenever it runs in production:
 REGISTRY_DEV_ISSUER_ORIGIN_MAP=https://mock-issuer.example=http://127.0.0.1:56900
 ```
 
+## Use it from the Python SDK
+
+`GRANTEX_ISSUER_ADAPTER=mock` makes the SDK's `load_issuer_client()` drive this
+CLI through the accredited issuer seam, so the registration flow runs against
+the mock with the same code that later runs against a real issuer. See
+[Implementing an Issuer Adapter](implementing-an-issuer-adapter.md).
+
 ## Use it from a test
 
 The package's API does the same in process; its
