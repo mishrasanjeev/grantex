@@ -40,6 +40,11 @@ grantex-attest = "grantex.cli.attest:main"
 [project.entry-points."grantex.issuers"]
 mock = "grantex.issuers._mock:create_mock_issuer_client"
 
+# Accredited issuer adapters (docs/issuers/implementing-an-issuer-adapter.md).
+# A real issuer's adapter registers under this group from its own package.
+[project.entry-points."grantex.issuers"]
+mock = "grantex.issuers._mock:create_mock_issuer_client"
+
 [project.urls]
 Homepage = "https://grantex.dev"
 Documentation = "https://docs.grantex.dev"
