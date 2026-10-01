@@ -18,7 +18,6 @@ class AccreditedIssuerClient(Protocol):
 
     def issuer_metadata(self) -> IssuerMetadata:
         """The issuer's id, keys (or Entity Configuration URL) and trust-mark scopes."""
-        ...
 
     def request_attestation(self, agent_record: AgentRecord, proved_key: ProvedKey) -> IssuedAttestation:
         """Ask the issuer to attest ``agent_record`` bound to ``proved_key``.
@@ -27,8 +26,6 @@ class AccreditedIssuerClient(Protocol):
         agent's possession of the key its own way; refusals surface with the
         issuer's code (``key_unproven`` and so on).
         """
-        ...
 
     def fetch_status(self, credential_ref: CredentialRef) -> IssuerStatus:
         """The issuer's current status of a credential it issued."""
-        ...

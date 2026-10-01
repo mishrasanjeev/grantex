@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import io
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -108,7 +109,7 @@ class StubIssuer:
 
     def request_attestation(self, agent_record: AgentRecord, proved_key: ProvedKey) -> IssuedAttestation:
         self.requests.append((agent_record, proved_key))
-        ref = CredentialRef("https://mock-issuer.example", "att-001", "sha-256:OiVR9AjgZRd6DJ8n_6dpLox_0KzFKt7gZ9MHpgHXOKQ")
+        ref = CredentialRef("https://mock-issuer.example", "ppt-001", "sha-256:OiVR9AjgZRd6DJ8n_6dpLox_0KzFKt7gZ9MHpgHXOKQ", issuer_attestation_id="att-001")
         thumbprint = self._override or proved_key.thumbprint
         provider = IssuedAttestation(
             jws="eyJ0eXAiOiJncmFudGV4LWF0dGVzdGF0aW9uK2p3dCJ9.eyJ0eXBlIjoicHJvdmlkZXIifQ.c2ln",
@@ -129,7 +130,7 @@ class StubIssuer:
 
 
 def _key_row(thumbprint: str, pub: Dict[str, Any], status: str = "active") -> Dict[str, Any]:
-    proved = status == "active"
+    proved = status in ("active", "rotated")
     return {
         "thumbprint": thumbprint, "agentId": AGENT_ID, "jwk": pub, "alg": "ES256", "status": status,
         "validFrom": "2026-09-30T00:00:00.000Z", "validTo": None,
@@ -195,6 +196,22 @@ def test_attest_agent_refuses_an_unproven_key_before_asking_the_issuer(client: G
     with pytest.raises(IssuerAdapterError) as unknown:
         attest_agent(client, AGENT_ID, "k" * 43, issuer=issuer)
     assert unknown.value.code == "key_unproven"
+
+
+@respx.mock
+def test_attest_agent_accepts_a_rotated_key_within_its_overlap_and_refuses_one_past_it(client: Grantex) -> None:
+    _private, pub, thumbprint = generate_agent_key()
+    respx.get(f"{BASE}/v1/agents/{AGENT_ID}").mock(return_value=httpx.Response(200, json=AGENT))
+    respx.post(f"{BASE}/v1/registry/attestations").mock(return_value=httpx.Response(201, json=REGISTRY_RECORD))
+    respx.get(f"{BASE}/v1/registry/agents/{DID}").mock(return_value=httpx.Response(200, json={"agent_did": DID, "level": "attested", "flags": []}))
+    overlap = {**_key_row(thumbprint, pub, "rotated"), "validTo": "2026-10-07T00:00:00.000Z", "usable": True}
+    respx.get(f"{BASE}/v1/agents/{AGENT_ID}/keys").mock(return_value=httpx.Response(200, json={"keys": [overlap]}))
+    assert attest_agent(client, AGENT_ID, thumbprint, issuer=StubIssuer()).key.status == "rotated"
+    ended = {**overlap, "usable": False, "denial": "key_not_active"}
+    respx.get(f"{BASE}/v1/agents/{AGENT_ID}/keys").mock(return_value=httpx.Response(200, json={"keys": [ended]}))
+    with pytest.raises(IssuerAdapterError) as info:
+        attest_agent(client, AGENT_ID, thumbprint, issuer=StubIssuer())
+    assert info.value.code == "key_not_active"
 
 
 @respx.mock
@@ -334,6 +351,58 @@ def test_grantex_attest_registers_proves_and_attests_in_one_command(tmp_path: Pa
     assert [s["step"] for s in _steps(out2)] == [
         "issuer", "attestation_issued", "attestation_ingested", "attestation_issued", "attestation_ingested", "lookup",
     ]
+
+
+@respx.mock
+def test_grantex_attest_with_the_mock_adapter_hands_it_the_generated_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The documented command, --generate-key with GRANTEX_ISSUER_ADAPTER=mock: the mock
+    (here the fake of its CLI) must find the key the command just wrote."""
+    from tests.test_issuers import FAKE_CLI
+    import textwrap
+
+    script = tmp_path / "fake_mock_issuer.py"
+    script.write_text(textwrap.dedent(FAKE_CLI), encoding="utf-8")
+    state = tmp_path / "state"
+    state.mkdir()
+    monkeypatch.setenv("GRANTEX_MOCK_ISSUER_CLI", f"{sys.executable} {script}")
+    monkeypatch.setenv("GRANTEX_MOCK_ISSUER_DIR", str(state))
+    key_file = tmp_path / "agent-key.json"
+    state_keys: Dict[str, Any] = {"keys": []}
+
+    def add_key(request: httpx.Request) -> httpx.Response:
+        pub = json.loads(request.content)["publicJwk"]
+        state_keys["keys"].append(_key_row(jwk_thumbprint(pub), pub, "pending"))
+        return httpx.Response(201, json=state_keys["keys"][-1])
+
+    def prove(request: httpx.Request) -> httpx.Response:
+        thumbprint = request.url.path.split("/")[-2]
+        row = next(k for k in state_keys["keys"] if k["thumbprint"] == thumbprint)
+        row.update(_key_row(thumbprint, row["jwk"], "active"))
+        return httpx.Response(200, json=row)
+
+    respx.get(f"{BASE}/v1/agents/{AGENT_ID}").mock(return_value=httpx.Response(200, json=AGENT))
+    respx.get(f"{BASE}/v1/agents/{AGENT_ID}/keys").mock(side_effect=lambda r: httpx.Response(200, json=state_keys))
+    respx.post(f"{BASE}/v1/agents/{AGENT_ID}/keys").mock(side_effect=add_key)
+    respx.post(url__regex=rf"{BASE}/v1/agents/{AGENT_ID}/keys/[^/]+/challenge").mock(
+        side_effect=lambda r: httpx.Response(201, json={
+            "thumbprint": r.url.path.split("/")[-2], "challenge": "n" * 43, "audience": "https://grantex.dev",
+            "subject": AGENT_ID, "typ": KEY_PROOF_TYP, "alg": "ES256", "expiresAt": None,
+        })
+    )
+    respx.post(url__regex=rf"{BASE}/v1/agents/{AGENT_ID}/keys/[^/]+/prove").mock(side_effect=prove)
+    respx.post(f"{BASE}/v1/registry/attestations").mock(return_value=httpx.Response(201, json=REGISTRY_RECORD))
+    respx.get(f"{BASE}/v1/registry/agents/{DID}").mock(return_value=httpx.Response(200, json={"agent_did": DID, "level": "attested", "flags": []}))
+
+    out, err = io.StringIO(), io.StringIO()
+    env = {"GRANTEX_API_KEY": "test-key", "GRANTEX_BASE_URL": BASE, "GRANTEX_ISSUER_ADAPTER": "mock", "GRANTEX_PROVIDER_DID": "did:web:provider.example"}
+    assert run([AGENT_ID, "--key", str(key_file), "--generate-key"], out, err, env) == 0, err.getvalue()
+    steps = _steps(out)
+    issued = [s for s in steps if s["step"] == "attestation_issued"]
+    assert [s["attestation_type"] for s in issued] == ["urn:grantex:tm:agent.identity", "urn:grantex:tm:provider.entity"]
+    assert issued[0]["external_credential_id"] == "ppt-att-001" and issued[0]["issuer_attestation_id"] == "att-001"
+    # The fake CLI read the key file the command generated (the thumbprint it signed is the key's).
+    assert issued[0]["issuer"] == "https://mock-issuer.example"
+    assert json.loads((state / "state.json").read_text(encoding="utf-8"))["passports"]["att-001"]["thumb"] == jwk_thumbprint(public_jwk(json.loads(key_file.read_text(encoding="utf-8"))))
 
 
 def test_grantex_attest_needs_an_api_key_and_a_key_file(tmp_path: Path) -> None:

@@ -54,6 +54,9 @@ class CredentialRef:
     issuer: str
     external_credential_id: str
     external_credential_hash: str
+    #: The issuer's own id of the attestation (its ``id`` claim), when known:
+    #: what the issuer's status and revocation operations take.
+    issuer_attestation_id: Optional[str] = None
 
 
 @dataclass(frozen=True)

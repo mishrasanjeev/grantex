@@ -95,7 +95,7 @@ class AgentKeysClient:
 
     def add(self, agent_id: str, public_jwk: dict[str, Any]) -> AgentKey:
         """Register a public key; it is ``pending`` until its possession is proven."""
-        return AgentKey.from_dict(self._http.post(_agent_path(agent_id), {"publicJwk": public_jwk}))
+        return AgentKey.from_dict(self._http.post(_agent_path(agent_id), {"publicJwk": public_jwk}, retry=False))
 
     def challenge(self, agent_id: str, thumbprint: str) -> KeyChallenge:
         """A single-use challenge for a pending key (spec §4.1)."""
@@ -103,7 +103,8 @@ class AgentKeysClient:
 
     def prove(self, agent_id: str, thumbprint: str, proof: str) -> AgentKey:
         """Answer the challenge with a compact JWS; the key becomes ``active`` (spec §4.3)."""
-        return AgentKey.from_dict(self._http.post(f"{_key_path(agent_id, thumbprint)}/prove", {"proof": proof}))
+        # Single use: a retry after a lost answer would replay a consumed challenge.
+        return AgentKey.from_dict(self._http.post(f"{_key_path(agent_id, thumbprint)}/prove", {"proof": proof}, retry=False))
 
     def rotate(
         self, agent_id: str, thumbprint: str, replacement_thumbprint: str, overlap_seconds: Optional[int] = None
@@ -112,11 +113,11 @@ class AgentKeysClient:
         body: dict[str, Any] = {"replacementThumbprint": replacement_thumbprint}
         if overlap_seconds is not None:
             body["overlapSeconds"] = overlap_seconds
-        data = self._http.post(f"{_key_path(agent_id, thumbprint)}/rotate", body)
+        data = self._http.post(f"{_key_path(agent_id, thumbprint)}/rotate", body, retry=False)
         return dict(data) if isinstance(data, dict) else {}
 
     def compromise(self, agent_id: str, thumbprint: str, reason: Optional[str] = None) -> dict[str, Any]:
         """End the key now and revoke every grant bound to it (spec §6)."""
         body: dict[str, Any] = {} if reason is None else {"reason": reason}
-        data = self._http.post(f"{_key_path(agent_id, thumbprint)}/compromise", body)
+        data = self._http.post(f"{_key_path(agent_id, thumbprint)}/compromise", body, retry=False)
         return dict(data) if isinstance(data, dict) else {}

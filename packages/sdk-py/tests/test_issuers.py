@@ -96,13 +96,19 @@ elif command == "issue-passport":
     key_file = opts.get("agent-key")
     if not key_file or not os.path.exists(key_file):
         refuse("key_unproven", "no agent key")
-    thumb = json.load(open(key_file))["thumbprint"]
+    agent_jwk = json.load(open(key_file))
+    thumb = agent_jwk.get("thumbprint")
+    if thumb is None:  # a real private JWK: RFC 7638 over the EC members
+        import hashlib
+        members = {m: agent_jwk[m] for m in ("crv", "kty", "x", "y")}
+        canonical = json.dumps(members, separators=(",", ":"), sort_keys=True).encode()
+        thumb = base64.urlsafe_b64encode(hashlib.sha256(canonical).digest()).decode().rstrip("=")
     if os.environ.get("FAKE_CLI_WRONG_KEY"):
         thumb = "other-thumbprint"
     att = f"att-{len(state['passports']) + 1:03d}"
     state["passports"][att] = {"status": "valid", "thumb": thumb, "did": opts.get("agent-did")}
     save()
-    print(json.dumps({"attestation_id": att, "passport_id": f"pp-{att}", "passport": "eyJ.passport.sig~",
+    print(json.dumps({"attestation_id": att, "passport_id": f"ppt-{att}", "passport": "eyJ.passport.sig~",
                       "external_credential_hash": "sha-256:OiVR9AjgZRd6DJ8n_6dpLox_0KzFKt7gZ9MHpgHXOKQ",
                       "key_thumbprint": thumb, "status": {"uri": "https://mock-issuer.example/status/1", "idx": 7},
                       "iat": 1790596800, "exp": 1793188800, "agent_key_file": key_file}))
@@ -115,7 +121,9 @@ elif command == "attest":
     typ = os.environ.get("FAKE_CLI_TYP", "grantex-attestation+jwt")
     header = {"typ": typ, "alg": "ES256", "kid": "mock-1"}
     payload = {"iss": "https://mock-issuer.example", "id": att, "sub": state["passports"][att]["did"],
-               "type": opts.get("type", "urn:grantex:tm:agent.identity"), "key_thumbprint": state["passports"][att]["thumb"]}
+               "type": opts.get("type", "urn:grantex:tm:agent.identity"), "external_credential_id": f"ppt-{att}"}
+    if not os.environ.get("FAKE_CLI_NO_THUMB"):
+        payload["key_thumbprint"] = state["passports"][att]["thumb"]
     print(f"{b64(header)}.{b64(payload)}.c2ln")
 elif command in ("revoke", "suspend", "reinstate", "status"):
     att = opts["attestation-id"]
@@ -193,8 +201,11 @@ def test_mock_adapter_round_trip(mock_client: MockIssuerClient) -> None:
     assert [c.attestation_type for c in issued.companions] == ["urn:grantex:tm:provider.entity"]
     assert issued.companions[0].credential_ref == issued.credential_ref and issued.companions[0].jws != issued.jws
     assert issued.key_thumbprint == THUMBPRINT
+    # The reference names the passport (what the attestation's external_credential_id
+    # says) and keeps the issuer's own attestation id for status operations.
     assert issued.credential_ref == CredentialRef(
-        "https://mock-issuer.example", "att-001", "sha-256:OiVR9AjgZRd6DJ8n_6dpLox_0KzFKt7gZ9MHpgHXOKQ"
+        "https://mock-issuer.example", "ppt-att-001", "sha-256:OiVR9AjgZRd6DJ8n_6dpLox_0KzFKt7gZ9MHpgHXOKQ",
+        issuer_attestation_id="att-001",
     )
     assert issued.expires_at == datetime(2026, 10, 28, 12, 0, tzinfo=timezone.utc)
     assert issued.passport == "eyJ.passport.sig~"
@@ -235,6 +246,34 @@ def test_mock_adapter_refuses_an_attestation_for_another_key(
     assert info.value.code == KEY_BINDING_MISMATCH
 
 
+def test_mock_adapter_refuses_an_agent_attestation_without_the_bound_key(
+    mock_client: MockIssuerClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # spec/attestation-1.0.md: an agent.* attestation always names key_thumbprint.
+    monkeypatch.setenv("FAKE_CLI_NO_THUMB", "1")
+    with pytest.raises(IssuerAdapterError) as info:
+        mock_client.request_attestation(AGENT, KEY)
+    assert info.value.code == KEY_BINDING_MISMATCH
+
+
+def test_mock_adapter_needs_the_provider_did_for_provider_entity(mock_client: MockIssuerClient) -> None:
+    without_provider = AgentRecord(agent_id=AGENT.agent_id, did=AGENT.did)
+    with pytest.raises(IssuerAdapterError) as info:
+        mock_client.request_attestation(without_provider, KEY)
+    assert info.value.code == ADAPTER_INVALID and "provider_did" in info.value.detail
+    only_identity = MockIssuerClient(cli=mock_client._cli, state_dir=mock_client._state_dir, attestation_types=["urn:grantex:tm:agent.identity"])
+    assert only_identity.request_attestation(without_provider, KEY).companions == ()
+
+
+def test_mock_adapter_takes_a_registered_agent_key_file(fake_cli: List[str], tmp_path: Path) -> None:
+    key_file = tmp_path / "generated.json"
+    key_file.write_text(json.dumps({"thumbprint": "tp3"}), encoding="utf-8")
+    (tmp_path / "empty").mkdir()
+    client = MockIssuerClient(cli=fake_cli, state_dir=str(tmp_path / "empty"))
+    client.register_agent_key_file("tp3", str(key_file))
+    assert client.request_attestation(AGENT, ProvedKey(thumbprint="tp3", public_jwk={})).key_thumbprint == "tp3"
+
+
 def test_mock_adapter_refuses_an_attestation_with_the_wrong_typ(
     mock_client: MockIssuerClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -246,13 +285,19 @@ def test_mock_adapter_refuses_an_attestation_with_the_wrong_typ(
 
 def test_mock_adapter_surfaces_the_issuers_refusal_code(mock_client: MockIssuerClient) -> None:
     with pytest.raises(IssuerAdapterError) as info:
-        mock_client.fetch_status(CredentialRef("https://mock-issuer.example", "att-404", "sha-256:x"))
+        mock_client.fetch_status(CredentialRef("https://mock-issuer.example", "ppt-404", "sha-256:x", issuer_attestation_id="att-404"))
     assert info.value.code == "attestation_not_registered"
+
+
+def test_mock_adapter_status_needs_the_issuers_attestation_id(mock_client: MockIssuerClient) -> None:
+    with pytest.raises(IssuerAdapterError) as info:
+        mock_client.fetch_status(CredentialRef("https://mock-issuer.example", "ppt-att-001", "sha-256:x"))
+    assert info.value.code == ISSUER_RESPONSE_INVALID
 
 
 def test_mock_adapter_refuses_a_credential_of_another_issuer(mock_client: MockIssuerClient) -> None:
     with pytest.raises(IssuerAdapterError) as info:
-        mock_client.fetch_status(CredentialRef("https://issuer.example", "att-001", "sha-256:x"))
+        mock_client.fetch_status(CredentialRef("https://issuer.example", "ppt-att-001", "sha-256:x", issuer_attestation_id="att-001"))
     assert info.value.code == ISSUER_RESPONSE_INVALID
 
 
@@ -516,8 +561,10 @@ def test_mock_round_trip_against_the_repository_cli(tmp_path: Path) -> None:
     attested = client.request_attestation(AGENT, key)
     assert _header(attested.jws)["typ"] == "grantex-attestation+jwt"
     assert attested.key_thumbprint == thumbprint and attested.passport is not None
+    assert attested.credential_ref.external_credential_id.startswith("ppt_")
+    assert attested.credential_ref.issuer_attestation_id is not None and attested.credential_ref.issuer_attestation_id.startswith("att_")
     assert client.fetch_status(attested.credential_ref).state == "valid"
-    subprocess.run([*cli, "revoke", "--attestation-id", attested.credential_ref.external_credential_id, "--dir", str(state)], check=True)
+    subprocess.run([*cli, "revoke", "--attestation-id", attested.credential_ref.issuer_attestation_id, "--dir", str(state)], check=True)
     assert client.fetch_status(attested.credential_ref).state == "revoked"
     with pytest.raises(IssuerAdapterError) as info:
         client.request_attestation(AGENT, ProvedKey(thumbprint="unknown", public_jwk={}))
