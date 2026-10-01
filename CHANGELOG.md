@@ -29,6 +29,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `key_unproven` before the issuer is asked. `grantex-attest AGENT_ID --key
   FILE [--generate-key]` runs the whole step as one command; against
   `GRANTEX_ISSUER_ADAPTER=mock` it needs no external party.
+- `make demo-attest` (`scripts/demo-attest.mjs`, CI job `Demo (attest)`):
+  Demo 1 end to end against the mock issuer and a real auth service on a
+  local port, every step labelled `live` or `fixture`: accredit the mock,
+  sign up, register a provider and an agent, generate and prove the key,
+  `grantex-attest`, public lookup at level `attested`, revoke at the issuer,
+  lookup shows the drop and the revocation.
 
 ### Release preparation: DPDP clients
 - Versions prepared for the DPDP client changes: `@grantex/sdk` 0.8.2,

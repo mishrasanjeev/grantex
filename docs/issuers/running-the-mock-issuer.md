@@ -114,6 +114,22 @@ refuses whenever it runs in production:
 REGISTRY_DEV_ISSUER_ORIGIN_MAP=https://mock-issuer.example=http://127.0.0.1:56900
 ```
 
+## The attestation demo
+
+`make demo-attest` runs Demo 1 end to end with no external party: the mock
+issuer serving its JWKS and status lists, a real auth service on a local port
+(Postgres in `DATABASE_URL`, Redis in `REDIS_URL`), the mock accredited for
+`agent.identity` and `provider.entity`, a developer with a provider
+(`did:web:provider.example`) and an agent, the agent's key generated and
+proven, `grantex-attest` requesting both attestations through the `mock`
+adapter and posting them, the public lookup showing level `attested`, the
+issuer revoking the passport, and the lookup showing the level drop and the
+revocation within the status list `ttl` (1 s) plus one reconciliation read.
+Every step prints `live` (the registry) or `fixture` (the mock issuer). It
+runs in CI (`Demo (attest)`); locally it needs `make install`, the auth
+service built (`npm --prefix apps/auth-service run build`) and the SDK
+installed (`pip install -e packages/sdk-py`).
+
 ## Use it from the Python SDK
 
 `GRANTEX_ISSUER_ADAPTER=mock` makes the SDK's `load_issuer_client()` drive this

@@ -318,6 +318,51 @@ jobs:
         working-directory: packages/mpp
         run: npm ci && npm run typecheck && npm test
 
+  demo-attest:
+    name: Demo (attest)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+        env:
+          POSTGRES_USER: grantex_demo
+          POSTGRES_PASSWORD: grantex_demo
+          POSTGRES_DB: grantex_demo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grantex_demo -d grantex_demo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgres://grantex_demo:grantex_demo@127.0.0.1:5432/grantex_demo
+      REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.12'
+      - name: Install the mock issuer (root link, agent passport build)
+        run: |
+          npm ci --no-audit --no-fund
+          npm --prefix packages/agent-passport ci --no-audit --no-fund
+          npm --prefix packages/agent-passport run build
+          npm --prefix packages/mock-issuer ci --no-audit --no-fund
+      - name: Build the auth service
+        run: npm --prefix apps/auth-service ci --no-audit --no-fund && npm --prefix apps/auth-service run build
+      - name: Install the Python SDK
+        run: pip install -e packages/sdk-py
+      - name: Run the attestation demo
+        run: make demo-attest
+
   standalone-packages:
     name: Standalone Packages
     runs-on: ubuntu-latest
