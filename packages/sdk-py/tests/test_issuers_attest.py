@@ -162,10 +162,12 @@ def test_attest_agent_round_trip(client: Grantex) -> None:
     )
     issuer = StubIssuer()
 
-    outcome = attest_agent(client, AGENT_ID, thumbprint, issuer=issuer)
+    outcome = attest_agent(client, AGENT_ID, thumbprint, issuer=issuer, provider_did="did:web:provider.example")
 
     record, proved = issuer.requests[0]
-    assert record == AgentRecord(agent_id=AGENT_ID, did=DID, developer_id="dev_01", software_name="Nimbus Shopper")
+    assert record == AgentRecord(
+        agent_id=AGENT_ID, did=DID, developer_id="dev_01", provider_did="did:web:provider.example", software_name="Nimbus Shopper"
+    )
     assert proved.thumbprint == thumbprint and proved.public_jwk == pub
     assert proved.possession_proved_at == datetime(2026, 9, 30, 0, 1, tzinfo=timezone.utc)
     sent = ingest.calls[0].request
@@ -312,7 +314,8 @@ def test_grantex_attest_registers_proves_and_attests_in_one_command(tmp_path: Pa
     respx.get(f"{BASE}/v1/registry/agents/{DID}").mock(return_value=httpx.Response(200, json={"agent_did": DID, "level": "attested", "flags": []}))
 
     out, err = io.StringIO(), io.StringIO()
-    assert run([AGENT_ID, "--key", str(key_file), "--generate-key"], out, err, stub_adapter_env) == 0, err.getvalue()
+    env = {**stub_adapter_env, "GRANTEX_PROVIDER_DID": "did:web:provider.example"}
+    assert run([AGENT_ID, "--key", str(key_file), "--generate-key"], out, err, env) == 0, err.getvalue()
     steps = _steps(out)
     assert [s["step"] for s in steps] == [
         "key_generated", "key_added", "key_proved", "issuer",

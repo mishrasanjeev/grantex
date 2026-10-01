@@ -90,6 +90,7 @@ def attest_agent(
     thumbprint: str,
     *,
     issuer: Optional[AccreditedIssuerClient] = None,
+    provider_did: Optional[str] = None,
     timeout: float = DEFAULT_REGISTRY_TIMEOUT_SECONDS,
     transport: Optional[httpx.BaseTransport] = None,
 ) -> AttestationOutcome:
@@ -101,6 +102,10 @@ def attest_agent(
     2. Hands the agent's identifiers and the public key to the adapter
        (``issuer``, or the one ``GRANTEX_ISSUER_ADAPTER`` names).
     3. Posts the attestation JWS to the registry and reads the agent's level.
+
+    ``provider_did`` is the DID of the agent's provider (the developer's trust
+    registry record, ``did:web:<domain>``), which a ``provider.entity``
+    attestation names as its subject.
     """
     agent = client.agents.get(agent_id)
     keys = client.agents.keys.list(agent_id)
@@ -116,6 +121,7 @@ def attest_agent(
         agent_id=agent.id,
         did=agent.did,
         developer_id=agent.developer_id,
+        provider_did=provider_did,
         software_name=agent.name or None,
     )
     proved = ProvedKey(

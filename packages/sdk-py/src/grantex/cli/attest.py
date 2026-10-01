@@ -37,6 +37,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--api-key", help="developer API key (default: GRANTEX_API_KEY)")
     parser.add_argument("--base-url", help=f"registry base URL (default: GRANTEX_BASE_URL or {DEFAULT_BASE_URL})")
     parser.add_argument("--adapter", help="issuer adapter name (default: GRANTEX_ISSUER_ADAPTER)")
+    parser.add_argument("--provider-did", help="the agent's provider DID, did:web:<domain> (default: GRANTEX_PROVIDER_DID)")
     return parser
 
 
@@ -94,7 +95,8 @@ def run(argv: Sequence[str], out: TextIO, err: TextIO, environ: Optional[Mapping
                 raise IssuerAdapterError("key_not_active", f"key {thumbprint} is {key.status}")
             metadata = issuer.issuer_metadata()
             _emit(out, "issuer", source, issuer_id=metadata.issuer_id, scopes=list(metadata.scopes))
-            outcome = attest_agent(client, args.agent_id, thumbprint, issuer=issuer)
+            provider_did = args.provider_did or env.get("GRANTEX_PROVIDER_DID")
+            outcome = attest_agent(client, args.agent_id, thumbprint, issuer=issuer, provider_did=provider_did)
         finally:
             client.close()
     except IssuerAdapterError as exc:
