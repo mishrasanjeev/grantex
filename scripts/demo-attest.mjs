@@ -183,12 +183,44 @@ async function pollLookup(url, done, timeoutMs) {
   }
 }
 
-/** The registry's acceptance entry for an attestation: its Token Status List read and decoded. */
-async function acceptanceStatus(codec, entry) {
+
+/**
+ * Verify a JWS the registry signed (ES256 or RS256, kid in its JWK Set) and
+ * return its payload: typ, iss, sub and exp are checked, so a malformed,
+ * foreign, stale or re-signed status list fails the demo rather than passing
+ * it. Uses node:crypto only.
+ */
+async function verifyRegistryJws(token, { jwksUrl, typ, iss, sub }) {
+  const { createPublicKey, verify } = await import('node:crypto');
+  const [h, p, s] = token.split('.');
+  expect(h && p && s, 'the registry answered something that is not a compact JWS');
+  const header = JSON.parse(Buffer.from(h, 'base64url').toString('utf8'));
+  expect(header.typ === typ, `JWS typ is ${header.typ}, expected ${typ}`);
+  const jwks = await (await fetch(jwksUrl)).json();
+  const jwk = (jwks.keys ?? []).find((k) => k.kid === header.kid);
+  expect(jwk, `the registry's JWK Set has no key ${header.kid}`);
+  const algorithms = { ES256: ['sha256', { dsaEncoding: 'ieee-p1363' }], RS256: ['sha256', {}] };
+  const [hash, extra] = algorithms[header.alg] ?? [];
+  expect(hash, `unsupported JWS alg ${header.alg}`);
+  const key = createPublicKey({ key: jwk, format: 'jwk' });
+  const ok = verify(hash, Buffer.from(`${h}.${p}`), { key, ...extra }, Buffer.from(s, 'base64url'));
+  expect(ok, 'the status list signature does not verify against the registry JWK Set');
+  const payload = JSON.parse(Buffer.from(p, 'base64url').toString('utf8'));
+  expect(payload.iss === iss, `status list iss is ${payload.iss}, expected ${iss}`);
+  expect(payload.sub === sub, `status list sub is ${payload.sub}, expected ${sub}`);
+  const now = Math.floor(Date.now() / 1000);
+  expect(typeof payload.exp === 'number' && payload.exp > now, 'the status list has expired');
+  return payload;
+}
+
+/** The registry's acceptance entry for an attestation: its Token Status List verified, read and decoded. */
+async function acceptanceStatus(codec, entry, registry) {
   const response = await fetch(entry.uri, { headers: { Accept: 'application/statuslist+jwt' } });
   expect(response.ok, `acceptance list ${entry.uri} answered ${response.status}`);
   const token = (await response.text()).trim();
-  const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+  const payload = await verifyRegistryJws(token, {
+    jwksUrl: `${registry}/.well-known/jwks.json`, typ: 'statuslist+jwt', iss: registry, sub: entry.uri,
+  });
   const list = codec.decodeTokenStatusList(payload.status_list);
   const value = list.statusAt(entry.idx);
   const name = Object.entries(codec.TOKEN_STATUS).find(([, v]) => v === value)?.[0] ?? String(value);
@@ -318,7 +350,7 @@ async function main() {
       const source = s.source === 'live' ? 'live' : s.source === 'mock' ? 'fixture' : s.source;
       const { step: name, source: _source, ...rest } = s;
       step(`grantex-attest: ${name}`, source, Object.entries(rest).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('|') : v}`).join(' '));
-      if (name === 'attestation_issued' && attestationId === null) attestationId = s.external_credential_id;
+      if (name === 'attestation_issued' && attestationId === null) attestationId = s.issuer_attestation_id;
     }
     expect(attest.status === 0, `grantex-attest exited ${attest.status}: ${attest.stderr.trim()}`);
     const lookupStep = attestSteps.find((s) => s.step === 'lookup');
@@ -337,7 +369,7 @@ async function main() {
     const identity = (relying.json.attestations ?? []).find((a) => a.type === TRUST_MARKS[0]);
     expect(identity?.acceptance_status_list?.uri, `relying-party lookup carries no acceptance list entry: ${relying.text}`);
     const codec = await import(pathToFileURL(STATUS_LIST_CODEC).href);
-    const before = await acceptanceStatus(codec, identity.acceptance_status_list);
+    const before = await acceptanceStatus(codec, identity.acceptance_status_list, baseUrl);
     expect(before.value === codec.TOKEN_STATUS.VALID, `acceptance entry reads ${before.name} before revocation`);
     step('relying-party lookup (API key): acceptance entry', 'live', `${identity.acceptance_status_list.uri} idx=${identity.acceptance_status_list.idx} ${before.name}`);
 
@@ -351,10 +383,10 @@ async function main() {
 
     // The registry's own word on it: the acceptance entry is INVALID.
     const deadline = Date.now() + REVOCATION_TIMEOUT_MS;
-    let acceptance = await acceptanceStatus(codec, identity.acceptance_status_list);
+    let acceptance = await acceptanceStatus(codec, identity.acceptance_status_list, baseUrl);
     while (acceptance.value !== codec.TOKEN_STATUS.INVALID && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 500));
-      acceptance = await acceptanceStatus(codec, identity.acceptance_status_list);
+      acceptance = await acceptanceStatus(codec, identity.acceptance_status_list, baseUrl);
     }
     expect(acceptance.value === codec.TOKEN_STATUS.INVALID, `acceptance entry reads ${acceptance.name} after revocation`);
     step('acceptance list shows the attestation revoked', 'live', `idx=${identity.acceptance_status_list.idx} ${acceptance.name}`);
