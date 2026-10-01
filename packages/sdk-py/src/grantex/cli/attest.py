@@ -84,8 +84,7 @@ def run(argv: Sequence[str], out: TextIO, err: TextIO, environ: Optional[Mapping
         register = getattr(issuer, "register_agent_key_file", None)
         if callable(register):
             register(thumbprint, os.path.abspath(args.key))
-        client = Grantex(api_key=api_key, base_url=base_url, revocation_check="offline")
-        try:
+        with Grantex(api_key=api_key, base_url=base_url, revocation_check="offline") as client:
             keys = {k.thumbprint: k for k in client.agents.keys.list(args.agent_id)}
             key = keys.get(thumbprint)
             if key is None:
@@ -96,14 +95,13 @@ def run(argv: Sequence[str], out: TextIO, err: TextIO, environ: Optional[Mapping
                 proof = sign_key_proof(challenge, private)
                 key = client.agents.keys.prove(args.agent_id, thumbprint, proof)
                 _emit(out, "key_proved", "live", thumbprint=thumbprint, status=key.status, possession_proved_at=key.possession_proved_at)
-            elif key.status != "active":
-                raise IssuerAdapterError("key_not_active", f"key {thumbprint} is {key.status}")
+            elif not key.usable:
+                # The registry's verdict: a rotated key still inside its overlap is usable.
+                raise IssuerAdapterError(key.denial or "key_not_active", f"key {thumbprint} is {key.status} and not usable")
             metadata = issuer.issuer_metadata()
             _emit(out, "issuer", source, issuer_id=metadata.issuer_id, scopes=list(metadata.scopes))
             provider_did = args.provider_did or env.get("GRANTEX_PROVIDER_DID")
             outcome = attest_agent(client, args.agent_id, thumbprint, issuer=issuer, provider_did=provider_did)
-        finally:
-            client.close()
     except IssuerAdapterError as exc:
         err.write(f"grantex-attest: {exc.code}: {exc.detail}\n")
         return 1
