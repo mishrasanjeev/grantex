@@ -1945,3 +1945,44 @@ the pull request that references it.
   cascade from that instead; or index bindings of live grants only. Needs a
   migration. Owner: registry maintainers. Exit criterion: the cascade query
   reads rows proportional to bindings whose grant still needs acting on.
+
+## G-142 — `attestation_expiring` is set the moment a 30-day passport is attested
+
+- **Found:** running `make demo-attest`, 2026-10-01: the lookup right after
+  ingestion reports `flags=attestation_expiring` for attestations that are
+  seconds old.
+- **What:** `ATTESTATION_EXPIRING_WINDOW_SECONDS` in
+  `apps/auth-service/src/lib/registry/trust-level.ts` is thirty days, and the
+  mock issuer's default passport lifetime
+  (`DEFAULT_PASSPORT_LIFETIME_SECONDS`, `packages/mock-issuer/src/issuer.ts`)
+  is thirty days too, so every attestation the mock makes is "expiring" from
+  its first second. A real issuer with short-lived passports would see the
+  same.
+- **Impact:** the flag carries no information for such issuers; a relying
+  party that treats it as a warning warns on every fresh attestation.
+- **Proposal:** make the window relative to the attestation's own lifetime
+  (for example the last quarter of `exp - iat`, capped at thirty days), or
+  let the mock issue longer passports by default and expose the lifetime
+  through the issuer adapter. Owner: registry maintainers. Exit criterion: a
+  freshly ingested attestation is not flagged as expiring.
+
+## G-143 — With a status-list `ttl` at the poll floor, the registry re-reads the list only when it is already stale
+
+- **Found:** running `make demo-attest` with the mock's default 1 s `ttl`,
+  2026-10-01: the public lookup answered `basic` a second after an
+  authenticated one answered `attested`, with nothing changed.
+- **What:** `status-reconciliation.ts` schedules a re-read at
+  `max(fresh_until - tick, checked_at + REGISTRY_STATUS_POLL_MIN_INTERVAL_MS)`
+  with `tick = max(250 ms, interval / 4)`. When the list's `ttl` is no
+  longer than the minimum interval (1 s in development and test), the second
+  term wins and the read is due exactly when the previous read runs out, so
+  the attestation stops counting until the next tick lands. The level flaps
+  between `attested` and `basic` once a second.
+- **Impact:** development and CI only (production floors the interval at
+  30 s and issuers publish longer `ttl`s); the demo uses a 5 s `ttl`
+  (`DEMO_STATUS_TTL_SECONDS`) so the read lands a tick early.
+- **Proposal:** either floor a list's effective `ttl` at the minimum interval
+  plus one tick when scheduling, or keep relying on the previous read until
+  the re-read it triggered completes. Owner: registry maintainers. Exit
+  criterion: with `ttl` equal to the minimum interval, an attestation counts
+  continuously while its list keeps answering VALID.

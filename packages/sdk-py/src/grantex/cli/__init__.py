@@ -5,6 +5,8 @@
   ``grantex`` command name, where the same commands are ``grantex evidence ...``.
 - ``python -m grantex.cli evidence verify ...`` for environments without the
   console script.
+- ``grantex-attest AGENT_ID --key FILE``: register and prove an agent key and
+  have the configured accredited issuer attest the agent (``grantex.cli.attest``).
 """
 
 from __future__ import annotations

@@ -259,6 +259,15 @@ New behaviour on existing paths is off by default. Turn it on per deployment:
 
 The specifications are [registry federation](spec/registry-federation.md), [attestations](spec/attestation-1.0.md), [agent keys](spec/agent-keys.md), [Agent Passport 1.0](spec/agent-passport-1.0.md), [passport binding](spec/passport-binding.md) and [verification](spec/verification.md). This Agent Passport, an SD-JWT VC issued by an accredited issuer, is separate from the MPP `AgentPassportCredential` described [below](#mpp-agent-identity).
 
+### Demo: developer opt-in attestation
+
+`make demo-attest` runs the registration flow end to end against the
+repository's mock accredited issuer, with no external party: register an
+agent, prove its key, request attestation through the issuer adapter seam,
+see the level `attested` in the public lookup, revoke at the issuer, and see
+the level drop. Each step is labelled `live` (the registry) or `fixture` (the
+mock issuer). See [Running the Mock Issuer](https://docs.grantex.dev/issuers/running-the-mock-issuer).
+
 ## Current Releases
 
 Grantex components are independently versioned. The protocol specification remains **v1.0 Final**; SDK, MCP package, and roadmap milestone versions are separate release lines and do not represent a monorepo-wide version.

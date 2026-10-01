@@ -33,6 +33,7 @@ dependencies = [
 
 [project.scripts]
 grantex-evidence = "grantex.cli.evidence:main"
+grantex-attest = "grantex.cli.attest:main"
 
 # Accredited issuer adapters (docs/issuers/implementing-an-issuer-adapter.md).
 # A real issuer's adapter registers under this group from its own package.

@@ -17,8 +17,10 @@ from ._errors import (
     KEY_BINDING_MISMATCH,
     IssuerAdapterError,
 )
+from ._attest import AttestationOutcome, attest_agent, post_attestation
 from ._loader import ADAPTER_ENV, ENTRY_POINT_GROUP, MOCK_ADAPTER_NAME, installed_adapters, load_issuer_client
 from ._mock import MockIssuerClient, create_mock_issuer_client
+from ._proof import KEY_PROOF_TYP, generate_agent_key, jwk_thumbprint, public_jwk, sign_key_proof
 from ._protocol import AccreditedIssuerClient
 from ._types import (
     AgentRecord,
@@ -41,9 +43,11 @@ __all__ = [
     "ISSUER_RESPONSE_INVALID",
     "ISSUER_UNREACHABLE",
     "KEY_BINDING_MISMATCH",
+    "KEY_PROOF_TYP",
     "MOCK_ADAPTER_NAME",
     "AccreditedIssuerClient",
     "AgentRecord",
+    "AttestationOutcome",
     "CredentialRef",
     "IssuedAttestation",
     "IssuerAdapterConfig",
@@ -53,7 +57,13 @@ __all__ = [
     "IssuerStatusState",
     "MockIssuerClient",
     "ProvedKey",
+    "attest_agent",
     "create_mock_issuer_client",
+    "generate_agent_key",
     "installed_adapters",
+    "jwk_thumbprint",
     "load_issuer_client",
+    "post_attestation",
+    "public_jwk",
+    "sign_key_proof",
 ]

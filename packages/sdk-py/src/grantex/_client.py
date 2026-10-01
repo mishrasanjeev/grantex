@@ -295,6 +295,8 @@ class Grantex:
         self._audience_check = _check_audience_check(audience_check)
         self._audience = _check_expected_audience(audience, self._audience_check)
 
+        #: The registry this client talks to, for routes outside the API-key surface.
+        self.base_url = base_url.rstrip("/")
         self._http = HttpClient(
             base_url=base_url,
             api_key=resolved_key,

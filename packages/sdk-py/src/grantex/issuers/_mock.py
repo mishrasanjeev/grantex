@@ -42,6 +42,7 @@ from ._types import (
 CLI_ENV = "GRANTEX_MOCK_ISSUER_CLI"
 STATE_DIR_ENV = "GRANTEX_MOCK_ISSUER_DIR"
 AGENT_KEYS_ENV = "GRANTEX_MOCK_ISSUER_AGENT_KEYS"
+TYPES_ENV = "GRANTEX_MOCK_ISSUER_TYPES"
 ATTESTATION_TYP = "grantex-attestation+jwt"
 TRUST_MARK_AGENT_IDENTITY = "urn:grantex:tm:agent.identity"
 TRUST_MARK_PROVIDER_ENTITY = "urn:grantex:tm:provider.entity"
@@ -76,17 +77,20 @@ class MockIssuerClient:
         cli: Sequence[str],
         state_dir: str,
         agent_key_files: Optional[Mapping[str, str]] = None,
-        attestation_type: str = TRUST_MARK_AGENT_IDENTITY,
+        attestation_types: Sequence[str] = MOCK_SCOPES,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
         if not cli:
             raise IssuerAdapterError(ADAPTER_INVALID, "the mock issuer command is empty")
-        if attestation_type not in MOCK_SCOPES:
-            raise IssuerAdapterError(ADAPTER_INVALID, f"the mock issuer does not attest {attestation_type}")
+        types = tuple(dict.fromkeys(attestation_types))
+        if not types or any(t not in MOCK_SCOPES for t in types):
+            raise IssuerAdapterError(
+                ADAPTER_INVALID, f"the mock issuer attests {', '.join(MOCK_SCOPES)}, not {list(attestation_types)}"
+            )
         self._cli = list(cli)
         self._state_dir = os.path.abspath(state_dir)
         self._agent_key_files = dict(agent_key_files or {})
-        self._attestation_type = attestation_type
+        self._attestation_types = types
         self._timeout = timeout_seconds
         self._metadata: Optional[IssuerMetadata] = None
 
@@ -114,8 +118,9 @@ class MockIssuerClient:
             if not sep or not thumbprint or not path:
                 raise IssuerAdapterError(ADAPTER_INVALID, f"{AGENT_KEYS_ENV} entries are thumbprint=path")
             key_files[thumbprint] = path
+        types = [t.strip() for t in (env.get(TYPES_ENV) or "").split(",") if t.strip()] or list(MOCK_SCOPES)
         # The mock's base URL and credentials are not used: it has no network side.
-        return cls(cli=cli, state_dir=state_dir, agent_key_files=key_files)
+        return cls(cli=cli, state_dir=state_dir, agent_key_files=key_files, attestation_types=types)
 
     # ─── the three operations ───────────────────────────────────────────────
 
@@ -135,7 +140,17 @@ class MockIssuerClient:
             )
         return self._metadata
 
+    def register_agent_key_file(self, thumbprint: str, path: str) -> None:
+        """Tell the mock where the agent's private key is, so it can run the possession proof."""
+        self._agent_key_files[thumbprint] = path
+
     def request_attestation(self, agent_record: AgentRecord, proved_key: ProvedKey) -> IssuedAttestation:
+        if TRUST_MARK_PROVIDER_ENTITY in self._attestation_types and not agent_record.provider_did:
+            raise IssuerAdapterError(
+                ADAPTER_INVALID,
+                "a provider.entity attestation needs the agent's provider DID (AgentRecord.provider_did); "
+                f"give it, or leave provider.entity out of {TYPES_ENV}",
+            )
         key_file = self._agent_key_file(proved_key.thumbprint)
         args = [
             "issue-passport",
@@ -150,10 +165,14 @@ class MockIssuerClient:
             args += ["--software-version", agent_record.software_version]
         issued = self._run_json(args)
         attestation_id = issued.get("attestation_id")
+        passport_id = issued.get("passport_id")
         key_thumbprint = issued.get("key_thumbprint")
         credential_hash = issued.get("external_credential_hash")
         passport = issued.get("passport")
-        if not (isinstance(attestation_id, str) and isinstance(key_thumbprint, str) and isinstance(credential_hash, str)):
+        if not (
+            isinstance(attestation_id, str) and isinstance(passport_id, str)
+            and isinstance(key_thumbprint, str) and isinstance(credential_hash, str)
+        ):
             raise IssuerAdapterError(ISSUER_RESPONSE_INVALID, "issue-passport did not return the passport record")
         # The issuer bound the key the registry proved, or the attestation is for another agent.
         if key_thumbprint != proved_key.thumbprint:
@@ -161,20 +180,37 @@ class MockIssuerClient:
                 KEY_BINDING_MISMATCH,
                 f"the issuer bound key {key_thumbprint} but the registry proved {proved_key.thumbprint}",
             )
-        jws = self._run_text(["attest", "--attestation-id", attestation_id, "--type", self._attestation_type]).strip()
-        self._check_attestation(jws, key_thumbprint)
         exp = issued.get("exp")
+        # The attestation names the passport (external_credential_id, its hash)
+        # and carries the issuer's own id of the attestation as `id`; the
+        # mock's status operations take the latter.
+        credential_ref = CredentialRef(
+            issuer=self.issuer_metadata().issuer_id,
+            external_credential_id=passport_id,
+            external_credential_hash=credential_hash,
+            issuer_attestation_id=attestation_id,
+        )
+        # One passport, one attestation per trust mark: the first is the main
+        # one, the rest come along with it.
+        attestations: List[IssuedAttestation] = []
+        for attestation_type in self._attestation_types:
+            jws = self._run_text(["attest", "--attestation-id", attestation_id, "--type", attestation_type]).strip()
+            self._check_attestation(jws, attestation_type, key_thumbprint=key_thumbprint, passport_id=passport_id)
+            attestations.append(
+                IssuedAttestation(
+                    jws=jws,
+                    attestation_type=attestation_type,
+                    credential_ref=credential_ref,
+                    key_thumbprint=key_thumbprint,
+                    expires_at=datetime.fromtimestamp(exp, tz=timezone.utc) if isinstance(exp, int) else None,
+                    passport=passport if isinstance(passport, str) else None,
+                )
+            )
+        main, companions = attestations[0], tuple(attestations[1:])
         return IssuedAttestation(
-            jws=jws,
-            attestation_type=self._attestation_type,
-            credential_ref=CredentialRef(
-                issuer=self.issuer_metadata().issuer_id,
-                external_credential_id=attestation_id,
-                external_credential_hash=credential_hash,
-            ),
-            key_thumbprint=key_thumbprint,
-            expires_at=datetime.fromtimestamp(exp, tz=timezone.utc) if isinstance(exp, int) else None,
-            passport=passport if isinstance(passport, str) else None,
+            jws=main.jws, attestation_type=main.attestation_type, credential_ref=main.credential_ref,
+            key_thumbprint=main.key_thumbprint, expires_at=main.expires_at, passport=main.passport,
+            companions=companions,
         )
 
     def fetch_status(self, credential_ref: CredentialRef) -> IssuerStatus:
@@ -183,7 +219,12 @@ class MockIssuerClient:
             raise IssuerAdapterError(
                 ISSUER_RESPONSE_INVALID, f"credential {credential_ref.external_credential_id} was not issued by {issuer_id}"
             )
-        answer = self._run_json(["status", "--attestation-id", credential_ref.external_credential_id])
+        if not credential_ref.issuer_attestation_id:
+            raise IssuerAdapterError(
+                ISSUER_RESPONSE_INVALID,
+                f"the mock issuer reads status by its attestation id; the reference to {credential_ref.external_credential_id} carries none",
+            )
+        answer = self._run_json(["status", "--attestation-id", credential_ref.issuer_attestation_id])
         state = answer.get("status")
         mapped: Dict[str, IssuerStatusState] = {"valid": "valid", "suspended": "suspended", "invalid": "revoked"}
         if not isinstance(state, str) or state not in mapped:
@@ -204,7 +245,7 @@ class MockIssuerClient:
         return path
 
     @staticmethod
-    def _check_attestation(jws: str, key_thumbprint: str) -> None:
+    def _check_attestation(jws: str, attestation_type: str, *, key_thumbprint: str, passport_id: str) -> None:
         parts = jws.split(".")
         if len(parts) != 3 or not all(parts):
             raise IssuerAdapterError(ISSUER_RESPONSE_INVALID, "attest did not return a compact JWS")
@@ -217,8 +258,24 @@ class MockIssuerClient:
             raise IssuerAdapterError(ISSUER_RESPONSE_INVALID, f"attestation typ is {header.get('typ')!r}, not {ATTESTATION_TYP}")
         if not isinstance(header.get("kid"), str):
             raise IssuerAdapterError(ISSUER_RESPONSE_INVALID, "attestation header has no kid")
-        if payload.get("key_thumbprint") not in (None, key_thumbprint):
+        # spec/attestation-1.0.md: every agent.* attestation names the bound key.
+        if attestation_type.startswith("urn:grantex:tm:agent."):
+            if payload.get("key_thumbprint") != key_thumbprint:
+                raise IssuerAdapterError(
+                    KEY_BINDING_MISMATCH,
+                    f"attestation key_thumbprint is {payload.get('key_thumbprint')!r}, not the issued passport's {key_thumbprint}",
+                )
+        elif payload.get("key_thumbprint") not in (None, key_thumbprint):
             raise IssuerAdapterError(KEY_BINDING_MISMATCH, "attestation key_thumbprint differs from the issued passport")
+        if payload.get("external_credential_id") not in (None, passport_id):
+            raise IssuerAdapterError(
+                ISSUER_RESPONSE_INVALID,
+                f"attestation external_credential_id is {payload.get('external_credential_id')!r}, not the passport {passport_id}",
+            )
+        if payload.get("type") not in (None, attestation_type):
+            raise IssuerAdapterError(
+                ISSUER_RESPONSE_INVALID, f"attestation type is {payload.get('type')!r}, not {attestation_type}"
+            )
 
     def _run_text(self, args: Sequence[str]) -> str:
         command = [*self._cli, *args, "--dir", self._state_dir]

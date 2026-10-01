@@ -32,12 +32,20 @@ PY_VERIFIER := packages/verifier-py
 TS_PACKAGES := packages/sdk-ts packages/mcp-auth packages/agent-passport apps/auth-service packages/agent-httpsig packages/mock-issuer
 PY_HTTPSIG := packages/agent-httpsig-py
 
-.PHONY: help install check test check-docs check-denylist check-py check-ts test-py test-scripts test-ts
+.PHONY: help install check test check-docs check-denylist check-py check-ts test-py test-scripts test-ts demo-attest
 
 help:
 	@echo "make install   install dependencies"
 	@echo "make check     documentation integrity, vendor denylist, lint and type checks"
 	@echo "make test      unit tests"
+	@echo "make demo-attest  attestation demo against the mock issuer (Postgres in DATABASE_URL, Redis in REDIS_URL)"
+
+# Demo 1: register -> prove key -> attest -> level attested -> revoke -> level
+# drops, against the mock issuer and a real auth service on a local port.
+# Needs apps/auth-service built, the SDK installed (pip install -e packages/sdk-py)
+# and `make install`; scripts/demo-attest.mjs says what is missing.
+demo-attest:
+	node scripts/demo-attest.mjs
 
 install:
 	$(NPM) ci --no-audit --no-fund

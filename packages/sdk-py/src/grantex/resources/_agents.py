@@ -6,11 +6,14 @@ from typing import Any, List, Optional
 
 from .._http import HttpClient
 from .._types import Agent, ListAgentsResponse
+from ._agent_keys import AgentKeysClient
 
 
 class AgentsClient:
     def __init__(self, http: HttpClient) -> None:
         self._http = http
+        #: Key history and possession proof (spec/agent-keys.md).
+        self.keys = AgentKeysClient(http)
 
     def register(
         self,

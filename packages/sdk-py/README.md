@@ -268,6 +268,17 @@ its own package, configured by `GRANTEX_ISSUER_BASE_URL`,
 installed fails closed. See
 [Implementing an Issuer Adapter](https://docs.grantex.dev/issuers/implementing-an-issuer-adapter).
 
+The attestation step of registration runs as one command:
+
+```bash
+grantex-attest ag_01ABC --key agent-key.json --generate-key
+```
+
+It registers the key in the agent's history (`client.agents.keys.add`), proves
+possession with the registry's challenge (`sign_key_proof`), hands the proved
+key to the adapter, posts the attestation to the registry and prints the
+agent's level. The same steps are `grantex.issuers.attest_agent()`.
+
 ## Configuration
 
 ```python
