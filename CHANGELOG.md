@@ -35,6 +35,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   sign up, register a provider and an agent, generate and prove the key,
   `grantex-attest`, public lookup at level `attested`, revoke at the issuer,
   lookup shows the drop and the revocation.
+- `make demo-verify` (`scripts/demo-verify.mjs`, `scripts/demo_verify_step.py`,
+  same CI job): Demo 2, a relying party's one-call verification: the mock's
+  passport attested, a grant bound to it for `https://merchant.example`
+  (sandbox approval), `verify()` passing every check on a signed request,
+  the issuer revoking and `verify()` denying `passport_revoked`, the
+  registry's acceptance entry turning INVALID, and the verifier's adversarial
+  fixtures all denied. The demos share `scripts/lib/registry-demo.mjs`; the
+  registry advertises `https://registry.example` and the demos map it to
+  loopback. `grantex-attest --passport-out FILE` keeps the issuer's
+  credential for such a flow.
 
 ### Release preparation: DPDP clients
 - Versions prepared for the DPDP client changes: `@grantex/sdk` 0.8.2,

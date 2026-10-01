@@ -126,9 +126,11 @@ adapter and posting them, the public lookup showing level `attested`, the
 issuer revoking the passport, and the lookup showing the level drop and the
 revocation within the status list `ttl` (1 s) plus one reconciliation read.
 Every step prints `live` (the registry) or `fixture` (the mock issuer). It
-runs in CI (`Demo (attest)`); locally it needs `make install`, the auth
-service built (`npm --prefix apps/auth-service run build`) and the SDK
-installed (`pip install -e packages/sdk-py`).
+runs in CI (`Demos (attest, verify)`); locally it needs `make install`, the
+auth service built (`npm --prefix apps/auth-service run build`) and the SDK
+installed (`pip install -e packages/sdk-py`). `make demo-verify` continues
+from the same point into a passport-bound grant and a relying party's
+`verify()`; see [Verifying Agents](../relying-parties/verifying-agents.md).
 
 ## Use it from the Python SDK
 

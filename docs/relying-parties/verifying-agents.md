@@ -147,6 +147,24 @@ the registry has not changed and the manifest has not been re-signed, so a
 conditional request is cheap. The manifest route allows 60 requests a minute
 per client address.
 
+## The verification demo
+
+`make demo-verify` runs the whole of this page against the repository's mock
+issuer and a real auth service on a local port, with no external party: the
+mock issues an Agent Passport and the registry attests it (`grantex-attest`);
+the registry issues a grant bound to that passport for
+`https://merchant.example` (`POST /v1/authorize` with `passport` and
+`authorization_details`, a sandbox approval, `POST /v1/token`); the relying
+party signs a checkout request as the agent and `verify()` passes every
+check; the issuer revokes the passport and the next `verify()` denies with
+`passport_revoked`; the registry's acceptance entry for the bound grant turns
+INVALID within the status window; and the verifier's adversarial fixtures
+(forged issuer, unproven key, expired passport, revoked passport, swapped
+passport, grant for another key, stale lists, suspended issuer, ...) are run
+and every one is denied with its Appendix C code. The relying party's side is
+`scripts/demo_verify_step.py`; each step prints `live`, `fixture` or
+`verifier`. It runs in CI (`Demos (attest, verify)`).
+
 ## Verifying a request in Python
 
 `grantex-verifier` (`packages/verifier-py`, 0.1.0, **not yet published**)

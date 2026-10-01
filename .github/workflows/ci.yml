@@ -318,8 +318,8 @@ jobs:
         working-directory: packages/mpp
         run: npm ci && npm run typecheck && npm test
 
-  demo-attest:
-    name: Demo (attest)
+  demos:
+    name: Demos (attest, verify)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -358,10 +358,12 @@ jobs:
           npm --prefix packages/mock-issuer ci --no-audit --no-fund
       - name: Build the auth service
         run: npm --prefix apps/auth-service ci --no-audit --no-fund && npm --prefix apps/auth-service run build
-      - name: Install the Python SDK
-        run: pip install -e packages/sdk-py
+      - name: Install the Python SDK and the relying-party verifier
+        run: pip install -e packages/sdk-py -e packages/agent-passport-py -e packages/agent-httpsig-py -e "packages/verifier-py[dev]"
       - name: Run the attestation demo
         run: make demo-attest
+      - name: Run the verification demo
+        run: make demo-verify
 
   standalone-packages:
     name: Standalone Packages

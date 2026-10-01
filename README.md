@@ -265,8 +265,12 @@ The specifications are [registry federation](spec/registry-federation.md), [atte
 repository's mock accredited issuer, with no external party: register an
 agent, prove its key, request attestation through the issuer adapter seam,
 see the level `attested` in the public lookup, revoke at the issuer, and see
-the level drop. Each step is labelled `live` (the registry) or `fixture` (the
-mock issuer). See [Running the Mock Issuer](https://docs.grantex.dev/issuers/running-the-mock-issuer).
+the level drop. `make demo-verify` goes on to a grant bound to the passport,
+a relying party's `verify()` passing, the issuer revoking and `verify()`
+denying, and the verifier's adversarial fixtures all denied. Each step is
+labelled `live` (the registry), `fixture` (the mock issuer) or `verifier`. See
+[Running the Mock Issuer](https://docs.grantex.dev/issuers/running-the-mock-issuer)
+and [Verifying Agents](https://docs.grantex.dev/relying-parties/verifying-agents).
 
 ## Current Releases
 
