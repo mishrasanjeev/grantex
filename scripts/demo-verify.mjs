@@ -19,7 +19,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { MOCK_ISSUER_ORIGIN, REGISTRY_ORIGIN, REPO, RegistryDemo, expect, findPython, http, runDemo } from './lib/registry-demo.mjs';
+import { COMPACT_JWS, MOCK_ISSUER_ORIGIN, REGISTRY_ORIGIN, REPO, RegistryDemo, SD_JWT_PRESENTATION, expect, findPython, http, runDemo } from './lib/registry-demo.mjs';
 
 const MERCHANT = 'https://merchant.example';
 const AUDIENCE = `${MERCHANT}/checkout`;
@@ -44,7 +44,8 @@ await runDemo('demo-verify', async () => {
     const passportFile = join(demo.state, 'passport.sd-jwt');
     demo.runGrantexAttest(python, ['--passport-out', passportFile]);
     const passport = readFileSync(passportFile, 'utf8').trim();
-    expect(passport.includes('~'), 'the passport is not an SD-JWT presentation');
+    // Only a well-formed presentation goes to the registry.
+    expect(SD_JWT_PRESENTATION.test(passport), 'the passport file does not hold an SD-JWT presentation');
 
     // ── a grant bound to the passport, for this merchant ───────────────────
     const authorized = await http('POST', `${demo.baseUrl}/v1/authorize`, {
@@ -76,6 +77,8 @@ await runDemo('demo-verify', async () => {
     const exchanged = await http('POST', `${demo.baseUrl}/v1/token`, { headers: demo.auth, body: { code, agentId: demo.agent.id } });
     expect(exchanged.status === 201 || exchanged.status === 200, `token answered ${exchanged.status}: ${exchanged.text}`);
     const grant = exchanged.json.grantToken;
+    // Only a compact JWS is kept; nothing else the registry might answer reaches the file.
+    expect(typeof grant === 'string' && COMPACT_JWS.test(grant), 'the token answer is not a compact JWS');
     const claims = decodeJwtPayload(grant);
     const detail = (claims.authorization_details ?? []).find((d) => d.type === COMMERCE);
     expect(detail?.passport?.key_thumbprint === demo.agentKey.thumbprint, `the grant is not bound to the passport's key: ${JSON.stringify(claims.authorization_details)}`);

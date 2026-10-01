@@ -128,7 +128,9 @@ def run(argv: Sequence[str], out: TextIO, err: TextIO, environ: Optional[Mapping
         if not outcome.issued.passport:
             err.write("grantex-attest: the issuer returned no passport to write\n")
             return 1
-        with open(args.passport_out, "w", encoding="utf-8") as handle:
+        # The credential is the agent's: created readable by this user only, replaced if present.
+        fd = os.open(args.passport_out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(outcome.issued.passport + "\n")
         _emit(out, "passport_written", "local", file=args.passport_out)
     return 0

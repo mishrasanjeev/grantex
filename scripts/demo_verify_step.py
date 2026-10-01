@@ -19,7 +19,7 @@ import json
 import os
 import sys
 from typing import Any, Dict, Mapping, Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 
@@ -46,10 +46,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     mapping = {args.registry_origin: args.registry_loopback, args.mock_origin: args.mock_loopback}
 
     def mapped(url: str) -> str:
-        for origin, loopback in mapping.items():
-            if url.startswith(origin):
-                return loopback + url[len(origin):]
-        return url
+        parts = urlsplit(url)
+        origin = f"{parts.scheme}://{parts.netloc}"
+        loopback = mapping.get(origin)
+        if loopback is None:
+            return url
+        return loopback + parts.path + (f"?{parts.query}" if parts.query else "")
 
     client = httpx.Client(follow_redirects=False, timeout=10.0)
 

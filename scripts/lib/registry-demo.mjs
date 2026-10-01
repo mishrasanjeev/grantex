@@ -169,6 +169,11 @@ async function verifyRegistryJws(token, { jwksUrl, typ, iss, sub }) {
   return payload;
 }
 
+/** An SD-JWT presentation: compact JWS segments and disclosures, base64url only. */
+export const SD_JWT_PRESENTATION = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(~[A-Za-z0-9_-]*)*~?$/;
+/** A compact JWS (RFC 7515 section 7.1). */
+export const COMPACT_JWS = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+
 export function summarizeAttestations(lookup) {
   const attestations = Array.isArray(lookup.attestations) ? lookup.attestations : [];
   // The public lookup lists counted attestations only: type, issuer, expiry.
@@ -200,8 +205,10 @@ export class RegistryDemo {
 
   /** The URL to fetch for one the registry or the mock issuer advertises. */
   mapUrl(url) {
-    if (url.startsWith(REGISTRY_ORIGIN)) return this.baseUrl + url.slice(REGISTRY_ORIGIN.length);
-    if (url.startsWith(MOCK_ISSUER_ORIGIN)) return this.serve.origin + url.slice(MOCK_ISSUER_ORIGIN.length);
+    const parsed = new URL(url);
+    const rest = parsed.pathname + parsed.search;
+    if (parsed.origin === REGISTRY_ORIGIN) return this.baseUrl + rest;
+    if (parsed.origin === MOCK_ISSUER_ORIGIN) return this.serve.origin + rest;
     return url;
   }
 
