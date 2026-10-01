@@ -71,6 +71,7 @@
               "features/trust-registry",
               "issuers/becoming-an-accredited-issuer",
               "issuers/running-the-mock-issuer",
+              "issuers/implementing-an-issuer-adapter",
               "providers/registering-agents",
               "relying-parties/verifying-agents",
               "features/fido-webauthn",
