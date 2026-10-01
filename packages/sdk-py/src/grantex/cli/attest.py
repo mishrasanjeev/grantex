@@ -80,6 +80,11 @@ def run(argv: Sequence[str], out: TextIO, err: TextIO, environ: Optional[Mapping
         thumbprint = jwk_thumbprint(pub)
         issuer = load_issuer_client(adapter_name, environ=env)
         source = adapter_name or "adapter"
+        # The mock runs the agent's side of the possession proof itself and
+        # needs the private key file; a real issuer proves with the agent.
+        register = getattr(issuer, "register_agent_key_file", None)
+        if callable(register):
+            register(thumbprint, os.path.abspath(args.key))
         client = Grantex(api_key=api_key, base_url=base_url, revocation_check="offline")
         try:
             keys = {k.thumbprint: k for k in client.agents.keys.list(args.agent_id)}
@@ -117,6 +122,7 @@ def run(argv: Sequence[str], out: TextIO, err: TextIO, environ: Optional[Mapping
             issuer=issued.credential_ref.issuer,
             external_credential_id=issued.credential_ref.external_credential_id,
             external_credential_hash=issued.credential_ref.external_credential_hash,
+            issuer_attestation_id=issued.credential_ref.issuer_attestation_id,
         )
         _emit(out, "attestation_ingested", "live", id=record.get("id"), type=record.get("type"), state=record.get("state"))
     _emit(out, "lookup", "live", agent_did=outcome.agent.did, level=outcome.level, flags=list(outcome.flags))
