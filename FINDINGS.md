@@ -1986,3 +1986,31 @@ the pull request that references it.
   the re-read it triggered completes. Owner: registry maintainers. Exit
   criterion: with `ttl` equal to the minimum interval, an attestation counts
   continuously while its list keeps answering VALID.
+
+## G-144 — The SDKs read a tool-qualified scope as the whole connector permission
+
+- **Found:** running agentic-org's `make demo-case` against the Python SDK
+  0.7.2 (2026-10-01): a grant delegated with only
+  `tool:mock:read:screen_business` and `tool:mock:read:screen_person` passed
+  `enforce(connector="mock", tool="ownership")`.
+- **What:** `Grantex._resolve_granted_permission` in
+  `packages/sdk-py/src/grantex/_client.py` splits each scope and takes
+  `parts[2]` as the permission granted on `parts[1]`, ignoring a fourth
+  segment. A scope that names a tool therefore grants every tool of that
+  permission on the connector. The TypeScript (`packages/sdk-ts/src/client.ts`)
+  and Go (`packages/go-sdk`) clients resolve scopes the same way, and the
+  manifest check only maps the tool to its permission level.
+- **Impact:** an integrator that registers per-tool scopes (agentic-org's
+  `auth/scope_registry.py` does) gets connector-wide attenuation, not
+  per-tool. Purpose binding, caps, revocation and decision grants are not
+  affected. agentic-org refuses such calls itself from its next release
+  (its FINDINGS A-109).
+- **Proposal:** honour the tool segment in all three SDKs: when every scope
+  a grant holds for a connector names a tool, a call to a tool none of them
+  names is `tool_not_granted` (`sub_reason` `tool_scope_missing`); a
+  connector-level scope keeps today's reading. Behind an opt-in option
+  (`toolQualifiedScopes` / `tool_qualified_scopes` / `ToolQualifiedScopes`)
+  until the next major, with a conformance case in `packages/conformance`
+  and the SDK Authority Boundaries workflow. Owner: SDK maintainers. Exit
+  criterion: the agentic-org demo's out-of-scope call is refused by the SDK
+  alone with the pre-check removed.
