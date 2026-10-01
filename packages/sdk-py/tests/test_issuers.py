@@ -44,7 +44,7 @@ from grantex.issuers import (
     installed_adapters,
     load_issuer_client,
 )
-from grantex.issuers._mock import AGENT_KEYS_ENV, CLI_ENV, STATE_DIR_ENV
+from grantex.issuers._mock import AGENT_KEYS_ENV, CLI_ENV, STATE_DIR_ENV, TYPES_ENV
 from tests.docs_examples.issuer_adapter import ExampleIssuerClient, create_client
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -189,6 +189,9 @@ def test_mock_adapter_round_trip(mock_client: MockIssuerClient) -> None:
     issued = mock_client.request_attestation(AGENT, KEY)
     assert _header(issued.jws)["typ"] == "grantex-attestation+jwt"
     assert issued.attestation_type == "urn:grantex:tm:agent.identity"
+    # The same passport also attests the provider's entity; both make the level attested.
+    assert [c.attestation_type for c in issued.companions] == ["urn:grantex:tm:provider.entity"]
+    assert issued.companions[0].credential_ref == issued.credential_ref and issued.companions[0].jws != issued.jws
     assert issued.key_thumbprint == THUMBPRINT
     assert issued.credential_ref == CredentialRef(
         "https://mock-issuer.example", "att-001", "sha-256:OiVR9AjgZRd6DJ8n_6dpLox_0KzFKt7gZ9MHpgHXOKQ"
@@ -269,8 +272,17 @@ def test_mock_adapter_reports_a_usage_error_as_invalid(fake_cli: List[str], stat
 
 def test_mock_adapter_only_attests_the_mocks_trust_marks(fake_cli: List[str], state_dir: Path) -> None:
     with pytest.raises(IssuerAdapterError) as info:
-        MockIssuerClient(cli=fake_cli, state_dir=str(state_dir), attestation_type="urn:grantex:tm:provider.screening")
+        MockIssuerClient(cli=fake_cli, state_dir=str(state_dir), attestation_types=["urn:grantex:tm:provider.screening"])
     assert info.value.code == ADAPTER_INVALID
+    only = MockIssuerClient(cli=fake_cli, state_dir=str(state_dir), attestation_types=["urn:grantex:tm:agent.identity"])
+    assert only.request_attestation(AGENT, KEY).companions == ()
+
+
+def test_mock_adapter_types_from_the_environment(fake_cli: List[str], state_dir: Path) -> None:
+    environ = {CLI_ENV: " ".join(fake_cli), STATE_DIR_ENV: str(state_dir), TYPES_ENV: "urn:grantex:tm:provider.entity"}
+    client = MockIssuerClient.from_config(IssuerAdapterConfig(adapter="mock"), environ=environ)
+    issued = client.request_attestation(AGENT, KEY)
+    assert issued.attestation_type == "urn:grantex:tm:provider.entity" and issued.companions == ()
 
 
 def test_mock_adapter_from_the_environment(fake_cli: List[str], state_dir: Path, tmp_path: Path) -> None:

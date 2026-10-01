@@ -18,7 +18,7 @@ Three operations, nothing else:
 | Operation | Input | Output |
 |---|---|---|
 | `issuer_metadata()` | — | `IssuerMetadata`: `issuer_id`, trust-mark `scopes`, and either a static `jwks` or an `entity_configuration_url` (OpenID Federation, Phase 2); optionally `status_list_base` |
-| `request_attestation(agent_record, proved_key)` | the agent's identifiers (`AgentRecord`) and a public key the registry has proved possession of (`ProvedKey`: RFC 7638 `thumbprint`, `public_jwk`, `possession_proved_at`) | `IssuedAttestation`: the compact JWS (`typ` `grantex-attestation+jwt`, [spec](https://github.com/mishrasanjeev/grantex/blob/main/spec/attestation-1.0.md)), its `attestation_type`, a `CredentialRef` (`issuer`, `external_credential_id`, `external_credential_hash`) for later lookups, the bound `key_thumbprint`, `expires_at`, and the issuer's own credential (`passport`) when it issued one |
+| `request_attestation(agent_record, proved_key)` | the agent's identifiers (`AgentRecord`) and a public key the registry has proved possession of (`ProvedKey`: RFC 7638 `thumbprint`, `public_jwk`, `possession_proved_at`) | `IssuedAttestation`: the compact JWS (`typ` `grantex-attestation+jwt`, [spec](https://github.com/mishrasanjeev/grantex/blob/main/spec/attestation-1.0.md)), its `attestation_type`, a `CredentialRef` (`issuer`, `external_credential_id`, `external_credential_hash`) for later lookups, the bound `key_thumbprint`, `expires_at`, the issuer's own credential (`passport`) when it issued one, and `companions`: further attestations from the same issuance (an Agent Passport attests `provider.entity` as well as `agent.identity`), each ingested with it |
 | `fetch_status(credential_ref)` | a `CredentialRef` | `IssuerStatus`: `valid`, `suspended` or `revoked`, with `checked_at` and `source` |
 
 The adapter only ever sees public material. An issuer verifies the agent's
@@ -182,6 +182,32 @@ What the adapter must guarantee:
 - `fetch_status` reflects the issuer's status list or API as of
   `checked_at`; a stale or unreadable source is an error.
 
+## The registry side: requesting attestation
+
+`grantex.issuers.attest_agent(client, agent_id, thumbprint)` is the step of
+agent registration that uses the adapter. It reads the key from the agent's
+history and refuses with `key_unproven` unless it is `active` (possession
+proven through `POST /v1/agents/{id}/keys/{thumbprint}/challenge` and
+`/prove`); hands the agent's identifiers and public key to the adapter;
+posts the attestation JWS to `POST /v1/registry/attestations` with no API key
+(the issuer's signature is the authentication); and reads the agent's
+computed level back from the lookup. The registry's refusals keep their codes
+(`issuer_not_accredited`, `scope_not_accredited`, `signature_invalid`,
+`expired`, `key_unproven`).
+
+The same step is the `grantex-attest` command, which also registers and
+proves the key when it is new:
+
+```bash
+export GRANTEX_API_KEY=...            # the developer's key
+export GRANTEX_ISSUER_ADAPTER=mock    # or a private adapter's name
+grantex-attest ag_01ABC --key agent-key.json --generate-key
+```
+
+Each step is one JSON line: `key_generated`, `key_added`, `key_proved`,
+`issuer`, `attestation_issued`, `attestation_ingested`, `lookup`, with a
+`source` of `live` for the registry and the adapter's name for the issuer.
+
 ## The mock issuer's adapter
 
 `GRANTEX_ISSUER_ADAPTER=mock` builds `grantex.issuers.MockIssuerClient`, which
@@ -194,6 +220,7 @@ attestation, `status` for status. It reads:
 | `GRANTEX_MOCK_ISSUER_CLI` | the command, default `node packages/mock-issuer/src/cli.ts` when the SDK runs from the repository |
 | `GRANTEX_MOCK_ISSUER_DIR` (or `MOCK_ISSUER_DIR`) | the mock's state directory |
 | `GRANTEX_MOCK_ISSUER_AGENT_KEYS` | `thumbprint=path` pairs for agent key files, when they are not under `<state dir>/agents/` |
+| `GRANTEX_MOCK_ISSUER_TYPES` | the trust marks to attest from one passport, comma separated; default `urn:grantex:tm:agent.identity,urn:grantex:tm:provider.entity`, which is what the level `attested` needs |
 
 The mock runs both sides of the possession proof itself, so it needs the
 agent's private key file: the one `issue-passport --generate-agent-key` writes

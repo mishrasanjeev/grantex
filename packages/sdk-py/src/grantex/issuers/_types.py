@@ -69,6 +69,10 @@ class IssuedAttestation:
     expires_at: Optional[datetime] = None
     #: The issuer's own credential (an Agent Passport, SD-JWT VC) when it issued one.
     passport: Optional[str] = None
+    #: Further attestations from the same act of issuance (an Agent Passport
+    #: attests the provider's entity as well as the agent's identity); each is
+    #: ingested with this one.
+    companions: Tuple[IssuedAttestation, ...] = ()
 
 
 @dataclass(frozen=True)

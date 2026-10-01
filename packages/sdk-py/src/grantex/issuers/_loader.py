@@ -77,7 +77,9 @@ def load_issuer_client(
             f"{ADAPTER_ENV}={MOCK_ADAPTER_NAME}",
         )
     if len(matches) > 1:
-        origins = ", ".join(sorted({(ep.dist.name if ep.dist else "?") for ep in matches}))
+        # EntryPoint.dist exists from Python 3.10; the name is a courtesy in the message.
+        dists = [getattr(ep, "dist", None) for ep in matches]
+        origins = ", ".join(sorted({(dist.name if dist is not None else "?") for dist in dists}))
         raise IssuerAdapterError(
             ADAPTER_AMBIGUOUS,
             f"{len(matches)} packages provide the adapter {adapter!r} ({origins}); uninstall all but one",

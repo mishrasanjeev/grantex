@@ -19,6 +19,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   fails closed with `adapter_not_installed`; nothing falls back to the mock.
   Documented for third parties in `docs/issuers/implementing-an-issuer-adapter.md`,
   whose example adapter is a test.
+- The attestation step of registration: `client.agents.keys` (add, challenge,
+  prove, rotate, compromise over `/v1/agents/{id}/keys`),
+  `grantex.issuers.sign_key_proof()` and `generate_agent_key()` for the
+  agent's side of possession (spec/agent-keys.md §4.2, RFC 7638 thumbprints),
+  and `grantex.issuers.attest_agent()`, which hands the proved key to the
+  adapter, posts the attestation to `POST /v1/registry/attestations` and reads
+  the agent's computed level. A key that is not `active` is refused with
+  `key_unproven` before the issuer is asked. `grantex-attest AGENT_ID --key
+  FILE [--generate-key]` runs the whole step as one command; against
+  `GRANTEX_ISSUER_ADAPTER=mock` it needs no external party.
 
 ### Release preparation: DPDP clients
 - Versions prepared for the DPDP client changes: `@grantex/sdk` 0.8.2,
