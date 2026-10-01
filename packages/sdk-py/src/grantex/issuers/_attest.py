@@ -96,9 +96,10 @@ def attest_agent(
 ) -> AttestationOutcome:
     """Request an attestation for ``agent_id`` bound to its proved key ``thumbprint``.
 
-    1. Reads the agent and the key from its history; the key must be
-       ``active`` (possession proven), or the request stops with
-       ``key_unproven`` before the issuer is asked.
+    1. Reads the agent and the key from its history; the key must be usable
+       (possession proven and within its validity), or the request stops with
+       the registry's denial (``key_unproven``, ``key_not_active``) before the
+       issuer is asked.
     2. Hands the agent's identifiers and the public key to the adapter
        (``issuer``, or the one ``GRANTEX_ISSUER_ADAPTER`` names).
     3. Posts the attestation JWS to the registry and reads the agent's level.
@@ -112,9 +113,12 @@ def attest_agent(
     key = next((k for k in keys if k.thumbprint == thumbprint), None)
     if key is None:
         raise IssuerAdapterError("key_unproven", f"agent {agent_id} has no key {thumbprint} in its history")
-    if key.status != "active" or not key.possession_proved_at:
+    # The registry's own verdict: proven and within its validity (an active key,
+    # or a rotated one still inside its overlap).
+    if not key.usable or not key.possession_proved_at:
         raise IssuerAdapterError(
-            "key_unproven", f"key {thumbprint} is {key.status}; prove possession before requesting attestation"
+            key.denial or "key_unproven",
+            f"key {thumbprint} is {key.status} and not usable; prove possession before requesting attestation",
         )
     adapter = issuer if issuer is not None else load_issuer_client()
     record = AgentRecord(
