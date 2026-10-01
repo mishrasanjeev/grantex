@@ -139,6 +139,36 @@ export async function http(method, url, { body, headers = {}, raw = false } = {}
   return { status: response.status, json, text };
 }
 
+
+/**
+ * Verify a JWS the registry signed (ES256 or RS256, kid in its JWK Set) and
+ * return its payload: typ, iss, sub and exp are checked, so a malformed,
+ * foreign, stale or re-signed status list fails the demo rather than passing
+ * it. Uses node:crypto only.
+ */
+async function verifyRegistryJws(token, { jwksUrl, typ, iss, sub }) {
+  const { createPublicKey, verify } = await import('node:crypto');
+  const [h, p, s] = token.split('.');
+  expect(h && p && s, 'the registry answered something that is not a compact JWS');
+  const header = JSON.parse(Buffer.from(h, 'base64url').toString('utf8'));
+  expect(header.typ === typ, `JWS typ is ${header.typ}, expected ${typ}`);
+  const jwks = await (await fetch(jwksUrl)).json();
+  const jwk = (jwks.keys ?? []).find((k) => k.kid === header.kid);
+  expect(jwk, `the registry's JWK Set has no key ${header.kid}`);
+  const algorithms = { ES256: ['sha256', { dsaEncoding: 'ieee-p1363' }], RS256: ['sha256', {}] };
+  const [hash, extra] = algorithms[header.alg] ?? [];
+  expect(hash, `unsupported JWS alg ${header.alg}`);
+  const key = createPublicKey({ key: jwk, format: 'jwk' });
+  const ok = verify(hash, Buffer.from(`${h}.${p}`), { key, ...extra }, Buffer.from(s, 'base64url'));
+  expect(ok, 'the status list signature does not verify against the registry JWK Set');
+  const payload = JSON.parse(Buffer.from(p, 'base64url').toString('utf8'));
+  expect(payload.iss === iss, `status list iss is ${payload.iss}, expected ${iss}`);
+  expect(payload.sub === sub, `status list sub is ${payload.sub}, expected ${sub}`);
+  const now = Math.floor(Date.now() / 1000);
+  expect(typeof payload.exp === 'number' && payload.exp > now, 'the status list has expired');
+  return payload;
+}
+
 export function summarizeAttestations(lookup) {
   const attestations = Array.isArray(lookup.attestations) ? lookup.attestations : [];
   // The public lookup lists counted attestations only: type, issuer, expiry.
@@ -309,7 +339,7 @@ export class RegistryDemo {
       const source = s.source === 'live' ? 'live' : s.source === 'mock' ? 'fixture' : s.source;
       const { step: name, source: _source, ...rest } = s;
       this.step(`grantex-attest: ${name}`, source, Object.entries(rest).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join('|') : v}`).join(' '));
-      if (name === 'attestation_issued' && attestationId === null) attestationId = s.external_credential_id;
+      if (name === 'attestation_issued' && attestationId === null) attestationId = s.issuer_attestation_id;
     }
     expect(attest.status === 0, `grantex-attest exited ${attest.status}: ${attest.stderr.trim()}`);
     const lookup = steps.find((s) => s.step === 'lookup');
@@ -339,7 +369,10 @@ export class RegistryDemo {
     const response = await fetch(this.mapUrl(entry.uri), { headers: { Accept: 'application/statuslist+jwt' } });
     expect(response.ok, `acceptance list ${entry.uri} answered ${response.status}`);
     const token = (await response.text()).trim();
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+    // Signed by the registry: verified against its JWK Set before anything is read from it.
+    const payload = await verifyRegistryJws(token, {
+      jwksUrl: `${this.baseUrl}/.well-known/jwks.json`, typ: 'statuslist+jwt', iss: REGISTRY_ORIGIN, sub: entry.uri,
+    });
     const list = this.codec.decodeTokenStatusList(payload.status_list);
     const value = list.statusAt(entry.idx);
     const name = Object.entries(this.codec.TOKEN_STATUS).find(([, v]) => v === value)?.[0] ?? String(value);
