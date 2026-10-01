@@ -345,12 +345,14 @@ def test_grantex_attest_registers_proves_and_attests_in_one_command(tmp_path: Pa
     assert steps[2]["status"] == "active" and steps[5]["id"] == "ratt_01" and steps[8]["level"] == "attested"
     assert "d" in json.loads(key_file.read_text(encoding="utf-8"))
 
-    # A second run finds the active key and skips registration and proof.
+    # A second run finds the active key and skips registration and proof; --passport-out keeps the credential.
     out2 = io.StringIO()
-    assert run([AGENT_ID, "--key", str(key_file)], out2, io.StringIO(), stub_adapter_env) == 0
+    passport_file = tmp_path / "passport.sd-jwt"
+    assert run([AGENT_ID, "--key", str(key_file), "--passport-out", str(passport_file)], out2, io.StringIO(), stub_adapter_env) == 0
     assert [s["step"] for s in _steps(out2)] == [
-        "issuer", "attestation_issued", "attestation_ingested", "attestation_issued", "attestation_ingested", "lookup",
+        "issuer", "attestation_issued", "attestation_ingested", "attestation_issued", "attestation_ingested", "lookup", "passport_written",
     ]
+    assert passport_file.read_text(encoding="utf-8") == "eyJ.passport.sig~\n"
 
 
 @respx.mock

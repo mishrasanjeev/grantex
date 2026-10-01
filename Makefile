@@ -32,13 +32,14 @@ PY_VERIFIER := packages/verifier-py
 TS_PACKAGES := packages/sdk-ts packages/mcp-auth packages/agent-passport apps/auth-service packages/agent-httpsig packages/mock-issuer
 PY_HTTPSIG := packages/agent-httpsig-py
 
-.PHONY: help install check test check-docs check-denylist check-py check-ts test-py test-scripts test-ts demo-attest
+.PHONY: help install check test check-docs check-denylist check-py check-ts test-py test-scripts test-ts demo-attest demo-verify
 
 help:
 	@echo "make install   install dependencies"
 	@echo "make check     documentation integrity, vendor denylist, lint and type checks"
 	@echo "make test      unit tests"
 	@echo "make demo-attest  attestation demo against the mock issuer (Postgres in DATABASE_URL, Redis in REDIS_URL)"
+	@echo "make demo-verify  one-call verification demo: passport-bound grant, verify(), revocation, adversarial fixtures"
 
 # Demo 1: register -> prove key -> attest -> level attested -> revoke -> level
 # drops, against the mock issuer and a real auth service on a local port.
@@ -46,6 +47,13 @@ help:
 # and `make install`; scripts/demo-attest.mjs says what is missing.
 demo-attest:
 	node scripts/demo-attest.mjs
+
+# Demo 2: passport issued -> grant bound to it -> verify() passes -> issuer
+# revokes -> verify() denies -> every adversarial fixture denied. Needs the
+# same as demo-attest plus the Python verifier packages
+# (pip install -e packages/agent-passport-py -e packages/agent-httpsig-py -e "packages/verifier-py[dev]").
+demo-verify:
+	node scripts/demo-verify.mjs
 
 install:
 	$(NPM) ci --no-audit --no-fund

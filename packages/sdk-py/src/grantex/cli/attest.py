@@ -38,6 +38,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-url", help=f"registry base URL (default: GRANTEX_BASE_URL or {DEFAULT_BASE_URL})")
     parser.add_argument("--adapter", help="issuer adapter name (default: GRANTEX_ISSUER_ADAPTER)")
     parser.add_argument("--provider-did", help="the agent's provider DID, did:web:<domain> (default: GRANTEX_PROVIDER_DID)")
+    parser.add_argument("--passport-out", metavar="FILE", help="write the issuer's credential (the Agent Passport) here")
     return parser
 
 
@@ -123,6 +124,15 @@ def run(argv: Sequence[str], out: TextIO, err: TextIO, environ: Optional[Mapping
         )
         _emit(out, "attestation_ingested", "live", id=record.get("id"), type=record.get("type"), state=record.get("state"))
     _emit(out, "lookup", "live", agent_did=outcome.agent.did, level=outcome.level, flags=list(outcome.flags))
+    if args.passport_out:
+        if not outcome.issued.passport:
+            err.write("grantex-attest: the issuer returned no passport to write\n")
+            return 1
+        # The credential is the agent's: created readable by this user only, replaced if present.
+        fd = os.open(args.passport_out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(outcome.issued.passport + "\n")
+        _emit(out, "passport_written", "local", file=args.passport_out)
     return 0
 
 
