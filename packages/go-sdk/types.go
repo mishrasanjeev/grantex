@@ -115,6 +115,9 @@ type ListAgentsResponse struct {
 // AuthorizeParams are the parameters for creating an authorization request.
 type AuthorizeParams struct {
 	Audience            string   `json:"audience,omitempty"`
+	// DataRegion is the region the grant's data may be processed in ("in", "eu", ...),
+	// carried in the token's urn:grantex:tools:v1 entries.
+	DataRegion          string   `json:"dataRegion,omitempty"`
 	AgentID             string   `json:"agentId"`
 	PrincipalID         string   `json:"principalId"`
 	Scopes              []string `json:"scopes"`

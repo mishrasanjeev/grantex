@@ -14,6 +14,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   on `read` tools. `low` and `medium` are reported on `ToolSpec.riskTier` /
   `ToolSpec.risk_tier` for a platform's own policies. Shared cases in
   `spec/examples/manifest-0.6/`.
+### Data region at issuance (auth service, SDKs)
+- `POST /v1/authorize` takes `dataRegion` (`in`, `eu`, `in-south`: two letters and an
+  optional qualifier, lowercased when stored). It needs at least one
+  `tool:<connector>:<permission>` scope and is written as `data_region` on every
+  `urn:grantex:tools:v1` entry of the issued token, alongside the purpose when
+  one is given or on its own; a malformed value is refused with
+  `INVALID_DATA_REGION`. Delegated and refreshed tokens keep it, as they keep
+  the purpose. `AuthorizeParams.dataRegion` (TypeScript, Go) and
+  `AuthorizeParams.data_region` (Python) send it.
 
 ### Data region enforcement (TypeScript SDK, Python SDK, @grantex/gateway)
 - `enforce()` can check a grant's `data_region` (the `urn:grantex:tools:v1`

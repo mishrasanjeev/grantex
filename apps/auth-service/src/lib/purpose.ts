@@ -59,8 +59,51 @@ export function connectorsInScopes(scopes: readonly string[]): string[] {
 export type ToolsAuthorizationDetail = {
   type: typeof TOOLS_DETAIL_TYPE;
   connector: string;
-  purpose: string;
+  purpose?: string;
+  data_region?: string;
 };
+
+// A data region: a two-letter code with an optional qualifier, lowercased
+// (`in`, `eu`, `in-south`). Relying parties compare it after trimming and
+// lowercasing (spec/grant-token-0.6.md, `urn:grantex:tools:v1`).
+const DATA_REGION_RE = /^[a-z]{2}(?:-[a-z0-9]{1,16})?$/;
+const MAX_DATA_REGION_LENGTH = 24;
+
+/** Whether `value` is a well-formed data region, after trimming and lowercasing. */
+export function isDataRegion(value: unknown): value is string {
+  return typeof value === 'string'
+    && value.trim().length > 0
+    && value.trim().length <= MAX_DATA_REGION_LENGTH
+    && DATA_REGION_RE.test(value.trim().toLowerCase());
+}
+
+export type RequestedDataRegion =
+  | { ok: true; dataRegion: string | null; details: ToolsAuthorizationDetail[] | null }
+  | { ok: false; message: string };
+
+/**
+ * Validate the `dataRegion` of an authorization request and bind it into the
+ * tools entries the token will carry: the entries the purpose produced, or one
+ * per connector in `scopes` when there is no purpose. No region is valid and
+ * leaves `details` as given; a region must be well formed and reach at least
+ * one connector scope.
+ */
+export function resolveRequestedDataRegion(
+  dataRegion: unknown,
+  scopes: readonly string[],
+  details: ToolsAuthorizationDetail[] | null,
+): RequestedDataRegion {
+  if (dataRegion === undefined) return { ok: true, dataRegion: null, details };
+  if (!isDataRegion(dataRegion)) {
+    return { ok: false, message: 'dataRegion must be a region code such as in, eu or in-south (lowercase letters, optional -qualifier)' };
+  }
+  const region = dataRegion.trim().toLowerCase();
+  const base = details ?? connectorsInScopes(scopes).map((connector) => ({ type: TOOLS_DETAIL_TYPE, connector }) as ToolsAuthorizationDetail);
+  if (base.length === 0) {
+    return { ok: false, message: 'dataRegion requires at least one tool:<connector>:<permission> scope' };
+  }
+  return { ok: true, dataRegion: region, details: base.map((entry) => ({ ...entry, data_region: region })) };
+}
 
 /**
  * One `urn:grantex:tools:v1` entry per connector in `scopes`, each carrying
