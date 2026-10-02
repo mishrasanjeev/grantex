@@ -1757,6 +1757,29 @@ class ListVaultCredentialsResponse:
         )
 
 
+@dataclass(frozen=True)
+class ExchangeCredentialReferenceResponse:
+    """A credential handed out by reference: the relying party resolves it; the agent never holds the secret."""
+
+    credential_ref: str
+    service: str
+    credential_type: str
+    token_expires_at: str | None
+    metadata: dict[str, Any]
+    reference_expires_at: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ExchangeCredentialReferenceResponse":
+        return cls(
+            credential_ref=data["credentialRef"],
+            service=data["service"],
+            credential_type=data["credentialType"],
+            token_expires_at=data.get("tokenExpiresAt"),
+            metadata=data.get("metadata", {}),
+            reference_expires_at=data["referenceExpiresAt"],
+        )
+
+
 @dataclass
 class ExchangeCredentialParams:
     service: str
