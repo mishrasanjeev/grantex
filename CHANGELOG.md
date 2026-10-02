@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Credentials by reference (@grantex/gateway)
+- `credentialReference: on` redeems a `Grantex-Credential-Ref` request header (a
+  reference from `POST /v1/vault/credentials/exchange` with `delivery: reference`)
+  for the request's grant with the gateway's own API key
+  (`POST /v1/vault/credentials/resolve`) and injects the credential upstream as
+  `Authorization: Bearer`; the agent never holds the secret. A reference the auth
+  service refuses (another grant's, expired, the grant revoked or stopped) denies
+  the request with `CREDENTIAL_REF_INVALID`; an auth service that cannot be
+  reached is `CREDENTIAL_RESOLVE_FAILED` (502), never a request forwarded without
+  the credential. Off by default; the header is never forwarded upstream.
+
 ### Data region follow-ups (auth service, SDKs, @grantex/gateway)
 - `POST /v1/authorize` reads `dataRegion` only when `DATA_REGION_ISSUANCE_ENABLED=true`;
   off (the default), the member is ignored as before. The code exchange accepts

@@ -44,6 +44,9 @@ const HOP_BY_HOP_REQUEST_HEADERS = new Set([
 /** Reserved for headers the gateway itself asserts about the verified grant. */
 const GRANTEX_HEADER_PREFIX = 'x-grantex-';
 
+/** Instructions to this gateway (a credential reference); never relayed, on or off. */
+const GATEWAY_REQUEST_HEADERS = new Set(['grantex-credential-ref']);
+
 const SUPPRESSED_RESPONSE_HEADERS = new Set([
   'content-encoding',
   'content-length',
@@ -94,6 +97,7 @@ export async function proxyRequest(
     const name = key.toLowerCase();
     if (HOP_BY_HOP_REQUEST_HEADERS.has(name)) continue;
     if (name.startsWith(GRANTEX_HEADER_PREFIX)) continue;
+    if (GATEWAY_REQUEST_HEADERS.has(name)) continue;
     if (value !== undefined) {
       headers.set(name, Array.isArray(value) ? value.join(', ') : value);
     }

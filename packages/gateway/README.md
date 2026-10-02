@@ -77,6 +77,7 @@ Client → Gateway (verify token + check scopes) → Upstream API
 | `routes` | array | Yes | Route definitions (see below) |
 | `dataRegion` | string | No | The data region the upstream processes data in (for example `in`); a grant bound to another region is refused with `REGION_MISMATCH`, and a region-bound grant is refused with `REGION_UNCONFIGURED` when no region is set. Needs `dataRegionCheck: on`; a route's `dataRegion` overrides it |
 | `dataRegionCheck` | `on` \| `off` | No | `off` in this release: a grant's `data_region` is ignored, as earlier releases did; `on` checks it |
+| `credentialReference` | `on` \| `off` | No | `on` redeems a `Grantex-Credential-Ref` request header (a reference from the vault exchange with `delivery: reference`) with `grantexApiKey` against `grantexBaseUrl` and injects the credential upstream as `Authorization: Bearer`; the agent never holds the secret. `off` (default) ignores the header, which is never forwarded either way |
 
 ### Route Definition
 
@@ -96,6 +97,23 @@ The gateway adds these headers to upstream requests:
 | `X-Grantex-Agent` | Agent DID from the grant token |
 | `X-Grantex-GrantId` | Grant ID from the grant token |
 
+## Credentials by reference
+
+With `credentialReference: on`, an agent that exchanged its grant token for a credential
+reference (`POST /v1/vault/credentials/exchange` with `delivery: "reference"`) presents it as
+`Grantex-Credential-Ref: vcr_...`. The gateway redeems the reference for the request's grant with
+its own API key (`POST /v1/vault/credentials/resolve`) and forwards the request with
+`Authorization: Bearer <credential>`; the agent never holds the secret. The auth service refuses
+a reference that belongs to another grant, has expired, or whose grant is revoked or stopped, and
+the gateway then denies the request rather than forwarding it without the credential. A request
+that presents no reference is proxied as before. The header is never forwarded upstream.
+
+```yaml
+credentialReference: on
+grantexApiKey: gx_key_...
+grantexBaseUrl: https://api.grantex.dev
+```
+
 ## Error Responses
 
 | Status | Error Code | When |
@@ -106,6 +124,9 @@ The gateway adds these headers to upstream requests:
 | 401 | `TOKEN_EXPIRED` | Token has expired |
 | 403 | `SCOPE_INSUFFICIENT` | Grant doesn't include required scopes |
 | 502 | `UPSTREAM_ERROR` | Upstream API is unreachable |
+| 400 | `CREDENTIAL_REF_INVALID` | `Grantex-Credential-Ref` is not a credential reference |
+| 403 | `CREDENTIAL_REF_INVALID` | The auth service refused the reference: another grant's, expired, the grant no longer active, or unknown |
+| 502 | `CREDENTIAL_RESOLVE_FAILED` | The auth service could not be reached, refused the gateway's key or answered without a credential |
 
 ## Library API
 

@@ -64,6 +64,19 @@ describe('proxyRequest', () => {
     expect(headers.get('authorization')).toBeNull();
   });
 
+  it('never forwards the credential reference header', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      status: 200,
+      headers: { entries: () => [].values() },
+      text: () => Promise.resolve(''),
+    }));
+    const req = mockReq({ headers: { 'grantex-credential-ref': 'vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M', accept: 'application/json' } });
+    await proxyRequest(req, mockReply(), MOCK_GRANT, { upstream: 'https://api.internal.com' });
+    const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Headers;
+    expect(headers.get('grantex-credential-ref')).toBeNull();
+    expect(headers.get('accept')).toBe('application/json');
+  });
+
   it('adds upstream headers', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       status: 200,

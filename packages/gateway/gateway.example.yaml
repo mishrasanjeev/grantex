@@ -12,6 +12,12 @@ upstreamHeaders:
 # Optional: Grantex API key for audit logging
 # grantexApiKey: gx_key_...
 
+# Optional: credentials by reference. The agent presents a Grantex-Credential-Ref
+# header (from the vault exchange with delivery: reference); the gateway redeems it
+# with grantexApiKey against grantexBaseUrl and injects the credential upstream.
+# credentialReference: on
+# grantexBaseUrl: https://api.grantex.dev
+
 routes:
   # Calendar read access
   - path: /calendar/**

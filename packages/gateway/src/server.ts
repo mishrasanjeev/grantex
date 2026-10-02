@@ -7,6 +7,7 @@ import { GatewayError } from './errors.js';
 import { log } from './logger.js';
 import { audienceDenial, checkAudienceCheck, checkExpectedAudience, readTokenAudience } from './audience.js';
 import { checkDataRegionCheck, checkExpectedDataRegion, readTokenDataRegions, regionDenial } from './region.js';
+import { checkCredentialReference, readCredentialRef, resolveCredentialReference } from './credentials.js';
 
 export function createGatewayServer(config: GatewayConfig): FastifyInstance {
   // Checked here as well as in validateConfig, for a config built in code: an
@@ -31,6 +32,15 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
   if (currentAuthority !== undefined && (typeof currentAuthority !== 'function' || audienceCheck !== 'on'
     || config.routes.some((route) => !(route.audience ?? audience)))) {
     throw new Error('Current authority verification requires a callback and an audience for every route, with audienceCheck on');
+  }
+  // Credentials by reference: the gateway redeems a presented reference with its
+  // own key, so turning it on without the key or the auth service stops the gateway.
+  const credentialReference = checkCredentialReference(config.credentialReference ?? 'off');
+  const resolveOptions = credentialReference === 'on' && config.grantexApiKey && config.grantexBaseUrl
+    ? { grantexApiKey: config.grantexApiKey, grantexBaseUrl: config.grantexBaseUrl }
+    : undefined;
+  if (credentialReference === 'on' && resolveOptions === undefined) {
+    throw new Error('credentialReference: on needs grantexApiKey and grantexBaseUrl');
   }
 
   /**
@@ -183,10 +193,31 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
         grantId: grant.grantId,
       });
 
+      // 3c. Credential by reference: the client presented a reference instead
+      //     of a credential; the gateway redeems it for this grant with its own
+      //     key and injects the credential upstream. Off, the header is ignored
+      //     (and never forwarded, see proxy.ts). A reference the auth service
+      //     refuses denies the request; the gateway never forwards a request
+      //     without the credential the client asked to be injected.
+      let upstreamHeaders = config.upstreamHeaders;
+      if (resolveOptions !== undefined) {
+        const credentialRef = readCredentialRef(req.headers);
+        if (credentialRef !== undefined) {
+          const resolved = await resolveCredentialReference(credentialRef, grant.grantId, resolveOptions);
+          upstreamHeaders = { ...(config.upstreamHeaders ?? {}), Authorization: `Bearer ${resolved.accessToken}` };
+          log('info', 'Credential injected by reference', {
+            method,
+            path,
+            grantId: grant.grantId,
+            service: resolved.service,
+          });
+        }
+      }
+
       // 4. Proxy to upstream
       await proxyRequest(req, reply, grant, {
         upstream: config.upstream,
-        upstreamHeaders: config.upstreamHeaders,
+        upstreamHeaders,
       });
     } catch (err) {
       if (err instanceof GatewayError) {
