@@ -39,6 +39,14 @@ export interface GatewayConfig {
   dataRegion?: string;
   /** `off` (the default in this release) ignores a grant's `data_region`; `on` checks it. */
   dataRegionCheck?: 'on' | 'off';
+  /**
+   * `on` redeems a `Grantex-Credential-Ref` request header (a reference from the
+   * vault exchange with `delivery: reference`) with the gateway's own API key
+   * (`grantexApiKey`, `grantexBaseUrl`) and injects the credential upstream as
+   * `Authorization: Bearer` and does not forward the header; the agent never
+   * holds the secret. `off` (the default) leaves the header alone.
+   */
+  credentialReference?: 'on' | 'off';
 }
 
 export interface MatchResult {

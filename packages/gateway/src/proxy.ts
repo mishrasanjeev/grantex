@@ -6,6 +6,8 @@ export interface ProxyOptions {
   upstream: string;
   upstreamHeaders?: Record<string, string>;
   timeout?: number;
+  /** Request headers (lower-case) addressed to this gateway, never relayed; set by the server for the checks that are on. */
+  dropRequestHeaders?: Iterable<string>;
 }
 
 /**
@@ -43,6 +45,7 @@ const HOP_BY_HOP_REQUEST_HEADERS = new Set([
  */
 /** Reserved for headers the gateway itself asserts about the verified grant. */
 const GRANTEX_HEADER_PREFIX = 'x-grantex-';
+
 
 const SUPPRESSED_RESPONSE_HEADERS = new Set([
   'content-encoding',
@@ -90,10 +93,12 @@ export async function proxyRequest(
   // gateway's reserved namespace: every inbound `x-grantex-*` is
   // client-controlled and must never reach the upstream.
   const rawHeaders = req.headers;
+  const dropped = new Set(Array.from(options.dropRequestHeaders ?? [], (name) => name.toLowerCase()));
   for (const [key, value] of Object.entries(rawHeaders)) {
     const name = key.toLowerCase();
     if (HOP_BY_HOP_REQUEST_HEADERS.has(name)) continue;
     if (name.startsWith(GRANTEX_HEADER_PREFIX)) continue;
+    if (dropped.has(name)) continue;
     if (value !== undefined) {
       headers.set(name, Array.isArray(value) ? value.join(', ') : value);
     }

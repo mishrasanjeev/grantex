@@ -319,3 +319,126 @@ describe('request body handling', () => {
     expect((bodyGivenToProxy() as Buffer).toString('utf-8')).toBe('{not valid json');
   });
 });
+
+describe('credentials by reference', () => {
+  const REFERENCE = 'vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M';
+  const REF_CONFIG: GatewayConfig = {
+    ...CONFIG,
+    credentialReference: 'on',
+    grantexApiKey: 'gx_key_1',
+    grantexBaseUrl: 'https://auth.example.com',
+    upstreamHeaders: { 'X-Internal': 'yes' },
+  };
+  let server: ReturnType<typeof createGatewayServer>;
+
+  function resolver(status: number, body: unknown) {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status,
+      ok: status >= 200 && status < 300,
+      json: () => Promise.resolve(body),
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+    return fetchImpl;
+  }
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(verifyGrantToken).mockResolvedValue(MOCK_GRANT);
+    vi.mocked(proxyRequest).mockResolvedValue(undefined);
+    server = createGatewayServer(REF_CONFIG);
+  });
+
+  afterEach(async () => {
+    await server.close();
+    vi.unstubAllGlobals();
+  });
+
+  it('redeems a presented reference for the grant and injects the credential upstream', async () => {
+    const fetchImpl = resolver(200, { accessToken: 'ya29.token', service: 'google', credentialType: 'oauth2' });
+    const response = await server.inject({
+      method: 'GET',
+      url: '/calendar/events',
+      headers: { authorization: `Bearer ${GRANT_TOKEN}`, 'grantex-credential-ref': REFERENCE },
+    });
+    expect(response.statusCode).toBe(200);
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://auth.example.com/v1/vault/credentials/resolve');
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer gx_key_1');
+    expect(JSON.parse(init.body as string)).toEqual({ credentialRef: REFERENCE, grantId: 'grnt_1' });
+    const options = vi.mocked(proxyRequest).mock.calls[0]![3];
+    expect(options.upstreamHeaders).toEqual({ 'X-Internal': 'yes', Authorization: 'Bearer ya29.token' });
+    expect(Array.from(options.dropRequestHeaders ?? [])).toEqual(['grantex-credential-ref']);
+  });
+
+  it('proxies a request that presents no reference without asking the auth service', async () => {
+    const fetchImpl = resolver(200, {});
+    const response = await server.inject({
+      method: 'GET',
+      url: '/calendar/events',
+      headers: { authorization: `Bearer ${GRANT_TOKEN}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(vi.mocked(proxyRequest).mock.calls[0]![3].upstreamHeaders).toEqual({ 'X-Internal': 'yes' });
+  });
+
+  it('denies the request when the auth service refuses the reference, and never proxies it', async () => {
+    resolver(403, { code: 'GRANT_INACTIVE' });
+    const response = await server.inject({
+      method: 'GET',
+      url: '/calendar/events',
+      headers: { authorization: `Bearer ${GRANT_TOKEN}`, 'grantex-credential-ref': REFERENCE },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(JSON.parse(response.body).error).toBe('CREDENTIAL_REF_INVALID');
+    expect(JSON.parse(response.body).message).toContain('GRANT_INACTIVE');
+    expect(proxyRequest).not.toHaveBeenCalled();
+  });
+
+  it('answers 502 when the auth service cannot be reached, and never proxies', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
+    const response = await server.inject({
+      method: 'GET',
+      url: '/calendar/events',
+      headers: { authorization: `Bearer ${GRANT_TOKEN}`, 'grantex-credential-ref': REFERENCE },
+    });
+    expect(response.statusCode).toBe(502);
+    expect(JSON.parse(response.body).error).toBe('CREDENTIAL_RESOLVE_FAILED');
+    expect(proxyRequest).not.toHaveBeenCalled();
+  });
+
+  it('refuses a malformed reference with 400', async () => {
+    const fetchImpl = resolver(200, {});
+    const response = await server.inject({
+      method: 'GET',
+      url: '/calendar/events',
+      headers: { authorization: `Bearer ${GRANT_TOKEN}`, 'grantex-credential-ref': 'not-a-reference' },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body).error).toBe('CREDENTIAL_REF_INVALID');
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(proxyRequest).not.toHaveBeenCalled();
+  });
+
+  it('ignores the header while the check is off', async () => {
+    await server.close();
+    server = createGatewayServer(CONFIG);
+    const fetchImpl = resolver(200, {});
+    const response = await server.inject({
+      method: 'GET',
+      url: '/calendar/events',
+      headers: { authorization: `Bearer ${GRANT_TOKEN}`, 'grantex-credential-ref': REFERENCE },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(proxyRequest).toHaveBeenCalledTimes(1);
+    // Off, the header is not addressed to the gateway and is relayed as before.
+    expect(vi.mocked(proxyRequest).mock.calls[0]![3].dropRequestHeaders).toBeUndefined();
+  });
+
+  it('refuses to start with the check on but no key or auth service', () => {
+    expect(() => createGatewayServer({ ...CONFIG, credentialReference: 'on', grantexApiKey: 'gx_key_1' }))
+      .toThrow('credentialReference: on needs grantexApiKey and grantexBaseUrl');
+    expect(() => createGatewayServer({ ...CONFIG, credentialReference: 'maybe' as never })).toThrow();
+  });
+});

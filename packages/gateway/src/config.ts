@@ -4,6 +4,7 @@ import type { GatewayConfig } from './types.js';
 import { GatewayError } from './errors.js';
 import { checkAudienceCheck, checkExpectedAudience, type AudienceCheck } from './audience.js';
 import { checkDataRegionCheck, checkExpectedDataRegion, type DataRegionCheck } from './region.js';
+import { checkCredentialReference, type CredentialReferenceCheck } from './credentials.js';
 
 export function loadConfig(filePath: string): GatewayConfig {
   let content: string;
@@ -121,6 +122,16 @@ export function validateConfig(raw: unknown): GatewayConfig {
     };
   });
 
+  // Credentials by reference need the gateway's own key and the auth service to
+  // redeem them with; a config that turns it on without them stops the gateway.
+  const credentialReference: CredentialReferenceCheck | undefined = 'credentialReference' in obj
+    ? configValue(() => checkCredentialReference(obj['credentialReference']))
+    : undefined;
+  if (credentialReference === 'on' && (typeof obj['grantexApiKey'] !== 'string' || !obj['grantexApiKey']
+      || typeof obj['grantexBaseUrl'] !== 'string' || !obj['grantexBaseUrl'])) {
+    throw new GatewayError('CONFIG_INVALID', 'credentialReference: on needs grantexApiKey and grantexBaseUrl', 500);
+  }
+
   const upstreamHeaders = typeof obj['upstreamHeaders'] === 'object' && obj['upstreamHeaders'] !== null
     ? Object.fromEntries(
         Object.entries(obj['upstreamHeaders'] as Record<string, unknown>).map(([k, v]) => [k, String(v)]),
@@ -142,6 +153,7 @@ export function validateConfig(raw: unknown): GatewayConfig {
     ...('audienceCheck' in obj ? { audienceCheck } : {}),
     ...(dataRegion !== undefined ? { dataRegion } : {}),
     ...('dataRegionCheck' in obj ? { dataRegionCheck } : {}),
+    ...(credentialReference !== undefined ? { credentialReference } : {}),
   };
 }
 

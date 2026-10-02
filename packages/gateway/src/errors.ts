@@ -12,7 +12,9 @@ export type GatewayErrorCode =
   | 'SCOPE_INSUFFICIENT'
   | 'UPSTREAM_ERROR'
   | 'UPSTREAM_TIMEOUT'
-  | 'PATH_INVALID';
+  | 'PATH_INVALID'
+  | 'CREDENTIAL_REF_INVALID'
+  | 'CREDENTIAL_RESOLVE_FAILED';
 
 export class GatewayError extends Error {
   readonly code: GatewayErrorCode;
