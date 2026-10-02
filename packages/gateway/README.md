@@ -114,6 +114,9 @@ upstream; off, the gateway treats it as any other request header, as earlier rel
 ```yaml
 credentialReference: on
 grantexApiKey: gx_key_...
+grantexBaseUrl: https://api.grantex.dev
+```
+
 ## Stop-sensitive deployments
 
 A gateway verifies a grant token's signature, claims and scopes locally. That
