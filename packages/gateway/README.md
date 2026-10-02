@@ -77,7 +77,7 @@ Client → Gateway (verify token + check scopes) → Upstream API
 | `routes` | array | Yes | Route definitions (see below) |
 | `dataRegion` | string | No | The data region the upstream processes data in (for example `in`); a grant bound to another region is refused with `REGION_MISMATCH`, and a region-bound grant is refused with `REGION_UNCONFIGURED` when no region is set. Needs `dataRegionCheck: on`; a route's `dataRegion` overrides it |
 | `dataRegionCheck` | `on` \| `off` | No | `off` in this release: a grant's `data_region` is ignored, as earlier releases did; `on` checks it |
-| `credentialReference` | `on` \| `off` | No | `on` redeems a `Grantex-Credential-Ref` request header (a reference from the vault exchange with `delivery: reference`) with `grantexApiKey` against `grantexBaseUrl` and injects the credential upstream as `Authorization: Bearer`; the agent never holds the secret. `off` (default) ignores the header, which is never forwarded either way |
+| `credentialReference` | `on` \| `off` | No | `on` redeems a `Grantex-Credential-Ref` request header (a reference from the vault exchange with `delivery: reference`) with `grantexApiKey` against `grantexBaseUrl` and injects the credential upstream as `Authorization: Bearer`; the agent never holds the secret. `off` (default) leaves the header alone, as earlier releases did |
 
 ### Route Definition
 
@@ -106,7 +106,8 @@ its own API key (`POST /v1/vault/credentials/resolve`) and forwards the request 
 `Authorization: Bearer <credential>`; the agent never holds the secret. The auth service refuses
 a reference that belongs to another grant, has expired, or whose grant is revoked or stopped, and
 the gateway then denies the request rather than forwarding it without the credential. A request
-that presents no reference is proxied as before. The header is never forwarded upstream.
+that presents no reference is proxied as before. With the check on, the header is not forwarded
+upstream; off, the gateway treats it as any other request header, as earlier releases did.
 
 ```yaml
 credentialReference: on

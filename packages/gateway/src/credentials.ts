@@ -15,7 +15,8 @@ import { GatewayError } from './errors.js';
  * A request that presents no reference is proxied as before. A malformed
  * reference, or one the auth service refuses, denies the request; a failure to
  * reach the auth service is a 502. The gateway never forwards a request without
- * the credential the client asked to be injected, and never forwards the header.
+ * the credential the client asked to be injected. With the check on, the header
+ * is not forwarded upstream; off, it is a header like any other.
  */
 
 export const CREDENTIAL_REF_HEADER = 'grantex-credential-ref';
@@ -74,6 +75,7 @@ export async function resolveCredentialReference(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? RESOLVE_TIMEOUT_MS);
   let response: Response;
+  let payload: Record<string, unknown> | null = null;
   try {
     response = await fetchImpl(url, {
       method: 'POST',
@@ -85,6 +87,14 @@ export async function resolveCredentialReference(
       body: JSON.stringify({ credentialRef, grantId }),
       signal: controller.signal,
     });
+    // The timer stays armed until the body is read: an auth service that
+    // answers its headers and then stalls on the body is a timeout too.
+    try {
+      payload = (await response.json()) as Record<string, unknown>;
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') throw err;
+      payload = null; // not JSON: judged by the status below
+    }
   } catch (err) {
     throw new GatewayError(
       'CREDENTIAL_RESOLVE_FAILED',
@@ -103,7 +113,6 @@ export async function resolveCredentialReference(
       502,
     );
   }
-  const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
   if (!response.ok) {
     const code = payload && typeof payload['code'] === 'string' ? payload['code'] : `HTTP ${response.status}`;
     throw new GatewayError('CREDENTIAL_REF_INVALID', `The credential reference was refused: ${code}`, 403);

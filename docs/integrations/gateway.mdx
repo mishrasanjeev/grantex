@@ -77,7 +77,7 @@ Client → Gateway (verify token + check scopes) → Upstream API
 | `audienceCheck` | `on` \| `off` | No | `on` | `off` ignores the token's `aud`, as earlier releases did; cannot be combined with `audience`. From version 0.2.0 |
 | `dataRegion` | string | No | none | The data region the upstream processes data in (for example `in`). With `dataRegionCheck: on`, a grant whose tools entries name another region is refused with `REGION_MISMATCH`, and a region-bound grant is refused with `REGION_UNCONFIGURED` when no region is set. A route's `dataRegion` overrides it |
 | `dataRegionCheck` | `on` \| `off` | No | `off` | `on` checks a grant's `data_region`; `off` ignores it, as earlier releases did. Cannot be `off` with `dataRegion` set |
-| `credentialReference` | `on` \| `off` | No | `off` | `on` redeems a `Grantex-Credential-Ref` request header (a reference from the [vault exchange](/api-reference/vault/exchange) with `delivery: reference`) with `grantexApiKey` against `grantexBaseUrl` and injects the credential upstream as `Authorization: Bearer`; the agent never holds the secret. `off` ignores the header, which is never forwarded either way |
+| `credentialReference` | `on` \| `off` | No | `off` | `on` redeems a `Grantex-Credential-Ref` request header (a reference from the [vault exchange](/api-reference/vault/exchange) with `delivery: reference`) with `grantexApiKey` against `grantexBaseUrl` and injects the credential upstream as `Authorization: Bearer`; the agent never holds the secret. `off` leaves the header alone, as earlier releases did |
 | `routes` | array | Yes | — | Route definitions |
 
 ### Route Definition
@@ -114,11 +114,12 @@ Your upstream API can use these to apply fine-grained business logic without re-
 With `credentialReference: on`, an agent that exchanged its grant token for a credential
 reference ([exchange](/api-reference/vault/exchange) with `delivery: "reference"`) presents it as
 `Grantex-Credential-Ref: vcr_...`. The gateway redeems the reference for the request's grant with
-its own API key (`POST /v1/vault/credentials/resolve`) and forwards the request with
+its own API key ([resolve](/api-reference/vault/resolve)) and forwards the request with
 `Authorization: Bearer <credential>`; the agent never holds the secret. The auth service refuses
 a reference that belongs to another grant, has expired, or whose grant is revoked or stopped, and
 the gateway then denies the request rather than forwarding it without the credential. A request
-that presents no reference is proxied as before. The header is never forwarded upstream.
+that presents no reference is proxied as before. With the check on, the header is not forwarded
+upstream; off, the gateway treats it as any other request header, as earlier releases did.
 
 ```yaml
 credentialReference: on

@@ -7,7 +7,12 @@ import { GatewayError } from './errors.js';
 import { log } from './logger.js';
 import { audienceDenial, checkAudienceCheck, checkExpectedAudience, readTokenAudience } from './audience.js';
 import { checkDataRegionCheck, checkExpectedDataRegion, readTokenDataRegions, regionDenial } from './region.js';
-import { checkCredentialReference, readCredentialRef, resolveCredentialReference } from './credentials.js';
+import {
+  CREDENTIAL_REF_HEADER,
+  checkCredentialReference,
+  readCredentialRef,
+  resolveCredentialReference,
+} from './credentials.js';
 
 export function createGatewayServer(config: GatewayConfig): FastifyInstance {
   // Checked here as well as in validateConfig, for a config built in code: an
@@ -195,10 +200,11 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
 
       // 3c. Credential by reference: the client presented a reference instead
       //     of a credential; the gateway redeems it for this grant with its own
-      //     key and injects the credential upstream. Off, the header is ignored
-      //     (and never forwarded, see proxy.ts). A reference the auth service
-      //     refuses denies the request; the gateway never forwards a request
-      //     without the credential the client asked to be injected.
+      //     key and injects the credential upstream, and the header itself is
+      //     not forwarded. Off, the header is a header like any other. A
+      //     reference the auth service refuses denies the request; the gateway
+      //     never forwards a request without the credential the client asked
+      //     to be injected.
       let upstreamHeaders = config.upstreamHeaders;
       if (resolveOptions !== undefined) {
         const credentialRef = readCredentialRef(req.headers);
@@ -218,6 +224,7 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
       await proxyRequest(req, reply, grant, {
         upstream: config.upstream,
         upstreamHeaders,
+        ...(resolveOptions !== undefined ? { dropRequestHeaders: [CREDENTIAL_REF_HEADER] } : {}),
       });
     } catch (err) {
       if (err instanceof GatewayError) {

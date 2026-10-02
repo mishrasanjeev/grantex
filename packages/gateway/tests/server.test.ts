@@ -367,6 +367,7 @@ describe('credentials by reference', () => {
     expect(JSON.parse(init.body as string)).toEqual({ credentialRef: REFERENCE, grantId: 'grnt_1' });
     const options = vi.mocked(proxyRequest).mock.calls[0]![3];
     expect(options.upstreamHeaders).toEqual({ 'X-Internal': 'yes', Authorization: 'Bearer ya29.token' });
+    expect(Array.from(options.dropRequestHeaders ?? [])).toEqual(['grantex-credential-ref']);
   });
 
   it('proxies a request that presents no reference without asking the auth service', async () => {
@@ -431,6 +432,8 @@ describe('credentials by reference', () => {
     expect(response.statusCode).toBe(200);
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(proxyRequest).toHaveBeenCalledTimes(1);
+    // Off, the header is not addressed to the gateway and is relayed as before.
+    expect(vi.mocked(proxyRequest).mock.calls[0]![3].dropRequestHeaders).toBeUndefined();
   });
 
   it('refuses to start with the check on but no key or auth service', () => {

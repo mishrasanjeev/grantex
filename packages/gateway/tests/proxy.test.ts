@@ -64,17 +64,24 @@ describe('proxyRequest', () => {
     expect(headers.get('authorization')).toBeNull();
   });
 
-  it('never forwards the credential reference header', async () => {
+  it('drops the request headers the server addresses to the gateway, and only those', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       status: 200,
       headers: { entries: () => [].values() },
       text: () => Promise.resolve(''),
     }));
     const req = mockReq({ headers: { 'grantex-credential-ref': 'vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M', accept: 'application/json' } });
-    await proxyRequest(req, mockReply(), MOCK_GRANT, { upstream: 'https://api.internal.com' });
+    await proxyRequest(req, mockReply(), MOCK_GRANT, {
+      upstream: 'https://api.internal.com',
+      dropRequestHeaders: ['Grantex-Credential-Ref'],
+    });
     const headers = vi.mocked(fetch).mock.calls[0]![1]?.headers as Headers;
     expect(headers.get('grantex-credential-ref')).toBeNull();
     expect(headers.get('accept')).toBe('application/json');
+    // Without the instruction (the check off) the header is forwarded like any other.
+    await proxyRequest(req, mockReply(), MOCK_GRANT, { upstream: 'https://api.internal.com' });
+    const relayed = vi.mocked(fetch).mock.calls[1]![1]?.headers as Headers;
+    expect(relayed.get('grantex-credential-ref')).toBe('vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M');
   });
 
   it('adds upstream headers', async () => {

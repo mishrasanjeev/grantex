@@ -79,6 +79,17 @@ describe('resolveCredentialReference', () => {
     }
   });
 
+  it('answers 502 when the auth service answers its headers and then stalls on the body', async () => {
+    const stalled = vi.fn().mockResolvedValue({
+      status: 200,
+      ok: true,
+      json: () => Promise.reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' })),
+    }) as unknown as typeof fetch;
+    const error = await denial(resolveCredentialReference(REFERENCE, 'grnt_1', { ...OPTIONS, fetchImpl: stalled, timeoutMs: 10 }));
+    expect(error.code).toBe('CREDENTIAL_RESOLVE_FAILED');
+    expect(error.statusCode).toBe(502);
+  });
+
   it('answers 502 when the auth service cannot be reached, refuses the gateway key, fails or answers without a credential', async () => {
     const unreachable = vi.fn().mockRejectedValue(new Error('ECONNREFUSED')) as unknown as typeof fetch;
     for (const fetchImpl of [unreachable, answer(401, { code: 'UNAUTHORIZED' }), answer(500, {}), answer(200, { service: 'google' })]) {
