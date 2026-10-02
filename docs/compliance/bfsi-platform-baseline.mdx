@@ -1,0 +1,105 @@
+---
+title: BFSI platform baseline
+description: How the authority layer contributes to a bank-grade enterprise AI platform baseline, and what it still owes.
+---
+
+A regulated financial institution expects an enterprise AI platform to satisfy a baseline of residency,
+isolation and control conditions plus a long list of technical and functional capabilities. The platform
+side of that baseline lives in AgenticOrg (`docs/bfsi/` in that repository). This page lists the items
+where Grantex is the authority primitive the platform relies on, the current status, and the hardening
+package that closes the remaining gaps. Identifiers follow the AgenticOrg catalogue.
+
+## Where Grantex is the primitive
+
+| ID | Capability | Status | What exists | Package |
+|---|---|---|---|---|
+| BASE-01 | In-country data residency | Partial | Self-hosting (Helm/Compose) lets the operator choose the region; the hosted service is pinned to one foreign region; data_region is carried in tokens but not enforced. (`docs/compliance/data-residency.md`, `deploy/gcp/setup.sh`, `deploy/helm/grantex/values.yaml`) | WP-19 |
+| BASE-02 | Isolated production instance | Partial | Self-hosting gives a dedicated instance; the hosted service is multi-tenant with application-level tenant scoping. (`deploy/helm/grantex/values.yaml`, `docker-compose.prod.yml`, `docs/self-hosting.md`) | WP-19 |
+| BASE-03 | In-country disaster recovery | Gap | Single region, no secondary DR site; backup and restore runbook not written. (`docs/compliance/data-residency.md`, `docs/self-hosting.md`) | WP-19 |
+| BASE-04 | No training on institution data | Gap | No prompt processing or training; no written no-training control. | WP-19 |
+| BASE-05 | Emergency operator override | Partial | Emergency stop by grant/agent/principal/developer with issuance freeze and revocation feed; off unless EMERGENCY_STOP_ENABLED; cannot halt models or pipelines; the gateway checks JWTs locally with no online revocation. (`apps/auth-service/src/routes/emergency-stop.ts`, `apps/auth-service/src/lib/revocation/emergency-stop.ts`, `apps/auth-service/src/lib/revocation/issuance-freeze.ts`) | WP-01 |
+| INF-04 | Managed Kubernetes | Partial | Helm chart with autoscaler and disruption budget for managed Kubernetes. (`deploy/helm/grantex/templates/hpa.yaml`, `deploy/helm/grantex/templates/pdb.yaml`) | WP-00 |
+| INF-05 | Managed serverless containers | Partial | Deploys to serverless containers on one provider. (`deploy/gcp/setup.sh`, `.github/workflows/deploy.yml`) | WP-00 |
+| SEC-02 | Key management and BYOK | Partial | AES-256-GCM vault key and encrypted signing keys with publish-then-sign rotation; no KMS/HSM/BYOK. (`apps/auth-service/src/lib/vault-crypto.ts`, `apps/auth-service/src/lib/signing-keys.ts`, `apps/auth-service/src/cli/rotate-signing-key.ts`) | WP-00 |
+| SEC-03 | Secrets management | Partial | Encrypted credential vault and secret-manager runtime secrets; no managed DB credential or certificate rotation. (`apps/auth-service/src/routes/vault.ts`, `deploy/gcp/setup.sh`, `apps/auth-service/src/routes/event-sources.ts`) | WP-00 |
+| SEC-04 | Web application firewall | Partial | Rate limiting only; no WAF ruleset. (`deploy/nginx/nginx.conf`, `apps/auth-service/src/plugins/dynamicRateLimit.ts`) | WP-00 |
+| SEC-06 | Security posture management | Partial | CI-time image scans, CodeQL, secret scanning; no runtime posture management. (`.github/workflows/security-scan.yml`, `.github/workflows/codeql.yml`, `scripts/scan-container.sh`) | WP-00 |
+| SEC-07 | Threat detection | Partial | Irregularity detection on authorization events; no control-plane or network detection. (`apps/auth-service/src/workers/anomalyDetection.ts`, `apps/auth-service/src/routes/anomalies.ts`) | WP-00 |
+| SEC-08 | SIEM and security lake | Partial | SIEM sinks and audit export; no open-schema security lake. (`packages/destinations/src/destinations/splunk.ts`, `packages/destinations/src/destinations/datadog.ts`, `docs/guides/siem-splunk.mdx`) | WP-00 |
+| SEC-09 | Identity and access management | Partial | Scopes, short-lived DPoP-bound tokens, OIDC/SAML SSO with group mapping, SCIM, passkeys; no general role model; admin MFA delegated to the identity provider. (`apps/auth-service/src/routes/sso.ts`, `apps/auth-service/src/routes/scim.ts`, `apps/auth-service/src/routes/webauthn.ts`) | WP-00 |
+| DATA-08 | Managed relational databases | Partial | Managed Postgres without HA configuration. (`deploy/gcp/setup.sh`, `docs/self-hosting.md`) | WP-00 |
+| AIINF-10 | Agent tool gateway | Partial | Grant-token proxy, MCP resource guard, credential exchange, MCP server registry; local JWT checks without online revocation. (`packages/gateway/src/proxy.ts`, `packages/mcp-auth/src/resource/guard.ts`, `apps/auth-service/src/routes/vault.ts`) | WP-01 |
+| AIINF-11 | Agent lifecycle governance | Partial | Agent registration, active/suspended, key rotation, passport issue/revoke; no versioning, traffic routing or rollback. (`apps/auth-service/src/routes/agents.ts`, `apps/auth-service/src/routes/agent-keys.ts`, `apps/auth-service/src/routes/passport.ts`) | WP-05 |
+| NET-01 | Private service endpoints | Partial | Private VPC for data stores. (`deploy/gcp/setup.sh`) | WP-00 |
+| NET-02 | Enterprise API gateway | Partial | API-key auth, plan rate limits, WebSocket/SSE events, header-injecting proxy. (`packages/gateway/src/server.ts`, `apps/auth-service/src/plugins/dynamicRateLimit.ts`, `apps/auth-service/src/routes/events.ts`) | WP-00 |
+| OPS-01 | Distributed tracing for AI | Partial | OpenTelemetry in the auth service with agent and grant attributes. (`apps/auth-service/src/lib/tracing.ts`, `apps/auth-service/src/lib/traceAttributes.ts`, `docs/guides/opentelemetry.mdx`) | WP-09 |
+| OPS-02 | Centralised platform logging | Partial | Structured logs, Prometheus metrics, Grafana dashboards. (`apps/auth-service/src/lib/logger.ts`, `apps/auth-service/src/lib/metrics.ts`, `deploy/grafana/overview-dashboard.json`) | WP-09 |
+| OPS-03 | Infrastructure as code | Partial | Terraform provider and Helm chart; no drift detection. (`packages/terraform-provider-grantex/internal/provider/provider.go`, `deploy/helm/grantex/Chart.yaml`, `docs/guides/pulumi.mdx`) | WP-00 |
+| OPS-06 | Managed CI/CD | Partial | GitHub Actions CI/CD. (`.github/workflows/ci.yml`, `.github/workflows/deploy.yml`, `.github/workflows/release.yml`) | WP-00 |
+| ACQ-01 | Lawful automated acquisition | Partial | Purpose-bound manifests for registry connectors; no acquisition engine. (`packages/sdk-ts/src/manifests/epfo.ts`, `packages/sdk-ts/src/manifests/gstn.ts`, `packages/sdk-ts/src/manifests/mca_portal.ts`) | WP-16 |
+| ACQ-02 | Provenance metadata | Partial | Evidence records carry keyed digests, provider, upstream record references, receipt time and chain hash. (`spec/evidence-package.md`, `apps/auth-service/src/lib/evidence/build.ts`, `apps/auth-service/src/routes/evidence.ts`) | WP-16 |
+| CONV-04 | Confirmed transaction invocation | Partial | Human consent and action-bound decision grants before execution. (`apps/auth-service/src/routes/decisions.ts`, `packages/mcp-auth/src/resource/grantex-decisions.ts`, `apps/auth-service/src/routes/authorize.ts`) | WP-11 |
+| RAG-09 | Access-aware retrieval | Partial | Per-connector and per-tool scope and purpose restriction; no document-level filtering. (`docs/concepts/scopes.mdx`, `docs/concepts/tool-manifests.mdx`) | WP-04 |
+| TXN-01 | Entity-centric aggregation | Partial | Evidence grouped per case. (`apps/auth-service/src/routes/evidence.ts`, `spec/evidence-package.md`) | WP-15 |
+| TXN-06 | Consolidated evidence context | Covered | Signed hash-chained per-case evidence package with export and offline verification. (`spec/evidence-package.md`, `apps/auth-service/src/routes/evidence.ts`, `apps/auth-service/src/lib/evidence/verify.ts`) | WP-15 |
+| GW-07 | Model access policies | Partial | Grant-token proxy can restrict any upstream endpoint by agent and grant scope. (`packages/gateway/src/proxy.ts`, `packages/gateway/gateway.example.yaml`) | WP-02 |
+| GW-08 | Gateway audit trail | Partial | Evidence entries record model versions and policy evaluations. (`spec/evidence-package.md`, `apps/auth-service/src/lib/evidence/schema-1.0.ts`) | WP-02 |
+| MLOPS-01 | Governed model registry | Gap | Not in scope for the authority layer. | WP-05 |
+| MLOPS-02 | Controlled promotion | Gap | Not in scope for the authority layer. | WP-05 |
+| REG-01 | Searchable agent catalogue | Partial | Agent list, registry lookup by DID and key, trust-registry search with category filter. (`apps/auth-service/src/routes/agents.ts`, `apps/auth-service/src/routes/registry-lookup.ts`, `apps/auth-service/src/routes/trust-registry.ts`) | WP-05 |
+| REG-02 | Agent card | Partial | A2A agent card, passport claims, per-tool permission manifests; no model or I/O schema fields. (`packages/a2a/src/agent-card.ts`, `spec/agent-passport-1.0.md`, `packages/agent-passport/src/passport.ts`) | WP-05 |
+| REG-03 | Agent lifecycle states | Gap | Only active and suspended. (`apps/auth-service/src/routes/agents.ts`) | WP-05 |
+| REG-04 | Agent templates | Gap | Prebuilt tool manifests, no agent templates. (`packages/sdk-ts/src/manifests/index.ts`) | WP-05 |
+| REG-05 | Dependency visualisation | Gap | No visual map. | WP-05 |
+| REG-06 | Agent approval workflow | Partial | Accredited-issuer attestations and trust levels; no internal approval workflow. (`apps/auth-service/src/routes/registry-attestations.ts`, `apps/auth-service/src/lib/registry/trust-level.ts`, `spec/attestation-1.0.md`) | WP-05 |
+| REG-07 | Environment version management | Gap | Sandbox and live only. | WP-05 |
+| REG-08 | Ratings and reliability metrics | Gap | No ratings. | WP-05 |
+| ORCH-03 | Multi-agent collaboration | Partial | Scoped delegation with depth limits; A2A calls. (`apps/auth-service/src/routes/delegate.ts`, `packages/a2a/src/server.ts`, `docs/concepts/delegation.mdx`) | WP-17 |
+| ORCH-04 | Tool registration | Partial | Schema-validated tool manifests and MCP server registration. (`docs/guides/custom-manifests.mdx`, `spec/manifest-0.6.schema.json`, `apps/auth-service/src/routes/mcp-servers.ts`) | WP-17 |
+| ORCH-05 | Sandboxed authorised tool execution | Partial | enforce, the gateway and the MCP guard check scope, tool, purpose, caps and decisions fail-closed; no sandboxing. (`packages/sdk-ts/src/client.ts`, `packages/gateway/src/proxy.ts`, `packages/mcp-auth/src/resource/guard.ts`) | WP-17 |
+| ORCH-07 | Human approval checkpoints | Covered | Decision grants with OIDC approver sign-in, step-up, four-eyes, dwell time, single-use consumption and audit. (`apps/auth-service/src/routes/decisions.ts`, `apps/auth-service/src/routes/decision-page.ts`, `spec/decision-grant.md`) | WP-17 |
+| ORCH-08 | Execution limits and loop detection | Partial | Per-tool caps and budgets; no step, duration or loop detection. (`packages/sdk-ts/src/caps/index.ts`, `docs/concepts/caps-and-metering.md`, `apps/auth-service/src/routes/budget.ts`) | WP-17 |
+| ORCH-09 | Per-agent tool restrictions | Covered | Manifests map tools to read/write/delete/admin; agent and grant scopes enforce it. (`docs/concepts/tool-manifests.mdx`, `packages/mcp-auth/src/resource/tool-policy.ts`, `spec/manifest-0.6.md`) | WP-17 |
+| ORCH-10 | Debugging console | Partial | Audit and enforcement log viewers. (`apps/portal/src/pages/audit/AuditLog.tsx`, `apps/portal/src/pages/enforce/EnforceLog.tsx`) | WP-17 |
+| ORCH-11 | Agents as callable capabilities | Partial | Agents exposed over A2A with grant auth. (`packages/a2a/src/server.ts`, `packages/a2a/src/agent-card.ts`) | WP-17 |
+| AIGOV-01 | Live asset inventory | Partial | Inventory of agents, grants, MCP servers, manifests; software SBOM and provenance; no AIBOM. (`apps/auth-service/src/routes/agents.ts`, `apps/auth-service/src/routes/mcp-servers.ts`, `.github/workflows/publish-auth-service-image.yml`) | WP-08 |
+| AIGOV-02 | Configurable AI policies | Partial | Allow/deny policies with OPA and Cedar backends, tool, purpose and caps rules; no model, prompt or output governance. (`apps/auth-service/src/lib/policy.ts`, `apps/auth-service/src/lib/backends/opa.ts`, `apps/auth-service/src/lib/backends/cedar.ts`) | WP-08 |
+| AIGOV-03 | Regulatory risk tiers | Partial | Trust levels and per-tool requires_decision and four_eyes; no workload risk tiers. (`apps/auth-service/src/lib/registry/trust-level.ts`, `packages/mcp-auth/src/resource/tool-policy.ts`, `apps/auth-service/src/lib/decisions/policy.ts`) | WP-08 |
+| AIGOV-04 | Operator override | Partial | Emergency stop for grant, agent, principal and developer; no model or pipeline throttling. (`apps/auth-service/src/routes/emergency-stop.ts`, `apps/auth-service/src/lib/revocation/emergency-stop.ts`, `apps/auth-service/src/routes/revocations.ts`) | WP-01 |
+| AIGOV-05 | Dependency graph | Gap | No dependency graph. | WP-08 |
+| AIGOV-06 | Model cards | Gap | Software SBOM and provenance only. (`.github/workflows/release.yml`) | WP-08 |
+| TRUST-02 | Sensitive-data controls | Partial | DPDP consent lifecycle, pseudonyms in evidence, SD-JWT selective disclosure; no PII detection in AI inputs and outputs. (`apps/auth-service/src/routes/dpdp.ts`, `packages/dpdp/src/index.ts`, `apps/auth-service/src/lib/decisions/personal-data.ts`) | WP-03 |
+| TRUST-05 | Agent access policies | Covered | Access governed by agent, principal, tool, connector, purpose, caps, time, OPA and Cedar; no data-classification attribute. (`docs/concepts/tool-manifests.mdx`, `docs/concepts/purpose-bound-grants.md`, `apps/auth-service/src/lib/policy.ts`) | WP-08 |
+| TRUST-06 | Approval for high-risk actions | Covered | requires_decision and four_eyes tools need approval; fail closed. (`spec/decision-grant.md`, `apps/auth-service/src/routes/decisions.ts`, `packages/mcp-auth/README.md`) | WP-17 |
+| TRUST-07 | Central credential vault | Partial | Encrypted vault and gateway upstreamHeaders; the credential exchange returns the raw credential to the agent. (`apps/auth-service/src/routes/vault.ts`, `apps/auth-service/src/lib/vault-crypto.ts`, `packages/gateway/gateway.example.yaml`) | WP-21 |
+| OBS-05 | Correlation identifiers | Partial | Request ids, OpenTelemetry spans, caseId linking evidence. (`apps/auth-service/src/server.ts`, `packages/sdk-ts/src/http.ts`, `apps/auth-service/src/lib/traceAttributes.ts`) | WP-09 |
+| OBS-06 | Tamper-evident audit | Covered | Hash-chained audit log and signed, anchored evidence packages. (`apps/auth-service/src/lib/audit-chain.ts`, `apps/auth-service/src/routes/audit.ts`, `spec/evidence-package.md`) | WP-09 |
+| FIN-01 | Usage attribution | Partial | Usage metering per developer and per-grant cost units. (`apps/auth-service/src/lib/usage.ts`, `apps/auth-service/src/routes/usage.ts`, `apps/auth-service/src/routes/budget.ts`) | WP-10 |
+| FIN-02 | Budget thresholds | Partial | Budget alerts at 50 and 80 percent, caps that deny, plan rate limits. (`docs/guides/budget-controls.mdx`, `packages/sdk-ts/src/caps/index.ts`, `apps/auth-service/src/plugins/dynamicRateLimit.ts`) | WP-10 |
+| FE-08 | Governed API exposure | Partial | Grant-token governance in front of any API. (`packages/gateway/src/proxy.ts`, `docs/openapi.yaml`) | WP-00 |
+| FE-12 | Paused-task review queue | Partial | Per-request approval page; no central queue. (`apps/auth-service/src/routes/decision-page.ts`, `apps/auth-service/src/routes/prepaid-wallets.ts`) | WP-18 |
+| FE-13 | Business configuration console | Partial | Portal forms for policies, rules and budgets. (`apps/portal/src/pages/policies/PolicyForm.tsx`, `apps/portal/src/pages/anomalies/RuleBuilder.tsx`, `apps/portal/src/pages/budgets/BudgetList.tsx`) | WP-18 |
+
+## Hardening package (WP-21)
+
+Online revocation checks in the gateway so emergency stops take effect immediately, a credential-exchange mode that never returns raw credentials to the agent, agent lifecycle states and approval attestations in the trust registry, environment-scoped agent versions, workload risk tiers on manifests, and tool-qualified scope enforcement in the SDKs.
+
+Acceptance:
+
+- An emergency-stopped agent is refused by the gateway on the next request.
+- An agent can hold credentials by reference only; the gateway injects them upstream.
+- A manifest can declare a risk tier that forces decision grants for high-risk tools.
+
+Pull-request sequence:
+
+1. gateway online revocation
+2. credential-by-reference mode
+3. lifecycle states and attestation types
+4. risk tiers on manifests
+5. SDK tool-qualified scopes
+
+## Shared packages
+
+Grantex also contributes to WP-01 (emergency stops consumed by the platform's tool gateway through the
+revocation feed), WP-05 (attestations and passports attached to agent cards), WP-08 (manifests and
+attestations feeding the AI inventory) and WP-19 (`data_region` enforcement by relying parties).
