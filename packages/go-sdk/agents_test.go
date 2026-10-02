@@ -165,6 +165,24 @@ func TestAgentsUpdate(t *testing.T) {
 	}
 }
 
+func TestUpdateAgentParamsMarshalsTheStatusReason(t *testing.T) {
+	status, reason := "retired", "decommissioned"
+	body, err := json.Marshal(UpdateAgentParams{Status: &status, StatusReason: &reason})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if payload["status"] != "retired" || payload["statusReason"] != "decommissioned" {
+		t.Errorf("expected status and statusReason in the payload, got %v", payload)
+	}
+	if _, present := payload["name"]; present {
+		t.Errorf("an unset field must stay out of the payload, got %v", payload)
+	}
+}
+
 func TestAgentsDelete(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/agent-1" || r.Method != http.MethodDelete {

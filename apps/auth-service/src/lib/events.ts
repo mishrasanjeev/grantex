@@ -43,6 +43,7 @@ export const EVENT_TYPES = [
   'sso.connection.created',
   'sso.connection.updated',
   'sso.connection.deleted',
+  'agent.status_changed',
   'vault.credential.stored',
   'vault.credential.deleted',
   'vault.credential.exchanged',
