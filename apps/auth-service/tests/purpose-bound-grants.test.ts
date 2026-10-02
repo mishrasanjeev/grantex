@@ -209,6 +209,25 @@ describe('POST /v1/token carries purpose into the grant and token', () => {
     }
   });
 
+  it('refuses region-only entries that leave a scoped connector unbound', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{
+      ...approved,
+      purpose: null,
+      scopes: [...TOOL_SCOPES, 'tool:bank_core:write'],
+      authorization_details: [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in' }],
+    }]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token',
+      headers: authHeader(),
+      payload: { code: 'code-123', agentId: TEST_AGENT.id },
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.json<{ code: string }>().code).toBe('INTERNAL_ERROR');
+    expect(sqlCall('INSERT INTO grants')).toBeUndefined();
+  });
+
   it('issues no authorization_details for a request without purpose', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([{ ...approved, purpose: null, authorization_details: null }]);
@@ -715,6 +734,8 @@ describe('isRegionOnlyToolsAuthorizationDetails', () => {
       [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'nope!' }],
       [{ type: 'urn:grantex:tools:v1', connector: 'unknown', data_region: 'in' }],
       [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in', purpose: 'aml.cdd.onboarding' }],
+      // bank_core is scoped but has no entry: it would travel unbound.
+      [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in' }],
       [
         { type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in' },
         { type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in' },

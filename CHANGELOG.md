@@ -9,11 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed - Region-only tools entries (auth service, @grantex/gateway)
 - The code exchange signs stored tools entries without a purpose only when they
   are the region-only entries issuance writes: one `urn:grantex:tools:v1` entry
-  per connector of the approved scopes, each with a well-formed `data_region`
-  (the same on every entry) and no purpose. A stored row with anything else
-  (an empty object, a decision entry, a missing or malformed region, a
-  connector outside the scopes, a repeated connector) is refused as
-  inconsistent rather than signed.
+  for every connector of the approved scopes and no other, each with a
+  well-formed `data_region` (the same on every entry) and no purpose. A stored
+  row with anything else (an empty object, a decision entry, a missing or
+  malformed region, a connector outside the scopes, a scoped connector left
+  unbound, a repeated connector) is refused as inconsistent rather than signed.
 - `@grantex/gateway` refuses a token that names a tools connector twice even
   when one of the entries names no region; the repeat was only caught when
   both entries carried one.

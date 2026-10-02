@@ -166,8 +166,9 @@ export function narrowToolsAuthorizationDetails(
 /**
  * Whether `entries` are exactly the region-only tools entries issuance writes
  * when a data region is bound without a purpose: `urn:grantex:tools:v1`
- * entries only, each naming a connector of `scopes` once, each with a
+ * entries only, one for every connector of `scopes` and no other, each with a
  * well-formed `data_region` (the same region on every entry) and no purpose.
+ * A connector of the scopes with no entry would travel unbound, so it refuses.
  * The code exchange signs stored entries only when this holds; a stored row
  * that fails it is corrupt and is refused rather than signed.
  */
@@ -190,7 +191,8 @@ export function isRegionOnlyToolsAuthorizationDetails(entries: unknown, scopes: 
     if (region !== undefined && region !== normalised) return false;
     region = normalised;
   }
-  return true;
+  // Every scoped connector is bound; one left out would reach the token unrestricted.
+  return seen.size === connectors.size;
 }
 
 export function purposeOfToolsAuthorizationDetails(entries: ReadonlyArray<Record<string, unknown>>): string | undefined {
