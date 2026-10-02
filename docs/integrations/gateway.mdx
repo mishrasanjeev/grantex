@@ -72,7 +72,9 @@ Client → Gateway (verify token + check scopes) → Upstream API
 | `jwksUri` | string | Yes | — | JWKS endpoint used to retrieve keys for local signature verification |
 | `port` | number | No | 8080 | Listen port |
 | `upstreamHeaders` | object | No | — | Headers added to every upstream request |
-| `grantexApiKey` | string | No | — | API key for audit logging |
+| `grantexApiKey` | string | No | — | The gateway's own API key; needed for `currentAuthorityCheck` (or set `GRANTEX_API_KEY`) |
+| `grantexBaseUrl` | string | No | `https://api.grantex.dev` | The issuer the current-authority check asks; set it for a self-hosted issuer |
+| `currentAuthorityCheck` | boolean | No | `false` | `true` asks the issuer on every request whether the grant is still active, so a revoked or stopped grant is refused on the next request rather than at token expiry. The documented default for stop-sensitive deployments; needs an audience on every route and `audienceCheck: on`. See [Stop-sensitive deployments](#stop-sensitive-deployments) |
 | `audience` | string | No | — | Grant token audience the gateway expects. From version 0.2.0 |
 | `audienceCheck` | `on` \| `off` | No | `on` | `off` ignores the token's `aud`, as earlier releases did; cannot be combined with `audience`. From version 0.2.0 |
 | `dataRegion` | string | No | none | The data region the upstream processes data in (for example `in`). With `dataRegionCheck: on`, a grant whose tools entries name another region is refused with `REGION_MISMATCH`, and a region-bound grant is refused with `REGION_UNCONFIGURED` when no region is set. A route's `dataRegion` overrides it |
@@ -245,6 +247,27 @@ routes:
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
+
+## Stop-sensitive deployments
+
+A gateway verifies a grant token's signature, claims and scopes locally. That
+accepts a token until it expires: a grant revoked, or ended by an emergency stop,
+a minute after the token was issued is still accepted for the rest of the token's
+lifetime. With `currentAuthorityCheck: true` the gateway also asks the issuer, on
+every request, whether the grant is still active, so a stopped or revoked grant is
+refused on the next request. This is the documented default for stop-sensitive
+deployments: anywhere an emergency stop must take effect before token expiry, turn
+it on and treat a gateway without it as accepting stale authority for up to a
+token lifetime. Set `GRANTEX_API_KEY` (or `grantexApiKey`), give every route an
+audience, and keep `audienceCheck` on; `grantexBaseUrl` selects the issuer for a
+self-hosted deployment. The issuer being unreachable denies the request: the
+gateway never falls back to the signature alone.
+
+```yaml
+audience: calendar-service
+currentAuthorityCheck: true
+grantexBaseUrl: https://api.grantex.dev
+```
 
 ## Current Authority and Human Identity
 

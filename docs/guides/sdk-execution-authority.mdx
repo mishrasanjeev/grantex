@@ -22,6 +22,10 @@ human login. Configure and test every execution boundary before production.
 3. **Current authority:** a valid signature is not evidence that a grant is
    still active. Check the issuer before every operation. Deny if that check
    is unavailable, inactive, malformed, or identifies a different grant/actor.
+   Anywhere an emergency stop must take effect before token expiry, this check
+   is the documented default: `currentAuthority` in the SDK verifiers and
+   `currentAuthorityCheck: true` in the gateway. Without it a stopped or revoked
+   grant is accepted until its token expires.
 4. **Execution policy:** bind authorization to the real operation and inputs.
    Use strict manifest enforcement, action-bound decision grants and atomic
    caps reservations/settlement where required. Scope-only wrappers do not
@@ -112,6 +116,8 @@ routes:
     requiredScopes: [calendar:read]
 ```
 
+`currentAuthorityCheck: true` is the documented default for stop-sensitive
+deployments (see [Stop-sensitive deployments](/integrations/gateway#stop-sensitive-deployments)).
 Set `GRANTEX_API_KEY` in the server environment, not in a committed YAML
 file or browser. For self-hosting, `grantexBaseUrl` selects the trusted
 issuer API. Every route must have a global or route-specific audience;
