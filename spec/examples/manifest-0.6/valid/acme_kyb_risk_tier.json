@@ -1,0 +1,28 @@
+{
+  "$schema": "https://grantex.dev/schemas/manifest-0.6.schema.json",
+  "connector": "acme_kyb",
+  "version": "0.6",
+  "description": "Risk tiers: a high-risk tool needs a decision grant on every call; lower tiers are reported.",
+  "tools": {
+    "get_case": {
+      "permission": "read",
+      "risk_tier": "low"
+    },
+    "verify_business": {
+      "permission": "write",
+      "risk_tier": "medium"
+    },
+    "case_decision": {
+      "permission": "write",
+      "risk_tier": "high",
+      "decision_fields": [
+        "currency"
+      ],
+      "requires_decision": true
+    },
+    "close_case": {
+      "permission": "write",
+      "risk_tier": "high"
+    }
+  }
+}

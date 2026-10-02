@@ -80,9 +80,13 @@ const TOOL_KEYS = [
   'caps',
   'cost_units',
   'requires_decision',
+  'risk_tier',
   'four_eyes_on',
   'decision_fields',
 ] as const;
+/** Workload risk tiers a tool may declare; `high` needs a decision grant on every call. */
+export const RISK_TIERS = ['low', 'medium', 'high'] as const;
+export type RiskTier = (typeof RISK_TIERS)[number];
 const CORE_DECISION_FIELDS = ['case_id', 'action', 'decision', 'subject', 'amount', 'extra'];
 /** Most extra semantic fields a tool may declare for decision grants. */
 export const MAX_DECISION_FIELDS = 16;
@@ -120,6 +124,7 @@ export interface ManifestToolObject {
   caps?: ManifestToolCaps;
   cost_units?: Record<string, number>;
   requires_decision?: boolean;
+  risk_tier?: RiskTier;
   four_eyes_on?: string[];
   decision_fields?: string[];
 }
@@ -145,6 +150,8 @@ export interface ToolSpec {
   caps?: ToolCaps;
   costUnits?: Readonly<Record<string, number>>;
   requiresDecision: boolean;
+  /** Workload risk tier; `high` needs a decision grant on every call whether or not `requiresDecision` is set. */
+  riskTier?: RiskTier;
   fourEyesOn: readonly string[];
   /** Call arguments, beyond the core semantic action, that a decision grant binds (e.g. `currency`). */
   decisionFields?: readonly string[];
@@ -276,6 +283,14 @@ export function parseToolDeclaration(tool: string, value: unknown): ToolSpec {
     spec.requiresDecision = value['requires_decision'];
   }
 
+  if ('risk_tier' in value) {
+    const raw = value['risk_tier'];
+    if (typeof raw !== 'string' || !(RISK_TIERS as readonly string[]).includes(raw)) {
+      throw fail(`${path}.risk_tier: must be one of ${RISK_TIERS.join(', ')}`);
+    }
+    spec.riskTier = raw as RiskTier;
+  }
+
   if ('four_eyes_on' in value) {
     const raw = value['four_eyes_on'];
     const message = `${path}.four_eyes_on: must be a non-empty array of unique decision names`;
@@ -304,6 +319,9 @@ export function parseToolDeclaration(tool: string, value: unknown): ToolSpec {
 
   if (spec.requiresDecision && permission === Permission.READ) {
     throw fail(`${path}: requires_decision is not allowed on a tool with read permission`);
+  }
+  if (spec.riskTier === 'high' && permission === Permission.READ) {
+    throw fail(`${path}: risk_tier high is not allowed on a tool with read permission`);
   }
   if (spec.fourEyesOn.length > 0 && !spec.requiresDecision) {
     throw fail(`${path}.four_eyes_on: requires requires_decision: true`);
@@ -369,6 +387,7 @@ export function toolSpecToObject(spec: ToolSpec): ManifestToolObject {
   }
   if (spec.costUnits !== undefined) out.cost_units = { ...spec.costUnits };
   if (spec.requiresDecision) out.requires_decision = true;
+  if (spec.riskTier !== undefined) out.risk_tier = spec.riskTier;
   if (spec.fourEyesOn.length > 0) out.four_eyes_on = [...spec.fourEyesOn];
   if (spec.decisionFields !== undefined) out.decision_fields = [...spec.decisionFields];
   return out;

@@ -844,7 +844,9 @@ export class Grantex {
     // Every denial warn mode lets through, in step order; wouldDeny is the
     // first of them.
     const wouldDenyAll: WouldDeny[] = [];
-    if (spec.requiresDecision || decisionReference?.tools.includes(tool)) {
+    // A high-risk tool needs a decision grant on every call, whether or not the
+    // manifest also declares requires_decision.
+    if (spec.requiresDecision || spec.riskTier === 'high' || decisionReference?.tools.includes(tool)) {
       const fourEyesOn = [...new Set([...spec.fourEyesOn, ...(decisionReference?.fourEyesOn[tool] ?? [])])];
       const requirement = { decision_required: `${connector}:${tool}` };
       let decisionDenial: WouldDeny | undefined;

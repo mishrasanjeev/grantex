@@ -98,9 +98,12 @@ _TOOL_KEYS = (
     "caps",
     "cost_units",
     "requires_decision",
+    "risk_tier",
     "four_eyes_on",
     "decision_fields",
 )
+RISK_TIERS = ("low", "medium", "high")
+"""Workload risk tiers a tool may declare; ``high`` needs a decision grant on every call."""
 _CORE_DECISION_FIELDS = ("case_id", "action", "decision", "subject", "amount", "extra")
 MAX_DECISION_FIELDS = 16
 _CAP_KEYS = ("per_hour", "per_day", "per_case")
@@ -147,6 +150,9 @@ class ToolSpec:
     caps: Optional[ToolCaps] = None
     cost_units: Optional[Dict[str, int]] = None
     requires_decision: bool = False
+    risk_tier: Optional[str] = None
+    """Workload risk tier; ``high`` needs a decision grant on every call whether or not
+    ``requires_decision`` is set."""
     four_eyes_on: Tuple[str, ...] = ()
     decision_fields: Tuple[str, ...] = ()
     """Call arguments, beyond the core semantic action, that a decision grant binds
@@ -334,6 +340,13 @@ def parse_tool_declaration(tool: str, value: Any) -> ToolSpec:
             raise _fail(f"{path}.requires_decision: must be a boolean")
         requires_decision = value["requires_decision"]
 
+    risk_tier: Optional[str] = None
+    if "risk_tier" in value:
+        raw_tier = value["risk_tier"]
+        if not isinstance(raw_tier, str) or raw_tier not in RISK_TIERS:
+            raise _fail(f"{path}.risk_tier: must be one of {', '.join(RISK_TIERS)}")
+        risk_tier = raw_tier
+
     four_eyes_on: Tuple[str, ...] = ()
     if "four_eyes_on" in value:
         raw_eyes = value["four_eyes_on"]
@@ -373,6 +386,8 @@ def parse_tool_declaration(tool: str, value: Any) -> ToolSpec:
         raise _fail(
             f"{path}: requires_decision is not allowed on a tool with read permission"
         )
+    if risk_tier == "high" and permission == Permission.READ:
+        raise _fail(f"{path}: risk_tier high is not allowed on a tool with read permission")
     if four_eyes_on and not requires_decision:
         raise _fail(f"{path}.four_eyes_on: requires requires_decision: true")
     if decision_fields and not requires_decision:
@@ -384,6 +399,7 @@ def parse_tool_declaration(tool: str, value: Any) -> ToolSpec:
         caps=caps,
         cost_units=cost_units,
         requires_decision=requires_decision,
+        risk_tier=risk_tier,
         four_eyes_on=four_eyes_on,
         decision_fields=decision_fields,
     )
@@ -404,6 +420,8 @@ def tool_spec_to_dict(spec: ToolSpec) -> Dict[str, Any]:
         out["cost_units"] = dict(spec.cost_units)
     if spec.requires_decision:
         out["requires_decision"] = True
+    if spec.risk_tier is not None:
+        out["risk_tier"] = spec.risk_tier
     if spec.four_eyes_on:
         out["four_eyes_on"] = list(spec.four_eyes_on)
     if spec.decision_fields:
