@@ -22,6 +22,7 @@ export const newIrregularityPolicyChangeId = (): string => `irpc_${ulid()}`;
 export const newScimTokenId = (): string => `scimtok_${ulid()}`;
 export const newScimUserId = (): string => `scimuser_${ulid()}`;
 export const newVaultCredentialId = (): string => `vault_${ulid()}`;
+export const newVaultCredentialReferenceId = (): string => `vcr_${ulid()}`;
 export const newBudgetAllocationId = (): string => `bdg_${ulid()}`;
 export const newBudgetTransactionId = (): string => `btx_${ulid()}`;
 export const newUsageDailyId = (): string => `usg_${ulid()}`;

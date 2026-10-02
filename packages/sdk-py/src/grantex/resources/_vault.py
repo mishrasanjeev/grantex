@@ -9,6 +9,7 @@ import httpx
 from .._http import HttpClient
 from .._types import (
     ExchangeCredentialParams,
+    ExchangeCredentialReferenceResponse,
     ExchangeCredentialResponse,
     ListVaultCredentialsParams,
     ListVaultCredentialsResponse,
@@ -59,25 +60,46 @@ class VaultClient:
 
         Uses the grant token (not the API key) as the Bearer token.
         """
+        return ExchangeCredentialResponse.from_dict(self._exchange(grant_token, params.to_dict()))
+
+    def exchange_reference(
+        self,
+        grant_token: str,
+        params: ExchangeCredentialParams,
+    ) -> ExchangeCredentialReferenceResponse:
+        """Exchange a grant token for a credential reference instead of the credential.
+
+        The relying party (for example the gateway with ``credentialReference: on``)
+        resolves the reference and injects the credential upstream; this process
+        never holds the secret. Needs ``VAULT_CREDENTIAL_REFERENCES_ENABLED`` on
+        the auth service.
+        """
+        body = {**params.to_dict(), "delivery": "reference"}
+        return ExchangeCredentialReferenceResponse.from_dict(self._exchange(grant_token, body))
+
+    def _exchange(self, grant_token: str, body: dict[str, Any]) -> dict[str, Any]:
         url = f"{self._base_url}/v1/vault/credentials/exchange"
         response = httpx.post(
             url,
-            json=params.to_dict(),
+            json=body,
             headers={
                 "Authorization": f"Bearer {grant_token}",
                 "Accept": "application/json",
             },
         )
         if not response.is_success:
-            body: dict[str, Any] | None = None
+            payload: dict[str, Any] | None = None
             try:
-                body = response.json()
+                payload = response.json()
             except Exception:
-                body = None
+                payload = None
             message = (
-                body["message"]
-                if isinstance(body, dict) and isinstance(body.get("message"), str)
+                payload["message"]
+                if isinstance(payload, dict) and isinstance(payload.get("message"), str)
                 else f"HTTP {response.status_code}"
             )
             raise ValueError(message)
-        return ExchangeCredentialResponse.from_dict(response.json())
+        data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError("unexpected response from the vault exchange")
+        return data
