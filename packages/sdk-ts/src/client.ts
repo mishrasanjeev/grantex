@@ -27,7 +27,7 @@ import {
   RevocationSubReason,
   ManifestSubReason,
   PurposeSubReason,
-  TokenSubReason,
+  RegionSubReason, TokenSubReason,
   ToolSubReason,
 } from './denials.js';
 import {
@@ -161,6 +161,54 @@ function audienceDenial(
   };
 }
 
+function checkDataRegionCheck(mode: unknown): 'on' | 'off' {
+  if (mode !== 'on' && mode !== 'off') {
+    throw new Error(`dataRegionCheck must be one of on, off, not ${JSON.stringify(mode)}`);
+  }
+  return mode;
+}
+
+function normaliseDataRegion(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function checkExpectedDataRegion(region: unknown, dataRegionCheck: 'on' | 'off'): string | undefined {
+  if (region === undefined) return undefined;
+  if (typeof region !== 'string' || normaliseDataRegion(region) === '') {
+    throw new Error(`dataRegion must be a non-empty string, not ${JSON.stringify(region)}`);
+  }
+  // The check is off, so the region would be ignored and grants bound to another
+  // region accepted: refuse the contradiction instead.
+  if (dataRegionCheck === 'off') throw new Error("dataRegion cannot be set with dataRegionCheck: 'off'");
+  return normaliseDataRegion(region);
+}
+
+/**
+ * The data region denial for a grant's tools entry, if any. An entry without a
+ * region is unrestricted; one that names a region must name the expected one
+ * (compared after trimming and lowercasing).
+ */
+function dataRegionDenial(
+  tokenRegion: string | undefined,
+  expected: string | undefined,
+): { reason: string; subReason: string; details: Record<string, unknown> } | undefined {
+  if (tokenRegion === undefined) return undefined;
+  const region = normaliseDataRegion(tokenRegion);
+  if (expected === undefined) {
+    return {
+      reason: "The grant is bound to a data region and this client has no expected region; set dataRegion (or dataRegionCheck: 'off').",
+      subReason: RegionSubReason.REGION_UNCONFIGURED,
+      details: { token_data_region: region },
+    };
+  }
+  if (region === expected) return undefined;
+  return {
+    reason: `The grant's data region ${JSON.stringify(region)} is not ${JSON.stringify(expected)}.`,
+    subReason: RegionSubReason.REGION_MISMATCH,
+    details: { expected_data_region: expected, token_data_region: region },
+  };
+}
+
 function checkCapsMode(mode: unknown): CapsMode {
   if (!(CAPS_MODES as readonly unknown[]).includes(mode)) {
     throw new Error(`capsMode must be one of ${CAPS_MODES.join(', ')}, not ${JSON.stringify(mode)}`);
@@ -201,6 +249,8 @@ export class Grantex {
   readonly #decisionAlgorithms: string[];
   readonly #audienceCheck: 'on' | 'off';
   readonly #audience: string | undefined;
+  readonly #dataRegionCheck: 'on' | 'off';
+  readonly #dataRegion: string | undefined;
 
   readonly agents: AgentsClient;
   readonly grants: GrantsClient;
@@ -292,6 +342,11 @@ export class Grantex {
     // audience check did.
     this.#audienceCheck = checkAudienceCheck(options.audienceCheck === undefined ? 'on' : options.audienceCheck);
     this.#audience = checkExpectedAudience(options.audience, this.#audienceCheck);
+    // The data region this relying party processes data in. With dataRegionCheck
+    // 'on' a grant whose tools entry names another region is denied; 'off' (the
+    // default in this release) ignores data_region, as earlier releases did.
+    this.#dataRegionCheck = checkDataRegionCheck(options.dataRegionCheck === undefined ? 'off' : options.dataRegionCheck);
+    this.#dataRegion = checkExpectedDataRegion(options.dataRegion, this.#dataRegionCheck);
     this.decisions = new DecisionsClient(this.#http);
     const decisions = this.decisions;
     this.#decisionConsumer = options.decisionConsumer ?? {
@@ -512,6 +567,9 @@ export class Grantex {
     const expectedAudience = options.audience === undefined
       ? this.#audience
       : checkExpectedAudience(options.audience, this.#audienceCheck);
+    const expectedDataRegion = options.dataRegion === undefined
+      ? this.#dataRegion
+      : checkExpectedDataRegion(options.dataRegion, this.#dataRegionCheck);
     const base: Omit<EnforceResult, 'allowed' | 'reason'> = {
       grantId: '',
       agentDid: '',
@@ -603,6 +661,24 @@ export class Grantex {
     }
     const purpose = entry?.purpose;
     resultPurpose = purpose;
+
+    // 2b. Data region. A grant bound to a region may only be used by a relying
+    //     party in that region. The denial fails closed in every enforce mode,
+    //     like the audience check: the data must not be processed here.
+    if (this.#dataRegionCheck === 'on') {
+      const denial = dataRegionDenial(entry?.dataRegion, expectedDataRegion);
+      if (denial) {
+        return {
+          ...base,
+          allowed: false,
+          reason: denial.reason,
+          reasonCode: DenialReason.REGION_MISMATCH,
+          subReason: denial.subReason,
+          details: denial.details,
+          ...(resultPurpose !== undefined ? { purpose: resultPurpose } : {}),
+        };
+      }
+    }
 
     // 3. Look up manifest for the connector
     const manifest = this.#manifests.get(connector);

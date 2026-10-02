@@ -6,6 +6,7 @@ import { proxyRequest } from './proxy.js';
 import { GatewayError } from './errors.js';
 import { log } from './logger.js';
 import { audienceDenial, checkAudienceCheck, checkExpectedAudience, readTokenAudience } from './audience.js';
+import { checkDataRegionCheck, checkExpectedDataRegion, readTokenDataRegions, regionDenial } from './region.js';
 
 export function createGatewayServer(config: GatewayConfig): FastifyInstance {
   // Checked here as well as in validateConfig, for a config built in code: an
@@ -13,6 +14,9 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
   const audienceCheck = checkAudienceCheck(config.audienceCheck === undefined ? 'on' : config.audienceCheck);
   const audience = checkExpectedAudience(config.audience, audienceCheck);
   for (const route of config.routes) checkExpectedAudience(route.audience, audienceCheck);
+  const dataRegionCheck = checkDataRegionCheck(config.dataRegionCheck === undefined ? 'off' : config.dataRegionCheck);
+  const dataRegion = checkExpectedDataRegion(config.dataRegion, dataRegionCheck);
+  for (const route of config.routes) checkExpectedDataRegion(route.dataRegion, dataRegionCheck);
   if (config.currentAuthorityCheck !== undefined && typeof config.currentAuthorityCheck !== 'boolean') {
     throw new Error('currentAuthorityCheck must be a boolean');
   }
@@ -62,6 +66,36 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
         ? 'The grant token is for a specific audience and the gateway has no audience configured'
         : 'The grant token audience does not include the audience this gateway expects',
     });
+    return true;
+  };
+
+  /**
+   * Sends the data region denial for a verified grant token and returns true, or
+   * returns false when the region is accepted (or the check is off).
+   */
+  const denyByRegion = (
+    token: string,
+    routeRegion: string | undefined,
+    method: string,
+    path: string,
+    grantId: string | undefined,
+    reply: FastifyReply,
+  ): boolean => {
+    if (dataRegionCheck === 'off') return false;
+    let regions: Map<string, string>;
+    try {
+      regions = readTokenDataRegions(token);
+    } catch (err) {
+      // Fail closed: a token whose region binding cannot be read may be bound elsewhere.
+      const message = err instanceof Error ? err.message : 'grant token payload cannot be read';
+      log('info', 'Request denied: grant token data region unreadable', { method, path, error: message, grantId });
+      reply.status(401).send({ error: 'TOKEN_INVALID', message });
+      return true;
+    }
+    const denial = regionDenial(regions, routeRegion ?? dataRegion);
+    if (denial === undefined) return false;
+    log('info', 'Request denied: grant data region', { method, path, error: denial.code, grantId, details: denial.details });
+    reply.status(403).send({ error: denial.code, message: denial.message, details: denial.details });
     return true;
   };
 
@@ -136,6 +170,10 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
       // 3a. Audience (RFC 7519 section 4.1.3), with the same semantics as the
       //     SDKs' enforce(): the route's audience overrides the gateway's.
       if (denyByAudience(token, match.route.audience, method, path, grant.grantId, reply)) return;
+
+      // 3b. Data region, with the same semantics as the SDKs' enforce(): a grant
+      //     bound to a region may only be used by an upstream in that region.
+      if (denyByRegion(token, match.route.dataRegion, method, path, grant.grantId, reply)) return;
 
       log('info', 'Request authorized', {
         method,

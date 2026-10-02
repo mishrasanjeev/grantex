@@ -1,0 +1,18 @@
+{
+  "description": "Data region cases for enforce() shared by the Python SDK, the TypeScript SDK and @grantex/gateway. 'token_region' is the data_region member of the grant token's urn:grantex:tools:v1 entry for the connector (null: the entry carries none). 'client_region' is the relying party's data region set on the client (gateway: top-level config); 'call_region' is the per-call value (gateway: the route's dataRegion), which overrides the client's. Regions are compared after trimming and lowercasing. 'region_check' is 'on' or 'off' (the default in this release is 'off'). 'expect' is 'allow' or the region_mismatch sub-reason the call is denied with.",
+  "cases": [
+    {"name": "no token region, none configured", "token_region": null, "client_region": null, "call_region": null, "region_check": "on", "expect": "allow"},
+    {"name": "no token region, client region configured", "token_region": null, "client_region": "in", "call_region": null, "region_check": "on", "expect": "allow"},
+    {"name": "token region, none configured", "token_region": "in", "client_region": null, "call_region": null, "region_check": "on", "expect": "region_unconfigured"},
+    {"name": "token region equals client region", "token_region": "in", "client_region": "in", "call_region": null, "region_check": "on", "expect": "allow"},
+    {"name": "comparison ignores case", "token_region": "IN", "client_region": "in", "call_region": null, "region_check": "on", "expect": "allow"},
+    {"name": "comparison ignores surrounding whitespace", "token_region": " in ", "client_region": "in", "call_region": null, "region_check": "on", "expect": "allow"},
+    {"name": "token region differs from client region", "token_region": "eu", "client_region": "in", "call_region": null, "region_check": "on", "expect": "region_mismatch"},
+    {"name": "comparison is exact otherwise", "token_region": "in-south", "client_region": "in", "call_region": null, "region_check": "on", "expect": "region_mismatch"},
+    {"name": "call region overrides client region (match)", "token_region": "in", "client_region": "eu", "call_region": "in", "region_check": "on", "expect": "allow"},
+    {"name": "call region overrides client region (mismatch)", "token_region": "in", "client_region": "in", "call_region": "eu", "region_check": "on", "expect": "region_mismatch"},
+    {"name": "call region without client region", "token_region": "in", "client_region": null, "call_region": "in", "region_check": "on", "expect": "allow"},
+    {"name": "off: token region, none configured", "token_region": "eu", "client_region": null, "call_region": null, "region_check": "off", "expect": "allow"},
+    {"name": "off: no token region", "token_region": null, "client_region": null, "call_region": null, "region_check": "off", "expect": "allow"}
+  ]
+}

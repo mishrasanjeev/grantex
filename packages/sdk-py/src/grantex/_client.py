@@ -50,6 +50,7 @@ from .denials import (
     ManifestSubReason,
     PurposeSubReason,
     RevocationSubReason,
+    RegionSubReason,
     TokenSubReason,
     ToolSubReason,
 )
@@ -163,6 +164,55 @@ def _per_call_revocation_check(configured: str, requested: str | None) -> str:
 AUDIENCE_CHECK_MODES = ("on", "off")
 
 
+def _check_data_region_check(mode: object) -> str:
+    if mode not in ("on", "off"):
+        raise ValueError(f"data_region_check must be one of on, off, not {mode!r}")
+    return str(mode)
+
+
+def _normalise_data_region(value: str) -> str:
+    return value.strip().lower()
+
+
+def _check_expected_data_region(region: object, data_region_check: str) -> str | None:
+    if region is None:
+        return None
+    if not isinstance(region, str) or not _normalise_data_region(region):
+        raise ValueError(f"data_region must be a non-empty string, not {region!r}")
+    if data_region_check == "off":
+        # The check is off, so the region would be ignored and grants bound to
+        # another region accepted: refuse the contradiction instead.
+        raise ValueError("data_region cannot be set with data_region_check='off'")
+    return _normalise_data_region(region)
+
+
+def _data_region_denial(
+    token_region: str | None, expected: str | None
+) -> tuple[str, str, dict[str, Any]] | None:
+    """The data region denial for a grant's tools entry, if any.
+
+    An entry without a region is unrestricted; one that names a region must
+    name the expected one (compared after trimming and lowercasing).
+    """
+    if token_region is None:
+        return None
+    region = _normalise_data_region(token_region)
+    if expected is None:
+        return (
+            "The grant is bound to a data region and this client has no expected "
+            "region; set data_region (or data_region_check='off').",
+            RegionSubReason.REGION_UNCONFIGURED,
+            {"token_data_region": region},
+        )
+    if region == expected:
+        return None
+    return (
+        f"The grant's data region {region!r} is not {expected!r}.",
+        RegionSubReason.REGION_MISMATCH,
+        {"expected_data_region": expected, "token_data_region": region},
+    )
+
+
 def _check_audience_check(mode: object) -> str:
     if not isinstance(mode, str) or mode not in AUDIENCE_CHECK_MODES:
         raise ValueError(f"audience_check must be one of on, off, not {mode!r}")
@@ -262,6 +312,8 @@ class Grantex:
         decision_algorithms: Sequence[str] = ("RS256", "ES256"),
         audience: str | None = None,
         audience_check: str = "on",
+        data_region: str | None = None,
+        data_region_check: str = "off",
     ) -> None:
         resolved_key = (api_key or os.environ.get("GRANTEX_API_KEY", "")).strip()
         if not resolved_key:
@@ -294,6 +346,11 @@ class Grantex:
         # releases before the audience check did.
         self._audience_check = _check_audience_check(audience_check)
         self._audience = _check_expected_audience(audience, self._audience_check)
+        # The data region this relying party processes data in. With
+        # data_region_check "on" a grant whose tools entry names another region
+        # is denied; "off" (the default in this release) ignores data_region.
+        self._data_region_check = _check_data_region_check(data_region_check)
+        self._data_region = _check_expected_data_region(data_region, self._data_region_check)
 
         #: The registry this client talks to, for routes outside the API-key surface.
         self.base_url = base_url.rstrip("/")
@@ -517,6 +574,7 @@ class Grantex:
         decisions_mode: str | None = None,
         revocation_check: str | None = None,
         audience: str | None = None,
+        data_region: str | None = None,
     ) -> EnforceResult:
         """Enforce scope for a tool call.
 
@@ -623,6 +681,11 @@ class Grantex:
             if audience is None
             else _check_expected_audience(audience, self._audience_check)
         )
+        expected_data_region = (
+            self._data_region
+            if data_region is None
+            else _check_expected_data_region(data_region, self._data_region_check)
+        )
 
         # 1. Verify the token locally using JWKS retrieved from the configured URI
         try:
@@ -714,6 +777,24 @@ class Grantex:
         decision_ref: DecisionReference | None = decision_refs.get(connector)
         purpose = entry.purpose if entry is not None else None
         result_purpose = purpose or ""
+
+        # 2b. Data region. A grant bound to a region may only be used by a
+        #     relying party in that region. The denial fails closed in every
+        #     enforce mode, like the audience check: the data must not be
+        #     processed here.
+        if self._data_region_check == "on":
+            region_denial = _data_region_denial(
+                entry.data_region if entry is not None else None, expected_data_region
+            )
+            if region_denial is not None:
+                message, sub_reason, details = region_denial
+                return EnforceResult(
+                    allowed=False, reason=message,
+                    grant_id=grant_id, agent_did=agent_did, scopes=scopes,
+                    permission=permission, connector=connector, tool=tool,
+                    reason_code=DenialReason.REGION_MISMATCH, sub_reason=sub_reason,
+                    details=details, purpose=result_purpose,
+                )
 
         # 3. Look up manifest for the connector
         manifest = self._manifests.get(connector)

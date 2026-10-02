@@ -75,6 +75,8 @@ Client → Gateway (verify token + check scopes) → Upstream API
 | `upstreamHeaders` | object | No | Headers added to every upstream request |
 | `grantexApiKey` | string | No | API key for audit logging |
 | `routes` | array | Yes | Route definitions (see below) |
+| `dataRegion` | string | No | The data region the upstream processes data in (for example `in`); a grant bound to another region is refused with `REGION_MISMATCH`, and a region-bound grant is refused with `REGION_UNCONFIGURED` when no region is set. Needs `dataRegionCheck: on`; a route's `dataRegion` overrides it |
+| `dataRegionCheck` | `on` \| `off` | No | `off` in this release: a grant's `data_region` is ignored, as earlier releases did; `on` checks it |
 
 ### Route Definition
 

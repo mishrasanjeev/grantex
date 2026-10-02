@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Data region enforcement (TypeScript SDK, Python SDK, @grantex/gateway)
+- `enforce()` can check a grant's `data_region` (the `urn:grantex:tools:v1`
+  entry member that names the region the grant's data may be processed in)
+  against the relying party's: `dataRegion` / `data_region` names the
+  relying party's region and `dataRegionCheck` / `data_region_check: 'on'`
+  turns the check on. A connector entry that names another region is denied
+  with `region_mismatch` / `region_mismatch`; one that names a region when the
+  client has no region with `region_mismatch` / `region_unconfigured`; an
+  entry without a region is unrestricted. Regions are compared after trimming
+  and lowercasing. Per-call `enforce({ dataRegion })` overrides the client's.
+  The denial is not relaxed by permissive mode. `RegionSubReason` is exported.
+- `@grantex/gateway`: `dataRegion` and `dataRegionCheck` (top level, and
+  `dataRegion` per route) refuse a region-bound grant with 403
+  `REGION_MISMATCH` or `REGION_UNCONFIGURED`.
+- The check is `off` by default in this release, so nothing changes until a
+  deployment turns it on; `spec/examples/enforce-data-region.json` holds the
+  shared cases.
+
 ### Accredited issuer adapters (Python SDK)
 - `grantex.issuers`: the `AccreditedIssuerClient` seam between the registry
   and an accredited issuer, with exactly three operations

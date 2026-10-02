@@ -4,6 +4,8 @@ export interface RouteDefinition {
   requiredScopes: string[];
   /** Expected grant token audience for this route; overrides `GatewayConfig.audience`. */
   audience?: string;
+  /** Data region for this route; overrides `GatewayConfig.dataRegion`. */
+  dataRegion?: string;
 }
 
 export interface GatewayConfig {
@@ -28,6 +30,15 @@ export interface GatewayConfig {
    * `off` ignores `aud`, as releases before the check did.
    */
   audienceCheck?: 'on' | 'off';
+  /**
+   * The data region this gateway's upstream processes data in (for example `in`).
+   * With `dataRegionCheck: 'on'`, a grant whose tools entries name another region is
+   * refused (`REGION_MISMATCH`), and one that names a region when no region is
+   * configured is refused outright (`REGION_UNCONFIGURED`).
+   */
+  dataRegion?: string;
+  /** `off` (the default in this release) ignores a grant's `data_region`; `on` checks it. */
+  dataRegionCheck?: 'on' | 'off';
 }
 
 export interface MatchResult {
