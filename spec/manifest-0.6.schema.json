@@ -5,7 +5,10 @@
   "description": "Declares, for one connector, the permission each tool requires and the optional purpose, cap, cost and decision constraints that enforce() applies to calls of that tool. See spec/manifest-0.6.md.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["connector", "tools"],
+  "required": [
+    "connector",
+    "tools"
+  ],
   "properties": {
     "$schema": {
       "description": "Optional reference to this schema. Ignored by loaders.",
@@ -31,10 +34,14 @@
       "minProperties": 1,
       "propertyNames": {
         "$ref": "#/$defs/name",
-        "not": { "const": "cost_units" },
+        "not": {
+          "const": "cost_units"
+        },
         "description": "cost_units is reserved: grant caps use it for the cost-unit budget."
       },
-      "additionalProperties": { "$ref": "#/$defs/tool" }
+      "additionalProperties": {
+        "$ref": "#/$defs/tool"
+      }
     }
   },
   "$defs": {
@@ -44,7 +51,12 @@
     },
     "permission": {
       "description": "Required permission level. admin > delete > write > read.",
-      "enum": ["read", "write", "delete", "admin"]
+      "enum": [
+        "read",
+        "write",
+        "delete",
+        "admin"
+      ]
     },
     "count": {
       "type": "integer",
@@ -59,22 +71,32 @@
     },
     "tool": {
       "oneOf": [
-        { "$ref": "#/$defs/permission" },
-        { "$ref": "#/$defs/toolObject" }
+        {
+          "$ref": "#/$defs/permission"
+        },
+        {
+          "$ref": "#/$defs/toolObject"
+        }
       ]
     },
     "toolObject": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["permission"],
+      "required": [
+        "permission"
+      ],
       "properties": {
-        "permission": { "$ref": "#/$defs/permission" },
+        "permission": {
+          "$ref": "#/$defs/permission"
+        },
         "allowed_purposes": {
           "description": "The grant's purpose must match at least one pattern. Omit to apply no purpose restriction.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "$ref": "#/$defs/purposePattern" }
+          "items": {
+            "$ref": "#/$defs/purposePattern"
+          }
         },
         "caps": {
           "description": "Call caps. per_hour and per_day are rolling windows; per_case counts calls within one case. A cap of 0 disables the tool.",
@@ -82,17 +104,28 @@
           "additionalProperties": false,
           "minProperties": 1,
           "properties": {
-            "per_hour": { "$ref": "#/$defs/count" },
-            "per_day": { "$ref": "#/$defs/count" },
-            "per_case": { "$ref": "#/$defs/count" }
+            "per_hour": {
+              "$ref": "#/$defs/count"
+            },
+            "per_day": {
+              "$ref": "#/$defs/count"
+            },
+            "per_case": {
+              "$ref": "#/$defs/count"
+            }
           }
         },
         "cost_units": {
           "description": "Cost units charged against a grant's cost-unit budget, by component (for example base, ownership).",
           "type": "object",
           "minProperties": 1,
-          "propertyNames": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
-          "additionalProperties": { "$ref": "#/$defs/count" }
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/count"
+          }
         },
         "requires_decision": {
           "description": "When true, a call also needs a decision grant. Not allowed on read tools.",
@@ -103,7 +136,10 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" }
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          }
         },
         "decision_fields": {
           "description": "Call arguments beyond the core semantic action (case_id, action, decision, subject, amount) that a decision grant binds, for example currency. Requires requires_decision: true.",
@@ -114,24 +150,67 @@
           "items": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "not": { "enum": ["case_id", "action", "decision", "subject", "amount", "extra"] }
+            "not": {
+              "enum": [
+                "case_id",
+                "action",
+                "decision",
+                "subject",
+                "amount",
+                "extra"
+              ]
+            }
           }
+        },
+        "risk_tier": {
+          "description": "Workload risk tier. high means every call also needs a decision grant, whether or not requires_decision is set; not allowed on read tools.",
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
         }
       },
       "if": {
-        "properties": { "permission": { "const": "read" } }
+        "properties": {
+          "permission": {
+            "const": "read"
+          }
+        }
       },
       "then": {
-        "properties": { "requires_decision": { "const": false } }
+        "properties": {
+          "requires_decision": {
+            "const": false
+          },
+          "risk_tier": {
+            "not": {
+              "const": "high"
+            }
+          }
+        }
       },
       "dependentSchemas": {
         "four_eyes_on": {
-          "properties": { "requires_decision": { "const": true } },
-          "required": ["requires_decision"]
+          "properties": {
+            "requires_decision": {
+              "const": true
+            }
+          },
+          "required": [
+            "requires_decision"
+          ]
         },
         "decision_fields": {
-          "properties": { "requires_decision": { "const": true } },
-          "required": ["requires_decision"]
+          "properties": {
+            "requires_decision": {
+              "const": true
+            }
+          },
+          "required": [
+            "requires_decision"
+          ]
         }
       }
     }

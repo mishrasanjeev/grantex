@@ -121,7 +121,7 @@ export {
   type ToolDeclaration,
   type ManifestToolObject,
   type ManifestToolCaps,
-  type ToolSpec,
+  type RiskTier, ToolSpec,
   type ToolCaps,
   type WouldDeny,
   type WrapToolOptions,

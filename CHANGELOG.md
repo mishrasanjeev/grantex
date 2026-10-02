@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Risk tiers on tool manifests (spec, TypeScript SDK, Python SDK, @grantex/mcp-auth)
+- A tool object may declare `risk_tier: low | medium | high` (manifest 0.6). A
+  `high` tool is enforced as if it declared `requires_decision: true`: `enforce()`
+  denies a call without a valid decision grant with `decision_required`, and
+  `toolPolicyFromManifests` sets `requiresDecision` for it. `high` is not allowed
+  on `read` tools. `low` and `medium` are reported on `ToolSpec.riskTier` /
+  `ToolSpec.risk_tier` for a platform's own policies. Shared cases in
+  `spec/examples/manifest-0.6/`.
 ### Data region at issuance (auth service, SDKs)
 - `POST /v1/authorize` takes `dataRegion` (`in`, `eu`, `in-south`: two letters and an
   optional qualifier, lowercased when stored). It needs at least one

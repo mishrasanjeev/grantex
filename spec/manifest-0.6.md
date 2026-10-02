@@ -55,6 +55,7 @@ manifest. A string `"read"` is equivalent to `{"permission": "read"}`.
 | `caps` | object with at least one of `per_hour`, `per_day`, `per_case` | Call caps. `per_hour` and `per_day` are rolling windows; `per_case` counts calls within one case. |
 | `cost_units` | non-empty object, unit name to count | Units charged per call against a grant's cost-unit budget. |
 | `requires_decision` | boolean | When `true`, a call also needs a decision grant. |
+| `risk_tier` | `low`, `medium` or `high` | The tool's workload risk tier. `high` means every call also needs a decision grant, whether or not `requires_decision` is set; `low` and `medium` are reported on the tool's spec for the platform's own policies. |
 | `four_eyes_on` | non-empty array of unique decision names | Decisions that need two decision grants from different approvers. |
 | `decision_fields` | non-empty array of at most 16 unique field names | Call arguments, beyond `case_id`, `decision`, `subject` and `amount`, that a decision grant binds (for example `currency`). See `spec/canonicalization.md`. |
 
@@ -77,6 +78,9 @@ is specified in `docs/concepts/purpose-bound-grants.md`.
 - `requires_decision: true` is not allowed on a `read` tool. A decision guards
   a state change; a read tool that needs one is almost always a
   mis-declared permission.
+- `risk_tier: high` is not allowed on a `read` tool, for the same reason as
+  `requires_decision`. A `high` tool is enforced as if it declared
+  `requires_decision: true` (`decision_required` without a decision grant).
 - `four_eyes_on` requires `requires_decision: true`.
 - `decision_fields` requires `requires_decision: true` and may not name
   `case_id`, `action`, `decision`, `subject`, `amount` or `extra`.

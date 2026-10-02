@@ -883,7 +883,9 @@ class Grantex:
         # the first of them.
         would_deny_all: list[dict[str, Any]] = []
         ref_tools = decision_ref.tools if decision_ref is not None else ()
-        if spec.requires_decision or tool in ref_tools:
+        # A high-risk tool needs a decision grant on every call, whether or not
+        # the manifest also declares requires_decision.
+        if spec.requires_decision or spec.risk_tier == "high" or tool in ref_tools:
             four_eyes_on = tuple(spec.four_eyes_on) + tuple(
                 d for d in (decision_ref.four_eyes_on.get(tool, ()) if decision_ref is not None else ())
                 if d not in spec.four_eyes_on
