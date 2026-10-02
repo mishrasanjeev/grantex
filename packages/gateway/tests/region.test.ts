@@ -152,6 +152,12 @@ describe('region helpers', () => {
     expect([...regions.entries()]).toEqual([['a', 'in']]);
     expect(readTokenDataRegions(tokenWith({ sub: 'x' })).size).toBe(0);
     expect(() => readTokenDataRegions(tokenWith({ authorization_details: 'nope' }))).toThrow('authorization_details must be an array');
+    expect(() => readTokenDataRegions(tokenWith({
+      authorization_details: [
+        { type: 'urn:grantex:tools:v1', connector: 'a', data_region: 'eu' },
+        { type: 'urn:grantex:tools:v1', connector: 'a', data_region: 'in' },
+      ],
+    }))).toThrow('repeats connector "a"');
     expect(() => readTokenDataRegions('a.b')).toThrow('grant token payload cannot be read');
   });
 

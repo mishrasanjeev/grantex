@@ -48,7 +48,8 @@ export function checkExpectedDataRegion(value: unknown, dataRegionCheck: DataReg
  *
  * The payload is read from the token whose signature was just checked. A
  * payload that cannot be read, or an `authorization_details` claim whose tools
- * entries cannot be read unambiguously, throws: the caller then denies.
+ * entries cannot be read unambiguously (including a connector that appears
+ * twice), throws: the caller then denies.
  */
 export function readTokenDataRegions(token: string): Map<string, string> {
   const parts = token.split('.');
@@ -79,6 +80,10 @@ export function readTokenDataRegions(token: string): Map<string, string> {
     const region = record['data_region'];
     if (region === undefined || region === null) return;
     if (typeof region !== 'string') throw new Error(`authorization_details[${index}].data_region must be a string`);
+    // Two entries for one connector are ambiguous; the token format allows one.
+    if (regions.has(connector)) {
+      throw new Error(`authorization_details[${index}] repeats connector "${connector}"; a grant carries one tools entry per connector`);
+    }
     regions.set(connector, region);
   });
   return regions;

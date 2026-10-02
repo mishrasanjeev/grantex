@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Data region follow-ups (auth service, SDKs, @grantex/gateway)
+- `POST /v1/authorize` reads `dataRegion` only when `DATA_REGION_ISSUANCE_ENABLED=true`;
+  off (the default), the member is ignored as before. The code exchange accepts
+  region-only tools entries (a region bound without a purpose), which it refused
+  as inconsistent. `AuthorizationRequest` carries `dataRegion` (TypeScript, Go) /
+  `data_region` (Python) and the API documentation declares it.
+- `@grantex/gateway`: a token whose tools entries repeat a connector is refused
+  as `TOKEN_INVALID` instead of the later region silently replacing the earlier.
+- The risk-tier example manifest names the canonical schema id.
 ### Tool-qualified scopes (TypeScript SDK, Python SDK)
 - `enforce()` can honour the tool segment of `tool:<connector>:<permission>:<tool>`
   scopes (FINDINGS G-144): with `toolQualifiedScopes: true` /

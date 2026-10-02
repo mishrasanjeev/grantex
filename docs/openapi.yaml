@@ -3690,7 +3690,8 @@ paths:
                     lowercased when stored. Requires at least one `tool:<connector>:<permission>`
                     scope. Issued tokens carry it as `data_region` on each `urn:grantex:tools:v1`
                     entry; relying parties with the region check on refuse the token outside it.
-                    Rejected with `INVALID_DATA_REGION`.
+                    Rejected with `INVALID_DATA_REGION`. Read only when `DATA_REGION_ISSUANCE_ENABLED=true`;
+                    otherwise ignored like any other member this route does not know.
                   example: in
                 passport:
                   type: string
@@ -3778,6 +3779,9 @@ paths:
                   purpose:
                     type: string
                     description: Present when the request carries a purpose
+                  dataRegion:
+                    type: string
+                    description: Present when the request carries a data region (lowercased); read only when `DATA_REGION_ISSUANCE_ENABLED=true`
         "400":
           description: >-
             Validation error. With a passport: `passport_malformed` or `passport_not_accepted`

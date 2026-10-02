@@ -182,6 +182,8 @@ class AuthorizationRequest:
     policy_enforced: bool | None = None
     effect: str | None = None
     purpose: str | None = None
+    data_region: str | None = None
+    """Data region the request binds the grant to (lowercased), when one was given."""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> AuthorizationRequest:
@@ -200,6 +202,7 @@ class AuthorizationRequest:
             policy_enforced=data.get("policyEnforced"),
             effect=data.get("effect"),
             purpose=data.get("purpose"),
+            data_region=data.get("dataRegion"),
         )
 
 
