@@ -1987,7 +1987,7 @@ the pull request that references it.
   criterion: with `ttl` equal to the minimum interval, an attestation counts
   continuously while its list keeps answering VALID.
 
-## G-144 — The SDKs read a tool-qualified scope as the whole connector permission
+## G-144 — The SDKs read a tool-qualified scope as the whole connector permission (fixed, opt-in)
 
 - **Found:** running agentic-org's `make demo-case` against the Python SDK
   0.7.2 (2026-10-01): a grant delegated with only
@@ -2014,3 +2014,8 @@ the pull request that references it.
   and the SDK Authority Boundaries workflow. Owner: SDK maintainers. Exit
   criterion: the agentic-org demo's out-of-scope call is refused by the SDK
   alone with the pre-check removed.
+- **Fixed:** `toolQualifiedScopes` / `tool_qualified_scopes` in the TypeScript and
+  Python SDKs (off by default until the next major); shared cases in
+  `spec/examples/enforce-tool-qualified-scopes.json`. The Go SDK has no
+  `enforce`. The conformance suite case waits on the auth service issuing
+  tool-qualified scopes in its live flow.
