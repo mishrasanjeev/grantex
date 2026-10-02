@@ -6,6 +6,7 @@ import { parseActorClaim } from '../lib/grant-token-claims.js';
 import {
   isKnownPurpose,
   narrowToolsAuthorizationDetails,
+  isRegionOnlyToolsAuthorizationDetails,
   purposeOfToolsAuthorizationDetails,
 } from '../lib/purpose.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
@@ -402,10 +403,11 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             routeError(500, 'Authorization request purpose is inconsistent', 'INTERNAL_ERROR');
           }
         } else if (approvedDetails !== null) {
-          // Without a purpose the only valid tools entries are region-only ones
-          // (a data region bound at authorization); anything else is corrupt.
-          if (!Array.isArray(approvedDetails) || approvedDetails.length === 0
-              || purposeOfToolsAuthorizationDetails(approvedDetails as Array<Record<string, unknown>>) !== undefined) {
+          // Without a purpose the only valid tools entries are the region-only
+          // ones issuance writes: one per connector of the approved scopes, each
+          // with a well-formed region and no purpose. Anything else is a corrupt
+          // row and is refused rather than signed.
+          if (!isRegionOnlyToolsAuthorizationDetails(approvedDetails, authReq['scopes'] as string[])) {
             routeError(500, 'Authorization request purpose is inconsistent', 'INTERNAL_ERROR');
           }
         }

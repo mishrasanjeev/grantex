@@ -163,6 +163,38 @@ export function narrowToolsAuthorizationDetails(
  * The single purpose carried by tools entries, or undefined when none carries
  * one. Throws when entries disagree, which issuance never produces.
  */
+/**
+ * Whether `entries` are exactly the region-only tools entries issuance writes
+ * when a data region is bound without a purpose: `urn:grantex:tools:v1`
+ * entries only, one for every connector of `scopes` and no other, each with a
+ * well-formed `data_region` (the same region on every entry) and no purpose.
+ * A connector of the scopes with no entry would travel unbound, so it refuses.
+ * The code exchange signs stored entries only when this holds; a stored row
+ * that fails it is corrupt and is refused rather than signed.
+ */
+export function isRegionOnlyToolsAuthorizationDetails(entries: unknown, scopes: readonly string[]): boolean {
+  if (!Array.isArray(entries) || entries.length === 0) return false;
+  const connectors = new Set(connectorsInScopes(scopes));
+  const seen = new Set<string>();
+  let region: string | undefined;
+  for (const entry of entries) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return false;
+    const record = entry as Record<string, unknown>;
+    if (record['type'] !== TOOLS_DETAIL_TYPE) return false;
+    if (record['purpose'] !== undefined && record['purpose'] !== null) return false;
+    const connector = record['connector'];
+    if (typeof connector !== 'string' || !connectors.has(connector) || seen.has(connector)) return false;
+    seen.add(connector);
+    const value = record['data_region'];
+    if (!isDataRegion(value)) return false;
+    const normalised = value.trim().toLowerCase();
+    if (region !== undefined && region !== normalised) return false;
+    region = normalised;
+  }
+  // Every scoped connector is bound; one left out would reach the token unrestricted.
+  return seen.size === connectors.size;
+}
+
 export function purposeOfToolsAuthorizationDetails(entries: ReadonlyArray<Record<string, unknown>>): string | undefined {
   let purpose: string | undefined;
   for (const entry of entries) {
