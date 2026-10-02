@@ -9,7 +9,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^4.0.81",
     "@grantex/sdk": "^0.6.0",
-    "@grantex/vercel-ai": "^0.1.6",
+    "@grantex/vercel-ai": "^0.1.7",
     "ai": "^7.0.122",
     "zod": "^4.6.5"
   },
