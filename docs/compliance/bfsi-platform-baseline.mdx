@@ -86,7 +86,8 @@ evidence, and the capability group each item belongs to. Identifiers follow the 
   for one surface only. **Gap**: nothing usable exists yet.
 - The gateway (`packages/gateway`) verifies grant tokens locally by default; with `currentAuthorityCheck: true`
   it verifies every request against the issuer, so revocations and emergency stops take effect on the next
-  request rather than at token expiry. Deployments where a stop must be immediate turn it on.
+  request rather than at token expiry. It is the documented default for stop-sensitive deployments
+  (see the gateway integration page); a gateway without it accepts stale authority for up to a token lifetime.
 - Capability groups name the product area that owns an item: WP-01 operator override, WP-05 agent registry
   and certification, WP-08 governance inventory, WP-19 residency controls, WP-21 authority layer hardening
   (credential-by-reference exchange, lifecycle states and attestation types, risk tiers on manifests,
