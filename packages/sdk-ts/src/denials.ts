@@ -121,6 +121,21 @@ export const TokenSubReason = {
   AUDIENCE_MISMATCH: 'audience_mismatch',
 } as const;
 
+/** Sub-reasons for `region_mismatch`. */
+export const RegionSubReason = {
+  /**
+   * The grant's tools entry for the connector names a data region and the client
+   * has no expected region, so it cannot tell whether it may process the data.
+   * `details` carries `token_data_region`.
+   */
+  REGION_UNCONFIGURED: 'region_unconfigured',
+  /**
+   * The grant's data region for the connector is not the expected region.
+   * `details` carries `expected_data_region` and `token_data_region`.
+   */
+  REGION_MISMATCH: 'region_mismatch',
+} as const;
+
 /**
  * Sub-reasons for `decision_required` and `decision_invalid` (PRD G-3;
  * `spec/decision-grant.md`). The first four are PRD Appendix B's; the auth

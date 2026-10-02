@@ -156,6 +156,18 @@ class TokenSubReason:
     ``token_audience``."""
 
 
+class RegionSubReason:
+    """Sub-reasons for :attr:`DenialReason.REGION_MISMATCH`."""
+
+    REGION_UNCONFIGURED = "region_unconfigured"
+    """The grant's tools entry for the connector names a data region and the
+    client has no expected region, so it cannot tell whether it may process
+    the data. ``details`` carries ``token_data_region``."""
+    REGION_MISMATCH = "region_mismatch"
+    """The grant's data region for the connector is not the expected region.
+    ``details`` carries ``expected_data_region`` and ``token_data_region``."""
+
+
 class DecisionSubReason:
     """Sub-reasons for :attr:`DenialReason.DECISION_REQUIRED` and
     :attr:`DenialReason.DECISION_INVALID` (PRD G-3; ``spec/decision-grant.md``).

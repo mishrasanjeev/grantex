@@ -80,8 +80,14 @@ entry per connector named by the grant's scopes:
 
 An entry of this type may also carry `tools` (tool names, or prefixes ending
 in `*`), `caps` and `data_region`. `enforce()` applies an entry's `tools` list
-in addition to the scopes. `data_region` is carried and reported but not yet
-evaluated. Entries of other types are ignored. A claim that cannot be read
+in addition to the scopes. `data_region` names the region the grant's data
+may be processed in: a relying party with `dataRegionCheck: 'on'`
+(`data_region_check="on"` in Python, `dataRegionCheck: on` in the gateway)
+denies a call for a connector whose entry names another region with
+`region_mismatch` / `region_mismatch`, and one whose entry names a region
+when the relying party has no `dataRegion` with `region_mismatch` /
+`region_unconfigured`; an entry without a region is unrestricted, and the
+check is off by default in this release. Entries of other types are ignored. A claim that cannot be read
 unambiguously (not an array, an entry without `type`, an unknown key in a
 `urn:grantex:tools:v1` entry, or two entries for the same connector) denies
 every call with `token_invalid` / `malformed_authorization_details`.

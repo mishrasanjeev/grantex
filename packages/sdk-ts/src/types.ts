@@ -69,6 +69,20 @@ export interface GrantexClientOptions {
    * `enforceMode: 'permissive'`: they stay `allowed: false` in every enforce mode.
    */
   audienceCheck?: 'on' | 'off';
+  /**
+   * The data region this relying party processes data in (for example `in`). With
+   * `dataRegionCheck: 'on'`, a grant whose tools entry for the connector names another
+   * region is denied with `region_mismatch` / `region_mismatch`, and one that names a
+   * region when no region is configured with `region_mismatch` / `region_unconfigured`.
+   * Compared after trimming and lowercasing. `enforce({ dataRegion })` overrides it per call.
+   */
+  dataRegion?: string;
+  /**
+   * `off` (the default in this release) ignores a grant's `data_region`, as earlier
+   * releases did; `on` checks it in `enforce()`. Cannot be `off` with `dataRegion` set.
+   * Region denials are not relaxed by `enforceMode: 'permissive'`.
+   */
+  dataRegionCheck?: 'on' | 'off';
 }
 
 // ─── Signup ─────────────────────────────────────────────────────────────────

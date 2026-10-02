@@ -675,6 +675,8 @@ export interface EnforceOptions {
   revocationCheck?: 'offline' | 'online' | 'feed';
   /** Overrides the client's expected grant token audience for this call. */
   audience?: string;
+  /** Overrides the client's data region for this call (needs `dataRegionCheck: 'on'`). */
+  dataRegion?: string;
   /**
    * Decision grant tokens for a tool with `requires_decision` (one, or two for a decision in
    * `four_eyes_on`). Without them the call is denied with `decision_required`.

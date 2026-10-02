@@ -3,6 +3,7 @@ import { parse as parseYaml } from 'yaml';
 import type { GatewayConfig } from './types.js';
 import { GatewayError } from './errors.js';
 import { checkAudienceCheck, checkExpectedAudience, type AudienceCheck } from './audience.js';
+import { checkDataRegionCheck, checkExpectedDataRegion, type DataRegionCheck } from './region.js';
 
 export function loadConfig(filePath: string): GatewayConfig {
   let content: string;
@@ -61,6 +62,12 @@ export function validateConfig(raw: unknown): GatewayConfig {
   const audience = 'audience' in obj
     ? configValue(() => checkExpectedAudience(obj['audience'], audienceCheck))
     : undefined;
+  const dataRegionCheck: DataRegionCheck = 'dataRegionCheck' in obj
+    ? configValue(() => checkDataRegionCheck(obj['dataRegionCheck']))
+    : 'off';
+  const dataRegion = 'dataRegion' in obj
+    ? configValue(() => checkExpectedDataRegion(obj['dataRegion'], dataRegionCheck))
+    : undefined;
 
   if (!Array.isArray(obj['routes']) || obj['routes'].length === 0) {
     throw new GatewayError('CONFIG_INVALID', 'Config must include at least one route', 500);
@@ -101,12 +108,16 @@ export function validateConfig(raw: unknown): GatewayConfig {
     const routeAudience = 'audience' in r
       ? configValue(() => checkExpectedAudience(r['audience'], audienceCheck), `Route ${i}: `)
       : undefined;
+    const routeDataRegion = 'dataRegion' in r
+      ? configValue(() => checkExpectedDataRegion(r['dataRegion'], dataRegionCheck), `Route ${i}: `)
+      : undefined;
 
     return {
       path: r['path'],
       methods,
       requiredScopes,
       ...(routeAudience !== undefined ? { audience: routeAudience } : {}),
+      ...(routeDataRegion !== undefined ? { dataRegion: routeDataRegion } : {}),
     };
   });
 
@@ -129,6 +140,8 @@ export function validateConfig(raw: unknown): GatewayConfig {
     ...(typeof obj['grantexApiKey'] === 'string' ? { grantexApiKey: obj['grantexApiKey'] } : {}),
     ...(audience !== undefined ? { audience } : {}),
     ...('audienceCheck' in obj ? { audienceCheck } : {}),
+    ...(dataRegion !== undefined ? { dataRegion } : {}),
+    ...('dataRegionCheck' in obj ? { dataRegionCheck } : {}),
   };
 }
 
