@@ -1,17 +1,17 @@
 ---
 title: BFSI platform baseline
-description: How the authority layer contributes to a bank-grade enterprise AI platform baseline, and what it still owes.
+description: How the authority layer contributes to a bank-grade enterprise AI platform baseline, and where it stops.
 ---
 
 A regulated financial institution expects an enterprise AI platform to satisfy a baseline of residency,
 isolation and control conditions plus a long list of technical and functional capabilities. The platform
 side of that baseline lives in AgenticOrg (`docs/bfsi/` in that repository). This page lists the items
-where Grantex is the authority primitive the platform relies on, the current status, and the hardening
-package that closes the remaining gaps. Identifiers follow the AgenticOrg catalogue.
+where Grantex is the authority primitive the platform relies on, what exists today with repository
+evidence, and the capability group each item belongs to. Identifiers follow the AgenticOrg catalogue.
 
 ## Where Grantex is the primitive
 
-| ID | Capability | Status | What exists | Package |
+| ID | Capability | Status | What exists | Group |
 |---|---|---|---|---|
 | BASE-01 | In-country data residency | Partial | Self-hosting (Helm/Compose) lets the operator choose the region; the hosted service is pinned to one foreign region; data_region is carried in tokens but not enforced. (`docs/compliance/data-residency.md`, `deploy/gcp/setup.sh`, `deploy/helm/grantex/values.yaml`) | WP-19 |
 | BASE-02 | Isolated production instance | Partial | Self-hosting gives a dedicated instance; the hosted service is multi-tenant with application-level tenant scoping. (`deploy/helm/grantex/values.yaml`, `docker-compose.prod.yml`, `docs/self-hosting.md`) | WP-19 |
@@ -24,7 +24,7 @@ package that closes the remaining gaps. Identifiers follow the AgenticOrg catalo
 | SEC-03 | Secrets management | Partial | Encrypted credential vault and secret-manager runtime secrets; no managed DB credential or certificate rotation. (`apps/auth-service/src/routes/vault.ts`, `deploy/gcp/setup.sh`, `apps/auth-service/src/routes/event-sources.ts`) | WP-00 |
 | SEC-04 | Web application firewall | Partial | Rate limiting only; no WAF ruleset. (`deploy/nginx/nginx.conf`, `apps/auth-service/src/plugins/dynamicRateLimit.ts`) | WP-00 |
 | SEC-06 | Security posture management | Partial | CI-time image scans, CodeQL, secret scanning; no runtime posture management. (`.github/workflows/security-scan.yml`, `.github/workflows/codeql.yml`, `scripts/scan-container.sh`) | WP-00 |
-| SEC-07 | Threat detection | Partial | Irregularity detection on authorization events; no control-plane or network detection. (`apps/auth-service/src/workers/anomalyDetection.ts`, `apps/auth-service/src/routes/anomalies.ts`) | WP-00 |
+| SEC-07 | Threat detection | Partial | Irregularity detection on authorization events; no control-plane or network detection. | WP-00 |
 | SEC-08 | SIEM and security lake | Partial | SIEM sinks and audit export; no open-schema security lake. (`packages/destinations/src/destinations/splunk.ts`, `packages/destinations/src/destinations/datadog.ts`, `docs/guides/siem-splunk.mdx`) | WP-00 |
 | SEC-09 | Identity and access management | Partial | Scopes, short-lived DPoP-bound tokens, OIDC/SAML SSO with group mapping, SCIM, passkeys; no general role model; admin MFA delegated to the identity provider. (`apps/auth-service/src/routes/sso.ts`, `apps/auth-service/src/routes/scim.ts`, `apps/auth-service/src/routes/webauthn.ts`) | WP-00 |
 | DATA-08 | Managed relational databases | Partial | Managed Postgres without HA configuration. (`deploy/gcp/setup.sh`, `docs/self-hosting.md`) | WP-00 |
@@ -78,28 +78,16 @@ package that closes the remaining gaps. Identifiers follow the AgenticOrg catalo
 | FIN-02 | Budget thresholds | Partial | Budget alerts at 50 and 80 percent, caps that deny, plan rate limits. (`docs/guides/budget-controls.mdx`, `packages/sdk-ts/src/caps/index.ts`, `apps/auth-service/src/plugins/dynamicRateLimit.ts`) | WP-10 |
 | FE-08 | Governed API exposure | Partial | Grant-token governance in front of any API. (`packages/gateway/src/proxy.ts`, `docs/openapi.yaml`) | WP-00 |
 | FE-12 | Paused-task review queue | Partial | Per-request approval page; no central queue. (`apps/auth-service/src/routes/decision-page.ts`, `apps/auth-service/src/routes/prepaid-wallets.ts`) | WP-18 |
-| FE-13 | Business configuration console | Partial | Portal forms for policies, rules and budgets. (`apps/portal/src/pages/policies/PolicyForm.tsx`, `apps/portal/src/pages/anomalies/RuleBuilder.tsx`, `apps/portal/src/pages/budgets/BudgetList.tsx`) | WP-18 |
+| FE-13 | Business configuration console | Partial | Portal forms for policies, rules and budgets. (`apps/portal/src/pages/policies/PolicyForm.tsx`, `apps/portal/src/pages/budgets/BudgetList.tsx`) | WP-18 |
 
-## Hardening package (WP-21)
+## Reading the status
 
-Online revocation checks in the gateway so emergency stops take effect immediately, a credential-exchange mode that never returns raw credentials to the agent, agent lifecycle states and approval attestations in the trust registry, environment-scoped agent versions, workload risk tiers on manifests, and tool-qualified scope enforcement in the SDKs.
-
-Acceptance:
-
-- An emergency-stopped agent is refused by the gateway on the next request.
-- An agent can hold credentials by reference only; the gateway injects them upstream.
-- A manifest can declare a risk tier that forces decision grants for high-risk tools.
-
-Pull-request sequence:
-
-1. gateway online revocation
-2. credential-by-reference mode
-3. lifecycle states and attestation types
-4. risk tiers on manifests
-5. SDK tool-qualified scopes
-
-## Shared packages
-
-Grantex also contributes to WP-01 (emergency stops consumed by the platform's tool gateway through the
-revocation feed), WP-05 (attestations and passports attached to agent cards), WP-08 (manifests and
-attestations feeding the AI inventory) and WP-19 (`data_region` enforcement by relying parties).
+- **Covered**: the primitive exists in product form with tests. **Partial**: part of it exists or it exists
+  for one surface only. **Gap**: nothing usable exists yet.
+- The gateway (`packages/gateway`) verifies grant tokens locally by default; with `currentAuthorityCheck: true`
+  it verifies every request against the issuer, so revocations and emergency stops take effect on the next
+  request rather than at token expiry. Deployments where a stop must be immediate turn it on.
+- Capability groups name the product area that owns an item: WP-01 operator override, WP-05 agent registry
+  and certification, WP-08 governance inventory, WP-19 residency controls, WP-21 authority layer hardening
+  (credential-by-reference exchange, lifecycle states and attestation types, risk tiers on manifests,
+  tool-qualified scopes in the SDKs). A group carries no delivery commitment.
