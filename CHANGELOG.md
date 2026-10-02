@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Dependency bundle compatibility
+- Align the root Python requirements with the published 0.7.1 SDK required by
+  current integration packages. Upgrade example SDKs together with their
+  adapters so clean installs satisfy peer dependency requirements.
+
 ### Fixed - Region-only tools entries (auth service, @grantex/gateway)
 - The code exchange signs stored tools entries without a purpose only when they
   are the region-only entries issuance writes: one `urn:grantex:tools:v1` entry
