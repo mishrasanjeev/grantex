@@ -20,6 +20,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Events `vault.credential.reference_issued` and `vault.credential.resolved`.
 - SDKs: `vault.exchangeReference` (TypeScript), `vault.exchange_reference`
   (Python) and `Vault.ExchangeReference` (Go).
+### Documentation
+- Current-authority verification (`currentAuthorityCheck: true` in the gateway,
+  `currentAuthority` in the SDK verifiers) is the documented default for
+  stop-sensitive deployments: anywhere an emergency stop must take effect before
+  token expiry. The gateway page and README gain a stop-sensitive deployments
+  section and the `currentAuthorityCheck` and `grantexBaseUrl` configuration
+  rows; the execution-authority guide and the platform baseline say the same.
 
 ### Data region follow-ups (auth service, SDKs, @grantex/gateway)
 - `POST /v1/authorize` reads `dataRegion` only when `DATA_REGION_ISSUANCE_ENABLED=true`;
