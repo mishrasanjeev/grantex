@@ -15,7 +15,7 @@ grantex-fastapi>=0.1.5            # FastAPI middleware (requires: fastapi>=0.115
 grantex-crewai>=0.1.7             # CrewAI integration
 grantex-openai-agents>=0.1.6      # OpenAI Agents SDK integration
 grantex-adk>=0.1.6                # Google ADK integration
-grantex-a2a>=0.1.4                # A2A Protocol Bridge (Python)
+grantex-a2a>=0.1.5                # A2A Protocol Bridge (Python)
 grantex-gemma>=0.1.1              # Offline auth for Gemma on-device agents
 grantex-strands>=0.1.1            # Strands Agents SDK integration
 
