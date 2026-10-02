@@ -213,7 +213,7 @@ const SCOPE_LEVELS: Record<string, number> = { read: 0, write: 1, delete: 2, adm
 
 /**
  * Read a grant's scopes for one connector honouring the tool segment:
- * `tool:<connector>:<permission>[:<tool>][:capped:<N>]`. The permission for `tool`
+ * `tool:<connector>:<permission>[:<tool>|:*][:capped:<N>]`. The permission for `tool`
  * is the best of the connector-level scopes and the scopes naming that tool.
  * When the connector has scopes but every one names another tool, the call is
  * not covered (`scopeMissing`), whatever permission those scopes carry.
@@ -234,7 +234,8 @@ function readToolQualifiedScopes(
     anyScope = true;
     const level = SCOPE_LEVELS[parts[2]] ?? -1;
     const qualifier = parts[3];
-    if (qualifier === undefined || qualifier === '' || qualifier === 'capped') {
+    // No qualifier, a `*` qualifier and a cap are all connector-wide.
+    if (qualifier === undefined || qualifier === '' || qualifier === '*' || qualifier === 'capped') {
       connectorLevel = true;
       if (level > best) best = level;
       continue;

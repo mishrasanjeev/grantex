@@ -172,7 +172,7 @@ def _read_tool_qualified_scopes(
 ) -> tuple[str | None, bool, list[str]]:
     """Read a grant's scopes for one connector honouring the tool segment.
 
-    ``tool:<connector>:<permission>[:<tool>][:capped:<N>]``: the permission for
+    ``tool:<connector>:<permission>[:<tool>|:*][:capped:<N>]``: the permission for
     ``tool`` is the best of the connector-level scopes and the scopes naming
     that tool. When the connector has scopes but every one names another tool,
     the call is not covered (the second value is True), whatever permission
@@ -190,7 +190,8 @@ def _read_tool_qualified_scopes(
         any_scope = True
         level = _SCOPE_LEVELS.get(parts[2], -1)
         qualifier = parts[3] if len(parts) > 3 else ""
-        if qualifier in ("", "capped"):
+        # No qualifier, a ``*`` qualifier and a cap are all connector-wide.
+        if qualifier in ("", "*", "capped"):
             connector_level = True
             best = max(best, level)
             continue

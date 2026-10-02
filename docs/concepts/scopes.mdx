@@ -110,7 +110,8 @@ Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kum
 ## Tool-qualified scopes
 
 A scope may name one tool: `tool:<connector>:<permission>:<tool>` (an optional
-`:capped:<N>` may follow either form). By default `enforce()` reads such a scope
+`:capped:<N>` may follow either form; a `*` in the tool position is connector-wide,
+like no tool segment). By default `enforce()` reads such a scope
 as the connector permission, so `tool:acme_kyb:read:get_case` covers every read
 tool on `acme_kyb`. With `toolQualifiedScopes: true` (`tool_qualified_scopes=True`
 in Python) the tool segment is honoured: a tool's permission comes from the

@@ -1,5 +1,5 @@
 {
-  "description": "Tool-qualified scope cases for enforce() shared by the Python and TypeScript SDKs. A scope is tool:<connector>:<permission>[:<tool>][:capped:<N>]; the optional fourth segment names one tool. 'scopes' are the grant's scopes, 'tool' the tool called on connector acme_kyb, 'required' the permission the manifest declares for it, 'option' whether toolQualifiedScopes / tool_qualified_scopes is on (the default in this release is off). 'expect' is 'allow' or '<reason_code>/<sub_reason>' ('' when there is no sub-reason).",
+  "description": "Tool-qualified scope cases for enforce() shared by the Python and TypeScript SDKs. A scope is tool:<connector>:<permission>[:<tool>][:capped:<N>]; the optional fourth segment names one tool, or is * for every tool (connector-wide, like no segment). 'scopes' are the grant's scopes, 'tool' the tool called on connector acme_kyb, 'required' the permission the manifest declares for it, 'option' whether toolQualifiedScopes / tool_qualified_scopes is on (the default in this release is off). 'expect' is 'allow' or '<reason_code>/<sub_reason>' ('' when there is no sub-reason).",
   "cases": [
     {
       "name": "connector-level scope covers every tool",
@@ -18,6 +18,27 @@
       ],
       "tool": "get_case",
       "required": "read",
+      "option": true,
+      "expect": "allow"
+    },
+    {
+      "name": "a * qualifier is connector-wide",
+      "scopes": [
+        "tool:acme_kyb:read:*"
+      ],
+      "tool": "get_case",
+      "required": "read",
+      "option": true,
+      "expect": "allow"
+    },
+    {
+      "name": "a * qualifier beside tool scopes keeps the connector reading",
+      "scopes": [
+        "tool:acme_kyb:write:*",
+        "tool:acme_kyb:read:verify_business"
+      ],
+      "tool": "get_case",
+      "required": "write",
       "option": true,
       "expect": "allow"
     },
