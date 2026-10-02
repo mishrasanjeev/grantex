@@ -11,10 +11,13 @@ import {
   buildToolsAuthorizationDetails,
   connectorsInScopes,
   describePurpose,
+  isDataRegion,
   isKnownPurpose,
   narrowToolsAuthorizationDetails,
   PURPOSE_VOCABULARY,
   purposeOfToolsAuthorizationDetails,
+  resolveRequestedDataRegion,
+  type ToolsAuthorizationDetail,
 } from '../src/lib/purpose.js';
 
 let app: FastifyInstance;
@@ -555,3 +558,93 @@ describe('migration 095', () => {
     expect(text).not.toMatch(/\b(DROP|UPDATE|DELETE|NOT NULL)\b/);
   });
 });
+
+describe('POST /v1/authorize with dataRegion', () => {
+  function seedAuthorize(): void {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]); // subscription
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]); // grant count
+    sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id }]); // agent
+    sqlMock.mockResolvedValueOnce([]); // policies
+    sqlMock.mockResolvedValueOnce([]); // insert
+  }
+
+  it('binds the region to every tools entry alongside the purpose', async () => {
+    seedAuthorize();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: { agentId: TEST_AGENT.id, principalId: 'user_123', scopes: TOOL_SCOPES, purpose: 'aml.cdd.onboarding', dataRegion: ' IN ' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ dataRegion: string }>().dataRegion).toBe('in');
+    const insert = sqlCall('INSERT INTO auth_requests');
+    expect(insert).toBeDefined();
+    expect(insert!.slice(1)).toContainEqual([
+      { type: 'urn:grantex:tools:v1', connector: 'acme_kyb', purpose: 'aml.cdd.onboarding', data_region: 'in' },
+    ]);
+  });
+
+  it('binds the region without a purpose', async () => {
+    seedAuthorize();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: { agentId: TEST_AGENT.id, principalId: 'user_123', scopes: TOOL_SCOPES, dataRegion: 'eu' },
+    });
+    expect(res.statusCode).toBe(201);
+    const insert = sqlCall('INSERT INTO auth_requests');
+    expect(insert!.slice(1)).toContainEqual([{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'eu' }]);
+  });
+
+  it.each([['IN-'], ['i'], ['in_south'], ['europe-west1-long-qualifier-x'], [''], [7]])(
+    'rejects dataRegion %j before touching the database',
+    async (dataRegion) => {
+      seedAuth();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/authorize',
+        headers: authHeader(),
+        payload: { agentId: TEST_AGENT.id, principalId: 'user_123', scopes: TOOL_SCOPES, dataRegion },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json<{ code: string }>().code).toBe('INVALID_DATA_REGION');
+      expect(sqlCall('INSERT INTO auth_requests')).toBeUndefined();
+    },
+  );
+
+  it('needs a connector scope to bind to', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/authorize',
+      headers: authHeader(),
+      payload: { agentId: TEST_AGENT.id, principalId: 'user_123', scopes: ['files:read'], dataRegion: 'in' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ code: string }>().code).toBe('INVALID_DATA_REGION');
+  });
+});
+
+describe('resolveRequestedDataRegion', () => {
+  it('leaves details alone without a region and binds every entry with one', () => {
+    const details = DETAILS as ToolsAuthorizationDetail[];
+    expect(resolveRequestedDataRegion(undefined, TOOL_SCOPES, details)).toEqual({ ok: true, dataRegion: null, details });
+    expect(resolveRequestedDataRegion('In-South', TOOL_SCOPES, details)).toEqual({
+      ok: true,
+      dataRegion: 'in-south',
+      details: [{ ...DETAILS[0], data_region: 'in-south' }],
+    });
+    expect(resolveRequestedDataRegion('in', TOOL_SCOPES, null)).toEqual({
+      ok: true,
+      dataRegion: 'in',
+      details: [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in' }],
+    });
+    expect(resolveRequestedDataRegion('in', ['files:read'], null).ok).toBe(false);
+    expect(isDataRegion('eu')).toBe(true);
+    expect(isDataRegion('e')).toBe(false);
+  });
+});
+

@@ -13,7 +13,7 @@ import { checkRateLimit } from '../lib/rate-limit.js';
 import { assertValidRedirectUri } from '../lib/url-security.js';
 import { isValidPkceChallenge } from '../lib/pkce.js';
 import { validateResourceServers } from '../lib/agent-security.js';
-import { resolveRequestedPurpose } from '../lib/purpose.js';
+import { resolveRequestedDataRegion, resolveRequestedPurpose } from '../lib/purpose.js';
 import {
   PassportBindingError,
   checkPassportParameter,
@@ -40,6 +40,8 @@ interface AuthorizeBody {
   codeChallenge?: string;
   codeChallengeMethod?: string;
   purpose?: string;
+  /** The data region the grant's data may be processed in (`in`, `eu`, ...); carried in the token's tools entries. */
+  dataRegion?: string;
   /** An Agent Passport SD-JWT; read only when PASSPORT_BOUND_GRANTS_ENABLED=true (spec/passport-binding.md). */
   passport?: unknown;
   /**
@@ -66,7 +68,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     if (typeof body !== 'object' || body === null || Array.isArray(body)) {
       return reply.status(400).send({ message: 'Request body must be a JSON object', code: 'BAD_REQUEST', requestId: request.id });
     }
-    const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience, codeChallenge, codeChallengeMethod, purpose } = body;
+    const { agentId, principalId, scopes, redirectUri, state, expiresIn = '24h', audience, codeChallenge, codeChallengeMethod, purpose, dataRegion } = body;
     // Off, `passport` is ignored like any member this route does not know.
     const passportBound = config.passportBoundGrantsEnabled && body.passport !== undefined;
 
@@ -113,6 +115,12 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
     const requestedPurpose = resolveRequestedPurpose(purpose, scopes);
     if (!requestedPurpose.ok) {
       return reply.status(400).send({ message: requestedPurpose.message, code: 'INVALID_PURPOSE', requestId: request.id });
+    }
+    // A data region binds where the grant's data may be processed; relying
+    // parties with the region check on refuse the token elsewhere.
+    const requestedRegion = resolveRequestedDataRegion(dataRegion, scopes, requestedPurpose.details);
+    if (!requestedRegion.ok) {
+      return reply.status(400).send({ message: requestedRegion.message, code: 'INVALID_DATA_REGION', requestId: request.id });
     }
     if (redirectUri !== undefined) {
       if (typeof redirectUri !== 'string' || redirectUri.length === 0 || redirectUri.length > 2048) {
@@ -385,7 +393,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
           ${codeChallengeMethod ?? null},
           ${agent.key_thumbprint ?? null},
           ${requestedPurpose.purpose},
-          ${requestedPurpose.details === null ? null : sql.json(requestedPurpose.details as never)}
+          ${requestedRegion.details === null ? null : sql.json(requestedRegion.details as never)}
         )
       `;
     } else {
@@ -408,7 +416,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
           ${codeChallengeMethod ?? null},
           ${binding.key_thumbprint},
           ${requestedPurpose.purpose},
-          ${requestedPurpose.details === null ? null : sql.json(requestedPurpose.details as never)},
+          ${requestedRegion.details === null ? null : sql.json(requestedRegion.details as never)},
           ${sql.json(binding as never)}
         )
       `;
@@ -421,6 +429,7 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       consentUrl,
       expiresAt: expiresAt.toISOString(),
       ...(requestedPurpose.purpose !== null ? { purpose: requestedPurpose.purpose } : {}),
+      ...(requestedRegion.dataRegion !== null ? { dataRegion: requestedRegion.dataRegion } : {}),
     };
 
     if (isSandbox) {

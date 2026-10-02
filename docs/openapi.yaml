@@ -3681,6 +3681,17 @@ paths:
                     Issued tokens carry it in `authorization_details` entries of type
                     `urn:grantex:tools:v1`, one per connector. Rejected with `INVALID_PURPOSE`.
                   example: aml.cdd.onboarding
+                dataRegion:
+                  type: string
+                  maxLength: 24
+                  pattern: '^[A-Za-z]{2}(?:-[A-Za-z0-9]{1,16})?$'
+                  description: |
+                    The data region the grant's data may be processed in (`in`, `eu`, `in-south`),
+                    lowercased when stored. Requires at least one `tool:<connector>:<permission>`
+                    scope. Issued tokens carry it as `data_region` on each `urn:grantex:tools:v1`
+                    entry; relying parties with the region check on refuse the token outside it.
+                    Rejected with `INVALID_DATA_REGION`.
+                  example: in
                 passport:
                   type: string
                   maxLength: 16384
