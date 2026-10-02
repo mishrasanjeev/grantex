@@ -81,6 +81,11 @@ export const PurposeSubReason = {
 export const ToolSubReason = {
   /** The grant's tools entry for the connector does not list the tool. */
   NOT_IN_AUTHORIZATION_DETAILS: 'not_in_authorization_details',
+  /**
+   * Every scope the grant holds for the connector names a tool, and none names this
+   * one (`toolQualifiedScopes: true`). `details` carries `tool_scopes`.
+   */
+  TOOL_SCOPE_MISSING: 'tool_scope_missing',
 } as const;
 
 /**

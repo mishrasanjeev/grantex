@@ -15,6 +15,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `@grantex/gateway`: a token whose tools entries repeat a connector is refused
   as `TOKEN_INVALID` instead of the later region silently replacing the earlier.
 - The risk-tier example manifest names the canonical schema id.
+### Tool-qualified scopes (TypeScript SDK, Python SDK)
+- `enforce()` can honour the tool segment of `tool:<connector>:<permission>:<tool>`
+  scopes (FINDINGS G-144): with `toolQualifiedScopes: true` /
+  `tool_qualified_scopes=True`, a tool's permission comes from connector-level
+  scopes and scopes naming that tool, and a connector whose scopes all name
+  other tools denies with `tool_not_granted` / `tool_scope_missing` (`details`
+  carries `tool_scopes`); a `*` in the tool position is connector-wide. Off by
+  default in this release, so a tool-qualified
+  scope is still read as the connector permission until a deployment turns
+  it on; the next major flips the default. Shared cases in
+  `spec/examples/enforce-tool-qualified-scopes.json`. The Go SDK has no
+  `enforce` and is unaffected.
 
 ### Risk tiers on tool manifests (spec, TypeScript SDK, Python SDK, @grantex/mcp-auth)
 - A tool object may declare `risk_tier: low | medium | high` (manifest 0.6). A

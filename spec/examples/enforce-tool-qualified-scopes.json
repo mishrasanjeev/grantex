@@ -1,0 +1,151 @@
+{
+  "description": "Tool-qualified scope cases for enforce() shared by the Python and TypeScript SDKs. A scope is tool:<connector>:<permission>[:<tool>][:capped:<N>]; the optional fourth segment names one tool, or is * for every tool (connector-wide, like no segment). 'scopes' are the grant's scopes, 'tool' the tool called on connector acme_kyb, 'required' the permission the manifest declares for it, 'option' whether toolQualifiedScopes / tool_qualified_scopes is on (the default in this release is off). 'expect' is 'allow' or '<reason_code>/<sub_reason>' ('' when there is no sub-reason).",
+  "cases": [
+    {
+      "name": "connector-level scope covers every tool",
+      "scopes": [
+        "tool:acme_kyb:read"
+      ],
+      "tool": "get_case",
+      "required": "read",
+      "option": true,
+      "expect": "allow"
+    },
+    {
+      "name": "a scope naming the tool allows it",
+      "scopes": [
+        "tool:acme_kyb:read:get_case"
+      ],
+      "tool": "get_case",
+      "required": "read",
+      "option": true,
+      "expect": "allow"
+    },
+    {
+      "name": "a * qualifier is connector-wide",
+      "scopes": [
+        "tool:acme_kyb:read:*"
+      ],
+      "tool": "get_case",
+      "required": "read",
+      "option": true,
+      "expect": "allow"
+    },
+    {
+      "name": "a * qualifier beside tool scopes keeps the connector reading",
+      "scopes": [
+        "tool:acme_kyb:write:*",
+        "tool:acme_kyb:read:verify_business"
+      ],
+      "tool": "get_case",
+      "required": "write",
+      "option": true,
+      "expect": "allow"
+    },
+    {
+      "name": "a scope naming another tool does not",
+      "scopes": [
+        "tool:acme_kyb:read:verify_business"
+      ],
+      "tool": "get_case",
+      "required": "read",
+      "option": true,
+      "expect": "tool_not_granted/tool_scope_missing"
+    },
+    {
+      "name": "two scopes naming other tools do not",
+      "scopes": [
+        "tool:acme_kyb:read:verify_business",
+        "tool:acme_kyb:read:screen_person"
+      ],
+      "tool": "get_case",
+      "required": "read",
+      "option": true,
+      "expect": "tool_not_granted/tool_scope_missing"
+    },
+    {
+      "name": "a connector-level scope beside tool scopes keeps the connector reading",
+      "scopes": [
+        "tool:acme_kyb:read",
+        "tool:acme_kyb:read:verify_business"
+      ],
+      "tool": "get_case",
+      "required": "read",
+      "option": true,
+      "expect": "allow"
+    },
+    {
+      "name": "the permission for a tool comes from scopes naming it",
+      "scopes": [
+        "tool:acme_kyb:read:get_case",
+        "tool:acme_kyb:write:verify_business"
+      ],
+      "tool": "get_case",
+      "required": "write",
+      "option": true,
+      "expect": "permission_insufficient/"
+    },
+    {
+      "name": "a connector-level permission still raises a named tool",
+      "scopes": [
+        "tool:acme_kyb:write",
+        "tool:acme_kyb:read:get_case"
+      ],
+      "tool": "get_case",
+      "required": "write",
+      "option": true,
+      "expect": "allow"
+    },
+    {
+      "name": "a capped connector-level scope is connector-level (the cap then asks for an amount)",
+      "scopes": [
+        "tool:acme_kyb:read:capped:100"
+      ],
+      "tool": "get_case",
+      "required": "read",
+      "option": true,
+      "expect": "cap_exceeded/amount_missing"
+    },
+    {
+      "name": "the agenticorg prefix reads the same way",
+      "scopes": [
+        "agenticorg:acme_kyb:read:verify_business"
+      ],
+      "tool": "get_case",
+      "required": "read",
+      "option": true,
+      "expect": "tool_not_granted/tool_scope_missing"
+    },
+    {
+      "name": "scopes on another connector say nothing",
+      "scopes": [
+        "tool:hubspot:read:get_contact"
+      ],
+      "tool": "get_case",
+      "required": "read",
+      "option": true,
+      "expect": "tool_not_granted/"
+    },
+    {
+      "name": "off: a scope naming another tool is read as the connector permission",
+      "scopes": [
+        "tool:acme_kyb:read:verify_business"
+      ],
+      "tool": "get_case",
+      "required": "read",
+      "option": false,
+      "expect": "allow"
+    },
+    {
+      "name": "off: the permission is the best on the connector",
+      "scopes": [
+        "tool:acme_kyb:read:get_case",
+        "tool:acme_kyb:write:verify_business"
+      ],
+      "tool": "get_case",
+      "required": "write",
+      "option": false,
+      "expect": "allow"
+    }
+  ]
+}

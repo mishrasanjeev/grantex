@@ -164,6 +164,49 @@ def _per_call_revocation_check(configured: str, requested: str | None) -> str:
 AUDIENCE_CHECK_MODES = ("on", "off")
 
 
+_SCOPE_LEVELS = {"read": 0, "write": 1, "delete": 2, "admin": 3}
+
+
+def _read_tool_qualified_scopes(
+    scopes: list[str], connector: str, tool: str
+) -> tuple[str | None, bool, list[str]]:
+    """Read a grant's scopes for one connector honouring the tool segment.
+
+    ``tool:<connector>:<permission>[:<tool>|:*][:capped:<N>]``: the permission for
+    ``tool`` is the best of the connector-level scopes and the scopes naming
+    that tool. When the connector has scopes but every one names another tool,
+    the call is not covered (the second value is True), whatever permission
+    those scopes carry. The third value lists the tools the scopes name.
+    """
+    best = -1
+    any_scope = False
+    connector_level = False
+    tool_named = False
+    named: set[str] = set()
+    for scope in scopes:
+        parts = scope.split(":")
+        if len(parts) < 3 or parts[0] not in ("tool", "agenticorg") or parts[1] != connector or not parts[2]:
+            continue
+        any_scope = True
+        level = _SCOPE_LEVELS.get(parts[2], -1)
+        qualifier = parts[3] if len(parts) > 3 else ""
+        # No qualifier, a ``*`` qualifier and a cap are all connector-wide.
+        if qualifier in ("", "*", "capped"):
+            connector_level = True
+            best = max(best, level)
+            continue
+        named.add(qualifier)
+        if qualifier == tool:
+            tool_named = True
+            best = max(best, level)
+    if not any_scope:
+        return None, False, []
+    if not connector_level and not tool_named:
+        return None, True, sorted(named)
+    permission = next((name for name, level in _SCOPE_LEVELS.items() if level == best), None)
+    return permission, False, sorted(named)
+
+
 def _check_data_region_check(mode: object) -> str:
     if mode not in ("on", "off"):
         raise ValueError(f"data_region_check must be one of on, off, not {mode!r}")
@@ -314,6 +357,7 @@ class Grantex:
         audience_check: str = "on",
         data_region: str | None = None,
         data_region_check: str = "off",
+        tool_qualified_scopes: bool = False,
     ) -> None:
         resolved_key = (api_key or os.environ.get("GRANTEX_API_KEY", "")).strip()
         if not resolved_key:
@@ -351,6 +395,12 @@ class Grantex:
         # is denied; "off" (the default in this release) ignores data_region.
         self._data_region_check = _check_data_region_check(data_region_check)
         self._data_region = _check_expected_data_region(data_region, self._data_region_check)
+        # Read the tool segment of tool:<connector>:<permission>:<tool> scopes in
+        # enforce() (FINDINGS G-144). Off (the default in this release) reads such a
+        # scope as the connector permission, as earlier releases did.
+        if not isinstance(tool_qualified_scopes, bool):
+            raise ValueError(f"tool_qualified_scopes must be a bool, not {tool_qualified_scopes!r}")
+        self._tool_qualified_scopes = tool_qualified_scopes
 
         #: The registry this client talks to, for routes outside the API-key surface.
         self.base_url = base_url.rstrip("/")
@@ -825,8 +875,21 @@ class Grantex:
                 DenialReason.MANIFEST_UNKNOWN_TOOL, ManifestSubReason.UNKNOWN_TOOL,
             )
 
-        # 5. Find the best matching scope for this connector
-        granted_permission = self._resolve_granted_permission(scopes, connector)
+        # 5. Find the best matching scope for this connector. With
+        #    tool_qualified_scopes the tool segment of a scope is honoured: only
+        #    connector-level scopes and scopes naming this tool count, and a
+        #    connector whose scopes all name other tools does not cover this
+        #    one (FINDINGS G-144).
+        if self._tool_qualified_scopes:
+            granted_permission, scope_missing, named_tools = _read_tool_qualified_scopes(scopes, connector, tool)
+            if scope_missing:
+                return _denied(
+                    f"Grant scopes on connector '{connector}' name other tools, not '{tool}'.",
+                    DenialReason.TOOL_NOT_GRANTED, ToolSubReason.TOOL_SCOPE_MISSING,
+                    {"tool_scopes": named_tools},
+                )
+        else:
+            granted_permission = self._resolve_granted_permission(scopes, connector)
         if not granted_permission:
             return _denied(
                 f"No scope grants access to connector '{connector}'.",
