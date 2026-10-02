@@ -1032,6 +1032,20 @@ export interface ExchangeCredentialResponse {
   metadata: Record<string, unknown>;
 }
 
+export interface ExchangeCredentialReferenceParams {
+  service: string;
+}
+
+/** A credential handed out by reference: the relying party resolves it; the agent never holds the secret. */
+export interface ExchangeCredentialReferenceResponse {
+  credentialRef: string;
+  service: string;
+  credentialType: string;
+  tokenExpiresAt: string | null;
+  metadata: Record<string, unknown>;
+  referenceExpiresAt: string;
+}
+
 // ─── Budgets ─────────────────────────────────────────────────────────────────
 
 export interface AllocateBudgetParams {

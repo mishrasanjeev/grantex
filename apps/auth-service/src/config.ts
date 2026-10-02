@@ -220,6 +220,17 @@ export const config = {
   get passportBoundGrantsEnabled() { return process.env['PASSPORT_BOUND_GRANTS_ENABLED'] === 'true'; },
   /** Read `dataRegion` on POST /v1/authorize and bind it into the token's tools entries. Off, the member is ignored. */
   get dataRegionIssuanceEnabled() { return process.env['DATA_REGION_ISSUANCE_ENABLED'] === 'true'; },
+  /**
+   * Read `delivery: 'reference'` on POST /v1/vault/credentials/exchange and hand out a
+   * short-lived credential reference instead of the raw credential; the relying party
+   * redeems it with POST /v1/vault/credentials/resolve. Off, that delivery is refused.
+   */
+  get vaultCredentialReferencesEnabled() { return process.env['VAULT_CREDENTIAL_REFERENCES_ENABLED'] === 'true'; },
+  /** How long a credential reference can be resolved, in seconds (30 to 3600; 300 by default). */
+  get vaultCredentialReferenceTtlSeconds() {
+    const raw = Number(process.env['VAULT_CREDENTIAL_REFERENCE_TTL_SECONDS'] ?? '300');
+    return Number.isFinite(raw) ? Math.min(3600, Math.max(30, Math.floor(raw))) : 300;
+  },
   // The registry's unauthenticated reads (GET /v1/registry/issuers). Off by
   // default: new endpoints ship enabled only behind authentication, so these
   // are registered only for exactly 'true', read when the app is built.

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getSql } from '../db/client.js';
-import { newVaultCredentialId } from '../lib/ids.js';
+import { newVaultCredentialId, newVaultCredentialReferenceId } from '../lib/ids.js';
+import { getRedis } from '../redis/client.js';
 import { encrypt, decrypt } from '../lib/vault-crypto.js';
 import { checkActiveGrantToken } from '../lib/active-grant-token.js';
 import { config } from '../config.js';
@@ -19,7 +20,16 @@ interface StoreCredentialBody {
 
 interface ExchangeCredentialBody {
   service: string;
+  /** `token` (the default) returns the credential; `reference` returns a handle the relying party resolves. */
+  delivery?: string;
 }
+
+interface ResolveCredentialBody {
+  credentialRef: string;
+  grantId: string;
+}
+
+const CREDENTIAL_REFERENCE_PATTERN = /^vcr_[0-9A-HJKMNP-TV-Z]{26}$/;
 
 function toCredentialResponse(row: Record<string, unknown>) {
   return {
@@ -256,6 +266,23 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
           requestId: request.id,
         });
       }
+      const delivery = request.body.delivery ?? 'token';
+      if (delivery !== 'token' && delivery !== 'reference') {
+        return reply.status(400).send({
+          message: 'delivery must be "token" or "reference"',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+      if (delivery === 'reference' && !config.vaultCredentialReferencesEnabled) {
+        // The agent asked not to receive the credential; handing it over anyway
+        // would defeat the request, so the exchange is refused instead.
+        return reply.status(400).send({
+          message: 'Credential references are not enabled on this auth service (VAULT_CREDENTIAL_REFERENCES_ENABLED)',
+          code: 'CREDENTIAL_REFERENCE_DISABLED',
+          requestId: request.id,
+        });
+      }
 
       const sql = getSql();
       const rows = await sql`
@@ -275,6 +302,41 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
+      if (delivery === 'reference') {
+        // By reference: the agent gets a handle bound to its grant; the relying
+        // party that holds the developer's API key (the gateway) resolves it and
+        // injects the credential upstream, so the agent never holds the secret.
+        const referenceId = newVaultCredentialReferenceId();
+        // A reference never outlives the grant token that obtained it.
+        const expiresAt = new Date(Math.min(
+          Date.now() + config.vaultCredentialReferenceTtlSeconds * 1000,
+          claims.exp * 1000,
+        ));
+        await sql`
+          INSERT INTO vault_credential_references
+            (id, developer_id, vault_credential_id, grant_id, principal_id, agent_did, service, expires_at)
+          VALUES (
+            ${referenceId}, ${claims.dev}, ${cred['id'] as string}, ${claims.grnt},
+            ${claims.sub}, ${claims.agt}, ${service}, ${expiresAt.toISOString()}
+          )
+        `;
+        emitEvent(claims.dev, 'vault.credential.reference_issued', {
+          credentialId: cred['id'],
+          referenceId,
+          grantId: claims.grnt,
+          principalId: claims.sub,
+          service,
+        }).catch(() => {});
+        return reply.send({
+          credentialRef: referenceId,
+          service,
+          credentialType: cred['credential_type'],
+          tokenExpiresAt: cred['token_expires_at'] ?? null,
+          metadata: cred['metadata'] ?? {},
+          referenceExpiresAt: expiresAt.toISOString(),
+        });
+      }
+
       const accessToken = decrypt(cred['access_token'] as string);
 
       emitEvent(claims.dev, 'vault.credential.exchanged', {
@@ -290,6 +352,105 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
         credentialType: cred['credential_type'],
         tokenExpiresAt: cred['token_expires_at'] ?? null,
         metadata: cred['metadata'] ?? {},
+      });
+    },
+  );
+
+  // POST /v1/vault/credentials/resolve — redeem a credential reference (developer API key: the relying party)
+  app.post<{ Body: ResolveCredentialBody }>(
+    '/v1/vault/credentials/resolve',
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const body = (request.body ?? {}) as Partial<ResolveCredentialBody>;
+      const credentialRef = typeof body.credentialRef === 'string' ? body.credentialRef : '';
+      const grantId = typeof body.grantId === 'string' ? body.grantId.trim() : '';
+      if (!CREDENTIAL_REFERENCE_PATTERN.test(credentialRef) || !grantId || grantId.length > 128) {
+        return reply.status(400).send({
+          message: 'credentialRef (vcr_...) and grantId are required',
+          code: 'BAD_REQUEST',
+          requestId: request.id,
+        });
+      }
+
+      const sql = getSql();
+      const developerId = request.developer.id;
+      const rows = await sql`
+        SELECT r.id, r.grant_id, r.principal_id, r.agent_did, r.service, r.expires_at,
+               c.access_token, c.credential_type, c.token_expires_at, c.metadata
+        FROM vault_credential_references r
+        JOIN vault_credentials c ON c.id = r.vault_credential_id
+        WHERE r.id = ${credentialRef} AND r.developer_id = ${developerId}
+      `;
+      const ref = rows[0];
+      if (!ref) {
+        return reply.status(404).send({
+          message: 'Credential reference not found',
+          code: 'NOT_FOUND',
+          requestId: request.id,
+        });
+      }
+      if (ref['grant_id'] !== grantId) {
+        return reply.status(403).send({
+          message: 'The credential reference was issued to another grant',
+          code: 'GRANT_MISMATCH',
+          requestId: request.id,
+        });
+      }
+      if (new Date(ref['expires_at'] as string) <= new Date()) {
+        return reply.status(410).send({
+          message: 'The credential reference has expired; the agent must exchange again',
+          code: 'CREDENTIAL_REFERENCE_EXPIRED',
+          requestId: request.id,
+        });
+      }
+
+      // Current authority: the grant must still be active. A revocation or an
+      // emergency stop ends the reference with it, so a stopped agent's
+      // credential is never injected again. The revocation cache is consulted
+      // first; the grant row decides when the cache cannot be read.
+      let revokedInCache = false;
+      try {
+        revokedInCache = Boolean(await getRedis().get(`revoked:grant:${grantId}`));
+      } catch {
+        revokedInCache = false;
+      }
+      const grantRows = await sql`
+        SELECT status, expires_at FROM grants WHERE id = ${grantId} AND developer_id = ${developerId}
+      `;
+      const grantRow = grantRows[0];
+      const grantExpired = grantRow !== undefined
+        && grantRow['expires_at'] !== null
+        && new Date(grantRow['expires_at'] as string) <= new Date();
+      if (revokedInCache || grantRow?.['status'] !== 'active' || grantExpired) {
+        return reply.status(403).send({
+          message: 'The grant behind this credential reference is no longer active',
+          code: 'GRANT_INACTIVE',
+          requestId: request.id,
+        });
+      }
+
+      const accessToken = decrypt(ref['access_token'] as string);
+      await sql`
+        UPDATE vault_credential_references
+        SET resolved_count = resolved_count + 1, last_resolved_at = NOW()
+        WHERE id = ${credentialRef}
+      `;
+      emitEvent(developerId, 'vault.credential.resolved', {
+        referenceId: credentialRef,
+        grantId,
+        principalId: ref['principal_id'],
+        service: ref['service'],
+      }).catch(() => {});
+
+      return reply.send({
+        accessToken,
+        service: ref['service'],
+        credentialType: ref['credential_type'],
+        tokenExpiresAt: ref['token_expires_at'] ?? null,
+        metadata: ref['metadata'] ?? {},
+        grantId,
+        principalId: ref['principal_id'],
+        agentDid: ref['agent_did'],
       });
     },
   );

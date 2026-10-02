@@ -16,6 +16,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the request with `CREDENTIAL_REF_INVALID`; an auth service that cannot be
   reached is `CREDENTIAL_RESOLVE_FAILED` (502), never a request forwarded without
   the credential. Off by default; the header is never forwarded upstream.
+### Credential references (auth service, SDKs)
+- `POST /v1/vault/credentials/exchange` takes `delivery: "reference"` and, with
+  `VAULT_CREDENTIAL_REFERENCES_ENABLED=true`, returns a short-lived credential
+  reference (`vcr_...`, `VAULT_CREDENTIAL_REFERENCE_TTL_SECONDS`, 300 by default)
+  instead of the credential. The relying party that holds the developer API key
+  redeems it with the new `POST /v1/vault/credentials/resolve`, which checks the
+  reference is the grant's, unexpired and that the grant is still active (a
+  revocation or an emergency stop ends the reference with it), and injects the
+  credential upstream itself; the agent never holds the secret. Off (the
+  default), a request for a reference is refused with
+  `CREDENTIAL_REFERENCE_DISABLED` rather than answered with the credential.
+  Events `vault.credential.reference_issued` and `vault.credential.resolved`.
+- SDKs: `vault.exchangeReference` (TypeScript), `vault.exchange_reference`
+  (Python) and `Vault.ExchangeReference` (Go).
 
 ### Data region follow-ups (auth service, SDKs, @grantex/gateway)
 - `POST /v1/authorize` reads `dataRegion` only when `DATA_REGION_ISSUANCE_ENABLED=true`;

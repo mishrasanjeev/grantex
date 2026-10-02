@@ -119,6 +119,28 @@ describe('VaultClient', () => {
     expect(body.service).toBe('google');
   });
 
+  it('exchangeReference() asks for delivery by reference and returns the reference', async () => {
+    const mockFetch = makeFetch(200, {
+      credentialRef: 'vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M',
+      service: 'google',
+      credentialType: 'oauth2',
+      tokenExpiresAt: null,
+      metadata: {},
+      referenceExpiresAt: '2026-04-01T00:05:00Z',
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const result = await grantex.vault.exchangeReference('grant.jwt.token', { service: 'google' });
+
+    expect(result.credentialRef).toBe('vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M');
+    expect(result).not.toHaveProperty('accessToken');
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/v1\/vault\/credentials\/exchange$/);
+    expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer grant.jwt.token');
+    expect(JSON.parse(init.body as string)).toEqual({ service: 'google', delivery: 'reference' });
+  });
+
   it('exchange() uses grant token auth, not API key', async () => {
     const mockFetch = makeFetch(200, {
       accessToken: 'token',

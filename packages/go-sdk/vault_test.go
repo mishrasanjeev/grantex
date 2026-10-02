@@ -192,6 +192,41 @@ func TestVaultExchange(t *testing.T) {
 	}
 }
 
+func TestVaultExchangeReference(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/vault/credentials/exchange" || r.Method != http.MethodPost {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		if auth := r.Header.Get("Authorization"); auth != "Bearer grant-token-xyz" {
+			t.Errorf("expected Bearer grant-token-xyz, got %s", auth)
+		}
+		var params map[string]string
+		json.NewDecoder(r.Body).Decode(&params)
+		if params["service"] != "github" || params["delivery"] != "reference" {
+			t.Errorf("expected service github with delivery reference, got %v", params)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ExchangeCredentialReferenceResponse{
+			CredentialRef:      "vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M",
+			Service:            "github",
+			CredentialType:     "oauth2",
+			ReferenceExpiresAt: "2026-04-01T00:05:00Z",
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL))
+	resp, err := client.Vault.ExchangeReference(context.Background(), "grant-token-xyz", ExchangeCredentialParams{
+		Service: "github",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.CredentialRef != "vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M" || resp.ReferenceExpiresAt != "2026-04-01T00:05:00Z" {
+		t.Errorf("unexpected reference response: %+v", resp)
+	}
+}
+
 func TestVaultExchangeError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

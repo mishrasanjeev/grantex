@@ -46,6 +46,8 @@ export const EVENT_TYPES = [
   'vault.credential.stored',
   'vault.credential.deleted',
   'vault.credential.exchanged',
+  'vault.credential.reference_issued',
+  'vault.credential.resolved',
   'consent_bundle.created',
   'consent_bundle.synced',
   'consent_bundle.revoked',

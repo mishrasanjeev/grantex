@@ -124,6 +124,34 @@ def test_exchange_credential() -> None:
 
 
 @respx.mock
+def test_exchange_credential_reference() -> None:
+    respx.post(f"{BASE_URL}/v1/vault/credentials/exchange").mock(
+        return_value=httpx.Response(200, json={
+            "credentialRef": "vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M",
+            "service": "google",
+            "credentialType": "oauth2",
+            "tokenExpiresAt": None,
+            "metadata": {},
+            "referenceExpiresAt": "2026-04-01T00:05:00Z",
+        })
+    )
+
+    client = Grantex(api_key="test_key", base_url=BASE_URL)
+    result = client.vault.exchange_reference(
+        "grant.jwt.token",
+        ExchangeCredentialParams(service="google"),
+    )
+
+    assert result.credential_ref == "vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M"
+    assert result.reference_expires_at == "2026-04-01T00:05:00Z"
+    assert not hasattr(result, "access_token")
+
+    request = respx.calls.last.request
+    assert request.headers["authorization"] == "Bearer grant.jwt.token"
+    assert json.loads(request.content) == {"service": "google", "delivery": "reference"}
+
+
+@respx.mock
 def test_list_credentials_without_filters() -> None:
     respx.get(f"{BASE_URL}/v1/vault/credentials").mock(
         return_value=httpx.Response(200, json={"credentials": []})

@@ -280,6 +280,8 @@ export type {
   ListVaultCredentialsParams,
   ListVaultCredentialsResponse,
   ExchangeCredentialParams,
+  ExchangeCredentialReferenceParams,
+  ExchangeCredentialReferenceResponse,
   ExchangeCredentialResponse,
   // Budgets
   AllocateBudgetParams,

@@ -1,6 +1,8 @@
 import type { HttpClient } from '../http.js';
 import type {
   ExchangeCredentialParams,
+  ExchangeCredentialReferenceParams,
+  ExchangeCredentialReferenceResponse,
   ExchangeCredentialResponse,
   ListVaultCredentialsParams,
   ListVaultCredentialsResponse,
@@ -52,6 +54,27 @@ export class VaultClient {
     grantToken: string,
     params: ExchangeCredentialParams,
   ): Promise<ExchangeCredentialResponse> {
+    return this.#exchange<ExchangeCredentialResponse>(grantToken, { service: params.service });
+  }
+
+  /**
+   * Exchange a grant token for a credential reference instead of the credential.
+   * The relying party (for example the gateway with `credentialReference: on`)
+   * resolves the reference and injects the credential upstream; this process
+   * never holds the secret. Needs `VAULT_CREDENTIAL_REFERENCES_ENABLED` on the
+   * auth service.
+   */
+  async exchangeReference(
+    grantToken: string,
+    params: ExchangeCredentialReferenceParams,
+  ): Promise<ExchangeCredentialReferenceResponse> {
+    return this.#exchange<ExchangeCredentialReferenceResponse>(grantToken, {
+      service: params.service,
+      delivery: 'reference',
+    });
+  }
+
+  async #exchange<T>(grantToken: string, body: Record<string, string>): Promise<T> {
     const url = `${this.#baseUrl}/v1/vault/credentials/exchange`;
     const response = await fetch(url, {
       method: 'POST',
@@ -60,18 +83,18 @@ export class VaultClient {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify(params),
+      body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      const body = await response.json().catch(() => null);
+      const payload = await response.json().catch(() => null);
       const message =
-        body && typeof body === 'object' && 'message' in body
-          ? String((body as Record<string, unknown>)['message'])
+        payload && typeof payload === 'object' && 'message' in payload
+          ? String((payload as Record<string, unknown>)['message'])
           : `HTTP ${response.status}`;
       throw new Error(message);
     }
 
-    return response.json() as Promise<ExchangeCredentialResponse>;
+    return response.json() as Promise<T>;
   }
 }
