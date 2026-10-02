@@ -262,3 +262,8 @@ c951f7bc24b43706a3203e6475b215b7c9773c58:packages/sdk-py/tests/fixtures/dpdp_ser
 c951f7bc24b43706a3203e6475b215b7c9773c58:packages/sdk-ts/tests/fixtures/dpdp-server-fixtures.json:jwt:14
 6cd3ba0b03c431fc7a728a290c0baa45aed3ca73:packages/dpdp/tests/fixtures/dpdp-server-fixtures.json:jwt:14
 016895b6b051229eff374f35c1b86952989db1be:packages/gateway/tests/proxy.test.ts:generic-api-key:73
+b670b91a9b5894d65d3474d81ca898f8b348c945:docs/api-reference/vault/exchange.mdx:generic-api-key:66
+b670b91a9b5894d65d3474d81ca898f8b348c945:docs/api-reference/vault/resolve.mdx:generic-api-key:37
+b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-py/tests/test_vault.py:generic-api-key:130
+b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-py/tests/test_vault.py:generic-api-key:145
+b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-ts/tests/vault.test.ts:generic-api-key:124

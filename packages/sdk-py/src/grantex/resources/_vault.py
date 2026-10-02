@@ -99,4 +99,7 @@ class VaultClient:
                 else f"HTTP {response.status_code}"
             )
             raise ValueError(message)
-        return response.json()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise ValueError("unexpected response from the vault exchange")
+        return data
