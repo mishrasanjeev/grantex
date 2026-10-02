@@ -261,3 +261,4 @@ c951f7bc24b43706a3203e6475b215b7c9773c58:packages/go-sdk/testdata/dpdp-server-fi
 c951f7bc24b43706a3203e6475b215b7c9773c58:packages/sdk-py/tests/fixtures/dpdp_server_fixtures.json:jwt:14
 c951f7bc24b43706a3203e6475b215b7c9773c58:packages/sdk-ts/tests/fixtures/dpdp-server-fixtures.json:jwt:14
 6cd3ba0b03c431fc7a728a290c0baa45aed3ca73:packages/dpdp/tests/fixtures/dpdp-server-fixtures.json:jwt:14
+016895b6b051229eff374f35c1b86952989db1be:packages/gateway/tests/proxy.test.ts:generic-api-key:73
