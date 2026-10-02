@@ -117,8 +117,11 @@ export async function authorizeRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(400).send({ message: requestedPurpose.message, code: 'INVALID_PURPOSE', requestId: request.id });
     }
     // A data region binds where the grant's data may be processed; relying
-    // parties with the region check on refuse the token elsewhere.
-    const requestedRegion = resolveRequestedDataRegion(dataRegion, scopes, requestedPurpose.details);
+    // parties with the region check on refuse the token elsewhere. Off, the
+    // member is ignored like any other member this route does not know.
+    const requestedRegion = resolveRequestedDataRegion(
+      config.dataRegionIssuanceEnabled ? dataRegion : undefined, scopes, requestedPurpose.details,
+    );
     if (!requestedRegion.ok) {
       return reply.status(400).send({ message: requestedRegion.message, code: 'INVALID_DATA_REGION', requestId: request.id });
     }

@@ -201,6 +201,8 @@ export interface AuthorizationRequest {
   effect?: 'allow' | 'deny';
   /** Purpose the request binds the grant to, when one was given. */
   purpose?: string;
+  /** Data region the request binds the grant to (lowercased), when one was given. */
+  dataRegion?: string;
 }
 
 // ─── Grants ───────────────────────────────────────────────────────────────────

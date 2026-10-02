@@ -81,8 +81,9 @@ entry per connector named by the grant's scopes:
 An entry of this type may also carry `tools` (tool names, or prefixes ending
 in `*`), `caps` and `data_region`. `enforce()` applies an entry's `tools` list
 in addition to the scopes. `data_region` names the region the grant's data
-may be processed in (`POST /v1/authorize` takes it as `dataRegion`, lowercased
-and bound to every connector the scopes name, with or without a purpose): a relying party with `dataRegionCheck: 'on'`
+may be processed in (`POST /v1/authorize` takes it as `dataRegion` when
+`DATA_REGION_ISSUANCE_ENABLED=true`, lowercased and bound to every connector the
+scopes name, with or without a purpose): a relying party with `dataRegionCheck: 'on'`
 (`data_region_check="on"` in Python, `dataRegionCheck: on` in the gateway)
 denies a call for a connector whose entry names another region with
 `region_mismatch` / `region_mismatch`, and one whose entry names a region

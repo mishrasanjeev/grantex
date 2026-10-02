@@ -218,6 +218,8 @@ export const config = {
   // /v1/authorize takes an Agent Passport and the grant is bound to it. Off by
   // default; off, the passport member is ignored as any unknown member is.
   get passportBoundGrantsEnabled() { return process.env['PASSPORT_BOUND_GRANTS_ENABLED'] === 'true'; },
+  /** Read `dataRegion` on POST /v1/authorize and bind it into the token's tools entries. Off, the member is ignored. */
+  get dataRegionIssuanceEnabled() { return process.env['DATA_REGION_ISSUANCE_ENABLED'] === 'true'; },
   // The registry's unauthenticated reads (GET /v1/registry/issuers). Off by
   // default: new endpoints ship enabled only behind authentication, so these
   // are registered only for exactly 'true', read when the app is built.

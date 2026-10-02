@@ -402,7 +402,12 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
             routeError(500, 'Authorization request purpose is inconsistent', 'INTERNAL_ERROR');
           }
         } else if (approvedDetails !== null) {
-          routeError(500, 'Authorization request purpose is inconsistent', 'INTERNAL_ERROR');
+          // Without a purpose the only valid tools entries are region-only ones
+          // (a data region bound at authorization); anything else is corrupt.
+          if (!Array.isArray(approvedDetails) || approvedDetails.length === 0
+              || purposeOfToolsAuthorizationDetails(approvedDetails as Array<Record<string, unknown>>) !== undefined) {
+            routeError(500, 'Authorization request purpose is inconsistent', 'INTERNAL_ERROR');
+          }
         }
         const grantAuthorizationDetails = approvedDetails as Array<Record<string, unknown>> | null;
 

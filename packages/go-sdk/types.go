@@ -139,6 +139,9 @@ type AuthorizationRequest struct {
 	ExpiresAt     string   `json:"expiresAt"`
 	Status        string   `json:"status"`
 	CreatedAt     string   `json:"createdAt"`
+	// Purpose and DataRegion are present when the request binds the grant to them.
+	Purpose       string   `json:"purpose,omitempty"`
+	DataRegion    string   `json:"dataRegion,omitempty"`
 }
 
 // --- Tokens ---

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it, expect, beforeAll } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { decodeJwt } from 'jose';
 import type { FastifyInstance } from 'fastify';
 import { buildTestApp, authHeader, seedAuth, sqlMock, mockRedis, TEST_AGENT, TEST_DEVELOPER } from './helpers.js';
@@ -560,6 +560,9 @@ describe('migration 095', () => {
 });
 
 describe('POST /v1/authorize with dataRegion', () => {
+  beforeAll(() => { process.env['DATA_REGION_ISSUANCE_ENABLED'] = 'true'; });
+  afterAll(() => { delete process.env['DATA_REGION_ISSUANCE_ENABLED']; });
+
   function seedAuthorize(): void {
     seedAuth();
     sqlMock.mockResolvedValueOnce([]); // subscription
@@ -625,6 +628,25 @@ describe('POST /v1/authorize with dataRegion', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json<{ code: string }>().code).toBe('INVALID_DATA_REGION');
+  });
+
+  it('is ignored while the flag is off', async () => {
+    delete process.env['DATA_REGION_ISSUANCE_ENABLED'];
+    try {
+      seedAuthorize();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/authorize',
+        headers: authHeader(),
+        payload: { agentId: TEST_AGENT.id, principalId: 'user_123', scopes: TOOL_SCOPES, dataRegion: 'not a region' },
+      });
+      expect(res.statusCode).toBe(201);
+      expect(res.json<{ dataRegion?: string }>().dataRegion).toBeUndefined();
+      const insert = sqlCall('INSERT INTO auth_requests');
+      expect(insert!.slice(1)).toContain(null);
+    } finally {
+      process.env['DATA_REGION_ISSUANCE_ENABLED'] = 'true';
+    }
   });
 });
 
