@@ -9,7 +9,7 @@
     "demo": "tsx agent.ts"
   },
   "dependencies": {
-    "@grantex/sdk": "^0.6.0",
+    "@grantex/sdk": "^0.8.1",
     "@grantex/x402": "^0.4.1",
     "jose": "^6.2.12",
     "tsx": "^4.23.15"
