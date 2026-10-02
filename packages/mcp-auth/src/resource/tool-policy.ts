@@ -22,6 +22,7 @@ export interface ManifestToolObject {
   caps?: { per_hour?: number; per_day?: number; per_case?: number };
   cost_units?: Record<string, number>;
   requires_decision?: boolean;
+  risk_tier?: 'low' | 'medium' | 'high';
   four_eyes_on?: string[];
   decision_fields?: string[];
 }
@@ -44,6 +45,8 @@ export interface ToolRequirement {
   /** Scopes the challenge asks for when the grant does not cover the tool. */
   requiredScopes: string[];
   requiresDecision: boolean;
+  /** Workload risk tier; `high` is why `requiresDecision` is true when the manifest did not say so. */
+  riskTier?: 'low' | 'medium' | 'high';
   allowedPurposes?: string[];
   caps?: ManifestToolObject['caps'];
   fourEyesOn?: string[];
@@ -117,11 +120,20 @@ export function toolPolicyFromManifests(manifests: readonly LoadedManifest[], op
       if (!isPermission(permission)) {
         throw new Error(`toolPolicyFromManifests: ${manifest.connector}.${tool} has an invalid permission`);
       }
-      const requiresDecision = object?.requires_decision === true;
       if (object && object.requires_decision !== undefined && typeof object.requires_decision !== 'boolean') {
         throw new Error(`toolPolicyFromManifests: ${manifest.connector}.${tool} requires_decision must be a boolean`);
       }
-      if (requiresDecision && permission === 'read') {
+      const riskTier = object?.risk_tier;
+      if (riskTier !== undefined && riskTier !== 'low' && riskTier !== 'medium' && riskTier !== 'high') {
+        throw new Error(`toolPolicyFromManifests: ${manifest.connector}.${tool} risk_tier must be one of low, medium, high`);
+      }
+      if (riskTier === 'high' && permission === 'read') {
+        throw new Error(`toolPolicyFromManifests: ${manifest.connector}.${tool} declares risk_tier high on a read tool`);
+      }
+      // A high-risk tool needs a decision grant on every call, whether or not the
+      // manifest also declares requires_decision.
+      const requiresDecision = object?.requires_decision === true || riskTier === 'high';
+      if (object?.requires_decision === true && permission === 'read') {
         throw new Error(`toolPolicyFromManifests: ${manifest.connector}.${tool} declares requires_decision on a read tool`);
       }
       const name = nameOf(manifest.connector, tool);
@@ -135,6 +147,7 @@ export function toolPolicyFromManifests(manifests: readonly LoadedManifest[], op
         permission,
         requiredScopes: [manifestScope(manifest.connector, permission)],
         requiresDecision,
+        ...(riskTier !== undefined ? { riskTier } : {}),
         ...(object?.allowed_purposes !== undefined ? { allowedPurposes: [...object.allowed_purposes] } : {}),
         ...(object?.caps !== undefined ? { caps: { ...object.caps } } : {}),
         ...(object?.four_eyes_on !== undefined ? { fourEyesOn: [...object.four_eyes_on] } : {}),
