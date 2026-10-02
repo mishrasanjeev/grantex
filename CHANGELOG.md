@@ -18,6 +18,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   when one of the entries names no region; the repeat was only caught when
   both entries carried one.
 
+### Agent lifecycle states (auth service, SDKs)
+- Behind `AGENT_LIFECYCLE_STATES_ENABLED` (off by default; off, the routes accept
+  `active` and `suspended` as before and ignore `status` at registration and
+  `statusReason`): an agent is `draft` (registered, not yet usable), `active`,
+  `suspended` (paused, resumable) or `retired` (final). `POST /v1/agents` may
+  register a draft; `PATCH /v1/agents/{id}` moves an agent along the lifecycle,
+  refuses a transition outside it with `409 AGENT_STATUS_TRANSITION` and one
+  that races another change with `409 AGENT_STATUS_CONFLICT` (the write is
+  conditional on the state that was checked), records `statusChangedAt`,
+  `statusReason` (kept by a same-state request) and `retiredAt`, and emits
+  `agent.status_changed`. The compliance summaries count `draft` and `retired`
+  agents alongside the other states. Issuance already requires `active`, so a draft,
+  suspended or retired agent is never issued a grant; retiring does not revoke
+  the grants it holds (revoke them, or use the emergency stop). Migration 132
+  adds the columns and a check constraint; existing agents are unchanged.
+- SDKs: the agent type carries the new states and the lifecycle fields in all
+  three; registration takes `status` (`draft` or `active`); `agents.update`
+  takes `status` and `statusReason` (TypeScript), `status` and
+  `status_reason` (Python), `StatusReason` (Go, serialised by the custom
+  marshaller).
 ### Credentials by reference (@grantex/gateway)
 - `credentialReference: on` redeems a `Grantex-Credential-Ref` request header (a
   reference from `POST /v1/vault/credentials/exchange` with `delivery: reference`)

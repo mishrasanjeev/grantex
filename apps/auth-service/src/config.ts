@@ -221,6 +221,13 @@ export const config = {
   /** Read `dataRegion` on POST /v1/authorize and bind it into the token's tools entries. Off, the member is ignored. */
   get dataRegionIssuanceEnabled() { return process.env['DATA_REGION_ISSUANCE_ENABLED'] === 'true'; },
   /**
+   * Agent lifecycle states (draft, active, suspended, retired) with the transition
+   * table on PATCH /v1/agents/{id} and `status: draft` at registration. Off, the
+   * routes behave as before: active or suspended only, `status` at registration
+   * and `statusReason` ignored like any unknown member.
+   */
+  get agentLifecycleStatesEnabled() { return process.env['AGENT_LIFECYCLE_STATES_ENABLED'] === 'true'; },
+  /**
    * Read `delivery: 'reference'` on POST /v1/vault/credentials/exchange and hand out a
    * short-lived credential reference instead of the raw credential; the relying party
    * redeems it with POST /v1/vault/credentials/resolve. Off, that delivery is refused.
