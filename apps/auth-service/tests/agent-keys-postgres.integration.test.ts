@@ -738,7 +738,8 @@ describePostgres('agent key history against real Postgres', () => {
 describePostgres('POST and PATCH /v1/agents with the history mirror off (the default)', () => {
   const AGENT_FIELDS = [
     'agentId', 'createdAt', 'description', 'developerId', 'did', 'keyBindingConfigured', 'keyPossessionVerified',
-    'keyThumbprint', 'name', 'publicJwk', 'redirectUris', 'resourceServers', 'scopes', 'status', 'updatedAt',
+    'keyThumbprint', 'name', 'publicJwk', 'redirectUris', 'resourceServers', 'retiredAt', 'scopes', 'status',
+    'statusChangedAt', 'statusReason', 'updatedAt',
   ];
 
   beforeEach(() => {
