@@ -58,8 +58,8 @@ curl -X POST https://api.grantex.dev/v1/vault/credentials/resolve \
 
 1. The reference exists and was issued under the caller's developer account.
 2. `grantId` is the grant the reference was issued to.
-3. The reference has not expired (`VAULT_CREDENTIAL_REFERENCE_TTL_SECONDS`, 300 by default).
-4. The grant is still active: a revoked grant, or one an emergency stop ended, refuses the reference with it.
+3. The reference has not expired (`VAULT_CREDENTIAL_REFERENCE_TTL_SECONDS`, 300 by default; a reference is also never issued beyond the expiry of the grant token that obtained it).
+4. The grant is still active and unexpired: a revoked grant, one an emergency stop ended, or one past its own expiry refuses the reference with it.
 
 Each resolution is recorded on the reference (`resolved_count`, `last_resolved_at`) and
 emits `vault.credential.resolved`.

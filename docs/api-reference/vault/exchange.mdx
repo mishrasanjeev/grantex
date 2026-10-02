@@ -73,8 +73,8 @@ curl -X POST https://api.grantex.dev/v1/vault/credentials/exchange \
 ```
 
 No `accessToken` is returned. The reference is bound to the grant that obtained it,
-expires after `VAULT_CREDENTIAL_REFERENCE_TTL_SECONDS` (300 by default) and is refused
-once the grant is revoked or stopped. The agent presents it to the gateway as the
+expires after `VAULT_CREDENTIAL_REFERENCE_TTL_SECONDS` (300 by default), never later than the
+grant token that obtained it, and is refused once the grant is revoked, stopped or expired. The agent presents it to the gateway as the
 `Grantex-Credential-Ref` request header.
 
 ## Response Fields

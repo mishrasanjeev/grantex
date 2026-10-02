@@ -307,7 +307,11 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
         // party that holds the developer's API key (the gateway) resolves it and
         // injects the credential upstream, so the agent never holds the secret.
         const referenceId = newVaultCredentialReferenceId();
-        const expiresAt = new Date(Date.now() + config.vaultCredentialReferenceTtlSeconds * 1000);
+        // A reference never outlives the grant token that obtained it.
+        const expiresAt = new Date(Math.min(
+          Date.now() + config.vaultCredentialReferenceTtlSeconds * 1000,
+          claims.exp * 1000,
+        ));
         await sql`
           INSERT INTO vault_credential_references
             (id, developer_id, vault_credential_id, grant_id, principal_id, agent_did, service, expires_at)
@@ -411,10 +415,13 @@ export async function vaultRoutes(app: FastifyInstance): Promise<void> {
         revokedInCache = false;
       }
       const grantRows = await sql`
-        SELECT status FROM grants WHERE id = ${grantId} AND developer_id = ${developerId}
+        SELECT status, expires_at FROM grants WHERE id = ${grantId} AND developer_id = ${developerId}
       `;
-      const grantStatus = grantRows[0]?.['status'];
-      if (revokedInCache || grantStatus !== 'active') {
+      const grantRow = grantRows[0];
+      const grantExpired = grantRow !== undefined
+        && grantRow['expires_at'] !== null
+        && new Date(grantRow['expires_at'] as string) <= new Date();
+      if (revokedInCache || grantRow?.['status'] !== 'active' || grantExpired) {
         return reply.status(403).send({
           message: 'The grant behind this credential reference is no longer active',
           code: 'GRANT_INACTIVE',

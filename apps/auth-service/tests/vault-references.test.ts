@@ -93,6 +93,26 @@ describe('POST /v1/vault/credentials/exchange with delivery: reference', () => {
     expect(insert!.slice(1)).toEqual(expect.arrayContaining([body.credentialRef, 'dev_TEST', 'vault_1', GRANT_ID, 'user_123', 'google']));
   });
 
+  it('never outlives the grant token that obtained it', async () => {
+    const { signGrantToken } = await import('../src/lib/crypto.js');
+    const exp = Math.floor(Date.now() / 1000) + 45;
+    const token = await signGrantToken({
+      sub: 'user_123', agt: 'did:grantex:ag_01', dev: 'dev_TEST', scp: ['vault:google:exchange'],
+      jti: 'tok_VAULTREF02', grnt: GRANT_ID, exp,
+    });
+    seedActiveToken();
+    sqlMock.mockResolvedValueOnce([CREDENTIAL_ROW]);
+    sqlMock.mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/vault/credentials/exchange',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { service: 'google', delivery: 'reference' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(new Date(res.json().referenceExpiresAt).getTime()).toBeLessThanOrEqual(exp * 1000);
+  });
+
   it('is refused while references are disabled instead of answering with the credential', async () => {
     delete process.env['VAULT_CREDENTIAL_REFERENCES_ENABLED'];
     try {
@@ -146,7 +166,7 @@ describe('POST /v1/vault/credentials/resolve', () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([referenceRow()]);
     mockRedis.get.mockResolvedValueOnce(null);
-    sqlMock.mockResolvedValueOnce([{ status: 'active' }]);
+    sqlMock.mockResolvedValueOnce([{ status: 'active', expires_at: new Date(Date.now() + 3600_000).toISOString() }]);
     sqlMock.mockResolvedValueOnce([]); // UPDATE ... resolved_count
 
     const res = await app.inject({
@@ -213,6 +233,22 @@ describe('POST /v1/vault/credentials/resolve', () => {
     mockRedis.get.mockResolvedValueOnce(null);
     sqlMock.mockResolvedValueOnce([{ status: 'revoked' }]);
     res = await app.inject({
+      method: 'POST',
+      url: '/v1/vault/credentials/resolve',
+      headers: authHeader(),
+      payload: { credentialRef: REFERENCE, grantId: GRANT_ID },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('GRANT_INACTIVE');
+    expect(res.json()).not.toHaveProperty('accessToken');
+  });
+
+  it('refuses a reference whose grant has expired although its row still says active', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([referenceRow()]);
+    mockRedis.get.mockResolvedValueOnce(null);
+    sqlMock.mockResolvedValueOnce([{ status: 'active', expires_at: new Date(Date.now() - 1_000).toISOString() }]);
+    const res = await app.inject({
       method: 'POST',
       url: '/v1/vault/credentials/resolve',
       headers: authHeader(),
