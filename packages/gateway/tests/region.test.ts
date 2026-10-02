@@ -158,6 +158,19 @@ describe('region helpers', () => {
         { type: 'urn:grantex:tools:v1', connector: 'a', data_region: 'in' },
       ],
     }))).toThrow('repeats connector "a"');
+    // A repeat is refused even when the earlier entry names no region.
+    expect(() => readTokenDataRegions(tokenWith({
+      authorization_details: [
+        { type: 'urn:grantex:tools:v1', connector: 'a' },
+        { type: 'urn:grantex:tools:v1', connector: 'a', data_region: 'in' },
+      ],
+    }))).toThrow('repeats connector "a"');
+    expect(() => readTokenDataRegions(tokenWith({
+      authorization_details: [
+        { type: 'urn:grantex:tools:v1', connector: 'a', data_region: 'in' },
+        { type: 'urn:grantex:tools:v1', connector: 'a', data_region: null },
+      ],
+    }))).toThrow('repeats connector "a"');
     expect(() => readTokenDataRegions('a.b')).toThrow('grant token payload cannot be read');
   });
 

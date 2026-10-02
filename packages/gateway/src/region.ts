@@ -65,6 +65,9 @@ export function readTokenDataRegions(token: string): Map<string, string> {
   }
   const claim = (payload as Record<string, unknown>)['authorization_details'];
   const regions = new Map<string, string>();
+  // Every tools connector seen, bound to a region or not: a connector that
+  // appears twice is ambiguous whichever of its entries names the region.
+  const seen = new Set<string>();
   if (claim === undefined || claim === null) return regions;
   if (!Array.isArray(claim)) throw new Error('authorization_details must be an array');
   claim.forEach((entry: unknown, index) => {
@@ -77,13 +80,14 @@ export function readTokenDataRegions(token: string): Map<string, string> {
     if (typeof connector !== 'string' || connector === '') {
       throw new Error(`authorization_details[${index}].connector must be a connector name`);
     }
+    // Two entries for one connector are ambiguous; the token format allows one.
+    if (seen.has(connector)) {
+      throw new Error(`authorization_details[${index}] repeats connector "${connector}"; a grant carries one tools entry per connector`);
+    }
+    seen.add(connector);
     const region = record['data_region'];
     if (region === undefined || region === null) return;
     if (typeof region !== 'string') throw new Error(`authorization_details[${index}].data_region must be a string`);
-    // Two entries for one connector are ambiguous; the token format allows one.
-    if (regions.has(connector)) {
-      throw new Error(`authorization_details[${index}] repeats connector "${connector}"; a grant carries one tools entry per connector`);
-    }
     regions.set(connector, region);
   });
   return regions;

@@ -18,6 +18,7 @@ import {
   purposeOfToolsAuthorizationDetails,
   resolveRequestedDataRegion,
   type ToolsAuthorizationDetail,
+  isRegionOnlyToolsAuthorizationDetails,
 } from '../src/lib/purpose.js';
 
 let app: FastifyInstance;
@@ -162,6 +163,50 @@ describe('POST /v1/token carries purpose into the grant and token', () => {
     const insert = sqlCall('INSERT INTO grants');
     expect((insert![0] as string[]).join('?')).toContain('purpose, authorization_details');
     expect(insert!.slice(-5, -3)).toEqual(['aml.cdd.onboarding', DETAILS]);
+  });
+
+  it('signs region-only tools entries bound at authorization', async () => {
+    const regionOnly = [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in' }];
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ ...approved, purpose: null, authorization_details: regionOnly }]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/token',
+      headers: authHeader(),
+      payload: { code: 'code-123', agentId: TEST_AGENT.id },
+    });
+    expect(res.statusCode).toBe(201);
+    const claims = decodeJwt(res.json<{ grantToken: string }>().grantToken);
+    expect(claims['authorization_details']).toEqual(regionOnly);
+  });
+
+  it('refuses to sign stored tools entries without a purpose that are not well-formed region-only entries', async () => {
+    const malformed: unknown[][] = [
+      [{}],
+      [{ type: 'urn:grantex:decision:v1', connector: 'acme_kyb', tools: [] }],
+      [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb' }],
+      [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'not a region' }],
+      [{ type: 'urn:grantex:tools:v1', connector: 'other_connector', data_region: 'in' }],
+      [
+        { type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in' },
+        { type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'eu' },
+      ],
+      [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in', purpose: 'aml.cdd.onboarding' }],
+    ];
+    for (const details of malformed) {
+      sqlMock.mockReset();
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([{ ...approved, purpose: null, authorization_details: details }]);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/token',
+        headers: authHeader(),
+        payload: { code: 'code-123', agentId: TEST_AGENT.id },
+      });
+      expect(res.statusCode, JSON.stringify(details)).toBe(500);
+      expect(res.json<{ code: string }>().code).toBe('INTERNAL_ERROR');
+      expect(sqlCall('INSERT INTO grants')).toBeUndefined();
+    }
   });
 
   it('issues no authorization_details for a request without purpose', async () => {
@@ -646,6 +691,40 @@ describe('POST /v1/authorize with dataRegion', () => {
       expect(insert!.slice(1)).toContain(null);
     } finally {
       process.env['DATA_REGION_ISSUANCE_ENABLED'] = 'true';
+    }
+  });
+});
+
+describe('isRegionOnlyToolsAuthorizationDetails', () => {
+  const scopes = ['tool:acme_kyb:read', 'tool:bank_core:write', 'files:read'];
+
+  it('accepts one well-formed region-only entry per connector of the scopes', () => {
+    expect(isRegionOnlyToolsAuthorizationDetails([
+      { type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in' },
+      { type: 'urn:grantex:tools:v1', connector: 'bank_core', data_region: 'IN ' },
+    ], scopes)).toBe(true);
+  });
+
+  it('refuses anything else', () => {
+    for (const entries of [
+      undefined,
+      [],
+      [{}],
+      [{ type: 'urn:grantex:decision:v1', connector: 'acme_kyb' }],
+      [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb' }],
+      [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'nope!' }],
+      [{ type: 'urn:grantex:tools:v1', connector: 'unknown', data_region: 'in' }],
+      [{ type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in', purpose: 'aml.cdd.onboarding' }],
+      [
+        { type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in' },
+        { type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in' },
+      ],
+      [
+        { type: 'urn:grantex:tools:v1', connector: 'acme_kyb', data_region: 'in' },
+        { type: 'urn:grantex:tools:v1', connector: 'bank_core', data_region: 'eu' },
+      ],
+    ]) {
+      expect(isRegionOnlyToolsAuthorizationDetails(entries, scopes), JSON.stringify(entries)).toBe(false);
     }
   });
 });
