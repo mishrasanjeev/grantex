@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { getSql, type TxSql } from '../db/client.js';
 import { newAgentId } from '../lib/ids.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
@@ -50,6 +50,8 @@ export const AGENT_STATUS_TRANSITIONS: Record<AgentStatus, readonly AgentStatus[
   retired: [],
 };
 const VALID_AGENT_STATUSES = new Set<string>(AGENT_STATUSES);
+/** The statuses the routes accepted before the lifecycle existed (AGENT_LIFECYCLE_STATES_ENABLED off). */
+const LEGACY_AGENT_STATUSES = new Set<string>(['active', 'suspended']);
 
 export function isAgentStatus(value: unknown): value is AgentStatus {
   return typeof value === 'string' && VALID_AGENT_STATUSES.has(value);
@@ -121,7 +123,9 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     const did = keyThumbprint
       ? `did:web:${config.didWebDomain}:agents:${id}`
       : `did:grantex:${id}`;
-    const requestedStatus = (body as Partial<RegisterAgentBody>).status;
+    // Lifecycle states are behind AGENT_LIFECYCLE_STATES_ENABLED; off, the
+    // member is ignored like any unknown member and every agent starts active.
+    const requestedStatus = config.agentLifecycleStatesEnabled ? (body as Partial<RegisterAgentBody>).status : undefined;
     if (requestedStatus !== undefined && requestedStatus !== 'draft' && requestedStatus !== 'active') {
       return reply.status(400).send({
         message: 'status may be "draft" or "active" at registration',
@@ -265,24 +269,32 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     if (description !== undefined && typeof description !== 'string') {
       return reply.status(400).send({ message: 'description must be a string', code: 'BAD_REQUEST', requestId: request.id });
     }
-    if (status !== undefined && !isAgentStatus(status)) {
+    const lifecycle = config.agentLifecycleStatesEnabled;
+    if (status !== undefined && !(lifecycle ? isAgentStatus(status) : LEGACY_AGENT_STATUSES.has(status))) {
       return reply.status(400).send({
-        message: `status must be one of ${AGENT_STATUSES.join(', ')}`,
+        message: lifecycle ? `status must be one of ${AGENT_STATUSES.join(', ')}` : 'status must be active or suspended',
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
     }
-    if (statusReason !== undefined && (typeof statusReason !== 'string' || statusReason.length > 500)) {
+    // Off, statusReason is ignored like any unknown member.
+    const reason = lifecycle ? statusReason : undefined;
+    if (reason !== undefined && (typeof reason !== 'string' || reason.length > 500)) {
       return reply.status(400).send({
         message: 'statusReason must be a string of at most 500 characters',
         code: 'BAD_REQUEST',
         requestId: request.id,
       });
     }
-    // A lifecycle change is checked against the current state before any write:
-    // draft becomes active, active and suspended swap, either retires, retired is final.
+    // A lifecycle change is checked against the current state before any write
+    // (draft becomes active, active and suspended swap, either retires, retired
+    // is final), and the write is conditional on that state, so two concurrent
+    // changes cannot both pass against the same stale read: the second finds
+    // no row and answers 409 AGENT_STATUS_CONFLICT.
     let statusChange: { from: string; to: AgentStatus } | null = null;
-    if (status !== undefined) {
+    let expectedStatus: string | null = null;
+    const nextStatus: AgentStatus | undefined = status !== undefined && isAgentStatus(status) ? status : undefined;
+    if (lifecycle && nextStatus !== undefined) {
       const currentRows = await sql`
         SELECT status FROM agents WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
       `;
@@ -290,14 +302,15 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       if (typeof current !== 'string') {
         return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
       }
-      if (!agentStatusTransitionAllowed(current, status)) {
+      if (!agentStatusTransitionAllowed(current, nextStatus)) {
         return reply.status(409).send({
           message: `An agent does not move from ${current} to ${status}: draft becomes active, active and suspended swap, either retires, and retired is final`,
           code: 'AGENT_STATUS_TRANSITION',
           requestId: request.id,
         });
       }
-      if (current !== status) statusChange = { from: current, to: status };
+      expectedStatus = current;
+      if (current !== nextStatus) statusChange = { from: current, to: nextStatus };
     }
 
     if (scopes !== undefined) {
@@ -364,7 +377,10 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
               WHEN ${status ?? null}::text IS NULL OR ${status ?? null}::text = status THEN status_changed_at
               ELSE NOW()
             END,
-            status_reason = CASE WHEN ${status ?? null}::text IS NULL THEN status_reason ELSE ${statusReason ?? null} END,
+            status_reason = CASE
+              WHEN ${status ?? null}::text IS NULL OR ${status ?? null}::text = status THEN status_reason
+              ELSE ${reason ?? null}
+            END,
             retired_at = CASE WHEN ${status ?? null}::text = 'retired' THEN COALESCE(retired_at, NOW()) ELSE retired_at END,
             redirect_uris = COALESCE(${validatedRedirectUris ?? null}, redirect_uris),
             resource_servers = COALESCE(${validatedResourceServers ?? null}, resource_servers),
@@ -374,6 +390,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
             key_verified_at = NULL,
             updated_at  = NOW()
             WHERE id = ${agentId} AND developer_id = ${developerId}
+              AND (${expectedStatus}::text IS NULL OR status = ${expectedStatus})
             RETURNING id, did, developer_id, name, description, scopes, status,
                       redirect_uris, resource_servers, public_jwk, key_thumbprint,
                       key_verified_thumbprint, key_verified_at,
@@ -398,6 +415,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
         throw error;
       }
       const agent = mirrored[0];
+      if (!agent && expectedStatus !== null) return statusConflict(reply, request.id);
       if (!agent) {
         return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
       }
@@ -420,7 +438,10 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
           WHEN ${status ?? null}::text IS NULL OR ${status ?? null}::text = status THEN status_changed_at
           ELSE NOW()
         END,
-        status_reason = CASE WHEN ${status ?? null}::text IS NULL THEN status_reason ELSE ${statusReason ?? null} END,
+        status_reason = CASE
+          WHEN ${status ?? null}::text IS NULL OR ${status ?? null}::text = status THEN status_reason
+          ELSE ${reason ?? null}
+        END,
         retired_at = CASE WHEN ${status ?? null}::text = 'retired' THEN COALESCE(retired_at, NOW()) ELSE retired_at END,
         redirect_uris = COALESCE(${validatedRedirectUris ?? null}, redirect_uris),
         resource_servers = COALESCE(${validatedResourceServers ?? null}, resource_servers),
@@ -436,6 +457,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
         END,
         updated_at  = NOW()
         WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
+          AND (${expectedStatus}::text IS NULL OR status = ${expectedStatus})
         RETURNING id, did, developer_id, name, description, scopes, status,
                   redirect_uris, resource_servers, public_jwk, key_thumbprint,
                   key_verified_thumbprint, key_verified_at,
@@ -453,6 +475,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       throw error;
     }
     const agent = rows[0];
+    if (!agent && expectedStatus !== null) return statusConflict(reply, request.id);
     if (!agent) {
       return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
     }
@@ -530,6 +553,14 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return reply.status(204).send();
+  });
+}
+
+function statusConflict(reply: FastifyReply, requestId: string) {
+  return reply.status(409).send({
+    message: 'The agent status changed concurrently; read it again and retry',
+    code: 'AGENT_STATUS_CONFLICT',
+    requestId,
   });
 }
 

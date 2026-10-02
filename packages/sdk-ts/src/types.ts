@@ -127,6 +127,8 @@ export interface RegisterAgentParams {
   resourceServers?: string[];
   /** Public asymmetric JWK used to bind grants to the Agent key. */
   publicJwk?: Record<string, unknown>;
+  /** Lifecycle state at registration: `draft` (registered, not yet usable) or `active` (the default). */
+  status?: 'draft' | 'active';
 }
 
 export interface UpdateAgentParams {

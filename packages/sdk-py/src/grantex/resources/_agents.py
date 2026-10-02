@@ -24,12 +24,15 @@ class AgentsClient:
         redirect_uris: List[str] | None = None,
         resource_servers: List[str] | None = None,
         public_jwk: dict[str, Any] | None = None,
+        status: str | None = None,
     ) -> Agent:
         body: dict[str, Any] = {
             "name": name,
             "description": description,
             "scopes": scopes,
         }
+        if status is not None:
+            body["status"] = status
         if redirect_uris is not None:
             body["redirectUris"] = redirect_uris
         if resource_servers is not None:

@@ -88,6 +88,9 @@ class Agent:
     public_jwk: dict[str, Any] | None = None
     key_thumbprint: str | None = None
     key_binding_configured: bool = False
+    status_changed_at: str | None = None
+    status_reason: str | None = None
+    retired_at: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Agent:
@@ -106,6 +109,9 @@ class Agent:
             public_jwk=data.get("publicJwk"),
             key_thumbprint=data.get("keyThumbprint"),
             key_binding_configured=bool(data.get("keyBindingConfigured", False)),
+            status_changed_at=data.get("statusChangedAt"),
+            status_reason=data.get("statusReason"),
+            retired_at=data.get("retiredAt"),
         )
 
 

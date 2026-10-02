@@ -86,7 +86,9 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
           COUNT(*)                                       AS total,
           COUNT(*) FILTER (WHERE status = 'active')     AS active,
           COUNT(*) FILTER (WHERE status = 'suspended')  AS suspended,
-          COUNT(*) FILTER (WHERE status = 'revoked')    AS revoked
+          COUNT(*) FILTER (WHERE status = 'revoked')    AS revoked,
+          COUNT(*) FILTER (WHERE status = 'draft')      AS draft,
+          COUNT(*) FILTER (WHERE status = 'retired')    AS retired
         FROM agents WHERE developer_id = ${developerId}
       `,
       sql`
@@ -132,6 +134,8 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
         active: Number(agents['active'] ?? 0),
         suspended: Number(agents['suspended'] ?? 0),
         revoked: Number(agents['revoked'] ?? 0),
+        draft: Number(agents['draft'] ?? 0),
+        retired: Number(agents['retired'] ?? 0),
       },
       grants: {
         total: Number(grants['total'] ?? 0),
@@ -211,7 +215,9 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
           COUNT(*)                                       AS total,
           COUNT(*) FILTER (WHERE status = 'active')     AS active,
           COUNT(*) FILTER (WHERE status = 'suspended')  AS suspended,
-          COUNT(*) FILTER (WHERE status = 'revoked')    AS revoked
+          COUNT(*) FILTER (WHERE status = 'revoked')    AS revoked,
+          COUNT(*) FILTER (WHERE status = 'draft')      AS draft,
+          COUNT(*) FILTER (WHERE status = 'retired')    AS retired
         FROM agents WHERE developer_id = ${developerId}
       `,
       sql`
@@ -318,6 +324,8 @@ export async function complianceRoutes(app: FastifyInstance): Promise<void> {
           active: Number(agents['active'] ?? 0),
           suspended: Number(agents['suspended'] ?? 0),
           revoked: Number(agents['revoked'] ?? 0),
+          draft: Number(agents['draft'] ?? 0),
+          retired: Number(agents['retired'] ?? 0),
         },
         grants: {
           total: Number(grantStats['total'] ?? 0),

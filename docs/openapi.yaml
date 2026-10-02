@@ -1570,7 +1570,7 @@ components:
         status:
           type: string
           enum: [draft, active, suspended, retired, revoked]
-          description: Lifecycle state. draft is registered but not yet usable; active is usable; suspended is paused and resumable; retired is final. A grant is issued to an active agent only.
+          description: Lifecycle state. draft is registered but not yet usable; active is usable; suspended is paused and resumable; retired is final. A grant is issued to an active agent only. draft and retired need AGENT_LIFECYCLE_STATES_ENABLED on the auth service.
         statusChangedAt:
           type: string
           format: date-time
@@ -3195,7 +3195,7 @@ paths:
                 status:
                   type: string
                   enum: [draft, active]
-                  description: Lifecycle state at registration (active by default). A draft agent is registered but not yet usable until it becomes active.
+                  description: Lifecycle state at registration (active by default). A draft agent is registered but not yet usable until it becomes active. Read only when AGENT_LIFECYCLE_STATES_ENABLED is on; off, the member is ignored.
                 name:
                   type: string
                   description: Human-readable agent name
@@ -3301,7 +3301,7 @@ paths:
                 status:
                   type: string
                   enum: [draft, active, suspended, retired]
-                  description: draft becomes active; active and suspended swap; either retires; retired is final. A transition outside this table is refused with 409 AGENT_STATUS_TRANSITION.
+                  description: draft becomes active; active and suspended swap; either retires; retired is final. A transition outside this table is refused with 409 AGENT_STATUS_TRANSITION, and one that races another change with 409 AGENT_STATUS_CONFLICT. With AGENT_LIFECYCLE_STATES_ENABLED off only active and suspended are accepted, as before.
                 statusReason:
                   type: string
                   maxLength: 500

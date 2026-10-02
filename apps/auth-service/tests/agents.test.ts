@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildTestApp, authHeader, seedAuth, sqlMock, TEST_AGENT, TEST_DEVELOPER } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 
@@ -6,6 +6,14 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   app = await buildTestApp();
+});
+
+beforeAll(() => {
+  process.env['AGENT_LIFECYCLE_STATES_ENABLED'] = 'true';
+});
+
+afterAll(() => {
+  delete process.env['AGENT_LIFECYCLE_STATES_ENABLED'];
 });
 
 describe('POST /v1/agents', () => {
@@ -418,6 +426,87 @@ describe('PATCH /v1/agents/:id', () => {
       });
       expect(res.statusCode).toBe(200);
       expect(res.json().status).toBe(to);
+    }
+  });
+
+  it('answers 409 when the status changed between the check and the write', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ status: 'active' }]);
+    sqlMock.mockResolvedValueOnce([]); // the conditional UPDATE matched no row: another change won
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(),
+      payload: { status: 'retired' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('AGENT_STATUS_CONFLICT');
+    const update = sqlMock.mock.calls.find((call) => String(call[0]).includes('UPDATE agents'));
+    expect(String(update![0])).toContain('status = ');
+    expect(update!.slice(1)).toContain('active');
+  });
+
+  it('keeps the recorded reason on a same-state request and replaces it on a change', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ status: 'suspended' }]);
+    sqlMock.mockResolvedValueOnce([{ ...TEST_AGENT, status: 'suspended', status_reason: 'incident 42' }]);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(),
+      payload: { status: 'suspended' },
+    });
+    expect(res.statusCode).toBe(200);
+    const update = sqlMock.mock.calls.find((call) => String(call[0]).includes('UPDATE agents'));
+    expect(String(update![0])).toContain('= status THEN status_reason');
+  });
+
+  it('keeps the routes as before while lifecycle states are off', async () => {
+    delete process.env['AGENT_LIFECYCLE_STATES_ENABLED'];
+    try {
+      seedAuth();
+      const refused = await app.inject({
+        method: 'PATCH',
+        url: `/v1/agents/${TEST_AGENT.id}`,
+        headers: authHeader(),
+        payload: { status: 'retired', statusReason: 'decommissioned' },
+      });
+      expect(refused.statusCode).toBe(400);
+      expect(refused.json().message).toBe('status must be active or suspended');
+
+      sqlMock.mockReset();
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([{ ...TEST_AGENT, status: 'suspended' }]);
+      const suspended = await app.inject({
+        method: 'PATCH',
+        url: `/v1/agents/${TEST_AGENT.id}`,
+        headers: authHeader(),
+        payload: { status: 'suspended', statusReason: 'ignored while off' },
+      });
+      expect(suspended.statusCode).toBe(200);
+      // No state read before the write, and the reason is not sent.
+      expect(sqlMock.mock.calls.some((call) => String(call[0]).includes('SELECT status FROM agents'))).toBe(false);
+      const update = sqlMock.mock.calls.find((call) => String(call[0]).includes('UPDATE agents'));
+      expect(update!.slice(1)).not.toContain('ignored while off');
+
+      sqlMock.mockReset();
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([]);
+      sqlMock.mockResolvedValueOnce([]);
+      sqlMock.mockResolvedValueOnce([{ count: '0' }]);
+      sqlMock.mockResolvedValueOnce([TEST_AGENT]);
+      const registered = await app.inject({
+        method: 'POST',
+        url: '/v1/agents',
+        headers: authHeader(),
+        payload: { name: 'Draft Agent', status: 'draft' },
+      });
+      expect(registered.statusCode).toBe(201);
+      const insert = sqlMock.mock.calls.find((call) => String(call[0]).includes('INSERT INTO agents'));
+      expect(insert!.slice(1)).toContain('active');
+      expect(insert!.slice(1)).not.toContain('draft');
+    } finally {
+      process.env['AGENT_LIFECYCLE_STATES_ENABLED'] = 'true';
     }
   });
 
