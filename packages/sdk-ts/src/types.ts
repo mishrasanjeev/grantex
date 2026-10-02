@@ -36,6 +36,14 @@ export interface GrantexClientOptions {
   /** `enforce` (default) denies over-cap calls, `warn` allows them and reports `wouldDeny` / `wouldDenyAll`, `off` skips caps. */
   capsMode?: CapsMode;
   /**
+   * Read the tool segment of `tool:<connector>:<permission>:<tool>` scopes in `enforce()`.
+   * On, a tool's permission comes from connector-level scopes and scopes naming that tool,
+   * and a connector whose scopes all name other tools denies with `tool_not_granted` /
+   * `tool_scope_missing`. Off (the default in this release) reads a tool-qualified scope as
+   * the connector permission, as earlier releases did.
+   */
+  toolQualifiedScopes?: boolean;
+  /**
    * How `enforce()` finds out about revocations (PRD G-6). `online` (the
    * default) asks the auth service about every call, and denies if it cannot.
    * `feed` follows the revocation feed and denies within seconds, failing

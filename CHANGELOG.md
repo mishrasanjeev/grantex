@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Tool-qualified scopes (TypeScript SDK, Python SDK)
+- `enforce()` can honour the tool segment of `tool:<connector>:<permission>:<tool>`
+  scopes (FINDINGS G-144): with `toolQualifiedScopes: true` /
+  `tool_qualified_scopes=True`, a tool's permission comes from connector-level
+  scopes and scopes naming that tool, and a connector whose scopes all name
+  other tools denies with `tool_not_granted` / `tool_scope_missing` (`details`
+  carries `tool_scopes`). Off by default in this release, so a tool-qualified
+  scope is still read as the connector permission until a deployment turns
+  it on; the next major flips the default. Shared cases in
+  `spec/examples/enforce-tool-qualified-scopes.json`. The Go SDK has no
+  `enforce` and is unaffected.
+
 ### Data region at issuance (auth service, SDKs)
 - `POST /v1/authorize` takes `dataRegion` (`in`, `eu`, `in-south`: two letters and an
   optional qualifier, lowercased when stored). It needs at least one

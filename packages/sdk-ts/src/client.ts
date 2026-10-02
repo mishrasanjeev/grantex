@@ -209,6 +209,48 @@ function dataRegionDenial(
   };
 }
 
+const SCOPE_LEVELS: Record<string, number> = { read: 0, write: 1, delete: 2, admin: 3 };
+
+/**
+ * Read a grant's scopes for one connector honouring the tool segment:
+ * `tool:<connector>:<permission>[:<tool>][:capped:<N>]`. The permission for `tool`
+ * is the best of the connector-level scopes and the scopes naming that tool.
+ * When the connector has scopes but every one names another tool, the call is
+ * not covered (`scopeMissing`), whatever permission those scopes carry.
+ */
+function readToolQualifiedScopes(
+  scopes: readonly string[],
+  connector: string,
+  tool: string,
+): { permission: string | undefined; scopeMissing: boolean; namedTools: string[] } {
+  let best = -1;
+  let anyScope = false;
+  let connectorLevel = false;
+  let toolNamed = false;
+  const named = new Set<string>();
+  for (const scope of scopes) {
+    const parts = scope.split(':');
+    if ((parts[0] !== 'tool' && parts[0] !== 'agenticorg') || parts[1] !== connector || !parts[2]) continue;
+    anyScope = true;
+    const level = SCOPE_LEVELS[parts[2]] ?? -1;
+    const qualifier = parts[3];
+    if (qualifier === undefined || qualifier === '' || qualifier === 'capped') {
+      connectorLevel = true;
+      if (level > best) best = level;
+      continue;
+    }
+    named.add(qualifier);
+    if (qualifier === tool) {
+      toolNamed = true;
+      if (level > best) best = level;
+    }
+  }
+  if (!anyScope) return { permission: undefined, scopeMissing: false, namedTools: [] };
+  if (!connectorLevel && !toolNamed) return { permission: undefined, scopeMissing: true, namedTools: [...named].sort() };
+  const permission = Object.keys(SCOPE_LEVELS).find((name) => SCOPE_LEVELS[name] === best);
+  return { permission, scopeMissing: false, namedTools: [...named].sort() };
+}
+
 function checkCapsMode(mode: unknown): CapsMode {
   if (!(CAPS_MODES as readonly unknown[]).includes(mode)) {
     throw new Error(`capsMode must be one of ${CAPS_MODES.join(', ')}, not ${JSON.stringify(mode)}`);
@@ -251,6 +293,7 @@ export class Grantex {
   readonly #audience: string | undefined;
   readonly #dataRegionCheck: 'on' | 'off';
   readonly #dataRegion: string | undefined;
+  readonly #toolQualifiedScopes: boolean;
 
   readonly agents: AgentsClient;
   readonly grants: GrantsClient;
@@ -347,6 +390,10 @@ export class Grantex {
     // default in this release) ignores data_region, as earlier releases did.
     this.#dataRegionCheck = checkDataRegionCheck(options.dataRegionCheck === undefined ? 'off' : options.dataRegionCheck);
     this.#dataRegion = checkExpectedDataRegion(options.dataRegion, this.#dataRegionCheck);
+    if (options.toolQualifiedScopes !== undefined && typeof options.toolQualifiedScopes !== 'boolean') {
+      throw new Error(`toolQualifiedScopes must be a boolean, not ${JSON.stringify(options.toolQualifiedScopes)}`);
+    }
+    this.#toolQualifiedScopes = options.toolQualifiedScopes === true;
     this.decisions = new DecisionsClient(this.#http);
     const decisions = this.decisions;
     this.#decisionConsumer = options.decisionConsumer ?? {
@@ -718,8 +765,25 @@ export class Grantex {
       );
     }
 
-    // 5. Find the best matching scope for this connector
-    const grantedPermission = this.#resolveGrantedPermission(grant.scopes, connector);
+    // 5. Find the best matching scope for this connector. With toolQualifiedScopes
+    //    the tool segment of a scope is honoured: only connector-level scopes and
+    //    scopes naming this tool count, and a connector whose scopes all name
+    //    other tools does not cover this one (FINDINGS G-144).
+    let grantedPermission: string | undefined;
+    if (this.#toolQualifiedScopes) {
+      const reading = readToolQualifiedScopes(grant.scopes, connector, tool);
+      if (reading.scopeMissing) {
+        return denied(
+          `Grant scopes on connector '${connector}' name other tools, not '${tool}'.`,
+          DenialReason.TOOL_NOT_GRANTED,
+          ToolSubReason.TOOL_SCOPE_MISSING,
+          { tool_scopes: reading.namedTools },
+        );
+      }
+      grantedPermission = reading.permission;
+    } else {
+      grantedPermission = this.#resolveGrantedPermission(grant.scopes, connector);
+    }
     if (!grantedPermission) {
       return denied(`No scope grants access to connector '${connector}'.`, DenialReason.TOOL_NOT_GRANTED);
     }

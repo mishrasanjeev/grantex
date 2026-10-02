@@ -117,6 +117,9 @@ class ToolSubReason:
 
     NOT_IN_AUTHORIZATION_DETAILS = "not_in_authorization_details"
     """The grant's tools entry for the connector does not list the tool."""
+    TOOL_SCOPE_MISSING = "tool_scope_missing"
+    """Every scope the grant holds for the connector names a tool, and none names
+    this one (``tool_qualified_scopes=True``). ``details`` carries ``tool_scopes``."""
 
 
 class RevocationSubReason:
