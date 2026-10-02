@@ -721,7 +721,8 @@
               "api-reference/vault/list",
               "api-reference/vault/get",
               "api-reference/vault/delete",
-              "api-reference/vault/exchange"
+              "api-reference/vault/exchange",
+              "api-reference/vault/resolve"
             ]
           },
           {

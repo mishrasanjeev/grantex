@@ -72,6 +72,23 @@ type ExchangeCredentialResponse struct {
 	Metadata       map[string]interface{} `json:"metadata"`
 }
 
+// ExchangeCredentialReferenceResponse is a credential handed out by reference: the
+// relying party resolves it and injects the credential upstream; the agent never
+// holds the secret.
+type ExchangeCredentialReferenceResponse struct {
+	CredentialRef      string                 `json:"credentialRef"`
+	Service            string                 `json:"service"`
+	CredentialType     string                 `json:"credentialType"`
+	TokenExpiresAt     *string                `json:"tokenExpiresAt"`
+	Metadata           map[string]interface{} `json:"metadata"`
+	ReferenceExpiresAt string                 `json:"referenceExpiresAt"`
+}
+
+type exchangeCredentialRequest struct {
+	Service  string `json:"service"`
+	Delivery string `json:"delivery,omitempty"`
+}
+
 // Store saves an encrypted credential in the vault (upserts on principal+service).
 func (s *VaultService) Store(ctx context.Context, params StoreCredentialParams) (*StoreCredentialResponse, error) {
 	return unmarshal[StoreCredentialResponse](s.http.post(ctx, "/v1/vault/credentials", params))
@@ -113,6 +130,27 @@ func (s *VaultService) Delete(ctx context.Context, credentialID string) error {
 // Exchange trades a grant token for an upstream service credential.
 // Unlike other methods, this uses the grant token (not the API key) as the Bearer token.
 func (s *VaultService) Exchange(ctx context.Context, grantToken string, params ExchangeCredentialParams) (*ExchangeCredentialResponse, error) {
+	respBody, err := s.exchange(ctx, grantToken, exchangeCredentialRequest{Service: params.Service})
+	if err != nil {
+		return nil, err
+	}
+	return unmarshal[ExchangeCredentialResponse](respBody, nil)
+}
+
+// ExchangeReference exchanges a grant token for a credential reference instead of
+// the credential. The relying party (for example the gateway with
+// credentialReference: on) resolves the reference and injects the credential
+// upstream; this process never holds the secret. Needs
+// VAULT_CREDENTIAL_REFERENCES_ENABLED on the auth service.
+func (s *VaultService) ExchangeReference(ctx context.Context, grantToken string, params ExchangeCredentialParams) (*ExchangeCredentialReferenceResponse, error) {
+	respBody, err := s.exchange(ctx, grantToken, exchangeCredentialRequest{Service: params.Service, Delivery: "reference"})
+	if err != nil {
+		return nil, err
+	}
+	return unmarshal[ExchangeCredentialReferenceResponse](respBody, nil)
+}
+
+func (s *VaultService) exchange(ctx context.Context, grantToken string, params exchangeCredentialRequest) ([]byte, error) {
 	reqURL := strings.TrimRight(s.http.baseURL, "/") + "/v1/vault/credentials/exchange"
 
 	body, err := json.Marshal(params)
@@ -145,5 +183,5 @@ func (s *VaultService) Exchange(ctx context.Context, grantToken string, params E
 		return nil, s.http.parseError(resp.StatusCode, respBody, parseRateLimitHeaders(resp.Header))
 	}
 
-	return unmarshal[ExchangeCredentialResponse](respBody, nil)
+	return respBody, nil
 }
