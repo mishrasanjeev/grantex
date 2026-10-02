@@ -74,6 +74,27 @@ describe('validateConfig', () => {
     expect(config.upstreamHeaders).toEqual({ 'X-Auth': 'secret', 'X-Version': '2' });
   });
 
+  it('parses credentialReference with the key and auth service it needs', () => {
+    const config = validateConfig({
+      ...VALID_CONFIG,
+      credentialReference: 'on',
+      grantexApiKey: 'gx_key_123',
+      grantexBaseUrl: 'https://auth.example.com',
+    });
+    expect(config.credentialReference).toBe('on');
+    expect(validateConfig({ ...VALID_CONFIG, credentialReference: 'off' }).credentialReference).toBe('off');
+    expect(validateConfig(VALID_CONFIG).credentialReference).toBeUndefined();
+  });
+
+  it('refuses credentialReference on without the gateway key or the auth service, and any other value', () => {
+    expect(() => validateConfig({ ...VALID_CONFIG, credentialReference: 'on', grantexApiKey: 'gx_key_123' }))
+      .toThrow('credentialReference: on needs grantexApiKey and grantexBaseUrl');
+    expect(() => validateConfig({ ...VALID_CONFIG, credentialReference: 'on', grantexBaseUrl: 'https://auth.example.com' }))
+      .toThrow('credentialReference: on needs grantexApiKey and grantexBaseUrl');
+    expect(() => validateConfig({ ...VALID_CONFIG, credentialReference: 'yes' }))
+      .toThrow("credentialReference must be 'on' or 'off'");
+  });
+
   it('parses grantexApiKey', () => {
     const config = validateConfig({
       ...VALID_CONFIG,
