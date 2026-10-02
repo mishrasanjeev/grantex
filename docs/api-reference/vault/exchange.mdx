@@ -34,6 +34,7 @@ The grant token must also carry the explicit, exactly-matched exchange scope for
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `service` | `string` | Yes | The service whose credential to retrieve (e.g. `"github"`, `"slack"`) |
+| `delivery` | `string` | No | `token` (the default) returns the credential. `reference` returns a short-lived credential reference instead; the relying party that holds the developer API key (for example `@grantex/gateway` with `credentialReference: on`) redeems it with [Resolve Reference](/api-reference/vault/resolve) and injects the credential upstream, so the agent never holds the secret. Needs `VAULT_CREDENTIAL_REFERENCES_ENABLED=true` on the auth service; otherwise refused with `400 CREDENTIAL_REFERENCE_DISABLED` |
 
 ## Example Request
 
@@ -58,6 +59,24 @@ curl -X POST https://api.grantex.dev/v1/vault/credentials/exchange \
 }
 ```
 
+## Response -- 200 OK (`delivery: "reference"`)
+
+```json
+{
+  "credentialRef": "vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M",
+  "service": "github",
+  "credentialType": "oauth2",
+  "tokenExpiresAt": "2026-04-06T12:00:00.000Z",
+  "metadata": { "scopes": ["repo", "read:org"] },
+  "referenceExpiresAt": "2026-04-06T09:05:00.000Z"
+}
+```
+
+No `accessToken` is returned. The reference is bound to the grant that obtained it,
+expires after `VAULT_CREDENTIAL_REFERENCE_TTL_SECONDS` (300 by default) and is refused
+once the grant is revoked or stopped. The agent presents it to the gateway as the
+`Grantex-Credential-Ref` request header.
+
 ## Response Fields
 
 | Field | Type | Description |
@@ -80,7 +99,8 @@ This endpoint is limited to **20 requests per minute** per grant token.
 
 | Status | Code | Description |
 |---|---|---|
-| 400 | `BAD_REQUEST` | Missing `service` field |
+| 400 | `BAD_REQUEST` | Missing `service` field, or `delivery` is neither `token` nor `reference` |
+| 400 | `CREDENTIAL_REFERENCE_DISABLED` | `delivery: "reference"` requested but references are not enabled on this auth service |
 | 401 | `UNAUTHORIZED` | Missing, invalid, or expired grant token |
 | 403 | `FORBIDDEN` | Grant token does not include a service-matching credential scope |
 | 404 | `NOT_FOUND` | No credential found for this principal and service |

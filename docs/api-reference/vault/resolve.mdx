@@ -1,0 +1,80 @@
+---
+title: "Resolve a Credential Reference"
+sidebarTitle: "Resolve Reference"
+description: "Redeem a short-lived credential reference for the stored upstream credential; for the relying party that injects credentials on the agent's behalf."
+---
+
+## Endpoint
+
+```
+POST /v1/vault/credentials/resolve
+```
+
+## Authentication
+
+Requires the **developer API key** (not a grant token). The caller is the relying
+party that injects the credential upstream, such as `@grantex/gateway` with
+`credentialReference: on`. The agent itself never calls this endpoint and never
+holds the credential.
+
+Available when the auth service runs with `VAULT_CREDENTIAL_REFERENCES_ENABLED=true`
+(the exchange hands out references only then).
+
+## Request Body
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `credentialRef` | `string` | Yes | The reference the exchange returned (`vcr_...`) |
+| `grantId` | `string` | Yes | The grant the agent presented; must be the grant the reference was issued to |
+
+## Example Request
+
+```bash
+curl -X POST https://api.grantex.dev/v1/vault/credentials/resolve \
+  -H "Authorization: Bearer gx_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "credentialRef": "vcr_01J9ZK3X6Q0Z6W7F0X2Y1V8K3M",
+    "grantId": "grnt_01J9ZK3X6Q0Z6W7F0X2Y1V8K3N"
+  }'
+```
+
+## Response -- 200 OK
+
+```json
+{
+  "accessToken": "ghp_xxxxxxxxxxxx",
+  "service": "github",
+  "credentialType": "oauth2",
+  "tokenExpiresAt": "2026-04-06T12:00:00.000Z",
+  "metadata": { "scopes": ["repo", "read:org"] },
+  "grantId": "grnt_01J9ZK3X6Q0Z6W7F0X2Y1V8K3N",
+  "principalId": "user_123",
+  "agentDid": "did:grantex:agent:01J9..."
+}
+```
+
+## What is checked
+
+1. The reference exists and was issued under the caller's developer account.
+2. `grantId` is the grant the reference was issued to.
+3. The reference has not expired (`VAULT_CREDENTIAL_REFERENCE_TTL_SECONDS`, 300 by default).
+4. The grant is still active: a revoked grant, or one an emergency stop ended, refuses the reference with it.
+
+Each resolution is recorded on the reference (`resolved_count`, `last_resolved_at`) and
+emits `vault.credential.resolved`.
+
+## Error Responses
+
+| Status | Code | Description |
+|---|---|---|
+| 400 | `BAD_REQUEST` | `credentialRef` or `grantId` missing or malformed |
+| 401 | `UNAUTHORIZED` | Missing or invalid API key |
+| 403 | `GRANT_MISMATCH` | The reference was issued to another grant |
+| 403 | `GRANT_INACTIVE` | The grant is revoked, stopped or otherwise no longer active |
+| 404 | `NOT_FOUND` | No such reference under this developer account |
+| 410 | `CREDENTIAL_REFERENCE_EXPIRED` | The reference has expired; the agent exchanges again |
+
+## Rate Limits
+
+This endpoint is limited to **120 requests per minute** per API key.
