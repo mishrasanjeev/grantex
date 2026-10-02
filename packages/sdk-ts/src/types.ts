@@ -136,6 +136,10 @@ export interface UpdateAgentParams {
   redirectUris?: string[];
   resourceServers?: string[];
   publicJwk?: Record<string, unknown>;
+  /** Lifecycle: draft becomes active; active and suspended swap; either retires; retired is final. */
+  status?: 'draft' | 'active' | 'suspended' | 'retired';
+  /** Why the status changed; recorded on the agent. */
+  statusReason?: string;
 }
 
 export interface Agent {
@@ -147,7 +151,10 @@ export interface Agent {
   name: string;
   description: string;
   scopes: string[];
-  status: 'active' | 'suspended' | 'revoked';
+  status: 'draft' | 'active' | 'suspended' | 'retired' | 'revoked';
+  statusChangedAt?: string | null;
+  statusReason?: string | null;
+  retiredAt?: string | null;
   developerId: string;
   createdAt: string;
   updatedAt: string;

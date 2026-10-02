@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Agent lifecycle states (auth service, SDKs)
+- An agent is `draft` (registered, not yet usable), `active`, `suspended`
+  (paused, resumable) or `retired` (final). `POST /v1/agents` may register a
+  draft; `PATCH /v1/agents/{id}` moves an agent along the lifecycle, refuses a
+  transition outside it with `409 AGENT_STATUS_TRANSITION`, records
+  `statusChangedAt`, `statusReason` and `retiredAt`, and emits
+  `agent.status_changed`. Issuance already requires `active`, so a draft,
+  suspended or retired agent is never issued a grant; retiring does not revoke
+  the grants it holds (revoke them, or use the emergency stop). Migration 132
+  adds the columns and a check constraint; existing agents are unchanged.
+- SDKs: the agent type carries the new states and fields; `agents.update`
+  takes `status` and `statusReason` (TypeScript), `status` and
+  `status_reason` (Python), `StatusReason` (Go).
+
 ### Data region follow-ups (auth service, SDKs, @grantex/gateway)
 - `POST /v1/authorize` reads `dataRegion` only when `DATA_REGION_ISSUANCE_ENABLED=true`;
   off (the default), the member is ignored as before. The code exchange accepts

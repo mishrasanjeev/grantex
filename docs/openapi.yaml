@@ -1569,7 +1569,22 @@ components:
             type: string
         status:
           type: string
-          enum: [active, suspended, revoked]
+          enum: [draft, active, suspended, retired, revoked]
+          description: Lifecycle state. draft is registered but not yet usable; active is usable; suspended is paused and resumable; retired is final. A grant is issued to an active agent only.
+        statusChangedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the status last changed
+        statusReason:
+          type: string
+          nullable: true
+          description: The reason given with the last status change
+        retiredAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the agent was retired; retired is final
         createdAt:
           type: string
           format: date-time
@@ -3177,6 +3192,10 @@ paths:
             schema:
               type: object
               properties:
+                status:
+                  type: string
+                  enum: [draft, active]
+                  description: Lifecycle state at registration (active by default). A draft agent is registered but not yet usable until it becomes active.
                 name:
                   type: string
                   description: Human-readable agent name
@@ -3281,7 +3300,12 @@ paths:
                     type: string
                 status:
                   type: string
-                  enum: [active, suspended]
+                  enum: [draft, active, suspended, retired]
+                  description: draft becomes active; active and suspended swap; either retires; retired is final. A transition outside this table is refused with 409 AGENT_STATUS_TRANSITION.
+                statusReason:
+                  type: string
+                  maxLength: 500
+                  description: Why the status changed; recorded on the agent
       responses:
         "200":
           description: Updated agent

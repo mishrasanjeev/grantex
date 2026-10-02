@@ -10,6 +10,7 @@ import {
 import type { JWK } from 'jose';
 import { config } from '../config.js';
 import { AgentKeyMirrorRefusal, mirrorRegisteredAgentKey } from '../lib/registry/agent-key-mirror.js';
+import { emitEvent } from '../lib/events.js';
 
 interface RegisterAgentBody {
   name: string;
@@ -18,6 +19,8 @@ interface RegisterAgentBody {
   redirectUris?: string[];
   resourceServers?: string[];
   publicJwk?: JWK;
+  /** `draft` or `active` (the default): a draft agent is registered but not yet usable. */
+  status?: string;
 }
 
 interface UpdateAgentBody {
@@ -25,12 +28,39 @@ interface UpdateAgentBody {
   description?: string;
   scopes?: string[];
   status?: string;
+  /** Why the status changed; recorded on the agent. */
+  statusReason?: string;
   redirectUris?: string[];
   resourceServers?: string[];
   publicJwk?: JWK;
 }
 
-const VALID_AGENT_STATUSES = new Set(['active', 'suspended']);
+/**
+ * Agent lifecycle: draft (registered, not yet usable), active, suspended (paused,
+ * resumable) and retired (final). Issuance requires `active`, so a draft, suspended
+ * or retired agent is never issued a grant; retiring does not revoke the grants it
+ * already holds (revoke them, or use the emergency stop).
+ */
+export const AGENT_STATUSES = ['draft', 'active', 'suspended', 'retired'] as const;
+export type AgentStatus = (typeof AGENT_STATUSES)[number];
+export const AGENT_STATUS_TRANSITIONS: Record<AgentStatus, readonly AgentStatus[]> = {
+  draft: ['active', 'retired'],
+  active: ['suspended', 'retired'],
+  suspended: ['active', 'retired'],
+  retired: [],
+};
+const VALID_AGENT_STATUSES = new Set<string>(AGENT_STATUSES);
+
+export function isAgentStatus(value: unknown): value is AgentStatus {
+  return typeof value === 'string' && VALID_AGENT_STATUSES.has(value);
+}
+
+/** Staying in the same state is always allowed; otherwise the transition table decides. */
+export function agentStatusTransitionAllowed(from: string, to: AgentStatus): boolean {
+  if (from === to) return true;
+  const allowed = (AGENT_STATUS_TRANSITIONS as Record<string, readonly AgentStatus[]>)[from];
+  return allowed !== undefined && allowed.includes(to);
+}
 const OAUTH_SCOPE_TOKEN = /^[\x21\x23-\x5B\x5D-\x7E]+$/;
 
 export async function agentsRoutes(app: FastifyInstance): Promise<void> {
@@ -91,6 +121,15 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     const did = keyThumbprint
       ? `did:web:${config.didWebDomain}:agents:${id}`
       : `did:grantex:${id}`;
+    const requestedStatus = (body as Partial<RegisterAgentBody>).status;
+    if (requestedStatus !== undefined && requestedStatus !== 'draft' && requestedStatus !== 'active') {
+      return reply.status(400).send({
+        message: 'status may be "draft" or "active" at registration',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    const initialStatus: AgentStatus = requestedStatus ?? 'active';
     let limitExceeded: { plan: string; limit: number } | undefined;
     let createdRow: Record<string, unknown> | undefined;
 
@@ -120,15 +159,18 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
         const rows = await tx`
           INSERT INTO agents (
             id, did, developer_id, name, description, scopes,
-            redirect_uris, resource_servers, public_jwk, key_thumbprint
+            redirect_uris, resource_servers, public_jwk, key_thumbprint,
+            status, status_changed_at
           )
           VALUES (
             ${id}, ${did}, ${developerId}, ${name.trim()}, ${description}, ${scopes},
-            ${redirectUris}, ${resourceServers}, ${publicJwk ? tx.json(publicJwk) : null}, ${keyThumbprint}
+            ${redirectUris}, ${resourceServers}, ${publicJwk ? tx.json(publicJwk) : null}, ${keyThumbprint},
+            ${initialStatus}, NOW()
           )
           RETURNING id, did, developer_id, name, description, scopes, status,
                     redirect_uris, resource_servers, public_jwk, key_thumbprint,
                     key_verified_thumbprint, key_verified_at,
+                    status_changed_at, status_reason, retired_at,
                     created_at, updated_at
         `;
         createdRow = rows[0];
@@ -175,6 +217,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       SELECT id, did, developer_id, name, description, scopes, status,
              redirect_uris, resource_servers, public_jwk, key_thumbprint,
              key_verified_thumbprint, key_verified_at,
+             status_changed_at, status_reason, retired_at,
              created_at, updated_at
       FROM agents
       WHERE developer_id = ${request.developer.id}
@@ -190,6 +233,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       SELECT id, did, developer_id, name, description, scopes, status,
              redirect_uris, resource_servers, public_jwk, key_thumbprint,
              key_verified_thumbprint, key_verified_at,
+             status_changed_at, status_reason, retired_at,
              created_at, updated_at
       FROM agents
       WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
@@ -208,7 +252,8 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return reply.status(400).send({ message: 'No fields to update', code: 'BAD_REQUEST', requestId: request.id });
     }
-    const { name, description, scopes, status, redirectUris, resourceServers, publicJwk } = body as UpdateAgentBody;
+    const { name, description, scopes, status, statusReason, redirectUris, resourceServers, publicJwk } =
+      body as UpdateAgentBody;
 
     if (name === undefined && description === undefined && scopes === undefined && status === undefined
         && redirectUris === undefined && resourceServers === undefined && publicJwk === undefined) {
@@ -220,8 +265,39 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     if (description !== undefined && typeof description !== 'string') {
       return reply.status(400).send({ message: 'description must be a string', code: 'BAD_REQUEST', requestId: request.id });
     }
-    if (status !== undefined && (typeof status !== 'string' || !VALID_AGENT_STATUSES.has(status))) {
-      return reply.status(400).send({ message: 'status must be active or suspended', code: 'BAD_REQUEST', requestId: request.id });
+    if (status !== undefined && !isAgentStatus(status)) {
+      return reply.status(400).send({
+        message: `status must be one of ${AGENT_STATUSES.join(', ')}`,
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    if (statusReason !== undefined && (typeof statusReason !== 'string' || statusReason.length > 500)) {
+      return reply.status(400).send({
+        message: 'statusReason must be a string of at most 500 characters',
+        code: 'BAD_REQUEST',
+        requestId: request.id,
+      });
+    }
+    // A lifecycle change is checked against the current state before any write:
+    // draft becomes active, active and suspended swap, either retires, retired is final.
+    let statusChange: { from: string; to: AgentStatus } | null = null;
+    if (status !== undefined) {
+      const currentRows = await sql`
+        SELECT status FROM agents WHERE id = ${request.params.id} AND developer_id = ${request.developer.id}
+      `;
+      const current = currentRows[0]?.['status'];
+      if (typeof current !== 'string') {
+        return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
+      }
+      if (!agentStatusTransitionAllowed(current, status)) {
+        return reply.status(409).send({
+          message: `An agent does not move from ${current} to ${status}: draft becomes active, active and suspended swap, either retires, and retired is final`,
+          code: 'AGENT_STATUS_TRANSITION',
+          requestId: request.id,
+        });
+      }
+      if (current !== status) statusChange = { from: current, to: status };
     }
 
     if (scopes !== undefined) {
@@ -284,6 +360,12 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
             description = COALESCE(${description ?? null}, description),
             scopes      = COALESCE(${scopes ?? null}, scopes),
             status      = COALESCE(${status ?? null}, status),
+            status_changed_at = CASE
+              WHEN ${status ?? null}::text IS NULL OR ${status ?? null}::text = status THEN status_changed_at
+              ELSE NOW()
+            END,
+            status_reason = CASE WHEN ${status ?? null}::text IS NULL THEN status_reason ELSE ${statusReason ?? null} END,
+            retired_at = CASE WHEN ${status ?? null}::text = 'retired' THEN COALESCE(retired_at, NOW()) ELSE retired_at END,
             redirect_uris = COALESCE(${validatedRedirectUris ?? null}, redirect_uris),
             resource_servers = COALESCE(${validatedResourceServers ?? null}, resource_servers),
             public_jwk = ${tx.json(jwk as never)},
@@ -295,6 +377,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
             RETURNING id, did, developer_id, name, description, scopes, status,
                       redirect_uris, resource_servers, public_jwk, key_thumbprint,
                       key_verified_thumbprint, key_verified_at,
+                      status_changed_at, status_reason, retired_at,
                       created_at, updated_at
           `;
           await mirrorRegisteredAgentKey(tx, {
@@ -318,6 +401,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       if (!agent) {
         return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
       }
+      announceStatusChange(request.developer.id, agent, statusChange);
       return reply.send(toAgentResponse(agent));
     }
 
@@ -332,6 +416,12 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
         description = COALESCE(${description ?? null}, description),
         scopes      = COALESCE(${scopes ?? null}, scopes),
         status      = COALESCE(${status ?? null}, status),
+        status_changed_at = CASE
+          WHEN ${status ?? null}::text IS NULL OR ${status ?? null}::text = status THEN status_changed_at
+          ELSE NOW()
+        END,
+        status_reason = CASE WHEN ${status ?? null}::text IS NULL THEN status_reason ELSE ${statusReason ?? null} END,
+        retired_at = CASE WHEN ${status ?? null}::text = 'retired' THEN COALESCE(retired_at, NOW()) ELSE retired_at END,
         redirect_uris = COALESCE(${validatedRedirectUris ?? null}, redirect_uris),
         resource_servers = COALESCE(${validatedResourceServers ?? null}, resource_servers),
         public_jwk = COALESCE(${validatedPublicJwk ? sql.json(validatedPublicJwk) : null}, public_jwk),
@@ -349,6 +439,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
         RETURNING id, did, developer_id, name, description, scopes, status,
                   redirect_uris, resource_servers, public_jwk, key_thumbprint,
                   key_verified_thumbprint, key_verified_at,
+                  status_changed_at, status_reason, retired_at,
                   created_at, updated_at
       `;
     } catch (error) {
@@ -365,6 +456,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     if (!agent) {
       return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
     }
+    announceStatusChange(request.developer.id, agent, statusChange);
     return reply.send(toAgentResponse(agent));
   });
 
@@ -441,6 +533,20 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
   });
 }
 
+function announceStatusChange(
+  developerId: string,
+  agent: Record<string, unknown>,
+  change: { from: string; to: AgentStatus } | null,
+): void {
+  if (!change) return;
+  emitEvent(developerId, 'agent.status_changed', {
+    agentId: agent['id'],
+    from: change.from,
+    to: change.to,
+    reason: agent['status_reason'] ?? null,
+  }).catch(() => {});
+}
+
 function toAgentResponse(row: Record<string, unknown>) {
   return {
     agentId: row['id'],
@@ -458,6 +564,9 @@ function toAgentResponse(row: Record<string, unknown>) {
       && row['key_verified_at'] !== null
       && row['key_verified_at'] !== undefined,
     status: row['status'],
+    statusChangedAt: row['status_changed_at'] ?? null,
+    statusReason: row['status_reason'] ?? null,
+    retiredAt: row['retired_at'] ?? null,
     createdAt: row['created_at'],
     updatedAt: row['updated_at'],
   };

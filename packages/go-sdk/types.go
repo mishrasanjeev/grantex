@@ -72,6 +72,7 @@ type UpdateAgentParams struct {
 	Description     *string                `json:"description,omitempty"`
 	Scopes          []string               `json:"scopes,omitempty"`
 	Status          *string                `json:"status,omitempty"`
+	StatusReason    *string                `json:"statusReason,omitempty"`
 	RedirectURIs    []string               `json:"redirectUris,omitempty"`
 	ResourceServers []string               `json:"resourceServers,omitempty"`
 	PublicJWK       map[string]interface{} `json:"publicJwk,omitempty"`

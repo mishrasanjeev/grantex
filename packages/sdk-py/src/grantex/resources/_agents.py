@@ -57,8 +57,14 @@ class AgentsClient:
         redirect_uris: Optional[List[str]] = None,
         resource_servers: Optional[List[str]] = None,
         public_jwk: dict[str, Any] | None = None,
+        status: str | None = None,
+        status_reason: str | None = None,
     ) -> Agent:
         body: dict[str, Any] = {}
+        if status is not None:
+            body["status"] = status
+        if status_reason is not None:
+            body["statusReason"] = status_reason
         if name is not None:
             body["name"] = name
         if description is not None:

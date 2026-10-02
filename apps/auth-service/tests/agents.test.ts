@@ -38,6 +38,34 @@ describe('POST /v1/agents', () => {
     expect(sqlMock.begin).toHaveBeenCalledTimes(1);
   });
 
+  it('registers a draft agent when asked, and refuses any other starting state', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([]);
+    sqlMock.mockResolvedValueOnce([{ count: '0' }]);
+    sqlMock.mockResolvedValueOnce([{ ...TEST_AGENT, status: 'draft' }]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/agents',
+      headers: authHeader(),
+      payload: { name: 'Draft Agent', status: 'draft' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().status).toBe('draft');
+    const insert = sqlMock.mock.calls.find((call) => String(call[0]).includes('INSERT INTO agents'));
+    expect(insert!.slice(1)).toContain('draft');
+
+    seedAuth();
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/v1/agents',
+      headers: authHeader(),
+      payload: { name: 'Retired Agent', status: 'retired' },
+    });
+    expect(refused.statusCode).toBe(400);
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
+  });
+
   it('returns 402 when plan agent limit is reached', async () => {
     seedAuth();
     sqlMock.mockResolvedValueOnce([]);                 // advisory lock
@@ -335,6 +363,84 @@ describe('PATCH /v1/agents/:id', () => {
       payload: {},
     });
 
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('retires an active agent, recording when, and announces the change', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([{ status: 'active' }]); // the current state
+    const retiredAt = new Date().toISOString();
+    sqlMock.mockResolvedValueOnce([{ ...TEST_AGENT, status: 'retired', retired_at: retiredAt, status_reason: 'decommissioned' }]);
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(),
+      payload: { status: 'retired', statusReason: 'decommissioned' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('retired');
+    expect(res.json().retiredAt).toBe(retiredAt);
+    expect(res.json().statusReason).toBe('decommissioned');
+    const update = sqlMock.mock.calls.find((call) => String(call[0]).includes('UPDATE agents'));
+    expect(String(update![0])).toContain('retired_at');
+  });
+
+  it('refuses a transition the lifecycle does not allow, before any write', async () => {
+    for (const [from, to] of [['retired', 'active'], ['draft', 'suspended'], ['retired', 'suspended']]) {
+      sqlMock.mockReset();
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([{ status: from }]);
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/v1/agents/${TEST_AGENT.id}`,
+        headers: authHeader(),
+        payload: { status: to },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe('AGENT_STATUS_TRANSITION');
+      expect(sqlMock.mock.calls.some((call) => String(call[0]).includes('UPDATE agents'))).toBe(false);
+    }
+  });
+
+  it('activates a draft and lets a suspended agent resume', async () => {
+    for (const [from, to] of [['draft', 'active'], ['suspended', 'active'], ['active', 'suspended'], ['active', 'active']]) {
+      sqlMock.mockReset();
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([{ status: from }]);
+      sqlMock.mockResolvedValueOnce([{ ...TEST_AGENT, status: to }]);
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/v1/agents/${TEST_AGENT.id}`,
+        headers: authHeader(),
+        payload: { status: to },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().status).toBe(to);
+    }
+  });
+
+  it('answers 404 for a status change on an agent that does not exist', async () => {
+    seedAuth();
+    sqlMock.mockResolvedValueOnce([]);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/v1/agents/ag_NONEXISTENT',
+      headers: authHeader(),
+      payload: { status: 'suspended' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('rejects a status reason that is too long', async () => {
+    seedAuth();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(),
+      payload: { status: 'suspended', statusReason: 'x'.repeat(501) },
+    });
     expect(res.statusCode).toBe(400);
   });
 
