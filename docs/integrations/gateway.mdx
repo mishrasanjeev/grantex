@@ -114,7 +114,7 @@ Your upstream API can use these to apply fine-grained business logic without re-
 With `credentialReference: on`, an agent that exchanged its grant token for a credential
 reference ([exchange](/api-reference/vault/exchange) with `delivery: "reference"`) presents it as
 `Grantex-Credential-Ref: vcr_...`. The gateway redeems the reference for the request's grant with
-its own API key ([resolve](/api-reference/vault/resolve)) and forwards the request with
+its own API key (`POST /v1/vault/credentials/resolve`) and forwards the request with
 `Authorization: Bearer <credential>`; the agent never holds the secret. The auth service refuses
 a reference that belongs to another grant, has expired, or whose grant is revoked or stopped, and
 the gateway then denies the request rather than forwarding it without the credential. A request
