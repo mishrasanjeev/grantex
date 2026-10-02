@@ -173,6 +173,12 @@ export interface AuthorizeParams {
   codeChallengeMethod?: string;
   /** Purpose of the grant, e.g. `aml.cdd.onboarding` (see `PURPOSE_VOCABULARY`). */
   purpose?: string;
+  /**
+   * The data region the grant's data may be processed in (`in`, `eu`, ...). Carried in the
+   * token's `urn:grantex:tools:v1` entries; relying parties with `dataRegionCheck: 'on'` refuse
+   * the token outside it. Needs at least one `tool:<connector>:<permission>` scope.
+   */
+  dataRegion?: string;
 }
 
 export interface AuthorizationRequest {

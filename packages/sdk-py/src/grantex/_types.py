@@ -136,6 +136,10 @@ class AuthorizeParams:
     state: str | None = None
     purpose: str | None = None
     """Purpose of the grant (for example ``aml.cdd.onboarding``); see grantex.purpose."""
+    data_region: str | None = None
+    """The data region the grant's data may be processed in (``in``, ``eu``, ...), carried in the
+    token's ``urn:grantex:tools:v1`` entries; relying parties with ``data_region_check="on"``
+    refuse the token outside it."""
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -157,6 +161,8 @@ class AuthorizeParams:
             body["codeChallengeMethod"] = self.code_challenge_method
         if self.purpose is not None:
             body["purpose"] = self.purpose
+        if self.data_region is not None:
+            body["dataRegion"] = self.data_region
         return body
 
 
