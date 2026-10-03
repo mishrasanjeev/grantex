@@ -706,6 +706,19 @@ async function authorizationCodeToken(
       exp: Math.floor(accessExpiresAt.getTime() / 1000),
     });
 
+    if (config.agentLifecycleStatesEnabled) {
+      // Capacity holds lock 3; take the lifecycle sweep's lock 4 before the
+      // final active-agent read and the grant insert.
+      await tx`SELECT pg_advisory_xact_lock(hashtextextended(${auth['developer_id'] as string}, 4))`;
+      const activeAgent = await tx`
+        SELECT id FROM agents
+        WHERE id = ${clientId}
+          AND developer_id = ${auth['developer_id'] as string}
+          AND status = 'active'
+      `;
+      if (!activeAgent[0]) oauthFailure(400, 'invalid_grant', 'The client is not active');
+    }
+
     await tx`
       INSERT INTO grants (
         id, agent_id, principal_id, developer_id, scopes, expires_at,
@@ -828,6 +841,10 @@ async function refreshToken(body: OAuthBody, headers: Record<string, unknown>, r
             && rotated['grant_id'] === row['grant_id']
             && !rotated['is_used']
             && new Date(rotated['expires_at'] as string) > now) {
+          if (config.agentLifecycleStatesEnabled
+              && (row['status'] !== 'active' || row['agent_status'] !== 'active')) {
+            oauthFailure(400, 'invalid_grant', 'The refresh token or grant has expired or been revoked');
+          }
           await requireIssuanceOpen(tx, lockoutSubject, 'oauth_refresh', { inTransaction: true, log });
           const originalAccessExpiry = Math.min(
             replayIssuedAt + ACCESS_TOKEN_LIFETIME_SECONDS,

@@ -1570,7 +1570,7 @@ components:
         status:
           type: string
           enum: [draft, active, suspended, retired, revoked]
-          description: Lifecycle state. draft is registered but not yet usable; active is usable; suspended is paused and resumable; retired is final. A grant is issued to an active agent only. draft and retired need AGENT_LIFECYCLE_STATES_ENABLED on the auth service.
+          description: Lifecycle state. draft is registered but not yet usable; active is usable; suspended is paused and resumable; retired is final. A grant is issued to an active agent only. With AGENT_LIFECYCLE_STATES_ENABLED on, suspending or retiring revokes live grants and online verification rejects tokens of non-active agents. draft and retired need that flag on the auth service.
         statusChangedAt:
           type: string
           format: date-time
@@ -3301,7 +3301,7 @@ paths:
                 status:
                   type: string
                   enum: [draft, active, suspended, retired]
-                  description: draft becomes active; active and suspended swap; either retires; retired is final. A transition outside this table is refused with 409 AGENT_STATUS_TRANSITION, and one that races another change with 409 AGENT_STATUS_CONFLICT. With AGENT_LIFECYCLE_STATES_ENABLED off only active and suspended are accepted, as before.
+                  description: draft becomes active; active and suspended swap; either retires; retired is final. A transition outside this table is refused with 409 AGENT_STATUS_TRANSITION, and one that races another change with 409 AGENT_STATUS_CONFLICT. With AGENT_LIFECYCLE_STATES_ENABLED on, suspension and retirement revoke live agent grants and descendants in the same transaction; resuming a suspended agent first sweeps older grants. With the flag off only active and suspended are accepted, as before.
                 statusReason:
                   type: string
                   maxLength: 500
@@ -4606,9 +4606,10 @@ paths:
                 $ref: "#/components/schemas/Error"
         "409":
           description: >-
-            `key_not_active`: the sub-agent's registered key was reported compromised
-            (`POST /v1/agents/{id}/keys/{thumbprint}/compromise`), including while this request
-            was in flight. No grant is bound to a compromised key.
+            `AGENT_INACTIVE`: the sub-agent became inactive while this request was in flight
+            (with agent lifecycle states enabled). `key_not_active`: the sub-agent's registered
+            key was reported compromised (`POST /v1/agents/{id}/keys/{thumbprint}/compromise`),
+            including while this request was in flight. No grant is bound to a compromised key.
           content:
             application/json:
               schema:

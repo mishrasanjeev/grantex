@@ -1,5 +1,6 @@
 import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
+import { config } from '../config.js';
 import { GrantTokenClaimsError } from './grant-token-claims.js';
 import {
   verifyOAuthAccessToken,
@@ -68,9 +69,11 @@ export async function checkActiveGrantToken(
 
   const sql = getSql();
   const rows = await sql`
-    SELECT gt.is_revoked, gt.expires_at, g.status AS grant_status
+    SELECT gt.is_revoked, gt.expires_at, g.status AS grant_status,
+           a.status AS agent_status
     FROM grant_tokens gt
     JOIN grants g ON g.id = gt.grant_id
+    JOIN agents a ON a.id = g.agent_id AND a.developer_id = g.developer_id
     WHERE gt.jti = ${claims.jti}
       AND (${options.expectedDeveloperId ?? null}::text IS NULL OR g.developer_id = ${options.expectedDeveloperId ?? null})
       AND (${options.expectedProtocol ?? null}::text IS NULL OR g.protocol = ${options.expectedProtocol ?? null})
@@ -81,7 +84,8 @@ export async function checkActiveGrantToken(
     return { ok: false, reason: 'not_found' };
   }
 
-  if ((row['is_revoked'] as boolean) || row['grant_status'] !== 'active') {
+  if ((row['is_revoked'] as boolean) || row['grant_status'] !== 'active'
+      || (config.agentLifecycleStatesEnabled && row['agent_status'] !== 'active')) {
     return { ok: false, reason: 'revoked' };
   }
 
@@ -105,9 +109,11 @@ export async function checkActiveOAuthAccessToken(
 
   const sql = getSql();
   const rows = await sql`
-    SELECT gt.is_revoked, gt.expires_at, g.id AS grant_id, g.status AS grant_status
+    SELECT gt.is_revoked, gt.expires_at, g.id AS grant_id, g.status AS grant_status,
+           a.status AS agent_status
     FROM grant_tokens gt
     JOIN grants g ON g.id = gt.grant_id
+    JOIN agents a ON a.id = g.agent_id AND a.developer_id = g.developer_id
     WHERE gt.jti = ${claims.jti}
       AND g.protocol = ${expectedProtocol}
   `;
@@ -123,7 +129,8 @@ export async function checkActiveOAuthAccessToken(
   if ((tokenRevocationResult.status === 'fulfilled' && tokenRevocationResult.value)
       || (grantRevocationResult.status === 'fulfilled' && grantRevocationResult.value)
       || row['is_revoked'] === true
-      || row['grant_status'] !== 'active') {
+      || row['grant_status'] !== 'active'
+      || (config.agentLifecycleStatesEnabled && row['agent_status'] !== 'active')) {
     return { ok: false, reason: 'revoked' };
   }
   if (new Date(row['expires_at'] as string) <= new Date()) {

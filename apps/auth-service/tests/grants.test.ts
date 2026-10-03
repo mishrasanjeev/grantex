@@ -293,6 +293,37 @@ describe('POST /v1/grants/verify', () => {
     expect(body.claims?.jti).toBe('tok_valid');
   });
 
+  it('accepts only an active agent under the lifecycle gate', async () => {
+    process.env['AGENT_LIFECYCLE_STATES_ENABLED'] = 'true';
+    try {
+      const { signGrantToken } = await import('../src/lib/crypto.js');
+      const token = await signGrantToken({
+        sub: 'user_123', agt: TEST_GRANT.agent_id, dev: TEST_GRANT.developer_id,
+        scp: TEST_GRANT.scopes, jti: 'tok_inactive_agent', grnt: TEST_GRANT.id,
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      });
+      for (const status of ['active', 'suspended', 'retired']) {
+        seedAuth();
+        sqlMock.mockResolvedValueOnce([{
+          is_revoked: false,
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          grant_status: 'active', agent_status: status,
+        }]);
+        const res = await app.inject({
+          method: 'POST', url: '/v1/grants/verify', headers: authHeader(), payload: { token },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toMatchObject(status === 'active'
+          ? { active: true }
+          : { active: false, reason: 'revoked' });
+        expect(sqlMock.mock.calls.some(([parts]) => String(parts).includes('JOIN agents a'))).toBe(true);
+        sqlMock.mockClear();
+      }
+    } finally {
+      delete process.env['AGENT_LIFECYCLE_STATES_ENABLED'];
+    }
+  });
+
   it('falls back to the authoritative database when Redis reads fail', async () => {
     seedAuth();
     mockRedis.get.mockRejectedValue(new Error('redis unavailable'));

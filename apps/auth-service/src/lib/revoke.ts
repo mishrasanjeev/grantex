@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import { getSql, type TxSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
 import { emitEvent } from './events.js';
+import { logger } from './logger.js';
 import { grantsRevokedTotal } from './metrics.js';
 import { revokeVCsByGrantIds } from './vc.js';
 import { releaseWalletReservationsForGrants } from './prepaid-wallet.js';
@@ -174,6 +175,80 @@ export async function revokeGrantCascade(
   return publishGrantRevocation(developerId, tree);
 }
 
+/** Revoke an agent's live grants and descendants inside the caller's transaction. */
+export async function revokeAgentGrantsInTx(
+  tx: TxSql,
+  agentId: string,
+  developerId: string,
+  requireRevokePolicy: boolean,
+): Promise<Record<string, unknown>[]> {
+  await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
+  if (requireRevokePolicy) {
+    const policy = await tx`
+      SELECT irregularity_response_mode FROM developers
+      WHERE id = ${developerId} FOR SHARE
+    `;
+    if (policy[0]?.['irregularity_response_mode'] !== 'revoke_agent_grants') return [];
+  }
+  const revokedRows = await tx`
+    WITH RECURSIVE affected (id) AS (
+      SELECT id FROM grants
+      WHERE agent_id = ${agentId}
+        AND developer_id = ${developerId}
+        AND status IN ('active', 'suspended')
+        AND expires_at > NOW()
+      UNION
+      SELECT child.id FROM grants child
+      JOIN affected parent ON child.parent_grant_id = parent.id
+      WHERE child.developer_id = ${developerId}
+        AND child.status IN ('active', 'suspended')
+    )
+    UPDATE grants SET status = 'revoked', revoked_at = NOW()
+    WHERE id IN (SELECT id FROM affected)
+      AND developer_id = ${developerId}
+      AND status IN ('active', 'suspended')
+    RETURNING id, expires_at, parent_grant_id
+  `;
+  if (revokedRows.length === 0) return [];
+  const ids = revokedRows.map((row) => row['id'] as string);
+  await releaseWalletReservationsForGrants(tx, developerId, ids);
+  await revokeVCsByGrantIds(ids, developerId, tx);
+  await tx`DELETE FROM grant_suspensions WHERE developer_id = ${developerId} AND grant_id = ANY(${ids})`;
+  return revokedRows;
+}
+
+/** Publish the cache and metric only after the transaction commits. */
+export async function publishAgentGrantRevocations(rows: Record<string, unknown>[]): Promise<string[]> {
+  if (rows.length === 0) return [];
+  await cacheRevokedGrants(rows);
+  grantsRevokedTotal.inc(rows.length);
+  return rows.map((row) => row['id'] as string);
+}
+
+/** Notify lifecycle revocations after the committed grant sweep. */
+export async function publishLifecycleGrantRevocations(
+  developerId: string,
+  rows: Record<string, unknown>[],
+): Promise<string[]> {
+  const ids = await publishAgentGrantRevocations(rows);
+  if (ids.length === 0) return ids;
+  const revokedIds = new Set(rows.map((row) => row['id'] as string));
+  const parentsWithRevokedChildren = new Set(rows
+    .map((row) => row['parent_grant_id'])
+    .filter((id): id is string => typeof id === 'string' && revokedIds.has(id)));
+  const publications = await Promise.allSettled(rows.map((row) =>
+    emitEvent(developerId, 'grant.revoked', {
+      grantId: row['id'] as string,
+      cascade: parentsWithRevokedChildren.has(row['id'] as string),
+    }),
+  ));
+  const failed = publications.filter((result) => result.status === 'rejected').length;
+  if (failed > 0) {
+    logger.warn({ developerId, failed }, 'lifecycle grant revocation publication failed after commit');
+  }
+  return ids;
+}
+
 /** Revoke every live grant for an agent and its descendants as one atomic operation. */
 export async function revokeAgentGrantsCascade(
   agentId: string,
@@ -181,43 +256,8 @@ export async function revokeAgentGrantsCascade(
   requireRevokePolicy: boolean,
 ): Promise<string[]> {
   const sql = getSql();
-  let revokedRows: Record<string, unknown>[] = [];
-  await sql.begin(async (_tx) => {
-    const tx = _tx as unknown as TxSql;
-    await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
-    if (requireRevokePolicy) {
-      const policy = await tx`
-        SELECT irregularity_response_mode FROM developers
-        WHERE id = ${developerId} FOR SHARE
-      `;
-      if (policy[0]?.['irregularity_response_mode'] !== 'revoke_agent_grants') return;
-    }
-    revokedRows = await tx`
-      WITH RECURSIVE affected (id) AS (
-        SELECT id FROM grants
-        WHERE agent_id = ${agentId}
-          AND developer_id = ${developerId}
-          AND status = 'active'
-          AND expires_at > NOW()
-        UNION
-        SELECT child.id FROM grants child
-        JOIN affected parent ON child.parent_grant_id = parent.id
-        WHERE child.developer_id = ${developerId}
-          AND child.status = 'active'
-      )
-      UPDATE grants SET status = 'revoked', revoked_at = NOW()
-      WHERE id IN (SELECT id FROM affected)
-        AND developer_id = ${developerId}
-        AND status = 'active'
-      RETURNING id, expires_at
-    `;
-    if (revokedRows.length === 0) return;
-    const ids = revokedRows.map((row) => row['id'] as string);
-    await releaseWalletReservationsForGrants(tx, developerId, ids);
-    await revokeVCsByGrantIds(ids, developerId, tx);
-  });
-
-  await cacheRevokedGrants(revokedRows);
-  grantsRevokedTotal.inc(revokedRows.length);
-  return revokedRows.map((row) => row['id'] as string);
+  const revokedRows = await sql.begin(async (_tx) => revokeAgentGrantsInTx(
+    _tx as unknown as TxSql, agentId, developerId, requireRevokePolicy,
+  ));
+  return publishAgentGrantRevocations(revokedRows);
 }

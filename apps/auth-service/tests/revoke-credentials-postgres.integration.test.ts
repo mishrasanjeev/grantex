@@ -16,6 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { TxSql } from '../src/db/client.js';
 import { createTestDatabase } from './helpers/database.js';
 
 // A database of its own; see FINDINGS G-24.
@@ -59,11 +60,70 @@ afterAll(async () => {
   }
 }, 60_000);
 
-const { revokeGrantCascade, revokeAgentGrantsCascade } = await import('../src/lib/revoke.js');
+const { revokeGrantCascade, revokeAgentGrantsCascade, revokeAgentGrantsInTx } = await import('../src/lib/revoke.js');
 const { reconcileRevokedGrantDescendants, reconcileRevokedGrantVCs } = await import('../src/lib/vc-reconciliation.js');
 const { runMigrations } = await import('../src/db/migrate.js');
 
 describePostgres('revoking a grant revokes its credentials in the same transaction', () => {
+  it('commits or rolls back the agent lifecycle and grant-tree sweep together', async () => {
+    const sql = state.pool!;
+    const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
+    const developerId = `dev_lifecycle_${suffix}`;
+    const otherDeveloperId = `dev_other_${suffix}`;
+    const agentId = `ag_lifecycle_${suffix}`;
+    const childAgentId = `ag_child_${suffix}`;
+    const otherAgentId = `ag_other_${suffix}`;
+    const parentId = `grnt_parent_${suffix}`;
+    const childId = `grnt_child_${suffix}`;
+    const otherGrantId = `grnt_other_${suffix}`;
+    await runMigrations(sql);
+    try {
+      await sql`INSERT INTO developers (id, api_key_hash, name)
+                VALUES (${developerId}, ${'hash_a_' + suffix}, 'Lifecycle Test'),
+                       (${otherDeveloperId}, ${'hash_b_' + suffix}, 'Other Test')`;
+      await sql`INSERT INTO agents (id, did, developer_id, name)
+                VALUES (${agentId}, ${'did:grantex:' + agentId}, ${developerId}, 'Agent'),
+                       (${childAgentId}, ${'did:grantex:' + childAgentId}, ${developerId}, 'Child'),
+                       (${otherAgentId}, ${'did:grantex:' + otherAgentId}, ${otherDeveloperId}, 'Other')`;
+      await sql`INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+                VALUES (${parentId}, ${agentId}, 'user_lifecycle', ${developerId}, ${['read']}, NOW() + INTERVAL '1 hour'),
+                       (${otherGrantId}, ${otherAgentId}, 'user_other', ${otherDeveloperId}, ${['read']}, NOW() + INTERVAL '1 hour')`;
+      await sql`INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, status, expires_at, parent_grant_id)
+                VALUES (${childId}, ${childAgentId}, 'user_lifecycle', ${developerId}, ${['read']}, 'suspended',
+                        NOW() + INTERVAL '1 hour', ${parentId})`;
+
+      await expect(sql.begin(async (raw) => {
+        const tx = raw as unknown as TxSql;
+        await tx`UPDATE agents SET status = 'suspended' WHERE id = ${agentId} AND developer_id = ${developerId}`;
+        await revokeAgentGrantsInTx(tx, agentId, developerId, false);
+        throw new Error('roll back lifecycle transition');
+      })).rejects.toThrow('roll back lifecycle transition');
+      expect((await sql`SELECT status FROM agents WHERE id = ${agentId}`)[0]?.['status']).toBe('active');
+      expect((await sql`SELECT status FROM grants WHERE id = ${parentId}`)[0]?.['status']).toBe('active');
+      expect((await sql`SELECT status FROM grants WHERE id = ${childId}`)[0]?.['status']).toBe('suspended');
+      expect(await sql`SELECT grant_id FROM grant_revocation_events
+                       WHERE developer_id = ${developerId} AND action = 'revoked'`).toHaveLength(0);
+
+      const revoked = await sql.begin(async (raw) => {
+        const tx = raw as unknown as TxSql;
+        await tx`UPDATE agents SET status = 'suspended' WHERE id = ${agentId} AND developer_id = ${developerId}`;
+        return revokeAgentGrantsInTx(tx, agentId, developerId, false);
+      });
+      expect(new Set(revoked.map((row) => row['id']))).toEqual(new Set([parentId, childId]));
+      expect((await sql`SELECT status FROM agents WHERE id = ${agentId}`)[0]?.['status']).toBe('suspended');
+      expect((await sql`SELECT status FROM grants WHERE id = ${parentId}`)[0]?.['status']).toBe('revoked');
+      expect((await sql`SELECT status FROM grants WHERE id = ${childId}`)[0]?.['status']).toBe('revoked');
+      expect((await sql`SELECT status FROM grants WHERE id = ${otherGrantId}`)[0]?.['status']).toBe('active');
+      const feed = await sql`SELECT grant_id FROM grant_revocation_events
+                             WHERE developer_id = ${developerId} AND action = 'revoked'`;
+      expect(new Set(feed.map((row) => row['grant_id']))).toEqual(new Set([parentId, childId]));
+    } finally {
+      await sql`DELETE FROM grants WHERE id IN (${parentId}, ${childId}, ${otherGrantId})`.catch(() => undefined);
+      await sql`DELETE FROM agents WHERE id IN (${agentId}, ${childAgentId}, ${otherAgentId})`.catch(() => undefined);
+      await sql`DELETE FROM developers WHERE id IN (${developerId}, ${otherDeveloperId})`.catch(() => undefined);
+    }
+  }, 300_000);
+
   it('marks the credential revoked and flips its status-list bit', async () => {
     const sql = state.pool!;
     const suffix = randomUUID().replace(/-/g, '').slice(0, 12);

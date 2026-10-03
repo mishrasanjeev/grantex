@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { buildTestApp, seedAuth, authHeader, sqlMock, TEST_DEVELOPER, TEST_AGENT } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 import { generateKeyPairSync, sign } from 'node:crypto';
@@ -67,6 +67,25 @@ describe('POST /v1/consent-bundles', () => {
     expect(executedSql).toContain('INSERT INTO grant_tokens');
     expect(body.bundleId).toBe(body.data.bundleId);
     expect(body.grantToken).toBe(body.data.grantToken);
+  });
+
+  it('refuses a bundle when the agent became inactive before the insertion transaction', async () => {
+    vi.stubEnv('AGENT_LIFECYCLE_STATES_ENABLED', 'true');
+    try {
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([{ id: TEST_AGENT.id, did: TEST_AGENT.did, scopes: ['read'] }]);
+      const res = await app.inject({
+        method: 'POST', url: '/v1/consent-bundles', headers: authHeader(),
+        payload: { agentId: TEST_AGENT.id, userId: 'user_123', scopes: ['read'] },
+      });
+      expect(res.statusCode).toBe(404);
+      const statements = sqlMock.mock.calls.map(([parts]) => String(parts));
+      expect(statements.join('\n')).toContain('FOR UPDATE');
+      expect(statements.join('\n')).not.toContain('INSERT INTO grants');
+      expect(statements.join('\n')).not.toContain('INSERT INTO consent_bundles');
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('rejects an audit algorithm that does not match the generated Ed25519 key', async () => {

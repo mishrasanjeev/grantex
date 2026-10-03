@@ -34,10 +34,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   conditional on the state that was checked), records `statusChangedAt`,
   `statusReason` (kept by a same-state request) and `retiredAt`, and emits
   `agent.status_changed`. The compliance summaries count `draft` and `retired`
-  agents alongside the other states. Issuance already requires `active`, so a draft,
-  suspended or retired agent is never issued a grant; retiring does not revoke
-  the grants it holds (revoke them, or use the emergency stop). Migration 132
-  adds the columns and a check constraint; existing agents are unchanged.
+  agents alongside the other states. Issuance requires `active`. With the flag on,
+  suspending or retiring an agent now revokes its unexpired active or suspended
+  grants and delegated descendants in the status-change transaction, including
+  wallet reservations and issued credentials; resuming a suspended agent first
+  sweeps any grants left from before this behavior. Online Grantex token checks
+  reject a non-active agent even if a historical grant row remains active.
+  Same-state suspend/retire PATCH requests can sweep historical grants. Offline
+  signature-only verifiers must use revocation-aware verification to see this
+  change; disabling the flag retains the legacy behavior. Migration 132 adds
+  the columns and a check constraint; existing agents are unchanged.
 - SDKs: the agent type carries the new states and the lifecycle fields in all
   three; registration takes `status` (`draft` or `active`); `agents.update`
   takes `status` and `statusReason` (TypeScript), `status` and

@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { getSql, type TxSql } from '../db/client.js';
+import { getSql, queries, type TxSql } from '../db/client.js';
 import { newAgentId } from '../lib/ids.js';
 import { isPlanName, PLAN_LIMITS } from '../lib/plans.js';
 import {
@@ -11,6 +11,7 @@ import type { JWK } from 'jose';
 import { config } from '../config.js';
 import { AgentKeyMirrorRefusal, mirrorRegisteredAgentKey } from '../lib/registry/agent-key-mirror.js';
 import { emitEvent } from '../lib/events.js';
+import { publishLifecycleGrantRevocations, revokeAgentGrantsInTx } from '../lib/revoke.js';
 
 interface RegisterAgentBody {
   name: string;
@@ -38,8 +39,8 @@ interface UpdateAgentBody {
 /**
  * Agent lifecycle: draft (registered, not yet usable), active, suspended (paused,
  * resumable) and retired (final). Issuance requires `active`, so a draft, suspended
- * or retired agent is never issued a grant; retiring does not revoke the grants it
- * already holds (revoke them, or use the emergency stop).
+ * or retired agent is never issued a grant. With the lifecycle flag on,
+ * suspending or retiring also revokes its live grant tree.
  */
 export const AGENT_STATUSES = ['draft', 'active', 'suspended', 'retired'] as const;
 export type AgentStatus = (typeof AGENT_STATUSES)[number];
@@ -312,6 +313,11 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       expectedStatus = current;
       if (current !== nextStatus) statusChange = { from: current, to: nextStatus };
     }
+    // A resume also sweeps pre-existing grants, so one issued before a
+    // suspension cannot become usable again when the agent is reactivated.
+    const revokeForStatus = lifecycle && nextStatus !== undefined
+      && (nextStatus === 'suspended' || nextStatus === 'retired'
+        || (nextStatus === 'active' && expectedStatus === 'suspended'));
 
     if (scopes !== undefined) {
       if (!Array.isArray(scopes) || scopes.some(s => typeof s !== 'string'
@@ -347,6 +353,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     const keyedDid = keyThumbprint
       ? `did:web:${config.didWebDomain}:agents:${request.params.id}`
       : null;
+    let revokedRows: Record<string, unknown>[] = [];
 
     // AGENT_KEY_HISTORY_MIRROR_ENABLED (default off), and only when the key
     // changes: the same update in a transaction that also mirrors the key into
@@ -397,6 +404,9 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
                       status_changed_at, status_reason, retired_at,
                       created_at, updated_at
           `;
+          if (mirrored[0] && revokeForStatus) {
+            revokedRows = await revokeAgentGrantsInTx(tx, agentId, developerId, false);
+          }
           await mirrorRegisteredAgentKey(tx, {
             agentId, developerId, jwk, thumbprint, previousThumbprint: current[0].key_thumbprint,
           });
@@ -419,14 +429,15 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       if (!agent) {
         return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
       }
+      if (revokeForStatus) await publishLifecycleGrantRevocations(request.developer.id, revokedRows);
       announceStatusChange(request.developer.id, agent, statusChange);
       return reply.send(toAgentResponse(agent));
     }
 
-    // Use COALESCE so unset fields keep their current values — single SQL call, no fragments
-    let rows;
+    // Use COALESCE so unset fields keep their current values.
+    let rows: Record<string, unknown>[] = [];
     try {
-      rows = await sql`
+      const updateAgent = (db: TxSql) => db`
         UPDATE agents
         SET
         did         = COALESCE(${keyedDid}, did),
@@ -445,7 +456,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
         retired_at = CASE WHEN ${status ?? null}::text = 'retired' THEN COALESCE(retired_at, NOW()) ELSE retired_at END,
         redirect_uris = COALESCE(${validatedRedirectUris ?? null}, redirect_uris),
         resource_servers = COALESCE(${validatedResourceServers ?? null}, resource_servers),
-        public_jwk = COALESCE(${validatedPublicJwk ? sql.json(validatedPublicJwk) : null}, public_jwk),
+        public_jwk = COALESCE(${validatedPublicJwk ? db.json(validatedPublicJwk) : null}, public_jwk),
         key_thumbprint = COALESCE(${keyThumbprint ?? null}, key_thumbprint),
         key_verified_thumbprint = CASE
           WHEN ${keyThumbprint ?? null}::text IS NULL THEN key_verified_thumbprint
@@ -464,6 +475,17 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
                   status_changed_at, status_reason, retired_at,
                   created_at, updated_at
       `;
+      if (revokeForStatus) {
+        await sql.begin(async (_tx) => {
+          const tx = _tx as unknown as TxSql;
+          rows = await updateAgent(tx);
+          if (rows[0]) {
+            revokedRows = await revokeAgentGrantsInTx(tx, request.params.id, request.developer.id, false);
+          }
+        });
+      } else {
+        rows = await updateAgent(queries(sql));
+      }
     } catch (error) {
       if (isAgentKeyConflict(error)) {
         return reply.status(409).send({
@@ -479,6 +501,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
     if (!agent) {
       return reply.status(404).send({ message: 'Agent not found', code: 'NOT_FOUND', requestId: request.id });
     }
+    if (revokeForStatus) await publishLifecycleGrantRevocations(request.developer.id, revokedRows);
     announceStatusChange(request.developer.id, agent, statusChange);
     return reply.send(toAgentResponse(agent));
   });

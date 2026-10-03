@@ -106,6 +106,37 @@ describe('POST /v1/token', () => {
     expect(res.json().code).toBe('PLAN_LIMIT_EXCEEDED');
   });
 
+  it('rechecks lifecycle status after locks 3 and 4 without consuming the code', async () => {
+    vi.stubEnv('AGENT_LIFECYCLE_STATES_ENABLED', 'true');
+    try {
+      sqlMock.mockImplementation(async (parts: TemplateStringsArray) => {
+        const query = parts.join('?');
+        if (query.includes('FROM auth_requests ar')) return [validAuthRequest];
+        if (query.includes('COALESCE((SELECT plan')) return [{ plan: 'free', count: '0' }];
+        return [];
+      });
+      seedAuth();
+
+      const res = await app.inject({
+        method: 'POST', url: '/v1/token', headers: authHeader(),
+        payload: { code: 'still-approved', agentId: TEST_AGENT.id },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe('AGENT_INACTIVE');
+      const statements = sqlMock.mock.calls.map(([parts]) => String(parts));
+      const lock3 = statements.findIndex((statement) => statement.includes('hashtextextended') && statement.includes(', 3)'));
+      const lock4 = statements.findIndex((statement) => statement.includes('hashtextextended') && statement.includes(', 4)'));
+      const activeRead = statements.findIndex((statement) => statement.includes('SELECT id FROM agents'));
+      expect(lock3).toBeGreaterThanOrEqual(0);
+      expect(lock4).toBeGreaterThan(lock3);
+      expect(activeRead).toBeGreaterThan(lock4);
+      expect(statements.join('\n')).not.toMatch(/INSERT INTO grants|UPDATE auth_requests/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('does not consume the authorization code when JWT signing fails', async () => {
     const crypto = await import('../src/lib/crypto.js');
     const signer = vi.spyOn(crypto, 'signGrantToken').mockRejectedValueOnce(new Error('signer unavailable'));

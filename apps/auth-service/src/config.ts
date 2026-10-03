@@ -224,7 +224,8 @@ export const config = {
    * Agent lifecycle states (draft, active, suspended, retired) with the transition
    * table on PATCH /v1/agents/{id} and `status: draft` at registration. Off, the
    * routes behave as before: active or suspended only, `status` at registration
-   * and `statusReason` ignored like any unknown member.
+   * and `statusReason` ignored like any unknown member. On, suspending or
+   * retiring revokes live grants, and online token checks require an active agent.
    */
   get agentLifecycleStatesEnabled() { return process.env['AGENT_LIFECYCLE_STATES_ENABLED'] === 'true'; },
   /**

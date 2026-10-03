@@ -443,6 +443,19 @@ export async function tokenRoutes(app: FastifyInstance): Promise<void> {
           ? grantAuthorizationDetails
           : [...(grantAuthorizationDetails ?? []), commerceAuthorizationDetail(passportBinding, commerceConstraints)];
 
+        if (config.agentLifecycleStatesEnabled) {
+          // Lock order is the capacity lock (3), then the lifecycle sweep lock
+          // (4). This read runs after a sweep that committed while we waited.
+          await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
+          const activeAgent = await tx`
+            SELECT id FROM agents
+            WHERE id = ${authReq['agent_id'] as string}
+              AND developer_id = ${developerId}
+              AND status = 'active'
+          `;
+          if (!activeAgent[0]) routeError(400, 'Agent is not active', 'AGENT_INACTIVE');
+        }
+
         await tx`
           INSERT INTO grants (
             id, agent_id, principal_id, developer_id, scopes, expires_at,
