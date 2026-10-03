@@ -229,6 +229,24 @@ describePostgres('agent key history against real Postgres', () => {
     expect(row!['possession_proved_at']).not.toBeNull();
   }, 60_000);
 
+  it('revokes grants when a key update and lifecycle suspension share one PATCH', async () => {
+    vi.stubEnv('AGENT_LIFECYCLE_STATES_ENABLED', 'true');
+    const tenant = await newTenant();
+    const oldKey = await newKey('EdDSA');
+    const agentId = await createAgent(tenant, oldKey.jwk);
+    await dpopVerified(agentId, oldKey.thumbprint);
+    const grant = await mintGrant(tenant, agentId, 'shopper-01');
+    const replacement = await newKey('EdDSA');
+
+    const res = await call(tenant, 'PATCH', `/v1/agents/${agentId}`, {
+      status: 'suspended', publicJwk: replacement.jwk,
+    });
+
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({ status: 'suspended', keyThumbprint: replacement.thumbprint });
+    expect(await grantStatus(grant.grantId)).toBe('revoked');
+  }, 60_000);
+
   it('adds a pending key, proves possession over a challenge, and records it in the audit chain', async () => {
     const tenant = await newTenant();
     const agentId = await createAgent(tenant);
@@ -596,6 +614,22 @@ describePostgres('agent key history against real Postgres', () => {
     const agent = await sql`SELECT key_thumbprint, public_jwk, key_verified_thumbprint, status FROM agents WHERE id = ${agentId}`;
     expect(agent[0]).toMatchObject({ key_thumbprint: null, public_jwk: null, key_verified_thumbprint: null, status: 'suspended' });
     expect(await keyRow(key.thumbprint)).toMatchObject({ status: 'compromised' });
+  }, 60_000);
+
+  it('suspension from key compromise also revokes an unbound grant with lifecycle enabled', async () => {
+    vi.stubEnv('AGENT_LIFECYCLE_STATES_ENABLED', 'true');
+    const tenant = await newTenant();
+    const key = await newKey('EdDSA');
+    const agentId = await createAgent(tenant, key.jwk);
+    const grantId = `grnt_key_lifecycle_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+    await sql`INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+              VALUES (${grantId}, ${agentId}, 'shopper-01', ${tenant.id}, ${SCOPES}, NOW() + INTERVAL '1 hour')`;
+
+    const res = await call(tenant, 'POST', keyUrl(agentId, key.thumbprint, 'compromise'), {});
+
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()).toMatchObject({ agentSuspended: true, grantsRevoked: 1 });
+    expect(await grantStatus(grantId)).toBe('revoked');
   }, 60_000);
 
   it('a compromise of a key other than the registered one leaves the agent as it was', async () => {

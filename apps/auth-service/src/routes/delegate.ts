@@ -266,9 +266,22 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
     // answered below; anything else propagates as it always did.
     let refused = null as ReturnType<typeof issuanceRefusal>;
     let subAgentKeyCompromised = false;
+    let subAgentInactive = false;
     await sql.begin(async (_tx) => {
       const tx = _tx as unknown as TxSql;
       await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
+      // A lifecycle change takes this lock before sweeping grants. Re-read
+      // the sub-agent after it, so a delegation cannot land after the sweep.
+      if (config.agentLifecycleStatesEnabled) {
+        const activeSubAgent = await tx`
+          SELECT id FROM agents
+          WHERE id = ${subAgentId} AND developer_id = ${developerId} AND status = 'active'
+        `;
+        if (!activeSubAgent[0]) {
+          subAgentInactive = true;
+          return;
+        }
+      }
       // The sub-agent's key, read above, may have been reported compromised
       // since (POST /v1/agents/:id/keys/:thumbprint/compromise). The
       // compromise records the key in compromised_agent_keys and only then
@@ -370,6 +383,13 @@ export async function delegateRoutes(app: FastifyInstance): Promise<void> {
     });
     if (refused !== null) {
       return reply.status(refused.statusCode).send({ ...refused.body, requestId: request.id });
+    }
+    if (subAgentInactive) {
+      return reply.status(409).send({
+        message: 'Sub-agent is no longer active',
+        code: 'AGENT_INACTIVE',
+        requestId: request.id,
+      });
     }
     if (subAgentKeyCompromised) {
       return reply.status(409).send({

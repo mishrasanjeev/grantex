@@ -26,6 +26,7 @@ import type { JWK } from 'jose';
 import type postgres from 'postgres';
 import { config } from '../config.js';
 import { getSql, queries, type TxSql } from '../db/client.js';
+import { publishLifecycleGrantRevocations, revokeAgentGrantsInTx } from '../lib/revoke.js';
 import { validateAgentPublicJwk } from '../lib/agent-security.js';
 import { appendPlatformAuditEntries, lockAuditChain } from '../lib/audit-chain.js';
 import {
@@ -512,6 +513,7 @@ export async function agentKeysRoutes(app: FastifyInstance): Promise<void> {
       promotedThumbprint?: string;
       agentSuspended: boolean;
     } | undefined;
+    let lifecycleRevokedRows: Record<string, unknown>[] = [];
 
     // Step 1: end the key and take it out of every place it could still be
     // used, in one transaction. The agent row is locked FOR UPDATE, which is
@@ -581,6 +583,9 @@ export async function agentKeysRoutes(app: FastifyInstance): Promise<void> {
           agentSuspended = true;
         }
       }
+      if (agentSuspended && config.agentLifecycleStatesEnabled) {
+        lifecycleRevokedRows = await revokeAgentGrantsInTx(tx, agentId, developerId, false);
+      }
       if (!alreadyCompromised) {
         await audit(tx, developerId, agent, AGENT_KEY_AUDIT_ACTIONS.compromised, {
           thumbprint,
@@ -596,6 +601,7 @@ export async function agentKeysRoutes(app: FastifyInstance): Promise<void> {
       };
     });
     if (!outcome) throw new Error('compromise recorded no key');
+    if (config.agentLifecycleStatesEnabled) await publishLifecycleGrantRevocations(developerId, lifecycleRevokedRows);
 
     // Step 2: revoke every grant bound to the key (cnf.jkt), and everything
     // delegated beneath them, through the cascade. It runs on every call, so
@@ -620,7 +626,7 @@ export async function agentKeysRoutes(app: FastifyInstance): Promise<void> {
         WHERE developer_id = ${developerId} AND agent_key_thumbprint = ${thumbprint}
           AND status IN ('active', 'suspended')`;
     });
-    let grantsRevoked = 0;
+    let grantsRevoked = lifecycleRevokedRows.length;
     if (bound.length > 0) {
       const cascade = await cascadeGrantAction(sql, {
         developerId,
@@ -630,7 +636,7 @@ export async function agentKeysRoutes(app: FastifyInstance): Promise<void> {
         reason: 'agent key compromised',
         context: { key_thumbprint: thumbprint, agent_id: outcome.agentId },
       });
-      grantsRevoked = cascade.affected.length;
+      grantsRevoked += cascade.affected.length;
     }
 
     return reply.send({

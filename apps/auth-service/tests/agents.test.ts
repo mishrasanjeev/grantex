@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildTestApp, authHeader, seedAuth, sqlMock, TEST_AGENT, TEST_DEVELOPER } from './helpers.js';
+import { buildTestApp, authHeader, seedAuth, sqlMock, mockRedis, TEST_AGENT, TEST_DEVELOPER } from './helpers.js';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
@@ -395,6 +395,75 @@ describe('PATCH /v1/agents/:id', () => {
     expect(String(update![0])).toContain('retired_at');
   });
 
+  it('revokes an agent grant tree in the same transaction as suspension', async () => {
+    const expiresAt = new Date(Date.now() + 3600_000).toISOString();
+    seedAuth();
+    sqlMock.mockImplementation(async (parts: TemplateStringsArray) => {
+      const query = parts.join('');
+      if (query.includes('SELECT status FROM agents')) return [{ status: 'active' }];
+      if (query.includes('UPDATE agents')) return [{ ...TEST_AGENT, status: 'suspended' }];
+      if (query.includes("UPDATE grants SET status = 'revoked'")) {
+        return [{ id: 'grnt_parent', expires_at: expiresAt }, { id: 'grnt_child', expires_at: expiresAt }];
+      }
+      return [];
+    });
+
+    const res = await app.inject({
+      method: 'PATCH', url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(), payload: { status: 'suspended', statusReason: 'operator action' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqlMock.begin).toHaveBeenCalledTimes(1);
+    const queries = sqlMock.mock.calls.map(([parts]) => String(parts));
+    expect(queries.findIndex((query) => query.includes('UPDATE agents'))).toBeLessThan(
+      queries.findIndex((query) => query.includes("UPDATE grants SET status = 'revoked'")),
+    );
+    const revoke = sqlMock.mock.calls.find(([parts]) => String(parts).includes("UPDATE grants SET status = 'revoked'"));
+    expect(revoke?.slice(1)).toContain(TEST_DEVELOPER.id);
+    expect(revoke?.slice(1)).toContain(TEST_AGENT.id);
+    expect(queries.join('\n')).toContain('DELETE FROM grant_suspensions');
+    expect(mockRedis.set).toHaveBeenCalledWith('revoked:grant:grnt_parent', '1', 'EX', expect.any(Number));
+    expect(mockRedis.set).toHaveBeenCalledWith('revoked:grant:grnt_child', '1', 'EX', expect.any(Number));
+  });
+
+  it('fails the status change when the grant sweep fails', async () => {
+    seedAuth();
+    sqlMock.mockImplementation(async (parts: TemplateStringsArray) => {
+      const query = parts.join('');
+      if (query.includes('SELECT status FROM agents')) return [{ status: 'active' }];
+      if (query.includes('UPDATE agents')) return [{ ...TEST_AGENT, status: 'retired' }];
+      if (query.includes("UPDATE grants SET status = 'revoked'")) throw new Error('grant sweep unavailable');
+      return [];
+    });
+
+    const res = await app.inject({
+      method: 'PATCH', url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(), payload: { status: 'retired' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(mockRedis.set).not.toHaveBeenCalledWith(expect.stringContaining('revoked:grant:'), '1', 'EX', expect.any(Number));
+  });
+
+  it('sweeps old grants before a suspended agent becomes active again', async () => {
+    seedAuth();
+    sqlMock.mockImplementation(async (parts: TemplateStringsArray) => {
+      const query = parts.join('');
+      if (query.includes('SELECT status FROM agents')) return [{ status: 'suspended' }];
+      if (query.includes('UPDATE agents')) return [{ ...TEST_AGENT, status: 'active' }];
+      return [];
+    });
+
+    const res = await app.inject({
+      method: 'PATCH', url: `/v1/agents/${TEST_AGENT.id}`,
+      headers: authHeader(), payload: { status: 'active' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(sqlMock.mock.calls.some(([parts]) => String(parts).includes("UPDATE grants SET status = 'revoked'"))).toBe(true);
+  });
+
   it('refuses a transition the lifecycle does not allow, before any write', async () => {
     for (const [from, to] of [['retired', 'active'], ['draft', 'suspended'], ['retired', 'suspended']]) {
       sqlMock.mockReset();
@@ -415,6 +484,7 @@ describe('PATCH /v1/agents/:id', () => {
   it('activates a draft and lets a suspended agent resume', async () => {
     for (const [from, to] of [['draft', 'active'], ['suspended', 'active'], ['active', 'suspended'], ['active', 'active']]) {
       sqlMock.mockReset();
+      sqlMock.mockResolvedValue([]);
       seedAuth();
       sqlMock.mockResolvedValueOnce([{ status: from }]);
       sqlMock.mockResolvedValueOnce([{ ...TEST_AGENT, status: to }]);

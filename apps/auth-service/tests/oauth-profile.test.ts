@@ -8,7 +8,7 @@ import {
   type CryptoKey,
   type JWK,
 } from 'jose';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { accessTokenHash, verifyDpopProof } from '../src/lib/dpop.js';
 import { signOAuthAccessToken } from '../src/lib/crypto.js';
 import { sealRefreshReplayToken } from '../src/lib/refresh-replay.js';
@@ -194,6 +194,51 @@ describe('DPoP proof verification', () => {
 });
 
 describe('OAuth agent-grants profile routes', () => {
+  it('rechecks lifecycle status after capacity locking without consuming the code', async () => {
+    vi.stubEnv('AGENT_LIFECYCLE_STATES_ENABLED', 'true');
+    try {
+      const verifier = randomBytes(32).toString('base64url');
+      const challenge = createHash('sha256').update(verifier).digest('base64url');
+      sqlMock.mockImplementation(async (parts: TemplateStringsArray) => {
+        const query = parts.join('?');
+        if (query.includes('FROM auth_requests ar')) return [{
+          id: 'areq_oauth_lifecycle', status: 'approved',
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+          agent_status: 'active', agent_id: 'ag_oauth', developer_id: 'dev_oauth',
+          principal_id: 'principal_123', scopes: ['grantex.resource.read'],
+          redirect_uri: 'https://client.example/callback', code_challenge: challenge,
+          agent_key_thumbprint: dpopKey.thumbprint, key_thumbprint: dpopKey.thumbprint,
+          audience: 'https://grantex.dev/oauth/resource', authorization_details: null,
+        }];
+        if (query.includes('COALESCE((SELECT plan')) return [{ plan: 'free', count: '0' }];
+        return [];
+      });
+      const res = await app.inject({
+        method: 'POST', url: '/oauth/token',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          dpop: await dpopProof({ method: 'POST', uri: 'https://grantex.dev/oauth/token' }),
+        },
+        payload: form({
+          grant_type: 'authorization_code', code: 'still-approved', client_id: 'ag_oauth',
+          redirect_uri: 'https://client.example/callback', code_verifier: verifier,
+        }),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: 'invalid_grant' });
+      const statements = sqlMock.mock.calls.map(([parts]) => String(parts));
+      const lock3 = statements.findIndex((statement) => statement.includes('hashtextextended') && statement.includes(', 3)'));
+      const lock4 = statements.findIndex((statement) => statement.includes('hashtextextended') && statement.includes(', 4)'));
+      const activeRead = statements.findIndex((statement) => statement.includes('SELECT id FROM agents'));
+      expect(lock3).toBeGreaterThanOrEqual(0);
+      expect(lock4).toBeGreaterThan(lock3);
+      expect(activeRead).toBeGreaterThan(lock4);
+      expect(statements.join('\n')).not.toMatch(/INSERT INTO grants|UPDATE auth_requests/);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('marks token responses as non-cacheable', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -271,6 +316,44 @@ describe('OAuth agent-grants profile routes', () => {
       refresh_token: firstBody.refresh_token,
       refresh_replay: true,
     });
+  });
+
+  it('refuses an OAuth refresh replay after the agent is suspended', async () => {
+    process.env['AGENT_LIFECYCLE_STATES_ENABLED'] = 'true';
+    try {
+      const refreshToken = 'ref_oauth_parent';
+      const idempotencyKey = 'oauth-refresh-attempt-00000002';
+      sqlMock
+        .mockResolvedValueOnce([oauthRefreshRow({
+          is_used: true,
+          agent_status: 'suspended',
+          rotated_to_token_id: 'ref_oauth_child',
+          replay_expires_at: new Date(Date.now() + 60_000).toISOString(),
+          replay_request_hash: oauthRefreshReplayHash(refreshToken, idempotencyKey),
+          replay_jti: 'tok_oauth_replay',
+          replay_issued_at: Math.floor(Date.now() / 1000),
+          replay_grant_token: sealRefreshReplayToken('committed-access-token'),
+        })])
+        .mockResolvedValueOnce([{
+          id: 'ref_oauth_child', grant_id: 'grnt_oauth_refresh', is_used: false,
+          expires_at: new Date(Date.now() + 3600_000).toISOString(),
+        }]);
+
+      const res = await app.inject({
+        method: 'POST', url: '/oauth/token',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'idempotency-key': idempotencyKey,
+          dpop: await dpopProof({ method: 'POST', uri: 'https://grantex.dev/oauth/token' }),
+        },
+        payload: form({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: 'ag_oauth' }),
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: 'invalid_grant' });
+    } finally {
+      delete process.env['AGENT_LIFECYCLE_STATES_ENABLED'];
+    }
   });
 
   it('revokes the OAuth token family when a used refresh token has a different retry key', async () => {
@@ -559,6 +642,34 @@ describe('OAuth agent-grants profile routes', () => {
       authorized: true,
     });
     expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n')).toContain('g.protocol =');
+  });
+
+  it('refuses an otherwise live OAuth access token after agent retirement', async () => {
+    process.env['AGENT_LIFECYCLE_STATES_ENABLED'] = 'true';
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const token = await signOAuthAccessToken({
+        sub: 'principal_123', clientId: 'ag_oauth', scopes: ['grantex.resource.read'],
+        jti: 'tok_oauth_retired', aud: 'https://grantex.dev/oauth/resource',
+        cnf: { jkt: dpopKey.thumbprint }, exp: now + 300,
+      });
+      sqlMock.mockResolvedValueOnce([{
+        is_revoked: false, expires_at: new Date((now + 300) * 1000).toISOString(),
+        grant_id: 'grnt_oauth_resource', grant_status: 'active', agent_status: 'retired',
+      }]);
+      const res = await app.inject({
+        method: 'GET', url: '/oauth/resource',
+        headers: {
+          authorization: `DPoP ${token}`,
+          dpop: await dpopProof({ method: 'GET', uri: 'https://grantex.dev/oauth/resource', accessToken: token }),
+        },
+      });
+
+      expect(res.statusCode).toBe(401);
+      expect(res.json()).toMatchObject({ error: 'invalid_token' });
+    } finally {
+      delete process.env['AGENT_LIFECYCLE_STATES_ENABLED'];
+    }
   });
 });
 

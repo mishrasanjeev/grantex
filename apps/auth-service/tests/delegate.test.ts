@@ -141,6 +141,28 @@ describe('POST /v1/grants/delegate', () => {
     expect(sqlMock).toHaveBeenCalledTimes(5);
   });
 
+  it('does not delegate after the sub-agent is suspended during the request', async () => {
+    process.env['AGENT_LIFECYCLE_STATES_ENABLED'] = 'true';
+    try {
+      seedAuth();
+      sqlMock.mockResolvedValueOnce([{ ...ACTIVE_PARENT_ROW, agent_status: 'active' }]);
+      sqlMock.mockResolvedValueOnce([SUB_AGENT]);
+      sqlMock.mockResolvedValueOnce([]); // shared grant lock
+      sqlMock.mockResolvedValueOnce([]); // sub-agent is no longer active
+
+      const res = await app.inject({
+        method: 'POST', url: '/v1/grants/delegate', headers: authHeader(),
+        payload: { parentGrantToken: parentToken, subAgentId: SUB_AGENT.id, scopes: ['read'], expiresIn: '1h' },
+      });
+
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ code: 'AGENT_INACTIVE' });
+      expect(sqlMock.mock.calls.some(([parts]) => String(parts).includes('INSERT INTO grants'))).toBe(false);
+    } finally {
+      delete process.env['AGENT_LIFECYCLE_STATES_ENABLED'];
+    }
+  });
+
   it('returns 400 when requested scopes exceed parent scopes', async () => {
     seedAuth();
     mockRedis.get.mockResolvedValue(null);

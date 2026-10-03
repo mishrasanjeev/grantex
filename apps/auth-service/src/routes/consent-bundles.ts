@@ -226,8 +226,31 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
       // A refusal from the lockout check rolls the transaction back and is
       // answered below; anything else propagates as it always did.
       let refused = null as ReturnType<typeof issuanceRefusal>;
+      let agentInactive = false;
       await sql.begin(async (_tx) => {
         const tx = _tx as unknown as TxSql;
+        if (config.agentLifecycleStatesEnabled) {
+          // Lock the row before lock 4, matching status update then sweep.
+          // The earlier agent lookup was outside this transaction.
+          const activeAgent = await tx`
+            SELECT id FROM agents
+            WHERE id = ${agentId} AND developer_id = ${developerId} AND status = 'active'
+            FOR UPDATE
+          `;
+          if (!activeAgent[0]) {
+            agentInactive = true;
+            return;
+          }
+          await tx`SELECT pg_advisory_xact_lock(hashtextextended(${developerId}, 4))`;
+          const stillActive = await tx`
+            SELECT id FROM agents
+            WHERE id = ${agentId} AND developer_id = ${developerId} AND status = 'active'
+          `;
+          if (!stillActive[0]) {
+            agentInactive = true;
+            return;
+          }
+        }
         // An emergency stop's lockout, in the transaction that writes the
         // bundle's grant.
         await assertIssuanceOpen(tx, {
@@ -267,6 +290,13 @@ export async function consentBundlesRoutes(app: FastifyInstance): Promise<void> 
       });
       if (refused !== null) {
         return reply.status(refused.statusCode).send({ ...refused.body, requestId: request.id });
+      }
+      if (agentInactive) {
+        return reply.status(404).send({
+          message: 'Agent not found or not owned by developer',
+          code: 'NOT_FOUND',
+          requestId: request.id,
+        });
       }
 
       // Emit event
