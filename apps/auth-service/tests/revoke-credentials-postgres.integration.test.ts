@@ -66,6 +66,7 @@ const { runMigrations } = await import('../src/db/migrate.js');
 
 describePostgres('revoking a grant revokes its credentials in the same transaction', () => {
   it('commits or rolls back the agent lifecycle and grant-tree sweep together', async () => {
+    vi.stubEnv('AGENT_LIFECYCLE_STATES_ENABLED', 'true');
     const sql = state.pool!;
     const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
     const developerId = `dev_lifecycle_${suffix}`;
@@ -118,9 +119,63 @@ describePostgres('revoking a grant revokes its credentials in the same transacti
                              WHERE developer_id = ${developerId} AND action = 'revoked'`;
       expect(new Set(feed.map((row) => row['grant_id']))).toEqual(new Set([parentId, childId]));
     } finally {
+      vi.unstubAllEnvs();
       await sql`DELETE FROM grants WHERE id IN (${parentId}, ${childId}, ${otherGrantId})`.catch(() => undefined);
       await sql`DELETE FROM agents WHERE id IN (${agentId}, ${childAgentId}, ${otherAgentId})`.catch(() => undefined);
       await sql`DELETE FROM developers WHERE id IN (${developerId}, ${otherDeveloperId})`.catch(() => undefined);
+    }
+  }, 300_000);
+
+  it.each([false, true])('gates suspended-grant traversal in the irregularity cascade with lifecycle flag %s', async (enabled) => {
+    vi.stubEnv('AGENT_LIFECYCLE_STATES_ENABLED', String(enabled));
+    const sql = state.pool!;
+    const suffix = randomUUID().replace(/-/g, '').slice(0, 12);
+    const developerId = `dev_policy_${suffix}`;
+    const rootAgentId = `ag_policy_root_${suffix}`;
+    const childAgentId = `ag_policy_child_${suffix}`;
+    const grandchildAgentId = `ag_policy_grand_${suffix}`;
+    const rootId = `grnt_policy_root_${suffix}`;
+    const childId = `grnt_policy_child_${suffix}`;
+    const grandchildId = `grnt_policy_grand_${suffix}`;
+
+    await runMigrations(sql);
+    try {
+      await sql`INSERT INTO developers (id, api_key_hash, name, irregularity_response_mode)
+                VALUES (${developerId}, ${'hash_' + suffix}, 'Cascade Policy Test', 'revoke_agent_grants')`;
+      await sql`INSERT INTO agents (id, did, developer_id, name)
+                VALUES (${rootAgentId}, ${'did:grantex:' + rootAgentId}, ${developerId}, 'Root'),
+                       (${childAgentId}, ${'did:grantex:' + childAgentId}, ${developerId}, 'Child'),
+                       (${grandchildAgentId}, ${'did:grantex:' + grandchildAgentId}, ${developerId}, 'Grandchild')`;
+      await sql`INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at)
+                VALUES (${rootId}, ${rootAgentId}, 'user_policy', ${developerId}, ${['read']}, NOW() + INTERVAL '1 hour')`;
+      await sql`INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, status, expires_at, parent_grant_id)
+                VALUES (${childId}, ${childAgentId}, 'user_policy', ${developerId}, ${['read']}, 'suspended',
+                        NOW() + INTERVAL '1 hour', ${rootId})`;
+      await sql`INSERT INTO grants (id, agent_id, principal_id, developer_id, scopes, expires_at, parent_grant_id)
+                VALUES (${grandchildId}, ${grandchildAgentId}, 'user_policy', ${developerId}, ${['read']},
+                        NOW() + INTERVAL '1 hour', ${childId})`;
+      await sql`INSERT INTO grant_suspensions (grant_id, developer_id, root_grant_id)
+                VALUES (${childId}, ${developerId}, ${childId})`;
+
+      const revoked = await revokeAgentGrantsCascade(rootAgentId, developerId, true);
+      expect(new Set(revoked)).toEqual(new Set(enabled
+        ? [rootId, childId, grandchildId]
+        : [rootId]));
+      const grants = await sql<{ id: string; status: string }[]>`
+        SELECT id, status FROM grants WHERE developer_id = ${developerId}`;
+      expect(new Map(grants.map((grant) => [grant.id, grant.status]))).toEqual(new Map([
+        [rootId, 'revoked'],
+        [childId, enabled ? 'revoked' : 'suspended'],
+        [grandchildId, enabled ? 'revoked' : 'active'],
+      ]));
+      const suspensions = await sql`SELECT grant_id FROM grant_suspensions WHERE developer_id = ${developerId}`;
+      expect(suspensions.map((row) => row['grant_id'])).toEqual(enabled ? [] : [childId]);
+    } finally {
+      vi.unstubAllEnvs();
+      await sql`DELETE FROM grant_suspensions WHERE developer_id = ${developerId}`.catch(() => undefined);
+      await sql`DELETE FROM grants WHERE developer_id = ${developerId}`.catch(() => undefined);
+      await sql`DELETE FROM agents WHERE developer_id = ${developerId}`.catch(() => undefined);
+      await sql`DELETE FROM developers WHERE id = ${developerId}`.catch(() => undefined);
     }
   }, 300_000);
 
