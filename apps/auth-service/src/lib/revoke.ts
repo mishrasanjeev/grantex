@@ -190,30 +190,35 @@ export async function revokeAgentGrantsInTx(
     `;
     if (policy[0]?.['irregularity_response_mode'] !== 'revoke_agent_grants') return [];
   }
+  // Irregularity auto-revocation also uses this helper and was active-only before lifecycle states.
+  const includeSuspended = config.agentLifecycleStatesEnabled;
+  const revocableStatuses = includeSuspended ? ['active', 'suspended'] : ['active'];
   const revokedRows = await tx`
     WITH RECURSIVE affected (id) AS (
       SELECT id FROM grants
       WHERE agent_id = ${agentId}
         AND developer_id = ${developerId}
-        AND status IN ('active', 'suspended')
+        AND status = ANY(${revocableStatuses})
         AND expires_at > NOW()
       UNION
       SELECT child.id FROM grants child
       JOIN affected parent ON child.parent_grant_id = parent.id
       WHERE child.developer_id = ${developerId}
-        AND child.status IN ('active', 'suspended')
+        AND child.status = ANY(${revocableStatuses})
     )
     UPDATE grants SET status = 'revoked', revoked_at = NOW()
     WHERE id IN (SELECT id FROM affected)
       AND developer_id = ${developerId}
-      AND status IN ('active', 'suspended')
+      AND status = ANY(${revocableStatuses})
     RETURNING id, expires_at, parent_grant_id
   `;
   if (revokedRows.length === 0) return [];
   const ids = revokedRows.map((row) => row['id'] as string);
   await releaseWalletReservationsForGrants(tx, developerId, ids);
   await revokeVCsByGrantIds(ids, developerId, tx);
-  await tx`DELETE FROM grant_suspensions WHERE developer_id = ${developerId} AND grant_id = ANY(${ids})`;
+  if (includeSuspended) {
+    await tx`DELETE FROM grant_suspensions WHERE developer_id = ${developerId} AND grant_id = ANY(${ids})`;
+  }
   return revokedRows;
 }
 
