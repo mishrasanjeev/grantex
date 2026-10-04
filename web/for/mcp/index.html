@@ -51,6 +51,7 @@
     body { background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.6; }
     a { color: var(--accent2); text-decoration: none; }
     a:hover { text-decoration: underline; }
+    .ownership-notice a { text-decoration: underline; text-underline-offset: 2px; }
     code { font-family: var(--mono); background: var(--surface); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
     pre { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; overflow-x: auto; font-family: var(--mono); font-size: 0.875rem; line-height: 1.5; }
     pre code { background: none; padding: 0; }
@@ -132,7 +133,7 @@
   </ul>
 </nav>
 
-<div id="app">
+<main id="app">
   <section class="hero">
     <span class="hero-badge">MCP + Grantex</span>
     <h1>Grantex for <span class="highlight">MCP</span> Applications and Servers</h1>
@@ -203,7 +204,7 @@
     <li><a href="https://docs.grantex.dev/release-status">Current SDK versions and limitations</a></li>
   </ul></section>
   <section class="section" style="text-align:center"><h2>Evaluate the right MCP authorization layer</h2><p style="margin-bottom:1.5rem;color:var(--muted)">Start with the current MCP transport requirements, then add agent-specific grant enforcement where the tool needs it.</p><div class="hero-ctas"><a href="https://docs.grantex.dev/integrations/mcp" class="btn btn-primary">Read the integration guide</a><a href="/vs/mcp-auth" class="btn btn-secondary">Compare MCP options</a></div></section>
-</div>
+</main>
 
 <footer class="footer">
   <span style="color:var(--muted);font-size:0.85rem">Grantex — Open authorization for AI agents</span>

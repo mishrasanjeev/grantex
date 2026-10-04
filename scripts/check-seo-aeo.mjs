@@ -238,6 +238,13 @@ export async function validateSeoAeo(options = {}) {
   }
 
   const visibleHomepage = normalizeVisibleText(homepage);
+  if (/<a\b[^>]*>\s*(?:learn more|click here|read more)\s*<\/a>/i.test(homepage)) {
+    failures.push('web/index.html contains a non-descriptive link label');
+  }
+  const x402Page = await fs.readFile(path.join(webRoot, 'x402', 'index.html'), 'utf8');
+  if (!/<main\b[^>]*>[\s\S]*<\/main>/i.test(x402Page)) {
+    failures.push('web/x402/index.html must contain a main landmark');
+  }
   const faq = graph.find((node) => node?.['@type'] === 'FAQPage');
   for (const entity of faq?.mainEntity || []) {
     const question = normalizeVisibleText(entity?.name || '');
