@@ -13,7 +13,7 @@ Wrap any function with Grantex grant token verification so your agents can only 
 ## Install
 
 ```bash
-pip install grantex-adk==0.1.7
+pip install grantex-adk
 ```
 
 You also need the Google ADK installed (it's a peer dependency):

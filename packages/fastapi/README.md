@@ -7,7 +7,7 @@ Verify Grantex JWTs and enforce scopes on any FastAPI route with a single `Depen
 ## Install
 
 ```bash
-pip install grantex-fastapi==0.1.6
+pip install grantex-fastapi
 ```
 
 ## Quick Start

@@ -4,6 +4,10 @@ Zero-code reverse-proxy that enforces [Grantex](https://grantex.dev) grant token
 
 ## Install
 
+Version 0.3.0 adds opt-in data-region enforcement and credential-reference
+redemption. Check [Release Status](https://docs.grantex.dev/release-status)
+for the version currently available on npm.
+
 Version 0.2.0 is a breaking release requiring Node.js 22.12+ and
 `@grantex/sdk` 0.8+. Set `audience` globally or on each route. Audience-bearing
 tokens fail closed when no audience is configured; mismatches return HTTP 401.
@@ -14,7 +18,7 @@ current-state enforcement where needed. See the
 [migration guide](https://docs.grantex.dev/migration-enforcement).
 
 ```bash
-npm install @grantex/gateway@0.2.1 @grantex/sdk@0.8.1
+npm install @grantex/gateway @grantex/sdk
 ```
 
 ## Quick Start

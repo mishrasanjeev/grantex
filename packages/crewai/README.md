@@ -13,7 +13,7 @@ Wrap any CrewAI tool with Grantex grant token verification so your agents can on
 ## Install
 
 ```bash
-pip install grantex-crewai==0.1.8
+pip install grantex-crewai
 ```
 
 You also need CrewAI installed (it's a peer dependency):

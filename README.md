@@ -276,7 +276,8 @@ and [Verifying Agents](https://docs.grantex.dev/relying-parties/verifying-agents
 
 Grantex components are independently versioned. The protocol specification remains **v1.0 Final**; SDK, MCP package, and roadmap milestone versions are separate release lines and do not represent a monorepo-wide version.
 
-Current public releases and repository versions, verified 2026-09-30:
+Public releases below were verified on 2026-09-30. Repository versions are
+release candidates until the corresponding registry confirms publication.
 
 The enforcement releases are TypeScript `0.8.1`, Python `0.7.1`, CLI
 `0.4.2`, gateway/adapters/Strands `0.2.1` and MCP Auth `4.0.0`. See the complete
@@ -295,16 +296,16 @@ See [release limitations](https://docs.grantex.dev/release-status#known-limitati
 
 | Component | Published version | Repository version | Reproducible install |
 | --- | ---: | ---: | --- |
-| TypeScript SDK | `@grantex/sdk` `0.8.1` | `0.8.1` | `npm install @grantex/sdk@0.8.1` |
+| TypeScript SDK | `@grantex/sdk` `0.8.1` | `0.8.2` | `npm install @grantex/sdk@0.8.1` |
 | x402 Payment Protocol | `@grantex/x402` `0.4.1` | `0.4.1` | `npm install @grantex/x402@0.4.1 @grantex/sdk@0.8.1` |
-| Python SDK | `grantex` `0.7.1` | - | `python -m pip install grantex==0.7.1` |
-| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.4.2` (Go 1.26.1+) | - | `go get github.com/mishrasanjeev/grantex-go@v0.4.2` |
-| MCP Authorization Server | `@grantex/mcp-auth` `4.0.0` | `4.0.0` | `npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1` |
+| Python SDK | `grantex` `0.7.1` | `0.7.2` | `python -m pip install grantex==0.7.1` |
+| Go SDK | `github.com/mishrasanjeev/grantex-go` `v0.4.2` (Go 1.26.1+) | `v0.4.3` | `go get github.com/mishrasanjeev/grantex-go@v0.4.2` |
+| MCP Authorization Server | `@grantex/mcp-auth` `4.0.0` | `4.1.0` | `npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1` |
 | CLI | `@grantex/cli` `0.4.2` | `0.4.2` | `npm install -g @grantex/cli@0.4.2` |
-| Gateway | `@grantex/gateway` `0.2.1` | `0.2.1` | `npm install @grantex/gateway@0.2.1 @grantex/sdk@0.8.1` |
+| Gateway | `@grantex/gateway` `0.2.1` | `0.3.0` | `npm install @grantex/gateway@0.2.1 @grantex/sdk@0.8.1` |
 | Service adapters | `@grantex/adapters` `0.2.1` | `0.2.1` | `npm install @grantex/adapters@0.2.1 @grantex/sdk@0.8.1` |
 | Strands TypeScript | `@grantex/strands` `0.2.1` | `0.2.1` | `npm install @grantex/strands@0.2.1 @grantex/sdk@0.8.1` |
-| Strands Python | `grantex-strands` `0.2.1` | `0.2.1` | `python -m pip install grantex-strands==0.2.1 grantex==0.7.1` |
+| Strands Python | `grantex-strands` `0.2.1` | `0.2.2` | `python -m pip install grantex-strands==0.2.1 grantex==0.7.1` |
 
 Python registry hashes, public-file tests and normal pinned PyPI index
 installations are verified on the workstation and in Docker. See the

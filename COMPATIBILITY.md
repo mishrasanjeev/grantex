@@ -20,37 +20,37 @@ This repository uses package-specific versions; there is no monorepo-wide SDK or
 
 ## Package Versions
 
-The repository contains 35 packages under `packages/`. Each row maps a directory to its artifact name and repository version. A `published` status means the exact version has been verified on its public registry; other rows describe the package's role without claiming registry publication. Python public-file tests and normal pinned PyPI index installations passed.
+The repository contains 35 packages under `packages/`. Each row maps a directory to its artifact name and the published version followed by a source candidate where they differ. A `published` status applies only to the first version, verified on its public registry; a source candidate is not yet installable from that registry. Python public-file tests and normal pinned PyPI index installations passed for the published versions.
 
 | # | Directory | Published name | Version | Status |
 | ---: | --- | --- | ---: | --- |
-| 1 | `packages/sdk-ts` | @grantex/sdk | 0.8.1 | Primary SDK (TypeScript); published and registry verified |
-| 2 | `packages/sdk-py` | grantex | 0.7.1 | Published; registry verified |
-| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.4.2 (Go 1.26.1) | Primary SDK (Go); tag and public proxy verified |
+| 1 | `packages/sdk-ts` | @grantex/sdk | 0.8.1 / 0.8.2 | Primary SDK (TypeScript); published version verified, source candidate pending |
+| 2 | `packages/sdk-py` | grantex | 0.7.1 / 0.7.2 | Published version verified, source candidate pending |
+| 3 | `packages/go-sdk` | github.com/mishrasanjeev/grantex-go | v0.4.2 / v0.4.3 (Go 1.26.1) | Published tag and proxy verified, source candidate pending |
 | 4 | `packages/cli` | @grantex/cli | 0.4.2 | Published; registry and clean-install verified |
-| 5 | `packages/mcp-auth` | @grantex/mcp-auth | 4.0.0 | Published and registry verified; deployment configuration required |
-| 6 | `packages/mcp` | @grantex/mcp | 0.1.10 | Adapter |
+| 5 | `packages/mcp-auth` | @grantex/mcp-auth | 4.0.0 / 4.1.0 | Published version verified; source candidate pending; deployment configuration required |
+| 6 | `packages/mcp` | @grantex/mcp | 0.1.10 / 0.1.11 | Source candidate pending |
 | 7 | `packages/langchain` | @grantex/langchain | 0.1.8 | Published; registry verified |
 | 8 | `packages/autogen` | @grantex/autogen | 0.1.7 | Published; registry verified |
 | 9 | `packages/vercel-ai` | @grantex/vercel-ai | 0.1.7 | Published; registry verified |
 | 10 | `packages/anthropic` | @grantex/anthropic | 0.1.2 | Published; registry verified |
-| 11 | `packages/crewai` | grantex-crewai | 0.1.8 | Published; registry verified |
-| 12 | `packages/openai-agents` | grantex-openai-agents | 0.1.7 | Published; registry verified |
-| 13 | `packages/google-adk` | grantex-adk | 0.1.7 | Published; registry verified |
-| 14 | `packages/strands-py` | grantex-strands | 0.2.1 | Published; registry verified |
+| 11 | `packages/crewai` | grantex-crewai | 0.1.8 / 0.1.9 | Published version verified; source candidate pending |
+| 12 | `packages/openai-agents` | grantex-openai-agents | 0.1.7 / 0.1.8 | Published version verified; source candidate pending |
+| 13 | `packages/google-adk` | grantex-adk | 0.1.7 / 0.1.8 | Published version verified; source candidate pending |
+| 14 | `packages/strands-py` | grantex-strands | 0.2.1 / 0.2.2 | Published version verified; source candidate pending |
 | 15 | `packages/strands` | @grantex/strands | 0.2.1 | Published; registry verified |
 | 16 | `packages/express` | @grantex/express | 0.1.6 | Published; registry verified |
-| 17 | `packages/fastapi` | grantex-fastapi | 0.1.6 | Published; registry verified |
-| 18 | `packages/gateway` | @grantex/gateway | 0.2.1 | Published; registry verified |
-| 19 | `packages/conformance` | @grantex/conformance | 0.1.8 | Test suite |
+| 17 | `packages/fastapi` | grantex-fastapi | 0.1.6 / 0.1.7 | Published version verified; source candidate pending |
+| 18 | `packages/gateway` | @grantex/gateway | 0.2.1 / 0.3.0 | Published version verified; source candidate pending |
+| 19 | `packages/conformance` | @grantex/conformance | 0.1.8 / 0.1.9 | Source candidate pending |
 | 20 | `packages/adapters` | @grantex/adapters | 0.2.1 | Published; registry verified |
 | 21 | `packages/destinations` | @grantex/destinations | 0.1.2 | Event destinations |
-| 22 | `packages/dpdp` | @grantex/dpdp | 0.1.1 | Compliance controls |
-| 23 | `packages/gemma` | @grantex/gemma | 0.1.1 | Offline authorization (TS) |
-| 24 | `packages/gemma-py` | grantex-gemma | 0.1.1 | Offline authorization (Python) |
+| 22 | `packages/dpdp` | @grantex/dpdp | 0.1.1 / 0.2.0 | Source candidate pending |
+| 23 | `packages/gemma` | @grantex/gemma | 0.1.1 / 0.1.2 | Offline authorization (TS); source candidate pending |
+| 24 | `packages/gemma-py` | grantex-gemma | 0.1.1 / 0.1.2 | Offline authorization (Python); source candidate pending |
 | 25 | `packages/a2a` | @grantex/a2a | 0.1.4 | Published; registry verified |
-| 26 | `packages/a2a-py` | grantex-a2a | 0.1.5 | Published; registry verified |
-| 27 | `packages/mpp` | @grantex/mpp | 0.1.2 | MPP support |
+| 26 | `packages/a2a-py` | grantex-a2a | 0.1.5 / 0.1.6 | Published version verified; source candidate pending |
+| 27 | `packages/mpp` | @grantex/mpp | 0.1.2 / 0.1.3 | MPP support; source candidate pending |
 | 28 | `packages/x402` | @grantex/x402 | 0.4.1 | Official x402 v2 layered-wallet integration with opt-in Base USDC |
 | 29 | `packages/terraform-provider-grantex` | terraform-provider-grantex | Go module (Go 1.25.0) | Source-only Terraform provider; public registry returned 404 on 2026-09-07 |
 | 30 | `packages/agent-passport` | @grantex/agent-passport | 0.1.0 | Private source package; not part of this registry release |
@@ -71,9 +71,11 @@ The repository contains 35 packages under `packages/`. Each row maps a directory
   routes as shipped, `keyPersistence`, expanded erasure results). Until they
   are on the registries, install the published versions listed above.
   `@grantex/cli` 0.4.2 is already published and supports `--notice-version`.
-- **Unpublished audit changes:** changed
-  integration source is not a new registry release. Existing integration
-  versions do not contain the audit's new opt-in authority forwarding.
+- **Unpublished integration changes:** the source candidates shown above for
+  gateway, MCP Auth, MCP, MPP, Gemma, conformance and seven Python integrations
+  differ from their current registry artifacts. Version equality alone did not
+  establish artifact parity; the other audited npm integrations matched
+  their published tarballs and do not need another release.
 - **Current SDK enforcement:** Node.js 22.12+ is required for changed npm
   packages. Local verification is not current-state enforcement; legacy aliases
   remain enabled until explicitly disabled.

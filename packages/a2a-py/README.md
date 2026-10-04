@@ -5,7 +5,7 @@ Google A2A protocol bridge for [Grantex](https://grantex.dev) — inject grant t
 ## Installation
 
 ```bash
-pip install grantex-a2a==0.1.5
+pip install grantex-a2a
 ```
 
 ## Usage

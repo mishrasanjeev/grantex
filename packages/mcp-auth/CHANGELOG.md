@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.1.0
+
+- A manifest tool with `risk_tier: high` requires an action-bound decision
+  grant on each invocation, even when `requires_decision` is omitted. Invalid
+  risk tiers and high-risk read tools are rejected.
+- Existing manifests without `risk_tier` retain their previous policy.
+
 ## 4.0.0
 
 ### Breaking

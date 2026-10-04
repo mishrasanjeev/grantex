@@ -13,7 +13,7 @@ Wrap any function with Grantex grant token verification so your agents can only 
 ## Install
 
 ```bash
-pip install grantex-openai-agents==0.1.7
+pip install grantex-openai-agents
 ```
 
 You also need the OpenAI Agents SDK installed (it's a peer dependency):
