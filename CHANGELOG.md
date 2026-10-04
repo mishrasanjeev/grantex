@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Public-page search and accessibility clarity
+- Give MPP and x402 links descriptive names, align install-button names with
+  visible commands, restore heading order, and improve inline-link and wallet
+  flow text contrast on the public homepage. Improve x402 text and button
+  contrast, distinguish footer links, and add a main landmark.
+
 ### Fixed - Public release guidance
 - Update indexed MCP authorization and x402 pages to the published SDK and MCP
   Auth versions. Clarify the production host responsibilities for human consent,

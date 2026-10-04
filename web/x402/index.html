@@ -39,10 +39,11 @@
 
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0a0f1a;--surface:#111827;--border:#1f2937;--text:#f9fafb;--text-dim:#9ca3af;--indigo:#6366f1;--emerald:#10b981;--amber:#f59e0b;--code-bg:#1e1e2e;--mono:'Menlo','Monaco','Cascadia Code','Consolas',monospace}
+:root{--bg:#0a0f1a;--surface:#111827;--border:#1f2937;--text:#f9fafb;--text-dim:#9ca3af;--indigo:#a5b4fc;--emerald:#10b981;--amber:#f59e0b;--code-bg:#1e1e2e;--mono:'Menlo','Monaco','Cascadia Code','Consolas',monospace}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
 a{color:var(--indigo);text-decoration:none}
 a:hover{text-decoration:underline}
+p a, footer .ownership-notice a{text-decoration:underline;text-underline-offset:2px}
 .container{max-width:1100px;margin:0 auto;padding:0 24px}
 
 /* Hero */
@@ -53,8 +54,8 @@ a:hover{text-decoration:underline}
 .hero .desc{font-size:1rem;color:var(--text-dim);margin-top:16px;max-width:650px;margin-left:auto;margin-right:auto}
 .hero-actions{display:flex;gap:12px;justify-content:center;margin-top:32px;flex-wrap:wrap}
 .btn{padding:12px 28px;border-radius:10px;font-weight:600;font-size:1rem;border:none;cursor:pointer;transition:all .15s;text-decoration:none;display:inline-block}
-.btn-primary{background:var(--indigo);color:#fff}
-.btn-primary:hover{background:#4f46e5;text-decoration:none}
+.btn-primary{background:#4338ca;color:#fff}
+.btn-primary:hover{background:#3730a3;text-decoration:none}
 .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}
 .btn-outline:hover{border-color:var(--indigo);text-decoration:none}
 .install-badge{margin-top:20px;display:inline-block;background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:10px 20px;font-family:var(--mono);font-size:.9rem;color:var(--emerald)}
@@ -122,6 +123,7 @@ footer .links{display:flex;gap:24px;justify-content:center;margin-bottom:12px}
 </style>
 </head>
 <body>
+<main>
 
 <!-- Hero -->
 <div class="container">
@@ -280,6 +282,7 @@ DPoP Agent ── x402Agent.fetch() ── Resource Server
 </div>
 </section>
 
+</main>
 <!-- Footer -->
 <footer>
 <div class="container">

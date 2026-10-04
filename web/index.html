@@ -131,7 +131,7 @@
           "height": 630,
           "caption": "Grantex AI agent authorization"
         },
-        "dateModified": "2026-09-01",
+        "dateModified": "2026-10-04",
         "inLanguage": "en"
       },
       {
@@ -322,6 +322,7 @@
     }
     a { color: var(--accent2); text-decoration: none; }
     a:hover { text-decoration: underline; }
+    p a { text-decoration: underline; text-underline-offset: 2px; }
     img { max-width: 100%; }
 
     /* ── Layout ────────────────────────────────────────────────────────────── */
@@ -1146,7 +1147,7 @@
       margin-top: 2px;
       flex-shrink: 0;
     }
-    .enterprise-feature h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .enterprise-feature h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
     .enterprise-feature p { color: var(--muted); font-size: 13px; }
     .enterprise-cta {
       background: var(--surface);
@@ -1617,7 +1618,7 @@
       <span class="badge"><span class="dot"></span> SOC 2 readiness mapping</span>
       <span class="badge"><span class="dot"></span> Apache 2.0</span>
       <a class="badge" href="https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md"
-         aria-label="Read the Grantex protocol version 1.0 specification">
+         aria-label="Protocol v1.0 specification">
         <span class="dot"></span> Protocol v1.0
       </a>
     </div>
@@ -1979,7 +1980,7 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
         "35 AI agents, 53 pre-built connectors + 3 custom manifests for our internal APIs, 339+ tools — all scope-enforced through one grantex.enforce() call per tool execution."
       </p>
       <p style="color:var(--muted);font-size:13px;margin:0;">
-        — <a href="https://agenticorg.ai" style="color:var(--accent);text-decoration:none;">AgenticOrg</a> · AI Virtual Employee Platform · Live in production
+        — <a href="https://agenticorg.ai" style="color:var(--accent);">AgenticOrg</a> · AI Virtual Employee Platform · Live in production
       </p>
     </div>
   </div>
@@ -2283,26 +2284,22 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
     </p>
 
     <div class="install-commands">
-      <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/sdk@0.8.1', this)"
-              aria-label="Copy the TypeScript SDK install command">
+      <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/sdk@0.8.1', this)">
         <span class="install-label">npm</span>
         <code>npm install @grantex/sdk@0.8.1</code>
         <span class="install-copy">Copy</span>
       </button>
-      <button type="button" class="install-cmd" onclick="copyInstall('python -m pip install grantex==0.7.1', this)"
-              aria-label="Copy the Python SDK install command">
+      <button type="button" class="install-cmd" onclick="copyInstall('python -m pip install grantex==0.7.1', this)">
         <span class="install-label">PyPI</span>
         <code>python -m pip install grantex==0.7.1</code>
         <span class="install-copy">Copy</span>
       </button>
-      <button type="button" class="install-cmd" onclick="copyInstall('go get github.com/mishrasanjeev/grantex-go@v0.4.2', this)"
-              aria-label="Copy the Go SDK version 0.4.1 install command">
+      <button type="button" class="install-cmd" onclick="copyInstall('go get github.com/mishrasanjeev/grantex-go@v0.4.2', this)">
         <span class="install-label">Go</span>
         <code>go get github.com/mishrasanjeev/grantex-go@v0.4.2</code>
         <span class="install-copy">Copy</span>
       </button>
-      <button type="button" class="install-cmd" onclick="copyInstall('npm install -g @grantex/cli@0.4.2', this)"
-              aria-label="Copy the Grantex CLI install command">
+      <button type="button" class="install-cmd" onclick="copyInstall('npm install -g @grantex/cli@0.4.2', this)">
         <span class="install-label">CLI</span>
         <code>npm install -g @grantex/cli@0.4.2</code>
         <span class="install-copy">Copy</span>
@@ -2589,8 +2586,7 @@ func main() {
     <!-- ── Install + CTA ──────────────────────────────────────────────── -->
     <div style="margin-top:40px;">
       <div class="install-commands">
-        <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/mpp', this)"
-                aria-label="Copy the MPP package install command">
+        <button type="button" class="install-cmd" onclick="copyInstall('npm install @grantex/mpp', this)">
           <span class="install-label">npm</span>
           <code>npm install @grantex/mpp</code>
           <span class="install-copy">Copy</span>
@@ -2607,7 +2603,7 @@ func main() {
         </a>
         <a href="/for/mpp" class="btn btn-secondary"
            onclick="gtag('event','mpp_learn_click',{event_category:'mpp'})">
-          Learn more
+          Explore MPP for agents
         </a>
       </div>
     </div>
@@ -2642,7 +2638,7 @@ func main() {
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">Principal</div>
           <div style="font-size:11px;color:var(--muted);line-height:1.5;">Funds wallets<br>sets budgets + exact approvals</div>
           <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
-            <div style="font-family:var(--mono);font-size:10px;color:#6366f1;">assign(wallet, policy)</div>
+            <div style="font-family:var(--mono);font-size:10px;color:#a5b4fc;">assign(wallet, policy)</div>
           </div>
         </div>
         <!-- Arrow -->
@@ -2650,10 +2646,10 @@ func main() {
         <!-- Step 2: GDT Token -->
         <div class="wallet-flow-step wide divided">
           <div style="font-size:36px;margin-bottom:8px;">&#x1F4DC;</div>
-          <div style="font-size:13px;font-weight:700;color:#6366f1;margin-bottom:4px;">Prepaid Assignment</div>
+          <div style="font-size:13px;font-weight:700;color:#a5b4fc;margin-bottom:4px;">Prepaid Assignment</div>
           <div style="font-size:11px;color:var(--muted);line-height:1.5;">DPoP agent &middot; safe defaults<br>Semantic + layered policy</div>
           <div style="display:flex;gap:4px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
-            <span style="font-size:10px;font-family:var(--mono);background:rgba(99,102,241,0.15);color:#6366f1;padding:2px 8px;border-radius:10px;">weather:read</span>
+            <span style="font-size:10px;font-family:var(--mono);background:rgba(99,102,241,0.15);color:#a5b4fc;padding:2px 8px;border-radius:10px;">weather:read</span>
             <span style="font-size:10px;font-family:var(--mono);background:rgba(16,185,129,0.15);color:#10b981;padding:2px 8px;border-radius:10px;">25 USDC / 24h</span>
           </div>
         </div>
@@ -2665,7 +2661,7 @@ func main() {
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px;">AI Agent</div>
           <div style="font-size:11px;color:var(--muted);line-height:1.5;">Handles official x402 v2<br>402 &rarr; approve if needed &rarr; retry</div>
           <div style="margin-top:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px;">
-            <div style="font-family:var(--mono);font-size:10px;color:#6366f1;">PAYMENT-SIGNATURE</div>
+            <div style="font-family:var(--mono);font-size:10px;color:#a5b4fc;">PAYMENT-SIGNATURE</div>
           </div>
         </div>
         <!-- Arrow -->
@@ -2712,7 +2708,7 @@ func main() {
       </div>
       <!-- Right: code -->
       <div>
-        <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:#6366f1;margin-bottom:10px;">Connect the agent wallet</div>
+        <div style="font-size:12px;font-family:var(--mono);text-transform:uppercase;letter-spacing:1.5px;color:#a5b4fc;margin-bottom:10px;">Connect the agent wallet</div>
         <div class="code-block" style="border:1px solid var(--border);border-radius:var(--radius);margin-top:0;">
           <pre><span class="kw">import</span> <span class="op">{</span> <span class="id">PrepaidWalletAgentClient</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/sdk'</span><span class="op">;</span>
 <span class="kw">import</span> <span class="op">{</span> <span class="id">createX402Agent</span> <span class="op">}</span> <span class="kw">from</span> <span class="str">'@grantex/x402'</span><span class="op">;</span>
@@ -2745,8 +2741,7 @@ func main() {
     <!-- ── Install + CTA ──────────────────────────────────────────────── -->
     <div style="margin-top:40px;">
       <div class="install-commands">
-        <button type="button" class="install-cmd" onclick="copyInstall('git clone https://github.com/mishrasanjeev/grantex.git', this)"
-                aria-label="Copy the Grantex source checkout command">
+        <button type="button" class="install-cmd" onclick="copyInstall('git clone https://github.com/mishrasanjeev/grantex.git', this)">
           <span class="install-label">source</span>
           <code>git clone https://github.com/mishrasanjeev/grantex.git</code>
           <span class="install-copy">Copy</span>
@@ -2766,7 +2761,7 @@ func main() {
         </a>
         <a href="/x402" class="btn btn-secondary"
            onclick="gtag('event','x402_learn_click',{event_category:'x402'})">
-          Learn more
+          Explore x402 wallets
         </a>
       </div>
     </div>
@@ -3321,175 +3316,175 @@ grantex agent install --dir /path/to/skills</pre>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Policy engine</h4>
+              <h3>Policy engine</h3>
               <p>Define fine-grained scope restrictions, rate limits, and time-bound grants per agent or team.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>SCIM 2.0 provisioning</h4>
+              <h3>SCIM 2.0 provisioning</h3>
               <p>Sync agents and principals from your identity provider automatically.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Enterprise SSO (OIDC and SAML 2.0; LDAP preview)</h4>
+              <h3>Enterprise SSO (OIDC and SAML 2.0; LDAP preview)</h3>
               <p>OIDC and SAML 2.0 support multi-IdP routing, JIT provisioning, group-to-scope mapping, and enforcement. LDAP is a direct-bind preview that does not search directories or retrieve groups.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Anomaly detection</h4>
+              <h3>Irregularity detection</h3>
               <p>Scheduled and on-demand checks for four implemented activity patterns, with lifecycle APIs for stored findings.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Compliance exports</h4>
+              <h3>Compliance exports</h3>
               <p>JSON exports of grant and audit records for internal control and evidence review.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>On-premise Docker</h4>
+              <h3>On-premise Docker</h3>
               <p>Self-host the entire stack with our production Docker Compose configuration.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Credential Vault</h4>
+              <h3>Credential Vault</h3>
               <p>Encrypted per-user credential store. Agents exchange grant tokens for upstream service credentials.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>MCP Auth Server</h4>
+              <h3>MCP Auth Server</h3>
               <p>Fastify OAuth 2.1 + PKCE endpoints with dynamic clients, durable state and consent. Configure revocation and principal handoff before deployment.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/guides/event-streaming" style="color:inherit;text-decoration:none;">Event Streaming</a></h4>
+              <h3><a href="https://docs.grantex.dev/guides/event-streaming" style="color:inherit;text-decoration:none;">Event Streaming</a></h3>
               <p>Real-time SSE and WebSocket streams; optional <code>@grantex/destinations</code> consumers can forward events to Datadog, Splunk, S3, BigQuery, or Kafka.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/guides/budget-controls" style="color:inherit;text-decoration:none;">Budget Controls</a></h4>
+              <h3><a href="https://docs.grantex.dev/guides/budget-controls" style="color:inherit;text-decoration:none;">Budget Controls</a></h3>
               <p>Per-grant spending limits with atomic debit, threshold alerts, and JWT budget claims.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>Observability</h4>
+              <h3>Observability</h3>
               <p>Structured JSON logging (pino), Prometheus metrics, OpenTelemetry tracing, and Grafana dashboard templates out of the box.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/guides/terraform" style="color:inherit;text-decoration:none;">Terraform Provider</a></h4>
+              <h3><a href="https://docs.grantex.dev/guides/terraform" style="color:inherit;text-decoration:none;">Terraform Provider</a></h3>
               <p>Manage agents, policies, webhooks, and budgets as infrastructure with the official Terraform provider.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/guides/opa-integration" style="color:inherit;text-decoration:none;">OPA &amp; Cedar Backends</a></h4>
+              <h3><a href="https://docs.grantex.dev/guides/opa-integration" style="color:inherit;text-decoration:none;">OPA &amp; Cedar Backends</a></h3>
               <p>Pluggable policy engines — delegate authorization to Open Policy Agent or AWS Cedar.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/guides/policy-as-code" style="color:inherit;text-decoration:none;">Policy-as-Code</a></h4>
+              <h3><a href="https://docs.grantex.dev/guides/policy-as-code" style="color:inherit;text-decoration:none;">Policy-as-Code</a></h3>
               <p>Manage policies in Git with versioned bundles and automatic sync via webhooks.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>A2A Protocol Bridge</h4>
+              <h3>A2A Protocol Bridge</h3>
               <p>Grantex grant tokens inside Google A2A agent-to-agent communication. TypeScript and Python.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/guides/usage-metering" style="color:inherit;text-decoration:none;">Usage Metering</a></h4>
+              <h3><a href="https://docs.grantex.dev/guides/usage-metering" style="color:inherit;text-decoration:none;">Usage Metering</a></h3>
               <p>Repository source includes Redis usage counters, daily rollup, and standard developer API-key Free/Pro/Enterprise rate limits; custom-auth quota policy and managed deployment status are separate.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/guides/custom-domains" style="color:inherit;text-decoration:none;">Custom Domains</a></h4>
+              <h3><a href="https://docs.grantex.dev/guides/custom-domains" style="color:inherit;text-decoration:none;">Custom Domains</a></h3>
               <p>Register and verify your domain via DNS TXT records. Runtime traffic routing on your domain is on the roadmap.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/features/fido-webauthn" style="color:inherit;text-decoration:none;">FIDO2 / WebAuthn</a></h4>
+              <h3><a href="https://docs.grantex.dev/features/fido-webauthn" style="color:inherit;text-decoration:none;">FIDO2 / WebAuthn</a></h3>
               <p>Live consent uses passkeys. Hosted enrollment is enabled, and new grants and opt-in credentials can carry portable assertion evidence through refresh, delegation, and revocation. Published TypeScript, Python, and Go SDKs expose typed evidence; self-hosted operators enable these server features separately.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/features/verifiable-credentials" style="color:inherit;text-decoration:none;">W3C Verifiable Credentials</a></h4>
+              <h3><a href="https://docs.grantex.dev/features/verifiable-credentials" style="color:inherit;text-decoration:none;">W3C Verifiable Credentials</a></h3>
               <p>Portable, tamper-evident authorization proof in W3C VC-JWT format. Any verifier can validate using the published DID document — no Grantex account needed.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/features/sd-jwt" style="color:inherit;text-decoration:none;">SD-JWT Selective Disclosure</a></h4>
+              <h3><a href="https://docs.grantex.dev/features/sd-jwt" style="color:inherit;text-decoration:none;">SD-JWT Selective Disclosure</a></h3>
               <p>Privacy-preserving credential presentation. Holders choose exactly which claims to reveal — minimum disclosure for each verifier.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/features/did-infrastructure" style="color:inherit;text-decoration:none;">DID Infrastructure</a></h4>
+              <h3><a href="https://docs.grantex.dev/features/did-infrastructure" style="color:inherit;text-decoration:none;">DID Infrastructure</a></h3>
               <p>W3C DID document at did:web:grantex.dev with RS256 and Ed25519 public keys for local credential and token verification after key retrieval.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/guides/security-hardening" style="color:inherit;text-decoration:none;">Security Hardening</a></h4>
+              <h3><a href="https://docs.grantex.dev/guides/security-hardening" style="color:inherit;text-decoration:none;">Security Hardening</a></h3>
               <p>Fastify per-IP defaults or route overrides, plus additional standard-auth plan budgets (with JWKS exempt), HTTP security headers, HMAC-signed SSO state, timing-safe auth, scope validation, bounded refresh-token recovery, and 1MB body limits.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/guides/supply-chain-security" style="color:inherit;text-decoration:none;">Supply Chain Controls</a></h4>
+              <h3><a href="https://docs.grantex.dev/guides/supply-chain-security" style="color:inherit;text-decoration:none;">Supply Chain Controls</a></h3>
               <p>All npm lockfiles, Python install surfaces, and Go modules are audited; GitHub Actions and container images are pinned, Dependabot coverage is enforced, and reviewed third-party license notices ship with the source.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4>SDK Retry &amp; Resilience</h4>
+              <h3>SDK Retry &amp; Resilience</h3>
               <p>All three SDKs (TypeScript, Python, Go) include exponential backoff with jitter, Retry-After header support, and configurable max retries for transient failures.</p>
             </div>
           </div>
           <div class="enterprise-feature">
             <span class="check">&#x2713;</span>
             <div>
-              <h4><a href="https://docs.grantex.dev/guides/operations" style="color:inherit;text-decoration:none;">Production Operations</a></h4>
+              <h3><a href="https://docs.grantex.dev/guides/operations" style="color:inherit;text-decoration:none;">Production Operations</a></h3>
               <p>Deep health checks (DB + Redis), config validation on startup, graceful shutdown, connection pooling, database transactions, and structured JSON logging.</p>
             </div>
           </div>
