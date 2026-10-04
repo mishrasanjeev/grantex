@@ -24,7 +24,7 @@ keywords: ["AI agent framework integrations", "Hermes Agent authorization", "Ope
     Encrypted per-user credential store. Agents exchange grant tokens for upstream service credentials.
   </Card>
   <Card title="MCP Auth Server" icon="lock" href="/integrations/mcp-auth">
-    OAuth 2.1 + PKCE endpoint package for single-process evaluation; review the version 2.0.2 consent, code-handoff, state, and revocation limitations.
+    OAuth 2.1 + PKCE endpoint package with rendered consent; production use requires host-authenticated human identity, durable shared state, resource binding, and current-grant checks.
   </Card>
   <Card title="Grantex Gateway" icon="shield-halved" href="/integrations/gateway">
     Zero-code reverse-proxy that enforces grant tokens via YAML config.
@@ -106,33 +106,35 @@ keywords: ["AI agent framework integrations", "Hermes Agent authorization", "Ope
 | OpenClaw | `@grantex/cli@0.4.2` + Agent Skills | `grantex agent install --target openclaw` | Any shell; published package |
 | Other Agent Skills clients | `@grantex/cli@0.4.2` + Agent Skills | `grantex agent install --target portable` | Any shell; published package |
 | Adapters | `@grantex/adapters` | `npm install @grantex/adapters` | TypeScript |
-| MCP Auth Server | `@grantex/mcp-auth@2.0.2` | `npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.1` | TypeScript; evaluation only |
-| Gateway | `@grantex/gateway` | `npm install @grantex/gateway` | TypeScript |
+| MCP Auth Server | `@grantex/mcp-auth@4.1.0` | `npm install @grantex/mcp-auth@4.1.0 @grantex/sdk@0.8.2` | TypeScript; host login and durable state required |
+| Gateway | `@grantex/gateway@0.3.0` | `npm install @grantex/gateway@0.3.0 @grantex/sdk@0.8.2` | TypeScript |
 | Express.js | `@grantex/express` | `npm install @grantex/express` | TypeScript |
-| FastAPI | `grantex-fastapi` | `pip install grantex-fastapi` | Python |
-| MCP | `@grantex/mcp` | `npm install -g @grantex/mcp` | TypeScript |
+| FastAPI | `grantex-fastapi==0.1.7` | `pip install grantex-fastapi==0.1.7` | Python |
+| MCP | `@grantex/mcp@0.1.11` | `npm install -g @grantex/mcp@0.1.11` | TypeScript |
 | LangChain | `@grantex/langchain` | `npm install @grantex/langchain` | TypeScript |
 | Vercel AI SDK | `@grantex/vercel-ai` | `npm install @grantex/vercel-ai` | TypeScript |
 | AutoGen / OpenAI | `@grantex/autogen` | `npm install @grantex/autogen` | TypeScript |
-| CrewAI | `grantex-crewai` | `pip install grantex-crewai` | Python |
-| OpenAI Agents SDK | `grantex-openai-agents` | `pip install grantex-openai-agents` | Python |
-| Google ADK | `grantex-adk` | `pip install grantex-adk` | Python |
+| CrewAI | `grantex-crewai==0.1.9` | `pip install grantex-crewai==0.1.9` | Python |
+| OpenAI Agents SDK | `grantex-openai-agents==0.1.8` | `pip install grantex-openai-agents==0.1.8` | Python |
+| Google ADK | `grantex-adk==0.1.8` | `pip install grantex-adk==0.1.8` | Python |
 | Strands Agents SDK (TS) | `@grantex/strands` | `npm install @grantex/strands` | TypeScript |
-| Strands Agents SDK (Python) | `grantex-strands` | `pip install grantex-strands` | Python |
+| Strands Agents SDK (Python) | `grantex-strands==0.2.2` | `pip install grantex-strands==0.2.2` | Python |
 | Anthropic SDK | `@grantex/anthropic` | `npm install @grantex/anthropic` | TypeScript |
-| Go SDK | `grantex-go@v0.4.1` | `go get github.com/mishrasanjeev/grantex-go@v0.4.1` | Go 1.26.1+; published and public-proxy verified with wallet governance, corrected Agent/Audit contracts, and bounded refresh recovery |
+| Go SDK | `grantex-go@v0.4.3` | `go get github.com/mishrasanjeev/grantex-go@v0.4.3` | Go 1.26.1+; published and public-proxy verified with wallet governance, corrected Agent/Audit contracts, and bounded refresh recovery |
 | A2A Bridge (TS) | `@grantex/a2a` | `npm install @grantex/a2a` | TypeScript |
-| A2A Bridge (Py) | `grantex-a2a` | `pip install grantex-a2a` | Python |
+| A2A Bridge (Py) | `grantex-a2a==0.1.6` | `pip install grantex-a2a==0.1.6` | Python |
 | CLI | `@grantex/cli@0.4.2` | `npm install -g @grantex/cli@0.4.2` | TypeScript |
-| Conformance Suite | `@grantex/conformance` | `npm install -g @grantex/conformance` | TypeScript |
+| Conformance Suite | `@grantex/conformance@0.1.9` | `npm install -g @grantex/conformance@0.1.9` | TypeScript |
 | Event Destinations | `@grantex/destinations` | `npm install @grantex/destinations` | TypeScript |
-| MPP Agent Identity | `@grantex/mpp` | `npm install @grantex/mpp` | TypeScript |
+| MPP Agent Identity | `@grantex/mpp@0.1.3` | `npm install @grantex/mpp@0.1.3` | TypeScript |
 | Terraform Provider | `terraform-provider-grantex` | `source = "mishrasanjeev/grantex"` | Go / HCL |
 
 <Warning>
-  For production MCP enforcement today, use a primary SDK or direct JWKS-backed
-  verification at the service boundary. Treat `@grantex/mcp-auth@2.0.2` as
-  single-process evaluation software until its documented limitations are fixed.
+  For production MCP enforcement, use a primary SDK or direct JWKS-backed
+  verification at the service boundary. MCP Auth 4.1.0 supplies rendered
+  consent but requires host-authenticated human identity, durable shared
+  state, resource binding, and trusted current-grant verification.
+  Version 2.0.2 remains historical single-process evaluation software.
 </Warning>
 
 ## Verifiable Intent & Agentic Commerce

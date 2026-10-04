@@ -62,7 +62,7 @@ server and hands the actual grant to Grantex. Configure every boundary below:
 Install the version documented here after confirming registry publication, on Node.js 22.12 or newer:
 
 ```bash
-npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1
+npm install @grantex/mcp-auth@4.1.0 @grantex/sdk@0.8.2
 ```
 
 Also install the database driver you use (`pg` or `postgres`, or `ioredis`).
