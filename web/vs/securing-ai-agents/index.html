@@ -83,7 +83,7 @@
       .comparison-table th,.comparison-table td{padding:.5rem}
     }
   </style>
-  <script id="page-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/vs/securing-ai-agents#webpage","url":"https://grantex.dev/vs/securing-ai-agents","name":"How to Secure AI Agents: Authorization Checklist","description":"A practical AI agent security checklist covering identity, least privilege, consent, token verification, revocation, delegation, audit, and budgets.","isPartOf":{"@id":"https://grantex.dev/#website"},"mainEntity":{"@id":"https://grantex.dev/vs/securing-ai-agents#article"},"breadcrumb":{"@id":"https://grantex.dev/vs/securing-ai-agents#breadcrumb"},"dateModified":"2026-07-12","inLanguage":"en"},{"@type":"TechArticle","@id":"https://grantex.dev/vs/securing-ai-agents#article","url":"https://grantex.dev/vs/securing-ai-agents","headline":"How to Secure AI Agents: Authorization Checklist","description":"A practical AI agent security checklist covering identity, least privilege, consent, token verification, revocation, delegation, audit, and budgets.","author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/vs/securing-ai-agents#webpage"},"inLanguage":"en"},{"@type":"BreadcrumbList","@id":"https://grantex.dev/vs/securing-ai-agents#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"Comparisons","item":"https://grantex.dev/vs"},{"@type":"ListItem","position":3,"name":"How to Secure AI Agents: Authorization Checklist","item":"https://grantex.dev/vs/securing-ai-agents"}]}]}</script>
+  <script id="page-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/vs/securing-ai-agents#webpage","url":"https://grantex.dev/vs/securing-ai-agents","name":"How to Secure AI Agents: Authorization Checklist","description":"A practical AI agent security checklist covering identity, least privilege, consent, token verification, revocation, delegation, audit, and budgets.","isPartOf":{"@id":"https://grantex.dev/#website"},"mainEntity":{"@id":"https://grantex.dev/vs/securing-ai-agents#article"},"breadcrumb":{"@id":"https://grantex.dev/vs/securing-ai-agents#breadcrumb"},"dateModified":"2026-10-04","inLanguage":"en"},{"@type":"TechArticle","@id":"https://grantex.dev/vs/securing-ai-agents#article","url":"https://grantex.dev/vs/securing-ai-agents","headline":"How to Secure AI Agents: Authorization Checklist","description":"A practical AI agent security checklist covering identity, least privilege, consent, token verification, revocation, delegation, audit, and budgets.","author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/vs/securing-ai-agents#webpage"},"inLanguage":"en"},{"@type":"BreadcrumbList","@id":"https://grantex.dev/vs/securing-ai-agents#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"Comparisons","item":"https://grantex.dev/vs"},{"@type":"ListItem","position":3,"name":"How to Secure AI Agents: Authorization Checklist","item":"https://grantex.dev/vs/securing-ai-agents"}]}]}</script>
 </head>
 <body>
 <nav class="nav">
@@ -145,13 +145,13 @@
 
       <h2>Choose the current implementation</h2>
       <ul>
-        <li>TypeScript application: <code>@grantex/sdk@0.7.1</code></li>
-        <li>Python application: <code>grantex==0.3.14</code></li>
-        <li>Go application: <code>grantex-go@v0.1.10</code>, with the documented workarounds</li>
-        <li>MCP production integration: primary SDK or direct JWKS enforcement; treat MCP Auth 2.0.2 as evaluation software</li>
+        <li>TypeScript application: <code>@grantex/sdk@0.8.1</code></li>
+        <li>Python application: <code>grantex==0.7.1</code></li>
+        <li>Go application: <code>grantex-go@v0.4.2</code></li>
+        <li>MCP integration: <code>@grantex/mcp-auth@4.0.0</code> with verified human identity, shared state, and current-grant checks</li>
       </ul>
       <div class="cta-box"><h3>Build the enforcement point first</h3><p>Start with a protected service, one narrow scope, one denial test, and one revocation test.</p><a class="btn btn-primary" href="https://docs.grantex.dev/quickstart">Authorization quickstart</a> <a class="btn btn-secondary" href="https://docs.grantex.dev/release-status">Package status</a></div>
-      <p><small>Technical review updated 12 July 2026.</small></p>
+      <p><small>Technical review updated 4 October 2026.</small></p>
       <h2>Related implementation resources</h2>
       <ul>
         <li><a href="/vs/">All Grantex comparisons</a></li>

@@ -6,11 +6,11 @@
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <title>MCP Server Authorization Options and Limits | Grantex</title>
-  <meta name="description" content="Compare MCP's OAuth-based HTTP authorization with Grantex agent grants and review the single-process limits of @grantex/mcp-auth 2.0.2.">
+  <meta name="description" content="Compare MCP HTTP authorization with agent-specific Grantex grants. Review MCP Auth 4.0.0 human consent, resource checks, and host responsibilities.">
   <link rel="canonical" href="https://grantex.dev/vs/mcp-auth">
   <link rel="alternate" type="text/plain" href="/llms.txt" title="Grantex LLM index">
   <meta property="og:title" content="MCP Server Authorization Options and Limits | Grantex">
-  <meta property="og:description" content="Compare MCP's OAuth-based HTTP authorization with Grantex agent grants and review the single-process limits of @grantex/mcp-auth 2.0.2.">
+  <meta property="og:description" content="Compare MCP HTTP authorization with Grantex agent grants and the MCP Auth 4.0.0 deployment profile.">
   <meta property="og:url" content="https://grantex.dev/vs/mcp-auth">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
   <meta property="og:image:width" content="1200">
@@ -22,7 +22,7 @@
   <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="MCP Server Authorization Options and Limits | Grantex">
-  <meta name="twitter:description" content="Compare MCP's OAuth-based HTTP authorization with Grantex agent grants and review the single-process limits of @grantex/mcp-auth 2.0.2.">
+  <meta name="twitter:description" content="MCP transport authorization, human consent, and agent-specific tool enforcement.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
   <meta name="twitter:image:alt" content="Grantex AI agent authorization comparison">
 
@@ -83,7 +83,7 @@
       .comparison-table th,.comparison-table td{padding:.5rem}
     }
   </style>
-  <script id="page-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/vs/mcp-auth#webpage","url":"https://grantex.dev/vs/mcp-auth","name":"MCP Server Authorization Options and Limits | Grantex","description":"Compare MCP's OAuth-based HTTP authorization with Grantex agent grants and review the single-process limits of @grantex/mcp-auth 2.0.2.","isPartOf":{"@id":"https://grantex.dev/#website"},"mainEntity":{"@id":"https://grantex.dev/vs/mcp-auth#article"},"breadcrumb":{"@id":"https://grantex.dev/vs/mcp-auth#breadcrumb"},"dateModified":"2026-07-12","inLanguage":"en"},{"@type":"TechArticle","@id":"https://grantex.dev/vs/mcp-auth#article","url":"https://grantex.dev/vs/mcp-auth","headline":"MCP Server Authorization Options and Limits | Grantex","description":"Compare MCP's OAuth-based HTTP authorization with Grantex agent grants and review the single-process limits of @grantex/mcp-auth 2.0.2.","author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/vs/mcp-auth#webpage"},"inLanguage":"en"},{"@type":"BreadcrumbList","@id":"https://grantex.dev/vs/mcp-auth#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"Comparisons","item":"https://grantex.dev/vs"},{"@type":"ListItem","position":3,"name":"MCP Server Authorization Options and Limits | Grantex","item":"https://grantex.dev/vs/mcp-auth"}]}]}</script>
+  <script id="page-jsonld" type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"WebPage","@id":"https://grantex.dev/vs/mcp-auth#webpage","url":"https://grantex.dev/vs/mcp-auth","name":"MCP Server Authorization Options and Limits | Grantex","description":"Compare MCP HTTP authorization with agent-specific Grantex grants. Review MCP Auth 4.0.0 human consent, resource checks, and host responsibilities.","isPartOf":{"@id":"https://grantex.dev/#website"},"mainEntity":{"@id":"https://grantex.dev/vs/mcp-auth#article"},"breadcrumb":{"@id":"https://grantex.dev/vs/mcp-auth#breadcrumb"},"dateModified":"2026-10-04","inLanguage":"en"},{"@type":"TechArticle","@id":"https://grantex.dev/vs/mcp-auth#article","url":"https://grantex.dev/vs/mcp-auth","headline":"MCP Server Authorization Options and Limits | Grantex","description":"Compare MCP HTTP authorization with agent-specific Grantex grants. Review MCP Auth 4.0.0 human consent, resource checks, and host responsibilities.","author":{"@id":"https://grantex.dev/#organization"},"publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/vs/mcp-auth#webpage"},"dateModified":"2026-10-04","inLanguage":"en"},{"@type":"BreadcrumbList","@id":"https://grantex.dev/vs/mcp-auth#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"Comparisons","item":"https://grantex.dev/vs"},{"@type":"ListItem","position":3,"name":"MCP Server Authorization Options and Limits | Grantex","item":"https://grantex.dev/vs/mcp-auth"}]}]}</script>
 </head>
 <body>
 <nav class="nav">
@@ -113,36 +113,36 @@
   }
 }</code></pre>
 
-      <h3><code>@grantex/mcp-auth@2.0.2</code>: endpoint evaluation package</h3>
-      <p>This package can be used to evaluate OAuth 2.1-style authorization endpoints and middleware. Version 2.0.2 is not the recommended production integration path.</p>
+      <h3><code>@grantex/mcp-auth@4.0.0</code>: human-confirmed authorization server</h3>
+      <p>Version 4 renders consent, binds authorization to a host-authenticated human principal, and supports durable shared state. A deployment must configure trusted host login, shared storage, resource binding, local revocation and current issuer-grant checks before protecting tools.</p>
       <table class="comparison-table">
-        <thead><tr><th>Version 2.0.2 boundary</th><th>Current behavior</th><th>Required response</th></tr></thead>
+        <thead><tr><th>Boundary</th><th>Version 4 behavior</th><th>Host responsibility</th></tr></thead>
         <tbody>
-          <tr><td>Authorization-code storage</td><td>Non-configurable, process-local store</td><td>Use one process for evaluation; do not horizontally scale</td></tr>
-          <tr><td>Consent UI</td><td><code>consentUi</code> is discovery metadata only</td><td>Provide and validate a host-owned consent experience</td></tr>
-          <tr><td>Code handoff</td><td>The Grantex code is not persisted for the token handler</td><td>Use a primary SDK flow until a corrected release is published</td></tr>
-          <tr><td>Revocation enforcement</td><td>Signature and claim checks do not query live grant state</td><td>Perform an online check or synchronize revocation data</td></tr>
+          <tr><td>Human identity</td><td>Rechecks the required principal resolver at approval and callback</td><td>Verify human login and tenant-scoped sessions; an OAuth client ID is not the human</td></tr>
+          <tr><td>Consent</td><td>Renders purpose, tools, limits, destination and Allow or Deny</td><td>Configure truthful labels and live Grantex passkey enrollment</td></tr>
+          <tr><td>Shared state</td><td>Supports durable adapters and atomic code consumption</td><td>Provision Postgres or Redis and run migrations</td></tr>
+          <tr><td>Current authority</td><td>Can check the issuer's current grant before protected execution</td><td>Configure both local revocation and trusted current-grant verification</td></tr>
         </tbody>
       </table>
 
-      <h2>Recommended production pattern today</h2>
+      <h2>Production enforcement pattern</h2>
       <ol>
-        <li>Implement the current MCP authorization specification with an established authorization server and maintained MCP SDK.</li>
-        <li>Use <code>@grantex/sdk@0.7.1</code> or direct JWKS validation for the Grantex agent grant.</li>
-        <li>Validate issuer, audience, signature, expiry, principal, and required tool scope at the MCP resource server.</li>
-        <li>Check or synchronize current grant state where revocation must take effect before token expiry.</li>
-        <li>Log tool execution separately when you need an audit record; token verification alone is not an execution log.</li>
+        <li>Implement the current MCP HTTP discovery and authorization requirements with a compatible client and resource server.</li>
+        <li>Authenticate the human in the host and use a tenant-scoped principal resolver for consent.</li>
+        <li>At the tool boundary, validate issuer, audience, signature, expiry, principal, and exact scope.</li>
+        <li>Configure local revocation and current-grant checks; issuer outages must fail closed.</li>
+        <li>Require a consumed, action-bound human decision for sensitive tools and record actual execution separately.</li>
       </ol>
-      <pre><code>npm install @grantex/sdk@0.7.1
+      <pre><code>npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1 pg
 
 // At the MCP tool boundary:
-// 1. verify the signed grant token
-// 2. require the tool's exact scope
-// 3. check current state when revocation matters
-// 4. invoke the tool only after authorization succeeds</code></pre>
-      <blockquote>Do not describe <code>@grantex/mcp-auth@2.0.2</code> as drop-in, horizontally scalable, production-ready, or a complete hosted consent system.</blockquote>
-      <div class="cta-box"><h3>Review the package boundary before choosing an MCP path</h3><p>The release page is the source of truth for versions, runtimes, limitations, and workarounds.</p><a class="btn btn-primary" href="https://docs.grantex.dev/features/mcp-auth-server">MCP Auth limitations</a> <a class="btn btn-secondary" href="https://docs.grantex.dev/release-status">Release status</a></div>
-      <p><small>Technical review updated 12 July 2026.</small></p>
+// 1. verify the signed grant token and exact scope
+// 2. check local revocation and current issuer authority
+// 3. consume an action-bound decision when required
+// 4. execute and audit the tool only after authorization succeeds</code></pre>
+      <blockquote>Package installation does not provision human login, passkeys, shared state, or your MCP client's interoperability.</blockquote>
+      <div class="cta-box"><h3>Review the deployment boundary before choosing an MCP path</h3><p>The release page records exact versions and limitations. The deployment guide covers required host configuration.</p><a class="btn btn-primary" href="https://docs.grantex.dev/features/mcp-auth-server">MCP Auth deployment guide</a> <a class="btn btn-secondary" href="https://docs.grantex.dev/release-status">Release status</a></div>
+      <p><small>Technical review updated 4 October 2026.</small></p>
       <h2>Related implementation resources</h2>
       <ul>
         <li><a href="/vs/">All Grantex comparisons</a></li>

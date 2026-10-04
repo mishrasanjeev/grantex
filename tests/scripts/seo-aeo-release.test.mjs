@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { expectedMcpLimitationIds } from '../../scripts/check-seo-aeo.mjs';
+import { expectedMcpLimitationIds, stalePublicSelectors } from '../../scripts/check-seo-aeo.mjs';
 
 test('immutable MCP Auth 2.0.2 retains all six historical limitations', () => {
   assert.deepEqual(expectedMcpLimitationIds('2.0.2'), [
@@ -25,4 +25,19 @@ test('unknown or absent MCP profiles cannot satisfy the limitation check', () =>
 
 test('MCP Auth 4 retains deployment responsibilities without resurrecting v2 defects', () => {
   assert.deepEqual(expectedMcpLimitationIds('4.0.0'), expectedMcpLimitationIds('3.0.0'));
+});
+
+test('public install selectors stay aligned with the published release manifest', () => {
+  const artifacts = [
+    { id: 'typescript-sdk', version: '0.8.1' },
+    { id: 'mcp-auth', version: '4.0.0' },
+    { id: 'x402', version: '0.4.1' },
+    { id: 'python-sdk', version: '0.7.1' },
+    { id: 'go-sdk', version: 'v0.4.2' },
+  ];
+  assert.deepEqual(stalePublicSelectors('npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1', artifacts), []);
+  assert.deepEqual(stalePublicSelectors('grantex==0.7.1 grantex-go@v0.4.2 @grantex/x402@0.4.1', artifacts), []);
+  assert.deepEqual(stalePublicSelectors('npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.1', artifacts), [
+    '@grantex/mcp-auth@2.0.2', '@grantex/sdk@0.7.1',
+  ]);
 });

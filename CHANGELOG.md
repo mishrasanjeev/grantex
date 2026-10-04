@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Public release guidance
+- Update indexed MCP authorization and x402 pages to the published SDK and MCP
+  Auth versions. Clarify the production host responsibilities for human consent,
+  shared state, and current-grant enforcement. Guard public install selectors
+  against future release-manifest drift in the SEO integrity check.
+
 ### Fixed - Dependency bundle compatibility
 - Align the root Python requirements with the published 0.7.1 SDK required by
   current integration packages. Upgrade example SDKs together with their
