@@ -9,6 +9,10 @@ TypeScript SDK for the [Grantex](https://grantex.dev) delegated authorization pr
 
 ## Installation
 
+Version 0.8.2 adds typed DPDP client responses and the optional enterprise
+SSO `sessionToken` field. Check [Release Status](https://docs.grantex.dev/release-status)
+for the version currently available on npm; a source version is not a registry release.
+
 **Version 0.8.0:** `enforce()` checks the grant audience,
 requires an amount for capped scopes, and checks current revocation online by
 default. Per-call revocation settings cannot weaken the client setting.
@@ -35,7 +39,7 @@ the automatic 402/payment/retry flow. Confirm the published SDK version in
 See [Base custody setup](https://docs.grantex.dev/guides/base-usdc-custody).
 
 ```bash
-npm install @grantex/sdk@0.8.0
+npm install @grantex/sdk
 ```
 
 ## Quick Start
@@ -899,9 +903,8 @@ const { authorizeUrl } = await grantex.sso.getLoginUrl('dev_01J...');
 const { email, name, sub, developerId } = await grantex.sso.handleCallback(code, state);
 ```
 
-The repository source types `sessionToken` as an optional enterprise callback
-field when the server enables human SSO sessions. The published SDK needs a
-subsequent release before consumers receive this type update. The token is an
+Version 0.8.2 types `sessionToken` as an optional enterprise callback field
+when the server enables human SSO sessions. The token is an
 opaque bearer credential, not the `sessionId` audit identifier; keep it out of
 logs. Hosted dashboard sign-in currently uses OIDC, and machine API keys
 remain valid for automation. See the [enterprise SSO guide](https://docs.grantex.dev/guides/enterprise-sso).

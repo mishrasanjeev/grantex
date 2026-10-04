@@ -1,5 +1,9 @@
 # @grantex/dpdp
 
+Version 0.2.0 aligns grievance statuses, inline exports, and consent proofs
+with the current server contracts. Check [Release Status](https://docs.grantex.dev/release-status)
+for the version currently available on npm; a source version is not a registry release.
+
 [![npm version](https://img.shields.io/npm/v/@grantex/dpdp.svg)](https://www.npmjs.com/package/@grantex/dpdp)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3%2B-blue.svg)](https://www.typescriptlang.org/)
