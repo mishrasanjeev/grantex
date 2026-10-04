@@ -132,6 +132,24 @@ export function expectedMcpLimitationIds(version) {
   return [];
 }
 
+export function stalePublicSelectors(html, artifacts) {
+  const published = new Map(artifacts.map((artifact) => [artifact.id, artifact.version]));
+  const selectors = new Map([
+    ['@grantex/sdk@', published.get('typescript-sdk')],
+    ['@grantex/mcp-auth@', published.get('mcp-auth')],
+    ['@grantex/x402@', published.get('x402')],
+    ['grantex==', published.get('python-sdk')],
+    ['grantex-go@', published.get('go-sdk')],
+  ]);
+  const versionedSelector = /@grantex\/(?:sdk|mcp-auth|x402)@\d+\.\d+\.\d+|\bgrantex==\d+\.\d+\.\d+|\bgrantex-go@v\d+\.\d+\.\d+/g;
+  return [...html.matchAll(versionedSelector)]
+    .map(([selector]) => selector)
+    .filter((selector) => {
+      const [prefix, version] = [...selectors].find(([candidate]) => selector.startsWith(candidate)) || [];
+      return version && selector !== prefix + version;
+    });
+}
+
 export async function validateSeoAeo(options = {}) {
   const root = options.root || defaultRoot;
   const docsRoot = options.docsRoot || path.join(root, 'docs');
@@ -388,6 +406,15 @@ export async function validateSeoAeo(options = {}) {
     for (const [pattern, label] of forbidden) {
       const match = pattern.exec(text);
       if (match) failures.push(relative(root, file) + ' contains ' + label);
+    }
+  }
+
+  if (rootRelease) {
+    for (const file of await walk(webRoot, (candidate) => /\.html$/i.test(candidate))) {
+      const html = await fs.readFile(file, 'utf8');
+      for (const selector of stalePublicSelectors(html, rootRelease.artifacts)) {
+        failures.push(relative(root, file) + ' advertises stale implementation selector ' + selector);
+      }
     }
   }
 

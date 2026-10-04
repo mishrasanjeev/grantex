@@ -3,1219 +3,169 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Search and social metadata -->
-  <title>Grantex MCP Auth 2.0.2 — OAuth Endpoint Evaluation Package</title>
-  <meta name="description" content="Evaluate OAuth 2.1 draft profile endpoints for MCP with @grantex/mcp-auth 2.0.2, including consent, state, handoff, hook, and revocation limits.">
-  <meta name="keywords" content="MCP auth, MCP OAuth, Model Context Protocol authorization, MCP server security, OAuth 2.1 draft profile MCP, PKCE MCP, MCP token introspection, Grantex MCP, AI agent authorization, dynamic client registration MCP">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+  <title>MCP Server Authorization With Human Consent | Grantex</title>
+  <meta name="description" content="Use Grantex MCP Auth 4.0.0 for human-confirmed agent access. Learn the consent flow, required host identity, current-grant checks, and deployment limits.">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="canonical" href="https://grantex.dev/mcp">
   <link rel="alternate" type="text/plain" href="/llms.txt" title="Grantex LLM index">
-
-  <!-- OpenGraph -->
-  <meta property="og:title" content="Grantex MCP Auth 2.0.2 — OAuth Endpoint Evaluation Package">
-  <meta property="og:description" content="Evaluate OAuth 2.1 draft profile endpoints for MCP with @grantex/mcp-auth 2.0.2, including consent, state, handoff, hook, and revocation limits.">
+  <meta property="og:title" content="MCP Server Authorization With Human Consent | Grantex">
+  <meta property="og:description" content="Human-confirmed MCP authorization with agent-specific grants, current authority checks, and explicit host responsibilities.">
   <meta property="og:url" content="https://grantex.dev/mcp">
   <meta property="og:image" content="https://grantex.dev/og-image.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Grantex MCP authorization endpoint evaluation package">
-  <meta property="og:type" content="website">
+  <meta property="og:image:alt" content="Grantex AI agent authorization">
+  <meta property="og:type" content="article">
   <meta property="og:site_name" content="Grantex">
   <meta property="og:locale" content="en_US">
-
-  <!-- Twitter Card -->
   <meta name="twitter:site" content="@grantex_dev">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Grantex MCP Auth 2.0.2 — OAuth Endpoint Evaluation Package">
-  <meta name="twitter:description" content="Evaluate OAuth 2.1 draft profile endpoints for MCP with @grantex/mcp-auth 2.0.2, including consent, state, handoff, hook, and revocation limits.">
+  <meta name="twitter:title" content="MCP Server Authorization With Human Consent | Grantex">
+  <meta name="twitter:description" content="How MCP Auth 4.0.0 binds human consent, agent grants, and tool authorization.">
   <meta name="twitter:image" content="https://grantex.dev/og-image.png">
-  <meta name="twitter:image:alt" content="Grantex MCP authorization endpoint evaluation package">
-
-  <!-- Connected structured data; no invisible FAQ markup -->
-  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://grantex.dev/#organization","name":"Grantex","url":"https://grantex.dev/"},{"@type":"WebSite","@id":"https://grantex.dev/#website","name":"Grantex","url":"https://grantex.dev/","publisher":{"@id":"https://grantex.dev/#organization"}},{"@type":"WebPage","@id":"https://grantex.dev/mcp#webpage","url":"https://grantex.dev/mcp","name":"Grantex MCP Auth 2.0.2 — OAuth Endpoint Evaluation Package","description":"Evaluate OAuth 2.1 draft profile endpoints for MCP with @grantex/mcp-auth 2.0.2, including consent, state, handoff, hook, and revocation limits.","isPartOf":{"@id":"https://grantex.dev/#website"},"about":{"@id":"https://grantex.dev/mcp#source"}},{"@type":"SoftwareSourceCode","@id":"https://grantex.dev/mcp#source","name":"@grantex/mcp-auth","description":"Evaluate OAuth 2.1 draft profile endpoints for MCP with @grantex/mcp-auth 2.0.2, including consent, state, handoff, hook, and revocation limits.","codeRepository":"https://github.com/mishrasanjeev/grantex/tree/main/packages/mcp-auth","license":"https://www.apache.org/licenses/LICENSE-2.0","programmingLanguage":"TypeScript","runtimePlatform":"Node.js 18+","softwareVersion":"2.0.2","url":"https://www.npmjs.com/package/@grantex/mcp-auth","publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/mcp#webpage"}}]}</script>
-
+  <meta name="twitter:image:alt" content="Grantex AI agent authorization">
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://grantex.dev/#organization","name":"Orchestrum Technologies LLP","url":"https://grantex.dev/"},{"@type":"WebPage","@id":"https://grantex.dev/mcp#webpage","url":"https://grantex.dev/mcp","name":"MCP Server Authorization With Human Consent | Grantex","description":"Use Grantex MCP Auth 4.0.0 for human-confirmed agent access. Learn the consent flow, required host identity, current-grant checks, and deployment limits.","isPartOf":{"@id":"https://grantex.dev/#website"},"mainEntity":{"@id":"https://grantex.dev/mcp#software"},"breadcrumb":{"@id":"https://grantex.dev/mcp#breadcrumb"},"dateModified":"2026-10-04","inLanguage":"en"},{"@type":"SoftwareApplication","@id":"https://grantex.dev/mcp#software","name":"Grantex MCP Auth","url":"https://grantex.dev/mcp","description":"MCP authorization server package with rendered consent, authenticated human-principal binding, and configured current-grant verification.","applicationCategory":"SecurityApplication","operatingSystem":"Node.js","softwareVersion":"4.0.0","license":"https://www.apache.org/licenses/LICENSE-2.0","codeRepository":"https://github.com/mishrasanjeev/grantex/tree/main/packages/mcp-auth","publisher":{"@id":"https://grantex.dev/#organization"},"mainEntityOfPage":{"@id":"https://grantex.dev/mcp#webpage"}},{"@type":"BreadcrumbList","@id":"https://grantex.dev/mcp#breadcrumb","itemListElement":[{"@type":"ListItem","position":1,"name":"Grantex","item":"https://grantex.dev/"},{"@type":"ListItem","position":2,"name":"MCP Auth","item":"https://grantex.dev/mcp"}]}]}</script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-DNXYVLS5NY');</script>
   <style>
-    /* ── Design tokens ─────────────────────────────────────────────────────── */
-    :root {
-      --bg:       #0d1117;
-      --surface:  #161b22;
-      --border:   #30363d;
-      --text:     #e6edf3;
-      --muted:    #8b949e;
-      --accent:   #3fb950;
-      --accent2:  #58a6ff;
-      --purple:   #bc8cff;
-      --orange:   #ffa657;
-      --red:      #f85149;
-      --yellow:   #d29922;
-      --mono:     'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-      --sans:     'Inter', system-ui, -apple-system, sans-serif;
-      --radius:   8px;
-      --max-w:    1100px;
-    }
-
-    /* ── Reset ─────────────────────────────────────────────────────────────── */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--sans);
-      font-size: 16px;
-      line-height: 1.6;
-      -webkit-font-smoothing: antialiased;
-    }
-    a { color: var(--accent2); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-
-    /* ── Layout ────────────────────────────────────────────────────────────── */
-    .container {
-      max-width: var(--max-w);
-      margin: 0 auto;
-      padding: 0 24px;
-    }
-    section { padding: 80px 0; }
-    section + section { border-top: 1px solid var(--border); }
-
-    /* ── Nav ───────────────────────────────────────────────────────────────── */
-    nav {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(13, 17, 23, 0.92);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-    }
-    .nav-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 60px;
-    }
-    .nav-logo {
-      font-family: var(--mono);
-      font-size: 18px;
-      font-weight: 700;
-      color: var(--accent);
-      letter-spacing: -0.5px;
-    }
-    .nav-logo span { color: var(--text); }
-    .nav-links {
-      display: flex;
-      gap: 28px;
-      list-style: none;
-      font-size: 14px;
-    }
-    .nav-links a { color: var(--muted); transition: color 0.15s; }
-    .nav-links a:hover { color: var(--text); text-decoration: none; }
-
-    /* ── Hero ──────────────────────────────────────────────────────────────── */
-    .hero {
-      padding: 96px 0 80px;
-      text-align: center;
-    }
-    .hero-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 16px;
-      border-radius: 20px;
-      border: 1px solid var(--border);
-      font-size: 13px;
-      font-family: var(--mono);
-      color: var(--accent);
-      background: var(--surface);
-      margin-bottom: 24px;
-    }
-    .hero h1 {
-      font-size: clamp(36px, 5vw, 56px);
-      font-weight: 800;
-      letter-spacing: -1.5px;
-      line-height: 1.1;
-      margin-bottom: 20px;
-      background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .hero p {
-      max-width: 640px;
-      margin: 0 auto 36px;
-      font-size: 18px;
-      color: var(--muted);
-      line-height: 1.7;
-    }
-    .hero-ctas {
-      display: flex;
-      gap: 16px;
-      justify-content: center;
-      flex-wrap: wrap;
-      margin-bottom: 40px;
-    }
-
-    /* ── Buttons ───────────────────────────────────────────────────────────── */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border-radius: var(--radius);
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.15s, transform 0.15s;
-      border: none;
-    }
-    .btn:hover { opacity: 0.88; transform: translateY(-1px); text-decoration: none; }
-    .btn-primary { background: var(--accent); color: #0d1117; }
-    .btn-secondary {
-      background: transparent;
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-    .btn-secondary:hover { border-color: var(--muted); }
-
-    /* ── Install command ───────────────────────────────────────────────────── */
-    .install-hero {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      padding: 14px 24px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      cursor: pointer;
-      transition: border-color 0.2s;
-      margin-bottom: 16px;
-    }
-    .install-hero:hover { border-color: var(--accent2); }
-    .install-hero code {
-      font-family: var(--mono);
-      font-size: 15px;
-      color: var(--text);
-    }
-    .install-hero .copy-hint {
-      font-family: var(--mono);
-      font-size: 12px;
-      color: var(--muted);
-      transition: color 0.15s;
-    }
-    .install-hero:hover .copy-hint { color: var(--text); }
-
-    /* ── Badge row ─────────────────────────────────────────────────────────── */
-    .badge-row {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 12px;
-      border-radius: 20px;
-      border: 1px solid var(--border);
-      font-size: 12px;
-      font-family: var(--mono);
-      color: var(--muted);
-      background: var(--surface);
-    }
-    .badge .dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--accent);
-    }
-
-    /* ── Section shared ────────────────────────────────────────────────────── */
-    .section-label {
-      font-family: var(--mono);
-      font-size: 12px;
-      letter-spacing: 2px;
-      color: var(--accent);
-      text-transform: uppercase;
-      margin-bottom: 12px;
-    }
-    .section-title {
-      font-size: clamp(24px, 3vw, 36px);
-      font-weight: 700;
-      letter-spacing: -0.5px;
-      margin-bottom: 16px;
-    }
-    .section-sub {
-      color: var(--muted);
-      font-size: 17px;
-      max-width: 600px;
-      margin-bottom: 48px;
-    }
-
-    /* ── Comparison table ──────────────────────────────────────────────────── */
-    .cmp-table {
-      width: 100%;
-      table-layout: fixed;
-      border-collapse: collapse;
-      font-size: 14px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .cmp-table th {
-      font-size: 11px;
-      font-family: var(--mono);
-      letter-spacing: 0.5px;
-      color: var(--muted);
-      padding: 14px 10px;
-      border-bottom: 2px solid var(--border);
-      text-align: center;
-    }
-    .cmp-table th:first-child { text-align: left; width: 24%; padding-left: 20px; }
-    .cmp-table td {
-      padding: 14px 10px;
-      border-bottom: 1px solid var(--border);
-      color: var(--muted);
-      text-align: center;
-      font-size: 18px;
-    }
-    .cmp-table td:first-child {
-      text-align: left;
-      padding-left: 20px;
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--text);
-    }
-    .cmp-table tr:last-child td { border-bottom: none; }
-    .cmp-table .grantex-row td { background: rgba(63, 185, 80, 0.04); }
-    .cmp-table .grantex-row td:first-child { color: var(--accent); font-weight: 700; }
-    .cmp-table .check { color: var(--accent); }
-    .cmp-table .cross { color: #30363d; }
-    .cmp-table .partial { color: var(--yellow); font-size: 12px; }
-
-    /* ── Quickstart flow ───────────────────────────────────────────────────── */
-    .flow {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-      max-width: 740px;
-    }
-    .flow-step {
-      display: flex;
-      gap: 24px;
-      position: relative;
-      padding-bottom: 40px;
-    }
-    .flow-step:last-child { padding-bottom: 0; }
-    .flow-step:not(:last-child)::after {
-      content: '';
-      position: absolute;
-      left: 19px;
-      top: 50px;
-      bottom: 0;
-      width: 2px;
-      background: var(--border);
-    }
-    .step-num {
-      flex-shrink: 0;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: var(--surface);
-      border: 2px solid var(--accent);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: var(--mono);
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--accent);
-      position: relative;
-      z-index: 1;
-    }
-    .step-body { flex: 1; }
-    .step-body h3 {
-      font-size: 17px;
-      font-weight: 600;
-      margin-bottom: 8px;
-      padding-top: 8px;
-    }
-    .step-body p { color: var(--muted); font-size: 14px; margin-bottom: 12px; }
-
-    /* ── Code blocks ───────────────────────────────────────────────────────── */
-    .code-block {
-      position: relative;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .code-block pre {
-      font-family: var(--mono);
-      font-size: 13px;
-      line-height: 1.7;
-      padding: 20px 24px;
-      overflow-x: auto;
-      color: var(--text);
-    }
-    .copy-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      border-radius: 6px;
-      padding: 4px 10px;
-      font-size: 12px;
-      font-family: var(--mono);
-      cursor: pointer;
-      transition: color 0.15s, border-color 0.15s;
-    }
-    .copy-btn:hover { color: var(--text); border-color: var(--muted); }
-
-    /* Syntax highlight */
-    .kw  { color: #ff7b72; }
-    .str { color: #a5d6ff; }
-    .fn  { color: #d2a8ff; }
-    .cm  { color: #8b949e; }
-    .id  { color: #79c0ff; }
-    .op  { color: #e6edf3; }
-
-    /* ── Certification cards ───────────────────────────────────────────────── */
-    .cert-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-    }
-    @media (max-width: 780px) {
-      .cert-grid { grid-template-columns: 1fr; }
-    }
-    .cert-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 32px;
-      transition: border-color 0.2s;
-      position: relative;
-      overflow: hidden;
-    }
-    .cert-card:hover { border-color: var(--accent2); }
-    .cert-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-    }
-    .cert-card.bronze::before { background: #cd7f32; }
-    .cert-card.silver::before { background: #c0c0c0; }
-    .cert-card.gold::before   { background: #ffd700; }
-    .cert-tier {
-      font-family: var(--mono);
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-    .cert-card.bronze .cert-tier { color: #cd7f32; }
-    .cert-card.silver .cert-tier { color: #c0c0c0; }
-    .cert-card.gold .cert-tier   { color: #ffd700; }
-    .cert-card h3 {
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 16px;
-    }
-    .cert-list {
-      list-style: none;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    .cert-list li {
-      font-size: 13px;
-      color: var(--muted);
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-      line-height: 1.5;
-    }
-    .cert-list .bullet {
-      color: var(--accent);
-      font-size: 14px;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-    .cert-benefit {
-      font-size: 12px;
-      font-family: var(--mono);
-      padding: 8px 12px;
-      border-radius: 6px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--accent);
-      text-align: center;
-    }
-
-    /* ── Registry preview ──────────────────────────────────────────────────── */
-    .registry-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 20px;
-    }
-    .reg-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 28px;
-      transition: border-color 0.2s;
-    }
-    .reg-card:hover { border-color: var(--accent2); }
-    .reg-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .reg-name {
-      font-size: 16px;
-      font-weight: 600;
-    }
-    .reg-badge {
-      font-family: var(--mono);
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      padding: 3px 10px;
-      border-radius: 4px;
-      text-transform: uppercase;
-    }
-    .reg-badge.gold { background: rgba(255, 215, 0, 0.1); color: #ffd700; border: 1px solid rgba(255, 215, 0, 0.2); }
-    .reg-badge.silver { background: rgba(192, 192, 192, 0.1); color: #c0c0c0; border: 1px solid rgba(192, 192, 192, 0.2); }
-    .reg-badge.bronze { background: rgba(205, 127, 50, 0.1); color: #cd7f32; border: 1px solid rgba(205, 127, 50, 0.2); }
-    .reg-desc {
-      color: var(--muted);
-      font-size: 14px;
-      margin-bottom: 14px;
-      line-height: 1.6;
-    }
-    .reg-scopes {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-    .reg-scope {
-      font-family: var(--mono);
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 4px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      color: var(--muted);
-    }
-
-    /* ── Deployment toggle ─────────────────────────────────────────────────── */
-    .deploy-toggle {
-      display: flex;
-      gap: 0;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-      margin-bottom: 32px;
-      max-width: 320px;
-    }
-    .deploy-btn {
-      flex: 1;
-      background: var(--surface);
-      border: none;
-      padding: 10px 20px;
-      cursor: pointer;
-      font-size: 14px;
-      font-family: var(--mono);
-      font-weight: 600;
-      color: var(--muted);
-      transition: background 0.2s, color 0.2s;
-    }
-    .deploy-btn.active {
-      background: var(--accent);
-      color: var(--bg);
-    }
-    .deploy-btn:hover:not(.active) { color: var(--text); }
-    .deploy-panel { display: none; }
-    .deploy-panel.active { display: block; }
-    .deploy-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      align-items: start;
-    }
-    @media (max-width: 680px) {
-      .deploy-grid { grid-template-columns: 1fr; }
-      .limit-grid { grid-template-columns: 1fr; }
-    }
-    .deploy-features {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-    }
-    .deploy-feature {
-      display: flex;
-      gap: 12px;
-      align-items: flex-start;
-    }
-    .deploy-feature .check-icon {
-      color: var(--accent);
-      font-size: 16px;
-      flex-shrink: 0;
-      margin-top: 2px;
-    }
-    .deploy-feature h4 { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
-    .deploy-feature p { color: var(--muted); font-size: 13px; line-height: 1.5; }
-
-    /* ── Endpoint table ────────────────────────────────────────────────────── */
-    .endpoint-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      overflow: hidden;
-    }
-    .endpoint-table th {
-      font-size: 11px;
-      font-family: var(--mono);
-      letter-spacing: 0.5px;
-      color: var(--muted);
-      padding: 12px 16px;
-      border-bottom: 2px solid var(--border);
-      text-align: left;
-    }
-    .endpoint-table td {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      color: var(--muted);
-    }
-    .endpoint-table tr:last-child td { border-bottom: none; }
-    .endpoint-table .method {
-      font-family: var(--mono);
-      font-size: 12px;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 4px;
-    }
-    .method-get { background: rgba(88, 166, 255, 0.1); color: var(--accent2); }
-    .method-post { background: rgba(63, 185, 80, 0.1); color: var(--accent); }
-    .endpoint-table .path {
-      font-family: var(--mono);
-      font-size: 13px;
-      color: var(--text);
-    }
-
-    /* ── CTA bottom ────────────────────────────────────────────────────────── */
-    .cta-bottom {
-      text-align: center;
-      padding: 96px 0;
-    }
-    .cta-bottom h2 {
-      font-size: clamp(28px, 4vw, 44px);
-      font-weight: 800;
-      letter-spacing: -1px;
-      margin-bottom: 16px;
-    }
-    .cta-bottom p {
-      color: var(--muted);
-      font-size: 17px;
-      max-width: 560px;
-      margin: 0 auto 36px;
-    }
-
-    /* ── Footer ────────────────────────────────────────────────────────────── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 40px 0;
-    }
-    .footer-inner {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 20px;
-    }
-    .footer-logo {
-      font-family: var(--mono);
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--accent);
-    }
-    .footer-links {
-      display: flex;
-      gap: 20px;
-      list-style: none;
-      font-size: 13px;
-    }
-    .footer-links a { color: var(--muted); }
-    .footer-links a:hover { color: var(--text); text-decoration: none; }
-    .footer-copy {
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    /* ── Current release limitations ────────────────────────────────────────── */
-    .status-section { padding: 56px 0 64px; }
-    .status-panel {
-      padding: 28px;
-      background: rgba(210, 153, 34, 0.08);
-      border: 1px solid rgba(210, 153, 34, 0.45);
-      border-radius: var(--radius);
-    }
-    .status-panel h2 { margin-bottom: 10px; font-size: 24px; }
-    .status-panel > p { max-width: 860px; color: var(--muted); }
-    .limit-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-      margin-top: 22px;
-    }
-    .limit-card {
-      padding: 18px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-    }
-    .limit-card h3 { margin-bottom: 6px; color: var(--yellow); font-size: 15px; }
-    .limit-card p { color: var(--muted); font-size: 14px; line-height: 1.6; }
-    .status-links { margin-top: 20px; font-size: 14px; }
-
-    /* ── Responsive ────────────────────────────────────────────────────────── */
-    @media (max-width: 640px) {
-      section { padding: 56px 0; }
-      .nav-links { gap: 16px; font-size: 13px; }
-      .hero { padding: 64px 0 56px; }
-      .footer-inner { flex-direction: column; align-items: flex-start; }
-      .cert-grid { grid-template-columns: 1fr; }
-      .deploy-grid { grid-template-columns: 1fr; }
-      .limit-grid { grid-template-columns: 1fr; }
-    }
+    :root{--bg:#0d1117;--surface:#161b22;--line:#30363d;--text:#e6edf3;--muted:#a8b3bf;--green:#3fb950;--blue:#58a6ff}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,sans-serif;line-height:1.65}
+    a{color:var(--blue)}
+    a:hover{text-decoration:none}
+    .wrap{width:min(100% - 2.5rem,960px);margin-inline:auto}
+    .nav{border-bottom:1px solid var(--line)}
+    .nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding-block:1rem}
+    .brand{font-size:1.3rem;font-weight:800;color:var(--text);text-decoration:none}
+    .nav ul,.footer ul{display:flex;flex-wrap:wrap;gap:1.3rem;list-style:none;padding:0;margin:0}
+    .nav li a,.footer li a{color:var(--muted);text-decoration:none;font-size:.9rem}
+    .nav li a:hover,.footer li a:hover{color:var(--text)}
+    .hero{padding:4rem 0 3.5rem;border-bottom:1px solid var(--line)}
+    .eyebrow{color:var(--green);font-size:.82rem;font-weight:700;text-transform:uppercase}
+    h1{font-size:clamp(2.2rem,5vw,3.4rem);line-height:1.12;max-width:780px;margin:.8rem 0 1.2rem}
+    .lead{font-size:1.15rem;max-width:760px;color:var(--muted)}
+    .actions{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:1.8rem}
+    .button{display:inline-flex;align-items:center;justify-content:center;padding:.72rem 1.1rem;border:1px solid var(--green);border-radius:6px;background:var(--green);color:#0d1117;font-weight:700;text-decoration:none}
+    .button.secondary{border-color:var(--line);background:transparent;color:var(--text)}
+    main section{padding:2.4rem 0;border-bottom:1px solid var(--line)}
+    h2{font-size:1.7rem;line-height:1.25;margin:0 0 1rem}
+    h3{font-size:1.08rem;margin:0 0 .35rem}
+    p{margin:.6rem 0 1rem}
+    main p,main li{color:var(--muted)}
+    strong{color:var(--text)}
+    ol,ul{padding-left:1.4rem}
+    li{margin:.7rem 0}
+    code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--text);background:var(--surface);padding:.12rem .35rem;border-radius:4px;overflow-wrap:anywhere}
+    pre{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:1rem}
+    pre code{padding:0;white-space:pre;background:none}
+    .table-scroll{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;min-width:620px}
+    th,td{padding:.85rem;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+    th{font-size:.85rem;color:var(--text)}
+    td{color:var(--muted)}
+    .callout{border-left:3px solid var(--green);padding:.4rem 1rem;background:var(--surface);margin-top:1.5rem}
+    .footer{padding:2rem 0;color:var(--muted);font-size:.85rem}
+    .footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+    @media(max-width:620px){.nav .wrap{align-items:flex-start;flex-direction:column}.hero{padding:3rem 0 2.5rem}h2{font-size:1.4rem}}
   </style>
 </head>
 <body>
-
-<!-- ── Nav ───────────────────────────────────────────────────────────────── -->
-<nav>
-  <div class="container">
-    <div class="nav-inner">
-      <a href="/" class="nav-logo" style="text-decoration:none;">
-        grant<span>ex</span>
-      </a>
-      <ul class="nav-links">
-        <li><a href="https://docs.grantex.dev">Docs</a></li>
+  <nav class="nav" aria-label="Primary">
+    <div class="wrap">
+      <a class="brand" href="/">Grantex</a>
+      <ul>
+        <li><a href="/for/mcp">MCP integration</a></li>
+        <li><a href="https://docs.grantex.dev/features/mcp-auth-server">Documentation</a></li>
+        <li><a href="https://github.com/mishrasanjeev/grantex/tree/main/packages/mcp-auth">Source</a></li>
+      </ul>
+    </div>
+  </nav>
+  <header class="hero">
+    <div class="wrap">
+      <div class="eyebrow">Published package: @grantex/mcp-auth@4.0.0</div>
+      <h1>Grantex MCP Auth for human-approved agent access</h1>
+      <p class="lead">An MCP client can reach a protected tool only after the host identifies the human, the human approves the request, and the resource checks the agent's current authority.</p>
+      <div class="actions">
+        <a class="button" href="https://docs.grantex.dev/features/mcp-auth-server">Read the deployment guide</a>
+        <a class="button secondary" href="/vs/mcp-auth">Compare MCP authorization options</a>
+      </div>
+    </div>
+  </header>
+  <main class="wrap">
+    <section aria-labelledby="flow-title">
+      <h2 id="flow-title">How the authorization flow works</h2>
+      <ol>
+        <li><strong>Discover:</strong> The MCP resource challenges the client and advertises its authorization metadata.</li>
+        <li><strong>Identify:</strong> The host authenticates the human. A required principal resolver derives a tenant-scoped identity from that verified session.</li>
+        <li><strong>Approve:</strong> The server renders the requested purpose, tools, limits, redirect destination, and duration. The human chooses Allow or Deny; approval is bound to the browser and principal.</li>
+        <li><strong>Issue:</strong> After approval and Grantex consent, the authorization code is exchanged with PKCE, resource, and principal checks. Live Grantex consent requires the principal's passkey.</li>
+        <li><strong>Enforce:</strong> Before a protected tool runs, the resource checks signature, issuer, audience, scopes, local revocation, and current grant authority.</li>
+      </ol>
+      <p class="callout">A valid grant authorizes a class of actions. For sensitive business decisions, configure a trusted, action-bound human decision verifier before execution.</p>
+    </section>
+    <section aria-labelledby="boundaries-title">
+      <h2 id="boundaries-title">What the host must provide</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Boundary</th><th>Package behavior</th><th>Host responsibility</th></tr></thead>
+          <tbody>
+            <tr><td>Human identity</td><td>Rechecks the required principal resolver at approval and callback.</td><td>Authenticate the human and verify the session. Client IDs and agent text are not human identity.</td></tr>
+            <tr><td>Consent</td><td>Renders Allow and Deny with browser, CSRF, and principal binding.</td><td>Configure truthful tool labels, purpose, duration, and passkey enrollment for live Grantex consent.</td></tr>
+            <tr><td>State</td><td>Supports durable shared storage and atomic consumption.</td><td>Provision Postgres or Redis adapters and run the documented migrations.</td></tr>
+            <tr><td>Current authority</td><td>Can check the issuer's current grant state on every protected request.</td><td>Configure both local revocation checks and the trusted current-grant verifier; outages fail closed.</td></tr>
+            <tr><td>Sensitive actions</td><td>Can require and consume action-bound decisions.</td><td>Define trusted action data and independent approvers where policy requires them.</td></tr>
+            <tr><td>Spend and audit</td><td>Displays declared limits and exposes authorization hooks.</td><td>Enforce atomic spending at the service boundary and record actual tool execution separately.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section aria-labelledby="setup-title">
+      <h2 id="setup-title">Install the published release</h2>
+      <p>Use Node.js 22.12+ and the current Grantex SDK. The database adapter is an explicit deployment dependency.</p>
+      <pre><code>npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1 pg</code></pre>
+      <p>Follow the <a href="https://docs.grantex.dev/mcp-auth">complete deployment guide</a> for the principal resolver, consent route, shared storage, resource binding, and current-grant verifier. The host still owns human login and session security.</p>
+    </section>
+    <section aria-labelledby="verify-title">
+      <h2 id="verify-title">Checks to run before protecting real tools</h2>
+      <ul>
+        <li>Switch or log out the human between request and approval; the approval must fail.</li>
+        <li>Try a replayed code, wrong resource, wrong principal, and missing PKCE verifier; each must fail.</li>
+        <li>Revoke or expire a grant, then call the protected tool; the action must not run.</li>
+        <li>Stop the issuer's current-authority service; protected requests must fail closed.</li>
+        <li>Restart every replica and confirm pending state behaves as documented.</li>
+        <li>Test the actual MCP client, TLS origin, host login, and live passkey ceremony.</li>
+      </ul>
+      <p>Package tests cover these classes of denial and restart behavior. Your deployment still needs its own integration tests. Independent cross-vendor certification is not claimed.</p>
+    </section>
+    <section aria-labelledby="next-title">
+      <h2 id="next-title">Choose the right integration layer</h2>
+      <p>MCP transport authorization controls access to the resource. Grantex adds the agent, human principal, grant, scope, and current authority at the protected tool boundary. The <a href="/for/mcp">MCP integration guide</a> and <a href="/vs/mcp-auth">authorization comparison</a> explain the distinction.</p>
+      <div class="actions">
+        <a class="button" href="https://docs.grantex.dev/features/mcp-auth-server">MCP Auth documentation</a>
+        <a class="button secondary" href="https://docs.grantex.dev/release-status">Current release status</a>
+      </div>
+    </section>
+    <section aria-labelledby="questions-title">
+      <h2 id="questions-title">Common MCP authorization questions</h2>
+      <h3>Does MCP transport authorization prove what an agent may do?</h3>
+      <p>No. It establishes client access to the HTTP resource. The protected tool must separately verify the acting agent's grant, principal, audience, exact scope, and current authority before execution.</p>
+      <h3>Does MCP Auth authenticate the human?</h3>
+      <p>No. The host application must authenticate the human and pass a verified, tenant-scoped identity through the required principal resolver. A client ID or a user name supplied by the agent cannot stand in for the human.</p>
+      <h3>Is the HTTP authorization flow required for a local stdio MCP server?</h3>
+      <p>No. MCP's HTTP authorization profile is transport-specific. A local stdio deployment obtains credentials through its host environment; it still needs agent-specific checks at a protected tool boundary. See the <a href="https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization">MCP authorization specification</a>.</p>
+    </section>
+  </main>
+  <footer class="footer">
+    <div class="wrap">
+      <span>&copy; 2026 Orchestrum Technologies LLP</span>
+      <ul>
+        <li><a href="https://docs.grantex.dev/ownership">Ownership</a></li>
         <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
-        <li><a href="/playground">Playground</a></li>
-        <li><a href="/" >Home</a></li>
-        <li><a href="#limitations">Limitations</a></li>
-        <li><a href="#quickstart">Evaluation setup</a></li>
-        <li><a href="#certification">Certification</a></li>
-        <li><a href="https://www.npmjs.com/package/@grantex/mcp-auth">npm</a></li>
-        <li><a href="/dashboard" style="color:var(--accent);font-weight:600;">Dashboard</a></li>
+        <li><a href="/">Grantex.dev</a></li>
       </ul>
     </div>
-  </div>
-</nav>
-
-<!-- ── Hero ──────────────────────────────────────────────────────────────── -->
-<section class="hero">
-  <div class="container">
-    <div class="hero-tag">@grantex/mcp-auth 2.0.2 &mdash; evaluation release</div>
-    <h1>Evaluate OAuth 2.1 Draft-Profile Building Blocks for MCP.</h1>
-    <p>
-      The package registers OAuth discovery, dynamic client registration, authorization,
-      token, introspection, and revocation endpoint surfaces, plus JWT middleware.
-      Version 2.0.2 has material state, consent, code-handoff, hook, and live-revocation
-      limitations and is not a production-ready authorization server.
-    </p>
-    <div class="hero-ctas">
-      <div class="install-hero" onclick="copyInstall('npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.1', this)">
-        <code>npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.1</code>
-        <span class="copy-hint">Copy</span>
-      </div>
-    </div>
-    <div class="hero-ctas" style="margin-bottom:40px;">
-      <a href="https://docs.grantex.dev/features/mcp-auth-server" class="btn btn-primary">Read the status guide</a>
-      <a href="https://github.com/mishrasanjeev/grantex/tree/main/packages/mcp-auth" class="btn btn-secondary">Inspect the source</a>
-    </div>
-    <div class="badge-row">
-      <span class="badge"><span class="dot"></span>OAuth endpoint building blocks</span>
-      <span class="badge"><span class="dot"></span>PKCE S256 checks</span>
-      <span class="badge"><span class="dot"></span>Single-process evaluation</span>
-      <span class="badge"><span class="dot"></span>Node.js 18+ ESM</span>
-      <span class="badge"><span class="dot"></span>Apache 2.0</span>
-    </div>
-  </div>
-</section>
-
-<!-- ── Published limitations ─────────────────────────────────────────────── -->
-<section id="limitations" class="status-section">
-  <div class="container">
-    <div class="status-panel">
-      <div class="section-label">Published package status</div>
-      <h2>Version 2.0.2 is for controlled, single-process evaluation.</h2>
-      <p>
-        These are implementation limits in the published npm artifact, not optional
-        production configuration. Evaluate the endpoint and middleware shape, but do not
-        rely on this release for end-to-end authorization issuance or horizontally scaled state.
-      </p>
-      <div class="limit-grid">
-        <div class="limit-card">
-          <h3>Process-local authorization codes</h3>
-          <p>Authorization codes always use a non-configurable in-memory store. They are not shared across processes or durable across restarts.</p>
-        </div>
-        <div class="limit-card">
-          <h3>No rendered consent page</h3>
-          <p>The <code>consentUi</code> option contributes discovery metadata only; the package does not register or render a consent route.</p>
-        </div>
-        <div class="limit-card">
-          <h3>Incomplete Grantex code handoff</h3>
-          <p>The Grantex authorization code is not persisted for the token handler, so the end-to-end authorization-code exchange can fail.</p>
-        </div>
-        <div class="limit-card">
-          <h3>No live revocation lookup</h3>
-          <p>Middleware and introspection validate JWT signatures and claims but do not query current Grantex revocation state.</p>
-        </div>
-        <div class="limit-card">
-          <h3>Token hook is not invoked</h3>
-          <p><code>onTokenIssued</code> is declared in the API but is not called by the 2.0.2 token path. Host applications cannot treat it as an audit hook.</p>
-        </div>
-        <div class="limit-card">
-          <h3>Client storage is only partial durability</h3>
-          <p>Client registrations default to process memory. A custom <code>ClientStore</code> can persist registrations, but it does not replace the process-local authorization-code store.</p>
-        </div>
-      </div>
-      <p class="status-links">
-        Canonical details:
-        <a href="https://docs.grantex.dev/features/mcp-auth-server">MCP Auth feature status</a>
-        &middot;
-        <a href="https://docs.grantex.dev/release-status">Grantex release status</a>
-      </p>
-    </div>
-  </div>
-</section>
-
-<!-- ── Capability status ─────────────────────────────────────────────────── -->
-<section id="comparison">
-  <div class="container">
-    <div class="section-label">Implemented Surface</div>
-    <div class="section-title">What version 2.0.2 provides—and what it does not.</div>
-    <p class="section-sub">
-      The package is useful for inspecting endpoint registration, PKCE validation,
-      client registration, JWT claim checks, and scope middleware. The limitations
-      below prevent a production-readiness or full MCP authorization claim.
-    </p>
-    <table class="cmp-table">
-      <thead>
-        <tr>
-          <th>Area</th>
-          <th>Implemented in 2.0.2</th>
-          <th>Current boundary</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Authorization endpoint</td>
-          <td><span class="partial">Request and PKCE validation</span></td>
-          <td>No consent page; Grantex code is not handed durably to the token path</td>
-        </tr>
-        <tr>
-          <td>Scoped middleware</td>
-          <td><span class="check">&#x2713;</span> JWT signature, claims, and required scopes</td>
-          <td>No current-revocation lookup</td>
-        </tr>
-        <tr>
-          <td>Revocation route</td>
-          <td><span class="partial">Forwards a revocation request</span></td>
-          <td>Subsequent middleware and introspection remain local checks</td>
-        </tr>
-        <tr>
-          <td>Audit integration</td>
-          <td><span class="partial">Host can add its own logging</span></td>
-          <td><code>onTokenIssued</code> is not invoked; no full audit trail is supplied</td>
-        </tr>
-        <tr>
-          <td>Dynamic client registration</td>
-          <td><span class="check">&#x2713;</span> Pluggable <code>ClientStore</code></td>
-          <td>Authorization codes remain process-local even with a durable client store</td>
-        </tr>
-        <tr>
-          <td>Local JWT signature and claim validation; no live revocation query</td>
-          <td><span class="check">&#x2713;</span> JWT signature and claim validation</td>
-          <td>No online grant or revocation-state query</td>
-        </tr>
-        <tr class="grantex-row">
-          <td>Deployment status</td>
-          <td><span class="partial">Single-process evaluation</span></td>
-          <td>No production, horizontal-scale, or full conformance claim</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<!-- ── Endpoints ─────────────────────────────────────────────────────────── -->
-<section id="endpoints">
-  <div class="container">
-    <div class="section-label">What You Get</div>
-    <div class="section-title">Six endpoint routes registered by one function call.</div>
-    <p class="section-sub">
-      <code style="font-family:var(--mono);color:var(--accent2);">createMcpAuthServer()</code> registers
-      the documented discovery and OAuth route surface for controlled evaluation. Route presence does not imply complete end-to-end issuance or conformance.
-    </p>
-    <table class="endpoint-table">
-      <thead>
-        <tr>
-          <th>Method</th>
-          <th>Endpoint</th>
-          <th>RFC</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><span class="method method-get">GET</span></td>
-          <td class="path">/.well-known/oauth-authorization-server</td>
-          <td>RFC 8414</td>
-          <td>Server metadata discovery</td>
-        </tr>
-        <tr>
-          <td><span class="method method-post">POST</span></td>
-          <td class="path">/register</td>
-          <td>RFC 7591</td>
-          <td>Dynamic Client Registration</td>
-        </tr>
-        <tr>
-          <td><span class="method method-get">GET</span></td>
-          <td class="path">/authorize</td>
-          <td>OAuth 2.1 draft profile</td>
-          <td>PKCE-validated authorization request; no rendered consent route</td>
-        </tr>
-        <tr>
-          <td><span class="method method-post">POST</span></td>
-          <td class="path">/token</td>
-          <td>OAuth 2.1 draft profile</td>
-          <td>Code and refresh handlers; authorization-code handoff is incomplete</td>
-        </tr>
-        <tr>
-          <td><span class="method method-post">POST</span></td>
-          <td class="path">/introspect</td>
-          <td>RFC 7662</td>
-          <td>Local JWT signature and claim validation; no live revocation query</td>
-        </tr>
-        <tr>
-          <td><span class="method method-post">POST</span></td>
-          <td class="path">/revoke</td>
-          <td>RFC 7009</td>
-          <td>Forwards a revocation request; local middleware state is unchanged</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<!-- ── Quickstart ────────────────────────────────────────────────────────── -->
-<section id="quickstart">
-  <div class="container">
-    <div class="section-label">Get Started</div>
-    <div class="section-title">Evaluate the endpoint surface in three steps.</div>
-    <p class="section-sub">
-      Pin the published packages, run one local process, and inspect the registered routes and middleware.
-      This setup does not repair the consent, code-handoff, hook, or live-revocation gaps.
-    </p>
-
-    <div class="flow">
-      <!-- Step 1 -->
-      <div class="flow-step">
-        <div class="step-num">1</div>
-        <div class="step-body">
-          <h3>Install the package</h3>
-          <p>Install the exact evaluation release with its Grantex SDK dependency.</p>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode('code-install', this)">Copy</button>
-            <pre id="code-install"><span class="id">npm</span> <span class="id">install</span> <span class="str">@grantex/mcp-auth@2.0.2</span> <span class="str">@grantex/sdk@0.7.1</span></pre>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 2 -->
-      <div class="flow-step">
-        <div class="step-num">2</div>
-        <div class="step-body">
-          <h3>Create the auth server</h3>
-          <p>Define evaluation scopes and an issuer. The package registers the route surface and performs selected PKCE, client, JWT, and scope checks; review the limitations above before exercising token flow.</p>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode('code-server', this)">Copy</button>
-<pre id="code-server"><span class="kw">import</span> { <span class="id">Grantex</span> } <span class="kw">from</span> <span class="str">'@grantex/sdk'</span>;
-<span class="kw">import</span> { <span class="fn">createMcpAuthServer</span> } <span class="kw">from</span> <span class="str">'@grantex/mcp-auth'</span>;
-
-<span class="kw">const</span> <span class="id">grantex</span> = <span class="kw">new</span> <span class="fn">Grantex</span>({
-  <span class="id">baseUrl</span>: <span class="str">'https://api.grantex.dev'</span>,
-  <span class="id">apiKey</span>: <span class="id">process</span>.<span class="id">env</span>.<span class="id">GRANTEX_API_KEY</span>,
-});
-
-<span class="kw">const</span> <span class="id">authServer</span> = <span class="kw">await</span> <span class="fn">createMcpAuthServer</span>({
-  <span class="id">grantex</span>,
-  <span class="id">agentId</span>: <span class="str">'ag_your_mcp_server'</span>,
-  <span class="id">scopes</span>:  [<span class="str">'tools:read'</span>, <span class="str">'tools:execute'</span>, <span class="str">'resources:read'</span>],
-  <span class="id">issuer</span>:  <span class="str">'https://mcp.yourcompany.com'</span>,
-});
-
-<span class="kw">await</span> <span class="id">authServer</span>.<span class="fn">listen</span>({ <span class="id">port</span>: <span class="id">3001</span> });</pre>
-          </div>
-        </div>
-      </div>
-
-      <!-- Step 3 -->
-      <div class="flow-step">
-        <div class="step-num">3</div>
-        <div class="step-body">
-          <h3>Protect your MCP routes</h3>
-          <p>The Express or Hono middleware validates JWT signatures and claims against JWKS and enforces required scopes. It does not query current revocation state; add an online or synchronized revocation check before protected production actions.</p>
-          <div class="code-block">
-            <button class="copy-btn" onclick="copyCode('code-middleware', this)">Copy</button>
-<pre id="code-middleware"><span class="kw">import</span> <span class="id">express</span> <span class="kw">from</span> <span class="str">'express'</span>;
-<span class="kw">import</span> { <span class="fn">requireMcpAuth</span> } <span class="kw">from</span> <span class="str">'@grantex/mcp-auth/express'</span>;
-
-<span class="kw">const</span> <span class="id">app</span> = <span class="fn">express</span>();
-
-<span class="cm">// Protect all MCP tool routes</span>
-<span class="id">app</span>.<span class="fn">use</span>(<span class="str">'/mcp'</span>, <span class="fn">requireMcpAuth</span>({
-  <span class="id">issuer</span>: <span class="str">'https://mcp.yourcompany.com'</span>,
-  <span class="id">scopes</span>: [<span class="str">'tools:execute'</span>],
-}));
-
-<span class="cm">// Decoded grant available on every request</span>
-<span class="id">app</span>.<span class="fn">post</span>(<span class="str">'/mcp/tools/call'</span>, (<span class="id">req</span>, <span class="id">res</span>) =&gt; {
-  <span class="kw">const</span> <span class="id">grant</span> = <span class="id">req</span>.<span class="id">mcpGrant</span>;
-  <span class="id">console</span>.<span class="fn">log</span>(<span class="id">grant</span>.<span class="id">agentDid</span>, <span class="id">grant</span>.<span class="id">scopes</span>);
-  <span class="id">res</span>.<span class="fn">json</span>({ <span class="id">result</span>: <span class="str">'tool executed'</span> });
-});</pre>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── Certification preview ─────────────────────────────────────────────── -->
-<section id="certification">
-  <div class="container">
-    <div class="section-label">Preview</div>
-    <div class="section-title">Certification application intake.</div>
-    <p class="section-sub">
-      Registered MCP servers can submit a Bronze, Silver, or Gold certification application and track its pending status.
-      Automated conformance decisions, badge delivery, placement guarantees, and audience-reach claims are not currently implemented.
-    </p>
-    <div class="cert-grid">
-      <div class="cert-card bronze">
-        <div class="cert-tier">Available now</div>
-        <h3>Application API</h3>
-        <ul class="cert-list">
-          <li><span class="bullet">&#x2713;</span> Register an MCP server</li>
-          <li><span class="bullet">&#x2713;</span> Request a certification level</li>
-          <li><span class="bullet">&#x2713;</span> Retrieve application status</li>
-        </ul>
-      </div>
-      <div class="cert-card silver">
-        <div class="cert-tier">Not automated</div>
-        <h3>Review and badges</h3>
-        <ul class="cert-list">
-          <li><span class="bullet">&mdash;</span> No CLI certification command</li>
-          <li><span class="bullet">&mdash;</span> No automatic tier decision</li>
-          <li><span class="bullet">&mdash;</span> No embeddable badge delivery</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-<!-- ── Evaluation deployment boundary ────────────────────────────────────── -->
-<section id="deployment">
-  <div class="container">
-    <div class="section-label">Deployment Boundary</div>
-    <div class="section-title">The Grantex backend can be hosted or self-hosted; MCP Auth 2.0.2 still keeps code state in one process.</div>
-    <p class="section-sub">
-      Changing the Grantex SDK base URL selects the Grantex backend used by the package.
-      It does not make MCP authorization-code state durable, add a consent page, repair
-      the code handoff, invoke the token hook, or add live revocation checks.
-    </p>
-    <div class="deploy-grid">
-      <div class="deploy-features">
-        <div class="deploy-feature">
-          <span class="check-icon">&#x2713;</span>
-          <div>
-            <h4>Hosted Grantex backend</h4>
-            <p>Use <code>https://api.grantex.dev</code> for the Grantex API calls made by the package. The MCP wrapper itself still runs in your single Node.js process.</p>
-          </div>
-        </div>
-        <div class="deploy-feature">
-          <span class="check-icon">&#x2713;</span>
-          <div>
-            <h4>Self-hosted Grantex backend</h4>
-            <p>Point the SDK at your own Grantex service when evaluating the same route surface against self-hosted infrastructure.</p>
-          </div>
-        </div>
-        <div class="deploy-feature">
-          <span class="partial">Limit</span>
-          <div>
-            <h4>ClientStore is not a code store</h4>
-            <p>A durable <code>ClientStore</code> can persist registrations only. Authorization codes remain in the package's process-local map.</p>
-          </div>
-        </div>
-        <div class="deploy-feature">
-          <span class="partial">Limit</span>
-          <div>
-            <h4>No horizontal scale or restart durability</h4>
-            <p>Do not put multiple package processes behind a load balancer or expect pending authorization codes to survive a restart.</p>
-          </div>
-        </div>
-      </div>
-      <div class="status-panel">
-        <h2>Evaluation checklist</h2>
-        <p>Run one process, use non-production clients and principals, inspect the registered metadata and routes, test middleware signature/scope rejection, and plan separate consent, durable state, revocation-state, and audit integrations before production design.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── Implemented checks ────────────────────────────────────────────────── -->
-<section id="security">
-  <div class="container">
-    <div class="section-label">Implemented Checks</div>
-    <div class="section-title">Selected protocol and JWT checks are present, with explicit state and lifecycle gaps.</div>
-    <p class="section-sub">
-      These checks are useful evaluation inputs. They do not, by themselves, establish
-      production readiness, complete OAuth or MCP conformance, live revocation, or an audit trail.
-    </p>
-
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">PKCE S256 validation</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">The authorization route requires an S256 challenge and rejects the <code style="font-family:var(--mono);font-size:12px;">plain</code> method.</p>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">JWT algorithm allowlist</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Middleware verifies supported asymmetric JWT algorithms against configured JWKS and rejects HS256.</p>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Process-local code consumption</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Codes in the local store are removed when consumed, but they are not durable or shared and the Grantex code handoff remains incomplete.</p>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Fixed route rate limits</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">The published package applies fixed limits of 10/min on authorize and 20/min on token and introspection routes.</p>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Host-managed audit evidence</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Add explicit host logging for authorization, introspection, and revocation. Do not rely on <code style="font-family:var(--mono);font-size:12px;">onTokenIssued</code>; it is not invoked in 2.0.2.</p>
-      </div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
-        <h3 style="font-size:16px;font-weight:600;margin-bottom:8px;">Cryptographic client secrets</h3>
-        <p style="color:var(--muted);font-size:14px;line-height:1.65;">Default client secrets and local authorization codes use Node.js cryptographic random bytes.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ── CTA Bottom ────────────────────────────────────────────────────────── -->
-<section class="cta-bottom" style="border-top:1px solid var(--border);">
-  <div class="container">
-    <h2>Evaluate the MCP authorization endpoint surface.</h2>
-    <p>
-      Use the pinned 2.0.2 package in one controlled process to inspect its routes and middleware.
-      Review the state, consent, code-handoff, hook, and revocation-check limitations before designing a production authorization service.
-    </p>
-    <div class="hero-ctas">
-      <div class="install-hero" onclick="copyInstall('npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.1', this)">
-        <code>npm install @grantex/mcp-auth@2.0.2 @grantex/sdk@0.7.1</code>
-        <span class="copy-hint">Copy</span>
-      </div>
-    </div>
-    <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
-      <a href="https://docs.grantex.dev/features/mcp-auth-server" class="btn btn-primary">Read the Docs</a>
-      <a href="https://docs.grantex.dev/guides/mcp-certification" class="btn btn-secondary">Certification Preview</a>
-      <a href="https://github.com/mishrasanjeev/grantex/tree/main/packages/mcp-auth" class="btn btn-secondary">GitHub</a>
-    </div>
-  </div>
-</section>
-
-<!-- ── Footer ─────────────────────────────────────────────────────────────── -->
-<footer>
-  <div class="container">
-    <div class="footer-inner">
-      <span class="footer-logo">grantex</span>
-      <ul class="footer-links">
-        <li><a href="https://docs.grantex.dev">Docs</a></li>
-        <li><a href="https://github.com/mishrasanjeev/grantex">GitHub</a></li>
-        <li><a href="https://pypi.org/project/grantex/">PyPI</a></li>
-        <li><a href="https://www.npmjs.com/package/@grantex/mcp-auth">npm</a></li>
-        <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE">Apache 2.0</a></li>
-      </ul>
-      <ul class="footer-links" aria-label="Legal and procurement">
-        <li><a href="https://github.com/mishrasanjeev/grantex/blob/main/SECURITY.md">Security</a></li>
-      </ul>
-      <span class="footer-copy">&copy; 2026 Orchestrum Technologies LLP</span>
-    </div>
-  </div>
-      <p class="ownership-notice">Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Contact: <a href="mailto:sanjeev@orchestrum.in">sanjeev@orchestrum.in</a> or <a href="mailto:mishra.sanjeev@gmail.com">mishra.sanjeev@gmail.com</a>.</p>
-
-</footer>
-
-<!-- ── Scripts ────────────────────────────────────────────────────────────── -->
-<script>
-  /* Copy code block */
-  function copyCode(id, btn) {
-    const text = document.getElementById(id).innerText;
-    navigator.clipboard.writeText(text).then(() => {
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
-    });
-    if (typeof gtag !== 'undefined') {
-      gtag('event', 'copy_code', { event_category: 'mcp_quickstart', event_label: id });
-    }
-  }
-
-  /* Copy install command */
-  function copyInstall(text, el) {
-    navigator.clipboard.writeText(text).then(() => {
-      var hint = el.querySelector('.copy-hint');
-      hint.textContent = 'Copied!';
-      setTimeout(() => { hint.textContent = 'Copy'; }, 2000);
-    });
-    if (typeof gtag !== 'undefined') {
-      gtag('event', 'install_copy', { event_category: 'mcp_quickstart', event_label: text });
-    }
-  }
-
-  /* Deployment toggle */
-  function switchDeploy(panel, btn) {
-    document.querySelectorAll('.deploy-panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.deploy-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('deploy-' + panel).classList.add('active');
-    btn.classList.add('active');
-    if (typeof gtag !== 'undefined') {
-      gtag('event', 'deploy_toggle', { event_category: 'mcp', event_label: panel });
-    }
-  }
-</script>
-
-<!-- Google Analytics 4 -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-DNXYVLS5NY"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', 'G-DNXYVLS5NY');
-</script>
-
+  </footer>
 </body>
 </html>
