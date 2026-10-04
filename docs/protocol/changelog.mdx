@@ -6,31 +6,31 @@ description: "How to find current Grantex releases, package compatibility, and t
 
 ## Current release snapshot
 
-Release snapshot verified: **September 30, 2026**
+Release snapshot verified: **October 4, 2026**
 
 | Surface | Current release |
 |---|---:|
-| TypeScript SDK | `@grantex/sdk@0.8.1` |
+| TypeScript SDK | `@grantex/sdk@0.8.2` |
 | x402 Payment Protocol | `@grantex/x402@0.4.1` |
-| Python SDK | `grantex==0.7.1` |
-| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.4.2` |
-| MCP Auth server | `@grantex/mcp-auth@4.0.0` |
+| Python SDK | `grantex==0.7.2` |
+| Go SDK | `github.com/mishrasanjeev/grantex-go@v0.4.3` |
+| MCP Auth server | `@grantex/mcp-auth@4.1.0` |
 | CLI | `@grantex/cli@0.4.2` |
-| Gateway | `@grantex/gateway@0.2.1` |
+| Gateway | `@grantex/gateway@0.3.0` |
 | Adapters | `@grantex/adapters@0.2.1` |
 | Strands TypeScript | `@grantex/strands@0.2.1` |
-| Strands Python | `grantex-strands==0.2.1` |
+| Strands Python | `grantex-strands==0.2.2` |
 | OpenAPI contract | `0.5.0` |
 
 Grantex is a multi-package repository. SDKs, integrations, the API contract, and
 repository release entries can advance independently, so a single project-wide
 version number would be misleading.
 
-The eight enforcement releases have matching registry hashes. A clean npm
-installation and public Python-file installations passed their enforcement
-tests. Normal pinned PyPI index installation remains pending propagation;
-see [the validation report](/sdk-release-validation). Go and x402 were
-compatibility-tested, not republished.
+The current SDK and changed integration releases were validated from the
+merged source, then checked against npm, PyPI, and the public Go proxy.
+Historical enforcement tests are in [the validation report](/sdk-release-validation);
+the October 4 release verification is described in [Release Status](/release-status).
+x402 was compatibility-tested, not republished.
 
 ## Canonical sources
 

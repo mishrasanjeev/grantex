@@ -6,21 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-### Prepared - Registry artifact parity
-- Prepare new releases for the current source of gateway 0.3.0, MCP Auth
-  4.1.0, MCP 0.1.11, MPP 0.1.3, Gemma 0.1.2 and conformance 0.1.9.
-  Their existing same-version npm artifacts do not contain the latest source.
-- Prepare Python integration patch releases: A2A 0.1.6, ADK 0.1.8,
-  CrewAI 0.1.9, FastAPI 0.1.7, Gemma 0.1.2, OpenAI Agents 0.1.8 and
-  Strands 0.2.2. Their existing same-version PyPI wheels differ from source.
-- These are source candidates, not published packages; use the versions in
-  `release-status.json` until each registry confirms publication.
+### Published - Registry artifact parity (2026-10-04)
+- Publish TypeScript SDK 0.8.2, Python SDK 0.7.2, Go SDK v0.4.3 and
+  `@grantex/dpdp` 0.2.0 with their typed DPDP client updates.
+- Publish gateway 0.3.0, MCP Auth 4.1.0, MCP 0.1.11, MPP 0.1.3,
+  Gemma 0.1.2 and conformance 0.1.9 on npm.
+- Publish Python A2A 0.1.6, ADK 0.1.8, CrewAI 0.1.9, FastAPI 0.1.7,
+  Gemma 0.1.2, OpenAI Agents 0.1.8 and Strands 0.2.2 on PyPI.
+- Verify every new npm tarball and PyPI distribution against its validated
+  archive and verify the Go tag through the public module proxy. The
+  [registry audit](docs/reports/sdk-registry-sync-2026-10-04.md) records
+  tests and remaining publishing automation setup.
 
 ### Fixed - SDK release documentation
-- Align the TypeScript, Python, Go and DPDP package READMEs with their prepared
-  source versions without claiming that an unpublished version is available.
-  Correct the Python feature table and use registry-resolved installation
-  commands in the package READMEs.
+- Align the TypeScript, Python, Go and DPDP package READMEs with their source
+  versions. Update the release snapshot, installation guides, integration
+  matrix, indexed website pages, and machine-readable AI guidance only after
+  their public registry artifacts were verified.
 
 ### Fixed - Public-page search and accessibility clarity
 - Give MPP and x402 links descriptive names, align install-button names with
@@ -209,12 +211,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   loopback. `grantex-attest --passport-out FILE` keeps the issuer's
   credential for such a flow.
 
-### Release preparation: DPDP clients
-- Versions prepared for the DPDP client changes: `@grantex/sdk` 0.8.2,
+### DPDP client releases
+- Released versions for the DPDP client changes: `@grantex/sdk` 0.8.2,
   `grantex` (Python) 0.7.2, Go SDK v0.4.3 and `@grantex/dpdp` 0.2.0
   (minor: its types follow the server's grievance statuses, inline exports
-  and consent proofs). These versions are not yet published;
-  `@grantex/cli` 0.4.2 is already published.
+  and consent proofs). All four are now published and registry verified;
+  `@grantex/cli` 0.4.2 remains published.
 
 ### Agent callback URI management
 - Dashboard agent create/edit now exposes registered redirect URIs, including
@@ -696,8 +698,8 @@ docs say that the two consent-record lists paginate only when `limit` or
   responses, token/principal/agent/tenant substitution, and denied callbacks.
   See the SDK execution authority guide for host-owned consent, action-bound
   decisions, caps accounting, and offline-verifier limitations.
-- CLI and MCP Auth source candidates require SDK 0.8.1 as their minimum
-  dependency; earlier prepared archives must be rebuilt before publication.
+- CLI and MCP Auth require SDK 0.8.1 as their minimum dependency. The
+  validated MCP Auth 4.1.0 archive is now published.
 - The private mock issuer compares persisted state contents rather than
   file timestamps, so same-size/coarse-timestamp revocations are observed.
   Missing previously loaded state fails closed. Documentation example tests

@@ -113,7 +113,7 @@
   }
 }</code></pre>
 
-      <h3><code>@grantex/mcp-auth@4.0.0</code>: human-confirmed authorization server</h3>
+      <h3><code>@grantex/mcp-auth@4.1.0</code>: human-confirmed authorization server</h3>
       <p>Version 4 renders consent, binds authorization to a host-authenticated human principal, and supports durable shared state. A deployment must configure trusted host login, shared storage, resource binding, local revocation and current issuer-grant checks before protecting tools.</p>
       <table class="comparison-table">
         <thead><tr><th>Boundary</th><th>Version 4 behavior</th><th>Host responsibility</th></tr></thead>
@@ -133,7 +133,7 @@
         <li>Configure local revocation and current-grant checks; issuer outages must fail closed.</li>
         <li>Require a consumed, action-bound human decision for sensitive tools and record actual execution separately.</li>
       </ol>
-      <pre><code>npm install @grantex/mcp-auth@4.0.0 @grantex/sdk@0.8.1 pg
+      <pre><code>npm install @grantex/mcp-auth@4.1.0 @grantex/sdk@0.8.2 pg
 
 // At the MCP tool boundary:
 // 1. verify the signed grant token and exact scope
