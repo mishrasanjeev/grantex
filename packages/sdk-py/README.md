@@ -1,5 +1,9 @@
 # grantex
 
+Version 0.7.2 adds typed DPDP client responses and the optional enterprise
+SSO `session_token` field. Check [Release Status](https://docs.grantex.dev/release-status)
+for the version currently available on PyPI; a source version is not a registry release.
+
 **Version 0.7.0:** `enforce()` checks the grant audience,
 requires an amount for capped scopes, and checks current revocation online by
 default. Per-call revocation settings cannot weaken the client setting.
@@ -47,7 +51,7 @@ Grantex lets humans authorize AI agents with **verifiable, revocable, audited gr
 ## Install
 
 ```bash
-pip install grantex==0.7.1
+pip install grantex
 ```
 
 ## Quick start
@@ -177,16 +181,15 @@ token = client.tokens.exchange(ExchangeTokenParams(
 | **Billing** | `client.billing.get_subscription()`, `.create_checkout()`, `.create_portal()` |
 | **SCIM 2.0** | `client.scim.create_user()`, `.list_users()`, `.get_user()`, `.update_user()`, `.delete_user()` |
 | **OIDC SSO** | `client.sso.create_config()`, `.get_config()`, `.get_login_url()`, `.handle_callback()` |
+| **Agent prepaid wallets** | Developer policy, principal wallet/policy/approval, and ES256 DPoP agent clients |
+| **Commerce V1/OACP** | `client.commerce.get_profile()`, `.search_catalog()`, `.create_cart()`, `.get_ops_health()` |
 
-The repository source parses optional `session_token` from enterprise SSO
-callbacks when the server enables human sessions. A subsequent registry
-release is needed for consumers to receive this type update. Treat the token
+Version 0.7.2 parses optional `session_token` from enterprise SSO callbacks
+when the server enables human sessions. Treat the token
 as an opaque bearer credential, not a public session ID; keep it out of logs.
 Hosted dashboard sign-in currently uses OIDC and machine API keys remain
 usable for automation. See the
 [enterprise SSO guide](https://docs.grantex.dev/guides/enterprise-sso).
-| **Agent prepaid wallets** | Developer policy, principal wallet/policy/approval, and ES256 DPoP agent clients |
-| **Commerce V1/OACP** | `client.commerce.get_profile()`, `.search_catalog()`, `.create_cart()`, `.get_ops_health()` |
 
 Enrollment links are one-use bearer secrets. Alert-only is account-wide and
 affects the legacy detector's automatic revocation, not other security gates.

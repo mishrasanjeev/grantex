@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - SDK release documentation
+- Align the TypeScript, Python, Go and DPDP package READMEs with their prepared
+  source versions without claiming that an unpublished version is available.
+  Correct the Python feature table and use registry-resolved installation
+  commands in the package READMEs.
+
 ### Fixed - Public-page search and accessibility clarity
 - Give MPP and x402 links descriptive names, align install-button names with
   visible commands, restore heading order, and improve inline-link and wallet

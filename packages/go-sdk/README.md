@@ -1,6 +1,7 @@
 # Grantex Go SDK
 
-Version v0.4.2 adds opt-in per-invocation current-authority checks and trusted
+Version v0.4.3 adds typed DPDP client responses. Version v0.4.2 adds opt-in
+per-invocation current-authority checks and trusted
 principal/agent binding. Offline defaults remain unchanged. Verify public
 module availability before upgrading; see the execution-authority guide below.
 
@@ -28,7 +29,7 @@ Official Go SDK for the [Grantex](https://grantex.dev) delegated authorization p
 ## Installation
 
 ```bash
-go get github.com/mishrasanjeev/grantex-go@v0.4.2
+go get github.com/mishrasanjeev/grantex-go@latest
 ```
 
 Requires Go 1.26.1 or newer, matching the module's `go.mod` directive.
