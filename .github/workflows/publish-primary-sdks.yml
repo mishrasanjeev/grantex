@@ -322,9 +322,9 @@ jobs:
           for package in a2a-py google-adk crewai fastapi gemma-py openai-agents strands-py; do
             python -m pip install -e "packages/$package[dev]"
             (cd "packages/$package" && python -m mypy --strict src && python -m pytest)
-            python -m build "packages/$package" --outdir release-artifacts/auxiliary-pypi
+            python -m build "packages/$package" --outdir "release-artifacts/auxiliary-pypi/$package"
+            python -m twine check "release-artifacts/auxiliary-pypi/$package"/*
           done
-          python -m twine check release-artifacts/auxiliary-pypi/*
 
       - name: Upload immutable release candidates
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -469,11 +469,15 @@ jobs:
           packages-dir: release-artifacts/integration-pypi/
 
   pypi-auxiliary:
-    name: Publish changed Python integrations
+    name: Publish Python integration (${{ matrix.package }})
     needs: [verify, pypi]
     if: ${{ always() && inputs.publish_auxiliary_pypi && needs.verify.result == 'success' && (needs.pypi.result == 'success' || needs.pypi.result == 'skipped') }}
     runs-on: ubuntu-latest
     environment: sdk-release
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [a2a-py, google-adk, crewai, fastapi, gemma-py, openai-agents, strands-py]
     permissions:
       contents: read
       id-token: write
@@ -484,4 +488,4 @@ jobs:
           path: release-artifacts
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
-          packages-dir: release-artifacts/auxiliary-pypi/
+          packages-dir: release-artifacts/auxiliary-pypi/${{ matrix.package }}/

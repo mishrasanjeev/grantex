@@ -71,9 +71,11 @@ The repository contains 35 packages under `packages/`. Each row maps a directory
   routes as shipped, `keyPersistence`, expanded erasure results). Until they
   are on the registries, install the published versions listed above.
   `@grantex/cli` 0.4.2 is already published and supports `--notice-version`.
-- **Unpublished audit changes:** changed
-  integration source is not a new registry release. Existing integration
-  versions do not contain the audit's new opt-in authority forwarding.
+- **Unpublished integration changes:** the source candidates shown above for
+  gateway, MCP Auth, MCP, MPP, Gemma, conformance and seven Python integrations
+  differ from their current registry artifacts. Version equality alone did not
+  establish artifact parity; the other audited npm integrations matched
+  their published tarballs and do not need another release.
 - **Current SDK enforcement:** Node.js 22.12+ is required for changed npm
   packages. Local verification is not current-state enforcement; legacy aliases
   remain enabled until explicitly disabled.
