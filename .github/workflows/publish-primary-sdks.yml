@@ -37,6 +37,21 @@ on:
         required: true
         default: false
         type: boolean
+      publish_dpdp:
+        description: 'Publish the validated @grantex/dpdp package'
+        required: true
+        default: false
+        type: boolean
+      publish_auxiliary_npm:
+        description: 'Publish changed gateway, MCP, MPP, Gemma and conformance npm packages'
+        required: true
+        default: false
+        type: boolean
+      publish_auxiliary_pypi:
+        description: 'Publish changed A2A, ADK, CrewAI, FastAPI, Gemma, OpenAI Agents and Strands Python packages'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -53,9 +68,13 @@ jobs:
       - name: Validate confirmation
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
-          PUBLISH: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_pypi || inputs.publish_go || inputs.publish_integrations || inputs.publish_mcp_auth }}
+          PUBLISH: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_pypi || inputs.publish_go || inputs.publish_integrations || inputs.publish_mcp_auth || inputs.publish_dpdp || inputs.publish_auxiliary_npm || inputs.publish_auxiliary_pypi }}
         run: |
           test "$CONFIRMATION" = 'RELEASE_PRIMARY_SDKS'
+          if [ "${{ inputs.publish_integrations }}" = 'true' ] && [ "${{ inputs.publish_auxiliary_npm }}" = 'true' ]; then
+            echo 'Do not select both the full integration and selective auxiliary npm release batches' >&2
+            exit 1
+          fi
           if [ "$PUBLISH" = 'true' ]; then
             test "$GITHUB_REF" = 'refs/heads/main'
           fi
@@ -130,9 +149,39 @@ jobs:
           PUBLISH_PY: ${{ inputs.publish_pypi }}
           PUBLISH_INTEGRATIONS: ${{ inputs.publish_integrations }}
           PUBLISH_MCP_AUTH: ${{ inputs.publish_mcp_auth }}
+          PUBLISH_DPDP: ${{ inputs.publish_dpdp }}
+          PUBLISH_AUX_NPM: ${{ inputs.publish_auxiliary_npm }}
+          PUBLISH_AUX_PYPI: ${{ inputs.publish_auxiliary_pypi }}
         run: |
           set -euo pipefail
           fail=0
+          if [ "$PUBLISH_DPDP" = 'true' ]; then
+            version=$(node -p "require('./packages/dpdp/package.json').version")
+            if npm view "@grantex/dpdp@$version" version >/dev/null 2>&1; then
+              echo "::error::@grantex/dpdp@$version is already published"
+              fail=1
+            fi
+          fi
+          if [ "$PUBLISH_AUX_NPM" = 'true' ]; then
+            for package in gateway mcp mpp gemma conformance; do
+              name=$(node -p "require('./packages/$package/package.json').name")
+              version=$(node -p "require('./packages/$package/package.json').version")
+              if npm view "$name@$version" version >/dev/null 2>&1; then
+                echo "::error::$name@$version is already published"
+                fail=1
+              fi
+            done
+          fi
+          if [ "$PUBLISH_AUX_PYPI" = 'true' ]; then
+            for package in a2a-py google-adk crewai fastapi gemma-py openai-agents strands-py; do
+              name=$(grep -Eo '^name = "[^"]+"' "packages/$package/pyproject.toml" | cut -d'"' -f2)
+              version=$(grep -Eo '^version = "[^"]+"' "packages/$package/pyproject.toml" | cut -d'"' -f2)
+              if curl -fsSL "https://pypi.org/pypi/$name/$version/json" >/dev/null 2>&1; then
+                echo "::error::$name $version already exists"
+                fail=1
+              fi
+            done
+          fi
           if [ "$PUBLISH_MCP_AUTH" = 'true' ]; then
             version=$(node -p "require('./packages/mcp-auth/package.json').version")
             if npm view "@grantex/mcp-auth@$version" version >/dev/null 2>&1; then
@@ -230,6 +279,14 @@ jobs:
           node scripts/verify-enforcement-artifacts.mjs "$RUNNER_TEMP/grantex-sdk-consumer"
           node scripts/verify-mcp-consent-artifact.mjs "$RUNNER_TEMP/grantex-sdk-consumer"
 
+      - name: Verify and pack DPDP and changed auxiliary npm packages
+        if: ${{ inputs.publish_dpdp || inputs.publish_auxiliary_npm }}
+        run: |
+          set -euo pipefail
+          for package in dpdp gateway mcp mpp gemma conformance; do
+            (cd "packages/$package" && npm ci && npm run typecheck && npm test && npm run build && npm pack --pack-destination ../../release-artifacts/npm)
+          done
+
       - name: Verify the Python SDK
         working-directory: packages/sdk-py
         run: |
@@ -258,6 +315,17 @@ jobs:
           done
           python -m twine check release-artifacts/integration-pypi/*
 
+      - name: Verify and build changed auxiliary Python packages
+        if: ${{ inputs.publish_auxiliary_pypi }}
+        run: |
+          set -euo pipefail
+          for package in a2a-py google-adk crewai fastapi gemma-py openai-agents strands-py; do
+            python -m pip install -e "packages/$package[dev]"
+            (cd "packages/$package" && python -m mypy --strict src && python -m pytest)
+            python -m build "packages/$package" --outdir release-artifacts/auxiliary-pypi
+          done
+          python -m twine check release-artifacts/auxiliary-pypi/*
+
       - name: Upload immutable release candidates
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -269,7 +337,7 @@ jobs:
   npm:
     name: Publish npm SDKs
     needs: verify
-    if: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_integrations || inputs.publish_mcp_auth }}
+    if: ${{ inputs.publish_typescript_sdk || inputs.publish_x402 || inputs.publish_integrations || inputs.publish_mcp_auth || inputs.publish_dpdp || inputs.publish_auxiliary_npm }}
     runs-on: ubuntu-latest
     environment: sdk-release
     permissions:
@@ -306,6 +374,20 @@ jobs:
       - name: Publish only MCP Auth
         if: ${{ inputs.publish_mcp_auth }}
         run: npm publish release-artifacts/npm/grantex-mcp-auth-*.tgz --access public
+      - name: Publish DPDP
+        if: ${{ inputs.publish_dpdp }}
+        run: npm publish release-artifacts/npm/grantex-dpdp-*.tgz --access public
+      - name: Publish changed auxiliary npm packages
+        if: ${{ inputs.publish_auxiliary_npm }}
+        run: |
+          set -euo pipefail
+          for package in gateway mcp mpp gemma conformance; do
+            if [ "$package" = 'mcp' ]; then
+              npm publish release-artifacts/npm/grantex-mcp-[0-9]*.tgz --access public
+            else
+              npm publish release-artifacts/npm/grantex-$package-*.tgz --access public
+            fi
+          done
 
   pypi:
     name: Publish Python SDK
@@ -385,3 +467,21 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           packages-dir: release-artifacts/integration-pypi/
+
+  pypi-auxiliary:
+    name: Publish changed Python integrations
+    needs: [verify, pypi]
+    if: ${{ always() && inputs.publish_auxiliary_pypi && needs.verify.result == 'success' && (needs.pypi.result == 'success' || needs.pypi.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    environment: sdk-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: primary-sdk-distributions
+          path: release-artifacts
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: release-artifacts/auxiliary-pypi/

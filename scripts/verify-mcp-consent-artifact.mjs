@@ -11,8 +11,8 @@ const load = (name, entry = 'index.js') => import(pathToFileURL(resolve(root, 'n
 const mcp = await load('@grantex/mcp-auth');
 const { InMemoryStorage } = await load('@grantex/mcp-auth', 'testing.js');
 const { Grantex } = await load('@grantex/sdk');
-assert.equal(JSON.parse(readFileSync(resolve(root, 'node_modules/@grantex/mcp-auth/package.json'), 'utf8')).version, '4.0.0');
-assert.match(readFileSync(resolve(root, 'node_modules/@grantex/mcp-auth/CHANGELOG.md'), 'utf8'), /4\.0\.0/);
+assert.equal(JSON.parse(readFileSync(resolve(root, 'node_modules/@grantex/mcp-auth/package.json'), 'utf8')).version, '4.1.0');
+assert.match(readFileSync(resolve(root, 'node_modules/@grantex/mcp-auth/CHANGELOG.md'), 'utf8'), /4\.1\.0/);
 
 let subject = 'prn_artifact';
 let active = true;

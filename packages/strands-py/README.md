@@ -21,7 +21,7 @@ revocation. This helper has no amount extractor; for capped tools call
 [migration guide](https://docs.grantex.dev/migration-enforcement).
 
 ```bash
-pip install grantex-strands==0.2.1 grantex==0.7.1
+pip install grantex-strands grantex
 ```
 
 You also need the Strands Agents SDK installed:

@@ -1,6 +1,6 @@
 {
   "name": "@grantex/gateway",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Zero-code reverse-proxy gateway that enforces Grantex grant tokens via YAML config",
   "author": {
     "name": "Sanjeev Kumar",

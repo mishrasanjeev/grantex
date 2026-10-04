@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Prepared - Registry artifact parity
+- Prepare new releases for the current source of gateway 0.3.0, MCP Auth
+  4.1.0, MCP 0.1.11, MPP 0.1.3, Gemma 0.1.2 and conformance 0.1.9.
+  Their existing same-version npm artifacts do not contain the latest source.
+- Prepare Python integration patch releases: A2A 0.1.6, ADK 0.1.8,
+  CrewAI 0.1.9, FastAPI 0.1.7, Gemma 0.1.2, OpenAI Agents 0.1.8 and
+  Strands 0.2.2. Their existing same-version PyPI wheels differ from source.
+- These are source candidates, not published packages; use the versions in
+  `release-status.json` until each registry confirms publication.
+
 ### Fixed - SDK release documentation
 - Align the TypeScript, Python, Go and DPDP package READMEs with their prepared
   source versions without claiming that an unpublished version is available.
