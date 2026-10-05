@@ -8,10 +8,13 @@ import { expectedMcpLimitationIds, stalePublicSelectors } from '../../scripts/ch
 test('founder profile is factual and linked from the introduction', () => {
   const profile = readFileSync(new URL('../../docs/ownership.mdx', import.meta.url), 'utf8');
   const article = readFileSync(new URL('../../docs/blog/introducing-grantex.mdx', import.meta.url), 'utf8');
+  const homepage = readFileSync(new URL('../../web/index.html', import.meta.url), 'utf8');
   assert.match(profile, /Sanjeev Kumar is Founder & CEO of Orchestrum Technologies LLP/);
   assert.match(profile, /https:\/\/x\.com\/mishrak_sanjeev/);
   assert.match(profile, /https:\/\/www\.linkedin\.com\/in\/sanjeev-kumar-a184174/);
   assert.match(article, /\[author profile and ownership contacts\]\(\/ownership\)/);
+  assert.match(homepage, /href="https:\/\/docs\.grantex\.dev\/ownership">About the inventor<\/a>/);
+  assert.match(homepage, /"jobTitle": "Founder & CEO"/);
 });
 
 test('immutable MCP Auth 2.0.2 retains all six historical limitations', () => {

@@ -50,7 +50,12 @@
       "affiliation": {
         "@id": "https://grantex.dev/#organization"
       },
-      "url": "https://github.com/mishrasanjeev"
+      "jobTitle": "Founder & CEO",
+      "url": "https://docs.grantex.dev/ownership",
+      "sameAs": [
+        "https://x.com/mishrak_sanjeev",
+        "https://www.linkedin.com/in/sanjeev-kumar-a184174"
+      ]
     },
     {
       "@type": "WebSite",

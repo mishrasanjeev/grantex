@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Documentation - Inventor profile
 - Add the approved founder bio and public profile links to the ownership page,
-  and link to it from the introductory article.
+  and link to it from the introductory article and public homepage.
 
 ### Published - Registry artifact parity (2026-10-04)
 - Publish TypeScript SDK 0.8.2, Python SDK 0.7.2, Go SDK v0.4.3 and
