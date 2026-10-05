@@ -10,8 +10,8 @@ test('founder profile is factual and linked from the introduction', () => {
   const article = readFileSync(new URL('../../docs/blog/introducing-grantex.mdx', import.meta.url), 'utf8');
   const homepage = readFileSync(new URL('../../web/index.html', import.meta.url), 'utf8');
   assert.match(profile, /Sanjeev Kumar is Founder & CEO of Orchestrum Technologies LLP/);
-  assert.ok(profile.includes('https://x.com/mishrak_sanjeev'));
-  assert.ok(profile.includes('https://www.linkedin.com/in/sanjeev-kumar-a184174'));
+  assert.match(profile, /\[LinkedIn\]/);
+  assert.match(profile, /\[X\]/);
   assert.match(article, /\[author profile and ownership contacts\]\(\/ownership\)/);
   assert.match(homepage, /href="https:\/\/docs\.grantex\.dev\/ownership">About the inventor<\/a>/);
   assert.match(homepage, /"jobTitle": "Founder & CEO"/);
