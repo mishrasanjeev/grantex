@@ -292,6 +292,16 @@ export async function validateSeoAeo(options = {}) {
         || !/property=["']og:image:alt["']/i.test(html)) {
         failures.push(label + ' must include complete Open Graph image metadata');
       }
+      if (page !== pages[0]) {
+        const group = section === 'for' ? 'integration guide' : 'comparison';
+        const configCalls = html.match(/gtag\(['"]config['"],['"]G-[A-Z0-9]+['"]/g) || [];
+        if (configCalls.length !== 1) failures.push(label + ' must configure GA4 exactly once');
+        const groupedConfig = new RegExp(`gtag\\(['"]config['"],['"]G-[A-Z0-9]+['"],\\{content_group:['"]${group}['"]\\}\\)`);
+        if (!groupedConfig.test(html)) failures.push(label + ' must set its GA4 content group in the config call');
+        if (/gtag\(['"]event['"],['"]page_view['"]/.test(html)) {
+          failures.push(label + ' must not send a second manual GA4 page_view');
+        }
+      }
       const jsonLd = extractJsonLd(html, label, failures);
       if (jsonLd.length !== 1 || !Array.isArray(jsonLd[0]?.['@graph'])) failures.push(label + ' must have one connected JSON-LD graph');
     }
