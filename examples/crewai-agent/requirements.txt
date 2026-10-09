@@ -1,4 +1,4 @@
-grantex>=0.7.1
+grantex>=0.7.2
 grantex-crewai
 PyJWT>=2.15.1
 idna>=3.20
