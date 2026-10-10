@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Production E2E pacing
+- Wait for the shared token issuance rate-limit window before principal-session
+  tests. Keep the production limiter and test assertions unchanged, and add
+  workflow regressions so a failed suite cannot be ignored.
+
 ### Fixed - Idle event stream startup
 - Add the default-off `EVENT_STREAM_READY_ENABLED` flag to flush an initial SSE
   readiness comment after subscription setup. Hosted deployments explicitly
