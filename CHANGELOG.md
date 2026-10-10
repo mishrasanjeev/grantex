@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Dependency validation and runtime image hygiene
+- Reconcile overlapping dependency updates and refresh local-package lockfile
+  metadata so clean CI installs retain the requested versions.
+- Exclude optional native TypeScript compiler peers from the auth-service runtime
+  image while retaining compilation in its builder stage.
+- Use patched Go 1.26.9 in validation, security audits and release workflows.
+
 ### Documentation - Inventor profile
 - Add the approved founder bio and public profile links to the ownership page,
   and link to it from the introductory article and public homepage.

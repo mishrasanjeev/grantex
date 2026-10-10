@@ -68,7 +68,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node --test tests/scripts/seo-aeo-release.test.mjs
+      - run: node --test tests/scripts/seo-aeo-release.test.mjs tests/scripts/runtime-image.test.mjs
       - run: node scripts/check-docs-integrity.mjs
 
   commerce-preview-conformance:
@@ -568,7 +568,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version: '1.26.x'
+          go-version: '1.26.9'
           cache-dependency-path: |
             packages/go-sdk/go.sum
             packages/terraform-provider-grantex/go.sum
