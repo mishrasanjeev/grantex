@@ -155,6 +155,7 @@ rules.
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
 | `REDIS_URL` | Yes | — | Redis connection string |
+| `EVENT_STREAM_READY_ENABLED` | No | `false` | Set to `true` to flush an initial SSE readiness comment after subscription setup; avoids the idle 30-second heartbeat wait. Hosted deployments opt in; `false` retains previous timing |
 | `JWT_SIGNING_ALG` | No | `RS256` | Signing algorithm: `RS256` or `ES256` |
 | `RSA_PRIVATE_KEY` | Yes* | — | PKCS#8 PEM RSA private key (RS256). *Or `EC_PRIVATE_KEY` for ES256, `SIGNING_KEY_STORE=postgres`, or `AUTO_GENERATE_KEYS=true` (dev only) |
 | `EC_PRIVATE_KEY` | Yes* | — | PKCS#8 PEM EC P-256 private key (ES256) |
