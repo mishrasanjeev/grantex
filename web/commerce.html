@@ -159,7 +159,8 @@
     .node:nth-child(3) { border-top-color: var(--amber); }
     .node:nth-child(4) { border-top-color: var(--red); }
     table { width: 100%; border-collapse: collapse; background: white; border: 1px solid var(--line); }
-    th, td { text-align: left; padding: 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th, td { text-align: left; padding: 14px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+    th:first-child, td:first-child { white-space: nowrap; }
     th { background: #edf6f1; color: var(--muted); font-size: 13px; text-transform: uppercase; }
     .dark { background: #14201a; color: white; }
     .dark p, .dark a { color: #dbe7df; }

@@ -3,7 +3,6 @@ title: "MCP Auth 4.0: authenticated human consent"
 description: "Bind MCP consent to an authenticated human, preserve principal identity across callbacks and refresh, and check current grant authority before execution."
 ---
 
-# `@grantex/mcp-auth` 4.0
 
 > **Status.** Version 4.0.0 is published and registry verified as of
 > September 29, 2026. Real storage/restart, Chromium and clean registry

@@ -16,6 +16,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add real-HTTP startup regression coverage and make event E2E timeouts fail
   instead of silently accepting aborted connections. No SDK wire format changes.
 
+### Fixed - Public commerce and documentation presentation
+- Keep the commerce adapter comparison table within narrow mobile viewports.
+- Remove duplicate document H1s from 38 public guides and articles;
+  their documentation titles remain the page headings, with navigation-wide
+  regression coverage.
+- Add source-backed meta descriptions to the four credential API reference pages.
+
 ### Fixed - Dependency validation and runtime image hygiene
 - Reconcile overlapping dependency updates and refresh local-package lockfile
   metadata so clean CI installs retain the requested versions.
