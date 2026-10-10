@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "express": "^4.21.0",
-    "express-rate-limit": "^8.7.0"
+    "express-rate-limit": "^8.7.1"
   },
   "devDependencies": {
     "@grantex/mpp": "file:../../packages/mpp",
