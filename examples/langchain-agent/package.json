@@ -8,7 +8,7 @@
   },
   "dependencies": {
     "@grantex/langchain": "^0.1.8",
-    "@grantex/sdk": "^0.8.1",
+    "@grantex/sdk": "^0.8.2",
     "@langchain/core": "^1.2.16"
   },
   "devDependencies": {
