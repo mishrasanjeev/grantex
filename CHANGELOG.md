@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Dependency validation and runtime image hygiene
+- Reconcile overlapping dependency updates and refresh local-package lockfile
+  metadata so clean CI installs retain the requested versions.
+- Exclude optional native TypeScript compiler peers from the auth-service runtime
+  image while retaining compilation in its builder stage.
+- Use patched Go 1.26.9 in validation, security audits and release workflows.
+- Refresh the pinned auth image base to patched Alpine OpenSSL libraries and
+  update the development-only fast-copy dependency to its fixed release.
+- Patch transitive proxy-addr, source-map-js, sharp and MCP dependencies across
+  affected lockfiles. Update the Terraform provider's HTTP/2 dependency to
+  golang.org/x/net v0.60.0; source builds now require Go 1.26 or newer, with
+  Go 1.26.9 recommended for its standard-library security fixes.
+
 ### Documentation - Inventor profile
 - Add the approved founder bio and public profile links to the ownership page,
   and link to it from the introductory article and public homepage.

@@ -7,12 +7,12 @@
     "start": "npx tsx src/index.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.129.0",
+    "@anthropic-ai/sdk": "^0.131.0",
     "@grantex/anthropic": "^0.1.2",
-    "@grantex/sdk": "^0.8.1"
+    "@grantex/sdk": "^0.8.2"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },

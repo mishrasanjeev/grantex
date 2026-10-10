@@ -5,13 +5,13 @@
 # Install only what you need — sections are labeled.
 
 # ─── Core SDK ────────────────────────────────────────────────────────────────
-grantex==0.7.1                    # Published SDK required by current integrations
+grantex==0.7.2                    # Published SDK required by current integrations
 PyJWT>=2.15.0                     # JWT verification fixes
 idna>=3.20                        # IDNA validation fixes
-cryptography>=50.0.1              # RSA/Ed25519 key operations
+cryptography>=50.0.2              # RSA/Ed25519 key operations
 
 # ─── Framework Integrations (install as needed) ─────────────────────────────
-grantex-fastapi>=0.1.5            # FastAPI middleware (requires: fastapi>=0.115.0)
+grantex-fastapi>=0.1.7            # FastAPI middleware (requires: fastapi>=0.115.0)
 grantex-crewai>=0.1.8             # CrewAI integration
 grantex-openai-agents>=0.1.6      # OpenAI Agents SDK integration
 grantex-adk>=0.1.7                # Google ADK integration
@@ -23,7 +23,7 @@ grantex-strands>=0.1.1            # Strands Agents SDK integration
 # httpx>=0.27.0                   # HTTP client (async + sync)
 # PyJWT>=2.15.0                   # JWT decoding
 # idna>=3.20                      # IDNA validation
-# cryptography>=50.0.1            # RSA/Ed25519 key operations
+# cryptography>=50.0.2            # RSA/Ed25519 key operations
 
 # ─── FastAPI Integration Dependencies ────────────────────────────────────────
 # fastapi>=0.115.0                # Required by grantex-fastapi

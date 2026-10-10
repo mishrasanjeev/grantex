@@ -7,11 +7,11 @@
     "start": "npx tsx src/index.ts"
   },
   "dependencies": {
-    "@grantex/gateway": "^0.2.1",
-    "@grantex/sdk": "^0.8.1"
+    "@grantex/gateway": "^0.3.0",
+    "@grantex/sdk": "^0.8.2"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
