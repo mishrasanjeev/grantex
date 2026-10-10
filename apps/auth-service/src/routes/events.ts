@@ -34,6 +34,12 @@ export async function eventsRoutes(app: FastifyInstance): Promise<void> {
 
     reply.hijack();
 
+    const readyEnabled = process.env['EVENT_STREAM_READY_ENABLED'] === 'true';
+    if (readyEnabled) {
+      for (const [name, value] of Object.entries(reply.getHeaders())) {
+        if (value !== undefined) reply.raw.setHeader(name, value);
+      }
+    }
     reply.raw.writeHead(200, {
       'content-type': 'text/event-stream',
       'cache-control': 'no-cache',
@@ -70,7 +76,7 @@ export async function eventsRoutes(app: FastifyInstance): Promise<void> {
     });
 
     // A first SSE comment flushes idle response headers through buffering proxies.
-    if (process.env['EVENT_STREAM_READY_ENABLED'] === 'true') {
+    if (readyEnabled) {
       reply.raw.write(': connected\n\n');
     }
   });

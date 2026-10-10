@@ -68,15 +68,33 @@ describe('GET /v1/events/stream (SSE)', () => {
     const timeout = setTimeout(() => controller.abort(), 3000);
     try {
       const res = await fetch(`${baseUrl}/v1/events/stream`, {
-        headers: authHeader(), signal: controller.signal,
+        headers: { ...authHeader(), Origin: 'http://localhost:5173' }, signal: controller.signal,
       });
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toContain('text/event-stream');
+      expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:5173');
       const reader = res.body!.getReader();
       const first = await reader.read();
       expect(new TextDecoder().decode(first.value)).toBe(': connected\n\n');
       reader.releaseLock();
       expect(mockRedis.subscribe).toHaveBeenCalledWith(expect.stringContaining('grantex:events:'));
+    } finally {
+      clearTimeout(timeout);
+      controller.abort();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('does not reflect an untrusted browser origin in the streaming headers', async () => {
+    vi.stubEnv('EVENT_STREAM_READY_ENABLED', 'true');
+    seedAuth();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    try {
+      const res = await fetch(`${baseUrl}/v1/events/stream`, {
+        headers: { ...authHeader(), Origin: 'https://untrusted.example' }, signal: controller.signal,
+      });
+      expect(res.headers.get('access-control-allow-origin')).toBeNull();
     } finally {
       clearTimeout(timeout);
       controller.abort();

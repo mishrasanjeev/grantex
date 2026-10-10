@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Add the default-off `EVENT_STREAM_READY_ENABLED` flag to flush an initial SSE
   readiness comment after subscription setup. Hosted deployments explicitly
   enable it so the Events page does not wait for the 30-second heartbeat.
+- Preserve the configured CORS/security response headers on opted-in streams,
+  allowing the hosted dashboard to read its authenticated cross-origin stream
+  without reflecting untrusted origins.
 - Add real-HTTP startup regression coverage and make event E2E timeouts fail
   instead of silently accepting aborted connections. No SDK wire format changes.
 

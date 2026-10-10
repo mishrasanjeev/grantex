@@ -58,6 +58,8 @@ without waiting for an event. The flag defaults off and is enabled by hosted
 deployments; set it to `false` to retain the previous response timing. It does
 not change authentication, connection limits, or event payloads. Existing SDKs
 ignore SSE comments, so no client upgrade is required.
+Opted-in streams retain the server's configured CORS and security headers;
+cross-origin dashboards still need their exact origin in `CORS_ALLOWED_ORIGINS`.
 
 **`GET /v1/events/stream`** returns a Server-Sent Events stream. Authenticate with your API key as a Bearer token.
 
