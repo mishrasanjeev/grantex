@@ -3,7 +3,6 @@ title: "Migrating to Grantex 0.6"
 description: "Every change from Grantex 0.5 to 0.6 that can break an integration — manifests, purpose-bound grants, caps, ES256 signing and standard token claims — and what to do about each."
 ---
 
-# Migrating from 0.5 to 0.6
 
 Grantex 0.6 adds purpose-bound grants, spend caps, ES256 signing and an OAuth
 profile for grant tokens. Most of it is additive: an integration that does not

@@ -3,8 +3,6 @@ title: Agentic Commerce PRD
 description: Canonical product requirements document for Grantex Commerce and AgenticOrg agentic commerce implementation.
 ---
 
-# Agentic Commerce PRD
-
 This is the canonical consolidated PRD for Grantex Commerce and AgenticOrg
 agentic commerce. It brings the seller journey, buyer journey, existing merchant
 systems, buyer-agent channels, standards fit, safety gates, implementation gaps,
