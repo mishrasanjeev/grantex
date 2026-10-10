@@ -11,7 +11,7 @@ idna>=3.20                        # IDNA validation fixes
 cryptography>=50.0.2              # RSA/Ed25519 key operations
 
 # ─── Framework Integrations (install as needed) ─────────────────────────────
-grantex-fastapi>=0.1.5            # FastAPI middleware (requires: fastapi>=0.115.0)
+grantex-fastapi>=0.1.7            # FastAPI middleware (requires: fastapi>=0.115.0)
 grantex-crewai>=0.1.8             # CrewAI integration
 grantex-openai-agents>=0.1.6      # OpenAI Agents SDK integration
 grantex-adk>=0.1.7                # Google ADK integration
