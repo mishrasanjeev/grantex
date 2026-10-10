@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Idle event stream startup
+- Add the default-off `EVENT_STREAM_READY_ENABLED` flag to flush an initial SSE
+  readiness comment after subscription setup. Hosted deployments explicitly
+  enable it so the Events page does not wait for the 30-second heartbeat.
+- Add real-HTTP startup regression coverage and make event E2E timeouts fail
+  instead of silently accepting aborted connections. No SDK wire format changes.
+
 ### Fixed - Dependency validation and runtime image hygiene
 - Reconcile overlapping dependency updates and refresh local-package lockfile
   metadata so clean CI installs retain the requested versions.

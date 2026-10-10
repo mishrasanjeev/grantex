@@ -2,6 +2,10 @@
 openapi: get /v1/events/stream
 ---
 
+With `EVENT_STREAM_READY_ENABLED=true`, a successful subscription first emits
+the SSE comment `: connected`. It is not an authorization event. The opt-in
+flag defaults off for self-hosting and is enabled in hosted deployments.
+
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -68,6 +68,11 @@ export async function eventsRoutes(app: FastifyInstance): Promise<void> {
       subscriber.disconnect();
       await safeDecr(redis, connKey);
     });
+
+    // A first SSE comment flushes idle response headers through buffering proxies.
+    if (process.env['EVENT_STREAM_READY_ENABLED'] === 'true') {
+      reply.raw.write(': connected\n\n');
+    }
   });
 
   // GET /v1/events/ws — WebSocket
