@@ -1314,6 +1314,11 @@ transactions = client.budgets.transactions("grnt_01HXYZ...")
 
 ## Event Streaming
 
+Self-hosters can set `EVENT_STREAM_READY_ENABLED=true` to flush an initial SSE
+comment once the subscription is ready, avoiding the idle 30-second heartbeat
+wait. The flag defaults off; hosted deployments enable it. Authentication,
+connection limits and event payloads are unchanged, and no SDK update is needed.
+
 Grantex provides real-time event streaming via Server-Sent Events (SSE) and WebSocket. Subscribe to authorization lifecycle events as they happen — grant creation, revocation, token issuance, and budget threshold alerts. Events are published to both webhooks and streaming endpoints, so you can choose push or pull.
 
 ```typescript
