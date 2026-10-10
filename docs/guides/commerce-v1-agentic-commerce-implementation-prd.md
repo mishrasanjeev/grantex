@@ -3,8 +3,6 @@ title: Agentic Commerce Implementation PRD
 description: Merchant-readable product requirements and gap plan for making Grantex Commerce and AgenticOrg ready for self-serve agentic commerce.
 ---
 
-# Agentic Commerce Implementation PRD
-
 This document explains what still needs to be built before merchants can
 self-serve into agentic commerce using Grantex and AgenticOrg.
 

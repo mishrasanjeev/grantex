@@ -3,7 +3,6 @@ title: Merchant Guide To Agentic Commerce
 description: A detailed merchant-facing guide for using Grantex Commerce V1 safely with AI agents, read-only discovery, consent, approvals, launch readiness, operations, and support workflows.
 ---
 
-# Merchant Guide To Agentic Commerce
 
 This guide explains how a merchant can prepare for and operate agentic commerce
 with Grantex Commerce V1. It is written for merchant business owners, ecommerce
