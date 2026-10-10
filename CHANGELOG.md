@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Exclude optional native TypeScript compiler peers from the auth-service runtime
   image while retaining compilation in its builder stage.
 - Use patched Go 1.26.9 in validation, security audits and release workflows.
+- Refresh the pinned auth image base to patched Alpine OpenSSL libraries and
+  update the development-only fast-copy dependency to its fixed release.
 
 ### Documentation - Inventor profile
 - Add the approved founder bio and public profile links to the ownership page,
