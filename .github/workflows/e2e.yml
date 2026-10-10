@@ -137,6 +137,11 @@ jobs:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
         run: npx vitest run --testTimeout=120000 tests/e2e/events.test.ts
 
+      # /v1/token has a separate 20/min per-IP ceiling. Earlier suites mint
+      # tokens from this same runner even though each uses a disposable tenant.
+      - name: Wait for the shared token issuance window
+        run: sleep 65
+
       - name: Principal sessions
         env:
           E2E_BASE_URL: https://grantex-auth-dd4mtrt2gq-uc.a.run.app
