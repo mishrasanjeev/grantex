@@ -4,10 +4,25 @@ description: "Review the draft Grantex hosted-service terms and open-source lice
 ---
 
 **Status:** Draft. Subject to legal review. **Not a legally executed agreement and not legal advice.**
-**Last reviewed:** 2026-05-24
+**Last reviewed:** 2026-10-12 (approved prospective licensing policy)
 **Applies to:** the hosted Grantex services at `grantex.dev` and `api.grantex.dev`.
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. The open-source Grantex software is licensed separately under the Apache License 2.0 (see `LICENSE`); these Terms govern only your use of the hosted service operated by Orchestrum Technologies LLP.
+
+### Approved prospective policy (software adoption pending)
+
+Personal/internal use would be free; commercializing the platform would require
+an agreement with Orchestrum Technologies LLP. Agreements:
+[sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
+The [licensing policy](/compliance/licensing) records the owner's publication
+and legal-review approval. No effective date or covered software release has been approved.
+Existing Apache-2.0 grants, hosted-service plans and provider charges are unchanged.
+
+The concrete transition uses a separate source-available license for eligible
+future platform material, with exact release/file scope. Legacy code and published
+SDK/protocol grants keep their licenses. Hosted resale, OEM access and brand
+permissions need their own applicable agreement; that does not restrict independent
+use of Apache-licensed code. See the [transition details](/compliance/licensing).
 
 ## 1. Acceptance
 

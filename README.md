@@ -2123,6 +2123,13 @@ Protocol specification and SDKs: [Apache 2.0](https://github.com/mishrasanjeev/g
 Third-party packages retain their own licenses. Review
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) before redistribution.
 
+Approved prospective policy (software adoption pending): personal/internal use is free;
+commercializing the platform requires an agreement with Orchestrum Technologies
+LLP. Write to [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
+See [usage and licensing](LICENSING.md); current Apache-2.0 rights remain unchanged.
+The concrete transition uses a separate self-use/commercial-agreement license
+for eligible future platform material, not an added condition on legacy code.
+
 Product ownership: Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
 
 ---

@@ -90,6 +90,7 @@ For MCP HTTP transport authorization, configure a compatible authorization serve
 - [OpenAPI 3.1](https://github.com/mishrasanjeev/grantex/blob/main/docs/openapi.yaml): Auth service API contract.
 - [Sitemap](https://grantex.dev/sitemap.xml): Canonical public web URLs.
 - [GitHub Repository](https://github.com/mishrasanjeev/grantex): Apache-2.0 source, tests, issues, and release history.
+- [Usage and licensing](https://docs.grantex.dev/compliance/licensing): Approved prospective policy; software adoption awaits release scope. Personal/internal use free; commercialization by agreement with Orchestrum Technologies LLP at sanjeev@orchestrum.in. Current Apache-2.0 rights unchanged.
 
 ## Optional
 
