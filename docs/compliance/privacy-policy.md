@@ -1,4 +1,7 @@
-# Privacy Policy (Draft)
+---
+title: "Privacy Policy (Draft)"
+description: "Review the draft Grantex privacy policy, data handling, retention and contact routes. Subject to legal review, not an executed privacy notice."
+---
 
 **Status:** Draft. Subject to legal review. **Not a legally executed privacy notice and not legal advice.**
 **Last reviewed:** 2026-05-24

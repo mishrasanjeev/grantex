@@ -1,4 +1,7 @@
-# Cookie Policy (Draft)
+---
+title: "Cookie Policy (Draft)"
+description: "Review the draft Grantex cookie policy, site storage, analytics, opt-out choices and ownership contacts. Subject to legal review."
+---
 
 **Status:** Draft. Subject to legal review.
 **Last reviewed:** 2026-05-24

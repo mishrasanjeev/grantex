@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Documentation discovery integrity
+- Give seven public disclosure and relying-party pages explicit search metadata
+  and a single documentation-generated title, preserving their review caveats.
+- Point migration-guide repository references to their actual source files rather
+  than nonexistent documentation routes, with regression coverage for both cases.
+
 ### Fixed - Production E2E pacing
 - Wait for the shared token issuance rate-limit window before principal-session
   tests. Keep the production limiter and test assertions unchanged, and add

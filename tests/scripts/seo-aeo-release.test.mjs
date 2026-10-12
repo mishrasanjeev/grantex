@@ -63,6 +63,41 @@ test('the heading check distinguishes content headings from fenced examples', ()
   assert.equal(bodyH1Count('<h1>Duplicate title</h1>'), 1);
 });
 
+test('public disclosure and relying-party documents have one generated title and search metadata', () => {
+  for (const page of [
+    'compliance/cookie-policy', 'compliance/data-residency', 'compliance/dpa',
+    'compliance/privacy-policy', 'compliance/sub-processors',
+    'compliance/terms-of-service', 'relying-parties/verifying-agents',
+  ]) {
+    const { metadata, body } = documentParts(readFileSync(
+      new URL(`../../docs/${page}.md`, import.meta.url), 'utf8'));
+    assert.equal(typeof metadata.title, 'string', page + ' needs an explicit title');
+    assert.equal(bodyH1Count(body), 0, page + ' must not duplicate the rendered title');
+    assert.equal(typeof metadata.description, 'string', page + ' needs a description');
+    assert.ok(metadata.description.length >= 70 && metadata.description.length <= 160, page);
+  }
+});
+
+test('migration guide repository references resolve outside the documentation host', () => {
+  const source = readFileSync(new URL('../../docs/migration-0.6.md', import.meta.url), 'utf8');
+  const tree = createProcessor().parse(documentParts(source).body);
+  const urls = [];
+  function visit(node) {
+    if (node.type === 'link') urls.push(node.url);
+    for (const child of node.children || []) visit(child);
+  }
+  visit(tree);
+  assert.equal(urls.filter(url => url.startsWith('../')).length, 0,
+    'repository-relative links become nonexistent routes on the documentation host');
+  for (const file of [
+    'CHANGELOG.md', 'SPEC.md', 'spec/manifest-0.6.md',
+    'spec/manifest-0.6.schema.json', 'spec/grant-token-0.6.md',
+  ]) {
+    assert.ok(urls.includes('https://github.com/mishrasanjeev/grantex/blob/main/' + file), file);
+    assert.ok(existsSync(new URL('../../' + file, import.meta.url)), file + ' exists in the repository');
+  }
+});
+
 test('credential API reference pages supply meaningful unique search descriptions', () => {
   const descriptions = new Set();
   for (const page of ['get-credential', 'list-credentials', 'verify-credential', 'status-list']) {

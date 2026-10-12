@@ -1,4 +1,7 @@
-# Data Residency Statement
+---
+title: "Data Residency Statement"
+description: "Review Grantex's hosted data locations and self-hosted residency choices. This public disclosure is subject to review, not a certification."
+---
 
 **Status:** Current public disclosure. Subject to legal review. Not a certification document.
 **Last reviewed:** 2026-05-24

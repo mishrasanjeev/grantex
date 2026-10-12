@@ -8,7 +8,7 @@ Grantex 0.6 adds purpose-bound grants, spend caps, ES256 signing and an OAuth
 profile for grant tokens. Most of it is additive: an integration that does not
 use the new features keeps working. This guide lists **every** change that
 can alter the behaviour of an existing deployment, SDK integration or
-resource server, grouped by feature. The [CHANGELOG](../CHANGELOG.md) has the
+resource server, grouped by feature. The [CHANGELOG](https://github.com/mishrasanjeev/grantex/blob/main/CHANGELOG.md) has the
 full list of additions.
 
 **No step in this guide invalidates an outstanding token.** Upgrading keeps
@@ -66,8 +66,8 @@ changes.
 
 ## Tool manifest schema 0.6
 
-Reference: [`spec/manifest-0.6.md`](../spec/manifest-0.6.md) and
-[`spec/manifest-0.6.schema.json`](../spec/manifest-0.6.schema.json).
+Reference: [`spec/manifest-0.6.md`](https://github.com/mishrasanjeev/grantex/blob/main/spec/manifest-0.6.md) and
+[`spec/manifest-0.6.schema.json`](https://github.com/mishrasanjeev/grantex/blob/main/spec/manifest-0.6.schema.json).
 
 **Unchanged:** a manifest whose tools are all permission strings
 (`"get_case": "read"`) loads and enforces exactly as in 0.5.
@@ -201,7 +201,7 @@ For a gradual rollout, use `caps_mode="warn"` / `capsMode: 'warn'` to report
 
 ## ES256 signing
 
-Reference: [`SPEC.md`](../SPEC.md) §6.1 and §14, and
+Reference: [`SPEC.md`](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) §6.1 and §14, and
 [self-hosting Section 7](self-hosting.md).
 
 **Unchanged:** `JWT_SIGNING_ALG` defaults to `RS256`, and the same
@@ -319,8 +319,8 @@ The DID document lists every platform signing key.
 
 ## Standard grant token claims
 
-Reference: [`spec/grant-token-0.6.md`](../spec/grant-token-0.6.md) and
-[`SPEC.md`](../SPEC.md) §6.
+Reference: [`spec/grant-token-0.6.md`](https://github.com/mishrasanjeev/grantex/blob/main/spec/grant-token-0.6.md) and
+[`SPEC.md`](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) §6.
 
 Grant tokens now validate with a stock OAuth or JOSE library using only
 standard semantics. Each 0.5 claim maps to a standard claim:

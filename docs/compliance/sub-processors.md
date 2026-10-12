@@ -1,4 +1,7 @@
-# Sub-processor Disclosure
+---
+title: "Sub-processor Disclosure"
+description: "Review the services used to operate hosted Grantex, their data roles and self-hosting boundaries. A public disclosure, not a certification."
+---
 
 **Status:** Current public disclosure. Subject to legal review. Not a certification document.
 **Last reviewed:** 2026-05-24
