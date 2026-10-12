@@ -1,4 +1,7 @@
-# Data Processing Addendum (Template)
+---
+title: "Data Processing Addendum (Template)"
+description: "Review the draft Grantex data processing addendum for hosted-service procurement. This template is not an executed agreement or legal advice."
+---
 
 **Status:** Draft template. Subject to legal review. **Not a legally executed agreement and not legal advice.**
 **Last reviewed:** 2026-05-24

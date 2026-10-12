@@ -1,4 +1,7 @@
-# Verifying agents with the registry
+---
+title: "Verifying agents with the registry"
+description: "Look up agent identities, check signed registry manifests and distinguish public from authenticated relying-party data in Grantex."
+---
 
 This guide is for a **relying party**: a merchant, an API or any service that
 receives requests from AI agents and decides whether to act on them. It

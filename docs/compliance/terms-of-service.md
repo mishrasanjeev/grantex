@@ -1,4 +1,7 @@
-# Terms of Service (Draft)
+---
+title: "Terms of Service (Draft)"
+description: "Review the draft Grantex hosted-service terms and open-source licensing boundary. Subject to legal review, not an executed agreement."
+---
 
 **Status:** Draft. Subject to legal review. **Not a legally executed agreement and not legal advice.**
 **Last reviewed:** 2026-05-24
