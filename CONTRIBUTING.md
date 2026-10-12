@@ -6,6 +6,9 @@ Grantex is owned by Orchestrum Technologies LLP. Inventor and owner:
 Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com). Contributions are
 accepted under the Apache License 2.0 unless a file states otherwise.
 
+The [approved prospective licensing policy](LICENSING.md) is not a change
+to this contribution license or an assignment of contributors' rights.
+
 ---
 
 ## Where to Start

@@ -393,6 +393,10 @@ result = grantex.enforce(grant_token=token, connector="my-crm", tool="delete_acc
 
 Apache 2.0
 
+The [approved prospective platform policy](https://docs.grantex.dev/compliance/licensing)
+awaits software-release adoption; this SDK's Apache-2.0 rights remain unchanged.
+Commercial agreements: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
+
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

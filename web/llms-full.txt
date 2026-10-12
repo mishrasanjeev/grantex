@@ -1,6 +1,6 @@
 # Grantex — Full Implementation Brief for AI Assistants
 
-> Last updated: 2026-10-04
+> Last updated: 2026-10-12 (licensing draft link only)
 > Release snapshot verified: 2026-10-04
 
 Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
@@ -20,6 +20,18 @@ Canonical sources:
 - OpenAPI: https://github.com/mishrasanjeev/grantex/blob/main/docs/openapi.yaml
 - AgenticOrg governed-case integration: https://docs.grantex.dev/guides/agenticorg-governed-cases
 - License: Apache-2.0
+
+Approved prospective policy (software adoption pending): personal/internal use is free;
+commercializing the platform requires an agreement with Orchestrum Technologies
+LLP. Agreements: sanjeev@orchestrum.in. Current Apache-2.0 rights remain unchanged.
+Definitions and approval steps: https://docs.grantex.dev/compliance/licensing
+
+Concrete transition: a separate source-available license for eligible future
+Orchestrum-controlled material, with exact release/file scope. The candidate
+license text is licensing/ORCHESTRUM-SELF-USE-COMMERCIAL-1.0-DRAFT.md and the
+adoption record is licensing/scope.json in the repository. Policy publication
+is approved; the software scope is empty and has not been activated. Published SDK/protocol and legacy grants are preserved;
+hosted, reseller/OEM, support and brand agreements are separate.
 
 ## What Grantex Is
 

@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "product": "Grantex",
+  "status": "approved_for_publication",
+  "licensor": "Orchestrum Technologies LLP",
+  "commercial_contact": "sanjeev@orchestrum.in",
+  "proposed_license_id": "LicenseRef-Orchestrum-Self-Use-Commercial-1.0",
+  "license_text": "licensing/ORCHESTRUM-SELF-USE-COMMERCIAL-1.0-DRAFT.md",
+  "reference_baseline_commit": "de183d9089f8e3a6d40cbac1699bfd76370d179d",
+  "reference_baseline_is_cutoff": false,
+  "release_version": null,
+  "effective_date": null,
+  "covered_files": [],
+  "owner_approval_reference": "owner-publication-approval-2026-10-12",
+  "legal_review_reference": "owner-attested-legal-review-2026-10-12",
+  "publication_approved_on": "2026-10-12",
+  "existing_grants_policy": "preserve",
+  "third_party_licenses_policy": "retain_original",
+  "sdk_and_protocol_policy": "preserve_published_grants; explicit_scope_required_for_future_changes"
+}
+

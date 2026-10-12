@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Documentation - approved prospective licensing policy
+- Add concrete candidate source-available license terms and an explicitly
+  publication-approved, empty release-scope manifest for eligible future platform material.
+  Preserve legacy grants and separate hosted/reseller/brand agreements.
+- Publish the owner-approved self-use/commercial-agreement policy and quiet
+  legal/footer links. No software release has adopted it; existing Apache-2.0 grants,
+  contribution terms, package metadata, billing and runtime remain unchanged.
+
 ### Fixed - Documentation discovery integrity
 - Give seven public disclosure and relying-party pages explicit search metadata
   and a single documentation-generated title, preserving their review caveats.
