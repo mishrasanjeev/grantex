@@ -8,6 +8,11 @@ provider costs are separate.
 commercializing the platform requires an agreement with Orchestrum Technologies
 LLP. Agreements: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
 
+The policy covers existing and new users of covered software and Orchestrum-hosted
+commercial offerings. An older account is not an exemption. Existing hosted
+customers transition through applicable notice, acceptance and agreement terms;
+previously granted Apache-2.0 permissions are not withdrawn.
+
 Read the [licensing policy](docs/compliance/licensing.md) for definitions, existing
 license protections and release-scope requirements. Publication and legal-review
 approval were received from the owner on 12 October 2026. No software release has

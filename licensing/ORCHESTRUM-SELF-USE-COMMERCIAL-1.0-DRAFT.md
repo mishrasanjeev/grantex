@@ -43,6 +43,12 @@ Covered Software or its platform capabilities in a paid product or agent service
 offered to third parties, obtain a separate written agreement with Orchestrum
 Technologies LLP.
 
+This requirement applies equally to existing and new users of Covered Software.
+Prior use, account age or an earlier self-use deployment does not authorize its
+commercialization. An existing signed commercial agreement is sufficient if it
+already covers the intended offering. Self-use under section 2 remains free.
+This clause does not withdraw the prior grants preserved in section 1.
+
 An agreement signed by an authorized Orchestrum representative must identify its
 permitted offering and scope. An email inquiry, a paid infrastructure account or
 a customer subscription does not itself grant reseller or OEM rights.
@@ -99,6 +105,10 @@ other providers. Hosted plans and external charges remain separate.
 
 Access to Orchestrum-operated services, reseller access, white-label offerings
 and support are governed by their applicable reviewed service agreements.
+The commercialization-agreement policy includes existing and new hosted users.
+For existing customers, changes to continued covered commercial use require the
+notice, acceptance and amendment process applicable to their existing contracts
+and law. Publication does not backdate obligations or replace executed agreements.
 Independent Apache-licensed deployments do not acquire new restrictions through
 those service agreements.
 

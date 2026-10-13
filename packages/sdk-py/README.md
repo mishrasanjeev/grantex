@@ -395,6 +395,9 @@ Apache 2.0
 
 The [approved prospective platform policy](https://docs.grantex.dev/compliance/licensing)
 awaits software-release adoption; this SDK's Apache-2.0 rights remain unchanged.
+The platform policy includes existing and new covered users; existing hosted
+customers transition through required notice and acceptance. Self-use is free
+of a software license fee, not of hosting or provider charges.
 Commercial agreements: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
 
 ## Ownership

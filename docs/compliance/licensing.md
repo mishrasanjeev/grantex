@@ -1,6 +1,6 @@
 ---
 title: "Usage and licensing"
-description: "Approved prospective self-use and commercial-agreement policy. Software adoption awaits release scope; existing license grants remain unchanged."
+description: "Self-use and commercial-agreement policy for existing and new covered users. Software adoption awaits release scope; prior grants remain unchanged."
 ---
 
 **Status: Approved for policy publication; not adopted by a software release.**
@@ -9,9 +9,14 @@ description: "Approved prospective self-use and commercial-agreement policy. Sof
 
 ## Short notice
 
-For designated future covered releases: personal and internal use is free;
+Under this policy: personal and internal use is free;
 commercializing the platform requires an agreement with Orchestrum Technologies LLP.
 Agreements: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
+
+The policy covers existing and new users of covered software and Orchestrum-hosted
+commercial offerings. An older account is not an exemption. Software adoption
+awaits the release scope below; existing hosted customers require the contractual
+transition described below, not a backdated obligation.
 
 Current Apache-2.0 rights remain unchanged. This policy is not an additional
 restriction on existing Apache-licensed software, specifications or SDKs.
@@ -47,6 +52,33 @@ This protects eligible new software and commercial service/brand arrangements
 going forward. It does not stop someone commercializing an independent,
 previously Apache-licensed implementation. Hosted plans and support can be
 monetized separately without changing its source license.
+
+## Existing users and new users
+
+The agreement requirement is not limited to new customers. Existing and new users
+must have a written agreement with Orchestrum Technologies LLP for commercialization
+of software validly covered by the new license or of Orchestrum-hosted platform
+capabilities under the applicable service terms. Account age alone does not exempt
+a covered commercial offering.
+
+For existing hosted commercial customers:
+
+1. Identify the covered commercial offering and check the current agreement.
+2. Give the notice and obtain the acceptance required by that agreement and
+   applicable law before changing the conditions for continued commercial use.
+3. Execute a commercial agreement or amendment covering the offering. An existing
+   signed agreement that already authorizes it satisfies the requirement; a duplicate
+   agreement is not required merely because this notice was published.
+
+No retroactive fees, automatic acceptance, account suspension or effective date
+are created by publishing this policy. Existing executed agreements control until
+validly amended or replaced. Self-use remains free of a software license fee;
+hosting and provider charges are separate.
+
+For previously distributed Apache-2.0 copies, the existing commercial permissions
+remain available. An existing user may separately agree to commercial services or
+additional rights, but an agreement cannot be made mandatory solely to exercise
+those already-granted permissions by changing this page.
 
 ## What self-use means
 
