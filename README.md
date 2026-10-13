@@ -2126,6 +2126,8 @@ Third-party packages retain their own licenses. Review
 Approved prospective policy (software adoption pending): personal/internal use is free;
 commercializing the platform requires an agreement with Orchestrum Technologies
 LLP. Write to [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
+The policy covers existing and new covered users, not just new accounts;
+existing hosted customers transition through applicable notice and agreement terms.
 See [usage and licensing](LICENSING.md); current Apache-2.0 rights remain unchanged.
 The concrete transition uses a separate self-use/commercial-agreement license
 for eligible future platform material, not an added condition on legacy code.

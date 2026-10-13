@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Documentation - existing-user commercialization policy
+- Clarify that existing and new covered users require a commercialization
+  agreement, with no account-age exemption. Self-use remains free of a software
+  license fee; existing hosted customers transition through required contractual
+  notice and acceptance. Prior Apache grants, release scope, billing and runtime
+  are unchanged.
+
 ### Documentation - approved prospective licensing policy
 - Add concrete candidate source-available license terms and an explicitly
   publication-approved, empty release-scope manifest for eligible future platform material.
