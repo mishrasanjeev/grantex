@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Agent authorization API discovery
+- Add operation-specific search descriptions to 17 agent, authorization, grant
+  and token reference pages. Preserve authentication, consent, delegation,
+  revocation and expiry limits and unchanged OpenAPI method/path selectors.
+- Add regressions for unique metadata and the documented authority boundaries.
+
 ### Documentation - existing-user commercialization policy
 - Clarify that existing and new covered users require a commercialization
   agreement, with no account-age exemption. Self-use remains free of a software
