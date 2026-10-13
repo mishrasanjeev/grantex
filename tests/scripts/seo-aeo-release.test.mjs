@@ -13,6 +13,13 @@ function documentParts(source) {
   return { metadata: parseYaml(match[1]), body: source.slice(match[0].length) };
 }
 
+test('the SAML callback supplies an explicit title and preserves its protocol selector', () => {
+  const { metadata } = documentParts(readFileSync(new URL('../../docs/api-reference/sso/saml-callback.mdx', import.meta.url), 'utf8'));
+  assert.equal(metadata.title, 'SAML sign-in callback');
+  assert.equal(metadata.openapi, 'post /sso/callback/saml');
+  assert.match(metadata.description, /certificate-backed signature checks/);
+});
+
 function contactHarness(fetch) {
   const html = readFileSync(new URL('../../web/index.html', import.meta.url), 'utf8');
   const snippet = html.split('/* Contact form */')[1].split('/* Install command copy */')[0];

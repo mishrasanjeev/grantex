@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - SAML callback documentation metadata
+- Give the callback reference an explicit page title while retaining the same
+  operation selector and description. Verify the rendered HTML separately from
+  its machine-readable documentation output.
+
 ### Fixed - Documentation discovery and pilot enquiries
 - Fill all 99 remaining missing or short navigable API/Go SDK descriptions,
   preserving operation selectors and document bodies. Require useful metadata
