@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Documentation discovery and pilot enquiries
+- Fill all 99 remaining missing or short navigable API/Go SDK descriptions,
+  preserving operation selectors and document bodies. Require useful metadata
+  across the public navigation in the documentation regression suite.
+- Add bank, fintech and merchant evaluation paths and clarify the agent-runtime,
+  delegated-authority and operational-source boundaries.
+- Bound contact submission time, prevent duplicate pending requests, retain
+  failed enquiries and provide a direct email recovery path without exposing
+  provider errors or sending contact details as analytics event fields.
+- Align the security report search title with its subject and add practical
+  integration/author links without implying its project evidence was refreshed.
+
 ### Fixed - Agent authorization API discovery
 - Add operation-specific search descriptions to 17 agent, authorization, grant
   and token reference pages. Preserve authentication, consent, delegation,
