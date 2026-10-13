@@ -31,6 +31,15 @@
 
 **Ownership:** Grantex is owned by **Orchestrum Technologies LLP**. Inventor and owner: **Sanjeev Kumar**. Contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
 
+For a scoped technical pilot, begin with [security controls](https://docs.grantex.dev/guides/security-hardening),
+[token verification](https://docs.grantex.dev/guides/token-verification), and
+[OACP authority boundaries](https://docs.grantex.dev/guides/oacp/overview).
+AgenticOrg runs buyer/seller agents and workflows; Grantex governs delegated
+authority; merchant systems and payment providers retain operational authority.
+Discuss a bank, fintech or merchant integration at
+[sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), without sharing credentials
+or private customer records.
+
 <br/>
 
 <img src="docs/images/flow-diagram.svg" alt="Grantex Protocol Flow" width="100%"/>

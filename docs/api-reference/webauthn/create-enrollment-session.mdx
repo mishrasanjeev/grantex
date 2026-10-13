@@ -1,5 +1,6 @@
 ---
 openapi: post /v1/webauthn/enrollment-sessions
+description: Issue a one-use Grantex passkey enrollment link bound to the developer and principal for ten minutes. Requires the passkey enrollment rollout flag.
 ---
 
 Call only from your server after authenticating the principal. Do not log or

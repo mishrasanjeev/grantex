@@ -1513,6 +1513,12 @@
         transform: rotate(90deg);
       }
     }
+    .evaluation-paths { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-top: 32px; }
+    .evaluation-paths > div { border-top: 2px solid #3fb950; padding-top: 20px; }
+    .evaluation-paths h3 { font-size: 19px; margin-bottom: 12px; }
+    .evaluation-paths p { color: var(--muted); margin-bottom: 16px; }
+    .evaluation-paths a { display: inline-block; margin-bottom: 8px; }
+    @media (max-width: 760px) { .evaluation-paths { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -2210,6 +2216,35 @@ grantex.enforce(token, <span style="color:#c3e88d;">"my-crm"</span>, <span style
 </section>
 
 <!-- ── How It Works ───────────────────────────────────────────────────────── -->
+<section id="evaluation-paths">
+  <div class="container">
+    <div class="section-label">Choose a starting point</div>
+    <h2 class="section-title">Delegated authority for your first useful workflow</h2>
+    <p class="section-sub">Grantex governs who may act, with which scopes and constraints. AgenticOrg runs the agents and workflows. Your business systems remain the source of operational records.</p>
+    <div class="evaluation-paths">
+      <div>
+        <h3>Banks and BFSI teams</h3>
+        <p>Start with a bounded document or service workflow. Define delegation, reviewer ownership, retention and revocation before connecting institution-specific systems.</p>
+        <a href="https://docs.grantex.dev/guides/security-hardening">Review security controls</a><br>
+        <a href="https://agenticorg.ai/docs/bfsi-customer-service">Follow the AgenticOrg service workflow</a>
+      </div>
+      <div>
+        <h3>Fintechs and platform teams</h3>
+        <p>Use scoped grants and enforcement at the action boundary. Distinguish locally verified signatures from current revocation and source-system confirmation.</p>
+        <a href="https://docs.grantex.dev/guides/token-verification">Verify delegated access</a><br>
+        <a href="https://docs.grantex.dev/quickstart">Build a scoped integration</a>
+      </div>
+      <div>
+        <h3>Merchants and commerce teams</h3>
+        <p>Understand buyer identity, source freshness and authority artifacts. Catalogues, seller cards and protocol previews do not by themselves authorize a purchase or payment.</p>
+        <a href="https://docs.grantex.dev/guides/oacp/overview">Explore OACP boundaries</a><br>
+        <a href="https://agenticorg.ai/docs/seller-a2a-commerce-journey">Follow the external buyer journey</a>
+      </div>
+    </div>
+    <p style="margin-top:24px"><a href="#enterprise">Discuss a technical pilot</a> or write to <a href="mailto:sanjeev@orchestrum.in">sanjeev@orchestrum.in</a>. Availability, data location and provider permissions must be checked for your deployment and jurisdiction.</p>
+  </div>
+</section>
+
 <section id="how-it-works">
   <div class="container">
     <div class="section-label">How it works</div>
@@ -3501,7 +3536,7 @@ grantex agent install --dir /path/to/skills</pre>
           We work directly with engineering and security teams to design the right
           integration. Contact us to discuss deployment, support, and service-level requirements.
         </p>
-        <div id="contact-msg" class="contact-msg"></div>
+        <div id="contact-msg" class="contact-msg" role="status" aria-live="polite"></div>
         <form id="contact-form" class="contact-form" action="https://formspree.io/f/xqedjorr" method="POST">
           <input type="hidden" name="_subject" value="Grantex Contact Form">
           <input type="text" name="_gotcha" style="display:none">
@@ -3653,9 +3688,14 @@ grantex agent install --dir /path/to/skills</pre>
   (function() {
     var form = document.getElementById('contact-form');
     var msg = document.getElementById('contact-msg');
+    var pending = false;
     if (!form) return;
     form.addEventListener('submit', function(e) {
       e.preventDefault();
+      if (pending) return;
+      pending = true;
+      var controller = new AbortController();
+      var timeout = setTimeout(function() { controller.abort(); }, 15000);
       msg.className = 'contact-msg';
       msg.textContent = '';
       var btn = form.querySelector('button[type="submit"]');
@@ -3664,24 +3704,25 @@ grantex agent install --dir /path/to/skills</pre>
       fetch(form.action, {
         method: 'POST',
         body: new FormData(form),
-        headers: { 'Accept': 'application/json' }
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
       }).then(function(res) {
         if (res.ok) {
           msg.className = 'contact-msg success';
-          msg.textContent = 'Message sent! We\u2019ll get back to you soon.';
+          msg.textContent = 'Your enquiry was accepted. We will follow up using the contact details you provided.';
           form.reset();
           if (typeof gtag !== 'undefined') {
             gtag('event', 'contact_form_submit', { event_category: 'engagement' });
           }
         } else {
-          return res.json().then(function(data) {
-            throw new Error(data.errors ? data.errors.map(function(e) { return e.message; }).join(', ') : 'Something went wrong');
-          });
+          throw new Error('Contact intake unavailable');
         }
-      }).catch(function(err) {
+      }).catch(function() {
         msg.className = 'contact-msg error';
-        msg.textContent = err.message || 'Failed to send message. Please try again.';
+        msg.textContent = 'We could not confirm receipt. Your details are still here. Please retry or email sanjeev@orchestrum.in.';
       }).finally(function() {
+        clearTimeout(timeout);
+        pending = false;
         btn.disabled = false;
         btn.textContent = 'Send message \u2192';
       });

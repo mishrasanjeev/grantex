@@ -13,6 +13,64 @@ function documentParts(source) {
   return { metadata: parseYaml(match[1]), body: source.slice(match[0].length) };
 }
 
+function contactHarness(fetch) {
+  const html = readFileSync(new URL('../../web/index.html', import.meta.url), 'utf8');
+  const snippet = html.split('/* Contact form */')[1].split('/* Install command copy */')[0];
+  const button = { disabled: false, textContent: '' };
+  const message = { className: '', textContent: '' };
+  let submit;
+  let resetCount = 0;
+  let timeout;
+  const events = [];
+  const form = {
+    action: 'https://formspree.io/f/xqedjorr',
+    addEventListener: (_, handler) => { submit = handler; },
+    querySelector: () => button,
+    reset: () => { resetCount++; },
+  };
+  runInNewContext(snippet, {
+    document: { getElementById: (id) => id === 'contact-form' ? form : message },
+    fetch, FormData: class {}, AbortController,
+    setTimeout: (handler) => { timeout = handler; return 1; },
+    clearTimeout: () => {}, gtag: (...args) => events.push(args),
+  });
+  return { button, message, events, submit: () => submit({ preventDefault() {} }),
+    expire: () => timeout(), resets: () => resetCount };
+}
+
+test('contact intake prevents duplicate pending requests and does not leak form data to analytics', async () => {
+  let finish;
+  let requests = 0;
+  const contact = contactHarness(() => { requests++; return new Promise(resolve => { finish = resolve; }); });
+  contact.submit();
+  contact.submit();
+  assert.equal(requests, 1);
+  assert.equal(contact.button.disabled, true);
+  finish({ ok: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(contact.message.textContent, /enquiry was accepted/);
+  assert.equal(contact.resets(), 1);
+  assert.equal(contact.button.disabled, false);
+  assert.equal(JSON.stringify(contact.events), '[["event","contact_form_submit",{"event_category":"engagement"}]]');
+});
+
+test('failed or timed-out contact requests retain the enquiry and expose only safe recovery wording', async () => {
+  for (const failure of ['rejected', 'timeout']) {
+    const contact = contactHarness((_, options) => failure === 'rejected'
+      ? Promise.resolve({ ok: false, json: () => { throw new Error('private provider detail'); } })
+      : new Promise((_, reject) => options.signal.addEventListener('abort', () => reject(new Error('private detail')))));
+    contact.submit();
+    if (failure === 'timeout') contact.expire();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(contact.message.textContent, /could not confirm receipt/);
+    assert.match(contact.message.textContent, /sanjeev@orchestrum.in/);
+    assert.doesNotMatch(contact.message.textContent, /private/);
+    assert.equal(contact.resets(), 0);
+    assert.equal(contact.events.length, 0);
+    assert.equal(contact.button.disabled, false);
+  }
+});
+
 function bodyH1Count(body) {
   const tree = createProcessor().parse(body);
   let count = 0;
@@ -25,7 +83,7 @@ function bodyH1Count(body) {
   return count;
 }
 
-test('navigable documentation does not duplicate its generated H1', () => {
+function publicDocumentationPages() {
   const navigation = JSON.parse(readFileSync(new URL('../../docs/docs.json', import.meta.url), 'utf8'));
   const pages = new Set();
   function collect(node) {
@@ -45,6 +103,11 @@ test('navigable documentation does not duplicate its generated H1', () => {
   }
   collect(navigation.navigation);
   assert.ok(pages.size > 0, 'check every page in the public navigation');
+  return pages;
+}
+
+test('navigable documentation does not duplicate its generated H1', () => {
+  const pages = publicDocumentationPages();
   for (const page of pages) {
     const sourceUrl = ['mdx', 'md'].map((extension) =>
       new URL(`../../docs/${page}.${extension}`, import.meta.url)).find(existsSync);
@@ -54,6 +117,16 @@ test('navigable documentation does not duplicate its generated H1', () => {
     if (metadata.title || metadata.openapi) {
       assert.equal(bodyH1Count(body), 0, page + ' must not duplicate the rendered title');
     }
+  }
+});
+
+test('every navigable guide has meaningful search metadata', () => {
+  for (const page of publicDocumentationPages()) {
+    const sourceUrl = ['mdx', 'md'].map(extension =>
+      new URL(`../../docs/${page}.${extension}`, import.meta.url)).find(existsSync);
+    const { metadata } = documentParts(readFileSync(sourceUrl, 'utf8'));
+    assert.equal(typeof metadata.description, 'string', page + ' needs a search description');
+    assert.ok(metadata.description.trim().length >= 40, page + ' needs more than a generic label');
   }
 });
 
