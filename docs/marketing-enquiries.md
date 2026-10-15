@@ -6,13 +6,16 @@ not a separate form vendor. It posts bounded JSON to
 
 The operator configures the authenticated SMTP mailbox and marketing notification
 destination on the backend. Requester confirmations still go to the requester.
+Replies to those confirmations go to the marketing inbox; staff replies to
+notifications go to the requester, without changing tenant operational mail.
 The Grantex message is encrypted in the durable outbox and HTML-escaped in mail;
 contact details and message content are never analytics event fields. Grantex
 enquiries do not start an AI sales-agent action or change model budgets.
 
 ## Release and acceptance
 
-1. Release the backend with both durable delivery and Grantex enquiries enabled.
+1. Roll the backend API and workers to the same release. Enable durable delivery
+   for API, worker and beat, then enable Grantex enquiries on the intake API.
    Grantex support defaults off through `AGENTICORG_GRANTEX_ENQUIRIES_ENABLED`.
 2. Verify the backend permits uncredentialed POST/preflight only on the public
    enquiry path for the exact website origins. Do not widen tenant API CORS.
