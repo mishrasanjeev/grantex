@@ -33,3 +33,6 @@ The website sends no login cookies to this intake. This shared marketing service
 does not route authorization requests, agent conversations or commerce payments.
 If unavailable, use the published direct-email contact. Do not restore an
 unverified third-party form as an automatic fallback.
+
+Historical submissions held by the former form service are not recovered or
+replayed by this change. Recover them only through an authorized account export.
