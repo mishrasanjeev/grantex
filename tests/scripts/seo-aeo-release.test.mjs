@@ -79,6 +79,14 @@ test('contact uses bounded shared SMTP intake without cookies or caller-selected
   assert.equal(contact.resets(), 1);
 });
 
+test('without JavaScript the JSON-only form is hidden and direct email stays available', () => {
+  const html = readFileSync(new URL('../../web/index.html', import.meta.url), 'utf8');
+  const fallback = html.match(/<noscript>([\s\S]*?)<\/noscript>/)?.[1];
+  assert.ok(fallback);
+  assert.match(fallback, /#contact-form\s*\{\s*display:\s*none\s*!important;\s*\}/);
+  assert.match(fallback, /href="mailto:sanjeev@orchestrum.in"/);
+});
+
 test('a successful HTTP response without a durable receipt is not accepted as enquiry success', async () => {
   const contact = contactHarness(async () => ({ ok: true, json: async () => ({ status: 'ok' }) }));
   contact.submit();
