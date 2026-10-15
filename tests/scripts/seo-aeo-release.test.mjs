@@ -20,7 +20,7 @@ test('the SAML callback supplies an explicit title and preserves its protocol se
   assert.match(metadata.description, /certificate-backed signature checks/);
 });
 
-function contactHarness(fetch) {
+function contactHarness(fetch, fields = {}) {
   const html = readFileSync(new URL('../../web/index.html', import.meta.url), 'utf8');
   const snippet = html.split('/* Contact form */')[1].split('/* Install command copy */')[0];
   const button = { disabled: false, textContent: '' };
@@ -30,14 +30,14 @@ function contactHarness(fetch) {
   let timeout;
   const events = [];
   const form = {
-    action: 'https://formspree.io/f/xqedjorr',
+    action: 'https://app.agenticorg.ai/api/v1/demo-request',
     addEventListener: (_, handler) => { submit = handler; },
     querySelector: () => button,
     reset: () => { resetCount++; },
   };
   runInNewContext(snippet, {
     document: { getElementById: (id) => id === 'contact-form' ? form : message },
-    fetch, FormData: class {}, AbortController,
+    fetch, FormData: class { get(key) { return fields[key] ?? ''; } }, AbortController,
     setTimeout: (handler) => { timeout = handler; return 1; },
     clearTimeout: () => {}, gtag: (...args) => events.push(args),
   });
@@ -53,12 +53,47 @@ test('contact intake prevents duplicate pending requests and does not leak form 
   contact.submit();
   assert.equal(requests, 1);
   assert.equal(contact.button.disabled, true);
-  finish({ ok: true });
+  finish({ ok: true, json: async () => ({ status: 'received', delivery_request_id: 'synthetic-request' }) });
   await new Promise(resolve => setImmediate(resolve));
   assert.match(contact.message.textContent, /enquiry was accepted/);
   assert.equal(contact.resets(), 1);
   assert.equal(contact.button.disabled, false);
   assert.equal(JSON.stringify(contact.events), '[["event","contact_form_submit",{"event_category":"engagement"}]]');
+});
+
+test('contact uses bounded shared SMTP intake without cookies or caller-selected recipients', async () => {
+  let request;
+  const contact = contactHarness(async (url, options) => {
+    request = { url, ...options };
+    return { ok: true, json: async () => ({ status: 'received', delivery_request_id: 'synthetic-request' }) };
+  }, { name: 'Synthetic owner', email: 'buyer@example.org', company: 'Example', message: 'A question\nSecond line' });
+  contact.submit();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(request.url, 'https://app.agenticorg.ai/api/v1/demo-request');
+  assert.equal(request.credentials, 'omit');
+  assert.equal(request.headers['Content-Type'], 'application/json');
+  assert.deepEqual(JSON.parse(request.body), {
+    product: 'grantex', source: 'grantex_contact', name: 'Synthetic owner',
+    email: 'buyer@example.org', company: 'Example', message: 'A question\nSecond line', website: '',
+  });
+  assert.equal(contact.resets(), 1);
+});
+
+test('without JavaScript the JSON-only form is hidden and direct email stays available', () => {
+  const html = readFileSync(new URL('../../web/index.html', import.meta.url), 'utf8');
+  const fallback = html.match(/<noscript>([\s\S]*?)<\/noscript>/)?.[1];
+  assert.ok(fallback);
+  assert.match(fallback, /#contact-form\s*\{\s*display:\s*none\s*!important;\s*\}/);
+  assert.match(fallback, /href="mailto:sanjeev@orchestrum.in"/);
+});
+
+test('a successful HTTP response without a durable receipt is not accepted as enquiry success', async () => {
+  const contact = contactHarness(async () => ({ ok: true, json: async () => ({ status: 'ok' }) }));
+  contact.submit();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(contact.message.textContent, /could not confirm receipt/);
+  assert.equal(contact.resets(), 0);
+  assert.equal(contact.events.length, 0);
 });
 
 test('failed or timed-out contact requests retain the enquiry and expose only safe recovery wording', async () => {

@@ -31,6 +31,8 @@
 
 **Ownership:** Grantex is owned by **Orchestrum Technologies LLP**. Inventor and owner: **Sanjeev Kumar**. Contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
 
+Website operators: [marketing enquiry delivery and acceptance](docs/marketing-enquiries.md).
+
 For a scoped technical pilot, begin with [security controls](https://docs.grantex.dev/guides/security-hardening),
 [token verification](https://docs.grantex.dev/guides/token-verification), and
 [OACP authority boundaries](https://docs.grantex.dev/guides/oacp/overview).
