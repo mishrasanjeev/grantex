@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Marketing enquiry delivery
+- Replace the separate form-vendor handoff with the shared SMTP-backed marketing
+  intake. Require a durable receipt, omit browser credentials, preserve failed
+  form input and keep a direct-email recovery path. This changes marketing
+  contact handling only, not authorization or commerce transaction routing.
+
 ### Fixed - SAML callback documentation metadata
 - Give the callback reference an explicit page title while retaining the same
   operation selector and description. Verify the rendered HTML separately from
