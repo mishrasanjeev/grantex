@@ -18,7 +18,7 @@
  * and demonstrates tool creation, scope checks, and audit logging directly.
  */
 
-import { Grantex } from '@grantex/sdk';
+import { Grantex, verifyGrantToken } from '@grantex/sdk';
 import {
   createGrantexTool,
   withAuditLogging,
@@ -28,6 +28,10 @@ import { z } from 'zod';
 
 const BASE_URL = process.env['GRANTEX_URL'] ?? 'http://localhost:3001';
 const API_KEY = process.env['GRANTEX_API_KEY'] ?? 'sandbox-api-key-local';
+const VERIFY_OPTIONS = {
+  jwksUri: new URL('/.well-known/jwks.json', BASE_URL).href,
+  ...(process.env['GRANTEX_ISSUER'] ? { issuer: process.env['GRANTEX_ISSUER'] } : {}),
+};
 
 async function getGrantToken(
   grantex: Grantex,
@@ -43,7 +47,8 @@ async function getGrantToken(
   if (!code) throw new Error('No code returned — use the sandbox API key.');
 
   const tokenResponse = await grantex.tokens.exchange({ code, agentId });
-  return { ...tokenResponse, principalId: authRequest.principalId };
+  const verified = await verifyGrantToken(tokenResponse.grantToken, VERIFY_OPTIONS);
+  return { ...tokenResponse, principalId: verified.principalId };
 }
 
 async function main(): Promise<void> {
@@ -68,6 +73,7 @@ async function main(): Promise<void> {
       date: z.string().describe('Date to query, e.g. "today" or "2026-03-01"'),
     }),
     grantToken,
+    ...VERIFY_OPTIONS,
     requiredScope: 'calendar:read',
     execute: async ({ date }) => {
       // Simulated calendar API
@@ -90,6 +96,7 @@ async function main(): Promise<void> {
       body: z.string().describe('Email body text'),
     }),
     grantToken,
+    ...VERIFY_OPTIONS,
     requiredScope: 'email:send',
     execute: async ({ to, subject, body }) => {
       // Simulated email API
@@ -157,15 +164,17 @@ async function main(): Promise<void> {
   // ── 5. Demonstrate GrantexScopeError ───────────────────────────────
   console.log('\n--- Testing scope enforcement ---');
   try {
-    createGrantexTool({
+    const deniedTool = createGrantexTool({
       name: 'delete_files',
       description: 'Delete files from storage',
       parameters: z.object({ path: z.string() }),
       grantToken,
+      ...VERIFY_OPTIONS,
       requiredScope: 'storage:delete', // not in our grant!
       execute: async () => ({ deleted: true }),
     });
-    console.log('ERROR: should have thrown');
+    await deniedTool.execute({ path: 'synthetic-fixture' }, { toolCallId: 'call_denied', messages: [] });
+    throw new Error('Scope enforcement did not refuse execution');
   } catch (err) {
     if (err instanceof GrantexScopeError) {
       console.log('GrantexScopeError caught:');

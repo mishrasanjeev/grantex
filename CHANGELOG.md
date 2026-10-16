@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Refresh AI SDK patch dependencies and require Strands integration 0.2.2 in
   root installs. Exercise actual AI SDK argument parsing and audited tool
   execution, including invalid-input, missing-scope and authority denials.
+- Bind the chatbot example's audit principal to its verified grant, use the
+  configured auth service for JWKS, and demonstrate scope denial at execution.
 - Refresh reviewed framework, service, test-tool and workflow dependencies.
 - Require the patched MCP 1.x compatibility line for the Strands integration
   and root Python requirements, excluding vulnerable session-retention releases
