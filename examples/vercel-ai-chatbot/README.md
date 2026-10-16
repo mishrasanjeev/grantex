@@ -9,7 +9,7 @@ Demo of Vercel AI SDK tools with Grantex scope enforcement and audit logging.
 3. Creates two Vercel AI tools with Zod schemas and Grantex scope checks
 4. Wraps tools with `withAuditLogging` for automatic audit trail entries
 5. Invokes tools via `generateText` (with OpenAI) or directly (without)
-6. Demonstrates `GrantexScopeError` thrown at construction time when a scope is missing
+6. Demonstrates `GrantexScopeError` thrown before execution when a scope is missing
 
 ## Prerequisites
 
@@ -63,6 +63,7 @@ Done! Vercel AI integration demo complete.
 |---|---|---|
 | `GRANTEX_URL` | `http://localhost:3001` | Auth service base URL |
 | `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key (sandbox mode) |
+| `GRANTEX_ISSUER` | Derived from the JWKS URL by the SDK | Expected grant issuer when the service is reached through a different hostname |
 | `OPENAI_API_KEY` | — | OpenAI key (optional, enables `generateText`) |
 
 ## Ownership
