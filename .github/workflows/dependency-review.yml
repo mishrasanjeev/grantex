@@ -24,6 +24,7 @@ jobs:
         with:
           fail-on-severity: moderate
           license-check: true
+          # Match the existing Python-2.0 policy in audit-python-dependencies.py.
           allow-licenses: >-
             Apache-2.0,
             MIT,
@@ -40,6 +41,7 @@ jobs:
             AFL-2.1,
             CC0-1.0,
             CC-BY-4.0,
+            Python-2.0,
             MIT-0
           # GitHub normalizes json-schema@0.4.0's declared
           # "AFL-2.1 OR BSD-3-Clause" choice as a stricter conjunction that

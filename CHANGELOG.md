@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Require the patched MCP 1.x compatibility line for the Strands integration
   and root Python requirements, excluding vulnerable session-retention releases
   without suppressing the dependency audit. Package publication is separate.
+- Keep CodeQL action revisions synchronized and group their future updates.
+  Align dependency review with the existing permissive Python license policy.
 
 ### Fixed - Marketing enquiry delivery
 - Replace the separate form-vendor handoff with the shared SMTP-backed marketing
