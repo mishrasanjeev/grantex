@@ -58,7 +58,7 @@ dev = [
     "pg8000>=1.31",
     "pyyaml>=6",
     "mypy>=1.9",
-    "ruff>=0.4,<0.17",
+    "ruff>=0.4,<0.18",
 ]
 caps-redis = ["redis>=5"]
 caps-postgres = ["pg8000>=1.31"]
