@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   without suppressing the dependency audit. Package publication is separate.
 - Keep CodeQL action revisions synchronized and group their future updates.
   Align dependency review with the existing permissive Python license policy.
+- Keep automatic MCP version updates within the patched compatibility major;
+  require explicit framework compatibility review before a major migration.
 
 ### Fixed - Marketing enquiry delivery
 - Replace the separate form-vendor handoff with the shared SMTP-backed marketing

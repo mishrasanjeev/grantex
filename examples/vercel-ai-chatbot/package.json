@@ -8,10 +8,10 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.92",
-    "@grantex/sdk": "^0.8.1",
+    "@grantex/sdk": "^0.8.2",
     "@grantex/vercel-ai": "^0.1.7",
     "ai": "^7.0.138",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
