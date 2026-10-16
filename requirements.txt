@@ -6,22 +6,23 @@
 
 # ─── Core SDK ────────────────────────────────────────────────────────────────
 grantex==0.7.2                    # Published SDK required by current integrations
-PyJWT>=2.15.0                     # JWT verification fixes
+PyJWT>=2.15.1                     # JWT verification fixes
 idna>=3.20                        # IDNA validation fixes
 cryptography>=50.0.2              # RSA/Ed25519 key operations
 
 # ─── Framework Integrations (install as needed) ─────────────────────────────
 grantex-fastapi>=0.1.7            # FastAPI middleware (requires: fastapi>=0.115.0)
-grantex-crewai>=0.1.8             # CrewAI integration
-grantex-openai-agents>=0.1.6      # OpenAI Agents SDK integration
+grantex-crewai>=0.1.9             # CrewAI integration
+grantex-openai-agents>=0.1.8      # OpenAI Agents SDK integration
 grantex-adk>=0.1.7                # Google ADK integration
 grantex-a2a>=0.1.5                # A2A Protocol Bridge (Python)
 grantex-gemma>=0.1.1              # Offline auth for Gemma on-device agents
 grantex-strands>=0.1.1            # Strands Agents SDK integration
+mcp>=1.30.0,<2                   # Patched compatibility line: GHSA-84m7-p3x7-pcfv
 
 # ─── SDK Runtime Dependencies (installed automatically with grantex) ────────
 # httpx>=0.27.0                   # HTTP client (async + sync)
-# PyJWT>=2.15.0                   # JWT decoding
+# PyJWT>=2.15.1                   # JWT decoding
 # idna>=3.20                      # IDNA validation
 # cryptography>=50.0.2            # RSA/Ed25519 key operations
 
