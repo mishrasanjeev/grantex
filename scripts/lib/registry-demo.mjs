@@ -126,13 +126,32 @@ function startAndReadLine(children, command, args, options, label) {
   });
 }
 
-export async function http(method, url, { body, headers = {}, raw = false } = {}) {
+export function createLoopbackFetch(origins) {
+  const allowed = new Set(origins.map((origin) => {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== 'http:' || parsed.hostname !== '127.0.0.1'
+      || !parsed.port || parsed.username || parsed.password
+      || parsed.pathname !== '/' || parsed.search || parsed.hash) {
+      throw new Error('Demo transport requires explicit loopback server origins');
+    }
+    return parsed.origin;
+  }));
+  return (url, init = {}) => {
+    const target = new URL(url);
+    if (!allowed.has(target.origin) || target.username || target.password || target.hash) {
+      throw new Error('Demo request destination is not a registered loopback server');
+    }
+    return fetch(target, { ...init, redirect: 'error', signal: init.signal ?? AbortSignal.timeout(10_000) });
+  };
+}
+
+async function http(fetcher, method, url, { body, headers = {}, raw = false } = {}) {
   const init = { method, headers: { Accept: 'application/json', ...headers } };
   if (body !== undefined) {
     init.body = raw ? body : JSON.stringify(body);
     init.headers['Content-Type'] = raw ? headers['Content-Type'] : 'application/json';
   }
-  const response = await fetch(url, init);
+  const response = await fetcher(url, init);
   const text = await response.text();
   let json = null;
   try { json = JSON.parse(text); } catch { /* not JSON */ }
@@ -146,13 +165,13 @@ export async function http(method, url, { body, headers = {}, raw = false } = {}
  * foreign, stale or re-signed status list fails the demo rather than passing
  * it. Uses node:crypto only.
  */
-async function verifyRegistryJws(token, { jwksUrl, typ, iss, sub }) {
+async function verifyRegistryJws(token, { jwksUrl, typ, iss, sub, fetcher }) {
   const { createPublicKey, verify } = await import('node:crypto');
   const [h, p, s] = token.split('.');
   expect(h && p && s, 'the registry answered something that is not a compact JWS');
   const header = JSON.parse(Buffer.from(h, 'base64url').toString('utf8'));
   expect(header.typ === typ, `JWS typ is ${header.typ}, expected ${typ}`);
-  const jwks = await (await fetch(jwksUrl)).json();
+  const jwks = await (await fetcher(jwksUrl)).json();
   const jwk = (jwks.keys ?? []).find((k) => k.kid === header.kid);
   expect(jwk, `the registry's JWK Set has no key ${header.kid}`);
   const algorithms = { ES256: ['sha256', { dsaEncoding: 'ieee-p1363' }], RS256: ['sha256', {}] };
@@ -209,7 +228,7 @@ export class RegistryDemo {
     const rest = parsed.pathname + parsed.search;
     if (parsed.origin === REGISTRY_ORIGIN) return this.baseUrl + rest;
     if (parsed.origin === MOCK_ISSUER_ORIGIN) return this.serve.origin + rest;
-    return url;
+    throw new Error('Demo status URL has an unexpected issuer origin');
   }
 
   /** Mock issuer, database, auth service; then the mock accredited. */
@@ -230,6 +249,8 @@ export class RegistryDemo {
 
     const port = await freePort();
     this.baseUrl = `http://127.0.0.1:${port}`;
+    this.fetch = createLoopbackFetch([this.baseUrl, this.serve.origin]);
+    this.http = (method, url, options) => http(this.fetch, method, url, options);
     this.operatorKey = randomBytes(24).toString('hex');
     const env = {
       ...process.env,
@@ -263,7 +284,7 @@ export class RegistryDemo {
     await this.waitForHealth(authService);
     this.step('registry (auth service) healthy', 'live', `${this.baseUrl} as ${REGISTRY_ORIGIN}; migrations applied at startup`);
 
-    const accredited = await http('POST', `${this.baseUrl}/v1/registry/issuers`, {
+    const accredited = await this.http('POST', `${this.baseUrl}/v1/registry/issuers`, {
       headers: { Authorization: `Bearer ${this.operatorKey}` },
       body: {
         entity_id: this.keys.entity_id,
@@ -285,7 +306,7 @@ export class RegistryDemo {
     while (Date.now() < deadline) {
       if (authService.exitCode !== null) fail(`the auth service exited ${authService.exitCode}:\n${stderr}`);
       try {
-        const response = await fetch(`${this.baseUrl}/health`);
+        const response = await this.fetch(`${this.baseUrl}/health`);
         if (response.ok) return;
       } catch { /* not listening yet */ }
       await new Promise((r) => setTimeout(r, 500));
@@ -295,7 +316,7 @@ export class RegistryDemo {
 
   /** A developer; `sandbox` mode lets a script approve its own authorization requests. */
   async signup(mode = 'sandbox') {
-    const signup = await http('POST', `${this.baseUrl}/v1/signup`, { body: { name: 'Demo Developer', mode } });
+    const signup = await this.http('POST', `${this.baseUrl}/v1/signup`, { body: { name: 'Demo Developer', mode } });
     expect(signup.status === 201 || signup.status === 200, `signup answered ${signup.status}: ${signup.text}`);
     this.apiKey = signup.json.apiKey;
     this.auth = { Authorization: `Bearer ${this.apiKey}` };
@@ -304,14 +325,14 @@ export class RegistryDemo {
   }
 
   async registerProvider() {
-    const org = await http('POST', `${this.baseUrl}/v1/registry/orgs`, { headers: this.auth, body: { did: PROVIDER_DID, name: 'Provider Example' } });
+    const org = await this.http('POST', `${this.baseUrl}/v1/registry/orgs`, { headers: this.auth, body: { did: PROVIDER_DID, name: 'Provider Example' } });
     expect(org.status === 201 || org.status === 200, `provider registration answered ${org.status}: ${org.text}`);
     this.step('provider registered (the agent\'s developer)', 'live', `${PROVIDER_DID} trust_level=${org.json.trustLevel ?? org.json.trust_level ?? '?'}`);
     return org.json;
   }
 
   async registerAgent(extra = {}) {
-    const agent = await http('POST', `${this.baseUrl}/v1/agents`, {
+    const agent = await this.http('POST', `${this.baseUrl}/v1/agents`, {
       headers: this.auth,
       body: { name: 'Nimbus Shopper 2.4', description: 'shopper-01', scopes: ['read'], ...extra },
     });
@@ -363,7 +384,7 @@ export class RegistryDemo {
     let last = null;
     for (;;) {
       polls += 1;
-      last = await http('GET', url, { headers });
+      last = await this.http('GET', url, { headers });
       expect(last.status === 200, `lookup answered ${last.status}: ${last.text}`);
       if (done(last.json) || Date.now() >= deadline) return { ...last, polls };
       await new Promise((r) => setTimeout(r, 500));
@@ -373,12 +394,13 @@ export class RegistryDemo {
   /** The registry's acceptance entry for an attestation: its Token Status List read and decoded. */
   async acceptanceStatus(entry) {
     if (this.codec === null) this.codec = await import(pathToFileURL(STATUS_LIST_CODEC).href);
-    const response = await fetch(this.mapUrl(entry.uri), { headers: { Accept: 'application/statuslist+jwt' } });
+    const response = await this.fetch(this.mapUrl(entry.uri), { headers: { Accept: 'application/statuslist+jwt' } });
     expect(response.ok, `acceptance list ${entry.uri} answered ${response.status}`);
     const token = (await response.text()).trim();
     // Signed by the registry: verified against its JWK Set before anything is read from it.
     const payload = await verifyRegistryJws(token, {
       jwksUrl: `${this.baseUrl}/.well-known/jwks.json`, typ: 'statuslist+jwt', iss: REGISTRY_ORIGIN, sub: entry.uri,
+      fetcher: this.fetch,
     });
     const list = this.codec.decodeTokenStatusList(payload.status_list);
     const value = list.statusAt(entry.idx);

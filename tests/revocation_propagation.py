@@ -16,13 +16,11 @@ import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
-# Both forms on purpose: the module object is needed for the `__file__` check
-# below, and the names are what the measurement uses.
 import grantex
-from grantex import DenialReason, Grantex, Permission, RevocationSubReason, ToolManifest
 from grantex._types import AuthorizeParams, ExchangeTokenParams, SignupParams
 
 # The SDK under test must be the one in this checkout: an ambient install of
@@ -39,6 +37,12 @@ if _LOADED != _EXPECTED_SRC:
     raise SystemExit(2)
 
 BASE_URL = os.environ.get("REVOCATION_RELEASE_BASE_URL")
+if BASE_URL:
+    target = urlsplit(BASE_URL)
+    if (target.scheme != "http" or target.hostname not in {"localhost", "127.0.0.1", "::1"}
+            or not target.port or target.username or target.password
+            or target.path not in {"", "/"} or target.query or target.fragment):
+        raise ValueError("Release rehearsals require an explicit loopback HTTP origin")
 TRIALS = int(os.environ.get("REVOCATION_RELEASE_TRIALS", "40"))
 WARMUP = int(os.environ.get("REVOCATION_RELEASE_WARMUP", "2"))
 # The requirement (PRD G-6), deliberately not overridable.
@@ -69,11 +73,11 @@ def main() -> int:
         print("REVOCATION_RELEASE_BASE_URL is not set; skipping", file=sys.stderr)
         return 0
 
-    account = Grantex.signup(
+    account = grantex.Grantex.signup(
         SignupParams(name=f"revocation-release-py-{int(time.time())}", mode="sandbox"),
         base_url=BASE_URL,
     )
-    admin = Grantex(api_key=account.api_key, base_url=BASE_URL)
+    admin = grantex.Grantex(api_key=account.api_key, base_url=BASE_URL)
     stamp = int(time.time())
     root = admin.agents.register(name=f"release-py-root-{stamp}", scopes=SCOPES)
     middle = admin.agents.register(name=f"release-py-middle-{stamp}", scopes=SCOPES)
@@ -95,14 +99,14 @@ def main() -> int:
         )
         pairs.append((parent["grantId"], child["grantToken"]))
 
-    enforcer = Grantex(
+    enforcer = grantex.Grantex(
         api_key=account.api_key,
         base_url=BASE_URL,
         revocation_check="feed",
         revocation_feed_stale_after=5.0,
     )
     enforcer.load_manifest(
-        ToolManifest(connector="acme_kyb", tools={"resolve_business": Permission.READ})
+        grantex.ToolManifest(connector="acme_kyb", tools={"resolve_business": grantex.Permission.READ})
     )
     try:
         if not enforcer.revocation_feed().ready(timeout=10.0):
@@ -145,9 +149,9 @@ def main() -> int:
                 )
                 failures += 1
                 continue
-            if denial.reason_code != DenialReason.GRANT_REVOKED or denial.sub_reason not in (
-                RevocationSubReason.REVOKED,
-                RevocationSubReason.PARENT_REVOKED,
+            if denial.reason_code != grantex.DenialReason.GRANT_REVOKED or denial.sub_reason not in (
+                grantex.RevocationSubReason.REVOKED,
+                grantex.RevocationSubReason.PARENT_REVOKED,
             ):
                 print(
                     f"trial {index}: unexpected denial {denial.reason_code}/{denial.sub_reason}",

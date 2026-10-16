@@ -107,6 +107,7 @@ test-py:
 # Tests of the repository scripts (the vendor denylist check).
 test-scripts:
 	$(PYTHON) -m pytest -q tests/scripts
+	node --test tests/scripts/security-boundaries.test.mjs
 
 test-ts:
 	@for pkg in $(TS_PACKAGES); do \

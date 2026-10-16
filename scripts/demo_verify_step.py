@@ -21,12 +21,6 @@ import sys
 from typing import Any, Dict, Mapping, Optional
 from urllib.parse import quote, urlsplit
 
-import httpx
-
-from grantex_agent_httpsig import HttpRequest, sign
-from grantex_verifier import InMemoryNonceStore, OnlineGrantStatus, Transaction, VerifierConfig, verify
-
-
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--registry-origin", required=True, help="the registry's public https origin (its issuer)")
@@ -34,13 +28,28 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--mock-origin", required=True, help="the mock issuer's https entity id")
     parser.add_argument("--mock-loopback", required=True, help="where the mock issuer listens")
     parser.add_argument("--passport", required=True, metavar="FILE")
-    parser.add_argument("--grant", required=True, metavar="FILE")
+    grant_input = parser.add_mutually_exclusive_group(required=True)
+    grant_input.add_argument("--grant", metavar="FILE")
+    grant_input.add_argument("--grant-stdin", action="store_true")
     parser.add_argument("--agent-key", required=True, metavar="FILE", help="the agent's private JWK")
     parser.add_argument("--merchant", required=True, help="the relying party's origin")
     parser.add_argument("--audience", required=True, help="the grant audience the relying party expects")
     parser.add_argument("--amount-minor", type=int, default=12_500)
     parser.add_argument("--expect", choices=["ok", "denied"], required=True)
     args = parser.parse_args(argv)
+
+    if args.grant_stdin:
+        raw_grant = sys.stdin.read(65_537)
+        grant = raw_grant.strip()
+        if not grant or len(raw_grant) > 65_536:
+            parser.error("grant stdin must contain a non-empty token of at most 65536 characters")
+    else:
+        with open(args.grant, encoding="utf-8") as handle:
+            grant = handle.read().strip()
+
+    import httpx
+    from grantex_agent_httpsig import HttpRequest, sign
+    from grantex_verifier import InMemoryNonceStore, OnlineGrantStatus, Transaction, VerifierConfig, verify
 
     api_key = os.environ.get("GRANTEX_API_KEY")
     mapping = {args.registry_origin: args.registry_loopback, args.mock_origin: args.mock_loopback}
@@ -92,8 +101,6 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     with open(args.passport, encoding="utf-8") as handle:
         passport = handle.read().strip()
-    with open(args.grant, encoding="utf-8") as handle:
-        grant = handle.read().strip()
     with open(args.agent_key, encoding="utf-8") as handle:
         agent_key = json.load(handle)
 

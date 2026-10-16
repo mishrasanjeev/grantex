@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Demo, CLI and release-test security boundaries
+- Keep demo grant handoff in a bounded stdin pipe rather than a local file.
+  Pin demo requests to their own loopback servers and reject redirects.
+- Require an unambiguous HTTPS DPDP origin, with HTTP limited to loopback
+  development. Reject malformed keys and redirects before forwarding data.
+- Persist only validated release measurements and a locally generated run ID;
+  report files are exclusive/private, not overwritten. The report uses
+  `run_id` instead of `stop_id`; the server ID remains in the local test log.
+- Refuse non-loopback targets for destructive release rehearsals. Preserve
+  the Python source-origin check while using one SDK import style.
+
 ### Fixed - Dependency security and compatibility
 - Refresh AI SDK patch dependencies and require Strands integration 0.2.2 in
   root installs. Exercise actual AI SDK argument parsing and audited tool

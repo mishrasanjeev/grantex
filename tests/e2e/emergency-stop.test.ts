@@ -26,9 +26,11 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { emergencyStopReport, releaseLoopbackUrl } from '../../scripts/lib/release-report.mjs';
 import { Grantex, ToolManifest, Permission, DenialReason, RevocationSubReason } from '@grantex/sdk';
 
-const BASE_URL = process.env['REVOCATION_RELEASE_BASE_URL'];
+const BASE_URL = releaseLoopbackUrl(process.env['REVOCATION_RELEASE_BASE_URL']);
 /** The requirement (PRD G-6 / US-5), deliberately not overridable. */
 const BUDGET_MS = 2_000;
 const REPORT = process.env['EMERGENCY_STOP_REPORT'];
@@ -261,30 +263,15 @@ describeRelease('the emergency stop halts every agent under a grant tree', () =>
     expect(await liveGrantCount()).toBe(1);
     void rootGrantToken;
 
-    const report = {
-      agents: agents.map((agent) => ({
-        name: agent.name, mode: agent.mode, depth: agent.depth, allowed_calls_before_stop: agent.allowedCalls,
-      })),
-      budget_ms: BUDGET_MS,
-      stop_id: stop.stopId,
-      status: stop.status,
-      sweeps: Number(stop.sweeps),
-      live_grants_before: liveBefore,
-      grants_revoked: Number(stop.grantsRevoked),
-      agents_stopped: stop.agentsStopped.length,
-      max_ms: Math.max(...latencies),
-      latencies_ms: latencies,
-      lockout: stop.lockout === true,
-    };
+    expect(stop.stopId).toMatch(/^stop_[0-9A-HJKMNP-TV-Z]{26}$/);
+    const report = emergencyStopReport({
+      runId: randomUUID(), agents, budgetMs: BUDGET_MS, stop, liveBefore, latencies,
+    });
     // eslint-disable-next-line no-console
-    console.log(`emergency stop: ${JSON.stringify(report)}`);
-    // A report file is usually read straight into a dashboard, so nothing the
-    // server said goes into it unexamined: every field above is a number, a
-    // boolean or a string this file produced, and the one value that comes
-    // off the wire — the stop id — is checked against its own format first.
+    console.log(`emergency stop ${stop.stopId}: ${JSON.stringify(report)}`);
+    // Persist only bounded measurements and a local correlation ID, never a response blob.
     if (REPORT) {
-      expect(stop.stopId).toMatch(/^stop_[0-9A-HJKMNP-TV-Z]{26}$/);
-      writeFileSync(REPORT, `${JSON.stringify(report, null, 2)}\n`);
+      writeFileSync(REPORT, `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
     }
 
     expect(report.max_ms).toBeLessThanOrEqual(BUDGET_MS);

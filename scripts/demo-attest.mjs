@@ -17,7 +17,7 @@
 // then python), apps/auth-service built (npm run build), packages/agent-passport
 // built and packages/mock-issuer installed (make install). `make demo-attest`.
 
-import { RegistryDemo, TRUST_MARKS, expect, findPython, http, runDemo, summarizeAttestations } from './lib/registry-demo.mjs';
+import { RegistryDemo, TRUST_MARKS, expect, findPython, runDemo, summarizeAttestations } from './lib/registry-demo.mjs';
 
 const REVOCATION_TIMEOUT_MS = 30_000;
 const LOOKUP_SETTLE_MS = 15_000;
@@ -42,7 +42,7 @@ await runDemo('demo-attest', async () => {
     demo.step('public lookup (no API key) shows the level', 'live', `level=${shown.json.level} attestations: ${summarizeAttestations(shown.json)} (${shown.polls} polls)`);
 
     // ── a relying party reads the status list entries behind the level ─────
-    const relying = await http('GET', lookupUrl, { headers: demo.auth });
+    const relying = await demo.http('GET', lookupUrl, { headers: demo.auth });
     expect(relying.status === 200, `relying-party lookup answered ${relying.status}: ${relying.text}`);
     const identity = (relying.json.attestations ?? []).find((a) => a.type === TRUST_MARKS[0]);
     expect(identity?.acceptance_status_list?.uri, `relying-party lookup carries no acceptance list entry: ${relying.text}`);
