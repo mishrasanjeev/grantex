@@ -23,6 +23,16 @@ test('CodeQL action updates remain grouped', () => {
   assert.ok(actions.groups.codeql.patterns.includes('github/codeql-action/*'));
 });
 
+for (const directory of ['/', '/packages/strands-py']) {
+  test(`MCP major upgrades require explicit compatibility review in ${directory}`, () => {
+    const update = yaml('.github/dependabot.yml').updates.find((item) =>
+      item['package-ecosystem'] === 'pip' && item.directory === directory);
+    const rule = update.ignore?.find((item) => item['dependency-name'] === 'mcp');
+    assert.deepEqual(rule?.['update-types'], ['version-update:semver-major']);
+    assert.equal(rule.versions, undefined);
+  });
+}
+
 test('dependency review admits the existing permissive Python license policy', () => {
   const workflow = yaml('.github/workflows/dependency-review.yml');
   const step = workflow.jobs['dependency-review'].steps

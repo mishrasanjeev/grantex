@@ -338,6 +338,10 @@ updates:
     schedule: { interval: weekly }
     open-pull-requests-limit: 3
     labels: [dependencies, python]
+    # Keep the patched 1.x line until framework support permits a major upgrade.
+    ignore:
+      - dependency-name: mcp
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: pip
     directory: /packages/sdk-py
@@ -415,6 +419,10 @@ updates:
       interval: weekly
     open-pull-requests-limit: 3
     labels: [dependencies, python, strands-py]
+    # strands-agents currently excludes the patched MCP 2.x releases.
+    ignore:
+      - dependency-name: mcp
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: pip
     directory: /examples/crewai-agent
