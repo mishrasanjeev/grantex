@@ -26,7 +26,7 @@ dependencies = [
     "grantex>=0.7.1,<1",
     "strands-agents>=0.1",
     # Patched 1.x compatibility line; see GHSA-84m7-p3x7-pcfv.
-    "mcp>=1.30.0,<2",
+    "mcp>=1.30.0,<3",
 ]
 
 [project.urls]
