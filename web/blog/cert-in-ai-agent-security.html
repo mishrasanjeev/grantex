@@ -67,7 +67,7 @@
     <h2 id="boundaries">The problem is ordinary access, at agent speed.</h2>
     <p>CERT-In's <a href="https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES02&amp;VLCODE=CIAD-2026-0049">Critical Advisory CIAD-2026-0049</a>, issued on 15 October 2026, describes agents reaching systems beyond their assigned tasks. Exposed credentials, excessive permissions and reachable APIs gave them a way in.</p>
     <p>A prompt saying "only read this case" is not a security control. The service receiving the request must enforce the limit.</p>
-    <p><strong>Grantex handles delegated authorization:</strong> who allowed an agent to do what, until when, and whether that permission still stands. Your application still enforces which records the agent can access.</p>
+    <p><strong>Grantex handles delegated authorization:</strong> who allowed an agent to do what, until when, and whether that permission still stands. That limited permission is called a <strong>grant</strong>. Your application still enforces which records the agent can access.</p>
     <p class="notice">Grantex supports parts of the advisory's recommendations. It is not a CERT-In certification, endorsement or complete compliance solution. These workflows are integration patterns, not evidence that every deployment has the controls enabled.</p>
   </section>
 
@@ -80,7 +80,7 @@
       <ol class="steps">
         <li><span class="step-no">01</span><strong>Owner grants access</strong>Read permission, intended API and an expiry.</li>
         <li><span class="step-no">02</span><strong>Agent requests a read</strong>It presents the grant to the protected boundary.</li>
-        <li class="decision"><span class="step-no">03</span><strong>Boundary checks authority</strong>Validate identity, audience, scope and current authority.</li>
+        <li class="decision"><span class="step-no">03</span><strong>Access is checked</strong>Right agent, right API, allowed action, still-active grant.</li>
         <li><span class="step-no">04</span><strong>API returns allowed data</strong>Enforce tenant and case access; record the action and outcome.</li>
       </ol>
       <p class="branch"><strong>Wrong action, expired or revoked grant?</strong> Deny before the protected operation. Do not fall back to a broader key.</p>
@@ -99,7 +99,7 @@
       <ol class="steps">
         <li><span class="step-no">01</span><strong>Agent prepares</strong>Collect evidence and draft the proposed action.</li>
         <li class="human"><span class="step-no">02</span><strong>Human reviews</strong>An independent, authenticated reviewer decides.</li>
-        <li class="decision"><span class="step-no">03</span><strong>Bind the decision</strong>Use an action-bound decision grant, with freshness and approver checks.</li>
+        <li class="decision"><span class="step-no">03</span><strong>Link the approval</strong>Bind it to this exact action; check who approved it and when.</li>
         <li><span class="step-no">04</span><strong>Executor validates</strong>Check the exact action, limits and replay state before execution.</li>
       </ol>
       <p class="branch"><strong>No valid approval, or changed payment details?</strong> Keep the action blocked. The agent must not approve its own request.</p>
@@ -117,7 +117,7 @@
       <ol class="steps">
         <li><span class="step-no">01</span><strong>Monitor flags activity</strong>Configured alerts reach a responsible operator.</li>
         <li class="stop"><span class="step-no">02</span><strong>Operator revokes</strong>Revoke the grant or use the emergency-stop control.</li>
-        <li class="decision"><span class="step-no">03</span><strong>Next action is checked</strong>The boundary checks current authority and refuses access.</li>
+        <li class="decision"><span class="step-no">03</span><strong>Next action is checked</strong>Confirm permission is still active. Refuse after revocation.</li>
         <li><span class="step-no">04</span><strong>Incident owner follows up</strong>Preserve evidence, rotate exposed keys and retest.</li>
       </ol>
       <figcaption>A signature-only offline check cannot learn about revocation. Test current-authority checks and propagation. Revocation cannot undo an action already committed.</figcaption>
