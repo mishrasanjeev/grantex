@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed - CERT-In security guidance
+- Simplify the agent-security article with accessible workflows for scoped
+  access, independent human decisions and revocation. Distinguish product
+  mechanisms, opt-in source controls and operator-owned compliance duties.
+
 ### Added - Restricted agent deployment controls (source only)
 - Opt-in gateway `restrictedEgress` with exact origin configuration and no
   redirect following on upstream and credential-reference requests. The

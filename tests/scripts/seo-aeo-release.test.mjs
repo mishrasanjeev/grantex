@@ -7,6 +7,32 @@ import { createProcessor } from '@mdx-js/mdx';
 import { parse as parseYaml } from 'yaml';
 import { expectedMcpLimitationIds, stalePublicSelectors } from '../../scripts/check-seo-aeo.mjs';
 
+test('the CERT-In article preserves workflow navigation and explicit responsibility limits', () => {
+  const html = readFileSync(new URL('../../web/blog/cert-in-ai-agent-security.html', import.meta.url), 'utf8');
+  assert.equal((html.match(/<figure class="workflow"/g) || []).length, 3);
+  assert.equal((html.match(/class="step-no"/g) || []).length, 12);
+  for (const id of ['pilot-checklist', 'boundaries', 'grantex-controls', 'restricted-profile',
+    'tenant-sso', 'financial-example', 'stop-flow', 'operator-duties', 'adoption']) {
+    assert.equal((html.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, id);
+  }
+  assert.match(html, /<details>\s*<summary>In this article<\/summary>/);
+  assert.match(html, /not a CERT-In certification, endorsement or complete compliance solution/);
+  assert.match(html, /not in a published SDK release/);
+  assert.match(html, /no enforcing Kubernetes CNI was tested/);
+  assert.match(html, /signature-only offline check cannot learn about revocation/);
+  assert.match(html, /does not revoke a stolen upstream API key/);
+  assert.match(html, /sandbox-only/);
+  assert.match(html, /within Indian jurisdiction/);
+  assert.match(html, /CIAD-2026-0049/);
+  const structured = JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);
+  assert.equal(structured.mainEntityOfPage, 'https://grantex.dev/blog/cert-in-ai-agent-security');
+  assert.equal(structured.image, 'https://grantex.dev/blog/cert-in-agent-boundaries.png');
+  const png = readFileSync(new URL('../../web/blog/cert-in-agent-boundaries.png', import.meta.url));
+  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+  assert.equal(png.readUInt32BE(16), 1200);
+  assert.equal(png.readUInt32BE(20), 630);
+});
+
 function documentParts(source) {
   const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(source);
   if (!match) return { metadata: {}, body: source };
