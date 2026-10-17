@@ -16,10 +16,10 @@
 // prints `live` (the registry), `fixture` (the mock issuer) or `verifier`
 // (the relying party's own check). `make demo-verify`.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { COMPACT_JWS, MOCK_ISSUER_ORIGIN, REGISTRY_ORIGIN, REPO, RegistryDemo, SD_JWT_PRESENTATION, expect, findPython, http, runDemo } from './lib/registry-demo.mjs';
+import { COMPACT_JWS, MOCK_ISSUER_ORIGIN, REGISTRY_ORIGIN, REPO, RegistryDemo, SD_JWT_PRESENTATION, expect, findPython, runDemo } from './lib/registry-demo.mjs';
 
 const MERCHANT = 'https://merchant.example';
 const AUDIENCE = `${MERCHANT}/checkout`;
@@ -48,7 +48,7 @@ await runDemo('demo-verify', async () => {
     expect(SD_JWT_PRESENTATION.test(passport), 'the passport file does not hold an SD-JWT presentation');
 
     // ── a grant bound to the passport, for this merchant ───────────────────
-    const authorized = await http('POST', `${demo.baseUrl}/v1/authorize`, {
+    const authorized = await demo.http('POST', `${demo.baseUrl}/v1/authorize`, {
       headers: demo.auth,
       body: {
         agentId: demo.agent.id,
@@ -68,24 +68,22 @@ await runDemo('demo-verify', async () => {
     // sandbox developer, POST /v1/authorize/{id}/approve).
     let code = authorized.json.code;
     if (!code) {
-      const approved = await http('POST', `${demo.baseUrl}/v1/authorize/${encodeURIComponent(requestId)}/approve`, { headers: demo.auth });
+      const approved = await demo.http('POST', `${demo.baseUrl}/v1/authorize/${encodeURIComponent(requestId)}/approve`, { headers: demo.auth });
       expect(approved.status === 200 && approved.json.code, `approve answered ${approved.status}: ${approved.text}`);
       code = approved.json.code;
     }
     demo.step('principal consent recorded (sandbox approval)', 'live', `${requestId} code issued`);
 
-    const exchanged = await http('POST', `${demo.baseUrl}/v1/token`, { headers: demo.auth, body: { code, agentId: demo.agent.id } });
+    const exchanged = await demo.http('POST', `${demo.baseUrl}/v1/token`, { headers: demo.auth, body: { code, agentId: demo.agent.id } });
     expect(exchanged.status === 201 || exchanged.status === 200, `token answered ${exchanged.status}: ${exchanged.text}`);
     const grant = exchanged.json.grantToken;
-    // Only a compact JWS is kept; nothing else the registry might answer reaches the file.
+    // The grant stays in memory and reaches the verifier through its stdin pipe.
     expect(typeof grant === 'string' && COMPACT_JWS.test(grant), 'the token answer is not a compact JWS');
     const claims = decodeJwtPayload(grant);
     const detail = (claims.authorization_details ?? []).find((d) => d.type === COMMERCE);
     expect(detail?.passport?.key_thumbprint === demo.agentKey.thumbprint, `the grant is not bound to the passport's key: ${JSON.stringify(claims.authorization_details)}`);
     expect(claims.cnf?.jkt === demo.agentKey.thumbprint, `cnf.jkt is ${claims.cnf?.jkt}, not the agent's key`);
     expect(claims.aud === AUDIENCE, `aud is ${claims.aud}, not ${AUDIENCE}`);
-    const grantFile = join(demo.state, 'grant.jwt');
-    writeFileSync(grantFile, `${grant}\n`, { mode: 0o600 });
     demo.step('grant issued, bound to the passport', 'live',
       `${exchanged.json.grantId} aud=${claims.aud} cnf.jkt=${claims.cnf.jkt} passport.id=${detail.passport.id} acceptance idx=${detail.acceptance_status?.idx}`);
 
@@ -94,12 +92,12 @@ await runDemo('demo-verify', async () => {
       join(REPO, 'scripts', 'demo_verify_step.py'),
       '--registry-origin', REGISTRY_ORIGIN, '--registry-loopback', demo.baseUrl,
       '--mock-origin', MOCK_ISSUER_ORIGIN, '--mock-loopback', demo.serve.origin,
-      '--passport', passportFile, '--grant', grantFile, '--agent-key', demo.agentKey.file,
+      '--passport', passportFile, '--grant-stdin', '--agent-key', demo.agentKey.file,
       '--merchant', MERCHANT, '--audience', AUDIENCE, '--amount-minor', String(AMOUNT_MINOR),
     ];
     const runVerify = (expectation) => {
       const result = spawnSync(python, [...verifyArgs, '--expect', expectation], {
-        cwd: REPO, encoding: 'utf8', env: { ...process.env, GRANTEX_API_KEY: demo.apiKey },
+        cwd: REPO, encoding: 'utf8', input: grant, env: { ...process.env, GRANTEX_API_KEY: demo.apiKey },
       });
       const lines = result.stdout.trim().split('\n').filter(Boolean);
       let decision = null;

@@ -979,6 +979,30 @@ describe('dpdp command', () => {
   // ── error handling ────────────────────────────────────────────────────
 
   describe('error handling', () => {
+    it.each([
+      'http://provider.example', 'http://localhost.provider.example:3001',
+      'https://user:secret@provider.example', 'https://provider.example/v1',
+      'https://provider.example?key=secret', 'https://provider.example#hidden',
+    ])('refuses unsafe configured origin %s before a request', async (baseUrl) => {
+      mockFetchOk(listConsent);
+      vi.mocked(resolveConfig).mockReturnValue({ baseUrl, apiKey: 'synthetic-key' });
+      await expect(run(['dpdp', 'consent', 'list'])).rejects.toThrow();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it.each(['', 'synthetic key', 'synthetic\nkey', 'x'.repeat(8193)])('rejects malformed API key', async (apiKey) => {
+      mockFetchOk(listConsent);
+      vi.mocked(resolveConfig).mockReturnValue({ baseUrl: BASE, apiKey });
+      await expect(run(['dpdp', 'consent', 'list'])).rejects.toThrow(/API key/);
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('refuses redirects rather than forwarding an authenticated request', async () => {
+      mockFetchOk(listConsent);
+      await run(['dpdp', 'consent', 'list']);
+      expect(fetchInit().redirect).toBe('error');
+    });
+
     it('exits with error when config is not set', async () => {
       vi.mocked(resolveConfig).mockReturnValue(null);
       const exitSpy = await runFails(['dpdp', 'consent', 'list']);

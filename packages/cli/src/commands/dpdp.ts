@@ -13,6 +13,12 @@ function validateBaseUrl(baseUrl: string): string {
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
     throw new Error(`Invalid protocol: ${url.protocol} — only http/https allowed`);
   }
+  if (url.username || url.password || url.search || url.hash || url.pathname !== '/') {
+    throw new Error('DPDP base URL must be an origin without credentials, path, query or fragment');
+  }
+  if (url.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+    throw new Error('DPDP requires HTTPS except for loopback development servers');
+  }
   return url.origin; // normalized, no path/query/fragment
 }
 
@@ -62,7 +68,11 @@ async function apiRequest<T>(
   body?: unknown,
 ): Promise<{ data: T; status: number }> {
   const config = await getConfig();
-  const safeBase = validateBaseUrl(config.baseUrl); // lgtm[js/file-access-to-http]
+  const safeBase = validateBaseUrl(config.baseUrl);
+  if (typeof config.apiKey !== 'string' || config.apiKey.length === 0
+    || config.apiKey.length > 8192 || /[\x00-\x20\x7f]/.test(config.apiKey)) {
+    throw new Error('DPDP requires a non-empty API key without whitespace or control characters');
+  }
   const url = `${safeBase}${path}`;
   const headers: Record<string, string> = {
     Authorization: `Bearer ${String(config.apiKey)}`,
@@ -75,6 +85,7 @@ async function apiRequest<T>(
     res = await fetch(url, {
       method,
       headers,
+      redirect: 'error',
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
