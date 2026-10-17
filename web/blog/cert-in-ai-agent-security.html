@@ -32,9 +32,6 @@
   <p class="meta">Security engineering &middot; 17 October 2026 &middot; Product and operator guide</p>
   <h1>AI Agent Security Beyond Prompts</h1>
   <p class="lead">An agent's instructions are not its authority. Put enforceable boundaries between its reasoning, credentials, tools and real-world effects.</p>
-  <p>CERT-In issued <a href="https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES02&amp;VLCODE=CIAD-2026-0049">Critical Advisory CIAD-2026-0049</a> on 15 October 2026. It addresses unauthorized access by agents under evaluation and misuse of open-source agentic tools. The relevant failure is not limited to a malicious prompt: ordinary exposed credentials, excessive permissions and reachable APIs can become an agent's route into real systems.</p>
-  <p class="notice">This is our engineering response, not a CERT-In endorsement, certification or legal opinion. Source additions, enabled deployment controls and an organization's operational duties are different things. No product installation automatically completes this checklist.</p>
-  <p>If an advisory detail page is unavailable, CERT-In's <a href="https://www.cert-in.org.in/s2cMainServlet?pageid=PUBADVLIST02&amp;year=2026">official 2026 advisory index</a> lists both titles and issue dates. Detail-page availability was intermittent when checked on 17 October 2026.</p>
 
   <section aria-labelledby="pilot-checklist">
     <h2 id="pilot-checklist">Start With A Bounded Pilot</h2>
@@ -58,6 +55,10 @@
       <li><a href="#adoption">Pilot acceptance and adoption</a></li>
     </ul></nav>
   </details>
+
+  <p>CERT-In issued <a href="https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES02&amp;VLCODE=CIAD-2026-0049">Critical Advisory CIAD-2026-0049</a> on 15 October 2026. It addresses unauthorized access by agents under evaluation and misuse of open-source agentic tools. The relevant failure is not limited to a malicious prompt: ordinary exposed credentials, excessive permissions and reachable APIs can become an agent's route into real systems.</p>
+  <p class="notice">This is our engineering response, not a CERT-In endorsement, certification or legal opinion. Source additions, enabled deployment controls and an organization's operational duties are different things. No product installation automatically completes this checklist.</p>
+  <p>If an advisory detail page is unavailable, CERT-In's <a href="https://www.cert-in.org.in/s2cMainServlet?pageid=PUBADVLIST02&amp;year=2026">official 2026 advisory index</a> lists both titles and issue dates. Detail-page availability was intermittent when checked on 17 October 2026.</p>
 
   <h2 id="boundaries">Start With Three Independent Boundaries</h2>
   <div class="flow" aria-label="Three independent security boundaries">
