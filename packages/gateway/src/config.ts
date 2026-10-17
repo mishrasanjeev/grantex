@@ -5,6 +5,7 @@ import { GatewayError } from './errors.js';
 import { checkAudienceCheck, checkExpectedAudience, type AudienceCheck } from './audience.js';
 import { checkDataRegionCheck, checkExpectedDataRegion, type DataRegionCheck } from './region.js';
 import { checkCredentialReference, type CredentialReferenceCheck } from './credentials.js';
+import { assertEgressDestination, validateEgressOptions, type EgressOptions } from './egress.js';
 
 export function loadConfig(filePath: string): GatewayConfig {
   let content: string;
@@ -30,6 +31,12 @@ export function validateConfig(raw: unknown): GatewayConfig {
   }
 
   const obj = raw as Record<string, unknown>;
+  const egress: EgressOptions = {
+    ...('restrictedEgress' in obj ? { restrictedEgress: obj['restrictedEgress'] as boolean } : {}),
+    ...('egressAllowedOrigins' in obj ? { egressAllowedOrigins: obj['egressAllowedOrigins'] as string[] } : {}),
+    ...('allowInsecureLoopback' in obj ? { allowInsecureLoopback: obj['allowInsecureLoopback'] as boolean } : {}),
+  };
+  validateEgressOptions(egress);
   if ('currentAuthority' in obj) {
     throw new GatewayError('CONFIG_INVALID', 'currentAuthority callbacks are programmatic only; use currentAuthorityCheck in YAML', 500);
   }
@@ -54,6 +61,9 @@ export function validateConfig(raw: unknown): GatewayConfig {
   }
 
   const port = typeof obj['port'] === 'number' ? obj['port'] : 8080;
+  for (const field of ['upstream', 'jwksUri', 'grantexBaseUrl']) {
+    if (typeof obj[field] === 'string') assertEgressDestination(obj[field] as string, egress);
+  }
 
   // An invalid audience setting stops the gateway from starting rather than
   // being read as "no audience", which would accept tokens meant elsewhere.
@@ -139,6 +149,7 @@ export function validateConfig(raw: unknown): GatewayConfig {
     : undefined;
 
   return {
+    ...egress,
     upstream: obj['upstream'] as string,
     jwksUri: obj['jwksUri'] as string,
     port,

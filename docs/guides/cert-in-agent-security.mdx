@@ -1,0 +1,248 @@
+---
+title: "CERT-In Agent Security Deployment Guide"
+description: "Map CIAD-2026-0049 and CIAD-2026-0046 to agent authorization, deployment controls, evidence and incident response. No certification is implied."
+---
+
+This is an engineering deployment guide, not a compliance certificate, legal
+opinion or claim that installing an SDK secures an organization. Use the
+[official CIAD-2026-0049 advisory](https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES02&VLCODE=CIAD-2026-0049)
+(15 October 2026) and the related
+[CIAD-2026-0046 payment advisory](https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES02&VLCODE=CIAD-2026-0046)
+(9 October 2026) as the primary references.
+
+If a detail page is unavailable, consult CERT-In's
+[official 2026 advisory index](https://www.cert-in.org.in/s2cMainServlet?pageid=PUBADVLIST02&year=2026)
+for the advisory titles and issue dates. Detail-page availability was intermittent
+when this guide was checked on 17 October 2026.
+
+## The Trust Boundary
+
+An agent's instructions are not an authorization boundary. An upstream service
+must reject calls that lack the required identity, current authority, audience,
+purpose, permission and human decision. A network boundary must independently
+restrict destinations. A stolen upstream credential can bypass an application
+gateway if the upstream still accepts that credential directly.
+
+Grantex supplies authorization and evidence primitives. It does not install an
+endpoint-detection agent, configure every cloud role, discover every exposed
+credential, adjudicate screening matches or satisfy a bank's transaction policy.
+
+## Control And Responsibility Matrix
+
+| Control | Grantex mechanism | Deployment evidence and remaining owner |
+|---|---|---|
+| Agent and integration inventory | Agent registration, scopes, manifests and grant records | Operator reconciles these with every deployed workload, external tool and dormant account; a registry is not automatic asset discovery |
+| Least-privilege API use | Scope attenuation, tool checks, audience and purpose enforcement | Relying party enforces checks on every action; also inspect cloud IAM and database roles |
+| Short-lived authority | Expiring grant tokens and delegated child grants | Runtime requests a separate grant per run; token refresh is not a substitute for short lifetimes or run isolation |
+| Current authority and independent stop | Online grant verification, revocation, revocation feed and emergency stop | Verify authority at execution; an offline signature alone cannot establish current revocation state |
+| Human decisions | Action-bound decision grants and configured approver identity providers | Establish named humans, required step-up, distinct approvers and the exact action; reject an absent or stale decision |
+| Upstream secrets | Vault credential references allow a trusted gateway to inject a credential | Configure reference delivery and restrict redemption; keep the agent away from underlying keys and rotate exposed keys at their issuer |
+| Credential discovery and reuse | Repository secret scanning and explicit credential-revocation procedures | A scanner is not runtime quarantine. Block discovered third-party credentials across future runs; do not test whether an encountered key works |
+| Outbound requests | Source opt-in gateway origin restrictions and redirect refusal | Enable the settings below and enforce a separate network allowlist; URL validation alone does not constrain every process or tool |
+| Network isolation | Opt-in Helm NetworkPolicy and restricted pod token mounting | Requires an enforcing CNI, reviewed destinations and an actual deny test; not automatically applied to Cloud Run or agent workers |
+| Privileged administration | Separate platform administration credential; approver step-up for decision flows | API keys are not MFA. Put administration behind private ingress and an MFA-enforcing identity layer; retain a separately protected containment path |
+| Attack detection | Rate limits, structured events, audit chain and SIEM destinations | Configure per-second burst, enumeration, bulk-read and registration alerts across replicas; minute quotas alone are not this detection policy |
+| Evidence preservation | Hash-linked audit records and export destinations | Configure storage access, external verification, retention, immutability and legal holds. A hash chain does not prevent deletion by a privileged database administrator |
+| Patching | Dependency, container and static-security CI checks | Patch deployed images and middleware, not only lockfiles; inspect existing running revisions |
+| Payments | Spend caps, action-bound decisions and transaction evidence primitives | The payment executor enforces approved references, beneficiaries, cumulative ceilings, maker-checker, velocity and reconciliation at the debit boundary |
+| Incident response | Revocation, emergency containment and exportable evidence | Incident commander preserves evidence, coordinates credential rotation and forensic clearance, retests externally and assesses reporting duties |
+
+No row is considered complete merely because a related feature exists. Record
+the effective configuration, release revision, negative test and responsible
+operator for each row. Unknown, untested and disabled controls remain open.
+
+## Restricted Gateway Profile
+
+The following settings are **source additions**, not a statement that a published
+package or every hosted gateway already has them. Check
+[release status](/release-status) before using an installed package. Compatibility
+defaults are unchanged: `restrictedEgress` and `rejectRedirects` are opt-in.
+
+```yaml
+upstream: https://service.example
+jwksUri: https://issuer.example/.well-known/jwks.json
+grantexBaseUrl: https://issuer.example
+restrictedEgress: true
+egressAllowedOrigins:
+  - https://service.example
+  - https://issuer.example
+currentAuthorityCheck: true
+audience: https://service.example
+audienceCheck: on
+routes:
+  - path: /records/**
+    methods: [GET]
+    requiredScopes: [records:read]
+```
+
+Supply the gateway's API credential from a secret manager, not this file. The
+programmatic gateway accepts `grantexApiKey`; the CLI uses `GRANTEX_API_KEY`
+for current-authority checks. Credential-reference configuration has its own
+explicit credential requirements; do not assume an environment fallback where
+the configuration loader does not support one.
+
+Restricted mode requires a nonempty list of exact origins. Scheme, hostname and
+port form the boundary. Wildcards, user information, fragments, paths or query
+strings in allowlist entries are refused. Configured upstream, issuer API and
+JWKS destinations must be listed. Redirects are refused rather than silently
+following a new path or host. The issuer API transport also rejects redirects.
+
+For synthetic loopback fixtures only, `allowInsecureLoopback: true` permits
+HTTP to loopback origins; this setting is rejected under `NODE_ENV=production`.
+Do not use workstation exceptions as a production egress policy.
+
+For a direct TypeScript API client built from the updated source:
+
+```typescript
+const client = new Grantex({
+  baseUrl: 'https://issuer.example',
+  rejectRedirects: true,
+  maxRetries: 0,
+});
+```
+
+This option covers API calls and event-stream requests. It does not install a
+firewall, make other libraries use the same policy, or turn an unknown network
+failure into proof that a non-idempotent request did not commit. Reconcile an
+uncertain operation before retrying with a new key.
+
+## Network-Layer Enforcement
+
+The Helm chart includes an opt-in policy:
+
+```yaml
+networkPolicy:
+  enabled: true
+  allowClusterDns: true
+  ingressNamespaces: [approved-ingress]
+  allowedEgress:
+    - cidr: 192.0.2.10/32
+      ports:
+        - port: 443
+          protocol: TCP
+```
+
+The address above is documentation-only. Replace it with reviewed destinations,
+including database, Redis, issuer and an authenticated egress proxy as needed.
+An empty destination list permits only the explicitly enabled cluster DNS
+traffic. Empty ingress namespaces deny peer ingress. The template refuses an
+all-destinations CIDR and destinations without ports. Pods do not automatically
+mount a service-account token when this policy is enabled.
+
+Kubernetes policy is additive: another policy selecting the same pod can broaden
+access. A CNI that ignores NetworkPolicy makes this manifest ineffective. Audit
+all applicable policies and run an unauthorized connection attempt. DNS access
+does not authorize HTTP to a resolved host, but unrestricted DNS can itself be
+an exfiltration channel; use a controlled resolver or egress proxy when required.
+
+This chart protects the selected auth-service pods, **not automatically every
+agent worker**. Apply equivalent isolation to each agent workload. Run-specific
+allowlists need an isolated workload or an authenticated proxy that binds its
+policy to a server-issued run identity. Keep workload creation and network-policy
+changes outside the agent's permissions. Cloud Run requires its own reviewed
+VPC/firewall/proxy path; `all-traffic` routing alone is not destination denial.
+
+## Log Retention And Detection
+
+Keep security-relevant request and audit logs for at least 180 days when this
+baseline applies. Verify the actual bucket, sink routing, exclusions, region,
+access policy and export path. CI artifact retention is not production log
+retention; tracing records and business evidence may have different policies.
+
+For an existing Google Cloud Logging bucket, first read its current policy:
+
+```bash
+gcloud logging buckets describe _Default --location=global --project=PROJECT_ID
+```
+
+If a reviewed change is needed, extend retention without reducing a longer
+existing period. Do not lock a bucket or change legal holds as part of an
+unreviewed runbook. Extending retention cannot restore expired logs. Confirm
+that the required logs are actually routed to the bucket and not excluded.
+
+Audit events must identify the actor, grant, action and result without logging
+bearer tokens, credentials or sensitive bodies. Capture destination, protocol
+and port at the network/proxy boundary. Alert on enumeration bursts, bulk reads,
+new registrations, repeated denials and suspicious transfer velocity. Test the
+alert route with synthetic events and record receipt by a real operator. Ensure
+multi-instance counters and alerting do not silently become process-local.
+
+## Privileged Access And Dormant APIs
+
+### Tenant-Owned SSO And MFA
+
+Each tenant configures its own OIDC issuer, client, verified domain and group
+mappings using [Enterprise SSO](/guides/enterprise-sso). Keep client secrets in
+the tenant's approved secret store, never in the browser or a repository. Map
+the administrator scope only from the intended IdP group; do not give it to all
+domain users through a default scope. Test both an allowed administrator and a
+non-administrator before enabling enforcement.
+
+The service operator must first enable `SSO_HUMAN_ENFORCEMENT_ENABLED`; the
+tenant then enables enforcement after a successful JIT-provisioned OIDC admin
+login. A metadata connectivity test does not prove login, group mapping or MFA.
+Require MFA in the tenant's IdP application policy, test a session without the
+required factor, and retain the IdP policy and sign-in event as evidence. For
+decision approvals, configure the approved authentication context and freshness
+requirements in the decision policy; an arbitrary `amr` string is not proof.
+
+Tenant SSO does **not** grant platform-operator authority or replace protection
+for `ADMIN_API_KEY`. Machine API keys retain programmatic management authority,
+including the ability to change tenant SSO enforcement. Restrict, vault and
+monitor these keys independently. No tenant or platform MFA policy is enabled
+automatically by installing this release. Platform IAM/IAP changes are outside
+this rollout; operators must protect that separate boundary before claiming
+privileged administration is MFA-enforced.
+
+Inventory public routes, internal APIs, test endpoints, service accounts and
+third-party keys with an owner, last-use evidence and a removal decision.
+Require private ingress and identity-provider-enforced MFA for administration.
+Do not treat a bearer API key, an email string or a client-supplied MFA header
+as proof of an authenticated human. Test direct-origin bypass, not just the
+friendly domain. Patch exposed middleware and require a rollback-safe change
+before decommissioning an endpoint that may still have consumers.
+
+Preserve independent containment authority. An agent must not be able to disable
+its own monitor, restore a revoked root, edit its network allowlist or approve
+its own sensitive action. Exercise emergency containment using disposable
+tenants, not real customer grants.
+
+## Payment Execution Is A Separate Boundary
+
+A business application saying "approved" is insufficient if an attacker can
+invoke the bank or payment API directly. Require the executor to verify an
+approved record, beneficiary binding, amount, currency, expiry, replay status,
+required human decisions and aggregate ceilings immediately before execution.
+Reject fabricated references. Monitor new beneficiaries and reconcile provider
+statements with internal records. These checks must survive direct API calls,
+not just UI use. Product documentation is not evidence of implementation in a
+customer's bank integration. Sandbox merchant evidence never authorizes a live
+transfer or merchant activation.
+
+## Incident Procedure
+
+1. Stop the affected execution through independent operator controls; isolate
+   the workload without destroying volatile evidence.
+2. Preserve original logs, timestamps, image digests, grant identifiers and
+   configuration evidence. Restrict access and record custody and hashes.
+3. Revoke affected grants and rotate compromised credentials at every actual
+   issuer. Add encountered third-party credentials to a reviewed suppression
+   process; do not reuse them in another evaluation.
+4. Investigate root cause, adjacent accounts, direct-origin access and possible
+   persistence. A clean code scan alone is not forensic clearance.
+5. Patch and retest the exact failure and sibling paths in isolation. Have an
+   independent authorized party verify externally before restoring access.
+6. The incident commander assesses applicable CERT-In and other reporting
+   requirements with the responsible legal/security team. Do not wait for a
+   product vendor to decide the organization's obligations.
+
+## Acceptance Evidence
+
+Record the deployed SHA/image, effective flags, network policy, log-retention
+read-back, issuer/MFA policy, test timestamps and alert-delivery evidence. Test:
+wrong tenant, excess scope, wrong audience, revoked authority, missing human
+decision, denied destination, redirect, blocked credential reuse, burst/bulk
+activity, stop/restart and replay after a simulated loss of response.
+
+Do not publish a blanket "CERT-In compliant" or "all attacks prevented" claim.
+Publish the controls, their limits and the evidence that can actually be shown.

@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Restricted agent deployment controls (source only)
+- Opt-in gateway `restrictedEgress` with exact origin configuration and no
+  redirect following on upstream and credential-reference requests. The
+  TypeScript API transport also accepts `rejectRedirects: true` for API calls
+  and event streams; compatibility defaults remain unchanged.
+- Opt-in Helm ingress/egress NetworkPolicy with explicit destination ports,
+  optional cluster DNS and no automatic service-account token mount. Requires
+  an enforcing CNI and operator-selected destinations; not a Cloud Run policy.
+
 ### Fixed - Demo, CLI and release-test security boundaries
 - Keep demo grant handoff in a bounded stdin pipe rather than a local file.
   Pin demo requests to their own loopback servers and reject redirects.

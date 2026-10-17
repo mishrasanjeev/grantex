@@ -26,6 +26,8 @@ export interface GrantexClientOptions {
   timeout?: number;
   /** Maximum number of retries for transient failures (429, 502, 503, 504). Defaults to 3. Set to 0 to disable. */
   maxRetries?: number;
+  /** Opt-in redirect refusal for API requests and event streams. Default false for compatibility. */
+  rejectRedirects?: boolean;
   /** Meter for tools and grants that declare caps; without one such calls are denied. */
   capsMeter?: CapsMeter;
   /**

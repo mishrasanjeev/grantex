@@ -152,3 +152,17 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+# Opt-in infrastructure boundary. Requires a CNI that enforces NetworkPolicy.
+# Empty ingressNamespaces denies peer ingress; empty allowedEgress permits only
+# cluster DNS when allowClusterDns is true. Configure DB, Redis and an egress
+# proxy explicitly before enabling; this is not applied to hosted Cloud Run.
+networkPolicy:
+  enabled: false
+  allowClusterDns: true
+  ingressNamespaces: []
+  allowedEgress: []
+  # - cidr: 192.0.2.10/32
+  #   ports:
+  #     - port: 443
+  #       protocol: TCP

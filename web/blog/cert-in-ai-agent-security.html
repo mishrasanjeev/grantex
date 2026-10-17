@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI Agent Security After CERT-In CIAD-2026-0049 | Grantex</title>
+  <meta name="description" content="An actionable guide to scoped agent authority, restricted egress, tenant SSO, human decisions and evidence, with explicit product and operator responsibilities.">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://grantex.dev/blog/cert-in-ai-agent-security">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="AI Agent Security Beyond Prompts">
+  <meta property="og:description" content="What Grantex can enforce, what operators must configure, and how to test the boundary.">
+  <meta property="og:url" content="https://grantex.dev/blog/cert-in-ai-agent-security">
+  <meta property="og:image" content="https://grantex.dev/og-image.png">
+  <meta property="og:image:alt" content="Grantex delegated authorization for AI agents">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="AI Agent Security Beyond Prompts">
+  <meta name="twitter:description" content="Scoped authority, containment and an evidence-led rollout following CERT-In CIAD-2026-0049.">
+  <meta name="twitter:image" content="https://grantex.dev/og-image.png">
+  <meta name="twitter:image:alt" content="Grantex delegated authorization for AI agents">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"AI Agent Security Beyond Prompts","datePublished":"2026-10-17","author":{"@type":"Organization","name":"Grantex"},"publisher":{"@type":"Organization","name":"Grantex"},"mainEntityOfPage":"https://grantex.dev/blog/cert-in-ai-agent-security","image":"https://grantex.dev/og-image.png"}</script>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#0d1117;color:#c9d1d9;font:17px/1.75 system-ui,sans-serif;letter-spacing:0}a{color:#58c775;text-underline-offset:4px;overflow-wrap:anywhere}a:focus-visible{outline:2px solid #f0f6fc;outline-offset:5px}header,main,footer{max-width:900px;margin:auto;padding:28px 24px}header{border-bottom:1px solid #30363d}header a{font-weight:700;text-decoration:none;font-size:21px}h1,h2,h3{color:#f0f6fc;line-height:1.25}h1{font-size:40px;margin:18px 0}h2{font-size:26px;margin:44px 0 16px}h3{font-size:20px;margin:28px 0 12px}.meta{color:#9da7b3;font-size:14px}.lead{font-size:21px}.notice{border-left:3px solid #d4ad51;padding:4px 0 4px 20px}.flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin:28px 0}.flow div{border-top:2px solid #58c775;padding-top:12px}.flow strong{display:block;color:#f0f6fc}code{font-size:14px;overflow-wrap:anywhere}li{margin-bottom:12px}footer{border-top:1px solid #30363d;font-size:14px} @media(max-width:600px){h1{font-size:32px}.flow{grid-template-columns:1fr}header,main,footer{padding:24px 20px}}
+  </style>
+  <style>nav[aria-label="Article contents"] a{display:flex;align-items:center;min-height:44px;padding:6px 0}nav[aria-label="Article contents"] li{margin-bottom:0}</style>
+</head>
+<body>
+<header><a href="/">Grantex</a></header>
+<main>
+<article>
+  <p class="meta">Security engineering &middot; 17 October 2026 &middot; Product and operator guide</p>
+  <h1>AI Agent Security Beyond Prompts</h1>
+  <p class="lead">An agent's instructions are not its authority. Put enforceable boundaries between its reasoning, credentials, tools and real-world effects.</p>
+
+  <section aria-labelledby="pilot-checklist">
+    <h2 id="pilot-checklist">Start With A Bounded Pilot</h2>
+    <ol>
+      <li>Choose one read-only workflow and name its process owner.</li>
+      <li>Use synthetic data, short-lived grants and an explicit destination list.</li>
+      <li>Prove wrong-audience, missing-approval, revoked-grant and denied-network refusals.</li>
+      <li>Record the revision, effective configuration and evidence before widening access.</li>
+    </ol>
+    <p>New restricted profiles are opt-in source additions, not an automatic change to an installed package or a customer's deployment.</p>
+  </section>
+  <details style="border-bottom:1px solid #30363d;padding-bottom:12px">
+    <summary style="cursor:pointer;min-height:44px;padding:10px 0;color:#f0f6fc">In this guide</summary>
+    <nav aria-label="Article contents"><ul>
+      <li><a href="#boundaries">Three independent boundaries</a></li>
+      <li><a href="#grantex-controls">What Grantex contributes</a></li>
+      <li><a href="#restricted-profile">Restricted deployment options</a></li>
+      <li><a href="#tenant-sso">Tenant-owned SSO and MFA</a></li>
+      <li><a href="#financial-example">Financial-operations example</a></li>
+      <li><a href="#operator-duties">Operator responsibilities</a></li>
+      <li><a href="#adoption">Pilot acceptance and adoption</a></li>
+    </ul></nav>
+  </details>
+
+  <p>CERT-In issued <a href="https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES02&amp;VLCODE=CIAD-2026-0049">Critical Advisory CIAD-2026-0049</a> on 15 October 2026. It addresses unauthorized access by agents under evaluation and misuse of open-source agentic tools. The relevant failure is not limited to a malicious prompt: ordinary exposed credentials, excessive permissions and reachable APIs can become an agent's route into real systems.</p>
+  <p class="notice">This is our engineering response, not a CERT-In endorsement, certification or legal opinion. Source additions, enabled deployment controls and an organization's operational duties are different things. No product installation automatically completes this checklist.</p>
+  <p>If an advisory detail page is unavailable, CERT-In's <a href="https://www.cert-in.org.in/s2cMainServlet?pageid=PUBADVLIST02&amp;year=2026">official 2026 advisory index</a> lists both titles and issue dates. Detail-page availability was intermittent when checked on 17 October 2026.</p>
+
+  <h2 id="boundaries">Start With Three Independent Boundaries</h2>
+  <div class="flow" aria-label="Three independent security boundaries">
+    <div><strong>Authority</strong>Who delegated this action, on which resource, for what purpose, and until when?</div>
+    <div><strong>Reachability</strong>Which destinations can the process actually contact, even if application code is bypassed?</div>
+    <div><strong>Consequence</strong>Which human and downstream system must approve and validate the final effect?</div>
+  </div>
+  <p>Grantex addresses delegated authority. A gateway or tool boundary verifies the grant before forwarding an action. Network controls constrain the process independently. The system executing an irreversible business action must still enforce its own authorization, transaction validation and human decision requirements.</p>
+  <p>A stolen upstream API key can bypass a gateway if the upstream accepts it directly. Scoping a Grantex token does not reduce the permissions of that stolen key. Revoke and rotate it at the actual issuer, remove unintended direct access, and retest from outside the application path.</p>
+
+  <h2 id="grantex-controls">What Grantex Contributes</h2>
+  <h3>Scoped, Expiring Authority</h3>
+  <p>Use narrowly defined scopes, an exact audience and a bounded lifetime. Delegation should reduce authority, not expand it. Verify the expected principal, agent, audience and purpose at the relying party; possession of a signed token alone is not sufficient. Current-authority checks are needed where a locally valid JWT must stop working after revocation.</p>
+  <h3>Containment And Human Decisions</h3>
+  <p>Revocation and emergency-stop controls let an authorized operator contain delegated access independently of an agent's cooperation. An offline verifier does not magically learn about a stop: use the supported current-authority mechanism and test the next action after containment. Keep a separately protected operator path so an agent cannot disable its own monitor or reverse its own freeze.</p>
+  <p>Decision grants can bind a human decision to the protected operation. Configure named approvers, approved identity providers, freshness and separation-of-duties rules. A review button, a tenant role, or an agent-supplied identity string is not evidence of an authenticated independent approval.</p>
+  <h3>Credentials By Reference And Evidence</h3>
+  <p>A trusted gateway can redeem a vault credential reference and inject the upstream credential without handing that credential to the agent. Grant binding, reference expiry and current authority still matter. Restrict who can redeem a reference and ensure failure cannot fall back to an uncredentialed or overprivileged request.</p>
+  <p>Hash-linked audit records support integrity verification and evidence export. They do not make the entire storage system undeletable. Centralize security logs, protect readers and writers separately, and verify the destination, exclusions, retention and alert delivery rather than relying on a product label.</p>
+
+  <h2 id="restricted-profile">New Restricted Deployment Options</h2>
+  <p>This source change adds an opt-in gateway origin allowlist and redirect refusal. In restricted mode, the upstream and configured authority endpoints must match explicit origins. Redirects are refused rather than silently carrying a request outside the approved destination. A synthetic two-server regression exercises this boundary without customer systems or real credentials.</p>
+  <p>The TypeScript transport adds an opt-in <code>rejectRedirects</code> option. These additions are source-only until a separately authorized package release; an existing installed SDK does not acquire them merely because this article was published. Compatibility defaults remain unchanged. Check <a href="https://docs.grantex.dev/release-status">release status</a> before choosing an installed version.</p>
+  <p>The Helm chart also gains an opt-in ingress/egress NetworkPolicy and disables service-account-token automount for that profile. An enforcing CNI, carefully chosen namespaces and destination CIDRs, and checks for additive allow policies are prerequisites. This policy selects the auth-service pods, not every agent, browser, shell or worker in your estate. A URL allowlist is not a firewall, and allowing DNS still needs its own threat analysis.</p>
+  <p>Use the <a href="https://docs.grantex.dev/guides/cert-in-agent-security">full hardening guide</a> for settings, constraints and acceptance tests. Enable the profile in a disposable environment first; do not copy an example CIDR into production and assume connectivity or isolation.</p>
+
+  <h2 id="tenant-sso">Tenant SSO Belongs To The Tenant</h2>
+  <p>Each tenant should configure its own OIDC connection and administrator-group mapping. Enforce MFA in that identity provider's application policy and test both permitted and refused sign-ins. A successful discovery request proves neither MFA nor correct group mapping. Grantex's human SSO enforcement is opt-in, and privileged machine keys retain programmatic authority. Tenant SSO is not platform-operator authorization.</p>
+  <p>Keep management interfaces private or protected by a separately verified identity layer. Do not change access in a way that locks out containment. Platform IAM changes and tenant MFA policies require their owners' configuration and evidence; they are not automatically enabled by this release.</p>
+
+  <h2 id="financial-example">A Concrete Financial-Operations Example</h2>
+  <p>An agent prepares a supplier payment exception. Give it permission to read the named case and draft a recommendation, not unrestricted beneficiary creation or payout access. Use synthetic records while testing. The reviewer sees the evidence and approves an exact business record. The executor independently checks beneficiary, amount, currency, expiry, replay state and cumulative limits before any transfer.</p>
+  <p>Changing the beneficiary or amount after approval must invalidate the authorization. A second reviewer may be required by the institution's policy. This is the system owner's transaction-control design, not a claim that Grantex executes payments or that a grant is equivalent to bank approval. CERT-In's related <a href="https://www.cert-in.org.in/s2cMainServlet?pageid=PUBVLNOTES02&amp;VLCODE=CIAD-2026-0046">CIAD-2026-0046</a>, issued 9 October 2026, addresses payment and disbursement API threats.</p>
+
+  <h2 id="operator-duties">What Operators Still Must Do</h2>
+  <ul>
+    <li><strong>Inventory and minimize:</strong> record every agent, owner, tool, credential reference, endpoint and environment. Remove dormant integrations only after checking dependencies.</li>
+    <li><strong>Scan and rotate:</strong> scan history, builds and configuration. If a real credential is discovered, stop the run, preserve evidence and rotate it at its issuer. Repository scanning is not automatic runtime quarantine across future runs.</li>
+    <li><strong>Constrain execution:</strong> separate run identities and synthetic test data, enforce network-layer destination limits, and deny agent access to the mechanisms that relax those limits.</li>
+    <li><strong>Monitor useful signals:</strong> route security events to an owned sink, alert on enumeration, bulk reads and unusual tool activity, and test notification delivery. A per-minute quota is not a complete per-second irregularity detector.</li>
+    <li><strong>Retain and investigate:</strong> retain applicable security logs for at least 180 days, with access controls and enough storage. Increasing retention today cannot recover already expired history.</li>
+    <li><strong>Respond completely:</strong> preserve forensic evidence, remediate root causes, retest alternative access paths, and have the incident owner assess applicable CERT-In reporting obligations.</li>
+  </ul>
+
+  <h2 id="adoption">Adopt Through A Bounded Pilot</h2>
+  <p>Start with one read-only workflow, one owner, synthetic data and no live financial effect. Define the actions that must succeed and those that must fail. Exercise wrong tenant, wrong audience, missing approval, stale authority, denied destination, redirected request and a stop followed by another attempted action. Record the deployed revision and effective configuration alongside results.</p>
+  <p>Promote only after the downstream system, network boundary, IdP and incident owner pass their respective gates. Measure denied unsafe actions, reviewer effort, recovery time and evidence completeness. Faster adoption comes from a small, demonstrably bounded workflow, not a blanket promise that agents are safe.</p>
+  <p><a href="https://docs.grantex.dev/guides/cert-in-agent-security">Read the control matrix and deployment checklist</a> &middot; <a href="https://docs.grantex.dev/quickstart">Start a scoped integration</a> &middot; <a href="https://github.com/mishrasanjeev/grantex">Review the source</a></p>
+</article>
+</main>
+<footer>Grantex is developed by Orchestrum Technologies LLP. CERT-In is the cited advisory authority, not a product sponsor. <a href="/">Return to Grantex</a></footer>
+</body>
+</html>

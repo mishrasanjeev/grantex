@@ -4,6 +4,7 @@ import type { GatewayConfig } from './types.js';
 import { matchRoute, isSafeRequestPath } from './matcher.js';
 import { proxyRequest } from './proxy.js';
 import { GatewayError } from './errors.js';
+import { assertEgressDestination, validateEgressOptions } from './egress.js';
 import { log } from './logger.js';
 import { audienceDenial, checkAudienceCheck, checkExpectedAudience, readTokenAudience } from './audience.js';
 import { checkDataRegionCheck, checkExpectedDataRegion, readTokenDataRegions, regionDenial } from './region.js';
@@ -15,6 +16,13 @@ import {
 } from './credentials.js';
 
 export function createGatewayServer(config: GatewayConfig): FastifyInstance {
+  validateEgressOptions(config);
+  if (config.restrictedEgress && config.currentAuthorityCheck === true && !config.grantexBaseUrl) {
+    throw new Error('Restricted current-authority checks require an explicit grantexBaseUrl');
+  }
+  for (const destination of [config.upstream, config.jwksUri, config.grantexBaseUrl]) {
+    if (destination !== undefined) assertEgressDestination(destination, config);
+  }
   // Checked here as well as in validateConfig, for a config built in code: an
   // invalid audience setting must stop the gateway, not be read as "no audience".
   const audienceCheck = checkAudienceCheck(config.audienceCheck === undefined ? 'on' : config.audienceCheck);
@@ -30,7 +38,7 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
   if (config.currentAuthorityCheck === true && currentAuthority === undefined) {
     const apiKey = config.grantexApiKey ?? process.env['GRANTEX_API_KEY'];
     if (!apiKey) throw new Error('Current authority verification requires GRANTEX_API_KEY');
-    const issuer = new Grantex({ apiKey, maxRetries: 0,
+    const issuer = new Grantex({ apiKey, maxRetries: 0, rejectRedirects: config.restrictedEgress === true,
       ...(config.grantexBaseUrl !== undefined ? { baseUrl: config.grantexBaseUrl } : {}) });
     currentAuthority = (token) => issuer.grants.verify(token);
   }
@@ -42,7 +50,7 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
   // own key, so turning it on without the key or the auth service stops the gateway.
   const credentialReference = checkCredentialReference(config.credentialReference ?? 'off');
   const resolveOptions = credentialReference === 'on' && config.grantexApiKey && config.grantexBaseUrl
-    ? { grantexApiKey: config.grantexApiKey, grantexBaseUrl: config.grantexBaseUrl }
+    ? { grantexApiKey: config.grantexApiKey, grantexBaseUrl: config.grantexBaseUrl, rejectRedirects: config.restrictedEgress === true }
     : undefined;
   if (credentialReference === 'on' && resolveOptions === undefined) {
     throw new Error('credentialReference: on needs grantexApiKey and grantexBaseUrl');
@@ -224,6 +232,9 @@ export function createGatewayServer(config: GatewayConfig): FastifyInstance {
       await proxyRequest(req, reply, grant, {
         upstream: config.upstream,
         upstreamHeaders,
+        ...(config.restrictedEgress !== undefined ? { restrictedEgress: config.restrictedEgress } : {}),
+        ...(config.egressAllowedOrigins !== undefined ? { egressAllowedOrigins: config.egressAllowedOrigins } : {}),
+        ...(config.allowInsecureLoopback !== undefined ? { allowInsecureLoopback: config.allowInsecureLoopback } : {}),
         ...(resolveOptions !== undefined ? { dropRequestHeaders: [CREDENTIAL_REF_HEADER] } : {}),
       });
     } catch (err) {

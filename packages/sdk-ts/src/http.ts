@@ -32,6 +32,7 @@ export interface HttpClientOptions {
   apiKey: string;
   timeout?: number;
   maxRetries?: number;
+  rejectRedirects?: boolean;
 }
 
 export interface RequestOptions {
@@ -50,6 +51,7 @@ export class HttpClient {
   readonly #apiKey: string;
   readonly #timeout: number;
   readonly #maxRetries: number;
+  readonly #rejectRedirects: boolean;
   #lastRateLimit: RateLimit | undefined;
 
   constructor(options: HttpClientOptions) {
@@ -57,6 +59,10 @@ export class HttpClient {
     this.#apiKey = options.apiKey.trim();
     this.#timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
     this.#maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+    if (options.rejectRedirects !== undefined && typeof options.rejectRedirects !== 'boolean') {
+      throw new TypeError('rejectRedirects must be a boolean');
+    }
+    this.#rejectRedirects = options.rejectRedirects ?? false;
   }
 
   get lastRateLimit(): RateLimit | undefined {
@@ -90,6 +96,7 @@ export class HttpClient {
   async rawGet(path: string, signal?: AbortSignal): Promise<Response> {
     const url = `${this.#baseUrl}${path}`;
     return fetch(url, {
+      ...(this.#rejectRedirects ? { redirect: 'error' as const } : {}),
       headers: {
         Authorization: `Bearer ${this.#apiKey}`,
       },
@@ -131,6 +138,7 @@ export class HttpClient {
       let response: Response;
       try {
         response = await fetch(url, {
+          ...(this.#rejectRedirects ? { redirect: 'error' as const } : {}),
           method,
           headers,
           ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
