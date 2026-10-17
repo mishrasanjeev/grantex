@@ -55,6 +55,7 @@ export interface ResolveOptions {
   grantexApiKey: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  rejectRedirects?: boolean;
 }
 
 /**
@@ -86,6 +87,7 @@ export async function resolveCredentialReference(
       },
       body: JSON.stringify({ credentialRef, grantId }),
       signal: controller.signal,
+      ...(options.rejectRedirects ? { redirect: 'error' as const } : {}),
     });
     // The timer stays armed until the body is read: an auth service that
     // answers its headers and then stalls on the body is a timeout too.

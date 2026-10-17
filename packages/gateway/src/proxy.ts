@@ -1,8 +1,10 @@
 import type { VerifiedGrant } from '@grantex/sdk';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { GatewayError } from './errors.js';
+import { assertEgressDestination, type EgressOptions } from './egress.js';
+import { log } from './logger.js';
 
-export interface ProxyOptions {
+export interface ProxyOptions extends EgressOptions {
   upstream: string;
   upstreamHeaders?: Record<string, string>;
   timeout?: number;
@@ -82,6 +84,8 @@ export async function proxyRequest(
   options: ProxyOptions,
 ): Promise<void> {
   const targetUrl = `${options.upstream.replace(/\/$/, '')}${req.url}`;
+  assertEgressDestination(targetUrl, options);
+  const destination = options.restrictedEgress ? new URL(targetUrl) : undefined;
 
   // Build headers: strip Authorization, add upstream headers + Grantex context.
   // A real `Headers` instance normalises names, so a later `set` replaces an
@@ -130,6 +134,12 @@ export async function proxyRequest(
       headers,
       body,
       signal: controller.signal,
+      ...(options.restrictedEgress ? { redirect: 'error' as const } : {}),
+    });
+    if (destination) log('info', 'Restricted outbound response', {
+      destination: destination.origin, protocol: destination.protocol,
+      port: Number(destination.port || (destination.protocol === 'https:' ? 443 : 80)),
+      method: req.method, status: response.status,
     });
 
     // Forward status code
@@ -145,6 +155,10 @@ export async function proxyRequest(
     const responseBody = await response.text();
     reply.send(responseBody);
   } catch (err) {
+    if (destination) log('warn', 'Restricted outbound failure', {
+      destination: destination.origin, protocol: destination.protocol,
+      port: Number(destination.port || (destination.protocol === 'https:' ? 443 : 80)), method: req.method,
+    });
     if (err instanceof GatewayError) throw err;
     if (err instanceof Error && err.name === 'AbortError') {
       throw new GatewayError(
@@ -155,7 +169,8 @@ export async function proxyRequest(
     }
     throw new GatewayError(
       'UPSTREAM_ERROR',
-      `Failed to reach upstream: ${err instanceof Error ? err.message : String(err)}`,
+      options.restrictedEgress ? 'Restricted upstream request failed; no redirect is permitted'
+        : `Failed to reach upstream: ${err instanceof Error ? err.message : String(err)}`,
       502,
     );
   } finally {

@@ -71,6 +71,25 @@ jobs:
       - run: node --test tests/scripts/seo-aeo-release.test.mjs tests/scripts/runtime-image.test.mjs tests/scripts/e2e-workflow.test.mjs tests/scripts/dependency-policy.test.mjs tests/scripts/security-boundaries.test.mjs
       - run: node scripts/check-docs-integrity.mjs
 
+  helm-network-policy:
+    name: Restricted Network Policy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install checksum-verified Helm renderer
+        shell: bash
+        run: |
+          curl --fail --silent --show-error --location https://get.helm.sh/helm-v4.3.1-linux-amd64.tar.gz -o /tmp/helm.tar.gz
+          echo '0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b  /tmp/helm.tar.gz' | sha256sum --check
+          tar -xzf /tmp/helm.tar.gz -C /tmp
+          echo '/tmp/linux-amd64' >> "$GITHUB_PATH"
+      - run: node --test tests/scripts/helm-network-policy.test.mjs
+
   commerce-preview-conformance:
     name: Commerce Preview Conformance
     runs-on: ubuntu-latest

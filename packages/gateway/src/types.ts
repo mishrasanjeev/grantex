@@ -1,3 +1,5 @@
+import type { EgressOptions } from './egress.js';
+
 export interface RouteDefinition {
   path: string;
   methods: string[];
@@ -8,7 +10,7 @@ export interface RouteDefinition {
   dataRegion?: string;
 }
 
-export interface GatewayConfig {
+export interface GatewayConfig extends EgressOptions {
   /** Programmatic opt-in issuer authority callback. Requires a route/global audience. Not JSON-serializable. */
   currentAuthority?: (token: string) => Promise<import('@grantex/sdk').VerifiedGrant>;
   /** Enable authenticated /v1/grants/verify calls from YAML/CLI configuration. Defaults false. */

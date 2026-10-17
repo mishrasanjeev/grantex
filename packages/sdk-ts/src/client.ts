@@ -341,6 +341,7 @@ export class Grantex {
       apiKey,
       ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
       ...(options.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
+      ...(options.rejectRedirects !== undefined ? { rejectRedirects: options.rejectRedirects } : {}),
     });
 
     this.agents = new AgentsClient(this.#http);

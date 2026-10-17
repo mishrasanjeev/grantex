@@ -83,6 +83,9 @@ For MCP HTTP transport authorization, configure a compatible authorization serve
 
 ## Machine-Readable Sources
 
+- [Agent Security After CERT-In CIAD-2026-0049](https://grantex.dev/blog/cert-in-ai-agent-security): Scoped authority, source opt-in egress controls and deployment responsibilities; no blanket compliance claim.
+- [Agent Security Deployment Guide](https://docs.grantex.dev/guides/cert-in-agent-security): Control matrix, negative tests, tenant-owned OIDC, retention and incident-response gates.
+
 - [Linked-Data Entity Graph](https://grantex.dev/ld.json): Grantex Organization, WebSite, WebPage, source-code, specification, and FAQ entities.
 - [Release Status JSON](https://grantex.dev/release-status.json): Registry-verified primary releases and limitation IDs.
 - [JWKS](https://api.grantex.dev/.well-known/jwks.json): Published token-verification keys.

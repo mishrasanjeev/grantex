@@ -21,6 +21,9 @@ spec:
         {{- include "grantex.selectorLabels" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "grantex.serviceAccountName" . }}
+      {{- if .Values.networkPolicy.enabled }}
+      automountServiceAccountToken: false
+      {{- end }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:

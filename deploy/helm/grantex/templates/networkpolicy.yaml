@@ -1,0 +1,61 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "grantex.fullname" . }}-restricted
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "grantex.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "grantex.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress, Egress]
+  {{- if .Values.networkPolicy.ingressNamespaces }}
+  ingress:
+    - from:
+      {{- range .Values.networkPolicy.ingressNamespaces }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ . | quote }}
+      {{- end }}
+      ports:
+        - port: {{ .Values.service.targetPort }}
+          protocol: TCP
+  {{- else }}
+  ingress: []
+  {{- end }}
+  {{- if or .Values.networkPolicy.allowClusterDns .Values.networkPolicy.allowedEgress }}
+  egress:
+    {{- if .Values.networkPolicy.allowClusterDns }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { port: 53, protocol: UDP }
+        - { port: 53, protocol: TCP }
+    {{- end }}
+    {{- range .Values.networkPolicy.allowedEgress }}
+    {{- if regexMatch "/0+$" .cidr }}
+    {{- fail "restricted network policy forbids an all-destinations CIDR" }}
+    {{- end }}
+    {{- if not .ports }}
+    {{- fail "each restricted egress destination requires explicit ports" }}
+    {{- end }}
+    - to:
+        - ipBlock:
+            cidr: {{ required "restricted egress requires a CIDR" .cidr | quote }}
+      ports:
+        {{- range .ports }}
+        - port: {{ required "restricted egress requires a port" .port }}
+          protocol: {{ .protocol | default "TCP" | quote }}
+        {{- end }}
+    {{- end }}
+  {{- else }}
+  egress: []
+  {{- end }}
+{{- end }}

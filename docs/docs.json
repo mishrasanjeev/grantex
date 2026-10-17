@@ -169,6 +169,7 @@
               "guides/self-hosting",
               "guides/dependency-updates",
               "guides/security-hardening",
+                "guides/cert-in-agent-security",
               "guides/supply-chain-security",
               "guides/oauth-agent-grants",
               "guides/operations",
