@@ -56,7 +56,7 @@ export interface DecisionGrantClaims {
 /**
  * `approver_auth` of the machine profile (spec/decision-grant.md section 10):
  * a decision sealed by a deterministic policy arbiter, not approved by a
- * person. No human-approval consumer accepts it.
+ * person. No human-approval verifier accepts it.
  */
 export const POLICY_ARBITER_APPROVER_AUTH = 'policy_arbiter';
 

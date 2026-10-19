@@ -111,7 +111,7 @@ AgenticOrg's policy arbiter is authoritative and deterministic: it seals `allow`
 | Same `decision_id`, different body | `409 arbiter_decision_conflict`. |
 | Malformed, an `allow` with no evidence, `decided_at` in the future, or an `allow` older than ten minutes | `422`; not stored. |
 
-AgenticOrg verifies the returned `decision_grant` against the Grantex JWKS (`typ` `decision+jwt`, `aud` `urn:grantex:decision`, `approver_auth` `policy_arbiter`, `action_hash` equal to its own `payload_hash`) before storing the `jti` beside its decision row. Grantex's human decision-grant consumers (`POST /v1/decisions/consume`, SDK `verifyDecisionGrant(s)` and `enforce()`) refuse a `policy_arbiter` grant, so it can never stand in for a human approval. The profile is specified in `spec/decision-grant.md` section 10.
+AgenticOrg verifies the returned `decision_grant` against the Grantex JWKS (`typ` `decision+jwt`, `aud` `urn:grantex:decision`, `approver_auth` `policy_arbiter`, `action_hash` equal to its own `payload_hash`) before storing the `jti` beside its decision row. Grantex's human decision-grant verifiers (`POST /v1/decisions/consume`, SDK `verifyDecisionGrant(s)` and `enforce()`) refuse a `policy_arbiter` grant, so it can never stand in for a human approval. The profile is specified in `spec/decision-grant.md` section 10.
 
 ## Witness Checkpoints
 

@@ -2,7 +2,7 @@
  * OACP arbiter decisions (G16) with the database mocked: service-token auth,
  * validation, the machine-profile decision grant (signed by the platform key,
  * verified with the service's JWKS), refusals minting nothing, idempotency,
- * and every human-approval consumer refusing a `policy_arbiter` token.
+ * and every human-approval verifier refusing a `policy_arbiter` token.
  * Persistence against real Postgres is in commerce-ledger-postgres.integration.test.ts.
  */
 import type { FastifyInstance } from 'fastify';
@@ -275,7 +275,7 @@ describe('OACP arbiter decisions', () => {
     });
   });
 
-  describe('human-approval consumers refuse a machine-profile grant', () => {
+  describe('human-approval verifiers refuse a machine-profile grant', () => {
     async function arbiterToken(): Promise<string> {
       const now = Math.floor(Date.now() / 1000);
       return signArbiterDecisionGrant({
