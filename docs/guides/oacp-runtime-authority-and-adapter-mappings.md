@@ -86,6 +86,21 @@ at `/.well-known/ucp`. No Grantex-private namespace is emitted: the former
 `dev.grantex.commerce.discovery.preview` preview and the UCP-style and
 ACP-style preview routes are removed.
 
+## Buyer Identity Linking
+
+UCP identity linking needs an OAuth 2.0 authorization server on the merchant's
+domain. `@grantex/mcp-auth` serves it: configure
+`commerce.ucpIdentityLinking` (UCP release and well-known `dev.ucp.*` scopes)
+and, for ACP operations, `commerce.acpDelegatedAuthentication` (the Grantex
+`dev.grantex.acp.*` extension scopes). The buyer signs in to the merchant
+account, approves the scopes, and the platform receives a Grantex grant token
+audience-bound to the merchant resource. The merchant (AgenticOrg) verifies it
+against the Grantex JWKS and links (`iss`, `sub`) to the merchant account; the
+`onTokenIssued` hook reports the same link at issuance. Pass the offered UCP
+scopes (`grantex_extensions.commerce.ucp_identity_linking.scopes` in the
+authorization server metadata) as `identity_linking_scopes` to the UCP profile
+route. Flow and claims: `packages/mcp-auth/README.md`.
+
 ```mermaid
 flowchart LR
   shopify[Shopify source evidence] --> agentic[AgenticOrg redacted connector evidence]

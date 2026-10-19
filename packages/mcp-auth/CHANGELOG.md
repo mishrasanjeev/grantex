@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- `commerce.ucpIdentityLinking` offers the six well-known UCP
+  identity-linking scopes (UCP 2026-04-08 / 2026-08-25) and
+  `commerce.acpDelegatedAuthentication` the Grantex extension scopes
+  `dev.grantex.acp.checkout:manage`, `dev.grantex.acp.delegate_authentication:manage`
+  and `dev.grantex.acp.order:read`. With `commerce` set, an undefined
+  `dev.ucp.*` or `dev.grantex.acp.*` scope is refused at start-up, and the
+  metadata carries `grantex_extensions.commerce`. Servers without `commerce`
+  are unchanged.
+- `TokenIssuedEvent` gains `subject` (the token's `sub`) and, on code
+  exchange, `principalId` (the host principal), for recording buyer identity
+  links.
+
 ## 4.1.0
 
 - A manifest tool with `risk_tier: high` requires an action-bound decision

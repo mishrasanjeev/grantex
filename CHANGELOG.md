@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Buyer identity linking and ACP scopes on `@grantex/mcp-auth` (G24, G36)
+- `commerce.ucpIdentityLinking` offers the six well-known UCP
+  identity-linking scopes (`dev.ucp.shopping.checkout:manage`, `cart:manage`,
+  `order:read`, `order:manage`, `catalog.search:read`, `catalog.lookup:read`)
+  for UCP 2026-04-08 or 2026-08-25; `commerce.acpDelegatedAuthentication`
+  offers the Grantex extension scopes `dev.grantex.acp.checkout:manage`,
+  `dev.grantex.acp.delegate_authentication:manage` and
+  `dev.grantex.acp.order:read` (ACP defines no OAuth scopes). With `commerce`
+  set, an undefined `dev.ucp.*` or `dev.grantex.acp.*` scope is refused at
+  start-up and the metadata carries `grantex_extensions.commerce`. Servers
+  without `commerce` are unchanged.
+- `TokenIssuedEvent` gains `subject` and, on code exchange, `principalId`, so a
+  merchant records the (`iss`, `sub`) to merchant-account link at issuance.
+  The flow and token claims are in `packages/mcp-auth/README.md`.
+
 ### Breaking - UCP-style and ACP-style preview routes removed (G18)
 - Removed `GET /v1/commerce/merchants/{merchant_id}/ucp-capability-profile-preview`
   (C6K), its Grantex-private namespace `dev.grantex.commerce.discovery.preview`,

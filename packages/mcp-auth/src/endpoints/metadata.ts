@@ -1,11 +1,38 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { ServerContext } from '../context.js';
 import { buildProtectedResourceMetadata, protectedResourceMetadataPath } from '../resource/metadata.js';
+import { ACP_DELEGATED_AUTHENTICATION_SCOPES, UCP_IDENTITY_LINKING_SCOPES } from '../lib/commerce-scopes.js';
+
+/**
+ * `grantex_extensions.commerce`: the UCP release and identity-linking scopes,
+ * and the Grantex ACP extension scopes, this server offers. A merchant copies
+ * the UCP scopes into its profile's `dev.ucp.common.identity_linking`
+ * `config.scopes`.
+ */
+function commerceExtension(ctx: ServerContext): Record<string, unknown> | undefined {
+  const commerce = ctx.config.commerce;
+  if (commerce === undefined) return undefined;
+  const offered = (registry: Readonly<Record<string, unknown>>) =>
+    ctx.scopesSupported.filter((scope) => Object.hasOwn(registry, scope));
+  return {
+    ...(commerce.ucpIdentityLinking !== undefined
+      ? { ucp_identity_linking: { version: commerce.ucpIdentityLinking.version, scopes: offered(UCP_IDENTITY_LINKING_SCOPES) } }
+      : {}),
+    ...(commerce.acpDelegatedAuthentication !== undefined
+      ? { acp_delegated_authentication: { scopes: offered(ACP_DELEGATED_AUTHENTICATION_SCOPES), defined_by: 'grantex' } }
+      : {}),
+  };
+}
 
 /** RFC 8414 authorization server metadata for this server. */
 export function authorizationServerMetadata(ctx: ServerContext): Record<string, unknown> {
   const { issuer, config } = ctx;
   const consentUi = config.consentUi;
+  const commerce = commerceExtension(ctx);
+  const extensions = {
+    ...(consentUi !== undefined ? { consent_ui_config: consentUi } : {}),
+    ...(commerce !== undefined ? { commerce } : {}),
+  };
   return {
     issuer,
     authorization_endpoint: `${issuer}/authorize`,
@@ -27,7 +54,7 @@ export function authorizationServerMetadata(ctx: ServerContext): Record<string, 
     authorization_response_iss_parameter_supported: true,
     client_id_metadata_document_supported: ctx.clientMetadata.enabled,
     resource_indicators_supported: true,
-    ...(consentUi !== undefined ? { grantex_extensions: { consent_ui_config: consentUi } } : {}),
+    ...(Object.keys(extensions).length > 0 ? { grantex_extensions: extensions } : {}),
   };
 }
 
