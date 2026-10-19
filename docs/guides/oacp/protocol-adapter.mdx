@@ -11,7 +11,7 @@ The canonical artifact is OACP. Adapter payloads are derived compatibility views
 ```mermaid
 flowchart LR
   artifact[Canonical OACP artifacts] --> schema[Schema.org Product/Offer JSON-LD]
-  artifact --> ucp[UCP-style capability profile]
+  artifact --> ucp[UCP business profile 2026-04-08 / 2026-08-25]
   artifact --> acp[ACP-style interaction profile]
   artifact --> ap2[AP2-style evidence profile]
   artifact --> a2a[A2A task metadata]
@@ -24,8 +24,7 @@ flowchart LR
 | Adapter | Current use | Boundary |
 | --- | --- | --- |
 | Schema.org | Product and offer discovery shape. | Source/freshness stays from OACP and Shopify. |
-| UCP-style | Capability summary for agentic commerce. | Compatibility mapping only. |
-| ACP-style | Checkout-like shape preview for clients. | Does not create checkout or payment. |
+| UCP | Business profile `ucp` member (`GET /v1/commerce/oacp/ucp-profile`), spec shape at 2026-04-08 and 2026-08-25, `dev.ucp.*` names only. | Emits only capabilities the host serves and issued artifacts back; the host signs and publishes. |
 | AP2-style | Mandate/evidence profile shape. | Does not create a mandate. |
 | A2A | Agent card/task metadata. | Does not authorize execution. |
 | MCP | Tool metadata for ChatGPT/Claude-style clients. | Tool calls still hit AgenticOrg runtime checks. |

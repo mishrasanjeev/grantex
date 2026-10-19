@@ -69,8 +69,8 @@ Expected artifacts written under `<local-review-dir>`:
   `open-protocol-preview-conformance.status.json`.
 - Confirm the report says `status: passed` and the status output says
   `status: passing`.
-- Confirm the expected counts remain `fixtures_checked: 10`,
-  `surfaces_checked: 5`, and `scans_checked: 104`.
+- Confirm the expected counts remain `fixtures_checked: 6`,
+  `surfaces_checked: 3`, and `scans_checked: 72`.
 - Confirm all five surfaces are present:
   schema.org JSON-LD preview, UCP-style capability profile preview, ACP-style
   checkout shape preview, AP2-style evidence preview, and connector registry
@@ -103,7 +103,7 @@ The rehearsal passes only when all of the following are true:
   explicit work directory
 - report and status JSON parse successfully
 - report and status agree on passing posture
-- fixture count is 10, surface count is 5, and scan count is 104
+- fixture count is 10, surface count is 5, and scan count is 72
 - all five preview surfaces are present
 - blocked fixtures include blocker and remediation evidence
 - available fixtures preserve non-production posture

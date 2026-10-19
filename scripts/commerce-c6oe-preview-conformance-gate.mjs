@@ -26,17 +26,15 @@ const defaultFixtureDir = join(
 );
 
 const expectedSurfaces = [
-  'schemaorg_jsonld_preview',
-  'ucp_style_capability_profile_preview',
-  'acp_style_checkout_shape_preview',
+  'schemaorg_jsonld_preview',
   'ap2_style_evidence_preview',
   'connector_registry_metadata_preview',
 ];
 
 const expectedCounts = {
-  fixtures: 10,
-  surfaces: 5,
-  scans: 104,
+  fixtures: 6,
+  surfaces: 3,
+  scans: 72,
 };
 
 const deterministicGeneratedAt = '2026-06-07T00:00:00.000Z';

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/agentic-checkout-webhook/webhook-event.schema.json",
+  "title": "ACP 2026-04-17 WebhookEvent (from openapi.agentic_checkout_webhook.yaml)",
+  "$defs": {
+    "EventDataOrder": {
+      "allOf": [
+        { "$ref": "https://example.com/schemas/agentic-checkout/bundle.schema.json#/$defs/Order" }
+      ],
+      "required": ["type", "checkout_session_id", "permalink_url", "status"]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "type": { "type": "string" },
+    "data": { "$ref": "#/$defs/EventDataOrder" }
+  },
+  "required": ["type", "data"]
+}

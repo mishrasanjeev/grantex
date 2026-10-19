@@ -13,6 +13,8 @@
  *   GET  /oacp/artifacts/:artifactId           one artifact: {envelope, payload, status, ...}
  *   GET  /oacp/artifacts?tenant_id&...         replay: {artifacts, next_cursor}
  *   POST /oacp/artifacts/:artifactId/revoke    revoke and issue a revocation artifact
+ *   GET  /oacp/ucp-profile?tenant_id&...       UCP business-profile `ucp` member rendered
+ *                                              from the scope's issued artifacts (G18)
  *   GET  /oacp/issuer-keys                     list issuer keys (no private material)
  *   POST /oacp/issuer-keys/rotate              new active key; the previous one retires
  *   POST /oacp/issuer-keys/:kid/revoke         withdraw a key from the JWKS
@@ -22,6 +24,7 @@ import {
   C6Z_AUTHORITY_SERVICE_SCOPE,
   OACP_ARTIFACTS_READ_SCOPE,
   OACP_ARTIFACTS_REVOKE_SCOPE,
+  OACP_UCP_PROFILE_READ_SCOPE,
   type CommerceCaller,
 } from '../lib/commerce/caller.js';
 import {
@@ -33,6 +36,7 @@ import {
   OacpArtifactStoreError,
   getOacpArtifact,
   issueAndPersistC6ZArtifacts,
+  listLiveOacpArtifactsForScope,
   listOacpArtifacts,
   recordOacpRefusal,
   revokeOacpArtifact,
@@ -44,6 +48,13 @@ import {
   revokeOacpIssuerKey,
   rotateOacpIssuerKey,
 } from '../lib/commerce/oacp-issuer-keys.js';
+import {
+  UcpProfileInputError,
+  isUcpProfileVersion,
+  isUcpRenderableCapability,
+  renderUcpBusinessProfile,
+  type UcpRenderableCapability,
+} from '../lib/commerce/ucp-profile.js';
 import { CommerceHttpError } from '../lib/commerce/errors.js';
 import { getSql, queries } from '../db/client.js';
 
@@ -154,6 +165,11 @@ function invalid(field: string, message: string): CommerceHttpError {
     details: { fields: { [field]: message } },
     retryable: false,
   });
+}
+
+function commaList(value: string | undefined): string[] {
+  if (value === undefined || value.trim() === '') return [];
+  return value.split(',').map((item) => item.trim()).filter(Boolean);
 }
 
 function rethrowKeyUnavailable(err: unknown): never {
@@ -287,6 +303,55 @@ export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
       });
     },
   );
+
+  app.get<{
+    Querystring: {
+      tenant_id?: string;
+      merchant_id?: string;
+      seller_agent_id?: string;
+      version?: string;
+      served?: string;
+      rest_endpoint?: string;
+      identity_linking_scopes?: string;
+    };
+  }>('/oacp/ucp-profile', async (request, reply) => {
+    requireKind(request);
+    const q = request.query;
+    for (const field of ['tenant_id', 'merchant_id', 'seller_agent_id'] as const) {
+      if (typeof q[field] !== 'string' || q[field]!.length === 0) throw invalid(field, 'required');
+    }
+    if (!callerMayActForTenant(request, q.tenant_id, OACP_UCP_PROFILE_READ_SCOPE)) {
+      throw new CommerceHttpError(403, 'tenant_not_allowed', 'Caller may not render a UCP profile for this tenant', { retryable: false });
+    }
+    const version = q.version ?? '2026-04-08';
+    if (!isUcpProfileVersion(version)) throw invalid('version', 'must be 2026-04-08 or 2026-08-25');
+    const served = commaList(q.served);
+    if (served.length === 0) throw invalid('served', 'list the dev.ucp.* capabilities the business host serves');
+    const unknown = served.find((name) => !isUcpRenderableCapability(name));
+    if (unknown !== undefined) throw invalid('served', `unknown capability ${unknown}`);
+    const scopes = commaList(q.identity_linking_scopes);
+    const now = new Date().toISOString();
+    const artifacts = await listLiveOacpArtifactsForScope(getSql(), {
+      tenant_id: q.tenant_id!,
+      merchant_id: q.merchant_id!,
+      seller_agent_id: q.seller_agent_id!,
+    }, now);
+    try {
+      const rendered = renderUcpBusinessProfile({
+        version,
+        artifacts,
+        served: served as UcpRenderableCapability[],
+        rest_endpoint: q.rest_endpoint || undefined,
+        identity_linking: scopes.length > 0 ? { scopes } : undefined,
+        now_iso: now,
+      });
+      reply.header('cache-control', 'no-store');
+      return reply.status(200).send(rendered);
+    } catch (err) {
+      if (err instanceof UcpProfileInputError) throw invalid(err.field, err.message);
+      throw err;
+    }
+  });
 
   app.get('/oacp/issuer-keys', async (request, reply) => {
     requirePlatformAdmin(request);

@@ -1,6 +1,6 @@
 # Commerce V1 C6K UCP-Style Capability Profile Preview
 
-Status: implemented as preview-only foundation.
+Status: historical. The route, the `dev.grantex.commerce.discovery.preview` namespace and this preview were removed; the UCP business profile at `GET /v1/commerce/oacp/ucp-profile` replaces them (see `docs/guides/oacp-runtime-authority-and-adapter-mappings.md`).
 
 This slice adds an authenticated Grantex-owned UCP-style capability profile
 preview for review before open protocol packaging. It does not publish UCP

@@ -1,6 +1,6 @@
 # Commerce V1 C6L ACP-Style Checkout Shape Preview
 
-Status: implemented as preview-only foundation.
+Status: historical. The route and this preview were removed; see `docs/guides/oacp-runtime-authority-and-adapter-mappings.md` for the ACP surfaces Grantex serves.
 
 This slice adds an authenticated ACP-style cart and checkout shape preview for
 review before open protocol packaging. It does not publish ACP capabilities,

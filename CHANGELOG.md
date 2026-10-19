@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Breaking - UCP-style and ACP-style preview routes removed (G18)
+- Removed `GET /v1/commerce/merchants/{merchant_id}/ucp-capability-profile-preview`
+  (C6K), its Grantex-private namespace `dev.grantex.commerce.discovery.preview`,
+  and `GET /v1/commerce/merchants/{merchant_id}/acp-checkout-shape-preview`
+  (C6L), with their OpenAPI schemas, tests and the matching surfaces of the
+  internal C6Oa preview conformance fixtures, validator and gate (now 6
+  fixtures, 3 surfaces, 72 scans). Both now answer 404. No SDK or portal page
+  called them. Migrate to `GET /v1/commerce/oacp/ucp-profile` (below); the
+  schema.org JSON-LD and AP2-style evidence previews are unchanged. No opt-out:
+  the preview shapes used free-text capability names that no UCP or ACP client
+  accepts.
+
+### Added - UCP business profile from issued OACP artifacts (G18)
+- `GET /v1/commerce/oacp/ucp-profile` renders the `ucp` member of a UCP
+  business profile at `2026-04-08` (default) or `2026-08-25` for a merchant /
+  seller-agent scope: `dev.ucp.*` names only, every entry at the profile's
+  `ucp.version`, `spec` / `schema` on ucp.dev for that release, `services` and
+  `payment_handlers` always present. A capability (catalog search / lookup,
+  cart, checkout, order, identity linking) is rendered only when the host lists
+  it in `served` and every OACP artifact family that backs it is issued,
+  unrevoked and unexpired; the rest are returned in `withheld` with the reason.
+  Identity-linking `config.scopes` keeps only scopes of rendered capabilities.
+  Also returns `source_artifacts`, `valid_until` and `publication_allowed`.
+  Authenticated with the AgenticOrg service token (new route scope
+  `commerce.oacp.ucp_profile.read`, tenant allowlist), an operator of the
+  tenant, or the platform admin. Validated in tests against the saved UCP
+  schemas (`apps/auth-service/tests/fixtures/protocol-schemas/`).
+
 ### Added - Tamper-evident wallet ledger (G16)
 - `wallet_ledger_entries` gains `chain_seq`, `prev_hash` and `entry_hash`
   (migration `134_commerce_ledger.sql`): a `BEFORE INSERT` trigger chains every

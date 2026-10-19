@@ -368,3 +368,24 @@ export async function revokeOacpArtifact(
     return { artifact, revocation, already_revoked: false };
   }) as { artifact: OacpArtifactRecord; revocation: OacpArtifactRecord; already_revoked: boolean };
 }
+
+/**
+ * The issued, unexpired artifacts of one merchant / seller-agent scope, newest
+ * first. Revoked and refused rows are excluded (revocation flips the row and
+ * the status-list entry in one transaction).
+ */
+export async function listLiveOacpArtifactsForScope(
+  sql: Sql,
+  scope: { tenant_id: string; merchant_id: string; seller_agent_id: string },
+  nowIso: string,
+): Promise<OacpArtifactRecord[]> {
+  const rows = await sql.unsafe(
+    `SELECT ${COLUMNS} FROM oacp_artifacts
+      WHERE tenant_id = $1 AND merchant_id = $2 AND seller_agent_id = $3
+        AND status = 'issued' AND expires_at > $4::text::timestamptz
+      ORDER BY created_at DESC, artifact_id DESC
+      LIMIT 200`,
+    [scope.tenant_id, scope.merchant_id, scope.seller_agent_id, nowIso],
+  );
+  return (rows as unknown as Array<Record<string, unknown>>).map(rowToRecord);
+}

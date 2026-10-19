@@ -18,11 +18,9 @@ const fixtureDir = join(
 );
 
 const expectedSurfaces = [
-  'acp_style_checkout_shape_preview',
   'ap2_style_evidence_preview',
   'connector_registry_metadata_preview',
   'schemaorg_jsonld_preview',
-  'ucp_style_capability_profile_preview',
 ];
 
 const forbiddenReportPatterns = [
@@ -119,14 +117,14 @@ describe('C6Oc preview conformance report generation', () => {
         generated_at: '2026-06-07T00:00:00.000Z',
         source_manifest_path: 'docs/internal/commerce-v1/fixtures/c6oa-preview-conformance/manifest.json',
         fixture_corpus_version: 'c6oa-preview-1',
-        fixture_count: 10,
-        surface_count: 5,
-        scan_count: 104,
+        fixture_count: 6,
+        surface_count: 3,
+        scan_count: 72,
       });
       expect(report.per_surface_results.map((surface) => surface.surface).sort()).toEqual(expectedSurfaces);
       expect(report.per_surface_results.every((surface) => surface.status === 'passed')).toBe(true);
-      expect(report.per_fixture_results).toHaveLength(10);
-      expect(report.blocker_summary.blocked_fixture_count).toBe(5);
+      expect(report.per_fixture_results).toHaveLength(6);
+      expect(report.blocker_summary.blocked_fixture_count).toBe(3);
       expect(report.forbidden_claim_scan_summary.status).toBe('passed');
       expect(report.non_enabling_control_summary.status).toBe('passed');
       expect(markdown).toContain('# Open Protocol Preview Conformance Report');
@@ -208,7 +206,7 @@ describe('C6Oc preview conformance report generation', () => {
 
       const report = readJsonReport(jsonReport);
       expect(report.status).toBe('failed');
-      expect(report.fixture_count).toBe(10);
+      expect(report.fixture_count).toBe(6);
       expect(report.failures.some((failure) => failure.message.includes('preview_only'))).toBe(true);
       expect(
         report.per_fixture_results.find(

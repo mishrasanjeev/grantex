@@ -34,9 +34,7 @@ const previewInternalOnlyStatement =
   'Internal preview conformance report only. This is not public protocol publication, not a certification artifact, and does not enable public discovery, production checkout or payment creation, live payments, provider calls, or merchant private API calls.';
 
 const expectedSurfaceNames = [
-  'schemaorg_jsonld_preview',
-  'ucp_style_capability_profile_preview',
-  'acp_style_checkout_shape_preview',
+  'schemaorg_jsonld_preview',
   'ap2_style_evidence_preview',
   'connector_registry_metadata_preview',
 ];
@@ -285,21 +283,6 @@ function assertSurfaceFixture(fixture, fileName) {
       assert.ok(isRecord(payload.jsonld), `${fileName} jsonld must be an object`);
       assert.equal(payload.jsonld['@context'], 'https://schema.org', `${fileName} schema.org context`);
       assert.ok(Array.isArray(payload.jsonld['@graph']), `${fileName} schema.org graph`);
-      break;
-    }
-    case 'ucp_style_capability_profile_preview': {
-      assert.equal(payload.namespace, 'dev.grantex.commerce.discovery.preview', `${fileName} namespace`);
-      assert.equal(payload.ucp_certification_claim, 'none', `${fileName} UCP claim`);
-      assertFalse(payload.ucp_publication_enabled, `${fileName}.ucp_publication_enabled`);
-      assert.equal(JSON.stringify(payload).includes('dev.ucp.'), false, `${fileName} must not use certified UCP namespace`);
-      assertControls(payload.controls, `${fileName}.payload`);
-      break;
-    }
-    case 'acp_style_checkout_shape_preview': {
-      assert.equal(payload.acp_certification_claim, 'none', `${fileName} ACP claim`);
-      assertFalse(payload.payment_intent_creation_enabled, `${fileName}.payment_intent_creation_enabled`);
-      assertFalse(payload.checkout_link_creation_enabled, `${fileName}.checkout_link_creation_enabled`);
-      assertControls(payload.controls, `${fileName}.payload`);
       break;
     }
     case 'ap2_style_evidence_preview': {

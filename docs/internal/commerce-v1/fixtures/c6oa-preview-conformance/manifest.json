@@ -45,26 +45,6 @@
       "path": "schemaorg-jsonld-preview.blocked.json"
     },
     {
-      "surface": "ucp_style_capability_profile_preview",
-      "scenario": "preview_available",
-      "path": "ucp-capability-profile-preview.available.json"
-    },
-    {
-      "surface": "ucp_style_capability_profile_preview",
-      "scenario": "blocked_refusal",
-      "path": "ucp-capability-profile-preview.blocked.json"
-    },
-    {
-      "surface": "acp_style_checkout_shape_preview",
-      "scenario": "preview_available",
-      "path": "acp-checkout-shape-preview.available.json"
-    },
-    {
-      "surface": "acp_style_checkout_shape_preview",
-      "scenario": "blocked_refusal",
-      "path": "acp-checkout-shape-preview.blocked.json"
-    },
-    {
       "surface": "ap2_style_evidence_preview",
       "scenario": "preview_available",
       "path": "ap2-evidence-preview.available.json"
