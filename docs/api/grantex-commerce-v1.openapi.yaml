@@ -3285,7 +3285,6 @@ paths:
                     - source_evidence_ref
                     - source_observed_at
                     - no_payment_execution
-                    - no_public_discovery_enablement
                   properties:
                     request_id: { type: string }
                     tenant_id: { type: string }
@@ -3315,7 +3314,10 @@ paths:
                     source_evidence_ref: { type: string }
                     source_observed_at: { type: string, format: date-time }
                     no_payment_execution: { type: boolean, const: true }
-                    no_public_discovery_enablement: { type: boolean, const: true }
+                    no_public_discovery_enablement: { type: boolean, description: "true, unless public_discovery_requested is true (then false or absent)." }
+                    public_discovery_requested: { type: boolean, description: "Merchant opt-in to public discovery. Honoured only with OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED on, the tenant on the service allowlist and both attestation members; otherwise public_discovery_state is issued disabled." }
+                    namespace_attestation_ref: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$", description: Opaque reference to the merchant runtime's namespace-to-host attestation, bound into the enabled public_discovery_state artifact. }
+                    serving_host: { type: string, description: Lower-case DNS name the profile is served from, bound into the enabled artifact. }
                 connector_evidence:
                   type: object
                   properties:
@@ -3460,7 +3462,9 @@ paths:
           description: >-
             {ucp_version, profile: {ucp: {version, services, capabilities,
             payment_handlers}}, withheld, source_artifacts, valid_until,
-            publication_allowed}. Cache-Control no-store.
+            publication_allowed, public_discovery}. publication_allowed is true
+            only for an enabled, attested public_discovery_state artifact whose
+            serving_host equals the rest_endpoint host. Cache-Control no-store.
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
           description: tenant_not_allowed - the caller may not act for this tenant.

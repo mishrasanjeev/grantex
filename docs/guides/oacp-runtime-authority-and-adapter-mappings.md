@@ -35,6 +35,33 @@ issuer key published in `/.well-known/jwks.json` and listed on an OACP Token Sta
 The route is not a checkout, payment, order, mandate, provider, Shopify, or
 merchant private API path.
 
+### Public discovery opt-in
+
+By default every request carries `no_public_discovery_enablement: true` and
+`public_discovery_state` is issued `disabled`. A merchant opts in with
+`public_discovery_requested: true` (and `no_public_discovery_enablement`
+false or absent; `no_payment_execution: true` stays mandatory), an opaque
+`namespace_attestation_ref` (the merchant runtime's namespace-to-host
+attestation) and `serving_host` (lower-case DNS name). Grantex issues
+`public_discovery_state` with `public_discovery_state: "enabled"`,
+`public_discovery_publication_allowed: true`, the attestation ref and serving
+host bound into the signed payload, `no_public_discovery_enablement: false`, and
+`public_discovery_publication` removed from that artifact's blocked and
+unsupported capability lists, only when all of these hold:
+
+| Condition | Otherwise `public_discovery_withheld_reason` |
+|---|---|
+| `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED=true` (default off) | `issuance_flag_off` |
+| The tenant is on `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` | `tenant_not_allowlisted` |
+| Both `namespace_attestation_ref` and `serving_host` are present | `namespace_attestation_missing` |
+
+When a condition fails the artifact set is issued exactly as without the
+opt-in (disabled), plus `public_discovery_requested: true` and the withheld
+reason on the `public_discovery_state` artifact. Every other family keeps
+public discovery blocked. A malformed opt-in is refused with
+`public_discovery_request_invalid`. A request without the opt-in issues the
+same payload as before.
+
 ## Protocol Adapter Governance
 
 The `protocol_adapter` artifact carries a canonical mapping profile. It tells
@@ -79,8 +106,12 @@ Everything not rendered is listed in `withheld` (`not_served`,
 `ucp.version` and points `spec` / `schema` at ucp.dev for that release.
 `payment_handlers` is empty until a payment handler is backed. The response
 also carries `source_artifacts`, `valid_until` (earliest source expiry:
-re-render by then) and `publication_allowed` (from `public_discovery_state`;
-the host must not publish while it is false). The host adds its signing keys
+re-render by then), `publication_allowed` and `public_discovery`.
+`publication_allowed` is true only when the live `public_discovery_state`
+artifact is `enabled` with `public_discovery_publication_allowed: true`, a
+`serving_host` and a `namespace_attestation_ref`, and, when `rest_endpoint` is
+given, its host equals that `serving_host`; `public_discovery` then echoes the
+host and attestation ref. The host must not publish while it is false. The host adds its signing keys
 (`signing_keys[]` at 2026-04-08, `keys[]` at 2026-08-25) and serves the result
 at `/.well-known/ucp`. No Grantex-private namespace is emitted: the former
 `dev.grantex.commerce.discovery.preview` preview and the UCP-style and

@@ -137,8 +137,15 @@ export interface UcpProfileRender {
   source_artifacts: Array<{ artifact_id: string; family: string; expires_at: string | null }>;
   /** Re-render at or before this instant: the earliest expiry among the source artifacts. */
   valid_until: string | null;
-  /** From the `public_discovery_state` artifact; false when absent. The host must not publish while false. */
+  /**
+   * True only when the live `public_discovery_state` artifact says `enabled`
+   * with `public_discovery_publication_allowed: true` and, when a
+   * `rest_endpoint` is given, its host equals the attested `serving_host`.
+   * The host must not publish the profile while false.
+   */
   publication_allowed: boolean;
+  /** The attested serving host and attestation reference bound into that artifact, when enabled. */
+  public_discovery: { serving_host: string; namespace_attestation_ref: string } | null;
 }
 
 export class UcpProfileInputError extends Error {
@@ -279,7 +286,14 @@ export function renderUcpBusinessProfile(input: UcpProfileRenderInput): UcpProfi
     .sort((a, b) => a.family.localeCompare(b.family))
     .map((artifact) => ({ artifact_id: artifact.artifact_id, family: artifact.family, expires_at: artifact.expires_at }));
   const expiries = sources.map((source) => Date.parse(source.expires_at as string));
-  const discovery = live.get('public_discovery_state');
+  const discovery = live.get('public_discovery_state')?.payload;
+  const servingHost = discovery?.['serving_host'];
+  const attestationRef = discovery?.['namespace_attestation_ref'];
+  const discoveryEnabled = discovery?.['public_discovery_state'] === 'enabled'
+    && discovery['public_discovery_publication_allowed'] === true
+    && typeof servingHost === 'string' && servingHost.length > 0
+    && typeof attestationRef === 'string' && attestationRef.length > 0;
+  const hostMatches = input.rest_endpoint === undefined || new URL(input.rest_endpoint).hostname === servingHost;
 
   return {
     ucp_version: version,
@@ -287,6 +301,9 @@ export function renderUcpBusinessProfile(input: UcpProfileRenderInput): UcpProfi
     withheld,
     source_artifacts: sources,
     valid_until: expiries.length > 0 ? new Date(Math.min(...expiries)).toISOString() : null,
-    publication_allowed: discovery?.payload?.['public_discovery_publication_allowed'] === true,
+    publication_allowed: discoveryEnabled && hostMatches,
+    public_discovery: discoveryEnabled
+      ? { serving_host: servingHost as string, namespace_attestation_ref: attestationRef as string }
+      : null,
   };
 }

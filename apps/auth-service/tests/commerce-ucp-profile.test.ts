@@ -171,10 +171,36 @@ describe('UCP profile inputs and bookkeeping', () => {
     const rendered = renderAll('2026-04-08', artifacts({ inventory_snapshot: { expires_at: soon } }));
     expect(rendered.valid_until).toBe(soon);
     expect(rendered.publication_allowed).toBe(false);
-    const allowed = renderAll('2026-04-08', artifacts({
-      public_discovery_state: { payload: { public_discovery_publication_allowed: true } },
-    }));
+    expect(rendered.public_discovery).toBeNull();
+  });
+
+  it('allows publication only for an enabled, attested public_discovery_state served from the attested host', () => {
+    const enabled = {
+      public_discovery_state: 'enabled',
+      public_discovery_publication_allowed: true,
+      serving_host: 'merchant.example',
+      namespace_attestation_ref: 'nsatt_01EXAMPLE',
+    };
+    const allowed = renderAll('2026-04-08', artifacts({ public_discovery_state: { payload: enabled } }));
     expect(allowed.publication_allowed).toBe(true);
+    expect(allowed.public_discovery).toEqual({ serving_host: 'merchant.example', namespace_attestation_ref: 'nsatt_01EXAMPLE' });
+    // Another host than the attested one.
+    const otherHost = renderUcpBusinessProfile({
+      version: '2026-04-08', artifacts: artifacts({ public_discovery_state: { payload: enabled } }),
+      served: ['dev.ucp.shopping.catalog.search'], rest_endpoint: 'https://other.example/ucp', now_iso: NOW,
+    });
+    expect(otherHost.publication_allowed).toBe(false);
+    // The old shape (flag only, no state or attestation) no longer suffices.
+    for (const payload of [
+      { public_discovery_publication_allowed: true },
+      { ...enabled, public_discovery_state: 'disabled' },
+      { ...enabled, serving_host: undefined },
+      { ...enabled, namespace_attestation_ref: undefined },
+    ]) {
+      expect(renderAll('2026-04-08', artifacts({ public_discovery_state: { payload } })).publication_allowed).toBe(false);
+    }
+    // A revoked or expired public_discovery_state artifact never allows publication.
+    expect(renderAll('2026-04-08', artifacts({ public_discovery_state: { payload: enabled, status: 'revoked' } })).publication_allowed).toBe(false);
   });
 
   it('refuses an unsupported version, an unknown capability, a bad endpoint and a malformed scope', () => {

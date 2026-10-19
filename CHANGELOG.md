@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Merchant opt-in to public discovery on C6Z issuance (G17 enabler)
+- The C6Z authority request may set `public_discovery_requested: true` (with
+  `no_public_discovery_enablement` false or absent; `no_payment_execution: true`
+  stays mandatory), `namespace_attestation_ref` and `serving_host`. Grantex then
+  issues `public_discovery_state` with `public_discovery_state: "enabled"`,
+  `public_discovery_publication_allowed: true`, the attestation ref and serving
+  host in the signed payload, and `public_discovery_publication` removed from
+  that artifact's blocked capabilities, only when the new flag
+  `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED` is on (default off), the tenant is
+  on `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`, and both attestation members
+  are present. Otherwise the artifacts are issued disabled as before, with a
+  `public_discovery_withheld_reason`. A request without the opt-in issues the
+  same payload as before. A malformed opt-in is refused
+  (`public_discovery_request_invalid`). `no_public_discovery_enablement` in the
+  issuance result is `false` when enabled.
+- `GET /v1/commerce/oacp/ucp-profile` sets `publication_allowed` only from an
+  enabled, attested `public_discovery_state` artifact and only when the
+  `rest_endpoint` host equals the attested `serving_host`; it echoes them in
+  `public_discovery`.
+
 ### Added - ACP order events for Grantex orders (G37)
 - `GET /v1/commerce/oacp/acp/orders/{order_id}/event?tenant_id&permalink_base`
   maps a Grantex order (`commerce_orders`) and its handoffs to the ACP

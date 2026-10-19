@@ -54,7 +54,20 @@ export interface C6ZSellerAuthorityRequest {
   source_evidence_ref: string;
   source_observed_at: string;
   no_payment_execution: true;
-  no_public_discovery_enablement: true;
+  /** `true` unless the merchant opts in with `public_discovery_requested`. */
+  no_public_discovery_enablement?: boolean | undefined;
+  /**
+   * Merchant opt-in to public discovery (a published `/.well-known/ucp`).
+   * Honoured only when OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED is on, the
+   * tenant is on the authority service allowlist, and the request carries the
+   * namespace / host attestation below; otherwise the artifacts are issued
+   * with public discovery disabled, as without the opt-in.
+   */
+  public_discovery_requested?: boolean | undefined;
+  /** Opaque reference to the merchant runtime's namespace-to-host attestation. */
+  namespace_attestation_ref?: string | undefined;
+  /** The host the profile is served from (lower-case DNS name, no port). */
+  serving_host?: string | undefined;
 }
 
 export interface C6ZConnectorEvidence {
@@ -93,8 +106,59 @@ export interface C6ZIssuanceResult {
   message: string;
   allowed_to_execute: false;
   no_payment_execution: true;
-  no_public_discovery_enablement: true;
+  /** false only when the issued `public_discovery_state` artifact enables public discovery. */
+  no_public_discovery_enablement: boolean;
   non_authoritative_for_transaction: true;
+}
+
+/** Whether issuance may enable public discovery; decided by the store from config. */
+export interface C6ZPublicDiscoveryEligibility {
+  /** OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED. */
+  issuance_enabled: boolean;
+  /** The tenant is on COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS. */
+  tenant_allowlisted: boolean;
+}
+
+export type C6ZPublicDiscoveryWithheldReason =
+  | 'not_requested'
+  | 'issuance_flag_off'
+  | 'tenant_not_allowlisted'
+  | 'namespace_attestation_missing';
+
+export interface C6ZPublicDiscoveryDecision {
+  enabled: boolean;
+  withheld_reason: C6ZPublicDiscoveryWithheldReason | null;
+  namespace_attestation_ref: string | null;
+  serving_host: string | null;
+}
+
+const NAMESPACE_ATTESTATION_REF = /^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$/;
+const SERVING_HOST = /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+/**
+ * Public discovery is enabled only for an opted-in request, with the issuance
+ * flag on, an allow-listed tenant and both attestation members; otherwise the
+ * artifacts say disabled, as before the opt-in existed.
+ */
+export function decideC6ZPublicDiscovery(
+  request: C6ZSellerAuthorityRequest,
+  eligibility: C6ZPublicDiscoveryEligibility | undefined,
+): C6ZPublicDiscoveryDecision {
+  const withheld = (reason: C6ZPublicDiscoveryWithheldReason): C6ZPublicDiscoveryDecision => ({
+    enabled: false, withheld_reason: reason, namespace_attestation_ref: null, serving_host: null,
+  });
+  if (request.public_discovery_requested !== true) return withheld('not_requested');
+  if (eligibility?.issuance_enabled !== true) return withheld('issuance_flag_off');
+  if (eligibility.tenant_allowlisted !== true) return withheld('tenant_not_allowlisted');
+  if (!isNonEmptyString(request.namespace_attestation_ref) || !isNonEmptyString(request.serving_host)) {
+    return withheld('namespace_attestation_missing');
+  }
+  return {
+    enabled: true,
+    withheld_reason: null,
+    namespace_attestation_ref: request.namespace_attestation_ref,
+    serving_host: request.serving_host,
+  };
 }
 
 const POLICY_VERSION = 'commerce-c6z-internal-runtime-demo';
@@ -264,7 +328,9 @@ export function validateC6ZSellerAuthorityRequest(
     request.connector_choice !== 'shopify'
     || request.connector_mode !== 'read_only'
     || request.no_payment_execution !== true
-    || request.no_public_discovery_enablement !== true
+    || (request.public_discovery_requested === true
+      ? request.no_public_discovery_enablement === true
+      : request.no_public_discovery_enablement !== true)
   ) {
     return issueRefusal(
       'rejected',
@@ -279,6 +345,16 @@ export function validateC6ZSellerAuthorityRequest(
     || request.artifact_cache_scope.seller_agent_id !== request.seller_agent_id
   ) {
     return issueRefusal('rejected', 'artifact_cache_scope_mismatch', 'Artifact cache scope must match authority scope.', request);
+  }
+  if (
+    (request.public_discovery_requested !== undefined && typeof request.public_discovery_requested !== 'boolean')
+    || (request.namespace_attestation_ref !== undefined
+      && (typeof request.namespace_attestation_ref !== 'string' || !NAMESPACE_ATTESTATION_REF.test(request.namespace_attestation_ref)))
+    || (request.serving_host !== undefined
+      && (typeof request.serving_host !== 'string' || !SERVING_HOST.test(request.serving_host)))
+  ) {
+    return issueRefusal('rejected', 'public_discovery_request_invalid',
+      'public_discovery_requested must be a boolean, namespace_attestation_ref an opaque reference and serving_host a lower-case DNS name.', request);
   }
   if (request.commerce_categories.length === 0 || request.requested_authority_scope.length === 0) {
     return issueRefusal('pending_sandbox_review', 'authority_scope_incomplete', 'Categories and authority scope are required before issuance.', request);
@@ -316,8 +392,14 @@ function payloadForFamily(
   request: C6ZSellerAuthorityRequest,
   evidence: C6ZConnectorEvidence,
   signing: { issuer: string; kid: string; status_uri: string },
+  publicDiscovery: C6ZPublicDiscoveryDecision,
 ): Record<string, unknown> {
   const ttlSeconds = FAMILY_TTL_SECONDS[family];
+  // Only the enabled public discovery artifact drops public_discovery_publication from its blocked list.
+  const discoveryEnabledHere = family === 'public_discovery_state' && publicDiscovery.enabled;
+  const blocked = discoveryEnabledHere
+    ? BLOCKED_RUNTIME_CAPABILITIES.filter((capability) => capability !== 'public_discovery_publication')
+    : [...BLOCKED_RUNTIME_CAPABILITIES];
   return {
     artifact_family: family,
     tenant_id: request.tenant_id,
@@ -349,7 +431,7 @@ function payloadForFamily(
       status_at_issuance: 'not_revoked',
       stale_or_unreachable_behavior: 'treat_as_not_authorized_for_commitment',
     },
-    blocked_capabilities: [...BLOCKED_RUNTIME_CAPABILITIES],
+    blocked_capabilities: blocked,
     non_sensitive_evidence_refs: nonSensitiveEvidenceRefs(evidence),
     signature_metadata: {
       issuer: signing.issuer,
@@ -375,8 +457,15 @@ function payloadForFamily(
     offline_pos_evidence_refs_allowed: family === 'policy_scope'
       ? true
       : undefined,
-    public_discovery_state: family === 'public_discovery_state' ? 'disabled' : undefined,
-    public_discovery_publication_allowed: family === 'public_discovery_state' ? false : undefined,
+    public_discovery_state: family === 'public_discovery_state' ? (publicDiscovery.enabled ? 'enabled' : 'disabled') : undefined,
+    public_discovery_publication_allowed: family === 'public_discovery_state' ? publicDiscovery.enabled : undefined,
+    // Present only on an opt-in, so a request without one issues exactly the payload it did before.
+    public_discovery_requested: family === 'public_discovery_state' && request.public_discovery_requested === true ? true : undefined,
+    public_discovery_withheld_reason: family === 'public_discovery_state' && request.public_discovery_requested === true && !publicDiscovery.enabled
+      ? publicDiscovery.withheld_reason
+      : undefined,
+    namespace_attestation_ref: discoveryEnabledHere ? publicDiscovery.namespace_attestation_ref : undefined,
+    serving_host: discoveryEnabledHere ? publicDiscovery.serving_host : undefined,
     mandate_capability_status: family === 'mandate_capability' ? 'provider_owned_verification_required' : undefined,
     provider_execution_authority: family === 'mandate_capability' ? 'provider_owned_not_grantex_or_agenticorg' : undefined,
     mandate_capability_ref: family === 'mandate_capability' ? 'provider:mandate_rail:capability:pending:redacted' : undefined,
@@ -466,10 +555,10 @@ function payloadForFamily(
       }
       : undefined,
     authority_request_status: family === 'authority_request_status' ? 'artifact_issuance_ready' : undefined,
-    unsupported_capabilities: [...BLOCKED_RUNTIME_CAPABILITIES],
+    unsupported_capabilities: blocked,
     allowed_to_execute: false,
     no_payment_execution: true,
-    no_public_discovery_enablement: true,
+    no_public_discovery_enablement: !discoveryEnabledHere,
     non_authoritative_for_transaction: true,
   };
 }
@@ -510,6 +599,8 @@ export interface C6ZIssuanceContext {
   newArtifactId: () => string;
   /** Allocate the artifact's Token Status List entry, in the issuing transaction. */
   allocateStatus: (artifactId: string) => Promise<{ uri: string; idx: number }>;
+  /** Absent: public discovery is never enabled. */
+  publicDiscovery?: C6ZPublicDiscoveryEligibility;
 }
 
 /**
@@ -545,6 +636,7 @@ export async function issueC6ZInternalOacpArtifacts(input: {
   }
 
   const { issuer, signer } = input.context;
+  const publicDiscovery = decideC6ZPublicDiscovery(input.request, input.context.publicDiscovery);
   const jwks = { keys: [signer.publicJwk] };
   const artifacts: C6ZIssuedArtifact[] = [];
   for (const family of C6Z_ARTIFACT_FAMILIES) {
@@ -555,7 +647,7 @@ export async function issueC6ZInternalOacpArtifacts(input: {
       issuer,
       kid: signer.kid,
       status_uri: statusList.uri,
-    });
+    }, publicDiscovery);
     const ttlSeconds = Math.min(FAMILY_TTL_SECONDS[family], OACP_ARTIFACT_TTLS_SECONDS[artifactType]);
     const envelope = issueOacpArtifact({
       artifact_id: artifactId,
@@ -605,7 +697,7 @@ export async function issueC6ZInternalOacpArtifacts(input: {
     message: 'Issued ES256-signed C6Z OACP artifacts for AgenticOrg cache intake.',
     allowed_to_execute: false,
     no_payment_execution: true,
-    no_public_discovery_enablement: true,
+    no_public_discovery_enablement: !publicDiscovery.enabled,
     non_authoritative_for_transaction: true,
   };
 }
