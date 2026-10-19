@@ -269,3 +269,10 @@ b670b91a9b5894d65d3474d81ca898f8b348c945:docs/api-reference/vault/resolve.mdx:ge
 b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-py/tests/test_vault.py:generic-api-key:130
 b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-py/tests/test_vault.py:generic-api-key:145
 b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-ts/tests/vault.test.ts:generic-api-key:124
+# spec/examples/oacp (feat/oacp-integrity, 2026-10-19): synthetic OACP artifact
+# JWS conformance vectors and their generator. The JWS is an intentionally
+# malformed attached-payload test case; the gen.mjs lines name synthetic test
+# key ids. Not credentials. Fingerprints are commit-bound: merge, do not squash.
+862bf8e2026a7a6d2f079eb50f77e21b4ad61597:spec/examples/oacp/gen.mjs:generic-api-key:106
+862bf8e2026a7a6d2f079eb50f77e21b4ad61597:spec/examples/oacp/gen.mjs:generic-api-key:107
+862bf8e2026a7a6d2f079eb50f77e21b4ad61597:spec/examples/oacp/oacp-artifact-jws-v1.json:jwt:875
