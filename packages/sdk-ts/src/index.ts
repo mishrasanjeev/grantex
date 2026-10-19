@@ -145,6 +145,9 @@ export { CanonicalizationError, DuplicateKeyError, MAX_DEPTH as CANONICAL_MAX_DE
 export * from './decisions/index.js';
 export { DecisionSubReason } from './denials.js';
 
+// OACP artifact verification (profile oacp-artifact-jws-v1; grantex.oacp in the Python SDK)
+export * from './oacp/index.js';
+
 // DPDP Compliance
 export { DpdpClient } from './resources/dpdp.js';
 

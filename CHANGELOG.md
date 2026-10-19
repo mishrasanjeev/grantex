@@ -64,6 +64,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the cached-artifact verifier accepted a caller-supplied `signature_verified`
   flag. Decision and the rejected alternative (mounting them behind the
   authority route): `docs/guides/oacp/library-helper-decision.mdx`.
+### Added - OACP artifact verifiers in the SDKs (source only)
+- `verifyOacpArtifact()` (TypeScript) verifies an OACP artifact
+  (profile `oacp-artifact-jws-v1`): detached ES256 JWS over the RFC 8785
+  canonical envelope, payload hash, pinned issuer and JWK Set key, timestamps,
+  per-type TTL and expected scope, then the Token Status List entry
+  (draft-ietf-oauth-status-list). Checks run in one fixed order with fixed
+  refusal codes and pass every case of the shared vectors in
+  `spec/examples/oacp/`. An unreachable, expired or unverifiable status
+  list refuses the artifact with `revocation_status_unavailable`.
+- JWK Set and status-list fetchers bound to configured issuer URLs: no
+  redirects, bounded responses, https only (http on loopback when enabled),
+  status lists cached for no longer than their `ttl`.
+- `grantex.oacp.verify_oacp_artifact()` (Python, async) mirrors the
+  TypeScript verifier: the same check order and refusal codes, every vector
+  case, a fail-closed Token Status List check and `httpx.AsyncClient`
+  fetchers with the same bounds. Status URIs with dot segments (also
+  percent-encoded) are refused before any request.
+- `VerifyOacpArtifact()` (Go) mirrors the same checks and codes on the
+  standard library, with its own RFC 8785 canonicalizer, and
+  `NewOacpJWKSFetcher` / `NewOacpStatusListFetcher` (redirects disabled,
+  bounded bodies, five-second deadline, safe for concurrent use).
+- `revocation` artifacts may live up to 24 hours (86400 s) in the verifier's
+  per-type TTL table, matching the auth service's issuing TTL for that type.
+
+### Added - `oacp` conformance suite (source only)
+- `grantex-conformance --include oacp --suite oacp` checks issue, read-back
+  and replay, the Token Status List, SDK verification and tamper refusal,
+  revoke, the status flip to INVALID and the protocol adapter artifact against
+  a live auth service. The internal service token comes from
+  `GRANTEX_CONFORMANCE_INTERNAL_TOKEN`; `--oacp-issuer` and `--oacp-tenant`
+  pin the issuer and tenant. `@grantex/sdk` is an optional peer dependency
+  used by this suite only.
+- The runner sets up its shared agent only when a selected suite uses it, so
+  suites that do not need one make no agent calls.
 
 ### Changed - CERT-In security guidance
 - Simplify the agent-security article with accessible workflows for scoped
