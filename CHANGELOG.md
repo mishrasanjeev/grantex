@@ -23,6 +23,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   case, a fail-closed Token Status List check and `httpx.AsyncClient`
   fetchers with the same bounds. Status URIs with dot segments (also
   percent-encoded) are refused before any request.
+- `VerifyOacpArtifact()` (Go) mirrors the same checks and codes on the
+  standard library, with its own RFC 8785 canonicalizer, and
+  `NewOacpJWKSFetcher` / `NewOacpStatusListFetcher` (redirects disabled,
+  bounded bodies, five-second deadline, safe for concurrent use).
 - `revocation` artifacts may live up to 24 hours (86400 s) in the verifier's
   per-type TTL table, matching the auth service's issuing TTL for that type.
 
