@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - OACP artifact verifiers in the SDKs (source only)
+- `verifyOacpArtifact()` (TypeScript) verifies an OACP artifact
+  (profile `oacp-artifact-jws-v1`): detached ES256 JWS over the RFC 8785
+  canonical envelope, payload hash, pinned issuer and JWK Set key, timestamps,
+  per-type TTL and expected scope, then the Token Status List entry
+  (draft-ietf-oauth-status-list). Checks run in one fixed order with fixed
+  refusal codes and pass every case of the shared vectors in
+  `spec/examples/oacp/`. An unreachable, expired or unverifiable status
+  list refuses the artifact with `revocation_status_unavailable`.
+- JWK Set and status-list fetchers bound to configured issuer URLs: no
+  redirects, bounded responses, https only (http on loopback when enabled),
+  status lists cached for no longer than their `ttl`.
+
 ### Changed - CERT-In security guidance
 - Simplify the agent-security article with accessible workflows for scoped
   access, independent human decisions and revocation. Distinguish product
