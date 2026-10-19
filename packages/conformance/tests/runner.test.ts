@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { setupSharedAgent, SHARED_AGENT_NAME } from '../src/runner.js';
+import { describe, it, expect, vi } from 'vitest';
+import { runConformanceTests, setupSharedAgent, SHARED_AGENT_NAME } from '../src/runner.js';
 import { CleanupTracker } from '../src/cleanup.js';
 import type { ConformanceHttpClient } from '../src/http-client.js';
 import type { HttpResponse } from '../src/types.js';
@@ -106,5 +106,22 @@ describe('setupSharedAgent', () => {
     expect(patch?.path).toBe('/v1/agents/agt_ours');
     expect((patch?.body as { scopes: string[] }).scopes.sort()).toEqual(['calendar:read', 'read', 'write']);
     expect(calls.some((c) => c.path.includes('agt_prod'))).toBe(false);
+  });
+});
+
+describe('runConformanceTests', () => {
+  it('makes no agent calls when no selected suite needs the shared agent', async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      urls.push(url);
+      return new Response(JSON.stringify({ status: 'ok', keys: [{ kty: 'RSA' }] }), { status: 200 });
+    });
+    try {
+      const report = await runConformanceTests({ baseUrl: 'http://127.0.0.1:9', apiKey: 'placeholder_key_value', suite: 'health', format: 'json', bail: false });
+      expect(report.summary.failed).toBe(0);
+      expect(urls.some((url) => url.includes('/v1/agents'))).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

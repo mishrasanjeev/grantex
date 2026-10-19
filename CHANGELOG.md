@@ -19,6 +19,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   redirects, bounded responses, https only (http on loopback when enabled),
   status lists cached for no longer than their `ttl`.
 
+### Added - `oacp` conformance suite (source only)
+- `grantex-conformance --include oacp --suite oacp` checks issue, read-back
+  and replay, the Token Status List, SDK verification and tamper refusal,
+  revoke, the status flip to INVALID and the protocol adapter artifact against
+  a live auth service. The internal service token comes from
+  `GRANTEX_CONFORMANCE_INTERNAL_TOKEN`; `--oacp-issuer` and `--oacp-tenant`
+  pin the issuer and tenant. `@grantex/sdk` is an optional peer dependency
+  used by this suite only.
+- The runner sets up its shared agent only when a selected suite uses it, so
+  suites that do not need one make no agent calls.
+
 ### Changed - CERT-In security guidance
 - Simplify the agent-security article with accessible workflows for scoped
   access, independent human decisions and revocation. Distinguish product
