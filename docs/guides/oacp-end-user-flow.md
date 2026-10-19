@@ -58,15 +58,15 @@ Every artifact keeps `allowed_to_execute=false`,
 
 ## Adapter Closure Matrix
 
-| Adapter | Official source/spec URL | Runtime helper | What it does | What it does not claim |
+| Adapter | Official source/spec URL | Source in Grantex | What it does | What it does not claim |
 | --- | --- | --- | --- | --- |
-| Schema.org Product/Offer JSON-LD | https://schema.org/Product and https://schema.org/Offer | `buildOacpC6W4ProtocolAdapterPreview('schema_org_jsonld')` | Maps sourced product/offer-like facts for preview. | No schema.org certification or publication approval. |
-| UCP-style capability profile | https://ucp.dev/ | `buildOacpC6W4ProtocolAdapterPreview('ucp_capability_profile')` | Maps read-only capability metadata. | No UCP certification or public UCP publication. |
-| ACP-style commerce shape | https://docs.stripe.com/agentic-commerce | `buildOacpC6W4ProtocolAdapterPreview('acp_commerce_capability')` | Maps non-binding commerce capability shape. | No checkout/payment authority or ACP certification. |
-| AP2-style evidence shape | https://ap2-protocol.org/specification/ | `buildOacpC6W4ProtocolAdapterPreview('ap2_evidence_intent_summary')` | Maps evidence/intent summary without mandate execution. | No AP2 certification, mandate approval, or payment-network submission. |
-| A2A agent card/task metadata | https://a2a-protocol.org/latest/specification/ | `buildOacpC6W4ProtocolAdapterPreview('a2a_agent_card_task_capability')` | Maps seller-agent task metadata. | No official A2A marketplace approval. |
-| MCP tool/resource metadata | https://modelcontextprotocol.io/specification/ | `buildOacpC6W4ProtocolAdapterPreview('mcp_tool_resource_capability')` | Maps read-only tool/resource preview metadata. | No MCP registry approval or write tools. |
-| OpenAPI buyer-safe bridge schema | https://spec.openapis.org/oas/latest.html | `buildOacpC6W4ProtocolAdapterPreview('openapi_buyer_safe_bridge_schema')` | Maps function/API bridge shape for buyer-safe questions. | No execution authority or public API approval. |
+| Schema.org Product/Offer JSON-LD | https://schema.org/Product and https://schema.org/Offer | `protocol_adapter` artifact `adapter_mapping_profile` (AgenticOrg renders) | Maps sourced product/offer-like facts for preview. | No schema.org certification or publication approval. |
+| UCP-style capability profile | https://ucp.dev/ | `protocol_adapter` artifact `adapter_mapping_profile` (AgenticOrg renders) | Maps read-only capability metadata. | No UCP certification or public UCP publication. |
+| ACP-style commerce shape | https://docs.stripe.com/agentic-commerce | `protocol_adapter` artifact `adapter_mapping_profile` (AgenticOrg renders) | Maps non-binding commerce capability shape. | No checkout/payment authority or ACP certification. |
+| AP2-style evidence shape | https://ap2-protocol.org/specification/ | `protocol_adapter` artifact `adapter_mapping_profile` (AgenticOrg renders) | Maps evidence/intent summary without mandate execution. | No AP2 certification, mandate approval, or payment-network submission. |
+| A2A agent card/task metadata | https://a2a-protocol.org/latest/specification/ | `protocol_adapter` artifact `adapter_mapping_profile` (AgenticOrg renders) | Maps seller-agent task metadata. | No official A2A marketplace approval. |
+| MCP tool/resource metadata | https://modelcontextprotocol.io/specification/ | `protocol_adapter` artifact `adapter_mapping_profile` (AgenticOrg renders) | Maps read-only tool/resource preview metadata. | No MCP registry approval or write tools. |
+| OpenAPI buyer-safe bridge schema | https://spec.openapis.org/oas/latest.html | `protocol_adapter` artifact `adapter_mapping_profile` (AgenticOrg renders) | Maps function/API bridge shape for buyer-safe questions. | No execution authority or public API approval. |
 
 ## Stop Conditions
 

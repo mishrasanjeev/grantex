@@ -1,10 +1,15 @@
 import {
-  evaluateInternalOacpArtifactStatus,
-  issueInternalOacpArtifact,
+  OACP_ARTIFACT_TTLS_SECONDS,
+  type OacpArtifactAuthorityStatus,
   type OacpArtifactEnvelope,
   type OacpArtifactType,
-  type OacpIssuerKeyMetadata,
 } from './oacp-trust-artifacts.js';
+import {
+  OACP_JWS_TYP,
+  issueOacpArtifact,
+  verifyOacpArtifact,
+  type OacpSigningKey,
+} from './oacp-jws.js';
 
 export const C6Z_ARTIFACT_FAMILIES = [
   'merchant_profile',
@@ -75,7 +80,8 @@ export interface C6ZIssuedArtifact {
   artifact_type: OacpArtifactType;
   envelope: OacpArtifactEnvelope;
   payload: Record<string, unknown>;
-  verifier_status: ReturnType<typeof evaluateInternalOacpArtifactStatus>;
+  /** The issuer's own check of the signed artifact against its published key. */
+  verifier_status: OacpArtifactAuthorityStatus;
 }
 
 export interface C6ZIssuanceResult {
@@ -91,8 +97,6 @@ export interface C6ZIssuanceResult {
   non_authoritative_for_transaction: true;
 }
 
-const ISSUER = 'grantex_internal_oacp_authority';
-const ISSUER_KEY_ID = 'kid_c6z_internal_demo';
 const POLICY_VERSION = 'commerce-c6z-internal-runtime-demo';
 const MAX_SOURCE_AGE_SECONDS = 15 * 60;
 const FAMILY_TYPE: Record<C6ZArtifactFamily, OacpArtifactType> = {
@@ -175,14 +179,6 @@ function parseTime(value: string): number | null {
 
 function isoAfter(value: string, seconds: number): string {
   return new Date(Date.parse(value) + seconds * 1000).toISOString();
-}
-
-function stableId(parts: readonly string[]): string {
-  return parts.join(':').replace(/[^a-zA-Z0-9:_-]/g, '_');
-}
-
-function revocationStatusUrl(request: C6ZSellerAuthorityRequest): string {
-  return `internal:oacp:c6z:revocation:${request.tenant_id}:${request.merchant_id}`;
 }
 
 function nonSensitiveEvidenceRefs(evidence: C6ZConnectorEvidence): string[] {
@@ -315,21 +311,11 @@ export function validateC6ZSellerAuthorityRequest(
   };
 }
 
-function defaultIssuerKey(nowIso: string): OacpIssuerKeyMetadata {
-  return {
-    issuer: ISSUER,
-    issuer_key_id: ISSUER_KEY_ID,
-    algorithm: 'ES256',
-    state: 'active',
-    not_before: nowIso,
-    expires_at: isoAfter(nowIso, 24 * 60 * 60),
-  };
-}
-
 function payloadForFamily(
   family: C6ZArtifactFamily,
   request: C6ZSellerAuthorityRequest,
   evidence: C6ZConnectorEvidence,
+  signing: { issuer: string; kid: string; status_uri: string },
 ): Record<string, unknown> {
   const ttlSeconds = FAMILY_TTL_SECONDS[family];
   return {
@@ -359,16 +345,18 @@ function payloadForFamily(
       stale_behavior: 'refuse_final_commitment_or_require_refresh',
     },
     revocation_posture: {
-      revocation_status_url: revocationStatusUrl(request),
+      revocation_status_url: signing.status_uri,
       status_at_issuance: 'not_revoked',
       stale_or_unreachable_behavior: 'treat_as_not_authorized_for_commitment',
     },
     blocked_capabilities: [...BLOCKED_RUNTIME_CAPABILITIES],
     non_sensitive_evidence_refs: nonSensitiveEvidenceRefs(evidence),
     signature_metadata: {
-      issuer: ISSUER,
-      issuer_key_id: ISSUER_KEY_ID,
+      issuer: signing.issuer,
+      issuer_key_id: signing.kid,
       algorithm: 'ES256',
+      jws_typ: OACP_JWS_TYP,
+      canonicalization: 'rfc8785',
       payload_hash_algorithm: 'sha256',
       detached_jws_required: true,
       signature_value_in_payload: false,
@@ -513,12 +501,28 @@ function artifactSafety(family: C6ZArtifactFamily) {
   };
 }
 
-export function issueC6ZInternalOacpArtifacts(input: {
+/** What issuance needs from the store: the issuer, its key and status list entries. */
+export interface C6ZIssuanceContext {
+  /** The Grantex issuer identifier (config JWT_ISSUER). */
+  issuer: string;
+  signer: OacpSigningKey;
+  /** A fresh artifact id. */
+  newArtifactId: () => string;
+  /** Allocate the artifact's Token Status List entry, in the issuing transaction. */
+  allocateStatus: (artifactId: string) => Promise<{ uri: string; idx: number }>;
+}
+
+/**
+ * Validate the request and evidence, then issue one ES256-signed artifact per
+ * C6Z family, each on the status list. Every artifact is verified against the
+ * signer's published key before it is returned; a refusal issues nothing.
+ */
+export async function issueC6ZInternalOacpArtifacts(input: {
   request: C6ZSellerAuthorityRequest;
   evidence: C6ZConnectorEvidence;
   now_iso: string;
-  issuer_key?: OacpIssuerKeyMetadata | undefined;
-}): C6ZIssuanceResult {
+  context: C6ZIssuanceContext;
+}): Promise<C6ZIssuanceResult> {
   const validation = validateC6ZSellerAuthorityRequest(input.request, input.now_iso);
   if (validation.status !== 'artifact_issuance_ready') return validation;
   if (containsUnsafeValue(input.evidence)) {
@@ -540,15 +544,24 @@ export function issueC6ZInternalOacpArtifacts(input: {
     return issueRefusal('pending_sandbox_review', 'connector_evidence_stale', 'Connector evidence is stale for C6Z issuance.', input.request);
   }
 
-  const issuerKey = input.issuer_key ?? defaultIssuerKey(input.now_iso);
-  const artifacts = C6Z_ARTIFACT_FAMILIES.map((family): C6ZIssuedArtifact => {
+  const { issuer, signer } = input.context;
+  const jwks = { keys: [signer.publicJwk] };
+  const artifacts: C6ZIssuedArtifact[] = [];
+  for (const family of C6Z_ARTIFACT_FAMILIES) {
     const artifactType = FAMILY_TYPE[family];
-    const payload = payloadForFamily(family, input.request, input.evidence);
-    const envelope = issueInternalOacpArtifact({
-      artifact_id: stableId(['c6z', family, input.request.tenant_id, input.request.merchant_id, input.request.seller_agent_id]),
+    const artifactId = input.context.newArtifactId();
+    const statusList = await input.context.allocateStatus(artifactId);
+    const payload = payloadForFamily(family, input.request, input.evidence, {
+      issuer,
+      kid: signer.kid,
+      status_uri: statusList.uri,
+    });
+    const ttlSeconds = Math.min(FAMILY_TTL_SECONDS[family], OACP_ARTIFACT_TTLS_SECONDS[artifactType]);
+    const envelope = issueOacpArtifact({
+      artifact_id: artifactId,
       artifact_type: artifactType,
-      issuer: ISSUER,
-      issuer_key_id: ISSUER_KEY_ID,
+      issuer,
+      signer,
       subject_type: family,
       subject_id: `${input.request.merchant_id}:${input.request.seller_agent_id}`,
       tenant_id: input.request.tenant_id,
@@ -556,36 +569,30 @@ export function issueC6ZInternalOacpArtifacts(input: {
       seller_agent_id: input.request.seller_agent_id,
       buyer_agent_id: '',
       issued_at: input.now_iso,
-      expires_at: isoAfter(input.now_iso, FAMILY_TTL_SECONDS[family]),
+      expires_at: isoAfter(input.now_iso, ttlSeconds),
       source_observed_at: input.evidence.source_observed_at,
       policy_version: POLICY_VERSION,
-      revocation_status_url: revocationStatusUrl(input.request),
+      status_list: statusList,
+      evidence_refs: [input.evidence.source_evidence_ref],
       payload,
       safety: artifactSafety(family),
-      issuer_key: issuerKey,
-      signDetachedJws: ({ artifact_id, payload_hash }) => `eyJhbGciOiJFUzI1NiJ9..sig_${artifact_id}_${payload_hash.slice(0, 16)}`,
     });
-    const verifier_status = evaluateInternalOacpArtifactStatus({
+    const verifier_status = verifyOacpArtifact({
       envelope,
       payload,
-      issuer_keys: [issuerKey],
+      jwks,
       now_iso: input.now_iso,
+      // Allocated in this transaction a moment ago: VALID.
+      status: 0,
       expected_scope: {
         tenant_id: input.request.tenant_id,
         merchant_id: input.request.merchant_id,
         seller_agent_id: input.request.seller_agent_id,
         buyer_agent_id: '',
       },
-      verifyDetachedJws: ({ artifact_id, payload_hash, signature }) => signature === `eyJhbGciOiJFUzI1NiJ9..sig_${artifact_id}_${payload_hash.slice(0, 16)}`,
     });
-    return {
-      artifact_family: family,
-      artifact_type: artifactType,
-      envelope,
-      payload,
-      verifier_status,
-    };
-  });
+    artifacts.push({ artifact_family: family, artifact_type: artifactType, envelope, payload, verifier_status });
+  }
 
   if (artifacts.some((artifact) => artifact.verifier_status.valid !== true)) {
     return issueRefusal('rejected', 'issued_artifact_verification_failed', 'Issued C6Z artifacts must verify internally before handoff.', input.request);
@@ -595,7 +602,7 @@ export function issueC6ZInternalOacpArtifacts(input: {
     request_id: input.request.request_id ?? null,
     authority_request_ref: canonicalRef(input.request),
     artifacts,
-    message: 'Issued internal C6Z OACP artifacts for AgenticOrg cache intake.',
+    message: 'Issued ES256-signed C6Z OACP artifacts for AgenticOrg cache intake.',
     allowed_to_execute: false,
     no_payment_execution: true,
     no_public_discovery_enablement: true,

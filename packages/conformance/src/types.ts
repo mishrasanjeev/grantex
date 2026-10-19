@@ -5,6 +5,12 @@ export interface RunConfig {
   include?: string[];
   format: 'text' | 'json';
   bail: boolean;
+  /** Internal service token for the OACP routes; the API key is used when absent. */
+  internalToken?: string;
+  /** Pinned OACP issuer identifier (the auth service's JWT_ISSUER). Default: baseUrl. */
+  oacpIssuer?: string;
+  /** Commerce tenant the OACP suite issues under. Default: cten_CONFORMANCE. */
+  oacpTenantId?: string;
 }
 
 export interface HttpResponse<T = unknown> {
@@ -58,6 +64,9 @@ export interface SuiteContext {
   cleanup: import('./cleanup.js').CleanupTracker;
   /** Pre-created agent shared across suites to avoid plan limits */
   sharedAgent: SharedAgent;
+  internalToken?: string;
+  oacpIssuer?: string;
+  oacpTenantId?: string;
 }
 
 export interface SuiteDefinition {

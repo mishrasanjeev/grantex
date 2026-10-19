@@ -6,16 +6,16 @@ description: Evidence-backed inventory of what is implemented, gated, missing, o
 
 Canonical end-to-end flow: [OACP authority overview](./overview).
 
-This inventory is based on the Grantex C6Z authority route, OACP artifact libraries, adapter preview helpers, and tests in `apps/auth-service`.
+This inventory is based on the Grantex C6Z authority route, the OACP artifact signer, verifier, key store, status list and artifact store, and tests in `apps/auth-service`.
 
 ## Truth Table
 
 | Category | Grantex reality | Owner/action |
 | --- | --- | --- |
-| Implemented runtime | C6Z authority endpoint under commerce auth; allowlisted AgenticOrg service-token access; internal artifact issuance; artifact safety checks; TTL and signature metadata; adapter mapping payloads; cache/offline verifier helpers; POS handoff evidence-ref boundary in policy/mandate/protocol artifacts. AgenticOrg owns implemented tenant/merchant/seller scoped commerce config and Shopify runtime sync. | Grantex keeps tests and guard scans current. |
+| Implemented runtime | C6Z authority endpoint under commerce auth; allowlisted AgenticOrg service-token access; artifact issuance signed with an ES256 detached JWS over the RFC 8785 envelope by a DB-backed OACP issuer key published in `/.well-known/jwks.json`; persistence of every issue and refusal (`oacp_artifacts`); replay, read and revoke routes; an OACP Token Status List entry on every artifact and a signed `revocation` artifact on revoke; artifact safety checks; TTL; adapter mapping payloads; POS handoff evidence-ref boundary in policy/mandate/protocol artifacts. Before this, the signature was a template string checked by string equality; that code is deleted. AgenticOrg owns implemented tenant/merchant/seller scoped commerce config and Shopify runtime sync. | Grantex keeps tests and guard scans current. |
 | Implemented docs only | Historical Commerce V1 PRDs, launch plans, C6 review reports, and publication drafts. | Mark as historical where they conflict with this architecture. |
 | Implemented but not broad launch | Commerce V1 payment-control pilot code and Plural sandbox/UAT-compatible adapter paths exist separately from the AgenticOrg OACP runtime split. | Keep separate from OACP authority docs. |
-| Requires credentials or approval | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN`, `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`, merchant/AgenticOrg tenant approval, production key custody, provider or bank rail approval, POS callback approval, and external channel approvals. | Ops owner must collect evidence before public claims. |
+| Requires credentials or approval | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN`, `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`, the first OACP issuer key (`POST /v1/commerce/oacp/issuer-keys/rotate`), `OACP_STATUS_LIST_PUBLIC_ENABLED=true` for relying-party status checks, merchant/AgenticOrg tenant approval, production key custody, provider or bank rail approval, POS callback approval, and external channel approvals. | Ops owner must collect evidence before public claims. |
 | Missing | Public standards approval, broad external protocol partner program, universal buyer-surface rollout, live non-Shopify source adapters, live bank/custom provider adapters, live POS provider approval, and order/payment/mandate/POS execution through OACP artifacts. | Treat as pending runtime/product gaps. |
 | Stale/confusing docs | Older copy that says Grantex is the merchant connector runtime or payment-control loop for every buyer interaction. | Supersede with OACP authority docs and link here. |
 
@@ -24,8 +24,13 @@ This inventory is based on the Grantex C6Z authority route, OACP artifact librar
 - Route: `apps/auth-service/src/routes/commerce-oacp-runtime.ts`
 - Artifact logic: `apps/auth-service/src/lib/commerce/oacp-runtime-vertical.ts`
 - Trust helpers: `apps/auth-service/src/lib/commerce/oacp-trust-artifacts.ts`
-- Adapter previews: `schemaorg-preview.ts`, `ucp-capability-preview.ts`, `acp-checkout-preview.ts`, `ap2-evidence-preview.ts`
-- Tests: `apps/auth-service/tests/commerce-c6z-runtime-artifact-authority.test.ts` and `commerce-c6w4-oacp-adapter-previews.test.ts`
+- Signer and verifier: `apps/auth-service/src/lib/commerce/oacp-jws.ts`
+- Issuer keys: `apps/auth-service/src/lib/commerce/oacp-issuer-keys.ts`
+- Status list: `apps/auth-service/src/lib/commerce/oacp-status.ts`, route `routes/oacp-status.ts`
+- Persistence, replay, revocation: `apps/auth-service/src/lib/commerce/oacp-artifact-store.ts`
+- Migration: `apps/auth-service/src/db/migrations/133_oacp_issuer_keys_artifacts.sql`
+- Adapter previews (route-mounted, unsigned): `schemaorg-preview.ts`, `ucp-capability-preview.ts`, `acp-checkout-preview.ts`, `ap2-evidence-preview.ts`
+- Tests: `commerce-c6z-runtime-artifact-authority.test.ts`, `commerce-c6w2-oacp-artifact-authority.test.ts`, `oacp-jws-vectors.test.ts`, `oacp-canonicalization.test.ts`, `commerce-oacp-artifacts-postgres.integration.test.ts`
 
 ## Pending Runtime Gaps
 

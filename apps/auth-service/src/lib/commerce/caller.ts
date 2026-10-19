@@ -15,8 +15,22 @@ type Sql = ReturnType<typeof postgres>;
 
 export const C6Z_AUTHORITY_SERVICE_SCOPE = 'commerce.oacp.c6z.authority_requests.write';
 export const OACP_ARBITER_DECISIONS_SERVICE_SCOPE = 'commerce.oacp.arbiter_decisions.write';
-const C6Z_AUTHORITY_ROUTE_SUFFIX = '/oacp/c6z/authority-requests';
-const OACP_ARBITER_DECISIONS_ROUTE_SUFFIX = '/oacp/arbiter-decisions';
+export const OACP_ARTIFACTS_READ_SCOPE = 'commerce.oacp.artifacts.read';
+export const OACP_ARTIFACTS_REVOKE_SCOPE = 'commerce.oacp.artifacts.revoke';
+
+/**
+ * The internal routes the AgenticOrg service token may call, each with the one
+ * scope it carries there: issuance, artifact read and replay, revocation and
+ * arbiter decisions. Anywhere else the token is not recognised and falls
+ * through to the operator resolver, which refuses it.
+ */
+const SERVICE_TOKEN_ROUTES: ReadonlyArray<{ method: string; path: RegExp; scope: string }> = [
+  { method: 'POST', path: /\/oacp\/c6z\/authority-requests$/, scope: C6Z_AUTHORITY_SERVICE_SCOPE },
+  { method: 'GET', path: /\/v1\/commerce\/oacp\/artifacts$/, scope: OACP_ARTIFACTS_READ_SCOPE },
+  { method: 'GET', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+$/, scope: OACP_ARTIFACTS_READ_SCOPE },
+  { method: 'POST', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+\/revoke$/, scope: OACP_ARTIFACTS_REVOKE_SCOPE },
+  { method: 'POST', path: /\/oacp\/arbiter-decisions$/, scope: OACP_ARBITER_DECISIONS_SERVICE_SCOPE },
+];
 
 export type CommerceCaller =
   | {
@@ -137,17 +151,11 @@ function tokenSha256(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
-/**
- * The commerce routes the AgenticOrg internal service token may call, and the
- * one scope it carries on each. Anywhere else the token is not recognised and
- * falls through to the operator resolver, which refuses it.
- */
+/** The scope the AgenticOrg service token carries on this route, or null where it is not accepted. */
 function serviceTokenRouteScope(request: FastifyRequest): string | null {
-  if (request.method !== 'POST') return null;
   const path = request.url.split('?')[0] ?? '';
-  if (path.endsWith(C6Z_AUTHORITY_ROUTE_SUFFIX)) return C6Z_AUTHORITY_SERVICE_SCOPE;
-  if (path.endsWith(OACP_ARBITER_DECISIONS_ROUTE_SUFFIX)) return OACP_ARBITER_DECISIONS_SERVICE_SCOPE;
-  return null;
+  const route = SERVICE_TOKEN_ROUTES.find((r) => r.method === request.method && r.path.test(path));
+  return route ? route.scope : null;
 }
 
 /**

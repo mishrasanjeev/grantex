@@ -49,6 +49,104 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `grantexDecisionVerifier`). Shared vectors added to
   `spec/examples/decision-grant/verification.json`. No human-issued grant ever
   carries that value, so existing grants verify as before.
+### Added - Signed, persisted and revocable OACP artifacts (G1-G4)
+- OACP artifacts are signed with an ES256 detached JWS (RFC 7515 Appendix F,
+  typ `oacp-artifact+jws`) over the RFC 8785 envelope without `signature`,
+  and verified in a fixed eight-step order with fixed refusal codes
+  (`lib/commerce/oacp-jws.ts`; shared vectors
+  `spec/examples/oacp/oacp-artifact-jws-v1.json`). The template-string signer,
+  the string-equality verifier and the fabricated `kid_c6z_internal_demo` key
+  metadata are deleted (G1).
+- DB-backed OACP issuer keys (`oacp-YYYYMMDD-<hex>` kids, private JWK
+  encrypted and bound to the kid) published in `/.well-known/jwks.json`;
+  retired keys stay published until every artifact they signed has expired
+  (plus 600 s), revoked keys are withdrawn. Platform-admin routes:
+  `GET /v1/commerce/oacp/issuer-keys`, `POST .../issuer-keys/rotate`,
+  `POST .../issuer-keys/:kid/revoke`. No active key: issuance answers 503;
+  `OACP_AUTO_GENERATE_ISSUER_KEY=true` creates one outside production (G2).
+- Migration `133_oacp_issuer_keys_artifacts.sql`: `oacp_issuer_keys`,
+  `oacp_artifacts`, `oacp_status_lists`, `oacp_status_entries`. Every issue
+  and refusal is stored; internal routes `GET /v1/commerce/oacp/artifacts/:id`,
+  `GET /v1/commerce/oacp/artifacts` (replay, `next_cursor`) and
+  `POST /v1/commerce/oacp/artifacts/:id/revoke` accept the AgenticOrg
+  authority service token for allow-listed tenants (G3).
+- Every artifact carries `status.status_list` and an https
+  `revocation_status_url` on an OACP Token Status List, served unauthenticated
+  at `GET /status/oacp/:list` (`application/statuslist+jwt`, ttl 30 s) when
+  `OACP_STATUS_LIST_PUBLIC_ENABLED=true` (default off). Revoking sets the entry
+  INVALID and issues a signed `revocation` artifact; the `revocation` family
+  TTL is now 24 hours instead of 0 (G4).
+- `OACP_ALLOW_LOOPBACK_HTTP=true` (default off, ignored when `NODE_ENV` is
+  production) lets a local stack whose `PUBLIC_BASE_URL` is
+  `http://localhost:<port>` (or 127.0.0.0/8, `::1`) issue artifacts with an
+  http status list URI on that loopback host, so the `oacp` conformance suite
+  and the SDK verifiers' loopback mode can run end to end locally. Every other
+  host still requires https (G8).
+
+### Changed - C6Z authority route (breaking for artifact consumers)
+- Artifacts now carry `issuer` = `JWT_ISSUER`, `schema_version`
+  `oacp.artifact.v1`, a unique `oacp_art_<ULID>` id per issuance, a real
+  `issuer_key_id` and a verifiable signature. Consumers that matched the old
+  template signature or the `internal:oacp:` revocation URL must verify the
+  JWS against the JWKS instead. There is no opt-out: the previous signature
+  proved nothing.
+- `now_iso` in the request body is ignored; artifacts are stamped with the
+  issuer clock.
+- An operator caller may issue only for its own commerce tenant (the platform
+  admin for any); previously any operator could name any tenant.
+
+### Fixed - OACP canonical JSON is RFC 8785 (G1)
+- `canonicalizeOacpPayload` and `hashOacpPayload` use RFC 8785 (JCS) after
+  removing absent members, instead of an order based on `localeCompare` that
+  was not RFC 8785 and gave a different `payload_hash` from Python verifiers
+  for member names such as `a_b`/`ab` or upper-case first letters. No OACP
+  hash was stored before this change. Commerce idempotency hashing is
+  unchanged. Shared vectors: `spec/examples/oacp/oacp-artifact-jws-v1.json`
+  (synthetic test key; `gen.mjs` regenerates them).
+
+### Removed - Unmounted OACP library helpers (G7)
+- Delete the C6W4-C6W9 and C6X2 helpers from `oacp-trust-artifacts.ts`
+  (adapter previews, commitment boundary, prepared envelopes, response
+  reconciliation, eligibility packets, dry-run verifier, cached-artifact
+  verifier) and their tests, including the C6X3-C6Y5 compatibility tests built
+  on the cached-artifact verifier. No route, job or package called them, and
+  the cached-artifact verifier accepted a caller-supplied `signature_verified`
+  flag. Decision and the rejected alternative (mounting them behind the
+  authority route): `docs/guides/oacp/library-helper-decision.mdx`.
+### Added - OACP artifact verifiers in the SDKs (source only)
+- `verifyOacpArtifact()` (TypeScript) verifies an OACP artifact
+  (profile `oacp-artifact-jws-v1`): detached ES256 JWS over the RFC 8785
+  canonical envelope, payload hash, pinned issuer and JWK Set key, timestamps,
+  per-type TTL and expected scope, then the Token Status List entry
+  (draft-ietf-oauth-status-list). Checks run in one fixed order with fixed
+  refusal codes and pass every case of the shared vectors in
+  `spec/examples/oacp/`. An unreachable, expired or unverifiable status
+  list refuses the artifact with `revocation_status_unavailable`.
+- JWK Set and status-list fetchers bound to configured issuer URLs: no
+  redirects, bounded responses, https only (http on loopback when enabled),
+  status lists cached for no longer than their `ttl`.
+- `grantex.oacp.verify_oacp_artifact()` (Python, async) mirrors the
+  TypeScript verifier: the same check order and refusal codes, every vector
+  case, a fail-closed Token Status List check and `httpx.AsyncClient`
+  fetchers with the same bounds. Status URIs with dot segments (also
+  percent-encoded) are refused before any request.
+- `VerifyOacpArtifact()` (Go) mirrors the same checks and codes on the
+  standard library, with its own RFC 8785 canonicalizer, and
+  `NewOacpJWKSFetcher` / `NewOacpStatusListFetcher` (redirects disabled,
+  bounded bodies, five-second deadline, safe for concurrent use).
+- `revocation` artifacts may live up to 24 hours (86400 s) in the verifier's
+  per-type TTL table, matching the auth service's issuing TTL for that type.
+
+### Added - `oacp` conformance suite (source only)
+- `grantex-conformance --include oacp --suite oacp` checks issue, read-back
+  and replay, the Token Status List, SDK verification and tamper refusal,
+  revoke, the status flip to INVALID and the protocol adapter artifact against
+  a live auth service. The internal service token comes from
+  `GRANTEX_CONFORMANCE_INTERNAL_TOKEN`; `--oacp-issuer` and `--oacp-tenant`
+  pin the issuer and tenant. `@grantex/sdk` is an optional peer dependency
+  used by this suite only.
+- The runner sets up its shared agent only when a selected suite uses it, so
+  suites that do not need one make no agent calls.
 
 ### Changed - CERT-In security guidance
 - Simplify the agent-security article with accessible workflows for scoped

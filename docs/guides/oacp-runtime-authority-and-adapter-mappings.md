@@ -17,7 +17,8 @@ while TTL, freshness, revocation, scope, and verifier state remain usable.
 
 `POST /v1/commerce/oacp/c6z/authority-requests` accepts AgenticOrg
 route-scoped service-token requests for allowlisted tenants. It issues or
-refuses signed/internal OACP artifacts for:
+refuses OACP artifacts, each signed with an ES256 detached JWS by a Grantex OACP
+issuer key published in `/.well-known/jwks.json` and listed on an OACP Token Status List, for:
 
 - `merchant_profile`
 - `seller_agent_card`

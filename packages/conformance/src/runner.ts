@@ -24,6 +24,7 @@ import { anomaliesSuite } from './suites/anomalies.js';
 import { complianceSuite } from './suites/compliance.js';
 import { principalSessionsSuite } from './suites/principal-sessions.js';
 import { tokenRefreshSuite } from './suites/token-refresh.js';
+import { oacpSuite } from './suites/oacp.js';
 
 const coreSuites: SuiteDefinition[] = [
   healthSuite,
@@ -47,6 +48,7 @@ const optionalSuites: SuiteDefinition[] = [
   complianceSuite,
   principalSessionsSuite,
   tokenRefreshSuite,
+  oacpSuite,
 ];
 
 /** Name of the agent the conformance runner owns. Only agents with this exact name are ever reused. */
@@ -144,9 +146,6 @@ async function runSuites(
   setupHttp: ConformanceHttpClient,
   runCleanup: CleanupTracker,
 ): Promise<ConformanceReport> {
-  // Set up a shared agent for all suites (reuses our own existing agent or creates a new one)
-  const { agent: sharedAgent, skipReason } = await setupSharedAgent(setupHttp, runCleanup);
-
   const allSuites = [...coreSuites];
 
   if (config.include) {
@@ -166,6 +165,13 @@ async function runSuites(
       throw new Error(`Unknown suite "${config.suite}". Available: ${available}`);
     }
   }
+
+  // Set up a shared agent (reuses our own existing agent or creates a new
+  // one) only when a selected suite needs it, so `--suite oacp` makes no
+  // agent calls.
+  const { agent: sharedAgent, skipReason } = suitesToRun.some((s) => SUITES_REQUIRING_SHARED_AGENT.has(s.name))
+    ? await setupSharedAgent(setupHttp, runCleanup)
+    : { agent: null, skipReason: undefined };
 
   const results: SuiteResult[] = [];
   const overallStart = Date.now();
@@ -208,6 +214,9 @@ async function runSuites(
       // Suites that need the shared agent were skipped above when it is null;
       // the remaining suites never touch it, so an empty placeholder is safe.
       sharedAgent: sharedAgent ?? { agentId: '', agentDid: '', name: '' },
+      internalToken: config.internalToken,
+      oacpIssuer: config.oacpIssuer,
+      oacpTenantId: config.oacpTenantId,
     };
 
     const suiteStart = Date.now();

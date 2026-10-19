@@ -19,8 +19,9 @@ sequenceDiagram
   A->>A: Store source/channel/provider/POS refs
   A->>A: Read-only Shopify sync and redacted evidence
   A->>G: POST /v1/commerce/oacp/c6z/authority-requests
-  G-->>A: Signed/internal OACP artifacts or blockers
-  A->>A: Cache artifacts by tenant, merchant, seller, buyer scope
+  G-->>A: ES256-signed OACP artifacts or blockers
+  A->>A: Verify each JWS (JWKS) and status list entry
+  A->>A: Cache verified artifacts by tenant, merchant, seller, buyer scope
   A->>A: Prepare purchase or Offline POS handoff without execution
   A-->>M: Runtime ready, refresh needed, or blocker
 ```
@@ -42,6 +43,27 @@ Grantex returns:
 - `201 artifact_issuance_ready` with artifact families when ready;
 - `202 received` when connector evidence is still required;
 - `422` when the request is private, stale, executable, or otherwise unsafe.
+
+Every refusal is recorded in Grantex (`refusal_record_id`); a `202 received` intake is not.
+
+## Verifying Artifacts
+
+AgenticOrg must verify every artifact before caching it, as
+[OACP artifact authority](./artifact-authority) describes:
+
+- pin the Grantex issuer (`JWT_ISSUER`) and JWKS URI (`<issuer>/.well-known/jwks.json`) in
+  configuration; never follow a URL taken from an artifact;
+- run the eight verification steps with the refusal codes listed there (the shared vectors in
+  `spec/examples/oacp/oacp-artifact-jws-v1.json` cover steps 1-6);
+- read the status list at `status.status_list.uri`, verify it against the same JWKS, cache it no
+  longer than its `ttl` (30 s), and refuse with `revocation_status_unavailable` when it cannot be
+  read;
+- treat `schema_version` `oacp.artifact.v1` as the signed profile, and artifact ids as unique per
+  issuance (`oacp_art_<ULID>`), not stable per family.
+
+Recovery after a cache loss uses replay: `GET /v1/commerce/oacp/artifacts?tenant_id=...` with the
+same service token, following `next_cursor`. Revocation uses
+`POST /v1/commerce/oacp/artifacts/:artifactId/revoke`.
 
 ## Public Catalog Publishing Boundary
 

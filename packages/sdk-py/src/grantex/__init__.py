@@ -204,6 +204,13 @@ from .manifest import (
     ToolSpec,
 )
 from ._fastapi import GrantexEnforcer
+from .oacp import (
+    OACP_REFUSAL_CODES,
+    OacpVerification,
+    create_oacp_jwks_fetcher,
+    create_oacp_status_list_fetcher,
+    verify_oacp_artifact,
+)
 from .prepaid_wallets import (
     AgentPrepaidWalletClient,
     PrincipalPrepaidWalletClient,
@@ -435,6 +442,12 @@ __all__ = [
     "ToolSubReason",
     # FastAPI Integration
     "GrantexEnforcer",
+    # OACP artifact verification (grantex.oacp)
+    "OACP_REFUSAL_CODES",
+    "OacpVerification",
+    "create_oacp_jwks_fetcher",
+    "create_oacp_status_list_fetcher",
+    "verify_oacp_artifact",
     # Version
     "__version__",
 ]

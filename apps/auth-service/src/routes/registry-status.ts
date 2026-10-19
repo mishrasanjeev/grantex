@@ -55,7 +55,7 @@ export const TOKEN_STATUS_LIST_MEDIA_TYPE = 'application/statuslist+jwt';
 export const VC_JWT_MEDIA_TYPE = 'application/vc+jwt';
 
 /** RFC 9110 §13.1.2: If-None-Match uses the weak comparison function. */
-function matchesIfNoneMatch(header: string | string[] | undefined, etag: string): boolean {
+export function matchesIfNoneMatch(header: string | string[] | undefined, etag: string): boolean {
   if (header === undefined) return false;
   const value = Array.isArray(header) ? header.join(',') : header;
   const opaque = (tag: string): string => tag.trim().replace(/^W\//, '');

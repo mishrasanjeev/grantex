@@ -718,6 +718,7 @@ describe('POST /v1/consent-bundles/:bundleId/refresh', () => {
       grant_status: 'active',
     }]);
     sqlMock.mockResolvedValueOnce([]); // commerce Passport keys for JWKS snapshot
+    sqlMock.mockResolvedValueOnce([]); // OACP issuer keys for JWKS snapshot
     sqlMock.mockResolvedValueOnce([{ id: 'bundle_001' }]); // guarded bundle update
     sqlMock.mockResolvedValueOnce([{ id: 'grnt_001' }]); // guarded grant update
     sqlMock.mockResolvedValueOnce([]); // insert grant token
@@ -774,6 +775,7 @@ describe('POST /v1/consent-bundles/:bundleId/refresh', () => {
       grant_status: 'active',
     }]);
     sqlMock.mockResolvedValueOnce([]); // commerce Passport keys for JWKS snapshot
+    sqlMock.mockResolvedValueOnce([]); // OACP issuer keys for JWKS snapshot
     sqlMock.mockResolvedValueOnce([]); // guarded update loses the revoke race
 
     const res = await app.inject({
