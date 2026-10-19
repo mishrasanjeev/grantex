@@ -18,6 +18,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - JWK Set and status-list fetchers bound to configured issuer URLs: no
   redirects, bounded responses, https only (http on loopback when enabled),
   status lists cached for no longer than their `ttl`.
+- `grantex.oacp.verify_oacp_artifact()` (Python, async) mirrors the
+  TypeScript verifier: the same check order and refusal codes, every vector
+  case, a fail-closed Token Status List check and `httpx.AsyncClient`
+  fetchers with the same bounds. Status URIs with dot segments (also
+  percent-encoded) are refused before any request.
 - `revocation` artifacts may live up to 24 hours (86400 s) in the verifier's
   per-type TTL table, matching the auth service's issuing TTL for that type.
 
