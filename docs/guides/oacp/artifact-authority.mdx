@@ -108,6 +108,9 @@ Verification runs in this order, and every verifier refuses with the same code:
   2 bits: 0 VALID, 1 INVALID, 2 SUSPENDED). The envelope carries
   `status: {"status_list": {"idx": <int>, "uri": "<PUBLIC_BASE_URL>/status/oacp/<list>"}}`, and
   `revocation_status_url` is the same https URI. Issuance refuses a non-https `PUBLIC_BASE_URL`.
+  For a local stack only, `OACP_ALLOW_LOOPBACK_HTTP=true` (default off, ignored when `NODE_ENV`
+  is production) also accepts `http://` on a loopback host (`localhost`, 127.0.0.0/8, `::1`);
+  relying parties verify such artifacts only with the SDKs' `allowLoopbackHttp` option.
 - `GET /status/oacp/:list` serves the list as `application/statuslist+jwt`, signed with the platform
   signing key like the registry acceptance lists (kid in the same JWKS), `sub` the list URI,
   `ttl` 30 s, `exp` one hour after `iat`. It is unauthenticated and registered only when

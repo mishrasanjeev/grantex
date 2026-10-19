@@ -33,6 +33,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `OACP_STATUS_LIST_PUBLIC_ENABLED=true` (default off). Revoking sets the entry
   INVALID and issues a signed `revocation` artifact; the `revocation` family
   TTL is now 24 hours instead of 0 (G4).
+- `OACP_ALLOW_LOOPBACK_HTTP=true` (default off, ignored when `NODE_ENV` is
+  production) lets a local stack whose `PUBLIC_BASE_URL` is
+  `http://localhost:<port>` (or 127.0.0.0/8, `::1`) issue artifacts with an
+  http status list URI on that loopback host, so the `oacp` conformance suite
+  and the SDK verifiers' loopback mode can run end to end locally. Every other
+  host still requires https (G8).
 
 ### Changed - C6Z authority route (breaking for artifact consumers)
 - Artifacts now carry `issuer` = `JWT_ISSUER`, `schema_version`

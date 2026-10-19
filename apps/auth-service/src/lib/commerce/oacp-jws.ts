@@ -53,6 +53,38 @@ export const OACP_KID_PREFIX = 'oacp-';
 /** Clock skew tolerated on `issued_at` and `not_before`. */
 export const OACP_CLOCK_SKEW_SECONDS = 60;
 
+/** localhost, 127.0.0.0/8 or ::1, as the SDK verifiers' `isLoopbackHost`. */
+function isLoopbackHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1');
+  return host === 'localhost' || host === '::1' || /^127(\.\d{1,3}){3}$/.test(host);
+}
+
+/**
+ * Local development only: `OACP_ALLOW_LOOPBACK_HTTP=true` lets a service whose
+ * PUBLIC_BASE_URL is `http://localhost:<port>` (or 127.0.0.0/8, ::1) issue and
+ * self-verify artifacts naming an http status list on that loopback host, so
+ * the conformance suite and the SDK verifiers (`allowLoopbackHttp`) can run
+ * against a local stack. Ignored when NODE_ENV is production; off by default.
+ */
+export function oacpLoopbackHttpAllowed(): boolean {
+  if (process.env['NODE_ENV'] === 'production') return false;
+  return process.env['OACP_ALLOW_LOOPBACK_HTTP'] === 'true';
+}
+
+/** An https status list URI, or an http one on a loopback host when allowed. */
+export function isOacpStatusUriAllowed(uri: unknown): uri is string {
+  if (typeof uri !== 'string') return false;
+  let url: URL;
+  try {
+    url = new URL(uri);
+  } catch {
+    return false;
+  }
+  if (url.protocol === 'https:') return uri.startsWith('https://');
+  return url.protocol === 'http:' && uri.startsWith('http://')
+    && oacpLoopbackHttpAllowed() && isLoopbackHostname(url.hostname);
+}
+
 /** A private key that signs OACP artifacts, with its published JWK. */
 export interface OacpSigningKey {
   kid: string;
@@ -295,7 +327,7 @@ export function verifyOacpArtifact(input: {
   const uri = reference?.['uri'];
   const idx = reference?.['idx'];
   if (
-    typeof uri !== 'string' || !uri.startsWith('https://')
+    !isOacpStatusUriAllowed(uri)
     || typeof idx !== 'number' || !Number.isInteger(idx) || idx < 0
     || envelope.revocation_status_url !== uri
   ) {
@@ -355,7 +387,7 @@ export function issueOacpArtifact(input: {
   payload: unknown;
   safety: OacpArtifactSafety;
 }): OacpArtifactEnvelope {
-  if (!input.status_list.uri.startsWith('https://')) {
+  if (!isOacpStatusUriAllowed(input.status_list.uri)) {
     throw new Error('OACP status list URIs must be https');
   }
   const issuedMillis = parseMillis(input.issued_at);

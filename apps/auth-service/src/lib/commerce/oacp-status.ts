@@ -24,6 +24,7 @@ import { config } from '../../config.js';
 import { getKeyPair } from '../crypto.js';
 import { TOKEN_STATUS, encodeTokenStatusList, type StatusEntry } from '../registry/status-list-codec.js';
 import { newOacpStatusListId } from './ids.js';
+import { isOacpStatusUriAllowed } from './oacp-jws.js';
 
 export type OacpArtifactStatus = 'valid' | 'invalid' | 'suspended';
 
@@ -82,10 +83,11 @@ export function oacpStatusListIdFromUri(uri: string): string | null {
 
 /**
  * The envelope must carry an https status URI (OACP JWS profile §4), so a
- * service whose PUBLIC_BASE_URL is not https refuses to issue.
+ * service whose PUBLIC_BASE_URL is not https refuses to issue (local
+ * development may allow http on a loopback host: OACP_ALLOW_LOOPBACK_HTTP).
  */
 export function assertOacpStatusBaseUsable(): void {
-  if (!baseUrl().startsWith('https://')) {
+  if (!isOacpStatusUriAllowed(oacpStatusListUri('oacpl_00000000000000000000000000'))) {
     throw new Error('OACP issuance requires an https PUBLIC_BASE_URL for its status lists');
   }
 }

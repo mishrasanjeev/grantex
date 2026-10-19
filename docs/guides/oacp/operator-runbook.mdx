@@ -20,6 +20,11 @@ Canonical end-to-end flow: [OACP authority overview](./overview). Launch closure
 7. Confirm `artifact_count = 11`, or record the exact refusal/blocker.
 8. To roll back, remove the tenant id from `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` and rotate the token if there is any suspicion of exposure.
 
+For a local stack (`PUBLIC_BASE_URL=http://localhost:<port>`), also set
+`OACP_ALLOW_LOOPBACK_HTTP=true`; without it issuance refuses the http status list URI. It is
+ignored when `NODE_ENV` is production. Then run the live conformance suite:
+`GRANTEX_CONFORMANCE_INTERNAL_TOKEN=<service token> grantex-conformance --base-url http://localhost:<port> --api-key <developer key> --include oacp --suite oacp --oacp-issuer http://localhost:<port> --oacp-tenant <tenant>`.
+
 Never put Shopify tokens, provider credentials, payment credentials, raw provider payloads, checkout links, raw POS callbacks, or webhook secrets in Grantex artifacts or logs.
 
 ## Keys and Revocation
