@@ -96,7 +96,10 @@ export type CommerceAuditEventType =
   | 'tenant.disabled'
   | 'developer_tenant.bound'
   | 'developer_tenant.unbound'
-  | 'commerce_passport_key.rotated';
+  | 'commerce_passport_key.rotated'
+  // ACP surfaces (G35)
+  | 'acp.delegate_payment_allowance.issued'
+  | 'acp.delegate_payment_allowance.refused';
 
 export interface AppendCommerceAuditInput {
   tenantId: string;

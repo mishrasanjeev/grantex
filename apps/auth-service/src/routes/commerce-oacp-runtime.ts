@@ -79,7 +79,7 @@ function allowedServiceTenants(): Set<string> {
  * and for an allow-listed tenant; an operator only for its own commerce
  * tenant; the platform admin for any.
  */
-function callerMayActForTenant(request: FastifyRequest, tenantId: string | null | undefined, scope: string): boolean {
+export function callerMayActForTenant(request: FastifyRequest, tenantId: string | null | undefined, scope: string): boolean {
   const caller = request.commerceCaller as CommerceCaller | undefined;
   if (!caller) return false;
   if (caller.kind === 'operator') {
@@ -94,7 +94,7 @@ function callerMayActForTenant(request: FastifyRequest, tenantId: string | null 
   return false;
 }
 
-function requireKind(request: FastifyRequest): void {
+export function requireKind(request: FastifyRequest): void {
   const kind = (request.commerceCaller as CommerceCaller | undefined)?.kind;
   if (kind !== 'operator' && kind !== 'service') {
     throw new CommerceHttpError(403, 'forbidden', 'Operator or authority service caller required');

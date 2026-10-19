@@ -3467,6 +3467,59 @@ paths:
         "422":
           description: validation_failed - missing scope, unknown capability or version, bad endpoint or scope token.
 
+  /v1/commerce/oacp/acp/delegate-payment-allowance:
+    post:
+      tags: [OACP]
+      operationId: createAcpDelegatePaymentAllowance
+      summary: Derive an ACP delegate-payment allowance from a checkout Commerce Passport
+      description: >-
+        Verifies a checkout Commerce Passport in payment-affecting mode and
+        returns the ACP 2026-04-17 delegate-payment allowance (max_amount and
+        currency from the passport cap, expires_at from the passport expiry)
+        and risk-signal envelope for one checkout session. Grantex never
+        handles card data: a body with any payment-method member is refused.
+        Every issue and refusal is audited. Authenticated with the AgenticOrg
+        service token (route scope commerce.acp.delegate_payment_allowance.issue,
+        tenant allowlist), an operator of the tenant, or the platform admin.
+      security:
+        - developerApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenant_id, passport_jwt, checkout_session_id]
+              properties:
+                tenant_id: { type: string }
+                passport_jwt: { type: string, maxLength: 8192 }
+                checkout_session_id: { type: string, pattern: "^[A-Za-z0-9_.:-]{1,256}$" }
+                merchant_id: { type: string }
+                amount: { type: integer, minimum: 0, description: Minor units; must not exceed the passport cap. }
+                currency: { type: string, pattern: "^[A-Za-z]{3}$" }
+      responses:
+        "200":
+          description: >-
+            {api_version, allowance: {reason, max_amount, currency,
+            checkout_session_id, merchant_id, expires_at}, risk_signals,
+            metadata, authority, audit_event_id}. Cache-Control no-store.
+        "400":
+          description: passport_invalid - the passport failed verification.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: >-
+            tenant_not_allowed, passport_tenant_mismatch,
+            passport_merchant_mismatch, passport_revoked or
+            passport_scope_missing.
+        "422":
+          description: >-
+            validation_failed, card_data_refused, passport_not_checkout,
+            passport_cap_missing, allowance_exceeds_passport_cap,
+            currency_mismatch, invalid_amount or invalid_checkout_session_id.
+        "503":
+          description: revocation_unavailable - the online revocation check could not run; fails closed.
+
   # =====================================================================
   # M1 — implemented
   # =====================================================================

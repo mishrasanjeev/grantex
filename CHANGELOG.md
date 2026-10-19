@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - ACP delegate-payment allowance from the Commerce Passport cap (G35)
+- `POST /v1/commerce/oacp/acp/delegate-payment-allowance` verifies a checkout
+  Commerce Passport in payment-affecting mode (online revocation check, fails
+  closed with 503) for the body's tenant and optional merchant, and returns the
+  ACP 2026-04-17 delegate-payment `allowance` (`reason: one_time`,
+  `max_amount` = the passport cap in minor units, lowercase `currency`,
+  `checkout_session_id`, `merchant_id`, `expires_at` = the passport expiry),
+  `risk_signals` (empty: Grantex computes no `card_testing` score), a
+  string-only `metadata` map and the `authority` checks. A requested `amount`
+  above the cap, a browse passport, a passport without
+  `commerce:payment.initiate` or without a cap is refused. Grantex never
+  handles card data: a body with any payment-method member is refused 422
+  `card_data_refused`. Every issue and refusal is written to
+  `commerce_audit_events` (`acp.delegate_payment_allowance.issued` /
+  `.refused`); the allowance is returned only after it is recorded. Service
+  token route scope `commerce.acp.delegate_payment_allowance.issue`.
+- FINDINGS G-137 and `spec/verification.md` section 7.8 record that the ACP
+  allowance is now rendered by the auth service and schema-validated; the
+  verifier libraries still render nothing, so G-137 stays open.
+
 ### Added - Buyer identity linking and ACP scopes on `@grantex/mcp-auth` (G24, G36)
 - `commerce.ucpIdentityLinking` offers the six well-known UCP
   identity-linking scopes (`dev.ucp.shopping.checkout:manage`, `cart:manage`,

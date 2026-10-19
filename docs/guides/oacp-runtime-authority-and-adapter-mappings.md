@@ -86,6 +86,30 @@ at `/.well-known/ucp`. No Grantex-private namespace is emitted: the former
 `dev.grantex.commerce.discovery.preview` preview and the UCP-style and
 ACP-style preview routes are removed.
 
+## ACP Delegate-Payment Allowance
+
+`POST /v1/commerce/oacp/acp/delegate-payment-allowance` (AgenticOrg service
+token with scope `commerce.acp.delegate_payment_allowance.issue`, an operator of
+the tenant, or the platform admin). Body: `tenant_id`, `passport_jwt` (a
+checkout Commerce Passport), `checkout_session_id`, optional `merchant_id`,
+`amount` (minor units) and `currency`. Grantex verifies the passport
+payment-affecting (signature, expiry, online revocation, tenant, merchant),
+requires `commerce:payment.initiate` and a cap, and answers:
+
+| Member | Value |
+|---|---|
+| `allowance` | ACP `Allowance`: `reason: one_time`, `max_amount` = passport `max_amount`, `currency` lowercase, `checkout_session_id`, `merchant_id` = passport merchant, `expires_at` = passport `exp`. |
+| `risk_signals` | `[]`. ACP defines only `card_testing`, which Grantex does not score. |
+| `metadata` | String map for `DelegatePaymentRequest.metadata`: passport `jti`, agent, environment. |
+| `authority` | The checks performed, passport `jti`, agent, environment, policy version. |
+| `audit_event_id` | The `commerce_audit_events` row recording the allowance. |
+
+The PSP-facing `DelegatePaymentRequest` (payment method, billing address,
+signature) is built and sent by the merchant runtime to its PSP. Grantex never
+receives card data: any payment-method member in the body is refused with 422
+`card_data_refused`. An `amount` above the cap is refused with
+`allowance_exceeds_passport_cap`; every refusal is audited.
+
 ## Buyer Identity Linking
 
 UCP identity linking needs an OAuth 2.0 authorization server on the merchant's
