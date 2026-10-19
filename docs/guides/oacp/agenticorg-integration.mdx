@@ -149,6 +149,17 @@ AgenticOrg anchors the head of its hash-chained `audit_log` and asks Grantex to 
 
 `GET /v1/audit/witness-checkpoints?source=agenticorg&tenant_ref=...&limit=...` returns `{checkpoints, forks}`, newest `head_seq` first. AgenticOrg verifies the countersignature against the Grantex JWKS before storing the `witness_id` beside its anchor row, and treats a `WITNESS_FORK` as an irregularity of its own chain.
 
+## UCP And ACP Surfaces
+
+Each route takes the same service token with its own route scope and the tenant allowlist. Details: [OACP runtime authority and adapter mappings](../oacp-runtime-authority-and-adapter-mappings.md).
+
+| AgenticOrg needs | Call | Route scope |
+| --- | --- | --- |
+| The `ucp` member of `/.well-known/ucp` | `GET /v1/commerce/oacp/ucp-profile?tenant_id&merchant_id&seller_agent_id&version&served&rest_endpoint&identity_linking_scopes`; add its signing keys, publish only while `publication_allowed`, re-render by `valid_until`. | `commerce.oacp.ucp_profile.read` |
+| A delegate-payment allowance for an ACP checkout session | `POST /v1/commerce/oacp/acp/delegate-payment-allowance` with `{tenant_id, passport_jwt, checkout_session_id, merchant_id?, amount?, currency?}`; put `allowance`, `risk_signals` and `metadata` into its own `DelegatePaymentRequest` to the PSP. Never send card data to Grantex. | `commerce.acp.delegate_payment_allowance.issue` |
+| An ACP order event for a Grantex order | `GET /v1/commerce/oacp/acp/orders/{order_id}/event?tenant_id&permalink_base`; sign the body with `Merchant-Signature` and deliver it. | `commerce.acp.order_events.read` |
+| Buyer identity linking | Run `@grantex/mcp-auth` with `commerce.ucpIdentityLinking` (and `commerce.acpDelegatedAuthentication` for ACP); link (`iss`, `sub`) of the verified grant token to the merchant account. | n/a |
+
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

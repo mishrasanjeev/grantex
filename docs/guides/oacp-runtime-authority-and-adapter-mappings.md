@@ -110,6 +110,33 @@ receives card data: any payment-method member in the body is refused with 422
 `card_data_refused`. An `amount` above the cap is refused with
 `allowance_exceeds_passport_cap`; every refusal is audited.
 
+## ACP Order Events
+
+`GET /v1/commerce/oacp/acp/orders/{order_id}/event?tenant_id=&permalink_base=`
+(AgenticOrg service token with scope `commerce.acp.order_events.read`, an
+operator of the tenant, or the platform admin) returns `{event}`: the ACP
+2026-04-17 webhook body `{type, data}` for a Grantex order, always the full
+snapshot.
+
+| ACP member | From the Grantex order |
+|---|---|
+| `type` | `order_create` when the order was never updated and has no handoffs, else `order_update`; `event_type` overrides. |
+| `data.id` | Order id. |
+| `data.checkout_session_id` | `checkout_session_id` query, else the cart, else the payment intent (409 when none). |
+| `data.permalink_url` | `permalink_base` + `/` + order id (https only). |
+| `data.status` | `pending_source_facts` created, `recorded` confirmed, `merchant_acknowledged` processing, `closed` completed, `cancelled` / `expired` canceled, `blocked` / `unknown` manual_review. |
+| `data.line_items[]` | One per line: `id` (variant), `title`, `product_id`, `quantity {ordered, current, fulfilled: 0}`, `unit_price` and `subtotal` only when the price is known, `status` (`removed` on a cancelled or expired order). |
+| `data.totals[]` | `subtotal`, `tax`, `total` when known. |
+| `data.fulfillments[]` | Fulfillment / delivery handoffs whose safe `fulfillment_method` is `shipping`, `pickup` or `digital`. |
+| `data.adjustments[]` | Refund / return handoffs: status `pending`, `completed` (resolved) or `failed`; `amount` from the safe `amount_minor_units`. |
+
+No buyer, agent, audit, SKU or provider identifiers are emitted. The merchant
+runtime signs the exact body it sends with
+`Merchant-Signature: t=<unix>,v1=<hex HMAC-SHA256(secret, t + "." + body)>`
+(receivers allow 300 s) and posts it to the agent platform; Grantex sends no
+outbound webhooks. Shared signature vectors:
+`spec/examples/acp/merchant-signature-v1.json`.
+
 ## Buyer Identity Linking
 
 UCP identity linking needs an OAuth 2.0 authorization server on the merchant's

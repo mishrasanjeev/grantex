@@ -12,7 +12,7 @@ The canonical artifact is OACP. Adapter payloads are derived compatibility views
 flowchart LR
   artifact[Canonical OACP artifacts] --> schema[Schema.org Product/Offer JSON-LD]
   artifact --> ucp[UCP business profile 2026-04-08 / 2026-08-25]
-  artifact --> acp[ACP-style interaction profile]
+  artifact --> acp[ACP order events and delegate-payment allowance]
   artifact --> ap2[AP2-style evidence profile]
   artifact --> a2a[A2A task metadata]
   artifact --> mcp[MCP tool metadata]
@@ -25,6 +25,7 @@ flowchart LR
 | --- | --- | --- |
 | Schema.org | Product and offer discovery shape. | Source/freshness stays from OACP and Shopify. |
 | UCP | Business profile `ucp` member (`GET /v1/commerce/oacp/ucp-profile`), spec shape at 2026-04-08 and 2026-08-25, `dev.ucp.*` names only. | Emits only capabilities the host serves and issued artifacts back; the host signs and publishes. |
+| ACP | `order_create` / `order_update` events for Grantex orders, and the delegate-payment allowance from the Commerce Passport cap. | Grantex never handles card data; the merchant signs and delivers webhooks. |
 | AP2-style | Mandate/evidence profile shape. | Does not create a mandate. |
 | A2A | Agent card/task metadata. | Does not authorize execution. |
 | MCP | Tool metadata for ChatGPT/Claude-style clients. | Tool calls still hit AgenticOrg runtime checks. |

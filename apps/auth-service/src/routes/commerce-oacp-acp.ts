@@ -10,9 +10,19 @@
  *   POST /oacp/acp/delegate-payment-allowance   ACP delegate-payment allowance and
  *                                               risk-signal envelope from a checkout
  *                                               Commerce Passport (G35)
+ *   GET  /oacp/acp/orders/:orderId/event        ACP order_create / order_update event
+ *                                               body for a Grantex order (G37)
  */
 import type { FastifyInstance } from 'fastify';
-import { ACP_DELEGATE_PAYMENT_ALLOWANCE_SCOPE } from '../lib/commerce/caller.js';
+import { ACP_DELEGATE_PAYMENT_ALLOWANCE_SCOPE, ACP_ORDER_EVENTS_READ_SCOPE } from '../lib/commerce/caller.js';
+import {
+  ACP_ORDER_EVENT_TYPES,
+  AcpOrderEventError,
+  mapGrantexOrderToAcpEvent,
+  type AcpOrderEventType,
+  type GrantexOrderHandoffRecord,
+  type GrantexOrderRecord,
+} from '../lib/commerce/acp-order-events.js';
 import {
   AcpAllowanceError,
   assertNoCardData,
@@ -133,5 +143,58 @@ export async function commerceOacpAcpRoutes(app: FastifyInstance) {
     }, verified.passport);
     reply.header('cache-control', 'no-store');
     return reply.status(200).send({ ...envelope, audit_event_id: recorded.id });
+  });
+
+  app.get<{
+    Params: { orderId: string };
+    Querystring: { tenant_id?: string; permalink_base?: string; checkout_session_id?: string; event_type?: string };
+  }>('/oacp/acp/orders/:orderId/event', async (request, reply) => {
+    requireKind(request);
+    const q = request.query;
+    if (typeof q.tenant_id !== 'string' || q.tenant_id.length === 0) throw invalid('tenant_id', 'required');
+    if (!callerMayActForTenant(request, q.tenant_id, ACP_ORDER_EVENTS_READ_SCOPE)) {
+      throw new CommerceHttpError(403, 'tenant_not_allowed', 'Caller may not read orders for this tenant', { retryable: false });
+    }
+    if (typeof q.permalink_base !== 'string' || q.permalink_base.length === 0) throw invalid('permalink_base', 'required https URL');
+    if (q.event_type !== undefined && !(ACP_ORDER_EVENT_TYPES as readonly string[]).includes(q.event_type)) {
+      throw invalid('event_type', `must be one of ${ACP_ORDER_EVENT_TYPES.join(', ')}`);
+    }
+    if (q.checkout_session_id !== undefined && !/^[A-Za-z0-9_.:-]{1,256}$/.test(q.checkout_session_id)) {
+      throw invalid('checkout_session_id', 'must be 1 to 256 URL-safe characters');
+    }
+    const sql = getSql();
+    const orders = await sql<GrantexOrderRecord[]>`
+      SELECT id, cart_id, payment_intent_id, status, line_items_snapshot, commercial_facts_snapshot,
+             created_at, updated_at
+        FROM commerce_orders
+       WHERE tenant_id = ${q.tenant_id} AND id = ${request.params.orderId}
+    `;
+    const order = orders[0];
+    // Another tenant's order answers exactly like a missing one.
+    if (!order) throw new CommerceHttpError(404, 'order_not_found', 'Order not found', { retryable: false });
+    const handoffs = await sql<GrantexOrderHandoffRecord[]>`
+      SELECT id, handoff_type, status, handoff_snapshot, created_at, updated_at
+        FROM commerce_order_handoffs
+       WHERE tenant_id = ${q.tenant_id} AND order_id = ${order.id}
+       ORDER BY created_at, id
+    `;
+    try {
+      const event = mapGrantexOrderToAcpEvent({
+        order: { ...order, created_at: new Date(order.created_at).toISOString(), updated_at: new Date(order.updated_at).toISOString() },
+        handoffs,
+        permalink_base: q.permalink_base,
+        checkout_session_id: q.checkout_session_id,
+        event_type: q.event_type as AcpOrderEventType | undefined,
+      });
+      reply.header('cache-control', 'no-store');
+      return reply.status(200).send({ event });
+    } catch (err) {
+      if (err instanceof AcpOrderEventError) {
+        throw err.code === 'acp_order_checkout_reference_missing'
+          ? new CommerceHttpError(409, err.code, err.message, { retryable: false })
+          : invalid(err.code === 'invalid_permalink_base' ? 'permalink_base' : 'event_type', err.message);
+      }
+      throw err;
+    }
   });
 }

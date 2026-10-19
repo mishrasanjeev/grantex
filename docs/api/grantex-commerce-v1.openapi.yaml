@@ -3520,6 +3520,42 @@ paths:
         "503":
           description: revocation_unavailable - the online revocation check could not run; fails closed.
 
+  /v1/commerce/oacp/acp/orders/{order_id}/event:
+    parameters:
+      - { in: path, name: order_id, required: true, schema: { type: string } }
+    get:
+      tags: [OACP]
+      operationId: getAcpOrderEvent
+      summary: Render a Grantex order as an ACP order_create / order_update event
+      description: >-
+        Maps a Grantex order (commerce_orders) and its handoffs to the ACP
+        2026-04-17 WebhookEvent body {type, data}: the full order snapshot with
+        type order, checkout_session_id, permalink_url and status. No buyer,
+        agent, audit or provider identifiers are emitted; facts Grantex does
+        not hold are omitted. The merchant runtime signs the body with
+        Merchant-Signature and delivers it. Authenticated with the AgenticOrg
+        service token (route scope commerce.acp.order_events.read, tenant
+        allowlist), an operator of the tenant, or the platform admin.
+      security:
+        - developerApiKey: []
+      parameters:
+        - { in: query, name: tenant_id, required: true, schema: { type: string } }
+        - { in: query, name: permalink_base, required: true, schema: { type: string, format: uri } }
+        - { in: query, name: checkout_session_id, required: false, schema: { type: string, pattern: "^[A-Za-z0-9_.:-]{1,256}$" } }
+        - { in: query, name: event_type, required: false, schema: { type: string, enum: [order_create, order_update] } }
+      responses:
+        "200":
+          description: "{event: {type, data}}. Cache-Control no-store."
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: tenant_not_allowed - the caller may not act for this tenant.
+        "404":
+          description: order_not_found - no such order in this tenant.
+        "409":
+          description: acp_order_checkout_reference_missing - no cart, payment intent or checkout_session_id.
+        "422":
+          description: validation_failed - missing tenant_id or permalink_base, bad event_type or checkout_session_id.
+
   # =====================================================================
   # M1 — implemented
   # =====================================================================

@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - ACP order events for Grantex orders (G37)
+- `GET /v1/commerce/oacp/acp/orders/{order_id}/event?tenant_id&permalink_base`
+  maps a Grantex order (`commerce_orders`) and its handoffs to the ACP
+  2026-04-17 `WebhookEvent` body: `order_create` for an order never changed and
+  without handoffs, otherwise `order_update` (or `event_type`), with the full
+  order snapshot (`type: order`, `checkout_session_id` = the ACP session given,
+  else the Grantex cart, else the payment intent; `permalink_url`; `status`
+  mapped from the Grantex status; line items; totals; fulfillments from
+  fulfillment / delivery handoffs with a known method; refund / return
+  adjustments). No buyer, agent, audit or provider identifiers are emitted;
+  unknown prices are omitted. Tenant-scoped reads; another tenant's order
+  answers 404; an order without a checkout reference answers 409. Service token
+  route scope `commerce.acp.order_events.read`. Validated against the saved
+  ACP webhook and order schemas.
+- `acpMerchantSignature` / `verifyAcpMerchantSignature`
+  (`apps/auth-service/src/lib/commerce/acp-order-events.ts`) implement
+  `Merchant-Signature: t=<unix>,v1=<hex HMAC-SHA256>` with the 300 s receiver
+  window; shared vectors in `spec/examples/acp/merchant-signature-v1.json`
+  (synthetic secret). Grantex sends no outbound webhooks: the merchant runtime
+  signs and delivers.
+
 ### Added - ACP delegate-payment allowance from the Commerce Passport cap (G35)
 - `POST /v1/commerce/oacp/acp/delegate-payment-allowance` verifies a checkout
   Commerce Passport in payment-affecting mode (online revocation check, fails
