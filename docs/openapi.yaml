@@ -1675,6 +1675,26 @@ components:
             assertedAt: { type: string, format: date-time }
             digest: { type: string, pattern: '^[a-f0-9]{64}$' }
 
+    WalletLedgerChainVerification:
+      type: object
+      required: [wallet_id, valid, entries, head_seq, head_hash, failures]
+      properties:
+        wallet_id: { type: string }
+        valid: { type: boolean }
+        entries: { type: integer }
+        head_seq: { type: integer, description: Position of the newest entry; 0 for an empty ledger }
+        head_hash: { type: [string, 'null'] }
+        failures:
+          type: array
+          items:
+            type: object
+            required: [position, entry_id, chain_seq, reason]
+            properties:
+              position: { type: integer, description: Zero-based position in chain order }
+              entry_id: { type: string }
+              chain_seq: { type: string }
+              reason: { type: string, enum: [entry_hash_mismatch, prev_hash_mismatch, chain_seq_mismatch, wallet_mismatch] }
+
     AuditEntry:
       type: object
       properties:
@@ -2177,6 +2197,44 @@ paths:
         - { name: walletId, in: path, required: true, schema: { type: string } }
       responses:
         '200': { description: Durable wallet activity }
+
+  /v1/principal/prepaid-wallets/{walletId}/ledger/verification:
+    get:
+      operationId: verifyPrepaidWalletLedger
+      tags: [Prepaid Wallets]
+      summary: Recompute the wallet's ledger hash chain
+      description: |
+        Recomputes every entry's entry_hash and checks each chain_seq and prev_hash link
+        (migration 134). valid is false, with one failure per finding (entry_hash_mismatch,
+        prev_hash_mismatch, chain_seq_mismatch, wallet_mismatch), when an entry was edited,
+        deleted, inserted or reordered. head_seq and head_hash name the newest entry.
+      security: [{ principalSessionAuth: [] }]
+      parameters:
+        - { name: walletId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Chain verification
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WalletLedgerChainVerification" }
+        '404': { description: Wallet not found for this principal }
+
+  /v1/admin/prepaid-wallets/{walletId}/ledger/verification:
+    get:
+      operationId: adminVerifyPrepaidWalletLedger
+      tags: [Prepaid Wallets]
+      summary: Recompute a wallet's ledger hash chain (service administrator)
+      security: [{ adminAuth: [] }]
+      parameters:
+        - { name: walletId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Chain verification
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WalletLedgerChainVerification" }
+        '401': { description: Not the service administrator credential }
+        '404': { description: Wallet not found }
 
   /v1/principal/prepaid-wallet-reservations/{reservationId}/release:
     post:

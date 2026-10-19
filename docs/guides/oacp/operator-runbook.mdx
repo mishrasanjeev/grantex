@@ -79,6 +79,18 @@ A row in `audit_witness_forks` means AgenticOrg presented a second, different ha
 | Fork is refused | another hash at a witnessed `head_seq` answers `409 WITNESS_FORK` and adds a fork row |
 | Tests | `npm --prefix apps/auth-service test -- audit-witness-checkpoints.test.ts` |
 
+## Wallet Ledger Chain
+
+Migration `134_commerce_ledger.sql` adds `chain_seq`, `prev_hash` and `entry_hash` to `wallet_ledger_entries`, chains every new entry in a `BEFORE INSERT` trigger under a per-wallet advisory lock, and backfills existing entries per wallet in `(created_at, id)` order. The backfill disables the table's append-only trigger only inside the migration transaction, which already holds an exclusive lock on the table; it is enabled again before commit. Plan the migration for a maintenance window on a large ledger. No flag: the columns and trigger are additive and no existing response changes.
+
+| Check | Evidence |
+| --- | --- |
+| A wallet's chain is intact | `GET /v1/admin/prepaid-wallets/{walletId}/ledger/verification` with the admin credential answers `valid: true` |
+| Tampering is found | `valid: false` lists each `entry_hash_mismatch` (edited), `prev_hash_mismatch` / `chain_seq_mismatch` (deleted, inserted or reordered) entry |
+| Tests | `npm --prefix apps/auth-service test -- wallet-ledger-chain.test.ts` and, with `AUDIT_INTEGRATION_DATABASE_URL`, `commerce-ledger-postgres.integration.test.ts` |
+
+A failed verification is an irregularity in financial evidence: block the wallet, keep a database snapshot, and reconcile from backups before any repair. Never repair a ledger by editing or deleting entries.
+
 ## Refusal Copy
 
 Use exact blockers: missing source evidence, stale artifact, unsafe executable request, provider capability missing, tenant not allowlisted, or authority temporarily unavailable.

@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Tamper-evident wallet ledger (G16)
+- `wallet_ledger_entries` gains `chain_seq`, `prev_hash` and `entry_hash`
+  (migration `134_commerce_ledger.sql`): a `BEFORE INSERT` trigger chains every
+  entry per wallet under a per-wallet advisory lock, on every insert path, and
+  overwrites any caller-supplied value; a unique `(wallet_id, chain_seq)` index
+  backstops forks. Existing entries are backfilled per wallet in
+  `(created_at, id)` order. Additive, so not behind a flag: no existing
+  response changes, and every insert site already holds the wallet row lock.
+  The migration takes an exclusive lock on `wallet_ledger_entries` while it
+  backfills.
+- `GET /v1/admin/prepaid-wallets/{walletId}/ledger/verification` (service
+  administrator) and `GET /v1/principal/prepaid-wallets/{walletId}/ledger/verification`
+  (wallet owner) recompute a wallet's chain and list every edited, deleted,
+  inserted or reordered entry.
+
 ### Added - Audit witness checkpoints (G16)
 - `POST /v1/audit/witness-checkpoints`, authenticated with the AgenticOrg
   internal service token, stores an AgenticOrg audit chain head and answers
