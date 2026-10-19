@@ -122,18 +122,13 @@ Status as of 2026-06-18:
   The implementation is internal, non-publication, non-certifying,
   non-executing, and fail-closed.
 - C6W3 defines the OACP artifact family and public-safe fixture corpus.
-- C6W4 defines internal adapter previews for schema.org, UCP-style,
-  ACP-style, AP2-style, A2A-style, and MCP-style targets without publication.
-- C6W5 classifies non-binding preview, commitment-adjacent,
-  commitment-bound, and always-blocked actions over cached signed artifacts.
-- C6W6 prepares non-executing commitment request envelopes for human/source
-  confirmation handoff.
-- C6W7 reconciles local/cached response evidence with prepared envelopes.
-- C6W8 prepares eligibility and audit-readiness packets over reconciliations.
-- C6W9 performs dry-run verification that a future execution controller could
-  read the packet contract. It still does not execute, approve, publish, create
-  orders, create checkout/payment, call providers, call merchant private APIs,
-  or enable public discovery.
+- The C6W4-C6W9 and C6X2 library helpers (adapter previews, commitment
+  boundary, prepared envelopes, response reconciliation, eligibility packets,
+  dry-run verifier, cached-artifact verifier) were never mounted on a route and
+  have been deleted from Grantex. See
+  [OACP library helper decision](./oacp/library-helper-decision.mdx). Artifact
+  verification is the ES256 detached JWS verifier described in
+  [OACP artifact authority](./oacp/artifact-authority.mdx).
 - C6Z adds the AgenticOrg Seller Commerce Agent runtime path, Shopify read-only
   sync initiation, Grantex internal authority request route, AgenticOrg artifact
   cache, buyer answer path, MCP seller facts bridge, and Plural/Pine capability
@@ -337,8 +332,8 @@ Plain-English rules:
    caveats without inventing facts.
 5. Non-binding discovery does not require routing every message through
    Grantex.
-6. Commitment-bound actions require C6W5-C6W9 boundary, envelope,
-   reconciliation, eligibility, and dry-run checks before any future handoff.
+6. Commitment-bound actions require verified OACP artifacts (signature, scope,
+   freshness and status list) and remain blocked from execution.
 7. Merchant-system confirmation happens through approved seller-agent connector
    handoff or merchant-owned integration systems, not by raw private API calls.
 8. Provider-owned mandate and payment capability verification stays with the
@@ -489,12 +484,10 @@ in V1 form; others are future gaps.
 | CommerceSettlement/Payout | Grantex | Seller payment reporting. | Gap. |
 | CommerceAuditEvent | Grantex | Append-only evidence. | Foundation exists. |
 | CommerceAgentSession | AgenticOrg/Grantex boundary | Buyer-agent session attribution and channel state. | C6I channel-neutral session orchestration merged; live channels pending. |
-| OacpArtifact | Grantex authority, AgenticOrg cache | Signed or signature-ready public-safe artifact scoped to tenant, merchant, seller agent, and buyer agent. | C6Z authority route issues/refuses all 11 families; AgenticOrg caches and evaluates them for buyer-safe use. |
+| OacpArtifact | Grantex authority, AgenticOrg cache | Public-safe artifact signed with an ES256 detached JWS by a Grantex OACP issuer key, scoped to tenant, merchant, seller agent, and buyer agent. | C6Z authority route issues/refuses all 11 families, persists every issue and refusal in `oacp_artifacts`, and places each artifact on an OACP Token Status List; AgenticOrg caches and evaluates them for buyer-safe use. |
 | OacpProtocolAdapterPreview | Grantex authority, AgenticOrg consumer | schema.org/UCP-style/ACP-style/AP2-style/A2A/MCP preview derived from artifacts. | Grantex `protocol_adapter` artifacts now carry mapping governance; AgenticOrg generates runtime adapter payloads from cached artifacts. Public certification/publication remains pending. |
 | OacpPreparedEnvelope | Grantex authority, AgenticOrg consumer | Prepared-only request envelope for buyer/source/merchant/provider confirmation. | AgenticOrg purchase preparation now returns a non-executing handoff or exact blocker after OACP/provider checks. |
-| OacpReconciliation | AgenticOrg local runtime, Grantex rules | Local/cached response-evidence reconciliation result. | Internal C6W7 foundation merged; production persistence pending. |
-| OacpEligibilityPacket | AgenticOrg local runtime, Grantex rules | Non-executing eligibility/audit packet. | Internal C6W8 foundation merged; execution controller still absent. |
-| OacpDryRunVerification | Grantex rules, AgenticOrg consumer | Contract dry-run over eligibility packet. | Internal C6W9 foundation merged; execution remains blocked. |
+| OacpReconciliation, OacpEligibilityPacket, OacpDryRunVerification | None in Grantex | Former C6W7-C6W9 library helpers. | Deleted from Grantex (never mounted); see the OACP library helper decision. |
 | ChannelAdapterConfig | AgenticOrg | Platform launch and capability limits. | Gap. |
 
 ## 14. Product Requirements By Surface

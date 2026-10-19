@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Removed - Unmounted OACP library helpers (G7)
+- Delete the C6W4-C6W9 and C6X2 helpers from `oacp-trust-artifacts.ts`
+  (adapter previews, commitment boundary, prepared envelopes, response
+  reconciliation, eligibility packets, dry-run verifier, cached-artifact
+  verifier) and their tests, including the C6X3-C6Y5 compatibility tests built
+  on the cached-artifact verifier. No route, job or package called them, and
+  the cached-artifact verifier accepted a caller-supplied `signature_verified`
+  flag. Decision and the rejected alternative (mounting them behind the
+  authority route): `docs/guides/oacp/library-helper-decision.mdx`.
+
 ### Changed - CERT-In security guidance
 - Simplify the agent-security article with accessible workflows for scoped
   access, independent human decisions and revocation. Distinguish product

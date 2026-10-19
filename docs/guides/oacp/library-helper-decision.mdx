@@ -1,0 +1,46 @@
+---
+title: OACP Library Helper Decision
+description: Why the unmounted C6W4-C6W9 and C6X2 OACP helpers were deleted from Grantex, and what replaces them.
+---
+
+Canonical end-to-end flow: [OACP authority overview](./overview).
+
+## Decision
+
+The OACP helpers below lived in `apps/auth-service/src/lib/commerce/oacp-trust-artifacts.ts`
+but no route, job or package ever called them. They are deleted, together with their tests.
+Grantex no longer describes them as shipped.
+
+| Helper | Former slice | What it did |
+| --- | --- | --- |
+| `buildOacpC6W4ProtocolAdapterPreview` | C6W4 | Built schema.org, UCP-style, ACP-style, AP2-style, A2A and MCP preview shapes from fixtures. |
+| `evaluateOacpC6W5CommitmentBoundaryMetadata` | C6W5 | Classified preview, commitment-adjacent, commitment-bound and blocked actions. |
+| `prepareOacpC6W6CommitmentRequestEnvelope` | C6W6 | Prepared non-executing commitment request envelopes. |
+| `reconcileOacpC6W7PreparedCommitmentResponse` | C6W7 | Reconciled response evidence with a prepared envelope. |
+| `prepareOacpC6W8ExecutionHandoffEligibilityPacket` | C6W8 | Built eligibility and audit-readiness packets. |
+| `verifyOacpC6X2CachedArtifactEnvelope` and `verifyOacpC6W9ExecutionControllerHandoffDryRun` | C6X2, C6W9 | Checked cached artifact metadata and dry-run packets. The cache verifier trusted a caller-supplied `signature_verified` flag instead of checking a signature. |
+
+## What replaces them
+
+- Artifact verification is the ES256 detached JWS verifier (`verifyOacpArtifact` in
+  `lib/commerce/oacp-jws.ts`), described in [OACP artifact authority](./artifact-authority).
+  It checks the signature against the published JWKS and the payload hash, then freshness,
+  scope, safety and the OACP Token Status List.
+- Protocol mappings stay in the `protocol_adapter` artifact's `adapter_mapping_profile`,
+  which AgenticOrg renders from verified cached artifacts.
+- Commitment, reconciliation and execution decisions are AgenticOrg's deterministic arbiter
+  (a later phase of this programme), not a Grantex library.
+
+## Alternative considered
+
+Mount the helpers behind the internal authority route
+(`POST /v1/commerce/oacp/c6z/authority-requests`, same service-token auth) so AgenticOrg
+could request adapter previews or eligibility packets from Grantex. Rejected for now:
+
+- none of them took a signed artifact as input; they worked over unsigned fixtures, so
+  mounting them would publish output that looks authoritative without being verifiable;
+- the UCP and ACP surfaces planned next are rewritten to the published specifications, and
+  the C6W4 shapes are not those shapes, so no later work needs them.
+
+If a later surface needs an artifact-derived adapter from Grantex, it is built over
+verified artifacts and mounted behind the authority route, with its own tests.

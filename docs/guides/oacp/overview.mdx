@@ -40,7 +40,7 @@ Grantex does not own Shopify runtime credentials, WooCommerce/ERP connector cred
 
 | Status | Reality |
 | --- | --- |
-| Implemented runtime | `POST /v1/commerce/oacp/c6z/authority-requests`, internal artifact issuance, verifier helpers, adapter preview helpers, and OACP guard tests. |
+| Implemented runtime | `POST /v1/commerce/oacp/c6z/authority-requests`, internal artifact issuance, the artifact verifier, and OACP guard tests. The unmounted C6W4-C6W9 and C6X2 helpers were deleted ([decision](./library-helper-decision)). |
 | Implemented docs only | Historical Commerce V1 planning and C6 audit/review reports remain useful as internal history but are superseded for the public OACP split. |
 | Requires external credentials or approval | AgenticOrg service token and tenant allowlist, merchant Shopify access, channel approvals, and provider rail approval. |
 | Missing | Public standards program approval, universal channel launch, live POS provider approval, non-Shopify source adapters, bank/custom payment adapters, and broad payment/order execution. |

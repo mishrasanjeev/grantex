@@ -147,8 +147,9 @@ sequenceDiagram
    missing, revoked, ambiguous, or high risk.
 5. AgenticOrg explains grounded facts and warns about unknown or stale
    information.
-6. If the buyer requests a commitment-bound action, AgenticOrg uses C6W5-C6W9
-   style boundary, envelope, reconciliation, eligibility, and dry-run checks.
+6. If the buyer requests a commitment-bound action, AgenticOrg verifies the
+   OACP artifacts it relies on (detached JWS, scope, freshness, status list)
+   and the action stays blocked from execution.
 7. Merchant-system confirmation happens through approved connector handoff or
    merchant-owned systems.
 8. Provider-owned mandate/payment capability verification stays with the
