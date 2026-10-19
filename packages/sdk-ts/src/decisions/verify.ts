@@ -16,6 +16,8 @@ import { ActionValidationError, computeActionHash, isActionHash, parseDecisionAc
 
 export const DECISION_GRANT_TYP = 'decision+jwt';
 export const DECISION_GRANT_AUDIENCE = 'urn:grantex:decision';
+/** `approver_auth` of the machine profile, which human-approval verification refuses. */
+export const POLICY_ARBITER_APPROVER_AUTH = 'policy_arbiter';
 
 const JTI_RE = /^dgnt_[0-9A-HJKMNP-TV-Z]{26}$/;
 const MAX_TOKEN_LENGTH = 16_384;
@@ -238,6 +240,12 @@ export async function verifyDecisionGrant(
     );
   }
 
+  // A machine-profile grant records a policy arbiter's decision
+  // (spec/decision-grant.md section 10); it never satisfies a decision that
+  // needs a person, whatever else it carries.
+  if (payload['approver_auth'] === POLICY_ARBITER_APPROVER_AUTH) {
+    throw new DecisionGrantError(DecisionSubReason.MALFORMED, 'a policy_arbiter decision grant is a machine decision and cannot satisfy a human approval');
+  }
   const jti = claimString(payload, 'jti');
   if (!JTI_RE.test(jti)) throw new DecisionGrantError(DecisionSubReason.MALFORMED, 'decision grant jti is malformed');
   let action: DecisionAction;

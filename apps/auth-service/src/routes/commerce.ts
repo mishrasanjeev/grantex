@@ -57,6 +57,7 @@ import { commerceOpsRoutes } from './commerce-ops.js';
 import { commerceWebhookSourceRoutes } from './commerce-webhook-sources.js';
 import { commerceConnectorRoutes } from './commerce-connectors.js';
 import { commerceOacpRuntimeRoutes } from './commerce-oacp-runtime.js';
+import { commerceOacpArbiterRoutes } from './commerce-oacp-arbiter.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -4241,6 +4242,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   await app.register(commerceWebhookSourceRoutes);
   await app.register(commerceConnectorRoutes);
   await app.register(commerceOacpRuntimeRoutes);
+  await app.register(commerceOacpArbiterRoutes);
   await app.register(commerceCartPaymentRoutes);
   await app.register(commerceOpsRoutes);
 }

@@ -14,7 +14,9 @@ import {
 type Sql = ReturnType<typeof postgres>;
 
 export const C6Z_AUTHORITY_SERVICE_SCOPE = 'commerce.oacp.c6z.authority_requests.write';
+export const OACP_ARBITER_DECISIONS_SERVICE_SCOPE = 'commerce.oacp.arbiter_decisions.write';
 const C6Z_AUTHORITY_ROUTE_SUFFIX = '/oacp/c6z/authority-requests';
+const OACP_ARBITER_DECISIONS_ROUTE_SUFFIX = '/oacp/arbiter-decisions';
 
 export type CommerceCaller =
   | {
@@ -135,14 +137,26 @@ function tokenSha256(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
-function isC6ZAuthorityRoute(request: FastifyRequest): boolean {
-  if (request.method !== 'POST') return false;
+/**
+ * The commerce routes the AgenticOrg internal service token may call, and the
+ * one scope it carries on each. Anywhere else the token is not recognised and
+ * falls through to the operator resolver, which refuses it.
+ */
+function serviceTokenRouteScope(request: FastifyRequest): string | null {
+  if (request.method !== 'POST') return null;
   const path = request.url.split('?')[0] ?? '';
-  return path.endsWith(C6Z_AUTHORITY_ROUTE_SUFFIX);
+  if (path.endsWith(C6Z_AUTHORITY_ROUTE_SUFFIX)) return C6Z_AUTHORITY_SERVICE_SCOPE;
+  if (path.endsWith(OACP_ARBITER_DECISIONS_ROUTE_SUFFIX)) return OACP_ARBITER_DECISIONS_SERVICE_SCOPE;
+  return null;
 }
 
-function isC6ZAuthorityServiceToken(request: FastifyRequest, token: string): boolean {
-  if (!isC6ZAuthorityRoute(request)) return false;
+/**
+ * Whether `token` is the AgenticOrg internal service token
+ * (`COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN`, or its SHA-256 in
+ * `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN_SHA256`), compared in constant time.
+ * Route-independent: callers decide which routes accept it.
+ */
+export function matchesAgenticOrgServiceToken(token: string): boolean {
   const rawToken = process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN'];
   if (rawToken && rawToken.length >= 16 && timingSafeStringEqual(token, rawToken)) return true;
   const expectedHash = process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN_SHA256'];
@@ -175,14 +189,15 @@ export async function resolveCommerceCaller(
 
   // Order matters: check the most specific shapes first so an opaque
   // token doesn't accidentally match the operator fallback.
-  if (isC6ZAuthorityServiceToken(request, token)) {
+  const serviceScope = serviceTokenRouteScope(request);
+  if (serviceScope !== null && matchesAgenticOrgServiceToken(token)) {
     return {
       ok: true,
       caller: {
         kind: 'service',
         serviceId: 'agenticorg_c6z_authority',
         tenantId: process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_DEFAULT_TENANT'] ?? '',
-        scopes: [C6Z_AUTHORITY_SERVICE_SCOPE],
+        scopes: [serviceScope],
       },
     };
   }

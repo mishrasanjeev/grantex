@@ -589,6 +589,55 @@
         }
       ],
       "expect": "malformed"
+    },
+    {
+      "name": "policy_arbiter approver_auth on an otherwise valid human grant",
+      "grants": [
+        {
+          "claims": {
+            "approver_auth": "policy_arbiter"
+          }
+        }
+      ],
+      "expect": "malformed"
+    },
+    {
+      "name": "machine-profile decision grant where a human approval is required",
+      "grants": [
+        {
+          "claims": {
+            "approver_auth": "policy_arbiter",
+            "amr": [
+              "mandate",
+              "consent"
+            ],
+            "dwell_ms": 0,
+            "action_hash": "8d5f2a0c3b1e4d7f9a6c2e5b8d1f4a7c0e3b6d9f2a5c8e1b4d7f0a3c6e9b2d5f",
+            "decision_request": "arb_dec_0001",
+            "arbiter": {
+              "tenant_id": "cten_example",
+              "merchant_id": "mch_example",
+              "seller_agent_id": "seller-01",
+              "action": "purchase_handoff",
+              "policy_version": "2026-10-01",
+              "rules_evaluated": [
+                "mandate_present"
+              ],
+              "evidence_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+            }
+          },
+          "remove": [
+            "dev",
+            "idp",
+            "action",
+            "connector",
+            "case_version",
+            "memo_hash",
+            "policy_score_hash"
+          ]
+        }
+      ],
+      "expect": "malformed"
     }
   ]
 }

@@ -52,6 +52,20 @@ flowchart TD
 4. Leave existing historical artifacts reviewable for audit/export.
 5. Publish an operator note with affected tenants, merchant ids, artifact families, and timestamps.
 
+## Arbiter Decision Ledger
+
+`POST /v1/commerce/oacp/arbiter-decisions` records every AgenticOrg arbiter decision in `commerce_arbiter_decisions` (migration `134_commerce_ledger.sql`), append-only: a trigger refuses `UPDATE`, `DELETE` and `TRUNCATE`, and a check constraint refuses a refusal row that carries a grant. It needs no new configuration: the service token and `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` already provisioned for authority requests apply.
+
+| Check | Evidence |
+| --- | --- |
+| An `allow` is countersigned | `201` with `decision_grant`; the token verifies against `/.well-known/jwks.json` and carries `approver_auth: "policy_arbiter"` |
+| A `refuse` mints nothing | `201 {recorded: true}`; the row has `grant_jti IS NULL` |
+| Replays are idempotent | the same body answers `200` with the same `jti`; another body answers `409 arbiter_decision_conflict` |
+| Human approvals stay human | a `policy_arbiter` grant presented to `POST /v1/decisions/consume` is refused `400 malformed` |
+| Tests | `npm --prefix apps/auth-service test -- commerce-oacp-arbiter-decisions.test.ts` |
+
+To stop countersigning for a tenant, remove it from `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`; recorded decisions stay readable for audit.
+
 ## Refusal Copy
 
 Use exact blockers: missing source evidence, stale artifact, unsafe executable request, provider capability missing, tenant not allowlisted, or authority temporarily unavailable.

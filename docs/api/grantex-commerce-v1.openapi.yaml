@@ -3722,6 +3722,79 @@ paths:
         "422":
           description: Request is unsafe, stale, malformed, private, or executable.
 
+  /v1/commerce/oacp/arbiter-decisions:
+    post:
+      tags: [OACP]
+      summary: Record an AgenticOrg arbiter decision
+      description: >-
+        AgenticOrg's deterministic policy arbiter records every decision it
+        seals. Authenticated with the AgenticOrg internal service token of the
+        C6Z authority route and its tenant allowlist; other credentials are
+        refused. Stored append-only and idempotent on decision_id (same body,
+        same answer; different body, 409). An allow is answered with a
+        machine-profile decision grant (spec/decision-grant.md section 10:
+        approver_auth policy_arbiter, no acr, dwell_ms 0, at most ten minutes);
+        a refuse is recorded and nothing is minted.
+      security:
+        - developerApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision_id, tenant_id, merchant_id, seller_agent_id, buyer_agent_id, action,
+                action_hash, outcome, rules_evaluated, failing_rule, evidence, decided_at, policy_version]
+              properties:
+                decision_id: { type: string, maxLength: 128 }
+                tenant_id: { type: string, maxLength: 128 }
+                merchant_id: { type: string, maxLength: 128 }
+                seller_agent_id: { type: string, maxLength: 128 }
+                buyer_agent_id: { type: string, maxLength: 128 }
+                action: { type: string, maxLength: 128 }
+                action_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+                outcome: { type: string, enum: [allow, refuse] }
+                rules_evaluated:
+                  type: array
+                  minItems: 1
+                  maxItems: 64
+                  items: { type: string }
+                failing_rule: { type: [string, "null"] }
+                evidence:
+                  type: object
+                  additionalProperties: false
+                  required: [mandate_ref, mandate_hash, consent_ref, consent_status, passport_ref, artifact_ids]
+                  properties:
+                    mandate_ref: { type: [string, "null"] }
+                    mandate_hash: { type: [string, "null"] }
+                    consent_ref: { type: [string, "null"] }
+                    consent_status: { type: [string, "null"] }
+                    passport_ref: { type: [string, "null"] }
+                    artifact_ids:
+                      type: array
+                      maxItems: 64
+                      items: { type: string }
+                decided_at: { type: string, format: date-time }
+                policy_version: { type: string, maxLength: 128 }
+      responses:
+        "200":
+          description: Replay of a recorded decision with the same body; the first answer.
+        "201":
+          description: >-
+            Recorded. An allow answers {decision_id, outcome, decision_grant, jti,
+            exp, expires_at}; a refuse answers {decision_id, outcome, recorded: true}.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Not the AgenticOrg service token, or the tenant is not allowlisted.
+        "409":
+          description: arbiter_decision_conflict - the decision_id is recorded with another body.
+        "422":
+          description: >-
+            arbiter_decision_invalid (malformed, an allow with no evidence, decided_at
+            in the future) or arbiter_decision_stale (an allow older than ten minutes).
+            Not stored.
+
   # =====================================================================
   # M1 — implemented
   # =====================================================================

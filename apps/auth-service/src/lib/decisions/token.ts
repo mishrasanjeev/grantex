@@ -53,10 +53,54 @@ export interface DecisionGrantClaims {
   four_eyes?: FourEyesClaim;
 }
 
-/** Signs a decision grant. `iss` and `aud` are always this service's; any given are ignored. */
-export async function signDecisionGrant(
-  claims: Omit<DecisionGrantClaims, 'iss' | 'aud'> & { iss?: string; aud?: string },
-): Promise<string> {
+/**
+ * `approver_auth` of the machine profile (spec/decision-grant.md section 10):
+ * a decision sealed by a deterministic policy arbiter, not approved by a
+ * person. No human-approval consumer accepts it.
+ */
+export const POLICY_ARBITER_APPROVER_AUTH = 'policy_arbiter';
+
+/** Longest lifetime of a machine-profile decision grant, in seconds. */
+export const ARBITER_DECISION_GRANT_MAX_LIFETIME_SECONDS = 600;
+
+/** The arbiter's own facts, bound into a machine-profile decision grant. */
+export interface ArbiterClaim {
+  tenant_id: string;
+  merchant_id: string;
+  seller_agent_id: string;
+  action: string;
+  policy_version: string;
+  rules_evaluated: string[];
+  /** Lowercase hex SHA-256 of the RFC 8785 form of the decision's `evidence`. */
+  evidence_hash: string;
+}
+
+/**
+ * The claims of a machine-profile decision grant, as signed. `action_hash`
+ * is lowercase hex SHA-256 of the RFC 8785 handoff payload, as the arbiter
+ * computed it; there is no `acr`, no approver identity provider and no
+ * human dwell.
+ */
+export interface ArbiterDecisionGrantClaims {
+  iss: string;
+  sub: string;
+  aud: string;
+  jti: string;
+  iat: number;
+  exp: number;
+  approver_auth: typeof POLICY_ARBITER_APPROVER_AUTH;
+  amr: string[];
+  auth_time: number;
+  action_hash: string;
+  dwell_ms: 0;
+  dwell_source: 'server';
+  decision_request: string;
+  arbiter: ArbiterClaim;
+}
+
+type UnsignedClaims<T> = Omit<T, 'iss' | 'aud'> & { iss?: string; aud?: string };
+
+async function signWithPlatformKey(claims: UnsignedClaims<{ sub: string; jti: string; iat: number; exp: number }>): Promise<string> {
   // The platform's active signing key and the kid it signs with now, as for grant tokens.
   const { privateKey, kid, alg } = getKeyPair();
   const { sub, jti, iat, exp, iss: _iss, aud: _aud, ...rest } = claims;
@@ -69,6 +113,29 @@ export async function signDecisionGrant(
     .setIssuedAt(iat)
     .setExpirationTime(exp)
     .sign(privateKey);
+}
+
+/** Signs a decision grant. `iss` and `aud` are always this service's; any given are ignored. */
+export async function signDecisionGrant(claims: UnsignedClaims<DecisionGrantClaims>): Promise<string> {
+  if (claims.approver_auth === POLICY_ARBITER_APPROVER_AUTH) {
+    throw new DecisionTokenError('a human decision grant cannot carry the policy_arbiter approver_auth');
+  }
+  return signWithPlatformKey(claims);
+}
+
+/**
+ * Signs a machine-profile decision grant with the same platform key, header
+ * and audience as a human one, so relying parties verify it with the same
+ * JWKS and tell the profiles apart by `approver_auth`.
+ */
+export async function signArbiterDecisionGrant(claims: UnsignedClaims<ArbiterDecisionGrantClaims>): Promise<string> {
+  if (claims.approver_auth !== POLICY_ARBITER_APPROVER_AUTH || claims.dwell_ms !== 0 || 'acr' in claims) {
+    throw new DecisionTokenError('a machine-profile decision grant must name policy_arbiter, have no acr and no dwell');
+  }
+  if (claims.exp <= claims.iat || claims.exp - claims.iat > ARBITER_DECISION_GRANT_MAX_LIFETIME_SECONDS) {
+    throw new DecisionTokenError('a machine-profile decision grant lives at most ten minutes');
+  }
+  return signWithPlatformKey(claims);
 }
 
 export class DecisionTokenError extends Error {
@@ -124,6 +191,12 @@ export async function verifyDecisionGrantSignature(token: string): Promise<Decis
 /** Validates the claim set of a decision grant. */
 export function parseDecisionGrantClaims(payload: JWTPayload): DecisionGrantClaims {
   const p = payload as Record<string, unknown>;
+  // A machine-profile grant records a policy arbiter's decision. It never
+  // satisfies a decision that needs a person (approver sign-in, step-up,
+  // dwell, four eyes), whatever else it carries.
+  if (p['approver_auth'] === POLICY_ARBITER_APPROVER_AUTH) {
+    throw new DecisionTokenError('a policy_arbiter decision grant is a machine decision and cannot satisfy a human approval');
+  }
   const str = (key: string): string => {
     const value = p[key];
     if (typeof value !== 'string' || value.length === 0) throw new DecisionTokenError(`decision grant claim ${key} is missing`);

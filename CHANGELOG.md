@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - OACP arbiter decision ledger (G16)
+- `POST /v1/commerce/oacp/arbiter-decisions`, authenticated with the AgenticOrg
+  internal service token and tenant allowlist of the C6Z authority route,
+  records every policy-arbiter decision append-only in
+  `commerce_arbiter_decisions` (migration `134_commerce_ledger.sql`),
+  idempotent on `decision_id` (a different body is refused 409). An `allow`
+  is answered with a decision grant in the new machine profile
+  (`spec/decision-grant.md` section 10: `approver_auth: "policy_arbiter"`,
+  `amr` from the evidence, no `acr`, `dwell_ms: 0`, hex `action_hash`, at most
+  ten minutes), signed with the platform key and verifiable with the existing
+  JWKS. A `refuse` is recorded and nothing is minted.
+- Human decision-grant verification refuses a `policy_arbiter` grant as
+  `malformed`: the auth service's consumption endpoints and both SDKs'
+  `verifyDecisionGrant(s)` / `verify_decision_grant(s)` (and so `enforce()` and
+  `grantexDecisionVerifier`). Shared vectors added to
+  `spec/examples/decision-grant/verification.json`. No human-issued grant ever
+  carries that value, so existing grants verify as before.
+
 ### Changed - CERT-In security guidance
 - Simplify the agent-security article with accessible workflows for scoped
   access, independent human decisions and revocation. Distinguish product
