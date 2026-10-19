@@ -269,3 +269,4 @@ b670b91a9b5894d65d3474d81ca898f8b348c945:docs/api-reference/vault/resolve.mdx:ge
 b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-py/tests/test_vault.py:generic-api-key:130
 b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-py/tests/test_vault.py:generic-api-key:145
 b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-ts/tests/vault.test.ts:generic-api-key:124
+745cb2d86928e2d92fca30904e07d8855effc8a0:spec/examples/oacp/oacp-artifact-jws-v1.json:jwt:875
