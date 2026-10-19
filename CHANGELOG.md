@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - JWK Set and status-list fetchers bound to configured issuer URLs: no
   redirects, bounded responses, https only (http on loopback when enabled),
   status lists cached for no longer than their `ttl`.
+- `revocation` artifacts may live up to 24 hours (86400 s) in the verifier's
+  per-type TTL table, matching the auth service's issuing TTL for that type.
 
 ### Added - `oacp` conformance suite (source only)
 - `grantex-conformance --include oacp --suite oacp` checks issue, read-back

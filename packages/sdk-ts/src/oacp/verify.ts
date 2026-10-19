@@ -88,7 +88,7 @@ export const OACP_ARTIFACT_MAX_TTL_SECONDS: Readonly<Record<string, number>> = O
   public_discovery: 15 * 60,
   mandate_capability: 2 * 60,
   commitment_evidence: 5 * 60,
-  revocation: 0,
+  revocation: 24 * 60 * 60,
   protocol_adapter: 24 * 60 * 60,
 });
 

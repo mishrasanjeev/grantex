@@ -14,6 +14,7 @@ import {
   createOacpJwksFetcher,
   createOacpStatusListFetcher,
   decodeOacpStatusList,
+  OACP_ARTIFACT_MAX_TTL_SECONDS,
   verifyOacpArtifact,
   type OacpJwks,
 } from '../src/index.js';
@@ -147,6 +148,10 @@ describe('verifyOacpArtifact checks after the signature', () => {
   it('applies a stricter TTL override', async () => {
     const result = await verifyOacpArtifact(valid.envelope, valid.payload, { ...base, maxTtlSeconds: { catalog_snapshot: 60 }, checkStatus: false });
     expect(result).toMatchObject({ valid: false, refusalCode: 'artifact_ttl_exceeds_default' });
+  });
+
+  it('lets revocation artifacts live 24 hours', () => {
+    expect(OACP_ARTIFACT_MAX_TTL_SECONDS['revocation']).toBe(86_400);
   });
 
   it('compares each scope member given, including an empty buyer', async () => {
