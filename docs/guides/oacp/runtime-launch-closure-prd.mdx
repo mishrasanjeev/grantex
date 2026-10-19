@@ -15,7 +15,7 @@ This is the canonical Grantex closure PRD for the OACP Shopify merchant runtime.
 flowchart LR
   shopify[Merchant Shopify source of record] --> agentic[AgenticOrg Seller Commerce Agent runtime]
   agentic -->|redacted authority request| grantex[Grantex trust, policy, artifact authority]
-  grantex -->|signed/internal artifacts or refusal| agentic
+  grantex -->|ES256-signed artifacts or refusal| agentic
   agentic --> cache[AgenticOrg scoped artifact cache]
   cache --> buyer[Buyer surfaces]
   buyer --> provider[Pine/Plural, bank, POS, or payment provider-owned handoff]
@@ -49,7 +49,7 @@ Rejects or blocks:
 
 Returns:
 
-- `201 artifact_issuance_ready` with 11 signed/internal artifact families;
+- `201 artifact_issuance_ready` with 11 ES256-signed artifact families;
 - `202 received` when connector evidence is not yet attached;
 - `403 service_tenant_not_allowed` for non-allowlisted service tenant;
 - `422` for unsafe, stale, malformed, or executable requests.
@@ -64,7 +64,7 @@ Every issued artifact must carry:
 - revocation posture;
 - blocked and unsupported capabilities;
 - non-sensitive evidence refs only;
-- signature metadata;
+- an ES256 detached JWS signature (`oacp-artifact+jws`) and a Token Status List entry;
 - no raw Shopify payloads;
 - no raw provider payloads;
 - no payment credentials;
@@ -103,7 +103,7 @@ node scripts/commerce-oacp-runtime-launch-check.mjs
 | Unsafe evidence tests | Raw payload, secret, and execution-target rejection. | Implemented |
 | Stale evidence tests | `source_evidence_stale` and connector stale checks. | Implemented |
 | Valid issuance tests | 11 artifact-family issuance with verifier status. | Implemented |
-| Artifact metadata | Source lineage, TTL, freshness, revocation, evidence refs, signature metadata. | Implemented |
+| Artifact metadata | Source lineage, TTL, freshness, revocation, evidence refs, ES256 detached JWS, status list entry, persistence. | Implemented |
 | Verifier output | Internal verifier status on every artifact. | Implemented |
 | No raw private payloads | Payload guard and tests. | Implemented |
 | No transaction toll booth | Docs and architecture. | Implemented |

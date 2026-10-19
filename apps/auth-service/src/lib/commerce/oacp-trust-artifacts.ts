@@ -12,6 +12,9 @@ export const OACP_ARTIFACT_SIGNATURE_PROFILE = {
   ad_hoc_signed_json_allowed: false,
 } as const;
 
+/** `schema_version` of envelopes signed under the OACP artifact JWS profile v1. */
+export const OACP_ARTIFACT_SCHEMA_VERSION = 'oacp.artifact.v1';
+
 export const OACP_ARTIFACT_TYPES = [
   'merchant_capability',
   'seller_agent_capability',
@@ -121,7 +124,9 @@ export const OACP_ARTIFACT_TTLS_SECONDS: Record<OacpArtifactType, number> = {
   public_discovery: 15 * 60,
   mandate_capability: 2 * 60,
   commitment_evidence: 5 * 60,
-  revocation: 0,
+  // A revocation artifact stays verifiable for as long as any artifact it
+  // names could still be presented (the longest family TTL).
+  revocation: 24 * 60 * 60,
   protocol_adapter: 24 * 60 * 60,
 };
 
@@ -179,7 +184,13 @@ export interface OacpArtifactEnvelope {
   not_before?: string | undefined;
   source_observed_at?: string | undefined;
   freshness_class: 'fresh' | 'acceptable' | 'stale' | 'unknown';
+  /** The https URI of the OACP Token Status List; equals `status.status_list.uri`. */
   revocation_status_url: string;
+  /**
+   * Token Status List reference (draft-ietf-oauth-status-list §6.2 shape):
+   * where this artifact's status is published. Inside the signed envelope.
+   */
+  status?: OacpStatusReference | undefined;
   policy_version: string;
   adapter_version?: string | undefined;
   evidence_refs: string[];
@@ -187,6 +198,10 @@ export interface OacpArtifactEnvelope {
   signature_alg: typeof OACP_ARTIFACT_SIGNATURE_PROFILE.first_algorithm;
   signature: string;
   safety: OacpArtifactSafety;
+}
+
+export interface OacpStatusReference {
+  status_list: { idx: number; uri: string };
 }
 
 export interface OacpArtifactSafety {
@@ -246,37 +261,12 @@ export interface OacpOfflineCommitmentInput {
 
 export type OacpIssuerKeyState = 'active' | 'retired' | 'revoked';
 
-export interface OacpIssuerKeyMetadata {
-  issuer: string;
-  issuer_key_id: string;
-  algorithm: typeof OACP_ARTIFACT_SIGNATURE_PROFILE.first_algorithm;
-  state: OacpIssuerKeyState;
-  not_before?: string | undefined;
-  expires_at?: string | undefined;
-}
-
 export interface OacpArtifactScope {
   tenant_id: string;
   merchant_id: string;
   seller_agent_id: string;
   buyer_agent_id: string;
 }
-
-export interface OacpDetachedJwsSignerInput {
-  canonical_payload: string;
-  payload_hash: string;
-  artifact_id: string;
-  issuer: string;
-  issuer_key_id: string;
-  signature_alg: typeof OACP_ARTIFACT_SIGNATURE_PROFILE.first_algorithm;
-}
-
-export interface OacpDetachedJwsVerifierInput extends OacpDetachedJwsSignerInput {
-  signature: string;
-}
-
-export type OacpDetachedJwsSigner = (input: OacpDetachedJwsSignerInput) => string;
-export type OacpDetachedJwsVerifier = (input: OacpDetachedJwsVerifierInput) => boolean;
 
 export type OacpArtifactVerificationRefusalCode =
   | 'artifact_missing_or_invalid'
@@ -285,11 +275,12 @@ export type OacpArtifactVerificationRefusalCode =
   | 'artifact_expired_or_stale'
   | 'artifact_ttl_exceeds_default'
   | 'artifact_revoked'
+  | 'artifact_suspended'
+  | 'revocation_status_unavailable'
   | 'payload_hash_mismatch'
   | 'signature_missing_or_placeholder'
   | 'signature_algorithm_unsupported'
   | 'issuer_key_untrusted'
-  | 'issuer_key_inactive'
   | 'detached_jws_verification_failed';
 
 export type OacpArtifactAuthorityStatus =
@@ -773,24 +764,6 @@ function parseIsoMillis(value: string | undefined): number | null {
   return Number.isNaN(millis) ? null : millis;
 }
 
-function artifactRefusal(
-  artifact_id: string | null,
-  refusal_code: OacpArtifactVerificationRefusalCode,
-  message: string,
-): OacpArtifactAuthorityStatus {
-  return {
-    valid: false,
-    status: 'refused',
-    artifact_id,
-    refusal_code,
-    message,
-  };
-}
-
-function arrayIncludes(values: readonly string[] | undefined, value: string): boolean {
-  return values !== undefined && values.includes(value);
-}
-
 function isDetachedJws(signature: string): boolean {
   if (signature === 'detached_jws_required_before_publication') return false;
   const parts = signature.split('.');
@@ -798,25 +771,6 @@ function isDetachedJws(signature: string): boolean {
   const detachedPayload = parts[1] ?? null;
   const signatureValue = parts[2] ?? '';
   return parts.length === 3 && protectedHeader.length > 0 && detachedPayload === '' && signatureValue.length > 0;
-}
-
-function scopeMatches(envelope: OacpArtifactEnvelope, expected: OacpArtifactScope | undefined): boolean {
-  if (!expected) return true;
-  return envelope.tenant_id === expected.tenant_id
-    && envelope.merchant_id === expected.merchant_id
-    && envelope.seller_agent_id === expected.seller_agent_id
-    && envelope.buyer_agent_id === expected.buyer_agent_id;
-}
-
-function findIssuerKey(
-  envelope: OacpArtifactEnvelope,
-  issuerKeys: readonly OacpIssuerKeyMetadata[],
-): OacpIssuerKeyMetadata | null {
-  return issuerKeys.find((key) => (
-    key.issuer === envelope.issuer
-    && key.issuer_key_id === envelope.issuer_key_id
-    && key.algorithm === envelope.signature_alg
-  )) ?? null;
 }
 
 /**
@@ -1317,7 +1271,11 @@ export function buildUnsignedOacpArtifactEnvelope(input: {
   expires_at: string;
   source_observed_at?: string | undefined;
   policy_version: string;
-  revocation_status_url: string;
+  /** Where the artifact's status is published; sets `status` and `revocation_status_url`. */
+  status_list?: { idx: number; uri: string } | undefined;
+  /** Only when there is no status list entry (an unsigned preview). */
+  revocation_status_url?: string | undefined;
+  evidence_refs?: string[] | undefined;
   payload: unknown;
   safety: OacpArtifactSafety;
 }): OacpArtifactEnvelope {
@@ -1328,7 +1286,7 @@ export function buildUnsignedOacpArtifactEnvelope(input: {
   return {
     artifact_id: input.artifact_id,
     artifact_type: input.artifact_type,
-    schema_version: 'oacp.internal.v1',
+    schema_version: OACP_ARTIFACT_SCHEMA_VERSION,
     issuer: input.issuer,
     issuer_key_id: input.issuer_key_id,
     subject_type: input.subject_type,
@@ -1341,192 +1299,16 @@ export function buildUnsignedOacpArtifactEnvelope(input: {
     expires_at: input.expires_at,
     source_observed_at: input.source_observed_at,
     freshness_class: 'fresh',
-    revocation_status_url: input.revocation_status_url,
+    revocation_status_url: input.status_list?.uri ?? input.revocation_status_url ?? '',
+    status: input.status_list
+      ? { status_list: { idx: input.status_list.idx, uri: input.status_list.uri } }
+      : undefined,
     policy_version: input.policy_version,
-    evidence_refs: [],
+    evidence_refs: input.evidence_refs ?? [],
     payload_hash: hashOacpPayload(input.payload),
     signature_alg: OACP_ARTIFACT_SIGNATURE_PROFILE.first_algorithm,
     signature: 'detached_jws_required_before_publication',
     safety: input.safety,
-  };
-}
-
-export function issueInternalOacpArtifact(input: {
-  artifact_id: string;
-  artifact_type: OacpArtifactType;
-  issuer: string;
-  issuer_key_id: string;
-  subject_type: string;
-  subject_id: string;
-  tenant_id?: string | undefined;
-  merchant_id?: string | undefined;
-  buyer_agent_id?: string | undefined;
-  seller_agent_id?: string | undefined;
-  issued_at: string;
-  expires_at: string;
-  source_observed_at?: string | undefined;
-  policy_version: string;
-  revocation_status_url: string;
-  payload: unknown;
-  safety: OacpArtifactSafety;
-  issuer_key: OacpIssuerKeyMetadata;
-  signDetachedJws: OacpDetachedJwsSigner;
-}): OacpArtifactEnvelope {
-  if (input.issuer_key.state !== 'active') {
-    throw new Error('OACP artifact issuance requires an active issuer key');
-  }
-  if (
-    input.issuer_key.issuer !== input.issuer
-    || input.issuer_key.issuer_key_id !== input.issuer_key_id
-    || input.issuer_key.algorithm !== OACP_ARTIFACT_SIGNATURE_PROFILE.first_algorithm
-  ) {
-    throw new Error('OACP artifact issuer key metadata does not match envelope issuer fields');
-  }
-
-  const envelope = buildUnsignedOacpArtifactEnvelope(input);
-  const issuedMillis = parseIsoMillis(envelope.issued_at);
-  const expiresMillis = parseIsoMillis(envelope.expires_at);
-  const maxTtlSeconds = OACP_ARTIFACT_TTLS_SECONDS[envelope.artifact_type];
-  if (
-    issuedMillis === null
-    || expiresMillis === null
-    || expiresMillis < issuedMillis
-    || Math.floor((expiresMillis - issuedMillis) / 1000) > maxTtlSeconds
-  ) {
-    throw new Error('OACP artifact TTL must be valid and no longer than the pinned default');
-  }
-
-  const canonicalPayload = canonicalizeOacpPayload(input.payload);
-  const signature = input.signDetachedJws({
-    canonical_payload: canonicalPayload,
-    payload_hash: envelope.payload_hash,
-    artifact_id: envelope.artifact_id,
-    issuer: envelope.issuer,
-    issuer_key_id: envelope.issuer_key_id,
-    signature_alg: envelope.signature_alg,
-  });
-
-  if (!isDetachedJws(signature)) {
-    throw new Error('OACP artifact issuance requires a detached JWS signature');
-  }
-
-  return {
-    ...envelope,
-    signature,
-  };
-}
-
-export function evaluateInternalOacpArtifactStatus(input: {
-  envelope: OacpArtifactEnvelope;
-  payload: unknown;
-  issuer_keys: readonly OacpIssuerKeyMetadata[];
-  now_iso: string;
-  verifyDetachedJws: OacpDetachedJwsVerifier;
-  expected_scope?: OacpArtifactScope | undefined;
-  revoked_artifact_ids?: readonly string[] | undefined;
-  revoked_subject_ids?: readonly string[] | undefined;
-}): OacpArtifactAuthorityStatus {
-  const artifactId = input.envelope.artifact_id || null;
-  try {
-    assertNoForbiddenOacpArtifactFields(input.payload);
-  } catch {
-    return artifactRefusal(artifactId, 'artifact_missing_or_invalid', 'Payload contains private or enabling fields.');
-  }
-
-  if (!input.envelope.safety.public_safe || input.envelope.safety.contains_private_data) {
-    return artifactRefusal(artifactId, 'artifact_missing_or_invalid', 'Artifact safety metadata is not public-safe.');
-  }
-
-  const nowMillis = parseIsoMillis(input.now_iso);
-  const issuedMillis = parseIsoMillis(input.envelope.issued_at);
-  const expiresMillis = parseIsoMillis(input.envelope.expires_at);
-  const notBeforeMillis = parseIsoMillis(input.envelope.not_before);
-  if (nowMillis === null || issuedMillis === null || expiresMillis === null) {
-    return artifactRefusal(artifactId, 'artifact_missing_or_invalid', 'Artifact contains invalid timestamps.');
-  }
-
-  if (notBeforeMillis !== null && nowMillis < notBeforeMillis) {
-    return artifactRefusal(artifactId, 'artifact_not_yet_valid', 'Artifact is not yet valid.');
-  }
-  if (nowMillis > expiresMillis) {
-    return artifactRefusal(artifactId, 'artifact_expired_or_stale', 'Artifact has expired.');
-  }
-
-  const defaultTtlSeconds = OACP_ARTIFACT_TTLS_SECONDS[input.envelope.artifact_type];
-  const actualTtlSeconds = Math.floor((expiresMillis - issuedMillis) / 1000);
-  if (actualTtlSeconds < 0 || actualTtlSeconds > defaultTtlSeconds) {
-    return artifactRefusal(artifactId, 'artifact_ttl_exceeds_default', 'Artifact TTL exceeds the pinned default.');
-  }
-
-  if (input.envelope.signature_alg !== OACP_ARTIFACT_SIGNATURE_PROFILE.first_algorithm) {
-    return artifactRefusal(artifactId, 'signature_algorithm_unsupported', 'Artifact signature algorithm is unsupported.');
-  }
-  if (!isDetachedJws(input.envelope.signature)) {
-    return artifactRefusal(artifactId, 'signature_missing_or_placeholder', 'Artifact is missing a detached JWS signature.');
-  }
-
-  const canonicalPayload = canonicalizeOacpPayload(input.payload);
-  const payloadHash = sha256hex(canonicalPayload);
-  if (payloadHash !== input.envelope.payload_hash) {
-    return artifactRefusal(artifactId, 'payload_hash_mismatch', 'Artifact payload hash does not match payload.');
-  }
-
-  const issuerKey = findIssuerKey(input.envelope, input.issuer_keys);
-  if (issuerKey === null) {
-    return artifactRefusal(artifactId, 'issuer_key_untrusted', 'Artifact issuer key is not trusted.');
-  }
-  const keyNotBeforeMillis = parseIsoMillis(issuerKey.not_before);
-  const keyExpiresMillis = parseIsoMillis(issuerKey.expires_at);
-  if (
-    issuerKey.state !== 'active'
-    || (keyNotBeforeMillis !== null && nowMillis < keyNotBeforeMillis)
-    || (keyExpiresMillis !== null && nowMillis > keyExpiresMillis)
-  ) {
-    return artifactRefusal(artifactId, 'issuer_key_inactive', 'Artifact issuer key is not active.');
-  }
-
-  if (!scopeMatches(input.envelope, input.expected_scope)) {
-    return artifactRefusal(artifactId, 'artifact_scope_mismatch', 'Artifact is outside the expected tenant/merchant/agent scope.');
-  }
-  if (
-    arrayIncludes(input.revoked_artifact_ids, input.envelope.artifact_id)
-    || arrayIncludes(input.revoked_subject_ids, input.envelope.subject_id)
-  ) {
-    return artifactRefusal(artifactId, 'artifact_revoked', 'Artifact or subject is revoked.');
-  }
-
-  const signatureOk = input.verifyDetachedJws({
-    canonical_payload: canonicalPayload,
-    payload_hash: input.envelope.payload_hash,
-    artifact_id: input.envelope.artifact_id,
-    issuer: input.envelope.issuer,
-    issuer_key_id: input.envelope.issuer_key_id,
-    signature_alg: input.envelope.signature_alg,
-    signature: input.envelope.signature,
-  });
-  if (!signatureOk) {
-    return artifactRefusal(artifactId, 'detached_jws_verification_failed', 'Detached JWS verification failed.');
-  }
-
-  return {
-    valid: true,
-    status: 'valid',
-    artifact_id: input.envelope.artifact_id,
-    artifact_type: input.envelope.artifact_type,
-    cache_key: input.envelope.tenant_id && input.envelope.merchant_id && input.envelope.seller_agent_id && input.envelope.buyer_agent_id
-      ? buildOacpArtifactCacheKey({
-        tenant_id: input.envelope.tenant_id,
-        merchant_id: input.envelope.merchant_id,
-        seller_agent_id: input.envelope.seller_agent_id,
-        buyer_agent_id: input.envelope.buyer_agent_id,
-        artifact_type: input.envelope.artifact_type,
-        artifact_id: input.envelope.artifact_id,
-        schema_version: input.envelope.schema_version,
-        policy_version: input.envelope.policy_version,
-      })
-      : null,
-    payload_hash: input.envelope.payload_hash,
-    expires_at: input.envelope.expires_at,
   };
 }
 

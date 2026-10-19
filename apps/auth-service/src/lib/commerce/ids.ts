@@ -38,3 +38,17 @@ export function newCommercePassportKid(now: Date = new Date()): string {
   const suffix = randomBytes(4).toString('hex');  // 8 hex chars
   return `commerce-passport-${y}${m}${d}-${suffix}`;
 }
+
+// OACP artifact authority (migration 133).
+export const newOacpArtifactId = (): string => `oacp_art_${ulid()}`;
+export const newOacpRefusalId = (): string => `oacp_ref_${ulid()}`;
+export const newOacpStatusListId = (): string => `oacpl_${ulid()}`;
+
+// oacp-YYYYMMDD-<16 hex>: the `oacp-` prefix marks an OACP issuer key in the
+// shared JWKS (chk_oacp_issuer_keys_kid_format).
+export function newOacpIssuerKid(now: Date = new Date()): string {
+  const y = now.getUTCFullYear();
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(now.getUTCDate()).padStart(2, '0');
+  return `oacp-${y}${m}${d}-${randomBytes(8).toString('hex')}`;
+}

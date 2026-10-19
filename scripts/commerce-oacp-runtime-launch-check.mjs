@@ -1,10 +1,27 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { generateKeyPairSync } from 'node:crypto';
 import {
   C6Z_ARTIFACT_FAMILIES,
   issueC6ZInternalOacpArtifacts,
   validateC6ZSellerAuthorityRequest,
 } from '../apps/auth-service/dist/lib/commerce/oacp-runtime-vertical.js';
+import { verifyOacpArtifact } from '../apps/auth-service/dist/lib/commerce/oacp-jws.js';
+
+// A throwaway ES256 key and an in-memory status list: this harness checks
+// the issuance logic offline. Production artifacts are signed with the
+// DB-backed OACP issuer key and listed on the published status list.
+const kid = 'oacp-20260618-0000000000000000';
+const keyPair = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+const pub = keyPair.publicKey.export({ format: 'jwk' });
+const signer = { kid, privateKey: keyPair.privateKey, publicJwk: { kty: 'EC', crv: 'P-256', x: pub.x, y: pub.y, kid, alg: 'ES256', use: 'sig' } };
+let counter = 0;
+const context = {
+  issuer: 'https://issuer.example',
+  signer,
+  newArtifactId: () => `oacp_art_01J00000000000000000${String(counter++).padStart(6, '0')}`,
+  allocateStatus: async () => ({ uri: 'https://issuer.example/status/oacp/oacpl_01J000000000000000000LAUNCH', idx: counter }),
+};
 
 const nowIso = process.env.OACP_LAUNCH_NOW_ISO || '2026-06-18T03:00:00.000Z';
 
@@ -49,7 +66,7 @@ const evidence = {
 };
 
 const validation = validateC6ZSellerAuthorityRequest(request, nowIso);
-const issuance = issueC6ZInternalOacpArtifacts({ request, evidence, now_iso: nowIso });
+const issuance = await issueC6ZInternalOacpArtifacts({ request, evidence, now_iso: nowIso, context });
 
 assert.equal(validation.status, 'artifact_issuance_ready');
 assert.equal(issuance.status, 'artifact_issuance_ready');
@@ -62,6 +79,7 @@ const families = issuance.artifacts.map((artifact) => artifact.artifact_family).
 assert.deepEqual(families, [...C6Z_ARTIFACT_FAMILIES].sort());
 for (const artifact of issuance.artifacts) {
   assert.equal(artifact.verifier_status.valid, true);
+  assert.equal(verifyOacpArtifact({ envelope: artifact.envelope, payload: artifact.payload, jwks: { keys: [signer.publicJwk] }, now_iso: nowIso, status: 0 }).valid, true);
   assert.equal(artifact.payload.allowed_to_execute, false);
   assert.equal(artifact.payload.no_payment_execution, true);
   assert.equal(artifact.payload.no_public_discovery_enablement, true);

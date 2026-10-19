@@ -183,7 +183,7 @@ describe('C6W1 OACP trust artifact foundation', () => {
     });
 
     expect(envelope).toMatchObject({
-      schema_version: 'oacp.internal.v1',
+      schema_version: 'oacp.artifact.v1',
       signature_alg: 'ES256',
       signature: 'detached_jws_required_before_publication',
       payload_hash: hashOacpPayload({

@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Signed, persisted and revocable OACP artifacts (G1-G4)
+- OACP artifacts are signed with an ES256 detached JWS (RFC 7515 Appendix F,
+  typ `oacp-artifact+jws`) over the RFC 8785 envelope without `signature`,
+  and verified in a fixed eight-step order with fixed refusal codes
+  (`lib/commerce/oacp-jws.ts`; shared vectors
+  `spec/examples/oacp/oacp-artifact-jws-v1.json`). The template-string signer,
+  the string-equality verifier and the fabricated `kid_c6z_internal_demo` key
+  metadata are deleted (G1).
+- DB-backed OACP issuer keys (`oacp-YYYYMMDD-<hex>` kids, private JWK
+  encrypted and bound to the kid) published in `/.well-known/jwks.json`;
+  retired keys stay published until every artifact they signed has expired
+  (plus 600 s), revoked keys are withdrawn. Platform-admin routes:
+  `GET /v1/commerce/oacp/issuer-keys`, `POST .../issuer-keys/rotate`,
+  `POST .../issuer-keys/:kid/revoke`. No active key: issuance answers 503;
+  `OACP_AUTO_GENERATE_ISSUER_KEY=true` creates one outside production (G2).
+- Migration `133_oacp_issuer_keys_artifacts.sql`: `oacp_issuer_keys`,
+  `oacp_artifacts`, `oacp_status_lists`, `oacp_status_entries`. Every issue
+  and refusal is stored; internal routes `GET /v1/commerce/oacp/artifacts/:id`,
+  `GET /v1/commerce/oacp/artifacts` (replay, `next_cursor`) and
+  `POST /v1/commerce/oacp/artifacts/:id/revoke` accept the AgenticOrg
+  authority service token for allow-listed tenants (G3).
+- Every artifact carries `status.status_list` and an https
+  `revocation_status_url` on an OACP Token Status List, served unauthenticated
+  at `GET /status/oacp/:list` (`application/statuslist+jwt`, ttl 30 s) when
+  `OACP_STATUS_LIST_PUBLIC_ENABLED=true` (default off). Revoking sets the entry
+  INVALID and issues a signed `revocation` artifact; the `revocation` family
+  TTL is now 24 hours instead of 0 (G4).
+
+### Changed - C6Z authority route (breaking for artifact consumers)
+- Artifacts now carry `issuer` = `JWT_ISSUER`, `schema_version`
+  `oacp.artifact.v1`, a unique `oacp_art_<ULID>` id per issuance, a real
+  `issuer_key_id` and a verifiable signature. Consumers that matched the old
+  template signature or the `internal:oacp:` revocation URL must verify the
+  JWS against the JWKS instead. There is no opt-out: the previous signature
+  proved nothing.
+- `now_iso` in the request body is ignored; artifacts are stamped with the
+  issuer clock.
+- An operator caller may issue only for its own commerce tenant (the platform
+  admin for any); previously any operator could name any tenant.
+
 ### Fixed - OACP canonical JSON is RFC 8785 (G1)
 - `canonicalizeOacpPayload` and `hashOacpPayload` use RFC 8785 (JCS) after
   removing absent members, instead of an order based on `localeCompare` that

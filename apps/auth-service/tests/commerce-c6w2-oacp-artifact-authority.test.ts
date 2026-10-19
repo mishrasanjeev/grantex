@@ -1,230 +1,138 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+// SPDX-License-Identifier: Apache-2.0
+/**
+ * OACP artifact issuance and verification with a real ES256 key: the signer
+ * produces a detached JWS over the whole RFC 8785 envelope and the verifier
+ * checks it against a JWKS before anything else is trusted. Replaces the
+ * template-string signer and string-equality verifier (G1).
+ */
+import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
-  evaluateInternalOacpArtifactStatus,
-  hashOacpPayload,
-  issueInternalOacpArtifact,
-  type OacpArtifactEnvelope,
-  type OacpArtifactSafety,
-  type OacpDetachedJwsSigner,
-  type OacpDetachedJwsVerifier,
-  type OacpIssuerKeyMetadata,
-} from '../src/lib/commerce/oacp-trust-artifacts.js';
+  issueOacpArtifact,
+  verifyOacpArtifact,
+  type OacpSigningKey,
+} from '../src/lib/commerce/oacp-jws.js';
+import { hashOacpPayload, type OacpArtifactSafety } from '../src/lib/commerce/oacp-trust-artifacts.js';
 
-const TEST_DIR = dirname(fileURLToPath(import.meta.url));
-const DOC_PATH = join(
-  TEST_DIR,
-  '../../../docs/internal/commerce-v1/commerce-v1-c6w2-oacp-artifact-authority-foundation.md',
-);
+const NOW = '2026-06-11T00:00:00.000Z';
+const STATUS = { uri: 'https://issuer.example/status/oacp/oacpl_01J0000000000000000000000A', idx: 42 };
+const SCOPE = { tenant_id: 'cten_C6W2', merchant_id: 'mch_C6W2', seller_agent_id: 'seller_C6W2', buyer_agent_id: 'buyer_C6W2' };
 
-const ISSUER_KEY: OacpIssuerKeyMetadata = {
-  issuer: 'grantex',
-  issuer_key_id: 'kid_C6W2_stub',
-  algorithm: 'ES256',
-  state: 'active',
-  not_before: '2026-06-11T00:00:00.000Z',
-  expires_at: '2026-06-12T00:00:00.000Z',
-};
-
-const SAFETY: OacpArtifactSafety = {
+const safety: OacpArtifactSafety = {
   public_safe: true,
   contains_private_data: false,
-  allowed_agent_uses: ['quote_preview', 'price_lock'],
+  allowed_agent_uses: ['browse', 'compare'],
   forbidden_agent_uses: ['payment_capture'],
-  commitment_allowed: true,
-  offline_commitment_allowed: true,
-  requires_online_confirmation: false,
+  commitment_allowed: false,
+  offline_commitment_allowed: false,
+  requires_online_confirmation: true,
   requires_provider_direct_verification: false,
   requires_merchant_system_confirmation: true,
   stale_behavior: 'refuse_final_commitment',
   refusal_code_if_invalid: 'artifact_invalid',
 };
 
-const PAYLOAD = {
-  display_name: 'C6W2 public item',
-  amount_minor_units: 99900,
-  currency: 'INR',
-};
+const payload = { product_id: 'prod_1', variant_id: 'var_1', amount_minor_units: 99900, currency: 'INR', price_source: 'redacted', price_valid_until: '2026-06-11T00:05:00.000Z' };
 
-const SIGNER: OacpDetachedJwsSigner = ({ payload_hash }) => `eyJhbGciOiJFUzI1NiJ9..sig_${payload_hash}`;
-const VERIFIER: OacpDetachedJwsVerifier = ({ payload_hash, signature }) => (
-  signature === `eyJhbGciOiJFUzI1NiJ9..sig_${payload_hash}`
-);
+function newSigner(kid = 'oacp-20260611-0123456789abcdef'): OacpSigningKey {
+  const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const jwk = publicKey.export({ format: 'jwk' });
+  return { kid, privateKey, publicJwk: { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, kid, alg: 'ES256', use: 'sig' } };
+}
 
-function issuePriceArtifact(overrides: Partial<Parameters<typeof issueInternalOacpArtifact>[0]> = {}): OacpArtifactEnvelope {
-  return issueInternalOacpArtifact({
-    artifact_id: 'oacp_price_C6W2',
+function issue(signer: OacpSigningKey, overrides: Partial<Parameters<typeof issueOacpArtifact>[0]> = {}) {
+  return issueOacpArtifact({
+    artifact_id: 'oacp_art_01J0000000000000000000C6W2',
     artifact_type: 'price',
-    issuer: 'grantex',
-    issuer_key_id: 'kid_C6W2_stub',
-    subject_type: 'merchant_offer',
-    subject_id: 'offer_C6W2',
-    tenant_id: 'cten_C6W2',
-    merchant_id: 'mch_C6W2',
-    buyer_agent_id: 'buyer_C6W2',
-    seller_agent_id: 'seller_C6W2',
-    issued_at: '2026-06-11T00:00:00.000Z',
+    issuer: 'https://issuer.example',
+    signer,
+    subject_type: 'price',
+    subject_id: 'prod_1:var_1',
+    ...SCOPE,
+    issued_at: NOW,
     expires_at: '2026-06-11T00:05:00.000Z',
-    source_observed_at: '2026-06-11T00:00:00.000Z',
+    source_observed_at: NOW,
     policy_version: 'policy_C6W2',
-    revocation_status_url: 'https://grantex.example.invalid/oacp/revocations/oacp_price_C6W2',
-    payload: PAYLOAD,
-    safety: SAFETY,
-    issuer_key: ISSUER_KEY,
-    signDetachedJws: SIGNER,
+    status_list: STATUS,
+    payload,
+    safety,
     ...overrides,
   });
 }
 
-describe('C6W2 internal OACP artifact authority helpers', () => {
-  it('issues canonical-hash envelopes with detached JWS signatures and no JWT artifact container', () => {
-    const envelope = issuePriceArtifact();
+describe('OACP artifact authority (ES256 detached JWS)', () => {
+  const signer = newSigner();
+  const jwks = { keys: [signer.publicJwk] };
 
-    expect(envelope.payload_hash).toBe(hashOacpPayload(PAYLOAD));
-    expect(envelope.signature_alg).toBe('ES256');
-    expect(envelope.signature).toBe(`eyJhbGciOiJFUzI1NiJ9..sig_${hashOacpPayload(PAYLOAD)}`);
-    expect(envelope.signature).not.toContain('jwt');
+  it('issues envelopes carrying the payload hash, status list entry and a detached JWS', () => {
+    const envelope = issue(signer);
+    expect(envelope).toMatchObject({
+      schema_version: 'oacp.artifact.v1',
+      issuer_key_id: signer.kid,
+      signature_alg: 'ES256',
+      payload_hash: hashOacpPayload(payload),
+      revocation_status_url: STATUS.uri,
+      status: { status_list: STATUS },
+    });
+    const [header, middle, signature] = envelope.signature.split('.');
+    expect(middle).toBe('');
+    expect(JSON.parse(Buffer.from(header!, 'base64url').toString('utf8'))).toEqual({ alg: 'ES256', kid: signer.kid, typ: 'oacp-artifact+jws' });
+    expect(Buffer.from(signature!, 'base64url')).toHaveLength(64);
   });
 
-  it('verifies valid internal artifacts and returns all-four-scope cache status', () => {
-    const envelope = issuePriceArtifact();
-    const status = evaluateInternalOacpArtifactStatus({
-      envelope,
-      payload: PAYLOAD,
-      issuer_keys: [ISSUER_KEY],
-      now_iso: '2026-06-11T00:01:00.000Z',
-      verifyDetachedJws: VERIFIER,
-      expected_scope: {
-        tenant_id: 'cten_C6W2',
-        merchant_id: 'mch_C6W2',
-        seller_agent_id: 'seller_C6W2',
-        buyer_agent_id: 'buyer_C6W2',
-      },
-    });
-
-    expect(status).toMatchObject({
-      valid: true,
-      status: 'valid',
-      artifact_id: 'oacp_price_C6W2',
-      artifact_type: 'price',
-      cache_key: 'cten_C6W2:mch_C6W2:seller_C6W2:buyer_C6W2:price:oacp_price_C6W2:oacp.internal.v1:policy_C6W2',
-    });
+  it('verifies a valid artifact against the published key', () => {
+    const envelope = issue(signer);
+    expect(verifyOacpArtifact({ envelope, payload, jwks, now_iso: '2026-06-11T00:01:00.000Z', status: 0, expected_scope: SCOPE }))
+      .toMatchObject({ valid: true, artifact_id: envelope.artifact_id, payload_hash: envelope.payload_hash });
   });
 
-  it('fails closed for placeholder signatures, bad payload hashes, revoked artifacts, and scope mismatch', () => {
-    const envelope = issuePriceArtifact();
-
-    expect(evaluateInternalOacpArtifactStatus({
-      envelope: { ...envelope, signature: 'detached_jws_required_before_publication' },
-      payload: PAYLOAD,
-      issuer_keys: [ISSUER_KEY],
-      now_iso: '2026-06-11T00:01:00.000Z',
-      verifyDetachedJws: VERIFIER,
-    })).toMatchObject({
-      valid: false,
-      refusal_code: 'signature_missing_or_placeholder',
-    });
-
-    expect(evaluateInternalOacpArtifactStatus({
-      envelope,
-      payload: { ...PAYLOAD, amount_minor_units: 100000 },
-      issuer_keys: [ISSUER_KEY],
-      now_iso: '2026-06-11T00:01:00.000Z',
-      verifyDetachedJws: VERIFIER,
-    })).toMatchObject({
-      valid: false,
-      refusal_code: 'payload_hash_mismatch',
-    });
-
-    expect(evaluateInternalOacpArtifactStatus({
-      envelope,
-      payload: PAYLOAD,
-      issuer_keys: [ISSUER_KEY],
-      now_iso: '2026-06-11T00:01:00.000Z',
-      verifyDetachedJws: VERIFIER,
-      revoked_artifact_ids: ['oacp_price_C6W2'],
-    })).toMatchObject({
-      valid: false,
-      refusal_code: 'artifact_revoked',
-    });
-
-    expect(evaluateInternalOacpArtifactStatus({
-      envelope,
-      payload: PAYLOAD,
-      issuer_keys: [ISSUER_KEY],
-      now_iso: '2026-06-11T00:01:00.000Z',
-      verifyDetachedJws: VERIFIER,
-      expected_scope: {
-        tenant_id: 'cten_C6W2',
-        merchant_id: 'mch_C6W2',
-        seller_agent_id: 'seller_C6W2',
-        buyer_agent_id: 'other_buyer',
-      },
-    })).toMatchObject({
-      valid: false,
-      refusal_code: 'artifact_scope_mismatch',
-    });
+  it('refuses a tampered payload and a tampered envelope', () => {
+    const envelope = issue(signer);
+    const at = { jwks, now_iso: '2026-06-11T00:01:00.000Z', status: 0 as const };
+    expect(verifyOacpArtifact({ ...at, envelope, payload: { ...payload, amount_minor_units: 1 } }))
+      .toMatchObject({ refusal_code: 'payload_hash_mismatch' });
+    const forged = { ...payload, amount_minor_units: 1 };
+    expect(verifyOacpArtifact({ ...at, envelope: { ...envelope, payload_hash: hashOacpPayload(forged) }, payload: forged }))
+      .toMatchObject({ refusal_code: 'detached_jws_verification_failed' });
+    expect(verifyOacpArtifact({ ...at, envelope: { ...envelope, expires_at: '2026-06-11T00:04:59.000Z' }, payload }))
+      .toMatchObject({ refusal_code: 'detached_jws_verification_failed' });
+    expect(verifyOacpArtifact({ ...at, envelope: { ...envelope, status: { status_list: { ...STATUS, idx: 43 } } }, payload }))
+      .toMatchObject({ refusal_code: 'detached_jws_verification_failed' });
+    expect(verifyOacpArtifact({ ...at, envelope: { ...envelope, safety: { ...envelope.safety, commitment_allowed: true } }, payload }))
+      .toMatchObject({ refusal_code: 'detached_jws_verification_failed' });
   });
 
-  it('refuses untrusted or inactive issuer keys and detached JWS verification failure', () => {
-    const envelope = issuePriceArtifact();
-
-    expect(evaluateInternalOacpArtifactStatus({
-      envelope,
-      payload: PAYLOAD,
-      issuer_keys: [],
-      now_iso: '2026-06-11T00:01:00.000Z',
-      verifyDetachedJws: VERIFIER,
-    })).toMatchObject({
-      valid: false,
-      refusal_code: 'issuer_key_untrusted',
-    });
-
-    expect(evaluateInternalOacpArtifactStatus({
-      envelope,
-      payload: PAYLOAD,
-      issuer_keys: [{ ...ISSUER_KEY, state: 'revoked' }],
-      now_iso: '2026-06-11T00:01:00.000Z',
-      verifyDetachedJws: VERIFIER,
-    })).toMatchObject({
-      valid: false,
-      refusal_code: 'issuer_key_inactive',
-    });
-
-    expect(evaluateInternalOacpArtifactStatus({
-      envelope,
-      payload: PAYLOAD,
-      issuer_keys: [ISSUER_KEY],
-      now_iso: '2026-06-11T00:01:00.000Z',
-      verifyDetachedJws: () => false,
-    })).toMatchObject({
-      valid: false,
-      refusal_code: 'detached_jws_verification_failed',
-    });
+  it('refuses the former template signature and a placeholder', () => {
+    const envelope = issue(signer);
+    const at = { payload, jwks, now_iso: '2026-06-11T00:01:00.000Z', status: 0 as const };
+    expect(verifyOacpArtifact({ ...at, envelope: { ...envelope, signature: `eyJhbGciOiJFUzI1NiJ9..sig_${envelope.artifact_id}_${envelope.payload_hash.slice(0, 16)}` } }))
+      .toMatchObject({ refusal_code: 'detached_jws_verification_failed' });
+    expect(verifyOacpArtifact({ ...at, envelope: { ...envelope, signature: 'detached_jws_required_before_publication' } }))
+      .toMatchObject({ refusal_code: 'signature_missing_or_placeholder' });
   });
 
-  it('refuses issuance beyond the pinned artifact TTL', () => {
-    expect(() => issuePriceArtifact({
-      expires_at: '2026-06-11T00:05:01.000Z',
-    })).toThrow(/TTL/);
+  it('refuses a key that is not published, and a key that signs under another kid', () => {
+    const envelope = issue(signer);
+    const at = { envelope, payload, now_iso: '2026-06-11T00:01:00.000Z', status: 0 as const };
+    expect(verifyOacpArtifact({ ...at, jwks: { keys: [] } })).toMatchObject({ refusal_code: 'issuer_key_untrusted' });
+    const impostor = newSigner(signer.kid);
+    expect(verifyOacpArtifact({ ...at, jwks: { keys: [impostor.publicJwk] } }))
+      .toMatchObject({ refusal_code: 'detached_jws_verification_failed' });
   });
 
-  it('documents internal-only C6W2 authority behavior and non-enablement posture', () => {
-    const doc = readFileSync(DOC_PATH, 'utf8');
+  it('refuses expired, revoked, suspended and out-of-scope artifacts after the signature verifies', () => {
+    const envelope = issue(signer);
+    const at = { envelope, payload, jwks };
+    expect(verifyOacpArtifact({ ...at, now_iso: '2026-06-11T00:05:01.000Z', status: 0 })).toMatchObject({ refusal_code: 'artifact_expired_or_stale' });
+    expect(verifyOacpArtifact({ ...at, now_iso: '2026-06-11T00:01:00.000Z', status: 1 })).toMatchObject({ refusal_code: 'artifact_revoked' });
+    expect(verifyOacpArtifact({ ...at, now_iso: '2026-06-11T00:01:00.000Z', status: 2 })).toMatchObject({ refusal_code: 'artifact_suspended' });
+    expect(verifyOacpArtifact({ ...at, now_iso: '2026-06-11T00:01:00.000Z', status: 0, expected_scope: { ...SCOPE, buyer_agent_id: 'other' } }))
+      .toMatchObject({ refusal_code: 'artifact_scope_mismatch' });
+  });
 
-    for (const heading of [
-      'Scope',
-      'Internal Issue Helper',
-      'Internal Verify And Status Helper',
-      'What This Does Not Enable',
-    ]) {
-      expect(doc).toContain(`## ${heading}`);
-    }
-
-    expect(doc).toContain('canonical JSON payload hash');
-    expect(doc).toContain('detached JWS signature');
-    expect(doc).toContain('No endpoint, migration, workflow, provider adapter, public discovery, checkout/payment, live provider, merchant private API, allowlist, cloud, or protocol publication behavior is added');
+  it('refuses to issue beyond the pinned TTL, with a non-OACP kid, or with a non-https status list', () => {
+    expect(() => issue(signer, { expires_at: '2026-06-11T01:00:00.000Z' })).toThrow(/TTL/);
+    expect(() => issue(newSigner('kid_c6z_internal_demo'))).toThrow(/oacp-/);
+    expect(() => issue(signer, { status_list: { uri: 'internal:oacp:c6z:revocation:t:m', idx: 1 } })).toThrow(/https/);
   });
 });

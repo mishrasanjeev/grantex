@@ -1,15 +1,37 @@
+import { generateKeyPairSync } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   issueC6ZInternalOacpArtifacts,
   validateC6ZSellerAuthorityRequest,
   type C6ZConnectorEvidence,
+  type C6ZIssuanceContext,
   type C6ZSellerAuthorityRequest,
 } from '../src/lib/commerce/oacp-runtime-vertical.js';
+import { verifyOacpArtifact, type OacpSigningKey } from '../src/lib/commerce/oacp-jws.js';
 import { authHeader, buildTestApp } from './helpers.js';
 import { seedCommerceContext } from './commerce-helpers.js';
 
 const NOW = '2026-06-14T03:30:00.000Z';
+const STATUS_BASE = 'https://issuer.example/status/oacp/oacpl_01J00000000000000000000C6Z';
+
+function memoryContext(): C6ZIssuanceContext & { signer: OacpSigningKey; allocated: string[] } {
+  const kid = 'oacp-20260614-00000000000000c6';
+  const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+  const jwk = publicKey.export({ format: 'jwk' });
+  const allocated: string[] = [];
+  let next = 0;
+  return {
+    issuer: 'https://issuer.example',
+    signer: { kid, privateKey, publicJwk: { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, kid, alg: 'ES256', use: 'sig' } },
+    newArtifactId: () => `oacp_art_01J0000000000000000000${String(next++).padStart(4, '0')}`,
+    allocateStatus: async (artifactId) => {
+      allocated.push(artifactId);
+      return { uri: STATUS_BASE, idx: allocated.length };
+    },
+    allocated,
+  };
+}
 
 function authorityRequest(overrides: Partial<C6ZSellerAuthorityRequest> = {}): C6ZSellerAuthorityRequest {
   return {
@@ -84,11 +106,13 @@ describe('C6Z Grantex runtime artifact authority', () => {
     expect(result.authority_request_ref).toContain('cten_C6Z:mch_C6Z:seller_C6Z');
   });
 
-  it('issues internally signed OACP artifacts for all C6Z runtime families', () => {
-    const result = issueC6ZInternalOacpArtifacts({
+  it('issues ES256-signed OACP artifacts for all C6Z runtime families', async () => {
+    const context = memoryContext();
+    const result = await issueC6ZInternalOacpArtifacts({
       request: authorityRequest(),
       evidence: connectorEvidence(),
       now_iso: NOW,
+      context,
     });
 
     expect(result.status).toBe('artifact_issuance_ready');
@@ -107,8 +131,18 @@ describe('C6Z Grantex runtime artifact authority', () => {
       'seller_agent_card',
     ]);
     for (const artifact of result.artifacts) {
-      expect(artifact.envelope.issuer).toBe('grantex_internal_oacp_authority');
-      expect(artifact.envelope.signature).toMatch(/^eyJhbGciOiJFUzI1NiJ9\.\.sig_/);
+      expect(artifact.envelope.issuer).toBe('https://issuer.example');
+      expect(artifact.envelope.issuer_key_id).toBe(context.signer.kid);
+      expect(artifact.envelope.signature).toMatch(/^[A-Za-z0-9_-]+\.\.[A-Za-z0-9_-]{86}$/);
+      expect(artifact.envelope.status?.status_list.uri).toBe(STATUS_BASE);
+      expect(artifact.envelope.revocation_status_url).toBe(STATUS_BASE);
+      expect(verifyOacpArtifact({
+        envelope: artifact.envelope,
+        payload: artifact.payload,
+        jwks: { keys: [context.signer.publicJwk] },
+        now_iso: NOW,
+        status: 0,
+      })).toMatchObject({ valid: true });
       expect(artifact.envelope.seller_agent_id).toBe('seller_C6Z');
       expect(artifact.payload).toMatchObject({
         source_system: 'shopify',
@@ -125,14 +159,15 @@ describe('C6Z Grantex runtime artifact authority', () => {
           stale_behavior: 'refuse_final_commitment_or_require_refresh',
         },
         revocation_posture: {
-          revocation_status_url: 'internal:oacp:c6z:revocation:cten_C6Z:mch_C6Z',
+          revocation_status_url: STATUS_BASE,
           status_at_issuance: 'not_revoked',
           stale_or_unreachable_behavior: 'treat_as_not_authorized_for_commitment',
         },
         signature_metadata: {
-          issuer: 'grantex_internal_oacp_authority',
-          issuer_key_id: 'kid_c6z_internal_demo',
+          issuer: 'https://issuer.example',
+          issuer_key_id: context.signer.kid,
           algorithm: 'ES256',
+          jws_typ: 'oacp-artifact+jws',
           payload_hash_algorithm: 'sha256',
           detached_jws_required: true,
           signature_value_in_payload: false,
@@ -204,7 +239,8 @@ describe('C6Z Grantex runtime artifact authority', () => {
     });
   });
 
-  it('fails closed for stale evidence, missing scope, secrets, raw payloads, and execution targets', () => {
+  it('fails closed for stale evidence, missing scope, secrets, raw payloads, and execution targets', async () => {
+    const context = memoryContext();
     expect(validateC6ZSellerAuthorityRequest(
       authorityRequest({ source_observed_at: '2026-06-14T03:00:00.000Z' }),
       NOW,
@@ -228,7 +264,8 @@ describe('C6Z Grantex runtime artifact authority', () => {
       refusal_code: 'artifact_cache_scope_mismatch',
     });
 
-    expect(issueC6ZInternalOacpArtifacts({
+    expect(await issueC6ZInternalOacpArtifacts({
+      context,
       request: authorityRequest(),
       evidence: {
         ...connectorEvidence(),
@@ -241,7 +278,8 @@ describe('C6Z Grantex runtime artifact authority', () => {
       allowed_to_execute: false,
     });
 
-    expect(issueC6ZInternalOacpArtifacts({
+    expect(await issueC6ZInternalOacpArtifacts({
+      context,
       request: authorityRequest(),
       evidence: {
         ...connectorEvidence(),
@@ -261,82 +299,29 @@ describe('C6Z Grantex runtime artifact authority', () => {
       status: 'rejected',
       refusal_code: 'private_or_executable_authority_request',
     });
+    // A refusal signs nothing and takes no status list entry.
+    expect(context.allocated).toEqual([]);
   });
 
-  it('exposes an internal authority issuance endpoint under commerce auth', async () => {
-    seedCommerceContext('cten_C6Z');
+  // Issuance through the route, persistence, replay and revocation run against
+  // real Postgres in commerce-oacp-artifacts-postgres.integration.test.ts.
+  // These cases are refused before the database is touched.
 
+  it('refuses an operator issuing for a tenant other than its own', async () => {
+    seedCommerceContext('cten_OTHER');
     const response = await app.inject({
       method: 'POST',
       url: '/v1/commerce/oacp/c6z/authority-requests',
       headers: authHeader(),
-      payload: {
-        now_iso: NOW,
-        request: authorityRequest(),
-        connector_evidence: connectorEvidence(),
-      },
+      payload: { request: authorityRequest(), connector_evidence: connectorEvidence() },
     });
-
-    expect(response.statusCode).toBe(201);
-    const body = response.json();
-    expect(body).toMatchObject({
-      route_kind: 'grantex_internal_c6z_authority_request',
-      status: 'artifact_issuance_ready',
-      artifact_count: 11,
-      allowed_to_execute: false,
-      no_payment_execution: true,
-      no_public_discovery_enablement: true,
-    });
-    expect(body.artifacts[0].envelope.tenant_id).toBe('cten_C6Z');
+    expect(response.statusCode).toBe(403);
+    expect(response.json<{ error: { code: string } }>().error.code).toBe('tenant_not_allowed');
   });
 
-  it('receives valid intake requests without issuing artifacts until connector evidence is present', async () => {
-    seedCommerceContext('cten_C6Z');
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/commerce/oacp/c6z/authority-requests',
-      headers: authHeader(),
-      payload: {
-        now_iso: NOW,
-        request: authorityRequest(),
-      },
-    });
-
-    expect(response.statusCode).toBe(202);
-    expect(response.json()).toMatchObject({
-      route_kind: 'grantex_internal_c6z_authority_request',
-      status: 'received',
-      artifact_issuance_attempted: false,
-      artifacts: [],
-      allowed_to_execute: false,
-      no_payment_execution: true,
-      no_public_discovery_enablement: true,
-    });
-  });
-
-  it('accepts a tenant-allowlisted AgenticOrg authority service token for this endpoint only', async () => {
+  it('accepts the authority service token on the OACP routes only', async () => {
     vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN', 'agenticorg-c6z-fixture-service-key');
     vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS', 'cten_C6Z');
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/v1/commerce/oacp/c6z/authority-requests',
-      headers: { authorization: 'Bearer agenticorg-c6z-fixture-service-key' },
-      payload: {
-        now_iso: NOW,
-        request: authorityRequest(),
-        connector_evidence: connectorEvidence(),
-      },
-    });
-
-    expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({
-      route_kind: 'grantex_internal_c6z_authority_request',
-      status: 'artifact_issuance_ready',
-      artifact_count: 11,
-      allowed_to_execute: false,
-    });
 
     const blocked = await app.inject({
       method: 'GET',
@@ -345,6 +330,28 @@ describe('C6Z Grantex runtime artifact authority', () => {
     });
     expect(blocked.statusCode).toBe(401);
     expect(blocked.json<{ error: { code: string } }>().error.code).toBe('invalid_developer_key');
+
+    const replayOtherTenant = await app.inject({
+      method: 'GET',
+      url: '/v1/commerce/oacp/artifacts?tenant_id=cten_OTHER',
+      headers: { authorization: 'Bearer agenticorg-c6z-fixture-service-key' },
+    });
+    expect(replayOtherTenant.statusCode).toBe(403);
+    expect(replayOtherTenant.json<{ error: { code: string } }>().error.code).toBe('tenant_not_allowed');
+
+    const keys = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/oacp/issuer-keys/rotate',
+      headers: { authorization: 'Bearer agenticorg-c6z-fixture-service-key' },
+    });
+    expect(keys.statusCode).toBe(401);
+  });
+
+  it('does not register the public OACP status list route unless OACP_STATUS_LIST_PUBLIC_ENABLED is true', async () => {
+    const response = await app.inject({ method: 'GET', url: '/status/oacp/oacpl_01J0000000000000000000000Z' });
+    // Not a route: the global auth hook answers before any handler.
+    expect([401, 404]).toContain(response.statusCode);
+    expect(response.headers['content-type']).not.toContain('statuslist+jwt');
   });
 
   it('rejects the authority service token when the tenant is not explicitly allowlisted', async () => {
@@ -356,7 +363,6 @@ describe('C6Z Grantex runtime artifact authority', () => {
       url: '/v1/commerce/oacp/c6z/authority-requests',
       headers: { authorization: 'Bearer agenticorg-c6z-fixture-service-key' },
       payload: {
-        now_iso: NOW,
         request: authorityRequest(),
         connector_evidence: connectorEvidence(),
       },

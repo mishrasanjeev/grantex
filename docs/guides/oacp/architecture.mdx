@@ -14,7 +14,7 @@ flowchart TD
   shopify[Shopify and merchant systems] -->|catalog, price, inventory, policy facts| agenticSeller
   future[WooCommerce/ERP/bank/provider refs] -->|pending-adapter config only| config
   agenticSeller -->|redacted connector evidence| grantex[Grantex OACP authority]
-  grantex -->|signed/internal artifacts or refusals| cache[AgenticOrg OACP cache]
+  grantex -->|ES256-signed artifacts or refusals| cache[AgenticOrg OACP cache]
   cache --> buyerAgent[AgenticOrg buyer agent]
   buyerAgent --> web[Web]
   buyerAgent --> mcp[MCP clients]

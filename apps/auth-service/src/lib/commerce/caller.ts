@@ -14,7 +14,19 @@ import {
 type Sql = ReturnType<typeof postgres>;
 
 export const C6Z_AUTHORITY_SERVICE_SCOPE = 'commerce.oacp.c6z.authority_requests.write';
-const C6Z_AUTHORITY_ROUTE_SUFFIX = '/oacp/c6z/authority-requests';
+export const OACP_ARTIFACTS_READ_SCOPE = 'commerce.oacp.artifacts.read';
+export const OACP_ARTIFACTS_REVOKE_SCOPE = 'commerce.oacp.artifacts.revoke';
+
+/**
+ * The internal routes the AgenticOrg authority service token may call, and
+ * nothing else: issuance, artifact read and replay, and revocation.
+ */
+const C6Z_SERVICE_ROUTES: ReadonlyArray<{ method: string; path: RegExp }> = [
+  { method: 'POST', path: /\/oacp\/c6z\/authority-requests$/ },
+  { method: 'GET', path: /\/v1\/commerce\/oacp\/artifacts$/ },
+  { method: 'GET', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+$/ },
+  { method: 'POST', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+\/revoke$/ },
+];
 
 export type CommerceCaller =
   | {
@@ -136,9 +148,8 @@ function tokenSha256(token: string): string {
 }
 
 function isC6ZAuthorityRoute(request: FastifyRequest): boolean {
-  if (request.method !== 'POST') return false;
   const path = request.url.split('?')[0] ?? '';
-  return path.endsWith(C6Z_AUTHORITY_ROUTE_SUFFIX);
+  return C6Z_SERVICE_ROUTES.some((route) => route.method === request.method && route.path.test(path));
 }
 
 function isC6ZAuthorityServiceToken(request: FastifyRequest, token: string): boolean {
@@ -182,7 +193,7 @@ export async function resolveCommerceCaller(
         kind: 'service',
         serviceId: 'agenticorg_c6z_authority',
         tenantId: process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_DEFAULT_TENANT'] ?? '',
-        scopes: [C6Z_AUTHORITY_SERVICE_SCOPE],
+        scopes: [C6Z_AUTHORITY_SERVICE_SCOPE, OACP_ARTIFACTS_READ_SCOPE, OACP_ARTIFACTS_REVOKE_SCOPE],
       },
     };
   }

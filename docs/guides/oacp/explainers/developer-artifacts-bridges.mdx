@@ -6,7 +6,7 @@ description: Developer explainer for OACP artifacts, AgenticOrg bridges, and ada
 
 Canonical end-to-end flow: [OACP authority overview](../overview).
 
-Developers should treat OACP artifacts as signed/internal trust inputs, not as checkout execution tokens.
+Developers should treat OACP artifacts as ES256-signed trust inputs (verify the detached JWS against the Grantex JWKS and the status list first), not as checkout execution tokens.
 
 ```mermaid
 flowchart LR

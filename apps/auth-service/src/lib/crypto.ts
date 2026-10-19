@@ -525,6 +525,18 @@ export async function buildJwks(): Promise<{ keys: Record<string, unknown>[] }> 
     // route layer (this lib should not depend on pino directly).
   }
 
+  // OACP issuer keys (migration 133): the active key, and retired keys until
+  // every artifact they signed has expired. Revoked keys are never listed.
+  // Optional like the commerce keys: without the database the platform keys
+  // are still served, and OACP verification fails closed (issuer_key_untrusted).
+  try {
+    const { getSql } = await import('../db/client.js');
+    const { listOacpIssuerJwksKeys } = await import('./commerce/oacp-issuer-keys.js');
+    for (const jwk of await listOacpIssuerJwksKeys(getSql())) keys.push(jwk);
+  } catch {
+    // See the commerce passport keys above.
+  }
+
   return { keys };
 }
 

@@ -16,7 +16,7 @@ Merchant systems such as Shopify, future WooCommerce/ERP sources, and POS system
 flowchart LR
   merchant[Merchant systems: Shopify, future WooCommerce/ERP, OMS, inventory, policy] --> agentic[AgenticOrg seller and buyer runtime]
   agentic -->|authority request with redacted evidence| grantex[Grantex OACP authority]
-  grantex -->|signed internal artifacts and blockers| agentic
+  grantex -->|ES256-signed artifacts and blockers| agentic
   agentic -->|buyer answer from valid cache| buyer[Buyer surfaces]
   agentic -->|capability or POS handoff only| provider[Pine Labs Plural/P3P, bank, POS, or payment rail]
   provider -->|redacted capability or POS evidence ref| agentic
@@ -28,7 +28,7 @@ flowchart LR
 | --- | --- |
 | Trust authority | Issues or refuses canonical internal OACP artifacts. |
 | Policy governance | Defines artifact TTL, freshness, source, revocation, risk, and blocked-capability rules. |
-| Artifact verification | Verifies issuer, scope, payload hash, signature, TTL, and public-safe payload constraints. |
+| Artifact verification | Verifies the ES256 detached JWS against `/.well-known/jwks.json`, the payload hash, TTL, scope, public-safe payload constraints and the OACP Token Status List ([artifact authority](./artifact-authority)). |
 | Protocol adapters | Governs compatibility mappings from canonical OACP artifacts to Schema.org, UCP-style, ACP-style, AP2-style, A2A, MCP, and OpenAPI payloads. |
 | Integration boundary | Accepts allowlisted AgenticOrg authority requests with public-safe connector evidence. |
 
