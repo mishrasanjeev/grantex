@@ -224,7 +224,8 @@ export async function listWitnessCheckpoints(
     SELECT witness_id, source, tenant_ref, chain, head_seq::text AS head_seq, head_hash, anchored_at, witnessed_at, countersignature
       FROM audit_witness_checkpoints
      WHERE source = ${query.source as string} AND tenant_ref = ${query.tenant_ref}
-     ORDER BY head_seq DESC, witness_id DESC
+     -- Qualified: the numeric column, not its text alias (which would sort 9 after 10).
+     ORDER BY audit_witness_checkpoints.head_seq DESC, witness_id DESC
      LIMIT ${limit}
   `;
   const forks = await sql<Record<string, unknown>[]>`

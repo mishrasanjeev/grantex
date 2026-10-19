@@ -173,6 +173,15 @@ describePostgres('commerce ledger against real Postgres', () => {
       expect(raced.map((r) => r.statusCode).sort()).toEqual([201, 409]);
     });
 
+    it('reads heads back in numeric head_seq order', async () => {
+      for (const seq of [9, 10, 100]) expect((await post(head(seq, 'a'.repeat(64), 'tenant-int-order'))).statusCode).toBe(201);
+      const read = await app.inject({
+        method: 'GET', url: '/v1/audit/witness-checkpoints?source=agenticorg&tenant_ref=tenant-int-order',
+        headers: { authorization: `Bearer ${SERVICE_TOKEN}` },
+      });
+      expect(read.json<{ checkpoints: { head_seq: number }[] }>().checkpoints.map((c) => c.head_seq)).toEqual([100, 10, 9]);
+    });
+
     it('witness rows and fork records are append-only', async () => {
       await expect(sql`UPDATE audit_witness_checkpoints SET head_hash = ${'0'.repeat(64)}`).rejects.toThrow(/append-only/);
       await expect(sql`DELETE FROM audit_witness_forks`).rejects.toThrow(/append-only/);
