@@ -66,6 +66,19 @@ flowchart TD
 
 To stop countersigning for a tenant, remove it from `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`; recorded decisions stay readable for audit.
 
+## Witness Checkpoints
+
+`POST /v1/audit/witness-checkpoints` stores AgenticOrg audit chain heads in `audit_witness_checkpoints` and refused forks in `audit_witness_forks` (both append-only, migration `134_commerce_ledger.sql`). It is authenticated with the AgenticOrg service token alone; no tenant allowlist applies, because `tenant_ref` names AgenticOrg's own tenant.
+
+A row in `audit_witness_forks` means AgenticOrg presented a second, different hash for a chain position Grantex had already witnessed: treat it as an irregularity, open an incident with AgenticOrg, and keep both the witnessed countersignature and the fork record for the review. Read them with `GET /v1/audit/witness-checkpoints?source=agenticorg&tenant_ref=...`.
+
+| Check | Evidence |
+| --- | --- |
+| Countersignature verifies | header `typ` `audit-witness+jwt`, `kid` in `/.well-known/jwks.json` |
+| Replay is idempotent | the same head answers `200` with the same `witness_id` |
+| Fork is refused | another hash at a witnessed `head_seq` answers `409 WITNESS_FORK` and adds a fork row |
+| Tests | `npm --prefix apps/auth-service test -- audit-witness-checkpoints.test.ts` |
+
 ## Refusal Copy
 
 Use exact blockers: missing source evidence, stale artifact, unsafe executable request, provider capability missing, tenant not allowlisted, or authority temporarily unavailable.

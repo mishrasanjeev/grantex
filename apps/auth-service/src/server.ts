@@ -14,6 +14,7 @@ import { tokenRoutes } from './routes/token.js';
 import { grantsRoutes } from './routes/grants.js';
 import { tokensRoutes } from './routes/tokens.js';
 import { auditRoutes } from './routes/audit.js';
+import { auditWitnessRoutes } from './routes/audit-witness.js';
 import { consentRoutes } from './routes/consent.js';
 import { delegateRoutes } from './routes/delegate.js';
 import { dashboardRoutes } from './routes/dashboard.js';
@@ -211,6 +212,7 @@ export async function buildApp(opts: AppOptions = {}) {
   await app.register(delegateRoutes);
   await app.register(tokensRoutes);
   await app.register(auditRoutes);
+  await app.register(auditWitnessRoutes);
   await app.register(webhooksRoutes);
   await app.register(billingRoutes);
   await app.register(policiesRoutes);

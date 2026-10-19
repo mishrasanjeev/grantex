@@ -65,7 +65,7 @@ Those outputs must include source and freshness labels, must not expose Shopify 
 
 | Config | Owner | Purpose |
 | --- | --- | --- |
-| `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` | Grantex + AgenticOrg | Service-token auth for authority requests and arbiter decisions. |
+| `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` | Grantex + AgenticOrg | Service-token auth for authority requests, arbiter decisions and witness checkpoints. |
 | `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` | Grantex | Tenant allowlist. |
 | Shopify credential custody | AgenticOrg + merchant | Read-only source evidence generation. |
 | Future connector config | AgenticOrg + merchant | WooCommerce, ERP, PIM, OMS, WMS, and custom API setup intent; not live until adapters exist. |
@@ -112,6 +112,20 @@ AgenticOrg's policy arbiter is authoritative and deterministic: it seals `allow`
 | Malformed, an `allow` with no evidence, `decided_at` in the future, or an `allow` older than ten minutes | `422`; not stored. |
 
 AgenticOrg verifies the returned `decision_grant` against the Grantex JWKS (`typ` `decision+jwt`, `aud` `urn:grantex:decision`, `approver_auth` `policy_arbiter`, `action_hash` equal to its own `payload_hash`) before storing the `jti` beside its decision row. Grantex's human decision-grant consumers (`POST /v1/decisions/consume`, SDK `verifyDecisionGrant(s)` and `enforce()`) refuse a `policy_arbiter` grant, so it can never stand in for a human approval. The profile is specified in `spec/decision-grant.md` section 10.
+
+## Witness Checkpoints
+
+AgenticOrg anchors the head of its hash-chained `audit_log` and asks Grantex to witness it, so a later rewrite below a witnessed head is provable outside AgenticOrg.
+
+`POST /v1/audit/witness-checkpoints` (same AgenticOrg service token) takes `{source: "agenticorg", tenant_ref, chain: "audit_log", head_seq, head_hash, anchored_at}` (`head_hash` lowercase hex SHA-256) and answers `201 {witness_id, countersignature, witnessed_at, created: true}`. `countersignature` is a compact JWS (`typ` `audit-witness+jwt`, platform key, `kid` in `/.well-known/jwks.json`) over those fields plus `witnessed_at`, with `jti` = `witness_id` and no `exp`.
+
+| Case | Answer |
+| --- | --- |
+| Same `(source, tenant_ref, chain, head_seq, head_hash)` again | `200` with the stored witness and countersignature (`created: false`). |
+| A different `head_hash` for a witnessed `(source, tenant_ref, chain, head_seq)` | `409 WITNESS_FORK`; `fork` holds the witnessed checkpoint (with its countersignature) and the presented hash. The attempt is recorded. |
+| Malformed, or `anchored_at` more than five minutes ahead | `400`. |
+
+`GET /v1/audit/witness-checkpoints?source=agenticorg&tenant_ref=...&limit=...` returns `{checkpoints, forks}`, newest `head_seq` first. AgenticOrg verifies the countersignature against the Grantex JWKS before storing the `witness_id` beside its anchor row, and treats a `WITNESS_FORK` as an irregularity of its own chain.
 
 ## Ownership
 

@@ -152,6 +152,10 @@ components:
       type: http
       scheme: bearer
       description: Registry operator key (one of REGISTRY_OPERATOR_API_KEYS); not a developer API key or ADMIN_API_KEY
+    agenticOrgServiceAuth:
+      type: http
+      scheme: bearer
+      description: AgenticOrg internal service token (COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN, or its SHA-256 in COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN_SHA256); not a developer API key
     registryIssuerRequestAuth:
       type: http
       scheme: GrantexIssuer
@@ -4735,6 +4739,81 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+
+  /v1/audit/witness-checkpoints:
+    post:
+      operationId: witnessAuditCheckpoint
+      tags: [Audit]
+      summary: Countersign an AgenticOrg audit chain head
+      description: |
+        Stores a chain head AgenticOrg anchors and countersigns it with the platform key: a compact
+        JWS with typ audit-witness+jwt and a kid from /.well-known/jwks.json, over source, tenant_ref,
+        chain, head_seq, head_hash, anchored_at and witnessed_at (jti = witness_id, no exp).
+        Idempotent on (source, tenant_ref, chain, head_seq, head_hash). A different head_hash for a
+        witnessed (source, tenant_ref, chain, head_seq) is refused with 409 WITNESS_FORK, recorded,
+        and answered with the stored witness as evidence.
+      security:
+        - agenticOrgServiceAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [source, tenant_ref, chain, head_seq, head_hash, anchored_at]
+              properties:
+                source: { type: string, enum: [agenticorg] }
+                tenant_ref: { type: string, maxLength: 128 }
+                chain: { type: string, enum: [audit_log] }
+                head_seq: { type: integer, minimum: 0 }
+                head_hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+                anchored_at: { type: string, format: date-time }
+      responses:
+        "200":
+          description: The head is already witnessed; the stored witness.
+        "201":
+          description: Witnessed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  witness_id: { type: string }
+                  countersignature: { type: string }
+                  witnessed_at: { type: string, format: date-time }
+                  created: { type: boolean }
+        "400":
+          description: Malformed checkpoint
+        "401":
+          description: Not the AgenticOrg service token
+        "409":
+          description: WITNESS_FORK; the body's fork member holds the witnessed checkpoint and the presented hash
+    get:
+      operationId: listAuditWitnessCheckpoints
+      tags: [Audit]
+      summary: Read witnessed heads and recorded forks of one tenant's chain
+      security:
+        - agenticOrgServiceAuth: []
+      parameters:
+        - name: source
+          in: query
+          required: true
+          schema: { type: string, enum: [agenticorg] }
+        - name: tenant_ref
+          in: query
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        "200":
+          description: Witnessed heads, newest head_seq first, and recorded forks
+        "400":
+          description: Malformed query
+        "401":
+          description: Not the AgenticOrg service token
 
   # ── Policies ─────────────────────────────────────────────────────────
   /v1/policies:

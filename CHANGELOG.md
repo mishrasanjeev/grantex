@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Audit witness checkpoints (G16)
+- `POST /v1/audit/witness-checkpoints`, authenticated with the AgenticOrg
+  internal service token, stores an AgenticOrg audit chain head and answers
+  `{witness_id, countersignature}`: a compact JWS (`typ`
+  `audit-witness+jwt`, platform key, `kid` in the JWKS) over the head and
+  `witnessed_at`. Idempotent on (source, tenant_ref, chain, head_seq,
+  head_hash); a different hash for a witnessed position is refused with 409
+  `WITNESS_FORK`, recorded in `audit_witness_forks`, and answered with the
+  stored witness as evidence. `GET /v1/audit/witness-checkpoints?source&tenant_ref`
+  reads heads and forks back. Tables are append-only (migration 134).
+
 ### Added - OACP arbiter decision ledger (G16)
 - `POST /v1/commerce/oacp/arbiter-decisions`, authenticated with the AgenticOrg
   internal service token and tenant allowlist of the C6Z authority route,

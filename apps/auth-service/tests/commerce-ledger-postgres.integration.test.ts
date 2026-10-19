@@ -1,7 +1,8 @@
 /**
  * Commerce ledger (G16) against real Postgres: arbiter decisions are stored
  * append-only and idempotently, and the database itself refuses a refusal
- * that carries a grant.
+ * that carries a grant; witness checkpoints are idempotent, a fork is refused
+ * and recorded, and both read back.
  */
 import postgres from 'postgres';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -123,6 +124,58 @@ describePostgres('commerce ledger against real Postgres', () => {
           'refuse', '["r"]', 'r', '{}', NOW(), '1', ${'f'.repeat(64)}, 'dgnt_x', '{}', NOW(), 'svc')`).rejects.toThrow(/chk_arbiter_grant/);
       await expect(sql`UPDATE commerce_arbiter_decisions SET outcome = 'refuse' WHERE decision_id = 'arb_int_allow_1'`).rejects.toThrow(/append-only/);
       await expect(sql`DELETE FROM commerce_arbiter_decisions WHERE decision_id = 'arb_int_allow_1'`).rejects.toThrow(/append-only/);
+    });
+  });
+
+  describe('witness checkpoints', () => {
+    const head = (seq: number, hash: string, tenant = 'tenant-int-1') => ({
+      source: 'agenticorg', tenant_ref: tenant, chain: 'audit_log', head_seq: seq, head_hash: hash, anchored_at: new Date().toISOString(),
+    });
+    const post = (payload: unknown) => app.inject({
+      method: 'POST', url: '/v1/audit/witness-checkpoints',
+      headers: { authorization: `Bearer ${SERVICE_TOKEN}` }, payload: payload as Record<string, unknown>,
+    });
+
+    it('witnesses a head once, replays it, refuses and records a fork, and reads both back', async () => {
+      const first = await post(head(7, 'a'.repeat(64)));
+      expect(first.statusCode, first.body).toBe(201);
+      const replay = await post(head(7, 'a'.repeat(64)));
+      expect(replay.statusCode).toBe(200);
+      expect(replay.json()).toMatchObject({
+        witness_id: first.json<{ witness_id: string }>().witness_id,
+        countersignature: first.json<{ countersignature: string }>().countersignature,
+      });
+
+      const fork = await post(head(7, 'b'.repeat(64)));
+      expect(fork.statusCode).toBe(409);
+      expect(fork.json()).toMatchObject({ code: 'WITNESS_FORK', fork: { witnessed: { head_hash: 'a'.repeat(64) }, presented: { head_hash: 'b'.repeat(64) } } });
+
+      expect((await post(head(8, 'c'.repeat(64)))).statusCode).toBe(201);
+      // Another tenant's position 7 is its own.
+      expect((await post(head(7, 'b'.repeat(64), 'tenant-int-2'))).statusCode).toBe(201);
+
+      const read = await app.inject({
+        method: 'GET', url: '/v1/audit/witness-checkpoints?source=agenticorg&tenant_ref=tenant-int-1',
+        headers: { authorization: `Bearer ${SERVICE_TOKEN}` },
+      });
+      expect(read.statusCode).toBe(200);
+      const body = read.json<{ checkpoints: { head_seq: number; head_hash: string }[]; forks: { head_seq: number; presented_hash: string }[] }>();
+      expect(body.checkpoints.map((c) => [c.head_seq, c.head_hash])).toEqual([[8, 'c'.repeat(64)], [7, 'a'.repeat(64)]]);
+      expect(body.forks).toHaveLength(1);
+      expect(body.forks[0]).toMatchObject({ head_seq: 7, presented_hash: 'b'.repeat(64) });
+    });
+
+    it('concurrent posts of one head store one witness; racing a fork against it refuses the loser', async () => {
+      const same = await Promise.all([post(head(20, 'd'.repeat(64))), post(head(20, 'd'.repeat(64))), post(head(20, 'd'.repeat(64)))]);
+      expect(same.map((r) => r.statusCode).sort()).toEqual([200, 200, 201]);
+      expect(new Set(same.map((r) => r.json<{ witness_id: string }>().witness_id)).size).toBe(1);
+      const raced = await Promise.all([post(head(21, 'e'.repeat(64))), post(head(21, 'f'.repeat(64)))]);
+      expect(raced.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+    });
+
+    it('witness rows and fork records are append-only', async () => {
+      await expect(sql`UPDATE audit_witness_checkpoints SET head_hash = ${'0'.repeat(64)}`).rejects.toThrow(/append-only/);
+      await expect(sql`DELETE FROM audit_witness_forks`).rejects.toThrow(/append-only/);
     });
   });
 });
