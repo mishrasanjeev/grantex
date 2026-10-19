@@ -1,10 +1,10 @@
 import { sha256hex } from '../hash.js';
-import { stableJson } from './idempotency.js';
+import { canonicalize } from '../evidence/canonical.js';
 
 export const OACP_ARTIFACT_SIGNATURE_PROFILE = {
   payload_format: 'canonical_json',
   signature_format: 'detached_jws',
-  canonicalization: 'json_canonicalization_scheme_style',
+  canonicalization: 'rfc8785_jcs',
   first_algorithm: 'ES256',
   artifact_container: 'json_object',
   jwt_container_allowed: false,
@@ -819,8 +819,34 @@ function findIssuerKey(
   )) ?? null;
 }
 
+/**
+ * Removes members whose value is `undefined`, recursively. Payload builders
+ * use `undefined` for an absent member; RFC 8785 has no `undefined`, and
+ * `canonicalize` refuses it rather than guessing. Array elements are kept as
+ * they are, so an `undefined` element still fails canonicalization.
+ */
+export function stripUndefinedMembers(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripUndefinedMembers);
+  if (value === null || typeof value !== 'object') return value;
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  if (prototype !== Object.prototype && prototype !== null) return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (child !== undefined) out[key] = stripUndefinedMembers(child);
+  }
+  return out;
+}
+
+/**
+ * The RFC 8785 (JCS) canonical JSON of an OACP payload or envelope, after
+ * absent (`undefined`) members are removed. Python verifiers produce the same
+ * bytes with `json.dumps(v, sort_keys=True, separators=(",", ":"),
+ * ensure_ascii=False)` for OACP values (no floats). This replaced an
+ * order based on `localeCompare`, which is not RFC 8785 and disagreed with
+ * Python for member names such as `a_b`/`ab` or upper-case first letters.
+ */
 export function canonicalizeOacpPayload(payload: unknown): string {
-  return stableJson(payload);
+  return canonicalize(stripUndefinedMembers(payload));
 }
 
 export function hashOacpPayload(payload: unknown): string {

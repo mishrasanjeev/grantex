@@ -39,6 +39,18 @@ sequenceDiagram
 | `protocol_adapter` | Compatibility mapping metadata. |
 | `authority_request_status` | Request result and blocker state. |
 
+## Canonical JSON
+
+Payloads are canonicalised with RFC 8785 (JCS) after members whose value is absent are
+removed, and `payload_hash` is the lowercase hex SHA-256 of those UTF-8 bytes
+(`canonicalizeOacpPayload` / `hashOacpPayload`). Python verifiers produce the same bytes with
+`json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)`, since OACP
+values carry no floating-point numbers. The shared vectors in
+`spec/examples/oacp/oacp-artifact-jws-v1.json` pin a payload whose member names
+(`a_b`/`ab`, `Zeta_upper`) sort differently under the older locale-based order, which was not
+RFC 8785; that order is no longer used for OACP. Commerce idempotency hashes keep their own
+stored format and are unchanged.
+
 ## Verification Rules
 
 Artifacts must carry issuer, issuer key, artifact type, issued/expires timestamps, payload hash, signature algorithm, source refs, freshness metadata, revocation posture, risk tier, and `no_checkout_payment_enablement` behavior. Payloads must not contain raw connector payloads, tokens, provider secrets, card or bank data, checkout URLs, payment URLs, executable targets, or private merchant data.

@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - OACP canonical JSON is RFC 8785 (G1)
+- `canonicalizeOacpPayload` and `hashOacpPayload` use RFC 8785 (JCS) after
+  removing absent members, instead of an order based on `localeCompare` that
+  was not RFC 8785 and gave a different `payload_hash` from Python verifiers
+  for member names such as `a_b`/`ab` or upper-case first letters. No OACP
+  hash was stored before this change. Commerce idempotency hashing is
+  unchanged. Shared vectors: `spec/examples/oacp/oacp-artifact-jws-v1.json`
+  (synthetic test key; `gen.mjs` regenerates them).
+
 ### Removed - Unmounted OACP library helpers (G7)
 - Delete the C6W4-C6W9 and C6X2 helpers from `oacp-trust-artifacts.ts`
   (adapter previews, commitment boundary, prepared envelopes, response

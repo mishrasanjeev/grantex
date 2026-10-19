@@ -1,0 +1,905 @@
+{
+  "profile": "oacp-artifact-jws-v1",
+  "note": "Synthetic test key generated for conformance vectors only. Never trust oacp-test-* kids outside tests.",
+  "verify_at": "2026-10-19T11:00:00.000Z",
+  "jwks": {
+    "keys": [
+      {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "qvXp5QfMIbxd8qGyJdAXZEpa21aonC0_L0vJNMsOVno",
+        "y": "WattfuPmPEMStEl7BGu0vwNbqOwnqKrbNI44khfQeF8",
+        "kid": "oacp-test-2026-10-a",
+        "alg": "ES256",
+        "use": "sig"
+      },
+      {
+        "kty": "EC",
+        "crv": "P-256",
+        "x": "r8Gy1DAwr5nGwlY1xRrL6T7jC06gn1xAmhdpaO9vooQ",
+        "y": "sA5XDO8Aypl9EsxcMbGqG8Q7MuOrD-8T70UXJcUUc6c",
+        "kid": "oacp-test-2026-10-b",
+        "alg": "ES256",
+        "use": "sig"
+      }
+    ]
+  },
+  "test_private_jwk": {
+    "kty": "EC",
+    "x": "qvXp5QfMIbxd8qGyJdAXZEpa21aonC0_L0vJNMsOVno",
+    "y": "WattfuPmPEMStEl7BGu0vwNbqOwnqKrbNI44khfQeF8",
+    "crv": "P-256",
+    "d": "wQMTaymmJc6BtvtvXzwlkur1__9QuM61rB8jSe4q7PQ",
+    "kid": "oacp-test-2026-10-a",
+    "alg": "ES256",
+    "use": "sig"
+  },
+  "payload_canonical": "{\"Zeta_upper\":\"upper case sorts before lower case under RFC 8785\",\"a_b\":1,\"ab\":2,\"allowed_to_execute\":false,\"artifact_family\":\"catalog_snapshot\",\"catalog_sample_refs\":[\"sku:A-1\",\"sku:B_2\",\"sku:a3\",\"sku:Z\"],\"merchant_id\":\"mch_TEST01\",\"no_payment_execution\":true,\"no_public_discovery_enablement\":true,\"non_authoritative_for_transaction\":true,\"product_count\":12,\"seller_agent_id\":\"seller_TEST01\",\"source_evidence_ref\":\"shopify:evidence:redacted:01\",\"source_observed_at\":\"2026-10-19T10:00:00.000Z\",\"source_system\":\"shopify\",\"tenant_id\":\"cten_TEST01\",\"variant_count\":30,\"é_accent\":\"non-ASCII member name\"}",
+  "payload_hash": "7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360",
+  "signing_payload_canonical": "{\"artifact_id\":\"oacp_art_01TESTCATALOG\",\"artifact_type\":\"catalog_snapshot\",\"buyer_agent_id\":\"\",\"evidence_refs\":[\"shopify:evidence:redacted:01\"],\"expires_at\":\"2026-10-19T16:00:00.000Z\",\"freshness_class\":\"fresh\",\"issued_at\":\"2026-10-19T10:00:00.000Z\",\"issuer\":\"https://issuer.example\",\"issuer_key_id\":\"oacp-test-2026-10-a\",\"merchant_id\":\"mch_TEST01\",\"payload_hash\":\"7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360\",\"policy_version\":\"oacp-policy-test\",\"revocation_status_url\":\"https://issuer.example/status/oacp/lst_01TEST\",\"safety\":{\"allowed_agent_uses\":[\"browse\",\"compare\"],\"commitment_allowed\":false,\"contains_private_data\":false,\"forbidden_agent_uses\":[\"checkout_payment_execution\"],\"offline_commitment_allowed\":false,\"public_safe\":true,\"refusal_code_if_invalid\":\"oacp_artifact_invalid\",\"requires_merchant_system_confirmation\":false,\"requires_online_confirmation\":true,\"requires_provider_direct_verification\":false,\"stale_behavior\":\"refuse_final_commitment\"},\"schema_version\":\"oacp.artifact.v1\",\"seller_agent_id\":\"seller_TEST01\",\"signature_alg\":\"ES256\",\"source_observed_at\":\"2026-10-19T10:00:00.000Z\",\"status\":{\"status_list\":{\"idx\":7,\"uri\":\"https://issuer.example/status/oacp/lst_01TEST\"}},\"subject_id\":\"mch_TEST01:seller_TEST01\",\"subject_type\":\"catalog_snapshot\",\"tenant_id\":\"cten_TEST01\"}",
+  "status_list": {
+    "uri": "https://issuer.example/status/oacp/lst_01TEST",
+    "idx": 7,
+    "expected_status_at_issue": 0
+  },
+  "cases": [
+    {
+      "name": "valid",
+      "envelope": {
+        "artifact_id": "oacp_art_01TESTCATALOG",
+        "artifact_type": "catalog_snapshot",
+        "schema_version": "oacp.artifact.v1",
+        "issuer": "https://issuer.example",
+        "issuer_key_id": "oacp-test-2026-10-a",
+        "subject_type": "catalog_snapshot",
+        "subject_id": "mch_TEST01:seller_TEST01",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "buyer_agent_id": "",
+        "issued_at": "2026-10-19T10:00:00.000Z",
+        "expires_at": "2026-10-19T16:00:00.000Z",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "freshness_class": "fresh",
+        "revocation_status_url": "https://issuer.example/status/oacp/lst_01TEST",
+        "status": {
+          "status_list": {
+            "idx": 7,
+            "uri": "https://issuer.example/status/oacp/lst_01TEST"
+          }
+        },
+        "policy_version": "oacp-policy-test",
+        "evidence_refs": [
+          "shopify:evidence:redacted:01"
+        ],
+        "payload_hash": "7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360",
+        "signature_alg": "ES256",
+        "safety": {
+          "public_safe": true,
+          "contains_private_data": false,
+          "allowed_agent_uses": [
+            "browse",
+            "compare"
+          ],
+          "forbidden_agent_uses": [
+            "checkout_payment_execution"
+          ],
+          "commitment_allowed": false,
+          "offline_commitment_allowed": false,
+          "requires_online_confirmation": true,
+          "requires_provider_direct_verification": false,
+          "requires_merchant_system_confirmation": false,
+          "stale_behavior": "refuse_final_commitment",
+          "refusal_code_if_invalid": "oacp_artifact_invalid"
+        },
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im9hY3AtdGVzdC0yMDI2LTEwLWEiLCJ0eXAiOiJvYWNwLWFydGlmYWN0K2p3cyJ9..z1MxHnF1JUldnh4_mRfVbapATYyxqMH45QKz-7EFtn--67zs3j3pgL4UfI8bumbpeHQ4gFi9D-VJS4fAeSxQuw"
+      },
+      "payload": {
+        "artifact_family": "catalog_snapshot",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "source_system": "shopify",
+        "source_evidence_ref": "shopify:evidence:redacted:01",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "product_count": 12,
+        "variant_count": 30,
+        "catalog_sample_refs": [
+          "sku:A-1",
+          "sku:B_2",
+          "sku:a3",
+          "sku:Z"
+        ],
+        "Zeta_upper": "upper case sorts before lower case under RFC 8785",
+        "a_b": 1,
+        "ab": 2,
+        "é_accent": "non-ASCII member name",
+        "allowed_to_execute": false,
+        "no_payment_execution": true,
+        "no_public_discovery_enablement": true,
+        "non_authoritative_for_transaction": true
+      },
+      "expect": "valid"
+    },
+    {
+      "name": "tampered_payload",
+      "envelope": {
+        "artifact_id": "oacp_art_01TESTCATALOG",
+        "artifact_type": "catalog_snapshot",
+        "schema_version": "oacp.artifact.v1",
+        "issuer": "https://issuer.example",
+        "issuer_key_id": "oacp-test-2026-10-a",
+        "subject_type": "catalog_snapshot",
+        "subject_id": "mch_TEST01:seller_TEST01",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "buyer_agent_id": "",
+        "issued_at": "2026-10-19T10:00:00.000Z",
+        "expires_at": "2026-10-19T16:00:00.000Z",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "freshness_class": "fresh",
+        "revocation_status_url": "https://issuer.example/status/oacp/lst_01TEST",
+        "status": {
+          "status_list": {
+            "idx": 7,
+            "uri": "https://issuer.example/status/oacp/lst_01TEST"
+          }
+        },
+        "policy_version": "oacp-policy-test",
+        "evidence_refs": [
+          "shopify:evidence:redacted:01"
+        ],
+        "payload_hash": "7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360",
+        "signature_alg": "ES256",
+        "safety": {
+          "public_safe": true,
+          "contains_private_data": false,
+          "allowed_agent_uses": [
+            "browse",
+            "compare"
+          ],
+          "forbidden_agent_uses": [
+            "checkout_payment_execution"
+          ],
+          "commitment_allowed": false,
+          "offline_commitment_allowed": false,
+          "requires_online_confirmation": true,
+          "requires_provider_direct_verification": false,
+          "requires_merchant_system_confirmation": false,
+          "stale_behavior": "refuse_final_commitment",
+          "refusal_code_if_invalid": "oacp_artifact_invalid"
+        },
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im9hY3AtdGVzdC0yMDI2LTEwLWEiLCJ0eXAiOiJvYWNwLWFydGlmYWN0K2p3cyJ9..z1MxHnF1JUldnh4_mRfVbapATYyxqMH45QKz-7EFtn--67zs3j3pgL4UfI8bumbpeHQ4gFi9D-VJS4fAeSxQuw"
+      },
+      "payload": {
+        "artifact_family": "catalog_snapshot",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "source_system": "shopify",
+        "source_evidence_ref": "shopify:evidence:redacted:01",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "product_count": 13,
+        "variant_count": 30,
+        "catalog_sample_refs": [
+          "sku:A-1",
+          "sku:B_2",
+          "sku:a3",
+          "sku:Z"
+        ],
+        "Zeta_upper": "upper case sorts before lower case under RFC 8785",
+        "a_b": 1,
+        "ab": 2,
+        "é_accent": "non-ASCII member name",
+        "allowed_to_execute": false,
+        "no_payment_execution": true,
+        "no_public_discovery_enablement": true,
+        "non_authoritative_for_transaction": true
+      },
+      "expect": "payload_hash_mismatch"
+    },
+    {
+      "name": "tampered_payload_and_hash",
+      "envelope": {
+        "artifact_id": "oacp_art_01TESTCATALOG",
+        "artifact_type": "catalog_snapshot",
+        "schema_version": "oacp.artifact.v1",
+        "issuer": "https://issuer.example",
+        "issuer_key_id": "oacp-test-2026-10-a",
+        "subject_type": "catalog_snapshot",
+        "subject_id": "mch_TEST01:seller_TEST01",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "buyer_agent_id": "",
+        "issued_at": "2026-10-19T10:00:00.000Z",
+        "expires_at": "2026-10-19T16:00:00.000Z",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "freshness_class": "fresh",
+        "revocation_status_url": "https://issuer.example/status/oacp/lst_01TEST",
+        "status": {
+          "status_list": {
+            "idx": 7,
+            "uri": "https://issuer.example/status/oacp/lst_01TEST"
+          }
+        },
+        "policy_version": "oacp-policy-test",
+        "evidence_refs": [
+          "shopify:evidence:redacted:01"
+        ],
+        "payload_hash": "e5836ab6ee016bf1ab63750d1204736bad96c4a2b4187e2378ee6574f7a6bc41",
+        "signature_alg": "ES256",
+        "safety": {
+          "public_safe": true,
+          "contains_private_data": false,
+          "allowed_agent_uses": [
+            "browse",
+            "compare"
+          ],
+          "forbidden_agent_uses": [
+            "checkout_payment_execution"
+          ],
+          "commitment_allowed": false,
+          "offline_commitment_allowed": false,
+          "requires_online_confirmation": true,
+          "requires_provider_direct_verification": false,
+          "requires_merchant_system_confirmation": false,
+          "stale_behavior": "refuse_final_commitment",
+          "refusal_code_if_invalid": "oacp_artifact_invalid"
+        },
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im9hY3AtdGVzdC0yMDI2LTEwLWEiLCJ0eXAiOiJvYWNwLWFydGlmYWN0K2p3cyJ9..z1MxHnF1JUldnh4_mRfVbapATYyxqMH45QKz-7EFtn--67zs3j3pgL4UfI8bumbpeHQ4gFi9D-VJS4fAeSxQuw"
+      },
+      "payload": {
+        "artifact_family": "catalog_snapshot",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "source_system": "shopify",
+        "source_evidence_ref": "shopify:evidence:redacted:01",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "product_count": 13,
+        "variant_count": 30,
+        "catalog_sample_refs": [
+          "sku:A-1",
+          "sku:B_2",
+          "sku:a3",
+          "sku:Z"
+        ],
+        "Zeta_upper": "upper case sorts before lower case under RFC 8785",
+        "a_b": 1,
+        "ab": 2,
+        "é_accent": "non-ASCII member name",
+        "allowed_to_execute": false,
+        "no_payment_execution": true,
+        "no_public_discovery_enablement": true,
+        "non_authoritative_for_transaction": true
+      },
+      "expect": "detached_jws_verification_failed"
+    },
+    {
+      "name": "tampered_envelope_expiry",
+      "envelope": {
+        "artifact_id": "oacp_art_01TESTCATALOG",
+        "artifact_type": "catalog_snapshot",
+        "schema_version": "oacp.artifact.v1",
+        "issuer": "https://issuer.example",
+        "issuer_key_id": "oacp-test-2026-10-a",
+        "subject_type": "catalog_snapshot",
+        "subject_id": "mch_TEST01:seller_TEST01",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "buyer_agent_id": "",
+        "issued_at": "2026-10-19T10:00:00.000Z",
+        "expires_at": "2026-10-19T16:30:00.000Z",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "freshness_class": "fresh",
+        "revocation_status_url": "https://issuer.example/status/oacp/lst_01TEST",
+        "status": {
+          "status_list": {
+            "idx": 7,
+            "uri": "https://issuer.example/status/oacp/lst_01TEST"
+          }
+        },
+        "policy_version": "oacp-policy-test",
+        "evidence_refs": [
+          "shopify:evidence:redacted:01"
+        ],
+        "payload_hash": "7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360",
+        "signature_alg": "ES256",
+        "safety": {
+          "public_safe": true,
+          "contains_private_data": false,
+          "allowed_agent_uses": [
+            "browse",
+            "compare"
+          ],
+          "forbidden_agent_uses": [
+            "checkout_payment_execution"
+          ],
+          "commitment_allowed": false,
+          "offline_commitment_allowed": false,
+          "requires_online_confirmation": true,
+          "requires_provider_direct_verification": false,
+          "requires_merchant_system_confirmation": false,
+          "stale_behavior": "refuse_final_commitment",
+          "refusal_code_if_invalid": "oacp_artifact_invalid"
+        },
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im9hY3AtdGVzdC0yMDI2LTEwLWEiLCJ0eXAiOiJvYWNwLWFydGlmYWN0K2p3cyJ9..z1MxHnF1JUldnh4_mRfVbapATYyxqMH45QKz-7EFtn--67zs3j3pgL4UfI8bumbpeHQ4gFi9D-VJS4fAeSxQuw"
+      },
+      "payload": {
+        "artifact_family": "catalog_snapshot",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "source_system": "shopify",
+        "source_evidence_ref": "shopify:evidence:redacted:01",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "product_count": 12,
+        "variant_count": 30,
+        "catalog_sample_refs": [
+          "sku:A-1",
+          "sku:B_2",
+          "sku:a3",
+          "sku:Z"
+        ],
+        "Zeta_upper": "upper case sorts before lower case under RFC 8785",
+        "a_b": 1,
+        "ab": 2,
+        "é_accent": "non-ASCII member name",
+        "allowed_to_execute": false,
+        "no_payment_execution": true,
+        "no_public_discovery_enablement": true,
+        "non_authoritative_for_transaction": true
+      },
+      "expect": "detached_jws_verification_failed"
+    },
+    {
+      "name": "tampered_envelope_scope",
+      "envelope": {
+        "artifact_id": "oacp_art_01TESTCATALOG",
+        "artifact_type": "catalog_snapshot",
+        "schema_version": "oacp.artifact.v1",
+        "issuer": "https://issuer.example",
+        "issuer_key_id": "oacp-test-2026-10-a",
+        "subject_type": "catalog_snapshot",
+        "subject_id": "mch_TEST01:seller_TEST01",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_OTHER",
+        "seller_agent_id": "seller_TEST01",
+        "buyer_agent_id": "",
+        "issued_at": "2026-10-19T10:00:00.000Z",
+        "expires_at": "2026-10-19T16:00:00.000Z",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "freshness_class": "fresh",
+        "revocation_status_url": "https://issuer.example/status/oacp/lst_01TEST",
+        "status": {
+          "status_list": {
+            "idx": 7,
+            "uri": "https://issuer.example/status/oacp/lst_01TEST"
+          }
+        },
+        "policy_version": "oacp-policy-test",
+        "evidence_refs": [
+          "shopify:evidence:redacted:01"
+        ],
+        "payload_hash": "7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360",
+        "signature_alg": "ES256",
+        "safety": {
+          "public_safe": true,
+          "contains_private_data": false,
+          "allowed_agent_uses": [
+            "browse",
+            "compare"
+          ],
+          "forbidden_agent_uses": [
+            "checkout_payment_execution"
+          ],
+          "commitment_allowed": false,
+          "offline_commitment_allowed": false,
+          "requires_online_confirmation": true,
+          "requires_provider_direct_verification": false,
+          "requires_merchant_system_confirmation": false,
+          "stale_behavior": "refuse_final_commitment",
+          "refusal_code_if_invalid": "oacp_artifact_invalid"
+        },
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im9hY3AtdGVzdC0yMDI2LTEwLWEiLCJ0eXAiOiJvYWNwLWFydGlmYWN0K2p3cyJ9..z1MxHnF1JUldnh4_mRfVbapATYyxqMH45QKz-7EFtn--67zs3j3pgL4UfI8bumbpeHQ4gFi9D-VJS4fAeSxQuw"
+      },
+      "payload": {
+        "artifact_family": "catalog_snapshot",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "source_system": "shopify",
+        "source_evidence_ref": "shopify:evidence:redacted:01",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "product_count": 12,
+        "variant_count": 30,
+        "catalog_sample_refs": [
+          "sku:A-1",
+          "sku:B_2",
+          "sku:a3",
+          "sku:Z"
+        ],
+        "Zeta_upper": "upper case sorts before lower case under RFC 8785",
+        "a_b": 1,
+        "ab": 2,
+        "é_accent": "non-ASCII member name",
+        "allowed_to_execute": false,
+        "no_payment_execution": true,
+        "no_public_discovery_enablement": true,
+        "non_authoritative_for_transaction": true
+      },
+      "expect": "detached_jws_verification_failed"
+    },
+    {
+      "name": "unknown_kid",
+      "envelope": {
+        "artifact_id": "oacp_art_01TESTCATALOG",
+        "artifact_type": "catalog_snapshot",
+        "schema_version": "oacp.artifact.v1",
+        "issuer": "https://issuer.example",
+        "issuer_key_id": "oacp-test-2026-10-z",
+        "subject_type": "catalog_snapshot",
+        "subject_id": "mch_TEST01:seller_TEST01",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "buyer_agent_id": "",
+        "issued_at": "2026-10-19T10:00:00.000Z",
+        "expires_at": "2026-10-19T16:00:00.000Z",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "freshness_class": "fresh",
+        "revocation_status_url": "https://issuer.example/status/oacp/lst_01TEST",
+        "status": {
+          "status_list": {
+            "idx": 7,
+            "uri": "https://issuer.example/status/oacp/lst_01TEST"
+          }
+        },
+        "policy_version": "oacp-policy-test",
+        "evidence_refs": [
+          "shopify:evidence:redacted:01"
+        ],
+        "payload_hash": "7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360",
+        "signature_alg": "ES256",
+        "safety": {
+          "public_safe": true,
+          "contains_private_data": false,
+          "allowed_agent_uses": [
+            "browse",
+            "compare"
+          ],
+          "forbidden_agent_uses": [
+            "checkout_payment_execution"
+          ],
+          "commitment_allowed": false,
+          "offline_commitment_allowed": false,
+          "requires_online_confirmation": true,
+          "requires_provider_direct_verification": false,
+          "requires_merchant_system_confirmation": false,
+          "stale_behavior": "refuse_final_commitment",
+          "refusal_code_if_invalid": "oacp_artifact_invalid"
+        },
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im9hY3AtdGVzdC0yMDI2LTEwLXoiLCJ0eXAiOiJvYWNwLWFydGlmYWN0K2p3cyJ9..3X19piUUX1EAs-bcXhqDHcpQisXmZAvfZ8D9048adZPJNs3KC5S9KbcGKABccayMm-WZAHVzXm-Nme_G9FvRTQ"
+      },
+      "payload": {
+        "artifact_family": "catalog_snapshot",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "source_system": "shopify",
+        "source_evidence_ref": "shopify:evidence:redacted:01",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "product_count": 12,
+        "variant_count": 30,
+        "catalog_sample_refs": [
+          "sku:A-1",
+          "sku:B_2",
+          "sku:a3",
+          "sku:Z"
+        ],
+        "Zeta_upper": "upper case sorts before lower case under RFC 8785",
+        "a_b": 1,
+        "ab": 2,
+        "é_accent": "non-ASCII member name",
+        "allowed_to_execute": false,
+        "no_payment_execution": true,
+        "no_public_discovery_enablement": true,
+        "non_authoritative_for_transaction": true
+      },
+      "expect": "issuer_key_untrusted"
+    },
+    {
+      "name": "signed_by_other_key_claiming_kid",
+      "envelope": {
+        "artifact_id": "oacp_art_01TESTCATALOG",
+        "artifact_type": "catalog_snapshot",
+        "schema_version": "oacp.artifact.v1",
+        "issuer": "https://issuer.example",
+        "issuer_key_id": "oacp-test-2026-10-a",
+        "subject_type": "catalog_snapshot",
+        "subject_id": "mch_TEST01:seller_TEST01",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "buyer_agent_id": "",
+        "issued_at": "2026-10-19T10:00:00.000Z",
+        "expires_at": "2026-10-19T16:00:00.000Z",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "freshness_class": "fresh",
+        "revocation_status_url": "https://issuer.example/status/oacp/lst_01TEST",
+        "status": {
+          "status_list": {
+            "idx": 7,
+            "uri": "https://issuer.example/status/oacp/lst_01TEST"
+          }
+        },
+        "policy_version": "oacp-policy-test",
+        "evidence_refs": [
+          "shopify:evidence:redacted:01"
+        ],
+        "payload_hash": "7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360",
+        "signature_alg": "ES256",
+        "safety": {
+          "public_safe": true,
+          "contains_private_data": false,
+          "allowed_agent_uses": [
+            "browse",
+            "compare"
+          ],
+          "forbidden_agent_uses": [
+            "checkout_payment_execution"
+          ],
+          "commitment_allowed": false,
+          "offline_commitment_allowed": false,
+          "requires_online_confirmation": true,
+          "requires_provider_direct_verification": false,
+          "requires_merchant_system_confirmation": false,
+          "stale_behavior": "refuse_final_commitment",
+          "refusal_code_if_invalid": "oacp_artifact_invalid"
+        },
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im9hY3AtdGVzdC0yMDI2LTEwLWEiLCJ0eXAiOiJvYWNwLWFydGlmYWN0K2p3cyJ9..J4yDZcGB7KkU89OwnpOJ2wN5nApBg6m2psWp5ADJ9jBbhOMLgNLdj11A0BvRpXJXzh3wlwMyOrb0jlOdQf9adg"
+      },
+      "payload": {
+        "artifact_family": "catalog_snapshot",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "source_system": "shopify",
+        "source_evidence_ref": "shopify:evidence:redacted:01",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "product_count": 12,
+        "variant_count": 30,
+        "catalog_sample_refs": [
+          "sku:A-1",
+          "sku:B_2",
+          "sku:a3",
+          "sku:Z"
+        ],
+        "Zeta_upper": "upper case sorts before lower case under RFC 8785",
+        "a_b": 1,
+        "ab": 2,
+        "é_accent": "non-ASCII member name",
+        "allowed_to_execute": false,
+        "no_payment_execution": true,
+        "no_public_discovery_enablement": true,
+        "non_authoritative_for_transaction": true
+      },
+      "expect": "detached_jws_verification_failed"
+    },
+    {
+      "name": "header_kid_mismatch",
+      "envelope": {
+        "artifact_id": "oacp_art_01TESTCATALOG",
+        "artifact_type": "catalog_snapshot",
+        "schema_version": "oacp.artifact.v1",
+        "issuer": "https://issuer.example",
+        "issuer_key_id": "oacp-test-2026-10-a",
+        "subject_type": "catalog_snapshot",
+        "subject_id": "mch_TEST01:seller_TEST01",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "buyer_agent_id": "",
+        "issued_at": "2026-10-19T10:00:00.000Z",
+        "expires_at": "2026-10-19T16:00:00.000Z",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "freshness_class": "fresh",
+        "revocation_status_url": "https://issuer.example/status/oacp/lst_01TEST",
+        "status": {
+          "status_list": {
+            "idx": 7,
+            "uri": "https://issuer.example/status/oacp/lst_01TEST"
+          }
+        },
+        "policy_version": "oacp-policy-test",
+        "evidence_refs": [
+          "shopify:evidence:redacted:01"
+        ],
+        "payload_hash": "7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360",
+        "signature_alg": "ES256",
+        "safety": {
+          "public_safe": true,
+          "contains_private_data": false,
+          "allowed_agent_uses": [
+            "browse",
+            "compare"
+          ],
+          "forbidden_agent_uses": [
+            "checkout_payment_execution"
+          ],
+          "commitment_allowed": false,
+          "offline_commitment_allowed": false,
+          "requires_online_confirmation": true,
+          "requires_provider_direct_verification": false,
+          "requires_merchant_system_confirmation": false,
+          "stale_behavior": "refuse_final_commitment",
+          "refusal_code_if_invalid": "oacp_artifact_invalid"
+        },
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im9hY3AtdGVzdC0yMDI2LTEwLWIiLCJ0eXAiOiJvYWNwLWFydGlmYWN0K2p3cyJ9..C-1lAJna7T-yXrWURhrCpaAVjYa-Z5_6XSYG1yZ4TUNaJlRLVbsz8gGqvvxQIm1dtivPTRt3YvKCaRUu85C4Dw"
+      },
+      "payload": {
+        "artifact_family": "catalog_snapshot",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "source_system": "shopify",
+        "source_evidence_ref": "shopify:evidence:redacted:01",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "product_count": 12,
+        "variant_count": 30,
+        "catalog_sample_refs": [
+          "sku:A-1",
+          "sku:B_2",
+          "sku:a3",
+          "sku:Z"
+        ],
+        "Zeta_upper": "upper case sorts before lower case under RFC 8785",
+        "a_b": 1,
+        "ab": 2,
+        "é_accent": "non-ASCII member name",
+        "allowed_to_execute": false,
+        "no_payment_execution": true,
+        "no_public_discovery_enablement": true,
+        "non_authoritative_for_transaction": true
+      },
+      "expect": "detached_jws_verification_failed"
+    },
+    {
+      "name": "wrong_typ",
+      "envelope": {
+        "artifact_id": "oacp_art_01TESTCATALOG",
+        "artifact_type": "catalog_snapshot",
+        "schema_version": "oacp.artifact.v1",
+        "issuer": "https://issuer.example",
+        "issuer_key_id": "oacp-test-2026-10-a",
+        "subject_type": "catalog_snapshot",
+        "subject_id": "mch_TEST01:seller_TEST01",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "buyer_agent_id": "",
+        "issued_at": "2026-10-19T10:00:00.000Z",
+        "expires_at": "2026-10-19T16:00:00.000Z",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "freshness_class": "fresh",
+        "revocation_status_url": "https://issuer.example/status/oacp/lst_01TEST",
+        "status": {
+          "status_list": {
+            "idx": 7,
+            "uri": "https://issuer.example/status/oacp/lst_01TEST"
+          }
+        },
+        "policy_version": "oacp-policy-test",
+        "evidence_refs": [
+          "shopify:evidence:redacted:01"
+        ],
+        "payload_hash": "7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360",
+        "signature_alg": "ES256",
+        "safety": {
+          "public_safe": true,
+          "contains_private_data": false,
+          "allowed_agent_uses": [
+            "browse",
+            "compare"
+          ],
+          "forbidden_agent_uses": [
+            "checkout_payment_execution"
+          ],
+          "commitment_allowed": false,
+          "offline_commitment_allowed": false,
+          "requires_online_confirmation": true,
+          "requires_provider_direct_verification": false,
+          "requires_merchant_system_confirmation": false,
+          "stale_behavior": "refuse_final_commitment",
+          "refusal_code_if_invalid": "oacp_artifact_invalid"
+        },
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im9hY3AtdGVzdC0yMDI2LTEwLWEiLCJ0eXAiOiJKV1QifQ..MFXmDbaU93tXYRXYl1_SWoUCXOAE5E2iilk5HNHXmqDj_5X_JIRVKC473EwVQw03vE5FugpEj07vYZYCUt2k6w"
+      },
+      "payload": {
+        "artifact_family": "catalog_snapshot",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "source_system": "shopify",
+        "source_evidence_ref": "shopify:evidence:redacted:01",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "product_count": 12,
+        "variant_count": 30,
+        "catalog_sample_refs": [
+          "sku:A-1",
+          "sku:B_2",
+          "sku:a3",
+          "sku:Z"
+        ],
+        "Zeta_upper": "upper case sorts before lower case under RFC 8785",
+        "a_b": 1,
+        "ab": 2,
+        "é_accent": "non-ASCII member name",
+        "allowed_to_execute": false,
+        "no_payment_execution": true,
+        "no_public_discovery_enablement": true,
+        "non_authoritative_for_transaction": true
+      },
+      "expect": "detached_jws_verification_failed"
+    },
+    {
+      "name": "legacy_template_signature",
+      "envelope": {
+        "artifact_id": "oacp_art_01TESTCATALOG",
+        "artifact_type": "catalog_snapshot",
+        "schema_version": "oacp.artifact.v1",
+        "issuer": "https://issuer.example",
+        "issuer_key_id": "oacp-test-2026-10-a",
+        "subject_type": "catalog_snapshot",
+        "subject_id": "mch_TEST01:seller_TEST01",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "buyer_agent_id": "",
+        "issued_at": "2026-10-19T10:00:00.000Z",
+        "expires_at": "2026-10-19T16:00:00.000Z",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "freshness_class": "fresh",
+        "revocation_status_url": "https://issuer.example/status/oacp/lst_01TEST",
+        "status": {
+          "status_list": {
+            "idx": 7,
+            "uri": "https://issuer.example/status/oacp/lst_01TEST"
+          }
+        },
+        "policy_version": "oacp-policy-test",
+        "evidence_refs": [
+          "shopify:evidence:redacted:01"
+        ],
+        "payload_hash": "7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360",
+        "signature_alg": "ES256",
+        "safety": {
+          "public_safe": true,
+          "contains_private_data": false,
+          "allowed_agent_uses": [
+            "browse",
+            "compare"
+          ],
+          "forbidden_agent_uses": [
+            "checkout_payment_execution"
+          ],
+          "commitment_allowed": false,
+          "offline_commitment_allowed": false,
+          "requires_online_confirmation": true,
+          "requires_provider_direct_verification": false,
+          "requires_merchant_system_confirmation": false,
+          "stale_behavior": "refuse_final_commitment",
+          "refusal_code_if_invalid": "oacp_artifact_invalid"
+        },
+        "signature": "eyJhbGciOiJFUzI1NiJ9..sig_oacp_art_01TESTCATALOG_7051541fd24c8f36"
+      },
+      "payload": {
+        "artifact_family": "catalog_snapshot",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "source_system": "shopify",
+        "source_evidence_ref": "shopify:evidence:redacted:01",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "product_count": 12,
+        "variant_count": 30,
+        "catalog_sample_refs": [
+          "sku:A-1",
+          "sku:B_2",
+          "sku:a3",
+          "sku:Z"
+        ],
+        "Zeta_upper": "upper case sorts before lower case under RFC 8785",
+        "a_b": 1,
+        "ab": 2,
+        "é_accent": "non-ASCII member name",
+        "allowed_to_execute": false,
+        "no_payment_execution": true,
+        "no_public_discovery_enablement": true,
+        "non_authoritative_for_transaction": true
+      },
+      "expect": "detached_jws_verification_failed"
+    },
+    {
+      "name": "attached_payload_not_detached",
+      "envelope": {
+        "artifact_id": "oacp_art_01TESTCATALOG",
+        "artifact_type": "catalog_snapshot",
+        "schema_version": "oacp.artifact.v1",
+        "issuer": "https://issuer.example",
+        "issuer_key_id": "oacp-test-2026-10-a",
+        "subject_type": "catalog_snapshot",
+        "subject_id": "mch_TEST01:seller_TEST01",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "buyer_agent_id": "",
+        "issued_at": "2026-10-19T10:00:00.000Z",
+        "expires_at": "2026-10-19T16:00:00.000Z",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "freshness_class": "fresh",
+        "revocation_status_url": "https://issuer.example/status/oacp/lst_01TEST",
+        "status": {
+          "status_list": {
+            "idx": 7,
+            "uri": "https://issuer.example/status/oacp/lst_01TEST"
+          }
+        },
+        "policy_version": "oacp-policy-test",
+        "evidence_refs": [
+          "shopify:evidence:redacted:01"
+        ],
+        "payload_hash": "7051541fd24c8f3663ae90416322a12afb70278dc53c39535978e1b39e906360",
+        "signature_alg": "ES256",
+        "safety": {
+          "public_safe": true,
+          "contains_private_data": false,
+          "allowed_agent_uses": [
+            "browse",
+            "compare"
+          ],
+          "forbidden_agent_uses": [
+            "checkout_payment_execution"
+          ],
+          "commitment_allowed": false,
+          "offline_commitment_allowed": false,
+          "requires_online_confirmation": true,
+          "requires_provider_direct_verification": false,
+          "requires_merchant_system_confirmation": false,
+          "stale_behavior": "refuse_final_commitment",
+          "refusal_code_if_invalid": "oacp_artifact_invalid"
+        },
+        "signature": "eyJhbGciOiJFUzI1NiIsImtpZCI6Im9hY3AtdGVzdC0yMDI2LTEwLWEiLCJ0eXAiOiJvYWNwLWFydGlmYWN0K2p3cyJ9.eyJhcnRpZmFjdF9pZCI6Im9hY3BfYXJ0XzAxVEVTVENBVEFMT0ciLCJhcnRpZmFjdF90eXBlIjoiY2F0YWxvZ19zbmFwc2hvdCIsImJ1eWVyX2FnZW50X2lkIjoiIiwiZXZpZGVuY2VfcmVmcyI6WyJzaG9waWZ5OmV2aWRlbmNlOnJlZGFjdGVkOjAxIl0sImV4cGlyZXNfYXQiOiIyMDI2LTEwLTE5VDE2OjAwOjAwLjAwMFoiLCJmcmVzaG5lc3NfY2xhc3MiOiJmcmVzaCIsImlzc3VlZF9hdCI6IjIwMjYtMTAtMTlUMTA6MDA6MDAuMDAwWiIsImlzc3VlciI6Imh0dHBzOi8vaXNzdWVyLmV4YW1wbGUiLCJpc3N1ZXJfa2V5X2lkIjoib2FjcC10ZXN0LTIwMjYtMTAtYSIsIm1lcmNoYW50X2lkIjoibWNoX1RFU1QwMSIsInBheWxvYWRfaGFzaCI6IjcwNTE1NDFmZDI0YzhmMzY2M2FlOTA0MTYzMjJhMTJhZmI3MDI3OGRjNTNjMzk1MzU5NzhlMWIzOWU5MDYzNjAiLCJwb2xpY3lfdmVyc2lvbiI6Im9hY3AtcG9saWN5LXRlc3QiLCJyZXZvY2F0aW9uX3N0YXR1c191cmwiOiJodHRwczovL2lzc3Vlci5leGFtcGxlL3N0YXR1cy9vYWNwL2xzdF8wMVRFU1QiLCJzYWZldHkiOnsiYWxsb3dlZF9hZ2VudF91c2VzIjpbImJyb3dzZSIsImNvbXBhcmUiXSwiY29tbWl0bWVudF9hbGxvd2VkIjpmYWxzZSwiY29udGFpbnNfcHJpdmF0ZV9kYXRhIjpmYWxzZSwiZm9yYmlkZGVuX2FnZW50X3VzZXMiOlsiY2hlY2tvdXRfcGF5bWVudF9leGVjdXRpb24iXSwib2ZmbGluZV9jb21taXRtZW50X2FsbG93ZWQiOmZhbHNlLCJwdWJsaWNfc2FmZSI6dHJ1ZSwicmVmdXNhbF9jb2RlX2lmX2ludmFsaWQiOiJvYWNwX2FydGlmYWN0X2ludmFsaWQiLCJyZXF1aXJlc19tZXJjaGFudF9zeXN0ZW1fY29uZmlybWF0aW9uIjpmYWxzZSwicmVxdWlyZXNfb25saW5lX2NvbmZpcm1hdGlvbiI6dHJ1ZSwicmVxdWlyZXNfcHJvdmlkZXJfZGlyZWN0X3ZlcmlmaWNhdGlvbiI6ZmFsc2UsInN0YWxlX2JlaGF2aW9yIjoicmVmdXNlX2ZpbmFsX2NvbW1pdG1lbnQifSwic2NoZW1hX3ZlcnNpb24iOiJvYWNwLmFydGlmYWN0LnYxIiwic2VsbGVyX2FnZW50X2lkIjoic2VsbGVyX1RFU1QwMSIsInNpZ25hdHVyZV9hbGciOiJFUzI1NiIsInNvdXJjZV9vYnNlcnZlZF9hdCI6IjIwMjYtMTAtMTlUMTA6MDA6MDAuMDAwWiIsInN0YXR1cyI6eyJzdGF0dXNfbGlzdCI6eyJpZHgiOjcsInVyaSI6Imh0dHBzOi8vaXNzdWVyLmV4YW1wbGUvc3RhdHVzL29hY3AvbHN0XzAxVEVTVCJ9fSwic3ViamVjdF9pZCI6Im1jaF9URVNUMDE6c2VsbGVyX1RFU1QwMSIsInN1YmplY3RfdHlwZSI6ImNhdGFsb2dfc25hcHNob3QiLCJ0ZW5hbnRfaWQiOiJjdGVuX1RFU1QwMSJ9.z1MxHnF1JUldnh4_mRfVbapATYyxqMH45QKz-7EFtn--67zs3j3pgL4UfI8bumbpeHQ4gFi9D-VJS4fAeSxQuw"
+      },
+      "payload": {
+        "artifact_family": "catalog_snapshot",
+        "tenant_id": "cten_TEST01",
+        "merchant_id": "mch_TEST01",
+        "seller_agent_id": "seller_TEST01",
+        "source_system": "shopify",
+        "source_evidence_ref": "shopify:evidence:redacted:01",
+        "source_observed_at": "2026-10-19T10:00:00.000Z",
+        "product_count": 12,
+        "variant_count": 30,
+        "catalog_sample_refs": [
+          "sku:A-1",
+          "sku:B_2",
+          "sku:a3",
+          "sku:Z"
+        ],
+        "Zeta_upper": "upper case sorts before lower case under RFC 8785",
+        "a_b": 1,
+        "ab": 2,
+        "é_accent": "non-ASCII member name",
+        "allowed_to_execute": false,
+        "no_payment_execution": true,
+        "no_public_discovery_enablement": true,
+        "non_authoritative_for_transaction": true
+      },
+      "expect": "signature_missing_or_placeholder"
+    }
+  ]
+}
