@@ -413,10 +413,14 @@ def serialize_list(members: SfList) -> str:
     return ", ".join(_serialize_member(m) for m in members)
 
 
-def _serialize_member(member: Member) -> str:
+def serialize_member(member: Member) -> str:
+    """A Dictionary or List member: an Item or an Inner List."""
     if isinstance(member, InnerList):
         return serialize_inner_list(member)
     return serialize_item(member)
+
+
+_serialize_member = serialize_member
 
 
 # Section 4.1.1.1

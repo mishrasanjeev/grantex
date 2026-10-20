@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Profile-driven agent request signatures: Grantex, Visa TAP, Web Bot Auth (G60)
+- `@grantex/agent-httpsig` and `grantex-agent-httpsig` add
+  `signWithProfile` / `verifyWithProfile` (`sign_with_profile` /
+  `verify_with_profile`): one RFC 9421 signer and verifier whose tag, covered
+  components, window, nonce rule and keyid rule come from the profile named:
+  `grantex` (the default: `sign()` / `verify()` unchanged, the shared vectors
+  pass through both paths), `tap` (Visa Trusted Agent Protocol:
+  `agent-payer-auth` or `agent-browser-auth`, at least `@authority @path`,
+  `expires - created` at most 8 minutes, `alg`, a nonce equal across the
+  message's signatures and refused when seen in the last 8 minutes, an opaque
+  key-store `keyid`) and `web-bot-auth` (draft-ietf-webbotauth-httpsig-protocol-00:
+  `tag="web-bot-auth"`, `@authority` or `@target-uri` plus
+  `"signature-agent";key=...`, the `Signature-Agent` Dictionary with
+  `directory` / `jwks_uri` / `cimd` types, thumbprint `keyid`, keys resolved
+  by the (Signature-Agent URL, keyid) pair, at most 24 hours).
+- The signature base implements the RFC 9421 component parameters `key`
+  (section 2.1.2) and `req` (section 2.4) and the derived component
+  `@target-uri` (section 2.2.2), with the RFC's examples as tests. Other
+  component parameters still fail.
+- No behaviour change for existing callers: `sign()`, `verify()` and their
+  exports are untouched; the new profiles are opt-in by name.
+
 ### Added - Merchant opt-in to public discovery on C6Z issuance (G17 enabler)
 - The C6Z authority request may set `public_discovery_requested: true` (with
   `no_public_discovery_enablement` false or absent; `no_payment_execution: true`

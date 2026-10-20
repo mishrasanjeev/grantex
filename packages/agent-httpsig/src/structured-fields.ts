@@ -335,7 +335,7 @@ export function serializeList(list: List): string {
   return list.map(serializeMember).join(', ');
 }
 
-function serializeMember(member: Member): string {
+export function serializeMember(member: Member): string {
   return 'items' in member ? serializeInnerList(member) : serializeItem(member);
 }
 

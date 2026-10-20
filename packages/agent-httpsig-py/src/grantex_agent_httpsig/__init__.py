@@ -2,7 +2,9 @@
 """RFC 9421 HTTP Message Signatures for agent requests.
 
 The Agent-Passport, Agent-Grant and Agent-Trust headers and the
-``agent-payer-auth`` signing profile of spec/verification.md. Not yet
+``agent-payer-auth`` signing profile of spec/verification.md, and the same
+signer and verifier under the Visa Trusted Agent Protocol and Web Bot Auth
+profiles (``sign_with_profile``, ``verify_with_profile``). Not yet
 published.
 """
 
@@ -43,6 +45,26 @@ from ._profile import (
     sign,
     verify,
 )
+from ._profiles import (
+    SIGNATURE_AGENT_FIELD,
+    SIGNATURE_AGENT_TYPES,
+    SIGNATURE_PROFILES,
+    TAP_BROWSER_TAG,
+    TAP_MAX_WINDOW_SECONDS,
+    TAP_NONCE_REPLAY_WINDOW_SECONDS,
+    TAP_PAYER_TAG,
+    WEB_BOT_AUTH_MAX_WINDOW_SECONDS,
+    WEB_BOT_AUTH_TAG,
+    KeyReference,
+    ProfileDefinition,
+    ProfileSignResult,
+    ProfileVerifyResult,
+    SignatureAgent,
+    parse_signature_agent,
+    serialize_signature_agent,
+    sign_with_profile,
+    verify_with_profile,
+)
 from .structured_fields import (
     Date,
     Dictionary,
@@ -57,11 +79,31 @@ from .structured_fields import (
     serialize_inner_list,
     serialize_item,
     serialize_list,
+    serialize_member,
 )
 
 __version__ = "0.1.0"
 
 __all__ = [
+    "SIGNATURE_AGENT_FIELD",
+    "SIGNATURE_AGENT_TYPES",
+    "SIGNATURE_PROFILES",
+    "TAP_BROWSER_TAG",
+    "TAP_MAX_WINDOW_SECONDS",
+    "TAP_NONCE_REPLAY_WINDOW_SECONDS",
+    "TAP_PAYER_TAG",
+    "WEB_BOT_AUTH_MAX_WINDOW_SECONDS",
+    "WEB_BOT_AUTH_TAG",
+    "KeyReference",
+    "ProfileDefinition",
+    "ProfileSignResult",
+    "ProfileVerifyResult",
+    "SignatureAgent",
+    "parse_signature_agent",
+    "serialize_signature_agent",
+    "serialize_member",
+    "sign_with_profile",
+    "verify_with_profile",
     "AGENT_PAYER_AUTH_TAG",
     "COVERED_COMPONENTS",
     "DEFAULT_CLOCK_SKEW_SECONDS",

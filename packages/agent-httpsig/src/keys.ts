@@ -114,17 +114,22 @@ export function publicKeyObject(jwk: unknown): { key: KeyObject; alg: SignatureA
 }
 
 /** HTTP_SIGN (RFC 9421 section 3.3.4 or 3.3.6). ECDSA output is r || s, 64 octets, not DER. */
-export function signBytes(key: KeyObject, alg: SignatureAlgorithm, base: string): Uint8Array {
-  const data = Buffer.from(base, 'ascii');
+export function signBytes(key: KeyObject, alg: SignatureAlgorithm, base: string | Uint8Array): Uint8Array {
+  const data = typeof base === 'string' ? Buffer.from(base, 'ascii') : Buffer.from(base);
   return new Uint8Array(
     alg === 'ed25519' ? nodeSign(null, data, key) : nodeSign('sha256', data, { key, dsaEncoding: 'ieee-p1363' }),
   );
 }
 
 /** HTTP_VERIFY (RFC 9421 section 3.3.4 or 3.3.6). Anything but 64 octets fails. */
-export function verifyBytes(key: KeyObject, alg: SignatureAlgorithm, base: string, signature: Uint8Array): boolean {
+export function verifyBytes(
+  key: KeyObject,
+  alg: SignatureAlgorithm,
+  base: string | Uint8Array,
+  signature: Uint8Array,
+): boolean {
   if (signature.length !== 64) return false;
-  const data = Buffer.from(base, 'ascii');
+  const data = typeof base === 'string' ? Buffer.from(base, 'ascii') : Buffer.from(base);
   try {
     return alg === 'ed25519'
       ? nodeVerify(null, data, key, signature)

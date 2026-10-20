@@ -164,20 +164,22 @@ def public_key_object(jwk: Any) -> Optional[Tuple[PublicKey, str]]:
     return key, alg
 
 
-def sign_bytes(key: PrivateKey, alg: str, base: str) -> bytes:
+def sign_bytes(key: PrivateKey, alg: str, base: Union[str, bytes]) -> bytes:
     """HTTP_SIGN (RFC 9421 section 3.3.4 or 3.3.6). ECDSA output is r || s, not DER."""
-    data = base.encode("ascii")
+    data = base.encode("ascii") if isinstance(base, str) else bytes(base)
     if isinstance(key, ed25519.Ed25519PrivateKey):
         return key.sign(data)
     r, s = decode_dss_signature(key.sign(data, ec.ECDSA(hashes.SHA256())))
     return r.to_bytes(32, "big") + s.to_bytes(32, "big")
 
 
-def verify_bytes(key: PublicKey, alg: str, base: str, signature: bytes) -> bool:
+def verify_bytes(
+    key: PublicKey, alg: str, base: Union[str, bytes], signature: bytes
+) -> bool:
     """HTTP_VERIFY (RFC 9421 section 3.3.4 or 3.3.6). Anything but 64 octets fails."""
     if len(signature) != 64:
         return False
-    data = base.encode("ascii")
+    data = base.encode("ascii") if isinstance(base, str) else bytes(base)
     try:
         if isinstance(key, ed25519.Ed25519PublicKey):
             key.verify(signature, data)

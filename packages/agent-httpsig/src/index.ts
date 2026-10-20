@@ -27,6 +27,41 @@ export type {
   VerifyResult,
   VerifySuccess,
 } from './profile.js';
+export {
+  SIGNATURE_AGENT_FIELD,
+  SIGNATURE_AGENT_TYPES,
+  SIGNATURE_PROFILES,
+  TAP_BROWSER_TAG,
+  TAP_MAX_WINDOW_SECONDS,
+  TAP_NONCE_REPLAY_WINDOW_SECONDS,
+  TAP_PAYER_TAG,
+  WEB_BOT_AUTH_MAX_WINDOW_SECONDS,
+  WEB_BOT_AUTH_TAG,
+  parseSignatureAgent,
+  serializeSignatureAgent,
+  signWithProfile,
+  verifyWithProfile,
+} from './profiles.js';
+export type {
+  GrantexProfileSignOptions,
+  GrantexProfileVerifyOptions,
+  KeyReference,
+  ProfileDefinition,
+  ProfileDenialReason,
+  ProfileName,
+  ProfileSignOptions,
+  ProfileSignResult,
+  ProfileVerifyFailure,
+  ProfileVerifyOptions,
+  ProfileVerifyResult,
+  ProfileVerifySuccess,
+  SignatureAgent,
+  SignatureAgentType,
+  TapSignOptions,
+  TapVerifyOptions,
+  WebBotAuthSignOptions,
+  WebBotAuthVerifyOptions,
+} from './profiles.js';
 export { jwkThumbprint, publicJwk, verifySignatureValue } from './keys.js';
 export type { AgentJwk, SignatureAlgorithm } from './keys.js';
 export { createSignatureBase, signatureBaseFor } from './message.js';
@@ -39,5 +74,6 @@ export {
   serializeInnerList,
   serializeItem,
   serializeList,
+  serializeMember,
 } from './structured-fields.js';
 export type { BareItem, Dictionary, InnerList, Item, List, Member, Parameters } from './structured-fields.js';

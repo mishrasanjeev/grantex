@@ -71,14 +71,51 @@ seconds. `InMemoryNonceStore` is for one process and for tests: a deployment
 with several instances needs a shared, atomic store (see section 4.4 of the
 specification).
 
+## Profiles: Grantex, Visa TAP and Web Bot Auth
+
+`signWithProfile(request, options)` and `verifyWithProfile(request, options)`
+run one RFC 9421 signer and verifier under the profile named in
+`options.profile`. Without a profile, or with `profile: 'grantex'`, they are
+`sign()` and `verify()` unchanged: the shared vectors pass through both
+paths.
+
+| Profile | `tag` | Covered components | Window | `nonce` | `keyid` |
+|---|---|---|---|---|---|
+| `grantex` (default) | `agent-payer-auth` | exactly `@method @authority @path content-digest agent-passport agent-grant` | at most 300 s | required, 22 to 128 base64url | RFC 7638 thumbprint |
+| `tap` (Visa Trusted Agent Protocol) | `agent-payer-auth` (payment) or `agent-browser-auth` (browsing) | at least `@authority @path`; more on request (`@method`, `content-digest`, fields) | `expires - created` at most 8 minutes | required; equal in every signature of the message; refused when seen in the last 8 minutes | the key's identifier in the network's key store (opaque) |
+| `web-bot-auth` (draft-ietf-webbotauth-httpsig-protocol-00) | `web-bot-auth` | `@authority` or `@target-uri`, and `"signature-agent";key="<label>"` | at most 24 hours (configurable lower) | optional | RFC 7638 thumbprint |
+
+- TAP signatures carry `alg` (the RFC 9421 algorithm name; the verifier also
+  accepts the TAP example's spelling `Ed25519`). The TAP sample code writes
+  `keyId`; the specification and RFC 9421 use `keyid`, and this library
+  follows them.
+- Web Bot Auth signers send `Signature-Agent` in the Dictionary form
+  (`sig1="https://agents.example"`, with `;type=jwks_uri` or `;type=cimd`
+  when not a directory). The verifier hands the resolver a `KeyReference`
+  with the Signature-Agent URL and type, so keys are looked up by the
+  (URL, keyid) pair, never keyid alone (section 5.4).
+- Both profiles verify a covered `Content-Digest` (`sha-256` or `sha-512`);
+  require it with `requiredComponents: ['content-digest']` when the body
+  matters.
+- Denials add `tag_not_accepted`, `nonce_missing`, `nonce_mismatch`,
+  `algorithm_mismatch`, `signature_agent_missing` and
+  `signature_agent_unsupported` to the reasons above.
+- Only `ecdsa-p256-sha256` and `ed25519` keys are supported. TAP's sample
+  implementation also signs with RSA-PSS; a TAP relying party that must
+  accept RSA keys needs another verifier for those.
+
+The signature base now implements the RFC 9421 component parameters `key`
+(section 2.1.2) and `req` (section 2.4, given the related request) and the
+derived component `@target-uri` (section 2.2.2).
+
 ## Also exported
 
 - `contentDigest(body)`, `jwkThumbprint(jwk)`, `publicJwk(jwk)`;
 - `signatureBaseFor(message, label)` and `verifySignatureValue(jwk, base,
   signature)`: RFC 9421 section 2.5 and section 3.3 for any request or
-  response whose covered components are `@method`, `@authority`, `@scheme`,
-  `@path`, `@query`, `@status` or header fields without component
-  parameters;
+  response whose covered components are `@method`, `@target-uri`,
+  `@authority`, `@scheme`, `@path`, `@query`, `@status` or header fields,
+  with the component parameters `key` and `req`;
 - `parseDictionary`, `parseList`, `parseItem` and the matching serializers
   (RFC 9651).
 
