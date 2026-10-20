@@ -3,6 +3,8 @@ import crypto from 'node:crypto';
 import type postgres from 'postgres';
 import { getSql } from '../db/client.js';
 import { config } from '../config.js';
+import { PrepaidWalletError } from '../lib/prepaid-wallet.js';
+import { verifyWalletLedger } from '../lib/wallet-ledger-chain.js';
 
 export async function loadAdminStats(sql: ReturnType<typeof postgres>) {
   const [stats] = await sql`
@@ -57,6 +59,25 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       if (!checkAdmin(request, reply)) return;
 
       return reply.send(await loadAdminStats(getSql()));
+    },
+  );
+
+  // GET /v1/admin/prepaid-wallets/:walletId/ledger/verification — recompute
+  // one wallet's ledger hash chain (migration 134); failures name each
+  // edited, deleted or reordered entry.
+  app.get<{ Params: { walletId: string } }>(
+    '/v1/admin/prepaid-wallets/:walletId/ledger/verification',
+    { config: { skipAuth: true, rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      if (!checkAdmin(request, reply)) return;
+      try {
+        return reply.send(await verifyWalletLedger(getSql(), request.params.walletId));
+      } catch (error) {
+        if (error instanceof PrepaidWalletError) {
+          return reply.status(error.statusCode).send({ message: error.message, code: error.code, requestId: request.id });
+        }
+        throw error;
+      }
     },
   );
 

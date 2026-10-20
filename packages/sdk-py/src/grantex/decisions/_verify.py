@@ -36,6 +36,8 @@ __all__ = [
 
 DECISION_GRANT_TYP = "decision+jwt"
 DECISION_GRANT_AUDIENCE = "urn:grantex:decision"
+# ``approver_auth`` of the machine profile, which human-approval verification refuses.
+POLICY_ARBITER_APPROVER_AUTH = "policy_arbiter"
 
 _JTI_RE = re.compile(r"^dgnt_[0-9A-HJKMNP-TV-Z]{26}\Z")
 _MAX_TOKEN_LENGTH = 16_384
@@ -283,6 +285,14 @@ def verify_decision_grant(
             DecisionSubReason.MALFORMED, f"decision grant signature, issuer or audience is invalid: {exc}"
         ) from exc
 
+    # A machine-profile grant records a policy arbiter's decision
+    # (spec/decision-grant.md section 10); it never satisfies a decision that
+    # needs a person, whatever else it carries.
+    if payload.get("approver_auth") == POLICY_ARBITER_APPROVER_AUTH:
+        raise DecisionGrantError(
+            DecisionSubReason.MALFORMED,
+            "a policy_arbiter decision grant is a machine decision and cannot satisfy a human approval",
+        )
     jti = _claim_str(payload, "jti")
     if not _JTI_RE.match(jti):
         raise DecisionGrantError(DecisionSubReason.MALFORMED, "decision grant jti is malformed")

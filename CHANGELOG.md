@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Tamper-evident wallet ledger (G16)
+- `wallet_ledger_entries` gains `chain_seq`, `prev_hash` and `entry_hash`
+  (migration `134_commerce_ledger.sql`): a `BEFORE INSERT` trigger chains every
+  entry per wallet under a per-wallet advisory lock, on every insert path, and
+  overwrites any caller-supplied value; a unique `(wallet_id, chain_seq)` index
+  backstops forks. Existing entries are backfilled per wallet in
+  `(created_at, id)` order. Additive, so not behind a flag: no existing
+  response changes, and every insert site already holds the wallet row lock.
+  The migration takes an exclusive lock on `wallet_ledger_entries` while it
+  backfills.
+- `GET /v1/admin/prepaid-wallets/{walletId}/ledger/verification` (service
+  administrator) and `GET /v1/principal/prepaid-wallets/{walletId}/ledger/verification`
+  (wallet owner) recompute a wallet's chain and list every edited, deleted,
+  inserted or reordered entry.
+
+### Added - Audit witness checkpoints (G16)
+- `POST /v1/audit/witness-checkpoints`, authenticated with the AgenticOrg
+  internal service token, stores an AgenticOrg audit chain head and answers
+  `{witness_id, countersignature}`: a compact JWS (`typ`
+  `audit-witness+jwt`, platform key, `kid` in the JWKS) over the head and
+  `witnessed_at`. Idempotent on (source, tenant_ref, chain, head_seq,
+  head_hash); a different hash for a witnessed position is refused with 409
+  `WITNESS_FORK`, recorded in `audit_witness_forks`, and answered with the
+  stored witness as evidence. `GET /v1/audit/witness-checkpoints?source&tenant_ref`
+  reads heads and forks back. Tables are append-only (migration 134).
+
+### Added - OACP arbiter decision ledger (G16)
+- `POST /v1/commerce/oacp/arbiter-decisions`, authenticated with the AgenticOrg
+  internal service token and tenant allowlist of the C6Z authority route,
+  records every policy-arbiter decision append-only in
+  `commerce_arbiter_decisions` (migration `134_commerce_ledger.sql`),
+  idempotent on `decision_id` (a different body is refused 409). An `allow`
+  is answered with a decision grant in the new machine profile
+  (`spec/decision-grant.md` section 10: `approver_auth: "policy_arbiter"`,
+  `amr` from the evidence, no `acr`, `dwell_ms: 0`, hex `action_hash`, at most
+  ten minutes), signed with the platform key and verifiable with the existing
+  JWKS. A `refuse` is recorded and nothing is minted.
+- Human decision-grant verification refuses a `policy_arbiter` grant as
+  `malformed`: the auth service's consumption endpoints and both SDKs'
+  `verifyDecisionGrant(s)` / `verify_decision_grant(s)` (and so `enforce()` and
+  `grantexDecisionVerifier`). Shared vectors added to
+  `spec/examples/decision-grant/verification.json`. No human-issued grant ever
+  carries that value, so existing grants verify as before.
 ### Added - Signed, persisted and revocable OACP artifacts (G1-G4)
 - OACP artifacts are signed with an ES256 detached JWS (RFC 7515 Appendix F,
   typ `oacp-artifact+jws`) over the RFC 8785 envelope without `signature`,

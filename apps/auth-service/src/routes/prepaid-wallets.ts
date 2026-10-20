@@ -30,6 +30,7 @@ import {
   type PaymentRequirementsBinding,
 } from '../lib/prepaid-wallet.js';
 import { requirePrincipalSession, type AuthenticatedPrincipal } from '../lib/principal-auth.js';
+import { verifyWalletLedger } from '../lib/wallet-ledger-chain.js';
 import {
   WalletSpendPolicyError,
   createWalletSpendPolicy,
@@ -383,6 +384,17 @@ export async function prepaidWalletRoutes(app: FastifyInstance): Promise<void> {
     if (!owner) return;
     try {
       return reply.send(await listWalletActivity(getSql(), owner, request.params.walletId));
+    } catch (error) {
+      return sendWalletError(reply, request, error);
+    }
+  });
+
+  // The wallet's ledger hash chain, recomputed: any edited, deleted or reordered entry is a failure.
+  app.get<{ Params: { walletId: string } }>('/v1/principal/prepaid-wallets/:walletId/ledger/verification', principalConfig, async (request, reply) => {
+    const owner = await principal(request, reply);
+    if (!owner) return;
+    try {
+      return reply.send(await verifyWalletLedger(getSql(), request.params.walletId, owner));
     } catch (error) {
       return sendWalletError(reply, request, error);
     }

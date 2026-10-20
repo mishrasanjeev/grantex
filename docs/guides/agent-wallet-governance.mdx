@@ -118,7 +118,9 @@ when the principal is not actively using the dashboard.
 
 Every policy decision has a durable decision ID, matched policy IDs, outcome,
 usage snapshot, and normalized payment context. Policy decisions are append-only.
-Wallet ledger entries are also append-only. The principal dashboard exposes
+Wallet ledger entries are also append-only, and hash-chained per wallet
+(`prev_hash`, `entry_hash`); `GET /v1/principal/prepaid-wallets/{walletId}/ledger/verification`
+recomputes the chain. The principal dashboard exposes
 pending approvals, policy status, wallet activity, reload requests, and stop
 controls.
 

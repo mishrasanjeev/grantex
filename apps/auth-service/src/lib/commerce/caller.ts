@@ -14,18 +14,22 @@ import {
 type Sql = ReturnType<typeof postgres>;
 
 export const C6Z_AUTHORITY_SERVICE_SCOPE = 'commerce.oacp.c6z.authority_requests.write';
+export const OACP_ARBITER_DECISIONS_SERVICE_SCOPE = 'commerce.oacp.arbiter_decisions.write';
 export const OACP_ARTIFACTS_READ_SCOPE = 'commerce.oacp.artifacts.read';
 export const OACP_ARTIFACTS_REVOKE_SCOPE = 'commerce.oacp.artifacts.revoke';
 
 /**
- * The internal routes the AgenticOrg authority service token may call, and
- * nothing else: issuance, artifact read and replay, and revocation.
+ * The internal routes the AgenticOrg service token may call, each with the one
+ * scope it carries there: issuance, artifact read and replay, revocation and
+ * arbiter decisions. Anywhere else the token is not recognised and falls
+ * through to the operator resolver, which refuses it.
  */
-const C6Z_SERVICE_ROUTES: ReadonlyArray<{ method: string; path: RegExp }> = [
-  { method: 'POST', path: /\/oacp\/c6z\/authority-requests$/ },
-  { method: 'GET', path: /\/v1\/commerce\/oacp\/artifacts$/ },
-  { method: 'GET', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+$/ },
-  { method: 'POST', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+\/revoke$/ },
+const SERVICE_TOKEN_ROUTES: ReadonlyArray<{ method: string; path: RegExp; scope: string }> = [
+  { method: 'POST', path: /\/oacp\/c6z\/authority-requests$/, scope: C6Z_AUTHORITY_SERVICE_SCOPE },
+  { method: 'GET', path: /\/v1\/commerce\/oacp\/artifacts$/, scope: OACP_ARTIFACTS_READ_SCOPE },
+  { method: 'GET', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+$/, scope: OACP_ARTIFACTS_READ_SCOPE },
+  { method: 'POST', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+\/revoke$/, scope: OACP_ARTIFACTS_REVOKE_SCOPE },
+  { method: 'POST', path: /\/oacp\/arbiter-decisions$/, scope: OACP_ARBITER_DECISIONS_SERVICE_SCOPE },
 ];
 
 export type CommerceCaller =
@@ -147,13 +151,20 @@ function tokenSha256(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
-function isC6ZAuthorityRoute(request: FastifyRequest): boolean {
+/** The scope the AgenticOrg service token carries on this route, or null where it is not accepted. */
+function serviceTokenRouteScope(request: FastifyRequest): string | null {
   const path = request.url.split('?')[0] ?? '';
-  return C6Z_SERVICE_ROUTES.some((route) => route.method === request.method && route.path.test(path));
+  const route = SERVICE_TOKEN_ROUTES.find((r) => r.method === request.method && r.path.test(path));
+  return route ? route.scope : null;
 }
 
-function isC6ZAuthorityServiceToken(request: FastifyRequest, token: string): boolean {
-  if (!isC6ZAuthorityRoute(request)) return false;
+/**
+ * Whether `token` is the AgenticOrg internal service token
+ * (`COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN`, or its SHA-256 in
+ * `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN_SHA256`), compared in constant time.
+ * Route-independent: callers decide which routes accept it.
+ */
+export function matchesAgenticOrgServiceToken(token: string): boolean {
   const rawToken = process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN'];
   if (rawToken && rawToken.length >= 16 && timingSafeStringEqual(token, rawToken)) return true;
   const expectedHash = process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN_SHA256'];
@@ -186,14 +197,15 @@ export async function resolveCommerceCaller(
 
   // Order matters: check the most specific shapes first so an opaque
   // token doesn't accidentally match the operator fallback.
-  if (isC6ZAuthorityServiceToken(request, token)) {
+  const serviceScope = serviceTokenRouteScope(request);
+  if (serviceScope !== null && matchesAgenticOrgServiceToken(token)) {
     return {
       ok: true,
       caller: {
         kind: 'service',
         serviceId: 'agenticorg_c6z_authority',
         tenantId: process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_DEFAULT_TENANT'] ?? '',
-        scopes: [C6Z_AUTHORITY_SERVICE_SCOPE, OACP_ARTIFACTS_READ_SCOPE, OACP_ARTIFACTS_REVOKE_SCOPE],
+        scopes: [serviceScope],
       },
     };
   }

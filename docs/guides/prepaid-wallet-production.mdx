@@ -126,6 +126,21 @@ evidence:
 - reconcile `available_amount`, `reserved_amount`, ledger entries, and any
   provider evidence before reopening a blocked wallet.
 
+Migration `134_commerce_ledger.sql` makes the ledger tamper-evident. Each entry
+carries `chain_seq` (its position in its wallet's chain, from 1), `prev_hash`
+and `entry_hash` (lowercase hex SHA-256 over the entry's columns and
+`prev_hash`), computed by a database trigger on every insert under a per-wallet
+lock, so concurrent writes cannot fork a chain. The migration chains existing
+entries per wallet in `(created_at, id)` order; on a large ledger it holds an
+exclusive lock on `wallet_ledger_entries` while it does, so run it in a
+maintenance window. To check a wallet, call
+`GET /v1/admin/prepaid-wallets/{walletId}/ledger/verification` (service
+administrator) or `GET /v1/principal/prepaid-wallets/{walletId}/ledger/verification`
+(wallet owner): `valid: false` lists every edited, deleted, inserted or
+reordered entry. The chain cannot show that the newest entries were removed
+from the top on its own; record `head_seq` and `head_hash` from time to time
+and compare them with later answers.
+
 Redis is required for the service and real-time event delivery, but PostgreSQL
 remains the wallet system of record.
 

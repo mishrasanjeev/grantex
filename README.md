@@ -233,6 +233,8 @@ flowchart LR
 | Area | Current posture |
 | --- | --- |
 | Grantex C6Z authority route | Implemented at `POST /v1/commerce/oacp/c6z/authority-requests` for allowlisted AgenticOrg tenants. |
+| Arbiter decision ledger | `POST /v1/commerce/oacp/arbiter-decisions` records every AgenticOrg policy-arbiter decision append-only and countersigns an `allow` with a machine-profile decision grant (`approver_auth: policy_arbiter`); refusals mint nothing, and human decision-grant verifiers refuse the machine profile. |
+| Audit witness | `POST /v1/audit/witness-checkpoints` countersigns AgenticOrg audit chain heads with the platform key (`audit-witness+jwt`); a different hash at a witnessed position is refused as `WITNESS_FORK` and recorded. |
 | Artifact families | 11 internal OACP families are issued or refused with source lineage, TTL, freshness, revocation posture, blocked capabilities and non-sensitive evidence refs. |
 | Artifact signatures | Each artifact is signed with an ES256 detached JWS (typ `oacp-artifact+jws`) over its RFC 8785 envelope by a DB-backed OACP issuer key (`oacp-...` kid) published in `/.well-known/jwks.json`; keys rotate, retired keys stay published until their artifacts expire, revoked keys are withdrawn. Shared verifier vectors: `spec/examples/oacp/oacp-artifact-jws-v1.json`. |
 | Persistence and revocation | Every issue and refusal is stored (`oacp_artifacts`); internal routes read, replay and revoke artifacts. Each artifact is on an OACP Token Status List served at `GET /status/oacp/:list` (behind `OACP_STATUS_LIST_PUBLIC_ENABLED`, default off); revoking issues a signed `revocation` artifact. See [OACP artifact authority](docs/guides/oacp/artifact-authority.mdx). |

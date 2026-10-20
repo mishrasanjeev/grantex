@@ -484,6 +484,7 @@ this; a token whose decision entries cannot be read is refused.
 | Consume | `consume`; `consume_request` (a platform's own decision) | `consume`; `consumeRequest` | `POST /v1/decisions/consume`; `POST /v1/decisions/requests/{id}/consume` |
 | Enforce | `enforce(..., decision_grants, arguments and/or decision_action, case_version, decisions_mode)`; `wrap_tool(..., decision_grants, case_version)`; FastAPI `GrantexEnforcer(..., case_version=...)` | `enforce({..., decisionGrants, arguments and/or decisionAction, caseVersion, decisionsMode})`; `wrapTool`, `enforceMiddleware` | |
 | MCP | | `grantexDecisionVerifier` (`@grantex/mcp-auth`) | |
+| Policy-arbiter decision (machine profile, section 10) | | | `POST /v1/commerce/oacp/arbiter-decisions` (AgenticOrg internal service token) |
 
 Shared test cases: `spec/examples/decision-grant/action-hash.json` and
 `spec/examples/decision-grant/verification.json`. The whole flow (admin
@@ -493,3 +494,69 @@ refused, replay, four eyes, a platform's own decision consumed by request id,
 and both SDKs consuming with the agent binding off) runs in Chromium against
 the auth service in
 `apps/auth-service/tests/e2e/decision-grants-browser.e2e.test.ts`.
+
+## 10. Machine profile: policy-arbiter decisions
+
+A profile of this token for decisions that no person takes: a deterministic
+policy arbiter (AgenticOrg's OACP commerce arbiter) seals `allow` or
+`refuse` from a mandate, consent, Commerce Passport and OACP artifact
+evidence, and the auth service countersigns an `allow`. It is a profile of
+the decision grant above, not a separate token type: the protected header,
+`aud`, signing key and JWK Set are the same, so a relying party verifies the
+signature exactly as in section 6 and then tells the profiles apart by
+`approver_auth`.
+
+**Human-approval verifiers MUST refuse it.** A grant whose `approver_auth`
+is `policy_arbiter` never satisfies a decision that needs a person (approver
+sign-in and step-up, dwell, four eyes): the auth service's consumption
+endpoints refuse it as `malformed` before reading any decision row, and both
+SDKs' `verifyDecisionGrant(s)` / `verify_decision_grant(s)` (and so
+`enforce()` and `grantexDecisionVerifier`) refuse it as `malformed` right
+after the signature verifies. Human `approver_auth` values always begin with
+`sso`, so the two can never be confused. The shared vectors in
+`spec/examples/decision-grant/verification.json` include both a
+machine-profile grant and a human-shaped grant claiming `policy_arbiter`.
+
+**Claims**
+
+| Claim | Type | Meaning |
+|---|---|---|
+| `iss`, `aud`, `jti`, `iat` | | As in section 3. |
+| `exp` | integer | At most 600 seconds after `iat`, and at most 600 seconds after the arbiter's `decided_at`: a late post never extends a decision. |
+| `sub` | string | The buyer agent the decision is about (`buyer_agent_id`). |
+| `approver_auth` | string | `policy_arbiter`. |
+| `amr` | string[] | The evidence the arbiter rested on, in this order: `mandate` (mandate reference and hash), `consent`, `passport`, `oacp_artifact` (at least one OACP artifact id). At least one is present. |
+| `acr` | | Absent. |
+| `auth_time` | integer | The arbiter's `decided_at`. |
+| `action_hash` | string | Lowercase hex SHA-256 of the RFC 8785 canonical JSON of the handoff payload the decision covers, as the arbiter computed it. Unlike section 2 it is not recomputed from an `action` claim: the relying party compares it with the hash of the payload it is about to execute. |
+| `dwell_ms` | integer | `0`. |
+| `dwell_source` | string | `server`. |
+| `decision_request` | string | The arbiter's `decision_id`. |
+| `arbiter` | object | `{tenant_id, merchant_id, seller_agent_id, action, policy_version, rules_evaluated, evidence_hash}`; `evidence_hash` is lowercase hex SHA-256 of the RFC 8785 form of the decision's `evidence` object. |
+
+`dev`, `idp`, `action`, `connector`, `case_version`, `memo_hash`,
+`policy_score_hash` and `four_eyes` are absent.
+
+**Minting.** `POST /v1/commerce/oacp/arbiter-decisions`, authenticated with
+the AgenticOrg internal service token and its tenant allowlist (the
+credential of `POST /v1/commerce/oacp/c6z/authority-requests`). The body is
+`{decision_id, tenant_id, merchant_id, seller_agent_id, buyer_agent_id,
+action, action_hash, outcome, rules_evaluated, failing_rule, evidence:
+{mandate_ref, mandate_hash, consent_ref, consent_status, passport_ref,
+artifact_ids}, decided_at, policy_version}`; unknown members are refused.
+Every accepted call is stored append-only (`commerce_arbiter_decisions`),
+idempotent on `decision_id`: the same body answers as the first call did (the
+same `jti` and `exp`, re-signed; tokens are never stored), a different body
+is refused with 409 `arbiter_decision_conflict`.
+
+- `outcome: "allow"` (with `failing_rule: null`) answers
+  `{decision_id, outcome, decision_grant, jti, exp, expires_at}`, `exp` in
+  seconds since the epoch.
+- `outcome: "refuse"` (with `failing_rule` naming one of `rules_evaluated`)
+  answers `{decision_id, outcome, recorded: true}`. No token is minted for a
+  refusal; the database refuses a refusal row that carries one.
+- A malformed body, an `allow` with no evidence, a `decided_at` more than 60
+  seconds in the future, or an `allow` older than 600 seconds is refused with
+  422 and not stored.
+
+Nothing in this profile waits for, or can be satisfied by, a person.
