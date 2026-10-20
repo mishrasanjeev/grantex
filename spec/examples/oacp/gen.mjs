@@ -95,6 +95,14 @@ const envelope = {
 const good = signEnvelope(envelope);
 const signed = { ...envelope, signature: good.signature };
 
+// The detached JWS with its payload put back in the middle part: a valid
+// compact JWS, but not the detached form the profile requires.
+function attachPayload(detached, payload) {
+  const [header, empty, signature] = detached.split('.');
+  if (empty !== '' || signature === undefined) throw new Error('expected a detached JWS');
+  return `${header}.${b64u(payload)}.${signature}`;
+}
+
 const cases = [];
 cases.push({ name: 'valid', envelope: signed, payload, expect: 'valid' });
 cases.push({ name: 'tampered_payload', envelope: signed, payload: { ...payload, product_count: 13 }, expect: 'payload_hash_mismatch' });
@@ -109,7 +117,7 @@ cases.push({ name: 'signed_by_other_key_claiming_kid', envelope: { ...envelope, 
 cases.push({ name: 'header_kid_mismatch', envelope: { ...envelope, issuer_key_id: kid, signature: otherSigned.signature }, payload, expect: 'detached_jws_verification_failed' });
 cases.push({ name: 'wrong_typ', envelope: { ...envelope, signature: signEnvelope(envelope, privateKey, kid, 'JWT').signature }, payload, expect: 'detached_jws_verification_failed' });
 cases.push({ name: 'legacy_template_signature', envelope: { ...envelope, signature: `eyJhbGciOiJFUzI1NiJ9..sig_${envelope.artifact_id}_${payloadHash.slice(0, 16)}` }, payload, expect: 'detached_jws_verification_failed' });
-cases.push({ name: 'attached_payload_not_detached', envelope: { ...envelope, signature: good.signature.replace('..', `.${b64u(good.signing_payload)}.`) }, payload, expect: 'signature_missing_or_placeholder' });
+cases.push({ name: 'attached_payload_not_detached', envelope: { ...envelope, signature: attachPayload(good.signature, good.signing_payload) }, payload, expect: 'signature_missing_or_placeholder' });
 
 const out = {
   profile: 'oacp-artifact-jws-v1',

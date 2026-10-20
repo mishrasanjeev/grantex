@@ -179,7 +179,7 @@ jobs:
 
   sdk-py:
     name: Python SDK — ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # ubuntu-latest (26.04) has no Python 3.9 build
     strategy:
       fail-fast: false
       matrix:
@@ -426,7 +426,7 @@ jobs:
 
   python-integrations:
     name: Python Integrations — ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # ubuntu-latest (26.04) has no Python 3.9 build
     strategy:
       fail-fast: false
       matrix:
