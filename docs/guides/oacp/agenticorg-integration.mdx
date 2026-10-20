@@ -171,6 +171,7 @@ Grantex issues Intent, Cart and Payment mandates as ES256 JWTs signed with the O
 | A Cart mandate | `POST /v1/commerce/oacp/mandates/cart` with `{tenant_id, passport_jwt, intent_mandate, checkout, presence?, webauthn_assertion?}`. `checkout` is the UCP checkout object (`id`, `currency`, `line_items[{id, quantity, ...}]`, `totals` with exactly one `total`). For `human_present`, `webauthn_assertion` is the buyer's WebAuthn `AuthenticationResponseJSON` whose challenge is `checkout_hash` = b64url SHA-256 of the RFC 8785 checkout. | `commerce.oacp.mandates.cart.issue` |
 | A Payment mandate | `POST /v1/commerce/oacp/mandates/payment` with `{tenant_id, passport_jwt, cart_mandate, rail: "plural" \| "upi_autopay" \| "card_network_token", token_binding: {type, id}}`. Never send card data. | `commerce.oacp.mandates.payment.issue` |
 | A server-side check | `POST /v1/commerce/oacp/mandates/verify` with `{tenant_id, mandate, expected_type?, expected_merchant_id?}` returns `{valid, refusal_code, mandate_type, mandate_hash, claims}` | `commerce.oacp.mandates.verify` |
+| Suspension | `POST /v1/commerce/oacp/mandates/{jti}/suspend` with `{reason_code?}` and `.../reinstate` (status 2, reversible, the named mandate only; 201 on a change, 200 when already in that state). Artifacts: `POST /v1/commerce/oacp/artifacts/{artifact_id}/suspend` / `reinstate` with `commerce.oacp.artifacts.suspend`. | `commerce.oacp.mandates.suspend` |
 | Revocation | `POST /v1/commerce/oacp/mandates/{jti}/revoke` with `{reason_code?}` revokes the mandate and every mandate issued under it (201, or 200 when already revoked) | `commerce.oacp.mandates.revoke` |
 
 An issue response is `{mandate, jti, mandate_type, exp, status: {status_list: {idx, uri}}, mandate_hash, claims, audit_event_id}`; a refusal carries `error.audit_event_id` when the tenant is a commerce tenant. Store `jti` and `mandate_hash` (lowercase hex SHA-256 of the compact JWT) in the ledger and in the arbiter evidence (`mandate_ref`, `mandate_hash`). Put the three mandate hashes in the Plural order metadata.
@@ -197,7 +198,7 @@ Issuance refuses, and records the refusal (the error `details.refusal_record_id`
 
 - passport and consent: `passport_invalid`, `passport_revoked`, `passport_not_checkout`, `passport_scope_missing`, `passport_cap_missing`, `consent_not_active`, `passport_cap_exceeded`, `currency_mismatch`, `merchant_not_allowed`;
 - presence: `presence_mismatch` (a `human_not_present` mandate under a `human_present` consent or parent);
-- parent mandate: `parent_mandate_expired`, `parent_mandate_revoked`, `parent_mandate_invalid`, `mandate_chain_mismatch`, `intent_cap_exceeded`;
+- parent mandate: `parent_mandate_expired`, `parent_mandate_revoked`, `parent_mandate_suspended`, `parent_mandate_invalid`, `mandate_chain_mismatch`, `intent_cap_exceeded`;
 - passkey: `passkey_evidence_required` (a `human_present` cart without an assertion), `passkey_evidence_invalid`, `passkey_evidence_replayed`;
 - request content: `checkout_invalid`, `card_data_refused`, `payment_rail_unsupported`, `token_binding_invalid`, `intent_invalid`.
 

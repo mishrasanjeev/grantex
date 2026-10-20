@@ -21,7 +21,7 @@ import { signCommercePassport, newCommercePassportJti } from '../src/lib/commerc
 import { _resetCommercePassportKeyCacheForTests } from '../src/lib/commerce/passport-keys.js';
 import { verifyOacpMandate, oacpCheckoutHash, oacpMandateChainRefusal, type OacpMandateStatusValue } from '../src/lib/commerce/oacp-mandate-jwt.js';
 import { decodeTokenStatusList } from '../src/lib/registry/status-list-codec.js';
-import { buildTestApp, sqlMock } from './helpers.js';
+import { buildTestApp, sqlMock, TEST_ADMIN_API_KEY } from './helpers.js';
 import { createTestDatabase } from './helpers/database.js';
 
 const adminDatabaseUrl = process.env['AUDIT_INTEGRATION_DATABASE_URL'];
@@ -429,6 +429,45 @@ describePostgres('OACP mandates against Postgres', () => {
     const refused = (await refusalRows('parent_mandate_revoked'))[0]!;
     const notRevocable = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/mandates/${refused['jti'] as string}/revoke`, headers: service, payload: {} });
     expect(notRevocable.statusCode).toBe(409);
+  });
+
+  it('suspends and reinstates a mandate through the status list (status 2), platform admin or service scope only', async () => {
+    const pp = await passport();
+    const i = await intent(pp);
+    const suspend = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/mandates/${i.jti}/suspend`, headers: service, payload: { reason_code: 'risk_review' } });
+    expect(suspend.statusCode, suspend.body).toBe(201);
+    expect(suspend.json()).toMatchObject({ jti: i.jti, suspended: true, suspension_reason: 'risk_review', changed: true });
+    resetOacpStatusCache();
+    expect(await relyingPartyVerify(i.mandate, i.claims, 'intent')).toMatchObject({ valid: false, refusal_code: 'mandate_suspended' });
+    expect((await post('verify', { tenant_id: TENANT, mandate: i.mandate })).json()).toMatchObject({ refusal_code: 'mandate_suspended' });
+
+    // Nothing is issued under a suspended parent.
+    const cart = await post('cart', { tenant_id: TENANT, passport_jwt: pp, intent_mandate: i.mandate, checkout: checkout() });
+    expect(cart.statusCode).toBe(403);
+    expect(cart.json<{ error: { code: string } }>().error.code).toBe('parent_mandate_suspended');
+
+    // Idempotent.
+    const again = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/mandates/${i.jti}/suspend`, headers: service, payload: {} });
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toMatchObject({ suspended: true, changed: false });
+
+    const reinstate = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/mandates/${i.jti}/reinstate`, headers: { authorization: `Bearer ${TEST_ADMIN_API_KEY}` }, payload: {} });
+    expect(reinstate.statusCode, reinstate.body).toBe(201);
+    expect(reinstate.json()).toMatchObject({ suspended: false, suspended_at: null, changed: true });
+    resetOacpStatusCache();
+    expect(await relyingPartyVerify(i.mandate, i.claims, 'intent')).toMatchObject({ valid: true });
+
+    const events = await sql`SELECT event_type FROM commerce_audit_events WHERE resource_id = ${i.jti} ORDER BY occurred_at`;
+    expect(events.map((e) => e['event_type'])).toEqual(['oacp.mandate.issued', 'oacp.mandate.suspended', 'oacp.mandate.reinstated']);
+
+    // A suspended mandate can still be revoked (final), and a revoked one cannot be suspended.
+    await app.inject({ method: 'POST', url: `/v1/commerce/oacp/mandates/${i.jti}/suspend`, headers: service, payload: {} });
+    const revoke = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/mandates/${i.jti}/revoke`, headers: service, payload: {} });
+    expect(revoke.statusCode).toBe(201);
+    resetOacpStatusCache();
+    expect(await relyingPartyVerify(i.mandate, i.claims, 'intent')).toMatchObject({ refusal_code: 'mandate_revoked' });
+    const late = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/mandates/${i.jti}/reinstate`, headers: service, payload: {} });
+    expect(late.statusCode).toBe(409);
   });
 
   it('refuses a cart under an expired intent', async () => {

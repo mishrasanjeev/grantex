@@ -88,6 +88,7 @@ export type OacpMandateIssueRefusalCode =
   | 'presence_mismatch'
   | 'parent_mandate_expired'
   | 'parent_mandate_revoked'
+  | 'parent_mandate_suspended'
   | 'parent_mandate_invalid'
   | 'mandate_chain_mismatch'
   | 'intent_cap_exceeded'
@@ -288,9 +289,8 @@ async function verifiedParent<T extends OacpMandateClaims>(
   const result = await verifyStoredOacpMandate(sql, mandate, { expected_type: type, expected_audience: passport.merchantId });
   if (!result.valid) {
     if (result.refusal_code === 'mandate_expired') refuse('parent_mandate_expired', `The ${type} mandate has expired`);
-    if (result.refusal_code === 'mandate_revoked' || result.refusal_code === 'mandate_suspended') {
-      refuse('parent_mandate_revoked', `The ${type} mandate is revoked`, 403);
-    }
+    if (result.refusal_code === 'mandate_revoked') refuse('parent_mandate_revoked', `The ${type} mandate is revoked`, 403);
+    if (result.refusal_code === 'mandate_suspended') refuse('parent_mandate_suspended', `The ${type} mandate is suspended`, 403);
     if (result.refusal_code === 'mandate_audience_mismatch') refuse('mandate_chain_mismatch', `The ${type} mandate is for another merchant`);
     refuse('parent_mandate_invalid', `The ${type} mandate does not verify (${result.refusal_code})`);
   }
@@ -767,7 +767,7 @@ export async function issuePaymentMandate(sql: Sql, redis: Redis | null, input: 
 }
 
 export class OacpMandateStoreError extends Error {
-  constructor(readonly code: 'mandate_not_found' | 'mandate_not_revocable', message: string) {
+  constructor(readonly code: 'mandate_not_found' | 'mandate_not_revocable' | 'mandate_not_suspendable', message: string) {
     super(message);
     this.name = 'OacpMandateStoreError';
   }
@@ -854,4 +854,60 @@ export async function revokeOacpMandate(
       already_revoked: alreadyRevoked,
     };
   }) as { jti: string; status: 'revoked'; revoked_at: string; revocation_reason: string; revoked_jtis: string[]; already_revoked: boolean };
+}
+
+/**
+ * Suspend (status 2) or reinstate (status 0) one issued mandate on its Token
+ * Status List (draft-ietf-oauth-status-list section 7.1), with its
+ * `oacp.mandate.suspended` / `oacp.mandate.reinstated` audit event, in one
+ * transaction. Reversible, unlike revocation, and applied to the named mandate
+ * only: no mandate is issued under a suspended parent
+ * (`parent_mandate_suspended`), and relying parties verify every mandate of a
+ * chain. Refused for refusal records and revoked mandates. Idempotent:
+ * `changed` is false when the mandate was already in the asked state.
+ */
+export async function setOacpMandateSuspension(
+  sql: Sql,
+  jti: string,
+  suspend: boolean,
+  options: { reason_code?: string | undefined; now?: Date | undefined; request_id?: string | null | undefined } = {},
+): Promise<{ jti: string; suspended: boolean; suspended_at: string | null; suspension_reason: string | null; changed: boolean }> {
+  const reason = options.reason_code && REASON_RE.test(options.reason_code) ? options.reason_code : 'issuer_suspended';
+  const nowIso = (options.now ?? new Date()).toISOString();
+  return await sql.begin(async (handle) => {
+    const tx = handle as unknown as TxSql;
+    const [row] = await tx`
+      SELECT jti, status, mandate_type, tenant_id, merchant_id, buyer_agent_id, subject, passport_jti,
+             status_list_uri, status_idx, suspended_at, suspension_reason
+        FROM oacp_mandates WHERE jti = ${jti} FOR UPDATE
+    `;
+    if (!row) throw new OacpMandateStoreError('mandate_not_found', 'OACP mandate not found');
+    if (row['status'] !== 'issued') {
+      throw new OacpMandateStoreError('mandate_not_suspendable', 'Only issued, unrevoked mandates can be suspended or reinstated');
+    }
+    const iso = (v: unknown) => (v === null || v === undefined ? null : v instanceof Date ? v.toISOString() : String(v));
+    const isSuspended = row['suspended_at'] !== null && row['suspended_at'] !== undefined;
+    if (isSuspended === suspend) {
+      return { jti, suspended: isSuspended, suspended_at: iso(row['suspended_at']), suspension_reason: (row['suspension_reason'] as string | null) ?? null, changed: false };
+    }
+    await setOacpStatus(tx, row['status_list_uri'] as string, Number(row['status_idx']), suspend ? 'suspended' : 'valid');
+    await tx`
+      UPDATE oacp_mandates
+         SET suspended_at = ${suspend ? nowIso : null}, suspension_reason = ${suspend ? reason : null}
+       WHERE jti = ${jti}
+    `;
+    await appendCommerceAudit(tx as unknown as Sql, {
+      tenantId: row['tenant_id'] as string,
+      merchantId: row['merchant_id'] as string,
+      agentId: row['buyer_agent_id'] as string,
+      userPrincipalId: row['subject'] as string,
+      eventType: suspend ? 'oacp.mandate.suspended' : 'oacp.mandate.reinstated',
+      resourceType: 'oacp_mandate',
+      resourceId: jti,
+      passportJti: row['passport_jti'] as string,
+      requestId: options.request_id ?? null,
+      metadata: { mandate_type: row['mandate_type'], ...(suspend ? { reason_code: reason } : {}) },
+    });
+    return { jti, suspended: suspend, suspended_at: suspend ? nowIso : null, suspension_reason: suspend ? reason : null, changed: true };
+  }) as { jti: string; suspended: boolean; suspended_at: string | null; suspension_reason: string | null; changed: boolean };
 }

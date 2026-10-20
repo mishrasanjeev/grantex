@@ -12,6 +12,12 @@
  *   POST /oacp/mandates/payment       PaymentMandate under a CartMandate
  *   POST /oacp/mandates/verify        verify any of the three
  *   POST /oacp/mandates/:jti/revoke   revoke a mandate and its descendants
+ *   POST /oacp/mandates/:jti/suspend  suspend one mandate (status 2), reversible
+ *   POST /oacp/mandates/:jti/reinstate
+ *
+ * Suspension and reinstatement take the service token with its own scope
+ * (commerce.oacp.mandates.suspend) or the platform admin; tenant operators
+ * cannot suspend.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
@@ -19,6 +25,8 @@ import {
   OACP_MANDATES_INTENT_ISSUE_SCOPE,
   OACP_MANDATES_PAYMENT_ISSUE_SCOPE,
   OACP_MANDATES_REVOKE_SCOPE,
+  OACP_MANDATES_SUSPEND_SCOPE,
+  type CommerceCaller,
   OACP_MANDATES_VERIFY_SCOPE,
 } from '../lib/commerce/caller.js';
 import {
@@ -30,6 +38,7 @@ import {
   issueIntentMandate,
   issuePaymentMandate,
   revokeOacpMandate,
+  setOacpMandateSuspension,
   verifyStoredOacpMandate,
   type OacpMandateIssued,
 } from '../lib/commerce/mandates.js';
@@ -191,4 +200,39 @@ export async function commerceOacpMandateRoutes(app: FastifyInstance) {
       throw err;
     }
   });
+
+  for (const action of ['suspend', 'reinstate'] as const) {
+    app.post<{ Params: { jti: string } }>(`/oacp/mandates/:jti/${action}`, async (request, reply) => {
+      requireKind(request);
+      const b = body(request);
+      const unknown = Object.keys(b).find((key) => key !== 'reason_code');
+      if (unknown !== undefined) throw invalid(unknown, 'unknown member');
+      if (b['reason_code'] !== undefined && (typeof b['reason_code'] !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(b['reason_code']))) {
+        throw invalid('reason_code', 'must match ^[a-z][a-z0-9_]{0,63}$');
+      }
+      const sql = getSql();
+      const record = await getOacpMandateRecord(sql, request.params.jti);
+      if (!record || !callerMaySuspend(request, record.tenant_id, OACP_MANDATES_SUSPEND_SCOPE)) {
+        throw new CommerceHttpError(404, 'mandate_not_found', 'OACP mandate not found', { retryable: false });
+      }
+      try {
+        const result = await setOacpMandateSuspension(sql, record.jti, action === 'suspend', {
+          reason_code: b['reason_code'] as string | undefined, request_id: request.id,
+        });
+        return reply.status(result.changed ? 201 : 200).send(result);
+      } catch (err) {
+        if (err instanceof OacpMandateStoreError) {
+          throw new CommerceHttpError(err.code === 'mandate_not_found' ? 404 : 409, err.code, err.message, { retryable: false });
+        }
+        throw err;
+      }
+    });
+  }
+}
+
+/** Suspension is the platform admin's or the authority service's (own scope, allow-listed tenant), never a tenant operator's. */
+export function callerMaySuspend(request: FastifyRequest, tenantId: string | null, scope: string): boolean {
+  const caller = request.commerceCaller as CommerceCaller | undefined;
+  if (caller?.kind === 'operator') return caller.isPlatformAdmin;
+  return caller?.kind === 'service' && callerMayActForTenant(request, tenantId, scope);
 }

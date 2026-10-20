@@ -211,6 +211,26 @@ describePostgres('OACP artifacts against Postgres', () => {
     expect(bad.json<{ refusal_code: string }>().refusal_code).toBe('mandate_capability_evidence_invalid');
   });
 
+  it('suspends and reinstates an artifact through the status list (status 2)', async () => {
+    const body = await issue();
+    const artifact = body.artifacts[0]!;
+    const id = artifact.envelope['artifact_id'] as string;
+    const suspend = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/artifacts/${id}/suspend`, headers: service, payload: { reason_code: 'source_review' } });
+    expect(suspend.statusCode, suspend.body).toBe(201);
+    expect(suspend.json()).toMatchObject({ artifact_id: id, status: 'issued', suspension_reason: 'source_review', changed: true });
+    resetOacpStatusCache();
+    expect(await verifyThroughPublicSurfaces(artifact)).toMatchObject({ valid: false, refusal_code: 'artifact_suspended' });
+    const reinstate = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/artifacts/${id}/reinstate`, headers: admin, payload: {} });
+    expect(reinstate.statusCode, reinstate.body).toBe(201);
+    expect(reinstate.json()).toMatchObject({ suspended_at: null, changed: true });
+    resetOacpStatusCache();
+    expect(await verifyThroughPublicSurfaces(artifact)).toMatchObject({ valid: true });
+    // Revocation stays final: a revoked artifact cannot be suspended or reinstated.
+    await app.inject({ method: 'POST', url: `/v1/commerce/oacp/artifacts/${id}/revoke`, headers: service, payload: {} });
+    const late = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/artifacts/${id}/suspend`, headers: service, payload: {} });
+    expect(late.statusCode).toBe(409);
+  });
+
   it('issues, persists and publishes 11 signed artifacts that verify through the JWKS and status list', async () => {
     const body = await issue();
     expect(body.artifacts).toHaveLength(11);

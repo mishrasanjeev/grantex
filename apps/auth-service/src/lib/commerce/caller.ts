@@ -25,6 +25,8 @@ export const OACP_MANDATES_CART_ISSUE_SCOPE = 'commerce.oacp.mandates.cart.issue
 export const OACP_MANDATES_PAYMENT_ISSUE_SCOPE = 'commerce.oacp.mandates.payment.issue';
 export const OACP_MANDATES_VERIFY_SCOPE = 'commerce.oacp.mandates.verify';
 export const OACP_MANDATES_REVOKE_SCOPE = 'commerce.oacp.mandates.revoke';
+export const OACP_MANDATES_SUSPEND_SCOPE = 'commerce.oacp.mandates.suspend';
+export const OACP_ARTIFACTS_SUSPEND_SCOPE = 'commerce.oacp.artifacts.suspend';
 
 /**
  * The internal routes the AgenticOrg service token may call, each with the one
@@ -40,6 +42,7 @@ const SERVICE_TOKEN_ROUTES: ReadonlyArray<{ method: string; path: RegExp; scope:
   { method: 'GET', path: /\/v1\/commerce\/oacp\/artifacts$/, scope: OACP_ARTIFACTS_READ_SCOPE },
   { method: 'GET', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+$/, scope: OACP_ARTIFACTS_READ_SCOPE },
   { method: 'POST', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+\/revoke$/, scope: OACP_ARTIFACTS_REVOKE_SCOPE },
+  { method: 'POST', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+\/(suspend|reinstate)$/, scope: OACP_ARTIFACTS_SUSPEND_SCOPE },
   { method: 'POST', path: /\/oacp\/arbiter-decisions$/, scope: OACP_ARBITER_DECISIONS_SERVICE_SCOPE },
   { method: 'GET', path: /\/v1\/commerce\/oacp\/ucp-profile$/, scope: OACP_UCP_PROFILE_READ_SCOPE },
   { method: 'POST', path: /\/v1\/commerce\/oacp\/acp\/delegate-payment-allowance$/, scope: ACP_DELEGATE_PAYMENT_ALLOWANCE_SCOPE },
@@ -49,6 +52,7 @@ const SERVICE_TOKEN_ROUTES: ReadonlyArray<{ method: string; path: RegExp; scope:
   { method: 'POST', path: /\/v1\/commerce\/oacp\/mandates\/payment$/, scope: OACP_MANDATES_PAYMENT_ISSUE_SCOPE },
   { method: 'POST', path: /\/v1\/commerce\/oacp\/mandates\/verify$/, scope: OACP_MANDATES_VERIFY_SCOPE },
   { method: 'POST', path: /\/v1\/commerce\/oacp\/mandates\/[^/]+\/revoke$/, scope: OACP_MANDATES_REVOKE_SCOPE },
+  { method: 'POST', path: /\/v1\/commerce\/oacp\/mandates\/[^/]+\/(suspend|reinstate)$/, scope: OACP_MANDATES_SUSPEND_SCOPE },
 ];
 
 export type CommerceCaller =

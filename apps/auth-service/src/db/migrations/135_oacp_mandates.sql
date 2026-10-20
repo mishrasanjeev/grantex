@@ -84,6 +84,9 @@ CREATE TABLE IF NOT EXISTS oacp_mandates (
   request_id             TEXT,
   revoked_at             TIMESTAMPTZ,
   revocation_reason      TEXT,
+  -- Set while the status-list entry is SUSPENDED (2); cleared on reinstatement.
+  suspended_at           TIMESTAMPTZ,
+  suspension_reason      TEXT,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   CONSTRAINT chk_oacp_mandates_jti CHECK (jti ~ '^oacp_(mnd|mref)_[0-9A-HJKMNP-TV-Z]{26}$'),
   CONSTRAINT chk_oacp_mandates_type CHECK (mandate_type IN ('intent', 'cart', 'payment')),
@@ -143,3 +146,9 @@ $$;
 UPDATE commerce_passport_keys
    SET public_key_jwk = (public_key_jwk #>> '{}')::jsonb
  WHERE jsonb_typeof(public_key_jwk) = 'string';
+
+-- 4. Suspension (draft-ietf-oauth-status-list section 7.1, status 2) of OACP
+--    artifacts, as for mandates above: set while the status-list entry is
+--    SUSPENDED, cleared on reinstatement. Revocation stays final.
+ALTER TABLE oacp_artifacts ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ;
+ALTER TABLE oacp_artifacts ADD COLUMN IF NOT EXISTS suspension_reason TEXT;

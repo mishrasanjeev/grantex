@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Suspension of OACP mandates and artifacts (status 2)
+- `POST /v1/commerce/oacp/mandates/{jti}/suspend` and `/reinstate`, and
+  `POST /v1/commerce/oacp/artifacts/{artifact_id}/suspend` and `/reinstate`,
+  set the Token Status List entry to SUSPENDED (2) or back to VALID
+  (draft-ietf-oauth-status-list section 7.1). Platform admin, or the service
+  token with the new route scopes `commerce.oacp.mandates.suspend` /
+  `commerce.oacp.artifacts.suspend`; tenant operators cannot suspend.
+  Verifiers refuse `mandate_suspended` / `artifact_suspended` meanwhile;
+  issuance under a suspended parent is refused `parent_mandate_suspended`.
+  Revocation stays final: a suspended item can be revoked, a revoked one
+  cannot be suspended or reinstated (409). Mandate suspensions are audited
+  (`oacp.mandate.suspended`, `oacp.mandate.reinstated`). Migration
+  `135_oacp_mandates.sql` adds `suspended_at` and `suspension_reason` to
+  `oacp_mandates` and `oacp_artifacts`. New endpoints, enabled behind
+  authentication.
+
 ### Changed - No placeholder values in signed OACP artifacts (breaking, signed content)
 - `mandate_capability` no longer carries `offline_pos_evidence_ref:
   "pos:provider_or_simulator:handoff_or_receipt:pending:redacted"`, a value

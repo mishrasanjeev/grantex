@@ -13,6 +13,8 @@
  *   GET  /oacp/artifacts/:artifactId           one artifact: {envelope, payload, status, ...}
  *   GET  /oacp/artifacts?tenant_id&...         replay: {artifacts, next_cursor}
  *   POST /oacp/artifacts/:artifactId/revoke    revoke and issue a revocation artifact
+ *   POST /oacp/artifacts/:artifactId/suspend   suspend (status 2), reversible; platform admin
+ *   POST /oacp/artifacts/:artifactId/reinstate or service token (commerce.oacp.artifacts.suspend)
  *   GET  /oacp/ucp-profile?tenant_id&...       UCP business-profile `ucp` member rendered
  *                                              from the scope's issued artifacts (G18)
  *   GET  /oacp/issuer-keys                     list issuer keys (no private material)
@@ -24,6 +26,7 @@ import {
   C6Z_AUTHORITY_SERVICE_SCOPE,
   OACP_ARTIFACTS_READ_SCOPE,
   OACP_ARTIFACTS_REVOKE_SCOPE,
+  OACP_ARTIFACTS_SUSPEND_SCOPE,
   OACP_UCP_PROFILE_READ_SCOPE,
   type CommerceCaller,
 } from '../lib/commerce/caller.js';
@@ -40,6 +43,7 @@ import {
   listOacpArtifacts,
   recordOacpRefusal,
   revokeOacpArtifact,
+  setOacpArtifactSuspension,
   type OacpArtifactRecord,
 } from '../lib/commerce/oacp-artifact-store.js';
 import {
@@ -144,6 +148,8 @@ function view(record: OacpArtifactRecord): Record<string, unknown> {
     revoked_at: record.revoked_at,
     revocation_reason: record.revocation_reason,
     revocation_artifact_id: record.revocation_artifact_id,
+    suspended_at: record.suspended_at,
+    suspension_reason: record.suspension_reason,
     created_at: record.created_at,
   };
 }
@@ -182,6 +188,39 @@ function rethrowKeyUnavailable(err: unknown): never {
 }
 
 export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
+  for (const action of ['suspend', 'reinstate'] as const) {
+    app.post<{ Params: { artifactId: string }; Body: { reason_code?: unknown } }>(
+      `/oacp/artifacts/:artifactId/${action}`,
+      async (request, reply) => {
+        requireKind(request);
+        const reason = (request.body ?? {}).reason_code;
+        if (reason !== undefined && (typeof reason !== 'string' || !/^[a-z][a-z0-9_]{0,63}$/.test(reason))) {
+          throw invalid('reason_code', 'must match ^[a-z][a-z0-9_]{0,63}$');
+        }
+        const sql = getSql();
+        const record = await getOacpArtifact(sql, request.params.artifactId);
+        const caller = request.commerceCaller as CommerceCaller | undefined;
+        const allowed = caller?.kind === 'operator'
+          ? caller.isPlatformAdmin
+          : caller?.kind === 'service' && callerMayActForTenant(request, record?.tenant_id, OACP_ARTIFACTS_SUSPEND_SCOPE);
+        if (!record || !allowed) {
+          throw new CommerceHttpError(404, 'artifact_not_found', 'OACP artifact not found', { retryable: false });
+        }
+        try {
+          const result = await setOacpArtifactSuspension(sql, record.artifact_id, action === 'suspend', {
+            reason_code: reason as string | undefined,
+          });
+          return reply.status(result.changed ? 201 : 200).send({ ...view(result.artifact), changed: result.changed });
+        } catch (err) {
+          if (err instanceof OacpArtifactStoreError) {
+            throw new CommerceHttpError(err.code === 'artifact_not_found' ? 404 : 409, err.code, err.message, { retryable: false });
+          }
+          throw err;
+        }
+      },
+    );
+  }
+
   app.post<{ Body: C6ZAuthorityBody }>('/oacp/c6z/authority-requests', async (request, reply) => {
     const body = request.body ?? {};
     requireAuthorityCaller(request, body);

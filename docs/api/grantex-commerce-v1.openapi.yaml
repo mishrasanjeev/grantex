@@ -3518,6 +3518,134 @@ paths:
         "409":
           description: mandate_not_revocable - a refused issuance.
 
+  /v1/commerce/oacp/mandates/{jti}/suspend:
+    parameters:
+      - { in: path, name: jti, required: true, schema: { type: string } }
+    post:
+      tags: [OACP]
+      operationId: suspendOacpMandate
+      summary: Suspend an OACP mandate on the Token Status List
+      description: >-
+        Sets the status list entry to SUSPENDED (2). Reversible;
+        revoked items are refused. Platform admin, or the AgenticOrg service
+        token with route scope commerce.oacp.mandates.suspend; tenant operators cannot.
+      security:
+        - developerApiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason_code: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+      responses:
+        "201":
+          description: Changed.
+        "200":
+          description: Already in that state (changed false).
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: mandate_not_found (also when the caller may not suspend it).
+        "409":
+          description: Not suspendable (refused or revoked).
+
+  /v1/commerce/oacp/mandates/{jti}/reinstate:
+    parameters:
+      - { in: path, name: jti, required: true, schema: { type: string } }
+    post:
+      tags: [OACP]
+      operationId: reinstateOacpMandate
+      summary: Reinstate an OACP mandate on the Token Status List
+      description: >-
+        Sets the status list entry to VALID (0) again. Reversible;
+        revoked items are refused. Platform admin, or the AgenticOrg service
+        token with route scope commerce.oacp.mandates.suspend; tenant operators cannot.
+      security:
+        - developerApiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason_code: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+      responses:
+        "201":
+          description: Changed.
+        "200":
+          description: Already in that state (changed false).
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: mandate_not_found (also when the caller may not suspend it).
+        "409":
+          description: Not suspendable (refused or revoked).
+
+  /v1/commerce/oacp/artifacts/{artifact_id}/suspend:
+    parameters:
+      - { in: path, name: artifact_id, required: true, schema: { type: string } }
+    post:
+      tags: [OACP]
+      operationId: suspendOacpArtifact
+      summary: Suspend an OACP artifact on the Token Status List
+      description: >-
+        Sets the status list entry to SUSPENDED (2). Reversible;
+        revoked items are refused. Platform admin, or the AgenticOrg service
+        token with route scope commerce.oacp.artifacts.suspend; tenant operators cannot.
+      security:
+        - developerApiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason_code: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+      responses:
+        "201":
+          description: Changed.
+        "200":
+          description: Already in that state (changed false).
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: artifact_not_found (also when the caller may not suspend it).
+        "409":
+          description: Not suspendable (refused or revoked).
+
+  /v1/commerce/oacp/artifacts/{artifact_id}/reinstate:
+    parameters:
+      - { in: path, name: artifact_id, required: true, schema: { type: string } }
+    post:
+      tags: [OACP]
+      operationId: reinstateOacpArtifact
+      summary: Reinstate an OACP artifact on the Token Status List
+      description: >-
+        Sets the status list entry to VALID (0) again. Reversible;
+        revoked items are refused. Platform admin, or the AgenticOrg service
+        token with route scope commerce.oacp.artifacts.suspend; tenant operators cannot.
+      security:
+        - developerApiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason_code: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+      responses:
+        "201":
+          description: Changed.
+        "200":
+          description: Already in that state (changed false).
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: artifact_not_found (also when the caller may not suspend it).
+        "409":
+          description: Not suspendable (refused or revoked).
+
   /v1/commerce/oacp/acp/orders/{order_id}/event:
     parameters:
       - { in: path, name: order_id, required: true, schema: { type: string } }
