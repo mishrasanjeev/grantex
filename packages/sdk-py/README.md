@@ -257,6 +257,67 @@ products = client.commerce.search_catalog({
 })
 ```
 
+### Verifying OACP artifacts
+
+> This is a source addition, not yet in a published release of this package.
+> Check [release status](https://docs.grantex.dev/release-status) before relying on
+> an installed version.
+
+`grantex.oacp.verify_oacp_artifact()` checks an OACP artifact (profile
+`oacp-artifact-jws-v1`) before a relying party caches or uses it. It is
+asynchronous and needs no Grantex account: only the issuer you pin, its JWK
+Set and its Token Status Lists.
+
+```python
+from grantex.oacp import (
+    create_oacp_jwks_fetcher,
+    create_oacp_status_list_fetcher,
+    verify_oacp_artifact,
+)
+
+issuer = "https://issuer.example"  # the issuer you trust, from your configuration
+jwks = create_oacp_jwks_fetcher(issuer)  # <issuer>/.well-known/jwks.json
+status_lists = create_oacp_status_list_fetcher([f"{issuer}/status/oacp/"])
+
+result = await verify_oacp_artifact(
+    envelope,
+    payload,
+    issuer=issuer,
+    jwks=jwks,
+    status_list_fetcher=status_lists,
+    expected_scope={"tenant_id": "cten_01", "merchant_id": "mch_01", "seller_agent_id": "seller_01"},
+)
+if not result.valid:
+    raise RuntimeError(f"OACP artifact refused: {result.refusal_code}")
+```
+
+The checks run in a fixed order and stop at the first failure, with the same
+refusal codes as the TypeScript and Go SDKs:
+
+| Step | Check | Refusal code |
+|------|-------|--------------|
+| 1 | `signature` is a detached compact JWS (RFC 7515 Appendix F) | `signature_missing_or_placeholder` |
+| 2 | `signature_alg` is `ES256` | `signature_algorithm_unsupported` |
+| 3 | SHA-256 of the RFC 8785 canonical payload equals `payload_hash` | `payload_hash_mismatch` |
+| 4 | Protected header is exactly `alg` `ES256`, `kid` = `issuer_key_id`, `typ` `oacp-artifact+jws` | `detached_jws_verification_failed` |
+| 5 | `issuer` is the pinned issuer; exactly one usable P-256 key with the kid | `issuer_key_untrusted` |
+| 6 | ES256 over the canonical envelope without `signature` | `detached_jws_verification_failed` |
+| 7 | Artifact type, public-safe safety block, no private fields, timestamps, per-type TTL, expected scope | `artifact_missing_or_invalid`, `artifact_not_yet_valid`, `artifact_expired_or_stale`, `artifact_ttl_exceeds_default`, `artifact_scope_mismatch` |
+| 8 | Token Status List entry (draft-ietf-oauth-status-list) is VALID | `artifact_revoked`, `artifact_suspended`, `revocation_status_unavailable` |
+
+Step 8 fails closed: an unreachable, expired, unsigned or undecodable list,
+or no `status_list_fetcher`, refuses the artifact with
+`revocation_status_unavailable`. Pass `check_status=False` only to check
+signatures offline; the result then reports `status="not_checked"`. The
+fetchers use `httpx.AsyncClient` (pass `client=` to reuse your own), never
+follow redirects, read bounded responses, refuse status URIs outside the
+allowed prefixes or with a query, fragment, credentials or dot segments, cache
+the JWK Set for ten minutes (refetching an unknown kid at most every 30
+seconds) and a status list for no longer than its `ttl`. Plain http is
+accepted only on loopback hosts with `allow_loopback_http=True`. The shared
+test vectors are in
+[`spec/examples/oacp/`](../../spec/examples/oacp/oacp-artifact-jws-v1.json).
+
 ## Accredited issuer adapters
 
 The registry asks an accredited issuer to attest an agent through one seam,

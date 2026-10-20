@@ -40,6 +40,14 @@
     "chalk": "^6.0.0",
     "commander": "^15.0.0"
   },
+  "peerDependencies": {
+    "@grantex/sdk": ">=0.9.0 <1"
+  },
+  "peerDependenciesMeta": {
+    "@grantex/sdk": {
+      "optional": true
+    }
+  },
   "overrides": {
     "esbuild": ">=0.25.0"
   },

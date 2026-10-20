@@ -2,6 +2,8 @@
 
 This folder is historical/internal context. C6, C6W, C6X, and C6Y files document earlier preview, compatibility, cache, audit, review, and retention slices.
 
+The C6W4-C6W9 and C6X2 library helpers these records describe were never mounted on a route and have been deleted from the code, together with the C6X3-C6Y5 compatibility tests built on them. The records stay as history only; see [OACP library helper decision](../../guides/oacp/library-helper-decision.mdx).
+
 For current OACP runtime launch decisions, use:
 
 - [OACP Runtime Launch Closure PRD](../../guides/oacp/runtime-launch-closure-prd.mdx)

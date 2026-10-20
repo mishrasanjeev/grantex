@@ -26,8 +26,16 @@ Options:
   --include <ext,...>    Include optional extensions (comma-separated)
   --format <format>      Output format: text or json (default: text)
   --bail                 Stop on first failure
+  --oacp-issuer <url>    Pinned OACP issuer identifier (default: the base URL)
+  --oacp-tenant <id>     Commerce tenant the oacp suite issues under
+                         (default: cten_CONFORMANCE)
   -h, --help             Display help
 ```
+
+Secrets are read from the environment, never from arguments:
+`GRANTEX_CONFORMANCE_INTERNAL_TOKEN` is the internal service token for the
+`oacp` suite. `GRANTEX_CONFORMANCE_OACP_ISSUER` and
+`GRANTEX_CONFORMANCE_OACP_TENANT` stand in for the two `--oacp-*` options.
 
 ### Run all core suites
 
@@ -79,6 +87,59 @@ grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx --for
 | `sso` | 4 | SSO configuration and flow |
 | `anomalies` | 3 | Anomaly detection and acknowledgement |
 | `compliance` | 4 | Compliance reporting and evidence export |
+| `oacp` | 9 | OACP artifacts: issue, persist and replay, Token Status List, SDK verification, revoke, status flip, protocol adapter artifact |
+
+### The `oacp` suite
+
+> This is a source addition, not yet in a published release of this package.
+> Check [release status](https://docs.grantex.dev/release-status) before relying on
+> an installed version.
+
+`--include oacp --suite oacp` runs the OACP artifact lifecycle (profile
+`oacp-artifact-jws-v1`) against a live auth service:
+
+1. **issue**: `POST /v1/commerce/oacp/c6z/authority-requests` with synthetic
+   read-only connector evidence for a merchant and seller id unique to the run;
+   every artifact must carry a detached ES256 JWS with the OACP header, the
+   pinned `issuer`, and a `status.status_list` entry matching
+   `revocation_status_url`;
+2. **persist**: `GET /v1/commerce/oacp/artifacts/:artifactId` returns the
+   issued envelope unchanged with status `issued`, and the replay
+   `GET /v1/commerce/oacp/artifacts?tenant_id&merchant_id&seller_agent_id&limit`
+   lists every issued artifact and nothing outside the scope;
+3. **status list**: `GET /status/oacp/:list` is served as
+   `application/statuslist+jwt`, verifies against `/.well-known/jwks.json`,
+   and the entry is VALID;
+4. **verify**: `verifyOacpArtifact()` from `@grantex/sdk` accepts every issued
+   artifact (status list included) and refuses a tampered payload
+   (`payload_hash_mismatch`) and a tampered envelope
+   (`detached_jws_verification_failed`);
+5. **revoke**: `POST /v1/commerce/oacp/artifacts/:artifactId/revoke`, after
+   which the artifact reads back `revoked` with `revoked_at`; a returned
+   `revocation_artifact` must be of type `revocation` and name the artifact;
+6. **status flips**: the entry reads INVALID and the verifier refuses with
+   `artifact_revoked`;
+7. **adapter render**: the issued `protocol_adapter` artifact verifies and
+   lists its adapter surfaces without allowing execution (skipped when the
+   service issues none).
+
+The suite needs `@grantex/sdk` with the OACP verifier installed beside the
+CLI (an optional peer dependency):
+
+```bash
+npm install @grantex/conformance @grantex/sdk
+GRANTEX_CONFORMANCE_INTERNAL_TOKEN=... npx grantex-conformance \
+  --base-url http://localhost:3001 --api-key sk_test_xxx \
+  --include oacp --suite oacp --oacp-issuer https://issuer.example
+```
+
+The internal token is the auth service's
+`COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` (or the token whose SHA-256 is
+`COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN_SHA256`), and the tenant must be listed
+in `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`; without the token the suite uses
+the API key as an operator caller. `--oacp-issuer` must equal the service's
+`JWT_ISSUER`. The suite accepts http status-list and JWKS URLs only on
+loopback hosts. Running `--suite oacp` alone makes no agent calls.
 
 ## Programmatic API
 

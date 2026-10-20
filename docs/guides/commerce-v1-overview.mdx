@@ -32,7 +32,7 @@ publication are not enabled by the OACP runtime artifact path.
 | Local/internal sandbox | Implemented | Synthetic catalog, cart, consent, passport, payment, webhook, and audit flows. |
 | Temporary Grantex Option A smoke | Verified | internal evidence record (operator-internal, available on request) records 14 passed, 0 failed, 6 failed-safe, 0 skipped. |
 | AgenticOrg real-staging handoff | Verified externally | AgenticOrg evidence records authority-checked tools and redacted fixture handling. |
-| Internal OACP foundation | Implemented through C6W9 | Artifact family, adapter preview, commitment boundary, prepared envelope, reconciliation, eligibility packet, and dry-run verifier foundations are internal and non-executing. |
+| Internal OACP foundation | Implemented (C6W1-C6W3, C6Z) | Artifact family, schema validation and the C6Z authority route, which signs artifacts with an ES256 detached JWS, persists them and lists them on an OACP Token Status List. The unmounted C6W4-C6W9 and C6X2 library helpers were deleted. Everything stays non-executing. |
 | Hosted AgenticOrg API-only discovery | Verified externally | AgenticOrg C3 evidence records hosted MCP/A2A discovery against temporary Grantex smoke. |
 | Plural sandbox hosted-checkout adapter | Implemented/gated | Token, hosted checkout order creation, order-status polling, and HMAC webhook verification are behind the provider abstraction and require explicit sandbox flags and credentials. |
 | Shopify payment-control pilot merchant | Deployed for the separate Grantex Commerce pilot | `mgx0n6-22.myshopify.com` is imported as `mch_shopify_mgx0n6_22`; this is not OACP runtime artifact launch proof. |

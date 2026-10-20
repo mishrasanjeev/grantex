@@ -264,6 +264,11 @@ export const config = {
   // /.well-known/agent-registry.json. Read when routes are registered at
   // boot, so it decides which routes exist; off unless exactly 'true'.
   get registryPublicEndpointsEnabled() { return process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'] === 'true'; },
+  // Unauthenticated OACP Token Status Lists (GET /status/oacp/:list,
+  // routes/oacp-status.ts). Read when routes are registered at boot; off
+  // unless exactly 'true'. Off, relying parties cannot read OACP artifact
+  // status and must refuse (revocation_status_unavailable).
+  get oacpStatusListPublicEnabled() { return process.env['OACP_STATUS_LIST_PUBLIC_ENABLED'] === 'true'; },
   // Status-list reconciliation with cascade (lib/registry/status-reconciliation.ts):
   // one instance polls issuers' status lists at their ttl, keeps the
   // registry's acceptance entries in line, and revokes, suspends or resumes
