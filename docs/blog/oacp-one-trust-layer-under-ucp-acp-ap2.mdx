@@ -1,0 +1,138 @@
+---
+title: "OACP explained: one trust layer under UCP, ACP and AP2"
+description: AI shopping agents speak several protocols. OACP gives a merchant one set of signed facts, one rule-based decision and one record, rendered into each of them.
+---
+
+## In 30 seconds
+
+- AI shopping agents use several protocols. **UCP** covers discovery and checkout, **ACP** covers agent checkout, **AP2** covers payment mandates, and **Visa TAP** and **Mastercard Agent Pay** identify agents. **MCP** and **A2A** connect the tools.
+- Each one covers one slice. Wire them one by one and a merchant keeps several copies of its facts, several trust set-ups and several logs.
+- **OACP** (Open Agentic Commerce Protocol) is a layer underneath them. The merchant states its facts once. Grantex signs them. AgenticOrg checks them, decides each purchase with fixed rules and records it. Adapters then speak each protocol.
+- Revoke a fact once and every protocol stops using it.
+- OACP does not replace UCP, ACP or AP2. It feeds them.
+
+<Note>
+Status on 20 October 2026. Everything this post describes on Grantex's side is merged and deployed. Signing is not behind a switch: once an operator creates the first OACP issuer key, every artifact and mandate is signed and the key is published. That key does not exist in production yet, and the public revocation list, public UCP discovery, the agent key registry and scheme agent ids are switches that default to off. On the AgenticOrg side, artifact verification before caching is merged; the arbiter, ledger, checkout and payment work is still in review there, behind switches that default to off. The SDK verifiers are in the repository source, not yet in a published release. Examples use synthetic shops and amounts. Details: [launch closure status](/guides/oacp/runtime-launch-closure-prd).
+</Note>
+
+This post tells the story from Grantex's side: what the trust authority signs, publishes and refuses. The [AgenticOrg version](https://agenticorg.ai/blog/oacp-one-trust-layer-under-ucp-acp-ap2) tells it from the merchant runtime's side.
+
+## Many agent protocols, one shop
+
+Buyers are starting to shop through AI agents, and those agents do not all speak the same language. Each protocol is useful. Each one covers one slice of the job.
+
+Picture a shop that integrates each protocol separately. Four problems show up:
+
+- **Several sources of truth.** The price lives in a UCP catalog, an ACP feed and an MCP tool. Change it in one place and the others drift.
+- **Several trust models.** Each integration checks keys and identities its own way.
+- **Several audit trails.** A disputed order leaves evidence spread across logs in different formats.
+- **No common off switch.** Miss one place when you end an offer, and an agent acts on a stale or revoked fact.
+
+<img className="block dark:hidden" src="/images/blog/oacp/oacp-without-light.svg" alt="Without OACP: a shop wired to UCP, ACP, AP2, TAP and MCP separately, each with its own facts, keys and log." />
+<img className="hidden dark:block" src="/images/blog/oacp/oacp-without-dark.svg" alt="Without OACP: a shop wired to UCP, ACP, AP2, TAP and MCP separately, each with its own facts, keys and log." />
+
+<img className="block dark:hidden" src="/images/blog/oacp/oacp-with-light.svg" alt="With OACP underneath: the shop feeds one OACP layer of signed facts, one rule set, one ledger and one revoke switch, rendered as UCP, ACP, AP2, TAP and MCP for every buyer agent." />
+<img className="hidden dark:block" src="/images/blog/oacp/oacp-with-dark.svg" alt="With OACP underneath: the shop feeds one OACP layer of signed facts, one rule set, one ledger and one revoke switch, rendered as UCP, ACP, AP2, TAP and MCP for every buyer agent." />
+
+## OACP in one sentence
+
+OACP is one set of signed, revocable commerce facts, one rule-based decision before any money moves, and one tamper-evident record, rendered into every agent protocol.
+
+Grantex is the trust authority in that picture. AgenticOrg is the merchant runtime. The payment provider still moves the money.
+
+<img className="block dark:hidden" src="/images/blog/oacp/oacp-flow-light.svg" alt="Seven steps: the merchant states facts once, Grantex signs them, AgenticOrg verifies and caches them, the arbiter decides, the ledger records it, adapters render each protocol, and buyer agents get the same answer." />
+<img className="hidden dark:block" src="/images/blog/oacp/oacp-flow-dark.svg" alt="Seven steps: the merchant states facts once, Grantex signs them, AgenticOrg verifies and caches them, the arbiter decides, the ledger records it, adapters render each protocol, and buyer agents get the same answer." />
+
+## What Grantex signs
+
+**Every fact is a signed artifact.** Catalog, price, stock, policy and payment capability each become an OACP artifact. Grantex signs it with ES256 as a detached JWS over the canonical JSON (RFC 8785) of the whole envelope. Scope, expiry and safety flags are signed too, not just a hash.
+
+**Keys are published, rotated and withdrawable.** Signing keys live in the database, encrypted at rest, with an `oacp-` key id. They appear in Grantex's `/.well-known/jwks.json`. A retired key stays published until everything it signed has expired. A revoked key disappears, and everything it signed stops verifying.
+
+**Every issue and every refusal is kept.** Grantex stores each artifact it issues and each request it refuses. AgenticOrg can replay the issued set to rebuild its cache.
+
+**Anyone can check a fact the same way.** The TypeScript, Python and Go SDK sources include `verifyOacpArtifact` (or its language equivalent); they are not yet in a published release. All three pass the same shared test vectors and return the same refusal codes, such as `payload_hash_mismatch` or `issuer_key_untrusted`.
+
+## One revoke switch
+
+Every artifact gets a slot on a **Token Status List** (an IETF OAuth working group draft). Revoking a fact sets that slot to invalid and issues a signed revocation record that names what was revoked.
+
+Verifiers check the list before they trust a fact. A cached copy of the list lasts 30 seconds by default. If the list cannot be reached, verifiers refuse with `revocation_status_unavailable` rather than guess.
+
+The public list is behind a switch, `OACP_STATUS_LIST_PUBLIC_ENABLED`, which defaults to off. Until an operator turns it on, relying parties refuse. That is deliberate: no list, no trust.
+
+<img className="block dark:hidden" src="/images/blog/oacp/oacp-revocation-light.svg" alt="One revocation sets the status list slot to invalid. AgenticOrg refuses the fact, the UCP profile stops offering it, the arbiter refuses new purchases, and revoking a mandate revokes its children. If the list is unreachable, everything refuses." />
+<img className="hidden dark:block" src="/images/blog/oacp/oacp-revocation-dark.svg" alt="One revocation sets the status list slot to invalid. AgenticOrg refuses the fact, the UCP profile stops offering it, the arbiter refuses new purchases, and revoking a mandate revokes its children. If the list is unreachable, everything refuses." />
+
+## Mandates: who allowed what
+
+Grantex issues three signed mandates, in order. Each points to the one before it.
+
+- **Intent mandate.** What the buyer allowed. For example: up to ₹2,000 at one shop.
+- **Cart mandate.** The exact cart, fixed by a hash. When the buyer is present, a passkey (WebAuthn) signs that hash, so the cart cannot change afterwards.
+- **Payment mandate.** The amount, the rail (Plural, UPI AutoPay or a card network token) and a reference to the payment token. Never the card number.
+
+Before issuing, Grantex checks the buyer's Commerce Passport, the consent behind it and the amount cap. A cart over its intent, a payment that does not match its cart, or a present buyer with no passkey is refused, and the refusal is recorded. Each mandate lives at most ten minutes and sits on the same status list, so revoking one revokes the mandates built on it.
+
+<img className="block dark:hidden" src="/images/blog/oacp/oacp-journey-light.svg" alt="A purchase: Intent, Cart and Payment mandates from Grantex, AFA with the buyer's bank when RBI rules require it, the arbiter's eight rules, a payment that runs once on allow, and one ledger record." />
+<img className="hidden dark:block" src="/images/blog/oacp/oacp-journey-dark.svg" alt="A purchase: Intent, Cart and Payment mandates from Grantex, AFA with the buyer's bank when RBI rules require it, the arbiter's eight rules, a payment that runs once on allow, and one ledger record." />
+
+Three honest notes. Mandates are signed JWTs mapped to AP2 field names, not AP2's own SD-JWT format. Passkey signing of the cart is a Grantex extension; Verifiable Intent credentials are not WebAuthn credentials. The AFA step, the arbiter and the payment in the picture run in AgenticOrg, where that work is still in review.
+
+## Decisions with no human waiting
+
+AgenticOrg's arbiter decides each purchase with fixed rules (that work is in review in AgenticOrg). Grantex does not decide; it countersigns, and its side is live in the deployed code.
+
+- For an **allow**, Grantex issues a short-lived decision grant in a machine profile: `approver_auth` is `policy_arbiter`, the evidence methods are listed, and the grant is bound to the exact handoff by its hash. It lives at most ten minutes.
+- For a **refuse**, Grantex records the refusal and issues nothing. A token is a permission, so a refusal never gets one.
+- Human decision-grant verifiers reject the machine profile, so an arbiter grant can never stand in for a person's approval.
+
+## A ledger someone else can check
+
+AgenticOrg keeps one hash-chained ledger (in review in AgenticOrg) and posts its latest chain head to Grantex. Grantex countersigns the head as a **witness**. If someone later presents a different hash at the same position, Grantex answers `WITNESS_FORK` and keeps the evidence. Grantex's own prepaid wallet ledger uses the same kind of hash chain.
+
+## Knowing which agent is calling
+
+The `agent-httpsig` library signs and verifies HTTP requests with RFC 9421 message signatures. One library now serves three profiles: Grantex's own, Visa TAP and Web Bot Auth.
+
+Grantex can publish registered agent keys in the form Web Bot Auth expects and attach scheme agent ids, such as those used by Visa TAP and Mastercard Agent Pay, to registry attestations. Both are switches that default to off (`HTTP_SIGNATURE_DIRECTORY_ENABLED`, `REGISTRY_SCHEME_AGENT_IDS_ENABLED`).
+
+## Rendering into each protocol
+
+- **UCP.** Grantex renders a UCP business profile for the 2026-04-08 or 2026-08-25 release. It lists a capability only while every artifact behind it is issued, unexpired and unrevoked. Public discovery needs the merchant's opt-in and a switch that defaults to off.
+- **ACP.** Grantex issues the delegate-payment allowance from the passport's cap, refuses card data, and maps orders to ACP `order_create` and `order_update` events.
+- **MCP.** The `@grantex/mcp-auth` server registers UCP identity-linking scopes and Grantex-namespaced ACP delegated-authentication scopes.
+
+When UCP changes between releases, for example signing keys moving from `signing_keys` to `keys`, the change lives in one renderer. The signed facts do not change.
+
+## Side by side
+
+The right-hand column describes the full design. The Grantex parts are deployed; the AgenticOrg parts (the arbiter, the ledger, and UPI AutoPay and AFA handling in checkout) are in review there.
+
+| What you need | Each protocol wired on its own | With OACP underneath |
+| --- | --- | --- |
+| Product facts | A copy per protocol, updated separately | Stated once, signed once, rendered into each protocol |
+| Trust | A different key and check per integration | One signature profile and one published key set |
+| Who may buy | Each integration has its own idea | Intent, Cart and Payment mandates, checked the same way everywhere |
+| Before money moves | Up to each integration | No allow decision, no payment |
+| Revocation | Revoke in each place and hope none is missed | One status list that every protocol checks |
+| Audit | Several logs in several formats | One hash-chained ledger, witnessed by Grantex |
+| New protocol versions | Rework each integration | Add a renderer; facts and rules stay the same |
+| India rails | Build UPI AutoPay and AFA handling yourself | UPI AutoPay mandates and the AFA step are part of checkout |
+
+## What OACP is not
+
+OACP is not a certification, and the groups behind UCP, ACP, AP2 and TAP have not endorsed it. It renders into their published formats and follows their specifications as written. It does not establish regulatory compliance on its own. It gives a merchant consistent facts, rules and records to build on.
+
+If a merchant only answers product questions on one platform and never takes payment there, a direct integration may be enough. OACP can be added later without changing the facts.
+
+## Read next
+
+- [OACP artifact authority](/guides/oacp/artifact-authority): the signature profile, keys and status list in detail.
+- [How OACP maps to protocols](/blog/oacp-maps-to-protocols) and [why OACP keeps buyer agents honest](/blog/oacp-keeps-buyer-agents-honest): the earlier posts on artifacts. Their UCP, ACP and AP2 preview adapters have since been replaced by the spec-shaped surfaces described here.
+- [Grantex is not a transaction toll booth](/blog/grantex-not-transaction-toll-booth).
+- Specifications: [UCP](https://ucp.dev/), [ACP](https://github.com/agentic-commerce-protocol/agentic-commerce-protocol), [AP2](https://github.com/google-agentic-commerce/AP2), [Visa Trusted Agent Protocol](https://github.com/visa/trusted-agent-protocol), [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421), [Token Status List](https://datatracker.ietf.org/doc/draft-ietf-oauth-status-list/).
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

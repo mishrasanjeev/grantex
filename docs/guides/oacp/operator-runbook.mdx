@@ -25,8 +25,40 @@ Canonical end-to-end flow: [OACP authority overview](./overview). Launch closure
 
 For a local stack (`PUBLIC_BASE_URL=http://localhost:<port>`), also set
 `OACP_ALLOW_LOOPBACK_HTTP=true`; without it issuance refuses the http status list URI. It is
-ignored when `NODE_ENV` is production. Then run the live conformance suite:
-`GRANTEX_CONFORMANCE_INTERNAL_TOKEN=<service token> grantex-conformance --base-url http://localhost:<port> --api-key <developer key> --include oacp --suite oacp --oacp-issuer http://localhost:<port> --oacp-tenant <tenant>`.
+ignored when `NODE_ENV` is production. `OACP_AUTO_GENERATE_ISSUER_KEY=true` creates the first key
+on first use in a local or test stack; it is also ignored in production. Then run the live
+conformance suite from the in-tree build (the `oacp` suite is not yet in a published release of
+`@grantex/conformance`):
+`GRANTEX_CONFORMANCE_INTERNAL_TOKEN=<service token> node packages/conformance/dist/index.js --base-url http://localhost:<port> --api-key <developer key> --include oacp --suite oacp --oacp-issuer http://localhost:<port> --oacp-tenant <tenant>`.
+
+## Production Turn-On Order
+
+A merge to `main` deploys the auth service, so the OACP code is deployed before anything is
+turned on. On 2026-10-20 production had no `oacp-` key in its JWKS and the status list route
+was off. Turn OACP on in this order, and do not start a step before the previous one is
+confirmed:
+
+| Step | Action | Confirm | While this step is not done |
+| --- | --- | --- | --- |
+| 1. Service access | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` (or `_SHA256`) from the secret manager and the AgenticOrg tenant ids in `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`; redeploy. `PUBLIC_BASE_URL` is https. | A request with the token for an allow-listed tenant is not refused `403`. | Every service-token route answers `401` or `403`. |
+| 2. First OACP issuer key | `POST /v1/commerce/oacp/issuer-keys/rotate` with the platform admin key. | `201 {kid, public_jwk, retired_kid: null}`; the `oacp-...` kid appears in `GET /.well-known/jwks.json` with `alg` `ES256`. | Every artifact, mandate and commitment-evidence issuance answers `503 oacp_issuer_key_unavailable`. |
+| 3. Public status list | Set `OACP_STATUS_LIST_PUBLIC_ENABLED=true` (owner approval) and redeploy. | Issue one fixture authority request for an allow-listed tenant; its `status.status_list.uri` answers `200` with `application/statuslist+jwt`; an SDK verifier accepts one artifact against the production JWKS and list. | Issuance works and artifacts are signed, but `GET /status/oacp/:list` answers `401`, so every relying party, AgenticOrg included, refuses every artifact and mandate with `revocation_status_unavailable`. |
+| 4. AgenticOrg | Point AgenticOrg at the Grantex issuer and JWKS, then turn on its own OACP flags by its runbooks. | AgenticOrg caches verified artifacts and records refusals with exact codes. | AgenticOrg has nothing it can verify; buyers get refusals, not invented facts. |
+| 5. Optional surfaces | One at a time, each after owner approval: `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED`, `HTTP_SIGNATURE_DIRECTORY_ENABLED`, `REGISTRY_SCHEME_AGENT_IDS_ENABLED`, `AGENT_PASSPORT_KYA_TIER_ENABLED` (with `AGENT_PASSPORT_KYA_TIER_MAP`). | The matching checks below. | Public discovery is issued `disabled`; no directory, scheme ids or KYA tier are served. |
+
+Rollback, in reverse: turning `OACP_STATUS_LIST_PUBLIC_ENABLED` off makes every relying party
+refuse (fail closed), it does not make anything valid; revoking the issuer key withdraws
+everything it signed; removing a tenant from the allowlist stops new issuance for it.
+
+| Flag | Default | Effect when on |
+| --- | --- | --- |
+| `OACP_STATUS_LIST_PUBLIC_ENABLED` | off | Serves `GET /status/oacp/:list` unauthenticated (ttl 30 s, CORS `*`, rate limited). |
+| `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED` | off | A C6Z request that opts in, from an allow-listed tenant, with both attestation members, gets `public_discovery_state` `enabled`. |
+| `HTTP_SIGNATURE_DIRECTORY_ENABLED` | off | Serves `/.well-known/http-message-signatures-directory` with opted-in agents' keys, countersigned once by the platform key. |
+| `REGISTRY_SCHEME_AGENT_IDS_ENABLED` | off | Agent attestations may carry `scheme_agent_ids`; lookup by scheme id; manifest lists them. |
+| `AGENT_PASSPORT_KYA_TIER_ENABLED` | off | Agent Passports carry `kyaTier` from the operator's `AGENT_PASSPORT_KYA_TIER_MAP` (empty by default). |
+| `OACP_AUTO_GENERATE_ISSUER_KEY` | off | Local and test only; ignored in production. |
+| `OACP_ALLOW_LOOPBACK_HTTP` | off | Local only; ignored in production. |
 
 Never put Shopify tokens, provider credentials, payment credentials, raw provider payloads, checkout links, raw POS callbacks, or webhook secrets in Grantex artifacts or logs.
 
@@ -122,6 +154,18 @@ Migration `134_commerce_ledger.sql` adds `chain_seq`, `prev_hash` and `entry_has
 | Tests | `npm --prefix apps/auth-service test -- wallet-ledger-chain.test.ts` and, with `AUDIT_INTEGRATION_DATABASE_URL`, `commerce-ledger-postgres.integration.test.ts` |
 
 A failed verification is an irregularity in financial evidence: block the wallet, keep a database snapshot, and reconcile from backups before any repair. Never repair a ledger by editing or deleting entries.
+
+## Protocol Surfaces, Receipts And Network Identity
+
+These routes ship enabled behind authentication (the service token with its route scope and the tenant allowlist, an operator of the tenant, or the platform admin) and need no new configuration. All of them depend on step 2 (issuer key); relying parties depend on step 3.
+
+| Check | Evidence |
+| --- | --- |
+| UCP profile | `GET /v1/commerce/oacp/ucp-profile?tenant_id&merchant_id&seller_agent_id&served=...` lists only served capabilities whose backing artifacts are live; checkout and order are withheld (`mandate_capability_unverified`) until a `mandate_capability` artifact is `verified`; `publication_allowed` stays false unless public discovery was issued `enabled`. Tests: `commerce-ucp-profile.test.ts`, `commerce-c6z-public-discovery.test.ts`. |
+| ACP allowance | `POST /v1/commerce/oacp/acp/delegate-payment-allowance` refuses card data (`422 card_data_refused`) and amounts over the passport cap; each issue and refusal is a `commerce_audit_events` row. Test: `commerce-acp-delegate-payment.test.ts`. |
+| ACP order events | `GET /v1/commerce/oacp/acp/orders/{order_id}/event` returns data only for existing `commerce_orders` rows; Grantex sends no webhooks. Test: `commerce-acp-order-events.test.ts`. |
+| Settlement receipts | `POST /v1/commerce/oacp/commitment-evidence/settlement-receipts` (service token only, scope `commerce.oacp.commitment_evidence.write`) issues a signed `commitment_evidence` artifact recording the receipt as reported, not verified. Test: `commerce-settlement-receipt-evidence.test.ts`. |
+| Key directory | With `HTTP_SIGNATURE_DIRECTORY_ENABLED`, `/.well-known/http-message-signatures-directory` lists only agents whose developer opted in (`PUT /v1/agents/:id/http-signature-directory`). Its countersignature is the registry's, not each key's, so strict Web Bot Auth clients ignore the keys. Test: `http-signature-directory.test.ts`. |
 
 ## Refusal Copy
 

@@ -272,6 +272,8 @@ fetchers are safe for concurrent use. The shared test vectors are in
 
 ### Verifying OACP mandates
 
+> This is a source addition, not yet in a published release of this module.
+
 `grantex.VerifyOacpMandate` checks a Grantex Intent, Cart or Payment mandate
 (compact ES256 JWT, claims mapped to AP2 v0.2) with the same refusal codes as
 the TypeScript and Python SDKs, and `grantex.CheckOacpMandateChain` checks
@@ -292,6 +294,10 @@ if !r.Valid {
 ```
 
 Vectors: `spec/examples/oacp/oacp-mandates-v1.json` and `oacp-mandates-v1-extra.json`.
+
+Both verifiers need the issuer's Token Status List. A Grantex deployment
+serves it only with `OACP_STATUS_LIST_PUBLIC_ENABLED=true`; until then every
+artifact and mandate is refused with `revocation_status_unavailable`.
 
 ## Standalone Functions
 

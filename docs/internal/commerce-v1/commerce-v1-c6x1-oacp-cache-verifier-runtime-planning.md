@@ -1,5 +1,7 @@
 # Commerce V1 C6X1 OACP Cache and Verifier Runtime Planning
 
+> Historical record. This C6W/C6X/C6Y report describes an earlier internal slice and is kept for history only; it is not current behaviour. Unmounted helpers it describes were deleted, artifacts are now ES256-signed, persisted and revocable, and the current OACP status is in `docs/guides/oacp/runtime-launch-closure-prd.mdx`.
+
 ## Scope
 
 C6X1 is an internal planning and test slice for persistent OACP artifact cache behavior in AgenticOrg and artifact issuance/verifier runtime boundaries in Grantex. It defines the contract shape and guardrails for later implementation work. It does not add runtime execution behavior.

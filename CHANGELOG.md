@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed - OACP documentation matches what is merged, deployed and turned on
+- The OACP runtime launch closure PRD has a 2026-10-20 status: what Phases 1
+  to 5 merged and deployed, and what is not yet turned on in production (no
+  OACP issuer key, `OACP_STATUS_LIST_PUBLIC_ENABLED` off, AgenticOrg's
+  arbiter, ledger and checkout work still in review). The operator runbook
+  gains the production turn-on order (first issuer key, then the public
+  status list, then AgenticOrg), a flag table and checks for the protocol
+  surfaces, settlement receipts and key directory.
+- The OACP overview, truth inventory, AgenticOrg integration guide,
+  merchant configuration, POS bridge, protocol adapter, launch readiness and
+  provider boundary pages, the adapter mappings guide and the end-user flow
+  describe signed artifacts, mandates and the UCP / ACP / AP2 surfaces instead
+  of the removed preview adapters, and say what each flag does when on and
+  off. The signed `protocol_adapter` payload's earlier `*_style` surface labels
+  are explained as kept labels, not routes.
+- SDK, conformance, x402, MPP, mcp-auth and agent-httpsig READMEs mark the
+  OACP and network-identity additions as unreleased source, note the status
+  list dependency, and document the token-binding helpers and the refusal of
+  `policy_arbiter` decision grants by human verifiers.
+- Earlier OACP blog posts carry a dated update note, and the new OACP
+  explainer post separates what Grantex has deployed from AgenticOrg work in
+  review. C6W, C6X and C6Y internal reports are marked historical.
+
 ### Fixed - OACP canonical JSON keeps a member named `__proto__`
 - `stripUndefinedMembers` (used by `canonicalizeOacpPayload` and the OACP
   payload hash) copied members by assignment, so a member named `__proto__`

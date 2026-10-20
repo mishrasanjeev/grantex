@@ -6,14 +6,14 @@ description: Protocol partner explainer for OACP compatibility mappings.
 
 Canonical end-to-end flow: [OACP authority overview](../overview).
 
-OACP is the canonical internal trust artifact. Protocol adapters are compatibility mappings derived from OACP, not official external approval.
+OACP is the canonical signed trust artifact. Protocol adapters are compatibility mappings derived from OACP, not official external approval.
 
 ```mermaid
 flowchart TD
   canonical[Canonical OACP artifacts] --> schema[Schema.org JSON-LD]
-  canonical --> ucp[UCP-style profile]
-  canonical --> acp[ACP-style commerce profile]
-  canonical --> ap2[AP2-style evidence profile]
+  canonical --> ucp[UCP business profile]
+  canonical --> acp[ACP allowance and order events]
+  canonical --> ap2[AP2-mapped mandates]
   canonical --> a2a[A2A metadata]
   canonical --> mcp[MCP metadata]
 ```

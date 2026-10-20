@@ -81,6 +81,9 @@ so swapping an upstream code cannot change the human.
 
 ## Buyer identity linking (UCP) and ACP scopes
 
+> This is a source addition, not yet in a published release of this package
+> (see the Unreleased section of its CHANGELOG).
+
 A merchant can run this server as the authorization server that UCP identity
 linking (`dev.ucp.common.identity_linking`, UCP 2026-04-08 and 2026-08-25)
 discovers on its domain. Set `commerce` in the configuration:

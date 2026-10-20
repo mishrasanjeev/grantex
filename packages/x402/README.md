@@ -206,6 +206,9 @@ HEADERS.PAYMENT_RESPONSE;
 
 ## Settlement receipts and OACP commitment evidence
 
+> `readSettlementResponse` and `settlementReceiptEvidence` are source
+> additions, not yet in a published release of this package.
+
 x402 v2 carries the protocol in headers: `PAYMENT-REQUIRED` (the 402
 challenge), `PAYMENT-SIGNATURE` (the client's payment payload) and
 `PAYMENT-RESPONSE` (the facilitator's SettlementResponse); v1 used the JSON
@@ -220,7 +223,9 @@ body, `X-PAYMENT` and `X-PAYMENT-RESPONSE`. `createX402Agent` speaks v2.
   it to a commitment as a signed OACP `commitment_evidence` artifact (receipt
   hash, network, transaction and the authorizing GDT's `jti`; never the
   payer). A failed settlement is refused. SettlementResponse is not signed, so
-  Grantex records the receipt as reported, not verified.
+  Grantex records the receipt as reported, not verified. The route takes the
+  AgenticOrg service token only, and the deployment needs an active OACP
+  issuer key.
 
 ## Principal controls
 

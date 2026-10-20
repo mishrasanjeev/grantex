@@ -399,6 +399,32 @@ Refusal codes in check order: `mandate_malformed`,
 `revocation_status_unavailable` (fail closed). Vectors:
 [`spec/examples/oacp/oacp-mandates-v1.json`](../../spec/examples/oacp/oacp-mandates-v1.json).
 
+Both verifiers need the issuer's Token Status List. A Grantex deployment
+serves it only with `OACP_STATUS_LIST_PUBLIC_ENABLED=true`; until then every
+artifact and mandate is refused with `revocation_status_unavailable`.
+
+### Scheme token bindings
+
+> This is a source addition, not yet in a published release of this package.
+
+`parseSchemeTokenBinding()` validates a scheme token binding
+`{scheme, token_ref, agent_id, merchant_scope, limits}` (`scheme` one of
+`visa`, `mastercard`, `upi_autopay` or `provider_token`; a PAN-like
+`token_ref` is refused) and `checkTokenBindingWithinCapability()` checks it
+against a payment capability. Failures throw `TokenBindingError`
+(`token_binding_invalid`). The auth service validates the same shape on the
+OACP `mandate_capability` artifact. Nothing here executes a payment.
+
+### Machine-profile decision grants
+
+> This is a source addition, not yet in a published release of this package.
+
+`verifyDecisionGrant()` / `verifyDecisionGrants()` (and so `enforce()`)
+refuse a decision grant with `approver_auth: "policy_arbiter"` as
+`malformed`. Such grants are issued by Grantex for a policy arbiter's
+recorded decision (`spec/decision-grant.md` section 10), and must never stand
+in for a human approval.
+
 ## PKCE Support
 
 The SDK includes built-in PKCE (Proof Key for Code Exchange) support using the S256 method for secure authorization flows:

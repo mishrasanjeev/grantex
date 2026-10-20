@@ -1,6 +1,6 @@
 # Commerce V1 Open Protocol Packaging Draft
 
-Status: internal packaging draft only.
+Status: historical internal packaging draft. The C6K UCP-style, C6L ACP-style and C6M AP2-style previews it packages, and the `dev.grantex.commerce.discovery.preview` namespace, were removed; `open-protocol-packaging-manifest.preview.json` is kept with it as history. Current surfaces: `docs/guides/oacp-runtime-authority-and-adapter-mappings.md`.
 
 Created: 2026-06-07.
 

@@ -321,6 +321,8 @@ test vectors are in
 
 ### Verifying OACP mandates
 
+> This is a source addition, not yet in a published release of this package.
+
 `grantex.oacp.verify_oacp_mandate()` checks a Grantex Intent, Cart or Payment
 mandate (compact ES256 JWT, claims mapped to AP2 v0.2) with the same refusal
 codes as `verifyOacpMandate` in TypeScript; `check_oacp_mandate_chain()`
@@ -339,6 +341,15 @@ if not (cart.valid and payment.valid) or check_oacp_mandate_chain(cart=cart.clai
 ```
 
 Vectors: [`spec/examples/oacp/oacp-mandates-v1.json`](../../spec/examples/oacp/oacp-mandates-v1.json).
+
+Both verifiers need the issuer's Token Status List. A Grantex deployment
+serves it only with `OACP_STATUS_LIST_PUBLIC_ENABLED=true`; until then every
+artifact and mandate is refused with `revocation_status_unavailable`.
+
+In the same source, `verify_decision_grant()` / `verify_decision_grants()`
+refuse a decision grant with `approver_auth: "policy_arbiter"` as
+`malformed`: a policy arbiter's machine decision never stands in for a human
+approval (`spec/decision-grant.md` section 10).
 
 ## Accredited issuer adapters
 

@@ -202,24 +202,32 @@ method="…", intent="…", request="…"`; the agent retries with
 carries the payment method's proof; a successful answer carries
 `Payment-Receipt`. There is no `Payment-Signature` header in this scheme:
 `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE` and `PAYMENT-RESPONSE` are x402 v2's
-headers. `@grantex/mpp` now implements the challenge, the stateless HMAC
+headers. The `@grantex/mpp` source in the repository now implements the challenge, the stateless HMAC
 binding of the challenge id, the credential checks (realm, method, expiry,
 body digest), the receipt and the RFC 9457 problem details, with an Express
 middleware (`requirePayment`) that leaves the method's proof to the method's
-own verifier. Grantex settles nothing.
+own verifier. Grantex settles nothing. These additions are not yet in a
+published npm release; the `npm install` below gets the released version
+without them.
 
-**Receipts become signed commitment evidence.** A relying party that saw an
-x402 settlement (`PAYMENT-RESPONSE`) or an MPP `Payment-Receipt` can post it
-to `POST /v1/commerce/oacp/commitment-evidence/settlement-receipts`. Grantex
+**Receipts become signed commitment evidence.** The merchant runtime
+(AgenticOrg, with its Grantex service token) that saw an x402 settlement
+(`PAYMENT-RESPONSE`) or an MPP `Payment-Receipt` can post it to
+`POST /v1/commerce/oacp/commitment-evidence/settlement-receipts`. Grantex
 issues a signed OACP `commitment_evidence` artifact that names the commitment,
 the artifacts it relied on and the receipt's hash. Neither receipt form is
-signed, so the artifact says the receipt was reported, not verified.
+signed, so the artifact says the receipt was reported, not verified. In a
+given deployment this needs an active OACP issuer key, and relying parties
+need the public OACP status list to check the artifact.
 
 **Card-network agent identity is HTTP Message Signatures.** Visa's Trusted
 Agent Protocol and Web Bot Auth both sign agent requests with RFC 9421. The
 Grantex agent request signing library now signs and verifies the TAP and Web
-Bot Auth profiles beside its own, and the registry can publish agent keys in
-an HTTP Message Signatures directory. See
+Bot Auth profiles beside its own (a source addition, not yet on npm), and
+the registry can publish opted-in agents' keys in an HTTP Message Signatures
+directory when `HTTP_SIGNATURE_DIRECTORY_ENABLED` is on (default off). That
+directory carries the registry's countersignature, not a signature by each
+key. See
 [Agent network identity](/guides/oacp/agent-network-identity).
 
 ## Try It Now

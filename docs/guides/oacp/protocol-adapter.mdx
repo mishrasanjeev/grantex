@@ -13,7 +13,7 @@ flowchart LR
   artifact[Canonical OACP artifacts] --> schema[Schema.org Product/Offer JSON-LD]
   artifact --> ucp[UCP business profile 2026-04-08 / 2026-08-25]
   artifact --> acp[ACP order events and delegate-payment allowance]
-  artifact --> ap2[AP2-style evidence profile]
+  artifact --> ap2[AP2-mapped Intent, Cart and Payment mandates]
   artifact --> a2a[A2A task metadata]
   artifact --> mcp[MCP tool metadata]
   artifact --> openapi[OpenAPI buyer-safe schema]
@@ -26,14 +26,14 @@ flowchart LR
 | Schema.org | Product and offer discovery shape. | Source/freshness stays from OACP and Shopify. |
 | UCP | Business profile `ucp` member (`GET /v1/commerce/oacp/ucp-profile`), spec shape at 2026-04-08 and 2026-08-25, `dev.ucp.*` names only. | Emits only capabilities the host serves and issued artifacts back; the host signs and publishes. |
 | ACP | `order_create` / `order_update` events for Grantex orders, and the delegate-payment allowance from the Commerce Passport cap. | Grantex never handles card data; the merchant signs and delivers webhooks. |
-| AP2-style | Mandate/evidence profile shape. | Does not create a mandate. |
+| AP2 | Intent, Cart and Payment mandates (`POST /v1/commerce/oacp/mandates/*`): ES256 JWTs whose claims use AP2 v0.2 member names ([mandates decision](./mandates-decision)). | Plain JWTs mapped to AP2, not AP2 v0.2 SD-JWT VCs; a mandate authorizes, the provider executes. |
 | A2A | Agent card/task metadata. | Does not authorize execution. |
 | MCP | Tool metadata for ChatGPT/Claude-style clients. | Tool calls still hit AgenticOrg runtime checks. |
 | OpenAPI | Gemini/Perplexity-style hosted/action clients. | Buyer-safe schema only. |
 
 ## Internal Mapping Vs External Approval
 
-Internal mapping means Grantex defines deterministic field lineage from OACP artifacts to adapter payloads. External approval means a third-party program has reviewed and accepted claims. The current implementation is internal mapping only unless a future page links evidence for external approval.
+Internal mapping means Grantex defines deterministic field lineage from OACP artifacts to adapter payloads. The signed `protocol_adapter` artifact still names some surfaces with earlier labels (`ucp_style_capability_profile`, `acp_style_commerce_interaction`, `ap2_style_mandate_payment_evidence_profile`); they are signed content kept for AgenticOrg compatibility and name mapping lineage, not routes. The UCP, ACP and AP2 surfaces Grantex serves are the ones in the table above. External approval means a third-party program has reviewed and accepted claims. The current implementation is internal mapping only unless a future page links evidence for external approval.
 
 ## Operator Rule
 

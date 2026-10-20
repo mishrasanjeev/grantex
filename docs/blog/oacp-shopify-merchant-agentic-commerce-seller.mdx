@@ -3,6 +3,9 @@ title: How A Shopify Merchant Becomes An Agentic Commerce Seller
 description: The Grantex authority view of Shopify onboarding through AgenticOrg and OACP artifacts.
 ---
 
+<Note>
+Update, 20 October 2026. Grantex artifacts are now ES256-signed, persisted and revocable, and AgenticOrg verifies them before caching. Grantex also issues mandates and countersigns AgenticOrg's purchase decisions; AgenticOrg's checkout and payment execution are behind its own switches, which default to off. Current status: [OACP runtime launch closure PRD](/guides/oacp/runtime-launch-closure-prd).
+</Note>
 
 ## Summary
 
@@ -38,7 +41,7 @@ flowchart LR
 
 ## What Is Implemented Now
 
-Grantex has the C6Z authority route, internal artifact issuance, adapter mapping, artifact verification helpers, and focused tests. AgenticOrg owns merchant self-service config, seller onboarding, Shopify sync, cache intake, buyer Q&A, bridge endpoints, public catalog publishing, Offline POS handoff, and Plural/Pine capability verification.
+Grantex has the C6Z authority route, signed and persisted artifact issuance, adapter mapping, artifact verification in the auth service and the SDK sources, and focused tests. AgenticOrg owns merchant self-service config, seller onboarding, Shopify sync, cache intake, buyer Q&A, bridge endpoints, public catalog publishing, Offline POS handoff, and Plural/Pine capability verification.
 
 WooCommerce, ERP, PIM, OMS, WMS, custom API, bank-owned rail, fintech rail, and custom provider setup can be recorded in AgenticOrg as pending-adapter config. Grantex should not treat those refs as live source or payment execution until an approved adapter and evidence path exists.
 

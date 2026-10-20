@@ -1,5 +1,7 @@
 # Commerce V1 C6Y1 Audit Review Manifest Compatibility
 
+> Historical record. This C6W/C6X/C6Y report describes an earlier internal slice and is kept for history only; it is not current behaviour. Unmounted helpers it describes were deleted, artifacts are now ES256-signed, persisted and revocable, and the current OACP status is in `docs/guides/oacp/runtime-launch-closure-prd.mdx`.
+
 ## Scope
 
 C6Y1 adds a Grantex compatibility guard for AgenticOrg internal OACP audit export review manifests and retention boundaries. Grantex changes are docs and tests only. The guard proves that Grantex cached-artifact verifier output and canonical OACP authority fields can be referenced by AgenticOrg through non-sensitive refs in a review manifest.

@@ -139,8 +139,13 @@ The following gaps were confirmed against the repository on July 13, 2026, with 
 - [ ] Add API-to-SDK coverage checks so undocumented or unwrapped endpoints fail CI.
 - [ ] Add interoperability fixtures for MCP, A2A, OACP adapters, and offline revocation synchronization.
 - [ ] Publish an implementation report for the current IETF draft and externally verifiable submission/comment receipts.
-- [ ] Keep OACP adapter output labelled preview/mapping until the relevant external conformance and approval requirements are met.
-- [x] Issue Intent, Cart and Payment mandates as ES256 JWTs mapped to AP2 v0.2, on the OACP Token Status List, with presence, `amr` and passkey anchoring of human-present carts; shared verifier vectors and `verifyOacpMandate` in `@grantex/sdk`.
+- [ ] Keep OACP adapter output described as a compatibility mapping, never as conformance or approval, until the relevant external conformance and approval requirements are met.
+- [x] Sign OACP artifacts (ES256 detached JWS over RFC 8785) with DB-backed, rotatable issuer keys; persist every issue and refusal; revoke and suspend on the OACP Token Status List; shared vectors and verifiers in the TypeScript, Python and Go SDK sources; `oacp` conformance suite.
+- [x] Record and countersign AgenticOrg arbiter decisions (machine-profile decision grants), witness AgenticOrg audit chain heads, and hash-chain the wallet ledger.
+- [x] Render a UCP business profile from issued artifacts, issue the ACP delegate-payment allowance and order events, and offer UCP identity-linking scopes in `@grantex/mcp-auth`.
+- [ ] Turn OACP on in production: create the first OACP issuer key, then enable `OACP_STATUS_LIST_PUBLIC_ENABLED`, then AgenticOrg. Exit criterion: an AgenticOrg tenant verifies production artifacts against the production JWKS and status list.
+- [ ] Release the OACP verifiers, `oacp` conformance suite, agent-httpsig profiles, x402 receipt helpers, MPP Payment scheme and mcp-auth commerce scopes in published packages.
+- [x] Issue Intent, Cart and Payment mandates as ES256 JWTs mapped to AP2 v0.2, on the OACP Token Status List, with presence, `amr` and passkey anchoring of human-present carts; shared verifier vectors and mandate verifiers in the TypeScript, Python and Go SDK sources.
 - [ ] Offer AP2 v0.2 SD-JWT VC mandates (Checkout / Payment Mandate, KB-JWT holder binding) once a relying party verifies Delegate SD-JWT chains.
 - [x] Agent request signatures under the Grantex, Visa Trusted Agent Protocol and Web Bot Auth profiles in one library (TypeScript and Python), with shared vectors.
 - [ ] Response signatures for the registry key directory by each listed key (the registry holds no agent private keys; today it countersigns with the platform key).

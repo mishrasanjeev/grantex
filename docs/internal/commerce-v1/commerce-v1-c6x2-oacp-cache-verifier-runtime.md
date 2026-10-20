@@ -1,5 +1,7 @@
 # Commerce V1 C6X2 OACP Cache Verifier Runtime
 
+> Historical record. This C6W/C6X/C6Y report describes an earlier internal slice and is kept for history only; it is not current behaviour. Unmounted helpers it describes were deleted, artifacts are now ES256-signed, persisted and revocable, and the current OACP status is in `docs/guides/oacp/runtime-launch-closure-prd.mdx`.
+
 ## Scope
 
 C6X2 adds an internal cached OACP artifact verifier helper for Grantex. The helper validates locally cached canonical artifact envelopes and returns verifier-result-only decisions for AgenticOrg cache consumption and future handoff planning. It does not issue new runtime authority, execute commerce actions, or add public surfaces.

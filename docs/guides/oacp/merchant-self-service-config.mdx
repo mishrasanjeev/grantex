@@ -18,10 +18,10 @@ The config may include:
 | --- | --- | --- |
 | Merchant profile | Display name, categories, public-safe profile refs. | May be represented in merchant profile artifacts. |
 | Source connector | Shopify runtime config today; WooCommerce, ERP, PIM, OMS, WMS, and custom API setup intent for future adapters. | Receives only redacted connector evidence refs, hashes, timestamps, source ids, and freshness. |
-| Buyer channels | Web, MCP, OpenAPI, A2A, search/public catalog, WhatsApp, Telegram readiness and approval refs. | May sign protocol adapter or public discovery-state artifacts; does not run channel bridges. |
-| Payment providers | Plural/Pine capability verifier today; bank, fintech, and custom provider refs as provider-owned non-executing setup. | May sign non-sensitive mandate capability evidence refs; does not execute rails. |
-| Offline POS | Store/POS refs and webhook-secret refs held by AgenticOrg. | May verify redacted POS evidence refs when authority refresh is needed. |
-| Public publishing | Merchant-level enablement for public-safe seller/product surfaces. | May sign public discovery-state artifacts; does not host AgenticOrg catalog pages. |
+| Buyer channels | Web, MCP, OpenAPI, A2A, search/public catalog, WhatsApp, Telegram readiness and approval refs. | Signs protocol adapter and public discovery-state artifacts; does not run channel bridges. |
+| Payment providers | Plural/Pine capability verifier today; bank, fintech, and custom provider refs as provider-owned non-executing setup. | Binds the capability verifier's redacted evidence object into the signed `mandate_capability` artifact (`verified`, `unavailable` or `unverified`), issues Intent, Cart and Payment mandates within the passport cap, and issues the ACP delegate-payment allowance; does not execute rails. |
+| Offline POS | Store/POS refs and webhook-secret refs held by AgenticOrg. | Names the allowed POS evidence ref types in signed policy and protocol artifacts; receives no POS evidence today (`offline_pos_evidence_status: "unverified"`). |
+| Public publishing | Merchant-level enablement for public-safe seller/product surfaces. | Signs the `public_discovery_state` artifact: `enabled` only for a merchant opt-in with a namespace attestation and serving host, from an allow-listed tenant, while `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED` is on (default off); renders the UCP profile; does not host AgenticOrg catalog pages. |
 
 ## Runtime-Supported Vs Pending Adapter
 
@@ -56,7 +56,7 @@ Safe wording:
 - "Merchant configuration is owned by AgenticOrg and scoped per tenant, merchant, and seller agent."
 - "Shopify is the current runtime source connector."
 - "WooCommerce, ERP, bank-owned rails, and custom providers are pending adapter until approved."
-- "Grantex signs or refuses OACP artifacts; it does not execute payments or host merchant connector runtime."
+- "Grantex signs or refuses OACP artifacts and mandates; it does not execute payments or host merchant connector runtime."
 
 Unsafe wording:
 

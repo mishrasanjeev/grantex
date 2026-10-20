@@ -28,7 +28,7 @@ flowchart LR
 
 | Area | Rule |
 | --- | --- |
-| Mandate setup | Provider-owned. OACP may carry non-sensitive capability evidence refs. |
+| Mandate setup | Provider-side mandate registration and execution are provider-owned. Grantex binds the provider capability verifier's redacted evidence into `mandate_capability` and issues OACP Intent, Cart and Payment mandates, which authorize; they do not execute. |
 | Bank-owned rails | Provider-owned config refs only until an approved bank adapter exists. |
 | Payment capture | Provider-owned and outside artifact issuance. |
 | POS handoff | AgenticOrg-owned orchestration; POS/provider-owned confirmation. |

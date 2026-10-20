@@ -1,5 +1,7 @@
 # Commerce V1 C6X3 Cache Repository Compatibility
 
+> Historical record. This C6W/C6X/C6Y report describes an earlier internal slice and is kept for history only; it is not current behaviour. Unmounted helpers it describes were deleted, artifacts are now ES256-signed, persisted and revocable, and the current OACP status is in `docs/guides/oacp/runtime-launch-closure-prd.mdx`.
+
 ## Scope
 
 C6X3 adds Grantex-side compatibility tests and internal documentation for the AgenticOrg OACP artifact cache repository intake shape. It proves the C6X2 cached-artifact verifier result already carries the metadata AgenticOrg needs to store, list, and evaluate local cache records. It adds no Grantex runtime code.

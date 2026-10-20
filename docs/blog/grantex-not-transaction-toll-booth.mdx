@@ -3,6 +3,9 @@ title: Why Grantex Is Not A Transaction Toll Booth
 description: Why OACP authority signs artifacts without relaying every buyer and seller interaction.
 ---
 
+<Note>
+Update, 20 October 2026. The principle holds: non-binding buyer questions never pass through Grantex. A purchase now makes a small number of calls to Grantex: for its Intent, Cart and Payment mandates and for the countersignature of AgenticOrg's arbiter decision. Grantex still does not execute payment, and it does not decide the purchase. Current status: [OACP runtime launch closure PRD](/guides/oacp/runtime-launch-closure-prd).
+</Note>
 
 ## Summary
 
@@ -29,7 +32,7 @@ Grantex signs the trust artifact. AgenticOrg stores a scoped cache. Buyer questi
 
 ## What Is Implemented Now
 
-The authority endpoint issues/refuses artifacts. AgenticOrg cache and bridge routes consume them for Q&A and prepared handoff. AgenticOrg merchant config records Shopify runtime setup plus WooCommerce/ERP/bank/custom provider pending-adapter intent without making Grantex the config owner.
+The authority endpoint issues or refuses signed artifacts, and every issue and refusal is kept. AgenticOrg verifies them before caching; its cache and bridge routes consume them for Q&A and prepared handoff. AgenticOrg merchant config records Shopify runtime setup plus WooCommerce/ERP/bank/custom provider pending-adapter intent without making Grantex the config owner.
 
 ## What Requires External Approval Or Config
 
