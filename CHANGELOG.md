@@ -193,7 +193,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   unknown prices are omitted. Tenant-scoped reads; another tenant's order
   answers 404; an order without a checkout reference answers 409. Service token
   route scope `commerce.acp.order_events.read`. Validated against the saved
-  ACP webhook and order schemas.
+  ACP webhook and order schemas. Trailing slashes of `permalink_base` are
+  stripped in linear time (no backtracking regular expression on the
+  caller-supplied value).
 - `acpMerchantSignature` / `verifyAcpMerchantSignature`
   (`apps/auth-service/src/lib/commerce/acp-order-events.ts`) implement
   `Merchant-Signature: t=<unix>,v1=<hex HMAC-SHA256>` with the 300 s receiver

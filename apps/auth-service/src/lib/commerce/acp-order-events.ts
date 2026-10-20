@@ -203,7 +203,7 @@ export function mapGrantexOrderToAcpEvent(input: AcpOrderEventInput): { type: Ac
       type: 'order',
       id: order.id,
       checkout_session_id: checkoutSessionId,
-      permalink_url: `${input.permalink_base.replace(/\/+$/, '')}/${encodeURIComponent(order.id)}`,
+      permalink_url: `${stripTrailingSlashes(input.permalink_base)}/${encodeURIComponent(order.id)}`,
       status: ACP_ORDER_STATUS[order.status],
       line_items: items,
       ...(orderFulfillments.length > 0 ? { fulfillments: orderFulfillments } : {}),
@@ -211,6 +211,16 @@ export function mapGrantexOrderToAcpEvent(input: AcpOrderEventInput): { type: Ac
       ...(orderTotals.length > 0 ? { totals: orderTotals } : {}),
     },
   };
+}
+
+/**
+ * `base` without its trailing slashes, in linear time. A `/\/+$/` replace
+ * backtracks quadratically on a caller-supplied base made of many slashes.
+ */
+export function stripTrailingSlashes(base: string): string {
+  let end = base.length;
+  while (end > 0 && base.charCodeAt(end - 1) === 0x2f) end -= 1;
+  return base.slice(0, end);
 }
 
 /** `Merchant-Signature` for a raw webhook body: `t=<unix>,v1=<hex HMAC-SHA256(secret, t + "." + body)>`. */
