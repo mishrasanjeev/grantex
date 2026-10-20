@@ -284,3 +284,13 @@ b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-ts/tests/vault.test.ts:gen
 686f509ace2a2163a76c89a4bfeceb0e3b1b97c4:apps/auth-service/tests/fixtures/protocol-schemas/acp-2026-04-17/schema.agentic_checkout.json:generic-api-key:325
 686f509ace2a2163a76c89a4bfeceb0e3b1b97c4:apps/auth-service/tests/fixtures/protocol-schemas/acp-2026-04-17/schema.agentic_checkout.json:generic-api-key:2126
 686f509ace2a2163a76c89a4bfeceb0e3b1b97c4:apps/auth-service/tests/fixtures/protocol-schemas/acp-2026-04-17/schema.agentic_checkout.json:generic-api-key:3636
+# feat/agent-network-identity (2026-10-20): synthetic test values, not credentials.
+# The TAP idToken placeholder is a JWT-shaped string whose signature segment
+# reads "signature-placeholder"; the generic-api-key hits are the synthetic
+# scheme agent id and token reference fixtures. Fingerprints are commit-bound:
+# merge, do not squash.
+f5221485f28fca32dffcf12c83320b3353361fed:packages/agent-httpsig/tests/tap.test.ts:jwt:25
+f5221485f28fca32dffcf12c83320b3353361fed:packages/agent-httpsig-py/tests/test_tap.py:jwt:34
+f5221485f28fca32dffcf12c83320b3353361fed:spec/examples/agent-httpsig-profile-vectors.json:jwt:140
+7d31f629cd7419123d07aeded95e0a84bfa36422:apps/auth-service/tests/registry-scheme-agent-ids.test.ts:generic-api-key:29
+ebd0131f9d13465c1ca3545599a75a53138ffb23:apps/auth-service/tests/commerce-scheme-token-binding.test.ts:generic-api-key:25
