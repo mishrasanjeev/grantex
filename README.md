@@ -239,6 +239,8 @@ flowchart LR
 | Artifact signatures | Each artifact is signed with an ES256 detached JWS (typ `oacp-artifact+jws`) over its RFC 8785 envelope by a DB-backed OACP issuer key (`oacp-...` kid) published in `/.well-known/jwks.json`; keys rotate, retired keys stay published until their artifacts expire, revoked keys are withdrawn. Shared verifier vectors: `spec/examples/oacp/oacp-artifact-jws-v1.json`. |
 | Persistence and revocation | Every issue and refusal is stored (`oacp_artifacts`); internal routes read, replay and revoke artifacts. Each artifact is on an OACP Token Status List served at `GET /status/oacp/:list` (behind `OACP_STATUS_LIST_PUBLIC_ENABLED`, default off); revoking issues a signed `revocation` artifact. See [OACP artifact authority](docs/guides/oacp/artifact-authority.mdx). |
 | Protocol adapters | UCP business profile at 2026-04-08 / 2026-08-25 (`dev.ucp.*` only, capabilities backed by issued artifacts); ACP `order_create` / `order_update` events for Grantex orders and the delegate-payment allowance from the Commerce Passport cap; UCP identity-linking and Grantex ACP scopes on `@grantex/mcp-auth`; Schema.org, AP2-style, A2A, MCP and OpenAPI compatibility mappings derived from OACP artifacts. |
+| Agent network identity | `@grantex/agent-httpsig` / `grantex-agent-httpsig` sign and verify RFC 9421 agent requests under the Grantex, Visa Trusted Agent Protocol and Web Bot Auth profiles, with TAP body objects and a Grantex consent record object. The registry can serve an HTTP Message Signatures key directory of opted-in agents' keys (`HTTP_SIGNATURE_DIRECTORY_ENABLED`, default off), carry opaque Visa / Mastercard scheme agent ids on agent attestations (`REGISTRY_SCHEME_AGENT_IDS_ENABLED`, default off), and add an operator-mapped KYA tier to the Agent Passport (`AGENT_PASSPORT_KYA_TIER_ENABLED`, default off). See [Agent network identity](docs/guides/oacp/agent-network-identity.mdx). |
+| Settlement evidence | `POST /v1/commerce/oacp/commitment-evidence/settlement-receipts` binds a successful x402 settlement or MPP `Payment-Receipt` to a commitment as a signed `commitment_evidence` artifact (receipt hash, never the payer; recorded as reported, not verified). The OACP `mandate_capability` artifact may carry a scheme token binding `{scheme, token_ref, agent_id, merchant_scope, limits}`; Grantex never executes it. |
 | AgenticOrg runtime | Merchant self-service config, Seller onboarding, Shopify sync, future connector/provider intent capture, cache, buyer Q&A, bridges, and provider capability verification live in AgenticOrg. |
 | Payment/order/POS execution | Outside OACP artifact authority. Provider, POS, and merchant systems must execute and confirm; agents must not invent success. |
 | Historical Commerce V1 docs | Retained for context, but superseded for the AgenticOrg OACP runtime split. |
@@ -1118,6 +1120,22 @@ app.use('/api/inference', requireAgentPassport({
 }));
 // req.agentPassport is populated on valid requests
 // 403 with typed error code on invalid requests
+```
+
+### The 402 challenge flow
+
+MPP's HTTP 402 flow is the "Payment" HTTP authentication scheme: `WWW-Authenticate: Payment` on the 402, `Authorization: Payment` on the retry, `Payment-Receipt` on success. (`PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE` are x402 v2's headers.)
+
+```typescript
+import { requirePayment } from '@grantex/mpp';
+
+app.get('/api/report', requirePayment({
+  secret: process.env.PAYMENT_CHALLENGE_SECRET!,
+  realm: 'api.merchant.example',
+  offers: () => [{ method: 'tempo', intent: 'charge', request: { amount: '1000', currency: 'usd' } }],
+  verifyPayload: async (credential) => verifyWithYourPaymentMethod(credential.payload),
+}), handler);
+// 402 with WWW-Authenticate challenges; on a valid credential, Payment-Receipt and req.payment
 ```
 
 ### Trust Registry

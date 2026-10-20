@@ -140,6 +140,10 @@ The following gaps were confirmed against the repository on July 13, 2026, with 
 - [ ] Add interoperability fixtures for MCP, A2A, OACP adapters, and offline revocation synchronization.
 - [ ] Publish an implementation report for the current IETF draft and externally verifiable submission/comment receipts.
 - [ ] Keep OACP adapter output labelled preview/mapping until the relevant external conformance and approval requirements are met.
+- [x] Agent request signatures under the Grantex, Visa Trusted Agent Protocol and Web Bot Auth profiles in one library (TypeScript and Python), with shared vectors.
+- [ ] Response signatures for the registry key directory by each listed key (the registry holds no agent private keys; today it countersigns with the platform key).
+- [ ] KYA tier mapping table and scheme agent id formats once the card networks and wallet schemes publish their specifications (both are opaque or operator-configured today).
+- [ ] Verify scheme-signed settlement receipts once a signed receipt format is published (x402 and MPP receipts are recorded as reported, not verified).
 
 ### Developer experience
 
