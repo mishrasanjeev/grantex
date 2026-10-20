@@ -165,6 +165,15 @@ the TypeScript and Python packages reproduce them byte for byte.
   for example a grantex signature and a web-bot-auth signature whose
   `Signature-Agent` names the agent's directory.
 
+The Grantex registry serves its own directory of opted-in agents' keys at
+`/.well-known/http-message-signatures-directory` only when
+`HTTP_SIGNATURE_DIRECTORY_ENABLED` is on (default off). The registry holds no
+agent private keys, so that response carries one countersignature by the
+registry's platform key (`tag="grantex-registry-directory"`) instead of a
+signature by each listed key; `verifyDirectoryResponse` and strict Web Bot
+Auth clients ignore its keys. Trust it through the Grantex JWKS, or resolve
+agents through the registry lookup.
+
 ## Also exported
 
 - `contentDigest(body)`, `jwkThumbprint(jwk)`, `publicJwk(jwk)`;

@@ -124,7 +124,8 @@ grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx --for
    service issues none).
 
 The suite needs `@grantex/sdk` with the OACP verifier installed beside the
-CLI (an optional peer dependency):
+CLI (an optional peer dependency, `>=0.9.0 <1`). Once both packages are
+released with the suite and the verifier:
 
 ```bash
 npm install @grantex/conformance @grantex/sdk
@@ -132,6 +133,12 @@ GRANTEX_CONFORMANCE_INTERNAL_TOKEN=... npx grantex-conformance \
   --base-url http://localhost:3001 --api-key sk_test_xxx \
   --include oacp --suite oacp --oacp-issuer https://issuer.example
 ```
+
+Until then, build `packages/sdk-ts` and `packages/conformance` from this
+repository, make the built SDK resolvable as `@grantex/sdk` from
+`packages/conformance` (the in-tree SDK version is still below the peer
+range, so `npm install ../sdk-ts` refuses to link it), and run
+`node packages/conformance/dist/index.js` with the same options.
 
 The internal token is the auth service's
 `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` (or the token whose SHA-256 is

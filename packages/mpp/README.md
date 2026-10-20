@@ -65,6 +65,9 @@ const record = await lookupOrgTrust('did:web:acme.com');
 
 ## The 402 challenge flow ("Payment" HTTP authentication scheme)
 
+> This section and the KYA tier below are source additions, not yet in a
+> published release of this package.
+
 MPP's HTTP 402 flow is the "Payment" HTTP authentication scheme
 (draft-ryan-httpauth-payment-01). This package implements it:
 
