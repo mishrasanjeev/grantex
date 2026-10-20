@@ -12,7 +12,7 @@ description: AI shopping agents speak several protocols. OACP gives a merchant o
 - OACP does not replace UCP, ACP or AP2. It feeds them.
 
 <Note>
-On by default: Grantex signs every OACP artifact and publishes the keys to check it. Public revocation lists, public UCP discovery, the agent key registry and scheme agent ids are switches that default to off. On the AgenticOrg side, checkout and payment execution default to off too. Examples use synthetic shops and amounts.
+Status on 20 October 2026. Everything this post describes on Grantex's side is merged and deployed. Signing is not behind a switch: once an operator creates the first OACP issuer key, every artifact and mandate is signed and the key is published. That key does not exist in production yet, and the public revocation list, public UCP discovery, the agent key registry and scheme agent ids are switches that default to off. On the AgenticOrg side, artifact verification before caching is merged; the arbiter, ledger, checkout and payment work is still in review there, behind switches that default to off. The SDK verifiers are in the repository source, not yet in a published release. Examples use synthetic shops and amounts. Details: [launch closure status](/guides/oacp/runtime-launch-closure-prd).
 </Note>
 
 This post tells the story from Grantex's side: what the trust authority signs, publishes and refuses. The [AgenticOrg version](https://agenticorg.ai/blog/oacp-one-trust-layer-under-ucp-acp-ap2) tells it from the merchant runtime's side.
@@ -51,11 +51,11 @@ Grantex is the trust authority in that picture. AgenticOrg is the merchant runti
 
 **Every issue and every refusal is kept.** Grantex stores each artifact it issues and each request it refuses. AgenticOrg can replay the issued set to rebuild its cache.
 
-**Anyone can check a fact the same way.** The TypeScript, Python and Go SDKs ship `verifyOacpArtifact` (or its language equivalent). All three pass the same shared test vectors and return the same refusal codes, such as `payload_hash_mismatch` or `issuer_key_untrusted`.
+**Anyone can check a fact the same way.** The TypeScript, Python and Go SDK sources include `verifyOacpArtifact` (or its language equivalent); they are not yet in a published release. All three pass the same shared test vectors and return the same refusal codes, such as `payload_hash_mismatch` or `issuer_key_untrusted`.
 
 ## One revoke switch
 
-Every artifact gets a slot on a public **Token Status List** (an IETF draft standard). Revoking a fact sets that slot to invalid and issues a signed revocation record that names what was revoked.
+Every artifact gets a slot on a **Token Status List** (an IETF OAuth working group draft). Revoking a fact sets that slot to invalid and issues a signed revocation record that names what was revoked.
 
 Verifiers check the list before they trust a fact. A cached copy of the list lasts 30 seconds by default. If the list cannot be reached, verifiers refuse with `revocation_status_unavailable` rather than guess.
 
@@ -77,11 +77,11 @@ Before issuing, Grantex checks the buyer's Commerce Passport, the consent behind
 <img className="block dark:hidden" src="/images/blog/oacp/oacp-journey-light.svg" alt="A purchase: Intent, Cart and Payment mandates from Grantex, AFA with the buyer's bank when RBI rules require it, the arbiter's eight rules, a payment that runs once on allow, and one ledger record." />
 <img className="hidden dark:block" src="/images/blog/oacp/oacp-journey-dark.svg" alt="A purchase: Intent, Cart and Payment mandates from Grantex, AFA with the buyer's bank when RBI rules require it, the arbiter's eight rules, a payment that runs once on allow, and one ledger record." />
 
-Two honest notes. Mandates are signed JWTs mapped to AP2 field names, not AP2's own SD-JWT format. Passkey signing of the cart is a Grantex extension; Verifiable Intent credentials are not WebAuthn credentials.
+Three honest notes. Mandates are signed JWTs mapped to AP2 field names, not AP2's own SD-JWT format. Passkey signing of the cart is a Grantex extension; Verifiable Intent credentials are not WebAuthn credentials. The AFA step, the arbiter and the payment in the picture run in AgenticOrg, where that work is still in review.
 
 ## Decisions with no human waiting
 
-AgenticOrg's arbiter decides each purchase with fixed rules. Grantex does not decide; it countersigns.
+AgenticOrg's arbiter decides each purchase with fixed rules (that work is in review in AgenticOrg). Grantex does not decide; it countersigns, and its side is live in the deployed code.
 
 - For an **allow**, Grantex issues a short-lived decision grant in a machine profile: `approver_auth` is `policy_arbiter`, the evidence methods are listed, and the grant is bound to the exact handoff by its hash. It lives at most ten minutes.
 - For a **refuse**, Grantex records the refusal and issues nothing. A token is a permission, so a refusal never gets one.
@@ -89,7 +89,7 @@ AgenticOrg's arbiter decides each purchase with fixed rules. Grantex does not de
 
 ## A ledger someone else can check
 
-AgenticOrg keeps one hash-chained ledger and posts its latest chain head to Grantex. Grantex countersigns the head as a **witness**. If someone later presents a different hash at the same position, Grantex answers `WITNESS_FORK` and keeps the evidence. Grantex's own prepaid wallet ledger uses the same kind of hash chain.
+AgenticOrg keeps one hash-chained ledger (in review in AgenticOrg) and posts its latest chain head to Grantex. Grantex countersigns the head as a **witness**. If someone later presents a different hash at the same position, Grantex answers `WITNESS_FORK` and keeps the evidence. Grantex's own prepaid wallet ledger uses the same kind of hash chain.
 
 ## Knowing which agent is calling
 
@@ -106,6 +106,8 @@ Grantex can publish registered agent keys in the form Web Bot Auth expects and a
 When UCP changes between releases, for example signing keys moving from `signing_keys` to `keys`, the change lives in one renderer. The signed facts do not change.
 
 ## Side by side
+
+The right-hand column describes the full design. The Grantex parts are deployed; the AgenticOrg parts (the arbiter, the ledger, and UPI AutoPay and AFA handling in checkout) are in review there.
 
 | What you need | Each protocol wired on its own | With OACP underneath |
 | --- | --- | --- |

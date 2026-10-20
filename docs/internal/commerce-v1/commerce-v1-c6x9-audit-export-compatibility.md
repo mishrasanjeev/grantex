@@ -1,5 +1,7 @@
 # Commerce V1 C6X9 Audit Export Compatibility
 
+> Historical record. This C6W/C6X/C6Y report describes an earlier internal slice and is kept for history only; it is not current behaviour. Unmounted helpers it describes were deleted, artifacts are now ES256-signed, persisted and revocable, and the current OACP status is in `docs/guides/oacp/runtime-launch-closure-prd.mdx`.
+
 ## Scope
 
 C6X9 adds a Grantex compatibility guard for AgenticOrg internal OACP cache and operator-decision audit export bundles. Grantex changes are docs and tests only. The guard proves that Grantex cached-artifact verifier output and canonical OACP authority fields can be referenced by AgenticOrg through non-sensitive refs in an export-ready bundle.

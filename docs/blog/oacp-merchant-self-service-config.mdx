@@ -6,6 +6,10 @@ authors:
   - name: "Sanjeev Kumar"
 ---
 
+<Note>
+Update, 20 October 2026. Grantex now signs every OACP artifact, binds the provider capability verifier's evidence into the `mandate_capability` artifact, and can issue `public_discovery_state` as enabled for a merchant that opts in, behind a switch that defaults to off. The ownership split in this post is unchanged. Current status: [OACP runtime launch closure PRD](/guides/oacp/runtime-launch-closure-prd).
+</Note>
+
 Agentic commerce needs merchant-controlled setup. A Shopify store, a future WooCommerce storefront, an ERP-backed catalog, a bank-owned mandate rail, and an offline POS terminal all have different operational owners. OACP should describe the trust boundary between those systems; it should not move every setting or every buyer turn into Grantex.
 
 ## The Split
@@ -36,7 +40,7 @@ WooCommerce, ERP, PIM, OMS, WMS, custom APIs, bank-owned rails, fintech rails, a
 
 ## Public Catalog And Search
 
-AgenticOrg can publish seller profile pages, product pages, buyer-safe catalog JSON, Schema.org JSON-LD, sitemap, and llms.txt only when the merchant enables public publishing and cached artifacts are fresh enough. Grantex may sign public discovery-state artifacts; it does not host the catalog pages.
+AgenticOrg can publish seller profile pages, product pages, buyer-safe catalog JSON, Schema.org JSON-LD, sitemap, and llms.txt only when the merchant enables public publishing and cached artifacts are fresh enough. Grantex signs the public discovery-state artifact (enabled only for a merchant opt-in while `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED` is on); it does not host the catalog pages.
 
 ## Safe Claim
 

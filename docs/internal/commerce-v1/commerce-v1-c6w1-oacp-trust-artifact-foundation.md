@@ -1,5 +1,7 @@
 # Commerce V1 C6W1 - OACP Trust Artifact Foundation
 
+> Historical record. This C6W/C6X/C6Y report describes an earlier internal slice and is kept for history only; it is not current behaviour. Unmounted helpers it describes were deleted, artifacts are now ES256-signed, persisted and revocable, and the current OACP status is in `docs/guides/oacp/runtime-launch-closure-prd.mdx`.
+
 Status: implementation foundation, internal-only, non-enabling.
 
 ## Scope

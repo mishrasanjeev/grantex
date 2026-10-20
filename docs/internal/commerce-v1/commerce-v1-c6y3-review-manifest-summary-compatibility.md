@@ -1,5 +1,7 @@
 # C6Y3 Review Manifest Summary Compatibility
 
+> Historical record. This C6W/C6X/C6Y report describes an earlier internal slice and is kept for history only; it is not current behaviour. Unmounted helpers it describes were deleted, artifacts are now ES256-signed, persisted and revocable, and the current OACP status is in `docs/guides/oacp/runtime-launch-closure-prd.mdx`.
+
 ## Scope
 
 C6Y3 confirms that Grantex OACP verifier and authority references remain sufficient for AgenticOrg internal audit review manifest queries and redacted summaries. This is a docs/tests compatibility guard only.

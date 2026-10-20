@@ -1,5 +1,7 @@
 # Commerce V1 C6W9 Dry-Run Verifier
 
+> Historical record. This C6W/C6X/C6Y report describes an earlier internal slice and is kept for history only; it is not current behaviour. Unmounted helpers it describes were deleted, artifacts are now ES256-signed, persisted and revocable, and the current OACP status is in `docs/guides/oacp/runtime-launch-closure-prd.mdx`.
+
 ## Scope
 
 C6W9 adds an internal dry-run verifier over C6W8 eligibility packets. It checks whether a packet has a complete local handoff contract for a future gated controller review. It does not create a controller, execute a transaction, persist production audit events, call providers, call merchant private APIs, or enable public discovery.

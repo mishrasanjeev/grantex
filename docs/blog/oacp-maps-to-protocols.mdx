@@ -3,6 +3,9 @@ title: How OACP Maps To Schema.org, UCP, ACP, AP2, A2A, And MCP
 description: A compatibility-mapping guide for protocol partners.
 ---
 
+<Note>
+Update, 20 October 2026. Grantex no longer serves preview adapters for UCP, ACP or AP2. It renders a UCP business profile from issued artifacts, issues the ACP delegate-payment allowance and order events, and issues Intent, Cart and Payment mandates mapped to AP2 v0.2 member names. See [OACP explained](/blog/oacp-one-trust-layer-under-ucp-acp-ap2) and [OACP runtime launch closure PRD](/guides/oacp/runtime-launch-closure-prd).
+</Note>
 
 ## Summary
 
@@ -17,9 +20,9 @@ Protocol partners, developers, and technical reviewers.
 ```mermaid
 flowchart TD
   oacp[Canonical OACP artifacts] --> schema[Schema.org Product/Offer]
-  oacp --> ucp[UCP-style capability]
-  oacp --> acp[ACP-style commerce profile]
-  oacp --> ap2[AP2-style evidence]
+  oacp --> ucp[UCP business profile]
+  oacp --> acp[ACP allowance and order events]
+  oacp --> ap2[AP2-mapped mandates]
   oacp --> a2a[A2A metadata]
   oacp --> mcp[MCP metadata]
 ```
@@ -30,7 +33,7 @@ Grantex issues OACP artifacts. AgenticOrg caches them. Adapter payloads are gene
 
 ## What Is Implemented Now
 
-Grantex contains a Schema.org preview helper, renders a UCP business profile from issued OACP artifacts, and issues an AP2-mapped PaymentMandate. The earlier unsigned UCP-style, ACP-style, and AP2-style preview routes were removed. AgenticOrg generates protocol adapter payloads including Schema.org, UCP-style, ACP-style, AP2-style, A2A, MCP, and OpenAPI views.
+Grantex contains a Schema.org preview helper, renders a UCP business profile from issued OACP artifacts, issues the ACP delegate-payment allowance and order events, and issues AP2-mapped Intent, Cart and Payment mandates. The earlier unsigned UCP-style, ACP-style, and AP2-style preview routes were removed. AgenticOrg generates its own protocol adapter payloads (Schema.org, A2A, MCP and OpenAPI views among them) from the artifacts it has verified.
 
 ## What Requires External Approval Or Config
 

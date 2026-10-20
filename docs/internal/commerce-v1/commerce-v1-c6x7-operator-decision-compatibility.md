@@ -1,5 +1,7 @@
 # Commerce V1 C6X7 Operator Decision Compatibility
 
+> Historical record. This C6W/C6X/C6Y report describes an earlier internal slice and is kept for history only; it is not current behaviour. Unmounted helpers it describes were deleted, artifacts are now ES256-signed, persisted and revocable, and the current OACP status is in `docs/guides/oacp/runtime-launch-closure-prd.mdx`.
+
 ## Scope
 
 C6X7 adds Grantex-side compatibility guard tests and internal documentation for AgenticOrg OACP cache maintenance operator decision records. It adds no Grantex runtime code, migration, endpoint, route, OpenAPI runtime contract, workflow, scheduler, queue, background worker, provider adapter, cloud resource, or external call.

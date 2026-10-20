@@ -3,10 +3,13 @@ title: How Pine Labs Plural/P3P Mandate Capability Fits Into Agentic Commerce
 description: The provider-owned mandate capability boundary in the OACP model.
 ---
 
+<Note>
+Update, 20 October 2026. Grantex now binds the capability verifier's redacted evidence object into the signed `mandate_capability` artifact (`verified`, `unavailable` or `unverified`), and issues Intent, Cart and Payment mandates whose payment rail may be Plural. A mandate authorizes; Plural still executes the payment. Current status: [OACP runtime launch closure PRD](/guides/oacp/runtime-launch-closure-prd).
+</Note>
 
 ## Summary
 
-Plural/Pine owns the mandate and payment rail. AgenticOrg verifies provider-owned capability metadata and Grantex can carry redacted evidence refs in OACP artifacts.
+Plural/Pine owns the mandate and payment rail. AgenticOrg verifies provider-owned capability metadata and Grantex binds the redacted evidence into the signed `mandate_capability` artifact.
 
 ## Target Audience
 

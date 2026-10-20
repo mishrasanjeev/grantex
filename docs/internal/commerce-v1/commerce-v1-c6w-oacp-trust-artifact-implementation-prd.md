@@ -1,5 +1,7 @@
 # C6W OACP Trust Artifact Implementation PRD
 
+> Historical record. This C6W/C6X/C6Y report describes an earlier internal slice and is kept for history only; it is not current behaviour. Unmounted helpers it describes were deleted, artifacts are now ES256-signed, persisted and revocable, and the current OACP status is in `docs/guides/oacp/runtime-launch-closure-prd.mdx`.
+
 Status: draft for human review only
 
 Date: 2026-06-11
