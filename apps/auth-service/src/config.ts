@@ -281,6 +281,12 @@ export const config = {
   // manifest names the schemes and the lookup template. Off unless exactly
   // 'true'; off, scheme_agent_ids is an unknown member as before.
   get registrySchemeAgentIdsEnabled() { return process.env['REGISTRY_SCHEME_AGENT_IDS_ENABLED'] === 'true'; },
+  // KYA tier on the Agent Passport (G54, lib/registry/kya-tier.ts): the tier
+  // the agent's counted trust marks map to in AGENT_PASSPORT_KYA_TIER_MAP
+  // (operator-configured, empty by default, pending the scheme
+  // specifications). Off unless exactly 'true'.
+  get agentPassportKyaTierEnabled() { return process.env['AGENT_PASSPORT_KYA_TIER_ENABLED'] === 'true'; },
+  get agentPassportKyaTierMap() { return process.env['AGENT_PASSPORT_KYA_TIER_MAP']; },
   /** Lets C6Z issuance enable public discovery for opted-in, allow-listed, attested merchants (default off). */
   get oacpPublicDiscoveryIssuanceEnabled() { return process.env['OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED'] === 'true'; },
   // Status-list reconciliation with cascade (lib/registry/status-reconciliation.ts):

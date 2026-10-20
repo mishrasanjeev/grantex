@@ -63,6 +63,30 @@ const record = await lookupOrgTrust('did:web:acme.com');
 // { organizationDID, trustLevel, verificationMethod, domains, verifiedAt }
 ```
 
+## KYA tier claim
+
+With `AGENT_PASSPORT_KYA_TIER_ENABLED=true` (default off), an issued passport's
+`credentialSubject` may carry `kyaTier`:
+
+```json
+"kyaTier": {
+  "tier": "tier-1",
+  "trustMarks": ["urn:grantex:tm:agent.identity"],
+  "mappingVersion": "2026-10-pending-scheme-specs"
+}
+```
+
+The tier comes from an operator-configured table, `AGENT_PASSPORT_KYA_TIER_MAP`,
+that maps registry trust marks to tier labels. The table is empty by default, so
+no tier is issued until an operator configures one. The card networks' and
+wallet schemes' KYA tier specifications are not yet published; until they are,
+Grantex defines no tiers of its own and attaches no meaning to a label beyond
+the mapping. The first table entry whose trust marks the agent's counted
+attestations all hold gives the tier. The claim reflects the registry at
+issuance; read the registry lookup for the agent's standing now.
+`verifyPassport` in `@grantex/mpp` returns `kyaTier` when the signed passport
+carries one, and refuses a malformed one (`MALFORMED_CREDENTIAL`).
+
 ## Error Codes
 
 | Code | Description |

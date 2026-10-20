@@ -10,6 +10,8 @@ import {
   issuanceRefusal,
 } from '../lib/revocation/issuance-freeze.js';
 import { config } from '../config.js';
+import { computeAgentTrust } from '../lib/registry/trust-level.js';
+import { kyaTierFor, parseKyaTierMap } from '../lib/registry/kya-tier.js';
 import { ulid } from 'ulid';
 
 const MPP_PASSPORT_MAX_EXPIRY_HOURS = parseInt(
@@ -233,6 +235,18 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
         statusListCredential: `${config.publicBaseUrl}/v1/credentials/status/${statusListId}`,
       };
 
+      // G54: the KYA tier the agent's counted trust marks map to, only with
+      // AGENT_PASSPORT_KYA_TIER_ENABLED. A table that does not parse refuses
+      // issuance (thrown, 500) rather than issue a passport without it.
+      let kyaTier: ReturnType<typeof kyaTierFor> = null;
+      if (config.agentPassportKyaTierEnabled) {
+        const map = parseKyaTierMap(config.agentPassportKyaTierMap);
+        if (map.tiers.length > 0) {
+          const trust = await computeAgentTrust(sql, agentDid, now);
+          kyaTier = trust === null ? null : kyaTierFor(trust.types, map);
+        }
+      }
+
       const credentialSubject: Record<string, unknown> = {
         id: agentDid,
         type: 'AIAgent',
@@ -244,6 +258,7 @@ export async function passportRoutes(app: FastifyInstance): Promise<void> {
         paymentRails,
         delegationDepth,
         ...(parentPassportId !== undefined ? { parentPassportId } : {}),
+        ...(kyaTier !== null ? { kyaTier } : {}),
       };
 
       const vcPayload = {

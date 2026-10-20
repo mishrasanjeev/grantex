@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - KYA tier claim on the Agent Passport, mapped from trust marks (G54)
+- `POST /v1/passport/issue` adds `credentialSubject.kyaTier`
+  (`{tier, trustMarks, mappingVersion}`) when the new flag
+  `AGENT_PASSPORT_KYA_TIER_ENABLED` is on (default off) and the
+  operator-configured `AGENT_PASSPORT_KYA_TIER_MAP` maps the agent's counted
+  registry trust marks to a tier. The table is empty by default, pending the
+  card networks' and wallet schemes' KYA specifications; Grantex defines no
+  tiers and passes the label through. A table that does not parse refuses
+  issuance instead of issuing without the claim.
+- `@grantex/mpp` `verifyPassport` returns the signed `kyaTier` and refuses a
+  malformed one (`MALFORMED_CREDENTIAL`).
+
 ### Changed - Verifiable Intent documentation says what is implemented (G53)
 - `docs/features/verifiable-credentials.mdx` replaces the Verifiable Intent
   table with an exact account: OACP mandates (Intent, Cart, Payment mandate
