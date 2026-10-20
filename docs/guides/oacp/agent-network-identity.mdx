@@ -1,0 +1,226 @@
+---
+title: Agent Network Identity
+description: How Grantex agents sign requests for Grantex, Visa Trusted Agent Protocol and Web Bot Auth relying parties, and how the registry publishes agent keys.
+---
+
+Canonical end-to-end flow: [OACP authority overview](./overview).
+
+An agent request can carry more than one RFC 9421 HTTP Message Signature.
+Grantex relying parties read the Grantex profile (`Agent-Passport`,
+`Agent-Grant`, `tag="agent-payer-auth"`); card-network merchant edges read
+the Visa Trusted Agent Protocol (TAP) profile; bot-management edges read
+Web Bot Auth. One library signs and verifies all three:
+`@grantex/agent-httpsig` (TypeScript) and `grantex-agent-httpsig` (Python),
+both unpublished and in this repository.
+
+## Signature profiles
+
+| Profile | `tag` | Minimum covered components | Window | Nonce | `keyid` |
+|---|---|---|---|---|---|
+| `grantex` (default, unchanged) | `agent-payer-auth` | exactly `@method @authority @path content-digest agent-passport agent-grant` | 300 s | required | RFC 7638 thumbprint |
+| `tap` | `agent-payer-auth` or `agent-browser-auth` | `@authority @path` | 8 minutes | required, equal across the message's signatures, refused when seen in the last 8 minutes | the network key store's identifier |
+| `web-bot-auth` | `web-bot-auth` | `@authority` or `@target-uri`, and `"signature-agent";key=...` | 24 hours at most | optional | RFC 7638 thumbprint, looked up with the Signature-Agent URL |
+
+The relying party chooses the profile it enforces; a request is never read
+under another one. The grantex profile and the TAP payer profile share the
+tag `agent-payer-auth`, so a verifier configured for one refuses the other's
+covered-component set.
+
+### TAP body objects
+
+TAP also carries `agenticConsumer` (consumer recognition) and
+`agenticPaymentContainer` objects in the request body, each signed and bound
+to the message signature's nonce and keyid. The library builds and checks
+them. A failed consumer object is reported for the merchant to weigh; a
+failed payment container is never usable for payment.
+
+What the published TAP specification does not settle is configurable, with
+documented defaults:
+
+- where the objects sit in the body (default: top-level `agenticConsumer`
+  and `agenticPaymentContainer` members);
+- what the object signature covers (default: RFC 8785 JCS of the object
+  without `signature`, signature base64url).
+
+The library signs objects with ES256, EdDSA or PS512. TAP's examples use
+PS256, which the library reports as unsupported. Message signatures may
+use `rsa-pss-sha512` (RFC 9421 section 3.3.1, RSA keys of at least 2048
+bits) under the TAP and Web Bot Auth profiles; TAP's sample code names an
+`rsa-pss-sha256` algorithm that is not in the RFC 9421 registry and is not
+accepted.
+
+### The Grantex consent record object
+
+`grantexConsentRecord` is a Grantex extension carried beside the TAP objects:
+the granted Grantex commerce consent the agent acts under (consent id,
+merchant, agent, approved scopes, amount cap, consent text version, approval
+and expiry), bound to the message nonce. It carries no principal identifier.
+The relying party checks the consent with Grantex by its id.
+
+## The registry key directory
+
+With `HTTP_SIGNATURE_DIRECTORY_ENABLED=true` (default off) the auth service
+serves `GET /.well-known/http-message-signatures-directory`
+(draft-meunier-webbotauth-httpsig-directory-00) with media type
+`application/http-message-signatures-directory+json`: a JWK Set of the usable
+keys of agents whose developers opted in.
+
+```http
+PUT /v1/agents/{agentId}/http-signature-directory
+Authorization: Bearer <developer API key>
+Content-Type: application/json
+
+{ "published": true }
+```
+
+- Only keys that are usable now are listed: active, or rotated and inside
+  their overlap; never pending, unproven or compromised; the agent must be
+  active. Removing a key from the directory is how it is deactivated.
+- Only P-256 (`ecdsa-p256-sha256`) and Ed25519 (`ed25519`) keys are listed.
+- Each entry has `kid` = its RFC 7638 thumbprint, `use: "sig"`, `nbf` and,
+  for a rotated key, `exp`.
+- The response carries `Content-Digest` and `Cache-Control: public,
+  max-age=300`.
+
+The directory draft recommends one response signature per listed key, by
+that key. The registry does not hold agents' private keys, so it cannot
+produce those. It signs the response once with its platform key instead,
+over `"@authority";req` and `content-digest`, with
+`tag="grantex-registry-directory"` and the platform `kid` from
+`/.well-known/jwks.json`. A relying party that trusts the registry can check
+that signature. A client that strictly applies the draft ignores keys
+without their own signature; it should resolve these agents through the
+registry lookup instead. An operator that hosts its own directory signs it
+per key with `signDirectoryResponse` / `sign_directory_response`.
+
+### Signature-Agent on Grantex agent requests
+
+An agent that wants Web Bot Auth relying parties to find its key adds a
+`web-bot-auth` signature beside the Grantex one and names the registry as its
+Signature-Agent:
+
+```typescript
+const grantex = signWithProfile(request, { key, agentPassport, agentGrant });
+const webBotAuth = signWithProfile(request, {
+  profile: 'web-bot-auth',
+  key,
+  label: 'sig2',
+  components: ['@method', '@authority', '@path', 'content-digest', 'signature-agent'],
+  signatureAgent: { url: 'https://registry.example' },
+});
+Object.assign(request.headers, combineSignatures(grantex, webBotAuth));
+```
+
+Grantex verifiers read `sig1`; Web Bot Auth verifiers read `sig2` and fetch
+the directory from the Signature-Agent origin.
+
+## Scheme agent ids
+
+Card networks identify registered agents with their own identifiers. With
+`REGISTRY_SCHEME_AGENT_IDS_ENABLED=true` (default off), an accredited
+issuer's agent attestation may carry them:
+
+```json
+"scheme_agent_ids": [
+  { "scheme": "visa_tap", "agent_id": "tap-agent-0001" },
+  { "scheme": "mastercard_agent_pay", "agent_id": "agent-pay-0001" }
+]
+```
+
+- The schemes are `visa_tap` and `mastercard_agent_pay`. The identifiers are
+  opaque, scheme-scoped strings of 1 to 256 characters. Neither scheme
+  publishes an identifier format (TAP keys an agent by the `keyid` of its key
+  store; Mastercard Agent Pay's wire details are not public), so the
+  registry never parses or validates them beyond length.
+- A relying party finds the agent with
+  `GET /v1/registry/agents?scheme=visa_tap&scheme_agent_id=tap-agent-0001`.
+  The answer is the usual minimised lookup, and each counted attestation
+  shows the `scheme_agent_ids` it carries.
+- `/.well-known/agent-registry.json` names the schemes, each with
+  `id_format: "opaque"`, and the `agent_by_scheme_agent_id` lookup template.
+
+The registry does not check an identifier with the scheme. The attestation is
+the accredited issuer's statement, and it counts only while the issuer's
+status list shows it valid.
+
+## Scheme token binding on the payment capability
+
+A buyer agent's payment can be bound to a token a scheme or provider holds:
+a network token (`visa`, `mastercard`), a UPI AutoPay mandate
+(`upi_autopay`) or a payment provider's tokenised instrument
+(`provider_token`, for example on the Plural rail). The
+`mandate_capability` artifact, which already says a provider-owned payment
+capability exists, may carry that binding as `token_binding`:
+
+```json
+"token_binding": {
+  "scheme": "visa",
+  "token_ref": "tokref_0001",
+  "agent_id": "shopper-01",
+  "merchant_scope": ["merchant.example"],
+  "limits": { "max_amount": 250000, "currency": "INR", "expires_at": "2026-11-01T00:00:00Z" }
+}
+```
+
+- `token_ref` is an opaque reference to the token the scheme or provider
+  holds, never the token and never an account number: a run of 13 to 19
+  digits is refused.
+- The binding must sit inside the capability: the same buyer agent,
+  merchants within its `merchant_scope`, the same currency, a limit no
+  higher than its `max_amount`, and no expiry after the artifact's. Anything
+  else is refused with `token_binding_invalid`.
+- Grantex describes and checks the binding; it never executes it. The
+  relying party's executor (AgenticOrg's Plural executor, for example) calls
+  the scheme or provider.
+
+The type and its parser are shared: `parseSchemeTokenBinding` and
+`checkTokenBindingWithinCapability` in `@grantex/sdk`, and the same module in
+the auth service.
+
+## KYA tier on the Agent Passport
+
+The Agent Passport can carry a KYA tier mapped from the agent's registry trust
+marks through an operator-configured table, pending the scheme specifications.
+See [MPP Agent Passport](/features/mpp-agent-passport#kya-tier).
+
+## HTTP 402 payments: challenges, receipts and commitment evidence
+
+- **MPP** uses the "Payment" HTTP authentication scheme
+  (draft-ryan-httpauth-payment-01): `WWW-Authenticate: Payment …` on the 402,
+  `Authorization: Payment <base64url JSON>` on the retry, `Payment-Receipt` on
+  success. `@grantex/mpp` implements the challenge binding, the credential
+  checks, the receipt, the problem details and an Express middleware.
+- **x402 v2** uses `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE` and
+  `PAYMENT-RESPONSE`. `@grantex/x402` pays through them and reads the
+  settlement receipt.
+- **Commitment evidence.** `POST /v1/commerce/oacp/commitment-evidence/settlement-receipts`
+  (AgenticOrg service token, scope `commerce.oacp.commitment_evidence.write`,
+  allow-listed tenants) binds a successful x402 settlement or MPP receipt to
+  a commitment as a signed `commitment_evidence` artifact on the OACP status
+  list: `commitment_type: "settlement_receipt_reference"`, the artifacts the
+  commitment relied on (issued, unrevoked, same tenant and merchant), and the
+  receipt's `sha-256` over its RFC 8785 form with the network or method and
+  the transaction or reference. The payer is never copied. Neither receipt
+  form is signed, so the artifact records
+  `receipt_verification: "reported_not_verified_by_grantex"`. It is
+  idempotent per commitment: the same receipt returns the same artifact,
+  another receipt is `409 commitment_receipt_conflict`; a failed settlement is
+  `422 settlement_not_successful`.
+
+```json
+{
+  "tenant_id": "cten_example",
+  "merchant_id": "merchant.example",
+  "seller_agent_id": "seller-01",
+  "buyer_agent_id": "shopper-01",
+  "commitment_id": "commit-0001",
+  "artifact_refs_used": ["oacp_art_..."],
+  "policy_version": "2026-10-01",
+  "receipt": {
+    "protocol": "x402",
+    "x402_version": 2,
+    "settlement": { "success": true, "transaction": "0x...", "network": "eip155:84532" },
+    "gdt_jti": "gdt_..."
+  }
+}
+```

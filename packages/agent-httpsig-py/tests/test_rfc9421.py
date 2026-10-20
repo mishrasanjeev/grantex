@@ -49,7 +49,9 @@ def test_signatures_with_the_rfc_test_keys(v: dict[str, Any]) -> None:
     assert isinstance(member, Item) and isinstance(member.value, bytes)
     jwk = v["verify"]["public_jwk"]
     assert verify_signature_value(jwk, v["signature_base"], member.value) is True
-    changed = v["signature_base"].replace("application/json", "application/jsoN")
+    # One changed octet: the last character of the base.
+    base = v["signature_base"]
+    changed = base[:-1] + ("b" if base[-1] != "b" else "c")
     assert verify_signature_value(jwk, changed, member.value) is False
 
 

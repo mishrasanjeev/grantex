@@ -156,7 +156,7 @@ Grantex integrates with emerging standards for agentic commerce through W3C Veri
   </Card>
 </CardGroup>
 
-These capabilities support the **Mastercard Verifiable Intent** specification and similar agentic commerce frameworks. When an agent needs to prove its authorization to a payment processor, merchant, or third-party API, it presents a Verifiable Credential that the receiving party can verify independently using the Grantex DID document.
+When an agent needs to prove its authorization to a payment processor, merchant, or third-party API, it presents a Verifiable Credential that the receiving party can verify independently using the Grantex DID document. Grantex does not issue or verify Mastercard Verifiable Intent credentials; what it implements toward Verifiable Intent (OACP mandates, passkey evidence) and what it does not is listed in [Verifiable Credentials](/features/verifiable-credentials#verifiable-intent-what-is-implemented-and-what-is-not).
 
 <Info>
 Verifiable Credentials are opt-in. Pass `credentialFormat: "vc-jwt"` during token exchange to receive a VC alongside the standard grant token. Existing integrations continue to work unchanged.

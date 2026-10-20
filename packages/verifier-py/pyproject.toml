@@ -39,7 +39,7 @@ classifiers = [
 dependencies = [
     "cryptography>=48.0.1",
     "grantex-agent-passport==0.1.0",
-    "grantex-agent-httpsig==0.1.0",
+    "grantex-agent-httpsig==0.2.0",
 ]
 
 [project.urls]

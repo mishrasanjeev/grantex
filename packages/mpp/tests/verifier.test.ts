@@ -272,3 +272,39 @@ describe('requireAgentPassport', () => {
     expect(next).not.toHaveBeenCalled();
   });
 });
+
+describe('verifyPassport: KYA tier claim', () => {
+  beforeEach(async () => {
+    await setupKeys();
+    clearJwksCache();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('passes a signed kyaTier through unchanged', async () => {
+    vi.stubGlobal('fetch', mockFetchJwks());
+    const base = makeCredential();
+    const kyaTier = { tier: 'tier-1', trustMarks: ['urn:grantex:tm:agent.identity'], mappingVersion: '2026-10' };
+    const credential = await signCredential({ ...base, credentialSubject: { ...base.credentialSubject, kyaTier } });
+    const result = await verifyPassport(encodeCredential(credential));
+    expect(result.kyaTier).toEqual(kyaTier);
+  });
+
+  it('a passport without one has none', async () => {
+    vi.stubGlobal('fetch', mockFetchJwks());
+    const result = await verifyPassport(encodeCredential(await signCredential(makeCredential())));
+    expect(result.kyaTier).toBeUndefined();
+  });
+
+  it('refuses a malformed signed kyaTier', async () => {
+    vi.stubGlobal('fetch', mockFetchJwks());
+    const base = makeCredential();
+    const credential = await signCredential({
+      ...base,
+      credentialSubject: { ...base.credentialSubject, kyaTier: { tier: '', trustMarks: 'x' } as never },
+    });
+    await expect(verifyPassport(encodeCredential(credential))).rejects.toMatchObject({ code: 'MALFORMED_CREDENTIAL' });
+  });
+});

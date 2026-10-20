@@ -15,6 +15,7 @@ type Sql = ReturnType<typeof postgres>;
 
 export const C6Z_AUTHORITY_SERVICE_SCOPE = 'commerce.oacp.c6z.authority_requests.write';
 export const OACP_ARBITER_DECISIONS_SERVICE_SCOPE = 'commerce.oacp.arbiter_decisions.write';
+export const OACP_COMMITMENT_EVIDENCE_SERVICE_SCOPE = 'commerce.oacp.commitment_evidence.write';
 export const OACP_ARTIFACTS_READ_SCOPE = 'commerce.oacp.artifacts.read';
 export const OACP_ARTIFACTS_REVOKE_SCOPE = 'commerce.oacp.artifacts.revoke';
 export const OACP_UCP_PROFILE_READ_SCOPE = 'commerce.oacp.ucp_profile.read';
@@ -44,6 +45,7 @@ const SERVICE_TOKEN_ROUTES: ReadonlyArray<{ method: string; path: RegExp; scope:
   { method: 'POST', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+\/revoke$/, scope: OACP_ARTIFACTS_REVOKE_SCOPE },
   { method: 'POST', path: /\/v1\/commerce\/oacp\/artifacts\/[^/]+\/(suspend|reinstate)$/, scope: OACP_ARTIFACTS_SUSPEND_SCOPE },
   { method: 'POST', path: /\/oacp\/arbiter-decisions$/, scope: OACP_ARBITER_DECISIONS_SERVICE_SCOPE },
+  { method: 'POST', path: /\/oacp\/commitment-evidence\/settlement-receipts$/, scope: OACP_COMMITMENT_EVIDENCE_SERVICE_SCOPE },
   { method: 'GET', path: /\/v1\/commerce\/oacp\/ucp-profile$/, scope: OACP_UCP_PROFILE_READ_SCOPE },
   { method: 'POST', path: /\/v1\/commerce\/oacp\/acp\/delegate-payment-allowance$/, scope: ACP_DELEGATE_PAYMENT_ALLOWANCE_SCOPE },
   { method: 'GET', path: /\/v1\/commerce\/oacp\/acp\/orders\/[^/]+\/event$/, scope: ACP_ORDER_EVENTS_READ_SCOPE },

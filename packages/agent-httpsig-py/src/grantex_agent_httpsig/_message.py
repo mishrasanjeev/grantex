@@ -12,7 +12,14 @@ from dataclasses import dataclass, field
 from typing import Iterable, Mapping, Optional, Sequence, Tuple, Union
 
 from ._errors import AgentHttpSigError
-from .structured_fields import InnerList, parse_dictionary, serialize_inner_list, serialize_key
+from .structured_fields import (
+    InnerList,
+    parse_dictionary,
+    serialize_inner_list,
+    serialize_item,
+    serialize_key,
+    serialize_member,
+)
 
 HeaderValue = Union[str, Sequence[str]]
 Headers = Union[Mapping[str, HeaderValue], Iterable[Tuple[str, str]]]
@@ -149,6 +156,14 @@ def _derived_value(message: HttpMessage, name: str) -> str:
     if name == "@method":
         # Section 2.2.1: as sent, case preserved.
         return message.method
+    if name == "@target-uri":
+        # Section 2.2.2: the full target URI (RFC 9110 section 7.1), without a fragment.
+        if target.authority is None or target.scheme is None:
+            raise AgentHttpSigError("@target-uri needs an absolute target")
+        return (
+            target.scheme + "://" + target.authority + (target.path or "/")
+            + (target.query or "")
+        )
     if name == "@authority":
         # Section 2.2.3.
         if target.authority is None:
@@ -181,19 +196,25 @@ def _check_value(value: str, name: str) -> None:
         )
 
 
+_IMPLEMENTED_COMPONENT_PARAMS = frozenset(("key", "req"))
+
+
 def create_signature_base(
     message: HttpMessage,
     signature_params: InnerList,
     overrides: Optional[Mapping[str, str]] = None,
+    related: Optional[HttpRequest] = None,
 ) -> str:
     """RFC 9421 section 2.5.
 
     The signature base for the covered components and signature parameters
-    of ``signature_params``. Components with parameters (``sf``, ``key``,
-    ``bs``, ``req``, ``tr``, ``name``) are not implemented and fail, as step
+    of ``signature_params``. Of the component parameters, ``key`` (a
+    Dictionary member, section 2.1.2) and ``req`` (the component of the
+    request a response answers, section 2.4, read from ``related``) are
+    implemented; any other (``sf``, ``bs``, ``tr``, ``name``) fails, as step
     2.5 requires for a parameter that is not understood. ``overrides`` gives
-    values used in place of the message's own for derived components (the
-    verifier's @authority).
+    values used in place of the message's own for derived components without
+    parameters (the verifier's @authority or @target-uri).
     """
     lines: list[str] = []
     seen: set[str] = set()
@@ -201,40 +222,72 @@ def create_signature_base(
         name = component.value
         if not isinstance(name, str) or type(name) is not str:
             raise AgentHttpSigError("a component identifier is not a String")
-        if component.params:
-            raise AgentHttpSigError("component parameters are not implemented (" + name + ")")
-        # Step 2.1: no component twice.
-        if name in seen:
-            raise AgentHttpSigError("component " + name + " is covered twice")
-        seen.add(name)
+        for param in component.params:
+            if param not in _IMPLEMENTED_COMPONENT_PARAMS:
+                raise AgentHttpSigError(
+                    "component parameter " + param + " is not implemented (" + name + ")"
+                )
+        key = component.params.get("key")
+        req = component.params.get("req")
+        if key is not None and type(key) is not str:
+            raise AgentHttpSigError("the key parameter of " + name + " is not a String")
+        if req is not None and req is not True:
+            raise AgentHttpSigError("the req parameter of " + name + " is not true")
+        identifier = serialize_item(component)
+        # Step 2.1: no component twice (the same name and parameters).
+        if identifier in seen:
+            raise AgentHttpSigError("component " + identifier + " is covered twice")
+        seen.add(identifier)
         if name == "@signature-params":
             raise AgentHttpSigError("@signature-params cannot be a covered component")
+        source: HttpMessage = message
+        if req is not None:
+            # Section 2.4: only a response has a related request.
+            if isinstance(message, HttpRequest):
+                raise AgentHttpSigError(identifier + " needs a response")
+            if related is None:
+                raise AgentHttpSigError(identifier + " needs the related request")
+            source = related
         if name.startswith("@"):
-            value = (overrides or {}).get(name)
+            if key is not None:
+                raise AgentHttpSigError("the key parameter does not apply to " + name)
+            value = (overrides or {}).get(name) if not component.params else None
             if value is None:
-                value = _derived_value(message, name)
+                value = _derived_value(source, name)
         else:
             # Section 2.1: the lowercased form of an RFC 9110 section 5.1
             # field name (token = 1*tchar, section 5.6.2).
             if not _FIELD_NAME.fullmatch(name):
                 raise AgentHttpSigError("invalid field name %r" % name)
-            v = field_value(message.headers, name)
+            v = field_value(source.headers, name)
             if v is None:
                 raise AgentHttpSigError("covered field " + name + " is not in the message")
-            value = v
+            if key is not None:
+                # Section 2.1.2: the member, re-serialized; a missing member fails.
+                member = parse_dictionary(v).get(key)
+                if member is None:
+                    raise AgentHttpSigError(
+                        "covered field " + name + " has no member " + key
+                    )
+                value = serialize_member(member)
+            else:
+                value = v
         _check_value(value, name)
-        lines.append('"' + name + '": ' + value)
+        lines.append(identifier + ": " + value)
     lines.append('"@signature-params": ' + serialize_inner_list(signature_params))
     base = "\n".join(lines)
     _check_value(base.replace("\n", " "), "@signature-params")
     return base
 
 
-def signature_base_for(message: HttpMessage, label: str) -> str:
+def signature_base_for(
+    message: HttpMessage, label: str, related: Optional[HttpRequest] = None
+) -> str:
     """The signature base of the signature labelled ``label``.
 
     Taken from the message's Signature-Input field (RFC 9421 section 3.2
-    steps 2 and 7).
+    steps 2 and 7). ``related`` is the request a response answers, for
+    components with ``req``.
     """
     serialize_key(label)
     value = field_value(message.headers, "signature-input")
@@ -245,4 +298,4 @@ def signature_base_for(message: HttpMessage, label: str) -> str:
         raise AgentHttpSigError("Signature-Input has no signature labelled " + label)
     if not isinstance(member, InnerList):
         raise AgentHttpSigError("Signature-Input member " + label + " is not an Inner List")
-    return create_signature_base(message, member)
+    return create_signature_base(message, member, None, related)

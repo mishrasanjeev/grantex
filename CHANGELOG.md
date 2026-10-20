@@ -167,6 +167,169 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   columns. No human step is added: presence is chosen when consent is
   requested, and AgenticOrg applies its stricter not-present rule set.
 
+### Added - RSA-PSS (`rsa-pss-sha512`) for agent request signatures; `grantex-agent-httpsig` 0.2.0 (unreleased) (G60, G49)
+- `@grantex/agent-httpsig` and `grantex-agent-httpsig` sign and verify RFC 9421
+  section 3.3.1 `rsa-pss-sha512` (RSASSA-PSS, SHA-512, MGF1 SHA-512, 64-octet
+  salt) with RSA JWKs of at least 2048 bits, under the `tap` and `web-bot-auth`
+  profiles and for TAP body objects (`PS512`). RFC 7638 thumbprints cover RSA
+  keys. The grantex profile is unchanged: it signs and verifies P-256 and
+  Ed25519 only, and refuses an RSA key (`key_mismatch`).
+- The shared vectors now verify the RFC 9421 RSA-PSS examples (sections 3.2,
+  B.2.1, B.2.3) with the Appendix B.1.2 public key (verification only, since
+  PSS is randomized) and include the RFC 7638 section 3.1 RSA thumbprint.
+- `grantex-agent-httpsig` is version 0.2.0, unreleased (still marked
+  `Private :: Do Not Upload` until it is published). `grantex-verifier` now
+  pins `grantex-agent-httpsig==0.2.0`; the `grantex` profile it uses is
+  unchanged.
+- G50 is partly closed: the registry key directory carries the registry's
+  platform-key countersignature; per-key directory response signatures need
+  agent-held keys and remain future work.
+
+### Added - x402 and MPP settlement receipts as OACP commitment evidence; the MPP 402 challenge flow (G59)
+- `POST /v1/commerce/oacp/commitment-evidence/settlement-receipts` (AgenticOrg
+  service token, new scope `commerce.oacp.commitment_evidence.write`, tenant
+  allowlist of the C6Z route) binds a successful x402 settlement
+  (SettlementResponse of `PAYMENT-RESPONSE`, optionally naming the
+  authorizing GDT `jti`) or an MPP `Payment-Receipt` to a commitment as a
+  signed OACP `commitment_evidence` artifact on the OACP status list:
+  `commitment_type: "settlement_receipt_reference"`, the artifacts relied on
+  (issued, unrevoked, same tenant and merchant), the receipt's SHA-256 over
+  RFC 8785, network or method, transaction or reference; never the payer.
+  Receipts are unsigned, so the artifact records
+  `receipt_verification: "reported_not_verified_by_grantex"`. Idempotent per
+  commitment (409 `commitment_receipt_conflict` for another receipt); a failed
+  settlement is 422 `settlement_not_successful`. No payment is executed.
+- `@grantex/mpp` implements the "Payment" HTTP authentication scheme
+  (draft-ryan-httpauth-payment-01): `WWW-Authenticate: Payment` challenges
+  with the stateless HMAC-bound id, `Authorization: Payment` credentials and
+  their checks (realm, method, expiry, body digest), `Payment-Receipt`, RFC
+  9457 problem details, and the `requirePayment` Express middleware (the
+  payment method's proof is verified by the integrator's verifier).
+- Correction to the program's naming: MPP has no `Payment-Signature` header.
+  `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE` are x402 v2's
+  headers, which `@grantex/x402` already speaks; it now also reads the
+  settlement receipt (`readSettlementResponse`, v2 and v1) and shapes it for
+  commitment evidence (`settlementReceiptEvidence`).
+
+### Added - KYA tier claim on the Agent Passport, mapped from trust marks (G54)
+- `POST /v1/passport/issue` adds `credentialSubject.kyaTier`
+  (`{tier, trustMarks, mappingVersion}`) when the new flag
+  `AGENT_PASSPORT_KYA_TIER_ENABLED` is on (default off) and the
+  operator-configured `AGENT_PASSPORT_KYA_TIER_MAP` maps the agent's counted
+  registry trust marks to a tier. The table is empty by default, pending the
+  card networks' and wallet schemes' KYA specifications; Grantex defines no
+  tiers and passes the label through. A table that does not parse refuses
+  issuance instead of issuing without the claim.
+- `@grantex/mpp` `verifyPassport` returns the signed `kyaTier` and refuses a
+  malformed one (`MALFORMED_CREDENTIAL`).
+
+### Changed - Verifiable Intent documentation says what is implemented (G53)
+- `docs/features/verifiable-credentials.mdx` replaces the Verifiable Intent
+  table with an exact account: OACP mandates (Intent, Cart, Payment mandate
+  JWTs mapped to the AP2 v0.2 member names) and passkey evidence for
+  human-present cart mandates are what Grantex implements toward Verifiable
+  Intent; Verifiable Intent's layered SD-JWT credentials (L1/L2/L3), open
+  mandates, the card credential and any Mastercard certification or Agent Pay
+  integration are not implemented. `docs/features/sd-jwt.mdx` and
+  `docs/integrations/overview.mdx` no longer claim Verifiable Intent
+  compatibility and point to that section.
+
+### Added - Scheme token binding on the payment capability (G52)
+- New shared type `{scheme, token_ref, agent_id, merchant_scope, limits}`
+  (`SchemeTokenBinding`, `parseSchemeTokenBinding`,
+  `checkTokenBindingWithinCapability`) in `@grantex/sdk` and the auth service
+  (`lib/commerce/scheme-token-binding.ts`; a test keeps the two equal).
+  Schemes `visa`, `mastercard`, `upi_autopay`, `provider_token`; `token_ref` is an
+  opaque reference and an account-number-like value is refused; limits are
+  integer minor units with an ISO 4217 currency and an optional expiry.
+- The OACP `mandate_capability` artifact may carry it as `token_binding`;
+  schema validation refuses (`token_binding_invalid`) a binding that does not
+  parse or does not sit inside the capability (buyer agent, merchant scope,
+  currency, cap, expiry). A capability without one validates as before.
+  Grantex never executes a binding.
+
+### Added - Scheme agent ids on registry attestations, published in the registry manifest (G51)
+- Behind the new flag `REGISTRY_SCHEME_AGENT_IDS_ENABLED` (default off), an
+  accredited issuer's agent attestation may carry `scheme_agent_ids`: 1 to 8
+  `{scheme, agent_id}` objects with `scheme` `visa_tap` or
+  `mastercard_agent_pay`. The identifiers are opaque, scheme-scoped strings:
+  neither scheme publishes a format, so the registry stores them verbatim
+  and never parses them. Off, the member is refused as unknown exactly as
+  before; on a provider attestation it is refused.
+- Stored in `registry_attestations.scheme_agent_ids` (migration
+  `136_agent_network_identity.sql`, GIN index). `GET /v1/registry/agents?scheme=&scheme_agent_id=`
+  finds the one agent an accepted attestation names with that pair; counted
+  attestations show their `scheme_agent_ids` in the lookup answer.
+- `/.well-known/agent-registry.json` names the schemes
+  (`scheme_agent_ids: [{scheme, id_format: "opaque"}]`) and the
+  `agent_by_scheme_agent_id` lookup template while the flag is on; the
+  manifest is unchanged while it is off. `spec/attestation-1.0.md` documents
+  the member.
+
+### Added - Registry HTTP Message Signatures key directory and Signature-Agent (G50)
+- `GET /.well-known/http-message-signatures-directory`
+  (draft-meunier-webbotauth-httpsig-directory-00), media type
+  `application/http-message-signatures-directory+json`, behind the new flag
+  `HTTP_SIGNATURE_DIRECTORY_ENABLED` (default off; public and
+  unauthenticated when on, rate limited, CORS-open). It lists the usable
+  P-256 and Ed25519 keys (active, or rotated within their overlap; never
+  pending, unproven or compromised) of active agents whose developers opted
+  in, with `kid` = RFC 7638 thumbprint, `use`, `nbf`, `exp`,
+  `Content-Digest` and `Cache-Control: public, max-age=300`.
+- The registry does not hold agent private keys, so it cannot add the
+  per-key response signatures the draft recommends. It signs the response
+  once with the platform key over `"@authority";req` and `content-digest`
+  with `tag="grantex-registry-directory"` (kid from `/.well-known/jwks.json`).
+- New developer route `PUT /v1/agents/:id/http-signature-directory`
+  (`{published: boolean}`, audited as `grantex.agent.http_signature_directory`).
+  Migration `136_agent_network_identity.sql` adds
+  `agents.http_signature_directory` (default false).
+- `@grantex/agent-httpsig` / `grantex-agent-httpsig`: directory build, per-key
+  response signing and verification (keys without their own valid signature
+  are ignored), and `combineSignatures` / `combine_signatures` to send a
+  grantex and a web-bot-auth signature (with `Signature-Agent`) on one request.
+
+### Added - Visa TAP header profile, body objects and the Grantex consent record object (G49)
+- `@grantex/agent-httpsig` / `grantex-agent-httpsig`: builders and a checker
+  for the TAP `agenticConsumer` and `agenticPaymentContainer` body objects,
+  bound to the `tap` profile signature's nonce and keyid. A failed consumer
+  object is reported; a failed payment container is never usable for payment
+  (fail closed, also when its key cannot be found).
+- The objects' body placement and signature canonicalization are not
+  confirmed by the published TAP specification; both are configurable, with
+  RFC 8785 JCS and top-level `agenticConsumer` / `agenticPaymentContainer`
+  members as documented defaults. ES256 and EdDSA only.
+- `buildGrantexConsentRecord` / `build_grantex_consent_record`: the
+  `grantexConsentRecord` object (Grantex extension) from a granted, unexpired
+  commerce consent, bound to the message nonce, without any principal
+  identifier; refuses a consent that is not granted, has no scopes or has
+  expired.
+- New shared vectors `spec/examples/agent-httpsig-profile-vectors.json`
+  (deterministic Ed25519, synthetic): both libraries reproduce the TAP and
+  Web Bot Auth signatures and the body objects byte for byte.
+
+### Added - Profile-driven agent request signatures: Grantex, Visa TAP, Web Bot Auth (G60)
+- `@grantex/agent-httpsig` and `grantex-agent-httpsig` add
+  `signWithProfile` / `verifyWithProfile` (`sign_with_profile` /
+  `verify_with_profile`): one RFC 9421 signer and verifier whose tag, covered
+  components, window, nonce rule and keyid rule come from the profile named:
+  `grantex` (the default: `sign()` / `verify()` unchanged, the shared vectors
+  pass through both paths), `tap` (Visa Trusted Agent Protocol:
+  `agent-payer-auth` or `agent-browser-auth`, at least `@authority @path`,
+  `expires - created` at most 8 minutes, `alg`, a nonce equal across the
+  message's signatures and refused when seen in the last 8 minutes, an opaque
+  key-store `keyid`) and `web-bot-auth` (draft-ietf-webbotauth-httpsig-protocol-00:
+  `tag="web-bot-auth"`, `@authority` or `@target-uri` plus
+  `"signature-agent";key=...`, the `Signature-Agent` Dictionary with
+  `directory` / `jwks_uri` / `cimd` types, thumbprint `keyid`, keys resolved
+  by the (Signature-Agent URL, keyid) pair, at most 24 hours).
+- The signature base implements the RFC 9421 component parameters `key`
+  (section 2.1.2) and `req` (section 2.4) and the derived component
+  `@target-uri` (section 2.2.2), with the RFC's examples as tests. Other
+  component parameters still fail.
+- No behaviour change for existing callers: `sign()`, `verify()` and their
+  exports are untouched; the new profiles are opt-in by name.
+
 ### Added - Merchant opt-in to public discovery on C6Z issuance (G17 enabler)
 - The C6Z authority request may set `public_discovery_requested: true` (with
   `no_public_discovery_enablement` false or absent; `no_payment_execution: true`

@@ -5,7 +5,7 @@
  * signature base (section 2.5).
  */
 import { AgentHttpSigError } from './errors.js';
-import { parseDictionary, serializeInnerList, serializeKey } from './structured-fields.js';
+import { parseDictionary, serializeInnerList, serializeItem, serializeKey, serializeMember } from './structured-fields.js';
 import type { InnerList } from './structured-fields.js';
 
 export type HeaderValue = string | readonly string[] | undefined;
@@ -143,6 +143,10 @@ function derivedValue(message: HttpMessage, name: string): string {
     case '@method':
       // Section 2.2.1: as sent, case preserved.
       return request.method;
+    case '@target-uri':
+      // Section 2.2.2: the full target URI (RFC 9110 section 7.1), without a fragment.
+      if (target.authority === null || target.scheme === null) fail('@target-uri needs an absolute target');
+      return `${target.scheme}://${target.authority}${target.path === '' ? '/' : target.path}${target.query ?? ''}`;
     case '@authority':
       // Section 2.2.3.
       if (target.authority === null) fail('@authority needs an absolute target');
@@ -168,43 +172,74 @@ function checkValue(value: string, name: string) {
 }
 
 export interface ComponentOverrides {
-  /** Values used in place of the message's own for derived components (the verifier's @authority). */
+  /**
+   * Values used in place of the message's own for derived components without
+   * parameters (the verifier's @authority or @target-uri).
+   */
   [name: string]: string;
 }
 
+/** The component parameters this library implements: `key` (section 2.1.2) and `req` (section 2.4). */
+const IMPLEMENTED_COMPONENT_PARAMS = new Set(['key', 'req']);
+
 /**
  * RFC 9421 section 2.5: the signature base for the covered components and
- * signature parameters of `signatureParams`. Components with parameters
- * (`sf`, `key`, `bs`, `req`, `tr`, `name`) are not implemented and fail, as
- * step 2.5 requires for a parameter that is not understood.
+ * signature parameters of `signatureParams`. Of the component parameters,
+ * `key` (a Dictionary member, section 2.1.2) and `req` (the component of the
+ * request a response answers, section 2.4, read from `related`) are
+ * implemented; any other (`sf`, `bs`, `tr`, `name`) fails, as step 2.5
+ * requires for a parameter that is not understood.
  */
 export function createSignatureBase(
   message: HttpMessage,
   signatureParams: InnerList,
   overrides: ComponentOverrides = {},
+  related?: AgentRequest,
 ): string {
   const lines: string[] = [];
   const seen = new Set<string>();
   for (const component of signatureParams.items) {
     if (component.value.type !== 'string') fail('a component identifier is not a String');
     const name = component.value.value;
-    if (component.params.size > 0) fail(`component parameters are not implemented (${name})`);
-    // Step 2.1: no component twice.
-    if (seen.has(name)) fail(`component ${name} is covered twice`);
-    seen.add(name);
+    for (const [param] of component.params) {
+      if (!IMPLEMENTED_COMPONENT_PARAMS.has(param)) fail(`component parameter ${param} is not implemented (${name})`);
+    }
+    const key = component.params.get('key');
+    const req = component.params.get('req');
+    if (key !== undefined && key.type !== 'string') fail(`the key parameter of ${name} is not a String`);
+    if (req !== undefined && !(req.type === 'boolean' && req.value)) fail(`the req parameter of ${name} is not true`);
+    const identifier = serializeItem(component);
+    // Step 2.1: no component twice (the same name and parameters).
+    if (seen.has(identifier)) fail(`component ${identifier} is covered twice`);
+    seen.add(identifier);
     if (name === '@signature-params') fail('@signature-params cannot be a covered component');
+    let source: HttpMessage = message;
+    if (req !== undefined) {
+      // Section 2.4: only a response has a related request.
+      if ('method' in message) fail(`${identifier} needs a response`);
+      if (related === undefined) fail(`${identifier} needs the related request`);
+      source = related;
+    }
     let value: string;
     if (name.startsWith('@')) {
-      value = overrides[name] ?? derivedValue(message, name);
+      if (key !== undefined) fail(`the key parameter does not apply to ${name}`);
+      value = (component.params.size === 0 ? overrides[name] : undefined) ?? derivedValue(source, name);
     } else {
       // Section 2.1: the lowercased form of an RFC 9110 field name.
       if (!FIELD_NAME.test(name)) fail(`invalid field name ${JSON.stringify(name)}`);
-      const v = fieldValue(message.headers, name);
+      const v = fieldValue(source.headers, name);
       if (v === null) fail(`covered field ${name} is not in the message`);
-      value = v;
+      if (key !== undefined) {
+        // Section 2.1.2: the member, re-serialized; a missing member fails.
+        const member = parseDictionary(v).get(key.value);
+        if (member === undefined) fail(`covered field ${name} has no member ${key.value}`);
+        value = serializeMember(member);
+      } else {
+        value = v;
+      }
     }
     checkValue(value, name);
-    lines.push(`"${name}": ${value}`);
+    lines.push(`${identifier}: ${value}`);
   }
   lines.push(`"@signature-params": ${serializeInnerList(signatureParams)}`);
   const base = lines.join('\n');
@@ -214,14 +249,15 @@ export function createSignatureBase(
 
 /**
  * The signature base of the signature labelled `label` in the message's
- * Signature-Input field (RFC 9421 section 3.2 steps 2 and 7).
+ * Signature-Input field (RFC 9421 section 3.2 steps 2 and 7). `related` is
+ * the request a response answers, for components with `req`.
  */
-export function signatureBaseFor(message: HttpMessage, label: string): string {
+export function signatureBaseFor(message: HttpMessage, label: string, related?: AgentRequest): string {
   serializeKey(label);
   const input = fieldValue(message.headers, 'signature-input');
   if (input === null) fail('the message has no Signature-Input field');
   const member = parseDictionary(input).get(label);
   if (member === undefined) fail(`Signature-Input has no signature labelled ${label}`);
   if (!('items' in member)) fail(`Signature-Input member ${label} is not an Inner List`);
-  return createSignatureBase(message, member);
+  return createSignatureBase(message, member, {}, related);
 }

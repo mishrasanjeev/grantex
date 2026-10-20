@@ -27,6 +27,19 @@ export interface AgentPassportCredentialSubject {
   paymentRails: string[];
   delegationDepth: number;
   parentPassportId?: string;
+  /**
+   * The KYA tier the registry mapped the agent's trust marks to at issuance,
+   * present only when the issuing service runs with the tier mapping on. The
+   * tier label is the operator's; Grantex attaches no meaning to it.
+   */
+  kyaTier?: KyaTierClaim;
+}
+
+/** The KYA tier claim of an Agent Passport (operator-configured mapping from registry trust marks). */
+export interface KyaTierClaim {
+  tier: string;
+  trustMarks: string[];
+  mappingVersion: string;
 }
 
 export interface StatusList2021Entry {
@@ -102,6 +115,8 @@ export interface VerifiedPassport {
   delegationDepth: number;
   expiresAt: Date;
   issuer: string;
+  /** The signed KYA tier claim, when the passport carries one. */
+  kyaTier?: KyaTierClaim;
 }
 
 // ─── MPP Middleware ──────────────────────────────────────────────────────────

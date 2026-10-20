@@ -242,6 +242,8 @@ function checkInteger(value: number, name: string) {
  */
 export function sign(request: AgentRequest, options: SignOptions): SignResult {
   const { key, alg } = privateKeyObject(options.key);
+  // spec/verification.md: the grantex profile signs with P-256 or Ed25519 only.
+  if (alg === 'rsa-pss-sha512') fail('the grantex profile signs with P-256 or Ed25519 keys');
   const keyid = jwkThumbprint(options.key);
   if (options.keyid !== undefined && options.keyid !== keyid) fail('keyid must be the RFC 7638 thumbprint of the key');
   if (options.tag !== undefined && options.tag !== AGENT_PAYER_AUTH_TAG) fail(`tag must be ${AGENT_PAYER_AUTH_TAG}`);
@@ -501,7 +503,8 @@ export async function verify(request: AgentRequest, options: VerifyOptions): Pro
   const resolved = await options.resolveKey(keyid.value);
   if (resolved === null || resolved === undefined) return deny('key_unknown');
   const pub = publicKeyObject(resolved);
-  if (pub === null || jwkThumbprint(resolved) !== keyid.value) return deny('key_mismatch');
+  // The grantex profile verifies P-256 and Ed25519 keys only (spec/verification.md).
+  if (pub === null || pub.alg === 'rsa-pss-sha512' || jwkThumbprint(resolved) !== keyid.value) return deny('key_mismatch');
 
   // 15. The signature over the recreated base, with this verifier's authority.
   let base: string;

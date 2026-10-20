@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * RFC 9421 section 2.5 and Appendix B.2: the signature bases rebuilt from the
- * RFC's own messages and Signature-Input values, and the B.2.4 (ECDSA P-256)
- * and B.2.6 (Ed25519) signatures verified with the RFC's public test keys.
+ * RFC's own messages and Signature-Input values, and the RSA-PSS (section 3.2,
+ * B.2.1, B.2.3), B.2.4 (ECDSA P-256) and B.2.6 (Ed25519) signatures verified
+ * with the RFC's public test keys.
  */
 import { describe, expect, it } from 'vitest';
 import { AgentHttpSigError, parseDictionary, signatureBaseFor, verifySignatureValue } from '../src/index.js';
@@ -35,7 +36,9 @@ describe('RFC 9421 signatures with the RFC test keys', () => {
       const signature = member.value.value;
       expect(verifySignatureValue(v.verify!.public_jwk, v.signature_base, signature)).toBe(true);
       // One changed octet of the base fails.
-      expect(verifySignatureValue(v.verify!.public_jwk, v.signature_base.replace('application/json', 'application/jsoN'), signature)).toBe(false);
+      const base = v.signature_base;
+      const changed = base.slice(0, -1) + (base.endsWith('b') ? 'c' : 'b');
+      expect(verifySignatureValue(v.verify!.public_jwk, changed, signature)).toBe(false);
     });
   }
 });

@@ -1,0 +1,180 @@
+{
+  "description": "Synthetic vectors for the tap and web-bot-auth signature profiles and the TAP body objects. Key: the ed25519-1 test key of agent-httpsig-vectors.json (seed = SHA-256 of its seed_label); never use it outside tests. Ed25519 is deterministic, so both libraries must reproduce every header and object byte for byte.",
+  "key": "ed25519-1",
+  "public_jwk": {
+    "kty": "OKP",
+    "crv": "Ed25519",
+    "x": "tzGIkIiswV6WlrxirpvdBVniA_RKDDPgj1dptnazfqI"
+  },
+  "thumbprint": "L5d-U2k4C-PU3btGPZH_EES9tK5GNxadBYz5Md91Q9E",
+  "request": {
+    "method": "POST",
+    "url": "https://merchant.example/v1/checkout?cart=c-1001",
+    "headers": [
+      [
+        "content-type",
+        "application/json"
+      ]
+    ],
+    "body": "{\"cart_id\":\"c-1001\"}"
+  },
+  "sign": [
+    {
+      "name": "tap payer, minimum components",
+      "options": {
+        "profile": "tap",
+        "keyid": "tap-key-01",
+        "nonce": "5f0e1d2c-3b4a-4968-8776-655443322110",
+        "created": 1790000000
+      },
+      "headers": [
+        [
+          "Signature-Input",
+          "sig1=(\"@authority\" \"@path\");created=1790000000;expires=1790000480;keyid=\"tap-key-01\";alg=\"ed25519\";nonce=\"5f0e1d2c-3b4a-4968-8776-655443322110\";tag=\"agent-payer-auth\""
+        ],
+        [
+          "Signature",
+          "sig1=:D+lH2aV/rSNEciLGx+WRKukCKyKuF5ZRmRNCrMHxsKZeK6WN3LLU8PaahfL2fcaygoUStttqpdYd6O3hKQzeBA==:"
+        ]
+      ],
+      "signature_base": "\"@authority\": merchant.example\n\"@path\": /v1/checkout\n\"@signature-params\": (\"@authority\" \"@path\");created=1790000000;expires=1790000480;keyid=\"tap-key-01\";alg=\"ed25519\";nonce=\"5f0e1d2c-3b4a-4968-8776-655443322110\";tag=\"agent-payer-auth\""
+    },
+    {
+      "name": "tap browser, method and content-digest",
+      "options": {
+        "profile": "tap",
+        "keyid": "tap-key-01",
+        "tag": "agent-browser-auth",
+        "nonce": "5f0e1d2c-3b4a-4968-8776-655443322111",
+        "created": 1790000000,
+        "expires": 1790000300,
+        "components": [
+          "@method",
+          "@authority",
+          "@path",
+          "content-digest"
+        ]
+      },
+      "headers": [
+        [
+          "Content-Digest",
+          "sha-256=:+16hzah8mPq4wqJdtcnmQ7ehmjwZOFMqbjyhvBzER2o=:"
+        ],
+        [
+          "Signature-Input",
+          "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\");created=1790000000;expires=1790000300;keyid=\"tap-key-01\";alg=\"ed25519\";nonce=\"5f0e1d2c-3b4a-4968-8776-655443322111\";tag=\"agent-browser-auth\""
+        ],
+        [
+          "Signature",
+          "sig1=:uzzO22TeNABIERKt15KifnIFFgx3DVcA+g79U8eJzn0WUcrVCFFNmzGN6WMNT/ThVcstoMM/ZE6hIw4826OoCg==:"
+        ]
+      ],
+      "signature_base": "\"@method\": POST\n\"@authority\": merchant.example\n\"@path\": /v1/checkout\n\"content-digest\": sha-256=:+16hzah8mPq4wqJdtcnmQ7ehmjwZOFMqbjyhvBzER2o=:\n\"@signature-params\": (\"@method\" \"@authority\" \"@path\" \"content-digest\");created=1790000000;expires=1790000300;keyid=\"tap-key-01\";alg=\"ed25519\";nonce=\"5f0e1d2c-3b4a-4968-8776-655443322111\";tag=\"agent-browser-auth\""
+    },
+    {
+      "name": "web-bot-auth directory",
+      "options": {
+        "profile": "web-bot-auth",
+        "nonce": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+        "created": 1790000000,
+        "signature_agent_url": "https://agents.example"
+      },
+      "headers": [
+        [
+          "Signature-Agent",
+          "sig1=\"https://agents.example\""
+        ],
+        [
+          "Signature-Input",
+          "sig1=(\"@authority\" \"signature-agent\";key=\"sig1\");created=1790000000;expires=1790000300;keyid=\"L5d-U2k4C-PU3btGPZH_EES9tK5GNxadBYz5Md91Q9E\";nonce=\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\";tag=\"web-bot-auth\""
+        ],
+        [
+          "Signature",
+          "sig1=:9P6VXIu3bPQcQE2BhWAZSTrYIEBu+rGrGdAT8gwNWFBkgdRlYkpp3kqlFQY7TmLwtPCYghrr1r5h0YqFLh61CQ==:"
+        ]
+      ],
+      "signature_base": "\"@authority\": merchant.example\n\"signature-agent\";key=\"sig1\": \"https://agents.example\"\n\"@signature-params\": (\"@authority\" \"signature-agent\";key=\"sig1\");created=1790000000;expires=1790000300;keyid=\"L5d-U2k4C-PU3btGPZH_EES9tK5GNxadBYz5Md91Q9E\";nonce=\"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\";tag=\"web-bot-auth\""
+    },
+    {
+      "name": "web-bot-auth jwks_uri, target-uri, no nonce",
+      "options": {
+        "profile": "web-bot-auth",
+        "nonce": null,
+        "created": 1790000000,
+        "expires": 1790003600,
+        "components": [
+          "@method",
+          "@target-uri",
+          "content-digest",
+          "signature-agent"
+        ],
+        "signature_agent_url": "https://agents.example/.well-known/jwks.json",
+        "signature_agent_type": "jwks_uri"
+      },
+      "headers": [
+        [
+          "Content-Digest",
+          "sha-256=:+16hzah8mPq4wqJdtcnmQ7ehmjwZOFMqbjyhvBzER2o=:"
+        ],
+        [
+          "Signature-Agent",
+          "sig1=\"https://agents.example/.well-known/jwks.json\";type=jwks_uri"
+        ],
+        [
+          "Signature-Input",
+          "sig1=(\"@method\" \"@target-uri\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1790000000;expires=1790003600;keyid=\"L5d-U2k4C-PU3btGPZH_EES9tK5GNxadBYz5Md91Q9E\";tag=\"web-bot-auth\""
+        ],
+        [
+          "Signature",
+          "sig1=:DPm9nPOnY+aFF1stpG6nztJvmTO0+hILipqHJxtZbnGS8J6s3/I8A0vLCx0aGo/SV6iSXhLfJ1JOhyS41sD9DA==:"
+        ]
+      ],
+      "signature_base": "\"@method\": POST\n\"@target-uri\": https://merchant.example/v1/checkout?cart=c-1001\n\"content-digest\": sha-256=:+16hzah8mPq4wqJdtcnmQ7ehmjwZOFMqbjyhvBzER2o=:\n\"signature-agent\";key=\"sig1\": \"https://agents.example/.well-known/jwks.json\";type=jwks_uri\n\"@signature-params\": (\"@method\" \"@target-uri\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1790000000;expires=1790003600;keyid=\"L5d-U2k4C-PU3btGPZH_EES9tK5GNxadBYz5Md91Q9E\";tag=\"web-bot-auth\""
+    }
+  ],
+  "directory": {
+    "authority": "agents.example",
+    "created": 1790000000,
+    "body": "{\"keys\":[{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"x\":\"tzGIkIiswV6WlrxirpvdBVniA_RKDDPgj1dptnazfqI\",\"kid\":\"L5d-U2k4C-PU3btGPZH_EES9tK5GNxadBYz5Md91Q9E\",\"use\":\"sig\"}]}",
+    "headers": [
+      [
+        "Content-Type",
+        "application/http-message-signatures-directory+json"
+      ],
+      [
+        "Content-Digest",
+        "sha-256=:oqMJ4Svuzhqi2TmrAFo+HOfmvOuRqWfStUm/omhdXKI=:"
+      ],
+      [
+        "Signature-Input",
+        "sig1=(\"@authority\";req \"content-digest\");created=1790000000;expires=1790000300;keyid=\"L5d-U2k4C-PU3btGPZH_EES9tK5GNxadBYz5Md91Q9E\";tag=\"http-message-signatures-directory\""
+      ],
+      [
+        "Signature",
+        "sig1=:F4VFK2SZwBdxWL1Z0QKZbmwoze40rJRvaFOHxeDg2613x7sVyzbq1TTkcHaKsBgrhJnYeXABB3y658jB+uDFDQ==:"
+      ]
+    ]
+  },
+  "tap_body_objects": {
+    "nonce": "5f0e1d2c-3b4a-4968-8776-655443322110",
+    "kid": "tap-key-01",
+    "agenticConsumer": {
+      "nonce": "5f0e1d2c-3b4a-4968-8776-655443322110",
+      "idToken": "eyJhbGciOiJQUzI1NiJ9.eyJzdWIiOiJzaG9wcGVyLTAxIn0.c2lnbmF0dXJlLXBsYWNlaG9sZGVy",
+      "contextualData": {
+        "countryCode": "IN",
+        "zip": "560001"
+      },
+      "kid": "tap-key-01",
+      "alg": "EdDSA",
+      "signature": "orhxBalqHs3hwXGjWAvOUdajBVjpb5SULODJATwYjQCleMko3cky5XNhrUudjKyDsG263vQ8jYDbO11vH_ncDQ"
+    },
+    "agenticPaymentContainer": {
+      "nonce": "5f0e1d2c-3b4a-4968-8776-655443322110",
+      "paymentCredentialsHash": "hash-placeholder",
+      "kid": "tap-key-01",
+      "alg": "EdDSA",
+      "signature": "NYSDyolcTw3kv3BkIiNg8P_cwNJLphcj2DmAjYJdCNbhcKJQlB-luHFK0gBn6LxmkRu0USrrV19Suo3EcD0qAQ"
+    }
+  }
+}

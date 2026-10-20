@@ -6,6 +6,7 @@
  *   GET  /v1/agents/:id/keys                               the history, with whether each key is usable now
  *   POST /v1/agents/:id/keys                               add a pending key
  *   PUT  /v1/agents/:id/declared-rails                     the rails the agent declares (P-256 rule)
+ *   PUT  /v1/agents/:id/http-signature-directory           publish the agent's usable keys in the key directory (opt-in)
  *   POST /v1/agents/:id/keys/:thumbprint/challenge         a single-use nonce to sign
  *   POST /v1/agents/:id/keys/:thumbprint/prove             a JWS over the nonce; the key becomes active
  *   POST /v1/agents/:id/keys/:thumbprint/rotate            end the key after an overlap; needs an active replacement
@@ -62,6 +63,7 @@ export const AGENT_KEY_AUDIT_ACTIONS = {
   rotated: 'grantex.agent_key.rotated',
   compromised: 'grantex.agent_key.compromised',
   railsDeclared: 'grantex.agent.rails_declared',
+  directoryPublication: 'grantex.agent.http_signature_directory',
 } as const;
 
 /** A refusal decided inside a transaction; throwing it rolls the transaction back. */
@@ -245,6 +247,25 @@ export async function agentKeysRoutes(app: FastifyInstance): Promise<void> {
       });
     });
     return reply.send({ agentId: request.params.id, declaredRails: rails });
+  }));
+
+  // Opt-in to the HTTP Message Signatures key directory (G50,
+  // lib/registry/signature-directory.ts). Only usable P-256 and Ed25519 keys
+  // of an active agent are ever listed; the directory itself is served only
+  // when HTTP_SIGNATURE_DIRECTORY_ENABLED=true.
+  app.put<AgentParams>('/v1/agents/:id/http-signature-directory', async (request, reply) => handle(request, reply, async () => {
+    const body = bodyObject(request.body);
+    const published = body['published'];
+    if (typeof published !== 'boolean') throw new KeyRouteError(400, 'BAD_REQUEST', 'published must be a boolean');
+    const developerId = request.developer.id;
+    await getSql().begin(async (raw) => {
+      const tx = raw as unknown as TxSql;
+      const agent = await ownedAgent(tx, request.params.id, developerId, 'update');
+      await tx`UPDATE agents SET http_signature_directory = ${published}, updated_at = NOW()
+               WHERE id = ${agent['id'] as string} AND developer_id = ${developerId}`;
+      await audit(tx, developerId, agent, AGENT_KEY_AUDIT_ACTIONS.directoryPublication, { published });
+    });
+    return reply.send({ agentId: request.params.id, httpSignatureDirectory: published });
   }));
 
   app.post<AgentParams>('/v1/agents/:id/keys', async (request, reply) => handle(request, reply, async () => {

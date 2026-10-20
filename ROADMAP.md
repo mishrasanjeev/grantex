@@ -142,6 +142,10 @@ The following gaps were confirmed against the repository on July 13, 2026, with 
 - [ ] Keep OACP adapter output labelled preview/mapping until the relevant external conformance and approval requirements are met.
 - [x] Issue Intent, Cart and Payment mandates as ES256 JWTs mapped to AP2 v0.2, on the OACP Token Status List, with presence, `amr` and passkey anchoring of human-present carts; shared verifier vectors and `verifyOacpMandate` in `@grantex/sdk`.
 - [ ] Offer AP2 v0.2 SD-JWT VC mandates (Checkout / Payment Mandate, KB-JWT holder binding) once a relying party verifies Delegate SD-JWT chains.
+- [x] Agent request signatures under the Grantex, Visa Trusted Agent Protocol and Web Bot Auth profiles in one library (TypeScript and Python), with shared vectors.
+- [ ] Response signatures for the registry key directory by each listed key (the registry holds no agent private keys; today it countersigns with the platform key).
+- [ ] KYA tier mapping table and scheme agent id formats once the card networks and wallet schemes publish their specifications (both are opaque or operator-configured today).
+- [ ] Verify scheme-signed settlement receipts once a signed receipt format is published (x402 and MPP receipts are recorded as reported, not verified).
 
 ### Developer experience
 

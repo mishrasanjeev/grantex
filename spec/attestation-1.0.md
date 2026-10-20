@@ -72,6 +72,7 @@ silently ignore.
 | `external_credential_hash` | string | REQUIRED. The hash rule (§3). |
 | `level` | string | REQUIRED. 1 to 128 characters, no control characters. The issuer's assurance level in its own words; the registry stores it verbatim and never interprets it. |
 | `declared_limits` | object | OPTIONAL. The limits the issuer checked the agent declares, at most 8 KiB as JSON. The registry compares successive values (§8, `declared_limits_changed`) but does not interpret the members. |
+| `scheme_agent_ids` | array | OPTIONAL, agent attestations only, and accepted only by a registry running with `REGISTRY_SCHEME_AGENT_IDS_ENABLED=true` (otherwise an unknown member, refused as `attestation_malformed`). 1 to 8 objects `{"scheme": <"visa_tap" \| "mastercard_agent_pay">, "agent_id": <1 to 256 characters, no control characters>}`, one per scheme. The identifiers are opaque and scheme-scoped: neither scheme publishes a format, so the registry stores them verbatim, never parses them, and answers a lookup by the exact (`scheme`, `agent_id`) pair. |
 | `status` | object | REQUIRED. `{"status_list": {"uri": <https URL>, "idx": <non-negative integer>}}`, a Token Status List reference (draft-ietf-oauth-status-list-21 §6.2) into the issuer's own list, under its `status_list_base` (§5 step 10). |
 
 An agent attestation for `shopper-01` (Nimbus Shopper 2.4):

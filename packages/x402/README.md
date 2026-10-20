@@ -204,6 +204,24 @@ HEADERS.PAYMENT_SIGNATURE;
 HEADERS.PAYMENT_RESPONSE;
 ```
 
+## Settlement receipts and OACP commitment evidence
+
+x402 v2 carries the protocol in headers: `PAYMENT-REQUIRED` (the 402
+challenge), `PAYMENT-SIGNATURE` (the client's payment payload) and
+`PAYMENT-RESPONSE` (the facilitator's SettlementResponse); v1 used the JSON
+body, `X-PAYMENT` and `X-PAYMENT-RESPONSE`. `createX402Agent` speaks v2.
+
+- `readSettlementResponse(response)` reads the SettlementResponse
+  (`{success, transaction, network, payer, errorReason?}`) from
+  `PAYMENT-RESPONSE`, or from `X-PAYMENT-RESPONSE` for v1.
+- `settlementReceiptEvidence(receipt, { gdtJti })` shapes a successful
+  settlement as the `receipt` of
+  `POST /v1/commerce/oacp/commitment-evidence/settlement-receipts`, which binds
+  it to a commitment as a signed OACP `commitment_evidence` artifact (receipt
+  hash, network, transaction and the authorizing GDT's `jti`; never the
+  payer). A failed settlement is refused. SettlementResponse is not signed, so
+  Grantex records the receipt as reported, not verified.
+
 ## Principal controls
 
 Use `PrincipalPrepaidWalletClient` from `@grantex/sdk` to create/fund wallets,

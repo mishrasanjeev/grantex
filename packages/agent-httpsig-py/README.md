@@ -1,6 +1,6 @@
 # grantex-agent-httpsig
 
-> **Not yet published.** Version 0.1.0 lives in this repository only; it is
+> **Not yet published.** Version 0.2.0 (unreleased) lives in this repository only; it is
 > not on PyPI, and its API may change before the first release.
 
 RFC 9421 HTTP Message Signatures for agent requests. An agent signs each
@@ -17,7 +17,8 @@ The header specification and the signing profile are in
   `created`, `expires`, `nonce`, `keyid` (the RFC 7638 thumbprint of the key)
   and `tag="agent-payer-auth"`, and at most 300 seconds between `created` and
   `expires`;
-- `ecdsa-p256-sha256` (P-256 JWKs) and `ed25519` (Ed25519 JWKs);
+- `ecdsa-p256-sha256` (P-256 JWKs) and `ed25519` (Ed25519 JWKs); the
+  `tap` and `web-bot-auth` profiles also take `rsa-pss-sha512` (RSA JWKs);
 - `Content-Digest` (RFC 9530) with SHA-256, computed by `sign()` and checked
   by `verify()`;
 - the three headers are RFC 9651 Byte Sequences, or, for a presentation over
@@ -90,15 +91,110 @@ non-negative number of seconds. `InMemoryNonceStore` is for one process
 several instances needs a shared, atomic store (see section 4.4 of the
 specification).
 
+## Profiles: Grantex, Visa TAP and Web Bot Auth
+
+`sign_with_profile(request, profile=..., ...)` and
+`verify_with_profile(request, profile=..., ...)`
+run one RFC 9421 signer and verifier under the profile named in
+`profile`. With the default `profile="grantex"` they are `sign()` and `verify()`
+unchanged: the shared vectors pass through both
+paths.
+
+| Profile | `tag` | Covered components | Window | `nonce` | `keyid` |
+|---|---|---|---|---|---|
+| `grantex` (default) | `agent-payer-auth` | exactly `@method @authority @path content-digest agent-passport agent-grant` | at most 300 s | required, 22 to 128 base64url | RFC 7638 thumbprint |
+| `tap` (Visa Trusted Agent Protocol) | `agent-payer-auth` (payment) or `agent-browser-auth` (browsing) | at least `@authority @path`; more on request (`@method`, `content-digest`, fields) | `expires - created` at most 8 minutes | required; equal in every signature of the message; refused when seen in the last 8 minutes | the key's identifier in the network's key store (opaque) |
+| `web-bot-auth` (draft-ietf-webbotauth-httpsig-protocol-00) | `web-bot-auth` | `@authority` or `@target-uri`, and `"signature-agent";key="<label>"` | at most 24 hours (configurable lower) | optional | RFC 7638 thumbprint |
+
+- TAP signatures carry `alg` (the RFC 9421 algorithm name; the verifier also
+  accepts the TAP example's spelling `Ed25519`). The TAP sample code writes
+  `keyId`; the specification and RFC 9421 use `keyid`, and this library
+  follows them.
+- Web Bot Auth signers send `Signature-Agent` in the Dictionary form
+  (`sig1="https://agents.example"`, with `;type=jwks_uri` or `;type=cimd`
+  when not a directory). The verifier hands the resolver a `KeyReference`
+  (`profile`, `tag`, `keyid`, `signature_agent`) with the Signature-Agent URL and type, so keys are looked up by the
+  (URL, keyid) pair, never keyid alone (section 5.4).
+- Both profiles verify a covered `Content-Digest` (`sha-256` or `sha-512`);
+  require it with `required_components=["content-digest"]` when the body
+  matters.
+- Denials add `tag_not_accepted`, `nonce_missing`, `nonce_mismatch`,
+  `algorithm_mismatch`, `signature_agent_missing` and
+  `signature_agent_unsupported` to the reasons above.
+- Algorithms: `ecdsa-p256-sha256`, `ed25519` and `rsa-pss-sha512` (RFC 9421
+  section 3.3.1: RSASSA-PSS with SHA-512, MGF1 SHA-512, 64-octet salt; RSA
+  keys of at least 2048 bits). The grantex profile stays P-256 and Ed25519
+  only. TAP's sample code names an `rsa-pss-sha256` algorithm, which is not
+  in the RFC 9421 registry and is not accepted. The RFC's RSA-PSS example
+  signatures are verification vectors in the shared vector file (PSS is
+  randomized, so they cannot be reproduced).
+
+The signature base now implements the RFC 9421 component parameters `key`
+(section 2.1.2) and `req` (section 2.4, given the related request) and the
+derived component `@target-uri` (section 2.2.2).
+
+## TAP body objects and the Grantex consent record
+
+TAP carries two signed objects in the request body beside the message
+signature. `build_agentic_consumer` (consumer recognition: `nonce`, `idToken`,
+`contextualData`, `kid`, `alg`, `signature`) and
+`build_agentic_payment_container` (`nonce`, `kid`, `alg`, `signature`, and
+optionally `paymentCredentialsHash`, `cardMetadata`, `credentialHash`, an
+already encrypted `payload`, `browsingIOU`) build them;
+`with_tap_body_objects` places them in a JSON body; `verify_tap_body_objects`
+checks them after the message signature verified under the `tap` profile:
+each object's `nonce` must equal the signature's nonce and its `kid` the
+signature's keyid. A consumer object that fails is reported (soft: its
+content may be inaccurate). A payment container that fails, or whose key
+cannot be found, is `usable_for_payment` false.
+
+UNCONFIRMED by the published TAP specification, and therefore configurable:
+
+- where the objects sit in the body (`members`; defaults
+  `agenticConsumer`, `agenticPaymentContainer` as top-level members);
+- what the object signature covers (default: RFC 8785 JCS of the object
+  without `signature`, signature base64url; pass `canonicalize`).
+
+Objects are signed with ES256 (P-256), EdDSA (Ed25519) or PS512 (RSA). TAP's
+examples use PS256, which this library reports as `algorithm_unsupported`.
+
+`build_grantex_consent_record(consent, nonce=...)` builds the
+`grantexConsentRecord` object from a granted, unexpired Grantex commerce
+consent: consent id, merchant, agent, passport type, approved scopes, amount
+cap, consent text version, presented payload hash, approval and expiry
+times, and the message nonce. It carries no principal identifier and is a
+Grantex extension, not part of TAP; the relying party checks the consent
+with Grantex by its id.
+
+[`spec/examples/agent-httpsig-profile-vectors.json`](../../spec/examples/agent-httpsig-profile-vectors.json)
+holds deterministic Ed25519 vectors for both profiles and both body objects;
+the TypeScript and Python packages reproduce them byte for byte.
+
+## Key directory and several signatures
+
+- `build_signature_directory(keys)`, `sign_directory_response(body,
+  authority=..., signing_keys=...)` and `verify_directory_response(response,
+  authority=...)`
+  implement draft-meunier-webbotauth-httpsig-directory-00: a JWK Set at
+  `/.well-known/http-message-signatures-directory`, media type
+  `application/http-message-signatures-directory+json`, `kid` = thumbprint,
+  one response signature per key over `"@authority";req` and
+  `content-digest` with `tag="http-message-signatures-directory"`. The
+  verifier returns only the keys with their own valid, current signature and
+  lists the others as ignored (section 5.2).
+- `combine_signatures(*results)` merges several signatures of one request,
+  for example a grantex signature and a web-bot-auth signature whose
+  `Signature-Agent` names the agent's directory.
+
 ## Also exported
 
 - `content_digest(body)`, `jwk_thumbprint(jwk)`, `public_jwk(jwk)`,
   `private_jwk_from_key(key)`;
 - `signature_base_for(message, label)` and `verify_signature_value(jwk, base,
   signature)`: RFC 9421 section 2.5 and section 3.3 for any request or
-  response whose covered components are `@method`, `@authority`, `@scheme`,
-  `@path`, `@query`, `@status` or header fields without component
-  parameters;
+  response whose covered components are `@method`, `@target-uri`,
+  `@authority`, `@scheme`, `@path`, `@query`, `@status` or header fields,
+  with the component parameters `key` and `req`;
 - `parse_dictionary`, `parse_list`, `parse_item` and the matching
   serializers (RFC 9651).
 

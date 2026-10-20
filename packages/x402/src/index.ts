@@ -37,6 +37,10 @@ export type {
   BaseUsdcConfig,
 } from './agent.js';
 
+// Settlement receipts (PAYMENT-RESPONSE) for OACP commitment evidence
+export { readSettlementResponse, settlementReceiptEvidence, X402_V1_PAYMENT_RESPONSE_HEADER } from './receipt.js';
+export type { X402SettlementReceipt } from './receipt.js';
+
 // Middleware
 export { x402Middleware } from './middleware.js';
 export type { GDTRequestInfo } from './middleware.js';

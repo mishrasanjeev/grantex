@@ -67,6 +67,25 @@ registered `publicJwk`. `PATCH /v1/agents` refuses a non-P-256 `publicJwk`
 for such an agent only when `AGENT_KEY_HISTORY_MIRROR_ENABLED` is `true`.
 Without a payments rail, Ed25519 keys are accepted as well.
 
+
+### Publishing keys in the key directory
+
+When the auth service runs with `HTTP_SIGNATURE_DIRECTORY_ENABLED=true`, the
+registry serves `/.well-known/http-message-signatures-directory` (Web Bot
+Auth). An agent's keys are listed only after its developer opts in:
+
+```http
+PUT /v1/agents/{agentId}/http-signature-directory
+Authorization: Bearer <developer API key>
+Content-Type: application/json
+
+{ "published": true }
+```
+
+Only usable P-256 and Ed25519 keys of an active agent are listed. Send
+`{ "published": false }` to withdraw them. See
+[Agent network identity](../guides/oacp/agent-network-identity.mdx).
+
 ## Proving possession
 
 Ask for a challenge for the pending key:

@@ -430,6 +430,20 @@ export async function verifyPassport(
     }
   }
 
+  // A KYA tier claim, when present, is read from the signed subject and must
+  // have its shape; a malformed one refuses the passport rather than being
+  // dropped silently.
+  const kyaTier = subject.kyaTier;
+  if (kyaTier !== undefined) {
+    const ok = typeof kyaTier === 'object' && kyaTier !== null
+      && typeof kyaTier.tier === 'string' && kyaTier.tier.length > 0
+      && typeof kyaTier.mappingVersion === 'string'
+      && Array.isArray(kyaTier.trustMarks) && kyaTier.trustMarks.every((m) => typeof m === 'string');
+    if (!ok) {
+      throw new PassportVerificationError('MALFORMED_CREDENTIAL', 'Signed credentialSubject has a malformed kyaTier');
+    }
+  }
+
   return {
     valid: true,
     passportId: signed.passportId,
@@ -442,6 +456,7 @@ export async function verifyPassport(
     delegationDepth: subject.delegationDepth,
     expiresAt,
     issuer: signed.issuer,
+    ...(kyaTier !== undefined ? { kyaTier } : {}),
   };
 }
 

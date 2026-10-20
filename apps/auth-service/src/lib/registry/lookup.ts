@@ -25,7 +25,9 @@
  * database error propagates.
  */
 import type postgres from 'postgres';
+import { config } from '../../config.js';
 import { queries, type TxSql } from '../../db/client.js';
+import { MAX_SCHEME_AGENT_ID_LENGTH, SCHEME_AGENT_ID_SCHEMES, type SchemeAgentId } from './attestation-jws.js';
 import { evaluateAgentKey, type AgentKeyStatus } from './agent-keys.js';
 import { computeAgentTrust, type TrustFlag, type TrustLevel } from './trust-level.js';
 
@@ -66,7 +68,8 @@ export class LookupRequestError extends Error {
 export type LookupRef =
   | { by: 'did'; did: string }
   | { by: 'key_thumbprint'; thumbprint: string }
-  | { by: 'credential'; issuer: string; externalCredentialId: string; hash: string };
+  | { by: 'credential'; issuer: string; externalCredentialId: string; hash: string }
+  | { by: 'scheme_agent_id'; scheme: string; schemeAgentId: string };
 
 const CREDENTIAL_PARAMS = ['issuer', 'external_credential_id', 'hash'] as const;
 
@@ -82,12 +85,29 @@ function single(query: Record<string, unknown>, name: string): string | undefine
  * three of issuer, external_credential_id and hash. Anything else is refused
  * before the store is read, so a partial credential never narrows a search.
  */
-export function parseLookupQuery(query: unknown): LookupRef {
+export function parseLookupQuery(
+  query: unknown,
+  options: { schemeAgentIds?: boolean } = { schemeAgentIds: config.registrySchemeAgentIdsEnabled },
+): LookupRef {
   const params = (query && typeof query === 'object' ? query : {}) as Record<string, unknown>;
+  const schemeParams = options.schemeAgentIds === true ? ['scheme', 'scheme_agent_id'] : [];
   for (const name of Object.keys(params)) {
-    if (name !== 'key_thumbprint' && !(CREDENTIAL_PARAMS as readonly string[]).includes(name)) {
+    if (name !== 'key_thumbprint' && !(CREDENTIAL_PARAMS as readonly string[]).includes(name) && !schemeParams.includes(name)) {
       throw new LookupRequestError(`${name} is not a lookup parameter`);
     }
+  }
+  // G51: by a scheme agent id, both parameters and nothing else.
+  if (schemeParams.some((name) => params[name] !== undefined)) {
+    if (Object.keys(params).length !== 2) throw new LookupRequestError('look up by scheme and scheme_agent_id together, and nothing else');
+    const scheme = single(params, 'scheme');
+    const schemeAgentId = single(params, 'scheme_agent_id');
+    if (scheme === undefined || !(SCHEME_AGENT_ID_SCHEMES as readonly string[]).includes(scheme)) {
+      throw new LookupRequestError(`scheme must be one of ${SCHEME_AGENT_ID_SCHEMES.join(', ')}`);
+    }
+    if (schemeAgentId === undefined || schemeAgentId.length === 0 || schemeAgentId.length > MAX_SCHEME_AGENT_ID_LENGTH) {
+      throw new LookupRequestError(`scheme_agent_id must be 1 to ${MAX_SCHEME_AGENT_ID_LENGTH} characters`);
+    }
+    return { by: 'scheme_agent_id', scheme, schemeAgentId };
   }
   const thumbprint = single(params, 'key_thumbprint');
   const credential = CREDENTIAL_PARAMS.map((name) => single(params, name));
@@ -124,6 +144,8 @@ export interface PublicAttestation {
   type: string;
   issuer: string;
   expires_at: string;
+  /** G51, with REGISTRY_SCHEME_AGENT_IDS_ENABLED: the opaque scheme agent ids the attestation carries. */
+  scheme_agent_ids?: SchemeAgentId[];
 }
 
 export interface RelyingPartyAttestation extends PublicAttestation {
@@ -193,6 +215,23 @@ async function agentForCredential(q: TxSql, ref: Extract<LookupRef, { by: 'crede
 }
 
 /**
+ * The DID of the one agent an accepted agent attestation names with this
+ * scheme agent id (G51). No match, or matches naming more than one agent,
+ * are null, answered alike. The attestation still has to count for the
+ * agent's level for the answer to show it.
+ */
+async function agentForSchemeAgentId(q: TxSql, ref: Extract<LookupRef, { by: 'scheme_agent_id' }>): Promise<string | null> {
+  const probe: SchemeAgentId[] = [{ scheme: ref.scheme as SchemeAgentId['scheme'], agent_id: ref.schemeAgentId }];
+  const rows = await q`
+    SELECT DISTINCT a.did
+    FROM registry_attestations r JOIN agents a ON a.id = r.agent_id
+    WHERE r.subject_kind = 'agent' AND r.state = 'accepted'
+      AND r.scheme_agent_ids @> ${q.json(probe as unknown as postgres.JSONValue)}
+    LIMIT 2`;
+  return rows.length === 1 ? rows[0]!['did'] as string : null;
+}
+
+/**
  * Look one agent up. Null when there is no such agent: the caller answers
  * 404 and says nothing about why.
  */
@@ -206,7 +245,11 @@ export async function lookupAgent(
   let trustRef: string;
   if (ref.by === 'did') trustRef = ref.did;
   else if (ref.by === 'key_thumbprint') trustRef = ref.thumbprint;
-  else {
+  else if (ref.by === 'scheme_agent_id') {
+    const did = await agentForSchemeAgentId(q, ref);
+    if (did === null) return null;
+    trustRef = did;
+  } else {
     const did = await agentForCredential(q, ref);
     if (did === null) return null;
     trustRef = did;
@@ -226,12 +269,26 @@ export async function lookupAgent(
     SELECT id, type, issuer_entity_id, exp, status_list_uri, status_list_idx, acceptance_list_uri, acceptance_list_idx
     FROM registry_attestations WHERE id = ANY(${computed.attestation_ids})
     ORDER BY type, issuer_entity_id, exp, id`;
+  // G51: read only with the flag on, so the column of migration 136 is
+  // never needed by a lookup that does not publish it.
+  const schemeIds = new Map<string, SchemeAgentId[]>();
+  if (config.registrySchemeAgentIdsEnabled && computed.attestation_ids.length > 0) {
+    const rows = await q`
+      SELECT id, scheme_agent_ids FROM registry_attestations
+      WHERE id = ANY(${computed.attestation_ids}) AND scheme_agent_ids IS NOT NULL`;
+    for (const row of rows) {
+      const value = typeof row['scheme_agent_ids'] === 'string' ? JSON.parse(row['scheme_agent_ids'] as string) as unknown : row['scheme_agent_ids'];
+      if (Array.isArray(value) && value.length > 0) schemeIds.set(row['id'] as string, value as SchemeAgentId[]);
+    }
+  }
   const attestations = attestationRows.map((row) => {
     const shown: PublicAttestation = {
       type: row['type'] as string,
       issuer: row['issuer_entity_id'] as string,
       expires_at: iso(row['exp']),
     };
+    const carried = schemeIds.get(row['id'] as string);
+    if (carried !== undefined) shown.scheme_agent_ids = carried;
     if (!options.authenticated) return shown;
     return {
       ...shown,
