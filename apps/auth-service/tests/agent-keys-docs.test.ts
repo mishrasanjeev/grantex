@@ -61,6 +61,7 @@ describe('docs/providers/registering-agents.md', () => {
     expect(examples.map((example) => `${example.method} ${example.path}`)).toEqual([
       'POST /v1/agents/{agentId}/keys',
       'PUT /v1/agents/{agentId}/declared-rails',
+      'PUT /v1/agents/{agentId}/http-signature-directory',
       'POST /v1/agents/{agentId}/keys/{thumbprint}/challenge',
       'POST /v1/agents/{agentId}/keys/{thumbprint}/prove',
       'POST /v1/agents/{agentId}/keys/{oldThumbprint}/rotate',

@@ -145,6 +145,21 @@ with Grantex by its id.
 holds deterministic Ed25519 vectors for both profiles and both body objects;
 the TypeScript and Python packages reproduce them byte for byte.
 
+## Key directory and several signatures
+
+- `buildSignatureDirectory(keys)`, `signDirectoryResponse(body, { authority,
+  signingKeys })` and `verifyDirectoryResponse(response, { authority })`
+  implement draft-meunier-webbotauth-httpsig-directory-00: a JWK Set at
+  `/.well-known/http-message-signatures-directory`, media type
+  `application/http-message-signatures-directory+json`, `kid` = thumbprint,
+  one response signature per key over `"@authority";req` and
+  `content-digest` with `tag="http-message-signatures-directory"`. The
+  verifier returns only the keys with their own valid, current signature and
+  lists the others as ignored (section 5.2).
+- `combineSignatures(...results)` merges several signatures of one request,
+  for example a grantex signature and a web-bot-auth signature whose
+  `Signature-Agent` names the agent's directory.
+
 ## Also exported
 
 - `contentDigest(body)`, `jwkThumbprint(jwk)`, `publicJwk(jwk)`;

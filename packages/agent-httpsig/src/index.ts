@@ -37,6 +37,7 @@ export {
   TAP_PAYER_TAG,
   WEB_BOT_AUTH_MAX_WINDOW_SECONDS,
   WEB_BOT_AUTH_TAG,
+  combineSignatures,
   parseSignatureAgent,
   serializeSignatureAgent,
   signWithProfile,
@@ -85,6 +86,16 @@ export type {
   VerifyTapBodyOptions,
 } from './tap.js';
 export { canonicalJson } from './canonical.js';
+export {
+  DIRECTORY_SIGNATURE_WINDOW_SECONDS,
+  SIGNATURE_DIRECTORY_MEDIA_TYPE,
+  SIGNATURE_DIRECTORY_PATH,
+  SIGNATURE_DIRECTORY_TAG,
+  buildSignatureDirectory,
+  signDirectoryResponse,
+  verifyDirectoryResponse,
+} from './directory.js';
+export type { DirectoryKey, SignDirectoryOptions, SignatureDirectory, VerifiedDirectory, VerifyDirectoryOptions } from './directory.js';
 export { jwkThumbprint, publicJwk, verifySignatureValue } from './keys.js';
 export type { AgentJwk, SignatureAlgorithm } from './keys.js';
 export { createSignatureBase, signatureBaseFor } from './message.js';

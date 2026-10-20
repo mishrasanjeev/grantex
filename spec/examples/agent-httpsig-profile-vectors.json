@@ -132,6 +132,29 @@
       "signature_base": "\"@method\": POST\n\"@target-uri\": https://merchant.example/v1/checkout?cart=c-1001\n\"content-digest\": sha-256=:+16hzah8mPq4wqJdtcnmQ7ehmjwZOFMqbjyhvBzER2o=:\n\"signature-agent\";key=\"sig1\": \"https://agents.example/.well-known/jwks.json\";type=jwks_uri\n\"@signature-params\": (\"@method\" \"@target-uri\" \"content-digest\" \"signature-agent\";key=\"sig1\");created=1790000000;expires=1790003600;keyid=\"L5d-U2k4C-PU3btGPZH_EES9tK5GNxadBYz5Md91Q9E\";tag=\"web-bot-auth\""
     }
   ],
+  "directory": {
+    "authority": "agents.example",
+    "created": 1790000000,
+    "body": "{\"keys\":[{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"x\":\"tzGIkIiswV6WlrxirpvdBVniA_RKDDPgj1dptnazfqI\",\"kid\":\"L5d-U2k4C-PU3btGPZH_EES9tK5GNxadBYz5Md91Q9E\",\"use\":\"sig\"}]}",
+    "headers": [
+      [
+        "Content-Type",
+        "application/http-message-signatures-directory+json"
+      ],
+      [
+        "Content-Digest",
+        "sha-256=:oqMJ4Svuzhqi2TmrAFo+HOfmvOuRqWfStUm/omhdXKI=:"
+      ],
+      [
+        "Signature-Input",
+        "sig1=(\"@authority\";req \"content-digest\");created=1790000000;expires=1790000300;keyid=\"L5d-U2k4C-PU3btGPZH_EES9tK5GNxadBYz5Md91Q9E\";tag=\"http-message-signatures-directory\""
+      ],
+      [
+        "Signature",
+        "sig1=:F4VFK2SZwBdxWL1Z0QKZbmwoze40rJRvaFOHxeDg2613x7sVyzbq1TTkcHaKsBgrhJnYeXABB3y658jB+uDFDQ==:"
+      ]
+    ]
+  },
   "tap_body_objects": {
     "nonce": "5f0e1d2c-3b4a-4968-8776-655443322110",
     "kid": "tap-key-01",

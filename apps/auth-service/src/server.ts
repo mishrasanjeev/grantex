@@ -48,6 +48,7 @@ import { trustRegistryRoutes } from './routes/trust-registry.js';
 import { registryIssuerRoutes } from './routes/registry-issuers.js';
 import { registryStatusRoutes } from './routes/registry-status.js';
 import { oacpStatusRoutes } from './routes/oacp-status.js';
+import { httpSignatureDirectoryRoutes } from './routes/http-signature-directory.js';
 import { registryAttestationRoutes } from './routes/registry-attestations.js';
 import { registryLookupRoutes } from './routes/registry-lookup.js';
 import { consentBundlesRoutes } from './routes/consent-bundles.js';
@@ -246,6 +247,7 @@ export async function buildApp(opts: AppOptions = {}) {
   // Registry lookup (API key; also public when REGISTRY_PUBLIC_ENDPOINTS_ENABLED=true)
   // and the signed manifest (only then).
   await app.register(registryLookupRoutes);
+  await app.register(httpSignatureDirectoryRoutes);
   await app.register(consentBundlesRoutes);
   await app.register(mcpServersRoutes);
   await app.register(dpdpRoutes);

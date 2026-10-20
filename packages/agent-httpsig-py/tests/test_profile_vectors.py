@@ -13,12 +13,16 @@ import pytest
 
 from grantex_agent_httpsig import (
     HttpRequest,
+    HttpResponse,
     InMemoryNonceStore,
     build_agentic_consumer,
     build_agentic_payment_container,
+    build_signature_directory,
     jwk_thumbprint,
     public_jwk,
+    sign_directory_response,
     sign_with_profile,
+    verify_directory_response,
     verify_tap_body_objects,
     verify_with_profile,
 )
@@ -71,3 +75,14 @@ def test_tap_body_object_vectors() -> None:
     assert container == t["agenticPaymentContainer"]
     out = verify_tap_body_objects(t, nonce=t["nonce"], keyid=t["kid"], resolve_key=lambda _k: FILE["public_jwk"])
     assert out.consumer.verified and out.usable_for_payment
+
+
+def test_directory_vector() -> None:
+    d = FILE["directory"]
+    assert json.dumps(build_signature_directory([KEY]), separators=(",", ":")) == d["body"]
+    headers = sign_directory_response(d["body"], authority=d["authority"], signing_keys=[KEY], created=d["created"])
+    assert [list(h) for h in headers.items()] == d["headers"]
+    out = verify_directory_response(
+        HttpResponse(200, [tuple(h) for h in d["headers"]], d["body"]), authority=d["authority"], now=d["created"] + 1
+    )
+    assert [k["kid"] for k in out.keys] == [FILE["thumbprint"]]

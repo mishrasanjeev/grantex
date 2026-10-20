@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Registry HTTP Message Signatures key directory and Signature-Agent (G50)
+- `GET /.well-known/http-message-signatures-directory`
+  (draft-meunier-webbotauth-httpsig-directory-00), media type
+  `application/http-message-signatures-directory+json`, behind the new flag
+  `HTTP_SIGNATURE_DIRECTORY_ENABLED` (default off; public and
+  unauthenticated when on, rate limited, CORS-open). It lists the usable
+  P-256 and Ed25519 keys (active, or rotated within their overlap; never
+  pending, unproven or compromised) of active agents whose developers opted
+  in, with `kid` = RFC 7638 thumbprint, `use`, `nbf`, `exp`,
+  `Content-Digest` and `Cache-Control: public, max-age=300`.
+- The registry does not hold agent private keys, so it cannot add the
+  per-key response signatures the draft recommends. It signs the response
+  once with the platform key over `"@authority";req` and `content-digest`
+  with `tag="grantex-registry-directory"` (kid from `/.well-known/jwks.json`).
+- New developer route `PUT /v1/agents/:id/http-signature-directory`
+  (`{published: boolean}`, audited as `grantex.agent.http_signature_directory`).
+  Migration `136_agent_network_identity.sql` adds
+  `agents.http_signature_directory` (default false).
+- `@grantex/agent-httpsig` / `grantex-agent-httpsig`: directory build, per-key
+  response signing and verification (keys without their own valid signature
+  are ignored), and `combineSignatures` / `combine_signatures` to send a
+  grantex and a web-bot-auth signature (with `Signature-Agent`) on one request.
+
 ### Added - Visa TAP header profile, body objects and the Grantex consent record object (G49)
 - `@grantex/agent-httpsig` / `grantex-agent-httpsig`: builders and a checker
   for the TAP `agenticConsumer` and `agenticPaymentContainer` body objects,

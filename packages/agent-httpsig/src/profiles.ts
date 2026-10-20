@@ -737,3 +737,43 @@ export async function verifyWithProfile(request: AgentRequest, input: ProfileVer
     signatureAgent,
   };
 }
+
+// ── Several signatures on one request ────────────────────────────────────────
+
+/**
+ * Merges the fields of several signatures of one request (RFC 9421 section
+ * 4.3: each signature is a member of the Signature-Input and Signature
+ * Dictionaries, and Signature-Agent members sit beside them). Use it to send
+ * a grantex signature and a web-bot-auth signature together, so that the
+ * request carries `Signature-Agent` for Web Bot Auth relying parties while
+ * Grantex verifiers read the `agent-payer-auth` signature. Each signature
+ * must have its own label; `Content-Digest` and other fields must agree.
+ */
+export function combineSignatures(...results: readonly ProfileSignResult[]): Record<string, string> {
+  const dictionaries = new Map<string, Dictionary>();
+  const out: Record<string, string> = {};
+  const labels = new Set<string>();
+  for (const result of results) {
+    if (labels.has(result.label)) fail(`signature label ${result.label} is used twice`);
+    labels.add(result.label);
+    for (const [name, value] of Object.entries(result.headers)) {
+      if (name === 'Signature-Input' || name === 'Signature' || name === 'Signature-Agent') {
+        const dictionary = dictionaries.get(name) ?? new Map<string, Member>();
+        for (const [key, member] of parseDictionary(value)) {
+          if (dictionary.has(key)) fail(`${name} member ${key} is set twice`);
+          dictionary.set(key, member);
+        }
+        dictionaries.set(name, dictionary);
+      } else if (out[name] !== undefined && out[name] !== value) {
+        fail(`the signatures disagree on ${name}`);
+      } else {
+        out[name] = value;
+      }
+    }
+  }
+  for (const name of ['Signature-Agent', 'Signature-Input', 'Signature'] as const) {
+    const dictionary = dictionaries.get(name);
+    if (dictionary !== undefined) out[name] = serializeDictionary(dictionary);
+  }
+  return out;
+}

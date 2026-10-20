@@ -65,6 +65,17 @@ from ._profiles import (
     sign_with_profile,
     verify_with_profile,
 )
+from ._directory import (
+    DIRECTORY_SIGNATURE_WINDOW_SECONDS,
+    SIGNATURE_DIRECTORY_MEDIA_TYPE,
+    SIGNATURE_DIRECTORY_PATH,
+    SIGNATURE_DIRECTORY_TAG,
+    VerifiedDirectory,
+    build_signature_directory,
+    combine_signatures,
+    sign_directory_response,
+    verify_directory_response,
+)
 from ._tap import (
     DEFAULT_TAP_BODY_MEMBERS,
     GRANTEX_CONSENT_RECORD_TYPE,
@@ -99,6 +110,15 @@ from .structured_fields import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "DIRECTORY_SIGNATURE_WINDOW_SECONDS",
+    "SIGNATURE_DIRECTORY_MEDIA_TYPE",
+    "SIGNATURE_DIRECTORY_PATH",
+    "SIGNATURE_DIRECTORY_TAG",
+    "VerifiedDirectory",
+    "build_signature_directory",
+    "combine_signatures",
+    "sign_directory_response",
+    "verify_directory_response",
     "DEFAULT_TAP_BODY_MEMBERS",
     "GRANTEX_CONSENT_RECORD_TYPE",
     "TapBodyVerification",

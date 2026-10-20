@@ -269,6 +269,12 @@ export const config = {
   // unless exactly 'true'. Off, relying parties cannot read OACP artifact
   // status and must refuse (revocation_status_unavailable).
   get oacpStatusListPublicEnabled() { return process.env['OACP_STATUS_LIST_PUBLIC_ENABLED'] === 'true'; },
+  // The registry's HTTP Message Signatures key directory,
+  // GET /.well-known/http-message-signatures-directory (Web Bot Auth,
+  // lib/registry/signature-directory.ts): the usable keys of agents whose
+  // developers opted in. Public and unauthenticated; read when routes are
+  // registered at boot; off unless exactly 'true'.
+  get httpSignatureDirectoryEnabled() { return process.env['HTTP_SIGNATURE_DIRECTORY_ENABLED'] === 'true'; },
   /** Lets C6Z issuance enable public discovery for opted-in, allow-listed, attested merchants (default off). */
   get oacpPublicDiscoveryIssuanceEnabled() { return process.env['OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED'] === 'true'; },
   // Status-list reconciliation with cascade (lib/registry/status-reconciliation.ts):

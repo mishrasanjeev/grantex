@@ -10,6 +10,9 @@ import {
   InMemoryNonceStore,
   buildAgenticConsumer,
   buildAgenticPaymentContainer,
+  buildSignatureDirectory,
+  signDirectoryResponse,
+  verifyDirectoryResponse,
   jwkThumbprint,
   publicJwk,
   signWithProfile,
@@ -31,6 +34,7 @@ const file = JSON.parse(readFileSync(`${repoRoot}spec/examples/agent-httpsig-pro
   thumbprint: string;
   request: { method: string; url: string; headers: [string, string][]; body: string };
   sign: Case[];
+  directory: { authority: string; created: number; body: string; headers: [string, string][] };
   tap_body_objects: { nonce: string; kid: string; agenticConsumer: Record<string, unknown>; agenticPaymentContainer: Record<string, unknown> };
 };
 
@@ -71,6 +75,15 @@ describe('profile vectors', () => {
       expect(out.ok).toBe(true);
     });
   }
+
+  it('signs and reads the key directory', () => {
+    const d = file.directory;
+    expect(JSON.stringify(buildSignatureDirectory([key]))).toBe(d.body);
+    const headers = signDirectoryResponse(d.body, { authority: d.authority, signingKeys: [key], created: d.created });
+    expect(Object.entries(headers)).toEqual(d.headers);
+    const out = verifyDirectoryResponse({ status: 200, headers: d.headers, body: d.body }, { authority: d.authority, now: d.created + 1 });
+    expect(out.keys.map((k) => k.kid)).toEqual([file.thumbprint]);
+  });
 
   it('builds the TAP body objects', async () => {
     const t = file.tap_body_objects;

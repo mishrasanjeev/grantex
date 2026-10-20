@@ -3539,6 +3539,48 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /v1/agents/{id}/http-signature-directory:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdPath"
+    put:
+      operationId: setAgentHttpSignatureDirectory
+      tags: [Agents]
+      summary: Publish the agent's keys in the HTTP Message Signatures key directory
+      description: |
+        Opt-in. When `HTTP_SIGNATURE_DIRECTORY_ENABLED=true`, the registry serves
+        `/.well-known/http-message-signatures-directory` (Web Bot Auth) listing the
+        usable P-256 and Ed25519 keys of active agents that opted in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [published]
+              properties:
+                published: { type: boolean }
+      responses:
+        "200":
+          description: Publication set
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agentId, httpSignatureDirectory]
+                properties:
+                  agentId: { type: string }
+                  httpSignatureDirectory: { type: boolean }
+        "400":
+          description: "`published` is not a boolean"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /v1/agents/{id}/keys/{thumbprint}/challenge:
     parameters:
       - $ref: "#/components/parameters/AgentIdPath"
