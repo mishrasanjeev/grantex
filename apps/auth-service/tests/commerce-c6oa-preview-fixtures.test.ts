@@ -22,7 +22,6 @@ const manifestPath = join(fixtureDir, 'manifest.json');
 
 const expectedSurfaces = new Set([
   'schemaorg_jsonld_preview',
-  'ap2_style_evidence_preview',
   'connector_registry_metadata_preview',
 ]);
 

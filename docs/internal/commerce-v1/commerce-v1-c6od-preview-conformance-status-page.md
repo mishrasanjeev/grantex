@@ -65,9 +65,6 @@ The JSON and Markdown status artifacts include:
 The required surfaces are:
 
 - schema.org JSON-LD preview
-- UCP-style capability profile preview
-- ACP-style checkout shape preview
-- AP2-style evidence preview
 - connector registry metadata preview
 
 Passing reports render `internal preview conformance: passing`. Failed reports

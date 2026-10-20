@@ -44,7 +44,6 @@ import {
   type SandboxReadOnlyDiscoveryRolloutProposalPayload,
 } from '../lib/commerce/sandbox-onboarding.js';
 import { readSchemaOrgJsonLdPreview } from '../lib/commerce/schemaorg-preview.js';
-import { readAp2EvidencePreview } from '../lib/commerce/ap2-evidence-preview.js';
 import { commerceTenantsRoutes } from './commerce-tenants.js';
 import { commercePassportRoutes } from './commerce-passport.js';
 import { commerceConsentRoutes } from './commerce-consent.js';
@@ -57,6 +56,7 @@ import { commerceConnectorRoutes } from './commerce-connectors.js';
 import { commerceOacpRuntimeRoutes } from './commerce-oacp-runtime.js';
 import { commerceOacpArbiterRoutes } from './commerce-oacp-arbiter.js';
 import { commerceOacpAcpRoutes } from './commerce-oacp-acp.js';
+import { commerceOacpMandateRoutes } from './commerce-oacp-mandates.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -2578,47 +2578,6 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.get<{ Params: { merchantId: string } }>(
-    '/merchants/:merchantId/ap2-evidence-preview',
-    async (request, reply) => {
-      requireOperatorOrSelfMerchant(request, request.params.merchantId);
-      const sql = getSql();
-      const context = await readAp2EvidencePreview(sql, {
-        tenantId: request.commerceTenantId,
-        merchantId: request.params.merchantId,
-      });
-      if (!context) {
-        throw new CommerceHttpError(404, 'merchant_not_found', 'Merchant not found in this tenant');
-      }
-      if (context.merchantEnvironment !== 'sandbox') {
-        throw new CommerceHttpError(409, 'ap2_evidence_preview_live_merchant_blocked',
-          'AP2-style evidence preview is only available for sandbox merchants',
-          {
-            details: {
-              sandbox_only: true,
-              preview_only: true,
-              ap2_certification_claim: 'none',
-              ap2_publication_enabled: false,
-              ap2_signed_mandate_created: false,
-              signed_production_mandate_created: false,
-              signature_status: 'unsigned_preview',
-              signing_key_used: false,
-              payment_network_submission_enabled: false,
-              checkout_payment_enabled: false,
-              live_provider_enabled: false,
-              [`live_${'p'}lural_enabled`]: false,
-              provider_credentials_exposed: false,
-              production_allowlist_written: false,
-              blockers: context.preview.blockers,
-              remediation_items: context.preview.remediation_items,
-            },
-            retryable: false,
-          });
-      }
-      return reply.status(200).send({ data: context.preview });
-    },
-  );
-
-  app.get<{ Params: { merchantId: string } }>(
     '/merchants/:merchantId/agenticorg-buyer-discovery-preview',
     async (request, reply) => {
       const caller = request.commerceCaller;
@@ -4165,6 +4124,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   await app.register(commerceOacpRuntimeRoutes);
   await app.register(commerceOacpArbiterRoutes);
   await app.register(commerceOacpAcpRoutes);
+  await app.register(commerceOacpMandateRoutes);
   await app.register(commerceCartPaymentRoutes);
   await app.register(commerceOpsRoutes);
 }

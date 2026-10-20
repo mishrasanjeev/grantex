@@ -273,6 +273,9 @@ function renderConsentPage(
       <div><span class="k">Merchant</span> <strong>${escapeHtml(record.merchantId)}</strong></div>
       <div><span class="k">Agent</span> <strong>${escapeHtml(record.agentId)}</strong></div>
       <div><span class="k">Type</span> ${escapeHtml(record.passportType)}</div>
+      <div><span class="k">Presence</span> ${record.presence === 'human_present'
+        ? 'You confirm each purchase with your passkey.'
+        : 'The agent may buy within these limits without asking you again.'}</div>
       ${record.maxAmount != null ? `<div><span class="k">Max amount</span> ${escapeHtml(String(record.maxAmount))} (${escapeHtml(record.currency ?? '')}, minor units, tax-inclusive)</div>` : ''}
       <div><span class="k">Expires</span> ${escapeHtml(record.expiresAt)}</div>
       <div><span class="k">Confirmation</span> Final payment requires a separate user confirmation step.</div>
@@ -479,6 +482,7 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
         currency: r.currency,
         consent_text_version: r.consentTextVersion,
         expires_at: r.expiresAt,
+        presence: r.presence,
         status: r.status,
         presented_payload_hash: r.presentedPayloadHash ?? sha256hex(canonical),
         // Hint surfaces so an SPA can confirm with the user before POST.
@@ -753,6 +757,8 @@ export async function commerceConsentRoutes(app: FastifyInstance): Promise<void>
           passport_type: r.record.passportType,
           principal_developer_id: principal.developerId,
           consumed_challenge_id: r.consumedChallengeId,
+          presence: r.record.presence,
+          amr: r.record.amr,
         },
       });
       // Mark the challenge as used in the audit trail explicitly (the

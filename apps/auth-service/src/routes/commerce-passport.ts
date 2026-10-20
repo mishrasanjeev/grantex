@@ -17,6 +17,8 @@ import {
   findConsentByRequestId,
   canonicalPresentedPayload,
   sha256hex,
+  isPresenceMode,
+  DEFAULT_PRESENCE,
   type CreateConsentInput,
 } from '../lib/commerce/consent.js';
 import { timingSafeEqual } from 'node:crypto';
@@ -91,6 +93,8 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
       // session, and approve rejects when hint != authenticated principal.
       user_principal_hint?: unknown;
       ttl_seconds?: unknown;
+      // G44: whether the buyer will be present when the agent buys.
+      presence?: unknown;
     };
 
     const fieldErrors: Record<string, string> = {};
@@ -107,6 +111,9 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
     const overreach = requestedScopes.filter((s) => !allowed.has(s));
     if (overreach.length) {
       fieldErrors['requested_scopes'] = `scopes outside the ${passportType} bundle: ${overreach.join(', ')}`;
+    }
+    if (body.presence !== undefined && !isPresenceMode(body.presence)) {
+      fieldErrors['presence'] = 'must be "human_present" or "human_not_present"';
     }
     if (passportType === 'checkout') {
       if (asInt(body.max_amount) === null || (asInt(body.max_amount) as number) < 0) {
@@ -139,6 +146,7 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
     const userPrincipalHint = isString(body.user_principal_hint)
       ? (body.user_principal_hint as string)
       : null;
+    const presence = isPresenceMode(body.presence) ? body.presence : DEFAULT_PRESENCE;
 
     const created = await sql.begin(async (_tx) => {
       const tx = _tx as unknown as TxSql;
@@ -158,6 +166,7 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
         userAgentHash: null,
         ttlSeconds: cappedTtl,
         userPrincipalHint,
+        presence,
       } satisfies CreateConsentInput);
       const audit = await appendCommerceAudit(tx as unknown as Sql, {
         tenantId: caller.tenantId,
@@ -177,6 +186,7 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
           ttl_seconds: cappedTtl,
           requires_final_user_confirmation: consentRequiresUserConfirmation(passportType),
           user_principal_hint: userPrincipalHint,
+          presence,
         },
       });
       return { ...c, auditEventId: audit.id };
@@ -190,6 +200,7 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
         consent_url: consentUrl,
         expires_at: created.expiresAt,
         passport_type: passportType,
+        presence,
       },
       audit_event_id: created.auditEventId,
     });
@@ -324,6 +335,8 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
       scopes: consent.approvedScopes ?? consent.requestedScopes,
       maxAmount: consent.maxAmount,
       currency: consent.currency,
+      presence: consent.presence ?? DEFAULT_PRESENCE,
+      amr: consent.amr ?? [],
       environment,
       issuedAt: now,
       notBefore: now,
@@ -339,7 +352,7 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
             jti, tenant_id, merchant_id, agent_id, consent_record_id,
             passport_type, kid, subject, scopes, max_amount, currency,
             environment, audience, issued_at, not_before, expires_at,
-            agent_auth_method
+            agent_auth_method, presence, amr
           ) VALUES (
             ${signed.jti}, ${consent.tenantId}, ${consent.merchantId}, ${consent.agentId}, ${consent.id},
             ${consent.passportType}, ${signed.kid}, ${consent.userPrincipalId},
@@ -347,7 +360,7 @@ export async function commercePassportRoutes(app: FastifyInstance): Promise<void
             ${consent.maxAmount}, ${consent.currency},
             ${environment}, ${'grantex-commerce'},
             to_timestamp(${now}), to_timestamp(${now}), to_timestamp(${expiresAt}),
-            ${caller.authMethod}
+            ${caller.authMethod}, ${consent.presence ?? DEFAULT_PRESENCE}, ${consent.amr ?? []}
           )
         `;
       const audit = await appendCommerceAudit(tx as unknown as Sql, {

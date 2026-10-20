@@ -140,6 +140,8 @@ The following gaps were confirmed against the repository on July 13, 2026, with 
 - [ ] Add interoperability fixtures for MCP, A2A, OACP adapters, and offline revocation synchronization.
 - [ ] Publish an implementation report for the current IETF draft and externally verifiable submission/comment receipts.
 - [ ] Keep OACP adapter output labelled preview/mapping until the relevant external conformance and approval requirements are met.
+- [x] Issue Intent, Cart and Payment mandates as ES256 JWTs mapped to AP2 v0.2, on the OACP Token Status List, with presence, `amr` and passkey anchoring of human-present carts; shared verifier vectors and `verifyOacpMandate` in `@grantex/sdk`.
+- [ ] Offer AP2 v0.2 SD-JWT VC mandates (Checkout / Payment Mandate, KB-JWT holder binding) once a relying party verifies Delegate SD-JWT chains.
 
 ### Developer experience
 

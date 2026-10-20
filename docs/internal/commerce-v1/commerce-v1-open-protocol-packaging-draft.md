@@ -124,6 +124,10 @@ as explicit blockers. Unsupported fields must remain explicit blockers.
 
 Source: Grantex C6M.
 
+Removed: the C6M route and this unsigned preview no longer exist; the
+AP2-mapped PaymentMandate at `POST /v1/commerce/oacp/mandates/payment`
+replaces them. The text below is kept as a historical record.
+
 The AP2-style package is deterministic and unsigned. It is an evidence preview
 from Commerce Passport, consent record, policy decision, cart hash, amount cap,
 merchant state, agent identity, audit reference, and idempotency/replay evidence

@@ -172,27 +172,11 @@ current, unrevoked artifact for every fact the capability depends on. When an
 artifact expires or is revoked, the capability drops out of the next rendering.
 Nothing is published until public discovery is approved for the merchant.
 
-### AP2-Style Evidence Preview
+### AP2 Payment Mandates
 
-The AP2-style evidence preview shows whether Grantex has enough sandbox
-evidence to describe a future mandate-style package for review. It is based on
-Commerce Passport, consent, policy decision, cart hash, amount cap, merchant
-state, agent identity, audit reference, and idempotency evidence.
-
-This preview is deterministic and unsigned. It is not AP2 certification, does
-not publish AP2 capabilities, does not create or sign a production mandate,
-does not submit anything to a payment network, and does not approve live
-checkout or payment traffic.
-
-The preview remains non-enabling. It does not enable public discovery,
-production Commerce V1, checkout/payment creation, live payments, live Plural,
-provider calls, provider credentials, production configuration, or allowlists.
-
-If required evidence is missing, Grantex returns blockers and remediation
-instead of filling gaps with guesses. The preview may show safe hashes and
-presence flags, but it does not expose tenant IDs, exact merchant IDs, passport
-JTIs, consent IDs, audit IDs, provider references, raw cart details, raw
-payloads, secrets, or private configuration.
+The AP2-style evidence preview was removed. It was an unsigned review aid and
+never created a mandate. Its replacement is the AP2-mapped PaymentMandate that
+Grantex issues through its OACP mandate API.
 
 ### Existing-System Connectors
 

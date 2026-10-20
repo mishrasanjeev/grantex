@@ -11,6 +11,10 @@ The TypeScript SDK mirrors it in ``verifyOacpArtifact``, the Go SDK in
 asynchronous (``httpx.AsyncClient``) and bound to URLs the relying party
 configures: :func:`create_oacp_jwks_fetcher` and
 :func:`create_oacp_status_list_fetcher`.
+
+:func:`verify_oacp_mandate` and :func:`check_oacp_mandate_chain` verify OACP
+Intent, Cart and Payment mandates (profile ``oacp.mandate.v1``, vectors in
+``spec/examples/oacp/oacp-mandates-v1.json``).
 """
 
 from __future__ import annotations
@@ -42,6 +46,20 @@ from ._status_list import (
     decode_oacp_status_list,
     read_oacp_status,
 )
+from ._mandates import (
+    OACP_MANDATE_CLOCK_SKEW_SECONDS,
+    OACP_MANDATE_MAX_LIFETIME_SECONDS,
+    OACP_MANDATE_REFUSAL_CODES,
+    OACP_MANDATE_TYP,
+    OACP_MANDATE_TYPES,
+    OACP_MANDATE_VERSION,
+    OACP_PAYMENT_RAILS,
+    OacpMandateVerification,
+    check_oacp_mandate_chain,
+    oacp_checkout_hash,
+    oacp_mandate_hash,
+    verify_oacp_mandate,
+)
 from ._time import parse_oacp_timestamp
 from ._verify import (
     OACP_ARTIFACT_JWS_TYP,
@@ -56,6 +74,18 @@ from ._verify import (
 )
 
 __all__ = [
+    "OACP_MANDATE_CLOCK_SKEW_SECONDS",
+    "OACP_MANDATE_MAX_LIFETIME_SECONDS",
+    "OACP_MANDATE_REFUSAL_CODES",
+    "OACP_MANDATE_TYP",
+    "OACP_MANDATE_TYPES",
+    "OACP_MANDATE_VERSION",
+    "OACP_PAYMENT_RAILS",
+    "OacpMandateVerification",
+    "check_oacp_mandate_chain",
+    "oacp_checkout_hash",
+    "oacp_mandate_hash",
+    "verify_oacp_mandate",
     "OACP_ARTIFACT_JWS_TYP",
     "OACP_ARTIFACT_MAX_TTL_SECONDS",
     "OACP_FETCH_TIMEOUT_SECONDS",

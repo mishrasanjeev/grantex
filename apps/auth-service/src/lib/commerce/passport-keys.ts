@@ -51,6 +51,20 @@ function isAutoGenerateAllowed(): boolean {
   return process.env['COMMERCE_AUTO_GENERATE_PASSPORT_KEY'] === 'true';
 }
 
+/**
+ * The stored public JWK as an object. Keys written before the fix in
+ * migration 135 were stored as a JSON string inside jsonb (the insert passed
+ * `JSON.stringify(jwk)`, which postgres.js encodes again for a jsonb
+ * parameter); read either form.
+ */
+export function storedPublicJwk(value: unknown): Record<string, unknown> {
+  const parsed = typeof value === 'string' ? JSON.parse(value) as unknown : value;
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('commerce passport public key is not a JWK object');
+  }
+  return parsed as Record<string, unknown>;
+}
+
 function rowToKey(row: {
   kid: string;
   algorithm: string;
@@ -63,7 +77,7 @@ function rowToKey(row: {
     kid: row.kid,
     algorithm: 'ES256',
     status: row.status as CommercePassportKey['status'],
-    publicKeyJwk: row.public_key_jwk,
+    publicKeyJwk: storedPublicJwk(row.public_key_jwk),
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     retiredAt: row.retired_at == null
       ? null
@@ -142,7 +156,7 @@ export async function findPublicKeyByKid(
   `;
   const row = rows[0];
   if (!row) return null;
-  return { publicKeyJwk: row.public_key_jwk, retiredAt: row.retired_at };
+  return { publicKeyJwk: storedPublicJwk(row.public_key_jwk), retiredAt: row.retired_at };
 }
 
 /** @deprecated kept for back-compat tests; new code uses findPublicKeyByKid. */
@@ -171,7 +185,7 @@ async function insertNewActiveKey(sql: Sql): Promise<ActiveCommercePassportSigne
     INSERT INTO commerce_passport_keys (
       kid, algorithm, public_key_jwk, encrypted_private_key_jwk, status
     ) VALUES (
-      ${kid}, 'ES256', ${JSON.stringify(publicJwkWithKid)}::jsonb,
+      ${kid}, 'ES256', ${sql.json(publicJwkWithKid as never)},
       ${encryptedPrivate}, 'active'
     )
   `;

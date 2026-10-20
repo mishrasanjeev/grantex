@@ -25,6 +25,15 @@ const VECTORS = JSON.parse(readFileSync(
 const payload = VECTORS.cases.find((entry) => entry.name === 'valid')!.payload;
 
 describe('OACP canonical JSON (RFC 8785)', () => {
+  it('keeps a member named __proto__ as a member and leaves the prototype alone', () => {
+    const payload = JSON.parse('{"b":1,"__proto__":{"polluted":true,"gone":null},"a":2}') as unknown;
+    const stripped = stripUndefinedMembers(payload) as Record<string, unknown>;
+    expect(Object.getPrototypeOf(stripped)).toBe(Object.prototype);
+    expect((stripped as { polluted?: unknown }).polluted).toBeUndefined();
+    expect(Object.keys(stripped)).toEqual(['b', '__proto__', 'a']);
+    expect(canonicalizeOacpPayload(payload)).toBe('{"__proto__":{"gone":null,"polluted":true},"a":2,"b":1}');
+  });
+
   it('reproduces the shared vector canonical text and payload hash', () => {
     expect(canonicalizeOacpPayload(payload)).toBe(VECTORS.payload_canonical);
     expect(hashOacpPayload(payload)).toBe(VECTORS.payload_hash);

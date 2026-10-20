@@ -26,7 +26,6 @@ const c6oeDocPath = join(
 );
 
 const expectedSurfaces = [
-  'ap2_style_evidence_preview',
   'connector_registry_metadata_preview',
   'schemaorg_jsonld_preview',
 ];
@@ -108,21 +107,21 @@ function passingArtifacts() {
   const status = readJson(join(dir, 'open-protocol-preview-conformance.status.json'));
   const validationSummary = {
     status: 'passed',
-    fixtures_checked: 6,
-    surfaces_checked: 3,
-    scans_checked: 72,
+    fixtures_checked: 4,
+    surfaces_checked: 2,
+    scans_checked: 56,
   };
   const reportSummary = {
     status: 'passed',
-    fixtures_checked: 6,
-    surfaces_checked: 3,
-    scans_checked: 72,
+    fixtures_checked: 4,
+    surfaces_checked: 2,
+    scans_checked: 56,
   };
   const statusSummary = {
     status: status.status,
-    fixture_count: 6,
-    surface_count: 3,
-    scan_count: 72,
+    fixture_count: 4,
+    surface_count: 2,
+    scan_count: 56,
   };
   return { dir, report, reportSummary, status, statusSummary, validationSummary };
 }
@@ -140,15 +139,15 @@ describe('C6Oe preview conformance gate', () => {
       work_dir: 'temporary',
       fixture_validation: {
         status: 'passed',
-        fixtures_checked: 6,
-        surfaces_checked: 3,
-        scans_checked: 72,
+        fixtures_checked: 4,
+        surfaces_checked: 2,
+        scans_checked: 56,
       },
       report: {
         status: 'passed',
-        fixture_count: 6,
-        surface_count: 3,
-        scan_count: 72,
+        fixture_count: 4,
+        surface_count: 2,
+        scan_count: 56,
       },
       status_page: {
         status: 'passing',
@@ -207,16 +206,16 @@ describe('C6Oe preview conformance gate', () => {
 
       expect(report).toMatchObject({
         status: 'passed',
-        fixture_count: 6,
-        surface_count: 3,
-        scan_count: 72,
+        fixture_count: 4,
+        surface_count: 2,
+        scan_count: 56,
       });
       expect(status).toMatchObject({
         status: 'passing',
         counts: {
-          fixture_count: 6,
-          surface_count: 3,
-          scan_count: 72,
+          fixture_count: 4,
+          surface_count: 2,
+          scan_count: 56,
         },
       });
       expect(report.per_surface_results.map((surface: { surface: string }) => surface.surface).sort()).toEqual(

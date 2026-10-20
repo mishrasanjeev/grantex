@@ -45,16 +45,6 @@
       "path": "schemaorg-jsonld-preview.blocked.json"
     },
     {
-      "surface": "ap2_style_evidence_preview",
-      "scenario": "preview_available",
-      "path": "ap2-evidence-preview.available.json"
-    },
-    {
-      "surface": "ap2_style_evidence_preview",
-      "scenario": "blocked_refusal",
-      "path": "ap2-evidence-preview.blocked.json"
-    },
-    {
       "surface": "connector_registry_metadata_preview",
       "scenario": "preview_available",
       "path": "connector-registry-preview.available.json"
