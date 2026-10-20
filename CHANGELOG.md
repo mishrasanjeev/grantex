@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Presence mode and `amr` on the consent record and Commerce Passport (G44)
+- `POST /v1/commerce/passports/consent-requests` accepts `presence`
+  (`human_present` | `human_not_present`, default `human_not_present`), the
+  AP2 human-present / human-not-present modes: `human_present` means every
+  cart is confirmed with the buyer's passkey, `human_not_present` that the
+  buyer delegated purchases within the consented caps. The consent page and
+  its JSON view show it, and it joins the payload whose hash the buyer
+  approves. Approval records `amr: ["consent", "otp"]` on the consent record.
+- Commerce Passports carry `presence` and `amr` claims copied from the
+  consent; `commerce_passports` stores both. Verifiers read a passport or
+  consent row from before this change as `human_not_present` with no methods
+  (the stricter mode). Migration `135_oacp_mandates.sql` adds the nullable
+  columns. No human step is added: presence is chosen when consent is
+  requested, and AgenticOrg applies its stricter not-present rule set.
+
 ### Added - Merchant opt-in to public discovery on C6Z issuance (G17 enabler)
 - The C6Z authority request may set `public_discovery_requested: true` (with
   `no_public_discovery_enablement` false or absent; `no_payment_execution: true`

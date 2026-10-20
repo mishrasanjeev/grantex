@@ -242,7 +242,7 @@ describe('Finding 3 — exchange is single-use', () => {
       merchantId: 'mch_M', agentId: 'cag_AGENT',
       consentRequestId: 'req_OK',
       passportType: 'browse',
-      requestedScopes: ['commerce:catalog.read'],
+      requestedScopes: ['commerce:catalog.read'], presence: null, amr: null,
       approvedScopes: ['commerce:catalog.read'],
       maxAmount: null, currency: null,
       consentTextVersion: '2026-05-01',
@@ -689,7 +689,7 @@ describe('Finding 3 (round 2) — disabled tenant blocks merchant/agent/consent/
     const hash = sha256hex(canonicalPresentedPayload({
       id: 'crec_OK', tenantId: 'cten_T', merchantId: 'mch_M', agentId: 'cag_AGENT',
       consentRequestId: 'req_OK', passportType: 'browse',
-      requestedScopes: ['commerce:catalog.read'],
+      requestedScopes: ['commerce:catalog.read'], presence: null, amr: null,
       approvedScopes: ['commerce:catalog.read'],
       maxAmount: null, currency: null, consentTextVersion: '2026-05-01',
       presentedPayloadHash: null, status: 'granted', agentAuthMethod: 'jwt',

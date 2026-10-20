@@ -161,6 +161,10 @@ Each route takes the same service token with its own route scope and the tenant 
 | An ACP order event for a Grantex order | `GET /v1/commerce/oacp/acp/orders/{order_id}/event?tenant_id&permalink_base`; sign the body with `Merchant-Signature` and deliver it. | `commerce.acp.order_events.read` |
 | Buyer identity linking | Run `@grantex/mcp-auth` with `commerce.ucpIdentityLinking` (and `commerce.acpDelegatedAuthentication` for ACP); link (`iss`, `sub`) of the verified grant token to the merchant account. | n/a |
 
+## Presence And Authentication Methods
+
+A consent request names `presence`: `human_present` (the buyer confirms each cart with a passkey) or `human_not_present` (the buyer delegated purchases within the consented caps). The default is `human_not_present`. The buyer sees the mode on the consent page and it is part of the payload whose hash they approve. Approval records `amr: ["consent", "otp"]`. The Commerce Passport carries both as `presence` and `amr` claims, and mandates copy them. A passport issued before these claims existed reads as `human_not_present` with no methods. AgenticOrg's arbiter applies its stricter not-present rule set to `human_not_present`; neither mode adds a human step to a delegated purchase.
+
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

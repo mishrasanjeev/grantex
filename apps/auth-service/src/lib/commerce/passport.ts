@@ -17,6 +17,7 @@ import {
   findPublicKeyByKid,
 } from './passport-keys.js';
 import { checkPassportRevocation, type RevocationCheck } from './revocation.js';
+import { DEFAULT_PRESENCE, isPresenceMode, type PresenceMode } from './consent.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -56,6 +57,10 @@ export interface PassportClaimsToSign {
   maxAmount?: number | null;
   currency?: string | null;
   policyVersion?: string | null;
+  /** G44: presence mode the buyer approved on the consent. */
+  presence?: PresenceMode;
+  /** G44: authentication methods behind the consent (RFC 8176 values where one exists). */
+  amr?: string[];
   environment: Environment;
   issuedAt: number;                     // epoch seconds
   notBefore: number;
@@ -84,6 +89,8 @@ export async function signCommercePassport(
       ? { max_amount: claims.maxAmount } : {}),
     ...(claims.currency ? { currency: claims.currency } : {}),
     ...(claims.policyVersion ? { policy_version: claims.policyVersion } : {}),
+    presence: claims.presence ?? DEFAULT_PRESENCE,
+    amr: claims.amr ?? [],
     env: claims.environment,
     ver: '1',
   } satisfies JWTPayload)
@@ -113,6 +120,10 @@ export interface VerifiedPassport {
   maxAmount: number | null;
   currency: string | null;
   policyVersion: string | null;
+  /** `human_not_present` for passports issued before presence existed. */
+  presence: PresenceMode;
+  /** Empty for passports issued before presence existed. */
+  amr: string[];
   environment: Environment;
   issuedAt: number;
   notBefore: number;
@@ -330,6 +341,8 @@ export async function verifyCommercePassport(
     maxAmount: typeof payload['max_amount'] === 'number' ? payload['max_amount'] : null,
     currency: typeof payload['currency'] === 'string' ? payload['currency'] : null,
     policyVersion: typeof payload['policy_version'] === 'string' ? payload['policy_version'] : null,
+    presence: isPresenceMode(payload['presence']) ? payload['presence'] : DEFAULT_PRESENCE,
+    amr: Array.isArray(payload['amr']) && payload['amr'].every((m) => typeof m === 'string') ? payload['amr'] as string[] : [],
     environment: payload['env'] as Environment,
     issuedAt: iat,
     notBefore: nbf,

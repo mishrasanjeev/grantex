@@ -40,6 +40,8 @@ function passport(overrides: Partial<VerifiedPassport> = {}): VerifiedPassport {
     maxAmount: 250000,
     currency: 'INR',
     policyVersion: 'policy-7',
+    presence: 'human_not_present',
+    amr: ['consent', 'otp'],
     environment: 'sandbox',
     issuedAt: EXP - 600,
     notBefore: EXP - 600,
