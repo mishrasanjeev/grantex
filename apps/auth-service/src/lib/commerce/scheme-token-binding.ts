@@ -7,12 +7,13 @@
  *
  * on the OACP `mandate_capability` artifact payload as `token_binding`.
  * Grantex describes and checks the binding; it never executes it. The
- * scheme or provider (a network token service, UPI AutoPay, the Plural
- * rail) executes, through the relying party's own executor; Grantex holds no
+ * scheme or provider (a network token service, UPI AutoPay, a payment
+ * provider) executes, through the relying party's own executor; Grantex holds no
  * token, no card data and no provider credential.
  *
  *   scheme          `visa` | `mastercard` (network tokens), `upi_autopay`,
- *                   `plural` (the provider rail's tokenised instrument)
+ *                   `provider_token` (a payment provider's tokenised
+ *                   instrument, held behind the provider-neutral interface)
  *   token_ref       an opaque reference to the token the scheme or provider
  *                   holds: 1 to 128 characters from A-Z a-z 0-9 . _ : -,
  *                   never a primary account number (13 to 19 digits are
@@ -27,7 +28,7 @@
  * a test keeps the two files equal below this comment.
  */
 
-export const TOKEN_BINDING_SCHEMES = ['visa', 'mastercard', 'upi_autopay', 'plural'] as const;
+export const TOKEN_BINDING_SCHEMES = ['visa', 'mastercard', 'upi_autopay', 'provider_token'] as const;
 export type TokenBindingScheme = (typeof TOKEN_BINDING_SCHEMES)[number];
 export const MAX_TOKEN_BINDING_MERCHANTS = 32;
 

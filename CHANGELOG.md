@@ -60,7 +60,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`SchemeTokenBinding`, `parseSchemeTokenBinding`,
   `checkTokenBindingWithinCapability`) in `@grantex/sdk` and the auth service
   (`lib/commerce/scheme-token-binding.ts`; a test keeps the two equal).
-  Schemes `visa`, `mastercard`, `upi_autopay`, `plural`; `token_ref` is an
+  Schemes `visa`, `mastercard`, `upi_autopay`, `provider_token`; `token_ref` is an
   opaque reference and an account-number-like value is refused; limits are
   integer minor units with an ISO 4217 currency and an optional expiry.
 - The OACP `mandate_capability` artifact may carry it as `token_binding`;

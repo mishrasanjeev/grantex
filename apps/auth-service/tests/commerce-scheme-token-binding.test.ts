@@ -41,7 +41,7 @@ function refused(value: unknown): string {
 
 describe('parseSchemeTokenBinding', () => {
   it('accepts {scheme, token_ref, agent_id, merchant_scope, limits} for every scheme', () => {
-    for (const scheme of ['visa', 'mastercard', 'upi_autopay', 'plural']) {
+    for (const scheme of ['visa', 'mastercard', 'upi_autopay', 'provider_token']) {
       expect(parseSchemeTokenBinding({ ...BINDING, scheme })).toEqual({ ...BINDING, scheme });
     }
     expect(parseSchemeTokenBinding({ ...BINDING, limits: { ...BINDING.limits, expires_at: '2026-06-11T00:02:00Z' } }).limits.expires_at).toBe('2026-06-11T00:02:00Z');

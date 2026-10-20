@@ -23,7 +23,7 @@ const BINDING: SchemeTokenBinding = {
 
 describe('scheme token binding', () => {
   it('parses the shared shape for each scheme', () => {
-    expect(TOKEN_BINDING_SCHEMES).toEqual(['visa', 'mastercard', 'upi_autopay', 'plural']);
+    expect(TOKEN_BINDING_SCHEMES).toEqual(['visa', 'mastercard', 'upi_autopay', 'provider_token']);
     expect(parseSchemeTokenBinding(BINDING)).toEqual(BINDING);
   });
 
