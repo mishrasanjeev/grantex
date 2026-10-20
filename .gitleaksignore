@@ -338,3 +338,11 @@ b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-ts/tests/vault.test.ts:gen
 286060f5c7ec8ccf7441b5370b20a7f40cab1956:spec/examples/oacp/oacp-mandates-v1-extra.json:jwt:29
 286060f5c7ec8ccf7441b5370b20a7f40cab1956:spec/examples/oacp/oacp-mandates-v1-extra.json:jwt:34
 286060f5c7ec8ccf7441b5370b20a7f40cab1956:spec/examples/oacp/oacp-mandates-v1-extra.json:jwt:39
+
+# spec/examples/oacp/oacp-mandates-v1.json (feat/mandates-rails, 2026-10-20): gitleaks 8.30
+# decodes the base64url payload of two synthetic cart-mandate vectors and reports the
+# passkey `credential_ref` claim, a SHA-256 of the literal "synthetic-credential-id"
+# (see gen-mandates.mjs). Not a credential. Fingerprints are commit-bound: merge, do not
+# squash.
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:generic-api-key:89
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:generic-api-key:182
