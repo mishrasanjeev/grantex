@@ -277,6 +277,14 @@ b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-ts/tests/vault.test.ts:gen
 862bf8e2026a7a6d2f079eb50f77e21b4ad61597:spec/examples/oacp/gen.mjs:generic-api-key:107
 862bf8e2026a7a6d2f079eb50f77e21b4ad61597:spec/examples/oacp/oacp-artifact-jws-v1.json:jwt:875
 745cb2d86928e2d92fca30904e07d8855effc8a0:spec/examples/oacp/oacp-artifact-jws-v1.json:jwt:875
+
+# spec/examples/oacp (OACP integrity, #1790, squash-merged as 79735e1a): the same
+# synthetic conformance vectors and generator key ids baselined on the PR branch
+# under its original commits. Not credentials.
+79735e1a6aa858e4aff960f6541379b049ce7399:spec/examples/oacp/gen.mjs:generic-api-key:114
+79735e1a6aa858e4aff960f6541379b049ce7399:spec/examples/oacp/gen.mjs:generic-api-key:115
+79735e1a6aa858e4aff960f6541379b049ce7399:spec/examples/oacp/oacp-artifact-jws-v1.json:jwt:875
+
 # apps/auth-service/tests/fixtures/protocol-schemas (feat/commerce-protocol-surfaces,
 # 2026-10-20): the vendored ACP 2026-04-17 checkout JSON Schema's own `examples`
 # show placeholder payment tokens. Upstream example values, not credentials.
