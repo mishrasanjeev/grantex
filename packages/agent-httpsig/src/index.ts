@@ -62,6 +62,29 @@ export type {
   WebBotAuthSignOptions,
   WebBotAuthVerifyOptions,
 } from './profiles.js';
+export {
+  DEFAULT_TAP_BODY_MEMBERS,
+  GRANTEX_CONSENT_RECORD_TYPE,
+  buildAgenticConsumer,
+  buildAgenticPaymentContainer,
+  buildGrantexConsentRecord,
+  jcsCanonicalizer,
+  signTapObject,
+  verifyTapBodyObjects,
+  withTapBodyObjects,
+} from './tap.js';
+export type {
+  AgenticConsumerInput,
+  AgenticPaymentContainerInput,
+  GrantexConsentSource,
+  TapBodyMembers,
+  TapBodyVerification,
+  TapCanonicalizer,
+  TapObjectCheck,
+  TapObjectProblem,
+  VerifyTapBodyOptions,
+} from './tap.js';
+export { canonicalJson } from './canonical.js';
 export { jwkThumbprint, publicJwk, verifySignatureValue } from './keys.js';
 export type { AgentJwk, SignatureAlgorithm } from './keys.js';
 export { createSignatureBase, signatureBaseFor } from './message.js';

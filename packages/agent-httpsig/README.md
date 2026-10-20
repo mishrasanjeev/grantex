@@ -108,6 +108,43 @@ The signature base now implements the RFC 9421 component parameters `key`
 (section 2.1.2) and `req` (section 2.4, given the related request) and the
 derived component `@target-uri` (section 2.2.2).
 
+## TAP body objects and the Grantex consent record
+
+TAP carries two signed objects in the request body beside the message
+signature. `buildAgenticConsumer` (consumer recognition: `nonce`, `idToken`,
+`contextualData`, `kid`, `alg`, `signature`) and
+`buildAgenticPaymentContainer` (`nonce`, `kid`, `alg`, `signature`, and
+optionally `paymentCredentialsHash`, `cardMetadata`, `credentialHash`, an
+already encrypted `payload`, `browsingIOU`) build them;
+`withTapBodyObjects` places them in a JSON body; `verifyTapBodyObjects`
+checks them after the message signature verified under the `tap` profile:
+each object's `nonce` must equal the signature's nonce and its `kid` the
+signature's keyid. A consumer object that fails is reported (soft: its
+content may be inaccurate). A payment container that fails, or whose key
+cannot be found, is `usableForPayment: false`.
+
+UNCONFIRMED by the published TAP specification, and therefore configurable:
+
+- where the objects sit in the body (`TapBodyMembers`; defaults
+  `agenticConsumer`, `agenticPaymentContainer` as top-level members);
+- what the object signature covers (default: RFC 8785 JCS of the object
+  without `signature`, signature base64url; pass `canonicalize`).
+
+Objects are signed with ES256 (P-256) or EdDSA (Ed25519). TAP's examples use
+PS256, which this library reports as `algorithm_unsupported`.
+
+`buildGrantexConsentRecord(consent, { nonce })` builds the
+`grantexConsentRecord` object from a granted, unexpired Grantex commerce
+consent: consent id, merchant, agent, passport type, approved scopes, amount
+cap, consent text version, presented payload hash, approval and expiry
+times, and the message nonce. It carries no principal identifier and is a
+Grantex extension, not part of TAP; the relying party checks the consent
+with Grantex by its id.
+
+[`spec/examples/agent-httpsig-profile-vectors.json`](../../spec/examples/agent-httpsig-profile-vectors.json)
+holds deterministic Ed25519 vectors for both profiles and both body objects;
+the TypeScript and Python packages reproduce them byte for byte.
+
 ## Also exported
 
 - `contentDigest(body)`, `jwkThumbprint(jwk)`, `publicJwk(jwk)`;

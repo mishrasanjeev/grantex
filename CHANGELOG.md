@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Visa TAP header profile, body objects and the Grantex consent record object (G49)
+- `@grantex/agent-httpsig` / `grantex-agent-httpsig`: builders and a checker
+  for the TAP `agenticConsumer` and `agenticPaymentContainer` body objects,
+  bound to the `tap` profile signature's nonce and keyid. A failed consumer
+  object is reported; a failed payment container is never usable for payment
+  (fail closed, also when its key cannot be found).
+- The objects' body placement and signature canonicalization are not
+  confirmed by the published TAP specification; both are configurable, with
+  RFC 8785 JCS and top-level `agenticConsumer` / `agenticPaymentContainer`
+  members as documented defaults. ES256 and EdDSA only.
+- `buildGrantexConsentRecord` / `build_grantex_consent_record`: the
+  `grantexConsentRecord` object (Grantex extension) from a granted, unexpired
+  commerce consent, bound to the message nonce, without any principal
+  identifier; refuses a consent that is not granted, has no scopes or has
+  expired.
+- New shared vectors `spec/examples/agent-httpsig-profile-vectors.json`
+  (deterministic Ed25519, synthetic): both libraries reproduce the TAP and
+  Web Bot Auth signatures and the body objects byte for byte.
+
 ### Added - Profile-driven agent request signatures: Grantex, Visa TAP, Web Bot Auth (G60)
 - `@grantex/agent-httpsig` and `grantex-agent-httpsig` add
   `signWithProfile` / `verifyWithProfile` (`sign_with_profile` /

@@ -65,6 +65,20 @@ from ._profiles import (
     sign_with_profile,
     verify_with_profile,
 )
+from ._tap import (
+    DEFAULT_TAP_BODY_MEMBERS,
+    GRANTEX_CONSENT_RECORD_TYPE,
+    TapBodyVerification,
+    TapObjectCheck,
+    build_agentic_consumer,
+    build_agentic_payment_container,
+    build_grantex_consent_record,
+    canonical_json,
+    jcs_canonicalizer,
+    sign_tap_object,
+    verify_tap_body_objects,
+    with_tap_body_objects,
+)
 from .structured_fields import (
     Date,
     Dictionary,
@@ -85,6 +99,18 @@ from .structured_fields import (
 __version__ = "0.1.0"
 
 __all__ = [
+    "DEFAULT_TAP_BODY_MEMBERS",
+    "GRANTEX_CONSENT_RECORD_TYPE",
+    "TapBodyVerification",
+    "TapObjectCheck",
+    "build_agentic_consumer",
+    "build_agentic_payment_container",
+    "build_grantex_consent_record",
+    "canonical_json",
+    "jcs_canonicalizer",
+    "sign_tap_object",
+    "verify_tap_body_objects",
+    "with_tap_body_objects",
     "SIGNATURE_AGENT_FIELD",
     "SIGNATURE_AGENT_TYPES",
     "SIGNATURE_PROFILES",
