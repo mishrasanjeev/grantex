@@ -86,7 +86,7 @@ function asText(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-function rowToRecord(row: Record<string, unknown>): OacpArtifactRecord {
+export function rowToRecord(row: Record<string, unknown>): OacpArtifactRecord {
   const uri = asText(row['status_list_uri']);
   const idx = row['status_idx'];
   return {
@@ -113,13 +113,14 @@ function rowToRecord(row: Record<string, unknown>): OacpArtifactRecord {
   };
 }
 
-const COLUMNS = `artifact_id, family, artifact_type, tenant_id, merchant_id, seller_agent_id,
+export const COLUMNS = `artifact_id, family, artifact_type, tenant_id, merchant_id, seller_agent_id,
   issuer_key_id, payload_hash, envelope, payload, status, status_list_uri, status_idx,
   request_id, issued_at, expires_at, refusal_code, revoked_at, revocation_reason,
   revocation_artifact_id, created_at,
   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_exact`;
 
-async function insertIssued(
+/** Insert one issued artifact row; call it in the transaction that allocated its status entry. */
+export async function insertIssued(
   tx: TxSql,
   row: { family: string; envelope: OacpArtifactEnvelope; payload: Record<string, unknown>; request_id: string | null },
 ): Promise<void> {

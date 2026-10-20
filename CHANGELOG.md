@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - x402 and MPP settlement receipts as OACP commitment evidence; the MPP 402 challenge flow (G59)
+- `POST /v1/commerce/oacp/commitment-evidence/settlement-receipts` (AgenticOrg
+  service token, new scope `commerce.oacp.commitment_evidence.write`, tenant
+  allowlist of the C6Z route) binds a successful x402 settlement
+  (SettlementResponse of `PAYMENT-RESPONSE`, optionally naming the
+  authorizing GDT `jti`) or an MPP `Payment-Receipt` to a commitment as a
+  signed OACP `commitment_evidence` artifact on the OACP status list:
+  `commitment_type: "settlement_receipt_reference"`, the artifacts relied on
+  (issued, unrevoked, same tenant and merchant), the receipt's SHA-256 over
+  RFC 8785, network or method, transaction or reference; never the payer.
+  Receipts are unsigned, so the artifact records
+  `receipt_verification: "reported_not_verified_by_grantex"`. Idempotent per
+  commitment (409 `commitment_receipt_conflict` for another receipt); a failed
+  settlement is 422 `settlement_not_successful`. No payment is executed.
+- `@grantex/mpp` implements the "Payment" HTTP authentication scheme
+  (draft-ryan-httpauth-payment-01): `WWW-Authenticate: Payment` challenges
+  with the stateless HMAC-bound id, `Authorization: Payment` credentials and
+  their checks (realm, method, expiry, body digest), `Payment-Receipt`, RFC
+  9457 problem details, and the `requirePayment` Express middleware (the
+  payment method's proof is verified by the integrator's verifier).
+- Correction to the program's naming: MPP has no `Payment-Signature` header.
+  `PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE` are x402 v2's
+  headers, which `@grantex/x402` already speaks; it now also reads the
+  settlement receipt (`readSettlementResponse`, v2 and v1) and shapes it for
+  commitment evidence (`settlementReceiptEvidence`).
+
 ### Added - KYA tier claim on the Agent Passport, mapped from trust marks (G54)
 - `POST /v1/passport/issue` adds `credentialSubject.kyaTier`
   (`{tier, trustMarks, mappingVersion}`) when the new flag

@@ -63,6 +63,35 @@ const record = await lookupOrgTrust('did:web:acme.com');
 // { organizationDID, trustLevel, verificationMethod, domains, verifiedAt }
 ```
 
+## The 402 challenge flow ("Payment" HTTP authentication scheme)
+
+MPP's HTTP 402 flow is the "Payment" HTTP authentication scheme
+(draft-ryan-httpauth-payment-01). This package implements it:
+
+- `createPaymentChallenge({ secret, realm, method, intent, request, expiresIn })`
+  binds the challenge id to its parameters statelessly
+  (`base64url(HMAC-SHA256(secret, realm|method|intent|request|expires|digest|opaque))`,
+  section 5.1.2.1.1); `formatPaymentChallenge` and `parsePaymentChallenges`
+  write and read `WWW-Authenticate: Payment …` (several challenges per field).
+- `formatPaymentCredential` and `parsePaymentCredential` write and read
+  `Authorization: Payment <base64url JSON {challenge, source?, payload}>`
+  (section 5.2); `verifyPaymentCredential` checks that this server issued the
+  echoed challenge with exactly those parameters, the realm, the method, the
+  expiry and a bound body digest.
+- `formatPaymentReceipt` / `parsePaymentReceipt`: `Payment-Receipt` (section
+  5.3), on 2xx only.
+- `paymentProblem(code, detail)`: RFC 9457 problem details under
+  `https://paymentauth.org/problems/` (section 8).
+- `requirePayment({ secret, realm, offers, verifyPayload })`: Express
+  middleware that answers 402 with the challenges, verifies a credential,
+  hands the method's proof to `verifyPayload`, and sets `Payment-Receipt` and
+  `req.payment`. Grantex settles nothing; `verifyPayload` is the payment
+  method's verifier.
+
+There is no `Payment-Signature` header in this scheme; that name is x402 v2's
+(`PAYMENT-REQUIRED` / `PAYMENT-SIGNATURE` / `PAYMENT-RESPONSE`, in
+`@grantex/x402`).
+
 ## KYA tier claim
 
 With `AGENT_PASSPORT_KYA_TIER_ENABLED=true` (default off), an issued passport's

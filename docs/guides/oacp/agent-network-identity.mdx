@@ -178,3 +178,45 @@ the auth service.
 The Agent Passport can carry a KYA tier mapped from the agent's registry trust
 marks through an operator-configured table, pending the scheme specifications.
 See [MPP Agent Passport](/features/mpp-agent-passport#kya-tier).
+
+## HTTP 402 payments: challenges, receipts and commitment evidence
+
+- **MPP** uses the "Payment" HTTP authentication scheme
+  (draft-ryan-httpauth-payment-01): `WWW-Authenticate: Payment …` on the 402,
+  `Authorization: Payment <base64url JSON>` on the retry, `Payment-Receipt` on
+  success. `@grantex/mpp` implements the challenge binding, the credential
+  checks, the receipt, the problem details and an Express middleware.
+- **x402 v2** uses `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE` and
+  `PAYMENT-RESPONSE`. `@grantex/x402` pays through them and reads the
+  settlement receipt.
+- **Commitment evidence.** `POST /v1/commerce/oacp/commitment-evidence/settlement-receipts`
+  (AgenticOrg service token, scope `commerce.oacp.commitment_evidence.write`,
+  allow-listed tenants) binds a successful x402 settlement or MPP receipt to
+  a commitment as a signed `commitment_evidence` artifact on the OACP status
+  list: `commitment_type: "settlement_receipt_reference"`, the artifacts the
+  commitment relied on (issued, unrevoked, same tenant and merchant), and the
+  receipt's `sha-256` over its RFC 8785 form with the network or method and
+  the transaction or reference. The payer is never copied. Neither receipt
+  form is signed, so the artifact records
+  `receipt_verification: "reported_not_verified_by_grantex"`. It is
+  idempotent per commitment: the same receipt returns the same artifact,
+  another receipt is `409 commitment_receipt_conflict`; a failed settlement is
+  `422 settlement_not_successful`.
+
+```json
+{
+  "tenant_id": "cten_example",
+  "merchant_id": "merchant.example",
+  "seller_agent_id": "seller-01",
+  "buyer_agent_id": "shopper-01",
+  "commitment_id": "commit-0001",
+  "artifact_refs_used": ["oacp_art_..."],
+  "policy_version": "2026-10-01",
+  "receipt": {
+    "protocol": "x402",
+    "x402_version": 2,
+    "settlement": { "success": true, "transaction": "0x...", "network": "eip155:84532" },
+    "gdt_jti": "gdt_..."
+  }
+}
+```

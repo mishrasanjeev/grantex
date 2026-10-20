@@ -7,6 +7,40 @@ export { createMppPassportMiddleware, encodePassport } from './middleware.js';
 // ── Merchant-side verifier ──────────────────────────────────────────────────
 export { verifyPassport, requireAgentPassport, clearJwksCache } from './verifier.js';
 
+// ── "Payment" HTTP authentication scheme (402 flow) ───────────────────────────
+export {
+  PAYMENT_AUTH_SCHEME,
+  PAYMENT_PROBLEMS,
+  PAYMENT_PROBLEM_BASE,
+  PAYMENT_RECEIPT_HEADER,
+  PaymentAuthError,
+  bodyDigest,
+  createPaymentChallenge,
+  decodeChallengeRequest,
+  formatPaymentChallenge,
+  formatPaymentCredential,
+  formatPaymentReceipt,
+  parsePaymentChallenges,
+  parsePaymentCredential,
+  parsePaymentReceipt,
+  paymentChallengeId,
+  paymentProblem,
+  requirePayment,
+  verifyPaymentCredential,
+} from './payment-auth.js';
+export type {
+  CreateChallengeOptions,
+  PaymentChallenge,
+  PaymentCredential,
+  PaymentOffer,
+  PaymentProblem,
+  PaymentProblemCode,
+  PaymentReceipt,
+  RequirePaymentOptions,
+  VerifiedPayment,
+  VerifyCredentialOptions,
+} from './payment-auth.js';
+
 // ── Trust Registry ──────────────────────────────────────────────────────────
 export { lookupOrgTrust, clearTrustRegistryCache } from './trust-registry.js';
 
@@ -41,4 +75,5 @@ export type {
   GetPassportResponse,
   RevokePassportResponse,
   ListTrustRegistryResponse,
+  KyaTierClaim,
 } from './types.js';
