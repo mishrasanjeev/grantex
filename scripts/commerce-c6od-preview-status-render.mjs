@@ -8,7 +8,6 @@ const repoRoot = resolve(scriptsDir, '..');
 
 const requiredSurfaces = [
   'schemaorg_jsonld_preview',
-  'ap2_style_evidence_preview',
   'connector_registry_metadata_preview',
 ];
 

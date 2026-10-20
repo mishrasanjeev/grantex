@@ -42,9 +42,9 @@ published, and must not be committed as timestamped artifacts.
 | Check | Result |
 | --- | --- |
 | Release-review gate | passed |
-| Fixture count | 6 |
-| Surface count | 3 |
-| Scan count | 72 |
+| Fixture count | 4 |
+| Surface count | 2 |
+| Scan count | 56 |
 | Rendered status | passing |
 | Badge status | passing |
 | Report/status artifacts | generated only in local temp/review directory |
@@ -67,12 +67,9 @@ Artifact retention rule: must not be committed under `docs/internal/commerce-v1/
 
 ## Surface Coverage
 
-The passing rehearsal covered all five preview surfaces:
+The passing rehearsal covered both remaining preview surfaces:
 
 - schema.org JSON-LD preview
-- UCP-style capability profile preview
-- ACP-style checkout shape preview
-- AP2-style evidence preview
 - connector registry metadata preview
 
 This coverage confirms the preview conformance chain can validate fixture
@@ -90,7 +87,7 @@ public discovery, production allowlists, or any certification claim.
 | Grantex public discovery | blocked | Public discovery remains outside the preview conformance gate. | Approved rollout plan, safe allowlist process, monitoring, rollback, and production-readiness approval. |
 | AgenticOrg public commerce discovery | blocked | AgenticOrg discovery stays read-only and gated; public commerce discovery is not enabled by this chain. | Cross-repo approval, grounded-response review, monitoring, rollback, and public-discovery authorization. |
 | Production Commerce V1 | blocked | C6Oa-C6Of validates preview fixtures and local reports only. | Production readiness review, operator approval, risk acceptance, and production config change control. |
-| Production checkout/payment creation | blocked | ACP-style and AP2-style artifacts remain sandbox/non-live and non-enabling. | Consent/passport/policy evidence, payment risk review, provider approval, payment-creation controls, and rollback. |
+| Production checkout/payment creation | blocked | The preview chain carries no checkout or payment surface; the remaining artifacts are sandbox/non-live and non-enabling. | Consent/passport/policy evidence, payment risk review, provider approval, payment-creation controls, and rollback. |
 | Live payments/live Plural/live providers | blocked | No live provider path is exercised or enabled. | Provider approvals, credential handling review, live-payment controls, audit evidence, and incident rollback. |
 | Production allowlists | blocked | No concrete production allowlist values are set or approved. | Allowlist owner approval, tenant scope review, expiry/rollback policy, and config-change review. |
 

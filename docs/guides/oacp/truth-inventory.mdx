@@ -29,7 +29,7 @@ This inventory is based on the Grantex C6Z authority route, the OACP artifact si
 - Status list: `apps/auth-service/src/lib/commerce/oacp-status.ts`, route `routes/oacp-status.ts`
 - Persistence, replay, revocation: `apps/auth-service/src/lib/commerce/oacp-artifact-store.ts`
 - Migration: `apps/auth-service/src/db/migrations/133_oacp_issuer_keys_artifacts.sql`
-- Adapter previews (route-mounted, unsigned): `schemaorg-preview.ts`, `ucp-capability-preview.ts`, `acp-checkout-preview.ts`, `ap2-evidence-preview.ts`
+- Adapter preview (route-mounted, unsigned): `schemaorg-preview.ts` only. The UCP-style, ACP-style and AP2-style previews are removed; the UCP profile (`ucp-profile.ts`) is rendered from issued artifacts and AP2 is served by signed mandates (`mandates.ts`).
 - Tests: `commerce-c6z-runtime-artifact-authority.test.ts`, `commerce-c6w2-oacp-artifact-authority.test.ts`, `oacp-jws-vectors.test.ts`, `oacp-canonicalization.test.ts`, `commerce-oacp-artifacts-postgres.integration.test.ts`
 
 ## Pending Runtime Gaps

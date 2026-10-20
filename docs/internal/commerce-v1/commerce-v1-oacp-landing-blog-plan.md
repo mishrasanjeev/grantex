@@ -213,7 +213,7 @@ flowchart TB
   schema["schema.org preview"]
   ucp["UCP-style profile"]
   acp["ACP-style checkout shape"]
-  ap2["AP2-style evidence preview"]
+  ap2["AP2-mapped PaymentMandate"]
   a2a["A2A-style handoff"]
   mcp["MCP-style tool metadata"]
 

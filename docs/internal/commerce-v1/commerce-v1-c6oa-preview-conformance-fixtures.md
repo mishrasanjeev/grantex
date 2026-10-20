@@ -19,7 +19,6 @@ Fixture directory:
 Covered surfaces:
 
 - schema.org JSON-LD preview
-- AP2-style evidence preview
 - connector registry metadata/source precedence preview
 
 Each surface has a preview-available example and a blocked/refusal example. The

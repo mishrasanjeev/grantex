@@ -11,7 +11,6 @@ discovery approval, and not checkout or payment approval.
 The corpus covers both preview-available and blocked/refusal examples for:
 
 - schema.org JSON-LD preview
-- AP2-style evidence preview
 - connector registry metadata/source precedence preview
 
 Every fixture must remain synthetic, sandbox-only, preview-only, non-live,

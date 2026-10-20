@@ -35,7 +35,6 @@ const previewInternalOnlyStatement =
 
 const expectedSurfaceNames = [
   'schemaorg_jsonld_preview',
-  'ap2_style_evidence_preview',
   'connector_registry_metadata_preview',
 ];
 
@@ -283,15 +282,6 @@ function assertSurfaceFixture(fixture, fileName) {
       assert.ok(isRecord(payload.jsonld), `${fileName} jsonld must be an object`);
       assert.equal(payload.jsonld['@context'], 'https://schema.org', `${fileName} schema.org context`);
       assert.ok(Array.isArray(payload.jsonld['@graph']), `${fileName} schema.org graph`);
-      break;
-    }
-    case 'ap2_style_evidence_preview': {
-      assert.equal(payload.ap2_certification_claim, 'none', `${fileName} AP2 claim`);
-      assert.equal(payload.signature_status, 'unsigned_preview', `${fileName} signature status`);
-      assertFalse(payload.ap2_signed_mandate_created, `${fileName}.ap2_signed_mandate_created`);
-      assertFalse(payload.signed_production_mandate_created, `${fileName}.signed_production_mandate_created`);
-      assertFalse(payload.payment_network_submission_enabled, `${fileName}.payment_network_submission_enabled`);
-      assertControls(payload.controls, `${fileName}.payload`);
       break;
     }
     case 'connector_registry_metadata_preview': {

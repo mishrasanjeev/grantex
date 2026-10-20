@@ -28,10 +28,10 @@ describe('C6Ob preview conformance validator automation', () => {
 
     expect(summary).toMatchObject({
       status: 'passed',
-      fixtures_checked: 6,
-      surfaces_checked: 3,
+      fixtures_checked: 4,
+      surfaces_checked: 2,
       manifest: 'docs/internal/commerce-v1/fixtures/c6oa-preview-conformance/manifest.json',
     });
-    expect(summary.scans_checked).toBeGreaterThanOrEqual(72);
+    expect(summary.scans_checked).toBeGreaterThanOrEqual(56);
   });
 });

@@ -21,7 +21,7 @@ What exists is valuable:
 - Grantex has the seller control-plane backbone for sandbox merchant onboarding, category/catalog readiness, public-safe preview, review request, operator decision, rollout proposal dry run, AgenticOrg sandbox handoff, connector registry, connector dry-run review, remediation evidence, standards previews, and internal conformance gates.
 - AgenticOrg has Grantex-only commerce connector aliases and channel-neutral read-only buyer discovery/session orchestration.
 - The architecture correctly keeps merchant systems, payment providers, consent, policy, Commerce Passports, and audit inside Grantex.
-- Standards packaging is moving in the right direction: schema.org JSON-LD preview, UCP-style preview, ACP-style preview, AP2-style evidence preview, internal public-safe example corpus, IETF draft skeleton, and NIST reference-architecture skeleton.
+- Standards packaging is moving in the right direction: schema.org JSON-LD preview, UCP-style preview, ACP-style preview, AP2-mapped PaymentMandate (replacing the removed AP2-style evidence preview), internal public-safe example corpus, IETF draft skeleton, and NIST reference-architecture skeleton.
 
 The hard truth:
 
@@ -81,7 +81,7 @@ Implemented or substantially present:
 - schema.org JSON-LD preview.
 - UCP-style capability profile preview.
 - ACP-style cart/checkout shape preview.
-- AP2-style evidence preview.
+- AP2-mapped PaymentMandate (the unsigned AP2-style evidence preview was removed).
 - C6Tc internal public-safe example corpus for future IETF/NIST draft preparation, with synthetic data and non-enabling markers.
 - Preview conformance fixtures, validators, status rendering, CI gate, and release-review runbook.
 - IETF and NIST internal draft-preparation materials.

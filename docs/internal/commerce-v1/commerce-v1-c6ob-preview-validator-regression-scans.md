@@ -41,8 +41,8 @@ The command validates:
 - no public discovery, production Commerce V1, checkout/payment, live-provider,
   provider-call, merchant-private-API, AgenticOrg direct-execution, allowlist,
   publication, or certification enablement
-- surface-specific schema expectations for schema.org JSON-LD, UCP-style,
-  ACP-style, AP2-style, and connector registry previews
+- surface-specific schema expectations for schema.org JSON-LD and connector
+  registry previews
 
 ## Regression Scans
 

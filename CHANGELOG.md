@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Breaking - Unsigned AP2-style evidence preview removed (G42)
+- `GET /v1/commerce/merchants/{merchant_id}/ap2-evidence-preview` is removed
+  (now 404) with `lib/commerce/ap2-evidence-preview.ts`, its OpenAPI path and
+  `Ap2EvidencePreview` schema, its tests, and its two C6Oa preview-conformance
+  fixtures (corpus now 4 fixtures, 2 surfaces, 56 scans). It returned unsigned
+  AP2-shaped evidence that no relying party could verify. The signed
+  PaymentMandate at `POST /v1/commerce/oacp/mandates/payment` replaces it. No
+  opt-out: the preview proved nothing and was sandbox-only.
+
 ### Added - Presence mode and `amr` on the consent record and Commerce Passport (G44)
 - `POST /v1/commerce/passports/consent-requests` accepts `presence`
   (`human_present` | `human_not_present`, default `human_not_present`), the

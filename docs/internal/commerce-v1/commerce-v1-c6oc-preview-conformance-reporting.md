@@ -32,9 +32,9 @@ Expected success output:
 commerce C6Oa preview conformance validation passed
 {
   "status": "passed",
-  "fixtures_checked": 6,
-  "surfaces_checked": 3,
-  "scans_checked": 72,
+  "fixtures_checked": 4,
+  "surfaces_checked": 2,
+  "scans_checked": 56,
   "manifest": "docs/internal/commerce-v1/fixtures/c6oa-preview-conformance/manifest.json"
 }
 ```
@@ -78,9 +78,6 @@ The JSON and Markdown reports include:
 The required surfaces are:
 
 - schema.org JSON-LD preview
-- UCP-style capability profile preview
-- ACP-style checkout shape preview
-- AP2-style evidence preview
 - connector registry metadata preview
 
 ## Failure Behavior
