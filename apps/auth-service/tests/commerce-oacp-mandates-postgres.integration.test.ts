@@ -276,6 +276,15 @@ describePostgres('OACP mandates against Postgres', () => {
       ['issued', null, 0], ['issued', i.jti, 0], ['issued', cart.jti, 0],
     ]);
 
+    // Each issuance wrote its commerce audit event in the issuing transaction.
+    const audits = await sql<Array<Record<string, unknown>>>`
+      SELECT id, resource_id, event_type, passport_jti FROM commerce_audit_events
+       WHERE resource_type = 'oacp_mandate' AND resource_id = ANY(${[i.jti, cart.jti, payment.jti]}) ORDER BY occurred_at`;
+    expect(audits.map((a) => [a['event_type'], a['resource_id']])).toEqual([
+      ['oacp.mandate.issued', i.jti], ['oacp.mandate.issued', cart.jti], ['oacp.mandate.issued', payment.jti],
+    ]);
+    expect(p.json<{ audit_event_id: string }>().audit_event_id).toBe(audits[2]!['id']);
+
     // The verification endpoint answers the same.
     const v = await post('verify', { tenant_id: TENANT, mandate: payment.mandate, expected_type: 'payment', expected_merchant_id: MERCHANT });
     expect(v.json()).toMatchObject({ valid: true, refusal_code: null, mandate_type: 'payment', mandate_hash: payment.mandate_hash });
@@ -291,6 +300,9 @@ describePostgres('OACP mandates against Postgres', () => {
     expect(body.error.code).toBe('passport_cap_exceeded');
     const [row] = await sql`SELECT status, jwt, status_list_uri, refusal_code FROM oacp_mandates WHERE jti = ${body.error.details.refusal_record_id}`;
     expect(row).toMatchObject({ status: 'refused', jwt: null, status_list_uri: null, refusal_code: 'passport_cap_exceeded' });
+    const audit = await sql`SELECT event_type, tenant_id FROM commerce_audit_events WHERE resource_id = ${body.error.details.refusal_record_id}`;
+    expect(audit).toEqual([{ event_type: 'oacp.mandate.refused', tenant_id: TENANT }]);
+    expect(res.json<{ error: { audit_event_id: string } }>().error.audit_event_id).toMatch(/^caud_/);
   });
 
   it('refuses when the consent behind the passport is not active', async () => {
@@ -395,6 +407,9 @@ describePostgres('OACP mandates against Postgres', () => {
     expect(revoke.statusCode, revoke.body).toBe(201);
     expect(revoke.json()).toMatchObject({ jti: i.jti, status: 'revoked', revocation_reason: 'buyer_withdrew', already_revoked: false });
     expect(revoke.json<{ revoked_jtis: string[] }>().revoked_jtis.sort()).toEqual([i.jti, cart.jti].sort());
+    const revokedAudits = await sql`
+      SELECT resource_id FROM commerce_audit_events WHERE event_type = 'oacp.mandate.revoked' AND resource_id = ANY(${[i.jti, cart.jti]})`;
+    expect(revokedAudits).toHaveLength(2);
 
     resetOacpStatusCache();
     expect(await relyingPartyVerify(i.mandate, i.claims, 'intent')).toMatchObject({ valid: false, refusal_code: 'mandate_revoked' });

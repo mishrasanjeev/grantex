@@ -70,6 +70,7 @@ import {
   type OacpPaymentClaims,
   type OacpPaymentRail,
 } from './oacp-mandate-jwt.js';
+import { appendCommerceAudit } from './audit.js';
 import { createWebAuthnEvidence, verifyPortableWebAuthnEvidence, type WebAuthnAssertionEvidence } from '../webauthn-evidence.js';
 
 type Sql = ReturnType<typeof postgres>;
@@ -102,6 +103,7 @@ export type OacpMandateIssueRefusalCode =
 /** A refused issuance: HTTP status, code, and the refusal record id once written. */
 export class OacpMandateRefusal extends Error {
   refusalRecordId: string | null = null;
+  auditEventId: string | null = null;
 
   constructor(readonly code: OacpMandateIssueRefusalCode, readonly status: 403 | 422, message: string) {
     super(message);
@@ -127,6 +129,8 @@ export interface OacpMandateIssued {
   /** Lowercase hex SHA-256 of `mandate`. */
   mandate_hash: string;
   claims: OacpMandateClaims;
+  /** The `oacp.mandate.issued` row in commerce_audit_events, written in the issuing transaction. */
+  audit_event_id: string;
 }
 
 interface CommonInput {
@@ -523,15 +527,59 @@ async function signAndPersist(sql: Sql, p: Persist): Promise<OacpMandateIssued> 
       }
       throw err;
     }
-    return { mandate, jti, mandate_type: p.type, exp: p.exp, status: { status_list: status }, mandate_hash: mandateHash, claims };
+    const audit = await appendCommerceAudit(tx as unknown as Sql, {
+      tenantId: p.passport.tenantId,
+      merchantId: p.passport.merchantId,
+      agentId: p.passport.agentId,
+      userPrincipalId: p.passport.subject,
+      eventType: 'oacp.mandate.issued',
+      resourceType: 'oacp_mandate',
+      resourceId: jti,
+      passportJti: p.passport.jti,
+      policyVersion: p.passport.policyVersion,
+      requestId: p.requestId,
+      metadata: {
+        mandate_type: p.type,
+        presence: p.presence,
+        amr: p.amr,
+        parent_jti: p.parentJti,
+        mandate_hash: mandateHash,
+        issuer_key_id: signer.kid,
+        checkout_hash: p.checkoutHash,
+        amount: p.amount,
+        currency: p.currency,
+        expires_at: new Date(p.exp * 1000).toISOString(),
+        passkey_evidence_digest: p.passkey?.evidence.digest ?? null,
+      },
+    });
+    return {
+      mandate, jti, mandate_type: p.type, exp: p.exp, status: { status_list: status }, mandate_hash: mandateHash, claims,
+      audit_event_id: audit.id,
+    };
   }) as OacpMandateIssued;
 }
 
-/** Record a refused issuance: what was asked, the code, never a token. */
+/**
+ * Record a refused issuance: what was asked, the code, never a token. The
+ * `oacp.mandate.refused` audit event is written in the same transaction when
+ * the tenant is a commerce tenant (commerce_audit_events references
+ * commerce_tenants); a request naming no known tenant is recorded in
+ * oacp_mandates only.
+ */
 export async function recordOacpMandateRefusal(
   sql: Sql,
   input: { type: OacpMandateType; tenant_id: unknown; code: string; message: string; passport: VerifiedPassport | null; request_id: string | null },
-): Promise<string> {
+): Promise<{ id: string; audit_event_id: string | null }> {
+  return await sql.begin(async (handle) => {
+    const tx = handle as unknown as Sql;
+    return await recordRefusalTx(tx, input);
+  }) as { id: string; audit_event_id: string | null };
+}
+
+async function recordRefusalTx(
+  sql: Sql,
+  input: { type: OacpMandateType; tenant_id: unknown; code: string; message: string; passport: VerifiedPassport | null; request_id: string | null },
+): Promise<{ id: string; audit_event_id: string | null }> {
   const id = newOacpMandateRefusalId();
   const tenant = typeof input.tenant_id === 'string' && input.tenant_id.length <= 256 ? input.tenant_id : null;
   await queries(sql)`
@@ -545,7 +593,23 @@ export async function recordOacpMandateRefusal(
       ${queries(sql).json({ refusal_code: input.code, message: input.message } as never)}, 'refused', ${input.code}, ${input.request_id}
     )
   `;
-  return id;
+  const tenantId = input.passport?.tenantId ?? tenant;
+  if (tenantId === null) return { id, audit_event_id: null };
+  const known = await sql`SELECT 1 FROM commerce_tenants WHERE id = ${tenantId}`;
+  if (!known[0]) return { id, audit_event_id: null };
+  const audit = await appendCommerceAudit(sql, {
+    tenantId,
+    merchantId: input.passport?.merchantId ?? null,
+    agentId: input.passport?.agentId ?? null,
+    userPrincipalId: input.passport?.subject ?? null,
+    eventType: 'oacp.mandate.refused',
+    resourceType: 'oacp_mandate',
+    resourceId: id,
+    passportJti: input.passport?.jti ?? null,
+    requestId: input.request_id,
+    metadata: { mandate_type: input.type, refusal_code: input.code },
+  });
+  return { id, audit_event_id: audit.id };
 }
 
 /** Run an issuance, recording any refusal before rethrowing it. */
@@ -560,9 +624,11 @@ async function withRefusalRecord<T>(
     return await run((p) => { passport = p; });
   } catch (err) {
     if (err instanceof OacpMandateRefusal) {
-      err.refusalRecordId = await recordOacpMandateRefusal(sql, {
+      const recorded = await recordOacpMandateRefusal(sql, {
         type, tenant_id: input.tenant_id, code: err.code, message: err.message, passport, request_id: input.request_id ?? null,
       });
+      err.refusalRecordId = recorded.id;
+      err.auditEventId = recorded.audit_event_id;
     }
     throw err;
   }
@@ -732,7 +798,7 @@ export async function getOacpMandateRecord(sql: Sql, jti: string): Promise<OacpM
 export async function revokeOacpMandate(
   sql: Sql,
   jti: string,
-  options: { reason_code?: string | undefined; now?: Date | undefined } = {},
+  options: { reason_code?: string | undefined; now?: Date | undefined; request_id?: string | null | undefined } = {},
 ): Promise<{ jti: string; status: 'revoked'; revoked_at: string; revocation_reason: string; revoked_jtis: string[]; already_revoked: boolean }> {
   const reason = options.reason_code && REASON_RE.test(options.reason_code) ? options.reason_code : 'issuer_revoked';
   const nowIso = (options.now ?? new Date()).toISOString();
@@ -747,7 +813,8 @@ export async function revokeOacpMandate(
         UNION
         SELECT m.jti FROM oacp_mandates m JOIN tree t ON m.parent_jti = t.jti
       )
-      SELECT m.jti, m.status, m.status_list_uri, m.status_idx
+      SELECT m.jti, m.status, m.status_list_uri, m.status_idx, m.mandate_type, m.tenant_id, m.merchant_id,
+             m.buyer_agent_id, m.subject, m.passport_jti
         FROM oacp_mandates m JOIN tree t ON t.jti = m.jti
        WHERE m.status = 'issued'
        ORDER BY m.jti
@@ -760,6 +827,18 @@ export async function revokeOacpMandate(
         UPDATE oacp_mandates SET status = 'revoked', revoked_at = ${nowIso}, revocation_reason = ${reason}
          WHERE jti = ${row['jti'] as string} AND status = 'issued'
       `;
+      await appendCommerceAudit(tx as unknown as Sql, {
+        tenantId: row['tenant_id'] as string,
+        merchantId: row['merchant_id'] as string,
+        agentId: row['buyer_agent_id'] as string,
+        userPrincipalId: row['subject'] as string,
+        eventType: 'oacp.mandate.revoked',
+        resourceType: 'oacp_mandate',
+        resourceId: row['jti'] as string,
+        passportJti: row['passport_jti'] as string,
+        requestId: options.request_id ?? null,
+        metadata: { mandate_type: row['mandate_type'], reason_code: reason, revoked_with: jti },
+      });
       revoked.push(row['jti'] as string);
     }
     const alreadyRevoked = root['status'] === 'revoked';

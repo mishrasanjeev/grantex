@@ -74,6 +74,7 @@ function rethrow(err: unknown): never {
     throw new CommerceHttpError(err.status, err.code, err.message, {
       retryable: false,
       ...(err.refusalRecordId ? { details: { refusal_record_id: err.refusalRecordId } } : {}),
+      ...(err.auditEventId ? { auditEventId: err.auditEventId } : {}),
     });
   }
   if (err instanceof OacpMandateUnavailableError) {
@@ -94,6 +95,7 @@ function issuedView(issued: OacpMandateIssued): Record<string, unknown> {
     status: issued.status,
     mandate_hash: issued.mandate_hash,
     claims: issued.claims,
+    audit_event_id: issued.audit_event_id,
   };
 }
 
@@ -180,7 +182,7 @@ export async function commerceOacpMandateRoutes(app: FastifyInstance) {
       throw new CommerceHttpError(404, 'mandate_not_found', 'OACP mandate not found', { retryable: false });
     }
     try {
-      const result = await revokeOacpMandate(sql, record.jti, { reason_code: b['reason_code'] as string | undefined });
+      const result = await revokeOacpMandate(sql, record.jti, { reason_code: b['reason_code'] as string | undefined, request_id: request.id });
       return reply.status(result.already_revoked ? 200 : 201).send(result);
     } catch (err) {
       if (err instanceof OacpMandateStoreError) {

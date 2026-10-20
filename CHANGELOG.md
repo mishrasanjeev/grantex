@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Commerce audit events for OACP mandates
+- Every mandate issuance, refusal and revocation writes `oacp.mandate.issued`,
+  `oacp.mandate.refused` or `oacp.mandate.revoked` to `commerce_audit_events`
+  (`resource_type` `oacp_mandate`), in the same transaction as the
+  `oacp_mandates` row and, for revocation, the status-list change. A refusal
+  that names no known commerce tenant is recorded in `oacp_mandates` only.
+  Issue responses carry `audit_event_id`; refusals carry
+  `error.audit_event_id`.
+
 ### Added - OACP mandate verifiers in the SDKs (G41)
 - `@grantex/sdk`: `verifyOacpMandate`, `checkOacpMandateChain`,
   `oacpCheckoutHash`, `oacpMandateHash` and the mandate constants. The

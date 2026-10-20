@@ -40,7 +40,7 @@ Never put Shopify tokens, provider credentials, payment credentials, raw provide
 | Revoke one artifact | `POST /v1/commerce/oacp/artifacts/:artifactId/revoke` with `{"reason_code": "..."}`. The status list shows INVALID within its 30 s ttl and a `revocation` artifact is issued. Revocation is final. |
 | Audit what was issued or refused | `GET /v1/commerce/oacp/artifacts?tenant_id=...` or the `oacp_artifacts` table. |
 | Revoke a mandate | `POST /v1/commerce/oacp/mandates/:jti/revoke` with `{"reason_code": "..."}`. It revokes the mandate and every mandate issued under it (an intent's carts, a cart's payments); their status list entries are INVALID within the 30 s ttl. Final, idempotent. |
-| Audit mandates | The `oacp_mandates` table: every issued, revoked and refused mandate (`refusal_code`, no token on refusals), `jwt_sha256` = AgenticOrg's `mandate_hash`, the passkey evidence of human-present carts. |
+| Audit mandates | `commerce_audit_events` (`oacp.mandate.issued`, `oacp.mandate.refused`, `oacp.mandate.revoked`, `resource_type` `oacp_mandate`), written in the same transaction as the mandate row; and the `oacp_mandates` table: every issued, revoked and refused mandate (`refusal_code`, no token on refusals), `jwt_sha256` = AgenticOrg's `mandate_hash`, the passkey evidence of human-present carts. |
 | Key compromise and mandates | Mandates are signed by the same OACP issuer key: revoking the key stops every mandate it signed (`issuer_key_untrusted`); AgenticOrg must request new ones. |
 
 ## Smoke Tests

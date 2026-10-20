@@ -173,7 +173,7 @@ Grantex issues Intent, Cart and Payment mandates as ES256 JWTs signed with the O
 | A server-side check | `POST /v1/commerce/oacp/mandates/verify` with `{tenant_id, mandate, expected_type?, expected_merchant_id?}` returns `{valid, refusal_code, mandate_type, mandate_hash, claims}` | `commerce.oacp.mandates.verify` |
 | Revocation | `POST /v1/commerce/oacp/mandates/{jti}/revoke` with `{reason_code?}` revokes the mandate and every mandate issued under it (201, or 200 when already revoked) | `commerce.oacp.mandates.revoke` |
 
-An issue response is `{mandate, jti, mandate_type, exp, status: {status_list: {idx, uri}}, mandate_hash, claims}`. Store `jti` and `mandate_hash` (lowercase hex SHA-256 of the compact JWT) in the ledger and in the arbiter evidence (`mandate_ref`, `mandate_hash`). Put the three mandate hashes in the Plural order metadata.
+An issue response is `{mandate, jti, mandate_type, exp, status: {status_list: {idx, uri}}, mandate_hash, claims, audit_event_id}`; a refusal carries `error.audit_event_id` when the tenant is a commerce tenant. Store `jti` and `mandate_hash` (lowercase hex SHA-256 of the compact JWT) in the ledger and in the arbiter evidence (`mandate_ref`, `mandate_hash`). Put the three mandate hashes in the Plural order metadata.
 
 Verify every mandate locally before relying on it. Use the pinned Grantex issuer and JWKS, and check the status list. Order and refusal codes:
 
