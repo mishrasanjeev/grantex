@@ -8,3 +8,12 @@
  */
 export const OACP_PAYMENT_RAILS = ['plural', 'upi_autopay', 'card_network_token'] as const;
 export type OacpPaymentRail = typeof OACP_PAYMENT_RAILS[number];
+
+/**
+ * Providers whose mandate-capability verifier AgenticOrg runs and whose
+ * redacted evidence Grantex binds into the `mandate_capability` artifact
+ * (G43). `plural_pine` is the provider value of the AgenticOrg Plural capability
+ * verifier.
+ */
+export const MANDATE_CAPABILITY_PROVIDERS = ['plural_pine'] as const;
+export type MandateCapabilityProvider = typeof MANDATE_CAPABILITY_PROVIDERS[number];

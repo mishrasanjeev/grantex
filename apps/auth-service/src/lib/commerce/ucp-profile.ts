@@ -98,6 +98,7 @@ export type UcpWithheldReason =
   | 'not_served'
   | 'missing_backing_artifact'
   | 'requires_checkout'
+  | 'mandate_capability_unverified'
   | 'no_identity_linking_scopes';
 
 export interface UcpWithheldCapability {
@@ -246,7 +247,15 @@ export function renderUcpBusinessProfile(input: UcpProfileRenderInput): UcpProfi
       withheld.push({ name, reason: 'requires_checkout' });
       continue;
     }
-    if (backed(name)) emit(name);
+    if (!backed(name)) continue;
+    // G43: checkout is backed only by provider-verified mandate capability
+    // evidence, never by an `unverified` or `unavailable` artifact.
+    if (name === 'dev.ucp.shopping.checkout'
+      && live.get('mandate_capability')?.payload?.['mandate_capability_status'] !== 'verified') {
+      withheld.push({ name, reason: 'mandate_capability_unverified' });
+      continue;
+    }
+    emit(name);
   }
 
   // Identity linking last: its scope map lists only capabilities this profile emits.

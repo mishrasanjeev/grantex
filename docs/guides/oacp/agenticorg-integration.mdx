@@ -203,6 +203,44 @@ Issuance refuses, and records the refusal (the error `details.refusal_record_id`
 
 If revocation state is unavailable, the response is 503 `revocation_unavailable`. A mandate never outlives its passport or its parent, and a checkout passport lives 600 s, so request the three mandates within one passport's life.
 
+## Mandate Capability Evidence
+
+Send the result of the provider capability verifier (`verify_plural_pine_mandate_capability`) with the C6Z authority request. It is a top-level `mandate_capability_evidence` member beside `request` and `connector_evidence`. Grantex binds it into the signed `mandate_capability` artifact. The object is closed: unknown members are refused, and it must hold no secrets.
+
+```json
+{
+  "schema_version": "oacp.mandate_capability_evidence.v1",
+  "evidence_id": "<verifier evidence_id>",
+  "tenant_id": "<request tenant_id>",
+  "merchant_id": "<request merchant_id>",
+  "provider": "plural_pine",
+  "provider_environment": "sandbox",
+  "result_status": "available",
+  "external_validation_performed": true,
+  "rails": ["plural", "upi_autopay"],
+  "caps": [{ "rail": "upi_autopay", "max_amount": 1500000, "currency": "INR" }],
+  "token_types": ["network_token", "upi_mandate"],
+  "verified_at": "<checked_at>",
+  "expires_at": "<checked_at + 6 h>",
+  "redacted_evidence_ref": "provider:plural_pine:capability:<hash>:redacted",
+  "evidence_hash": "<lowercase hex SHA-256 of the redacted provider response>"
+}
+```
+
+The rules:
+
+- `result_status` and `redacted_evidence_ref` are the verifier's own values.
+- `rails` and `caps` use the mandate rail names `plural`, `upi_autopay` and `card_network_token`, with integer minor units.
+- `verified_at` must be at most 6 h old and not in the future.
+- `available` needs `external_validation_performed: true` and at least one rail.
+
+The artifact then says `mandate_capability_status: "verified"`. It carries `mandate_capability_ref` (the redacted reference) and `mandate_capability_evidence`: the object without tenant and merchant, plus `evidence_object_hash`, Grantex's SHA-256 of the RFC 8785 form of what it received.
+
+- Any other `result_status` gives `unavailable`.
+- With no evidence the artifact says `unverified` and carries no reference. The placeholder `provider:mandate_rail:capability:pending:redacted` is gone.
+- Malformed, stale, out-of-scope or placeholder evidence is refused as `mandate_capability_evidence_invalid` (422, recorded).
+- The UCP profile emits checkout and order only while the live `mandate_capability` artifact is `verified`.
+
 ## Presence And Authentication Methods
 
 A consent request names `presence`: `human_present` (the buyer confirms each cart with a passkey) or `human_not_present` (the buyer delegated purchases within the consented caps). The default is `human_not_present`. The buyer sees the mode on the consent page and it is part of the payload whose hash they approve. Approval records `amr: ["consent", "otp"]`. The Commerce Passport carries both as `presence` and `amr` claims, and mandates copy them. A passport issued before these claims existed reads as `human_not_present` with no methods. AgenticOrg's arbiter applies its stricter not-present rule set to `human_not_present`; neither mode adds a human step to a delegated purchase.

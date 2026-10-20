@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed - `mandate_capability` carries provider capability evidence, not a placeholder (G43, breaking)
+- The C6Z authority request accepts a top-level `mandate_capability_evidence`:
+  the redacted result of AgenticOrg's provider capability verifier. It holds
+  `schema_version` `oacp.mandate_capability_evidence.v1`, `evidence_id`,
+  tenant, merchant, `provider`, `provider_environment`, `result_status`,
+  `external_validation_performed`, `rails`, `caps`, `token_types`,
+  `verified_at`, `expires_at`, `redacted_evidence_ref` and `evidence_hash`.
+  The object is closed and must hold no secrets. Grantex binds it into the
+  signed `mandate_capability` artifact (`mandate_capability_evidence` plus an
+  `evidence_object_hash`, and `mandate_capability_ref` = the redacted
+  reference) with `mandate_capability_status` `verified`, or `unavailable`
+  for any other provider result. Invalid, stale, out-of-scope or placeholder
+  evidence is refused as `mandate_capability_evidence_invalid`.
+- Breaking, signed content: without evidence the artifact now says
+  `mandate_capability_status: "unverified"` (was
+  `provider_owned_verification_required`) and carries no
+  `mandate_capability_ref`. The placeholder
+  `provider:mandate_rail:capability:pending:redacted`, which looked like
+  evidence, is gone. No opt-out: AgenticOrg reads neither member.
+- `GET /v1/commerce/oacp/ucp-profile` emits `dev.ucp.shopping.checkout` (and
+  so `order`) only while the live `mandate_capability` artifact is
+  `verified`; otherwise it is withheld as `mandate_capability_unverified`.
+
 ### Added - OACP Intent, Cart and Payment mandates (G41, G45, G46)
 - `POST /v1/commerce/oacp/mandates/intent`, `/cart` and `/payment` issue
   mandates as ES256 JWTs (`typ` `oacp-intent-mandate+jwt`,

@@ -192,7 +192,7 @@ export function c6zPublicDiscoveryEligibility(tenantId: string): C6ZPublicDiscov
  */
 export async function issueAndPersistC6ZArtifacts(
   sql: Sql,
-  input: { request: C6ZSellerAuthorityRequest; evidence: C6ZConnectorEvidence; now_iso: string },
+  input: { request: C6ZSellerAuthorityRequest; evidence: C6ZConnectorEvidence; mandate_capability_evidence?: unknown; now_iso: string },
 ): Promise<C6ZIssuanceResult & { refusal_record_id?: string }> {
   assertOacpStatusBaseUsable();
   const signer = await getActiveOacpSigner(sql);

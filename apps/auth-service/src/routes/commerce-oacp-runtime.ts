@@ -61,6 +61,8 @@ import { getSql, queries } from '../db/client.js';
 interface C6ZAuthorityBody {
   request?: C6ZSellerAuthorityRequest;
   connector_evidence?: C6ZConnectorEvidence;
+  /** G43: redacted provider mandate-capability evidence; absent means `unverified`. */
+  mandate_capability_evidence?: unknown;
   /** Ignored: artifacts are stamped with the issuer's own clock. */
   now_iso?: string;
 }
@@ -207,6 +209,7 @@ export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
     const issuance = await issueAndPersistC6ZArtifacts(sql, {
       request: authorityRequest as C6ZSellerAuthorityRequest,
       evidence: body.connector_evidence,
+      mandate_capability_evidence: body.mandate_capability_evidence,
       now_iso: now,
     }).catch(rethrowKeyUnavailable);
     return reply.status(issuance.status === 'artifact_issuance_ready' ? 201 : 422).send({

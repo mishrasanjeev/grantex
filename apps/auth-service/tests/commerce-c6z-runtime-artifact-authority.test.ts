@@ -198,7 +198,7 @@ describe('C6Z Grantex runtime artifact authority', () => {
       });
     expect(result.artifacts.find((artifact) => artifact.artifact_family === 'mandate_capability')?.payload)
       .toMatchObject({
-        mandate_capability_status: 'provider_owned_verification_required',
+        mandate_capability_status: 'unverified',
         provider_execution_authority: 'provider_owned_not_grantex_or_agenticorg',
         offline_pos_confirmation_authority: 'pos_or_payment_provider_callback_required_not_grantex',
       });
@@ -237,6 +237,66 @@ describe('C6Z Grantex runtime artifact authority', () => {
         }),
       ]),
     });
+  });
+
+  it('binds redacted provider capability evidence into mandate_capability, and says unverified without it (G43)', async () => {
+    const placeholderFree = await issueC6ZInternalOacpArtifacts({ request: authorityRequest(), evidence: connectorEvidence(), now_iso: NOW, context: memoryContext() });
+    // As signed and stored: absent (undefined) members are not part of the payload.
+    const bare = JSON.parse(JSON.stringify(placeholderFree.artifacts.find((a) => a.artifact_family === 'mandate_capability')!.payload)) as Record<string, unknown>;
+    // Before G43 this was the placeholder 'provider:mandate_rail:capability:pending:redacted'.
+    expect(bare['mandate_capability_status']).toBe('unverified');
+    expect(bare).not.toHaveProperty('mandate_capability_ref');
+    expect(bare).not.toHaveProperty('mandate_capability_evidence');
+    expect(JSON.stringify(placeholderFree.artifacts)).not.toContain('capability:pending');
+
+    const evidence = {
+      schema_version: 'oacp.mandate_capability_evidence.v1',
+      evidence_id: 'plural_pine_capability_01',
+      tenant_id: authorityRequest().tenant_id,
+      merchant_id: authorityRequest().merchant_id,
+      provider: 'plural_pine',
+      provider_environment: 'sandbox',
+      result_status: 'available',
+      external_validation_performed: true,
+      rails: ['plural', 'upi_autopay'],
+      caps: [{ rail: 'upi_autopay', max_amount: 1500000, currency: 'INR' }],
+      token_types: ['network_token', 'upi_mandate'],
+      verified_at: new Date(Date.parse(NOW) - 60_000).toISOString(),
+      expires_at: new Date(Date.parse(NOW) + 6 * 3600_000).toISOString(),
+      redacted_evidence_ref: 'provider:plural_pine:capability:0123456789abcdef01234567:redacted',
+      evidence_hash: 'a'.repeat(64),
+    };
+    const context = memoryContext();
+    const issued = await issueC6ZInternalOacpArtifacts({ request: authorityRequest(), evidence: connectorEvidence(), mandate_capability_evidence: evidence, now_iso: NOW, context });
+    expect(issued.status).toBe('artifact_issuance_ready');
+    const artifact = issued.artifacts.find((a) => a.artifact_family === 'mandate_capability')!;
+    expect(artifact.payload).toMatchObject({
+      mandate_capability_status: 'verified',
+      mandate_capability_ref: evidence.redacted_evidence_ref,
+      mandate_capability_evidence: {
+        provider: 'plural_pine', rails: ['plural', 'upi_autopay'], caps: evidence.caps, token_types: evidence.token_types,
+        verified_at: evidence.verified_at, evidence_hash: evidence.evidence_hash, evidence_object_hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      },
+    });
+    expect(artifact.verifier_status.valid).toBe(true);
+
+    const unavailable = await issueC6ZInternalOacpArtifacts({
+      request: authorityRequest(), evidence: connectorEvidence(), now_iso: NOW, context: memoryContext(),
+      mandate_capability_evidence: { ...evidence, result_status: 'blocked_missing_credentials', external_validation_performed: false, rails: [], caps: [] },
+    });
+    expect(unavailable.artifacts.find((a) => a.artifact_family === 'mandate_capability')!.payload['mandate_capability_status']).toBe('unavailable');
+
+    for (const bad of [
+      { ...evidence, client_secret: 'x' },
+      { ...evidence, redacted_evidence_ref: 'provider:mandate_rail:capability:pending:redacted' },
+      { ...evidence, tenant_id: 'cten_OTHER' },
+      { ...evidence, verified_at: new Date(Date.parse(NOW) - 7 * 3600_000).toISOString() },
+      { ...evidence, rails: ['wire'] },
+      { ...evidence, result_status: 'available', external_validation_performed: false },
+    ]) {
+      const refused = await issueC6ZInternalOacpArtifacts({ request: authorityRequest(), evidence: connectorEvidence(), mandate_capability_evidence: bad, now_iso: NOW, context: memoryContext() });
+      expect(refused).toMatchObject({ status: 'rejected', refusal_code: 'mandate_capability_evidence_invalid', artifacts: [] });
+    }
   });
 
   it('fails closed for stale evidence, missing scope, secrets, raw payloads, and execution targets', async () => {
