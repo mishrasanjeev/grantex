@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Go SDK OACP mandate verifier
+- `grantex.VerifyOacpMandate`, `CheckOacpMandateChain`, `OacpCheckoutHash`
+  and `OacpMandateHash` in the Go SDK, mirroring `verifyOacpMandate` (order,
+  refusal codes, fail-closed status list, repeated JSON member names refused)
+  and running both shared mandate vector files.
+
 ### Fixed - Mandate verifier refuses repeated JSON member names
 - The auth-service mandate verifier now refuses a header or claims set that
   repeats a member name (at any depth) as `mandate_malformed`, as the SDKs
