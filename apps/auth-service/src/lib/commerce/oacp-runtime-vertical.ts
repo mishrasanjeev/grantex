@@ -483,15 +483,16 @@ function payloadForFamily(
     offline_pos_confirmation_authority: family === 'mandate_capability'
       ? 'pos_or_payment_provider_callback_required_not_grantex'
       : undefined,
-    offline_pos_evidence_ref: family === 'mandate_capability'
-      ? 'pos:provider_or_simulator:handoff_or_receipt:pending:redacted'
-      : undefined,
+    // No POS handoff or receipt evidence reaches Grantex today: say so instead
+    // of naming a reference that looks like evidence.
+    offline_pos_evidence_status: family === 'mandate_capability' ? 'unverified' : undefined,
     adapter_surfaces: family === 'protocol_adapter'
       ? [
         'schema_org_product_offer_jsonld',
         'ucp_style_capability_profile',
         'acp_style_commerce_interaction',
-        'ap2_style_payment_mandate_evidence',
+        // Signed AP2-mapped mandates exist (POST /v1/commerce/oacp/mandates/*).
+        'ap2_payment_mandate',
         'a2a_agent_card_task_metadata',
         'mcp_tool_manifest_resource_metadata',
         'openapi_buyer_safe_bridge_schema',

@@ -248,6 +248,13 @@ describe('C6Z Grantex runtime artifact authority', () => {
     expect(bare).not.toHaveProperty('mandate_capability_ref');
     expect(bare).not.toHaveProperty('mandate_capability_evidence');
     expect(JSON.stringify(placeholderFree.artifacts)).not.toContain('capability:pending');
+    // No signed value anywhere looks like pending evidence.
+    expect(JSON.stringify(placeholderFree.artifacts)).not.toMatch(/:pending:/);
+    expect(bare['offline_pos_evidence_status']).toBe('unverified');
+    expect(bare).not.toHaveProperty('offline_pos_evidence_ref');
+    const adapter = JSON.parse(JSON.stringify(placeholderFree.artifacts.find((a) => a.artifact_family === 'protocol_adapter')!.payload)) as Record<string, unknown>;
+    expect(adapter['adapter_surfaces']).toContain('ap2_payment_mandate');
+    expect(adapter['adapter_surfaces']).not.toContain('ap2_style_payment_mandate_evidence');
 
     const evidence = {
       schema_version: 'oacp.mandate_capability_evidence.v1',

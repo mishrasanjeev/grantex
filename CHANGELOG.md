@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed - No placeholder values in signed OACP artifacts (breaking, signed content)
+- `mandate_capability` no longer carries `offline_pos_evidence_ref:
+  "pos:provider_or_simulator:handoff_or_receipt:pending:redacted"`, a value
+  that looked like evidence; it states `offline_pos_evidence_status:
+  "unverified"` instead, as `mandate_capability_status` does without capability
+  evidence (G43).
+- `protocol_adapter` `adapter_surfaces` names `ap2_payment_mandate` instead of
+  `ap2_style_payment_mandate_evidence`, now that signed AP2-mapped mandates
+  exist. The other adapter members are unchanged.
+- No opt-out: AgenticOrg reads neither member (its launch check uses its own
+  surface list).
+
 ### Added - Go SDK OACP mandate verifier
 - `grantex.VerifyOacpMandate`, `CheckOacpMandateChain`, `OacpCheckoutHash`
   and `OacpMandateHash` in the Go SDK, mirroring `verifyOacpMandate` (order,
