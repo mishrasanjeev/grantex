@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Scheme token binding on the payment capability (G52)
+- New shared type `{scheme, token_ref, agent_id, merchant_scope, limits}`
+  (`SchemeTokenBinding`, `parseSchemeTokenBinding`,
+  `checkTokenBindingWithinCapability`) in `@grantex/sdk` and the auth service
+  (`lib/commerce/scheme-token-binding.ts`; a test keeps the two equal).
+  Schemes `visa`, `mastercard`, `upi_autopay`, `plural`; `token_ref` is an
+  opaque reference and an account-number-like value is refused; limits are
+  integer minor units with an ISO 4217 currency and an optional expiry.
+- The OACP `mandate_capability` artifact may carry it as `token_binding`;
+  schema validation refuses (`token_binding_invalid`) a binding that does not
+  parse or does not sit inside the capability (buyer agent, merchant scope,
+  currency, cap, expiry). A capability without one validates as before.
+  Grantex never executes a binding.
+
 ### Added - Scheme agent ids on registry attestations, published in the registry manifest (G51)
 - Behind the new flag `REGISTRY_SCHEME_AGENT_IDS_ENABLED` (default off), an
   accredited issuer's agent attestation may carry `scheme_agent_ids`: 1 to 8

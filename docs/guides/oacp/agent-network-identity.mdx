@@ -139,3 +139,36 @@ issuer's agent attestation may carry them:
 The registry does not check an identifier with the scheme. The attestation is
 the accredited issuer's statement, and it counts only while the issuer's
 status list shows it valid.
+
+## Scheme token binding on the payment capability
+
+A buyer agent's payment can be bound to a token a scheme or provider holds:
+a network token (`visa`, `mastercard`), a UPI AutoPay mandate
+(`upi_autopay`) or the Plural rail's tokenised instrument (`plural`). The
+`mandate_capability` artifact, which already says a provider-owned payment
+capability exists, may carry that binding as `token_binding`:
+
+```json
+"token_binding": {
+  "scheme": "visa",
+  "token_ref": "tokref_0001",
+  "agent_id": "shopper-01",
+  "merchant_scope": ["merchant.example"],
+  "limits": { "max_amount": 250000, "currency": "INR", "expires_at": "2026-11-01T00:00:00Z" }
+}
+```
+
+- `token_ref` is an opaque reference to the token the scheme or provider
+  holds, never the token and never an account number: a run of 13 to 19
+  digits is refused.
+- The binding must sit inside the capability: the same buyer agent,
+  merchants within its `merchant_scope`, the same currency, a limit no
+  higher than its `max_amount`, and no expiry after the artifact's. Anything
+  else is refused with `token_binding_invalid`.
+- Grantex describes and checks the binding; it never executes it. The
+  relying party's executor (AgenticOrg's Plural executor, for example) calls
+  the scheme or provider.
+
+The type and its parser are shared: `parseSchemeTokenBinding` and
+`checkTokenBindingWithinCapability` in `@grantex/sdk`, and the same module in
+the auth service.

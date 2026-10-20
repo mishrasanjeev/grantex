@@ -41,3 +41,11 @@ export type {
   OacpStatusListFetcherOptions,
 } from './fetchers.js';
 export type { OacpJwks } from './jose.js';
+export {
+  MAX_TOKEN_BINDING_MERCHANTS,
+  TOKEN_BINDING_SCHEMES,
+  TokenBindingError,
+  checkTokenBindingWithinCapability,
+  parseSchemeTokenBinding,
+} from './token-binding.js';
+export type { SchemeTokenBinding, TokenBindingLimits, TokenBindingScheme } from './token-binding.js';

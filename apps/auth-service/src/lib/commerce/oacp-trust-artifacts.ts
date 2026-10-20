@@ -1,3 +1,4 @@
+import { TokenBindingError, checkTokenBindingWithinCapability, parseSchemeTokenBinding } from './scheme-token-binding.js';
 import { sha256hex } from '../hash.js';
 import { canonicalize } from '../evidence/canonical.js';
 
@@ -318,6 +319,7 @@ export type OacpArtifactSchemaValidationRefusalCode =
   | 'artifact_ttl_exceeds_default'
   | 'protocol_adapter_outlives_references'
   | 'mandate_provider_verification_required'
+  | 'token_binding_invalid'
   | 'public_discovery_offline_change_forbidden'
   | 'commitment_evidence_forbidden_implication';
 
@@ -1209,6 +1211,27 @@ export function validateOacpArtifactSchema(input: {
     && (payload.provider_direct_verification_required !== true || safety.requires_provider_direct_verification !== true)
   ) {
     return schemaRefusal(artifactTypeValue, 'mandate_provider_verification_required', 'Mandate capability requires direct provider verification.');
+  }
+
+  // G52: a payment capability may carry a scheme token binding. Grantex only
+  // describes and checks it; the scheme or provider executes. It must parse
+  // and sit inside the capability (agent, merchants, currency, cap, expiry).
+  if (artifactTypeValue === 'mandate_capability' && payload.token_binding !== undefined) {
+    try {
+      checkTokenBindingWithinCapability(
+        parseSchemeTokenBinding(payload.token_binding),
+        {
+          buyer_agent_id: payload.buyer_agent_id,
+          merchant_scope: payload.merchant_scope,
+          max_amount: payload.max_amount,
+          currency: payload.currency,
+        },
+        typeof envelope.expires_at === 'string' ? envelope.expires_at : undefined,
+      );
+    } catch (error) {
+      if (error instanceof TokenBindingError) return schemaRefusal(artifactTypeValue, 'token_binding_invalid', error.message);
+      throw error;
+    }
   }
 
   if (
