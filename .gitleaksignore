@@ -284,3 +284,50 @@ b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-ts/tests/vault.test.ts:gen
 686f509ace2a2163a76c89a4bfeceb0e3b1b97c4:apps/auth-service/tests/fixtures/protocol-schemas/acp-2026-04-17/schema.agentic_checkout.json:generic-api-key:325
 686f509ace2a2163a76c89a4bfeceb0e3b1b97c4:apps/auth-service/tests/fixtures/protocol-schemas/acp-2026-04-17/schema.agentic_checkout.json:generic-api-key:2126
 686f509ace2a2163a76c89a4bfeceb0e3b1b97c4:apps/auth-service/tests/fixtures/protocol-schemas/acp-2026-04-17/schema.agentic_checkout.json:generic-api-key:3636
+# spec/examples/oacp/oacp-mandates-v1.json (feat/mandates-rails, 2026-10-20): synthetic
+# OACP mandate test vectors, compact JWTs signed by a key generated for the file and
+# discarded (only its public JWK is published). Not credentials. Fingerprints are
+# commit-bound: merge, do not squash.
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:77
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:83
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:89
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:95
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:106
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:111
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:116
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:121
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:126
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:131
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:137
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:142
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:147
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:152
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:157
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:162
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:167
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:172
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:177
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:182
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:187
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:192
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:197
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:202
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:207
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:212
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:218
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:224
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:230
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:236
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:243
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:244
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:245
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:250
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:251
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:252
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:257
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:258
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:259
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:264
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:265
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:270
+49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:271
