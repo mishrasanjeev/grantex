@@ -275,6 +275,12 @@ export const config = {
   // developers opted in. Public and unauthenticated; read when routes are
   // registered at boot; off unless exactly 'true'.
   get httpSignatureDirectoryEnabled() { return process.env['HTTP_SIGNATURE_DIRECTORY_ENABLED'] === 'true'; },
+  // Scheme agent ids on agent attestations (G51): an accredited issuer's
+  // agent attestation may carry scheme_agent_ids (opaque, scheme-scoped
+  // agent identifiers), the lookup answers by them, and the registry
+  // manifest names the schemes and the lookup template. Off unless exactly
+  // 'true'; off, scheme_agent_ids is an unknown member as before.
+  get registrySchemeAgentIdsEnabled() { return process.env['REGISTRY_SCHEME_AGENT_IDS_ENABLED'] === 'true'; },
   /** Lets C6Z issuance enable public discovery for opted-in, allow-listed, attested merchants (default off). */
   get oacpPublicDiscoveryIssuanceEnabled() { return process.env['OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED'] === 'true'; },
   // Status-list reconciliation with cascade (lib/registry/status-reconciliation.ts):

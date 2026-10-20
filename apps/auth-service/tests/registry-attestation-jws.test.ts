@@ -238,6 +238,7 @@ describe('payload (Appendix A)', () => {
       declaredLimits: { max_amount: '250.00', currency: 'EUR' },
       statusListUri: STATUS_URI,
       statusListIdx: 7,
+      schemeAgentIds: [],
     });
   });
 

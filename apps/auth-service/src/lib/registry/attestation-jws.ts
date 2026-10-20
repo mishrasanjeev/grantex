@@ -217,6 +217,54 @@ const PAYLOAD_MEMBERS = new Set([
   'external_credential_hash', 'level', 'declared_limits', 'status',
 ]);
 
+/**
+ * Payment schemes whose agent identifiers an agent attestation may carry in
+ * `scheme_agent_ids` (G51). The labels are the registry's own; the
+ * identifiers are opaque, scheme-scoped strings whose format the registry
+ * does not interpret, because neither scheme has published one (Visa
+ * Trusted Agent Protocol keys an agent by the `keyid` of its key store;
+ * Mastercard Agent Pay's identifiers are not publicly specified).
+ */
+export const SCHEME_AGENT_ID_SCHEMES = ['visa_tap', 'mastercard_agent_pay'] as const;
+export type SchemeAgentIdScheme = (typeof SCHEME_AGENT_ID_SCHEMES)[number];
+export const MAX_SCHEME_AGENT_IDS = 8;
+export const MAX_SCHEME_AGENT_ID_LENGTH = 256;
+
+/** One scheme-scoped agent identifier: opaque, never parsed. */
+export interface SchemeAgentId {
+  scheme: SchemeAgentIdScheme;
+  agent_id: string;
+}
+
+/** Options of parseAttestationPayload. */
+export interface AttestationPayloadOptions {
+  /** Accept `scheme_agent_ids` (REGISTRY_SCHEME_AGENT_IDS_ENABLED). Off, it is an unknown member as before. */
+  schemeAgentIds?: boolean;
+}
+
+/** `scheme_agent_ids`: 1 to 8 `{scheme, agent_id}` objects, one per scheme. */
+export function parseSchemeAgentIds(value: unknown): SchemeAgentId[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_SCHEME_AGENT_IDS) {
+    badClaim(`scheme_agent_ids must be an array of 1 to ${MAX_SCHEME_AGENT_IDS} {scheme, agent_id} objects`);
+  }
+  const seen = new Set<string>();
+  return value.map((entry) => {
+    if (!isPlainObject(entry) || Object.keys(entry).some((name) => name !== 'scheme' && name !== 'agent_id')) {
+      badClaim('each scheme_agent_ids entry has exactly scheme and agent_id');
+    }
+    const { scheme, agent_id: agentId } = entry;
+    if (typeof scheme !== 'string' || !(SCHEME_AGENT_ID_SCHEMES as readonly string[]).includes(scheme)) {
+      badClaim(`scheme must be one of ${SCHEME_AGENT_ID_SCHEMES.join(', ')}`);
+    }
+    if (!isText(agentId, MAX_SCHEME_AGENT_ID_LENGTH)) {
+      badClaim(`agent_id must be an opaque string of 1 to ${MAX_SCHEME_AGENT_ID_LENGTH} characters`);
+    }
+    if (seen.has(scheme)) badClaim(`scheme_agent_ids lists ${scheme} more than once`);
+    seen.add(scheme);
+    return { scheme: scheme as SchemeAgentIdScheme, agent_id: agentId };
+  });
+}
+
 export type SubjectKind = 'agent' | 'provider';
 
 export interface AttestationClaims {
@@ -234,6 +282,8 @@ export interface AttestationClaims {
   declaredLimits: Record<string, unknown> | null;
   statusListUri: string;
   statusListIdx: number;
+  /** Scheme-scoped agent identifiers (G51); empty when the attestation carries none. */
+  schemeAgentIds: SchemeAgentId[];
 }
 
 function badClaim(message: string): never {
@@ -269,9 +319,12 @@ export function subjectKindOf(type: TrustMarkType): SubjectKind {
  * `external_credential_hash` is the hash rule's, checked later by
  * checkExternalCredentialHash with its own code; here it must be a string.
  */
-export function parseAttestationPayload(payload: Record<string, unknown>): AttestationClaims {
+export function parseAttestationPayload(
+  payload: Record<string, unknown>,
+  options: AttestationPayloadOptions = {},
+): AttestationClaims {
   for (const name of Object.keys(payload)) {
-    if (!PAYLOAD_MEMBERS.has(name)) {
+    if (!PAYLOAD_MEMBERS.has(name) && !(name === 'scheme_agent_ids' && options.schemeAgentIds === true)) {
       throw new AttestationError('attestation_malformed', 'unknown_member', `${name} is not a member of an attestation`);
     }
   }
@@ -312,6 +365,12 @@ export function parseAttestationPayload(payload: Record<string, unknown>): Attes
     declaredLimits = limits;
   }
 
+  let schemeAgentIds: SchemeAgentId[] = [];
+  if ('scheme_agent_ids' in payload) {
+    if (kind !== 'agent') badClaim('a provider attestation has no scheme_agent_ids');
+    schemeAgentIds = parseSchemeAgentIds(payload['scheme_agent_ids']);
+  }
+
   // draft-ietf-oauth-status-list-21 §6.2: {"status_list": {"idx", "uri"}}.
   if (!isPlainObject(status) || Object.keys(status).length !== 1 || !isPlainObject(status['status_list'])) {
     badClaim('status must be {"status_list": {"uri", "idx"}}');
@@ -337,6 +396,7 @@ export function parseAttestationPayload(payload: Record<string, unknown>): Attes
     declaredLimits,
     statusListUri: reference['uri'] as string,
     statusListIdx: idx as number,
+    schemeAgentIds,
   };
 }
 

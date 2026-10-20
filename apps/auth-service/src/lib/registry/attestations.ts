@@ -68,6 +68,7 @@ import {
   verifyAttestationRequest,
   verifyJwsSignature,
   type AttestationClaims,
+  type SchemeAgentId,
   type AttestationRequestAction,
 } from './attestation-jws.js';
 import { IssuerFetchError, fetchIssuerStatusList } from './issuer-fetcher.js';
@@ -116,6 +117,8 @@ export interface AttestationRecord {
   acceptanceListIdx: number;
   state: 'accepted' | 'withdrawn' | 'superseded';
   issuerStatus: IssuerStatus;
+  /** Scheme-scoped agent identifiers the attestation carries (G51). */
+  schemeAgentIds: SchemeAgentId[];
   /** When the registry last tried to read the issuer's list, successfully or not. */
   issuerStatusCheckedAt: Date;
   /** Until when the last successful read may be relied on. */
@@ -132,6 +135,12 @@ function toDate(value: unknown): Date {
 
 function optionalDate(value: unknown): Date | null {
   return value === null || value === undefined ? null : toDate(value);
+}
+
+/** The stored scheme agent ids (G51), [] when the column is absent or empty. */
+function parseStoredSchemeAgentIds(value: unknown): SchemeAgentId[] {
+  const parsed = typeof value === 'string' ? JSON.parse(value) as unknown : value;
+  return Array.isArray(parsed) ? parsed as SchemeAgentId[] : [];
 }
 
 function toRecord(row: Record<string, unknown>): AttestationRecord {
@@ -169,6 +178,7 @@ function toRecord(row: Record<string, unknown>): AttestationRecord {
     supersededBy: (row['superseded_by'] as string | null) ?? null,
     withdrawnAt: optionalDate(row['withdrawn_at']),
     supersededAt: optionalDate(row['superseded_at']),
+    schemeAgentIds: parseStoredSchemeAgentIds(row['scheme_agent_ids']),
   };
 }
 
@@ -368,7 +378,7 @@ export async function verifyAttestation(sql: Sql, compact: unknown, now: Date = 
     throw new AttestationError(accreditation.code, accreditation.code, `the issuer is not accredited for ${type} now`);
   }
   await verifyJwsSignature(compact as string, await issuerVerificationKey(sql, iss, kid), alg);
-  const claims = parseAttestationPayload(parsed.payload);
+  const claims = parseAttestationPayload(parsed.payload, { schemeAgentIds: config.registrySchemeAgentIdsEnabled });
   const subject = await resolveSubject(q, claims);
   if (subject.kind === 'agent') await checkAttestedKey(q, subject.agentId!, claims.keyThumbprint!, now);
   checkExternalCredentialHash(claims.externalCredentialHash);
@@ -401,6 +411,13 @@ async function insertRecord(tx: TxSql, verified: VerifiedAttestation, supersedes
       ${claims.statusListUri}, ${claims.statusListIdx}, ${acceptance.uri}, ${acceptance.idx}, ${supersedes},
       ${now}, ${verified.issuerStatusFreshUntil}
     )`;
+  if (claims.schemeAgentIds.length > 0) {
+    // Only an attestation that carries scheme agent ids (accepted only with
+    // REGISTRY_SCHEME_AGENT_IDS_ENABLED) writes the column of migration 136.
+    await tx`UPDATE registry_attestations
+             SET scheme_agent_ids = ${tx.json(claims.schemeAgentIds as unknown as postgres.JSONValue)}
+             WHERE id = ${id}`;
+  }
   const record = await selectRecord(tx, id);
   if (!record) throw new Error('attestation vanished inside its own transaction');
   return record;

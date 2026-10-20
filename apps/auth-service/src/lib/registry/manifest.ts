@@ -15,6 +15,10 @@
  *                            and Bitstring Status List forms
  *   endpoints                lookup URL templates (RFC 6570 level 1), the
  *                            issuer list, the status list template, the JWKS
+ *   scheme_agent_ids         with REGISTRY_SCHEME_AGENT_IDS_ENABLED only: the
+ *                            payment schemes whose opaque agent ids agent
+ *                            attestations may carry (G51), and the
+ *                            agent_by_scheme_agent_id lookup template
  *
  * Phase 1 relying parties use it instead of resolving a Federation trust
  * chain. It is signed with the platform signing key, so its kid resolves
@@ -53,6 +57,7 @@ import { getSql } from '../../db/client.js';
 import { getKeyPair } from '../crypto.js';
 import { SIGNING_ALGORITHMS } from '../signing-algorithms.js';
 import { ACCEPTANCE_LIST_PATH, acceptanceListUri } from './acceptance-status.js';
+import { SCHEME_AGENT_ID_SCHEMES } from './attestation-jws.js';
 import { listAllPublicIssuers, TRUST_MARK_TYPES, type PublicIssuer } from './issuers.js';
 
 type Sql = ReturnType<typeof postgres>;
@@ -94,6 +99,8 @@ export interface RegistryManifestEndpoints {
   agent_by_did: string;
   agent_by_key_thumbprint: string;
   agent_by_credential: string;
+  /** G51, with REGISTRY_SCHEME_AGENT_IDS_ENABLED. */
+  agent_by_scheme_agent_id?: string;
   issuers: string;
   acceptance_status_list: string;
   jwks_uri: string;
@@ -107,6 +114,12 @@ export interface RegistryManifestClaims {
   trust_mark_types: string[];
   acceptance_status_lists: AcceptanceStatusListForms[];
   endpoints: RegistryManifestEndpoints;
+  /**
+   * G51, with REGISTRY_SCHEME_AGENT_IDS_ENABLED: the payment schemes whose
+   * opaque agent identifiers agent attestations may carry
+   * (`scheme_agent_ids`), each with the format the registry applies to it.
+   */
+  scheme_agent_ids?: { scheme: string; id_format: 'opaque' }[];
 }
 
 /** What a manifest states, read from the store. */
@@ -135,6 +148,9 @@ export function registryEndpoints(): RegistryManifestEndpoints {
     agent_by_did: `${base}/v1/registry/agents/{agent_did}`,
     agent_by_key_thumbprint: `${base}/v1/registry/agents?key_thumbprint={key_thumbprint}`,
     agent_by_credential: `${base}/v1/registry/agents?issuer={issuer}&external_credential_id={external_credential_id}&hash={hash}`,
+    ...(config.registrySchemeAgentIdsEnabled
+      ? { agent_by_scheme_agent_id: `${base}/v1/registry/agents?scheme={scheme}&scheme_agent_id={scheme_agent_id}` }
+      : {}),
     issuers: `${base}/v1/registry/issuers`,
     acceptance_status_list: `${base}${ACCEPTANCE_LIST_PATH}/{list}`,
     jwks_uri: `${base}/.well-known/jwks.json`,
@@ -188,6 +204,9 @@ export async function signRegistryManifest(content: RegistryManifestContent, now
     trust_mark_types: [...TRUST_MARK_TYPES],
     acceptance_status_lists: content.acceptanceListIds.map(acceptanceForms),
     endpoints: registryEndpoints(),
+    ...(config.registrySchemeAgentIdsEnabled
+      ? { scheme_agent_ids: SCHEME_AGENT_ID_SCHEMES.map((scheme) => ({ scheme, id_format: 'opaque' as const })) }
+      : {}),
   };
   const { privateKey, kid, alg } = getKeyPair();
   const header = { alg, kid, typ: REGISTRY_MANIFEST_TYP };

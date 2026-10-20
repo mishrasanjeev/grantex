@@ -110,3 +110,32 @@ Object.assign(request.headers, combineSignatures(grantex, webBotAuth));
 
 Grantex verifiers read `sig1`; Web Bot Auth verifiers read `sig2` and fetch
 the directory from the Signature-Agent origin.
+
+## Scheme agent ids
+
+Card networks identify registered agents with their own identifiers. With
+`REGISTRY_SCHEME_AGENT_IDS_ENABLED=true` (default off), an accredited
+issuer's agent attestation may carry them:
+
+```json
+"scheme_agent_ids": [
+  { "scheme": "visa_tap", "agent_id": "tap-agent-0001" },
+  { "scheme": "mastercard_agent_pay", "agent_id": "agent-pay-0001" }
+]
+```
+
+- The schemes are `visa_tap` and `mastercard_agent_pay`. The identifiers are
+  opaque, scheme-scoped strings of 1 to 256 characters. Neither scheme
+  publishes an identifier format (TAP keys an agent by the `keyid` of its key
+  store; Mastercard Agent Pay's wire details are not public), so the
+  registry never parses or validates them beyond length.
+- A relying party finds the agent with
+  `GET /v1/registry/agents?scheme=visa_tap&scheme_agent_id=tap-agent-0001`.
+  The answer is the usual minimised lookup, and each counted attestation
+  shows the `scheme_agent_ids` it carries.
+- `/.well-known/agent-registry.json` names the schemes, each with
+  `id_format: "opaque"`, and the `agent_by_scheme_agent_id` lookup template.
+
+The registry does not check an identifier with the scheme. The attestation is
+the accredited issuer's statement, and it counts only while the issuer's
+status list shows it valid.

@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Scheme agent ids on registry attestations, published in the registry manifest (G51)
+- Behind the new flag `REGISTRY_SCHEME_AGENT_IDS_ENABLED` (default off), an
+  accredited issuer's agent attestation may carry `scheme_agent_ids`: 1 to 8
+  `{scheme, agent_id}` objects with `scheme` `visa_tap` or
+  `mastercard_agent_pay`. The identifiers are opaque, scheme-scoped strings:
+  neither scheme publishes a format, so the registry stores them verbatim
+  and never parses them. Off, the member is refused as unknown exactly as
+  before; on a provider attestation it is refused.
+- Stored in `registry_attestations.scheme_agent_ids` (migration
+  `136_agent_network_identity.sql`, GIN index). `GET /v1/registry/agents?scheme=&scheme_agent_id=`
+  finds the one agent an accepted attestation names with that pair; counted
+  attestations show their `scheme_agent_ids` in the lookup answer.
+- `/.well-known/agent-registry.json` names the schemes
+  (`scheme_agent_ids: [{scheme, id_format: "opaque"}]`) and the
+  `agent_by_scheme_agent_id` lookup template while the flag is on; the
+  manifest is unchanged while it is off. `spec/attestation-1.0.md` documents
+  the member.
+
 ### Added - Registry HTTP Message Signatures key directory and Signature-Agent (G50)
 - `GET /.well-known/http-message-signatures-directory`
   (draft-meunier-webbotauth-httpsig-directory-00), media type
