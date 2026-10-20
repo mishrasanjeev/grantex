@@ -49,7 +49,8 @@ test('dependency review admits the existing permissive Python license policy', (
   const firstParty = readdirSync(`${root}packages`)
     .filter((name) => existsSync(`${root}packages/${name}/package.json`))
     .map((name) => JSON.parse(readFileSync(`${root}packages/${name}/package.json`, 'utf8')).name)
-    .map((name) => `pkg:npm/${name.replace('@', '%40')}`);
+    // A purl percent-encodes the scope's leading '@' (package names contain no other '@').
+    .map((name) => `pkg:npm/${name.startsWith('@') ? `%40${name.slice(1)}` : name}`);
   for (const purl of firstParty) assert.ok(exempt.includes(purl), purl);
   for (const purl of exempt.slice(1)) {
     assert.match(purl, /^pkg:(?:npm\/%40grantex\/|pypi\/grantex|golang\/github\.com\/mishrasanjeev\/grantex-go$)/);
