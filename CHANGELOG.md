@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - OACP canonical JSON keeps a member named `__proto__`
+- `stripUndefinedMembers` (used by `canonicalizeOacpPayload` and the OACP
+  payload hash) copied members by assignment, so a member named `__proto__`
+  replaced the copy's prototype and was dropped from the canonical bytes.
+  It is now kept as an ordinary member, as RFC 8785 and the Python verifiers
+  do. No issued payload uses that member name.
+
 ### Added - Suspension of OACP mandates and artifacts (status 2)
 - `POST /v1/commerce/oacp/mandates/{jti}/suspend` and `/reinstate`, and
   `POST /v1/commerce/oacp/artifacts/{artifact_id}/suspend` and `/reinstate`,

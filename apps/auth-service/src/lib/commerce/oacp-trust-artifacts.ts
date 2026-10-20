@@ -786,7 +786,14 @@ export function stripUndefinedMembers(value: unknown): unknown {
   if (prototype !== Object.prototype && prototype !== null) return value;
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    if (child !== undefined) out[key] = stripUndefinedMembers(child);
+    // defineProperty, not assignment: a member named `__proto__` (JSON.parse
+    // makes it an own property) must stay a member, not replace the
+    // prototype of `out` and vanish from the canonical form.
+    if (child !== undefined) {
+      Object.defineProperty(out, key, {
+        value: stripUndefinedMembers(child), enumerable: true, writable: true, configurable: true,
+      });
+    }
   }
   return out;
 }
