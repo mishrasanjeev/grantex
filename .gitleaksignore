@@ -331,3 +331,10 @@ b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-ts/tests/vault.test.ts:gen
 49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:265
 49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:270
 49a2d171c6acb0caebe79936491c2bf6aa6c35e3:spec/examples/oacp/oacp-mandates-v1.json:jwt:271
+# spec/examples/oacp/oacp-mandates-v1-extra.json (feat/mandates-rails, 2026-10-20):
+# additional synthetic OACP mandate vectors, signed by a discarded key generated for
+# the file. Not credentials. Fingerprints are commit-bound: merge, do not squash.
+286060f5c7ec8ccf7441b5370b20a7f40cab1956:spec/examples/oacp/oacp-mandates-v1-extra.json:jwt:23
+286060f5c7ec8ccf7441b5370b20a7f40cab1956:spec/examples/oacp/oacp-mandates-v1-extra.json:jwt:29
+286060f5c7ec8ccf7441b5370b20a7f40cab1956:spec/examples/oacp/oacp-mandates-v1-extra.json:jwt:34
+286060f5c7ec8ccf7441b5370b20a7f40cab1956:spec/examples/oacp/oacp-mandates-v1-extra.json:jwt:39
