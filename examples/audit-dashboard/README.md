@@ -1,98 +1,103 @@
-# Audit Dashboard
+# Audit Trail Report
 
-Demonstrates how to query, filter, and analyze the Grantex audit trail with metrics computation and hash chain integrity verification.
+A script that writes a small, known set of audit entries for two agents, reads
+them back through the SDK and turns them into a report: a timeline, per-agent
+and per-action views, outcome percentages, and a check of the developer's
+audit hash chain.
 
-## What it does
+## Steps
 
-1. **Sets up two agents** with different scopes and generates grant tokens
-2. **Generates 9 audit entries** — a mix of success, failure, and blocked statuses
-3. **Displays full audit timeline** — formatted table with status icons, agent names, and timestamps
-4. **Filters by agent** — shows entries for each agent separately
-5. **Filters by action** — shows only `email:send` entries with metadata
-6. **Computes metrics** — success rate, entries per agent, top actions by frequency
-7. **Verifies hash chain integrity** — walks the chain to confirm tamper evidence
+1. Registers `data-reader` and `notifier`, authorizes each for `user-alice`,
+   and exchanges the codes for grant tokens.
+2. Records nine entries: six `success`, two `failure` (actions outside the
+   granted scopes) and one `blocked` (rate limited).
+3. Lists each agent's entries and prints them merged in time order.
+4. Prints each agent's entries on their own, then only the `email:send` entries
+   with their metadata.
+5. Prints the share of each outcome, the entry count per agent, and the action
+   counts, most frequent first.
+6. Lists the developer's entries without a filter and checks that every
+   entry's `prevHash` equals the `hash` of the entry before it. The chain is
+   kept per developer, so a per-agent list would show false breaks.
 
-## Prerequisites
+## Run it
 
-- Node.js 18+
-- Docker (for the local Grantex stack)
-
-## Run
+You need Node.js 24 and Docker.
 
 ```bash
-# Start the local Grantex stack (from repo root)
+# repository root: start the local stack
 docker compose up -d
 
-# Run the example
 cd examples/audit-dashboard
 npm install
 npm start
 ```
 
-## Expected output
+## Sample output
 
-```
-=== Audit Dashboard Demo ===
+Identifiers, times and hashes differ on each run.
 
-Agent A (data-reader) registered: ag_01...
-Agent B (notifier) registered: ag_01...
+```text
+=== Audit Trail Report ===
+
+Registered data-reader: ag_01...
+Registered notifier: ag_01...
 Both agents authorized.
 
---- Generating audit entries ---
-Generated 9 audit entries (5 success, 2 failure, 1 blocked, 1 more success).
+--- Recording activity ---
+Recorded 9 entries (6 success, 2 failure, 1 blocked).
 
---- Full Audit Timeline ---
+--- Timeline ---
+   # Mark Outcome Agent          Action              Time (UTC)
+   1 [+]  success data-reader    data:read           22:39:31
+   2 [+]  success data-reader    calendar:read       22:39:31
+   3 [+]  success data-reader    data:read           22:39:31
+   4 [x]  failure data-reader    data:write          22:39:31
+   5 [+]  success notifier       email:send          22:39:31
+   6 [+]  success notifier       notification:push   22:39:31
+   7 [+]  success notifier       email:send          22:39:31
+   8 [!]  blocked notifier       email:send          22:39:31
+   9 [x]  failure data-reader    calendar:write      22:39:31
 
-  #  Status    Agent          Action              Time
-  -  ------    -----          ------              ----
-   1 [+] success data-reader    data:read           12:00:01
-   2 [+] success data-reader    calendar:read       12:00:01
-   3 [+] success data-reader    data:read           12:00:01
-   4 [x] failure data-reader    data:write          12:00:01
-   5 [+] success notifier       email:send          12:00:01
-   6 [+] success notifier       notification:push   12:00:01
-   7 [+] success notifier       email:send          12:00:01
-   8 [!] blocked notifier       email:send          12:00:02
-   9 [x] failure data-reader    calendar:write      12:00:02
+--- Only data-reader (5) ---
+...
+--- Only notifier (4) ---
+...
+--- Only email:send (3) ---
+  [+] notifier: success {"to":"team@example.com"}
+  [+] notifier: success {"to":"manager@example.com"}
+  [!] notifier: blocked {"reason":"rate_limit_exceeded"}
 
---- Filter: Agent A (data-reader) only ---
-  Entries: 5
-
---- Filter: Agent B (notifier) only ---
-  Entries: 4
-
---- Filter: email:send actions only ---
-  Entries: 3
-
---- Metrics Summary ---
-  Total entries:  9
-  Success:        6 (67%)
-  Failure:        2 (22%)
-  Blocked:        1 (11%)
-
-  Entries per agent:
+--- Summary ---
+  Entries: 9
+  success  6 (67%)
+  failure  2 (22%)
+  blocked  1 (11%)
+  Per agent:
     data-reader: 5
     notifier: 4
-
-  Top actions:
+  Per action, most frequent first:
     email:send: 3
     data:read: 2
-    calendar:read: 1
     ...
 
---- Hash Chain Integrity Check ---
-  All hash chains verified: integrity PASSED
-  Chain length: 9 entries
+--- Hash chain ---
+  Intact: 9 linked entries
+  First hash 71c321237d151fb7...
+  Last hash  19eb5ce92974c241...
 
-Done! Audit dashboard demo complete.
+Report complete.
 ```
 
-## Environment variables
+On a database that already holds entries for the same developer, the chain
+length counts those entries too.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
-| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
+## Configuration
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `GRANTEX_URL` | `http://localhost:3001` | Auth service base URL |
+| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key; a sandbox key approves consent automatically, which the script relies on |
 
 ## Ownership
 

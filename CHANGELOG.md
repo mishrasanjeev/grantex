@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed - Re-implemented contributed code, behaviour unchanged
+- `grantex-strands` (Python) has a new implementation of
+  `create_grantex_tool`, `get_tool_scopes`, its errors and its offline claims
+  reader, and a new test suite. The public API, error messages and checks are
+  unchanged; the earlier suite passes against the new code.
+- The `audit-dashboard` and `token-expiry-refresh` TypeScript examples, their
+  READMEs and documentation pages are rewritten. They make the same API calls
+  in the same order; the printed report wording is new.
+- The portal error boundary's "Go to Dashboard" handler and its test, and the
+  consent-bundle list response assertions, are rewritten with the same
+  behaviour.
+
 ### Changed - OACP documentation matches what is merged, deployed and turned on
 - The OACP runtime launch closure PRD has a 2026-10-20 status: what Phases 1
   to 5 merged and deployed, and what is not yet turned on in production (no

@@ -1,35 +1,39 @@
 ---
 title: "Audit Dashboard"
 sidebarTitle: "Audit Dashboard"
-description: "Query, filter, and analyze the Grantex audit trail with metrics and hash chain verification."
+description: "Build a report from the Grantex audit trail: timeline, per-agent and per-action views, outcome shares and a hash chain check."
 ---
 
-## What it does
+## Overview
 
-This example demonstrates how to use the Grantex audit trail as a rich data source:
+The example writes nine audit entries for two agents, reads them back with the
+TypeScript SDK and prints a report:
 
-1. **Set up two agents** with different scopes and generate grant tokens
-2. **Generate audit entries** — a mix of success, failure, and blocked statuses across agents
-3. **Display full audit timeline** — formatted table with status icons, agent names, and timestamps
-4. **Filter by agent** — show entries for each agent separately
-5. **Filter by action** — show only specific actions (e.g. `email:send`) with metadata
-6. **Compute metrics** — success rate, failure rate, entries per agent, top actions by frequency
-7. **Verify hash chain integrity** — walk the cryptographic chain to confirm tamper evidence
+1. **Two agents, two grants.** `data-reader` and `notifier` are registered and
+   authorized for the same user.
+2. **Known activity.** Six successful entries, two failures for actions outside
+   the granted scopes, and one blocked entry.
+3. **Timeline.** Both agents' entries, merged and sorted by time.
+4. **Slices.** Each agent on its own, then only `email:send` with its metadata.
+5. **Summary.** Outcome percentages, entries per agent, and action counts.
+6. **Hash chain.** The developer's unfiltered entries are walked to confirm that
+   each `prevHash` matches the previous entry's `hash`. The chain is kept per
+   developer, which is why the check does not filter by agent.
 
 ## Prerequisites
 
-- **Node.js 24 LTS** (the tested repository toolchain)
-- **Docker** (Docker Desktop or Docker Engine with Compose)
+- **Node.js 24 LTS**
+- **Docker** with Compose
 
 ## Run
 
-Start the local Grantex stack from the repository root:
+From the repository root, start the local stack:
 
 ```bash
 docker compose up --build
 ```
 
-In a separate terminal, run the example:
+Then, in another terminal:
 
 ```bash
 cd examples/audit-dashboard
@@ -37,49 +41,47 @@ npm install
 npm start
 ```
 
-## Expected output
+## Sample output
 
 ```text
-=== Audit Dashboard Demo ===
+=== Audit Trail Report ===
 
-Agent A (data-reader) registered: ag_01HXYZ...
-Agent B (notifier) registered: ag_01HXYZ...
+Registered data-reader: ag_01...
+Registered notifier: ag_01...
 Both agents authorized.
 
---- Generating audit entries ---
-Generated 9 audit entries.
+--- Recording activity ---
+Recorded 9 entries (6 success, 2 failure, 1 blocked).
 
---- Full Audit Timeline ---
-
-  #  Status    Agent          Action              Time
-   1 [+] success data-reader    data:read           12:00:01
-   2 [+] success data-reader    calendar:read       12:00:01
+--- Timeline ---
+   # Mark Outcome Agent          Action              Time (UTC)
+   1 [+]  success data-reader    data:read           22:39:31
    ...
-   8 [!] blocked notifier       email:send          12:00:02
-   9 [x] failure data-reader    calendar:write      12:00:02
+   8 [!]  blocked notifier       email:send          22:39:31
+   9 [x]  failure data-reader    calendar:write      22:39:31
 
---- Metrics Summary ---
-  Total entries:  9
-  Success:        6 (67%)
-  Failure:        2 (22%)
-  Blocked:        1 (11%)
+--- Summary ---
+  Entries: 9
+  success  6 (67%)
+  failure  2 (22%)
+  blocked  1 (11%)
 
---- Hash Chain Integrity Check ---
-  All hash chains verified: integrity PASSED
+--- Hash chain ---
+  Intact: 9 linked entries
 
-Done! Audit dashboard demo complete.
+Report complete.
 ```
 
-## Environment variables
+## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
-| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `GRANTEX_URL` | `http://localhost:3001` | Auth service base URL |
+| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key; a sandbox key approves consent automatically, which the script relies on |
 
 ## Source code
 
-The full source is in [`examples/audit-dashboard/src/index.ts`](https://github.com/mishrasanjeev/grantex/tree/main/examples/audit-dashboard).
+See [`examples/audit-dashboard/src/index.ts`](https://github.com/mishrasanjeev/grantex/tree/main/examples/audit-dashboard).
 
 ## Ownership
 

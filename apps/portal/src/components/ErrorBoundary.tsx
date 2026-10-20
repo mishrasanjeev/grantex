@@ -11,6 +11,10 @@ interface State {
   error: Error | null;
 }
 
+// The portal is built with Vite `base: '/dashboard/'` (see vite.config.ts), so
+// the app shell answers only on that exact path, trailing slash included.
+const PORTAL_ROOT_PATH = '/dashboard/';
+
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -24,6 +28,11 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('ErrorBoundary caught:', error, info.componentStack);
   }
+
+  private readonly leaveToPortalRoot = (): void => {
+    // A full page load, not client-side routing: the subtree that failed is discarded.
+    window.location.href = PORTAL_ROOT_PATH;
+  };
 
   render() {
     if (this.state.hasError) {
@@ -45,7 +54,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </Button>
               <Button
                 size="sm"
-                onClick={() => { window.location.href = '/dashboard/'; }}
+                onClick={this.leaveToPortalRoot}
               >
                 Go to Dashboard
               </Button>

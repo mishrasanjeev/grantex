@@ -62,34 +62,59 @@ describe('ErrorBoundary', () => {
     expect(screen.getByRole('button', { name: 'Go to Dashboard' })).toBeInTheDocument();
   });
 
-  it('navigates to /dashboard/ (with trailing slash) when Go to Dashboard is clicked', async () => {
-    // Vite serves the portal under base: '/dashboard/' — without the trailing
-    // slash, Vite shows an educational warning page instead of the SPA.
-    const user = userEvent.setup();
-    const hrefSetter = vi.fn();
-    const originalLocation = window.location;
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: {
-        get href() { return ''; },
-        set href(v: string) { hrefSetter(v); },
-      },
-    });
+  describe('Go to Dashboard', () => {
+    // Swap window.location for a recorder so a click can be observed without jsdom
+    // attempting a real navigation. Returns the recorded hrefs and a restore hook.
+    function recordLocationAssignments(): { assigned: string[]; restore: () => void } {
+      const realLocation = Object.getOwnPropertyDescriptor(window, 'location');
+      const assigned: string[] = [];
+      const recorder = {
+        get href(): string {
+          return assigned[assigned.length - 1] ?? 'http://localhost/dashboard/agents';
+        },
+        set href(next: string) {
+          assigned.push(next);
+        },
+      };
+      Object.defineProperty(window, 'location', { configurable: true, value: recorder });
+      return {
+        assigned,
+        restore: () => {
+          if (realLocation) Object.defineProperty(window, 'location', realLocation);
+        },
+      };
+    }
 
-    try {
+    function renderFailure() {
       render(
         <ErrorBoundary>
           <ThrowError shouldThrow={true} />
         </ErrorBoundary>,
       );
-      await user.click(screen.getByRole('button', { name: 'Go to Dashboard' }));
-      expect(hrefSetter).toHaveBeenCalledWith('/dashboard/');
-    } finally {
-      Object.defineProperty(window, 'location', {
-        configurable: true,
-        value: originalLocation,
-      });
     }
+
+    it('loads the portal root at the Vite base path, slash included', async () => {
+      const nav = recordLocationAssignments();
+      try {
+        renderFailure();
+        await userEvent.setup().click(screen.getByRole('button', { name: 'Go to Dashboard' }));
+        // '/dashboard' without the slash is not served by the SPA build.
+        expect(nav.assigned).toEqual(['/dashboard/']);
+      } finally {
+        nav.restore();
+      }
+    });
+
+    it('does not navigate when Try Again is chosen instead', async () => {
+      const nav = recordLocationAssignments();
+      try {
+        renderFailure();
+        await userEvent.setup().click(screen.getByRole('button', { name: 'Try Again' }));
+        expect(nav.assigned).toEqual([]);
+      } finally {
+        nav.restore();
+      }
+    });
   });
 
   it('resets error state when Try Again is clicked', async () => {
