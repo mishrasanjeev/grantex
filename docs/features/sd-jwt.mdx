@@ -1,7 +1,7 @@
 ---
 title: "SD-JWT (Selective Disclosure)"
 sidebarTitle: "SD-JWT"
-description: "Selective Disclosure JWTs let agents present only the claims needed for a given transaction, enabling privacy-preserving authorization and Verifiable Intent compatibility."
+description: "Selective Disclosure JWTs let agents present only the claims needed for a given transaction, enabling privacy-preserving authorization."
 ---
 
 ## Overview
@@ -93,13 +93,18 @@ By default, the following credential subject fields are selectively disclosable:
 | `scopes` | Authorized scopes | No (selective) |
 | `delegationDepth` | Delegation chain depth | No (selective) |
 
-## Verifiable Intent Compatibility
+## Verifiable Intent
 
-SD-JWT enables Grantex credentials to be compatible with Verifiable Intent frameworks like the Mastercard model. By selectively disclosing only the fields relevant to a specific transaction, agents can:
+Verifiable Intent also uses SD-JWT, but in its own layered credential format. Selective
+disclosure of Grantex Verifiable Credentials lets an agent:
 
 1. **Prove authorization** without revealing identity
 2. **Demonstrate scope** without exposing the full grant
 3. **Verify delegation chains** without leaking organizational structure
+
+Grantex does not issue or verify Verifiable Intent credentials. What it implements toward
+Verifiable Intent, and what it does not, is listed in
+[Verifiable Credentials](/features/verifiable-credentials#verifiable-intent-what-is-implemented-and-what-is-not).
 
 ## SDK Support
 

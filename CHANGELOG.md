@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed - Verifiable Intent documentation says what is implemented (G53)
+- `docs/features/verifiable-credentials.mdx` replaces the Verifiable Intent
+  table with an exact account: OACP mandates (Intent, Cart, Payment mandate
+  JWTs mapped to the AP2 v0.2 member names) and passkey evidence for
+  human-present cart mandates are what Grantex implements toward Verifiable
+  Intent; Verifiable Intent's layered SD-JWT credentials (L1/L2/L3), open
+  mandates, the card credential and any Mastercard certification or Agent Pay
+  integration are not implemented. `docs/features/sd-jwt.mdx` and
+  `docs/integrations/overview.mdx` no longer claim Verifiable Intent
+  compatibility and point to that section.
+
 ### Added - Scheme token binding on the payment capability (G52)
 - New shared type `{scheme, token_ref, agent_id, merchant_scope, limits}`
   (`SchemeTokenBinding`, `parseSchemeTokenBinding`,
