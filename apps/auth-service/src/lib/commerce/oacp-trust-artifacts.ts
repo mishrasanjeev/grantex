@@ -784,18 +784,15 @@ export function stripUndefinedMembers(value: unknown): unknown {
   if (value === null || typeof value !== 'object') return value;
   const prototype = Object.getPrototypeOf(value) as unknown;
   if (prototype !== Object.prototype && prototype !== null) return value;
-  const out: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    // defineProperty, not assignment: a member named `__proto__` (JSON.parse
-    // makes it an own property) must stay a member, not replace the
-    // prototype of `out` and vanish from the canonical form.
-    if (child !== undefined) {
-      Object.defineProperty(out, key, {
-        value: stripUndefinedMembers(child), enumerable: true, writable: true, configurable: true,
-      });
-    }
-  }
-  return out;
+  // Object.fromEntries defines each member as an own data property, so a
+  // member named `__proto__` (JSON.parse makes it an own property) stays a
+  // member. Copying by assignment would replace the copy's prototype instead
+  // and drop the member from the canonical form.
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, child]) => child !== undefined)
+      .map(([key, child]) => [key, stripUndefinedMembers(child)]),
+  );
 }
 
 /**
