@@ -27,13 +27,13 @@
  *
  * Verification order and refusal codes (every verifier):
  *   1. compact JWS, three non-empty base64url parts     mandate_malformed
- *   2. header JSON object                               mandate_malformed
+ *   2. header JSON object, no repeated member names      mandate_malformed
  *      alg ES256                                        mandate_algorithm_unsupported
  *      exactly alg, kid, typ; kid a string             mandate_malformed
  *      typ one of the three (and the expected one)      mandate_type_mismatch
  *   3. exactly one usable ES256 P-256 JWK for kid       issuer_key_untrusted
  *   4. ECDSA over header.payload                        mandate_signature_invalid
- *   5. payload JSON object                              mandate_malformed
+ *   5. payload JSON object, no repeated member names     mandate_malformed
  *   6. iss is the pinned issuer                         mandate_issuer_mismatch
  *   7. claims present and well-typed for the type       mandate_claims_invalid
  *   8. iat <= now + 60 s                                mandate_not_yet_valid
@@ -46,6 +46,7 @@
  */
 import { createHash, sign as cryptoSign, verify as cryptoVerify } from 'node:crypto';
 import { canonicalizeOacpPayload } from './oacp-trust-artifacts.js';
+import { parseJsonRejectingDuplicates } from '../evidence/canonical.js';
 import { OACP_PAYMENT_RAILS, type OacpPaymentRail } from './payment-providers/mandate-rails.js';
 import { OACP_KID_PREFIX, isOacpStatusUriAllowed, oacpTrustedKey, type OacpJwks, type OacpSigningKey } from './oacp-jws.js';
 
@@ -356,7 +357,7 @@ export function verifyOacpMandateSignatureAndClaims(input: {
   let header: unknown = null;
   const headerRaw = b64urlDecode(headerB64);
   if (headerRaw) {
-    try { header = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(headerRaw)); } catch { header = null; }
+    try { header = parseJsonRejectingDuplicates(new TextDecoder('utf-8', { fatal: true }).decode(headerRaw)); } catch { header = null; }
   }
   if (!isRecord(header)) return refuse('mandate_malformed');
   if (header['alg'] !== 'ES256') return refuse('mandate_algorithm_unsupported');
@@ -380,7 +381,7 @@ export function verifyOacpMandateSignatureAndClaims(input: {
   let claims: unknown = null;
   const payloadRaw = b64urlDecode(payloadB64);
   if (payloadRaw) {
-    try { claims = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(payloadRaw)); } catch { claims = null; }
+    try { claims = parseJsonRejectingDuplicates(new TextDecoder('utf-8', { fatal: true }).decode(payloadRaw)); } catch { claims = null; }
   }
   if (!isRecord(claims)) return refuse('mandate_malformed', type);
 

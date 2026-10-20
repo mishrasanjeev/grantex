@@ -101,3 +101,20 @@ def test_status_list_is_read_and_fails_closed() -> None:
         result = asyncio.run(verify_oacp_mandate(intent, **options, status_list_fetcher=fetch))
         assert (None if result.valid else result.refusal_code) == expected
     assert asyncio.run(verify_oacp_mandate(intent, **options)).refusal_code == "revocation_status_unavailable"
+
+
+EXTRA: Dict[str, Any] = json.loads(
+    (Path(__file__).resolve().parents[3] / "spec" / "examples" / "oacp" / "oacp-mandates-v1-extra.json").read_text(encoding="utf-8")
+)
+
+
+@pytest.mark.parametrize("case", EXTRA["cases"], ids=[c["name"] for c in EXTRA["cases"]])
+def test_extra_vector_case(case: Dict[str, Any]) -> None:
+    result = asyncio.run(verify_oacp_mandate(
+        case["mandate"], issuer=EXTRA["issuer"], jwks=EXTRA["jwks"],
+        now=datetime.fromtimestamp(EXTRA["verify_at"], tz=timezone.utc),
+        expected_audience=EXTRA["expected_audience"], expected_type=case.get("expected_type"),
+        status=case.get("status", 0),
+    ))
+    assert (None if result.valid else result.refusal_code) == case["expect"]
+

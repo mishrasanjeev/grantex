@@ -36,6 +36,8 @@ interface Vectors {
 }
 
 const vectors = JSON.parse(readFileSync(join(__dirname, '../../../spec/examples/oacp/oacp-mandates-v1.json'), 'utf8')) as Vectors;
+// Cases added later, in their own file (own synthetic key): repeated JSON member names.
+const extra = JSON.parse(readFileSync(join(__dirname, '../../../spec/examples/oacp/oacp-mandates-v1-extra.json'), 'utf8')) as Vectors;
 
 function verify(mandate: string, extra: { expected_type?: OacpMandateType | undefined; expected_audience?: string | undefined; status?: OacpMandateStatusValue | undefined } = {}) {
   return verifyOacpMandate({
@@ -92,4 +94,16 @@ describe('OACP mandate vectors', () => {
     const ed = generateKeyPairSync('ed25519');
     expect(() => signOacpMandate('intent', claims, { kid, privateKey: ed.privateKey, publicJwk: {} })).toThrow();
   });
+});
+
+describe('OACP mandate vectors (additional cases)', () => {
+  for (const c of extra.cases) {
+    it(`case ${c.name} -> ${c.expect ?? 'valid'}`, () => {
+      const result = verifyOacpMandate({
+        mandate: c.mandate, jwks: extra.jwks, issuer: extra.issuer, now_seconds: extra.verify_at,
+        status: c.status ?? 0, expected_type: c.expected_type, expected_audience: c.expected_audience ?? extra.expected_audience,
+      });
+      expect(result.refusal_code).toBe(c.expect);
+    });
+  }
 });

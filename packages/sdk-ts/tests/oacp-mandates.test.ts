@@ -110,3 +110,19 @@ describe('OACP mandate status list', () => {
     expect(broken).toMatchObject({ valid: false, refusalCode: 'revocation_status_unavailable' });
   });
 });
+
+describe('OACP mandate vectors (additional cases)', () => {
+  const EXTRA = JSON.parse(readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'spec', 'examples', 'oacp', 'oacp-mandates-v1-extra.json'),
+    'utf-8',
+  )) as Vectors;
+  for (const c of EXTRA.cases) {
+    it(`${c.name} -> ${c.expect ?? 'valid'}`, async () => {
+      const result = await verifyOacpMandate(c.mandate, {
+        issuer: EXTRA.issuer, jwks: EXTRA.jwks, now: new Date(EXTRA.verify_at * 1000), expectedAudience: EXTRA.expected_audience,
+        ...(c.expected_type ? { expectedType: c.expected_type } : {}), status: c.status ?? 0,
+      });
+      expect(result.valid ? null : result.refusalCode).toBe(c.expect);
+    });
+  }
+});
