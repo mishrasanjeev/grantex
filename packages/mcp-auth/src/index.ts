@@ -7,6 +7,19 @@ export { canonicalResource, protectedResourceMetadataUrl, protectedResourceMetad
 export { isClientIdMetadataUrl, ClientMetadataError } from './lib/client-metadata.js';
 export type { ClientIdMetadataDocumentOptions, ClientMetadataFailure } from './lib/client-metadata.js';
 export { buildProtectedResourceMetadata } from './resource/metadata.js';
+export {
+  UCP_IDENTITY_LINKING_VERSIONS,
+  UCP_IDENTITY_LINKING_SCOPES,
+  ACP_DELEGATED_AUTHENTICATION_SCOPES,
+  UCP_SCOPE_TOKEN_PATTERNS,
+  commerceScopeDefinition,
+  ucpIdentityLinkingScopePolicies,
+} from './lib/commerce-scopes.js';
+export type {
+  CommerceAuthorizationOptions,
+  CommerceScopeDefinition,
+  UcpIdentityLinkingVersion,
+} from './lib/commerce-scopes.js';
 export type { ProtectedResourceMetadataOptions } from './resource/metadata.js';
 export { createMcpResourceGuard, filterToolsForGrant } from './resource/guard.js';
 export type {

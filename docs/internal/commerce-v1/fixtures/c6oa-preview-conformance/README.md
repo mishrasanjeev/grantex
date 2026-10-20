@@ -11,8 +11,6 @@ discovery approval, and not checkout or payment approval.
 The corpus covers both preview-available and blocked/refusal examples for:
 
 - schema.org JSON-LD preview
-- UCP-style capability profile preview
-- ACP-style checkout shape preview
 - AP2-style evidence preview
 - connector registry metadata/source precedence preview
 

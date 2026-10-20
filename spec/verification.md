@@ -618,3 +618,11 @@ The library does not render a verified grant into payment-protocol objects
 (an ACP delegated payment allowance or AP2 mandates). Renderers are withheld
 until their member names can be checked against the protocols' texts, so
 that the library ships no invented protocol output (FINDINGS G-137).
+
+Status: the ACP delegate-payment allowance is now rendered by the auth
+service, not by this library, from a verified checkout Commerce Passport
+(`POST /v1/commerce/oacp/acp/delegate-payment-allowance`), and its output is
+validated in tests against the vendored ACP 2026-04-17
+`schema.delegate_payment.json`. The verifier library still has no rendering
+API, and AP2 mandate rendering stays withheld, so G-137 remains open for the
+library.

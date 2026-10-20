@@ -269,6 +269,8 @@ export const config = {
   // unless exactly 'true'. Off, relying parties cannot read OACP artifact
   // status and must refuse (revocation_status_unavailable).
   get oacpStatusListPublicEnabled() { return process.env['OACP_STATUS_LIST_PUBLIC_ENABLED'] === 'true'; },
+  /** Lets C6Z issuance enable public discovery for opted-in, allow-listed, attested merchants (default off). */
+  get oacpPublicDiscoveryIssuanceEnabled() { return process.env['OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED'] === 'true'; },
   // Status-list reconciliation with cascade (lib/registry/status-reconciliation.ts):
   // one instance polls issuers' status lists at their ttl, keeps the
   // registry's acceptance entries in line, and revokes, suspends or resumes

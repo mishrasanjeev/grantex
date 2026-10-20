@@ -17,6 +17,9 @@ Canonical end-to-end flow: [OACP authority overview](./overview). Launch closure
 5. Set `OACP_STATUS_LIST_PUBLIC_ENABLED=true` and restart when relying parties are ready to check
    status; until then they refuse artifacts with `revocation_status_unavailable`.
 6. Submit a fixture `POST /v1/commerce/oacp/c6z/authority-requests` for that tenant.
+   Public discovery stays disabled unless `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED=true` and the
+   request opts in (`public_discovery_requested: true` with `namespace_attestation_ref` and
+   `serving_host`); turn the flag on only after the owner approves publishing UCP profiles.
 7. Confirm `artifact_count = 11`, or record the exact refusal/blocker.
 8. To roll back, remove the tenant id from `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` and rotate the token if there is any suspicion of exposure.
 

@@ -28,6 +28,7 @@ import {
   issueC6ZInternalOacpArtifacts,
   type C6ZConnectorEvidence,
   type C6ZIssuanceResult,
+  type C6ZPublicDiscoveryEligibility,
   type C6ZSellerAuthorityRequest,
 } from './oacp-runtime-vertical.js';
 import { OACP_ARTIFACT_TTLS_SECONDS, type OacpArtifactEnvelope, type OacpArtifactSafety } from './oacp-trust-artifacts.js';
@@ -170,6 +171,21 @@ export async function recordOacpRefusal(
 }
 
 /**
+ * Whether issuance may enable public discovery for a tenant:
+ * OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED (default off) and the tenant on the
+ * authority service allowlist (COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS),
+ * whoever calls.
+ */
+export function c6zPublicDiscoveryEligibility(tenantId: string): C6ZPublicDiscoveryEligibility {
+  return {
+    issuance_enabled: config.oacpPublicDiscoveryIssuanceEnabled,
+    tenant_allowlisted: (process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS'] ?? '')
+      .split(',').map((item) => item.trim()).filter(Boolean)
+      .includes(tenantId),
+  };
+}
+
+/**
  * Issue the C6Z artifact set and persist it, or persist the refusal. The
  * issuer clock decides `issued_at`; signing happens inside the transaction
  * that allocates the status-list entries and writes the rows.
@@ -190,6 +206,7 @@ export async function issueAndPersistC6ZArtifacts(
           signer,
           newArtifactId: newOacpArtifactId,
           allocateStatus: (artifactId) => allocateOacpStatusEntry(tx, artifactId),
+          publicDiscovery: c6zPublicDiscoveryEligibility(input.request.tenant_id),
         },
       });
       if (result.status !== 'artifact_issuance_ready') throw new IssuanceRolledBack(result);
@@ -367,4 +384,25 @@ export async function revokeOacpArtifact(
     const revocation = (await getOacpArtifact(tx, revocationId))!;
     return { artifact, revocation, already_revoked: false };
   }) as { artifact: OacpArtifactRecord; revocation: OacpArtifactRecord; already_revoked: boolean };
+}
+
+/**
+ * The issued, unexpired artifacts of one merchant / seller-agent scope, newest
+ * first. Revoked and refused rows are excluded (revocation flips the row and
+ * the status-list entry in one transaction).
+ */
+export async function listLiveOacpArtifactsForScope(
+  sql: Sql,
+  scope: { tenant_id: string; merchant_id: string; seller_agent_id: string },
+  nowIso: string,
+): Promise<OacpArtifactRecord[]> {
+  const rows = await sql.unsafe(
+    `SELECT ${COLUMNS} FROM oacp_artifacts
+      WHERE tenant_id = $1 AND merchant_id = $2 AND seller_agent_id = $3
+        AND status = 'issued' AND expires_at > $4::text::timestamptz
+      ORDER BY created_at DESC, artifact_id DESC
+      LIMIT 200`,
+    [scope.tenant_id, scope.merchant_id, scope.seller_agent_id, nowIso],
+  );
+  return (rows as unknown as Array<Record<string, unknown>>).map(rowToRecord);
 }

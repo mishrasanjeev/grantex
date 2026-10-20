@@ -6,6 +6,7 @@ import type { ClientMetadataResolver } from './lib/client-metadata.js';
 import { toolPolicyFromManifests } from './resource/tool-policy.js';
 import type { ToolPolicy } from './resource/tool-policy.js';
 import { prepareConsentPage } from './consent/page.js';
+import { commerceScopes } from './lib/commerce-scopes.js';
 import type { PreparedConsentPage } from './consent/page.js';
 
 /** Everything the endpoints share, derived once from the configuration. */
@@ -109,7 +110,11 @@ export function serverContext(config: McpAuthConfig): ServerContext {
   const issuer = assertIssuer(config.issuer);
   const resources = acceptedResources(config);
   const toolPolicy = config.manifests !== undefined ? toolPolicyFromManifests(config.manifests) : undefined;
-  const scopesSupported = [...new Set([...(config.scopes ?? []), ...(toolPolicy?.scopesSupported ?? [])])];
+  const scopesSupported = [...new Set([
+    ...(config.scopes ?? []),
+    ...(toolPolicy?.scopesSupported ?? []),
+    ...commerceScopes(config.commerce, config.scopes ?? []),
+  ])];
   if (scopesSupported.length === 0) {
     throw new Error('createMcpAuthServer: configure `scopes` or `manifests` so clients have scopes to request');
   }

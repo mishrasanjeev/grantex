@@ -11,11 +11,9 @@ const validatorPath = join(repoRoot, 'scripts', 'commerce-c6oa-preview-conforman
 const rendererPath = join(repoRoot, 'scripts', 'commerce-c6od-preview-status-render.mjs');
 
 const expectedSurfaces = [
-  'acp_style_checkout_shape_preview',
   'ap2_style_evidence_preview',
   'connector_registry_metadata_preview',
   'schemaorg_jsonld_preview',
-  'ucp_style_capability_profile_preview',
 ];
 
 const forbiddenOutputPatterns = [
@@ -130,9 +128,9 @@ describe('C6Od preview conformance status renderer', () => {
       expect(status).toMatchObject({
         status: 'passing',
         counts: {
-          fixture_count: 10,
-          surface_count: 5,
-          scan_count: 104,
+          fixture_count: 6,
+          surface_count: 3,
+          scan_count: 72,
         },
       });
       expect(status.badge).toMatchObject({
@@ -142,7 +140,7 @@ describe('C6Od preview conformance status renderer', () => {
         public_badge_publication_enabled: false,
       });
       expect(status.per_surface_status.map((surface) => surface.surface).sort()).toEqual(expectedSurfaces);
-      expect(status.blocker_summary.blocked_fixture_count).toBe(5);
+      expect(status.blocker_summary.blocked_fixture_count).toBe(3);
       expect(status.forbidden_claim_scan_summary.status).toBe('passed');
       expect(status.non_enabling_control_summary.status).toBe('passed');
       expect(markdown).toContain('# Open Protocol Preview Conformance Status');

@@ -5,6 +5,7 @@ import type { LoadedManifest } from './resource/tool-policy.js';
 import type { ConsentPageOptions } from './consent/page.js';
 import type { FastifyRequest } from 'fastify';
 import type { CurrentGrantVerifier } from './resource/guard.js';
+import type { CommerceAuthorizationOptions } from './lib/commerce-scopes.js';
 
 export interface AuthenticatedPrincipal {
   /** Tenant-scoped external principal ID derived from a verified host session. */
@@ -19,6 +20,18 @@ export interface TokenIssuedEvent {
   scopes: string[];
   grantId: string;
   agentDid?: string;
+  /**
+   * The token's `sub`: the Grantex principal who approved the grant. With
+   * `principalId` this is the identity link a merchant records (see
+   * "Buyer identity linking" in the README).
+   */
+  subject?: string;
+  /**
+   * The host principal `resolvePrincipal` returned when the code was issued,
+   * e.g. the merchant account the buyer signed in to. Present on code
+   * exchange; absent on refresh.
+   */
+  principalId?: string;
 }
 
 export interface McpAuthConfig {
@@ -47,6 +60,14 @@ export interface McpAuthConfig {
    * the 0.5 (permission string) or 0.6 (tool object) form.
    */
   manifests?: LoadedManifest[];
+  /**
+   * Commerce scope registries: UCP buyer identity linking
+   * (`dev.ucp.common.identity_linking` well-known scopes) and the Grantex
+   * `dev.grantex.acp.*` extension scopes for ACP operations. The selected
+   * scopes join `scopes_supported`. A configured `dev.ucp.*` or
+   * `dev.grantex.acp.*` scope outside these registries is refused at start-up.
+   */
+  commerce?: CommerceAuthorizationOptions;
   /**
    * Base URL for this auth server (used in metadata). Must be https (http is
    * accepted only for localhost) with no query or fragment.

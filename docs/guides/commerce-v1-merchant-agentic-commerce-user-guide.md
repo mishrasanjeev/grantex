@@ -161,48 +161,16 @@ Reviewers should reject the preview if it contains private merchant data,
 internal IDs, provider metadata, raw payloads, secrets, production claims,
 allowlist values, payment claims, launch claims, or certification claims.
 
-### UCP-Style Capability Profile Preview
+### UCP Profile And ACP Surfaces
 
-The UCP-style capability profile preview shows how Grantex can describe a
-merchant's agent-commerce capabilities in a standard-looking capability shape
-without publishing or certifying those capabilities.
-
-This preview uses only the Grantex-owned namespace
-`dev.grantex.commerce.discovery.preview`. It does not publish `dev.ucp.*`
-capabilities, does not claim UCP certification, and does not make the merchant
-publicly discoverable.
-
-The preview can show read-only discovery capabilities such as merchant profile,
-catalog search, catalog item read, and availability read when evidence exists.
-It also shows blocked capabilities such as checkout, payment, fulfillment,
-refund/return execution, live provider access, and production allowlist writes.
-
-Merchants and reviewers should treat the preview as review metadata only. It
-does not enable public discovery, production Commerce V1, checkout/payment
-creation, live payments, live Plural, provider credentials, production config,
-or allowlists.
-
-### ACP-Style Checkout Shape Preview
-
-The ACP-style checkout shape preview shows how Grantex cart, checkout, consent,
-passport, policy, and payment-intent evidence could map into future cart and
-checkout protocol objects. It is a review aid, not checkout publication.
-
-This preview is sandbox-only and non-enabling. It does not claim ACP
-certification, publish ACP capabilities, create payment intents, create checkout
-links, expose checkout URLs, call providers, expose provider metadata, enable
-live payments, enable live Plural, write production configuration, or set
-allowlists.
-
-The preview refuses to mark checkout mapping as available when required evidence
-is missing. Missing granted checkout consent, an unrevoked checkout Commerce
-Passport, an active policy, cart evidence, or payment-intent foundation evidence
-appears as a blocker with remediation rather than being guessed.
-
-Unsupported fields such as public checkout URLs, provider payment references,
-live provider execution, fulfillment execution, and refund/return execution
-remain explicit blockers. A merchant should treat this as protocol packaging
-evidence only, not approval to accept live checkout or payment traffic.
+The UCP-style capability profile preview and the ACP-style checkout shape
+preview were removed. Their replacement is a standard UCP business profile
+(release 2026-04-08 or 2026-08-25) that Grantex renders from the merchant's
+signed OACP artifacts. It lists a UCP capability, such as catalog search, cart
+or checkout, only when your storefront host serves it and Grantex holds a
+current, unrevoked artifact for every fact the capability depends on. When an
+artifact expires or is revoked, the capability drops out of the next rendering.
+Nothing is published until public discovery is approved for the merchant.
 
 ### AP2-Style Evidence Preview
 

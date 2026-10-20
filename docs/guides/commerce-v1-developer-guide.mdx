@@ -60,59 +60,27 @@ error. Missing or unsafe catalog evidence is omitted and reported through
 missing seller, product, price, inventory, shipping, refund, launch, payment, or
 certification facts.
 
-### UCP-Style Capability Profile Preview
+### UCP Business Profile From OACP Artifacts
 
-Operators and owning merchants can inspect the C6K UCP-style capability profile
-preview through:
+The UCP-style capability profile preview (C6K, Grantex-owned namespace
+`dev.grantex.commerce.discovery.preview`) and the ACP-style checkout shape
+preview (C6L) were removed. Grantex now renders the `ucp` member of a UCP
+business profile at a pinned release from the merchant's issued OACP
+artifacts:
 
-`GET /v1/commerce/merchants/{merchant_id}/ucp-capability-profile-preview`
+`GET /v1/commerce/oacp/ucp-profile?tenant_id=&merchant_id=&seller_agent_id=&version=2026-04-08&served=&rest_endpoint=&identity_linking_scopes=`
 
-The endpoint is tenant-scoped and sandbox-only. It returns services,
-capabilities, transports, controls, blockers, and evidence summary fields from
-canonical Grantex merchant/catalog/readiness state. Every capability ID uses the
-Grantex-owned namespace:
-
-`dev.grantex.commerce.discovery.preview`
-
-The endpoint must not publish `dev.ucp.*`, must not claim UCP certification,
-and must not enable a public discovery route. Response controls explicitly keep
-public discovery, checkout/payment creation, live provider access, live Plural,
-production allowlist writes, UCP publication, and UCP certification disabled.
-
-Read-only discovery capabilities can be marked `preview_available` when Grantex
-has public-safe profile and catalog evidence. Checkout, payment, fulfillment,
-refund/return execution, provider credentials, and live paths remain `blocked`
-metadata only.
-
-### ACP-Style Checkout Shape Preview
-
-Operators and owning merchants can inspect the C6L ACP-style checkout shape
-preview through:
-
-`GET /v1/commerce/merchants/{merchant_id}/acp-checkout-shape-preview`
-
-The endpoint is tenant-scoped and sandbox-only. It reads canonical Grantex cart,
-payment intent, consent, Commerce Passport, and active policy evidence, then
-returns ACP-style cart and checkout mapping objects as preview metadata. It does
-not call the payment provider and does not reuse the runtime checkout/payment
-creation handlers.
-
-The response includes explicit non-enabling controls:
-
-- `acp_publication_enabled: false`
-- `acp_certification_claim: none`
-- `public_checkout_enabled: false`
-- `payment_intent_creation_enabled: false`
-- `checkout_link_creation_enabled: false`
-- `provider_call_enabled_by_preview: false`
-- `live_payment_enabled_by_preview: false`
-- `live_plural_enabled_by_preview: false`
-
-Checkout mapping stays blocked when granted checkout consent, an unrevoked
-checkout Commerce Passport, an active policy, cart evidence, or sandbox payment
-intent evidence is missing. Unsupported fields such as public checkout URLs,
-provider payment references, provider metadata, live execution, fulfillment,
-and refunds/returns are represented as explicit blockers.
+Callers: the AgenticOrg service token (scope `commerce.oacp.ucp_profile.read`,
+allow-listed tenant), an operator of the tenant, or the platform admin.
+`version` is `2026-04-08` (default) or `2026-08-25`. `served` lists the
+`dev.ucp.*` capabilities the business host actually serves. A capability is
+rendered only when it is served and every OACP artifact family that backs it is
+issued, unrevoked and unexpired; everything else is returned in `withheld` with
+the reason. Only `dev.ucp.*` names appear, each entry declares the profile's
+`ucp.version`, and `spec` / `schema` point at ucp.dev for that release. The
+host adds its own signing keys and serves the document at `/.well-known/ucp`,
+and must not publish it while `publication_allowed` is false. See
+[OACP runtime authority and adapter mappings](./oacp-runtime-authority-and-adapter-mappings.md).
 
 ### AP2-Style Evidence Preview
 

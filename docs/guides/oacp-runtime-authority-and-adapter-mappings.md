@@ -35,6 +35,33 @@ issuer key published in `/.well-known/jwks.json` and listed on an OACP Token Sta
 The route is not a checkout, payment, order, mandate, provider, Shopify, or
 merchant private API path.
 
+### Public discovery opt-in
+
+By default every request carries `no_public_discovery_enablement: true` and
+`public_discovery_state` is issued `disabled`. A merchant opts in with
+`public_discovery_requested: true` (and `no_public_discovery_enablement`
+false or absent; `no_payment_execution: true` stays mandatory), an opaque
+`namespace_attestation_ref` (the merchant runtime's namespace-to-host
+attestation) and `serving_host` (lower-case DNS name). Grantex issues
+`public_discovery_state` with `public_discovery_state: "enabled"`,
+`public_discovery_publication_allowed: true`, the attestation ref and serving
+host bound into the signed payload, `no_public_discovery_enablement: false`, and
+`public_discovery_publication` removed from that artifact's blocked and
+unsupported capability lists, only when all of these hold:
+
+| Condition | Otherwise `public_discovery_withheld_reason` |
+|---|---|
+| `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED=true` (default off) | `issuance_flag_off` |
+| The tenant is on `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` | `tenant_not_allowlisted` |
+| Both `namespace_attestation_ref` and `serving_host` are present | `namespace_attestation_missing` |
+
+When a condition fails the artifact set is issued exactly as without the
+opt-in (disabled), plus `public_discovery_requested: true` and the withheld
+reason on the `public_discovery_state` artifact. Every other family keeps
+public discovery blocked. A malformed opt-in is refused with
+`public_discovery_request_invalid`. A request without the opt-in issues the
+same payload as before.
+
 ## Protocol Adapter Governance
 
 The `protocol_adapter` artifact carries a canonical mapping profile. It tells
@@ -46,6 +73,115 @@ task metadata, MCP tool/resource metadata, and OpenAPI buyer-safe bridge schema.
 These are compatibility mappings only. They are not public protocol
 certification, standards publication, public discovery approval, checkout
 enablement, or payment execution.
+
+## UCP Business Profile
+
+`GET /v1/commerce/oacp/ucp-profile` renders the `ucp` member of a UCP business
+profile from the merchant / seller-agent scope's issued artifacts, at UCP
+`2026-04-08` (default) or `2026-08-25`. Callers: the AgenticOrg service token
+(scope `commerce.oacp.ucp_profile.read`, allow-listed tenant), an operator of
+the tenant, or the platform admin.
+
+| Query | Meaning |
+|---|---|
+| `tenant_id`, `merchant_id`, `seller_agent_id` | Required artifact scope. |
+| `version` | `2026-04-08` or `2026-08-25`. |
+| `served` | Comma-separated `dev.ucp.*` capabilities the business host serves. |
+| `rest_endpoint` | The host's UCP REST base URL (https, no trailing slash); adds the `dev.ucp.shopping` REST service. |
+| `identity_linking_scopes` | Scope tokens the merchant's authorization server issues (see `@grantex/mcp-auth` identity linking). |
+
+A capability is rendered only when it is served and every artifact family that
+backs it is `issued`, unrevoked and unexpired:
+
+| Capability | Backing artifact families |
+|---|---|
+| `dev.ucp.shopping.catalog.search`, `dev.ucp.shopping.catalog.lookup`, `dev.ucp.shopping.cart` | `merchant_profile`, `seller_agent_card`, `catalog_snapshot`, `offer_price_snapshot`, `inventory_snapshot` |
+| `dev.ucp.shopping.checkout` | the above plus `policy_scope`, `mandate_capability` |
+| `dev.ucp.shopping.order` | as checkout, and only when checkout is rendered |
+| `dev.ucp.common.identity_linking` | `merchant_profile`, `seller_agent_card`; `config.scopes` keeps only scopes of rendered capabilities |
+
+Everything not rendered is listed in `withheld` (`not_served`,
+`missing_backing_artifact` with the missing families, `requires_checkout`,
+`no_identity_linking_scopes`). Every entry declares the profile's
+`ucp.version` and points `spec` / `schema` at ucp.dev for that release.
+`payment_handlers` is empty until a payment handler is backed. The response
+also carries `source_artifacts`, `valid_until` (earliest source expiry:
+re-render by then), `publication_allowed` and `public_discovery`.
+`publication_allowed` is true only when the live `public_discovery_state`
+artifact is `enabled` with `public_discovery_publication_allowed: true`, a
+`serving_host` and a `namespace_attestation_ref`, and, when `rest_endpoint` is
+given, its host equals that `serving_host`; `public_discovery` then echoes the
+host and attestation ref. The host must not publish while it is false. The host adds its signing keys
+(`signing_keys[]` at 2026-04-08, `keys[]` at 2026-08-25) and serves the result
+at `/.well-known/ucp`. No Grantex-private namespace is emitted: the former
+`dev.grantex.commerce.discovery.preview` preview and the UCP-style and
+ACP-style preview routes are removed.
+
+## ACP Delegate-Payment Allowance
+
+`POST /v1/commerce/oacp/acp/delegate-payment-allowance` (AgenticOrg service
+token with scope `commerce.acp.delegate_payment_allowance.issue`, an operator of
+the tenant, or the platform admin). Body: `tenant_id`, `passport_jwt` (a
+checkout Commerce Passport), `checkout_session_id`, optional `merchant_id`,
+`amount` (minor units) and `currency`. Grantex verifies the passport
+payment-affecting (signature, expiry, online revocation, tenant, merchant),
+requires `commerce:payment.initiate` and a cap, and answers:
+
+| Member | Value |
+|---|---|
+| `allowance` | ACP `Allowance`: `reason: one_time`, `max_amount` = passport `max_amount`, `currency` lowercase, `checkout_session_id`, `merchant_id` = passport merchant, `expires_at` = passport `exp`. |
+| `risk_signals` | `[]`. ACP defines only `card_testing`, which Grantex does not score. |
+| `metadata` | String map for `DelegatePaymentRequest.metadata`: passport `jti`, agent, environment. |
+| `authority` | The checks performed, passport `jti`, agent, environment, policy version. |
+| `audit_event_id` | The `commerce_audit_events` row recording the allowance. |
+
+The PSP-facing `DelegatePaymentRequest` (payment method, billing address,
+signature) is built and sent by the merchant runtime to its PSP. Grantex never
+receives card data: any payment-method member in the body is refused with 422
+`card_data_refused`. An `amount` above the cap is refused with
+`allowance_exceeds_passport_cap`; every refusal is audited.
+
+## ACP Order Events
+
+`GET /v1/commerce/oacp/acp/orders/{order_id}/event?tenant_id=&permalink_base=`
+(AgenticOrg service token with scope `commerce.acp.order_events.read`, an
+operator of the tenant, or the platform admin) returns `{event}`: the ACP
+2026-04-17 webhook body `{type, data}` for a Grantex order, always the full
+snapshot.
+
+| ACP member | From the Grantex order |
+|---|---|
+| `type` | `order_create` when the order was never updated and has no handoffs, else `order_update`; `event_type` overrides. |
+| `data.id` | Order id. |
+| `data.checkout_session_id` | `checkout_session_id` query, else the cart, else the payment intent (409 when none). |
+| `data.permalink_url` | `permalink_base` + `/` + order id (https only). |
+| `data.status` | `pending_source_facts` created, `recorded` confirmed, `merchant_acknowledged` processing, `closed` completed, `cancelled` / `expired` canceled, `blocked` / `unknown` manual_review. |
+| `data.line_items[]` | One per line: `id` (variant), `title`, `product_id`, `quantity {ordered, current, fulfilled: 0}`, `unit_price` and `subtotal` only when the price is known, `status` (`removed` on a cancelled or expired order). |
+| `data.totals[]` | `subtotal`, `tax`, `total` when known. |
+| `data.fulfillments[]` | Fulfillment / delivery handoffs whose safe `fulfillment_method` is `shipping`, `pickup` or `digital`. |
+| `data.adjustments[]` | Refund / return handoffs: status `pending`, `completed` (resolved) or `failed`; `amount` from the safe `amount_minor_units`. |
+
+No buyer, agent, audit, SKU or provider identifiers are emitted. The merchant
+runtime signs the exact body it sends with
+`Merchant-Signature: t=<unix>,v1=<hex HMAC-SHA256(secret, t + "." + body)>`
+(receivers allow 300 s) and posts it to the agent platform; Grantex sends no
+outbound webhooks. Shared signature vectors:
+`spec/examples/acp/merchant-signature-v1.json`.
+
+## Buyer Identity Linking
+
+UCP identity linking needs an OAuth 2.0 authorization server on the merchant's
+domain. `@grantex/mcp-auth` serves it: configure
+`commerce.ucpIdentityLinking` (UCP release and well-known `dev.ucp.*` scopes)
+and, for ACP operations, `commerce.acpDelegatedAuthentication` (the Grantex
+`dev.grantex.acp.*` extension scopes). The buyer signs in to the merchant
+account, approves the scopes, and the platform receives a Grantex grant token
+audience-bound to the merchant resource. The merchant (AgenticOrg) verifies it
+against the Grantex JWKS and links (`iss`, `sub`) to the merchant account; the
+`onTokenIssued` hook reports the same link at issuance. Pass the offered UCP
+scopes (`grantex_extensions.commerce.ucp_identity_linking.scopes` in the
+authorization server metadata) as `identity_linking_scopes` to the UCP profile
+route. Flow and claims: `packages/mcp-auth/README.md`.
 
 ```mermaid
 flowchart LR

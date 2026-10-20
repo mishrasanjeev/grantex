@@ -79,6 +79,64 @@ Grantex's returned internal principal ID is recorded separately from the
 host's external ID. Token exchange and refresh preserve the internal subject,
 so swapping an upstream code cannot change the human.
 
+## Buyer identity linking (UCP) and ACP scopes
+
+A merchant can run this server as the authorization server that UCP identity
+linking (`dev.ucp.common.identity_linking`, UCP 2026-04-08 and 2026-08-25)
+discovers on its domain. Set `commerce` in the configuration:
+
+- `commerce.ucpIdentityLinking: { version: '2026-04-08' | '2026-08-25', scopes? }`
+  adds the well-known UCP scopes (default: all six) to `scopes_supported`:
+  `dev.ucp.shopping.checkout:manage`, `dev.ucp.shopping.cart:manage`,
+  `dev.ucp.shopping.order:read`, `dev.ucp.shopping.order:manage`,
+  `dev.ucp.shopping.catalog.search:read`, `dev.ucp.shopping.catalog.lookup:read`.
+- `commerce.acpDelegatedAuthentication: { scopes? }` adds the Grantex extension
+  scopes `dev.grantex.acp.checkout:manage`,
+  `dev.grantex.acp.delegate_authentication:manage` and
+  `dev.grantex.acp.order:read` (default: all three). ACP defines no OAuth scopes
+  (its checkout, delegate-payment and delegate-authentication APIs take an
+  opaque bearer token); these are Grantex scopes in Grantex's own namespace,
+  for merchants that want a linked buyer token on ACP operations.
+
+With `commerce` set, a configured `dev.ucp.*` or `dev.grantex.acp.*` scope
+outside these registries is refused at start-up, and the authorization server
+metadata carries `grantex_extensions.commerce` with the UCP release and the
+offered scopes. The registries, `UCP_SCOPE_TOKEN_PATTERNS` (the release's
+`scope_token` pattern) and `ucpIdentityLinkingScopePolicies()` (a profile's
+`config.scopes` map with plain-text descriptions) are exported.
+
+The flow is the one this server already runs, which is what UCP requires:
+
+1. The platform reads the merchant's RFC 9728 protected-resource metadata
+   (`authorization_servers`), then this server's RFC 8414 metadata, and checks
+   that `issuer` matches.
+2. Authorization Code with PKCE S256 (`plain` is refused). The buyer signs in to
+   the merchant account; `resolvePrincipal` returns that account. The consent
+   page lists the requested scopes; Grantex records the approval.
+3. The authorization response carries `state` and `iss` (RFC 9207), which the
+   platform must verify.
+4. The token endpoint returns a Grantex grant token, audience-bound to the
+   merchant resource (RFC 8707).
+
+The merchant links the buyer from the token it receives on each call, after
+verifying it against the Grantex JWKS (`createMcpResourceGuard` or the SDK):
+
+| Claim | Use for linking |
+|---|---|
+| `iss` | The Grantex issuer. Link on (`iss`, `sub`), never on `sub` alone. |
+| `sub` | The Grantex principal who approved the grant: the stable buyer identifier. |
+| `aud` | The merchant resource; refuse any other audience. |
+| `scope` | The granted UCP / Grantex ACP scopes; a UCP operation listed in the profile's `config.scopes` needs its scope. |
+| `client_id`, `urn:grantex:grant.agent_did` | The platform agent acting for the buyer. |
+| `jti`, `urn:grantex:grant.grant_id`, `exp` | Revocation and replay checks; revoking the grant ends the link's authority. |
+
+`hooks.onTokenIssued` receives `subject` (the token's `sub`) and, on code
+exchange, `principalId` (the merchant account `resolvePrincipal` returned),
+so the merchant can record the (`iss`, `sub`) to account link when the token is
+issued. A missing or invalid token on a scope-gated UCP operation is
+`identity_required` (401 with `WWW-Authenticate: Bearer`); a token without the
+scope is `insufficient_scope`.
+
 ## Durable state
 
 Use `PostgresStorage` with `runMigrations` from `@grantex/mcp-auth/postgres`,

@@ -32,9 +32,9 @@ Expected success output:
 commerce C6Oa preview conformance validation passed
 {
   "status": "passed",
-  "fixtures_checked": 10,
-  "surfaces_checked": 5,
-  "scans_checked": 104,
+  "fixtures_checked": 6,
+  "surfaces_checked": 3,
+  "scans_checked": 72,
   "manifest": "docs/internal/commerce-v1/fixtures/c6oa-preview-conformance/manifest.json"
 }
 ```

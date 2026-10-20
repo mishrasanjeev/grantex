@@ -42,9 +42,9 @@ published, and must not be committed as timestamped artifacts.
 | Check | Result |
 | --- | --- |
 | Release-review gate | passed |
-| Fixture count | 10 |
-| Surface count | 5 |
-| Scan count | 104 |
+| Fixture count | 6 |
+| Surface count | 3 |
+| Scan count | 72 |
 | Rendered status | passing |
 | Badge status | passing |
 | Report/status artifacts | generated only in local temp/review directory |

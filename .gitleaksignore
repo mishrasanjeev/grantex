@@ -284,3 +284,11 @@ b670b91a9b5894d65d3474d81ca898f8b348c945:packages/sdk-ts/tests/vault.test.ts:gen
 79735e1a6aa858e4aff960f6541379b049ce7399:spec/examples/oacp/gen.mjs:generic-api-key:114
 79735e1a6aa858e4aff960f6541379b049ce7399:spec/examples/oacp/gen.mjs:generic-api-key:115
 79735e1a6aa858e4aff960f6541379b049ce7399:spec/examples/oacp/oacp-artifact-jws-v1.json:jwt:875
+
+# apps/auth-service/tests/fixtures/protocol-schemas (feat/commerce-protocol-surfaces,
+# 2026-10-20): the vendored ACP 2026-04-17 checkout JSON Schema's own `examples`
+# show placeholder payment tokens. Upstream example values, not credentials.
+# Fingerprints are commit-bound: merge, do not squash.
+686f509ace2a2163a76c89a4bfeceb0e3b1b97c4:apps/auth-service/tests/fixtures/protocol-schemas/acp-2026-04-17/schema.agentic_checkout.json:generic-api-key:325
+686f509ace2a2163a76c89a4bfeceb0e3b1b97c4:apps/auth-service/tests/fixtures/protocol-schemas/acp-2026-04-17/schema.agentic_checkout.json:generic-api-key:2126
+686f509ace2a2163a76c89a4bfeceb0e3b1b97c4:apps/auth-service/tests/fixtures/protocol-schemas/acp-2026-04-17/schema.agentic_checkout.json:generic-api-key:3636

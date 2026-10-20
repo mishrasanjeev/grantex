@@ -1891,6 +1891,13 @@ the pull request that references it.
   against those schemas. Owner: payments integration maintainers. Exit
   criterion: both renderings validate against the published schemas in
   CI.
+- **Status (G35):** partially addressed outside the library. The auth service
+  renders the ACP delegate-payment `allowance` and `risk_signals` envelope from
+  a verified checkout Commerce Passport
+  (`POST /v1/commerce/oacp/acp/delegate-payment-allowance`), validated in CI
+  against the vendored ACP 2026-04-17 `schema.delegate_payment.json`
+  (`apps/auth-service/tests/fixtures/protocol-schemas/`). The verifier
+  libraries still render nothing, and AP2 stays withheld. Open.
 
 ## G-138 — The manifest cannot say whether an issuer is suspended at a given time
 

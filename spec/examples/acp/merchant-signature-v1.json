@@ -1,0 +1,62 @@
+{
+  "description": "ACP 2026-04-17 Merchant-Signature vectors: v1 = hex(HMAC-SHA256(secret, t + \".\" + raw_body)). Synthetic secret and data; not a real credential.",
+  "secret": "synthetic-acp-webhook-secret-for-tests-only",
+  "cases": [
+    {
+      "name": "valid",
+      "raw_body": "{\"type\":\"order_create\",\"data\":{\"type\":\"order\",\"id\":\"cord_01EXAMPLE\",\"checkout_session_id\":\"ccart_01EXAMPLE\",\"permalink_url\":\"https://merchant.example/orders/cord_01EXAMPLE\",\"status\":\"confirmed\",\"line_items\":[{\"id\":\"cvar_01EXAMPLE\",\"title\":\"Ceramic mug\",\"product_id\":\"cprd_01EXAMPLE\",\"quantity\":{\"ordered\":2,\"current\":2,\"fulfilled\":0},\"unit_price\":45000,\"subtotal\":90000,\"status\":\"processing\"}],\"totals\":[{\"type\":\"subtotal\",\"display_text\":\"Subtotal\",\"amount\":90000},{\"type\":\"total\",\"display_text\":\"Total\",\"amount\":90000}]}}",
+      "t": 1792483200,
+      "now": 1792483210,
+      "header": "t=1792483200,v1=88144bbc09fed6280dad22ce541b68b71beef0273089c30865dce0e186c707db",
+      "valid": true
+    },
+    {
+      "name": "valid_at_tolerance_edge",
+      "raw_body": "{\"type\":\"order_create\",\"data\":{\"type\":\"order\",\"id\":\"cord_01EXAMPLE\",\"checkout_session_id\":\"ccart_01EXAMPLE\",\"permalink_url\":\"https://merchant.example/orders/cord_01EXAMPLE\",\"status\":\"confirmed\",\"line_items\":[{\"id\":\"cvar_01EXAMPLE\",\"title\":\"Ceramic mug\",\"product_id\":\"cprd_01EXAMPLE\",\"quantity\":{\"ordered\":2,\"current\":2,\"fulfilled\":0},\"unit_price\":45000,\"subtotal\":90000,\"status\":\"processing\"}],\"totals\":[{\"type\":\"subtotal\",\"display_text\":\"Subtotal\",\"amount\":90000},{\"type\":\"total\",\"display_text\":\"Total\",\"amount\":90000}]}}",
+      "t": 1792483200,
+      "now": 1792483500,
+      "header": "t=1792483200,v1=88144bbc09fed6280dad22ce541b68b71beef0273089c30865dce0e186c707db",
+      "valid": true
+    },
+    {
+      "name": "stale",
+      "raw_body": "{\"type\":\"order_create\",\"data\":{\"type\":\"order\",\"id\":\"cord_01EXAMPLE\",\"checkout_session_id\":\"ccart_01EXAMPLE\",\"permalink_url\":\"https://merchant.example/orders/cord_01EXAMPLE\",\"status\":\"confirmed\",\"line_items\":[{\"id\":\"cvar_01EXAMPLE\",\"title\":\"Ceramic mug\",\"product_id\":\"cprd_01EXAMPLE\",\"quantity\":{\"ordered\":2,\"current\":2,\"fulfilled\":0},\"unit_price\":45000,\"subtotal\":90000,\"status\":\"processing\"}],\"totals\":[{\"type\":\"subtotal\",\"display_text\":\"Subtotal\",\"amount\":90000},{\"type\":\"total\",\"display_text\":\"Total\",\"amount\":90000}]}}",
+      "t": 1792483200,
+      "now": 1792483501,
+      "header": "t=1792483200,v1=88144bbc09fed6280dad22ce541b68b71beef0273089c30865dce0e186c707db",
+      "valid": false
+    },
+    {
+      "name": "body_changed",
+      "raw_body": "{\"type\":\"order_create\",\"data\":{\"type\":\"order\",\"id\":\"cord_01EXAMPLE\",\"checkout_session_id\":\"ccart_01EXAMPLE\",\"permalink_url\":\"https://merchant.example/orders/cord_01EXAMPLE\",\"status\":\"confirmed\",\"line_items\":[{\"id\":\"cvar_01EXAMPLE\",\"title\":\"Glass mug\",\"product_id\":\"cprd_01EXAMPLE\",\"quantity\":{\"ordered\":2,\"current\":2,\"fulfilled\":0},\"unit_price\":45000,\"subtotal\":90000,\"status\":\"processing\"}],\"totals\":[{\"type\":\"subtotal\",\"display_text\":\"Subtotal\",\"amount\":90000},{\"type\":\"total\",\"display_text\":\"Total\",\"amount\":90000}]}}",
+      "t": 1792483200,
+      "now": 1792483210,
+      "header": "t=1792483200,v1=88144bbc09fed6280dad22ce541b68b71beef0273089c30865dce0e186c707db",
+      "valid": false
+    },
+    {
+      "name": "uppercase_hex",
+      "raw_body": "{\"type\":\"order_create\",\"data\":{\"type\":\"order\",\"id\":\"cord_01EXAMPLE\",\"checkout_session_id\":\"ccart_01EXAMPLE\",\"permalink_url\":\"https://merchant.example/orders/cord_01EXAMPLE\",\"status\":\"confirmed\",\"line_items\":[{\"id\":\"cvar_01EXAMPLE\",\"title\":\"Ceramic mug\",\"product_id\":\"cprd_01EXAMPLE\",\"quantity\":{\"ordered\":2,\"current\":2,\"fulfilled\":0},\"unit_price\":45000,\"subtotal\":90000,\"status\":\"processing\"}],\"totals\":[{\"type\":\"subtotal\",\"display_text\":\"Subtotal\",\"amount\":90000},{\"type\":\"total\",\"display_text\":\"Total\",\"amount\":90000}]}}",
+      "t": 1792483200,
+      "now": 1792483210,
+      "header": "t=1792483200,v1=88144BBC09FED6280DAD22CE541B68B71BEEF0273089C30865DCE0E186C707DB",
+      "valid": true
+    },
+    {
+      "name": "malformed_header",
+      "raw_body": "{\"type\":\"order_create\",\"data\":{\"type\":\"order\",\"id\":\"cord_01EXAMPLE\",\"checkout_session_id\":\"ccart_01EXAMPLE\",\"permalink_url\":\"https://merchant.example/orders/cord_01EXAMPLE\",\"status\":\"confirmed\",\"line_items\":[{\"id\":\"cvar_01EXAMPLE\",\"title\":\"Ceramic mug\",\"product_id\":\"cprd_01EXAMPLE\",\"quantity\":{\"ordered\":2,\"current\":2,\"fulfilled\":0},\"unit_price\":45000,\"subtotal\":90000,\"status\":\"processing\"}],\"totals\":[{\"type\":\"subtotal\",\"display_text\":\"Subtotal\",\"amount\":90000},{\"type\":\"total\",\"display_text\":\"Total\",\"amount\":90000}]}}",
+      "t": 1792483200,
+      "now": 1792483210,
+      "header": "v1=88144bbc09fed6280dad22ce541b68b71beef0273089c30865dce0e186c707db,t=1792483200",
+      "valid": false
+    },
+    {
+      "name": "short_mac",
+      "raw_body": "{\"type\":\"order_create\",\"data\":{\"type\":\"order\",\"id\":\"cord_01EXAMPLE\",\"checkout_session_id\":\"ccart_01EXAMPLE\",\"permalink_url\":\"https://merchant.example/orders/cord_01EXAMPLE\",\"status\":\"confirmed\",\"line_items\":[{\"id\":\"cvar_01EXAMPLE\",\"title\":\"Ceramic mug\",\"product_id\":\"cprd_01EXAMPLE\",\"quantity\":{\"ordered\":2,\"current\":2,\"fulfilled\":0},\"unit_price\":45000,\"subtotal\":90000,\"status\":\"processing\"}],\"totals\":[{\"type\":\"subtotal\",\"display_text\":\"Subtotal\",\"amount\":90000},{\"type\":\"total\",\"display_text\":\"Total\",\"amount\":90000}]}}",
+      "t": 1792483200,
+      "now": 1792483210,
+      "header": "t=1792483200,v1=88144bbc09fed6280dad22ce541b68b71beef0273089c30865dce0e186c707d",
+      "valid": false
+    }
+  ]
+}

@@ -80,14 +80,22 @@ function audienceBound(grantToken: unknown, resource: string, principalId?: stri
 export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext): void {
   const { config, storage } = ctx;
 
-  async function tokenIssued(token: ExchangeTokenResponse, clientId: string): Promise<void> {
+  async function tokenIssued(token: ExchangeTokenResponse, clientId: string, principalId?: string): Promise<void> {
     const hook = config.hooks?.onTokenIssued;
     if (!hook) return;
     const claims = jose.decodeJwt(token.grantToken);
     const extension = claims['urn:grantex:grant'] as { agent_did?: unknown } | undefined;
     const agentDid = typeof extension?.agent_did === 'string' ? extension.agent_did : typeof claims['agt'] === 'string' ? claims['agt'] : undefined;
     try {
-      await hook({ accessToken: token.grantToken, clientId, scopes: [...token.scopes], grantId: token.grantId, ...(agentDid ? { agentDid } : {}) });
+      await hook({
+        accessToken: token.grantToken,
+        clientId,
+        scopes: [...token.scopes],
+        grantId: token.grantId,
+        ...(agentDid ? { agentDid } : {}),
+        ...(typeof claims.sub === 'string' ? { subject: claims.sub } : {}),
+        ...(principalId !== undefined ? { principalId } : {}),
+      });
     } catch {
       try { (config.warn ?? console.warn)('mcp-auth: onTokenIssued failed after issuance; token delivery continues'); } catch { /* Observability only. */ }
     }
@@ -234,7 +242,7 @@ export function registerTokenEndpoint(app: FastifyInstance, ctx: ServerContext):
       if (!bound.ok) return refuseUnboundToken(reply, bound.jti, bound.principalMismatch);
 
       await bindRefreshToken(tokenResponse.refreshToken, client_id, authCode.resource, authCode.grantexPrincipalId);
-      await tokenIssued(tokenResponse, client_id);
+      await tokenIssued(tokenResponse, client_id, authCode.principalId);
 
       return reply.send({
         access_token: tokenResponse.grantToken,

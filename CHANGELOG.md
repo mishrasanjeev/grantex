@@ -6,6 +6,112 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Merchant opt-in to public discovery on C6Z issuance (G17 enabler)
+- The C6Z authority request may set `public_discovery_requested: true` (with
+  `no_public_discovery_enablement` false or absent; `no_payment_execution: true`
+  stays mandatory), `namespace_attestation_ref` and `serving_host`. Grantex then
+  issues `public_discovery_state` with `public_discovery_state: "enabled"`,
+  `public_discovery_publication_allowed: true`, the attestation ref and serving
+  host in the signed payload, and `public_discovery_publication` removed from
+  that artifact's blocked capabilities, only when the new flag
+  `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED` is on (default off), the tenant is
+  on `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`, and both attestation members
+  are present. Otherwise the artifacts are issued disabled as before, with a
+  `public_discovery_withheld_reason`. A request without the opt-in issues the
+  same payload as before. A malformed opt-in is refused
+  (`public_discovery_request_invalid`). `no_public_discovery_enablement` in the
+  issuance result is `false` when enabled.
+- `GET /v1/commerce/oacp/ucp-profile` sets `publication_allowed` only from an
+  enabled, attested `public_discovery_state` artifact and only when the
+  `rest_endpoint` host equals the attested `serving_host`; it echoes them in
+  `public_discovery`.
+
+### Added - ACP order events for Grantex orders (G37)
+- `GET /v1/commerce/oacp/acp/orders/{order_id}/event?tenant_id&permalink_base`
+  maps a Grantex order (`commerce_orders`) and its handoffs to the ACP
+  2026-04-17 `WebhookEvent` body: `order_create` for an order never changed and
+  without handoffs, otherwise `order_update` (or `event_type`), with the full
+  order snapshot (`type: order`, `checkout_session_id` = the ACP session given,
+  else the Grantex cart, else the payment intent; `permalink_url`; `status`
+  mapped from the Grantex status; line items; totals; fulfillments from
+  fulfillment / delivery handoffs with a known method; refund / return
+  adjustments). No buyer, agent, audit or provider identifiers are emitted;
+  unknown prices are omitted. Tenant-scoped reads; another tenant's order
+  answers 404; an order without a checkout reference answers 409. Service token
+  route scope `commerce.acp.order_events.read`. Validated against the saved
+  ACP webhook and order schemas. Trailing slashes of `permalink_base` are
+  stripped in linear time (no backtracking regular expression on the
+  caller-supplied value).
+- `acpMerchantSignature` / `verifyAcpMerchantSignature`
+  (`apps/auth-service/src/lib/commerce/acp-order-events.ts`) implement
+  `Merchant-Signature: t=<unix>,v1=<hex HMAC-SHA256>` with the 300 s receiver
+  window; shared vectors in `spec/examples/acp/merchant-signature-v1.json`
+  (synthetic secret). Grantex sends no outbound webhooks: the merchant runtime
+  signs and delivers.
+
+### Added - ACP delegate-payment allowance from the Commerce Passport cap (G35)
+- `POST /v1/commerce/oacp/acp/delegate-payment-allowance` verifies a checkout
+  Commerce Passport in payment-affecting mode (online revocation check, fails
+  closed with 503) for the body's tenant and optional merchant, and returns the
+  ACP 2026-04-17 delegate-payment `allowance` (`reason: one_time`,
+  `max_amount` = the passport cap in minor units, lowercase `currency`,
+  `checkout_session_id`, `merchant_id`, `expires_at` = the passport expiry),
+  `risk_signals` (empty: Grantex computes no `card_testing` score), a
+  string-only `metadata` map and the `authority` checks. A requested `amount`
+  above the cap, a browse passport, a passport without
+  `commerce:payment.initiate` or without a cap is refused. Grantex never
+  handles card data: a body with any payment-method member is refused 422
+  `card_data_refused`. Every issue and refusal is written to
+  `commerce_audit_events` (`acp.delegate_payment_allowance.issued` /
+  `.refused`); the allowance is returned only after it is recorded. Service
+  token route scope `commerce.acp.delegate_payment_allowance.issue`.
+- FINDINGS G-137 and `spec/verification.md` section 7.8 record that the ACP
+  allowance is now rendered by the auth service and schema-validated; the
+  verifier libraries still render nothing, so G-137 stays open.
+
+### Added - Buyer identity linking and ACP scopes on `@grantex/mcp-auth` (G24, G36)
+- `commerce.ucpIdentityLinking` offers the six well-known UCP
+  identity-linking scopes (`dev.ucp.shopping.checkout:manage`, `cart:manage`,
+  `order:read`, `order:manage`, `catalog.search:read`, `catalog.lookup:read`)
+  for UCP 2026-04-08 or 2026-08-25; `commerce.acpDelegatedAuthentication`
+  offers the Grantex extension scopes `dev.grantex.acp.checkout:manage`,
+  `dev.grantex.acp.delegate_authentication:manage` and
+  `dev.grantex.acp.order:read` (ACP defines no OAuth scopes). With `commerce`
+  set, an undefined `dev.ucp.*` or `dev.grantex.acp.*` scope is refused at
+  start-up and the metadata carries `grantex_extensions.commerce`. Servers
+  without `commerce` are unchanged.
+- `TokenIssuedEvent` gains `subject` and, on code exchange, `principalId`, so a
+  merchant records the (`iss`, `sub`) to merchant-account link at issuance.
+  The flow and token claims are in `packages/mcp-auth/README.md`.
+
+### Breaking - UCP-style and ACP-style preview routes removed (G18)
+- Removed `GET /v1/commerce/merchants/{merchant_id}/ucp-capability-profile-preview`
+  (C6K), its Grantex-private namespace `dev.grantex.commerce.discovery.preview`,
+  and `GET /v1/commerce/merchants/{merchant_id}/acp-checkout-shape-preview`
+  (C6L), with their OpenAPI schemas, tests and the matching surfaces of the
+  internal C6Oa preview conformance fixtures, validator and gate (now 6
+  fixtures, 3 surfaces, 72 scans). Both now answer 404. No SDK or portal page
+  called them. Migrate to `GET /v1/commerce/oacp/ucp-profile` (below); the
+  schema.org JSON-LD and AP2-style evidence previews are unchanged. No opt-out:
+  the preview shapes used free-text capability names that no UCP or ACP client
+  accepts.
+
+### Added - UCP business profile from issued OACP artifacts (G18)
+- `GET /v1/commerce/oacp/ucp-profile` renders the `ucp` member of a UCP
+  business profile at `2026-04-08` (default) or `2026-08-25` for a merchant /
+  seller-agent scope: `dev.ucp.*` names only, every entry at the profile's
+  `ucp.version`, `spec` / `schema` on ucp.dev for that release, `services` and
+  `payment_handlers` always present. A capability (catalog search / lookup,
+  cart, checkout, order, identity linking) is rendered only when the host lists
+  it in `served` and every OACP artifact family that backs it is issued,
+  unrevoked and unexpired; the rest are returned in `withheld` with the reason.
+  Identity-linking `config.scopes` keeps only scopes of rendered capabilities.
+  Also returns `source_artifacts`, `valid_until` and `publication_allowed`.
+  Authenticated with the AgenticOrg service token (new route scope
+  `commerce.oacp.ucp_profile.read`, tenant allowlist), an operator of the
+  tenant, or the platform admin. Validated in tests against the saved UCP
+  schemas (`apps/auth-service/tests/fixtures/protocol-schemas/`).
+
 ### Added - Tamper-evident wallet ledger (G16)
 - `wallet_ledger_entries` gains `chain_seq`, `prev_hash` and `entry_hash`
   (migration `134_commerce_ledger.sql`): a `BEFORE INSERT` trigger chains every

@@ -28,11 +28,9 @@ const expectedArtifacts = [
 ];
 
 const expectedSurfaces = [
-  'ACP-style checkout shape preview',
   'AP2-style evidence preview',
   'connector registry metadata preview',
   'schema.org JSON-LD preview',
-  'UCP-style capability profile preview',
 ];
 
 function readRunbook() {
@@ -87,9 +85,9 @@ describe('C6Of conformance release-review runbook', () => {
     expect(runbook).toContain('## Fail Criteria');
     expect(runbook).toContain('## Stop Conditions');
     expect(runbook).toContain('## Rollback');
-    expect(runbook).toContain('fixtures_checked: 10');
-    expect(runbook).toContain('surfaces_checked: 5');
-    expect(runbook).toContain('scans_checked: 104');
+    expect(runbook).toContain('fixtures_checked: 6');
+    expect(runbook).toContain('surfaces_checked: 3');
+    expect(runbook).toContain('scans_checked: 72');
 
     for (const surface of expectedSurfaces) {
       expect(runbook).toContain(surface);
@@ -138,9 +136,9 @@ describe('C6Of conformance release-review runbook', () => {
         artifacts_retained: true,
         report: {
           status: 'passed',
-          fixture_count: 10,
-          surface_count: 5,
-          scan_count: 104,
+          fixture_count: 6,
+          surface_count: 3,
+          scan_count: 72,
         },
         status_page: {
           status: 'passing',
@@ -175,16 +173,16 @@ describe('C6Of conformance release-review runbook', () => {
 
       expect(report).toMatchObject({
         status: 'passed',
-        fixture_count: 10,
-        surface_count: 5,
-        scan_count: 104,
+        fixture_count: 6,
+        surface_count: 3,
+        scan_count: 72,
       });
       expect(status).toMatchObject({
         status: 'passing',
         counts: {
-          fixture_count: 10,
-          surface_count: 5,
-          scan_count: 104,
+          fixture_count: 6,
+          surface_count: 3,
+          scan_count: 72,
         },
       });
     } finally {
