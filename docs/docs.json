@@ -817,6 +817,7 @@
           {
             "group": "Posts",
             "pages": [
+              "blog/oacp-one-trust-layer-under-ucp-acp-ap2",
               "blog/oacp-shopify-merchant-agentic-commerce-seller",
               "blog/oacp-merchant-self-service-config",
               "blog/oacp-keeps-buyer-agents-honest",
