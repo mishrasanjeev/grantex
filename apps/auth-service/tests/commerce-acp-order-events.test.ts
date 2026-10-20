@@ -13,6 +13,7 @@ import {
   AcpOrderEventError,
   acpMerchantSignature,
   mapGrantexOrderToAcpEvent,
+  stripTrailingSlashes,
   verifyAcpMerchantSignature,
   type GrantexOrderHandoffRecord,
   type GrantexOrderRecord,
@@ -69,6 +70,17 @@ function handoff(overrides: Partial<GrantexOrderHandoffRecord>): GrantexOrderHan
 const PERMALINK = 'https://merchant.example/orders';
 
 describe('mapGrantexOrderToAcpEvent', () => {
+  it('strips trailing slashes of permalink_base in linear time (no regex backtracking)', () => {
+    expect(stripTrailingSlashes('https://merchant.example/orders///')).toBe('https://merchant.example/orders');
+    expect(stripTrailingSlashes('https://merchant.example/orders')).toBe('https://merchant.example/orders');
+    expect(stripTrailingSlashes('///')).toBe('');
+    const hostile = `https://merchant.example/${'/'.repeat(200_000)}x`;
+    const started = performance.now();
+    expect(stripTrailingSlashes(hostile)).toBe(hostile);
+    expect(stripTrailingSlashes(`${hostile}${'/'.repeat(200_000)}`)).toBe(hostile);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   it('emits order_create for a new order, valid against the ACP WebhookEvent schema', () => {
     const event = mapGrantexOrderToAcpEvent({ order: order(), handoffs: [], permalink_base: PERMALINK });
     expect(schemaErrors('acp-2026-04-17', WEBHOOK, event)).toEqual([]);
