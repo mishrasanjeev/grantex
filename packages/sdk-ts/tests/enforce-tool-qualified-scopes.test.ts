@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * enforce() honours the tool segment of a scope with `toolQualifiedScopes: true`
  * (FINDINGS G-144). The cases in spec/examples/enforce-tool-qualified-scopes.json

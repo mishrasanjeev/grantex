@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Commerce scope registries for buyer identity linking (G24) and delegated
  * authentication (G36).

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: Apache-2.0
+-- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -- Registry attestations (Agent Trust Registry, Phase 1; PRD §5, §7
 -- Attestation, §8.3, Appendix A) and what the computed trust level needs.
 --

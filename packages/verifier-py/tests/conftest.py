@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """A local fake registry and an agent, built at run time for the verifier tests.
 
 Every key is generated when the tests run and never written to disk. The

@@ -9,6 +9,7 @@
 | **Trust Service Categories** | Security (CC) · Availability (A) · Confidentiality (C) |
 | **Classification** | Public |
 | **Report type** | Internal readiness control mapping; not a SOC 2 Type I attestation |
+| **Licence note (21 October 2026)** | Grantex is now licensed under the PolyForm Noncommercial License 1.0.0, with commercial use by written agreement with Orchestrum Technologies LLP. Rows CC1.1.1 and CC9.2.2 describe the Apache 2.0 licence in effect at the snapshot date. |
 
 ---
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 import { generateKeyPairSync } from 'node:crypto';
 import { InMemoryNonceStore, jwkThumbprint, publicJwk, sign, verify } from '@grantex/agent-httpsig';
 import type { AgentJwk, VerifyResult } from '@grantex/agent-httpsig';

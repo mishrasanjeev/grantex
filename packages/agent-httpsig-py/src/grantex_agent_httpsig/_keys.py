@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Agent keys as JWKs.
 
 P-256 (RFC 7518 section 6.2) and Ed25519 (RFC 8037 section 2), their RFC

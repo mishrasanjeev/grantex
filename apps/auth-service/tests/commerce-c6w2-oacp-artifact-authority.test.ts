@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * OACP artifact issuance and verification with a real ES256 key: the signer
  * produces a detached JWS over the whole RFC 8785 envelope and the verifier

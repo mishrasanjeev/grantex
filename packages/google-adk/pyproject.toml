@@ -7,7 +7,7 @@ name = "grantex-adk"
 version = "0.1.8"
 description = "Google ADK integration for the Grantex delegated authorization protocol — scope-enforced agent tools"
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = { text = "PolyForm-Noncommercial-1.0.0" }
 authors = [{ name = "Sanjeev Kumar", email = "sanjeev@orchestrum.in" }]
 maintainers = [{ name = "Orchestrum Technologies LLP", email = "sanjeev@orchestrum.in" }, { name = "Sanjeev Kumar", email = "mishra.sanjeev@gmail.com" }]
 requires-python = ">=3.9"
@@ -15,7 +15,7 @@ keywords = ["grantex", "google", "adk", "ai-agents", "authorization", "oauth", "
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
+    "License :: Free for non-commercial use",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",

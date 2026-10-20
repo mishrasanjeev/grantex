@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Key Binding JWT (RFC 9901 section 4.3).
 
 The holder proves possession of the cnf key for one relying party (aud) and

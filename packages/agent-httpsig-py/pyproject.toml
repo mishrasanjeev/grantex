@@ -7,7 +7,7 @@ name = "grantex-agent-httpsig"
 version = "0.2.0"
 description = "RFC 9421 HTTP Message Signatures for agent requests: the Agent-Passport, Agent-Grant and Agent-Trust headers and the agent-payer-auth signing profile"
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = { text = "PolyForm-Noncommercial-1.0.0" }
 authors = [{ name = "Sanjeev Kumar", email = "sanjeev@orchestrum.in" }]
 maintainers = [{ name = "Orchestrum Technologies LLP", email = "sanjeev@orchestrum.in" }, { name = "Sanjeev Kumar", email = "mishra.sanjeev@gmail.com" }]
 requires-python = ">=3.9"
@@ -15,7 +15,7 @@ keywords = ["grantex", "http-message-signatures", "rfc9421", "structured-fields"
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
+    "License :: Free for non-commercial use",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",

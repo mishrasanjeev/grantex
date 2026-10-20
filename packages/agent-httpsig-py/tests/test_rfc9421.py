@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """RFC 9421 section 2.5 and Appendix B.2.
 
 The signature bases rebuilt from the RFC's own messages and Signature-Input

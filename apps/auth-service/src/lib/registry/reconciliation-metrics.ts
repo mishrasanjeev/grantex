@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Status-list reconciliation metrics (lib/registry/status-reconciliation.ts).
  * Low cardinality: no issuer, list, attestation or grant appears in a label;

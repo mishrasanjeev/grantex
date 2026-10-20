@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 //
 // The issuer's own passport status lists, in memory: numbered lists of
 // 131,072 entries each, with indices drawn at random. The published lists

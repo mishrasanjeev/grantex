@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Property tests for the hash rule and the key rule.
 
 Cases come from a seeded generator, so a failure replays with the same inputs.

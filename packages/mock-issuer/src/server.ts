@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 //
 // Server mode: the issuer's JWKS and passport status lists over plain HTTP
 // on 127.0.0.1 only, for the registry's development-and-test origin map

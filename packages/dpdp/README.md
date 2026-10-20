@@ -5,7 +5,7 @@ with the current server contracts. Check [Release Status](https://docs.grantex.d
 for the version currently available on npm; a source version is not a registry release.
 
 [![npm version](https://img.shields.io/npm/v/@grantex/dpdp.svg)](https://www.npmjs.com/package/@grantex/dpdp)
-[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-orange.svg)](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3%2B-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
@@ -781,7 +781,16 @@ be created if processing is to resume.
 
 ## License
 
-Apache-2.0. See [LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE).
+PolyForm Noncommercial License 1.0.0, licensor Orchestrum Technologies LLP
+([LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)).
+Noncommercial self use is free. Commercial use of any sort, including internal
+use by a for-profit business, hosting or SaaS, resale, embedding and paid
+services, needs a written agreement with Orchestrum Technologies LLP: see
+[commercial licensing](https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md)
+or write to [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in). Versions
+published before 21 October 2026 remain available under the Apache License 2.0
+they were released with. "Grantex" is a trademark of Orchestrum Technologies LLP
+([trademarks](https://github.com/mishrasanjeev/grantex/blob/main/TRADEMARKS.md)).
 
 ## Ownership
 

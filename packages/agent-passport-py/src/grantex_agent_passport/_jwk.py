@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """JWK helpers and the key rule.
 
 Two keys are the same key when their RFC 7638 thumbprints are equal. The

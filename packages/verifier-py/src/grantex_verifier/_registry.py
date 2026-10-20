@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """What the relying party reads from the registry and the issuers, and how long it keeps it.
 
 Every document is read through the injected ``fetch`` and kept no longer

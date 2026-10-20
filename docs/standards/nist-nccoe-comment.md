@@ -12,7 +12,7 @@
 
 ## 1. Executive Summary
 
-This comment responds to the NIST National Cybersecurity Center of Excellence (NCCoE) challenge areas related to AI security, specifically addressing the gap in standardized authorization frameworks for autonomous AI agents. We present the Delegated Agent Authorization Protocol (DAAP) — an open, Apache 2.0 licensed protocol with a production reference implementation — as evidence that the authorization gap identified in AI agent deployments can be addressed with existing cryptographic primitives (JWT, JWK, DID) extended with agent-specific semantics.
+This comment responds to the NIST National Cybersecurity Center of Excellence (NCCoE) challenge areas related to AI security, specifically addressing the gap in standardized authorization frameworks for autonomous AI agents. We present the Delegated Agent Authorization Protocol (DAAP) — a published, source-available protocol (PolyForm Noncommercial License 1.0.0; commercial use by agreement with Orchestrum Technologies LLP) with a production reference implementation — as evidence that the authorization gap identified in AI agent deployments can be addressed with existing cryptographic primitives (JWT, JWK, DID) extended with agent-specific semantics.
 
 ## 2. Problem Statement
 

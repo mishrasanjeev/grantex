@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The shared vectors in spec/examples/agent-httpsig-vectors.json. The Python
  * package (packages/agent-httpsig-py/tests/test_vectors.py) runs the same

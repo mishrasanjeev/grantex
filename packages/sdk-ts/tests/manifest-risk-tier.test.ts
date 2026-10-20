@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * `risk_tier` on tool manifests: a `high` tool needs a decision grant on every
  * call, whether or not the manifest also declares `requires_decision`.

@@ -230,4 +230,15 @@ configure gateway-wide protection, TLS, secure sessions and monitoring.
 Independent certification of all MCP clients or physical authenticators is not
 claimed; validate your actual hosts and clients before production traffic.
 
-Apache-2.0. Copyright 2026 Orchestrum Technologies LLP.
+## License
+
+PolyForm Noncommercial License 1.0.0, licensor Orchestrum Technologies LLP
+([LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)).
+Noncommercial self use is free. Commercial use of any sort, including internal
+use by a for-profit business, hosting or SaaS, resale, embedding and paid
+services, needs a written agreement with Orchestrum Technologies LLP: see
+[commercial licensing](https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md)
+or write to [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in). Versions
+published before 21 October 2026 remain available under the Apache License 2.0
+they were released with. "Grantex" is a trademark of Orchestrum Technologies LLP
+([trademarks](https://github.com/mishrasanjeev/grantex/blob/main/TRADEMARKS.md)).

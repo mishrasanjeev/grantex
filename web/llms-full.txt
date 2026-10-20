@@ -3,7 +3,7 @@
 > Last updated: 2026-10-13 (existing-user licensing clarification)
 > Release snapshot verified: 2026-10-04
 
-Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
+Grantex is a source-available delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
 Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal.
 
@@ -19,25 +19,20 @@ Canonical sources:
 - Linked-data graph: https://grantex.dev/ld.json
 - OpenAPI: https://github.com/mishrasanjeev/grantex/blob/main/docs/openapi.yaml
 - AgenticOrg governed-case integration: https://docs.grantex.dev/guides/agenticorg-governed-cases
-- License: Apache-2.0
+- License: PolyForm-Noncommercial-1.0.0 (source-available, not open source), licensor Orchestrum Technologies LLP
+- Licence summary: https://docs.grantex.dev/license
+- Commercial licensing: https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md
+- Trademarks: https://github.com/mishrasanjeev/grantex/blob/main/TRADEMARKS.md
 
-Approved prospective policy (software adoption pending): personal/internal use is free;
-commercializing the platform requires an agreement with Orchestrum Technologies
-LLP. Agreements: sanjeev@orchestrum.in. Current Apache-2.0 rights remain unchanged.
-Definitions and approval steps: https://docs.grantex.dev/compliance/licensing
-
-The policy includes existing and new covered users. Account age alone is not an
-exemption. Existing hosted customers transition through required notice and
-acceptance under their contracts; existing authorizing agreements suffice.
-Self-use remains free of a software license fee; hosting/provider charges are
-separate. No retroactive obligations or withdrawal of prior grants is implied.
-
-Concrete transition: a separate source-available license for eligible future
-Orchestrum-controlled material, with exact release/file scope. The candidate
-license text is licensing/ORCHESTRUM-SELF-USE-COMMERCIAL-1.0-DRAFT.md and the
-adoption record is licensing/scope.json in the repository. Policy publication
-is approved; the software scope is empty and has not been activated. Published SDK/protocol and legacy grants are preserved;
-hosted, reseller/OEM, support and brand agreements are separate.
+From 21 October 2026, every version of Grantex, including all updates, is
+licensed under the PolyForm Noncommercial License 1.0.0. Only self use is free.
+Commercial use of any sort, including internal use by a for-profit business,
+hosting or SaaS, resale, embedding and paid services, needs a written agreement
+with Orchestrum Technologies LLP (sanjeev@orchestrum.in). Releases published
+before 21 October 2026 remain available under the Apache License 2.0 they were
+released with. "Grantex" and "AgenticOrg" are trademarks of Orchestrum
+Technologies LLP; commercial use of the names, logos, hosted services or brand,
+including with earlier versions, needs prior written approval.
 
 ## What Grantex Is
 
@@ -466,7 +461,7 @@ outside MCP and agent-token authority. See the
 
 ### Can Grantex be self-hosted?
 
-Yes. The reference implementation is Apache-2.0 licensed. Follow https://docs.grantex.dev/guides/self-hosting and apply the documented security and operations controls.
+Yes, for noncommercial use under the PolyForm Noncommercial License 1.0.0; commercial self-hosting, including internal use by a for-profit business, needs a written agreement with Orchestrum Technologies LLP. Follow https://docs.grantex.dev/guides/self-hosting and apply the documented security and operations controls.
 
 ### Is Grantex an IETF standard?
 

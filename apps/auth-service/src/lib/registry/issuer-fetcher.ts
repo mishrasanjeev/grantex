@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The registry's fetcher for documents an accredited issuer publishes: today
  * its Token Status Lists (draft-ietf-oauth-status-list-21), read when an

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """RFC 9421 HTTP Message Signatures for agent requests.
 
 The Agent-Passport, Agent-Grant and Agent-Trust headers and the

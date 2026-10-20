@@ -39,6 +39,7 @@
             "pages": [
               "introduction",
               "ownership",
+              "license",
               "quickstart",
               "release-status",
               "migration-0.6",

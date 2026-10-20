@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 //
 // The two status-list codecs against the examples in their specifications:
 // draft-ietf-oauth-status-list-21 sections 4.1 (the byte arrays) and 4.2 (the

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 //
 // The mock's own compact JWS: what it signs verifies with node:crypto
 // independently, and what it parses is strict.

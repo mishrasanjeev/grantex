@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 //
 // Strict base64url (RFC 4648 section 5, no padding, as RFC 7515 section 2
 // requires): anything else is refused rather than guessed at.

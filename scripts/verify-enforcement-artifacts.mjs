@@ -26,7 +26,7 @@ for (const [name, version] of versions) {
   const manifest = JSON.parse(readFileSync(resolve(root, 'node_modules', name, 'package.json'), 'utf8'));
   assert.equal(manifest.version, version, name);
   assert.equal(manifest.engines.node, '>=22.12.0', `${name} runtime`);
-  assert.match(readFileSync(resolve(root, 'node_modules', name, 'LICENSE'), 'utf8'), /Apache License/);
+  assert.match(readFileSync(resolve(root, 'node_modules', name, 'LICENSE'), 'utf8'), /PolyForm Noncommercial License 1\.0\.0/);
   assert.match(readFileSync(resolve(root, 'node_modules', name, 'NOTICE'), 'utf8'), /Orchestrum Technologies LLP/);
   assert.ok(readFileSync(resolve(root, 'node_modules', name, 'README.md'), 'utf8').includes('migration-enforcement'), `${name} migration documentation`);
 }

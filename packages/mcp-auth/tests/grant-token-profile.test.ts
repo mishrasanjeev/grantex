@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The resource guard and the introspection/revocation verifier against the
  * grant token profile (spec/grant-token-0.6.md, "Validation"): RS256 and

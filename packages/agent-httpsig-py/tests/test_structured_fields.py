@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """RFC 9651 parsing (section 4.2) and serialization (section 4.1).
 
 The same cases as packages/agent-httpsig/tests/structured-fields.test.ts.

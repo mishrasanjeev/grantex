@@ -264,7 +264,10 @@ This project uses only Apple frameworks — no third-party dependencies:
 
 ## License
 
-Apache-2.0
+PolyForm Noncommercial License 1.0.0 ([LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)).
+Commercial use needs a written agreement with Orchestrum Technologies LLP; see
+[COMMERCIAL-LICENSE.md](https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md).
+Model weights and third-party runtimes keep their own licences.
 
 ## Ownership
 

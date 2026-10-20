@@ -120,6 +120,22 @@ const reviewedLicenseMetadataOverrides = new Map([
   ['sqlite-vec-windows-x64', 'MIT OR Apache-2.0'],
 ]);
 
+// Orchestrum's own packages (every tracked package.json name, and in-repository
+// source directories that lockfiles reference by relative path) are licensed by
+// the owner: PolyForm-Noncommercial-1.0.0 from 2026-10-21, Apache-2.0 before.
+// The allowlist above governs third-party dependencies only.
+const firstPartyPackageNames = new Set(
+  tracked
+    .filter((file) => posix.basename(file) === 'package.json')
+    .map((file) => JSON.parse(readFileSync(resolve(root, file), 'utf8')).name)
+    .filter((name) => typeof name === 'string' && (name === 'grantex' || name.startsWith('@grantex/'))),
+);
+const firstPartyLicenseIds = new Set(['PolyForm-Noncommercial-1.0.0', 'Apache-2.0']);
+
+function isFirstParty(packagePath, entry, name) {
+  return !packagePath.includes('node_modules/') || firstPartyPackageNames.has(entry.name ?? name);
+}
+
 function packageName(packagePath) {
   return packagePath.split('node_modules/').at(-1);
 }
@@ -164,7 +180,9 @@ for (const lockfile of lockfiles) {
       failures.push(`${lockfile}: ${name}@${entry.version} has no license metadata or reviewed exception`);
       continue;
     }
+    const firstParty = isFirstParty(packagePath, entry, name);
     for (const id of licenseIds(license)) {
+      if (firstParty && firstPartyLicenseIds.has(id)) continue;
       if (!allowedLicenseIds.has(id)) failures.push(`${lockfile}: ${name}@${entry.version} uses unapproved license ${id}`);
     }
     lgplObserved ||= license.includes('LGPL-3.0-or-later');

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The parts of status-list reconciliation that need no database: the poll
  * interval floor (owner decision 5), the registry's decision for an

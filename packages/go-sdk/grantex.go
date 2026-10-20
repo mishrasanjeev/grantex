@@ -9,6 +9,13 @@
 //	    Description: "An AI assistant",
 //	    Scopes:      []string{"read:email", "send:email"},
 //	})
+//
+// # License
+//
+// PolyForm Noncommercial License 1.0.0 (see LICENSE), licensor Orchestrum
+// Technologies LLP. Noncommercial self use is free; commercial use of any sort
+// requires a written agreement with Orchestrum Technologies LLP. See
+// https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md.
 package grantex
 
 import (

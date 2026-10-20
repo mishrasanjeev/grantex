@@ -47,5 +47,43 @@ jobs:
           # "AFL-2.1 OR BSD-3-Clause" choice as a stricter conjunction that
           # also mentions AFL-3.0. The shipped LICENSE permits BSD-3-Clause;
           # keep this exception exact and documented in THIRD_PARTY_NOTICES.md.
-          allow-dependencies-licenses: pkg:npm/json-schema@0.4.0
+          # Orchestrum's own packages follow: they are licensed by the owner
+          # (PolyForm-Noncommercial-1.0.0 from 2026-10-21, Apache-2.0 before),
+          # so the third-party allowlist above does not apply to them.
+          allow-dependencies-licenses: >-
+            pkg:npm/json-schema@0.4.0,
+            pkg:npm/%40grantex/a2a,
+            pkg:npm/%40grantex/adapters,
+            pkg:npm/%40grantex/agent-httpsig,
+            pkg:npm/%40grantex/agent-passport,
+            pkg:npm/%40grantex/anthropic,
+            pkg:npm/%40grantex/autogen,
+            pkg:npm/%40grantex/cli,
+            pkg:npm/%40grantex/conformance,
+            pkg:npm/%40grantex/destinations,
+            pkg:npm/%40grantex/dpdp,
+            pkg:npm/%40grantex/express,
+            pkg:npm/%40grantex/gateway,
+            pkg:npm/%40grantex/gemma,
+            pkg:npm/%40grantex/langchain,
+            pkg:npm/%40grantex/mcp,
+            pkg:npm/%40grantex/mcp-auth,
+            pkg:npm/%40grantex/mock-issuer,
+            pkg:npm/%40grantex/mpp,
+            pkg:npm/%40grantex/sdk,
+            pkg:npm/%40grantex/strands,
+            pkg:npm/%40grantex/vercel-ai,
+            pkg:npm/%40grantex/x402,
+            pkg:pypi/grantex,
+            pkg:pypi/grantex-a2a,
+            pkg:pypi/grantex-adk,
+            pkg:pypi/grantex-agent-httpsig,
+            pkg:pypi/grantex-agent-passport,
+            pkg:pypi/grantex-crewai,
+            pkg:pypi/grantex-fastapi,
+            pkg:pypi/grantex-gemma,
+            pkg:pypi/grantex-openai-agents,
+            pkg:pypi/grantex-strands,
+            pkg:pypi/grantex-verifier,
+            pkg:golang/github.com/mishrasanjeev/grantex-go
           comment-summary-in-pr: always

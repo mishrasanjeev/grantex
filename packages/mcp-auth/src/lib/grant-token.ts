@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The grant token profile (`spec/grant-token-0.6.md`) as this package reads
  * it: the algorithms a grant token is signed with, its `typ`, and its claims.

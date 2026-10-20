@@ -63,7 +63,7 @@
     "ed25519",
     "tempo"
   ],
-  "license": "Apache-2.0",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "overrides": {
     "esbuild": "^0.25.0",
     "qs": "^6.15.2"

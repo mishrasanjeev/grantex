@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Encoders and decoders for the two status-list formats the registry
  * publishes attestation acceptance in.

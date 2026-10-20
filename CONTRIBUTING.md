@@ -1,13 +1,40 @@
 # Contributing to Grantex
 
-Thanks for your interest in contributing. Grantex is an open protocol for delegated AI agent authorization — contributions help shape a safer agentic internet.
+Thanks for your interest in contributing. Grantex is a published, source-available protocol for delegated AI agent authorization — contributions help shape a safer agentic internet.
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner:
-Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com). Contributions are
-accepted under the Apache License 2.0 unless a file states otherwise.
+Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
 
-The [approved prospective licensing policy](LICENSING.md) is not a change
-to this contribution license or an assignment of contributors' rights.
+## Contribution licence
+
+Grantex is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE),
+and Orchestrum Technologies LLP also licenses it commercially
+([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). For that to work for
+contributed code, every contribution is made on these terms:
+
+By submitting a contribution (code, documentation, tests, examples or any other
+material) to this repository, you:
+
+1. confirm that you wrote it, or otherwise have the right to submit it on these
+   terms, and that your employer, if it has rights in your work, has agreed;
+2. keep your copyright, and grant Orchestrum Technologies LLP and anyone who
+   receives Grantex from it a perpetual, worldwide, non-exclusive, royalty-free,
+   irrevocable licence to use, reproduce, modify, prepare derivative works of,
+   publicly display, publicly perform, distribute and sublicense the
+   contribution, and to license it on any terms, including the PolyForm
+   Noncommercial License 1.0.0 and commercial licences that Orchestrum grants
+   for a fee;
+3. grant Orchestrum Technologies LLP and those recipients a perpetual,
+   worldwide, non-exclusive, royalty-free, irrevocable patent licence to make,
+   use, sell, offer for sale, import and otherwise transfer the contribution,
+   alone or combined with Grantex, under any patent claims you can license that
+   it would otherwise infringe; and
+4. understand that the contribution and this record of it are public and kept
+   indefinitely.
+
+If you cannot agree, do not open a pull request; open an issue describing the
+change instead. Material you did not write keeps its own licence; say so in the
+pull request and add it to [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 

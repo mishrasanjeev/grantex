@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """PassportError: every refusal carries a code and a reason.
 
 The codes that have a counterpart in the registry denial codes

@@ -40,7 +40,7 @@ A multi-region offering (EU and India) is on the public roadmap (`ROADMAP.md`, i
 
 ## Self-hosted Grantex — operator-chosen residency
 
-Grantex is Apache 2.0 and ships with a Helm chart (`deploy/helm/grantex/`) and Docker Compose stack (`docker-compose.prod.yml`). When you self-host, **the data never leaves the infrastructure you control** — Grantex maintainers receive no telemetry from your deployment by default.
+Grantex is source-available (PolyForm Noncommercial 1.0.0; commercial self-hosting needs an agreement with Orchestrum Technologies LLP) and ships with a Helm chart (`deploy/helm/grantex/`) and Docker Compose stack (`docker-compose.prod.yml`). When you self-host, **the data never leaves the infrastructure you control** — Grantex maintainers receive no telemetry from your deployment by default.
 
 Operator-controlled residency knobs:
 

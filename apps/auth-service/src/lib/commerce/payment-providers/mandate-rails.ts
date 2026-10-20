@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Payment rails a PaymentMandate may name (`payment.rail`, the AP2
  * `payment_instrument.type` role). Provider-specific names live here, in the

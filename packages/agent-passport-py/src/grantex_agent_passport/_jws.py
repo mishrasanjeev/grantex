@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Compact JWS (RFC 7515 section 7.1) with the profile's two algorithms.
 
 ES256 (RFC 7518 section 3.4, P-256, R || S signature) and EdDSA (RFC 8037

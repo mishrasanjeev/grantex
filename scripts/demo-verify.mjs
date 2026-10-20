@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 //
 // Demo 2: one-call verification by a relying party, end to end, against the
 // mock accredited issuer. No external party, no network beyond loopback.

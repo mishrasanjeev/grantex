@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Scheme token binding (G52): the adapter shape a payment capability carries
  * when a buyer agent's payment is bound to a scheme token,

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The freeze check every issuance path makes (lib/revocation/issuance-freeze.ts),
  * on its own: when it reads, what it takes, and how it fails. The paths

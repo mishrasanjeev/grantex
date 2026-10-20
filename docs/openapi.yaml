@@ -3,7 +3,7 @@ info:
   title: Grantex Auth Service API
   version: 0.5.0
   description: |
-    Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
+    Grantex is a source-available delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
     Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: sanjeev@orchestrum.in or mishra.sanjeev@gmail.com.
 
@@ -32,8 +32,8 @@ info:
     Commerce, the SCIM Bearer data-plane routes under `/scim/v2/*`, admin, and other custom-auth routes do not consume these plan buckets; the standard API-key-authenticated `/v1/scim/tokens` management routes do.
     These defaults describe repository source; verify managed-environment rollout separately.
   license:
-    name: Apache 2.0
-    url: https://opensource.org/licenses/Apache-2.0
+    name: PolyForm Noncommercial License 1.0.0 (commercial use by written agreement with Orchestrum Technologies LLP)
+    url: https://polyformproject.org/licenses/noncommercial/1.0.0
   contact:
     name: Orchestrum Technologies LLP / Grantex
     url: https://grantex.dev

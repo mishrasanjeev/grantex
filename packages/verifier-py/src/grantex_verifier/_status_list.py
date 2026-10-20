@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Token Status List (draft-ietf-oauth-status-list-21) for a relying party.
 
 A Status List Token is a JWT with ``typ`` ``statuslist+jwt`` (section 5.1),

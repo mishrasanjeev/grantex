@@ -6,11 +6,16 @@ Inventor and owner: Sanjeev Kumar.
 
 Ownership contact: sanjeev@orchestrum.in or mishra.sanjeev@gmail.com
 
-The Grantex protocol specification, source code, SDKs, examples, and
-documentation are made available under the Apache License 2.0 unless a file
-states otherwise. The open-source license does not remove or transfer the
-product ownership notice above.
+From 21 October 2026, the Grantex protocol specification, source code, SDKs,
+examples and documentation are licensed under the PolyForm Noncommercial
+License 1.0.0 (see LICENSE) unless a file states otherwise. Only noncommercial
+use is permitted. Commercial use of any kind requires a written agreement with
+Orchestrum Technologies LLP; see https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md.
+Releases published before that date remain available under the Apache License
+2.0 they were released with.
 
-Third-party dependencies retain their own licenses. See
-https://github.com/mishrasanjeev/grantex/blob/main/THIRD_PARTY_NOTICES.md
-for reviewed distribution notices and obligations.
+"Grantex" and "AgenticOrg" and their logos are trademarks of Orchestrum
+Technologies LLP; see https://github.com/mishrasanjeev/grantex/blob/main/TRADEMARKS.md.
+
+Third-party dependencies and the third-party files listed in
+https://github.com/mishrasanjeev/grantex/blob/main/THIRD_PARTY_NOTICES.md retain their own licenses.

@@ -61,7 +61,7 @@
     "delegated-auth",
     "tool-use"
   ],
-  "license": "Apache-2.0",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/mishrasanjeev/grantex"

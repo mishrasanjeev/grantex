@@ -873,7 +873,7 @@ The following design questions that were open in v0.1-draft have been resolved f
 
 ---
 
-*Grantex Protocol Specification is licensed under [Apache 2.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)*
+*Grantex Protocol Specification is licensed under the [PolyForm Noncommercial License 1.0.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE); commercial use needs a written agreement with Orchestrum Technologies LLP ([COMMERCIAL-LICENSE.md](https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md)).*
 
 ## Ownership
 

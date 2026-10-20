@@ -1,9 +1,19 @@
 # Third-Party Dependency Notices
 
-Grantex source code is licensed under Apache License 2.0 unless a file states
-otherwise. Third-party packages retain their own licenses. Package managers
-normally download these packages during installation; this repository does not
-relicense them or transfer their copyrights.
+Grantex source code is licensed under the PolyForm Noncommercial License 1.0.0
+(see [LICENSE](LICENSE)) unless a file states otherwise. Third-party packages
+and the third-party files listed below retain their own licenses. Package
+managers normally download these packages during installation; this repository
+does not relicense them or transfer their copyrights.
+
+## Third-party files kept in this repository
+
+| Path | Source | License |
+|---|---|---|
+| `spec/examples/canonicalization/rfc8785/` and the `static_u64` values and checksums in `spec/examples/canonicalization/es6-numbers.json` | RFC 8785 reference implementation test data, <https://github.com/cyberphone/json-canonicalization>, Copyright 2018 Anders Rundgren | Apache-2.0 |
+| `apps/auth-service/tests/fixtures/protocol-schemas/ucp-*/` | Universal Commerce Protocol JSON Schemas (see the README in that directory) | Apache-2.0 |
+| `apps/auth-service/tests/fixtures/protocol-schemas/acp-*/` | Agentic Commerce Protocol JSON Schemas (see the README in that directory) | Apache-2.0 |
+| `docs/ietf-draft/` | Internet-Draft texts as submitted to the IETF | IETF Trust Legal Provisions (BCP 78) apply to the submitted texts |
 
 ## Dependencies requiring explicit distribution attention
 

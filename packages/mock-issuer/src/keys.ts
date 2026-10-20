@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 //
 // The mock issuer's signing key: one ES256 (P-256) key pair, generated at
 // start. With a directory, the private key is written there once (mode 0600)

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: Apache-2.0
+-- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -- Credential references: a short-lived handle the vault exchange hands an agent
 -- instead of the raw upstream credential (VAULT_CREDENTIAL_REFERENCES_ENABLED).
 -- A relying party that holds the developer's API key (the gateway) redeems the

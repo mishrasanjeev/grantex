@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The child grant examples in spec/passport-binding.md §8 and
  * docs/concepts/passport-vs-grant.md are what the auth service takes and

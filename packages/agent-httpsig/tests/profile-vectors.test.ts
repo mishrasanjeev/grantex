@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * spec/examples/agent-httpsig-profile-vectors.json: the TAP and Web Bot Auth
  * profiles and the TAP body objects, byte for byte. The Python package runs

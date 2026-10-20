@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """The signing profile of spec/verification.md with keys generated for the run.
 
 Both algorithms end to end, the adversarial cases, and the refusals that are

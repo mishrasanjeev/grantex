@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """spec/examples/agent-httpsig-profile-vectors.json, byte for byte.
 
 The TypeScript package runs the same file (tests/profile-vectors.test.ts).

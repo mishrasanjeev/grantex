@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Issue and persist a `commitment_evidence` artifact that binds a settlement
  * receipt (G59; lib/commerce/settlement-receipt-evidence.ts) to a

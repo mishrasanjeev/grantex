@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """grantex-verifier: what a relying party checks before it acts on an agent's request.
 
 The Agent Passport (keys from the signed registry manifest only), the

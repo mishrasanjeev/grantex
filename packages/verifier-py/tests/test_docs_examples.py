@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """The examples in docs/relying-parties/verifying-agents.md and the README.
 
 Each is a file under tests/docs/examples, embedded verbatim (without its SPDX

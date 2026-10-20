@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 //
 // Hand an attestation to a registry: POST the compact JWS itself as the body,
 // with Content-Type application/grantex-attestation+jwt, to

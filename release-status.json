@@ -6,11 +6,11 @@
   "product": {
     "name": "Grantex",
     "category": "AI agent authorization",
-    "definition": "Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.",
+    "definition": "Grantex is a source-available delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.",
     "websiteUrl": "https://grantex.dev/",
     "documentationUrl": "https://docs.grantex.dev/",
     "sourceUrl": "https://github.com/mishrasanjeev/grantex",
-    "license": "Apache-2.0",
+    "license": "PolyForm-Noncommercial-1.0.0",
     "protocolVersion": "1.0",
     "specificationUrl": "https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md",
     "ietfDraftUrl": "https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/",

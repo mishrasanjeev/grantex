@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Denial codes and the order in which checks decide the denial.
 
 PRD Appendix C codes are used wherever one applies. Three checks refuse for

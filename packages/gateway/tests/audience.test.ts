@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The gateway checks the grant token's audience with the same semantics as
  * the SDKs' `enforce()` (RFC 7519 section 4.1.3). The cases in

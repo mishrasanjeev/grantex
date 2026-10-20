@@ -53,6 +53,19 @@ card = build_grantex_agent_card(GrantexAgentCardOptions(
 ))
 ```
 
+## License
+
+PolyForm Noncommercial License 1.0.0, licensor Orchestrum Technologies LLP
+([LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)).
+Noncommercial self use is free. Commercial use of any sort, including internal
+use by a for-profit business, hosting or SaaS, resale, embedding and paid
+services, needs a written agreement with Orchestrum Technologies LLP: see
+[commercial licensing](https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md)
+or write to [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in). Versions
+published before 21 October 2026 remain available under the Apache License 2.0
+they were released with. "Grantex" is a trademark of Orchestrum Technologies LLP
+([trademarks](https://github.com/mishrasanjeev/grantex/blob/main/TRADEMARKS.md)).
+
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

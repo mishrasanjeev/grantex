@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """The Python example in spec/verification.md and this package's README.
 
 The example is tests/docs/examples/sign_and_verify.py, embedded verbatim
