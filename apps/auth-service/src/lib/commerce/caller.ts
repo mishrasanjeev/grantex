@@ -20,12 +20,18 @@ export const OACP_ARTIFACTS_REVOKE_SCOPE = 'commerce.oacp.artifacts.revoke';
 export const OACP_UCP_PROFILE_READ_SCOPE = 'commerce.oacp.ucp_profile.read';
 export const ACP_DELEGATE_PAYMENT_ALLOWANCE_SCOPE = 'commerce.acp.delegate_payment_allowance.issue';
 export const ACP_ORDER_EVENTS_READ_SCOPE = 'commerce.acp.order_events.read';
+export const OACP_MANDATES_INTENT_ISSUE_SCOPE = 'commerce.oacp.mandates.intent.issue';
+export const OACP_MANDATES_CART_ISSUE_SCOPE = 'commerce.oacp.mandates.cart.issue';
+export const OACP_MANDATES_PAYMENT_ISSUE_SCOPE = 'commerce.oacp.mandates.payment.issue';
+export const OACP_MANDATES_VERIFY_SCOPE = 'commerce.oacp.mandates.verify';
+export const OACP_MANDATES_REVOKE_SCOPE = 'commerce.oacp.mandates.revoke';
 
 /**
  * The internal routes the AgenticOrg service token may call, each with the one
  * scope it carries there: issuance, artifact read and replay, revocation,
  * arbiter decisions, the UCP profile rendered from issued artifacts, the ACP
- * delegate-payment allowance and ACP order events.
+ * delegate-payment allowance, ACP order events, and OACP mandates (issue
+ * each of the three types, verify, revoke).
  * Anywhere else the token is not recognised and falls through to the
  * operator resolver, which refuses it.
  */
@@ -38,6 +44,11 @@ const SERVICE_TOKEN_ROUTES: ReadonlyArray<{ method: string; path: RegExp; scope:
   { method: 'GET', path: /\/v1\/commerce\/oacp\/ucp-profile$/, scope: OACP_UCP_PROFILE_READ_SCOPE },
   { method: 'POST', path: /\/v1\/commerce\/oacp\/acp\/delegate-payment-allowance$/, scope: ACP_DELEGATE_PAYMENT_ALLOWANCE_SCOPE },
   { method: 'GET', path: /\/v1\/commerce\/oacp\/acp\/orders\/[^/]+\/event$/, scope: ACP_ORDER_EVENTS_READ_SCOPE },
+  { method: 'POST', path: /\/v1\/commerce\/oacp\/mandates\/intent$/, scope: OACP_MANDATES_INTENT_ISSUE_SCOPE },
+  { method: 'POST', path: /\/v1\/commerce\/oacp\/mandates\/cart$/, scope: OACP_MANDATES_CART_ISSUE_SCOPE },
+  { method: 'POST', path: /\/v1\/commerce\/oacp\/mandates\/payment$/, scope: OACP_MANDATES_PAYMENT_ISSUE_SCOPE },
+  { method: 'POST', path: /\/v1\/commerce\/oacp\/mandates\/verify$/, scope: OACP_MANDATES_VERIFY_SCOPE },
+  { method: 'POST', path: /\/v1\/commerce\/oacp\/mandates\/[^/]+\/revoke$/, scope: OACP_MANDATES_REVOKE_SCOPE },
 ];
 
 export type CommerceCaller =

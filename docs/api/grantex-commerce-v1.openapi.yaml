@@ -3280,6 +3280,244 @@ paths:
         "503":
           description: revocation_unavailable - the online revocation check could not run; fails closed.
 
+  /v1/commerce/oacp/mandates/intent:
+    post:
+      tags: [OACP]
+      operationId: issueOacpIntentMandate
+      summary: Issue an Intent mandate from a checkout Commerce Passport
+      description: >-
+        What the buyer delegated: the summary hash, an amount cap within the passport cap, the passport merchant, an expiry within the passport, AP2 v0.2 constraints, and cnf with the buyer agent key. Signed ES256 by the OACP issuer key (typ
+        oacp-intent-mandate+jwt), on the OACP Token Status List, persisted with
+        every refusal. Authenticated with the AgenticOrg service token (route
+        scope commerce.oacp.mandates.intent.issue, tenant allowlist), an operator of the tenant, or the
+        platform admin. See docs/guides/oacp/mandates-decision.mdx.
+      security:
+        - developerApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenant_id, passport_jwt, description, max_amount]
+              properties:
+                tenant_id: { type: string }
+                passport_jwt: { type: string, maxLength: 8192 }
+                presence: { type: string, enum: [human_present, human_not_present] }
+                description: { type: string, maxLength: 4000 }
+                max_amount:
+                  type: object
+                  required: [value, currency]
+                  properties:
+                    value: { type: integer, minimum: 0 }
+                    currency: { type: string, pattern: "^[A-Za-z]{3}$" }
+                merchants: { type: array, items: { type: string } }
+                expires_at: { type: string, format: date-time }
+      responses:
+        "201":
+          description: >-
+            {mandate (compact JWT), jti, mandate_type, exp (NumericDate),
+            status: {status_list: {idx, uri}}, mandate_hash (hex SHA-256 of the
+            JWT), claims}. Cache-Control no-store.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: >-
+            tenant_not_allowed, passport_invalid, passport_revoked,
+            passport_scope_missing, consent_not_active, presence_mismatch,
+            parent_mandate_revoked, passkey_evidence_required,
+            passkey_evidence_invalid or passkey_evidence_replayed. Refusals
+            carry error.details.refusal_record_id.
+        "422":
+          description: >-
+            validation_failed, passport_not_checkout, passport_cap_missing,
+            passport_cap_exceeded, currency_mismatch, merchant_not_allowed,
+            presence_mismatch, parent_mandate_expired, parent_mandate_invalid,
+            mandate_chain_mismatch, intent_cap_exceeded, intent_invalid,
+            checkout_invalid, card_data_refused, payment_rail_unsupported or
+            token_binding_invalid.
+        "503":
+          description: revocation_unavailable or oacp_issuer_key_unavailable; fails closed.
+
+  /v1/commerce/oacp/mandates/cart:
+    post:
+      tags: [OACP]
+      operationId: issueOacpCartMandate
+      summary: Issue a Cart mandate under an Intent mandate
+      description: >-
+        One cart: checkout_hash (b64url SHA-256 of the RFC 8785 UCP checkout object), line-item digests and total, within the intent and passport caps. A human_present cart needs webauthn_assertion, a WebAuthn assertion by a passkey the buyer registered whose challenge is the checkout_hash. Signed ES256 by the OACP issuer key (typ
+        oacp-cart-mandate+jwt), on the OACP Token Status List, persisted with
+        every refusal. Authenticated with the AgenticOrg service token (route
+        scope commerce.oacp.mandates.cart.issue, tenant allowlist), an operator of the tenant, or the
+        platform admin. See docs/guides/oacp/mandates-decision.mdx.
+      security:
+        - developerApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenant_id, passport_jwt, intent_mandate, checkout]
+              properties:
+                tenant_id: { type: string }
+                passport_jwt: { type: string, maxLength: 8192 }
+                presence: { type: string, enum: [human_present, human_not_present] }
+                intent_mandate: { type: string }
+                checkout: { type: object, description: "UCP checkout: id, currency, line_items[{id, quantity}], totals with exactly one total (integer minor units)." }
+                webauthn_assertion: { type: object, description: WebAuthn AuthenticationResponseJSON over the checkout_hash. }
+      responses:
+        "201":
+          description: >-
+            {mandate (compact JWT), jti, mandate_type, exp (NumericDate),
+            status: {status_list: {idx, uri}}, mandate_hash (hex SHA-256 of the
+            JWT), claims}. Cache-Control no-store.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: >-
+            tenant_not_allowed, passport_invalid, passport_revoked,
+            passport_scope_missing, consent_not_active, presence_mismatch,
+            parent_mandate_revoked, passkey_evidence_required,
+            passkey_evidence_invalid or passkey_evidence_replayed. Refusals
+            carry error.details.refusal_record_id.
+        "422":
+          description: >-
+            validation_failed, passport_not_checkout, passport_cap_missing,
+            passport_cap_exceeded, currency_mismatch, merchant_not_allowed,
+            presence_mismatch, parent_mandate_expired, parent_mandate_invalid,
+            mandate_chain_mismatch, intent_cap_exceeded, intent_invalid,
+            checkout_invalid, card_data_refused, payment_rail_unsupported or
+            token_binding_invalid.
+        "503":
+          description: revocation_unavailable or oacp_issuer_key_unavailable; fails closed.
+
+  /v1/commerce/oacp/mandates/payment:
+    post:
+      tags: [OACP]
+      operationId: issueOacpPaymentMandate
+      summary: Issue a Payment mandate under a Cart mandate
+      description: >-
+        One payment: transaction_id = the cart checkout_hash, the cart total, payee, rail and token binding (a token reference, never card data). Signed ES256 by the OACP issuer key (typ
+        oacp-payment-mandate+jwt), on the OACP Token Status List, persisted with
+        every refusal. Authenticated with the AgenticOrg service token (route
+        scope commerce.oacp.mandates.payment.issue, tenant allowlist), an operator of the tenant, or the
+        platform admin. See docs/guides/oacp/mandates-decision.mdx.
+      security:
+        - developerApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenant_id, passport_jwt, cart_mandate, rail, token_binding]
+              properties:
+                tenant_id: { type: string }
+                passport_jwt: { type: string, maxLength: 8192 }
+                presence: { type: string, enum: [human_present, human_not_present] }
+                cart_mandate: { type: string }
+                rail: { type: string, enum: [plural, upi_autopay, card_network_token] }
+                token_binding:
+                  type: object
+                  additionalProperties: false
+                  required: [type, id]
+                  properties:
+                    type: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+                    id: { type: string }
+      responses:
+        "201":
+          description: >-
+            {mandate (compact JWT), jti, mandate_type, exp (NumericDate),
+            status: {status_list: {idx, uri}}, mandate_hash (hex SHA-256 of the
+            JWT), claims}. Cache-Control no-store.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: >-
+            tenant_not_allowed, passport_invalid, passport_revoked,
+            passport_scope_missing, consent_not_active, presence_mismatch,
+            parent_mandate_revoked, passkey_evidence_required,
+            passkey_evidence_invalid or passkey_evidence_replayed. Refusals
+            carry error.details.refusal_record_id.
+        "422":
+          description: >-
+            validation_failed, passport_not_checkout, passport_cap_missing,
+            passport_cap_exceeded, currency_mismatch, merchant_not_allowed,
+            presence_mismatch, parent_mandate_expired, parent_mandate_invalid,
+            mandate_chain_mismatch, intent_cap_exceeded, intent_invalid,
+            checkout_invalid, card_data_refused, payment_rail_unsupported or
+            token_binding_invalid.
+        "503":
+          description: revocation_unavailable or oacp_issuer_key_unavailable; fails closed.
+
+  /v1/commerce/oacp/mandates/verify:
+    post:
+      tags: [OACP]
+      operationId: verifyOacpMandate
+      summary: Verify an OACP mandate
+      description: >-
+        Verifies a mandate against the published OACP issuer keys and the OACP
+        Token Status List, in the fixed order of the mandate profile. A mandate
+        of another tenant answers mandate_scope_mismatch without claims. Route
+        scope commerce.oacp.mandates.verify.
+      security:
+        - developerApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenant_id, mandate]
+              properties:
+                tenant_id: { type: string }
+                mandate: { type: string }
+                expected_type: { type: string, enum: [intent, cart, payment] }
+                expected_merchant_id: { type: string }
+      responses:
+        "200":
+          description: "{valid, refusal_code, mandate_type, mandate_hash, claims}"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: tenant_not_allowed.
+        "422":
+          description: validation_failed.
+
+  /v1/commerce/oacp/mandates/{jti}/revoke:
+    parameters:
+      - { in: path, name: jti, required: true, schema: { type: string } }
+    post:
+      tags: [OACP]
+      operationId: revokeOacpMandate
+      summary: Revoke an OACP mandate and every mandate issued under it
+      description: >-
+        Sets the Token Status List entry of the mandate and of its descendants
+        (an intent's carts, a cart's payments) to INVALID and marks the rows
+        revoked, in one transaction. Final and idempotent. Route scope
+        commerce.oacp.mandates.revoke.
+      security:
+        - developerApiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason_code: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+      responses:
+        "201":
+          description: "{jti, status: revoked, revoked_at, revocation_reason, revoked_jtis, already_revoked: false}"
+        "200":
+          description: Already revoked; already_revoked true, revoked_jtis empty.
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: mandate_not_found (also another tenant's mandate).
+        "409":
+          description: mandate_not_revocable - a refused issuance.
+
   /v1/commerce/oacp/acp/orders/{order_id}/event:
     parameters:
       - { in: path, name: order_id, required: true, schema: { type: string } }

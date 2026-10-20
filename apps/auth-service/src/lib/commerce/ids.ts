@@ -43,6 +43,9 @@ export function newCommercePassportKid(now: Date = new Date()): string {
 export const newOacpArtifactId = (): string => `oacp_art_${ulid()}`;
 export const newOacpRefusalId = (): string => `oacp_ref_${ulid()}`;
 export const newOacpStatusListId = (): string => `oacpl_${ulid()}`;
+// OACP mandates (migration 135): issued mandate jti, and a refused issuance.
+export const newOacpMandateJti = (): string => `oacp_mnd_${ulid()}`;
+export const newOacpMandateRefusalId = (): string => `oacp_mref_${ulid()}`;
 
 // oacp-YYYYMMDD-<16 hex>: the `oacp-` prefix marks an OACP issuer key in the
 // shared JWKS (chk_oacp_issuer_keys_kid_format).

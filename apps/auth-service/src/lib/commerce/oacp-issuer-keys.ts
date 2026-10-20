@@ -201,7 +201,7 @@ export async function listOacpIssuerKeys(sql: Sql): Promise<OacpIssuerKey[]> {
 
 /**
  * The public JWKs to publish: the active key, and each retired key while an
- * artifact it signed is unexpired or it was retired recently (both within
+ * artifact or mandate (oacp_mandates) it signed is unexpired or it was retired recently (both within
  * the grace window). Revoked keys never.
  */
 export async function listOacpIssuerJwksKeys(sql: Sql): Promise<Array<Record<string, unknown>>> {
@@ -216,6 +216,12 @@ export async function listOacpIssuerJwksKeys(sql: Sql): Promise<Array<Record<str
               WHERE a.issuer_key_id = k.kid
                 AND a.status <> 'refused'
                 AND a.expires_at > NOW() - make_interval(secs => ${OACP_RETIRED_KEY_GRACE_SECONDS})
+            )
+            OR EXISTS (
+              SELECT 1 FROM oacp_mandates m
+              WHERE m.issuer_key_id = k.kid
+                AND m.status <> 'refused'
+                AND m.expires_at > NOW() - make_interval(secs => ${OACP_RETIRED_KEY_GRACE_SECONDS})
             )
           ))
     ORDER BY k.created_at DESC, k.kid DESC

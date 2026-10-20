@@ -626,3 +626,12 @@ validated in tests against the vendored ACP 2026-04-17
 `schema.delegate_payment.json`. The verifier library still has no rendering
 API, and AP2 mandate rendering stays withheld, so G-137 remains open for the
 library.
+
+AP2: the auth service now issues signed Intent, Cart and Payment mandates
+(`POST /v1/commerce/oacp/mandates/*`, ES256 JWTs with `typ`
+`oacp-intent-mandate+jwt`, `oacp-cart-mandate+jwt`, `oacp-payment-mandate+jwt`)
+whose claims use AP2 v0.2 member names (`checkout_hash`, `transaction_id`,
+constraints, `cnf`). `@grantex/sdk` verifies them (`verifyOacpMandate`, with
+the fixed refusal order pinned by `spec/examples/oacp/oacp-mandates-v1.json`).
+They are not AP2 v0.2 SD-JWT VCs, so this library still renders no AP2
+object.

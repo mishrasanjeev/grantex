@@ -1,0 +1,74 @@
+---
+title: OACP Mandates Decision
+description: Why Grantex issues Intent, Cart and Payment mandates as plain ES256 JWTs mapped to the AP2 reference, how the claims map to AP2 v0.2, and what was not chosen.
+---
+
+Canonical end-to-end flow: [OACP authority overview](./overview). Integration contract: [AgenticOrg integration](./agenticorg-integration#mandates).
+
+## Decision
+
+Grantex issues three mandate types as **plain signed JWTs** (RFC 7519 compact JWS, RFC 7515), signed **ES256 on P-256** (RFC 7518 §3.4) with the same DB-backed OACP issuer keys that sign OACP artifacts (`oacp-` kid, published in `/.well-known/jwks.json`):
+
+| Mandate | `typ` | Says |
+| --- | --- | --- |
+| Intent | `oacp-intent-mandate+jwt` | what the buyer delegated: the summary's hash, an amount cap, the merchant, the expiry, AP2 constraints |
+| Cart | `oacp-cart-mandate+jwt` | one cart: the AP2 `checkout_hash`, line-item digests, the total, the intent it falls under; for `human_present`, the passkey assertion over the `checkout_hash` |
+| Payment | `oacp-payment-mandate+jwt` | one payment: AP2 `transaction_id` (= the cart's `checkout_hash`), amount, currency, payee, rail, token binding, the cart it pays |
+
+The claims use AP2 v0.2 member names where AP2 has one. Each mandate is on the OACP Token Status List (`status.status_list`, draft-ietf-oauth-status-list §6.1); revoking sets the entry INVALID and revokes every mandate issued under it.
+
+**Key family.** Mandates reuse the OACP issuer keys rather than a separate `mandate-` key family. There is one key store, one rotation runbook and one JWKS rule. A retired key stays published while any artifact or mandate it signed is unexpired; a revoked key is withdrawn and every mandate it signed stops verifying (`issuer_key_untrusted`). The explicit `typ` keeps a mandate from being accepted as an artifact, and an artifact from being accepted as a mandate (RFC 8725 §3.11).
+
+## Alternatives not chosen
+
+**SD-JWT VC mandates, as in AP2 v0.2.** AP2 v0.2 replaces v0.1's Intent, Cart and Payment mandates with Checkout and Payment Mandates as SD-JWT VCs (`vct` `mandate.checkout.1`, `mandate.payment.1`, and the `.open.1` forms). A user or agent provider signs them on a non-agentic Trusted Surface. Selective disclosure hides members from some verifiers. Holder binding comes from a KB-JWT signed with the `cnf` key, which closes an open mandate in autonomous mode. We did not choose it now because:
+
+- In this deployment Grantex is the issuer and AgenticOrg is the only relying party. Selective disclosure would hide nothing from anyone.
+- No AgenticOrg verifier for Delegate SD-JWT chains exists yet. A plain JWT reuses the ES256 verification every OACP relying party already runs.
+- The buyer's signature on a Trusted Surface needs a wallet or credential provider, which is not part of this deployment. Grantex attests consent (`amr`) and, for `human_present`, a passkey assertion over the cart (below).
+
+The claim layout follows the v0.2 member names, so moving to SD-JWT later changes the envelope, not the content. That move is: issue the same claims as SD-JWT VC disclosures with the v0.2 `vct` values, and have the buyer agent close open mandates with a KB-JWT signed by its `cnf` key.
+
+**W3C VC 2.0 (VC-JWT).** This was rejected for the same reasons. It also adds a `credentialSubject` wrapper that AP2 does not use.
+
+## Mapping to AP2
+
+| Grantex claim | AP2 v0.2 | AP2 v0.1 (legacy) |
+| --- | --- | --- |
+| Intent `intent.max_amount {value, currency}` | `payment.amount_range` constraint `{currency, max}` (integer minor units) | `IntentMandate` (no amount field) |
+| Intent `intent.merchants`, constraint `checkout.allowed_merchants` | `checkout.allowed_merchants` `{allowed: [Merchant]}` | `IntentMandate.merchants` |
+| Intent `intent.description_hash` | (none; the natural-language description is not a v0.2 member) | `natural_language_description` (Grantex keeps only its b64url SHA-256) |
+| Intent `intent.expires_at`, `exp` | `exp` | `intent_expiry` |
+| Intent `cnf.jwk` (buyer agent's registered key) | `cnf` of an open mandate (RFC 7800) | none |
+| Cart `cart.checkout_hash` | `checkout_hash`: b64url SHA-256. AP2 hashes the merchant-signed `checkout_jwt`; Grantex hashes the RFC 8785 form of the UCP checkout object, because no merchant-signed checkout JWT exists in this deployment | `merchant_authorization.cart_hash` |
+| Cart `cart.line_items[] {id, quantity, digest}`, `cart.total` | `checkout.line_items` constraint / checkout `totals` | `CartContents.payment_request` |
+| Payment `payment.transaction_id` | `transaction_id` (= `checkout_hash`) | `user_authorization.transaction_data` |
+| Payment `payment.amount`, `payment.currency` | `payment_amount {amount, currency}` | `payment_details_total` (float) |
+| Payment `payment.payee {id}` | `payee` | `merchant_agent` |
+| Payment `payment.token_binding {type, id}` | `payment_instrument {type, id}` | `payment_response.details` |
+| Payment `payment.rail` (`plural`, `upi_autopay`, `card_network_token`) | `payment_instrument.type` | `method_name` |
+| `presence` (`human_present` / `human_not_present`) | Direct / Autonomous mode (closed vs open mandates) | "Human Present v/s Not Present" signal |
+| `status.status_list` | (none; AP2 uses receipts) | (none) |
+| `iss`, `sub`, `aud`, `iat`, `exp`, `jti` | SD-JWT VC `iss`, `iat`, `exp` | merchant authorization JWT claims |
+
+Amounts are integer minor units (ISO 4217), as in the v0.2 closed mandates.
+
+## Passkey anchoring of the cart (G45): a Grantex extension
+
+A `human_present` cart mandate is issued only with a WebAuthn assertion that meets three conditions:
+
+- it was made by a passkey the buyer registered with Grantex;
+- its `challenge` equals the cart's `checkout_hash`;
+- it has user verification.
+
+Grantex verifies it with the portable evidence code (`lib/webauthn-evidence.ts`, a `GrantexWebAuthnAssertion`) and moves the credential counter forward once. It keeps the evidence and names it in the mandate's `webauthn` claim (`digest`, `rp_id`, `origin`, `challenge`, `user_verified`, `asserted_at`, `credential_ref`). One assertion backs one mandate.
+
+This is **not** part of AP2 or Verifiable Intent. Verifiable Intent states that its credentials are not WebAuthn credentials: a WebAuthn assertion authenticates the user to a wallet, and a separate key signs the intent. AP2 mentions passkeys only as a possible future trust model. W3C Secure Payment Confirmation is the standard WebAuthn extension for transaction binding, but none of these protocols reference it. The binding here gives a relying party a user-verified ceremony over exactly this cart. No human step is added to a `human_not_present` purchase.
+
+## Verification profile
+
+The order and refusal codes are in `apps/auth-service/src/lib/commerce/oacp-mandate-jwt.ts`, and the shared vectors in `spec/examples/oacp/oacp-mandates-v1.json` pin them for every verifier (auth service, `@grantex/sdk` `verifyOacpMandate`, AgenticOrg).
+
+## Ownership
+
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -161,6 +161,48 @@ Each route takes the same service token with its own route scope and the tenant 
 | An ACP order event for a Grantex order | `GET /v1/commerce/oacp/acp/orders/{order_id}/event?tenant_id&permalink_base`; sign the body with `Merchant-Signature` and deliver it. | `commerce.acp.order_events.read` |
 | Buyer identity linking | Run `@grantex/mcp-auth` with `commerce.ucpIdentityLinking` (and `commerce.acpDelegatedAuthentication` for ACP); link (`iss`, `sub`) of the verified grant token to the merchant account. | n/a |
 
+## Mandates
+
+Grantex issues Intent, Cart and Payment mandates as ES256 JWTs signed with the OACP issuer key. Each mandate is on the OACP Token Status List. Why plain JWTs, and how they map to AP2: [OACP mandates decision](./mandates-decision). Each route takes the service token with its own route scope and the tenant allowlist, or an operator of the tenant. `tenant_id` is the Commerce Passport's commerce tenant.
+
+| AgenticOrg needs | Call | Route scope |
+| --- | --- | --- |
+| An Intent mandate | `POST /v1/commerce/oacp/mandates/intent` with `{tenant_id, passport_jwt, description, max_amount: {value, currency}, merchants?, expires_at?, presence?}` | `commerce.oacp.mandates.intent.issue` |
+| A Cart mandate | `POST /v1/commerce/oacp/mandates/cart` with `{tenant_id, passport_jwt, intent_mandate, checkout, presence?, webauthn_assertion?}`. `checkout` is the UCP checkout object (`id`, `currency`, `line_items[{id, quantity, ...}]`, `totals` with exactly one `total`). For `human_present`, `webauthn_assertion` is the buyer's WebAuthn `AuthenticationResponseJSON` whose challenge is `checkout_hash` = b64url SHA-256 of the RFC 8785 checkout. | `commerce.oacp.mandates.cart.issue` |
+| A Payment mandate | `POST /v1/commerce/oacp/mandates/payment` with `{tenant_id, passport_jwt, cart_mandate, rail: "plural" \| "upi_autopay" \| "card_network_token", token_binding: {type, id}}`. Never send card data. | `commerce.oacp.mandates.payment.issue` |
+| A server-side check | `POST /v1/commerce/oacp/mandates/verify` with `{tenant_id, mandate, expected_type?, expected_merchant_id?}` returns `{valid, refusal_code, mandate_type, mandate_hash, claims}` | `commerce.oacp.mandates.verify` |
+| Revocation | `POST /v1/commerce/oacp/mandates/{jti}/revoke` with `{reason_code?}` revokes the mandate and every mandate issued under it (201, or 200 when already revoked) | `commerce.oacp.mandates.revoke` |
+
+An issue response is `{mandate, jti, mandate_type, exp, status: {status_list: {idx, uri}}, mandate_hash, claims}`. Store `jti` and `mandate_hash` (lowercase hex SHA-256 of the compact JWT) in the ledger and in the arbiter evidence (`mandate_ref`, `mandate_hash`). Put the three mandate hashes in the Plural order metadata.
+
+Verify every mandate locally before relying on it. Use the pinned Grantex issuer and JWKS, and check the status list. Order and refusal codes:
+
+- `mandate_malformed`, `mandate_algorithm_unsupported`, `mandate_type_mismatch` (check the expected `typ`);
+- `issuer_key_untrusted`, `mandate_signature_invalid`, `mandate_issuer_mismatch`, `mandate_claims_invalid`;
+- `mandate_not_yet_valid` (60 s skew), `mandate_expired`, `mandate_lifetime_exceeded` (`exp - iat` over 600 s);
+- `mandate_audience_mismatch` (`aud` is the merchant id);
+- `mandate_revoked`, `mandate_suspended`, `revocation_status_unavailable` (fail closed).
+
+Then check the chain:
+
+- the cart's `intent_mandate_jti` and the payment's `cart_mandate_jti`;
+- `payment.transaction_id == cart.checkout_hash`;
+- the payment amount and currency equal the cart total;
+- the cart total is within the intent cap;
+- the same tenant, merchant, `sub`, buyer agent and `consent_ref`.
+
+A failed chain check is `mandate_chain_mismatch`. `@grantex/sdk` ships this as `verifyOacpMandate` and `checkOacpMandateChain`, and the shared vectors are in `spec/examples/oacp/oacp-mandates-v1.json`.
+
+Issuance refuses, and records the refusal (the error `details.refusal_record_id`), with these codes:
+
+- passport and consent: `passport_invalid`, `passport_revoked`, `passport_not_checkout`, `passport_scope_missing`, `passport_cap_missing`, `consent_not_active`, `passport_cap_exceeded`, `currency_mismatch`, `merchant_not_allowed`;
+- presence: `presence_mismatch` (a `human_not_present` mandate under a `human_present` consent or parent);
+- parent mandate: `parent_mandate_expired`, `parent_mandate_revoked`, `parent_mandate_invalid`, `mandate_chain_mismatch`, `intent_cap_exceeded`;
+- passkey: `passkey_evidence_required` (a `human_present` cart without an assertion), `passkey_evidence_invalid`, `passkey_evidence_replayed`;
+- request content: `checkout_invalid`, `card_data_refused`, `payment_rail_unsupported`, `token_binding_invalid`, `intent_invalid`.
+
+If revocation state is unavailable, the response is 503 `revocation_unavailable`. A mandate never outlives its passport or its parent, and a checkout passport lives 600 s, so request the three mandates within one passport's life.
+
 ## Presence And Authentication Methods
 
 A consent request names `presence`: `human_present` (the buyer confirms each cart with a passkey) or `human_not_present` (the buyer delegated purchases within the consented caps). The default is `human_not_present`. The buyer sees the mode on the consent page and it is part of the payload whose hash they approve. Approval records `amr: ["consent", "otp"]`. The Commerce Passport carries both as `presence` and `amr` claims, and mandates copy them. A passport issued before these claims existed reads as `human_not_present` with no methods. AgenticOrg's arbiter applies its stricter not-present rule set to `human_not_present`; neither mode adds a human step to a delegated purchase.

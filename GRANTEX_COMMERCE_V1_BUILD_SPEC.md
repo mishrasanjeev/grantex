@@ -544,6 +544,7 @@ AP2/MPP positioning:
 - Payment-network protocols such as AP2/MPP are treated as future compatibility targets for payment-network mandate evidence.
 - V1 should not present itself as a replacement for AP2/MPP.
 - V1 should state that Grantex can provide consent, scope, revocation, and audit evidence that payment-network protocols may consume in later integrations.
+- Status (OACP Phase 4): the unsigned AP2-style evidence preview route is removed. Grantex issues signed Intent, Cart and Payment mandates (ES256 JWTs whose claims map to AP2 v0.2 member names, on the OACP Token Status List) at `POST /v1/commerce/oacp/mandates/*`. This is a mapping to the AP2 reference, not AP2 certification and not the AP2 v0.2 SD-JWT format; see `docs/guides/oacp/mandates-decision.mdx`.
 
 V1 MCP tools:
 
