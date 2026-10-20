@@ -38,14 +38,14 @@ sequenceDiagram
 
 ## Allowed Evidence
 
-OACP artifacts may carry references such as:
+The `protocol_adapter` artifact's `offline_pos_bridge_mapping` names the reference types a POS handoff may use:
 
 - `offline_pos_handoff_packet_ref`
 - `provider_pos_evidence_ref`
 - `receipt_evidence_ref`
 - catalog, price, inventory, policy, and mandate capability artifact refs
 
-The references must be non-sensitive, scoped to tenant/merchant/seller agent, and tied to freshness metadata. They are not proof that a payment succeeded unless the POS or provider callback says so.
+The `policy_scope` artifact states that these refs are allowed. No POS evidence reaches Grantex today, so the `mandate_capability` artifact says `offline_pos_evidence_status: "unverified"` and names no POS reference (an earlier placeholder value was removed). References must be non-sensitive, scoped to tenant/merchant/seller agent, and tied to freshness metadata. They are not proof that a payment succeeded unless the POS or provider callback says so.
 
 ## Blocked Claims
 

@@ -6,7 +6,9 @@ description: How AgenticOrg requests and consumes Grantex OACP authority artifac
 
 Canonical end-to-end flow: [OACP authority overview](./overview).
 
-AgenticOrg calls Grantex only when it needs authority artifacts or verification. It does not route every buyer message through Grantex.
+AgenticOrg calls Grantex when it needs authority artifacts, mandates, a countersigned arbiter decision or a witnessed audit head. It does not route non-binding buyer messages through Grantex.
+
+Before any of this works in an environment, that environment needs an active OACP issuer key and, for verification, `OACP_STATUS_LIST_PUBLIC_ENABLED=true`. Without the key, issuance answers `503 oacp_issuer_key_unavailable`; without the public status list, AgenticOrg's verifier refuses every artifact and mandate with `revocation_status_unavailable`. Order: [operator runbook](./operator-runbook#production-turn-on-order).
 
 ## Runtime Flow
 
@@ -22,7 +24,9 @@ sequenceDiagram
   G-->>A: ES256-signed OACP artifacts or blockers
   A->>A: Verify each JWS (JWKS) and status list entry
   A->>A: Cache verified artifacts by tenant, merchant, seller, buyer scope
-  A->>A: Prepare purchase or Offline POS handoff without execution
+  A->>G: Mandates, then the arbiter decision for a purchase
+  G-->>A: Signed mandates and a countersigned allow, or recorded refusals
+  A->>A: Provider-owned execution or Offline POS handoff (AgenticOrg flags)
   A-->>M: Runtime ready, refresh needed, or blocker
 ```
 
@@ -192,7 +196,7 @@ Then check the chain:
 - the cart total is within the intent cap;
 - the same tenant, merchant, `sub`, buyer agent and `consent_ref`.
 
-A failed chain check is `mandate_chain_mismatch`. `@grantex/sdk` ships this as `verifyOacpMandate` and `checkOacpMandateChain`, and the shared vectors are in `spec/examples/oacp/oacp-mandates-v1.json`.
+A failed chain check is `mandate_chain_mismatch`. The SDK sources carry this as `verifyOacpMandate` / `checkOacpMandateChain` (TypeScript), `verify_oacp_mandate` / `check_oacp_mandate_chain` (Python) and `VerifyOacpMandate` / `CheckOacpMandateChain` (Go); they are not yet in a published package release. The shared vectors are in `spec/examples/oacp/oacp-mandates-v1.json` and `oacp-mandates-v1-extra.json`.
 
 Issuance refuses, and records the refusal (the error `details.refusal_record_id`), with these codes:
 
@@ -241,6 +245,14 @@ The artifact then says `mandate_capability_status: "verified"`. It carries `mand
 - With no evidence the artifact says `unverified` and carries no reference. The placeholder `provider:mandate_rail:capability:pending:redacted` is gone.
 - Malformed, stale, out-of-scope or placeholder evidence is refused as `mandate_capability_evidence_invalid` (422, recorded).
 - The UCP profile emits checkout and order only while the live `mandate_capability` artifact is `verified`.
+
+## Settlement Receipts
+
+When a payment settled over x402 or MPP, AgenticOrg can bind the receipt to the commitment: `POST /v1/commerce/oacp/commitment-evidence/settlement-receipts` with the service token (scope `commerce.oacp.commitment_evidence.write`, tenant allowlist; operators and the platform admin are refused). Grantex issues a signed `commitment_evidence` artifact with the receipt hash, network and transaction reference, never the payer, and records the receipt as reported, not verified, because neither receipt format is signed. The same commitment and receipt again answers `200`; another receipt for that commitment answers `409`. `settlementReceiptEvidence` in `@grantex/x402` shapes an x402 receipt for this body (a source addition, not yet released); an MPP receipt is sent as `{protocol: "mpp", receipt: <the decoded Payment-Receipt object>}`.
+
+## Agent Request Signatures
+
+AgenticOrg verifies and signs agent HTTP requests with `grantex-agent-httpsig` (`verify_with_profile` / `sign_with_profile`, profiles `grantex`, `tap` and `web-bot-auth`). The library, the shared vectors and the registry's key directory are described in [agent network identity](./agent-network-identity). The registry key directory is served only with `HTTP_SIGNATURE_DIRECTORY_ENABLED` on, and its keys carry the registry's countersignature rather than per-key signatures.
 
 ## Presence And Authentication Methods
 

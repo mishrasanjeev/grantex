@@ -29,7 +29,7 @@ flowchart TD
   ttl -->|No| refuse2[Refuse: stale]
   ttl -->|Yes| scope{Scope allowed?}
   scope -->|No| refuse3[Refuse: private or executable scope]
-  scope -->|Yes| issue[Issue internal OACP artifacts]
+  scope -->|Yes| issue[Issue signed OACP artifacts]
 ```
 
 ## Publication And Approval

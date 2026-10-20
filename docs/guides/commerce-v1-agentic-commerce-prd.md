@@ -116,7 +116,10 @@ AgenticOrg must not:
 
 ## 4. Current Implementation Snapshot
 
-Status as of 2026-06-18:
+Status as of 2026-06-18, with later corrections where a surface was removed or
+replaced. For the OACP status after the 2026-10-20 closure work (signed and
+revocable artifacts, mandates, ledger, UCP and ACP surfaces), read
+`docs/guides/oacp/runtime-launch-closure-prd.mdx`.
 
 - Grantex and AgenticOrg have merged the internal OACP foundation through C6Z.
   The implementation is internal, non-publication, non-certifying,
@@ -147,8 +150,8 @@ Status as of 2026-06-18:
 | Category presets | `electronics_appliances` readiness checklist and scoring exist for the sandbox path. | Multi-category presets and policy/eval defaults remain future work. |
 | Catalog and variants | Product/variant APIs, search/detail, bulk dry-run/upsert, patch/archive, CSV/JSON-oriented portal support, catalog readiness preview, and public-safe sample preview exist. | Large async imports, connector sync, conflict handling, rollback, richer price/offer models, and quantity inventory remain pending. |
 | Inventory | Variant availability and freshness exist. | Quantity, location, confidence, reservations, stock holds, and delivery feasibility are missing. |
-| Consent and Commerce Passport | Consent request/exchange/verify/revoke/challenge foundation exists. The C6M AP2-style unsigned evidence preview was removed; the AP2-mapped PaymentMandate (`POST /v1/commerce/oacp/mandates/payment`) replaces it. | Production challenge delivery, signed mandate evidence, independent AP2 conformance, and live payment approval are pending. |
-| Cart/payment intent | Cart draft and provider-neutral payment intent foundation exists. C6L ACP-style cart/checkout shape preview is merged. | Cart update/cancel/expire, fulfillment selection, ACP conformance, and broad live checkout readiness are pending. |
+| Consent and Commerce Passport | Consent request/exchange/verify/revoke/challenge foundation exists. The C6M AP2-style unsigned evidence preview was removed; signed, AP2-mapped Intent, Cart and Payment mandates (`POST /v1/commerce/oacp/mandates/*`) replace it. | Production challenge delivery, AP2 v0.2 SD-JWT VC mandates, independent AP2 conformance, and live payment approval are pending. |
+| Cart/payment intent | Cart draft and provider-neutral payment intent foundation exists. The C6L ACP-style cart/checkout shape preview was removed; the ACP delegate-payment allowance and order events replace it. | Cart update/cancel/expire, fulfillment selection, ACP conformance, and broad live checkout readiness are pending. |
 | Provider evidence/webhooks | Provider capability evidence references, webhook intake metadata, replay metadata, and reconciliation posture foundations exist. | Live provider-rail approval, signature evidence, outage handling, and rollback proof remain gated; provider/fintech rails remain payment authority. |
 | Merchant webhooks | Signed merchant webhook source and catalog update intake exist. | Inventory-only, price-only, order, fulfillment, support, return, and refund webhooks are pending. |
 | Existing-system connectors | C6N metadata-only connector registry, source precedence, sync health, stale/conflict blockers, and no-credential/no-execution guardrails are merged. | Real Shopify/WooCommerce/Magento/ERP/OMS/WMS/logistics/support/payment sync adapters remain pending. |
@@ -485,7 +488,7 @@ in V1 form; others are future gaps.
 | CommerceAuditEvent | Grantex | Append-only evidence. | Foundation exists. |
 | CommerceAgentSession | AgenticOrg/Grantex boundary | Buyer-agent session attribution and channel state. | C6I channel-neutral session orchestration merged; live channels pending. |
 | OacpArtifact | Grantex authority, AgenticOrg cache | Public-safe artifact signed with an ES256 detached JWS by a Grantex OACP issuer key, scoped to tenant, merchant, seller agent, and buyer agent. | C6Z authority route issues/refuses all 11 families, persists every issue and refusal in `oacp_artifacts`, and places each artifact on an OACP Token Status List; AgenticOrg caches and evaluates them for buyer-safe use. |
-| OacpProtocolAdapterPreview | Grantex authority, AgenticOrg consumer | schema.org/UCP-style/ACP-style/AP2-style/A2A/MCP preview derived from artifacts. | Grantex `protocol_adapter` artifacts now carry mapping governance; AgenticOrg generates runtime adapter payloads from cached artifacts. Public certification/publication remains pending. |
+| OacpProtocolAdapterPreview | None in Grantex | Former C6W4 library helper (schema.org/UCP-style/ACP-style/AP2-style/A2A/MCP preview shapes). | Deleted from Grantex (never mounted). Grantex `protocol_adapter` artifacts carry mapping governance, Grantex renders the UCP profile and ACP surfaces and issues AP2-mapped mandates; AgenticOrg generates its runtime adapter payloads from verified artifacts. Public certification/publication remains pending. |
 | OacpPreparedEnvelope | Grantex authority, AgenticOrg consumer | Prepared-only request envelope for buyer/source/merchant/provider confirmation. | AgenticOrg purchase preparation now returns a non-executing handoff or exact blocker after OACP/provider checks. |
 | OacpReconciliation, OacpEligibilityPacket, OacpDryRunVerification | None in Grantex | Former C6W7-C6W9 library helpers. | Deleted from Grantex (never mounted); see the OACP library helper decision. |
 | ChannelAdapterConfig | AgenticOrg | Platform launch and capability limits. | Gap. |

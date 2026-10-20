@@ -32,8 +32,11 @@ issuer key published in `/.well-known/jwks.json` and listed on an OACP Token Sta
 - `protocol_adapter`
 - `authority_request_status`
 
-The route is not a checkout, payment, order, mandate, provider, Shopify, or
-merchant private API path.
+The route is not a checkout, payment, order, provider, Shopify, or merchant
+private API path. Mandates have their own routes (see "AP2-Mapped Mandates"
+below). Issuance needs an active OACP issuer key (`503
+oacp_issuer_key_unavailable` otherwise), and relying parties can check the
+status list only while `OACP_STATUS_LIST_PUBLIC_ENABLED` is on.
 
 ### Public discovery opt-in
 
@@ -66,9 +69,17 @@ same payload as before.
 
 The `protocol_adapter` artifact carries a canonical mapping profile. It tells
 AgenticOrg which artifact families must feed each compatibility payload:
-Schema.org Product/Offer JSON-LD, UCP-style capability profile, ACP-style
-commerce interaction profile, AP2-style mandate/payment evidence profile, A2A
-task metadata, MCP tool/resource metadata, and OpenAPI buyer-safe bridge schema.
+Schema.org Product/Offer JSON-LD, the UCP capability profile, the ACP commerce
+interaction profile, the AP2 mandate and payment evidence profile, A2A task
+metadata, MCP tool/resource metadata, and OpenAPI buyer-safe bridge schema.
+The signed payload still labels three of these surfaces with their earlier
+names (`ucp_style_capability_profile`, `acp_style_commerce_interaction` /
+`acp_style_commerce_interaction_profile`,
+`ap2_style_mandate_payment_evidence_profile`); `adapter_surfaces` lists
+`ap2_payment_mandate`. The labels are kept so AgenticOrg's reader does not
+break; they name mapping lineage, not Grantex routes. The surfaces Grantex
+serves are the UCP profile, the ACP allowance and order events and the
+mandates described below.
 
 These are compatibility mappings only. They are not public protocol
 certification, standards publication, public discovery approval, checkout
@@ -167,6 +178,31 @@ runtime signs the exact body it sends with
 (receivers allow 300 s) and posts it to the agent platform; Grantex sends no
 outbound webhooks. Shared signature vectors:
 `spec/examples/acp/merchant-signature-v1.json`.
+
+## AP2-Mapped Mandates
+
+`POST /v1/commerce/oacp/mandates/intent`, `.../cart` and `.../payment` issue
+Intent, Cart and Payment mandates as ES256 JWTs signed by the OACP issuer key,
+with claims that use AP2 v0.2 member names (`checkout_hash`,
+`transaction_id`, constraints, `cnf`). They are plain JWTs mapped to AP2, not
+AP2 v0.2 SD-JWT VCs. Each is on the OACP Token Status List; revoking one
+revokes the mandates issued under it, and suspension is reversible. A
+`human_present` cart needs a passkey assertion over its `checkout_hash` (a
+Grantex extension). Request shapes, refusal codes and the verification order:
+`docs/guides/oacp/agenticorg-integration.mdx`; decision and AP2 mapping:
+`docs/guides/oacp/mandates-decision.mdx`.
+
+## Settlement Receipts As Commitment Evidence
+
+`POST /v1/commerce/oacp/commitment-evidence/settlement-receipts` (AgenticOrg
+service token with scope `commerce.oacp.commitment_evidence.write`, allow-listed
+tenant) binds a successful x402 SettlementResponse or MPP `Payment-Receipt` to
+a commitment as a signed `commitment_evidence` artifact: `commitment_type:
+settlement_receipt_reference`, the receipt's SHA-256 over its RFC 8785 form,
+network or method, transaction reference, never the payer, and
+`receipt_verification: reported_not_verified_by_grantex`, because neither
+receipt format is signed. One receipt per commitment: the same receipt again
+answers `200`, another answers `409`.
 
 ## Buyer Identity Linking
 

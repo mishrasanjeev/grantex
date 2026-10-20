@@ -159,11 +159,13 @@ AgenticOrg now has merchant-scoped Shopify credential storage, adapter payload
 generation, bridge routes, and purchase-preparation blockers; a real merchant
 launch still requires valid external credentials and tenant allowlisting.
 
-- implemented: internal artifact schemas, public-safe fixtures, adapter
-  previews, commitment boundary resolver, prepared envelopes, response
-  reconciliation, eligibility packets, execution-controller dry-run verifier,
-  internal C6Z authority request route, artifact verifier, and non-enablement
-  flags;
+- implemented: artifact schemas, public-safe fixtures, the C6Z authority
+  request route with ES256-signed, persisted and revocable artifacts, the
+  artifact verifier, and non-enablement flags (the earlier adapter previews,
+  commitment boundary resolver, prepared envelopes, response reconciliation,
+  eligibility packets and dry-run verifier library helpers were never mounted
+  and were deleted; status after 2026-10-20:
+  `docs/guides/oacp/runtime-launch-closure-prd.mdx`);
 - implemented in both repos: Grantex authority helpers/tests/docs and
   AgenticOrg local consumer/runtime helpers/tests/docs, including seller-agent
   packet creation, Shopify sync initiation, artifact cache, buyer answer, MCP
@@ -351,10 +353,11 @@ Grantex landing page planning blocks:
   refusal semantics, source/freshness, revocation, audit evidence.
 - Section 2: "What Grantex does not own" - seller agents, buyer chat runtime,
   merchant operational systems, provider mandate/payment execution.
-- Section 3: "OACP status" - internal C6Z foundation, blocked production
-  vertical, no public standard claim.
-- Section 4: "Protocol adapters" - schema.org, UCP-style, ACP-style,
-  AP2-style, A2A-style, MCP-style previews generated from artifacts.
+- Section 3: "OACP status" - signed C6Z artifacts, mandates and ledger
+  deployed, production turn-on pending, no public standard claim.
+- Section 4: "Protocol adapters" - schema.org preview, UCP business profile,
+  ACP allowance and order events, AP2-mapped mandates, A2A and MCP metadata
+  derived from artifacts.
 - Section 5: "Pending before live" - persistent cache, real connectors,
   provider-owned mandate verification, execution controller, public governance.
 

@@ -512,6 +512,8 @@ Defer:
 Refund in V1:
 
 - Refund execution is out of scope.
+Status note (2026-10-20): later OACP work went beyond some V1 exclusions without changing V1's scope. Grantex now renders a UCP business profile and issues the ACP delegate-payment allowance and order events (partial surfaces, not full UCP or ACP implementations), hash-chains the wallet ledger and witnesses AgenticOrg audit chain heads, and the SDK sources carry OACP verifiers. See `docs/guides/oacp/runtime-launch-closure-prd.mdx`.
+
 - Refund request API is out of scope.
 - Merchant must process refunds in existing provider/merchant systems during V1.
 - V1 may display provider payment status and audit references needed for manual refund handling.
@@ -544,6 +546,8 @@ AP2/MPP positioning:
 - Payment-network protocols such as AP2/MPP are treated as future compatibility targets for payment-network mandate evidence.
 - V1 should not present itself as a replacement for AP2/MPP.
 - V1 should state that Grantex can provide consent, scope, revocation, and audit evidence that payment-network protocols may consume in later integrations.
+- Status (OACP Phase 3): the UCP-style and ACP-style preview routes are removed. Grantex renders the `ucp` member of a UCP business profile from issued OACP artifacts (`GET /v1/commerce/oacp/ucp-profile`) and serves the ACP delegate-payment allowance and order events. These are partial surfaces; full UCP and ACP remain out of V1.
+- Status (OACP Phase 5): `@grantex/mpp` (repository source) implements the MPP "Payment" HTTP authentication scheme; x402 and MPP settlement receipts can be bound to a commitment as signed `commitment_evidence` artifacts.
 - Status (OACP Phase 4): the unsigned AP2-style evidence preview route is removed. Grantex issues signed Intent, Cart and Payment mandates (ES256 JWTs whose claims map to AP2 v0.2 member names, on the OACP Token Status List) at `POST /v1/commerce/oacp/mandates/*`. This is a mapping to the AP2 reference, not AP2 certification and not the AP2 v0.2 SD-JWT format; see `docs/guides/oacp/mandates-decision.mdx`.
 
 V1 MCP tools:
