@@ -17,7 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   B.2.1, B.2.3) with the Appendix B.1.2 public key (verification only, since
   PSS is randomized) and include the RFC 7638 section 3.1 RSA thumbprint.
 - `grantex-agent-httpsig` is version 0.2.0, unreleased (still marked
-  `Private :: Do Not Upload` until it is published).
+  `Private :: Do Not Upload` until it is published). `grantex-verifier` now
+  pins `grantex-agent-httpsig==0.2.0`; the `grantex` profile it uses is
+  unchanged.
 - G50 is partly closed: the registry key directory carries the registry's
   platform-key countersignature; per-key directory response signatures need
   agent-held keys and remain future work.
