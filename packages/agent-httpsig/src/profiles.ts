@@ -121,9 +121,25 @@ export interface SignatureAgent {
   type: SignatureAgentType;
 }
 
-const OPAQUE_KEYID = /^[!#-[\]-~]{1,256}$/;
+/**
+ * 1 to 256 visible ASCII characters (0x21-0x7E) other than `"` and `\`: what
+ * an RFC 9651 sf-string can carry without escapes. A predicate rather than a
+ * character-class range, which reads as a mistake (`#-[` spans digits,
+ * capitals and punctuation).
+ */
+const VISIBLE_UNQUOTED_1_256 = {
+  test(value: string): boolean {
+    if (value.length < 1 || value.length > 256) return false;
+    for (let i = 0; i < value.length; i += 1) {
+      const c = value.charCodeAt(i);
+      if (c < 0x21 || c > 0x7e || c === 0x22 || c === 0x5c) return false;
+    }
+    return true;
+  },
+};
+const OPAQUE_KEYID = VISIBLE_UNQUOTED_1_256;
 const THUMBPRINT_KEYID = /^[A-Za-z0-9_-]{43}$/;
-const TAP_NONCE = /^[!#-[\]-~]{1,256}$/;
+const TAP_NONCE = VISIBLE_UNQUOTED_1_256;
 const B64URL_NONCE = /^[A-Za-z0-9_-]{22,128}$/;
 const LABEL = /^[a-z*][a-z0-9_\-.*]*$/;
 const METHOD = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;

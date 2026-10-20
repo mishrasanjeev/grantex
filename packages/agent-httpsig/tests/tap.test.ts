@@ -177,3 +177,24 @@ describe('Grantex consent record object', () => {
     expect(() => buildGrantexConsentRecord(consent, { nonce: 'n-1', now: new Date('2026-10-20T10:10:00Z') })).toThrow(/expired/);
   });
 });
+
+describe('TAP keyid and nonce character set', () => {
+  const req = { method: 'GET', url: 'https://merchant.example/v1/products', headers: {} as Record<string, string> };
+  const sign = (keyid: string, nonce: string) => signWithProfile(req, {
+    profile: 'tap', key: keys.ed25519!, keyid, nonce, created: NOW, components: ['@authority', '@path'],
+  });
+
+  it('accepts 1 to 256 visible ASCII characters other than quote and backslash', () => {
+    for (const value of ['!', '#', '[', ']', '~', `!#[]~${'A'.repeat(251)}`]) {
+      expect(() => sign(value, 'nonce-01')).not.toThrow();
+      expect(() => sign('k1', value)).not.toThrow();
+    }
+  });
+
+  it('refuses empty, over-long, quote, backslash, space, control and non-ASCII values', () => {
+    for (const value of ['', 'A'.repeat(257), 'a"b', 'a\b', 'a b', 'a\tb', 'café']) {
+      expect(() => sign(value, 'nonce-01')).toThrow(AgentHttpSigError);
+      expect(() => sign('k1', value)).toThrow(AgentHttpSigError);
+    }
+  });
+});
