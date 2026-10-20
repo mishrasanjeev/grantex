@@ -82,9 +82,9 @@ describe('C6Og release rehearsal status and launch gap assessment', () => {
 
     expect(assessment).toContain(releaseReviewCommand);
     expect(assessment).toContain('| Release-review gate | passed |');
-    expect(assessment).toContain('| Fixture count | 6 |');
-    expect(assessment).toContain('| Surface count | 3 |');
-    expect(assessment).toContain('| Scan count | 72 |');
+    expect(assessment).toContain('| Fixture count | 4 |');
+    expect(assessment).toContain('| Surface count | 2 |');
+    expect(assessment).toContain('| Scan count | 56 |');
     expect(assessment).toContain('| Rendered status | passing |');
     expect(assessment).toContain('| Badge status | passing |');
   });
@@ -181,9 +181,9 @@ describe('C6Og release rehearsal status and launch gap assessment', () => {
         artifacts_retained: true,
         report: {
           status: 'passed',
-          fixture_count: 6,
-          surface_count: 3,
-          scan_count: 72,
+          fixture_count: 4,
+          surface_count: 2,
+          scan_count: 56,
         },
         status_page: {
           status: 'passing',

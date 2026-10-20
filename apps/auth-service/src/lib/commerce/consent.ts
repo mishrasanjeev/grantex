@@ -14,6 +14,29 @@ export const CONSENT_TEXT_VERSION = '2026-05-01';
 
 export type PassportType = 'browse' | 'checkout';
 
+/**
+ * Whether the buyer is present when the agent buys (G44). `human_present`:
+ * each cart is confirmed with the buyer's passkey (a CartMandate whose
+ * `checkout_hash` is the WebAuthn challenge). `human_not_present`: the buyer
+ * delegated the purchase within the consented caps; no further human step.
+ * Mirrors AP2's human-present / human-not-present modes.
+ */
+export type PresenceMode = 'human_present' | 'human_not_present';
+export const PRESENCE_MODES: readonly PresenceMode[] = ['human_present', 'human_not_present'];
+/** What a row written before presence existed is read as: the stricter mode for a relying party. */
+export const DEFAULT_PRESENCE: PresenceMode = 'human_not_present';
+
+/**
+ * Authentication methods behind a granted consent (RFC 8176 `amr` values
+ * where one exists): the buyer approved the consent (`consent`) after
+ * verifying a one-time code delivered out of band (`otp`).
+ */
+export const CONSENT_APPROVAL_AMR: readonly string[] = ['consent', 'otp'];
+
+export function isPresenceMode(value: unknown): value is PresenceMode {
+  return value === 'human_present' || value === 'human_not_present';
+}
+
 export interface CreateConsentInput {
   tenantId: string;
   merchantId: string;
@@ -33,6 +56,8 @@ export interface CreateConsentInput {
    * approval always sets user_principal_id from the verified session.
    */
   userPrincipalHint?: string | null;
+  /** Presence mode the agent asks the buyer to approve; defaults to `human_not_present`. */
+  presence?: PresenceMode;
 }
 
 export interface CreatedConsent {
@@ -54,12 +79,12 @@ export async function createConsentRequest(
       id, tenant_id, merchant_id, agent_id, consent_request_id,
       passport_type, requested_scopes, max_amount, currency,
       consent_text_version, agent_auth_method, ip_hash, user_agent_hash,
-      user_principal_hint, expires_at
+      user_principal_hint, expires_at, presence
     ) VALUES (
       ${id}, ${input.tenantId}, ${input.merchantId}, ${input.agentId}, ${consentRequestId},
       ${input.passportType}, ${input.requestedScopes}, ${input.maxAmount}, ${input.currency},
       ${CONSENT_TEXT_VERSION}, ${input.agentAuthMethod}, ${input.ipHash}, ${input.userAgentHash},
-      ${input.userPrincipalHint ?? null}, ${expiresAt.toISOString()}
+      ${input.userPrincipalHint ?? null}, ${expiresAt.toISOString()}, ${input.presence ?? DEFAULT_PRESENCE}
     )
   `;
   return { id, consentRequestId, expiresAt: expiresAt.toISOString() };
@@ -85,6 +110,10 @@ export interface ConsentRecord {
   deniedAt: string | null;
   userPrincipalId: string | null;
   userPrincipalHint: string | null;
+  /** null only on rows written before presence existed (read as `human_not_present`). */
+  presence: PresenceMode | null;
+  /** Authentication methods recorded at approval; null until granted (and on older rows). */
+  amr: string[] | null;
   createdAt: string;
 }
 
@@ -108,6 +137,8 @@ interface ConsentRow {
   denied_at: Date | string | null;
   user_principal_id: string | null;
   user_principal_hint: string | null;
+  presence?: string | null;
+  amr?: string[] | null;
   created_at: Date | string;
 }
 
@@ -137,6 +168,8 @@ function rowToRecord(row: ConsentRow): ConsentRecord {
     deniedAt: asIso(row.denied_at),
     userPrincipalId: row.user_principal_id,
     userPrincipalHint: row.user_principal_hint,
+    presence: isPresenceMode(row.presence) ? row.presence : null,
+    amr: Array.isArray(row.amr) ? row.amr : null,
     createdAt: asIso(row.created_at) ?? '',
   };
 }
@@ -164,6 +197,8 @@ export async function findConsentById(sql: Sql, id: string): Promise<ConsentReco
  * and compares (Finding 4) to defend against bait-and-switch.
  */
 export function canonicalPresentedPayload(record: ConsentRecord): string {
+  // `presence` joins the payload the buyer approves (G44); rows written
+  // before it existed keep the payload, and so the hash, they were shown.
   return JSON.stringify({
     consent_request_id: record.consentRequestId,
     tenant_id: record.tenantId,
@@ -175,6 +210,7 @@ export function canonicalPresentedPayload(record: ConsentRecord): string {
     currency: record.currency,
     consent_text_version: record.consentTextVersion,
     expires_at: record.expiresAt,
+    ...(record.presence !== null ? { presence: record.presence } : {}),
   });
 }
 
@@ -328,6 +364,7 @@ async function decideConsent(
                approved_scopes = requested_scopes,
                approved_at = NOW(),
                user_principal_id = ${principalId},
+               amr = ${[...CONSENT_APPROVAL_AMR]},
                updated_at = NOW()
          WHERE id = ${record.id} AND status = 'requested'
          RETURNING *

@@ -169,6 +169,68 @@ describePostgres('OACP artifacts against Postgres', () => {
     expect(await sql`SELECT 1 FROM oacp_status_entries`).toHaveLength(0);
   });
 
+  it('binds mandate_capability_evidence from the authority request into the signed, stored artifact (G43)', async () => {
+    const evidence = {
+      schema_version: 'oacp.mandate_capability_evidence.v1',
+      evidence_id: 'plural_pine_capability_int',
+      tenant_id: TENANT,
+      merchant_id: 'mch_OACPINT',
+      provider: 'plural_pine',
+      provider_environment: 'sandbox',
+      result_status: 'available',
+      external_validation_performed: true,
+      rails: ['plural'],
+      caps: [{ rail: 'plural', max_amount: 250000, currency: 'INR' }],
+      token_types: ['network_token'],
+      verified_at: new Date(Date.now() - 60_000).toISOString(),
+      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+      redacted_evidence_ref: 'provider:plural_pine:capability:abcdef0123456789abcdef01:redacted',
+      evidence_hash: 'b'.repeat(64),
+    };
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/oacp/c6z/authority-requests',
+      headers: service,
+      payload: { request: authorityRequest(), connector_evidence: connectorEvidence(), mandate_capability_evidence: evidence },
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    const artifact = res.json<{ artifacts: Array<{ artifact_family: string; envelope: Record<string, any>; payload: Record<string, unknown> }> }>()
+      .artifacts.find((a) => a.artifact_family === 'mandate_capability')!;
+    expect(artifact.payload).toMatchObject({ mandate_capability_status: 'verified', mandate_capability_ref: evidence.redacted_evidence_ref });
+    expect(await verifyThroughPublicSurfaces(artifact)).toMatchObject({ valid: true });
+    const [row] = await sql`SELECT payload FROM oacp_artifacts WHERE artifact_id = ${artifact.envelope['artifact_id'] as string}`;
+    expect((row!['payload'] as Record<string, any>)['mandate_capability_evidence']['evidence_hash']).toBe(evidence.evidence_hash);
+
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/v1/commerce/oacp/c6z/authority-requests',
+      headers: service,
+      payload: { request: authorityRequest(), connector_evidence: connectorEvidence(), mandate_capability_evidence: { ...evidence, client_secret: 'x' } },
+    });
+    expect(bad.statusCode).toBe(422);
+    expect(bad.json<{ refusal_code: string }>().refusal_code).toBe('mandate_capability_evidence_invalid');
+  });
+
+  it('suspends and reinstates an artifact through the status list (status 2)', async () => {
+    const body = await issue();
+    const artifact = body.artifacts[0]!;
+    const id = artifact.envelope['artifact_id'] as string;
+    const suspend = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/artifacts/${id}/suspend`, headers: service, payload: { reason_code: 'source_review' } });
+    expect(suspend.statusCode, suspend.body).toBe(201);
+    expect(suspend.json()).toMatchObject({ artifact_id: id, status: 'issued', suspension_reason: 'source_review', changed: true });
+    resetOacpStatusCache();
+    expect(await verifyThroughPublicSurfaces(artifact)).toMatchObject({ valid: false, refusal_code: 'artifact_suspended' });
+    const reinstate = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/artifacts/${id}/reinstate`, headers: admin, payload: {} });
+    expect(reinstate.statusCode, reinstate.body).toBe(201);
+    expect(reinstate.json()).toMatchObject({ suspended_at: null, changed: true });
+    resetOacpStatusCache();
+    expect(await verifyThroughPublicSurfaces(artifact)).toMatchObject({ valid: true });
+    // Revocation stays final: a revoked artifact cannot be suspended or reinstated.
+    await app.inject({ method: 'POST', url: `/v1/commerce/oacp/artifacts/${id}/revoke`, headers: service, payload: {} });
+    const late = await app.inject({ method: 'POST', url: `/v1/commerce/oacp/artifacts/${id}/suspend`, headers: service, payload: {} });
+    expect(late.statusCode).toBe(409);
+  });
+
   it('issues, persists and publishes 11 signed artifacts that verify through the JWKS and status list', async () => {
     const body = await issue();
     expect(body.artifacts).toHaveLength(11);

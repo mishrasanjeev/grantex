@@ -369,6 +369,36 @@ for ten minutes (refetching an unknown kid at most every 30 seconds) and a
 status list for no longer than its `ttl`. The shared test vectors are in
 [`spec/examples/oacp/`](../../spec/examples/oacp/oacp-artifact-jws-v1.json).
 
+### Verifying OACP mandates
+
+> This is a source addition, not yet in a published release of this package.
+
+`verifyOacpMandate()` checks a Grantex Intent, Cart or Payment mandate
+(compact ES256 JWT, `typ` `oacp-intent-mandate+jwt`, `oacp-cart-mandate+jwt`
+or `oacp-payment-mandate+jwt`, claims mapped to AP2 v0.2) against the pinned
+issuer, its JWK Set and its Token Status List. `checkOacpMandateChain()` then
+checks the verified claims against each other.
+
+```typescript
+import { checkOacpMandateChain, verifyOacpMandate } from '@grantex/sdk';
+
+const options = { issuer, jwks, statusListFetcher, expectedAudience: 'mch_01' };
+const cart = await verifyOacpMandate(cartJwt, { ...options, expectedType: 'cart' });
+const payment = await verifyOacpMandate(paymentJwt, { ...options, expectedType: 'payment' });
+if (!cart.valid || !payment.valid) throw new Error('mandate refused');
+if (checkOacpMandateChain({ cart: cart.claims, payment: payment.claims })) throw new Error('mandate chain mismatch');
+// store payment.jti and payment.mandateHash (hex SHA-256 of the JWT)
+```
+
+Refusal codes in check order: `mandate_malformed`,
+`mandate_algorithm_unsupported`, `mandate_type_mismatch`,
+`issuer_key_untrusted`, `mandate_signature_invalid`,
+`mandate_issuer_mismatch`, `mandate_claims_invalid`, `mandate_not_yet_valid`,
+`mandate_expired`, `mandate_lifetime_exceeded` (`exp - iat` over 600 s),
+`mandate_audience_mismatch`, then `mandate_revoked`, `mandate_suspended` or
+`revocation_status_unavailable` (fail closed). Vectors:
+[`spec/examples/oacp/oacp-mandates-v1.json`](../../spec/examples/oacp/oacp-mandates-v1.json).
+
 ## PKCE Support
 
 The SDK includes built-in PKCE (Proof Key for Code Exchange) support using the S256 method for secure authorization flows:

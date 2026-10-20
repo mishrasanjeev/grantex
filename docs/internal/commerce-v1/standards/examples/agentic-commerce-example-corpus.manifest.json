@@ -86,11 +86,6 @@
       "path": "acp-style-checkout-shape.blocked.json",
       "surface": "acp_style_checkout_shape",
       "scenario": "blocked_checkout"
-    },
-    {
-      "path": "ap2-style-evidence.unsigned-preview.json",
-      "surface": "ap2_style_evidence_preview",
-      "scenario": "unsigned_preview"
     }
   ],
   "required_refusal_codes_covered": [

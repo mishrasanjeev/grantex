@@ -161,6 +161,91 @@ Each route takes the same service token with its own route scope and the tenant 
 | An ACP order event for a Grantex order | `GET /v1/commerce/oacp/acp/orders/{order_id}/event?tenant_id&permalink_base`; sign the body with `Merchant-Signature` and deliver it. | `commerce.acp.order_events.read` |
 | Buyer identity linking | Run `@grantex/mcp-auth` with `commerce.ucpIdentityLinking` (and `commerce.acpDelegatedAuthentication` for ACP); link (`iss`, `sub`) of the verified grant token to the merchant account. | n/a |
 
+## Mandates
+
+Grantex issues Intent, Cart and Payment mandates as ES256 JWTs signed with the OACP issuer key. Each mandate is on the OACP Token Status List. Why plain JWTs, and how they map to AP2: [OACP mandates decision](./mandates-decision). Each route takes the service token with its own route scope and the tenant allowlist, or an operator of the tenant. `tenant_id` is the Commerce Passport's commerce tenant.
+
+| AgenticOrg needs | Call | Route scope |
+| --- | --- | --- |
+| An Intent mandate | `POST /v1/commerce/oacp/mandates/intent` with `{tenant_id, passport_jwt, description, max_amount: {value, currency}, merchants?, expires_at?, presence?}` | `commerce.oacp.mandates.intent.issue` |
+| A Cart mandate | `POST /v1/commerce/oacp/mandates/cart` with `{tenant_id, passport_jwt, intent_mandate, checkout, presence?, webauthn_assertion?}`. `checkout` is the UCP checkout object (`id`, `currency`, `line_items[{id, quantity, ...}]`, `totals` with exactly one `total`). For `human_present`, `webauthn_assertion` is the buyer's WebAuthn `AuthenticationResponseJSON` whose challenge is `checkout_hash` = b64url SHA-256 of the RFC 8785 checkout. | `commerce.oacp.mandates.cart.issue` |
+| A Payment mandate | `POST /v1/commerce/oacp/mandates/payment` with `{tenant_id, passport_jwt, cart_mandate, rail: "plural" \| "upi_autopay" \| "card_network_token", token_binding: {type, id}}`. Never send card data. | `commerce.oacp.mandates.payment.issue` |
+| A server-side check | `POST /v1/commerce/oacp/mandates/verify` with `{tenant_id, mandate, expected_type?, expected_merchant_id?}` returns `{valid, refusal_code, mandate_type, mandate_hash, claims}` | `commerce.oacp.mandates.verify` |
+| Suspension | `POST /v1/commerce/oacp/mandates/{jti}/suspend` with `{reason_code?}` and `.../reinstate` (status 2, reversible, the named mandate only; 201 on a change, 200 when already in that state). Artifacts: `POST /v1/commerce/oacp/artifacts/{artifact_id}/suspend` / `reinstate` with `commerce.oacp.artifacts.suspend`. | `commerce.oacp.mandates.suspend` |
+| Revocation | `POST /v1/commerce/oacp/mandates/{jti}/revoke` with `{reason_code?}` revokes the mandate and every mandate issued under it (201, or 200 when already revoked) | `commerce.oacp.mandates.revoke` |
+
+An issue response is `{mandate, jti, mandate_type, exp, status: {status_list: {idx, uri}}, mandate_hash, claims, audit_event_id}`; a refusal carries `error.audit_event_id` when the tenant is a commerce tenant. Store `jti` and `mandate_hash` (lowercase hex SHA-256 of the compact JWT) in the ledger and in the arbiter evidence (`mandate_ref`, `mandate_hash`). Put the three mandate hashes in the Plural order metadata.
+
+Verify every mandate locally before relying on it. Use the pinned Grantex issuer and JWKS, and check the status list. Order and refusal codes:
+
+- `mandate_malformed`, `mandate_algorithm_unsupported`, `mandate_type_mismatch` (check the expected `typ`);
+- `issuer_key_untrusted`, `mandate_signature_invalid`, `mandate_issuer_mismatch`, `mandate_claims_invalid`;
+- `mandate_not_yet_valid` (60 s skew), `mandate_expired`, `mandate_lifetime_exceeded` (`exp - iat` over 600 s);
+- `mandate_audience_mismatch` (`aud` is the merchant id);
+- `mandate_revoked`, `mandate_suspended`, `revocation_status_unavailable` (fail closed).
+
+Then check the chain:
+
+- the cart's `intent_mandate_jti` and the payment's `cart_mandate_jti`;
+- `payment.transaction_id == cart.checkout_hash`;
+- the payment amount and currency equal the cart total;
+- the cart total is within the intent cap;
+- the same tenant, merchant, `sub`, buyer agent and `consent_ref`.
+
+A failed chain check is `mandate_chain_mismatch`. `@grantex/sdk` ships this as `verifyOacpMandate` and `checkOacpMandateChain`, and the shared vectors are in `spec/examples/oacp/oacp-mandates-v1.json`.
+
+Issuance refuses, and records the refusal (the error `details.refusal_record_id`), with these codes:
+
+- passport and consent: `passport_invalid`, `passport_revoked`, `passport_not_checkout`, `passport_scope_missing`, `passport_cap_missing`, `consent_not_active`, `passport_cap_exceeded`, `currency_mismatch`, `merchant_not_allowed`;
+- presence: `presence_mismatch` (a `human_not_present` mandate under a `human_present` consent or parent);
+- parent mandate: `parent_mandate_expired`, `parent_mandate_revoked`, `parent_mandate_suspended`, `parent_mandate_invalid`, `mandate_chain_mismatch`, `intent_cap_exceeded`;
+- passkey: `passkey_evidence_required` (a `human_present` cart without an assertion), `passkey_evidence_invalid`, `passkey_evidence_replayed`;
+- request content: `checkout_invalid`, `card_data_refused`, `payment_rail_unsupported`, `token_binding_invalid`, `intent_invalid`.
+
+If revocation state is unavailable, the response is 503 `revocation_unavailable`. A mandate never outlives its passport or its parent, and a checkout passport lives 600 s, so request the three mandates within one passport's life.
+
+## Mandate Capability Evidence
+
+Send the result of the provider capability verifier (`verify_plural_pine_mandate_capability`) with the C6Z authority request. It is a top-level `mandate_capability_evidence` member beside `request` and `connector_evidence`. Grantex binds it into the signed `mandate_capability` artifact. The object is closed: unknown members are refused, and it must hold no secrets.
+
+```json
+{
+  "schema_version": "oacp.mandate_capability_evidence.v1",
+  "evidence_id": "<verifier evidence_id>",
+  "tenant_id": "<request tenant_id>",
+  "merchant_id": "<request merchant_id>",
+  "provider": "plural_pine",
+  "provider_environment": "sandbox",
+  "result_status": "available",
+  "external_validation_performed": true,
+  "rails": ["plural", "upi_autopay"],
+  "caps": [{ "rail": "upi_autopay", "max_amount": 1500000, "currency": "INR" }],
+  "token_types": ["network_token", "upi_mandate"],
+  "verified_at": "<checked_at>",
+  "expires_at": "<checked_at + 6 h>",
+  "redacted_evidence_ref": "provider:plural_pine:capability:<hash>:redacted",
+  "evidence_hash": "<lowercase hex SHA-256 of the redacted provider response>"
+}
+```
+
+The rules:
+
+- `result_status` and `redacted_evidence_ref` are the verifier's own values.
+- `rails` and `caps` use the mandate rail names `plural`, `upi_autopay` and `card_network_token`, with integer minor units.
+- `verified_at` must be at most 6 h old and not in the future.
+- `available` needs `external_validation_performed: true` and at least one rail.
+
+The artifact then says `mandate_capability_status: "verified"`. It carries `mandate_capability_ref` (the redacted reference) and `mandate_capability_evidence`: the object without tenant and merchant, plus `evidence_object_hash`, Grantex's SHA-256 of the RFC 8785 form of what it received.
+
+- Any other `result_status` gives `unavailable`.
+- With no evidence the artifact says `unverified` and carries no reference. The placeholder `provider:mandate_rail:capability:pending:redacted` is gone.
+- Malformed, stale, out-of-scope or placeholder evidence is refused as `mandate_capability_evidence_invalid` (422, recorded).
+- The UCP profile emits checkout and order only while the live `mandate_capability` artifact is `verified`.
+
+## Presence And Authentication Methods
+
+A consent request names `presence`: `human_present` (the buyer confirms each cart with a passkey) or `human_not_present` (the buyer delegated purchases within the consented caps). The default is `human_not_present`. The buyer sees the mode on the consent page and it is part of the payload whose hash they approve. Approval records `amr: ["consent", "otp"]`. The Commerce Passport carries both as `presence` and `amr` claims, and mandates copy them. A passport issued before these claims existed reads as `human_not_present` with no methods. AgenticOrg's arbiter applies its stricter not-present rule set to `human_not_present`; neither mode adds a human step to a delegated purchase.
+
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -96,7 +96,7 @@ backs it is `issued`, unrevoked and unexpired:
 | Capability | Backing artifact families |
 |---|---|
 | `dev.ucp.shopping.catalog.search`, `dev.ucp.shopping.catalog.lookup`, `dev.ucp.shopping.cart` | `merchant_profile`, `seller_agent_card`, `catalog_snapshot`, `offer_price_snapshot`, `inventory_snapshot` |
-| `dev.ucp.shopping.checkout` | the above plus `policy_scope`, `mandate_capability` |
+| `dev.ucp.shopping.checkout` | the above plus `policy_scope`, `mandate_capability` with `mandate_capability_status: "verified"` (else withheld as `mandate_capability_unverified`) |
 | `dev.ucp.shopping.order` | as checkout, and only when checkout is rendered |
 | `dev.ucp.common.identity_linking` | `merchant_profile`, `seller_agent_card`; `config.scopes` keeps only scopes of rendered capabilities |
 

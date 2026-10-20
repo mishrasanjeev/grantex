@@ -45,7 +45,7 @@ This mode:
   directory
 - parses the generated JSON artifacts
 - asserts fixture, surface, and scan counts
-- asserts all five preview surfaces are present
+- asserts both preview surfaces are present
 - asserts report and status posture agree
 - asserts failed reports cannot produce passing status
 - asserts blocked fixtures include blocker evidence
@@ -83,12 +83,9 @@ requests a pinned artifact.
 
 ## Required Surfaces
 
-The gate requires all five C6O preview surfaces:
+The gate requires both remaining C6O preview surfaces:
 
 - schema.org JSON-LD preview
-- UCP-style capability profile preview
-- ACP-style checkout shape preview
-- AP2-style evidence preview
 - connector registry metadata preview
 
 ## Failure Behavior

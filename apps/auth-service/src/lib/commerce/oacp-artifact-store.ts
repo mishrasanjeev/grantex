@@ -57,11 +57,13 @@ export interface OacpArtifactRecord {
   revoked_at: string | null;
   revocation_reason: string | null;
   revocation_artifact_id: string | null;
+  suspended_at: string | null;
+  suspension_reason: string | null;
   created_at: string;
 }
 
 export class OacpArtifactStoreError extends Error {
-  readonly code: 'artifact_not_found' | 'artifact_not_revocable';
+  readonly code: 'artifact_not_found' | 'artifact_not_revocable' | 'artifact_not_suspendable';
 
   constructor(code: OacpArtifactStoreError['code'], message: string) {
     super(message);
@@ -109,6 +111,8 @@ export function rowToRecord(row: Record<string, unknown>): OacpArtifactRecord {
     revoked_at: iso(row['revoked_at']),
     revocation_reason: asText(row['revocation_reason']),
     revocation_artifact_id: asText(row['revocation_artifact_id']),
+    suspended_at: iso(row['suspended_at']),
+    suspension_reason: asText(row['suspension_reason']),
     created_at: iso(row['created_at']) ?? '',
   };
 }
@@ -116,7 +120,7 @@ export function rowToRecord(row: Record<string, unknown>): OacpArtifactRecord {
 export const COLUMNS = `artifact_id, family, artifact_type, tenant_id, merchant_id, seller_agent_id,
   issuer_key_id, payload_hash, envelope, payload, status, status_list_uri, status_idx,
   request_id, issued_at, expires_at, refusal_code, revoked_at, revocation_reason,
-  revocation_artifact_id, created_at,
+  revocation_artifact_id, suspended_at, suspension_reason, created_at,
   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_exact`;
 
 /** Insert one issued artifact row; call it in the transaction that allocated its status entry. */
@@ -193,7 +197,7 @@ export function c6zPublicDiscoveryEligibility(tenantId: string): C6ZPublicDiscov
  */
 export async function issueAndPersistC6ZArtifacts(
   sql: Sql,
-  input: { request: C6ZSellerAuthorityRequest; evidence: C6ZConnectorEvidence; now_iso: string },
+  input: { request: C6ZSellerAuthorityRequest; evidence: C6ZConnectorEvidence; mandate_capability_evidence?: unknown; now_iso: string },
 ): Promise<C6ZIssuanceResult & { refusal_record_id?: string }> {
   assertOacpStatusBaseUsable();
   const signer = await getActiveOacpSigner(sql);
@@ -406,4 +410,38 @@ export async function listLiveOacpArtifactsForScope(
     [scope.tenant_id, scope.merchant_id, scope.seller_agent_id, nowIso],
   );
   return (rows as unknown as Array<Record<string, unknown>>).map(rowToRecord);
+}
+
+/**
+ * Suspend (status 2) or reinstate (status 0) an issued artifact on its Token
+ * Status List (draft-ietf-oauth-status-list section 7.1). Reversible, unlike
+ * revocation; refused for refusal records, revocation artifacts and revoked
+ * artifacts. Idempotent: `changed` is false when the artifact was already in
+ * the asked state.
+ */
+export async function setOacpArtifactSuspension(
+  sql: Sql,
+  artifactId: string,
+  suspend: boolean,
+  options: { reason_code?: string | undefined; now?: Date | undefined } = {},
+): Promise<{ artifact: OacpArtifactRecord; changed: boolean }> {
+  const reason = options.reason_code && REASON_RE.test(options.reason_code) ? options.reason_code : 'issuer_suspended';
+  const nowIso = (options.now ?? new Date()).toISOString();
+  return await sql.begin(async (handle) => {
+    const tx = handle as unknown as TxSql;
+    const rows = await tx.unsafe(`SELECT ${COLUMNS} FROM oacp_artifacts WHERE artifact_id = $1 FOR UPDATE`, [artifactId]);
+    if (!rows[0]) throw new OacpArtifactStoreError('artifact_not_found', 'OACP artifact not found');
+    const record = rowToRecord(rows[0] as Record<string, unknown>);
+    if (record.status !== 'issued' || record.family === 'revocation' || !record.status_list) {
+      throw new OacpArtifactStoreError('artifact_not_suspendable', 'Only issued, unrevoked OACP artifacts can be suspended or reinstated');
+    }
+    if ((record.suspended_at !== null) === suspend) return { artifact: record, changed: false };
+    await setOacpStatus(tx, record.status_list.uri, record.status_list.idx, suspend ? 'suspended' : 'valid');
+    await tx`
+      UPDATE oacp_artifacts
+         SET suspended_at = ${suspend ? nowIso : null}, suspension_reason = ${suspend ? reason : null}
+       WHERE artifact_id = ${artifactId}
+    `;
+    return { artifact: (await getOacpArtifact(tx, artifactId))!, changed: true };
+  }) as { artifact: OacpArtifactRecord; changed: boolean };
 }

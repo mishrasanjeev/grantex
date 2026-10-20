@@ -158,8 +158,12 @@ export function signOacpEnvelope(envelope: Record<string, unknown>, signer: Oacp
   return `${headerB64}..${b64url(signature)}`;
 }
 
-/** The public key of the one usable JWK for `kid`, or null (step 5). */
-function trustedKey(jwks: OacpJwks | null | undefined, kid: string): KeyObject | null {
+/**
+ * The public key of the one usable JWK for `kid`, or null (step 5). Shared
+ * with the OACP mandate verifier (oacp-mandate-jwt.ts), whose keys are the
+ * same `oacp-` issuer keys.
+ */
+export function oacpTrustedKey(jwks: OacpJwks | null | undefined, kid: string): KeyObject | null {
   if (!kid.startsWith(OACP_KID_PREFIX)) return null;
   const keys = jwks && Array.isArray(jwks.keys) ? jwks.keys : [];
   const matching = keys.filter((key) => isRecord(key) && key['kid'] === kid);
@@ -241,7 +245,7 @@ export function verifyOacpArtifactSignature(input: {
   }
 
   // 5.
-  const key = trustedKey(input.jwks, header['kid']);
+  const key = oacpTrustedKey(input.jwks, header['kid']);
   if (!key) {
     return refusal(artifactId, 'issuer_key_untrusted', 'No single usable ES256 key with this kid is published.');
   }

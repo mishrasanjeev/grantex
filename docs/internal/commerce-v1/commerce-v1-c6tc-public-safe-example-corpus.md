@@ -51,8 +51,7 @@ C6Tc provides a small sanitized corpus that reviewers can use to reason about:
 - consent and evidence envelopes;
 - connector source metadata and source precedence;
 - schema.org-style public-safe product and offer previews;
-- ACP-style blocked checkout shapes;
-- AP2-style unsigned evidence previews.
+- ACP-style blocked checkout shapes.
 
 These examples are for internal draft preparation only. Future public use
 requires separate public-safe review, legal review, security review, and
@@ -102,7 +101,6 @@ The manifest also repeats these markers as global corpus controls.
 | `connector-source-metadata.dry-run.json` | Shows connector source metadata, freshness, dry-run, and source precedence without private source payloads. |
 | `schemaorg-product-offer.preview.json` | Shows schema.org-style public-safe product/offer preview fields without publication. |
 | `acp-style-checkout-shape.blocked.json` | Shows ACP-style checkout shape mapping with checkout blocked. |
-| `ap2-style-evidence.unsigned-preview.json` | Shows AP2-style unsigned evidence preview with no mandate, token, provider call, or payment enablement. |
 
 ## Refusal Coverage
 
@@ -195,8 +193,7 @@ C6Tc is docs/fixture-only. Roll back by removing:
 - `docs/internal/commerce-v1/standards/examples/evidence-envelope.consent-preview.json`;
 - `docs/internal/commerce-v1/standards/examples/connector-source-metadata.dry-run.json`;
 - `docs/internal/commerce-v1/standards/examples/schemaorg-product-offer.preview.json`;
-- `docs/internal/commerce-v1/standards/examples/acp-style-checkout-shape.blocked.json`;
-- `docs/internal/commerce-v1/standards/examples/ap2-style-evidence.unsigned-preview.json`.
+- `docs/internal/commerce-v1/standards/examples/acp-style-checkout-shape.blocked.json`.
 
 No cloud action, deployment action, secret rotation, migration, route removal,
 production configuration change, public discovery change, checkout/payment

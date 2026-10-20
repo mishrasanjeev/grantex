@@ -269,6 +269,30 @@ http is accepted only on loopback hosts with `AllowLoopbackHTTP`. Both
 fetchers are safe for concurrent use. The shared test vectors are in
 [`spec/examples/oacp/`](../../spec/examples/oacp/oacp-artifact-jws-v1.json).
 
+
+### Verifying OACP mandates
+
+`grantex.VerifyOacpMandate` checks a Grantex Intent, Cart or Payment mandate
+(compact ES256 JWT, claims mapped to AP2 v0.2) with the same refusal codes as
+the TypeScript and Python SDKs, and `grantex.CheckOacpMandateChain` checks
+verified claims against each other (`mandate_chain_mismatch`).
+
+```go
+r := grantex.VerifyOacpMandate(ctx, cartJWT, grantex.OacpMandateVerifyOptions{
+	Issuer:            issuer,
+	JWKSFetcher:       jwks,
+	StatusListFetcher: lists.Fetch,
+	ExpectedType:      grantex.OacpMandateCart,
+	ExpectedAudience:  "mch_01",
+})
+if !r.Valid {
+	return fmt.Errorf("mandate refused: %s", r.RefusalCode)
+}
+// store r.JTI and r.MandateHash (hex SHA-256 of the JWT)
+```
+
+Vectors: `spec/examples/oacp/oacp-mandates-v1.json` and `oacp-mandates-v1-extra.json`.
+
 ## Standalone Functions
 
 ```go

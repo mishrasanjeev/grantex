@@ -99,7 +99,13 @@ export type CommerceAuditEventType =
   | 'commerce_passport_key.rotated'
   // ACP surfaces (G35)
   | 'acp.delegate_payment_allowance.issued'
-  | 'acp.delegate_payment_allowance.refused';
+  | 'acp.delegate_payment_allowance.refused'
+  // OACP mandates (G41, G46)
+  | 'oacp.mandate.issued'
+  | 'oacp.mandate.refused'
+  | 'oacp.mandate.revoked'
+  | 'oacp.mandate.suspended'
+  | 'oacp.mandate.reinstated';
 
 export interface AppendCommerceAuditInput {
   tenantId: string;

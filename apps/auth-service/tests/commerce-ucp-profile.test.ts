@@ -41,7 +41,9 @@ function artifacts(overrides: Record<string, Partial<UcpBackingArtifact> | null>
       family,
       status: 'issued',
       expires_at: LATER,
-      payload: family === 'public_discovery_state' ? { public_discovery_publication_allowed: false } : {},
+      payload: family === 'public_discovery_state'
+        ? { public_discovery_publication_allowed: false }
+        : family === 'mandate_capability' ? { mandate_capability_status: 'verified' } : {},
       ...override,
     }];
   });
@@ -127,6 +129,16 @@ describe.each(UCP_PROFILE_VERSIONS)('UCP %s business profile from OACP artifacts
       expect(rendered.profile.ucp.capabilities['dev.ucp.common.identity_linking']).toBeUndefined();
       expect(rendered.withheld).toContainEqual({ name: 'dev.ucp.common.identity_linking', reason: 'no_identity_linking_scopes' });
       expect(profileErrors(version, rendered.profile)).toEqual([]);
+    }
+  });
+
+  it('withholds checkout and order while the mandate capability is unverified or unavailable (G43)', () => {
+    for (const status of ['unverified', 'unavailable']) {
+      const rendered = renderAll(version, artifacts({ mandate_capability: { payload: { mandate_capability_status: status } } }));
+      expect(rendered.profile.ucp.capabilities['dev.ucp.shopping.checkout']).toBeUndefined();
+      expect(rendered.profile.ucp.capabilities['dev.ucp.shopping.order']).toBeUndefined();
+      expect(rendered.withheld).toContainEqual({ name: 'dev.ucp.shopping.checkout', reason: 'mandate_capability_unverified' });
+      expect(rendered.profile.ucp.capabilities['dev.ucp.shopping.cart']).toBeDefined();
     }
   });
 

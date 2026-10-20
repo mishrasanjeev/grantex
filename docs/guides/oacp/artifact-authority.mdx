@@ -38,7 +38,7 @@ sequenceDiagram
 | `inventory_snapshot` | Inventory/availability facts with source time. |
 | `policy_scope` | Merchant and Grantex policy boundaries. |
 | `public_discovery_state` | Whether buyer-safe discovery may be shown. |
-| `mandate_capability` | Provider-owned capability evidence requirement and state. |
+| `mandate_capability` | Provider capability state: `mandate_capability_status` `verified` (with the redacted `mandate_capability_evidence` bound from the authority request), `unavailable`, or `unverified` (no evidence; no reference). POS handoff evidence is stated as `offline_pos_evidence_status: "unverified"`, never as a placeholder reference. |
 | `protocol_adapter` | Compatibility mapping metadata. |
 | `authority_request_status` | Request result and blocker state. |
 

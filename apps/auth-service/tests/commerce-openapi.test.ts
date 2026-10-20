@@ -72,17 +72,11 @@ describe('Grantex Commerce V1 OpenAPI 3.1 contract', () => {
     expect(content).toMatch(/certification_claims:[\s\S]*maxItems:\s*0/);
   });
 
-  it('declares the C6M AP2-style evidence preview as unsigned and non-enabling', () => {
+  it('no longer declares the removed unsigned AP2-style evidence preview', () => {
     const content = readFileSync(yamlPath, 'utf8');
-    expect(content).toContain('/v1/commerce/merchants/{merchant_id}/ap2-evidence-preview');
-    expect(content).toMatch(/operationId:\s*getMerchantAp2EvidencePreview/);
-    expect(content).toMatch(/x-milestone:\s*C6M/);
-    expect(content).toMatch(/Ap2EvidencePreview:/);
-    expect(content).toMatch(/profile_style:\s*\{\s*type:\s*string,\s*enum:\s*\[ap2_style_evidence_preview\]\s*\}/);
-    expect(content).toMatch(/ap2_certification_claim:\s*\{\s*type:\s*string,\s*enum:\s*\[none\]\s*\}/);
-    expect(content).toMatch(/signature_status:\s*\{\s*type:\s*string,\s*enum:\s*\[unsigned_preview\]\s*\}/);
-    expect(content).toMatch(/signed_production_mandate_created:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
-    expect(content).toMatch(/payment_network_submission_enabled:\s*\{\s*type:\s*boolean,\s*const:\s*false\s*\}/);
+    expect(content).not.toContain('/ap2-evidence-preview');
+    expect(content).not.toMatch(/getMerchantAp2EvidencePreview/);
+    expect(content).not.toMatch(/Ap2EvidencePreview/);
   });
 
   it('declares the C6N existing-system connector registry as metadata-only', () => {

@@ -27,14 +27,13 @@ const defaultFixtureDir = join(
 
 const expectedSurfaces = [
   'schemaorg_jsonld_preview',
-  'ap2_style_evidence_preview',
   'connector_registry_metadata_preview',
 ];
 
 const expectedCounts = {
-  fixtures: 6,
-  surfaces: 3,
-  scans: 72,
+  fixtures: 4,
+  surfaces: 2,
+  scans: 56,
 };
 
 const deterministicGeneratedAt = '2026-06-07T00:00:00.000Z';

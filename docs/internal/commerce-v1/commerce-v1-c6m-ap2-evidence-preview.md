@@ -1,6 +1,6 @@
 # Commerce V1 C6M AP2-Style Evidence Preview
 
-Status: implemented as preview-only foundation.
+Status: historical. The route `GET /v1/commerce/merchants/{merchant_id}/ap2-evidence-preview` and this unsigned preview were removed; the AP2-mapped PaymentMandate at `POST /v1/commerce/oacp/mandates/payment` replaces them.
 
 This slice adds an authenticated AP2-style evidence preview for review before
 open protocol packaging. It does not claim AP2 certification, does not publish

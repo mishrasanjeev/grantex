@@ -10,6 +10,13 @@ import {
   verifyOacpArtifact,
   type OacpSigningKey,
 } from './oacp-jws.js';
+import {
+  MandateCapabilityEvidenceError,
+  bindMandateCapabilityEvidence,
+  parseMandateCapabilityEvidence,
+  type BoundMandateCapabilityEvidence,
+  type MandateCapabilityStatus,
+} from './mandate-capability-evidence.js';
 
 export const C6Z_ARTIFACT_FAMILIES = [
   'merchant_profile',
@@ -393,6 +400,7 @@ function payloadForFamily(
   evidence: C6ZConnectorEvidence,
   signing: { issuer: string; kid: string; status_uri: string },
   publicDiscovery: C6ZPublicDiscoveryDecision,
+  capability: { status: MandateCapabilityStatus; evidence: BoundMandateCapabilityEvidence | null },
 ): Record<string, unknown> {
   const ttlSeconds = FAMILY_TTL_SECONDS[family];
   // Only the enabled public discovery artifact drops public_discovery_publication from its blocked list.
@@ -466,21 +474,25 @@ function payloadForFamily(
       : undefined,
     namespace_attestation_ref: discoveryEnabledHere ? publicDiscovery.namespace_attestation_ref : undefined,
     serving_host: discoveryEnabledHere ? publicDiscovery.serving_host : undefined,
-    mandate_capability_status: family === 'mandate_capability' ? 'provider_owned_verification_required' : undefined,
+    // G43: the provider capability verifier's redacted evidence, bound as
+    // received; without it the artifact says `unverified` and names no ref.
+    mandate_capability_status: family === 'mandate_capability' ? capability.status : undefined,
     provider_execution_authority: family === 'mandate_capability' ? 'provider_owned_not_grantex_or_agenticorg' : undefined,
-    mandate_capability_ref: family === 'mandate_capability' ? 'provider:mandate_rail:capability:pending:redacted' : undefined,
+    mandate_capability_ref: family === 'mandate_capability' ? capability.evidence?.redacted_evidence_ref : undefined,
+    mandate_capability_evidence: family === 'mandate_capability' ? capability.evidence ?? undefined : undefined,
     offline_pos_confirmation_authority: family === 'mandate_capability'
       ? 'pos_or_payment_provider_callback_required_not_grantex'
       : undefined,
-    offline_pos_evidence_ref: family === 'mandate_capability'
-      ? 'pos:provider_or_simulator:handoff_or_receipt:pending:redacted'
-      : undefined,
+    // No POS handoff or receipt evidence reaches Grantex today: say so instead
+    // of naming a reference that looks like evidence.
+    offline_pos_evidence_status: family === 'mandate_capability' ? 'unverified' : undefined,
     adapter_surfaces: family === 'protocol_adapter'
       ? [
         'schema_org_product_offer_jsonld',
         'ucp_style_capability_profile',
         'acp_style_commerce_interaction',
-        'ap2_style_payment_mandate_evidence',
+        // Signed AP2-mapped mandates exist (POST /v1/commerce/oacp/mandates/*).
+        'ap2_payment_mandate',
         'a2a_agent_card_task_metadata',
         'mcp_tool_manifest_resource_metadata',
         'openapi_buyer_safe_bridge_schema',
@@ -611,6 +623,8 @@ export interface C6ZIssuanceContext {
 export async function issueC6ZInternalOacpArtifacts(input: {
   request: C6ZSellerAuthorityRequest;
   evidence: C6ZConnectorEvidence;
+  /** G43: the redacted provider capability evidence (mandate-capability-evidence.ts), or absent. */
+  mandate_capability_evidence?: unknown;
   now_iso: string;
   context: C6ZIssuanceContext;
 }): Promise<C6ZIssuanceResult> {
@@ -635,6 +649,17 @@ export async function issueC6ZInternalOacpArtifacts(input: {
     return issueRefusal('pending_sandbox_review', 'connector_evidence_stale', 'Connector evidence is stale for C6Z issuance.', input.request);
   }
 
+  let capability: ReturnType<typeof bindMandateCapabilityEvidence>;
+  try {
+    capability = bindMandateCapabilityEvidence(input.mandate_capability_evidence === undefined || input.mandate_capability_evidence === null
+      ? null
+      : parseMandateCapabilityEvidence(input.mandate_capability_evidence, input.request, input.now_iso));
+  } catch (err) {
+    if (!(err instanceof MandateCapabilityEvidenceError)) throw err;
+    return issueRefusal('rejected', 'mandate_capability_evidence_invalid',
+      `Mandate capability evidence is invalid (${err.field}): ${err.message}.`, input.request);
+  }
+
   const { issuer, signer } = input.context;
   const publicDiscovery = decideC6ZPublicDiscovery(input.request, input.context.publicDiscovery);
   const jwks = { keys: [signer.publicJwk] };
@@ -647,7 +672,7 @@ export async function issueC6ZInternalOacpArtifacts(input: {
       issuer,
       kid: signer.kid,
       status_uri: statusList.uri,
-    }, publicDiscovery);
+    }, publicDiscovery, capability);
     const ttlSeconds = Math.min(FAMILY_TTL_SECONDS[family], OACP_ARTIFACT_TTLS_SECONDS[artifactType]);
     const envelope = issueOacpArtifact({
       artifact_id: artifactId,
