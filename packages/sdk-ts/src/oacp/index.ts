@@ -41,3 +41,24 @@ export type {
   OacpStatusListFetcherOptions,
 } from './fetchers.js';
 export type { OacpJwks } from './jose.js';
+// OACP mandates (profile oacp.mandate.v1): Intent, Cart and Payment mandate JWTs.
+export {
+  OACP_MANDATE_CLOCK_SKEW_SECONDS,
+  OACP_MANDATE_MAX_LIFETIME_SECONDS,
+  OACP_MANDATE_REFUSAL_CODES,
+  OACP_MANDATE_TYP,
+  OACP_MANDATE_TYPES,
+  OACP_MANDATE_VERSION,
+  OACP_PAYMENT_RAILS,
+  checkOacpMandateChain,
+  oacpCheckoutHash,
+  oacpMandateHash,
+  verifyOacpMandate,
+} from './mandates.js';
+export type {
+  OacpMandateClaims,
+  OacpMandateRefusalCode,
+  OacpMandateType,
+  OacpMandateVerification,
+  VerifyOacpMandateOptions,
+} from './mandates.js';

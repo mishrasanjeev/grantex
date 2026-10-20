@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - OACP mandate verifiers in the SDKs (G41)
+- `@grantex/sdk`: `verifyOacpMandate`, `checkOacpMandateChain`,
+  `oacpCheckoutHash`, `oacpMandateHash` and the mandate constants. The
+  verifier mirrors the auth service in order and refusal codes, reads the
+  Token Status List through `createOacpStatusListFetcher` (fail closed), and
+  accepts a status the caller already read.
+- `grantex` (Python): `grantex.oacp.verify_oacp_mandate`,
+  `check_oacp_mandate_chain`, `oacp_checkout_hash`, `oacp_mandate_hash`.
+- Both run every case of `spec/examples/oacp/oacp-mandates-v1.json`.
+
 ### Changed - `mandate_capability` carries provider capability evidence, not a placeholder (G43, breaking)
 - The C6Z authority request accepts a top-level `mandate_capability_evidence`:
   the redacted result of AgenticOrg's provider capability verifier. It holds

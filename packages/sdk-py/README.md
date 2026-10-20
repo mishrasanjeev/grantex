@@ -318,6 +318,28 @@ accepted only on loopback hosts with `allow_loopback_http=True`. The shared
 test vectors are in
 [`spec/examples/oacp/`](../../spec/examples/oacp/oacp-artifact-jws-v1.json).
 
+
+### Verifying OACP mandates
+
+`grantex.oacp.verify_oacp_mandate()` checks a Grantex Intent, Cart or Payment
+mandate (compact ES256 JWT, claims mapped to AP2 v0.2) with the same refusal
+codes as `verifyOacpMandate` in TypeScript; `check_oacp_mandate_chain()`
+checks verified claims against each other (`mandate_chain_mismatch`).
+
+```python
+from grantex.oacp import check_oacp_mandate_chain, verify_oacp_mandate
+
+cart = await verify_oacp_mandate(cart_jwt, issuer=issuer, jwks=jwks, status_list_fetcher=status_lists,
+                                 expected_type="cart", expected_audience="mch_01")
+payment = await verify_oacp_mandate(payment_jwt, issuer=issuer, jwks=jwks, status_list_fetcher=status_lists,
+                                    expected_type="payment", expected_audience="mch_01")
+if not (cart.valid and payment.valid) or check_oacp_mandate_chain(cart=cart.claims, payment=payment.claims):
+    raise RuntimeError("mandate refused")
+# store payment.jti and payment.mandate_hash (hex SHA-256 of the JWT)
+```
+
+Vectors: [`spec/examples/oacp/oacp-mandates-v1.json`](../../spec/examples/oacp/oacp-mandates-v1.json).
+
 ## Accredited issuer adapters
 
 The registry asks an accredited issuer to attest an agent through one seam,
