@@ -42,9 +42,12 @@ documented defaults:
 - what the object signature covers (default: RFC 8785 JCS of the object
   without `signature`, signature base64url).
 
-The library signs objects with ES256 or EdDSA. TAP's examples use PS256,
-which the library reports as unsupported. RSA message signatures from TAP's
-sample code are not verified either.
+The library signs objects with ES256, EdDSA or PS512. TAP's examples use
+PS256, which the library reports as unsupported. Message signatures may
+use `rsa-pss-sha512` (RFC 9421 section 3.3.1, RSA keys of at least 2048
+bits) under the TAP and Web Bot Auth profiles; TAP's sample code names an
+`rsa-pss-sha256` algorithm that is not in the RFC 9421 registry and is not
+accepted.
 
 ### The Grantex consent record object
 

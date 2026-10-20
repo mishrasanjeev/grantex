@@ -21,6 +21,7 @@ from typing import Any, Callable, Dict, Mapping, Optional, Protocol, Tuple, Unio
 
 from ._errors import AgentHttpSigError
 from ._keys import (
+    RSA_PSS_SHA512,
     jwk_thumbprint,
     private_key_object,
     public_key_object,
@@ -248,6 +249,9 @@ def sign(
     already be in the JSON content under ``agent_credentials`` (section 1.2).
     """
     private_key, alg = private_key_object(key)
+    if alg == RSA_PSS_SHA512:
+        # spec/verification.md: the grantex profile signs with P-256 or Ed25519 only.
+        raise AgentHttpSigError("the grantex profile signs with P-256 or Ed25519 keys")
     thumbprint = jwk_thumbprint(key)
     if keyid is not None and keyid != thumbprint:
         raise AgentHttpSigError("keyid must be the RFC 7638 thumbprint of the key")
@@ -539,7 +543,8 @@ def verify(
     if resolved is None:
         return _deny("key_unknown")
     pub = public_key_object(resolved)
-    if pub is None or jwk_thumbprint(resolved) != keyid:
+    # The grantex profile verifies P-256 and Ed25519 keys only (spec/verification.md).
+    if pub is None or pub[1] == RSA_PSS_SHA512 or jwk_thumbprint(resolved) != keyid:
         return _deny("key_mismatch")
 
     # 15. The signature over the recreated base, with this verifier's authority.

@@ -45,7 +45,7 @@ DEFAULT_TAP_BODY_MEMBERS: Mapping[str, str] = {
 }
 GRANTEX_CONSENT_RECORD_TYPE = "grantex-consent-record"
 
-_JWS_ALG = {"ecdsa-p256-sha256": "ES256", "ed25519": "EdDSA"}
+_JWS_ALG = {"ecdsa-p256-sha256": "ES256", "ed25519": "EdDSA", "rsa-pss-sha512": "PS512"}
 _ALG_FOR_JWS = {v: k for k, v in _JWS_ALG.items()}
 
 

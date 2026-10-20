@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "grantex-agent-httpsig"
-version = "0.1.0"
+version = "0.2.0"
 description = "RFC 9421 HTTP Message Signatures for agent requests: the Agent-Passport, Agent-Grant and Agent-Trust headers and the agent-payer-auth signing profile"
 readme = "README.md"
 license = { text = "Apache-2.0" }

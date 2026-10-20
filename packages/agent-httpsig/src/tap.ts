@@ -57,7 +57,7 @@ export type TapCanonicalizer = (unsigned: Record<string, unknown>) => Uint8Array
 /** Default (UNCONFIRMED): RFC 8785 JCS, UTF-8. */
 export const jcsCanonicalizer: TapCanonicalizer = (unsigned) => new TextEncoder().encode(canonicalJson(unsigned));
 
-const JWS_ALG: Record<SignatureAlgorithm, string> = { 'ecdsa-p256-sha256': 'ES256', ed25519: 'EdDSA' };
+const JWS_ALG: Record<SignatureAlgorithm, string> = { 'ecdsa-p256-sha256': 'ES256', ed25519: 'EdDSA', 'rsa-pss-sha512': 'PS512' };
 
 function fail(message: string): never {
   throw new AgentHttpSigError(message);
@@ -240,7 +240,7 @@ export interface VerifyTapBodyOptions {
   canonicalize?: TapCanonicalizer;
 }
 
-const ALG_FOR_JWS: Record<string, SignatureAlgorithm> = { ES256: 'ecdsa-p256-sha256', EdDSA: 'ed25519' };
+const ALG_FOR_JWS: Record<string, SignatureAlgorithm> = { ES256: 'ecdsa-p256-sha256', EdDSA: 'ed25519', PS512: 'rsa-pss-sha512' };
 
 async function checkObject(
   value: unknown,

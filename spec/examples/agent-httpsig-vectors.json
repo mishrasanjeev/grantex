@@ -1,5 +1,5 @@
 {
-  "description": "Shared test vectors for the agent request signing profile (spec/verification.md), exercised by @grantex/agent-httpsig and grantex-agent-httpsig. Test-only keys: 'ed25519-1' is derived at test time from seed = SHA-256(UTF-8(seed_label)) and signs deterministically, so 'sign' vectors must be reproduced byte for byte; 'p256-1' is a public key only (its private key was discarded after the vectors were made), so ECDSA vectors are verification vectors. 'verify' cases give the full request, the verifier's expected authority, the current time 'now' (UNIX seconds, default clock skew), the nonces already seen as [keyid, nonce] pairs, whether the key resolver knows the key named by keyid ('key_known'; when it does it returns the public key 'key'), and the expected result. 'rfc9421' reproduces the signature bases of RFC 9421 section 2.5 and Appendix B.2 from the RFC's own messages and verifies the ECDSA (B.2.4) and Ed25519 (B.2.6) signatures with the RFC's public test keys (B.1.3, B.1.4). 'thumbprints' are RFC 7638 JWK thumbprints; the Ed25519 case is RFC 8037 Appendix A.3. 'content_digest' is RFC 9530 Appendix D.",
+  "description": "Shared test vectors for the agent request signing profile (spec/verification.md), exercised by @grantex/agent-httpsig and grantex-agent-httpsig. Test-only keys: 'ed25519-1' is derived at test time from seed = SHA-256(UTF-8(seed_label)) and signs deterministically, so 'sign' vectors must be reproduced byte for byte; 'p256-1' is a public key only (its private key was discarded after the vectors were made), so ECDSA vectors are verification vectors. 'verify' cases give the full request, the verifier's expected authority, the current time 'now' (UNIX seconds, default clock skew), the nonces already seen as [keyid, nonce] pairs, whether the key resolver knows the key named by keyid ('key_known'; when it does it returns the public key 'key'), and the expected result. 'rfc9421' reproduces the signature bases of RFC 9421 section 2.5 and Appendix B.2 from the RFC's own messages and verifies the ECDSA (B.2.4) and Ed25519 (B.2.6) signatures with the RFC's public test keys (B.1.3, B.1.4). 'thumbprints' are RFC 7638 JWK thumbprints; the Ed25519 case is RFC 8037 Appendix A.3. 'content_digest' is RFC 9530 Appendix D. The rfc9421 entries for test-key-rsa-pss verify with the RFC 9421 Appendix B.1.2 public key (rsa-pss-sha512, section 3.3.1; verification only, since PSS signatures are randomized), and the RSA thumbprint entry is the RFC 7638 section 3.1 example.",
   "profile": {
     "tag": "agent-payer-auth",
     "covered_components": [
@@ -58,6 +58,14 @@
         "y": "Mc4nN9LTDOBhfoUeg8Ye9WedFRhnZXZJA12Qp0zZ6F0"
       },
       "thumbprint": "ydQXMtvbsOsZyFir-Y7A8t7fKEM1gbKPvyFkdpu4fvI"
+    },
+    {
+      "jwk": {
+        "kty": "RSA",
+        "n": "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw",
+        "e": "AQAB"
+      },
+      "thumbprint": "NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs"
     }
   ],
   "content_digest": [
@@ -2663,7 +2671,15 @@
       "signature_input": "sig1=(\"@method\" \"@authority\" \"@path\" \"content-digest\" \"content-length\" \"content-type\");created=1618884473;keyid=\"test-key-rsa-pss\"",
       "signature": "sig1=:HIbjHC5rS0BYaa9v4QfD4193TORw7u9edguPh0AW3dMq9WImrlFrCGUDih47vAxi4L2YRZ3XMJc1uOKk/J0ZmZ+wcta4nKIgBkKq0rM9hs3CQyxXGxHLMCy8uqK488o+9jrptQ+xFPHK7a9sRL1IXNaagCNN3ZxJsYapFj+JXbmaI5rtAdSfSvzPuBCh+ARHBmWuNo1UzVVdHXrl8ePL4cccqlazIJdC4QEjrF+Sn4IxBQzTZsL9y9TP5FsZYzHvDqbInkTNigBcE9cKOYNFCn4D/WM7F6TNuZO9EgtzepLWcjTymlHzK7aXq6Am6sfOrpIC49yXjj3ae6HRalVc/g==:",
       "label": "sig1",
-      "signature_base": "\"@method\": POST\n\"@authority\": example.com\n\"@path\": /foo\n\"content-digest\": sha-512=:WZDPaVn/7XgHaAy8pmojAkGWoRx2UFChF41A2svX+TaPm+AbwAgBWnrIiYllu7BNNyealdVLvRwEmTHWXvJwew==:\n\"content-length\": 18\n\"content-type\": application/json\n\"@signature-params\": (\"@method\" \"@authority\" \"@path\" \"content-digest\" \"content-length\" \"content-type\");created=1618884473;keyid=\"test-key-rsa-pss\""
+      "signature_base": "\"@method\": POST\n\"@authority\": example.com\n\"@path\": /foo\n\"content-digest\": sha-512=:WZDPaVn/7XgHaAy8pmojAkGWoRx2UFChF41A2svX+TaPm+AbwAgBWnrIiYllu7BNNyealdVLvRwEmTHWXvJwew==:\n\"content-length\": 18\n\"content-type\": application/json\n\"@signature-params\": (\"@method\" \"@authority\" \"@path\" \"content-digest\" \"content-length\" \"content-type\");created=1618884473;keyid=\"test-key-rsa-pss\"",
+      "verify": {
+        "alg": "rsa-pss-sha512",
+        "public_jwk": {
+          "kty": "RSA",
+          "n": "r4tmm3r20Wd_PbqvP1s2-QEtvpuRaV8Yq40gjUR8y2Rjxa6dpG2GXHbPfvMs8ct-Lh1GH45x28Rw3Ry53mm-oAXjyQ86OnDkZ5N8lYbggD4O3w6M6pAvLkhk95AndTrifbIFPNU8PPMO7OyrFAHqgDsznjPFmTOtCEcN2Z1FpWgchwuYLPL-Wokqltd11nqqzi-bJ9cvSKADYdUAAN5WUtzdpiy6LbTgSxP7ociU4Tn0g5I6aDZJ7A8Lzo0KSyZYoA485mqcO0GVAdVw9lq4aOT9v6d-nb4bnNkQVklLQ3fVAvJm-xdDOp9LCNCN48V2pnDOkFV6-U9nV5oyc6XI2w",
+          "e": "AQAB"
+        }
+      }
     },
     {
       "section": "B.2.1",
@@ -2698,7 +2714,15 @@
       "signature_input": "sig-b21=();created=1618884473;keyid=\"test-key-rsa-pss\";nonce=\"b3k2pp5k7z-50gnwp.yemd\"",
       "signature": "sig-b21=:d2pmTvmbncD3xQm8E9ZV2828BjQWGgiwAaw5bAkgibUopemLJcWDy/lkbbHAve4cRAtx31Iq786U7it++wgGxbtRxf8Udx7zFZsckzXaJMkA7ChG52eSkFxykJeNqsrWH5S+oxNFlD4dzVuwe8DhTSja8xxbR/Z2cOGdCbzR72rgFWhzx2VjBqJzsPLMIQKhO4DGezXehhWwE56YCE+O6c0mKZsfxVrogUvA4HELjVKWmAvtl6UnCh8jYzuVG5WSb/QEVPnP5TmcAnLH1g+s++v6d4s8m0gCw1fV5/SITLq9mhho8K3+7EPYTU8IU1bLhdxO5Nyt8C8ssinQ98Xw9Q==:",
       "label": "sig-b21",
-      "signature_base": "\"@signature-params\": ();created=1618884473;keyid=\"test-key-rsa-pss\";nonce=\"b3k2pp5k7z-50gnwp.yemd\""
+      "signature_base": "\"@signature-params\": ();created=1618884473;keyid=\"test-key-rsa-pss\";nonce=\"b3k2pp5k7z-50gnwp.yemd\"",
+      "verify": {
+        "alg": "rsa-pss-sha512",
+        "public_jwk": {
+          "kty": "RSA",
+          "n": "r4tmm3r20Wd_PbqvP1s2-QEtvpuRaV8Yq40gjUR8y2Rjxa6dpG2GXHbPfvMs8ct-Lh1GH45x28Rw3Ry53mm-oAXjyQ86OnDkZ5N8lYbggD4O3w6M6pAvLkhk95AndTrifbIFPNU8PPMO7OyrFAHqgDsznjPFmTOtCEcN2Z1FpWgchwuYLPL-Wokqltd11nqqzi-bJ9cvSKADYdUAAN5WUtzdpiy6LbTgSxP7ociU4Tn0g5I6aDZJ7A8Lzo0KSyZYoA485mqcO0GVAdVw9lq4aOT9v6d-nb4bnNkQVklLQ3fVAvJm-xdDOp9LCNCN48V2pnDOkFV6-U9nV5oyc6XI2w",
+          "e": "AQAB"
+        }
+      }
     },
     {
       "section": "B.2.3",
@@ -2733,7 +2757,15 @@
       "signature_input": "sig-b23=(\"date\" \"@method\" \"@path\" \"@query\" \"@authority\" \"content-type\" \"content-digest\" \"content-length\");created=1618884473;keyid=\"test-key-rsa-pss\"",
       "signature": "sig-b23=:bbN8oArOxYoyylQQUU6QYwrTuaxLwjAC9fbY2F6SVWvh0yBiMIRGOnMYwZ/5MR6fb0Kh1rIRASVxFkeGt683+qRpRRU5p2voTp768ZrCUb38K0fUxN0O0iC59DzYx8DFll5GmydPxSmme9v6ULbMFkl+V5B1TP/yPViV7KsLNmvKiLJH1pFkh/aYA2HXXZzNBXmIkoQoLd7YfW91kE9o/CCoC1xMy7JA1ipwvKvfrs65ldmlu9bpG6A9BmzhuzF8Eim5f8ui9eH8LZH896+QIF61ka39VBrohr9iyMUJpvRX2Zbhl5ZJzSRxpJyoEZAFL2FUo5fTIztsDZKEgM4cUA==:",
       "label": "sig-b23",
-      "signature_base": "\"date\": Tue, 20 Apr 2021 02:07:55 GMT\n\"@method\": POST\n\"@path\": /foo\n\"@query\": ?param=Value&Pet=dog\n\"@authority\": example.com\n\"content-type\": application/json\n\"content-digest\": sha-512=:WZDPaVn/7XgHaAy8pmojAkGWoRx2UFChF41A2svX+TaPm+AbwAgBWnrIiYllu7BNNyealdVLvRwEmTHWXvJwew==:\n\"content-length\": 18\n\"@signature-params\": (\"date\" \"@method\" \"@path\" \"@query\" \"@authority\" \"content-type\" \"content-digest\" \"content-length\");created=1618884473;keyid=\"test-key-rsa-pss\""
+      "signature_base": "\"date\": Tue, 20 Apr 2021 02:07:55 GMT\n\"@method\": POST\n\"@path\": /foo\n\"@query\": ?param=Value&Pet=dog\n\"@authority\": example.com\n\"content-type\": application/json\n\"content-digest\": sha-512=:WZDPaVn/7XgHaAy8pmojAkGWoRx2UFChF41A2svX+TaPm+AbwAgBWnrIiYllu7BNNyealdVLvRwEmTHWXvJwew==:\n\"content-length\": 18\n\"@signature-params\": (\"date\" \"@method\" \"@path\" \"@query\" \"@authority\" \"content-type\" \"content-digest\" \"content-length\");created=1618884473;keyid=\"test-key-rsa-pss\"",
+      "verify": {
+        "alg": "rsa-pss-sha512",
+        "public_jwk": {
+          "kty": "RSA",
+          "n": "r4tmm3r20Wd_PbqvP1s2-QEtvpuRaV8Yq40gjUR8y2Rjxa6dpG2GXHbPfvMs8ct-Lh1GH45x28Rw3Ry53mm-oAXjyQ86OnDkZ5N8lYbggD4O3w6M6pAvLkhk95AndTrifbIFPNU8PPMO7OyrFAHqgDsznjPFmTOtCEcN2Z1FpWgchwuYLPL-Wokqltd11nqqzi-bJ9cvSKADYdUAAN5WUtzdpiy6LbTgSxP7ociU4Tn0g5I6aDZJ7A8Lzo0KSyZYoA485mqcO0GVAdVw9lq4aOT9v6d-nb4bnNkQVklLQ3fVAvJm-xdDOp9LCNCN48V2pnDOkFV6-U9nV5oyc6XI2w",
+          "e": "AQAB"
+        }
+      }
     },
     {
       "section": "B.2.4",

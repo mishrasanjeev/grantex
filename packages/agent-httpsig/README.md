@@ -17,7 +17,8 @@ The header specification and the signing profile are in
   `created`, `expires`, `nonce`, `keyid` (the RFC 7638 thumbprint of the key)
   and `tag="agent-payer-auth"`, and at most 300 seconds between `created` and
   `expires`;
-- `ecdsa-p256-sha256` (P-256 JWKs) and `ed25519` (Ed25519 JWKs);
+- `ecdsa-p256-sha256` (P-256 JWKs) and `ed25519` (Ed25519 JWKs); the
+  `tap` and `web-bot-auth` profiles also take `rsa-pss-sha512` (RSA JWKs);
 - `Content-Digest` (RFC 9530) with SHA-256, computed by `sign()` and checked
   by `verify()`;
 - the three headers are RFC 9651 Byte Sequences, or, for a presentation over
@@ -100,9 +101,13 @@ paths.
 - Denials add `tag_not_accepted`, `nonce_missing`, `nonce_mismatch`,
   `algorithm_mismatch`, `signature_agent_missing` and
   `signature_agent_unsupported` to the reasons above.
-- Only `ecdsa-p256-sha256` and `ed25519` keys are supported. TAP's sample
-  implementation also signs with RSA-PSS; a TAP relying party that must
-  accept RSA keys needs another verifier for those.
+- Algorithms: `ecdsa-p256-sha256`, `ed25519` and `rsa-pss-sha512` (RFC 9421
+  section 3.3.1: RSASSA-PSS with SHA-512, MGF1 SHA-512, 64-octet salt; RSA
+  keys of at least 2048 bits). The grantex profile stays P-256 and Ed25519
+  only. TAP's sample code names an `rsa-pss-sha256` algorithm, which is not
+  in the RFC 9421 registry and is not accepted. The RFC's RSA-PSS example
+  signatures are verification vectors in the shared vector file (PSS is
+  randomized, so they cannot be reproduced).
 
 The signature base now implements the RFC 9421 component parameters `key`
 (section 2.1.2) and `req` (section 2.4, given the related request) and the
@@ -130,8 +135,8 @@ UNCONFIRMED by the published TAP specification, and therefore configurable:
 - what the object signature covers (default: RFC 8785 JCS of the object
   without `signature`, signature base64url; pass `canonicalize`).
 
-Objects are signed with ES256 (P-256) or EdDSA (Ed25519). TAP's examples use
-PS256, which this library reports as `algorithm_unsupported`.
+Objects are signed with ES256 (P-256), EdDSA (Ed25519) or PS512 (RSA). TAP's
+examples use PS256, which this library reports as `algorithm_unsupported`.
 
 `buildGrantexConsentRecord(consent, { nonce })` builds the
 `grantexConsentRecord` object from a granted, unexpired Grantex commerce

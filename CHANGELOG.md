@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - RSA-PSS (`rsa-pss-sha512`) for agent request signatures; `grantex-agent-httpsig` 0.2.0 (unreleased) (G60, G49)
+- `@grantex/agent-httpsig` and `grantex-agent-httpsig` sign and verify RFC 9421
+  section 3.3.1 `rsa-pss-sha512` (RSASSA-PSS, SHA-512, MGF1 SHA-512, 64-octet
+  salt) with RSA JWKs of at least 2048 bits, under the `tap` and `web-bot-auth`
+  profiles and for TAP body objects (`PS512`). RFC 7638 thumbprints cover RSA
+  keys. The grantex profile is unchanged: it signs and verifies P-256 and
+  Ed25519 only, and refuses an RSA key (`key_mismatch`).
+- The shared vectors now verify the RFC 9421 RSA-PSS examples (sections 3.2,
+  B.2.1, B.2.3) with the Appendix B.1.2 public key (verification only, since
+  PSS is randomized) and include the RFC 7638 section 3.1 RSA thumbprint.
+- `grantex-agent-httpsig` is version 0.2.0, unreleased (still marked
+  `Private :: Do Not Upload` until it is published).
+- G50 is partly closed: the registry key directory carries the registry's
+  platform-key countersignature; per-key directory response signatures need
+  agent-held keys and remain future work.
+
 ### Added - x402 and MPP settlement receipts as OACP commitment evidence; the MPP 402 challenge flow (G59)
 - `POST /v1/commerce/oacp/commitment-evidence/settlement-receipts` (AgenticOrg
   service token, new scope `commerce.oacp.commitment_evidence.write`, tenant
