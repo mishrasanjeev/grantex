@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """The agent request signing profile of spec/verification.md.
 
 The Agent-Passport, Agent-Grant and Agent-Trust headers (section 1),

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 export { AgentHttpSigError } from './errors.js';
 export {
   AGENT_PAYER_AUTH_TAG,

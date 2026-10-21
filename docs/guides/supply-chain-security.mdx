@@ -15,7 +15,7 @@ below run on pull requests, on `main`, and in the scheduled security workflow.
 |---|---|
 | npm | Every tracked `package.json` directory has a Dependabot entry. Every tracked lockfile is checked with `npm audit --package-lock-only`, including development tooling. |
 | Python | Every tracked `pyproject.toml` and requirements file is resolved and scanned with pinned `pip-audit==2.10.1`. Pip dry-run reports classify each isolated transitive graph; copyleft, source-available, and unknown license results fail CI without installing untrusted packages. |
-| Go | Every Go module is scanned with pinned `govulncheck@v1.7.0` and `go-licenses@v2.0.1`, in addition to `go test ./...`. The repository's own modules (PolyForm Noncommercial 1.0.0) are excluded only from third-party classification. |
+| Go | Every Go module is scanned with pinned `govulncheck@v1.7.0` and `go-licenses@v2.0.1`, in addition to `go test ./...`. The repository's own Apache-2.0 modules are excluded only from third-party classification. |
 | GitHub Actions | Every external action is pinned to a 40-character commit SHA. The SLSA generic reusable workflow is pinned to canonical release tag `v2.1.0` because `slsa-verifier` requires the release tag in the builder identity; the verified tag resolves to commit `f7dd8c54c2067bafc12ca7a55595d5ee9b75204a`. Dependabot remains responsible for proposing reviewed updates. |
 | Containers | Dockerfile base images, Compose services, CI service containers, and the fixed OpenTelemetry collector image are pinned by digest. Dependabot covers both Dockerfiles. |
 | Licenses | Every resolved npm package license must match the reviewed SPDX allowlist. Unknown or unreviewed identifiers fail CI. LGPL and CC-BY dependencies must remain documented in `THIRD_PARTY_NOTICES.md`. |
@@ -47,10 +47,9 @@ creation fails if preflight or provenance generation fails.
 
 ## Reviewed third-party notices
 
-The repository itself is licensed under the PolyForm Noncommercial License
-1.0.0 (see the [Licence](/license) page), but that licence does not replace a
-dependency's license. Orchestrum's own packages are exempt from the third-party
-license allowlist in the npm, Python and Dependency Review checks. The current npm graph includes:
+The SDK and client packages under `packages/` are Apache-2.0 and the rest of
+the repository is PolyForm Noncommercial 1.0.0 (see the [Licence](/license)
+page), but neither licence replaces a dependency's license. The current npm graph includes:
 
 - optional Sharp/libvips platform binaries under `LGPL-3.0-or-later` in the
   Next.js example; and
@@ -109,5 +108,5 @@ self-hosting operator must also:
 <Warning>
 No automated scanner can prove non-infringement or complete legal compliance.
 Use qualified counsel for a distribution, acquisition, patent, trademark, or
-software-licence compliance opinion.
+open-source compliance opinion.
 </Warning>

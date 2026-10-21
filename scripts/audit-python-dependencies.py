@@ -56,31 +56,6 @@ FORBIDDEN_LICENSE_MARKERS = (
 )
 
 
-def _normalized(name: str) -> str:
-    return re.sub(r"[-_.]+", "-", name).lower()
-
-
-def first_party_names() -> frozenset[str]:
-    """Distribution names of the Python packages in this repository.
-
-    They are Orchestrum's own packages, licensed by the owner
-    (PolyForm-Noncommercial-1.0.0 from 2026-10-21, Apache-2.0 before), not
-    third-party dependencies, so the allowlist below does not apply to them.
-    """
-    import tomllib
-
-    output = subprocess.check_output(["git", "ls-files", "*pyproject.toml"], cwd=ROOT, text=True)
-    names = set()
-    for line in output.splitlines():
-        project = tomllib.loads((ROOT / line).read_text(encoding="utf-8")).get("project", {})
-        if isinstance(project.get("name"), str):
-            names.add(_normalized(project["name"]))
-    return frozenset(names)
-
-
-FIRST_PARTY_LICENSE_IDS = frozenset({"PolyForm-Noncommercial-1.0.0", "Apache-2.0"})
-
-
 def tracked_files() -> list[Path]:
     output = subprocess.check_output(
         ["git", "ls-files", "*pyproject.toml", "*requirements*.txt"],
@@ -131,17 +106,11 @@ def license_audit(path: Path) -> subprocess.CompletedProcess[str]:
 
         report = json.loads(report_path.read_text(encoding="utf-8"))
         findings: list[str] = []
-        own = first_party_names()
         for item in report.get("install", []):
             metadata = item.get("metadata", {})
             name = str(metadata.get("name", "<unknown>"))
             version = str(metadata.get("version", "<unknown>"))
             expression = metadata.get("license_expression")
-            declared = str(metadata.get("license", "")).strip()
-            if _normalized(name) in own and (
-                expression in FIRST_PARTY_LICENSE_IDS or declared in FIRST_PARTY_LICENSE_IDS
-            ):
-                continue
             if isinstance(expression, str) and expression.strip():
                 identifiers = {
                     token

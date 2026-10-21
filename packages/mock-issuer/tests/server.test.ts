@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 //
 // HTTP server mode: loopback only, the JWKS and the status lists with their
 // media types, for the registry's REGISTRY_DEV_ISSUER_ORIGIN_MAP.

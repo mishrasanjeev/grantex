@@ -3,7 +3,7 @@ info:
   title: Grantex Auth Service API
   version: 0.5.0
   description: |
-    Grantex is a source-available delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
+    Grantex is a delegated authorization protocol and reference implementation for AI agents, with open-source SDKs and a source-available server. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
     Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: sanjeev@orchestrum.in or mishra.sanjeev@gmail.com.
 

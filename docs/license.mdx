@@ -1,54 +1,70 @@
 ---
 title: "Licence"
 sidebarTitle: "Licence"
-description: "Grantex is source-available under the PolyForm Noncommercial License 1.0.0. Self use is free; commercial use needs a written agreement with Orchestrum Technologies LLP."
+description: "Grantex SDKs are open source under Apache-2.0. The Grantex server, portal and hosted services are PolyForm Noncommercial 1.0.0; commercial use needs an agreement with Orchestrum Technologies LLP."
 ---
 
 ## Summary
 
-Grantex is **source-available, not open source**. From **21 October 2026**,
-every version of Grantex, including all updates, is licensed under the
-[PolyForm Noncommercial License 1.0.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE).
-The licensor is Orchestrum Technologies LLP.
+Grantex has two licences.
+
+| Part | Licence | Commercial use |
+|---|---|---|
+| SDKs and client packages in `packages/` (TypeScript, Python and Go SDKs, framework integrations, verifiers, MCP, x402 and MPP packages, CLI, Terraform provider and the rest) and the examples | [Apache License 2.0](https://github.com/mishrasanjeev/grantex/blob/main/packages/sdk-ts/LICENSE), open source | Free for any use, including commercial |
+| The Grantex server and developer portal (`apps/`), the protocol specification text, this documentation and the website | [PolyForm Noncommercial License 1.0.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE), source-available, from **21 October 2026** including all updates | Needs a written agreement with Orchestrum Technologies LLP |
+
+The licensor for both is Orchestrum Technologies LLP.
+[LICENSING.md](https://github.com/mishrasanjeev/grantex/blob/main/LICENSING.md)
+lists the directories exactly.
+
+## Server, portal and hosted services
 
 | Use | Needs an agreement? |
 |---|---|
 | Self use for noncommercial purposes: personal study, research, experiments, testing, hobby projects | No |
 | Other noncommercial uses the licence names, such as use by charitable, educational, public research and government organisations | No |
-| Internal use by a for-profit business, including pilots and proofs of concept | Yes |
+| Running the auth service or portal inside a for-profit business, including pilots and proofs of concept | Yes |
 | Hosting, SaaS or a managed service offered to others | Yes |
-| Resale, bundling or commercial redistribution | Yes |
-| Embedding SDKs, libraries or the auth service in a commercial product | Yes |
-| Consulting, integration or other paid services built on Grantex | Yes |
+| Resale, bundling or commercial redistribution of the server or portal | Yes |
+| Consulting, integration or other paid services that run or deploy the server | Yes |
+| Commercial use of the hosted services (`grantex.dev` APIs) | Yes |
 
-Commercial use of any sort needs Orchestrum's prior approval and a written
-agreement with Orchestrum Technologies LLP. Write to
+Only self use is free. Commercial use of any sort needs Orchestrum's prior
+approval and a written agreement with Orchestrum Technologies LLP. Write to
 [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in), or see
 [commercial licensing](/compliance/licensing) for what to include and how an
 agreement is put in place.
 
+## SDKs and client packages
+
+The SDKs and client packages stay open source under the Apache License 2.0.
+You can use them in commercial products, run them in production and
+redistribute them, keeping their licence and notices. Calling the hosted
+services commercially is a separate matter covered above.
+
 ## Existing users and earlier releases
 
-Releases published before 21 October 2026, including packages already
-published to npm, PyPI and the Go module proxy, remain available under the
-Apache License 2.0 they were released with. Versions, updates, fixes and
-security patches published from that date are covered by the PolyForm
-Noncommercial License 1.0.0, so using them commercially needs an agreement,
-whether or not you used an earlier release before.
+Releases of the server, portal and other PolyForm-licensed parts published
+before 21 October 2026 remain available under the Apache License 2.0 they were
+released with. Versions, updates, fixes and security patches of those parts
+published from that date are covered by the PolyForm Noncommercial License
+1.0.0, so using them commercially needs an agreement, whether or not you used
+an earlier release before.
 
-## Names, logos and hosted services
+## Names, logos and brand
 
 "Grantex" and "AgenticOrg" and their logos are trademarks of Orchestrum
-Technologies LLP. Commercial use of the names, logos, hosted services
-(including the `grantex.dev` APIs) or brand needs Orchestrum's prior written
-approval, including with earlier versions. See
+Technologies LLP. Commercial use of the names, logos, hosted services or brand
+needs Orchestrum's prior written approval, including with the Apache-licensed
+SDKs and earlier versions. See
 [TRADEMARKS.md](https://github.com/mishrasanjeev/grantex/blob/main/TRADEMARKS.md).
 
-## What the licence requires when you share Grantex
+## What the PolyForm licence requires when you share
 
-If you pass on a copy for a permitted purpose, include the licence terms (or
-their URL) and the `Required Notice:` lines at the top of the
-[LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE) file.
+If you pass on a copy of a PolyForm-licensed part for a permitted purpose,
+include the licence terms (or their URL) and the `Required Notice:` lines at the
+top of the [LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
+file.
 
 ## Material under other licences
 
@@ -62,8 +78,7 @@ IETF Internet-Draft texts. See
 Contributors agree to the contribution licence in
 [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRIBUTING.md),
 which lets Orchestrum Technologies LLP distribute contributions under these
-terms and license them commercially.
+licences and license them commercially.
 
-The [LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE) text
-and any signed agreement govern; this page is a plain-language summary, not
-legal advice.
+The licence texts and any signed agreement govern; this page is a
+plain-language summary, not legal advice.

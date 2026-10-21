@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The shared scheme token binding type (G52), as relying parties import it
  * from @grantex/sdk. The auth service runs the same refusals and keeps its

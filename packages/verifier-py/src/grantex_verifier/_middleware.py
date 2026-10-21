@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """WSGI and ASGI middleware for a relying party (a merchant or a PSP).
 
 Each reads the ``Agent-Passport`` and ``Agent-Grant`` headers (spec/verification.md

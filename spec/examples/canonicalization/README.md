@@ -22,6 +22,6 @@ The files in `rfc8785/` must stay byte-for-byte identical to the originals
 (no trailing newline, LF line endings), which `.gitattributes` in this
 directory protects.
 
-`parity.json` is part of Grantex and is licensed under the PolyForm
-Noncommercial License 1.0.0, like the rest of this repository. The copied RFC
-8785 files above keep their Apache License 2.0 terms.
+`parity.json` is part of Grantex and is licensed under the Apache License,
+Version 2.0, like the other test vectors in `spec/examples/` (see
+[`../LICENSE`](../LICENSE)).

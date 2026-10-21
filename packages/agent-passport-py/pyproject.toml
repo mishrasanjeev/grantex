@@ -7,7 +7,7 @@ name = "grantex-agent-passport"
 version = "0.1.0"
 description = "Agent Passport: the SD-JWT VC profile for AI agent credentials (issue, verify, key binding, hash and key rules)"
 readme = "README.md"
-license = "PolyForm-Noncommercial-1.0.0"
+license = "Apache-2.0"
 requires-python = ">=3.9"
 authors = [{ name = "Sanjeev Kumar", email = "sanjeev@orchestrum.in" }]
 maintainers = [{ name = "Orchestrum Technologies LLP", email = "sanjeev@orchestrum.in" }, { name = "Sanjeev Kumar", email = "mishra.sanjeev@gmail.com" }]
@@ -22,6 +22,7 @@ keywords = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",

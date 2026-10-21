@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """The staleness matrix (PRD section 9) and the informational tier (section 11).
 
 How old a relying party's copy of each authority may be when it relies on it:

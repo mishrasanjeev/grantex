@@ -4,9 +4,10 @@
 Technologies LLP.
 
 No software licence for Grantex grants rights in these trademarks: neither the
-PolyForm Noncommercial License 1.0.0 that covers versions from 21 October 2026
-onward, nor the Apache License 2.0 that covers earlier releases (its section 6
-excludes trademarks).
+PolyForm Noncommercial License 1.0.0 that covers the server, portal and other
+non-SDK parts from 21 October 2026 onward, nor the Apache License 2.0 that
+covers the SDKs, client packages and earlier releases (its section 6 excludes
+trademarks).
 
 ## Needs Orchestrum's prior written approval
 

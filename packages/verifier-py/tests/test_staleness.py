@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """The staleness matrix (PRD section 9) and the tier it depends on."""
 
 from __future__ import annotations

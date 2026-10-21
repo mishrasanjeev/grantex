@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 //
 // Every refusal is a MockIssuerError with a code. Where the refusal has a
 // counterpart among the registry denial codes (PRD Appendix C:

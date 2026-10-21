@@ -10,7 +10,7 @@ const root = resolve(process.argv[2]);
 const pkg = name => resolve(root, 'node_modules', ...name.split('/'));
 const read = name => JSON.parse(readFileSync(resolve(pkg(name), 'package.json'), 'utf8'));
 for (const name of ['@grantex/sdk', '@grantex/x402']) {
-  assert.match(readFileSync(resolve(pkg(name), 'LICENSE'), 'utf8'), /PolyForm Noncommercial License 1\.0\.0/);
+  assert.match(readFileSync(resolve(pkg(name), 'LICENSE'), 'utf8'), /Apache License/);
   assert.match(readFileSync(resolve(pkg(name), 'NOTICE'), 'utf8'), /Orchestrum Technologies LLP/);
 }
 assert.equal(read('@grantex/sdk').version, process.argv[3]);

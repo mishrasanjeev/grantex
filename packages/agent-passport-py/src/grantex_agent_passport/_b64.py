@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """Strict base64url and JSON helpers.
 
 base64url is RFC 4648 section 5 without padding, as RFC 7515 section 2

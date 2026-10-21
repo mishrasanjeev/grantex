@@ -14,7 +14,7 @@ Copy-paste ready posts for each platform. Edit as needed before posting.
 
 Most AI agents today operate with all-or-nothing API keys. If your LangChain agent can read your calendar, it can also delete every event. There's no scoping, no revocation, no audit trail. This is where the web was before OAuth.
 
-Grantex is a source-available protocol (PolyForm Noncommercial 1.0.0; commercial use by agreement) for delegated authorization of AI agents. The core idea: a human approves a scoped, time-limited grant for an agent, and that agent receives a signed JWT it can present to any service. Services verify locally via JWKS — no Grantex account needed.
+Grantex is a protocol with open-source (Apache 2.0) SDKs and a source-available server for delegated authorization of AI agents. The core idea: a human approves a scoped, time-limited grant for an agent, and that agent receives a signed JWT it can present to any service. Services verify locally via JWKS — no Grantex account needed.
 
 What's different from OAuth 2.0:
 
@@ -63,7 +63,7 @@ I built this because I think the "give agents your API key" pattern is going to 
 
 **Body:**
 
-**TL;DR**: Grantex is a source-available protocol (PolyForm Noncommercial 1.0.0; commercial use by agreement) that gives AI agents scoped, human-approved, revocable permissions instead of all-or-nothing API keys. Think OAuth 2.0, but designed for autonomous agents and multi-agent pipelines.
+**TL;DR**: Grantex is a protocol with open-source (Apache 2.0) SDKs and a source-available server that gives AI agents scoped, human-approved, revocable permissions instead of all-or-nothing API keys. Think OAuth 2.0, but designed for autonomous agents and multi-agent pipelines.
 
 **The problem**: Most agent frameworks today handle auth with a shared API key. The agent has whatever access the key has — no scoping, no revocation, no record of what it did. For research prototypes this is fine. For agents booking flights, sending emails, or executing trades on behalf of real users, it's a liability.
 
@@ -116,7 +116,7 @@ Quick question: when you give your agent access to your email or calendar, how d
 
 Right now the answer for most people is "I gave it my API key and hoped for the best." That works for experiments, but it's going to be a real problem as agents get more capable and start acting in the real world.
 
-I built **Grantex** to solve this. It's a source-available protocol (PolyForm Noncommercial 1.0.0) — basically OAuth 2.0 redesigned for agents:
+I built **Grantex** to solve this. It's a protocol with open-source (Apache 2.0) SDKs — basically OAuth 2.0 redesigned for agents:
 
 - Agent requests specific scopes (`email:read`, `calendar:write`, `payments:max_100`)
 - Human approves via consent screen
@@ -129,7 +129,7 @@ It also handles **delegation** — if your agent spawns a sub-agent, the sub-age
 
 There's a TypeScript SDK, Python SDK, Go SDK, and integrations for LangChain, CrewAI, AutoGen, Vercel AI, OpenAI Agents SDK, Google ADK, and an MCP server (so it works with Claude Desktop/Cursor/Windsurf).
 
-Everything is source-available (PolyForm Noncommercial 1.0.0; commercial use by written agreement with Orchestrum Technologies LLP):
+The SDKs are open source (Apache 2.0); the server is source-available (PolyForm Noncommercial 1.0.0; commercial use by written agreement with Orchestrum Technologies LLP):
 
 - Homepage: [grantex.dev](https://grantex.dev)
 - GitHub: [github.com/mishrasanjeev/grantex](https://github.com/mishrasanjeev/grantex)
@@ -184,7 +184,7 @@ Verification is offline via JWKS (`/.well-known/jwks.json`) — receiving servic
 - CLI tool
 - OpenAPI 3.1 spec + Postman collection
 
-Everything is source-available under the PolyForm Noncommercial License 1.0.0; commercial use needs a written agreement with Orchestrum Technologies LLP.
+The SDKs are Apache 2.0. The server is source-available under the PolyForm Noncommercial License 1.0.0; commercial use of it needs a written agreement with Orchestrum Technologies LLP.
 
 **Links**:
 
@@ -261,7 +261,7 @@ Plus CLI, dev portal, policies, SCIM/SSO, anomaly detection.
 
 **Tweet 6 — CTA (220 chars):**
 
-Source-available. Noncommercial use free; commercial use by agreement.
+Open-source SDKs (Apache 2.0). Source-available server.
 
 npm install @grantex/sdk
 pip install grantex
@@ -323,7 +323,7 @@ What's shipping today:
 - Auth service, CLI, developer portal, conformance test suite
 - Enterprise features: policy engine, SCIM/SSO, anomaly detection, compliance exports
 
-Everything is source-available under the PolyForm Noncommercial License 1.0.0; commercial use needs a written agreement with Orchestrum Technologies LLP.
+The SDKs are Apache 2.0. The server is source-available under the PolyForm Noncommercial License 1.0.0; commercial use of it needs a written agreement with Orchestrum Technologies LLP.
 
 If you're building with AI agents — whether it's a single-agent tool or a multi-agent pipeline — I'd love your feedback on the protocol design.
 

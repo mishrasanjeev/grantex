@@ -211,9 +211,7 @@ Entry #1 ──hash──► Entry #2 ──hash──► Entry #3
 
 ## License
 
-PolyForm Noncommercial License 1.0.0 ([LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)).
-Commercial use needs a written agreement with Orchestrum Technologies LLP; see
-[COMMERCIAL-LICENSE.md](https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md).
+Apache-2.0 ([examples/LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/examples/LICENSE)), like the SDKs it uses.
 Model weights and third-party runtimes keep their own licences.
 
 ## Ownership

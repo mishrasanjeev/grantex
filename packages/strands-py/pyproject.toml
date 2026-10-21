@@ -8,14 +8,14 @@ version = "0.2.2"
 description = "Scope-checked Strands Agents tools backed by Grantex grant tokens"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "PolyForm-Noncommercial-1.0.0" }
+license = { text = "Apache-2.0" }
 authors = [{ name = "Sanjeev Kumar", email = "sanjeev@orchestrum.in" }]
 maintainers = [{ name = "Orchestrum Technologies LLP", email = "sanjeev@orchestrum.in" }, { name = "Sanjeev Kumar", email = "mishra.sanjeev@gmail.com" }]
 keywords = ["grantex", "strands", "ai-agents", "authorization", "oauth", "tools", "scope-enforcement", "delegated-auth", "agent-permissions"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: Free for non-commercial use",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

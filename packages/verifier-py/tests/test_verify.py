@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """verify(): every named check, its pass path and its failure codes."""
 
 from __future__ import annotations

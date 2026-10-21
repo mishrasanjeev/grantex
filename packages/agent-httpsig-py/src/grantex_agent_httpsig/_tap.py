@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """Visa Trusted Agent Protocol body objects, and the Grantex consent record.
 
 The TAP specification defines two signed objects carried in the request body

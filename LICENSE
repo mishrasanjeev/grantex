@@ -2,6 +2,11 @@ Required Notice: Copyright 2026 Orchestrum Technologies LLP.
 Required Notice: Grantex inventor and owner: Sanjeev Kumar <sanjeev@orchestrum.in> or <mishra.sanjeev@gmail.com>.
 Required Notice: Commercial use of any kind requires a prior written agreement with Orchestrum Technologies LLP (sanjeev@orchestrum.in); see https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md
 
+Scope: these terms apply to this repository except the packages/ and examples/
+directories, the spec/examples/ test vectors and the spec/*.schema.json files,
+which are licensed under the Apache License 2.0 (see the LICENSE file in each
+package, in examples/ and in spec/examples/). See LICENSING.md.
+
 # PolyForm Noncommercial License 1.0.0
 
 <https://polyformproject.org/licenses/noncommercial/1.0.0>

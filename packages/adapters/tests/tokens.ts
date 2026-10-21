@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * JWS-shaped test tokens. `verifyGrantToken` is mocked in these tests, so the
  * signature is a placeholder; the payload is what the audience check reads

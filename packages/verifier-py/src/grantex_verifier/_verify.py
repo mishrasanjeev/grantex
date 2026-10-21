@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """verify(): everything a relying party checks before it acts on an agent's request.
 
 The normative description is spec/verification.md, "Relying-party

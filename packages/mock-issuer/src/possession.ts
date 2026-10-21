@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 //
 // Possession proof: before binding a key into a passport (cnf, RFC 7800
 // section 3.2) the issuer makes the agent sign a fresh challenge with that

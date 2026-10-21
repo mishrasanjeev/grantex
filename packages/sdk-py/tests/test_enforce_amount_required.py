@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """A ``capped:N`` scope needs an amount: enforce() and wrap_tool() deny without one."""
 from __future__ import annotations
 

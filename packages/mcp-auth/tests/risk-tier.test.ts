@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /** `risk_tier: high` makes a tool require a decision grant in the MCP tool policy. */
 import { describe, expect, it } from 'vitest';
 import { toolPolicyFromManifests } from '../src/resource/tool-policy.js';

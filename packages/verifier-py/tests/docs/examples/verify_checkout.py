@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 from typing import Any, Callable, Mapping, Optional, Union

@@ -1,6 +1,6 @@
 # Grantex
 
-> Grantex is a source-available delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
+> Grantex is a delegated authorization protocol and reference implementation for AI agents, with open-source SDKs and a source-available server. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
 Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal.
 
@@ -60,7 +60,7 @@ For MCP HTTP transport authorization, configure a compatible authorization serve
 - [Security Hardening](https://docs.grantex.dev/guides/security-hardening): Deployment and service controls.
 - [Security Assessment](https://docs.grantex.dev/security/audit-report): Published external assessment and remediation notes.
 - [Security Architecture](https://docs.grantex.dev/security/overview): Trust boundaries and attack analysis.
-- [Self-Hosting](https://docs.grantex.dev/guides/self-hosting): Deploy the source-available reference implementation (commercial use by agreement).
+- [Self-Hosting](https://docs.grantex.dev/guides/self-hosting): Deploy the source-available reference server (PolyForm Noncommercial 1.0.0; commercial use by agreement).
 
 ## Comparisons and Direct Answers
 
@@ -92,9 +92,9 @@ For MCP HTTP transport authorization, configure a compatible authorization serve
 - [DID Document](https://grantex.dev/.well-known/did.json): Public `did:web:grantex.dev` verification methods.
 - [OpenAPI 3.1](https://github.com/mishrasanjeev/grantex/blob/main/docs/openapi.yaml): Auth service API contract.
 - [Sitemap](https://grantex.dev/sitemap.xml): Canonical public web URLs.
-- [GitHub Repository](https://github.com/mishrasanjeev/grantex): Source (PolyForm Noncommercial 1.0.0), tests, issues, and release history.
-- [Licence](https://docs.grantex.dev/license): PolyForm Noncommercial License 1.0.0 from 21 October 2026, including all updates. Only self use is free; commercial use of any sort needs a written agreement with Orchestrum Technologies LLP at sanjeev@orchestrum.in. Releases before that date remain under the Apache License 2.0 they were released with.
-- [Commercial licensing](https://docs.grantex.dev/compliance/licensing): Which uses need an agreement and how to obtain one.
+- [GitHub Repository](https://github.com/mishrasanjeev/grantex): Apache-2.0 SDKs, source-available server (PolyForm Noncommercial 1.0.0), tests, issues, and release history.
+- [Licence](https://docs.grantex.dev/license): SDKs and client packages are Apache-2.0, free for any use. The server, portal and hosted services are PolyForm Noncommercial License 1.0.0 from 21 October 2026, including all updates: only self use is free; commercial use of any sort needs a written agreement with Orchestrum Technologies LLP at sanjeev@orchestrum.in. Server releases before that date remain under the Apache License 2.0 they were released with.
+- [Commercial licensing](https://docs.grantex.dev/compliance/licensing): Which uses of the server, portal and hosted services need an agreement and how to obtain one.
 
 ## Optional
 

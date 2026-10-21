@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The grant data region check, with the same semantics as `enforce()` in the
  * Grantex SDKs: a `urn:grantex:tools:v1` entry that carries `data_region` names

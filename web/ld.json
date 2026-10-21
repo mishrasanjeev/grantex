@@ -37,7 +37,7 @@
           "email": "mishra.sanjeev@gmail.com"
         }
       ],
-      "description": "Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Grantex is a source-available delegated authorization protocol and reference implementation for AI agents."
+      "description": "Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Grantex is a delegated authorization protocol and reference implementation for AI agents, with open-source SDKs and a source-available server."
     },
     {
       "@type": "Person",
@@ -63,7 +63,7 @@
       "url": "https://grantex.dev/",
       "name": "Grantex",
       "alternateName": "Grantex AI Agent Authorization",
-      "description": "Source-available delegated authorization for AI agents, including scoped permissions, human consent, agent identity, JWT verification, revocation, delegation, and audit records.",
+      "description": "Delegated authorization for AI agents with open-source SDKs, including scoped permissions, human consent, agent identity, JWT verification, revocation, delegation, and audit records.",
       "publisher": {
         "@id": "https://grantex.dev/#organization"
       },
@@ -74,7 +74,7 @@
       "@id": "https://grantex.dev/#webpage",
       "url": "https://grantex.dev/",
       "name": "Grantex | Delegated Authorization for AI Agents",
-      "description": "Source-available delegated authorization for AI agents: scoped permissions, human consent, agent identity, JWT verification, revocation, delegation, and audit.",
+      "description": "Delegated authorization for AI agents with open-source SDKs: scoped permissions, human consent, agent identity, JWT verification, revocation, delegation, and audit.",
       "isPartOf": {
         "@id": "https://grantex.dev/#website"
       },
@@ -175,7 +175,7 @@
           "name": "What is Grantex?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Grantex is a source-available delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records."
+            "text": "Grantex is a delegated authorization protocol and reference implementation for AI agents, with open-source SDKs and a source-available server. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records."
           }
         },
         {

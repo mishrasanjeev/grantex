@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 //
 // grantex-mock-issuer: the mock issuer for scripts and demos.
 //

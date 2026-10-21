@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 //
 // @grantex/mock-issuer: a mock accredited issuer for local runs and CI.
 // Not published. See README.md and docs/issuers/running-the-mock-issuer.md.

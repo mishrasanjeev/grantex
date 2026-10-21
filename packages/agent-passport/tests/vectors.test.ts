@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 //
 // Shared vectors: spec/examples/agent-passport-vectors.json is checked by this
 // suite and by packages/agent-passport-py/tests/test_vectors.py, so both

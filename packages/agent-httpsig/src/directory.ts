@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The HTTP Message Signatures key directory of
  * draft-meunier-webbotauth-httpsig-directory-00: a JWK Set served at

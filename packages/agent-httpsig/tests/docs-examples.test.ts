@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The examples in spec/verification.md and this package's README cannot
  * drift: each code example is a file under tests/docs/examples, embedded

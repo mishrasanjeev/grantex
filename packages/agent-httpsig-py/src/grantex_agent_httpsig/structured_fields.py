@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """Structured Field Values for HTTP, RFC 9651.
 
 Parsing (section 4.2) and serialization (section 4.1). RFC 9421 relies on

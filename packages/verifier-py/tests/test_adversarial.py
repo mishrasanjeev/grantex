@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """The adversarial cases of PRD section 14 that a relying party's verifier meets."""
 
 from __future__ import annotations

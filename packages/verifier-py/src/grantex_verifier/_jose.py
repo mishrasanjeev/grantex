@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """Compact JWS (RFC 7515 section 7.1) for the registry's and issuers' tokens.
 
 RS256 (RFC 7518 section 3.3, RSASSA-PKCS1-v1_5 with SHA-256, keys of at least

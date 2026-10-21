@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """The Agent Passport: an SD-JWT VC with vct urn:grantex:agent-passport:1.
 
 spec/agent-passport-1.0.md is the normative description; this module and the

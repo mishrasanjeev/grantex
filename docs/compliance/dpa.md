@@ -18,7 +18,7 @@ Customers requiring a signed DPA should email `sanjeev@orchestrum.in or mishra.s
 - **Inventor and owner contact:** Sanjeev Kumar (`sanjeev@orchestrum.in`, `mishra.sanjeev@gmail.com`).
 - **Controller:** the customer organization identified in the executed cover sheet.
 
-This addendum supplements the software licence (the PolyForm Noncommercial License 1.0.0, or the Apache License 2.0 for releases published before 21 October 2026) and any commercial agreement covering the hosted service or the software. In a conflict, the executed cover sheet governs.
+This addendum supplements the software licences (the Apache License 2.0 for the SDKs; the PolyForm Noncommercial License 1.0.0 for the server and portal, or the Apache License 2.0 for their releases published before 21 October 2026) and any commercial agreement covering the hosted service or the software. In a conflict, the executed cover sheet governs.
 
 ## 2. Subject matter and duration
 

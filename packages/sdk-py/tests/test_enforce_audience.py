@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """enforce() checks the grant token's audience (RFC 7519 section 4.1.3).
 
 A token that names an audience is only for that relying party. enforce()

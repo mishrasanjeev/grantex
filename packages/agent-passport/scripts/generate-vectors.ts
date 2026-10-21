@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 //
 // Writes spec/examples/agent-passport-vectors.json: synthetic keys are
 // generated here, used to sign, and discarded. Only public keys and signed

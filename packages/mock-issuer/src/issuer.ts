@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 //
 // The mock accredited issuer: https://mock-issuer.example with a static
 // JWKS (Phase 1, owner decision 7; Entity Configuration through OpenID

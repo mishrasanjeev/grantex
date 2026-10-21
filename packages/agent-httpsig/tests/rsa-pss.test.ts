@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * RSA-PSS (RFC 9421 section 3.3.1, `rsa-pss-sha512`): sign and verify round
  * trips under the tap and web-bot-auth profiles and for TAP body objects,

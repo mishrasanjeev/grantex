@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * Visa Trusted Agent Protocol body objects, and the Grantex consent record
  * that travels beside them.

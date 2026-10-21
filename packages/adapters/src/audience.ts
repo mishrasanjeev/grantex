@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The grant token audience check (RFC 7519 section 4.1.3), with the same
  * semantics as `enforce()` in the Grantex SDKs: a token that carries `aud` is

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * RFC 8785 JSON Canonicalization Scheme for the JSON values this library
  * signs: object members sorted by their UTF-16 code units (section 3.2.3),

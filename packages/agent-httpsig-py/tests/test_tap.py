@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """TAP body objects bound to a TAP message signature, and the consent record (G49).
 
 Mirrors packages/agent-httpsig/tests/tap.test.ts.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The gateway checks the grant's data region with the same semantics as the
  * SDKs' `enforce()`. The cases in spec/examples/enforce-data-region.json are

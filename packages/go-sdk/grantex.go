@@ -12,10 +12,10 @@
 //
 // # License
 //
-// PolyForm Noncommercial License 1.0.0 (see LICENSE), licensor Orchestrum
-// Technologies LLP. Noncommercial self use is free; commercial use of any sort
-// requires a written agreement with Orchestrum Technologies LLP. See
-// https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md.
+// Apache-2.0 (see LICENSE): open source and free for any use, including
+// commercial use. The Grantex auth service, portal and hosted services are
+// licensed separately; see
+// https://github.com/mishrasanjeev/grantex/blob/main/LICENSING.md.
 package grantex
 
 import (

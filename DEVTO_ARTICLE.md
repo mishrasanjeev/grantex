@@ -177,7 +177,7 @@ We believe that as agents become more capable, proper authorization becomes more
 
 ---
 
-*Grantex is source-available (PolyForm Noncommercial 1.0.0; commercial use needs a written agreement with Orchestrum Technologies LLP). If you're building agent systems and care about authorization, we'd love your feedback -- [open an issue](https://github.com/mishrasanjeev/grantex/issues) or [star the repo](https://github.com/mishrasanjeev/grantex).*
+*Grantex SDKs are open source (Apache 2.0); the server is source-available (PolyForm Noncommercial 1.0.0; commercial use needs a written agreement with Orchestrum Technologies LLP). If you're building agent systems and care about authorization, we'd love your feedback -- [open an issue](https://github.com/mishrasanjeev/grantex/issues) or [star the repo](https://github.com/mishrasanjeev/grantex).*
 
 ## Ownership
 

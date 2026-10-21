@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 /**
  * The HTTP Message Signatures directory (draft-meunier-webbotauth-httpsig-directory-00)
  * and a request carrying a grantex and a web-bot-auth signature together,

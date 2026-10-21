@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 //
 // The compact JWS the mock signs and checks itself: its status list tokens,
 // Bitstring Status List credentials, attestations and possession proofs.

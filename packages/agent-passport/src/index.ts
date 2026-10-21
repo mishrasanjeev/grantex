@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 //
 // @grantex/agent-passport: the Agent Passport SD-JWT VC profile
 // (spec/agent-passport-1.0.md). The Python package grantex-agent-passport

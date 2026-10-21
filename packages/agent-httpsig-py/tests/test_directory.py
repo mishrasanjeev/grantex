@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """The key directory and several signatures on one request (G50).
 
 Mirrors packages/agent-httpsig/tests/directory.test.ts.

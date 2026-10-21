@@ -6,45 +6,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-### Breaking - Relicensed under the PolyForm Noncommercial License 1.0.0
-- From 21 October 2026, every version of Grantex in this repository, including
-  all updates, is licensed under the PolyForm Noncommercial License 1.0.0
-  ([LICENSE](LICENSE)); the licensor is Orchestrum Technologies LLP. Only self
-  use is free. Commercial use of any sort, including internal use by a
-  for-profit business, hosting or SaaS, resale, embedding and paid services,
-  needs a written agreement with Orchestrum Technologies LLP; see
-  [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md). There is no opt-out: to keep
-  using Grantex commercially, obtain an agreement or stay on a release
-  published before that date.
-- Releases published before 21 October 2026, including packages already on
-  npm, PyPI and the Go module proxy, remain available under the Apache License
-  2.0 they were released with.
+### Breaking - Server, portal and docs relicensed under PolyForm Noncommercial 1.0.0; SDKs stay Apache-2.0
+- Grantex now has two licences; [LICENSING.md](LICENSING.md) lists the
+  directories. The SDKs and client packages in `packages/`, and `examples/`,
+  stay Apache-2.0: open source and free for any use, including commercial use.
+- From 21 October 2026, the rest of the repository, including all updates, is
+  licensed under the PolyForm Noncommercial License 1.0.0 ([LICENSE](LICENSE)),
+  licensor Orchestrum Technologies LLP. That covers the auth service and
+  developer portal (`apps/`), the protocol specification text, documentation,
+  website and tooling. For these parts only self use is free; commercial use of
+  any sort, including running the server inside a for-profit business,
+  hosting or SaaS, resale and paid services, needs a written agreement with
+  Orchestrum Technologies LLP ([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)).
+  Commercial use of the hosted services needs an agreement too. There is no
+  opt-out. To keep running the server commercially without an agreement, stay
+  on a server release published before that date; the SDKs are unaffected.
+- Releases of the server, portal and other non-SDK parts published before
+  21 October 2026 remain available under the Apache License 2.0 they were
+  released with.
 - [TRADEMARKS.md](TRADEMARKS.md): "Grantex" and "AgenticOrg" and their logos are
-  trademarks of Orchestrum Technologies LLP; commercial use of the names,
+  trademarks of Orchestrum Technologies LLP. Commercial use of the names,
   logos, hosted services or brand needs prior written approval, including with
-  earlier versions.
-- Every package declares `PolyForm-Noncommercial-1.0.0` in `package.json` or
-  `pyproject.toml` (Python trove classifier `License :: Free for non-commercial
-  use` where a classifier is used) and ships the same LICENSE file; NOTICE
-  files, SPDX headers (267 files), the Go SDK and Terraform provider package
-  documentation, README licence sections, the OpenAPI `info.license`,
-  `release-status.json` and the marketing site say the same. Third-party files
-  (RFC 8785 test vectors, copied UCP and ACP JSON Schemas, IETF Internet-Draft
-  texts) keep their own licences and are listed in
-  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+  the Apache-licensed SDKs and earlier versions.
+- The interoperability test vectors in `spec/examples/` and the
+  `spec/*.schema.json` files, which the SDKs use, are Apache-2.0 as well
+  ([spec/examples/LICENSE](spec/examples/LICENSE)).
+- Packages: every package now ships the Apache LICENSE, including the 14 that
+  had none. `grantex-strands` (Python) moves from MIT to Apache-2.0, like the
+  other packages. Package NOTICE files and READMEs state Apache-2.0 and point
+  to the separate server licence.
+- Server and docs: SPDX headers outside `packages/` read
+  `PolyForm-Noncommercial-1.0.0`, as do `apps/auth-service` metadata, the
+  OpenAPI `info.license` and `release-status.json` (which adds
+  `sdkLicense: Apache-2.0`). Third-party files (RFC 8785 test vectors, copied
+  UCP and ACP JSON Schemas, IETF Internet-Draft texts) keep their own licences;
+  see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - [CONTRIBUTING.md](CONTRIBUTING.md) has a contribution licence that lets
   Orchestrum Technologies LLP license contributions, including commercially.
-- The documentation site has a Licence page; the commercial licensing,
-  terms-of-service, DPA, ownership and introduction pages are updated. The
-  canonical definition now reads "a source-available delegated authorization
-  protocol".
-- The npm lockfile gate, the Python dependency audit and Dependency Review
-  treat Orchestrum's own packages as first-party, so the third-party licence
-  allowlist no longer applies to them.
+- The documentation site has a Licence page, and the commercial licensing,
+  terms of service, DPA, ownership and introduction pages are updated. The
+  canonical definition now mentions "open-source SDKs and a source-available
+  server".
 - Removed the 12 October 2026 transition draft (`licensing/`) and its test,
-  which no release adopted; `tests/scripts/licensing.test.mjs` now checks the
-  licence text against the official PolyForm text, the package metadata, the
-  headers and the public statements.
+  which no release adopted. `tests/scripts/licensing.test.mjs` checks the
+  split: the official PolyForm text in the root LICENSE, Apache under
+  `packages/` and `examples/`, PolyForm SPDX headers in `apps/`, and the public
+  statements.
 
 ### Changed - Re-implemented contributed code, behaviour unchanged
 - `grantex-strands` (Python) has a new implementation of

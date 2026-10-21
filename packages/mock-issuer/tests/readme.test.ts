@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 //
 // The README example, run as written (with fresh agent keys), and a check
 // that every line of the README block appears in this test.

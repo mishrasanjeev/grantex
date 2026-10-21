@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: Apache-2.0
 """The profile-driven signer and verifier.
 
 The grantex profile unchanged (the shared vectors through sign_with_profile

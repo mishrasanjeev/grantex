@@ -7,9 +7,12 @@ Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchest
 
 ## Contribution licence
 
-Grantex is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE),
-and Orchestrum Technologies LLP also licenses it commercially
-([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). For that to work for
+Grantex has two licences ([LICENSING.md](LICENSING.md)): the SDKs and client
+packages in `packages/` and the examples are Apache-2.0, and the rest of the
+repository is the [PolyForm Noncommercial License 1.0.0](LICENSE), which
+Orchestrum Technologies LLP also licenses commercially
+([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). Contributions to `packages/`
+and `examples/` are distributed under Apache-2.0. For this to work for
 contributed code, every contribution is made on these terms:
 
 By submitting a contribution (code, documentation, tests, examples or any other

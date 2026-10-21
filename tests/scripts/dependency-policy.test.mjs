@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { parse } from 'yaml';
@@ -42,19 +42,7 @@ test('dependency review admits the existing permissive Python license policy', (
   assert.ok(licenses.includes('Python-2.0'));
   assert.equal(step.with['fail-on-severity'], 'moderate');
   assert.equal(step.with['license-check'], true);
-  const exempt = step.with['allow-dependencies-licenses'].split(',').map((value) => value.trim());
-  assert.equal(exempt[0], 'pkg:npm/json-schema@0.4.0');
-  // Every other exemption is an Orchestrum package, and every published
-  // Orchestrum npm package is exempt (they are not third-party dependencies).
-  const firstParty = readdirSync(`${root}packages`)
-    .filter((name) => existsSync(`${root}packages/${name}/package.json`))
-    .map((name) => JSON.parse(readFileSync(`${root}packages/${name}/package.json`, 'utf8')).name)
-    // A purl percent-encodes the scope's leading '@' (package names contain no other '@').
-    .map((name) => `pkg:npm/${name.startsWith('@') ? `%40${name.slice(1)}` : name}`);
-  for (const purl of firstParty) assert.ok(exempt.includes(purl), purl);
-  for (const purl of exempt.slice(1)) {
-    assert.match(purl, /^pkg:(?:npm\/%40grantex\/|pypi\/grantex|golang\/github\.com\/mishrasanjeev\/grantex-go$)/);
-  }
+  assert.equal(step.with['allow-dependencies-licenses'], 'pkg:npm/json-schema@0.4.0');
 });
 
 test('CI executes dependency policy regressions', () => {

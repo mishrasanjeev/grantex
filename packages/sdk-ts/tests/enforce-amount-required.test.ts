@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: Apache-2.0
 // A `capped:N` scope needs an amount: enforce(), wrapTool() and enforceMiddleware() deny without one.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ToolManifest } from '../src/manifest.js';
