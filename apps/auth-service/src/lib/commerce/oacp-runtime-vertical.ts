@@ -34,6 +34,17 @@ export const C6Z_ARTIFACT_FAMILIES = [
 
 export type C6ZArtifactFamily = typeof C6Z_ARTIFACT_FAMILIES[number];
 
+/**
+ * Where the catalogue evidence comes from. `shopify` is a merchant's own
+ * system of record. `synthetic_demo` is an invented demonstration catalogue:
+ * accepted only for a tenant on both COMMERCE_C6Z_DEMO_SOURCE_TENANTS and
+ * COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS, for a request that says
+ * `synthetic_data: true`, and every artifact issued from it says so.
+ */
+export const C6Z_SOURCE_SYSTEMS = ['shopify', 'synthetic_demo'] as const;
+
+export type C6ZSourceSystem = typeof C6Z_SOURCE_SYSTEMS[number];
+
 export type C6ZAuthorityRequestStatus =
   | 'received'
   | 'pending_sandbox_review'
@@ -47,8 +58,10 @@ export interface C6ZSellerAuthorityRequest {
   seller_agent_id: string;
   merchant_display_name: string;
   commerce_categories: string[];
-  connector_choice: 'shopify';
+  connector_choice: C6ZSourceSystem;
   connector_mode: 'read_only';
+  /** Required `true` with `connector_choice: 'synthetic_demo'`; not read for `shopify`. */
+  synthetic_data?: boolean | undefined;
   requested_authority_scope: string[];
   artifact_cache_scope: {
     tenant_id: string;
@@ -82,7 +95,9 @@ export interface C6ZConnectorEvidence {
   tenant_id: string;
   merchant_id: string;
   seller_agent_id: string;
-  source_system: 'shopify';
+  source_system: C6ZSourceSystem;
+  /** Required `true` with `source_system: 'synthetic_demo'`; not read for `shopify`. */
+  synthetic_data?: boolean | undefined;
   source_evidence_ref: string;
   source_observed_at: string;
   product_count: number;
@@ -137,6 +152,23 @@ export interface C6ZPublicDiscoveryDecision {
   withheld_reason: C6ZPublicDiscoveryWithheldReason | null;
   namespace_attestation_ref: string | null;
   serving_host: string | null;
+}
+
+/** Whether a tenant may use the synthetic demo source; decided by the store from config. */
+export interface C6ZSourceEligibility {
+  /** The tenant is on COMMERCE_C6Z_DEMO_SOURCE_TENANTS and on COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS. */
+  synthetic_demo_allowed: boolean;
+}
+
+/**
+ * `shopify` as before. `synthetic_demo` only when the request says
+ * `synthetic_data: true` and the tenant is eligible; absent eligibility, never.
+ */
+function sourceAccepted(request: C6ZSellerAuthorityRequest, eligibility: C6ZSourceEligibility | undefined): boolean {
+  if (request.connector_choice === 'shopify') return true;
+  return request.connector_choice === 'synthetic_demo'
+    && request.synthetic_data === true
+    && eligibility?.synthetic_demo_allowed === true;
 }
 
 const NAMESPACE_ATTESTATION_REF = /^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$/;
@@ -311,6 +343,8 @@ function issueRefusal(
 export function validateC6ZSellerAuthorityRequest(
   request: C6ZSellerAuthorityRequest | null | undefined,
   nowIso: string,
+  /** Absent: only `shopify` is accepted. */
+  sourceEligibility?: C6ZSourceEligibility,
 ): C6ZIssuanceResult {
   if (!request) {
     return issueRefusal('rejected', 'authority_request_missing', 'AgenticOrg authority request is required.');
@@ -332,7 +366,7 @@ export function validateC6ZSellerAuthorityRequest(
     );
   }
   if (
-    request.connector_choice !== 'shopify'
+    !sourceAccepted(request, sourceEligibility)
     || request.connector_mode !== 'read_only'
     || request.no_payment_execution !== true
     || (request.public_discovery_requested === true
@@ -394,6 +428,37 @@ export function validateC6ZSellerAuthorityRequest(
   };
 }
 
+/**
+ * Where the payload says its facts came from. A Shopify issuance keeps the
+ * lineage it always had; a synthetic demo issuance names its real source,
+ * says the data is synthetic and that no merchant system of record stands
+ * behind it.
+ */
+function sourceLineage(evidence: C6ZConnectorEvidence): Record<string, unknown> {
+  if (evidence.source_system === 'synthetic_demo') {
+    return {
+      source_system: 'synthetic_demo',
+      synthetic_data: true,
+      connector_mode: 'read_only',
+      connector_evidence_id: evidence.evidence_id,
+      source_evidence_ref: evidence.source_evidence_ref,
+      source_observed_at: evidence.source_observed_at,
+      merchant_system_source_of_record: false,
+      raw_provider_payload_stored_by_grantex: false,
+    };
+  }
+  return {
+    source_system: 'shopify',
+    connector_mode: 'read_only',
+    connector_evidence_id: evidence.evidence_id,
+    source_evidence_ref: evidence.source_evidence_ref,
+    source_observed_at: evidence.source_observed_at,
+    merchant_system_source_of_record: true,
+    raw_shopify_payload_stored_by_grantex: false,
+    raw_provider_payload_stored_by_grantex: false,
+  };
+}
+
 function payloadForFamily(
   family: C6ZArtifactFamily,
   request: C6ZSellerAuthorityRequest,
@@ -413,19 +478,12 @@ function payloadForFamily(
     tenant_id: request.tenant_id,
     merchant_id: request.merchant_id,
     seller_agent_id: request.seller_agent_id,
-    source_system: 'shopify',
+    source_system: evidence.source_system,
+    // Only a synthetic issuance gains the member, so a Shopify payload is byte-identical to before.
+    ...(evidence.source_system === 'synthetic_demo' ? { synthetic_data: true } : {}),
     source_evidence_ref: evidence.source_evidence_ref,
     source_observed_at: evidence.source_observed_at,
-    source_lineage: {
-      source_system: 'shopify',
-      connector_mode: 'read_only',
-      connector_evidence_id: evidence.evidence_id,
-      source_evidence_ref: evidence.source_evidence_ref,
-      source_observed_at: evidence.source_observed_at,
-      merchant_system_source_of_record: true,
-      raw_shopify_payload_stored_by_grantex: false,
-      raw_provider_payload_stored_by_grantex: false,
-    },
+    source_lineage: sourceLineage(evidence),
     ttl_seconds: ttlSeconds,
     freshness: {
       source_observed_at: evidence.source_observed_at,
@@ -613,6 +671,8 @@ export interface C6ZIssuanceContext {
   allocateStatus: (artifactId: string) => Promise<{ uri: string; idx: number }>;
   /** Absent: public discovery is never enabled. */
   publicDiscovery?: C6ZPublicDiscoveryEligibility;
+  /** Absent: the synthetic demo source is never accepted. */
+  sourceEligibility?: C6ZSourceEligibility;
 }
 
 /**
@@ -628,7 +688,7 @@ export async function issueC6ZInternalOacpArtifacts(input: {
   now_iso: string;
   context: C6ZIssuanceContext;
 }): Promise<C6ZIssuanceResult> {
-  const validation = validateC6ZSellerAuthorityRequest(input.request, input.now_iso);
+  const validation = validateC6ZSellerAuthorityRequest(input.request, input.now_iso, input.context.sourceEligibility);
   if (validation.status !== 'artifact_issuance_ready') return validation;
   if (containsUnsafeValue(input.evidence)) {
     return issueRefusal('rejected', 'private_or_executable_connector_evidence', 'Connector evidence must be redacted before issuance.', input.request);
@@ -637,7 +697,8 @@ export async function issueC6ZInternalOacpArtifacts(input: {
     input.evidence.tenant_id !== input.request.tenant_id
     || input.evidence.merchant_id !== input.request.merchant_id
     || input.evidence.seller_agent_id !== input.request.seller_agent_id
-    || input.evidence.source_system !== 'shopify'
+    || input.evidence.source_system !== input.request.connector_choice
+    || (input.evidence.source_system === 'synthetic_demo' && input.evidence.synthetic_data !== true)
     || input.evidence.no_payment_execution !== true
     || input.evidence.no_public_discovery_enablement !== true
   ) {

@@ -122,7 +122,10 @@ re-render by then), `publication_allowed` and `public_discovery`.
 artifact is `enabled` with `public_discovery_publication_allowed: true`, a
 `serving_host` and a `namespace_attestation_ref`, and, when `rest_endpoint` is
 given, its host equals that `serving_host`; `public_discovery` then echoes the
-host and attestation ref. The host must not publish while it is false. The host adds its signing keys
+host and attestation ref. The host must not publish while it is false. When a live
+artifact of the scope was issued from the synthetic demo source (`synthetic_data: true`
+in its signed payload), the response also carries `synthetic_data: true`, and the host
+must present the profile as a demonstration; otherwise the member is absent. The host adds its signing keys
 (`signing_keys[]` at 2026-04-08, `keys[]` at 2026-08-25) and serves the result
 at `/.well-known/ucp`. No Grantex-private namespace is emitted: the former
 `dev.grantex.commerce.discovery.preview` preview and the UCP-style and

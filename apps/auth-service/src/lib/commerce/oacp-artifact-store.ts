@@ -30,6 +30,7 @@ import {
   type C6ZIssuanceResult,
   type C6ZPublicDiscoveryEligibility,
   type C6ZSellerAuthorityRequest,
+  type C6ZSourceEligibility,
 } from './oacp-runtime-vertical.js';
 import { OACP_ARTIFACT_TTLS_SECONDS, type OacpArtifactEnvelope, type OacpArtifactSafety } from './oacp-trust-artifacts.js';
 
@@ -184,9 +185,26 @@ export async function recordOacpRefusal(
 export function c6zPublicDiscoveryEligibility(tenantId: string): C6ZPublicDiscoveryEligibility {
   return {
     issuance_enabled: config.oacpPublicDiscoveryIssuanceEnabled,
-    tenant_allowlisted: (process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS'] ?? '')
-      .split(',').map((item) => item.trim()).filter(Boolean)
-      .includes(tenantId),
+    tenant_allowlisted: envTenantList('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS').includes(tenantId),
+  };
+}
+
+function envTenantList(name: string): string[] {
+  return (process.env[name] ?? '').split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+/**
+ * Whether a tenant may issue from the synthetic demo source: on
+ * COMMERCE_C6Z_DEMO_SOURCE_TENANTS (empty by default, so never) and on the
+ * authority service allowlist COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS,
+ * whoever calls.
+ */
+export function c6zSourceEligibility(tenantId: string | null | undefined): C6ZSourceEligibility {
+  const id = typeof tenantId === 'string' ? tenantId : '';
+  return {
+    synthetic_demo_allowed: id.length > 0
+      && envTenantList('COMMERCE_C6Z_DEMO_SOURCE_TENANTS').includes(id)
+      && envTenantList('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS').includes(id),
   };
 }
 
@@ -212,6 +230,7 @@ export async function issueAndPersistC6ZArtifacts(
           newArtifactId: newOacpArtifactId,
           allocateStatus: (artifactId) => allocateOacpStatusEntry(tx, artifactId),
           publicDiscovery: c6zPublicDiscoveryEligibility(input.request.tenant_id),
+          sourceEligibility: c6zSourceEligibility(input.request.tenant_id),
         },
       });
       if (result.status !== 'artifact_issuance_ready') throw new IssuanceRolledBack(result);

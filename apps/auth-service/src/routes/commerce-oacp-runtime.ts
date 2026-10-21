@@ -37,6 +37,7 @@ import {
 } from '../lib/commerce/oacp-runtime-vertical.js';
 import {
   OacpArtifactStoreError,
+  c6zSourceEligibility,
   getOacpArtifact,
   issueAndPersistC6ZArtifacts,
   listLiveOacpArtifactsForScope,
@@ -227,7 +228,7 @@ export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
     const sql = getSql();
     const now = new Date().toISOString();
     const authorityRequest = body.request;
-    const requestStatus = validateC6ZSellerAuthorityRequest(authorityRequest, now);
+    const requestStatus = validateC6ZSellerAuthorityRequest(authorityRequest, now, c6zSourceEligibility(authorityRequest?.tenant_id));
     if (!body.connector_evidence || requestStatus.status !== 'artifact_issuance_ready') {
       const intakeOnly = !body.connector_evidence && requestStatus.status === 'artifact_issuance_ready';
       // A refusal is recorded; a valid intake still waiting for evidence is not one.

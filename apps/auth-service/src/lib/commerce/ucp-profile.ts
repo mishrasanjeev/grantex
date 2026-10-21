@@ -147,6 +147,13 @@ export interface UcpProfileRender {
   publication_allowed: boolean;
   /** The attested serving host and attestation reference bound into that artifact, when enabled. */
   public_discovery: { serving_host: string; namespace_attestation_ref: string } | null;
+  /**
+   * Present, and `true`, only when a live artifact of the scope was issued
+   * from the synthetic demo source (`synthetic_data: true` in its signed
+   * payload): the profile describes a demonstration catalogue, not a
+   * merchant's system of record. A host serving the profile must say so.
+   */
+  synthetic_data?: true;
 }
 
 export class UcpProfileInputError extends Error {
@@ -303,6 +310,7 @@ export function renderUcpBusinessProfile(input: UcpProfileRenderInput): UcpProfi
     && typeof servingHost === 'string' && servingHost.length > 0
     && typeof attestationRef === 'string' && attestationRef.length > 0;
   const hostMatches = input.rest_endpoint === undefined || new URL(input.rest_endpoint).hostname === servingHost;
+  const synthetic = [...live.values()].some((artifact) => artifact.payload?.['synthetic_data'] === true);
 
   return {
     ucp_version: version,
@@ -314,5 +322,7 @@ export function renderUcpBusinessProfile(input: UcpProfileRenderInput): UcpProfi
     public_discovery: discoveryEnabled
       ? { serving_host: servingHost as string, namespace_attestation_ref: attestationRef as string }
       : null,
+    // Only a synthetic scope gains the member, so other renders are unchanged.
+    ...(synthetic ? { synthetic_data: true as const } : {}),
   };
 }
