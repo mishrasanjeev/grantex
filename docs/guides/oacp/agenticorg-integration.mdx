@@ -50,6 +50,19 @@ Grantex returns:
 
 Every refusal is recorded in Grantex (`refusal_record_id`); a `202 received` intake is not.
 
+### Synthetic Demo Source
+
+A demonstration merchant whose catalogue is invented sends `connector_choice: "synthetic_demo"`
+and `synthetic_data: true` in the request, and `source_system: "synthetic_demo"` with
+`synthetic_data: true` in the connector evidence, never `shopify`. Grantex accepts it only for a
+tenant on both `COMMERCE_C6Z_DEMO_SOURCE_TENANTS` and `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`;
+otherwise it answers `422 unsupported_or_enabling_authority_request`, as for any unsupported
+source, and records the refusal. Accepted artifacts carry `source_system: "synthetic_demo"` and
+`synthetic_data: true` in the signed payload and in `source_lineage`, with
+`merchant_system_source_of_record: false`. AgenticOrg should label answers and public surfaces
+built from them as demonstration data. Public discovery for such a tenant follows the usual
+opt-in, and its `public_discovery_state` artifact carries `synthetic_data: true`.
+
 ## Verifying Artifacts
 
 AgenticOrg must verify every artifact before caching it, as
@@ -93,6 +106,7 @@ Those outputs must include source and freshness labels, must not expose Shopify 
 | --- | --- | --- |
 | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` | Grantex + AgenticOrg | Service-token auth for authority requests, arbiter decisions and witness checkpoints. |
 | `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` | Grantex | Tenant allowlist. |
+| `COMMERCE_C6Z_DEMO_SOURCE_TENANTS` | Grantex | Demonstration tenants allowed the `synthetic_demo` source; empty by default. |
 | Shopify credential custody | AgenticOrg + merchant | Read-only source evidence generation. |
 | Future connector config | AgenticOrg + merchant | WooCommerce, ERP, PIM, OMS, WMS, and custom API setup intent; not live until adapters exist. |
 | Provider capability config | AgenticOrg + provider or bank | Capability evidence checks outside Grantex. |

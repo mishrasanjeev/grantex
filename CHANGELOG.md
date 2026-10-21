@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Synthetic demo source for C6Z authority requests
+- `POST /v1/commerce/oacp/c6z/authority-requests` accepts
+  `connector_choice: "synthetic_demo"` (connector evidence
+  `source_system: "synthetic_demo"`) for a demonstration merchant whose
+  catalogue is invented, only when the tenant is on the new
+  `COMMERCE_C6Z_DEMO_SOURCE_TENANTS` (comma-separated, empty by default) and
+  on `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`, and both the request and the
+  evidence carry `synthetic_data: true`. Otherwise it is refused as before
+  (`422 unsupported_or_enabling_authority_request`, recorded).
+- Artifacts issued from it carry `source_system: "synthetic_demo"` and
+  `synthetic_data: true` in the signed payload and in `source_lineage`, with
+  `merchant_system_source_of_record: false`, and never name Shopify. Public
+  discovery follows the existing opt-in; the `public_discovery_state`
+  artifact carries `synthetic_data: true` and `GET /v1/commerce/oacp/ucp-profile`
+  adds `synthetic_data: true` to its render for such a scope.
+- Shopify issuance is unchanged: its payloads are byte-identical (a test pins
+  their hashes) and the UCP render of a Shopify scope gains no member.
+
+### Fixed - Go 1.26.10 for the crypto/x509 advisory
+- Build, test, audit and release workflows use Go 1.26.10 (GO-2026-6809,
+  compromised intermediate certificates in `crypto/x509`, fixed in 1.26.10);
+  the SDK authority audit image moves to a digest-pinned `golang:1.26.10`.
+- The Go SDK, Terraform provider and Go quickstart modules name
+  `toolchain go1.26.10`. Their minimum `go` versions are unchanged; the
+  directive only applies when the module itself is the main module.
+
 ### Breaking - Platform licensed under the Orchestrum Personal Use License 1.0; SDKs stay Apache-2.0
 - Grantex now has two licences; [LICENSING.md](LICENSING.md) lists the
   directories. The SDKs and client packages in `packages/`, and `examples/`,
