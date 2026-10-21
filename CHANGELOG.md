@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Security - Patched Go validation toolchain
+- Pin Go validation, SDK authority checks and release builds to Go 1.26.10,
+  including the digest-pinned authority container, to address GO-2026-6809 in
+  the standard library's certificate verification. Dependency and license
+  audit enforcement is unchanged; this does not publish an SDK release.
+
 ### Breaking - Server, portal and docs relicensed under PolyForm Noncommercial 1.0.0; SDKs stay Apache-2.0
 - Grantex now has two licences; [LICENSING.md](LICENSING.md) lists the
   directories. The SDKs and client packages in `packages/`, and `examples/`,

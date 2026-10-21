@@ -17,8 +17,8 @@ test('Go validation and release workflows use the patched toolchain', () => {
     const workflow = readFileSync(new URL(`../../.github/workflows/${filename}`, import.meta.url), 'utf8');
     const versions = [...workflow.matchAll(/go-version: '([^']+)'/g)].map((match) => match[1]);
     assert.ok(versions.length > 0, filename);
-    assert.ok(versions.every((version) => version === '1.26.9'), filename);
+    assert.ok(versions.every((version) => version === '1.26.10'), filename);
   }
   const authority = readFileSync(new URL('../../.github/workflows/sdk-authority.yml', import.meta.url), 'utf8');
-  assert.match(authority, /golang:1\.26\.9@sha256:[a-f0-9]{64}/);
+  assert.match(authority, /golang:1\.26\.10@sha256:5c3f3f28a273c9b61698b2d34f18375929790ab1f1d3835d032d21e2b31eae0c/);
 });
