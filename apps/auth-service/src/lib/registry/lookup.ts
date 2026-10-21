@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The registry lookup (PRD §7 Lookup): what a relying party reads about one
  * agent, by its DID, by the RFC 7638 thumbprint of a key in its history, or

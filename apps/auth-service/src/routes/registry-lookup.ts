@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The registry lookup and the signed registry manifest (PRD §7 Lookup,
  * Federation and discovery; spec/registry-federation.md).

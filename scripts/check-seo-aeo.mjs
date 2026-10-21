@@ -156,7 +156,7 @@ export async function validateSeoAeo(options = {}) {
   const webRoot = options.webRoot || path.join(root, 'web');
   const failures = [];
 
-  const canonicalDefinition = 'Grantex is an open-source delegated authorization protocol and reference implementation for AI agents.';
+  const canonicalDefinition = 'Grantex is a delegated authorization protocol and reference implementation for AI agents, with open-source SDKs and a source-available server.';
   const definitionFiles = [
     'README.md',
     'docs/introduction.mdx',

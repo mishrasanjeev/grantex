@@ -1,8 +1,8 @@
 # Welcome to Grantex
 
-**The open authorization protocol for AI agents.**
+**The authorization protocol for AI agents, with open-source SDKs.**
 
-Grantex is OAuth 2.0 for AI agents — delegated, scoped, revocable permissions so humans stay in control of what agents can do. Apache 2.0 licensed, IETF Internet-Draft submitted.
+Grantex is OAuth 2.0 for AI agents — delegated, scoped, revocable permissions so humans stay in control of what agents can do. SDKs are Apache 2.0; the server is source-available under the PolyForm Noncommercial License 1.0.0 (commercial use by agreement with Orchestrum Technologies LLP). IETF Internet-Draft submitted.
 
 ---
 

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: Apache-2.0
+-- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -- The registry's attestation-acceptance status lists: whether the registry,
 -- under its own issuer identifier, accepts each registered attestation. They
 -- are published as a Token Status List (draft-ietf-oauth-status-list) and as

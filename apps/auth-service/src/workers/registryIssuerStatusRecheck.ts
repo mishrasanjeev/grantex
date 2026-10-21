@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Rereads accredited issuers' Token Status Lists for accepted registry
  * attestations before the registry's last read of each goes stale.

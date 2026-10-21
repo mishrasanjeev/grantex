@@ -38,7 +38,7 @@ All examples use the sandbox key by default.
 | [`openai-agents`](./openai-agents/) | OpenAI Agents SDK with scope enforcement | `grantex`, `grantex-openai-agents` |
 | [`google-adk`](./google-adk/) | Google ADK with scoped function tools | `grantex`, `grantex-adk` |
 | [`token-expiry-refresh`](./token-expiry-refresh/) | Active-grant refresh rotation, 300-second lost-response recovery, and expired-grant re-authorization | `@grantex/sdk` |
-| [`audit-dashboard`](./audit-dashboard/) | Audit trail querying, filtering, metrics, and hash chain verification | `@grantex/sdk` |
+| [`audit-dashboard`](./audit-dashboard/) | Report built from the audit trail: timeline, per-agent and per-action views, outcome shares, hash chain check | `@grantex/sdk` |
 | [`multi-agent-email-flow`](./multi-agent-email-flow/) | Multi-agent delegation with failure handling and audit trail | `@grantex/sdk` |
 | [`gemma-raspberry-pi`](./gemma-raspberry-pi/) | Gemma 4 smart home agent on Raspberry Pi with offline auth | `grantex-gemma` |
 | [`gemma-android-kotlin`](./gemma-android-kotlin/) | Gemma 4 Android agent with offline auth in Kotlin | `nimbus-jose-jwt` |

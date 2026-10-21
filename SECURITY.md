@@ -136,8 +136,8 @@ We will not pursue legal action against researchers who act in good faith and fo
 
 ## Recognition (no monetary bug bounty)
 
-Grantex does **not** currently operate a paid bug bounty programme. We are an
-open-source project and a small commercial team; a formal monetary programme
+Grantex does **not** currently operate a paid bug bounty programme. We are a
+source-available project and a small commercial team; a formal monetary programme
 is on the roadmap but is not in place today, and we will not invent one.
 
 What we do offer:

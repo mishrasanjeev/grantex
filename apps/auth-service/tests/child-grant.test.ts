@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Per-merchant child grants (spec/passport-binding.md §8), without a
  * database: the request parameters (RFC 8693 §2.1), the merchant origin, the

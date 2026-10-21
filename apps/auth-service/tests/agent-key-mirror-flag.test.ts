@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * AGENT_KEY_HISTORY_MIRROR_ENABLED on POST and PATCH /v1/agents, with the
  * database mocked: which statements each flag state sends.

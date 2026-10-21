@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Public reads of the OACP Token Status Lists (lib/commerce/oacp-status.ts).
  *

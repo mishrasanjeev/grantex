@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Public reads of the registry's attestation-acceptance status lists
  * (lib/registry/acceptance-status.ts).

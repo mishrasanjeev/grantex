@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Accredited issuers against real Postgres, through the routes and the
  * lookups later registry work builds on.

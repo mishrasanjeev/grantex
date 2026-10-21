@@ -92,3 +92,14 @@ npm ci
 npm run typecheck
 npm test
 ```
+
+## License
+
+Apache-2.0 ([LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/packages/mock-issuer/LICENSE)).
+This package is open source and free for any use, including commercial use.
+The Grantex auth service, developer portal and hosted services are licensed
+separately under the PolyForm Noncommercial License 1.0.0; commercial use of
+those needs a written agreement with Orchestrum Technologies LLP (see
+[licensing](https://github.com/mishrasanjeev/grantex/blob/main/LICENSING.md)).
+"Grantex" is a trademark of Orchestrum Technologies LLP
+([trademarks](https://github.com/mishrasanjeev/grantex/blob/main/TRADEMARKS.md)).

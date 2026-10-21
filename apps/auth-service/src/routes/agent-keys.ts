@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Agent key history (PRD §5 Agent, §7 Keys, §8.8): the keys an agent holds,
  * proof that it holds them, rotation with an overlap, and compromise.

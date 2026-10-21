@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 function count(value) {
   if (!Number.isSafeInteger(value) || value < 0) throw new Error('Invalid release report count');

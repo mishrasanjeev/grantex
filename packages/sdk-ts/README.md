@@ -1112,14 +1112,14 @@ const result = await grantex.enforce({ grantToken: token, connector: 'my-crm', t
 
 ## License
 
-[Apache 2.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
-
-The [approved prospective platform policy](https://docs.grantex.dev/compliance/licensing)
-awaits software-release adoption; this SDK's Apache-2.0 rights remain unchanged.
-The platform policy includes existing and new covered users; existing hosted
-customers transition through required notice and acceptance. Self-use is free
-of a software license fee, not of hosting or provider charges.
-Commercial agreements: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
+Apache-2.0 ([LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/packages/sdk-ts/LICENSE)).
+This package is open source and free for any use, including commercial use.
+The Grantex auth service, developer portal and hosted services are licensed
+separately under the PolyForm Noncommercial License 1.0.0; commercial use of
+those needs a written agreement with Orchestrum Technologies LLP (see
+[licensing](https://github.com/mishrasanjeev/grantex/blob/main/LICENSING.md)).
+"Grantex" is a trademark of Orchestrum Technologies LLP
+([trademarks](https://github.com/mishrasanjeev/grantex/blob/main/TRADEMARKS.md)).
 
 ## Ownership
 

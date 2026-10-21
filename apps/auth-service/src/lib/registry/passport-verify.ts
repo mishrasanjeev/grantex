@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Agent Passport verification (spec/agent-passport-1.0.md §1 to §4, §6, §7):
  * a copy of the verification half of packages/agent-passport, which the

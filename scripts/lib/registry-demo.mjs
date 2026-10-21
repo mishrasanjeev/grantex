@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 //
 // What the registry demos share: the mock accredited issuer on loopback, a
 // real auth service on a local port with a database of its own, the mock

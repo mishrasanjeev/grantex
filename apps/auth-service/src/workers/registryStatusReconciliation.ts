@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Runs status-list reconciliation with cascade
  * (lib/registry/status-reconciliation.ts) on a timer, while

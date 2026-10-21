@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Accredited issuers: the organisations whose Agent Passports and
  * attestations the registry accepts (Agent Trust Registry, Phase 1).

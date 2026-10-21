@@ -1,20 +1,20 @@
 /**
- * Grantex Token Refresh & Rotation - Time-Bound Grants
+ * Refresh lifecycle of a time-bound grant.
  *
- * Demonstrates how to work with time-bound grants and the refresh token
- * rotation pattern:
+ * Steps:
+ *   1. Register an agent and authorize a grant that lives for GRANT_TTL
+ *   2. Verify the grant token locally (JWKS) and with the service
+ *   3. Refresh: a new grant token and refresh token for the same grantId
+ *   4. Verify the refreshed token the same two ways
+ *   5. Retry the first refresh token at once, as a client that lost the
+ *      refresh response would, and get the same rotated refresh token back
+ *   6. Use the rotated refresh token, after which the first one is refused
+ *   7. Let a second, short grant expire: it no longer verifies and cannot be
+ *      refreshed, so the caller has to authorize again
  *
- *   1. Register an agent and authorize a grant
- *   2. Verify the token while the grant is active
- *   3. Refresh the active grant - get a new JWT with the same grantId
- *   4. Demonstrate refresh response recovery for a lost HTTP response
- *   5. Demonstrate refresh token rotation (old refresh tokens cannot keep being reused)
- *   6. Demonstrate that an expired grant must be re-authorized, not refreshed
- *
- * Prerequisites:
- *   docker compose up          # from repo root
- *   cd examples/token-expiry-refresh
- *   npm install && npm start
+ * Run against the local stack:
+ *   docker compose up              (repository root)
+ *   cd examples/token-expiry-refresh && npm install && npm start
  */
 
 import { Grantex, verifyGrantToken } from '@grantex/sdk';
@@ -23,198 +23,125 @@ const BASE_URL = process.env['GRANTEX_URL'] ?? 'http://localhost:3001';
 const API_KEY = process.env['GRANTEX_API_KEY'] ?? 'sandbox-api-key-local';
 const JWKS_URI = `${BASE_URL}/.well-known/jwks.json`;
 
+// Lifetime of the grant used for refreshing, and of the one left to expire.
+// TOKEN_TTL is the older name for EXPIRED_GRANT_TTL and is still honoured.
 const GRANT_TTL = process.env['GRANT_TTL'] ?? '5m';
 const EXPIRED_GRANT_TTL = process.env['EXPIRED_GRANT_TTL'] ?? process.env['TOKEN_TTL'] ?? '3s';
 
-/** Handle agent.id vs agentId API response gotcha */
-function getAgentId(agent: Record<string, unknown>): string {
-  return (agent['id'] ?? agent['agentId']) as string;
-}
+const SCOPES = ['calendar:read', 'email:send'];
+const SECONDS_PER_UNIT: Record<string, number> = { s: 1, m: 60, h: 60 * 60, d: 24 * 60 * 60 };
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function parseDurationSeconds(value: string): number {
-  const match = /^(\d+)([smhd])$/i.exec(value.trim());
-  if (!match) {
-    throw new Error(`TOKEN_TTL must be a duration such as 10s, 5m, 2h, or 1d (received ${value})`);
+/** Seconds in a duration written as a whole number and one of s, m, h, d (for example 90s or 5m). */
+function durationInSeconds(text: string): number {
+  const parsed = /^(\d+)([smhd])$/i.exec(text.trim());
+  if (parsed === null) {
+    throw new Error(`TOKEN_TTL must be a duration such as 10s, 5m, 2h, or 1d (received ${text})`);
   }
-  const amount = Number(match[1]);
-  const unit = match[2]!.toLowerCase();
-  const multiplier = { s: 1, m: 60, h: 3600, d: 86400 }[unit];
-  return amount * multiplier!;
+  return Number(parsed[1]) * SECONDS_PER_UNIT[parsed[2]!.toLowerCase()]!;
+}
+
+function pause(seconds: number): Promise<void> {
+  return new Promise((done) => setTimeout(done, seconds * 1000));
+}
+
+function heading(title: string): void {
+  console.log(`\n--- ${title} ---`);
+}
+
+function ensure(condition: boolean, failure: string): void {
+  if (!condition) throw new Error(failure);
+}
+
+/** Resolves to the error message when `attempt` rejects, or null when it succeeds. */
+async function rejectionOf(attempt: Promise<unknown>): Promise<string | null> {
+  try {
+    await attempt;
+    return null;
+  } catch (err) {
+    return (err as Error).message;
+  }
 }
 
 async function main(): Promise<void> {
   const grantex = new Grantex({ apiKey: API_KEY, baseUrl: BASE_URL });
+  console.log('=== Grant Refresh Lifecycle ===\n');
 
-  // ── 1. Register agent ──────────────────────────────────────────
-  console.log('=== Token Refresh & Rotation Demo ===\n');
-
-  const agentRaw = await grantex.agents.register({
-    name: 'time-sensitive-agent',
-    description: 'Agent with a short-lived grant token for expiry demo',
-    scopes: ['calendar:read', 'email:send'],
+  const registered = await grantex.agents.register({
+    name: 'time-bound-agent',
+    description: 'Holds a short-lived grant to show refresh and expiry',
+    scopes: SCOPES,
   });
-  const agentId = getAgentId(agentRaw as unknown as Record<string, unknown>);
-  console.log('Agent registered:', agentId);
+  // Older API responses name the identifier `agentId`; newer SDKs also expose `id`.
+  const fields = registered as unknown as { id?: string; agentId?: string };
+  const agentId = (fields.id ?? fields.agentId) as string;
+  console.log(`Agent: ${agentId}`);
 
-  // ── 2. Authorize a grant ───────────────────────────────────────
-  console.log(`\n--- Authorizing an active grant (${GRANT_TTL}) ---`);
-
-  const authRequest = await grantex.authorize({
-    agentId,
-    userId: 'user-alice',
-    scopes: ['calendar:read', 'email:send'],
-    expiresIn: GRANT_TTL,
-  });
-
-  const code = (authRequest as unknown as Record<string, unknown>)['code'] as string;
-  if (!code) {
-    console.error('No code returned — are you using the sandbox API key?');
-    process.exit(1);
+  async function grantFor(userId: string, scopes: string[], expiresIn: string) {
+    const request = await grantex.authorize({ agentId, userId, scopes, expiresIn });
+    const code = (request as unknown as { code?: string }).code;
+    if (!code) throw new Error('Authorization returned no code; use a sandbox API key so consent is auto-approved.');
+    return grantex.tokens.exchange({ code, agentId });
   }
 
-  const tokenResponse = await grantex.tokens.exchange({ code, agentId });
-  console.log('Grant token received:');
-  console.log('  grantId:     ', tokenResponse.grantId);
-  console.log('  scopes:      ', tokenResponse.scopes.join(', '));
-  console.log('  expiresAt:   ', tokenResponse.expiresAt);
-  console.log('  refreshToken:', tokenResponse.refreshToken.slice(0, 12) + '...');
+  heading(`Grant valid for ${GRANT_TTL}`);
+  const first = await grantFor('user-alice', SCOPES, GRANT_TTL);
+  console.log(`  grantId       ${first.grantId}`);
+  console.log(`  scopes        ${first.scopes.join(', ')}`);
+  console.log(`  expiresAt     ${first.expiresAt}`);
+  console.log(`  refreshToken  ${first.refreshToken.slice(0, 12)}...`);
 
-  const savedRefreshToken = tokenResponse.refreshToken;
+  heading('Verify the first grant token');
+  const local = await verifyGrantToken(first.grantToken, { jwksUri: JWKS_URI, requiredScopes: ['calendar:read'] });
+  console.log(`  local (JWKS)  ok, principal ${local.principalId}, scopes ${local.scopes.join(', ')}`);
+  const remote = await grantex.tokens.verify(first.grantToken);
+  console.log(`  service       valid=${remote.valid}`);
+  ensure(remote.valid, 'The first grant token should verify while its grant is active.');
 
-  // ── 3. Use token before expiry ─────────────────────────────────
-  console.log('\n--- Using token before expiry ---');
+  heading('Refresh');
+  const second = await grantex.tokens.refresh({ refreshToken: first.refreshToken, agentId });
+  console.log(`  grantId       ${second.grantId} (unchanged)`);
+  console.log(`  expiresAt     ${second.expiresAt} (refresh does not extend the grant)`);
+  console.log(`  scopes        ${second.scopes.join(', ')}`);
 
-  const verified = await verifyGrantToken(tokenResponse.grantToken, {
-    jwksUri: JWKS_URI,
-    requiredScopes: ['calendar:read'],
-  });
-  console.log('Offline verification: PASSED');
-  console.log('  principalId:', verified.principalId);
-  console.log('  scopes:     ', verified.scopes.join(', '));
+  heading('Verify the refreshed grant token');
+  const localAgain = await verifyGrantToken(second.grantToken, { jwksUri: JWKS_URI, requiredScopes: SCOPES });
+  console.log(`  local (JWKS)  ok, token ${localAgain.tokenId}, scopes ${localAgain.scopes.join(', ')}`);
+  const remoteAgain = await grantex.tokens.verify(second.grantToken);
+  console.log(`  service       valid=${remoteAgain.valid}`);
+  ensure(remoteAgain.valid, 'The refreshed grant token should verify while its grant is active.');
 
-  const onlineCheck = await grantex.tokens.verify(tokenResponse.grantToken);
-  console.log('Online verification:  valid =', onlineCheck.valid);
-  if (!onlineCheck.valid) {
-    throw new Error('Expected the initial grant token to verify while the grant is active');
-  }
+  heading('Recover a lost refresh response');
+  console.log('  Sending the first refresh token again, as a client that never saw the reply would...');
+  const replayed = await grantex.tokens.refresh({ refreshToken: first.refreshToken, agentId });
+  const sameRotation = replayed.refreshToken === second.refreshToken;
+  console.log(`  same rotated refresh token returned: ${sameRotation}`);
+  ensure(sameRotation, 'Retrying the first refresh token should return the refresh token it already rotated to.');
 
-  // ── 4. Refresh while the grant is active ───────────────────────
-  console.log('\n--- Refreshing token ---');
+  heading('Rotation moves on');
+  console.log('  Using the rotated refresh token...');
+  await grantex.tokens.refresh({ refreshToken: replayed.refreshToken, agentId });
+  console.log('  Trying the first refresh token once more...');
+  const staleRefusal = await rejectionOf(grantex.tokens.refresh({ refreshToken: first.refreshToken, agentId }));
+  ensure(staleRefusal !== null, 'The first refresh token was accepted after its successor had been used.');
+  console.log(`  refused: ${staleRefusal}`);
+  console.log('  A refresh token is single-use; the retry window closes once the next token is used.');
 
-  const refreshed = await grantex.tokens.refresh({
-    refreshToken: savedRefreshToken,
-    agentId,
-  });
-  console.log('Token refreshed successfully!');
-  console.log('  grantId:  ', refreshed.grantId, '(same as original)');
-  console.log('  expiresAt:', refreshed.expiresAt, '(grant lifetime unchanged)');
-  console.log('  scopes:   ', refreshed.scopes.join(', '));
+  heading(`Grant valid for ${EXPIRED_GRANT_TTL}, left to expire`);
+  const shortLived = await grantFor(`user-expired-${Date.now()}`, ['calendar:read'], EXPIRED_GRANT_TTL);
+  const wait = durationInSeconds(EXPIRED_GRANT_TTL) + 2;
+  console.log(`  waiting ${wait}s...`);
+  await pause(wait);
+  const afterExpiry = await grantex.tokens.verify(shortLived.grantToken);
+  console.log(`  service       valid=${afterExpiry.valid} (expected false)`);
+  ensure(!afterExpiry.valid, 'The short-lived grant token should have expired.');
+  const expiredRefusal = await rejectionOf(
+    grantex.tokens.refresh({ refreshToken: shortLived.refreshToken, agentId }),
+  );
+  ensure(expiredRefusal !== null, 'A refresh was accepted for a grant that had already expired.');
+  console.log(`  refresh refused: ${expiredRefusal}`);
+  console.log('  Refresh only renews credentials of an active grant; an expired grant needs a new authorization.');
 
-  // ── 5. Use refreshed token ─────────────────────────────────────
-  console.log('\n--- Using refreshed token ---');
-
-  const refreshedVerified = await verifyGrantToken(refreshed.grantToken, {
-    jwksUri: JWKS_URI,
-    requiredScopes: ['calendar:read', 'email:send'],
-  });
-  console.log('Offline verification: PASSED');
-  console.log('  tokenId:', refreshedVerified.tokenId);
-  console.log('  scopes: ', refreshedVerified.scopes.join(', '));
-
-  const refreshedOnline = await grantex.tokens.verify(refreshed.grantToken);
-  console.log('Online verification:  valid =', refreshedOnline.valid);
-  if (!refreshedOnline.valid) {
-    throw new Error('Expected the refreshed grant token to verify while the grant is active');
-  }
-
-  // ── 6. Refresh response recovery ──────────────────────────────
-  console.log('\n--- Refresh response recovery window ---');
-  console.log('Retrying the original refresh token immediately (simulates a lost HTTP response)...');
-
-  const recovered = await grantex.tokens.refresh({
-    refreshToken: savedRefreshToken,
-    agentId,
-  });
-  console.log('Recovered refresh token matches first rotation:', recovered.refreshToken === refreshed.refreshToken);
-  if (recovered.refreshToken !== refreshed.refreshToken) {
-    throw new Error('Expected replay recovery to return the already-rotated refresh token');
-  }
-
-  // ── 7. Refresh token rotation (single-use) ────────────────────
-  console.log('\n--- Refresh token rotation (single-use enforcement) ---');
-  console.log('Advancing the rotation chain with the current refresh token...');
-
-  await grantex.tokens.refresh({
-    refreshToken: recovered.refreshToken,
-    agentId,
-  });
-  console.log('Attempting to reuse the original refresh token after the chain moved forward...');
-
-  let originalRefreshTokenRejected = false;
-  try {
-    await grantex.tokens.refresh({
-      refreshToken: savedRefreshToken,
-      agentId,
-    });
-  } catch (err) {
-    originalRefreshTokenRejected = true;
-    console.log('Blocked! Original refresh token rejected.');
-    console.log('  Error:', (err as Error).message);
-    console.log('  Reason: Refresh tokens are single-use; recovery only works before the rotated child is used.');
-  }
-  if (!originalRefreshTokenRejected) {
-    throw new Error('Original refresh token was unexpectedly accepted after the rotated child was used');
-  }
-
-  // ── 8. Expired grant boundary ──────────────────────────────────
-  console.log('\n--- Expired grant boundary ---');
-  console.log(`Creating a short-lived grant (${EXPIRED_GRANT_TTL}) to show the re-authorization boundary...`);
-
-  const expiringAuthRequest = await grantex.authorize({
-    agentId,
-    userId: `user-expired-${Date.now()}`,
-    scopes: ['calendar:read'],
-    expiresIn: EXPIRED_GRANT_TTL,
-  });
-
-  const expiringCode = (expiringAuthRequest as unknown as Record<string, unknown>)['code'] as string;
-  if (!expiringCode) {
-    console.error('No code returned for expiring grant - are you using the sandbox API key?');
-    process.exit(1);
-  }
-
-  const expiringToken = await grantex.tokens.exchange({ code: expiringCode, agentId });
-  const expiringTtlSeconds = parseDurationSeconds(EXPIRED_GRANT_TTL);
-  console.log(`Waiting ${expiringTtlSeconds + 2}s for the grant to expire...`);
-  await sleep((expiringTtlSeconds + 2) * 1000);
-
-  const expiredCheck = await grantex.tokens.verify(expiringToken.grantToken);
-  console.log('Online verification after expiry: valid =', expiredCheck.valid, '(expected: false)');
-  if (expiredCheck.valid) {
-    throw new Error('Expected the short-lived grant token to be expired');
-  }
-
-  let expiredGrantRefreshRejected = false;
-  try {
-    await grantex.tokens.refresh({
-      refreshToken: expiringToken.refreshToken,
-      agentId,
-    });
-  } catch (err) {
-    expiredGrantRefreshRejected = true;
-    console.log('Refresh after grant expiry blocked.');
-    console.log('  Error:', (err as Error).message);
-    console.log('  Reason: Refresh rotates credentials for an active grant; expired grants require re-authorization.');
-  }
-  if (!expiredGrantRefreshRejected) {
-    throw new Error('Expired grant refresh was unexpectedly accepted');
-  }
-
-  console.log('\nDone! Token refresh lifecycle complete.');
+  console.log('\nRefresh lifecycle complete.');
 }
 
 main().catch((err) => {

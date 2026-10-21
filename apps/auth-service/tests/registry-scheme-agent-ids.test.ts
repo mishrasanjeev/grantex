@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Scheme agent ids on agent attestations (G51) without a database: the
  * payload member and its refusals, the flag that decides whether it is a

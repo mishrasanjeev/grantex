@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * OACP mandates: issuance, persistence, verification and revocation (G41,
  * G45, G46). The JWT profile itself (claims, signer, verifier, refusal codes)

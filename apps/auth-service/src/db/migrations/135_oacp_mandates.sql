@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: Apache-2.0
+-- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -- OACP mandates and presence (Phase 4).
 --
 -- Additive: nullable columns on two tables and one new table, created empty,

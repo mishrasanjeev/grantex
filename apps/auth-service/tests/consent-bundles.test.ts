@@ -577,13 +577,15 @@ describe('GET /v1/consent-bundles', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.bundles).toHaveLength(2);
-    expect(body.bundles[0].id).toBe('bundle_001');
-    expect(body.bundles[0].status).toBe('active');
-    expect(body.bundles[0].devicePlatform).toBe('raspberry-pi');
-    expect(body.bundles[1].id).toBe('bundle_002');
-    expect(body.bundles[1].status).toBe('revoked');
+    const body = res.json() as { bundles: Array<Record<string, unknown>> };
+    // Flat list envelope keyed by the collection name, like the other list routes;
+    // each row carries `id` (not `bundleId`) because the portal reads `id`.
+    expect(Object.keys(body)).toEqual(['bundles']);
+    expect(body.bundles.map((row) => [row['id'], row['status'], row['devicePlatform']])).toEqual([
+      ['bundle_001', 'active', 'raspberry-pi'],
+      ['bundle_002', 'revoked', null],
+    ]);
+    for (const row of body.bundles) expect(row).not.toHaveProperty('bundleId');
   });
 
   it('filters by status', async () => {
@@ -597,7 +599,7 @@ describe('GET /v1/consent-bundles', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().bundles).toEqual([]);
+    expect(res.json()).toEqual({ bundles: [] });
   });
 
   it('filters by agentId', async () => {
@@ -611,7 +613,7 @@ describe('GET /v1/consent-bundles', () => {
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().bundles).toEqual([]);
+    expect(res.json()).toEqual({ bundles: [] });
   });
 });
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Status-list reconciliation with cascade (spec/registry-federation.md,
  * "Status reconciliation") against real Postgres, through the routes.

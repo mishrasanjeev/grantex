@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 //
 // The revocation feed prune worker (FINDINGS G-66): bounded batches, a per-run
 // cap, one instance at a time, and a jittered first run.

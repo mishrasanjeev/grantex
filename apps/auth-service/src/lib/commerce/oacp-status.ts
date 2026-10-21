@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The OACP Token Status List (draft-ietf-oauth-status-list-21): every issued
  * OACP artifact has an entry, and its envelope names it as

@@ -2,13 +2,14 @@
 
 # Grantex
 
-### Open-Source AI Agent Authorization and Delegated Access
+### AI Agent Authorization and Delegated Access, with Open-Source SDKs
 
 **What OAuth 2.0 is to humans, Grantex is to agents.**
 
 <br/>
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![SDKs: Apache 2.0](https://img.shields.io/badge/SDKs-Apache%202.0-blue.svg)](LICENSING.md)
+[![Server: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/server-PolyForm%20Noncommercial%201.0.0-orange.svg)](LICENSE)
 [![Spec Version](https://img.shields.io/badge/spec-v1.0--final-green)](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
 [![IETF Draft](https://img.shields.io/badge/IETF-draft--mishra--oauth--agent--grants-blue)](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
 [![OAuth Agent Grants](https://img.shields.io/badge/OAuth_agent_grants-self--tested-3fb950)](https://docs.grantex.dev/guides/oauth-agent-grants)
@@ -50,9 +51,38 @@ or private customer records.
 
 </div>
 
+## Licence
+
+Grantex has two licences. [LICENSING.md](LICENSING.md) lists which directory
+uses which.
+
+| Part | Licence | Commercial use |
+|---|---|---|
+| **SDKs and client packages** in [`packages/`](packages/) (TypeScript, Python and Go SDKs, framework integrations, verifiers, MCP, x402 and MPP packages, CLI, Terraform provider and the rest) and the [`examples/`](examples/) | [Apache License 2.0](packages/sdk-ts/LICENSE), open source | Free for any use, including commercial |
+| **Everything else**: the auth service and developer portal (`apps/`), the protocol specification text, documentation and website | [PolyForm Noncommercial License 1.0.0](LICENSE), source-available, from 21 October 2026 including all updates | Needs a written agreement with Orchestrum Technologies LLP |
+
+- **Server and portal, free:** self use for noncommercial purposes (personal
+  study, research, experiments, testing and hobby projects) and the other
+  noncommercial uses the PolyForm licence permits.
+- **Server and portal, needs a written agreement with Orchestrum Technologies
+  LLP:** commercial use of any sort, including running the auth service or
+  portal inside a for-profit business, hosting or SaaS, resale, bundling the
+  server into a product, and paid services built on running it. Commercial use
+  of the hosted services (the `grantex.dev` APIs) also needs an agreement. See
+  [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) and write to
+  [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
+- **Existing users:** releases of the server, portal and other non-SDK parts
+  published before 21 October 2026 remain available under the Apache License
+  2.0 they were released with. Versions and updates published from that date
+  are not, so using them commercially needs an agreement.
+- **Names:** "Grantex" and "AgenticOrg" are trademarks of Orchestrum
+  Technologies LLP. Commercial use of the names, logos or brand needs
+  Orchestrum's prior written approval, including with the Apache-licensed SDKs
+  and earlier versions. See [TRADEMARKS.md](TRADEMARKS.md).
+
 ## What is Grantex?
 
-Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
+Grantex is a delegated authorization protocol and reference implementation for AI agents, with open-source SDKs and a source-available server. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
 Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal. Use Grantex when an AI agent acts for a person or organization and a relying service must verify exactly what that agent may do.
 
@@ -179,7 +209,7 @@ container images are pinned to immutable digests, and unreviewed npm license
 identifiers fail CI. Run `npm run audit:supply-chain` and
 `npm run audit:python` locally before a release.
 
-Apache-2.0 covers Grantex source, not third-party dependencies. See
+The Grantex licences cover Grantex source, not third-party dependencies. See
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the current
 Sharp/libvips LGPL and caniuse-lite CC-BY distribution notes, and the
 [supply-chain security guide](docs/guides/supply-chain-security.mdx) for the
@@ -431,7 +461,7 @@ grantex agent install --target portable  # writes ./.agents/skills
 
 The bundle installs `use-grantex-cli` for delegated-authorization operations and `integrate-grantex` for service-boundary implementation work. For a different host, use `grantex agent install --dir /path/to/skills`. Prefer `--env`, `--file`, or `--stdin` token inputs and keep final enforcement inside the protected service.
 
-> **35 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. Use the compatibility matrix for versions, the changelog for release notes, and GitHub Actions for current CI status. Fully self-hostable. Apache 2.0. The new relying-party Python verifier remains private source, not a registry release.
+> **35 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. Use the compatibility matrix for versions, the changelog for release notes, and GitHub Actions for current CI status. SDKs are Apache-2.0; the self-hostable server is PolyForm Noncommercial 1.0.0, with commercial use by agreement (see [Licence](#licence)). The new relying-party Python verifier remains private source, not a registry release.
 
 ---
 
@@ -2095,7 +2125,9 @@ The current [product roadmap](ROADMAP.md) prioritizes a 2026.08 production-trust
 
 ## Contributing
 
-Grantex is open-source and welcomes contributions:
+Grantex welcomes contributions. [CONTRIBUTING.md](CONTRIBUTING.md) explains the
+contribution licence that lets Orchestrum Technologies LLP license contributions,
+including commercially:
 
 1. **Report bugs** — open a [GitHub Issue](https://github.com/mishrasanjeev/grantex/issues) with reproduction steps
 2. **Propose features** — open a [GitHub Discussion](https://github.com/mishrasanjeev/grantex/discussions) with your use case
@@ -2116,7 +2148,7 @@ Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRI
 | **IETF** | Active individual Internet-Draft; revision -02 is published. Revision -03 and its self-assessed client/authorization-server/resource-server implementation are under review in [`docs/ietf-draft/`](docs/ietf-draft/), with no upload before 2026-09-09. This is not independent certification, adoption, or IETF endorsement ([Datatracker](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
 | **AuthZEN** | Conformance mapped |
 | **SOC 2** | Readiness control mapping published; formal third-party attestation not published |
-| **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, open, Apache 2.0 |
+| **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, publicly readable, PolyForm Noncommercial 1.0.0 |
 
 Full compliance matrix: [docs.grantex.dev/guides/compliance-matrix](https://docs.grantex.dev/guides/compliance-matrix)
 
@@ -2124,7 +2156,7 @@ Full compliance matrix: [docs.grantex.dev/guides/compliance-matrix](https://docs
 
 ## Trusted By
 
-> Using Grantex in production? [Open a PR](https://github.com/mishrasanjeev/grantex/edit/main/README.md) to add your company here.
+> Using Grantex under a commercial agreement with Orchestrum? Write to [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) to be listed here.
 
 <!--
 Add your company logo here:
@@ -2145,28 +2177,27 @@ OAuth 2.0 was designed for "user grants app permission to access their data." Ag
 MCP connects clients to tools and resources and defines optional OAuth-based authorization for HTTP transports. Grantex adds agent-specific delegated authority at the tool or service boundary: which agent may perform which action for which principal. The two layers are complementary.
 
 **Who owns the standard?**  
-The v1.0 protocol specification is open (Apache 2.0). Grantex is owned by Orchestrum Technologies LLP, and Sanjeev Kumar is listed as inventor and owner. Orchestrum Technologies LLP maintains the reference implementation. Revision -02 is published as an active individual IETF Internet-Draft, and revision -03 is under review; neither publication nor repository implementation is working-group adoption, independent certification, or IETF endorsement.
+The v1.0 protocol specification is published in this repository under the PolyForm Noncommercial License 1.0.0. Grantex is owned by Orchestrum Technologies LLP, and Sanjeev Kumar is listed as inventor and owner. Orchestrum Technologies LLP maintains the reference implementation. Revision -02 is published as an active individual IETF Internet-Draft, and revision -03 is under review; neither publication nor repository implementation is working-group adoption, independent certification, or IETF endorsement.
 
 **Can I self-host?**  
-Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete guide or the [self-hosting docs](https://docs.grantex.dev/guides/self-hosting).
+Yes. The SDKs are Apache-2.0 and free for any use. The auth service and portal are PolyForm Noncommercial 1.0.0: self-hosting them is free for noncommercial use, and commercial self-hosting, including inside a for-profit business, needs a written agreement with Orchestrum Technologies LLP (see [Licence](#licence)). Docker Compose deploy in one command. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete guide or the [self-hosting docs](https://docs.grantex.dev/guides/self-hosting).
 
 ---
 
 ## License
 
-Protocol specification and SDKs: [Apache 2.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
+SDKs and client packages (`packages/`) and examples (`examples/`): Apache-2.0,
+open source and free for any use. Auth service, portal, specification text,
+documentation and website: [PolyForm Noncommercial License 1.0.0](LICENSE),
+licensor Orchestrum Technologies LLP; commercial use of those needs a written
+agreement with Orchestrum Technologies LLP
+([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md),
+[sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in)). Directory scope:
+[LICENSING.md](LICENSING.md). Trademarks: [TRADEMARKS.md](TRADEMARKS.md).
 
-Third-party packages retain their own licenses. Review
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) before redistribution.
-
-Approved prospective policy (software adoption pending): personal/internal use is free;
-commercializing the platform requires an agreement with Orchestrum Technologies
-LLP. Write to [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
-The policy covers existing and new covered users, not just new accounts;
-existing hosted customers transition through applicable notice and agreement terms.
-See [usage and licensing](LICENSING.md); current Apache-2.0 rights remain unchanged.
-The concrete transition uses a separate self-use/commercial-agreement license
-for eligible future platform material, not an added condition on legacy code.
+Third-party packages and the third-party files listed in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) retain their own licenses.
+Review that file before redistribution.
 
 Product ownership: Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).
 
