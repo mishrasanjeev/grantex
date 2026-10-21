@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The synthetic demo source on C6Z issuance: `connector_choice:
  * 'synthetic_demo'` is accepted only for a tenant on both
