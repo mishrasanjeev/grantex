@@ -22,7 +22,7 @@ outbound package-registry access; no real issuer or model credentials are used.
 | --- | --- |
 | `node:24.20.0-bookworm-slim` | `run-node.sh` |
 | `python:3.12-slim` | `run-python.sh` |
-| `golang:1.26.1` | `run-go.sh` |
+| `golang:1.26.10` | `run-go.sh` |
 
 ```bash
 IMAGE=node:24.20.0-bookworm-slim
