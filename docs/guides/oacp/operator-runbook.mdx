@@ -23,6 +23,46 @@ Canonical end-to-end flow: [OACP authority overview](./overview). Launch closure
 7. Confirm `artifact_count = 11`, or record the exact refusal/blocker.
 8. To roll back, remove the tenant id from `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` and rotate the token if there is any suspicion of exposure.
 
+## Enable a Synthetic Demo Tenant
+
+A demonstration merchant with an invented catalogue gets real signed artifacts without claiming
+a merchant system of record. Issuance accepts `connector_choice: "synthetic_demo"` (and
+connector evidence with `source_system: "synthetic_demo"`) only when all of these hold:
+
+- the tenant id is on `COMMERCE_C6Z_DEMO_SOURCE_TENANTS` (comma-separated; empty by default,
+  so no tenant can use the synthetic source);
+- the same tenant id is on `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`, whoever calls (the platform
+  admin included);
+- the request carries `synthetic_data: true`, and so does the connector evidence.
+
+Otherwise the request is refused exactly as an unsupported source always was (`422`,
+`status: "rejected"`, `refusal_code: "unsupported_or_enabling_authority_request"`) and the
+refusal is recorded in `oacp_artifacts` with a `refusal_record_id`. Evidence that names another
+source, or is not marked synthetic, is refused `connector_evidence_scope_mismatch`, also recorded.
+
+Every artifact issued from the synthetic source says so in its signed payload:
+`source_system: "synthetic_demo"` and `synthetic_data: true` at the top level, and in
+`source_lineage` `source_system: "synthetic_demo"`, `synthetic_data: true` and
+`merchant_system_source_of_record: false`. Shopify issuance is unchanged, byte for byte.
+Public discovery follows the same opt-in rules as for any tenant (`OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED`,
+the allowlist and the namespace / host attestation); the `public_discovery_state` artifact
+then carries `synthetic_data: true`, and `GET /v1/commerce/oacp/ucp-profile` adds
+`synthetic_data: true` to its render, so a relying party can see the profile is a demonstration.
+
+To enable one demo tenant:
+
+1. Confirm with the owner that the tenant is a demonstration tenant whose catalogue is invented.
+2. Add its tenant id to `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` and to
+   `COMMERCE_C6Z_DEMO_SOURCE_TENANTS`; redeploy.
+3. Submit its authority request with `connector_choice: "synthetic_demo"` and
+   `synthetic_data: true`. Confirm `201`, `artifact_count = 11`, and that every payload carries
+   `synthetic_data: true`.
+4. Only if the demo is to publish a UCP profile: the public discovery opt-in, as above.
+
+To withdraw it, remove the tenant id from `COMMERCE_C6Z_DEMO_SOURCE_TENANTS` (new synthetic
+requests are refused at once) and revoke its live artifacts if they must stop verifying before
+they expire.
+
 For a local stack (`PUBLIC_BASE_URL=http://localhost:<port>`), also set
 `OACP_ALLOW_LOOPBACK_HTTP=true`; without it issuance refuses the http status list URI. It is
 ignored when `NODE_ENV` is production. `OACP_AUTO_GENERATE_ISSUER_KEY=true` creates the first key
@@ -54,6 +94,7 @@ everything it signed; removing a tenant from the allowlist stops new issuance fo
 | --- | --- | --- |
 | `OACP_STATUS_LIST_PUBLIC_ENABLED` | off | Serves `GET /status/oacp/:list` unauthenticated (ttl 30 s, CORS `*`, rate limited). |
 | `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED` | off | A C6Z request that opts in, from an allow-listed tenant, with both attestation members, gets `public_discovery_state` `enabled`. |
+| `COMMERCE_C6Z_DEMO_SOURCE_TENANTS` | empty | Listed tenants that are also on `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` may issue from the `synthetic_demo` source with `synthetic_data: true`; their artifacts say so. See [Enable a Synthetic Demo Tenant](#enable-a-synthetic-demo-tenant). |
 | `HTTP_SIGNATURE_DIRECTORY_ENABLED` | off | Serves `/.well-known/http-message-signatures-directory` with opted-in agents' keys, countersigned once by the platform key. |
 | `REGISTRY_SCHEME_AGENT_IDS_ENABLED` | off | Agent attestations may carry `scheme_agent_ids`; lookup by scheme id; manifest lists them. |
 | `AGENT_PASSPORT_KYA_TIER_ENABLED` | off | Agent Passports carry `kyaTier` from the operator's `AGENT_PASSPORT_KYA_TIER_MAP` (empty by default). |
@@ -97,6 +138,8 @@ flowchart TD
 | --- | --- |
 | Authority route exists | `apps/auth-service/src/routes/commerce-oacp-runtime.ts` |
 | AgenticOrg tenant allowlist | `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` contains only approved tenant ids |
+| Synthetic demo tenants | `COMMERCE_C6Z_DEMO_SOURCE_TENANTS` is empty or lists only owner-approved demonstration tenants |
+| Synthetic source tests pass | `npm --prefix apps/auth-service test -- commerce-c6z-synthetic-demo-source.test.ts` |
 | AgenticOrg service token | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` is present only via secret manager |
 | Artifact tests pass | `npm --prefix apps/auth-service test -- commerce-c6z-runtime-artifact-authority.test.ts` |
 | Signature tests pass | `npm --prefix apps/auth-service test -- oacp-jws-vectors.test.ts commerce-c6w2-oacp-artifact-authority.test.ts` |
@@ -104,7 +147,7 @@ flowchart TD
 | JWKS carries the OACP key | `GET /.well-known/jwks.json` contains one `kid` starting `oacp-` with `alg` `ES256` |
 | Conformance gate | `node scripts/commerce-c6oe-preview-conformance-gate.mjs --mode pr` |
 | Guardrail scan | Search changed docs for stale or overclaim wording. |
-| Merchant config boundary | Confirm Shopify is runtime-supported and WooCommerce/ERP/bank/custom provider configs are pending-adapter unless approved. |
+| Merchant config boundary | Confirm Shopify is runtime-supported, `synthetic_demo` only for listed demonstration tenants, and WooCommerce/ERP/bank/custom provider configs are pending-adapter unless approved. |
 
 ## Rollback
 

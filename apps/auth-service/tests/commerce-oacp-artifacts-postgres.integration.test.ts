@@ -3,7 +3,8 @@
  * OACP artifact authority against real Postgres, through the routes: ES256
  * issuance with a DB-backed issuer key, persistence of every issue and
  * refusal, replay, revocation through the OACP Token Status List, the
- * revocation artifact, JWKS publication, and key rotation and revocation.
+ * revocation artifact, JWKS publication, key rotation and revocation, and
+ * the synthetic demo source (COMMERCE_C6Z_DEMO_SOURCE_TENANTS).
  * The SQL mock forwards to a database of this file's own.
  */
 import postgres from 'postgres';
@@ -258,6 +259,153 @@ describePostgres('OACP artifacts against Postgres', () => {
       expect(row['entry_status']).toBe(0);
       expect(row['jws']).toBe((row['envelope'] as Record<string, unknown>)['signature']);
     }
+  });
+
+  describe('synthetic demo source', () => {
+    const DEMO_TENANT = 'cten_OACPDEMO';
+    const DEMO_SCOPE = { tenant_id: DEMO_TENANT, merchant_id: 'mch_OACPDEMO', seller_agent_id: 'seller_OACPDEMO' };
+    const DEMO_REF = 'agenticorg:synthetic_demo:evidence:oacp_demo:redacted';
+
+    function demoBody(requestOverrides: Record<string, unknown> = {}, evidenceOverrides: Record<string, unknown> = {}) {
+      return {
+        request: authorityRequest({
+          ...DEMO_SCOPE,
+          request_id: 'agenticorg_oacp_req_demo',
+          merchant_display_name: 'Synthetic Tea Shop (demo)',
+          artifact_cache_scope: DEMO_SCOPE,
+          connector_choice: 'synthetic_demo',
+          synthetic_data: true,
+          source_evidence_ref: DEMO_REF,
+          ...requestOverrides,
+        }),
+        connector_evidence: connectorEvidence({
+          ...DEMO_SCOPE,
+          evidence_id: 'synthetic_demo_evidence_OACPDEMO',
+          source_system: 'synthetic_demo',
+          synthetic_data: true,
+          source_evidence_ref: DEMO_REF,
+          ...evidenceOverrides,
+        }),
+      };
+    }
+
+    async function post(payload: unknown, headers: Record<string, string> = service) {
+      return app.inject({ method: 'POST', url: '/v1/commerce/oacp/c6z/authority-requests', headers, payload: payload as never });
+    }
+
+    it('refuses the synthetic source exactly as before, and records it, unless the tenant is on both lists and the request says synthetic_data', async () => {
+      const entriesBefore = (await sql`SELECT count(*)::int AS n FROM oacp_status_entries`)[0]!['n'];
+      const refusedBefore = (await sql`SELECT count(*)::int AS n FROM oacp_artifacts WHERE tenant_id = ${DEMO_TENANT} AND status = 'refused'`)[0]!['n'] as number;
+      vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS', `${TENANT},${DEMO_TENANT}`);
+      // COMMERCE_C6Z_DEMO_SOURCE_TENANTS unset: never.
+      const results = [await post(demoBody())];
+
+      vi.stubEnv('COMMERCE_C6Z_DEMO_SOURCE_TENANTS', DEMO_TENANT);
+      // On the demo list, but the request does not say synthetic_data: true.
+      results.push(await post(demoBody({ synthetic_data: undefined })));
+      results.push(await post(demoBody({ synthetic_data: false })));
+
+      // On the demo list, off the authority service allowlist: the service token is
+      // refused for the tenant as before, and even the platform admin cannot issue.
+      vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS', TENANT);
+      const serviceOff = await post(demoBody());
+      expect(serviceOff.statusCode, serviceOff.body).toBe(403);
+      expect(serviceOff.json<{ error: { code: string } }>().error.code).toBe('service_tenant_not_allowed');
+      results.push(await post(demoBody(), admin));
+
+      const before = await post({ request: authorityRequest({ connector_choice: 'other_source' }), connector_evidence: connectorEvidence() });
+      for (const res of [...results, before]) {
+        expect(res.statusCode, res.body).toBe(422);
+        expect(res.json()).toMatchObject({
+          status: 'rejected',
+          refusal_code: 'unsupported_or_enabling_authority_request',
+          artifacts: [],
+          artifact_issuance_attempted: false,
+          message: before.json<{ message: string }>().message,
+        });
+        expect(res.json<{ refusal_record_id: string }>().refusal_record_id).toMatch(/^oacp_ref_/);
+      }
+      const refused = await sql<Array<Record<string, unknown>>>`
+        SELECT refusal_code, jws, envelope, status_list_uri FROM oacp_artifacts
+        WHERE tenant_id = ${DEMO_TENANT} AND status = 'refused'`;
+      expect(refused).toHaveLength(refusedBefore + results.length);
+      for (const row of refused) {
+        expect(row['refusal_code']).toBe('unsupported_or_enabling_authority_request');
+        expect(row['jws']).toBeNull();
+        expect(row['envelope']).toBeNull();
+        expect(row['status_list_uri']).toBeNull();
+      }
+      expect((await sql`SELECT count(*)::int AS n FROM oacp_status_entries`)[0]!['n']).toBe(entriesBefore);
+    });
+
+    it('refuses and records evidence that is not marked synthetic', async () => {
+      vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS', `${TENANT},${DEMO_TENANT}`);
+      vi.stubEnv('COMMERCE_C6Z_DEMO_SOURCE_TENANTS', DEMO_TENANT);
+      for (const evidence of [{ synthetic_data: undefined }, { source_system: 'shopify' }]) {
+        const res = await post(demoBody({}, evidence));
+        expect(res.statusCode, res.body).toBe(422);
+        expect(res.json()).toMatchObject({ refusal_code: 'connector_evidence_scope_mismatch', artifact_issuance_attempted: true, artifact_count: 0 });
+        const id = res.json<{ refusal_record_id: string }>().refusal_record_id;
+        const [row] = await sql<Array<Record<string, unknown>>>`SELECT status, jws FROM oacp_artifacts WHERE artifact_id = ${id}`;
+        expect(row).toMatchObject({ status: 'refused', jws: null });
+      }
+    });
+
+    it('issues, persists and publishes synthetic artifacts that say so and never name Shopify; Shopify issuance is unchanged', async () => {
+      vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS', `${TENANT},${DEMO_TENANT}`);
+      vi.stubEnv('COMMERCE_C6Z_DEMO_SOURCE_TENANTS', DEMO_TENANT);
+      const res = await post(demoBody());
+      expect(res.statusCode, res.body).toBe(201);
+      const body = res.json<{ artifacts: Array<{ envelope: Record<string, any>; payload: Record<string, unknown> }> }>();
+      expect(body.artifacts).toHaveLength(11);
+      for (const artifact of body.artifacts) {
+        expect(await verifyThroughPublicSurfaces(artifact)).toMatchObject({ valid: true });
+        expect(artifact.payload).toMatchObject({ source_system: 'synthetic_demo', synthetic_data: true });
+        expect(artifact.payload['source_lineage']).toMatchObject({
+          source_system: 'synthetic_demo', synthetic_data: true, merchant_system_source_of_record: false,
+        });
+      }
+      const rows = await sql<Array<Record<string, unknown>>>`
+        SELECT jws, envelope::text AS envelope, payload::text AS payload FROM oacp_artifacts
+        WHERE artifact_id = ANY(${body.artifacts.map((a) => a.envelope['artifact_id'] as string)})`;
+      expect(rows).toHaveLength(11);
+      for (const row of rows) expect(JSON.stringify(row).toLowerCase()).not.toContain('shopify');
+
+      // The same deployment, a Shopify tenant: no synthetic member, Shopify lineage as before.
+      const shopify = await issue();
+      for (const artifact of shopify.artifacts) {
+        expect(artifact.payload).not.toHaveProperty('synthetic_data');
+        expect(artifact.payload).toMatchObject({ source_system: 'shopify' });
+        expect(artifact.payload['source_lineage']).toMatchObject({ source_system: 'shopify', merchant_system_source_of_record: true });
+      }
+    });
+
+    it('allows public discovery under the existing opt-in rules and shows synthetic_data to relying parties', async () => {
+      vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS', `${TENANT},${DEMO_TENANT}`);
+      vi.stubEnv('COMMERCE_C6Z_DEMO_SOURCE_TENANTS', DEMO_TENANT);
+      vi.stubEnv('OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED', 'true');
+      const res = await post(demoBody({
+        public_discovery_requested: true,
+        no_public_discovery_enablement: false,
+        namespace_attestation_ref: 'agenticorg:namespace_attestation:mch_OACPDEMO:01',
+        serving_host: 'demo-shop.merchant.example',
+      }));
+      expect(res.statusCode, res.body).toBe(201);
+      const body = res.json<{ no_public_discovery_enablement: boolean; artifacts: Array<{ artifact_family: string; envelope: Record<string, any>; payload: Record<string, unknown> }> }>();
+      expect(body.no_public_discovery_enablement).toBe(false);
+      const discovery = body.artifacts.find((a) => a.artifact_family === 'public_discovery_state')!;
+      expect(discovery.payload).toMatchObject({ public_discovery_state: 'enabled', synthetic_data: true, serving_host: 'demo-shop.merchant.example' });
+      expect(await verifyThroughPublicSurfaces(discovery)).toMatchObject({ valid: true });
+
+      const profile = await app.inject({
+        method: 'GET',
+        url: `/v1/commerce/oacp/ucp-profile?tenant_id=${DEMO_TENANT}&merchant_id=mch_OACPDEMO&seller_agent_id=seller_OACPDEMO`
+          + '&served=dev.ucp.shopping.catalog.search&rest_endpoint=https://demo-shop.merchant.example/ucp',
+        headers: admin,
+      });
+      expect(profile.statusCode, profile.body).toBe(200);
+      expect(profile.json()).toMatchObject({ publication_allowed: true, synthetic_data: true });
+    });
   });
 
   it('refuses a tampered payload or envelope read back from the store', async () => {
