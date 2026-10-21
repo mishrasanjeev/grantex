@@ -2,6 +2,8 @@ module github.com/mishrasanjeev/terraform-provider-grantex
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.19.0
 	github.com/hashicorp/terraform-plugin-framework-validators v0.19.0
