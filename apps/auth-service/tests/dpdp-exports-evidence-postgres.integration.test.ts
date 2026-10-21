@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The EU AI Act evidence pack and the per-person GDPR Art. 15 export against
  * real Postgres, through POST /v1/dpdp/exports.

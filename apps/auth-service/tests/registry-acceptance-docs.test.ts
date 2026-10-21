@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The examples in spec/registry-federation.md ("Attestation acceptance status
  * lists") are what the auth service publishes: each marked JSON block is

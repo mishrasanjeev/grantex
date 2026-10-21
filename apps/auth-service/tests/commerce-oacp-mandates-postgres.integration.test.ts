@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * OACP mandates against real Postgres, through the routes (G41, G44, G45,
  * G46): Intent -> Cart -> Payment issued as ES256 JWTs by the DB-backed OACP

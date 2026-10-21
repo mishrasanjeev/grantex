@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The attestation JWS profile (spec/attestation-1.0.md): the pure checks,
  * with no database and no network. lib/registry/attestations.ts runs them in

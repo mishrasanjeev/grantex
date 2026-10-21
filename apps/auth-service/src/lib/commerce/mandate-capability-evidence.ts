@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * Mandate-capability evidence (G43): the redacted result of AgenticOrg's
  * provider capability verifier (`verify_plural_pine_mandate_capability` for

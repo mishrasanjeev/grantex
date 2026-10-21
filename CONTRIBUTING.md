@@ -9,9 +9,9 @@ Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchest
 
 Grantex has two licences ([LICENSING.md](LICENSING.md)): the SDKs and client
 packages in `packages/` and the examples are Apache-2.0, and the rest of the
-repository is the [PolyForm Noncommercial License 1.0.0](LICENSE), which
-Orchestrum Technologies LLP also licenses commercially
-([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). Contributions to `packages/`
+repository is the [Orchestrum Personal Use License 1.0](LICENSE), under
+which Orchestrum Technologies LLP also licenses organisations by written
+agreement ([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). Contributions to `packages/`
 and `examples/` are distributed under Apache-2.0. For this to work for
 contributed code, every contribution is made on these terms:
 
@@ -24,9 +24,9 @@ material) to this repository, you:
    receives Grantex from it a perpetual, worldwide, non-exclusive, royalty-free,
    irrevocable licence to use, reproduce, modify, prepare derivative works of,
    publicly display, publicly perform, distribute and sublicense the
-   contribution, and to license it on any terms, including the PolyForm
-   Noncommercial License 1.0.0 and commercial licences that Orchestrum grants
-   for a fee;
+   contribution, and to license it on any terms, including the Orchestrum
+   Personal Use License 1.0 and the agreements, paid or free, that Orchestrum
+   grants to organisations;
 3. grant Orchestrum Technologies LLP and those recipients a perpetual,
    worldwide, non-exclusive, royalty-free, irrevocable patent licence to make,
    use, sell, offer for sale, import and otherwise transfer the contribution,

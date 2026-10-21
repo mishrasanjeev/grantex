@@ -9,7 +9,7 @@
 | **Trust Service Categories** | Security (CC) · Availability (A) · Confidentiality (C) |
 | **Classification** | Public |
 | **Report type** | Internal readiness control mapping; not a SOC 2 Type I attestation |
-| **Licence note (21 October 2026)** | The Grantex SDKs remain Apache 2.0; the server, portal, specification text and documentation are now licensed under the PolyForm Noncommercial License 1.0.0, with commercial use by written agreement with Orchestrum Technologies LLP. Rows CC1.1.1 and CC9.2.2 describe the licence in effect at the snapshot date. |
+| **Licence note (21 October 2026)** | The Grantex SDKs remain Apache 2.0; the server, portal, specification text and documentation are now licensed under the Orchestrum Personal Use License 1.0, with use by organisations by written permission from Orchestrum Technologies LLP. Rows CC1.1.1 and CC9.2.2 describe the licence in effect at the snapshot date. |
 
 ---
 

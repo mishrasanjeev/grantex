@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * Who may suspend or reinstate OACP mandates and artifacts: the platform
  * admin, or the authority service token with the suspension scope for an

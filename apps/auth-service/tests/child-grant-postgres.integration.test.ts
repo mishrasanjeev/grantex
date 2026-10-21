@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * Per-merchant child grants (spec/passport-binding.md §8) against real
  * Postgres, through the routes, with the mock accredited issuer

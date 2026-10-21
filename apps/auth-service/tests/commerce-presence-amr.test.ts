@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * G44: presence mode (`human_present` | `human_not_present`) and `amr` on the
  * consent record and the Commerce Passport.

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+-- SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 -- DPDP routes: persisted erasure requests, the notice version a consent
 -- record was given against, the grievance response period, what an export
 -- was filtered to, and CHECK constraints on the status columns of the tables

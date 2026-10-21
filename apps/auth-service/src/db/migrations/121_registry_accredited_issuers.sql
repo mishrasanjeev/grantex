@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+-- SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 -- Accredited issuers in the registry (Agent Trust Registry, Phase 1): the
 -- organisations whose Agent Passports and attestations the registry accepts,
 -- the trust marks each is accredited for, and the keys it signs with.

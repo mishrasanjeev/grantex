@@ -104,7 +104,7 @@
       "description": "Source-available reference implementation of delegated authorization for AI agents, with verifiable agent identity, scoped grants, human consent, delegation, service-side JWT verification, revocation controls, and audit records.",
       "url": "https://grantex.dev/",
       "codeRepository": "https://github.com/mishrasanjeev/grantex",
-      "license": "https://polyformproject.org/licenses/noncommercial/1.0.0",
+      "license": "https://github.com/mishrasanjeev/grantex/blob/main/LICENSE",
       "programmingLanguage": [
         "TypeScript",
         "Python",
@@ -150,7 +150,7 @@
       "headline": "Grantex Delegated Authorization Protocol Specification v1.0",
       "description": "The frozen version 1.0 specification for Grantex delegated authorization grants for AI agents.",
       "version": "1.0",
-      "license": "https://polyformproject.org/licenses/noncommercial/1.0.0",
+      "license": "https://github.com/mishrasanjeev/grantex/blob/main/LICENSE",
       "author": {
         "@id": "https://grantex.dev/#sanjeev-kumar"
       },

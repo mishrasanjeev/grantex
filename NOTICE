@@ -13,11 +13,13 @@ Grantex has two licences (see LICENSING.md for the directory scope):
   commercial use.
 - From 21 October 2026, the rest of this repository (the auth service and
   developer portal in apps/, the protocol specification text, documentation and
-  website) is licensed under the PolyForm Noncommercial License 1.0.0 (see
-  LICENSE). Commercial use of those parts, and of the hosted services, requires
-  a written agreement with Orchestrum Technologies LLP; see
-  COMMERCIAL-LICENSE.md. Releases of those parts published before that date
-  remain available under the Apache License 2.0 they were released with.
+  website) is licensed under the Orchestrum Personal Use License 1.0 (see
+  LICENSE). Only an individual using those parts for their own personal
+  purposes is free; any use by or for an organisation, and commercial use of
+  the hosted services, requires prior written permission from Orchestrum
+  Technologies LLP in a signed agreement; see COMMERCIAL-LICENSE.md. Releases
+  published before that date remain available under the terms they were
+  released with.
 
 "Grantex" and "AgenticOrg" and their logos are trademarks of Orchestrum
 Technologies LLP; see TRADEMARKS.md.

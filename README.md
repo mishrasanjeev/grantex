@@ -9,7 +9,7 @@
 <br/>
 
 [![SDKs: Apache 2.0](https://img.shields.io/badge/SDKs-Apache%202.0-blue.svg)](LICENSING.md)
-[![Server: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/server-PolyForm%20Noncommercial%201.0.0-orange.svg)](LICENSE)
+[![Platform: Orchestrum Personal Use 1.0](https://img.shields.io/badge/platform-Orchestrum%20Personal%20Use%201.0-orange.svg)](LICENSE)
 [![Spec Version](https://img.shields.io/badge/spec-v1.0--final-green)](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md)
 [![IETF Draft](https://img.shields.io/badge/IETF-draft--mishra--oauth--agent--grants-blue)](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)
 [![OAuth Agent Grants](https://img.shields.io/badge/OAuth_agent_grants-self--tested-3fb950)](https://docs.grantex.dev/guides/oauth-agent-grants)
@@ -56,25 +56,28 @@ or private customer records.
 Grantex has two licences. [LICENSING.md](LICENSING.md) lists which directory
 uses which.
 
-| Part | Licence | Commercial use |
+| Part | Licence | Use by an organisation |
 |---|---|---|
 | **SDKs and client packages** in [`packages/`](packages/) (TypeScript, Python and Go SDKs, framework integrations, verifiers, MCP, x402 and MPP packages, CLI, Terraform provider and the rest) and the [`examples/`](examples/) | [Apache License 2.0](packages/sdk-ts/LICENSE), open source | Free for any use, including commercial |
-| **Everything else**: the auth service and developer portal (`apps/`), the protocol specification text, documentation and website | [PolyForm Noncommercial License 1.0.0](LICENSE), source-available, from 21 October 2026 including all updates | Needs a written agreement with Orchestrum Technologies LLP |
+| **The Grantex platform**: the auth service and developer portal (`apps/`), the protocol specification text, documentation and website | [Orchestrum Personal Use License 1.0](LICENSE), source-available, from 21 October 2026 including all updates | Needs prior written permission from Orchestrum Technologies LLP in a signed agreement |
 
-- **Server and portal, free:** self use for noncommercial purposes (personal
-  study, research, experiments, testing and hobby projects) and the other
-  noncommercial uses the PolyForm licence permits.
-- **Server and portal, needs a written agreement with Orchestrum Technologies
-  LLP:** commercial use of any sort, including running the auth service or
-  portal inside a for-profit business, hosting or SaaS, resale, bundling the
-  server into a product, and paid services built on running it. Commercial use
-  of the hosted services (the `grantex.dev` APIs) also needs an agreement. See
+- **Platform, free:** an individual using, copying or changing it for their own
+  personal purposes (learning, personal study, experiments and hobby
+  projects), not acting for, on behalf of or for the benefit of any
+  organisation.
+- **Platform, needs prior written permission from Orchestrum Technologies
+  LLP:** any use by or for an organisation, whether companies, firms, sole
+  proprietors' businesses, charities, schools, universities, research bodies
+  or government, and whether paid or free. That includes evaluation, testing,
+  pilots, internal use, hosting or SaaS, resale, distribution and embedding
+  the platform in another product. Commercial use of the hosted services (the
+  `grantex.dev` APIs) also needs an agreement, even through the open SDKs. See
   [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) and write to
   [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
-- **Existing users:** releases of the server, portal and other non-SDK parts
-  published before 21 October 2026 remain available under the Apache License
-  2.0 they were released with. Versions and updates published from that date
-  are not, so using them commercially needs an agreement.
+- **Existing users:** releases published before 21 October 2026 remain
+  available under the terms they were released with. Versions and updates of
+  the platform published from that date are not, so an organisation needs
+  written permission to use them.
 - **Names:** "Grantex" and "AgenticOrg" are trademarks of Orchestrum
   Technologies LLP. Commercial use of the names, logos or brand needs
   Orchestrum's prior written approval, including with the Apache-licensed SDKs
@@ -461,7 +464,7 @@ grantex agent install --target portable  # writes ./.agents/skills
 
 The bundle installs `use-grantex-cli` for delegated-authorization operations and `integrate-grantex` for service-boundary implementation work. For a different host, use `grantex agent install --dir /path/to/skills`. Prefer `--env`, `--file`, or `--stdin` token inputs and keep final enforcement inside the protected service.
 
-> **35 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. Use the compatibility matrix for versions, the changelog for release notes, and GitHub Actions for current CI status. SDKs are Apache-2.0; the self-hostable server is PolyForm Noncommercial 1.0.0, with commercial use by agreement (see [Licence](#licence)). The new relying-party Python verifier remains private source, not a registry release.
+> **35 packages** across TypeScript, Python, and Go. Integrations for **Anthropic SDK, LangChain, OpenAI Agents SDK, Google ADK, Strands Agents SDK, CrewAI, Vercel AI, AutoGen, MCP, Express.js, FastAPI**, and **Terraform**. Use the compatibility matrix for versions, the changelog for release notes, and GitHub Actions for current CI status. SDKs are Apache-2.0; the self-hostable server is under the Orchestrum Personal Use License 1.0, and any organisation needs written permission (see [Licence](#licence)). The new relying-party Python verifier remains private source, not a registry release.
 
 ---
 
@@ -2148,7 +2151,7 @@ Read [CONTRIBUTING.md](https://github.com/mishrasanjeev/grantex/blob/main/CONTRI
 | **IETF** | Active individual Internet-Draft; revision -02 is published. Revision -03 and its self-assessed client/authorization-server/resource-server implementation are under review in [`docs/ietf-draft/`](docs/ietf-draft/), with no upload before 2026-09-09. This is not independent certification, adoption, or IETF endorsement ([Datatracker](https://datatracker.ietf.org/doc/draft-mishra-oauth-agent-grants/)) |
 | **AuthZEN** | Conformance mapped |
 | **SOC 2** | Readiness control mapping published; formal third-party attestation not published |
-| **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, publicly readable, PolyForm Noncommercial 1.0.0 |
+| **Protocol Spec** | [v1.0 Final](https://github.com/mishrasanjeev/grantex/blob/main/SPEC.md) — frozen, publicly readable, Orchestrum Personal Use License 1.0 |
 
 Full compliance matrix: [docs.grantex.dev/guides/compliance-matrix](https://docs.grantex.dev/guides/compliance-matrix)
 
@@ -2177,10 +2180,10 @@ OAuth 2.0 was designed for "user grants app permission to access their data." Ag
 MCP connects clients to tools and resources and defines optional OAuth-based authorization for HTTP transports. Grantex adds agent-specific delegated authority at the tool or service boundary: which agent may perform which action for which principal. The two layers are complementary.
 
 **Who owns the standard?**  
-The v1.0 protocol specification is published in this repository under the PolyForm Noncommercial License 1.0.0. Grantex is owned by Orchestrum Technologies LLP, and Sanjeev Kumar is listed as inventor and owner. Orchestrum Technologies LLP maintains the reference implementation. Revision -02 is published as an active individual IETF Internet-Draft, and revision -03 is under review; neither publication nor repository implementation is working-group adoption, independent certification, or IETF endorsement.
+The v1.0 protocol specification is published in this repository under the Orchestrum Personal Use License 1.0. Grantex is owned by Orchestrum Technologies LLP, and Sanjeev Kumar is listed as inventor and owner. Orchestrum Technologies LLP maintains the reference implementation. Revision -02 is published as an active individual IETF Internet-Draft, and revision -03 is under review; neither publication nor repository implementation is working-group adoption, independent certification, or IETF endorsement.
 
 **Can I self-host?**  
-Yes. The SDKs are Apache-2.0 and free for any use. The auth service and portal are PolyForm Noncommercial 1.0.0: self-hosting them is free for noncommercial use, and commercial self-hosting, including inside a for-profit business, needs a written agreement with Orchestrum Technologies LLP (see [Licence](#licence)). Docker Compose deploy in one command. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete guide or the [self-hosting docs](https://docs.grantex.dev/guides/self-hosting).
+Yes. The SDKs are Apache-2.0 and free for any use. The auth service and portal are under the Orchestrum Personal Use License 1.0: an individual may self-host them for their own personal use, and self-hosting by or for any organisation, including evaluation and pilots, needs prior written permission from Orchestrum Technologies LLP (see [Licence](#licence)). Docker Compose deploy in one command. See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the complete guide or the [self-hosting docs](https://docs.grantex.dev/guides/self-hosting).
 
 ---
 
@@ -2188,9 +2191,10 @@ Yes. The SDKs are Apache-2.0 and free for any use. The auth service and portal a
 
 SDKs and client packages (`packages/`) and examples (`examples/`): Apache-2.0,
 open source and free for any use. Auth service, portal, specification text,
-documentation and website: [PolyForm Noncommercial License 1.0.0](LICENSE),
-licensor Orchestrum Technologies LLP; commercial use of those needs a written
-agreement with Orchestrum Technologies LLP
+documentation and website: [Orchestrum Personal Use License 1.0](LICENSE),
+licensor Orchestrum Technologies LLP; free only for an individual's personal
+use, and any organisation needs prior written permission from Orchestrum
+Technologies LLP
 ([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md),
 [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in)). Directory scope:
 [LICENSING.md](LICENSING.md). Trademarks: [TRADEMARKS.md](TRADEMARKS.md).

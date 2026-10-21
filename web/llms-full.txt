@@ -20,7 +20,7 @@ Canonical sources:
 - OpenAPI: https://github.com/mishrasanjeev/grantex/blob/main/docs/openapi.yaml
 - AgenticOrg governed-case integration: https://docs.grantex.dev/guides/agenticorg-governed-cases
 - License (SDKs and client packages, packages/): Apache-2.0, open source
-- License (server, portal, specification text, docs, website): PolyForm-Noncommercial-1.0.0 (source-available), licensor Orchestrum Technologies LLP
+- License (server, portal, specification text, docs, website): LicenseRef-Orchestrum-Personal-Use-1.0, the Orchestrum Personal Use License 1.0 (source-available), licensor Orchestrum Technologies LLP
 - Licence summary: https://docs.grantex.dev/license
 - Directory scope: https://github.com/mishrasanjeev/grantex/blob/main/LICENSING.md
 - Commercial licensing: https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md
@@ -28,13 +28,15 @@ Canonical sources:
 
 Grantex SDKs and client packages are Apache-2.0 and free for any use,
 including commercial use. From 21 October 2026, the Grantex server and portal,
-including all updates, are licensed under the PolyForm Noncommercial License
-1.0.0: only self use is free, and commercial use of any sort, including running
-the server inside a for-profit business, hosting or SaaS, resale and paid
-services, needs a written agreement with Orchestrum Technologies LLP
-(sanjeev@orchestrum.in). Commercial use of the hosted services needs an
-agreement too. Releases of the server and portal published before 21 October
-2026 remain available under the Apache License 2.0 they were released with.
+including all updates, are licensed under the Orchestrum Personal Use License
+1.0: only an individual's own personal use is free, and every organisation
+(companies, firms, sole proprietors' businesses, charities, schools,
+universities, research bodies and government) needs prior written permission
+from Orchestrum Technologies LLP in a signed agreement (sanjeev@orchestrum.in),
+including for evaluation, testing, pilots, internal use, hosting, resale and
+embedding, paid or free. Commercial use of the hosted services needs an
+agreement too. Releases published before 21 October 2026 remain available
+under the terms they were released with.
 "Grantex" and "AgenticOrg" are trademarks of Orchestrum Technologies LLP;
 commercial use of the names, logos, hosted services or brand, including with
 the Apache-licensed SDKs and earlier versions, needs prior written approval.
@@ -466,7 +468,7 @@ outside MCP and agent-token authority. See the
 
 ### Can Grantex be self-hosted?
 
-Yes. The SDKs are Apache-2.0 and free for any use. The server and portal are PolyForm Noncommercial 1.0.0: self-hosting them is free for noncommercial use, and commercial self-hosting, including inside a for-profit business, needs a written agreement with Orchestrum Technologies LLP. Follow https://docs.grantex.dev/guides/self-hosting and apply the documented security and operations controls.
+Yes. The SDKs are Apache-2.0 and free for any use. The server and portal are under the Orchestrum Personal Use License 1.0: an individual may self-host them for their own personal use, and self-hosting by or for any organisation, including evaluation and pilots, needs prior written permission from Orchestrum Technologies LLP. Follow https://docs.grantex.dev/guides/self-hosting and apply the documented security and operations controls.
 
 ### Is Grantex an IETF standard?
 

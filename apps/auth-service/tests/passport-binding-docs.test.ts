@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The examples in spec/passport-binding.md and docs/concepts/passport-vs-grant.md
  * are what the auth service takes and produces: each marked JSON block is

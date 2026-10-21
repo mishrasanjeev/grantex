@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * POST /v1/commerce/oacp/commitment-evidence/settlement-receipts (G59): bind
  * an x402 or MPP settlement receipt to a commitment as a signed OACP

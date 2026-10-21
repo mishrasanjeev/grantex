@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * OACP mandates as signed JWTs (G41): the claim layout, the signer and the
  * verifier. Pure: no database, no clock of its own. The issuing service

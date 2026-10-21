@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 """Refuse changes that name a denylisted third-party vendor.
 
 The plain terms are not stored in the repository. ``security/denylist.sha256``

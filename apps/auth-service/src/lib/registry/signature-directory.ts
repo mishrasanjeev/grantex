@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The registry's HTTP Message Signatures key directory (G50):
  * `GET /.well-known/http-message-signatures-directory`, media type

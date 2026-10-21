@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The auth service verifies Agent Passports with a copy of the verification
  * half of packages/agent-passport (src/lib/registry/passport-verify.ts): the

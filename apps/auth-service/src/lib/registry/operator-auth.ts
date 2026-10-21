@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * Registry operator keys: the credential for the registry's write routes
  * (accrediting, suspending and withdrawing issuers, revoking their keys).

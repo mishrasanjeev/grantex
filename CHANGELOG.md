@@ -6,24 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-### Breaking - Server, portal and docs relicensed under PolyForm Noncommercial 1.0.0; SDKs stay Apache-2.0
+### Breaking - Platform licensed under the Orchestrum Personal Use License 1.0; SDKs stay Apache-2.0
 - Grantex now has two licences; [LICENSING.md](LICENSING.md) lists the
   directories. The SDKs and client packages in `packages/`, and `examples/`,
   stay Apache-2.0: open source and free for any use, including commercial use.
-- From 21 October 2026, the rest of the repository, including all updates, is
-  licensed under the PolyForm Noncommercial License 1.0.0 ([LICENSE](LICENSE)),
+- From 21 October 2026, the rest of the repository (the Grantex platform),
+  including all updates, is licensed under the Orchestrum Personal Use License
+  1.0 ([LICENSE](LICENSE), SPDX `LicenseRef-Orchestrum-Personal-Use-1.0`),
   licensor Orchestrum Technologies LLP. That covers the auth service and
   developer portal (`apps/`), the protocol specification text, documentation,
-  website and tooling. For these parts only self use is free; commercial use of
-  any sort, including running the server inside a for-profit business,
-  hosting or SaaS, resale and paid services, needs a written agreement with
-  Orchestrum Technologies LLP ([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)).
-  Commercial use of the hosted services needs an agreement too. There is no
-  opt-out. To keep running the server commercially without an agreement, stay
-  on a server release published before that date; the SDKs are unaffected.
-- Releases of the server, portal and other non-SDK parts published before
-  21 October 2026 remain available under the Apache License 2.0 they were
-  released with.
+  website and tooling. Only an individual using these parts for their own
+  personal purposes is free. Every organisation (companies, firms, sole
+  proprietors' businesses, charities, schools, universities, research bodies
+  and government) needs prior written permission from Orchestrum Technologies
+  LLP in a signed agreement, including for evaluation, testing, pilots,
+  internal use, hosting, resale and embedding, paid or free
+  ([COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)). Commercial use of the
+  hosted services needs an agreement too, even through the open SDKs. There is
+  no opt-out. To keep running the server in an organisation without an
+  agreement, stay on a release published before that date; the SDKs are
+  unaffected.
+- This replaces the PolyForm Noncommercial License 1.0.0 that was on `main`
+  for these parts earlier on 21 October 2026; no release used it.
+- Releases published before 21 October 2026 remain available under the terms
+  they were released with.
 - [TRADEMARKS.md](TRADEMARKS.md): "Grantex" and "AgenticOrg" and their logos are
   trademarks of Orchestrum Technologies LLP. Commercial use of the names,
   logos, hosted services or brand needs prior written approval, including with
@@ -36,9 +42,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   other packages. Package NOTICE files and READMEs state Apache-2.0 and point
   to the separate server licence.
 - Server and docs: SPDX headers outside `packages/` read
-  `PolyForm-Noncommercial-1.0.0`, as do `apps/auth-service` metadata, the
-  OpenAPI `info.license` and `release-status.json` (which adds
-  `sdkLicense: Apache-2.0`). Third-party files (RFC 8785 test vectors, copied
+  `LicenseRef-Orchestrum-Personal-Use-1.0`, as do the `apps/auth-service`,
+  `apps/portal` and `apps/mpp-demo-service` package metadata and
+  `release-status.json` (which adds `licenseName`, `licenseUrl` and
+  `sdkLicense: Apache-2.0`); the OpenAPI `info.license` names the licence and
+  links the root LICENSE. Third-party files (RFC 8785 test vectors, copied
   UCP and ACP JSON Schemas, IETF Internet-Draft texts) keep their own licences;
   see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - [CONTRIBUTING.md](CONTRIBUTING.md) has a contribution licence that lets
@@ -49,9 +57,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   server".
 - Removed the 12 October 2026 transition draft (`licensing/`) and its test,
   which no release adopted. `tests/scripts/licensing.test.mjs` checks the
-  split: the official PolyForm text in the root LICENSE, Apache under
-  `packages/` and `examples/`, PolyForm SPDX headers in `apps/`, and the public
-  statements.
+  split: the approved Orchestrum Personal Use License 1.0 text (by hash) in the
+  root LICENSE, Apache under `packages/` and `examples/`,
+  `LicenseRef-Orchestrum-Personal-Use-1.0` SPDX headers and metadata on the
+  platform, and the public statements.
 
 ### Changed - Re-implemented contributed code, behaviour unchanged
 - `grantex-strands` (Python) has a new implementation of

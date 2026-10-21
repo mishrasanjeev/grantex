@@ -2,7 +2,7 @@
 
 Grantex SDKs and client packages (`packages/`) and examples are licensed under
 the Apache License 2.0; the rest of the Grantex source is licensed under the
-PolyForm Noncommercial License 1.0.0 (see [LICENSING.md](LICENSING.md)), unless
+Orchestrum Personal Use License 1.0 (see [LICENSING.md](LICENSING.md)), unless
 a file states otherwise. Third-party packages
 and the third-party files listed below retain their own licenses. Package
 managers normally download these packages during installation; this repository

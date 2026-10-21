@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The attestation JWS profile (spec/attestation-1.0.md), without a database:
  * compact parsing, the protected header, the payload members and their types,

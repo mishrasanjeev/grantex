@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The signed registry manifest, `GET /.well-known/agent-registry.json`
  * (PRD §7 Federation and discovery): everything a relying party without

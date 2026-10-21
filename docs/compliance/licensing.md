@@ -1,6 +1,6 @@
 ---
 title: "Commercial licensing"
-description: "How to obtain a commercial licence for the Grantex server, portal and hosted services from Orchestrum Technologies LLP. The SDKs stay Apache-2.0."
+description: "How an organisation obtains written permission to use the Grantex server, portal and hosted services from Orchestrum Technologies LLP. The SDKs stay Apache-2.0."
 ---
 
 **In effect from 21 October 2026.** Grantex has two licences, summarised on
@@ -11,62 +11,62 @@ the [Licence](/license) page:
   commercial use. They need no agreement.
 - The Grantex server and developer portal, the protocol specification text,
   the documentation and the website are licensed under the
-  [PolyForm Noncommercial License 1.0.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE),
+  [Orchestrum Personal Use License 1.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE),
   licensor Orchestrum Technologies LLP.
 
 ## Short notice
 
-For the server, portal and hosted services, only self use is free. Commercial
-use of any sort needs Orchestrum's prior approval and a written agreement with
-Orchestrum Technologies LLP. Agreements:
+For the server, portal and hosted services, only an individual using them for
+their own personal purposes is free. Every organisation needs prior written
+permission from Orchestrum Technologies LLP in a signed agreement, whatever the
+use and whether it is paid or free. Permission:
 [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
 
-This applies to existing and new users alike. Releases of those parts
-published before 21 October 2026 remain available under the Apache License 2.0
-they were released with; versions and updates published from that date are
-not, so using them commercially needs an agreement.
+This applies to existing and new users alike. Releases published before
+21 October 2026 remain available under the terms they were released with;
+versions and updates of the platform published from that date are not, so an
+organisation needs written permission to use them.
 
 ## What is free
 
 - The SDKs and client packages, for any purpose.
-- Self use of the server and portal for noncommercial purposes: personal
-  study, research, experiments, testing and hobby projects with no expected
-  commercial application.
-- The other noncommercial uses the PolyForm licence names, such as use by a
-  charitable organisation, educational institution, public research
-  organisation, public safety or health organisation, environmental protection
-  organisation or government institution.
-- Changing the PolyForm-licensed code and sharing it for those purposes, with
-  the licence terms and `Required Notice:` lines included.
+- An individual's own personal use of the server and portal, such as learning,
+  personal study, experiments and hobby projects, when the individual is not
+  acting for, on behalf of or for the benefit of any organisation.
+- Changing the platform code for that personal use, keeping the licence and
+  the copyright notice with every copy. Distributing it, changed or not, needs
+  a written agreement.
 
-## What needs a written agreement
+## What needs written permission
 
-Orchestrum treats all of the following as commercial use of the server,
-portal or hosted services:
+Any use of the server, portal or hosted services by or for an organisation:
+any company, partnership, LLP, firm, sole proprietorship carrying on a
+business, charity, non-profit, school, university, research institution,
+government body or other organisation. There is no exception for evaluation,
+charities, education, research or government. This includes:
 
-- Running the auth service or portal inside a for-profit business, even if
-  nothing is sold, including pilots and proofs of concept.
+- Evaluation, testing, pilots and proofs of concept.
+- Internal use, even if nothing is sold.
 - Hosting, SaaS or a managed service built on the server, offered to others.
-- Resale, bundling, sublicensing or commercial redistribution of the server or
-  portal, changed or not.
-- Embedding the auth service, the portal or the specification text in a
-  commercial product, appliance or platform.
-- Consulting, integration, implementation, training or support work for
-  clients that runs or deploys the server.
+- Resale, bundling, sublicensing or redistribution of the server or portal,
+  changed or not.
+- Embedding the auth service, the portal or the specification text in another
+  product, appliance or platform.
+- Consulting, integration, implementation, training or support work that runs
+  or deploys the server, paid or unpaid.
 - Commercial use of the hosted services (`grantex.dev`, `api.grantex.dev` and
   related endpoints), whichever SDK you use to call them.
 
-If you are unsure, treat the use as commercial until Orchestrum confirms
-otherwise in writing.
+If you are unsure, treat the use as needing permission until Orchestrum
+confirms otherwise in writing.
 
-## How to obtain an agreement
+## How to obtain permission
 
 Email [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) with your
 organisation, the components and versions you want, how you will use them and
 who the users are, the expected scale and deployment, and when you need to
-start. Orchestrum replies with terms. Commercial use may begin only after a
-written agreement is signed by both parties; a request or a reply is not a
-licence.
+start. Orchestrum replies with terms. Use may begin only after a written
+agreement is signed by both parties; a request or a reply is not permission.
 
 ## Hosted services and brand
 
@@ -88,6 +88,6 @@ keep their own licences.
 
 ## References
 
-- [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0)
+- [Orchestrum Personal Use License 1.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
 - [LICENSING.md](https://github.com/mishrasanjeev/grantex/blob/main/LICENSING.md)
 - [COMMERCIAL-LICENSE.md](https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md)

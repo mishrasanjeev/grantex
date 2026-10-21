@@ -1,82 +1,65 @@
-Required Notice: Copyright 2026 Orchestrum Technologies LLP.
-Required Notice: Grantex inventor and owner: Sanjeev Kumar <sanjeev@orchestrum.in> or <mishra.sanjeev@gmail.com>.
-Required Notice: Commercial use of any kind requires a prior written agreement with Orchestrum Technologies LLP (sanjeev@orchestrum.in); see https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md
+Grantex inventor and owner: Sanjeev Kumar <sanjeev@orchestrum.in> or <mishra.sanjeev@gmail.com>.
 
-Scope: these terms apply to this repository except the packages/ and examples/
+Scope: this licence applies to this repository except the packages/ and examples/
 directories, the spec/examples/ test vectors and the spec/*.schema.json files,
 which are licensed under the Apache License 2.0 (see the LICENSE file in each
 package, in examples/ and in spec/examples/). See LICENSING.md.
 
-# PolyForm Noncommercial License 1.0.0
+# Orchestrum Personal Use License 1.0
 
-<https://polyformproject.org/licenses/noncommercial/1.0.0>
+Copyright (c) 2026 Orchestrum Technologies LLP. All rights reserved except as stated below.
 
-## Acceptance
+## 1. Who may use the software without permission
 
-In order to get any license under these terms, you must agree to them as both strict obligations and conditions to all your licenses.
+An **individual** may use, copy and modify the software for their own personal purposes
+("Personal Use"), provided the individual is not acting for, on behalf of, or for the benefit of
+any organisation.
 
-## Copyright License
+Personal Use does **not** include use by or for any company, partnership, LLP, firm, sole
+proprietorship carrying on a business, charity, non-profit, school, university, research
+institution, government body or any other organisation, whether or not that use is commercial,
+internal, for evaluation, or free of charge to others.
 
-The licensor grants you a copyright license for the software to do everything you might do with the software that would otherwise infringe the licensor's copyright in it for any permitted purpose.  However, you may only distribute the software according to [Distribution License](#distribution-license) and make changes or new works based on the software according to [Changes and New Works License](#changes-and-new-works-license).
+## 2. Everyone else needs written permission
 
-## Distribution License
+Any use other than Personal Use — including any use by or for an organisation, any commercial
+use, evaluation, testing, piloting, internal deployment, hosting, offering the software or a
+service based on it to others, resale, sublicensing, and embedding it in another product —
+requires **prior written permission** from Orchestrum Technologies LLP in a signed agreement.
 
-The licensor grants you an additional copyright license to distribute copies of the software.  Your license to distribute covers distributing the software with changes and new works permitted by [Changes and New Works License](#changes-and-new-works-license).
+To request permission: sanjeev@orchestrum.in
 
-## Notices
+## 3. Conditions
 
-You must ensure that anyone who gets a copy of any part of the software from you also gets a copy of these terms or the URL for them above, as well as copies of any plain-text lines beginning with `Required Notice:` that the licensor provided with the software.  For example:
+1. Keep this licence and the copyright notice with every copy, including modified copies.
+2. You may not distribute the software, modified or not, except as allowed by a written
+   agreement with Orchestrum Technologies LLP.
+3. You may not remove or alter any licensing, copyright or trademark notice.
+4. This licence grants no right to use the names, logos or trademarks "AgenticOrg", "Grantex" or
+   "Orchestrum"; see TRADEMARKS.md.
 
-> Required Notice: Copyright Yoyodyne, Inc. (http://example.com)
+## 4. Earlier releases and open-source parts
 
-## Changes and New Works License
+1. Releases published before 21 October 2026 were made available under the terms they were
+   released with. This licence applies to every version from 21 October 2026 onward, including
+   all updates.
+2. Some directories are licensed separately under the Apache License 2.0 (for example the SDKs
+   and client packages). Those directories say so in their own LICENSE files, and this licence
+   does not apply to them.
 
-The licensor grants you an additional copyright license to make changes and new works based on the software for any permitted purpose.
+## 5. Termination
 
-## Patent License
+Your rights under this licence end automatically if you use the software outside Personal Use
+without a written agreement, or break any condition above. They return if you stop the breach
+within 30 days of first learning of it, unless you have breached before.
 
-The licensor grants you a patent license for the software that covers patent claims the licensor can license, or becomes able to license, that you would infringe by using the software.
+## 6. No warranty and no liability
 
-## Noncommercial Purposes
+The software is provided "as is", without warranty of any kind, express or implied, including
+merchantability, fitness for a particular purpose and non-infringement. To the fullest extent
+the law allows, Orchestrum Technologies LLP is not liable for any claim, damages or other
+liability arising from the software or its use.
 
-Any noncommercial purpose is a permitted purpose.
+## 7. Governing law
 
-## Personal Uses
-
-Personal use for research, experiment, and testing for the benefit of public knowledge, personal study, private entertainment, hobby projects, amateur pursuits, or religious observance, without any anticipated commercial application, is use for a permitted purpose.
-
-## Noncommercial Organizations
-
-Use by any charitable organization, educational institution, public research organization, public safety or health organization, environmental protection organization, or government institution is use for a permitted purpose regardless of the source of funding or obligations resulting from the funding.
-
-## Fair Use
-
-You may have "fair use" rights for the software under the law. These terms do not limit them.
-
-## No Other Rights
-
-These terms do not allow you to sublicense or transfer any of your licenses to anyone else, or prevent the licensor from granting licenses to anyone else.  These terms do not imply any other licenses.
-
-## Patent Defense
-
-If you make any written claim that the software infringes or contributes to infringement of any patent, your patent license for the software granted under these terms ends immediately. If your company makes such a claim, your patent license ends immediately for work on behalf of your company.
-
-## Violations
-
-The first time you are notified in writing that you have violated any of these terms, or done anything with the software not covered by your licenses, your licenses can nonetheless continue if you come into full compliance with these terms, and take practical steps to correct past violations, within 32 days of receiving notice.  Otherwise, all your licenses end immediately.
-
-## No Liability
-
-***As far as the law allows, the software comes as is, without any warranty or condition, and the licensor will not be liable to you for any damages arising out of these terms or the use or nature of the software, under any kind of legal claim.***
-
-## Definitions
-
-The **licensor** is the individual or entity offering these terms, and the **software** is the software the licensor makes available under these terms.
-
-**You** refers to the individual or entity agreeing to these terms.
-
-**Your company** is any legal entity, sole proprietorship, or other kind of organization that you work for, plus all organizations that have control over, are under the control of, or are under common control with that organization.  **Control** means ownership of substantially all the assets of an entity, or the power to direct its management and policies by vote, contract, or otherwise.  Control can be direct or indirect.
-
-**Your licenses** are all the licenses granted to you for the software under these terms.
-
-**Use** means anything you do with the software requiring one of your licenses.
+This licence is governed by the laws of India. The courts at New Delhi, India have exclusive jurisdiction.

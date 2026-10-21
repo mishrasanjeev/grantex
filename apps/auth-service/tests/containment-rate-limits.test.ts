@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * Containment and revocation-status routes are rate limited in buckets of
  * their own, not the developer's plan bucket. A revocation must not wait out

@@ -4,21 +4,22 @@ description: "Review the draft Grantex hosted-service terms and how they relate 
 ---
 
 **Status:** Draft. Subject to legal review. **Not a legally executed agreement and not legal advice.**
-**Last reviewed:** 2026-10-21 (server and portal relicensed under PolyForm Noncommercial 1.0.0; SDKs stay Apache-2.0)
+**Last reviewed:** 2026-10-21 (server and portal relicensed under the Orchestrum Personal Use License 1.0; SDKs stay Apache-2.0)
 **Applies to:** the hosted Grantex services at `grantex.dev` and `api.grantex.dev`.
 
-Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. The Grantex software is licensed separately: the SDKs under the Apache License 2.0 and the server and portal under the PolyForm Noncommercial License 1.0.0 (see the [Licence](/license) page and [commercial licensing](/compliance/licensing)); these Terms govern only your use of the hosted service operated by Orchestrum Technologies LLP.
+Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. The Grantex software is licensed separately: the SDKs under the Apache License 2.0 and the server and portal under the Orchestrum Personal Use License 1.0 (see the [Licence](/license) page and [commercial licensing](/compliance/licensing)); these Terms govern only your use of the hosted service operated by Orchestrum Technologies LLP.
 
 ### Software licence and commercial use
 
 The Grantex SDKs and client packages are open source under the Apache License
 2.0. From 21 October 2026 the Grantex server and portal, including all
-updates, are licensed under the PolyForm Noncommercial License 1.0.0. For the
-server, the portal and this hosted service, only self use is free; commercial
-use of any sort needs a written agreement with Orchestrum Technologies LLP.
-Agreements: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in). Releases of
-the server and portal published before that date remain available under the
-Apache License 2.0 they were released with.
+updates, are licensed under the Orchestrum Personal Use License 1.0. For the
+server and portal, only an individual's own personal use is free; any use by
+or for an organisation, paid or free, and commercial use of this hosted
+service need prior written permission from Orchestrum Technologies LLP in a
+signed agreement. Permission: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
+Releases published before that date remain available under the terms they
+were released with.
 
 This applies to existing and new users. Existing hosted customers keep their
 executed agreements, which control until amended or replaced under the notice
@@ -79,7 +80,7 @@ Each party will protect the other's non-public information with at least the sam
 
 ## 10. Intellectual property
 
-- The Grantex SDKs are licensed to you under the Apache License 2.0. The server and portal are licensed under the PolyForm Noncommercial License 1.0.0 (or, for releases published before 21 October 2026, the Apache License 2.0 they were released with); commercial use of those needs a written agreement with Orchestrum Technologies LLP.
+- The Grantex SDKs are licensed to you under the Apache License 2.0. The server and portal are licensed under the Orchestrum Personal Use License 1.0 (or, for releases published before 21 October 2026, the terms they were released with); any use of those by or for an organisation needs prior written permission from Orchestrum Technologies LLP.
 - The "Grantex" and "AgenticOrg" names and logos are trademarks of Orchestrum Technologies LLP; the hosted-service branding and product ownership remain with Orchestrum Technologies LLP. Sanjeev Kumar is listed as inventor and owner.
 - Feedback you provide may be used to improve the service without obligation, but Grantex will not publicly attribute negative feedback to you without consent.
 
