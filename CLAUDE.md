@@ -3,7 +3,7 @@
 `AGENTS.md` and `CLAUDE.md` in this repository are the same document. Change both in the
 same commit and keep them identical.
 
-Grantex is an open-source authorization protocol and reference implementation for AI agents.
+Grantex is a source-available authorization protocol and reference implementation for AI agents.
 Keep protocol and SDK changes small, explicit, and verifiable across the supported languages.
 
 ## Hard rules
