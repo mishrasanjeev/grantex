@@ -144,7 +144,6 @@ test('public pages no longer name the superseded PolyForm licence', () => {
   // Historical records and the dependency licence policy may name it.
   const exempt = new Set([
     'CHANGELOG.md',
-    'TRADEMARKS.md',
     'scripts/audit-python-dependencies.py',
     'tests/scripts/licensing.test.mjs',
   ]);
