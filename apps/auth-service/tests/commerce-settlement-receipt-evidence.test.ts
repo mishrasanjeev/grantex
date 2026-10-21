@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * Settlement receipts as OACP commitment evidence (G59), without a
  * database: the receipt forms read, the refusals, the public-safe reference

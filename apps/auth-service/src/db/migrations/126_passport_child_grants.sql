@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+-- SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 -- Per-merchant child grants (Agent Trust Registry, Phase 1; PRD §8.5,
 -- Appendix B; owner decision 3; spec/passport-binding.md §8).
 --

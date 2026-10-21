@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The shared OACP artifact JWS profile v1 vectors
  * (spec/examples/oacp/oacp-artifact-jws-v1.json). Every verifier must refuse

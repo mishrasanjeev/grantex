@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 """Vendor-name denylist check (scripts/check_denylist.py).
 
 Uses its own salt and invented terms. Two tests read the committed hash list:

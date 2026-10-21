@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The signed registry manifest (/.well-known/agent-registry.json) without a
  * database: what signRegistryManifest publishes, and every refusal of

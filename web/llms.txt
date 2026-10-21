@@ -60,7 +60,7 @@ For MCP HTTP transport authorization, configure a compatible authorization serve
 - [Security Hardening](https://docs.grantex.dev/guides/security-hardening): Deployment and service controls.
 - [Security Assessment](https://docs.grantex.dev/security/audit-report): Published external assessment and remediation notes.
 - [Security Architecture](https://docs.grantex.dev/security/overview): Trust boundaries and attack analysis.
-- [Self-Hosting](https://docs.grantex.dev/guides/self-hosting): Deploy the source-available reference server (PolyForm Noncommercial 1.0.0; commercial use by agreement).
+- [Self-Hosting](https://docs.grantex.dev/guides/self-hosting): Deploy the source-available reference server (Orchestrum Personal Use License 1.0; organisations need written permission).
 
 ## Comparisons and Direct Answers
 
@@ -92,8 +92,8 @@ For MCP HTTP transport authorization, configure a compatible authorization serve
 - [DID Document](https://grantex.dev/.well-known/did.json): Public `did:web:grantex.dev` verification methods.
 - [OpenAPI 3.1](https://github.com/mishrasanjeev/grantex/blob/main/docs/openapi.yaml): Auth service API contract.
 - [Sitemap](https://grantex.dev/sitemap.xml): Canonical public web URLs.
-- [GitHub Repository](https://github.com/mishrasanjeev/grantex): Apache-2.0 SDKs, source-available server (PolyForm Noncommercial 1.0.0), tests, issues, and release history.
-- [Licence](https://docs.grantex.dev/license): SDKs and client packages are Apache-2.0, free for any use. The server, portal and hosted services are PolyForm Noncommercial License 1.0.0 from 21 October 2026, including all updates: only self use is free; commercial use of any sort needs a written agreement with Orchestrum Technologies LLP at sanjeev@orchestrum.in. Server releases before that date remain under the Apache License 2.0 they were released with.
+- [GitHub Repository](https://github.com/mishrasanjeev/grantex): Apache-2.0 SDKs, source-available server (Orchestrum Personal Use License 1.0), tests, issues, and release history.
+- [Licence](https://docs.grantex.dev/license): SDKs and client packages are Apache-2.0, free for any use. The server, portal and hosted services are under the Orchestrum Personal Use License 1.0 from 21 October 2026, including all updates: only an individual's own personal use is free; every organisation needs prior written permission from Orchestrum Technologies LLP in a signed agreement, paid or free, at sanjeev@orchestrum.in. Releases published before that date remain available under the terms they were released with.
 - [Commercial licensing](https://docs.grantex.dev/compliance/licensing): Which uses of the server, portal and hosted services need an agreement and how to obtain one.
 
 ## Optional

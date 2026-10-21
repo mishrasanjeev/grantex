@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The OACP mandate JWT profile against the shared vectors
  * (spec/examples/oacp/oacp-mandates-v1.json): every case refuses with exactly

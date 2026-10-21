@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The agent key registry's pure rules: declared rails and the P-256 rule for
  * payments rails, when a key in the history may be used (the rotation overlap

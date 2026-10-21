@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * Attestation ingestion, withdrawal and refresh against real Postgres,
  * through the routes, with accredited issuers served by a fake issuer on

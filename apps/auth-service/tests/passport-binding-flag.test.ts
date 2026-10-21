@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * PASSPORT_BOUND_GRANTS_ENABLED and POST /v1/authorize, without a database.
  *

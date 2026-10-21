@@ -129,7 +129,7 @@ It also handles **delegation** — if your agent spawns a sub-agent, the sub-age
 
 There's a TypeScript SDK, Python SDK, Go SDK, and integrations for LangChain, CrewAI, AutoGen, Vercel AI, OpenAI Agents SDK, Google ADK, and an MCP server (so it works with Claude Desktop/Cursor/Windsurf).
 
-The SDKs are open source (Apache 2.0); the server is source-available (PolyForm Noncommercial 1.0.0; commercial use by written agreement with Orchestrum Technologies LLP):
+The SDKs are open source (Apache 2.0); the server is source-available (Orchestrum Personal Use License 1.0; organisations by written permission from Orchestrum Technologies LLP):
 
 - Homepage: [grantex.dev](https://grantex.dev)
 - GitHub: [github.com/mishrasanjeev/grantex](https://github.com/mishrasanjeev/grantex)
@@ -184,7 +184,7 @@ Verification is offline via JWKS (`/.well-known/jwks.json`) — receiving servic
 - CLI tool
 - OpenAPI 3.1 spec + Postman collection
 
-The SDKs are Apache 2.0. The server is source-available under the PolyForm Noncommercial License 1.0.0; commercial use of it needs a written agreement with Orchestrum Technologies LLP.
+The SDKs are Apache 2.0. The server is source-available under the Orchestrum Personal Use License 1.0: free for an individual's personal use, and any organisation needs written permission from Orchestrum Technologies LLP.
 
 **Links**:
 
@@ -323,7 +323,7 @@ What's shipping today:
 - Auth service, CLI, developer portal, conformance test suite
 - Enterprise features: policy engine, SCIM/SSO, anomaly detection, compliance exports
 
-The SDKs are Apache 2.0. The server is source-available under the PolyForm Noncommercial License 1.0.0; commercial use of it needs a written agreement with Orchestrum Technologies LLP.
+The SDKs are Apache 2.0. The server is source-available under the Orchestrum Personal Use License 1.0: free for an individual's personal use, and any organisation needs written permission from Orchestrum Technologies LLP.
 
 If you're building with AI agents — whether it's a single-agent tool or a multi-agent pipeline — I'd love your feedback on the protocol design.
 

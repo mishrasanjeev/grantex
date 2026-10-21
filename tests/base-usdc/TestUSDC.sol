@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 pragma solidity ^0.8.35;
 
 // Test fixture only. Never deploy this mintable token outside the isolated Anvil chain.

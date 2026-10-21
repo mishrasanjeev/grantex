@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * Attestations in the registry (PRD §5 Attestation, §7 Attestation, §8.3,
  * Appendix A): ingestion, withdrawal, refresh and the recheck of an issuer's

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+-- SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 -- Passport binding at grant issuance (Agent Trust Registry, Phase 1; PRD §5
 -- GrantPassportBinding, §8.4; spec/passport-binding.md).
 --

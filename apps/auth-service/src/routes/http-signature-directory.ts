@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * GET /.well-known/http-message-signatures-directory (G50): the registry's
  * HTTP Message Signatures key directory (lib/registry/signature-directory.ts).

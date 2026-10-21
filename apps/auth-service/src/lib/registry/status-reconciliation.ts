@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * Status-list reconciliation with cascade (PRD §7 Events reconciliation
  * loop, §8.7, §9; spec/registry-federation.md "Status reconciliation").

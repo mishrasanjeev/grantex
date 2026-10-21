@@ -32,8 +32,8 @@ info:
     Commerce, the SCIM Bearer data-plane routes under `/scim/v2/*`, admin, and other custom-auth routes do not consume these plan buckets; the standard API-key-authenticated `/v1/scim/tokens` management routes do.
     These defaults describe repository source; verify managed-environment rollout separately.
   license:
-    name: PolyForm Noncommercial License 1.0.0 (commercial use by written agreement with Orchestrum Technologies LLP)
-    url: https://polyformproject.org/licenses/noncommercial/1.0.0
+    name: Orchestrum Personal Use License 1.0 (organisations need written permission from Orchestrum Technologies LLP)
+    url: https://github.com/mishrasanjeev/grantex/blob/main/LICENSE
   contact:
     name: Orchestrum Technologies LLP / Grantex
     url: https://grantex.dev

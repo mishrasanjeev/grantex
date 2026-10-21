@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * Agent network identity against real Postgres: migration 136, the key
  * directory and the scheme-agent-id lookup queries (G50, G51), and settlement

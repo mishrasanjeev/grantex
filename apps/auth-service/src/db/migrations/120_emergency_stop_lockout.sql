@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+-- SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 -- The emergency stop's lockout. A stop that asks for one (`lockout: true`)
 -- records a freeze here before it sweeps, and every issuance path refuses to
 -- issue a grant or a token under a freeze that has not been lifted. A stop

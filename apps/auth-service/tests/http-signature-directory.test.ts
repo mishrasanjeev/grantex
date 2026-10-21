@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The registry's HTTP Message Signatures key directory (G50) with the
  * database mocked: which agent keys are listed, the document and its

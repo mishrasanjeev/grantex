@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * A local stack (PUBLIC_BASE_URL http://localhost:<port>) could not issue a
  * single OACP artifact: issuance demanded an https status list URI, so the

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * KYA tier on the Agent Passport (G54): the operator's mapping table, the
  * mapping from counted trust marks, and the claim on an issued passport only

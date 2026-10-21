@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The agent key history mirror (PRD §7 Keys, §8.8), behind
  * AGENT_KEY_HISTORY_MIRROR_ENABLED (default off).

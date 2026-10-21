@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * spec/registry-federation.md ("Status reconciliation"), the runbook
  * docs/runbooks/status-list-incident.md, the alert rules and

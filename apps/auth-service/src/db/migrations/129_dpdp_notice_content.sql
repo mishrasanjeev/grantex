@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+-- SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 -- DPDP consent notice content (DPDP Act 2023 s.5; DPDP Rules 2025 r.3):
 -- structured fields for the itemised personal data, the specific purposes
 -- and the goods or services they enable, the means to withdraw consent,

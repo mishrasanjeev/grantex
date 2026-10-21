@@ -2,16 +2,16 @@
 
 Grantex is owned by Orchestrum Technologies LLP and has two licences:
 
-| Part | Licence | Commercial use |
+| Part | Licence | Use by an organisation |
 |---|---|---|
 | SDKs and client packages in `packages/`, and `examples/` | Apache License 2.0, open source | Free for any use, including commercial |
-| The Grantex server and portal (`apps/`), the protocol specification text, documentation and website | [PolyForm Noncommercial License 1.0.0](LICENSE), from **21 October 2026**, including every update | Needs a written agreement with Orchestrum Technologies LLP |
+| The Grantex platform: the server and portal (`apps/`), the protocol specification text, documentation and website | [Orchestrum Personal Use License 1.0](LICENSE), from **21 October 2026**, including every update | Needs prior written permission from Orchestrum Technologies LLP in a signed agreement |
 
-[LICENSING.md](LICENSING.md) lists the directories exactly. For the
-PolyForm-licensed parts, **only self use is free. Commercial use of any sort
-needs Orchestrum's prior approval and a written agreement with Orchestrum
-Technologies LLP.** Commercial use of the hosted services needs an agreement
-too.
+[LICENSING.md](LICENSING.md) lists the directories exactly. For the platform,
+**only an individual using it for their own personal purposes is free. Every
+organisation needs Orchestrum's prior written permission in a signed agreement
+with Orchestrum Technologies LLP, whatever the use and whether it is paid or
+free.** Commercial use of the hosted services needs an agreement too.
 
 This page explains in plain language what that means. The licence texts and
 any signed agreement are what govern; this page is not legal advice.
@@ -21,76 +21,77 @@ any signed agreement are what govern; this page is not legal advice.
 - **The SDKs and client packages**, for any purpose, under the Apache License
   2.0: build them into commercial products, run them in production and
   redistribute them, keeping their licence and notices.
-- **Self use of the server and portal.** An individual using them for their own
-  noncommercial purposes: learning, personal study, research, experiments,
-  testing and hobby projects, with no expected commercial application.
-- **Other noncommercial purposes the PolyForm licence names.** Use by a
-  charitable organisation, educational institution, public research
-  organisation, public safety or health organisation, environmental protection
-  organisation or government institution, as the licence's "Noncommercial
-  Organizations" section describes.
-- **Contributing** changes back to this repository (see
+- **Personal use of the platform.** An individual using, copying and changing
+  the server, portal, specification text or documentation for their own
+  personal purposes, such as learning, personal study, experiments and hobby
+  projects, and not acting for, on behalf of or for the benefit of any
+  organisation.
+- **Contributing** changes back to this repository as an individual (see
   [CONTRIBUTING.md](CONTRIBUTING.md)).
 
-You may change the PolyForm-licensed code and share it for these purposes, as
-long as everyone who receives a copy also receives the licence terms and the
-`Required Notice:` lines at the top of [LICENSE](LICENSE).
+Personal use does not include distributing the platform. Sharing a copy of the
+platform, changed or not, needs a written agreement with Orchestrum, and every
+copy you keep must include the licence and the copyright notice in
+[LICENSE](LICENSE).
 
-## Needs a written agreement with Orchestrum
+## Needs prior written permission from Orchestrum
 
-Any commercial use of the server, the portal or the other PolyForm-licensed
-parts, whatever its size and whether or not money changes hands. Orchestrum
-treats all of the following as commercial:
+Any use of the platform by or for an organisation, and any use that is not an
+individual's personal use. "Organisation" means any company, partnership, LLP,
+firm, sole proprietorship carrying on a business, charity, non-profit, school,
+university, research institution, government body or other organisation. There
+is no exception for evaluation, charities, education, research or government,
+and it makes no difference whether the use is commercial, internal or free of
+charge to others. This includes:
 
-- **Internal use by a for-profit business**, even if nothing is sold: running
-  the Grantex auth service or portal for your own staff, products, customers or
-  operations, including pilots and proofs of concept.
+- **Evaluation, testing and pilots**: trying the auth service or portal for an
+  organisation, including proofs of concept and test deployments.
+- **Internal use**: running the platform for an organisation's own staff,
+  products, customers or operations, even if nothing is sold.
 - **Hosting, SaaS and managed services**: offering the Grantex server, or a
-  service built on running it, to other people or organisations, on your
+  service based on it, to other people or organisations, on your
   infrastructure or anyone else's.
-- **Resale and distribution**: selling, licensing, bundling or redistributing
-  the server, the portal or a changed version of them as part of a commercial
-  offering.
+- **Resale, sublicensing and distribution**: selling, licensing, bundling or
+  redistributing the server, the portal or a changed version of them.
 - **Embedding**: including the auth service, the portal or the protocol
-  specification text in a commercial product, appliance or platform.
-- **Consulting and services**: delivering paid consulting, integration,
+  specification text in another product, appliance or platform.
+- **Consulting and services**: delivering consulting, integration,
   implementation, training or support work that runs or deploys the server or
-  portal.
+  portal, paid or unpaid.
 - **The hosted services**: commercial use of `grantex.dev`, `api.grantex.dev`
   and related endpoints, whichever SDK or version you use to call them.
 
-If you are not sure whether your use is commercial, treat it as commercial
-until Orchestrum confirms otherwise in writing.
+If you are not sure whether your use is personal use, treat it as needing
+permission until Orchestrum confirms otherwise in writing.
 
-## How to obtain a commercial licence
+## How to obtain permission
 
 Email [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) with:
 
 1. your organisation's name and country;
 2. the Grantex components and versions you want to use;
-3. how you will use them (internal, hosted, embedded, resale or services) and
-   who your users are;
+3. how you will use them (evaluation, internal, hosted, embedded, resale or
+   services) and who your users are;
 4. the expected scale and deployment (self-hosted, cloud, devices); and
 5. when you need to start.
 
-Orchestrum will reply with terms. Commercial use may begin only once a written
-agreement has been signed by Orchestrum Technologies LLP and you. Sending a
-request, or receiving a reply, is not itself a licence.
+Orchestrum will reply with terms. Use may begin only once a written agreement
+has been signed by Orchestrum Technologies LLP and you. Sending a request, or
+receiving a reply, is not itself permission.
 
 ## Earlier versions and existing users
 
-Releases of the server, portal and other PolyForm-licensed parts published
-before 21 October 2026 remain available under the Apache License 2.0 terms they
-were released with.
+Releases published before 21 October 2026 remain available under the terms
+they were released with.
 
-Those terms do not extend to any version, update, fix or security patch of
-those parts published on or after 21 October 2026. If you use the Grantex
-server or portal commercially today, moving to any later version requires a
-written agreement with Orchestrum. The SDKs and client packages are not
-affected: they remain Apache-2.0. No version of the Apache License 2.0 grants
-rights in the Grantex or AgenticOrg names and logos or access to Orchestrum's
-hosted services, so commercial use of those needs Orchestrum's prior written
-approval as described in [TRADEMARKS.md](TRADEMARKS.md).
+Those terms do not extend to any version, update, fix or security patch of the
+platform published on or after 21 October 2026. If an organisation uses the
+Grantex server or portal today, moving to any later version requires a written
+agreement with Orchestrum. The SDKs and client packages are not affected: they
+remain Apache-2.0. No version of the Apache License 2.0 grants rights in the
+Grantex or AgenticOrg names and logos or access to Orchestrum's hosted
+services, so commercial use of those needs Orchestrum's prior written approval
+as described in [TRADEMARKS.md](TRADEMARKS.md).
 
 ## Material that keeps its own licence
 

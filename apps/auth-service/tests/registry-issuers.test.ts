@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * Accredited issuers (registry, PRD Phase 1): the record's validation, the
  * operator key check on the write routes, and the public, minimised read.

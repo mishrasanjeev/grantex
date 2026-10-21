@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+-- SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 -- DPDP breach register: personal data breaches a Data Fiduciary records
 -- (DPDP Act 2023 s.8(6); DPDP Rules 2025 r.7), the detailed report it sends
 -- the Board, and the intimations it gave affected Data Principals.

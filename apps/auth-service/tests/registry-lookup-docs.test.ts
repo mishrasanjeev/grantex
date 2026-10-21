@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The examples in spec/registry-federation.md ("Agent lookup", "Registry
  * manifest") and docs/relying-parties/verifying-agents.md are what the

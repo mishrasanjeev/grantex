@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 /**
  * The examples in spec/attestation-1.0.md and in
  * docs/issuers/becoming-an-accredited-issuer.md are what the registry

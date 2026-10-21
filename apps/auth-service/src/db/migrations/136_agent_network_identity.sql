@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+-- SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 -- Agent network identity (G50, G51).
 --
 -- agents.http_signature_directory: the agent's developer has opted in to

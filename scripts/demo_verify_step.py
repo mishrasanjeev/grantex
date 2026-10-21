@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 """The relying party's side of Demo 2: sign a request as the agent, verify it
 with grantex_verifier.verify(), print the decision as one JSON line.
 

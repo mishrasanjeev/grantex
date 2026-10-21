@@ -4,7 +4,7 @@
 Technologies LLP.
 
 No software licence for Grantex grants rights in these trademarks: neither the
-PolyForm Noncommercial License 1.0.0 that covers the server, portal and other
+Orchestrum Personal Use License 1.0 that covers the server, portal and other
 non-SDK parts from 21 October 2026 onward, nor the Apache License 2.0 that
 covers the SDKs, client packages and earlier releases (its section 6 excludes
 trademarks).
@@ -24,13 +24,14 @@ versions of the software. For example:
 ## Fine without asking
 
 Truthful, factual references that do not suggest endorsement and are not part
-of a commercial offering: saying that a noncommercial project uses or works
+of a commercial offering: saying that a personal project uses or works
 with Grantex, linking to `grantex.dev` or this repository, and accurate
 references in articles, talks and research.
 
-If you distribute a changed version for a permitted noncommercial purpose, do
-not call it Grantex or AgenticOrg; describe it as "based on Grantex" and keep
-the `Required Notice:` lines from [LICENSE](LICENSE).
+If a written agreement with Orchestrum allows you to distribute a changed
+version, do not call it Grantex or AgenticOrg unless that agreement says you
+may; describe it as "based on Grantex" and keep the copyright and licence
+notices from [LICENSE](LICENSE).
 
 ## Contact
 
