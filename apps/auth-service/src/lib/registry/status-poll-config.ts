@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * REGISTRY_STATUS_POLL_MIN_INTERVAL_MS, the floor under how often status
  * reconciliation (status-reconciliation.ts) reads an issuer's status list.

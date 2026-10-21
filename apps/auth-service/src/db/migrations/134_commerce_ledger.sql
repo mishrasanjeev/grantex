@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: Apache-2.0
+-- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -- Commerce ledger (G16).
 --
 -- 1. commerce_arbiter_decisions: every decision AgenticOrg's policy arbiter

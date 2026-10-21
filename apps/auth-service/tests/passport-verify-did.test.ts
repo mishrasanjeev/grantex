@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The auth service's copy of the Agent Passport verifier accepts exactly the
  * DIDs packages/agent-passport accepts (DID Core §3.1 syntax, no DID URL):

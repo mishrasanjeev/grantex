@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * Persistence, replay and revocation of OACP artifacts (migration 133,
  * `oacp_artifacts`).

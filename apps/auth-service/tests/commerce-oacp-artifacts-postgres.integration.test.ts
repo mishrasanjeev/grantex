@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * OACP artifact authority against real Postgres, through the routes: ES256
  * issuance with a DB-backed issuer key, persistence of every issue and

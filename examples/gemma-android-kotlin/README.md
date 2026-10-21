@@ -211,7 +211,8 @@ Entry #1 ──hash──► Entry #2 ──hash──► Entry #3
 
 ## License
 
-Apache-2.0
+Apache-2.0 ([examples/LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/examples/LICENSE)), like the SDKs it uses.
+Model weights and third-party runtimes keep their own licences.
 
 ## Ownership
 

@@ -1,3 +1,9 @@
+// Command terraform-provider-grantex is the Terraform provider for Grantex.
+//
+// License: Apache-2.0 (see LICENSE): open source and free for any use,
+// including commercial use. The Grantex auth service, portal and hosted
+// services are licensed separately; see
+// https://github.com/mishrasanjeev/grantex/blob/main/LICENSING.md.
 package main
 
 import (

@@ -1,35 +1,36 @@
 # Usage and licensing
 
-Current Grantex source, specification and SDKs are licensed under
-[Apache-2.0](LICENSE), including commercial use. Hosted-service plans and
-provider costs are separate.
+## LICENSE-SCOPE
 
-**Approved prospective policy; software adoption pending:** personal and internal use is free;
-commercializing the platform requires an agreement with Orchestrum Technologies
-LLP. Agreements: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
+| Directory | Licence | Licence file |
+| --- | --- | --- |
+| `packages/` (every SDK and client package: `sdk-ts`, `sdk-py`, `go-sdk`, the framework integrations, verifiers, `agent-passport*`, `agent-httpsig*`, `x402`, `mpp`, `mcp`, `mcp-auth`, `adapters`, `a2a*`, `gateway`, `mock-issuer`, `cli`, `conformance`, `destinations`, `dpdp`, `terraform-provider-grantex`, `strands*` and the rest) | Apache-2.0 | `packages/<name>/LICENSE` |
+| `examples/` | Apache-2.0 | [examples/LICENSE](examples/LICENSE) |
+| `spec/examples/` (interoperability test vectors) and `spec/*.schema.json` (machine-readable schemas), which the SDKs use | Apache-2.0 | [spec/examples/LICENSE](spec/examples/LICENSE) |
+| `apps/` (auth service, developer portal and the other apps) | PolyForm-Noncommercial-1.0.0 | [LICENSE](LICENSE) |
+| The rest of `spec/` (specification prose), `SPEC.md`, `docs/`, `web/`, `deploy/`, `assets/`, `skills/`, `scripts/`, `tests/`, `security/`, `qa/` and root files | PolyForm-Noncommercial-1.0.0 | [LICENSE](LICENSE) |
+| Third-party files listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Their own licences | As listed |
 
-The policy covers existing and new users of covered software and Orchestrum-hosted
-commercial offerings. An older account is not an exemption. Existing hosted
-customers transition through applicable notice, acceptance and agreement terms;
-previously granted Apache-2.0 permissions are not withdrawn.
+A file's own header or notice takes precedence over this table.
 
-Read the [licensing policy](docs/compliance/licensing.md) for definitions, existing
-license protections and release-scope requirements. Publication and legal-review
-approval were received from the owner on 12 October 2026. No software release has
-adopted the new license; current grants and third-party licenses remain unchanged.
+## What this means
 
-## Concrete transition
+- **SDKs and client packages are open source** under the Apache License 2.0:
+  free for any use, including commercial use.
+- **The Grantex server, portal and hosted services are source-available.** From
+  21 October 2026 they are licensed under the PolyForm Noncommercial License
+  1.0.0, including all updates. Only self use is free; commercial use of any
+  sort needs Orchestrum's prior approval and a written agreement with
+  Orchestrum Technologies LLP. Agreements:
+  [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
 
-- Candidate terms: [Orchestrum Self-Use and Commercial Agreement License 1.0](licensing/ORCHESTRUM-SELF-USE-COMMERCIAL-1.0-DRAFT.md).
-- Exact adoption scope: [licensing/scope.json](licensing/scope.json). It is a
-  publication-approved with no covered files, release version or effective date; the reference
-  baseline commit is not a licensing cutoff.
-- Apply finalized terms to eligible new Orchestrum-controlled material only.
-  Prefer separately identifiable new modules, not a relabeling of existing code.
-- Current hosted plans, support, reseller/OEM access and brand permissions are
-  separate commercial arrangements; they do not restrict independent use of
-  Apache-licensed code. Software self-use does not imply free hosting/providers.
+| Document | What it covers |
+| --- | --- |
+| [LICENSE](LICENSE) | PolyForm Noncommercial 1.0.0 text and the `Required Notice:` lines |
+| [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) | What is free, what needs an agreement, how to obtain one, earlier versions |
+| [TRADEMARKS.md](TRADEMARKS.md) | The Grantex and AgenticOrg names, logos, hosted services and brand |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Third-party material that keeps its own licence |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | The licence contributors grant |
 
-This is mixed licensing, not Apache-2.0 with an extra condition. A future
-mixed release must identify each component's license instead of claiming the
-entire release is Apache-2.0 or unrestricted open source.
+This replaces the transition policy published on 12 October 2026 and its
+candidate licence text, which no release adopted.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * ACP surfaces Grantex serves to the merchant runtime, under /v1/commerce.
  *

@@ -14,7 +14,7 @@ AI agents are acting in the world — booking travel, sending emails, executing 
 - No **auditable, tamper-evident record** of what an agent did, when, and under whose authority
 - Multi-agent pipelines have no way to **chain authorization** — a sub-agent can't prove it was legitimately spawned
 
-Grantex is an open-source delegated authorization protocol and reference implementation for AI agents. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
+Grantex is a delegated authorization protocol and reference implementation for AI agents, with open-source SDKs and a source-available server. It gives each agent a verifiable identity and scoped, time-limited, revocable authority from a human or organization, with multi-agent delegation, service-side verification, and audit records.
 
 Grantex complements OAuth 2.0 and MCP: OAuth handles application and user authorization, MCP connects models to tools, and Grantex proves which agent may perform which action for which principal.
 
@@ -129,20 +129,21 @@ npm install -g @grantex/cli@0.4.2
     MCP connects clients to tools and resources and defines optional OAuth-based authorization for HTTP transports. Grantex adds agent-specific delegated authority at the tool or service boundary: which agent may perform which action for which principal. The two layers are complementary.
   </Accordion>
   <Accordion title="Can I self-host?">
-    Yes. The reference implementation is fully open-source. Docker Compose deploy in one command. See the [self-hosting guide](/guides/self-hosting).
+    Yes. The SDKs are Apache-2.0 and free for any use. The server and portal are PolyForm Noncommercial 1.0.0: self-hosting them is free for noncommercial use, and commercial self-hosting, including inside a for-profit business, needs a written agreement with Orchestrum Technologies LLP (see [Licence](/license)). Docker Compose deploy in one command. See the [self-hosting guide](/guides/self-hosting).
   </Accordion>
   <Accordion title="Who owns the standard?">
-    The Grantex protocol specification is open under Apache 2.0 and frozen at v1.0. The related [Delegated Agent Authorization Protocol (DAAP) Internet-Draft](/community/ietf-draft) is an individual submission for discussion; it is not an IETF-adopted or endorsed standard.
+    The Grantex protocol specification is publicly readable, licensed under the PolyForm Noncommercial License 1.0.0 and frozen at v1.0. The related [Delegated Agent Authorization Protocol (DAAP) Internet-Draft](/community/ietf-draft) is an individual submission for discussion; it is not an IETF-adopted or endorsed standard.
   </Accordion>
 </AccordionGroup>
 
 ## Usage and licensing
 
-Current source, specification and SDKs retain their Apache-2.0 rights. The
-[approved prospective licensing policy](/compliance/licensing) awaits software
-release adoption: personal/internal use would be free; commercialization would require an
-agreement with Orchestrum Technologies LLP. Contact
-[sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in).
-The policy includes existing and new covered users. Existing hosted customers
-transition through required notice and acceptance; account age alone is not an
-exemption, and previously granted source-code permissions remain unchanged.
+Grantex SDKs and client packages are open source under the Apache License 2.0
+and free for any use. The Grantex server, portal and hosted services are
+source-available under the [PolyForm Noncommercial License 1.0.0](/license)
+from 21 October 2026, including all updates: only self use is free, and
+commercial use of any sort needs a written agreement with Orchestrum
+Technologies LLP. See [commercial licensing](/compliance/licensing) or write to
+[sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in). Releases of the server
+and portal published before that date remain available under the Apache
+License 2.0 they were released with.

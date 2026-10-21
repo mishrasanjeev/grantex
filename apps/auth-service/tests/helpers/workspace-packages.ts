@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * The mock accredited issuer (packages/mock-issuer) and the Agent Passport
  * library (packages/agent-passport), loaded from their sources for tests.

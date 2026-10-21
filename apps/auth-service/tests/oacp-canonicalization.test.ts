@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * OACP payloads are canonicalised with RFC 8785 (JCS). The shared vector file
  * (spec/examples/oacp/oacp-artifact-jws-v1.json) pins the canonical text and

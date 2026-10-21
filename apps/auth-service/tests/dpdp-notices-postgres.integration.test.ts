@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 /**
  * DPDP consent notice content (DPDP Act s.5; DPDP Rules 2025 r.3) against
  * real Postgres, through the routes.

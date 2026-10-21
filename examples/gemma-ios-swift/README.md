@@ -264,7 +264,8 @@ This project uses only Apple frameworks — no third-party dependencies:
 
 ## License
 
-Apache-2.0
+Apache-2.0 ([examples/LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/examples/LICENSE)), like the SDKs it uses.
+Model weights and third-party runtimes keep their own licences.
 
 ## Ownership
 

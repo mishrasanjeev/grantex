@@ -53,6 +53,17 @@ card = build_grantex_agent_card(GrantexAgentCardOptions(
 ))
 ```
 
+## License
+
+Apache-2.0 ([LICENSE](https://github.com/mishrasanjeev/grantex/blob/main/packages/a2a-py/LICENSE)).
+This package is open source and free for any use, including commercial use.
+The Grantex auth service, developer portal and hosted services are licensed
+separately under the PolyForm Noncommercial License 1.0.0; commercial use of
+those needs a written agreement with Orchestrum Technologies LLP (see
+[licensing](https://github.com/mishrasanjeev/grantex/blob/main/LICENSING.md)).
+"Grantex" is a trademark of Orchestrum Technologies LLP
+([trademarks](https://github.com/mishrasanjeev/grantex/blob/main/TRADEMARKS.md)).
+
 ## Ownership
 
 Grantex is owned by Orchestrum Technologies LLP. Inventor and owner: Sanjeev Kumar. Ownership contact: [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) or [mishra.sanjeev@gmail.com](mailto:mishra.sanjeev@gmail.com).

@@ -1,4 +1,4 @@
--- SPDX-License-Identifier: Apache-2.0
+-- SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -- Agent key history (PRD §5 Agent, §7 Keys, §8.8; owner decision 12).
 --
 -- An agent used to hold one key: agents.public_jwk and agents.key_thumbprint,

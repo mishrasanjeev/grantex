@@ -1,35 +1,40 @@
 ---
 title: "Token Refresh & Rotation"
 sidebarTitle: "Token Refresh"
-description: "Active-grant refresh rotation, lost-response recovery, and the expired-grant re-authorization boundary."
+description: "Refresh a time-bound grant, retry a lost refresh response, see rotation refuse old refresh tokens, and hit the expiry boundary."
 ---
 
-## What it does
+## Overview
 
-This example demonstrates the complete token refresh lifecycle:
+The example takes one grant through its refresh lifecycle and lets a second
+grant expire:
 
-1. **Authorize an active grant** using the `expiresIn` parameter
-2. **Use the token** successfully while the grant remains active (local JWKS-based + online verification)
-3. **Refresh the token** — get a new JWT and rotated refresh token with the same `grantId` and `expiresAt`
-4. **Use the refreshed token** — verify it works with full scope access
-5. **Refresh response recovery** — retry the previous refresh token immediately to recover the already-rotated token
-6. **Refresh token rotation** — demonstrate that old refresh tokens cannot keep being reused
-7. **Expired grant boundary** — demonstrate that an expired grant must be re-authorized rather than refreshed
+1. **Authorize** a grant with an `expiresIn` lifetime (`GRANT_TTL`, default `5m`).
+2. **Verify** the grant token locally against the JWKS and with the service.
+3. **Refresh.** The new grant token keeps the `grantId`; the grant's
+   `expiresAt` stays the same.
+4. **Verify again** with the refreshed token.
+5. **Retry a lost response.** Sending the first refresh token again at once
+   returns the refresh token it was already rotated to.
+6. **Rotation.** After the rotated refresh token is used, the first one is refused.
+7. **Expiry.** A second grant with a short lifetime (`EXPIRED_GRANT_TTL`,
+   default `3s`) lapses; its token stops verifying and refresh is refused, so a
+   new authorization is required.
 
 ## Prerequisites
 
-- **Node.js 24 LTS** (the tested repository toolchain)
-- **Docker** (Docker Desktop or Docker Engine with Compose)
+- **Node.js 24 LTS**
+- **Docker** with Compose
 
 ## Run
 
-Start the local Grantex stack from the repository root:
+From the repository root, start the local stack:
 
 ```bash
 docker compose up --build
 ```
 
-In a separate terminal, run the example:
+Then, in another terminal:
 
 ```bash
 cd examples/token-expiry-refresh
@@ -37,71 +42,63 @@ npm install
 npm start
 ```
 
-## Expected output
+## Sample output
 
 ```text
-=== Token Refresh & Rotation Demo ===
+=== Grant Refresh Lifecycle ===
 
-Agent registered: ag_01HXYZ...
+Agent: ag_01...
 
---- Authorizing an active grant (5m) ---
-Grant token received:
-  grantId:      grnt_01...
-  scopes:       calendar:read, email:send
-  expiresAt:    2026-03-30T12:05:00.000Z
-  refreshToken: ref_01HXYZ...
+--- Grant valid for 5m ---
+  grantId       grnt_01...
+  scopes        calendar:read, email:send
+  expiresAt     2026-10-20T22:46:48.858Z
+  refreshToken  ref_01...
 
---- Using token before expiry ---
-Offline verification: PASSED
-Online verification:  valid = true
+--- Verify the first grant token ---
+  local (JWKS)  ok, principal user-alice, scopes calendar:read, email:send
+  service       valid=true
 
---- Refreshing token ---
-Token refreshed successfully!
-  grantId:   grnt_01... (same as original)
-  expiresAt: 2026-03-30T12:05:00.000Z (grant lifetime unchanged)
-  scopes:    calendar:read, email:send
+--- Refresh ---
+  grantId       grnt_01... (unchanged)
+  expiresAt     2026-10-20T22:46:48.858Z (refresh does not extend the grant)
 
---- Using refreshed token ---
-Offline verification: PASSED
-Online verification:  valid = true
+--- Recover a lost refresh response ---
+  same rotated refresh token returned: true
 
---- Refresh response recovery window ---
-Retrying the original refresh token immediately (simulates a lost HTTP response)...
-Recovered refresh token matches first rotation: true
+--- Rotation moves on ---
+  refused: Refresh token already used
 
---- Refresh token rotation (single-use enforcement) ---
-Advancing the rotation chain with the current refresh token...
-Attempting to reuse the original refresh token after the chain moved forward...
-Blocked! Original refresh token rejected.
-  Reason: Refresh tokens are single-use; recovery only works before the rotated child is used.
+--- Grant valid for 3s, left to expire ---
+  waiting 5s...
+  service       valid=false (expected false)
+  refresh refused: Grant has expired
 
---- Expired grant boundary ---
-Creating a short-lived grant (3s) to show the re-authorization boundary...
-Waiting 5s for the grant to expire...
-Online verification after expiry: valid = false (expected: false)
-Refresh after grant expiry blocked.
-  Reason: Refresh rotates credentials for an active grant; expired grants require re-authorization.
-
-Done! Token refresh lifecycle complete.
+Refresh lifecycle complete.
 ```
 
-## Environment variables
+## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GRANTEX_URL` | `http://localhost:3001` | Base URL of the Grantex auth service |
-| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key. Use a sandbox key for auto-approval |
-| `GRANT_TTL` | `5m` | Active grant lifetime used for refresh rotation |
-| `EXPIRED_GRANT_TTL` | `3s` | Short grant lifetime used only for the expired-grant boundary check |
-| `TOKEN_TTL` | unset | Backward-compatible alias for `EXPIRED_GRANT_TTL` |
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `GRANTEX_URL` | `http://localhost:3001` | Auth service base URL |
+| `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key; a sandbox key approves consent automatically, which the script relies on |
+| `GRANT_TTL` | `5m` | Lifetime of the grant that is refreshed |
+| `EXPIRED_GRANT_TTL` | `3s` | Lifetime of the grant that is left to expire |
+| `TOKEN_TTL` | unset | Older name for `EXPIRED_GRANT_TTL`, still read when that is unset |
 
-## Refresh boundary
+## Retrying a lost refresh response
 
-`expiresIn` controls the underlying grant lifetime. Refresh rotates credentials for that active grant and does not extend the grant's `expiresAt`. If the refresh response is lost after the server commits rotation, retry the previous refresh token immediately; Grantex can return the already-rotated refresh token during the five-minute recovery window. After the grant expires, the caller must re-authorize.
+If the service commits a rotation but the client never receives the reply, the
+client can send the same refresh token again, with the same `Idempotency-Key`,
+within five minutes and receive the refresh token it was rotated to. Recent SDK
+releases reuse the key for such a retry automatically. Once the rotated refresh
+token has been used, the earlier one is refused. Refresh never extends the
+grant: after `expiresAt` the agent needs a new authorization.
 
 ## Source code
 
-The full source is in [`examples/token-expiry-refresh/src/index.ts`](https://github.com/mishrasanjeev/grantex/tree/main/examples/token-expiry-refresh).
+See [`examples/token-expiry-refresh/src/index.ts`](https://github.com/mishrasanjeev/grantex/tree/main/examples/token-expiry-refresh).
 
 ## Ownership
 
