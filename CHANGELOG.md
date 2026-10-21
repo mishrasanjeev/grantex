@@ -23,6 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   adds `synthetic_data: true` to its render for such a scope.
 - Shopify issuance is unchanged: its payloads are byte-identical (a test pins
   their hashes) and the UCP render of a Shopify scope gains no member.
+### Fixed - Go 1.26.10 for the crypto/x509 advisory
+- Build, test, audit and release workflows use Go 1.26.10 (GO-2026-6809,
+  compromised intermediate certificates in `crypto/x509`, fixed in 1.26.10);
+  the SDK authority audit image moves to a digest-pinned `golang:1.26.10`.
+- The Go SDK, Terraform provider and Go quickstart modules name
+  `toolchain go1.26.10`. Their minimum `go` versions are unchanged; the
+  directive only applies when the module itself is the main module.
 
 ### Breaking - Server, portal and docs relicensed under PolyForm Noncommercial 1.0.0; SDKs stay Apache-2.0
 - Grantex now has two licences; [LICENSING.md](LICENSING.md) lists the
