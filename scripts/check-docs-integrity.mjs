@@ -277,6 +277,15 @@ async function validateContexts() {
   if (!commerceDiscovery) {
     failures.push('firebase.json does not route Commerce discovery to the auth service');
   }
+  // OACP artifacts and mandates name https://grantex.dev/status/oacp/<list> (the issuer origin) as
+  // their Token Status List; without this rewrite the static host answers 404 and verifiers refuse them.
+  const oacpStatusLists = rewrites.find((item) =>
+    item.source === '/status/oacp/**'
+    && item.run?.serviceId === 'grantex-auth'
+  );
+  if (!oacpStatusLists) {
+    failures.push('firebase.json does not route OACP Token Status Lists to the auth service');
+  }
 }
 
 async function validateYamlArtifacts() {

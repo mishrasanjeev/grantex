@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - OACP Token Status Lists reachable at the issuer origin
+- OACP artifacts and mandates name `https://grantex.dev/status/oacp/<list>`
+  as their Token Status List (the issuer origin, `PUBLIC_BASE_URL` falling
+  back to `JWT_ISSUER`), but the static host behind `grantex.dev` did not
+  route `/status/oacp/**` to the auth service and answered 404, so strict
+  verifiers refused every artifact with `revocation_status_unavailable`.
+  `firebase.json` now routes `/status/oacp/**` to `grantex-auth`, and the
+  documentation integrity check fails if that rewrite is missing.
+
 ### Added - Synthetic demo source for C6Z authority requests
 - `POST /v1/commerce/oacp/c6z/authority-requests` accepts
   `connector_choice: "synthetic_demo"` (connector evidence
