@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Update the Next.js starter and its image processor override to patched
   releases. Add dependency policy regressions for the affected versions;
   dependency audits and secret scanning remain enforced without exceptions.
+- Register the starter's exact configured callback URI for new and reused demo
+  agents and send it during token exchange, retaining strict redirect validation.
 
 ### Fixed - OACP Token Status Lists reachable at the issuer origin
 - OACP artifacts and mandates name `https://grantex.dev/status/oacp/<list>`
