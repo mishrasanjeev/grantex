@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 ### Security - Dependency advisory fixes
+- Pin Zod 4.6.7 in the six affected auth, payment and integration dependency
+  trees for GHSA-mrhx-c7xc-m3w5. Add v1/v2 payment schema compatibility and
+  rejection regressions; preserve dependency audit enforcement without exclusions.
+- Update the affected Express body parsers to patched releases within their
+  existing major versions for GHSA-27r3-jxmh-p828; retain compressed-request
+  handling and add local HTTP liveness regression coverage.
 - Raise Vitest and coverage package minimums to patched mocker releases,
   refresh the IP address parser, and update the gateway's Fastify minimum.
 - Update the Next.js starter and its image processor override to patched

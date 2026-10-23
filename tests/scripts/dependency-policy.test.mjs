@@ -17,6 +17,8 @@ const vulnerable = {
   fastify: '>=5.12.2 <5.12.6',
   next: '>=16.4.0 <16.4.1',
   sharp: '<0.35.5',
+  zod: '<4.6.6',
+  'body-parser': '<1.20.9 || >=2.0.0 <2.4.0',
 };
 
 test('tracked lockfiles exclude the reviewed vulnerable dependency versions', () => {
@@ -42,6 +44,30 @@ test('Vitest manifest floors cannot resolve a reviewed vulnerable mocker release
         `${path}: ${name} permits vulnerable releases`);
     }
   }
+});
+
+test('reviewed Zod trees retain the patched compatibility pin', () => {
+  for (const directory of [
+    'apps/auth-service', 'packages/langchain', 'packages/x402',
+    'examples/langchain-agent', 'examples/x402-agent-demo', 'examples/x402-weather-api',
+  ]) {
+    assert.equal(json(`${directory}/package.json`).overrides?.zod, '4.6.7', directory);
+  }
+});
+
+test('body parser fixes remain within their reviewed major versions', () => {
+  for (const [directory, version] of [
+    ['apps/mpp-demo-service', '1.20.9'], ['examples/x402-weather-api', '1.20.9'],
+    ['packages/mcp', '2.4.0'], ['packages/mpp', '2.4.0'],
+    ['packages/express', '2.4.0'], ['packages/mcp-auth', '2.4.0'], ['packages/x402', '2.4.0'],
+  ]) {
+    assert.equal(json(`${directory}/package.json`).overrides?.['body-parser'], version);
+  }
+});
+
+test('CI executes compressed-body liveness regressions', () => {
+  assert.ok(yaml('.github/workflows/ci.yml').jobs['mcp-packages'].steps
+    .some(step => step.run?.includes('node --test tests/scripts/body-parser.test.mjs')));
 });
 
 test('CodeQL initialization, build and analysis use one pinned revision', () => {
