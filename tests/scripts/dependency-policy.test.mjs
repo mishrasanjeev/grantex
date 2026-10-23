@@ -59,6 +59,7 @@ test('body parser fixes remain within their reviewed major versions', () => {
   for (const [directory, version] of [
     ['apps/mpp-demo-service', '1.20.9'], ['examples/x402-weather-api', '1.20.9'],
     ['packages/mcp', '2.4.0'], ['packages/mpp', '2.4.0'],
+    ['packages/express', '2.4.0'], ['packages/mcp-auth', '2.4.0'], ['packages/x402', '2.4.0'],
   ]) {
     assert.equal(json(`${directory}/package.json`).overrides?.['body-parser'], version);
   }

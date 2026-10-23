@@ -27,6 +27,7 @@ if (childIndex >= 0) {
 } else {
   for (const directory of [
     'apps/mpp-demo-service', 'examples/x402-weather-api', 'packages/mcp', 'packages/mpp',
+    'packages/express', 'packages/mcp-auth', 'packages/x402',
   ]) {
     for (const encoding of ['deflate', 'gzip']) {
       test(`${directory}: ${encoding} trailing bytes preserve parser liveness`, { timeout: 20_000 }, async () => {
