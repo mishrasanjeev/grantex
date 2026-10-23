@@ -15,6 +15,8 @@ if (childIndex >= 0) {
   const parser = require('body-parser').json();
   const server = createServer((req, res) => {
     if (req.url === '/health') { res.end('ready'); return; }
+    res.setHeader('content-type', 'application/json');
+    res.setHeader('x-content-type-options', 'nosniff');
     parser(req, res, error => {
       if (error) { res.statusCode = error.status ?? 500; res.end('rejected'); return; }
       // Complete the HTTP body only after decoding finished, exercising late bytes.
@@ -43,7 +45,8 @@ if (childIndex >= 0) {
             child.once('exit', code => reject(new Error(`Parser exited before listening: ${code}: ${stderr}`)));
             child.on('message', message => { if (message.port) resolve(message.port); });
           });
-          const plain = Buffer.from(JSON.stringify({ synthetic: true }));
+          const value = { synthetic: true, literal: '<script>synthetic</script>' };
+          const plain = Buffer.from(JSON.stringify(value));
           const frame = encoding === 'gzip' ? gzipSync(plain) : deflateSync(plain);
           const prefix = Buffer.concat([frame, Buffer.from([0])]);
           const tail = Buffer.alloc(4096, 0x58);
@@ -54,7 +57,7 @@ if (childIndex >= 0) {
               let body = '';
               response.setEncoding('utf8');
               response.on('data', chunk => { body += chunk; });
-              response.on('end', () => resolve({ status: response.statusCode, body }));
+              response.on('end', () => resolve({ status: response.statusCode, body, headers: response.headers }));
               response.on('error', reject);
             });
             child.on('message', message => { if (message.decoded) client.end(tail); });
@@ -64,7 +67,9 @@ if (childIndex >= 0) {
             client.write(prefix);
           });
           assert.equal(result.status, 200);
-          assert.deepEqual(JSON.parse(result.body), { synthetic: true });
+          assert.deepEqual(JSON.parse(result.body), value);
+          assert.match(result.headers['content-type'], /^application\/json/);
+          assert.equal(result.headers['x-content-type-options'], 'nosniff');
           const health = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(5000) });
           assert.equal(await health.text(), 'ready');
           assert.equal(child.exitCode, null, stderr);
