@@ -11,7 +11,7 @@
   "dependencies": {
     "@grantex/sdk": "^0.8.2",
     "@grantex/x402": "^0.4.1",
-    "jose": "^6.2.12",
+    "jose": "^6.2.13",
     "tsx": "^4.23.15"
   },
   "devDependencies": {
