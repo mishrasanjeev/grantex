@@ -41,7 +41,8 @@
   },
   "overrides": {
     "esbuild": ">=0.25.0",
-    "hono": ">=4.12.21"
+    "hono": ">=4.12.21",
+    "body-parser": "2.4.0"
   },
   "devDependencies": {
     "@types/node": "^26.0.1",
