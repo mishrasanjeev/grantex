@@ -45,7 +45,8 @@ describe('mixed signing JWKS profile', () => {
   );
 
   it('rejects weak RSA keys', () => {
-    const weak = generateKeyPairSync('rsa', { modulusLength: 1024 }).publicKey.export({ format: 'jwk' });
-    expect(() => validateMixedSigningJwks({ keys: [{ ...weak, alg: 'RS256' }] })).toThrow(/2048/);
+    // Public-only synthetic modulus: exercise rejection without generating a weak key pair.
+    const weak = { kty: 'RSA', alg: 'RS256', n: Buffer.alloc(128, 0xa5).toString('base64url'), e: 'AQAB' };
+    expect(() => validateMixedSigningJwks({ keys: [weak] })).toThrow(/2048/);
   });
 });
