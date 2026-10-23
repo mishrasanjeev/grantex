@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Opt-in mixed signing-key conformance profile
+- Add `--allow-additional-signing-keys` to validate additional ES256 P-256 and
+  EdDSA Ed25519 public signing keys while retaining an RS256 grant key. Reject
+  private/symmetric keys, weak RSA keys and inconsistent signing metadata.
+  The existing RS256-only default and grant-token algorithm rules are unchanged.
+
 ### Security - Dependency advisory fixes
 - Raise Vitest and coverage package minimums to patched mocker releases,
   refresh the IP address parser, and update the gateway's Fastify minimum.

@@ -214,6 +214,7 @@ async function runSuites(
       // Suites that need the shared agent were skipped above when it is null;
       // the remaining suites never touch it, so an empty placeholder is safe.
       sharedAgent: sharedAgent ?? { agentId: '', agentDid: '', name: '' },
+      allowAdditionalSigningKeys: config.allowAdditionalSigningKeys,
       internalToken: config.internalToken,
       oacpIssuer: config.oacpIssuer,
       oacpTenantId: config.oacpTenantId,
