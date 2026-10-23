@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Security - Dependency advisory fixes
+- Raise Vitest and coverage package minimums to patched mocker releases,
+  refresh the IP address parser, and update the gateway's Fastify minimum.
+- Update the Next.js starter and its image processor override to patched
+  releases. Add dependency policy regressions for the affected versions;
+  dependency audits and secret scanning remain enforced without exceptions.
+
 ### Fixed - OACP Token Status Lists reachable at the issuer origin
 - OACP artifacts and mandates name `https://grantex.dev/status/oacp/<list>`
   as their Token Status List (the issuer origin, `PUBLIC_BASE_URL` falling

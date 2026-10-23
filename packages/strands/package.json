@@ -41,7 +41,7 @@
     "@strands-agents/sdk": "^1.6.0",
     "@types/node": "^20.11.0",
     "typescript": "^5.3.3",
-    "vitest": "^4.1.2",
+    "vitest": "^4.1.12",
     "zod": "^4.1.12"
   },
   "overrides": {
