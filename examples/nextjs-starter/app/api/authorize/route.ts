@@ -1,32 +1,11 @@
 import { NextResponse } from 'next/server';
 import { Grantex } from '@grantex/sdk';
 import { cookies } from 'next/headers';
+import { getOrCreateDemoAgent } from '../../../lib/demo-agent';
 
 const BASE_URL = process.env['GRANTEX_URL'] ?? 'https://api.grantex.dev';
 const API_KEY = process.env['GRANTEX_API_KEY'] ?? '';
 const APP_URL = process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
-
-// The API returns `agentId` but the SDK types use `id` — use the raw shape
-interface AgentRaw {
-  agentId: string;
-  did: string;
-  name: string;
-  scopes: string[];
-}
-
-async function getOrCreateAgent(grantex: Grantex): Promise<AgentRaw> {
-  // Reuse an existing demo agent to avoid hitting the free-plan agent limit
-  const { agents } = await grantex.agents.list() as unknown as { agents: AgentRaw[] };
-  const existing = agents.find((a) => a.name === 'nextjs-demo-agent');
-  if (existing) return existing;
-
-  const created = await grantex.agents.register({
-    name: 'nextjs-demo-agent',
-    description: 'Temporary agent created by the Next.js starter demo',
-    scopes: ['calendar:read', 'email:send'],
-  }) as unknown as AgentRaw;
-  return created;
-}
 
 export async function POST() {
   if (!API_KEY) {
@@ -36,8 +15,8 @@ export async function POST() {
   const grantex = new Grantex({ apiKey: API_KEY, baseUrl: BASE_URL });
 
   try {
-    const agent = await getOrCreateAgent(grantex);
-    const agentId = agent.agentId;
+    const agent = await getOrCreateDemoAgent(grantex, `${APP_URL}/callback`);
+    const agentId = agent.id;
 
     // Generate a random state for CSRF protection
     const state = crypto.randomUUID();

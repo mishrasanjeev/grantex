@@ -11,8 +11,9 @@
     "@grantex/agent-passport": "file:packages/agent-passport",
     "@grantex/sdk": "file:packages/sdk-ts",
     "@mdx-js/mdx": "^3.1.1",
-    "vitest": "^4.0.18",
-    "yaml": "^2.9.1"
+    "vitest": "^4.1.12",
+    "yaml": "^2.9.1",
+    "semver": "^7.7.3"
   },
   "author": {
     "name": "Sanjeev Kumar",

@@ -1,11 +1,48 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { parse } from 'yaml';
+import semver from 'semver';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const yaml = (path) => parse(readFileSync(`${root}${path}`, 'utf8'));
+const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
+  .split('\0').filter(Boolean);
+const json = (path) => JSON.parse(readFileSync(`${root}${path}`, 'utf8'));
+const vulnerable = {
+  '@vitest/mocker': '<4.1.12 || >=5.0.0 <5.0.3',
+  'ip-address': '<10.7.4',
+  fastify: '>=5.12.2 <5.12.6',
+  next: '>=16.4.0 <16.4.1',
+  sharp: '<0.35.5',
+};
+
+test('tracked lockfiles exclude the reviewed vulnerable dependency versions', () => {
+  const findings = [];
+  for (const path of tracked.filter((file) => file.endsWith('package-lock.json'))) {
+    for (const [location, dependency] of Object.entries(json(path).packages ?? {})) {
+      const name = location.split('node_modules/').at(-1);
+      if (vulnerable[name] && semver.valid(dependency.version)
+        && semver.satisfies(dependency.version, vulnerable[name])) {
+        findings.push(`${path}: ${name}@${dependency.version}`);
+      }
+    }
+  }
+  assert.deepEqual(findings, []);
+});
+
+test('Vitest manifest floors cannot resolve a reviewed vulnerable mocker release', () => {
+  for (const path of tracked.filter((file) => file.endsWith('package.json'))) {
+    for (const [name, range] of Object.entries(json(path).devDependencies ?? {})) {
+      if (name !== 'vitest' && name !== '@vitest/coverage-v8') continue;
+      assert.ok(semver.validRange(range), `${path}: invalid ${name} range`);
+      assert.ok(!semver.intersects(range, vulnerable['@vitest/mocker']),
+        `${path}: ${name} permits vulnerable releases`);
+    }
+  }
+});
 
 test('CodeQL initialization, build and analysis use one pinned revision', () => {
   const workflow = yaml('.github/workflows/codeql.yml');
