@@ -105,6 +105,23 @@ describe('configuration parsing', () => {
     expect(() => parsePolicyBackend('open-policy-agent')).toThrow(/POLICY_BACKEND/);
   });
 
+  it('enables consent retention only for exactly "true"', () => {
+    const saved = process.env['AGENT_CONSENT_RETENTION_GUARD_ENABLED'];
+    try {
+      delete process.env['AGENT_CONSENT_RETENTION_GUARD_ENABLED'];
+      expect(config.agentConsentRetentionGuardEnabled).toBe(false);
+      for (const value of ['false', 'TRUE', '1', 'yes', ' true', '']) {
+        process.env['AGENT_CONSENT_RETENTION_GUARD_ENABLED'] = value;
+        expect(config.agentConsentRetentionGuardEnabled).toBe(false);
+      }
+      process.env['AGENT_CONSENT_RETENTION_GUARD_ENABLED'] = 'true';
+      expect(config.agentConsentRetentionGuardEnabled).toBe(true);
+    } finally {
+      if (saved === undefined) delete process.env['AGENT_CONSENT_RETENTION_GUARD_ENABLED'];
+      else process.env['AGENT_CONSENT_RETENTION_GUARD_ENABLED'] = saved;
+    }
+  });
+
   it('turns the public registry routes on only for exactly "true"', () => {
     const saved = process.env['REGISTRY_PUBLIC_ENDPOINTS_ENABLED'];
     try {

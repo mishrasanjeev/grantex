@@ -3403,9 +3403,21 @@ paths:
       operationId: deleteAgent
       tags: [Agents]
       summary: Delete an agent
+      description: |
+        Financial and issued-credential history prevent hard deletion. With
+        AGENT_CONSENT_RETENTION_GUARD_ENABLED=true (default off), any retained
+        consent bundle also prevents deletion, including revoked or expired
+        bundles. Returns AGENT_HAS_CONSENT_HISTORY without changing agent,
+        grant, bundle or synced audit records; suspend and revoke instead.
       responses:
         "204":
           description: Agent deleted
+        "409":
+          description: Agent has retained financial, credential or opt-in consent history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: Agent not found
           content:

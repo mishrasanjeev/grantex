@@ -522,6 +522,7 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
 
     let hasFinancialHistory = false;
     let hasCredentialHistory = false;
+    let hasConsentHistory = false;
     // Serialize deletion with wallet authorization and preserve append-only
     // financial evidence. Agents with payment history must be suspended and
     // their grants revoked instead of being hard-deleted.
@@ -550,6 +551,20 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
         return;
       }
       const grantSubquery = tx`SELECT id FROM grants WHERE agent_id = ${agentId} AND developer_id = ${developerId}`;
+      if (config.agentConsentRetentionGuardEnabled) {
+        // The agent row lock also serializes foreign-key inserts of bundles
+        // and grants. Retain every bundle status and its synced audit history.
+        const consentHistory = await tx`
+          SELECT 1 FROM consent_bundles
+          WHERE developer_id = ${developerId}
+            AND (agent_id = ${agentId} OR grant_id IN (${grantSubquery}))
+          LIMIT 1
+        `;
+        if (consentHistory[0]) {
+          hasConsentHistory = true;
+          return;
+        }
+      }
       await tx`DELETE FROM budget_transactions WHERE grant_id IN (${grantSubquery})`;
       await tx`DELETE FROM budget_allocations WHERE grant_id IN (${grantSubquery})`;
       await tx`DELETE FROM refresh_tokens WHERE grant_id IN (${grantSubquery})`;
@@ -571,6 +586,13 @@ export async function agentsRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(409).send({
         message: 'Agents with issued verifiable credentials cannot be deleted; suspend the agent and revoke its grants to preserve credential status and history',
         code: 'AGENT_HAS_CREDENTIAL_HISTORY',
+        requestId: request.id,
+      });
+    }
+    if (hasConsentHistory) {
+      return reply.status(409).send({
+        message: 'Agents with consent bundles cannot be deleted; suspend the agent and revoke its grants to preserve consent and audit history',
+        code: 'AGENT_HAS_CONSENT_HISTORY',
         requestId: request.id,
       });
     }
