@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Security - Auth runtime security release
+- Pin both auth image stages to Node 26.12.1, including patched bundled Undici
+  8.12.2. Verify native fetch integrity rejection and process liveness in the
+  actual isolated production image; retain existing container scanner gates.
+
 ### Security - URI and HTTP dependency patches
 - Refresh affected lockfiles to fast-uri 3.1.9/4.2.3 and undici 7.30.1/8.12.3
   within existing consumer majors. Add URI normalization, host confusion,
