@@ -554,12 +554,20 @@ describePostgres('GET /.well-known/agent-registry.json', () => {
     const missing = 505 - Number(counted!.count);
     if (missing > 0) {
       const jwks = { keys: [{ ...(await newKey()).jwk, kid: 'k1', alg: 'ES256', use: 'sig' }] };
-      for (let i = 0; i < missing; i += 1) {
+      const issuers = Array.from({ length: missing }, (_, i) => {
         const host = `bulk-${String(i).padStart(4, '0')}-${randomBytes(2).toString('hex')}.example`;
-        await sql`INSERT INTO accredited_issuers (id, entity_id, jwks, trust_marks, status, status_list_base, accreditation_evidence_ref)
-                  VALUES (${`aiss_${ulid()}`}, ${`https://${host}`}, ${sql.json(jwks)}, ${[AGENT_IDENTITY]}, 'active',
-                          ${`https://${host}/status/`}, ${`case-${host}`})`;
-      }
+        return {
+          id: `aiss_${ulid()}`,
+          entity_id: `https://${host}`,
+          jwks: sql.json(jwks),
+          trust_marks: [AGENT_IDENTITY],
+          status: 'active',
+          status_list_base: `https://${host}/status/`,
+          accreditation_evidence_ref: `case-${host}`,
+        };
+      });
+      await sql`INSERT INTO accredited_issuers ${sql(issuers,
+        'id', 'entity_id', 'jwks', 'trust_marks', 'status', 'status_list_base', 'accreditation_evidence_ref')}`;
     }
     const [totalled] = await sql<{ total: string }[]>`SELECT COUNT(*)::text AS total FROM accredited_issuers`;
     const total = totalled!.total;
