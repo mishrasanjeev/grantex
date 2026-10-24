@@ -26,3 +26,15 @@ test('Go validation and release workflows use the patched toolchain', () => {
     assert.match(goMod, /^toolchain go1\.26\.10\r?$/m, module);
   }
 });
+
+test('both auth image stages pin the reviewed Node security release', () => {
+  const dockerfile = readFileSync(new URL('../../apps/auth-service/Dockerfile', import.meta.url), 'utf8');
+  const images = [...dockerfile.matchAll(/^FROM (\S+)/gm)].map((match) => match[1]);
+  assert.deepEqual(images, Array(2).fill('node:26.12.1-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797'));
+});
+
+test('CI checks native fetch in the actual isolated production image', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/security-scan.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /docker run --rm --network none --entrypoint node/);
+  assert.match(workflow, /grantex-auth-service:scan --test \/tmp\/runtime-fetch\.test\.mjs/);
+});
