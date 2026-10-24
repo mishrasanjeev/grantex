@@ -19,6 +19,8 @@ const vulnerable = {
   sharp: '<0.35.5',
   zod: '<4.6.6',
   'body-parser': '<1.20.9 || >=2.0.0 <2.4.0',
+  'fast-uri': '<2.4.8 || >=3.0.0 <3.1.9 || >=4.0.0 <4.2.3',
+  undici: '>=6.5.0 <6.29.1 || >=7.0.0 <7.30.1 || >=8.0.0 <8.12.2',
 };
 
 test('tracked lockfiles exclude the reviewed vulnerable dependency versions', () => {
@@ -112,4 +114,9 @@ test('CI executes dependency policy regressions', () => {
   const workflow = yaml('.github/workflows/ci.yml');
   assert.ok(workflow.jobs['docs-integrity'].steps
     .some((step) => step.run?.includes('tests/scripts/dependency-policy.test.mjs')));
+});
+
+test('CI executes URI and HTTP advisory regressions', () => {
+  assert.ok(yaml('.github/workflows/ci.yml').jobs['docs-integrity'].steps
+    .some((step) => step.run?.includes('node --test tests/scripts/uri-http-dependencies.test.mjs')));
 });
