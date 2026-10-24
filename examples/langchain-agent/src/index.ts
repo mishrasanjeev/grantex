@@ -17,11 +17,15 @@
  * Grantex scope enforcement and audit logging.
  */
 
-import { Grantex } from '@grantex/sdk';
+import { Grantex, verifyGrantToken } from '@grantex/sdk';
 import { createGrantexTool, GrantexAuditHandler } from '@grantex/langchain';
 
 const BASE_URL = process.env['GRANTEX_URL'] ?? 'http://localhost:3001';
 const API_KEY = process.env['GRANTEX_API_KEY'] ?? 'sandbox-api-key-local';
+const VERIFY_OPTIONS = {
+  jwksUri: new URL('/.well-known/jwks.json', BASE_URL).href,
+  ...(process.env['GRANTEX_ISSUER'] ? { issuer: process.env['GRANTEX_ISSUER'] } : {}),
+};
 
 async function getGrantToken(
   grantex: Grantex,
@@ -37,7 +41,8 @@ async function getGrantToken(
   if (!code) throw new Error('No code returned — use the sandbox API key.');
 
   const tokenResponse = await grantex.tokens.exchange({ code, agentId });
-  return { ...tokenResponse, principalId: authRequest.principalId };
+  const verified = await verifyGrantToken(tokenResponse.grantToken, VERIFY_OPTIONS);
+  return { ...tokenResponse, principalId: verified.principalId };
 }
 
 async function main(): Promise<void> {
@@ -59,6 +64,7 @@ async function main(): Promise<void> {
     name: 'read_calendar',
     description: "Read the user's upcoming calendar events",
     grantToken,
+    ...VERIFY_OPTIONS,
     requiredScope: 'calendar:read',
     func: async (input: string) => {
       // Simulated calendar API call
@@ -75,6 +81,7 @@ async function main(): Promise<void> {
     name: 'send_email',
     description: 'Send an email on behalf of the user',
     grantToken,
+    ...VERIFY_OPTIONS,
     requiredScope: 'email:send',
     func: async (input: string) => {
       // Simulated email API call
@@ -118,16 +125,19 @@ async function main(): Promise<void> {
   // ── 5. Demonstrate scope enforcement ───────────────────────────────
   console.log('\n--- Testing scope enforcement ---');
   try {
-    createGrantexTool({
+    const deniedTool = createGrantexTool({
       name: 'delete_account',
       description: 'Delete the user account',
       grantToken,
+      ...VERIFY_OPTIONS,
       requiredScope: 'account:delete', // not in our grant!
       func: async () => 'deleted',
     });
-    console.log('ERROR: should have thrown');
+    await deniedTool.invoke('synthetic-fixture');
+    throw new Error('Scope enforcement did not refuse execution');
   } catch (err) {
-    console.log('Scope check blocked unauthorized tool:', (err as Error).message);
+    if (!(err instanceof Error) || !err.message.includes("not authorized for scope 'account:delete'")) throw err;
+    console.log('Scope check blocked unauthorized tool:', err.message);
   }
 
   // ── 6. Inspect audit trail ─────────────────────────────────────────
