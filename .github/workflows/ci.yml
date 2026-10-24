@@ -69,6 +69,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: node --test tests/scripts/seo-aeo-release.test.mjs tests/scripts/runtime-image.test.mjs tests/scripts/e2e-workflow.test.mjs tests/scripts/dependency-policy.test.mjs tests/scripts/security-boundaries.test.mjs tests/scripts/licensing.test.mjs tests/scripts/nextjs-starter.test.mjs
+      - name: Install URI and HTTP regression dependencies
+        run: |
+          for directory in apps/auth-service packages/vercel-ai apps/portal; do
+            npm ci --prefix "$directory" --ignore-scripts --no-audit --no-fund
+          done
+      - run: node --test tests/scripts/uri-http-dependencies.test.mjs
       - run: node scripts/check-docs-integrity.mjs
 
   helm-network-policy:
@@ -300,6 +306,12 @@ jobs:
       - name: Test MCP server
         working-directory: packages/mcp
         run: npm ci && npm run typecheck && npm test
+      - name: Test patched body parser HTTP liveness
+        run: |
+          for directory in apps/mpp-demo-service examples/x402-weather-api packages/mpp packages/express packages/mcp-auth packages/x402; do
+            npm ci --ignore-scripts --prefix "$directory"
+          done
+          node --test tests/scripts/body-parser.test.mjs
       - name: Test MCP auth
         working-directory: packages/mcp-auth
         run: npm ci && npm run typecheck && npm test

@@ -26,6 +26,9 @@ Options:
   --include <ext,...>    Include optional extensions (comma-separated)
   --format <format>      Output format: text or json (default: text)
   --bail                 Stop on first failure
+  --allow-additional-signing-keys
+                         Validate a mixed RS256/ES256/EdDSA public signing JWKS
+                         (default: off)
   --oacp-issuer <url>    Pinned OACP issuer identifier (default: the base URL)
   --oacp-tenant <id>     Commerce tenant the oacp suite issues under
                          (default: cten_CONFORMANCE)
@@ -44,6 +47,13 @@ grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx
 ```
 
 ### Run a single suite
+
+For a server that publishes additional signing keys, opt into the mixed-key
+profile with `--allow-additional-signing-keys`. It requires a valid RS256 grant
+key and validates additional ES256 P-256 and EdDSA Ed25519 public keys. It rejects
+private or symmetric key material, algorithm/type mismatches, encryption keys,
+weak RSA keys and ambiguous key identifiers. This option checks JWKS publication;
+it does not permit EdDSA grant tokens. The default RS256-only check is unchanged.
 
 ```bash
 grantex-conformance --base-url http://localhost:3001 --api-key sk_test_xxx --suite health
