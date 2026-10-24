@@ -5,6 +5,8 @@ export interface RunConfig {
   include?: string[];
   format: 'text' | 'json';
   bail: boolean;
+  /** Also validate ES256/EdDSA signing keys in a mixed JWKS; defaults off. */
+  allowAdditionalSigningKeys?: boolean;
   /** Internal service token for the OACP routes; the API key is used when absent. */
   internalToken?: string;
   /** Pinned OACP issuer identifier (the auth service's JWT_ISSUER). Default: baseUrl. */
@@ -64,6 +66,7 @@ export interface SuiteContext {
   cleanup: import('./cleanup.js').CleanupTracker;
   /** Pre-created agent shared across suites to avoid plan limits */
   sharedAgent: SharedAgent;
+  allowAdditionalSigningKeys?: boolean;
   internalToken?: string;
   oacpIssuer?: string;
   oacpTenantId?: string;

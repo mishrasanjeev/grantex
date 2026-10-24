@@ -145,6 +145,11 @@ jobs:
         run: bash scripts/test-scan-container.sh
       - name: Build auth-service image
         run: docker build -t grantex-auth-service:scan apps/auth-service
+      - name: Verify native fetch in the production runtime
+        run: |
+          docker run --rm --network none --entrypoint node \
+            --mount "type=bind,source=$PWD/tests/scripts/runtime-fetch.test.mjs,target=/tmp/runtime-fetch.test.mjs,readonly" \
+            grantex-auth-service:scan --test /tmp/runtime-fetch.test.mjs
       - name: Scan image and write SBOM
         run: bash scripts/scan-container.sh image grantex-auth-service:scan auth-service.cdx.json
       - name: Upload SBOM
