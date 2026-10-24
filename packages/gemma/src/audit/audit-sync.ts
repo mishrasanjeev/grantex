@@ -6,7 +6,7 @@ import type { SignedAuditEntry } from './hash-chain.js';
 /* ------------------------------------------------------------------ */
 
 export interface SyncOptions {
-  /** URL of the Grantex offline-sync endpoint. */
+  /** Grantex API base URL; the offline-sync route is appended by the client. */
   endpoint: string;
   /** Developer API key for authenticating sync requests. */
   apiKey: string;
