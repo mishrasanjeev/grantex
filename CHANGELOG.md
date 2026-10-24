@@ -39,6 +39,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Keep the Next.js starter's React and React DOM versions aligned so the server
   renderer does not reject a mismatched patch release.
 
+### Fixed - LangChain dependency compatibility
+- Keep the LangSmith override within the installed LangChain core's supported
+  range and exercise the real tool runtime in compatibility tests.
+
 ### Security - Dependency advisory fixes
 - Pin Zod 4.6.7 in the six affected auth, payment and integration dependency
   trees for GHSA-mrhx-c7xc-m3w5. Add v1/v2 payment schema compatibility and
