@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Opt-in consent retention on agent deletion
+- With `AGENT_CONSENT_RETENTION_GUARD_ENABLED=true` (default off), refuse agent
+  deletion with `409 AGENT_HAS_CONSENT_HISTORY` when any consent bundle refers
+  to the agent or its grants, preserving consent and synced audit history.
+  With the flag off, the existing deletion path is unchanged. No database
+  constraints or history records are removed. Production activation requires
+  separate operator approval after the local retention checks pass.
+
 ### Fixed - Gemma audit-sync example
 - Pass the API origin from a consent bundle's sync URL to the audit-sync helper,
   avoiding a duplicated route. Retain the helper's existing base-URL contract and

@@ -228,6 +228,7 @@ export const config = {
    * retiring revokes live grants, and online token checks require an active agent.
    */
   get agentLifecycleStatesEnabled() { return process.env['AGENT_LIFECYCLE_STATES_ENABLED'] === 'true'; },
+  get agentConsentRetentionGuardEnabled() { return process.env['AGENT_CONSENT_RETENTION_GUARD_ENABLED'] === 'true'; },
   /**
    * Read `delivery: 'reference'` on POST /v1/vault/credentials/exchange and hand out a
    * short-lived credential reference instead of the raw credential; the relying party
