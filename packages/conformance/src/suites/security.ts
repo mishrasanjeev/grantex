@@ -1,6 +1,7 @@
 import type { SuiteDefinition, SuiteContext, TestResult } from '../types.js';
 import { test, expectStatus } from '../helpers.js';
 import { ConformanceHttpClient } from '../http-client.js';
+import { validateMixedSigningJwks } from '../jwks.js';
 
 export const securitySuite: SuiteDefinition = {
   name: 'security',
@@ -26,11 +27,17 @@ export const securitySuite: SuiteDefinition = {
     );
 
     results.push(
-      await test('JWKS only contains RS256 keys', '§14', async () => {
+      await test(ctx.allowAdditionalSigningKeys
+        ? 'JWKS signing algorithms match public key types and curves'
+        : 'JWKS only contains RS256 keys', '§14', async () => {
         const res = await ctx.http.requestPublic<{
           keys: Array<{ kty: string; alg?: string; use?: string }>;
         }>('GET', '/.well-known/jwks.json');
         expectStatus(res, 200);
+        if (ctx.allowAdditionalSigningKeys) {
+          validateMixedSigningJwks(res.body);
+          return;
+        }
         for (const key of res.body.keys) {
           if (key.alg && key.alg !== 'RS256') {
             throw new Error(`Expected RS256 algorithm, found: ${key.alg}`);
