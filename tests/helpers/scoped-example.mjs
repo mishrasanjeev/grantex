@@ -46,14 +46,22 @@ const server = createServer(async (request, response) => {
     else { response.statusCode = 404; result = { error: 'unexpected_synthetic_route' }; }
     response.setHeader('Content-Type', 'application/json');
     response.end(JSON.stringify(result));
-  } catch (error) {
+  } catch {
     response.writeHead(400, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ error: String(error) }));
+    response.end(JSON.stringify({ error: 'invalid_synthetic_request' }));
   }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 base = `http://127.0.0.1:${server.address().port}`;
 try {
+  const malformed = await fetch(`${base}/v1/authorize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: 'synthetic-malformed-json-canary',
+    signal: AbortSignal.timeout(5000),
+  });
+  assert.equal(malformed.status, 400);
+  assert.equal(await malformed.text(), '{"error":"invalid_synthetic_request"}');
   const env = { ...process.env, GRANTEX_URL: base, GRANTEX_ISSUER: base, GRANTEX_API_KEY: 'synthetic-key', LANGSMITH_TRACING: 'false', LANGCHAIN_TRACING_V2: 'false' };
   for (const name of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'LANGSMITH_API_KEY', 'LANGCHAIN_API_KEY']) delete env[name];
   const child = spawn(process.execPath, [resolve(directory, 'node_modules/tsx/dist/cli.mjs'), resolve(directory, 'src/index.ts')], { cwd: directory, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -68,7 +76,7 @@ try {
   assert.doesNotMatch(output, /ERROR: should have thrown|Scope enforcement did not refuse/);
   assert(calls.includes('GET /.well-known/jwks.json'), 'The example must verify against the loopback issuer');
   assert(audit.filter(entry => entry.status === 'success').length >= 2, 'Both fake tools must produce audit evidence');
-  console.log(JSON.stringify({ localOnly: true, paidModelCalls: false, calls, auditEntries: audit.length }));
+  console.log(JSON.stringify({ localOnly: true, paidModelCalls: false, malformedJsonRejected: true, calls, auditEntries: audit.length }));
 } finally {
   await new Promise(resolve => server.close(resolve));
 }
