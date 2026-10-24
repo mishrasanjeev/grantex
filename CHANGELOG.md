@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Starter rendering dependencies
+- Keep the Next.js starter's React and React DOM versions aligned so the server
+  renderer does not reject a mismatched patch release.
+
 ### Security - Dependency advisory fixes
 - Raise Vitest and coverage package minimums to patched mocker releases,
   refresh the IP address parser, and update the gateway's Fastify minimum.
