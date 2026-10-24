@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Scoped example issuer verification
+- Bind the Anthropic example's token and tool verification to its configured
+  issuer and use the verified principal and registered agent identity for audit.
+
 ### Fixed - OACP Token Status Lists reachable at the issuer origin
 - OACP artifacts and mandates name `https://grantex.dev/status/oacp/<list>`
   as their Token Status List (the issuer origin, `PUBLIC_BASE_URL` falling
