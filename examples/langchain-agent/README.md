@@ -9,7 +9,7 @@ Demo of a LangChain agent using Grantex-scoped tools and automatic audit logging
 3. Creates two scoped tools using `createGrantexTool` (calendar read + email send)
 4. Sets up `GrantexAuditHandler` for automatic tool invocation logging
 5. Invokes tools and logs each action to the audit trail
-6. Demonstrates scope enforcement — attempting to create a tool with an unauthorized scope fails immediately
+6. Demonstrates scope enforcement: invoking a tool with an unauthorized scope is refused
 
 ## Prerequisites
 
@@ -60,7 +60,15 @@ Done! LangChain integration demo complete.
 |---|---|---|
 | `GRANTEX_URL` | `http://localhost:3001` | Auth service base URL |
 | `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key (sandbox mode) |
+| `GRANTEX_ISSUER` | SDK-derived | Optional expected JWT `iss` claim; overrides the SDK default |
 | `OPENAI_API_KEY` | — | OpenAI key (optional, for real LLM agent) |
+
+JWKS is loaded from `/.well-known/jwks.json` at the `GRANTEX_URL` origin.
+If `GRANTEX_ISSUER` is unset, the SDK still validates the issuer: it expects
+`https://grantex.dev` for the production JWKS URL
+(`https://api.grantex.dev/.well-known/jwks.json`), otherwise the JWKS origin
+(`http://localhost:3001` by default). Set `GRANTEX_ISSUER` when tokens use a
+different canonical issuer.
 
 ## Ownership
 

@@ -66,7 +66,15 @@ Done! Anthropic SDK integration demo complete.
 |---|---|---|
 | `GRANTEX_URL` | `http://localhost:3001` | Auth service base URL |
 | `GRANTEX_API_KEY` | `sandbox-api-key-local` | API key (sandbox mode) |
+| `GRANTEX_ISSUER` | SDK-derived | Optional expected JWT `iss` claim; overrides the SDK default |
 | `ANTHROPIC_API_KEY` | — | Anthropic key (optional, enables Claude tool use) |
+
+JWKS is loaded from `/.well-known/jwks.json` at the `GRANTEX_URL` origin.
+If `GRANTEX_ISSUER` is unset, the SDK still validates the issuer: it expects
+`https://grantex.dev` for the production JWKS URL
+(`https://api.grantex.dev/.well-known/jwks.json`), otherwise the JWKS origin
+(`http://localhost:3001` by default). Set `GRANTEX_ISSUER` when tokens use a
+different canonical issuer.
 
 ## Ownership
 
