@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Opt-in mixed signing-key conformance profile
+- Add `--allow-additional-signing-keys` to validate additional ES256 P-256 and
+  EdDSA Ed25519 public signing keys while retaining an RS256 grant key. Reject
+  private/symmetric keys, weak RSA keys and inconsistent signing metadata.
+  The existing RS256-only default and grant-token algorithm rules are unchanged.
+
+### Security - Auth runtime security release
+- Pin both auth image stages to Node 26.12.1, including patched bundled Undici
+  8.12.2. Verify native fetch integrity rejection and process liveness in the
+  actual isolated production image; retain existing container scanner gates.
+
+### Security - URI and HTTP dependency patches
+- Refresh affected lockfiles to fast-uri 3.1.9/4.2.3 and undici 7.30.1/8.12.3
+  within existing consumer majors. Add URI normalization, host confusion,
+  response integrity and excessive content-encoding denial regressions.
+
+### Security - Dependency advisory fixes
+- Pin Zod 4.6.7 in the six affected auth, payment and integration dependency
+  trees for GHSA-mrhx-c7xc-m3w5. Add v1/v2 payment schema compatibility and
+  rejection regressions; preserve dependency audit enforcement without exclusions.
+- Update the affected Express body parsers to patched releases within their
+  existing major versions for GHSA-27r3-jxmh-p828; retain compressed-request
+  handling and add local HTTP liveness regression coverage.
+- Raise Vitest and coverage package minimums to patched mocker releases,
+  refresh the IP address parser, and update the gateway's Fastify minimum.
+- Update the Next.js starter and its image processor override to patched
+  releases. Add dependency policy regressions for the affected versions;
+  dependency audits and secret scanning remain enforced without exceptions.
+- Register the starter's exact configured callback URI for new and reused demo
+  agents and send it during token exchange, retaining strict redirect validation.
+
 ### Fixed - OACP Token Status Lists reachable at the issuer origin
 - OACP artifacts and mandates name `https://grantex.dev/status/oacp/<list>`
   as their Token Status List (the issuer origin, `PUBLIC_BASE_URL` falling

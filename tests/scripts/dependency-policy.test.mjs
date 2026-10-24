@@ -1,11 +1,76 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { parse } from 'yaml';
+import semver from 'semver';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const yaml = (path) => parse(readFileSync(`${root}${path}`, 'utf8'));
+const tracked = execFileSync('git', ['ls-files', '-z'], { cwd: root, encoding: 'utf8' })
+  .split('\0').filter(Boolean);
+const json = (path) => JSON.parse(readFileSync(`${root}${path}`, 'utf8'));
+const vulnerable = {
+  '@vitest/mocker': '<4.1.12 || >=5.0.0 <5.0.3',
+  'ip-address': '<10.7.4',
+  fastify: '>=5.12.2 <5.12.6',
+  next: '>=16.4.0 <16.4.1',
+  sharp: '<0.35.5',
+  zod: '<4.6.6',
+  'body-parser': '<1.20.9 || >=2.0.0 <2.4.0',
+  'fast-uri': '<2.4.8 || >=3.0.0 <3.1.9 || >=4.0.0 <4.2.3',
+  undici: '>=6.5.0 <6.29.1 || >=7.0.0 <7.30.1 || >=8.0.0 <8.12.2',
+};
+
+test('tracked lockfiles exclude the reviewed vulnerable dependency versions', () => {
+  const findings = [];
+  for (const path of tracked.filter((file) => file.endsWith('package-lock.json'))) {
+    for (const [location, dependency] of Object.entries(json(path).packages ?? {})) {
+      const name = location.split('node_modules/').at(-1);
+      if (vulnerable[name] && semver.valid(dependency.version)
+        && semver.satisfies(dependency.version, vulnerable[name])) {
+        findings.push(`${path}: ${name}@${dependency.version}`);
+      }
+    }
+  }
+  assert.deepEqual(findings, []);
+});
+
+test('Vitest manifest floors cannot resolve a reviewed vulnerable mocker release', () => {
+  for (const path of tracked.filter((file) => file.endsWith('package.json'))) {
+    for (const [name, range] of Object.entries(json(path).devDependencies ?? {})) {
+      if (name !== 'vitest' && name !== '@vitest/coverage-v8') continue;
+      assert.ok(semver.validRange(range), `${path}: invalid ${name} range`);
+      assert.ok(!semver.intersects(range, vulnerable['@vitest/mocker']),
+        `${path}: ${name} permits vulnerable releases`);
+    }
+  }
+});
+
+test('reviewed Zod trees retain the patched compatibility pin', () => {
+  for (const directory of [
+    'apps/auth-service', 'packages/langchain', 'packages/x402',
+    'examples/langchain-agent', 'examples/x402-agent-demo', 'examples/x402-weather-api',
+  ]) {
+    assert.equal(json(`${directory}/package.json`).overrides?.zod, '4.6.7', directory);
+  }
+});
+
+test('body parser fixes remain within their reviewed major versions', () => {
+  for (const [directory, version] of [
+    ['apps/mpp-demo-service', '1.20.9'], ['examples/x402-weather-api', '1.20.9'],
+    ['packages/mcp', '2.4.0'], ['packages/mpp', '2.4.0'],
+    ['packages/express', '2.4.0'], ['packages/mcp-auth', '2.4.0'], ['packages/x402', '2.4.0'],
+  ]) {
+    assert.equal(json(`${directory}/package.json`).overrides?.['body-parser'], version);
+  }
+});
+
+test('CI executes compressed-body liveness regressions', () => {
+  assert.ok(yaml('.github/workflows/ci.yml').jobs['mcp-packages'].steps
+    .some(step => step.run?.includes('node --test tests/scripts/body-parser.test.mjs')));
+});
 
 test('CodeQL initialization, build and analysis use one pinned revision', () => {
   const workflow = yaml('.github/workflows/codeql.yml');
@@ -49,4 +114,9 @@ test('CI executes dependency policy regressions', () => {
   const workflow = yaml('.github/workflows/ci.yml');
   assert.ok(workflow.jobs['docs-integrity'].steps
     .some((step) => step.run?.includes('tests/scripts/dependency-policy.test.mjs')));
+});
+
+test('CI executes URI and HTTP advisory regressions', () => {
+  assert.ok(yaml('.github/workflows/ci.yml').jobs['docs-integrity'].steps
+    .some((step) => step.run?.includes('node --test tests/scripts/uri-http-dependencies.test.mjs')));
 });

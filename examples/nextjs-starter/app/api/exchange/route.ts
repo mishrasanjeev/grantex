@@ -16,6 +16,7 @@ function getBaseUrl(): string {
 }
 
 const API_KEY = process.env['GRANTEX_API_KEY'] ?? '';
+const APP_URL = process.env['NEXT_PUBLIC_APP_URL'] ?? 'http://localhost:3000';
 
 export async function POST(request: NextRequest) {
   if (!API_KEY) {
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Exchange authorization code for grant token
-    const token = await gx.tokens.exchange({ code, agentId });
+    const token = await gx.tokens.exchange({ code, agentId, redirectUri: `${APP_URL}/callback` });
 
     // Log an audit entry (best-effort — don't fail the demo if this errors)
     let auditEntryId: string | null = null;
