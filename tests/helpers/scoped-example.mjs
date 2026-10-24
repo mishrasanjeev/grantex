@@ -15,7 +15,7 @@ function jwt() {
   const now = Math.floor(Date.now() / 1000);
   const grant = { agent_did: 'did:grantex:shopper-01', developer_id: 'synthetic-developer', grant_id: 'synthetic-grant' };
   const payload = {
-    iss: base, sub: 'test-user-001', jti: 'synthetic-token', iat: now, exp: now + 300,
+    iss: base, sub: 'principal-01', jti: 'synthetic-token', iat: now, exp: now + 300,
     scope: 'calendar:read email:send', scp: ['calendar:read', 'email:send'],
     agt: grant.agent_did, dev: grant.developer_id, grnt: grant.grant_id, 'urn:grantex:grant': grant,
   };
@@ -38,7 +38,7 @@ const server = createServer(async (request, response) => {
     else if (path === '/v1/token') result = { grantToken: jwt(), grantId: 'synthetic-grant', refreshToken: 'synthetic-refresh', expiresIn: 300 };
     else if (path === '/v1/audit/log') {
       assert.equal(data.agentDid, 'did:grantex:shopper-01');
-      assert.equal(data.principalId, 'test-user-001');
+      assert.equal(data.principalId, 'principal-01');
       const entry = { ...data, entryId: `synthetic-entry-${audit.length}`, timestamp: new Date().toISOString() };
       audit.push(entry);
       result = entry;
