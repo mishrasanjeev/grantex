@@ -15,6 +15,7 @@ export async function run(): Promise<void> {
     .option('--include <extensions>', 'Include optional extensions (comma-separated)')
     .option('--format <format>', 'Output format: text or json', 'text')
     .option('--bail', 'Stop on first failure', false)
+    .option('--allow-additional-signing-keys', 'Validate additional ES256/EdDSA signing keys in a mixed JWKS', false)
     .option('--oacp-issuer <url>', 'Pinned OACP issuer identifier (default: the base URL)')
     .option('--oacp-tenant <id>', 'Commerce tenant the oacp suite issues under (default: cten_CONFORMANCE)')
     .action(async (opts: {
@@ -24,6 +25,7 @@ export async function run(): Promise<void> {
       include?: string;
       format: string;
       bail: boolean;
+      allowAdditionalSigningKeys: boolean;
       oacpIssuer?: string;
       oacpTenant?: string;
     }) => {
@@ -34,6 +36,7 @@ export async function run(): Promise<void> {
         include: opts.include ? opts.include.split(',').map((s) => s.trim()) : undefined,
         format: opts.format === 'json' ? 'json' : 'text',
         bail: opts.bail,
+        allowAdditionalSigningKeys: opts.allowAdditionalSigningKeys,
         // A secret: read from the environment only, never from argv.
         internalToken: process.env['GRANTEX_CONFORMANCE_INTERNAL_TOKEN'] || undefined,
         oacpIssuer: opts.oacpIssuer?.replace(/\/$/, '') ?? process.env['GRANTEX_CONFORMANCE_OACP_ISSUER'],
