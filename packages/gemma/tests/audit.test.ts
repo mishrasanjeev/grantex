@@ -56,6 +56,38 @@ describe('audit-sync', () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
+  it('documented audit sync example uses the API base origin', async () => {
+    const readme = await readFile(new URL('../README.md', import.meta.url), 'utf-8');
+    expect(readme).toContain('endpoint: new URL(bundle.syncEndpoint).origin,');
+  });
+
+  it('documented audit sync sends a full bundle endpoint to its route only once', async () => {
+    const log = createOfflineAuditLog({ signingKey, logPath });
+    await log.append(sampleEntry);
+    const bundle = {
+      bundleId: 'bundle_example',
+      syncEndpoint: 'https://api.example/v1/audit/offline-sync',
+    };
+    const originalFetch = globalThis.fetch;
+    const requests: string[] = [];
+    globalThis.fetch = vi.fn(async (url) => {
+      requests.push(String(url));
+      return new Response(JSON.stringify({ accepted: 1 }), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const result = await syncAuditLog(log, {
+        endpoint: new URL(bundle.syncEndpoint).origin,
+        apiKey: 'example-api-key',
+        bundleId: bundle.bundleId,
+      });
+      expect(requests).toEqual([bundle.syncEndpoint]);
+      expect(result).toEqual({ syncedCount: 1, hasErrors: false, errors: [] });
+      expect(await log.unsyncedCount()).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('returns zero synced when there are no entries', async () => {
     const log = createOfflineAuditLog({ signingKey, logPath });
 
