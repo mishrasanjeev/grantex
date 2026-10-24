@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Security - URI and HTTP dependency patches
+- Refresh affected lockfiles to fast-uri 3.1.9/4.2.3 and undici 7.30.1/8.12.3
+  within existing consumer majors. Add URI normalization, host confusion,
+  response integrity and excessive content-encoding denial regressions.
+
 ### Security - Dependency advisory fixes
 - Pin Zod 4.6.7 in the six affected auth, payment and integration dependency
   trees for GHSA-mrhx-c7xc-m3w5. Add v1/v2 payment schema compatibility and
