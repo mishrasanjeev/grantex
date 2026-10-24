@@ -23,8 +23,8 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
-    "grantex>=0.7.1,<1",
-    "strands-agents>=0.1",
+    "grantex>=0.7.2,<1",
+    "strands-agents>=1.61.1",
     # Patched 1.x compatibility line; see GHSA-84m7-p3x7-pcfv.
     "mcp>=1.30.0,<2",
 ]
@@ -38,7 +38,7 @@ Issues = "https://github.com/mishrasanjeev/grantex/issues"
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3,<9; python_version < '3.10'",
-    "pytest>=9.0.3; python_version >= '3.10'",
+    "pytest>=9.1.1; python_version >= '3.10'",
 ]
 
 [tool.hatch.build.targets.wheel]

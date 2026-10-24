@@ -16,9 +16,10 @@ describe('ManifestViewer', () => {
 
   it('renders all connector rows', () => {
     r();
-    for (const m of BUNDLED_MANIFESTS) {
-      expect(screen.getByText(m.connector)).toBeInTheDocument();
-    }
+    const table = screen.getByRole('table') as HTMLTableElement;
+    const connectors = Array.from(table.tBodies).flatMap((body) =>
+      Array.from(body.rows, (row) => row.cells[0]!.textContent));
+    expect(connectors.sort()).toEqual(BUNDLED_MANIFESTS.map((m) => m.connector).sort());
   });
 
   it('search filters by connector name', async () => {

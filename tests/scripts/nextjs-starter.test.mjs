@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { getOrCreateDemoAgent } from '../../examples/nextjs-starter/lib/demo-agent.ts';
 
 const redirectUri = 'https://app.example/callback';
+
+test('starter locks React and its renderer to the same version', () => {
+  const lock = JSON.parse(readFileSync(new URL('../../examples/nextjs-starter/package-lock.json', import.meta.url), 'utf8'));
+  assert.equal(lock.packages['node_modules/react'].version, lock.packages['node_modules/react-dom'].version);
+});
 
 test('starter registers its exact callback with a new demo agent', async () => {
   const client = { agents: {

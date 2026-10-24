@@ -70,11 +70,17 @@ function mutate(value: string, random: () => number): string {
   return value.slice(0, index) + next + value.slice(index + 1);
 }
 
-function freshKeys(): Record<string, unknown>[] {
+function freshCurveKeys(): Record<string, unknown>[] {
   return [
     generateKeyPairSync('ec', { namedCurve: 'P-256' }).publicKey.export({ format: 'jwk' }),
     generateKeyPairSync('ec', { namedCurve: 'P-384' }).publicKey.export({ format: 'jwk' }),
     generateKeyPairSync('ed25519').publicKey.export({ format: 'jwk' }),
+  ] as Record<string, unknown>[];
+}
+
+function freshKeys(): Record<string, unknown>[] {
+  return [
+    ...freshCurveKeys(),
     generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey.export({ format: 'jwk' }),
   ] as Record<string, unknown>[];
 }
@@ -109,7 +115,7 @@ describe('RFC 7638 JWK thumbprints', () => {
     const random = prng(0x7638);
     const extras = ['kid', 'alg', 'use', 'key_ops', 'x5t', 'ext', 'nimbus'];
     for (let round = 0; round < 50; round += 1) {
-      for (const jwk of [RFC7638_RSA, RFC8037_ED25519, ...freshKeys().slice(0, 3)]) {
+      for (const jwk of [RFC7638_RSA, RFC8037_ED25519, ...freshCurveKeys()]) {
         const expected = jwkThumbprint(jwk);
         const decorated: Record<string, unknown> = { ...jwk };
         for (const name of extras) {
@@ -123,7 +129,7 @@ describe('RFC 7638 JWK thumbprints', () => {
   it('changes when any required member changes (property)', () => {
     const random = prng(0x8037);
     for (let round = 0; round < 50; round += 1) {
-      for (const jwk of [RFC7638_RSA, RFC8037_ED25519, ...freshKeys().slice(0, 3)]) {
+      for (const jwk of [RFC7638_RSA, RFC8037_ED25519, ...freshCurveKeys()]) {
         const original = jwkThumbprint(jwk);
         const kty = jwk['kty'] as keyof typeof THUMBPRINT_MEMBERS;
         for (const member of THUMBPRINT_MEMBERS[kty]) {
@@ -134,7 +140,7 @@ describe('RFC 7638 JWK thumbprints', () => {
       }
     }
     // The curve and the key type are required members too.
-    const p256 = freshKeys()[0]!;
+    const p256 = freshCurveKeys()[0]!;
     expect(jwkThumbprint({ ...p256, crv: 'P-384' })).not.toBe(jwkThumbprint(p256));
     expect(jwkThumbprint({ ...RFC8037_ED25519, crv: 'Ed448' })).not.toBe(RFC8037_THUMBPRINT);
   });

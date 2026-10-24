@@ -3,11 +3,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node ../../tests/helpers/scoped-example.mjs .",
     "typecheck": "tsc --ignoreConfig --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --skipLibCheck --types node src/index.ts",
     "start": "npx tsx src/index.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.133.0",
+    "@anthropic-ai/sdk": "^0.135.0",
     "@grantex/anthropic": "^0.1.2",
     "@grantex/sdk": "^0.8.2"
   },

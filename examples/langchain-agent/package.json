@@ -3,13 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node ../../tests/helpers/scoped-example.mjs .",
     "typecheck": "tsc --ignoreConfig --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --strict --skipLibCheck --types node src/index.ts",
     "start": "npx tsx src/index.ts"
   },
   "dependencies": {
     "@grantex/langchain": "^0.1.8",
     "@grantex/sdk": "^0.8.2",
-    "@langchain/core": "^1.2.17"
+    "@langchain/core": "^1.2.20"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
