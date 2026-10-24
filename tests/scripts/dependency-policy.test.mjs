@@ -23,6 +23,22 @@ const vulnerable = {
   undici: '>=6.5.0 <6.29.1 || >=7.0.0 <7.30.1 || >=8.0.0 <8.12.2',
 };
 
+test('auth telemetry API satisfies every locked OpenTelemetry peer contract', () => {
+  const manifest = json('apps/auth-service/package.json');
+  const packages = json('apps/auth-service/package-lock.json').packages;
+  const apiVersion = packages['node_modules/@opentelemetry/api'].version;
+  const apiRange = manifest.dependencies['@opentelemetry/api'];
+  assert.ok(semver.satisfies(apiVersion, apiRange));
+  for (const [location, dependency] of Object.entries(packages)) {
+    const peerRange = dependency.peerDependencies?.['@opentelemetry/api'];
+    if (!peerRange || !location.startsWith('node_modules/@opentelemetry/')) continue;
+    assert.ok(semver.satisfies(apiVersion, peerRange),
+      `${location}@${dependency.version} requires API ${peerRange}, locked ${apiVersion}`);
+    assert.ok(semver.subset(apiRange, peerRange),
+      `${location}: manifest API range ${apiRange} exceeds peer ${peerRange}`);
+  }
+});
+
 test('tracked lockfiles exclude the reviewed vulnerable dependency versions', () => {
   const findings = [];
   for (const path of tracked.filter((file) => file.endsWith('package-lock.json'))) {
