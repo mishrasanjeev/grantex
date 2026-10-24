@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Gemma audit-sync example
+- Pass the API origin from a consent bundle's sync URL to the audit-sync helper,
+  avoiding a duplicated route. Retain the helper's existing base-URL contract and
+  verification policy, with executable documentation regression coverage.
+
 ### Added - Opt-in mixed signing-key conformance profile
 - Add `--allow-additional-signing-keys` to validate additional ES256 P-256 and
   EdDSA Ed25519 public signing keys while retaining an RS256 grant key. Reject

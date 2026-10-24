@@ -106,7 +106,7 @@ import { syncAuditLog } from '@grantex/gemma';
 
 // When connectivity returns, sync all un-uploaded entries
 const result = await syncAuditLog(auditLog, {
-  endpoint: bundle.syncEndpoint,
+  endpoint: new URL(bundle.syncEndpoint).origin,
   apiKey: process.env.GRANTEX_API_KEY!,
   bundleId: bundle.bundleId,
   batchSize: 100, // entries per HTTP request
