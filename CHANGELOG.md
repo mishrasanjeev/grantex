@@ -46,6 +46,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed - Scoped example issuer verification
 - Bind the LangChain example's token and tool verification to its configured
   issuer and exercise the denied tool before claiming scope enforcement.
+- Bind the Anthropic example's token and tool verification to its configured
+  issuer and use the verified principal and registered agent identity for audit.
 
 ### Security - Dependency advisory fixes
 - Pin Zod 4.6.7 in the six affected auth, payment and integration dependency

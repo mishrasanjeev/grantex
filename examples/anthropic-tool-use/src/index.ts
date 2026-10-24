@@ -19,7 +19,7 @@
  * and demonstrates tool creation, scope checks, and audit logging directly.
  */
 
-import { Grantex } from '@grantex/sdk';
+import { Grantex, verifyGrantToken } from '@grantex/sdk';
 import {
   createGrantexTool,
   getGrantScopes,
@@ -30,11 +30,15 @@ import {
 
 const BASE_URL = process.env['GRANTEX_URL'] ?? 'http://localhost:3001';
 const API_KEY = process.env['GRANTEX_API_KEY'] ?? 'sandbox-api-key-local';
+const VERIFY_OPTIONS = {
+  jwksUri: new URL('/.well-known/jwks.json', BASE_URL).href,
+  ...(process.env['GRANTEX_ISSUER'] ? { issuer: process.env['GRANTEX_ISSUER'] } : {}),
+};
 
 async function getGrantToken(
   grantex: Grantex,
   agentId: string,
-): Promise<{ grantToken: string; grantId: string }> {
+): Promise<{ grantToken: string; grantId: string; principalId: string }> {
   const authRequest = await grantex.authorize({
     agentId,
     userId: 'test-user-001',
@@ -44,7 +48,9 @@ async function getGrantToken(
   const code = (authRequest as unknown as Record<string, unknown>)['code'] as string;
   if (!code) throw new Error('No code returned — use the sandbox API key.');
 
-  return grantex.tokens.exchange({ code, agentId });
+  const tokenResponse = await grantex.tokens.exchange({ code, agentId });
+  const verified = await verifyGrantToken(tokenResponse.grantToken, VERIFY_OPTIONS);
+  return { ...tokenResponse, principalId: verified.principalId };
 }
 
 async function main(): Promise<void> {
@@ -60,7 +66,7 @@ async function main(): Promise<void> {
   const agentId = agent.id ?? (agent as unknown as Record<string, string>)['agentId'];
   console.log('Agent registered:', agentId);
 
-  const { grantToken, grantId } = await getGrantToken(grantex, agentId);
+  const { grantToken, grantId, principalId } = await getGrantToken(grantex, agentId);
   console.log('Grant token received, grantId:', grantId);
 
   // ── 2. Create scoped tools with JSON Schema ──────────────────────
@@ -75,6 +81,7 @@ async function main(): Promise<void> {
       required: ['date'],
     },
     grantToken,
+    ...VERIFY_OPTIONS,
     requiredScope: 'calendar:read',
     execute: async (args) => {
       // Simulated calendar API
@@ -101,6 +108,7 @@ async function main(): Promise<void> {
       required: ['to', 'subject', 'body'],
     },
     grantToken,
+    ...VERIFY_OPTIONS,
     requiredScope: 'email:send',
     execute: async (args) => {
       // Simulated email API
@@ -124,9 +132,9 @@ async function main(): Promise<void> {
   // ── 4. Invoke tools ────────────────────────────────────────────────
   const auditOpts = {
     agentId: agentId,
-    agentDid: `did:key:${agentId}`,
+    agentDid: agent.did,
     grantId,
-    principalId: 'test-user-001',
+    principalId,
   };
 
   if (process.env['ANTHROPIC_API_KEY']) {
@@ -205,13 +213,14 @@ async function main(): Promise<void> {
       required: ['path'],
     },
     grantToken,
+    ...VERIFY_OPTIONS,
     requiredScope: 'storage:delete', // not in our grant!
     execute: async () => ({ deleted: true }),
   });
 
   try {
-    await restrictedTool.execute({ path: '/tmp/secret.txt' });
-    console.log('ERROR: should have thrown');
+    await restrictedTool.execute({ path: 'synthetic-fixture' });
+    throw new Error('Scope enforcement did not refuse execution');
   } catch (err) {
     if (err instanceof GrantexScopeError) {
       console.log('GrantexScopeError caught:');
