@@ -76,7 +76,7 @@ Stop and require a new approved work item if any follow-up:
 - adds portal credential entry, outbound sync, connector execution, private API
   URLs, schedules, workers, or real merchant-system calls;
 - calls Shopify, WooCommerce, Magento, custom API, ERP, OMS, WMS, logistics,
-  CRM/support, payment providers, Plural, Stripe, Pine, or merchant private
+  CRM/support, payment providers, Plural, Stripe, or merchant private
   APIs;
 - allows AgenticOrg to call merchant private APIs directly;
 - enables Grantex public discovery or AgenticOrg public commerce discovery;

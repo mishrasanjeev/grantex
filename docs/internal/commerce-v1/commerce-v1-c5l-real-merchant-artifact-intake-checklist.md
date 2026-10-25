@@ -135,7 +135,7 @@ The payload preview must state:
 - No checkout or payment creation.
 - No broad `COMMERCE_V1_ENABLED` request.
 - Read-only discovery gate only.
-- No direct Stripe, Plural, Pine, or provider credential handling.
+- No direct Stripe, Plural, or provider credential handling.
 - No state-changing production request is part of C5L.
 
 ## Rejection Criteria

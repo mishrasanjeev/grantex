@@ -264,7 +264,7 @@ Blocked until separate approval:
 - live payment processing;
 - live Plural access;
 - provider credential access;
-- direct Stripe, Plural, Pine, or provider credential paths from an agent;
+- direct Stripe, Plural, or provider credential paths from an agent;
 - payment readiness or certification claims.
 
 ### AgenticOrg Dependency
@@ -784,7 +784,7 @@ only public-safe summaries or non-secret approval references.
 ### Can the agent access my payment provider directly?
 
 No. Agentic commerce must preserve provider boundaries. Agents should not access
-Stripe, Plural, Pine, or other provider credentials directly.
+Stripe, Plural, or other provider credentials directly.
 
 ### What happens if a customer denies consent?
 

@@ -84,7 +84,7 @@ when Grantex can verify:
 AgenticOrg must not:
 
 - hold provider credentials;
-- call Plural, Stripe, Pine, Razorpay, Cashfree, Adyen, PhonePe, or another
+- call Plural, Stripe, Razorpay, Cashfree, Adyen, PhonePe, or another
   payment provider directly for payment execution;
 - call Shopify, WooCommerce, Magento, ERP, OMS, WMS, logistics, CRM/support, or
   merchant private APIs outside merchant-approved seller-agent connector sync
@@ -134,7 +134,7 @@ revocable artifacts, mandates, ledger, UCP and ACP surfaces), read
   [OACP artifact authority](./oacp/artifact-authority.mdx).
 - C6Z adds the AgenticOrg Seller Commerce Agent runtime path, Shopify read-only
   sync initiation, Grantex internal authority request route, AgenticOrg artifact
-  cache, buyer answer path, MCP seller facts bridge, and Plural/Pine capability
+  cache, buyer answer path, MCP seller facts bridge, and Plural capability
   verifier. The 2026-06-18 production closure run is blocked because the
   mounted AgenticOrg Shopify token returns `401 Unauthorized` and the
   AgenticOrg-configured Grantex token returns `422 tenant_not_provisioned`.

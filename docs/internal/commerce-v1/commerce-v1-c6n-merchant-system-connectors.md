@@ -86,7 +86,7 @@ Stop and require separate approval if any change attempts to:
 
 - store or print real connector credentials
 - call Shopify, WooCommerce, Magento, custom APIs, ERP, billing, OMS, WMS,
-  logistics, CRM/support, payment providers, Plural, Stripe, Pine, or merchant
+  logistics, CRM/support, payment providers, Plural, Stripe, or merchant
   private APIs
 - let AgenticOrg call merchant private systems directly
 - enable checkout/payment creation, fulfillment execution, refund execution,

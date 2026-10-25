@@ -743,7 +743,7 @@ Require explicit human review before merge for these high-risk areas:
 - JWT/JWKS verification code, especially ES256 pinning, `kid` handling, clock skew, revocation checks, and rejection of `alg=none` or algorithm-confusion attacks;
 - consent screen security, especially CSP, `X-Frame-Options`, CSRF model, single-use approval/deny, and absence of unsafe inline script/style unless the existing framework has a reviewed nonce pattern;
 - webhook signature verification, especially raw-body handling, replay window, event idempotency, and timing-safe signature comparison;
-- Plural adapter after Pine/Plural confirms the real API and webhook signature scheme.
+- Plural adapter after the provider confirms the real API and webhook signature scheme.
 
 Do not self-approve these gates. If human review is unavailable, mark the release gate as blocked and explain the risk.
 

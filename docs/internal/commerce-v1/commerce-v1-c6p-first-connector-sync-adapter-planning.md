@@ -51,7 +51,7 @@ Out of scope for C6P:
 - ERP, billing, OMS, WMS, logistics, and CRM/support remain metadata-only and
   not called.
 - Payment provider connectors remain metadata-only and not called.
-- Plural, Stripe, Pine, payment providers, and merchant private APIs remain
+- Plural, Stripe, payment providers, and merchant private APIs remain
   non-live and not called.
 
 ## Traceability
@@ -325,7 +325,7 @@ Stop and require a new approved work item if any C6P follow-up:
 - adds a runtime sync route, worker, scheduler, migration, or portal UI
 - stores, prints, or accepts real connector credentials
 - calls Shopify, WooCommerce, Magento, custom APIs, ERP, billing, OMS, WMS,
-  logistics, CRM/support, payment providers, Plural, Stripe, Pine, or merchant
+  logistics, CRM/support, payment providers, Plural, Stripe, or merchant
   private APIs
 - allows AgenticOrg to call merchant private systems directly
 - writes production configuration or production allowlists

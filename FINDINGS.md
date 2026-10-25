@@ -446,7 +446,7 @@ the pull request that references it.
 
 - **Found:** review of the migration ledger (PRD G-6), 2026-09-21.
 - **What:** `062_trust_registry_verification_token.sql` hardcodes
-  `did:web:shopify.com`, `did:web:doordash.com` and `did:web:pinelabs.com` in
+  `did:web:shopify.com`, `did:web:doordash.com` and another third-party DID in
   its seed data. These are real companies that have no relationship with this
   project, and the rows are indistinguishable from a real trust-registry
   entry — exactly what the "no data that could be mistaken for real" rule

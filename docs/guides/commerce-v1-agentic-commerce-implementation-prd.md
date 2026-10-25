@@ -169,7 +169,7 @@ launch still requires valid external credentials and tenant allowlisting.
 - implemented in both repos: Grantex authority helpers/tests/docs and
   AgenticOrg local consumer/runtime helpers/tests/docs, including seller-agent
   packet creation, Shopify sync initiation, artifact cache, buyer answer, MCP
-  bridge, and Plural/Pine capability verifier paths;
+  bridge, and Plural capability verifier paths;
 - blocked in production: successful Shopify read-only sync with the mounted
   token and successful AgenticOrg-to-Grantex tenant provisioning for the
   configured internal token;

@@ -166,7 +166,7 @@ Stop the hosted run and mark the report blocked if any of these occur:
 - A target uses a production database, Redis, or secret version.
 - `COMMERCE_LIVE_MODE_ENABLED` or `PLURAL_LIVE_ENABLED` is true.
 - Provider is anything other than `mock`.
-- AgenticOrg tries to use direct Stripe, Plural, Pine, or provider credentials for commerce.
+- AgenticOrg tries to use direct Stripe, Plural, or provider credentials for commerce.
 - Checkout succeeds without consent, with denied consent, with a revoked or expired passport, or above amount cap.
 - Duplicate webhook changes state twice.
 - Audit timeline is missing required events.

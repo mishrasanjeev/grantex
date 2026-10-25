@@ -45,7 +45,7 @@ AgenticOrg local validation:
 - Deterministic eval/demo harness
 - Live-local connector smoke against Grantex localhost
 - Tool path: `grantex_commerce` connector to Grantex MCP/REST only
-- No direct Stripe, Plural, Pine, or provider credential path
+- No direct Stripe, Plural, or provider credential path
 
 ## Issue Found And Fixed
 
@@ -151,7 +151,7 @@ AgenticOrg:
 | Disabled merchant / policy denial | Grantex tests and AgenticOrg guardrails |
 | Revoked or expired passport | Grantex commerce tests |
 | Unsupported EMI/discount/offer/warranty | AgenticOrg refusal |
-| Direct provider path | AgenticOrg static regression confirms no Stripe/Plural/Pine commerce path |
+| Direct provider path | AgenticOrg static regression confirms no Stripe/Plural commerce path |
 | Duplicate webhook transition | Local Grantex harness confirms no duplicate payment transition |
 
 ## Limitations

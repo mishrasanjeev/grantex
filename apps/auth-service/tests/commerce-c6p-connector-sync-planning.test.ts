@@ -38,7 +38,7 @@ const notCalledSystems = [
   'Custom API remains declaration-only and not called',
   'ERP, billing, OMS, WMS, logistics, and CRM/support remain metadata-only',
   'Payment provider connectors remain metadata-only and not called',
-  'Plural, Stripe, Pine, payment providers, and merchant private APIs remain',
+  'Plural, Stripe, payment providers, and merchant private APIs remain',
 ];
 
 const sourceDomains = [

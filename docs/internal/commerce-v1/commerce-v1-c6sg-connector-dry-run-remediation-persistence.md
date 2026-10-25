@@ -104,7 +104,7 @@ duplicate audit events.
 ## Existing-System Boundary
 
 C6Sg does not connect to Shopify, WooCommerce, Magento, custom APIs, ERP, OMS,
-WMS, logistics, CRM/support, payment providers, Plural, Stripe, Pine, or
+WMS, logistics, CRM/support, payment providers, Plural, Stripe, or
 merchant private APIs. AgenticOrg never directly executes merchant private API
 calls. It continues to consume only Grantex-owned preview and buyer discovery
 surfaces after Grantex records the required sandbox evidence.
@@ -119,7 +119,7 @@ Stop and require a new approved work item if any follow-up:
 - adds outbound sync workers, connector execution, private API URLs, schedules,
   background jobs, or real merchant-system calls;
 - calls Shopify, WooCommerce, Magento, custom API, ERP, OMS, WMS, logistics,
-  CRM/support, payment providers, Plural, Stripe, Pine, or merchant private
+  CRM/support, payment providers, Plural, Stripe, or merchant private
   APIs;
 - allows AgenticOrg to call merchant private APIs directly;
 - enables Grantex public discovery or AgenticOrg public commerce discovery;

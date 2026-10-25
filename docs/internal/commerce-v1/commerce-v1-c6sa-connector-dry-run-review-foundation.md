@@ -70,7 +70,7 @@ artifacts, production config values, concrete allowlists, or customer data.
 
 C6Sa reviews evidence produced by Grantex. It does not connect to Shopify,
 WooCommerce, Magento, custom APIs, ERP, OMS, WMS, logistics, CRM/support,
-payment providers, Plural, Stripe, Pine, or merchant private APIs.
+payment providers, Plural, Stripe, or merchant private APIs.
 
 AgenticOrg never directly executes merchant private API calls. AgenticOrg
 continues to consume only Grantex-owned preview and buyer discovery surfaces

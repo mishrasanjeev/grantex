@@ -79,7 +79,7 @@ Stop and require a new approved work item if any follow-up:
 - adds outbound sync, connector execution, worker schedules, background jobs, or
   merchant private API calls;
 - connects to Shopify, WooCommerce, Magento, custom APIs, ERP, OMS, WMS,
-  logistics, CRM/support, payment providers, Plural, Stripe, Pine, or merchant
+  logistics, CRM/support, payment providers, Plural, Stripe, or merchant
   private APIs;
 - allows AgenticOrg to call merchant private APIs directly;
 - enables Grantex public discovery or AgenticOrg public commerce discovery;

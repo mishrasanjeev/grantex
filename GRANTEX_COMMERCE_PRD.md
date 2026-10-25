@@ -6,19 +6,19 @@
 **Product type:** New product line under Grantex, integrated with AgenticOrg
 **Primary positioning:** Trusted agentic commerce infrastructure for merchants
 **Primary users:** Merchants, payment partners, commerce platforms, AI agent platforms, enterprise operations teams
-**Primary partner rail:** Pine Labs / Plural for payments, checkout, affordability, POS, settlement, and merchant reach
+**Primary payment rail:** Plural, through the provider adapter, for payments, checkout, affordability, POS and settlement
 
-Grantex Commerce lets merchants safely accept AI-agent-led commerce across online and offline channels. It combines Grantex's delegated authorization and audit layer, AgenticOrg's merchant AI employees, Pine Labs/Plural payment rails, and UCP/ACP/MCP interoperability.
+Grantex Commerce lets merchants safely accept AI-agent-led commerce across online and offline channels. It combines Grantex's delegated authorization and audit layer, AgenticOrg's merchant AI employees, Plural payment rails, and UCP/ACP/MCP interoperability.
 
 The product must not be a small demo or MVP. It should become a working production-grade product line with a clear separation of responsibilities:
 
 - **Grantex.dev:** Trust, consent, agent identity, scoped authorization, payment passports, policy enforcement, audit, merchant commerce gateway, UCP/ACP/MCP authorization wrapper.
 - **AgenticOrg.ai:** Merchant AI agents and workflows: sales, support, catalog, offer, reconciliation, store operations, and human-in-loop merchant workbench.
-- **Pine Labs / Plural integrations:** Payment execution, checkout links, payment orders, subscriptions, refunds, rewards, affordability, online gateway, offline POS bridge where available.
+- **Plural integrations:** Payment execution, checkout links, payment orders, subscriptions, refunds, rewards, affordability, online gateway, offline POS bridge where available.
 
 The core thesis:
 
-> Plural lets merchants accept online payments. Pine POS lets merchants accept offline payments. Grantex Commerce lets merchants safely accept AI agents.
+> Plural lets merchants accept online payments. POS lets merchants accept offline payments. Grantex Commerce lets merchants safely accept AI agents.
 
 ## 1.1 Implementation Contract For Claude Code
 
@@ -28,11 +28,11 @@ Build must satisfy these rules:
 
 1. **Grantex Commerce is the merchant control plane.** Merchant registration, catalog, inventory, pricing, offers, payments, AI-native publishing, UCP/ACP/MCP settings, policies, analytics, and audit live in Grantex.
 2. **AgenticOrg is the merchant AI workforce.** AgenticOrg consumes Grantex Commerce data and Grantex grants; it does not become the source of truth for merchant catalog, inventory, pricing, policies, or payment settings.
-3. **Pine/Plural executes payments.** Do not create a competing payment processor. Wrap Plural/Pine APIs behind Grantex authorization, policy, audit, and merchant controls.
+3. **Plural executes payments.** Do not create a competing payment processor. Wrap Plural APIs behind Grantex authorization, policy, audit, and merchant controls.
 4. **UCP/ACP/MCP are interoperability adapters.** They are required, but the product is not only an adapter. The core product is trusted agentic commerce execution.
 5. **Every agent action must be attributable.** Store who acted, on whose behalf, under which grant, against which merchant, under which policy version, and with which provider result.
 6. **Every payment-affecting action must be consented or policy-approved.** No agent-created checkout, payment, refund, loyalty redemption, subscription, or store reservation may bypass Grantex Commerce Passport and merchant policy evaluation.
-7. **Every external integration must have sandbox, live, and mocked modes.** If Pine/Plural live access is unavailable, build a provider interface and mocked/sandbox adapter so the product can be developed and tested end-to-end.
+7. **Every external integration must have sandbox, live, and mocked modes.** If Plural live access is unavailable, build a provider interface and mocked/sandbox adapter so the product can be developed and tested end-to-end.
 8. **Every UI flow must have an equivalent API.** The product must support dashboard users and developer/platform integrations.
 9. **Every module must have tests.** Include unit tests, integration tests, policy tests, agent safety evals, webhook tests, and end-to-end sandbox tests.
 10. **Do not leave ambiguous TODOs in production paths.** Unknown partner details should be isolated behind typed interfaces, feature flags, and explicit configuration.
@@ -54,12 +54,12 @@ The finished product is considered complete when all of the following are true:
 
 ## 1.3 Product Ownership Matrix
 
-| Capability | Grantex.dev | AgenticOrg.ai | Pine/Plural | Notes |
+| Capability | Grantex.dev | AgenticOrg.ai | Plural | Notes |
 | --- | --- | --- | --- | --- |
 | Merchant registration | Owner | Consumer | Optional partner referral | Source of truth in Grantex Commerce |
 | Merchant verification | Owner | None | Optional partner data | Store verification status and evidence |
 | Catalog ingestion | Owner | Uses | None unless provided by merchant | AgenticOrg may enrich but not own canonical catalog |
-| Inventory ingestion | Owner | Uses | Pine POS source where available | Store freshness/confidence per SKU/location |
+| Inventory ingestion | Owner | Uses | POS source where available | Store freshness/confidence per SKU/location |
 | Pricing/offers data | Owner | Uses/recommends | Provides offer/EMI/reward eligibility where available | Merchant policy decides final exposure |
 | Payment execution | Wraps/enforces | Uses tools | Owner | Grantex never stores raw card/payment credentials |
 | Consent/passports | Owner | Requests/uses | Verifies where integrated | Grantex moat |
@@ -88,16 +88,16 @@ The first implementation must prove:
 
 Anything that does not strengthen that proof is roadmap until the core is live.
 
-## 1.5 Provider Neutrality And Pine/Plural Positioning
+## 1.5 Provider Neutrality And Plural Positioning
 
-Plural/Pine is the first reference payment and merchant-rail partner. It must not be hardcoded as the only possible provider.
+Plural is the first reference payment adapter. It must not be hardcoded as the only possible provider.
 
 Product positioning must remain provider-neutral:
 
-- Grantex Commerce is not "Pine Labs agentic commerce."
+- Grantex Commerce is not tied to one payment provider.
 - Grantex Commerce is the authorization, policy, audit, and capability publishing layer for AI-agent commerce.
-- Plural is the first payment adapter and partner implementation.
-- Pine POS is the first offline/POS adapter and partner implementation.
+- Plural is the first payment adapter.
+- A POS bridge is the first offline adapter.
 - Razorpay, Cashfree, Stripe, Adyen, PhonePe, ONDC, bank rails, and future providers must be supportable through the same adapter model.
 
 Implementation requirements:
@@ -106,11 +106,11 @@ Implementation requirements:
 - Provider names may appear in configuration, adapter packages, docs, and partner demos.
 - Core data models must use neutral fields such as `payment_provider`, `provider_account_id`, `provider_capability_status`, and `provider_reference_id`.
 - Merchant-facing product copy should say "connect payment provider" first and "Plural" as the first supported provider.
-- Partner-facing Pine/Plural demos may be co-branded, but core Grantex docs must remain provider-neutral.
+- Core Grantex docs remain provider-neutral.
 
 Strategic reason:
 
-If Grantex Commerce appears to be only Pine Labs infrastructure, non-Pine merchants and non-Pine AI platforms may not adopt it. The product should benefit from Pine/Plural access without being limited to Pine/Plural distribution.
+If Grantex Commerce appears tied to one payment provider, other merchants and AI platforms may not adopt it. The product supports Plural without being limited to it.
 
 ## 2. Strategic Context
 
@@ -156,7 +156,7 @@ Initial launch categories:
 
 1. **Electronics and appliances**
    - Highest priority launch category.
-   - Best fit for Pine/Plural because EMI, offers, warranties, store pickup, inventory, and assisted selling matter.
+   - Best fit because EMI, offers, warranties, store pickup, inventory, and assisted selling matter.
 2. **Fashion, footwear, beauty, and lifestyle**
    - High priority launch category.
    - Strong fit for variants, returns/exchanges, loyalty, agent-assisted discovery, and support.
@@ -237,10 +237,10 @@ Acceptance criteria:
 
 1. Establish Grantex as the trust and consent layer for AI-led commerce.
 2. Establish AgenticOrg as the merchant AI employee layer for agentic commerce operations.
-3. Enable Pine/Plural merchants to accept AI-agent-initiated transactions safely.
+3. Enable merchants to accept AI-agent-initiated transactions safely.
 4. Create a product category: **Agentic Commerce Acceptance Governance**.
 5. Generate enterprise and partner revenue through SaaS, usage fees, transaction-linked pricing, and implementation services.
-6. Create a wedge for deeper Pine Labs partnership around agentic payments, online checkout, POS, offers, affordability, loyalty, reconciliation, and merchant operations.
+6. Extend into agentic payments, online checkout, POS, offers, affordability, loyalty, reconciliation, and merchant operations.
 
 ### 3.2 Product Goals
 
@@ -255,7 +255,7 @@ Acceptance criteria:
 ### 3.3 Non-Goals
 
 1. Do not build a new payment gateway.
-2. Do not duplicate Plural checkout, Pine POS, or Pine settlement logic.
+2. Do not duplicate Plural checkout, POS, or provider settlement logic.
 3. Do not build a generic consumer shopping app as the primary product.
 4. Do not depend on scraping as the core commerce integration pattern.
 5. Do not position the product only as a UCP/ACP adapter.
@@ -341,7 +341,7 @@ Key product surfaces:
 - Grant verification APIs.
 - Commerce action APIs.
 
-### 4.6 Pine / Plural Product And Partnership Teams
+### 4.6 Payment Provider Product Teams
 
 Needs:
 
@@ -355,7 +355,7 @@ Key product surfaces:
 
 - Partner dashboard.
 - Plural adapter.
-- Pine POS bridge.
+- POS bridge.
 - Agentic payment audit ledger.
 - Co-branded demos.
 
@@ -380,7 +380,7 @@ Key product surfaces:
    - Commerce action enforcement.
    - UCP/ACP/MCP adapters.
    - Plural checkout adapter.
-   - Pine POS bridge.
+   - POS bridge.
    - Commerce audit ledger.
    - Commerce analytics.
 
@@ -393,7 +393,7 @@ Key product surfaces:
    - Store Operations Agent.
    - Human-in-loop workflows.
 
-4. **Pine / Plural Rails**
+4. **Payment Provider Rails**
    - Hosted checkout.
    - Payment links.
    - Orders and payments.
@@ -428,7 +428,7 @@ Required environments:
 Required tenant types:
 
 - Grantex internal tenant.
-- Pine/Plural partner tenant.
+- Payment provider tenant.
 - Merchant tenant.
 - Agent platform tenant.
 - Sandbox demo tenant.
@@ -438,7 +438,7 @@ Required tenant types:
 Production deployment must support:
 
 - Multi-tenant SaaS.
-- Partner tenant mode for Pine/Plural.
+- Provider tenant mode.
 - Enterprise tenant isolation.
 - Optional dedicated deployment for regulated merchants.
 - Separate sandbox and live environments.
@@ -502,7 +502,7 @@ Implement the product as explicit modules even if the first version is a monolit
 6. **Policy Service**
    - Owns merchant policies, policy versions, policy simulation, and policy decisions.
 7. **Payment Adapter Service**
-   - Owns provider interfaces for Plural/Pine/mocked providers, payment intents, checkout links, payment status, refunds, subscriptions, and webhooks.
+   - Owns provider interfaces for Plural/mocked providers, payment intents, checkout links, payment status, refunds, subscriptions, and webhooks.
 8. **AI-Native Gateway Service**
    - Owns UCP-style profile, ACP-compatible metadata, MCP tools, well-known endpoints, and external agent access.
 9. **Audit Service**
@@ -1035,7 +1035,7 @@ Merchants must be able to:
 - Configure inventory freshness.
 - Connect/disconnect pricing sources.
 - Configure offer rules.
-- Connect Plural/Pine credentials.
+- Connect Plural credentials.
 - Validate webhooks.
 - Configure AI agent access.
 - Publish/unpublish AI-native endpoints.
@@ -1284,7 +1284,7 @@ Statuses:
 
 ### Payment Adapter Rules
 
-The adapter must never expose raw provider complexity to agents. Agents call Grantex Commerce APIs; Grantex calls Plural/Pine adapters.
+The adapter must never expose raw provider complexity to agents. Agents call Grantex Commerce APIs; Grantex calls Plural adapters.
 
 Rules:
 
@@ -1335,11 +1335,11 @@ Valid state transitions:
 
 Invalid transitions must be rejected and logged.
 
-### 6.4 Pine POS Agent Bridge
+### 6.4 POS Agent Bridge
 
 ### Purpose
 
-Extend agentic commerce from online payments to offline retail stores using Pine Labs POS/payment capabilities.
+Extend agentic commerce from online payments to offline retail stores using POS and payment provider capabilities.
 
 ### Required Features
 
@@ -1375,7 +1375,7 @@ Extend agentic commerce from online payments to offline retail stores using Pine
 
 ### Acceptance Criteria
 
-- Offline flow can be run in sandbox mode if Pine POS live integration is not ready.
+- Offline flow can be run in sandbox mode if POS live integration is not ready.
 - Store reservation cannot exceed merchant policy rules.
 - Pickup code must be short-lived and auditable.
 - Store staff can mark reservation as fulfilled/cancelled/no-show.
@@ -1965,7 +1965,7 @@ Responsibilities:
 
 Required integrations:
 
-- Pine POS bridge.
+- POS bridge.
 - Store inventory.
 - Staff notification channels.
 
@@ -1981,7 +1981,7 @@ Required integrations:
 
 AgenticOrg agents must use Grantex Commerce tools through a scoped tool manifest:
 
-- No direct Plural/Pine provider calls from agents.
+- No direct Plural provider calls from agents.
 - No direct payment credential handling.
 - No direct write to merchant catalog/pricing/inventory unless a merchant operator grant allows it.
 - No checkout creation without Commerce Passport.
@@ -2032,7 +2032,7 @@ Required sections:
 
 1. Hero:
    - Headline: "Let merchants safely accept AI agents."
-   - Subcopy: "Grantex Commerce provides verifiable consent, scoped payment authority, merchant policies, audit logs, and Pine/Plural payment execution for agentic commerce."
+   - Subcopy: "Grantex Commerce provides verifiable consent, scoped payment authority, merchant policies, audit logs, and Plural payment execution for agentic commerce."
 2. Problem:
    - AI agents can act, but merchants need proof of authorization.
 3. Solution:
@@ -2042,12 +2042,12 @@ Required sections:
    - UCP/ACP/MCP gateway.
    - Audit ledger.
 4. Product architecture diagram.
-5. Pine/Plural integration section.
+5. Plural integration section.
 6. Developer quickstart.
 7. Compliance and audit section.
 8. CTA:
    - "Try sandbox"
-   - "Request Pine/Plural pilot"
+   - "Request a pilot"
    - "Read docs"
 
 #### 7.1.2 Developer Docs
@@ -2267,7 +2267,7 @@ Pricing and offers ingestion options:
 - Custom API.
 - Merchant inbound webhook connector.
 - CSV upload.
-- Plural/Pine offer and affordability sources where available.
+- Plural offer and affordability sources where available.
 - Manual offer rules.
 
 Pricing fields:
@@ -2436,7 +2436,7 @@ Required sections:
 3. Trust section:
    - Secured by Grantex Commerce Passport.
 4. Payments section:
-   - Powered by Pine/Plural rails.
+   - Payments through Plural.
 5. Demo flow.
 6. Enterprise controls.
 7. CTA:
@@ -2450,7 +2450,7 @@ Add Commerce Agent Pack:
 - Agent templates.
 - Merchant connection settings.
 - Grantex tenant connection.
-- Plural/Pine connection.
+- Plural connection.
 - Human approval queues.
 - Agent run logs.
 - Failed action queue.
@@ -3359,7 +3359,7 @@ Support compliance evidence for:
 
 - DPDP Act readiness.
 - SOC 2 controls.
-- PCI-sensitive boundary avoidance by relying on Plural/Pine for payment data.
+- PCI-sensitive boundary avoidance by relying on Plural for payment data.
 - Consumer consent evidence.
 - Merchant policy evidence.
 - AI agent accountability.
@@ -3498,7 +3498,7 @@ Dashboards:
 
 ### 11.2 Partner Analytics
 
-For Pine/Plural:
+For payment providers:
 
 - Agentic payment volume.
 - Merchant adoption.
@@ -3557,7 +3557,7 @@ For Pine/Plural:
 4. Agent creates store reservation.
 5. Pickup code generated.
 6. Staff receives notification.
-7. Customer visits store and pays via Pine POS or already-paid Plural checkout.
+7. Customer visits store and pays via POS or already-paid Plural checkout.
 8. Store marks fulfilled.
 9. Audit and reconciliation complete.
 
@@ -3667,7 +3667,7 @@ Exit criteria:
 - Agents enforce Grantex permissions.
 - Failed/high-risk actions enter human queue.
 
-### Release 6: Pine POS / Offline Bridge
+### Release 6: POS / Offline Bridge
 
 Must include:
 
@@ -3712,7 +3712,7 @@ Must include:
 - Category preset system for launch categories.
 - Complete catalog, inventory, pricing, and offer data hub.
 - Live Plural integration behind feature flag.
-- Partner-ready Pine/POS sandbox bridge.
+- POS sandbox bridge.
 - AgenticOrg Commerce Agent Pack enabled for pilot merchants.
 - UCP-style, ACP-compatible, and MCP interoperability docs.
 - Merchant analytics and partner analytics.
@@ -3759,7 +3759,7 @@ Claude Code should split implementation into these workstreams:
    - Mock provider.
    - Plural sandbox.
    - Plural live behind flag.
-   - Pine POS mock/sandbox bridge.
+   - POS mock/sandbox bridge.
 6. **AI-native gateway**
    - Well-known endpoints.
    - UCP-style profile.
@@ -3917,7 +3917,7 @@ The demo must be repeatable from:
 
 - Number of live merchants.
 - Agentic GMV.
-- Plural/Pine payment volume influenced.
+- Plural payment volume influenced.
 - Agent-driven conversion.
 - Merchant retention.
 - Revenue per merchant.
@@ -3971,22 +3971,22 @@ Recommended pricing:
 3. Usage fee per agentic payment intent.
 4. Premium fee for AgenticOrg Commerce Agent Pack.
 5. Enterprise fee for custom policies, self-hosting, compliance exports, and partner analytics.
-6. Potential transaction revenue share with Pine/Plural where contractually possible.
+6. Potential transaction revenue share with payment providers where contractually possible.
 
 Do not price only as a percentage of payment volume. The product creates value through trust, consent, compliance, and operations, not only transaction processing.
 
 ## 17. Open Questions
 
-1. Which Plural APIs are available in partner sandbox for order/payment/refund/subscription/offer flows?
-2. What Pine POS APIs can be used for reservation/payment intent/offline pickup?
-3. Does Pine want co-branded product packaging or white-label integration?
+1. Which Plural APIs are available in the provider sandbox for order/payment/refund/subscription/offer flows?
+2. What POS APIs can be used for reservation/payment intent/offline pickup?
+3. Which packaging do payment providers want: co-branded or provider-embedded?
 4. Should UCP profile be generated per merchant domain or hosted under Grantex Commerce?
 5. Which commerce platforms should be first connectors: Shopify, WooCommerce, Magento, custom API?
 6. What legal language is required for agentic payment consent in India?
 7. What merchant categories should be excluded from first launch?
 8. Should Grantex Trust Registry include external commerce agents from day one?
-9. What data can Pine/Plural share for partner analytics?
-10. What is the exact division of support responsibility among merchant, Pine/Plural, Grantex, and AgenticOrg?
+9. What data can a payment provider share for analytics?
+10. What is the exact division of support responsibility among merchant, payment provider, Grantex, and AgenticOrg?
 
 ## 18. Recommended Build Order For Claude Code
 
@@ -4008,7 +4008,7 @@ When implementing in codebases, proceed in this order:
 14. Add `/commerce` landing page and `/docs/commerce` documentation.
 15. Add AgenticOrg Commerce Agent Pack, tool manifests, guardrails, run logs, and evals.
 16. Add AgenticOrg console pages that consume Grantex merchant data and deep-link edits to Grantex.
-17. Add Pine POS bridge mocked/sandbox flow for reservations and pickup.
+17. Add POS bridge mocked/sandbox flow for reservations and pickup.
 18. Add merchant, partner, Grantex, and admin analytics.
 19. Add observability, alerts, runbooks, operational admin console, compliance exports, and security hardening.
 20. Run full test suite, E2E sandbox flow, threat model tests, and release sign-off checklist.
@@ -4137,11 +4137,11 @@ Before production launch:
 
 ## 20. Final Product Statement
 
-Grantex Commerce is a new product line that makes merchants safely usable by AI agents. It is not merely UCP, ACP, MCP, or checkout integration. It is the trust and control layer where agents get permission, merchants set policy, payments execute through Pine/Plural, AgenticOrg agents perform commerce work, and every action is auditable.
+Grantex Commerce is a new product line that makes merchants safely usable by AI agents. It is not merely UCP, ACP, MCP, or checkout integration. It is the trust and control layer where agents get permission, merchants set policy, payments execute through Plural, AgenticOrg agents perform commerce work, and every action is auditable.
 
 The product should make this sentence true:
 
-> Any merchant using Pine/Plural can safely accept AI-agent-led commerce with verifiable consent, scoped payment authority, merchant policy controls, UCP/ACP/MCP interoperability, AgenticOrg merchant agents, and complete auditability.
+> Any merchant can safely accept AI-agent-led commerce with verifiable consent, scoped payment authority, merchant policy controls, UCP/ACP/MCP interoperability, AgenticOrg merchant agents, and complete auditability.
 
 ## Ownership
 

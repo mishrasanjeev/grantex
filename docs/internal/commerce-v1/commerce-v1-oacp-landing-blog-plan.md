@@ -130,7 +130,7 @@ approval, payment approval, or live-provider readiness.
 
 | Draft | Core message | Required diagram |
 | --- | --- | --- |
-| How OACP Connects Seller Agents, Buyer Agents, Grantex, Shopify, and Plural/Pine | Four parties keep separate responsibilities: AgenticOrg runtime, Grantex authority, Shopify source of record, provider-owned execution. | Four-party architecture. |
+| How OACP Connects Seller Agents, Buyer Agents, Grantex, Shopify, and Plural | Four parties keep separate responsibilities: AgenticOrg runtime, Grantex authority, Shopify source of record, provider-owned execution. | Four-party architecture. |
 | Why Grantex Is A Trust Authority, Not A Transaction Toll Booth | Cached Grantex-issued artifacts can support non-binding answers until TTL, revocation, risk, freshness, or commitment boundaries require refresh. | Buyer question through cache. |
 | From Shopify To ChatGPT/Claude/Gemini: Buyer-Safe Commerce Through OACP | Shopify read-only sync becomes OACP artifacts, then AgenticOrg bridge adapters answer with source/freshness labels. | Shopify sync to OACP artifacts plus channel bridge flow. |
 | Mandates And Payments In Agentic Commerce: Provider-Owned Execution, Agent-Owned Context | AgenticOrg can verify capability metadata where approved; providers own mandate/payment execution and Grantex stores only non-sensitive evidence refs. | Mandate capability evidence flow and refusal/fail-closed flow. |

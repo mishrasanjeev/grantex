@@ -24,7 +24,7 @@ Last updated: 2026-06-19.
 9. Ask a buyer product question from cache and record source/freshness labels.
 10. Smoke the web, MCP, OpenAPI/function, and A2A bridge contracts against the cached data.
 11. Confirm WhatsApp and Telegram bridge adapters either answer through the same contract or return `blocked_missing_credentials` without outbound sends.
-12. Run Plural/Pine capability metadata verification only; do not execute mandates or payments.
+12. Run Plural capability metadata verification only; do not execute mandates or payments.
 13. Confirm AgenticOrg can generate Schema.org/UCP-style/ACP-style/AP2-style/A2A/MCP/OpenAPI adapter payloads from cached artifacts.
 14. Attempt purchase preparation and confirm it returns a prepared provider-owned handoff or an exact blocker without faking payment success.
 
@@ -43,6 +43,6 @@ vertical is re-run with those external dependencies resolved.
 
 ## Launch Status Labels
 
-- Internal runtime demo: implemented locally with deterministic Shopify fixture, Grantex-compatible artifact fixtures, adapter generation, buyer Q&A, Plural/Pine capability verification, and purchase-preparation blocker.
+- Internal runtime demo: implemented locally with deterministic Shopify fixture, Grantex-compatible artifact fixtures, adapter generation, buyer Q&A, Plural capability verification, and purchase-preparation blocker.
 - Closed merchant pilot: blocked until Shopify sync and AgenticOrg-to-Grantex authority issuance pass with the configured production credentials.
 - Public OACP preview: blocked. Public discovery remains disabled and OACP is not externally published.
