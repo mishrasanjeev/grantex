@@ -48,7 +48,7 @@ AgenticOrg internal sandbox:
 
 - Runtime: mocked eval/demo harness
 - Commerce tool prefix: `grantex_commerce:*`
-- No direct Stripe, Plural, Pine, or provider credential path allowed for commerce
+- No direct Stripe, Plural, or provider credential path allowed for commerce
 - No live Grantex, Docker, API keys, or provider runtime required for the AgenticOrg mocked checks
 
 ## Smoke Results
@@ -116,7 +116,7 @@ AgenticOrg mocked demo:
 | Disabled merchant / policy denial | Pass | Grantex commerce tests and AgenticOrg eval/guardrail tests cover refusal behavior. |
 | Revoked/expired passport | Pass | Grantex focused commerce tests cover passport revocation/expiry behavior. |
 | Unsupported EMI/discount/offer claim | Pass | AgenticOrg eval/demo refused unsupported commerce claims. |
-| Direct provider path unavailable | Pass | AgenticOrg no-provider-call regression confirmed commerce code/default tools avoid Stripe, Plural, Pine, and provider credential paths. |
+| Direct provider path unavailable | Pass | AgenticOrg no-provider-call regression confirmed commerce code/default tools avoid Stripe, Plural, and provider credential paths. |
 
 Focused command results:
 

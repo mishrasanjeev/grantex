@@ -65,7 +65,7 @@ Stop and require a new approved work item if any change:
 - enables production Commerce V1, checkout/payment creation, fulfillment,
   refunds, live payments, live Plural, or live providers;
 - calls Shopify, WooCommerce, Magento, custom API, ERP, OMS, WMS, logistics,
-  CRM/support, payment providers, Plural, Stripe, Pine, or merchant private
+  CRM/support, payment providers, Plural, Stripe, or merchant private
   APIs;
 - lets AgenticOrg call merchant private APIs directly;
 - writes production config or production allowlists;

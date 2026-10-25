@@ -245,7 +245,7 @@ Stop packaging or publication work immediately if any future change:
 - enables live payment
 - enables live provider execution
 - stores real credentials in repository, logs, fixtures, docs, or examples
-- calls Plural, Stripe, Pine, a payment provider, or a merchant private API
+- calls Plural, Stripe, a payment provider, or a merchant private API
   directly from AgenticOrg
 - claims schema.org, UCP, ACP, AP2, MPP, A2A, provider, or production
   certification

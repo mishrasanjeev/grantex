@@ -66,7 +66,7 @@ The Grantex read-only discovery gate tests passed and confirmed the gate remains
 - No live payment flow was run.
 - No live Plural flow was run.
 - No checkout/payment production creation request was run.
-- No direct Stripe, Plural, Pine, or provider credential path was introduced.
+- No direct Stripe, Plural, or provider credential path was introduced.
 - No secrets or real merchant data were required.
 - Synthetic data is not production approval.
 - The synthetic merchant ID must not be used in any production allowlist.

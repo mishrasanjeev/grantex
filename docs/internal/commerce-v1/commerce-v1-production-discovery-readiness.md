@@ -36,7 +36,7 @@
 - `grantex.dev/.well-known/grantex-commerce` returns 404, so the static site does not currently publish commerce discovery.
 - Production Commerce V1 enablement would be required before the API well-known commerce discovery endpoint can be eligible for read-only production publication.
 - Production JWKS is safe to reference as public verification metadata. It is not a secret and no private key material was observed or recorded.
-- No direct Stripe, Plural, Pine, provider credential, bearer token, passport/JWT, DB/Redis URL, private key, or raw payload material was recorded in this evidence.
+- No direct Stripe, Plural, provider credential, bearer token, passport/JWT, DB/Redis URL, private key, or raw payload material was recorded in this evidence.
 - Playground source validation records visible blocking language for live payment mode and Plural provider configuration. The playground should not be treated as production commerce readiness or live-payment approval.
 - Playground source validation also asserts no UCP, ACP, AP2, MPP, A2A, or certification claim is present on the commerce playground page.
 

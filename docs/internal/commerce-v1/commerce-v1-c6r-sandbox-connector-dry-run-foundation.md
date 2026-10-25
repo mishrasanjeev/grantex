@@ -57,7 +57,7 @@ payment creation, and does not approve production launch.
 
 C6R is the first runtime step toward connecting merchant systems, but it does
 not connect to them yet. Shopify, WooCommerce, Magento, custom API, ERP, OMS,
-WMS, logistics, CRM/support, payment provider, Plural, Stripe, Pine, and
+WMS, logistics, CRM/support, payment provider, Plural, Stripe, and
 merchant private API integrations remain non-live and not called.
 
 The first approved adapter is local/manual catalog dry-run only:
@@ -144,7 +144,7 @@ Stop and require a new approved work item if any follow-up:
   real merchant-system calls;
 - accepts or stores real connector credentials;
 - calls Shopify, WooCommerce, Magento, custom API, ERP, OMS, WMS, logistics,
-  CRM/support, payment providers, Plural, Stripe, Pine, or merchant private
+  CRM/support, payment providers, Plural, Stripe, or merchant private
   APIs;
 - allows AgenticOrg to call merchant private APIs directly;
 - writes production config or production allowlists;

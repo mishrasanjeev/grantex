@@ -9,7 +9,7 @@ Last updated: 2026-06-18.
 - AgenticOrg is the buyer and seller AI-agent runtime.
 - Grantex is the trust, protocol, policy, and canonical OACP artifact authority.
 - Merchant systems such as Shopify remain operational systems of record.
-- Provider and fintech rails such as Plural/Pine own mandate and payment execution.
+- Provider and fintech rails such as Plural own mandate and payment execution.
 - Grantex is not a toll booth for every non-binding buyer/seller interaction.
 
 ## Current Launch Result
@@ -29,7 +29,7 @@ Blocking evidence captured on 2026-06-18:
 
 1. Rotate or replace the AgenticOrg C6Z Shopify Admin token and verify read-only GraphQL access to `mgx0n6-22.myshopify.com`.
 2. Provision the Grantex commerce tenant/developer mapping for the AgenticOrg internal token, or replace the token with an approved operator/developer credential that is already mapped.
-3. Re-run the AgenticOrg production C6Z vertical from onboarding packet to Shopify sync, Grantex authority request, artifact cache, buyer answer, MCP seller facts, and Plural/Pine capability metadata verification.
+3. Re-run the AgenticOrg production C6Z vertical from onboarding packet to Shopify sync, Grantex authority request, artifact cache, buyer answer, MCP seller facts, and Plural capability metadata verification.
 4. Keep `AGENTICORG_COMMERCE_PUBLIC_DISCOVERY_ENABLED=false` and `COMMERCE_PUBLIC_DISCOVERY_ENABLED=false` until a separate public discovery rollout is approved.
 
 ## Non-Goals

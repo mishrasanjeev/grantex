@@ -37,7 +37,7 @@ V1 includes:
 
 V1 excludes:
 
-- Pine POS bridge.
+- POS bridge.
 - UCP full implementation.
 - ACP full implementation.
 - A2A handoff.
@@ -507,7 +507,7 @@ Defer:
 - subscriptions;
 - EMI optimization;
 - rewards;
-- Pine POS.
+- POS.
 
 Refund in V1:
 
@@ -866,7 +866,7 @@ V1 tenant model:
 
 - One tenant represents one Grantex customer organization.
 - A tenant may own one or more merchants, agents, provider credentials, policies, passports, carts, payment intents, and audit events.
-- The Pine/Plural partner uses a dedicated partner tenant.
+- A payment provider uses a dedicated provider tenant.
 - AgenticOrg may have its own tenant for agent platform integration, but merchant commerce records remain owned by the merchant tenant.
 - Every authenticated request resolves exactly one `tenant_id` from dashboard session, API key, agent identity, or service identity.
 
@@ -1362,7 +1362,7 @@ Inbound merchant webhook contract:
 Provider webhook contract:
 
 - Route is `POST /v1/webhooks/providers/{provider_key}`.
-- Plural signature scheme is an external blocker until Pine/Plural confirms the exact scheme.
+- Plural signature scheme is an external blocker until the provider confirms the exact scheme.
 - If Plural signature scheme is unavailable during development, implement the route against the mock provider signature contract and leave Plural live/sandbox webhook verification blocked with explicit configuration error.
 - Provider webhook events must be idempotent by provider event ID and payment reference.
 
@@ -1462,7 +1462,7 @@ Tenant isolation design:
 
 - V1 tenant model: one tenant represents one Grantex customer organization.
 - A tenant may own one or more merchants, agents, provider credentials, policies, passports, carts, payment intents, and audit events.
-- The Pine/Plural partner uses a dedicated tenant.
+- A payment provider uses a dedicated tenant.
 - The first pilot merchant operates under its own tenant or under a Grantex internal sandbox tenant until live readiness.
 - Every authenticated request resolves to exactly one `tenant_id` from auth context.
 - Every tenant-owned table includes `tenant_id`.
@@ -1689,10 +1689,10 @@ Target: 2-3 weeks.
 1. What exact Plural APIs are available for sandbox and live checkout/payment link creation?
 2. What webhook signature scheme does Plural use? This must be answered before Milestone 4 Plural webhook completion.
 3. What legal consent text is required for agent-created checkout in India?
-4. Confirm exact final user confirmation copy and hosted checkout handoff language with Pine/Plural legal.
+4. Confirm exact final user confirmation copy and hosted checkout handoff language with the payment provider's legal team.
 5. What RBI/AFA review is required before any delegated or semi-autonomous payment flow?
 6. Confirm RBI data localization scope for Grantex Commerce as an authorization layer, and identify payment data fields requiring India residency.
-7. What merchant onboarding/KYC data can be reused from Pine/Plural? Default assumption: re-collect or receive only with explicit data-sharing approval.
+7. What merchant onboarding/KYC data can be reused from the payment provider? Default assumption: re-collect or receive only with explicit data-sharing approval.
 8. What refund capability should be considered for V2 after V1 proves checkout authorization?
 9. What data can be shown in a public MCP catalog search without merchant/user authentication?
 10. Confirm first pilot merchant and their actual catalog/payment setup.
@@ -1752,8 +1752,8 @@ V1 must name the first pilot before Milestone 4 begins.
 
 Acceptable pilot options:
 
-- a real Pine/Plural electronics merchant;
-- an internal Pine/Plural test merchant configured like an electronics retailer;
+- a real electronics merchant;
+- an internal test merchant configured like an electronics retailer;
 - an AgenticOrg demo merchant with Plural sandbox credentials.
 
 Pilot profile must include:

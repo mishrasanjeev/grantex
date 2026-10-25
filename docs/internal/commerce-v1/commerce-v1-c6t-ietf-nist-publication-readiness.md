@@ -98,7 +98,7 @@ Goal:
 
 Define an application-layer protocol architecture and JSON/HTTP message model
 for safe agent-mediated commerce. The draft should be general enough that it is
-not Grantex-specific, Pine/Plural-specific, or AgenticOrg-specific.
+not Grantex-specific, Plural-specific, or AgenticOrg-specific.
 
 Expected draft sections:
 

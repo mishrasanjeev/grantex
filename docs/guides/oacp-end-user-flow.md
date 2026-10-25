@@ -17,7 +17,7 @@ payment approval.
   authority. It signs artifacts and mandates, keeps every issue and refusal,
   runs the status list, and countersigns the arbiter's decisions.
 - Shopify and other merchant systems remain operational systems of record.
-- Plural/Pine and other provider rails own payment and mandate execution.
+- Plural and other provider rails own payment and mandate execution.
 - Grantex is not a toll booth for every non-binding buyer/seller interaction.
   A purchase calls Grantex for its mandates and the decision countersignature.
 

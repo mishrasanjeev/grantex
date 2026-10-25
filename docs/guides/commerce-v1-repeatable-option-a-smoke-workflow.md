@@ -166,7 +166,7 @@ python demos/commerce_sales_agent_demo.py --mode=real-staging --fixture-env .tmp
 python -m pytest tests/evals/test_commerce_sales_agent_real_staging.py -q
 ```
 
-AgenticOrg must continue to use only `grantex_commerce:*` aliases. It must not call Stripe, Plural, Pine, or provider credential paths for commerce.
+AgenticOrg must continue to use only `grantex_commerce:*` aliases. It must not call Stripe, Plural, or provider credential paths for commerce.
 
 ## Automation Versus Manual Boundaries
 

@@ -92,7 +92,7 @@ Stop and require separate approval if any change attempts to:
 - enable production Commerce V1
 - enable checkout or payment creation in production
 - enable live payments or live Plural
-- call Plural, Stripe, Pine, payment providers, or merchant private APIs
+- call Plural, Stripe, payment providers, or merchant private APIs
 - store or print real provider credentials
 - expose private merchant data, exact internal IDs, raw payloads, provider
   metadata, allowlists, production config, or secrets

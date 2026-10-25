@@ -9,7 +9,7 @@ Update, 20 October 2026. Grantex now binds the capability verifier's redacted ev
 
 ## Summary
 
-Plural/Pine owns the mandate and payment rail. AgenticOrg verifies provider-owned capability metadata and Grantex binds the redacted evidence into the signed `mandate_capability` artifact.
+Plural owns the mandate and payment rail. AgenticOrg verifies provider-owned capability metadata and Grantex binds the redacted evidence into the signed `mandate_capability` artifact.
 
 ## Target Audience
 
@@ -20,8 +20,8 @@ Fintech partners, payment operators, and commerce risk teams.
 ```mermaid
 flowchart LR
   buyer[Buyer intent] --> agentic[AgenticOrg verifier]
-  agentic --> pine[Pine Labs Plural/P3P]
-  pine --> ref[Redacted capability evidence ref]
+  agentic --> provider[Pine Labs Plural/P3P]
+  provider --> ref[Redacted capability evidence ref]
   ref --> cache[OACP cache]
   cache --> handoff[Prepared handoff or blocker]
 ```
@@ -32,7 +32,7 @@ AgenticOrg checks whether provider capability metadata is available for the merc
 
 ## What Is Implemented Now
 
-AgenticOrg has a Plural/Pine capability verifier and purchase-preparation blocker. Grantex models mandate capability as an OACP artifact family and marks provider execution authority as provider-owned.
+AgenticOrg has a Plural capability verifier and purchase-preparation blocker. Grantex models mandate capability as an OACP artifact family and marks provider execution authority as provider-owned.
 
 ## What Requires External Approval Or Config
 

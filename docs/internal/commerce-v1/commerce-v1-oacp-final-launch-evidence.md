@@ -93,7 +93,7 @@ The real production vertical did not complete.
   - evidence id: not created because Shopify sync failed before connector evidence was produced.
 - Shopify Admin GraphQL read-only sync reached Shopify and failed with `401 Unauthorized`.
 - Direct status-only Shopify GraphQL probe using the mounted AgenticOrg C6Z Shopify token also returned `401`.
-- Because Shopify sync did not produce connector evidence, AgenticOrg did not complete Grantex authority request, artifact cache, buyer answer, MCP seller-facts production smoke, or Plural/Pine capability metadata verification in the same vertical run.
+- Because Shopify sync did not produce connector evidence, AgenticOrg did not complete Grantex authority request, artifact cache, buyer answer, MCP seller-facts production smoke, or Plural capability metadata verification in the same vertical run.
 
 ## Safety
 
@@ -116,7 +116,7 @@ The real production vertical did not complete.
 - AgenticOrg artifact cache proof: blocked by missing real connector evidence/artifacts.
 - Buyer answer proof: blocked by missing real connector evidence/artifacts.
 - MCP production seller facts proof: blocked by missing real connector evidence/artifacts.
-- Plural/Pine production capability proof in the same vertical: blocked because the vertical stopped at Shopify sync.
+- Plural production capability proof in the same vertical: blocked because the vertical stopped at Shopify sync.
 - Cost-risky and signed-event smoke checks: intentionally skipped by guard flags.
 
 ## Exact Launch Status
@@ -129,4 +129,4 @@ The real production vertical did not complete.
 
 1. AgenticOrg owner: rotate or replace `agenticorg-c6z-shopify-admin-access-token`, then verify a status-only Shopify GraphQL query returns 200.
 2. Grantex owner: provision the commerce tenant/developer mapping for the AgenticOrg internal token or replace it with an approved mapped token.
-3. After both fixes, re-run the C6Z vertical from AgenticOrg onboarding through Shopify sync, Grantex authority issuance, artifact cache, buyer answer, MCP seller tools, and Plural/Pine capability metadata verification.
+3. After both fixes, re-run the C6Z vertical from AgenticOrg onboarding through Shopify sync, Grantex authority issuance, artifact cache, buyer answer, MCP seller tools, and Plural capability metadata verification.
