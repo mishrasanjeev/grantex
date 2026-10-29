@@ -162,7 +162,7 @@ export async function appendCommerceAudit(
         ${input.decisionId ?? null},
         ${input.idempotencyKeyHash ?? null},
         ${input.requestId ?? null},
-        ${JSON.stringify(input.metadata ?? {})}::jsonb
+        ${sql.json((input.metadata ?? {}) as never)}
       )
       RETURNING id, occurred_at
     `;
