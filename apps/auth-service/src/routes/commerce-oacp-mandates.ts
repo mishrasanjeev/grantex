@@ -4,8 +4,10 @@
  *
  * Authentication: the commerce caller resolver. Each route accepts the
  * AgenticOrg service token with the one route scope it carries there (for a
- * tenant in COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS), an operator of the
- * tenant, or the platform admin.
+ * tenant in COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS, or an enrolled tenant and
+ * one of its enrolled merchants), an operator of the tenant, or the platform
+ * admin. For an enrolled tenant the merchant is the passport's (issue), the
+ * mandate's (verify) or the stored mandate's (revoke, suspend).
  *
  *   POST /oacp/mandates/intent        IntentMandate from a checkout passport
  *   POST /oacp/mandates/cart          CartMandate under an IntentMandate
@@ -47,7 +49,8 @@ import { OacpIssuerKeyUnavailableError } from '../lib/commerce/oacp-issuer-keys.
 import { CommerceHttpError } from '../lib/commerce/errors.js';
 import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
-import { callerMayActForTenant, requireKind } from './commerce-oacp-runtime.js';
+import { unverifiedMerchantClaim } from '../lib/commerce/oacp-service-tenants.js';
+import { callerMayActForTenant, requireCallerForTenant, requireKind, serviceTenantVerdict } from './commerce-oacp-runtime.js';
 
 const COMMON = ['tenant_id', 'passport_jwt', 'presence'];
 const FIELDS: Record<OacpMandateType, Set<string>> = {
@@ -116,12 +119,18 @@ export async function commerceOacpMandateRoutes(app: FastifyInstance) {
       const unknown = Object.keys(b).find((key) => !FIELDS[type].has(key));
       if (unknown !== undefined) throw invalid(unknown, 'unknown member');
       if (typeof b['tenant_id'] !== 'string' || b['tenant_id'].length === 0) throw invalid('tenant_id', 'required');
-      if (!callerMayActForTenant(request, b['tenant_id'], ISSUE_SCOPE[type])) {
-        throw new CommerceHttpError(403, 'tenant_not_allowed', 'Caller may not request mandates for this tenant', { retryable: false });
-      }
       if (typeof b['passport_jwt'] !== 'string' || b['passport_jwt'].length === 0 || b['passport_jwt'].length > 8192) {
+        // Authorisation first, as before: a refused tenant learns nothing about validation.
+        await requireCallerForTenant(request, b['tenant_id'], ISSUE_SCOPE[type], undefined, {
+          code: 'tenant_not_allowed', message: 'Caller may not request mandates for this tenant',
+        });
         throw invalid('passport_jwt', 'required compact JWT');
       }
+      // The passport names the merchant; it is verified during issuance, so
+      // reading the claim early can only refuse sooner, never widen access.
+      await requireCallerForTenant(request, b['tenant_id'], ISSUE_SCOPE[type], unverifiedMerchantClaim(b['passport_jwt']), {
+        code: 'tenant_not_allowed', message: 'Caller may not request mandates for this tenant',
+      });
       const input = { ...b, tenant_id: b['tenant_id'], passport_jwt: b['passport_jwt'], request_id: request.id };
       const sql = getSql();
       let issued: OacpMandateIssued;
@@ -145,9 +154,9 @@ export async function commerceOacpMandateRoutes(app: FastifyInstance) {
     const unknown = Object.keys(b).find((key) => !['tenant_id', 'mandate', 'expected_type', 'expected_merchant_id'].includes(key));
     if (unknown !== undefined) throw invalid(unknown, 'unknown member');
     if (typeof b['tenant_id'] !== 'string' || b['tenant_id'].length === 0) throw invalid('tenant_id', 'required');
-    if (!callerMayActForTenant(request, b['tenant_id'], OACP_MANDATES_VERIFY_SCOPE)) {
-      throw new CommerceHttpError(403, 'tenant_not_allowed', 'Caller may not verify mandates for this tenant', { retryable: false });
-    }
+    await requireCallerForTenant(request, b['tenant_id'], OACP_MANDATES_VERIFY_SCOPE, undefined, {
+      code: 'tenant_not_allowed', message: 'Caller may not verify mandates for this tenant',
+    });
     if (typeof b['mandate'] !== 'string' || b['mandate'].length === 0 || b['mandate'].length > 32768) {
       throw invalid('mandate', 'required compact JWT');
     }
@@ -163,8 +172,13 @@ export async function commerceOacpMandateRoutes(app: FastifyInstance) {
       expected_audience: b['expected_merchant_id'] as string | undefined,
     });
     reply.header('cache-control', 'no-store');
-    // A mandate of another tenant is refused as out of scope, its claims withheld.
-    if (result.claims && result.claims['tenant_id'] !== b['tenant_id']) {
+    // A mandate of another tenant is refused as out of scope, its claims withheld;
+    // so is, for an enrolled tenant's service caller, a mandate of a merchant it did not enrol.
+    const merchantOutOfScope = result.claims !== null && result.claims !== undefined
+      && (request.commerceCaller as CommerceCaller | undefined)?.kind === 'service'
+      && (await serviceTenantVerdict(request, b['tenant_id'], OACP_MANDATES_VERIFY_SCOPE,
+        typeof result.claims['merchant_id'] === 'string' ? result.claims['merchant_id'] : null)) !== 'allowed';
+    if (result.claims && (result.claims['tenant_id'] !== b['tenant_id'] || merchantOutOfScope)) {
       return reply.status(200).send({ valid: false, refusal_code: 'mandate_scope_mismatch', mandate_type: result.mandate_type, claims: null });
     }
     return reply.status(200).send({
@@ -187,7 +201,7 @@ export async function commerceOacpMandateRoutes(app: FastifyInstance) {
     const sql = getSql();
     const record = await getOacpMandateRecord(sql, request.params.jti);
     // Another tenant's mandate answers exactly like a missing one.
-    if (!record || !callerMayActForTenant(request, record.tenant_id, OACP_MANDATES_REVOKE_SCOPE)) {
+    if (!record || !(await callerMayActForTenant(request, record.tenant_id, OACP_MANDATES_REVOKE_SCOPE, record.merchant_id))) {
       throw new CommerceHttpError(404, 'mandate_not_found', 'OACP mandate not found', { retryable: false });
     }
     try {
@@ -212,7 +226,7 @@ export async function commerceOacpMandateRoutes(app: FastifyInstance) {
       }
       const sql = getSql();
       const record = await getOacpMandateRecord(sql, request.params.jti);
-      if (!record || !callerMaySuspend(request, record.tenant_id, OACP_MANDATES_SUSPEND_SCOPE)) {
+      if (!record || !(await callerMaySuspend(request, record.tenant_id, OACP_MANDATES_SUSPEND_SCOPE, record.merchant_id))) {
         throw new CommerceHttpError(404, 'mandate_not_found', 'OACP mandate not found', { retryable: false });
       }
       try {
@@ -230,9 +244,14 @@ export async function commerceOacpMandateRoutes(app: FastifyInstance) {
   }
 }
 
-/** Suspension is the platform admin's or the authority service's (own scope, allow-listed tenant), never a tenant operator's. */
-export function callerMaySuspend(request: FastifyRequest, tenantId: string | null, scope: string): boolean {
+/** Suspension is the platform admin's or the authority service's (own scope, allowed tenant), never a tenant operator's. */
+export async function callerMaySuspend(
+  request: FastifyRequest,
+  tenantId: string | null,
+  scope: string,
+  merchantId?: string | null,
+): Promise<boolean> {
   const caller = request.commerceCaller as CommerceCaller | undefined;
   if (caller?.kind === 'operator') return caller.isPlatformAdmin;
-  return caller?.kind === 'service' && callerMayActForTenant(request, tenantId, scope);
+  return caller?.kind === 'service' && await callerMayActForTenant(request, tenantId, scope, merchantId);
 }

@@ -58,6 +58,7 @@ import { commerceOacpArbiterRoutes } from './commerce-oacp-arbiter.js';
 import { commerceOacpSettlementEvidenceRoutes } from './commerce-oacp-settlement-evidence.js';
 import { commerceOacpAcpRoutes } from './commerce-oacp-acp.js';
 import { commerceOacpMandateRoutes } from './commerce-oacp-mandates.js';
+import { commerceOacpServiceTenantRoutes } from './commerce-oacp-service-tenants.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -4127,6 +4128,7 @@ export async function commerceRoutes(app: FastifyInstance): Promise<void> {
   await app.register(commerceOacpSettlementEvidenceRoutes);
   await app.register(commerceOacpAcpRoutes);
   await app.register(commerceOacpMandateRoutes);
+  await app.register(commerceOacpServiceTenantRoutes);
   await app.register(commerceCartPaymentRoutes);
   await app.register(commerceOpsRoutes);
 }

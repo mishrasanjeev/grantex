@@ -4,8 +4,9 @@
  *
  * Authentication: the commerce caller resolver. Each route accepts the
  * AgenticOrg service token with the one route scope it carries there (for a
- * tenant in COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS), an operator of the
- * tenant, or the platform admin.
+ * tenant in COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS, or an enrolled tenant and
+ * one of its enrolled merchants), an operator of the tenant, or the platform
+ * admin.
  *
  *   POST /oacp/acp/delegate-payment-allowance   ACP delegate-payment allowance and
  *                                               risk-signal envelope from a checkout
@@ -33,7 +34,8 @@ import { appendCommerceAudit } from '../lib/commerce/audit.js';
 import { CommerceHttpError } from '../lib/commerce/errors.js';
 import { getSql } from '../db/client.js';
 import { getRedis } from '../redis/client.js';
-import { callerMayActForTenant, requireKind } from './commerce-oacp-runtime.js';
+import { unverifiedMerchantClaim } from '../lib/commerce/oacp-service-tenants.js';
+import { requireCallerForTenant, requireKind, serviceTenantVerdict } from './commerce-oacp-runtime.js';
 
 interface AllowanceBody {
   tenant_id?: unknown;
@@ -80,9 +82,12 @@ export async function commerceOacpAcpRoutes(app: FastifyInstance) {
     const unknown = Object.keys(body).find((key) => !ALLOWANCE_FIELDS.has(key));
     if (unknown !== undefined) throw invalid(unknown, 'unknown member');
     if (typeof body.tenant_id !== 'string' || body.tenant_id.length === 0) throw invalid('tenant_id', 'required');
-    if (!callerMayActForTenant(request, body.tenant_id, ACP_DELEGATE_PAYMENT_ALLOWANCE_SCOPE)) {
-      throw new CommerceHttpError(403, 'tenant_not_allowed', 'Caller may not derive allowances for this tenant', { retryable: false });
-    }
+    // The merchant: the one named, else the passport's (verified below, so
+    // reading it early can only refuse sooner).
+    await requireCallerForTenant(request, body.tenant_id, ACP_DELEGATE_PAYMENT_ALLOWANCE_SCOPE,
+      typeof body.merchant_id === 'string' ? body.merchant_id : unverifiedMerchantClaim(body.passport_jwt), {
+        code: 'tenant_not_allowed', message: 'Caller may not derive allowances for this tenant',
+      });
     if (typeof body.passport_jwt !== 'string' || body.passport_jwt.length === 0 || body.passport_jwt.length > 8192) {
       throw invalid('passport_jwt', 'required compact JWT');
     }
@@ -152,9 +157,9 @@ export async function commerceOacpAcpRoutes(app: FastifyInstance) {
     requireKind(request);
     const q = request.query;
     if (typeof q.tenant_id !== 'string' || q.tenant_id.length === 0) throw invalid('tenant_id', 'required');
-    if (!callerMayActForTenant(request, q.tenant_id, ACP_ORDER_EVENTS_READ_SCOPE)) {
-      throw new CommerceHttpError(403, 'tenant_not_allowed', 'Caller may not read orders for this tenant', { retryable: false });
-    }
+    await requireCallerForTenant(request, q.tenant_id, ACP_ORDER_EVENTS_READ_SCOPE, undefined, {
+      code: 'tenant_not_allowed', message: 'Caller may not read orders for this tenant',
+    });
     if (typeof q.permalink_base !== 'string' || q.permalink_base.length === 0) throw invalid('permalink_base', 'required https URL');
     if (q.event_type !== undefined && !(ACP_ORDER_EVENT_TYPES as readonly string[]).includes(q.event_type)) {
       throw invalid('event_type', `must be one of ${ACP_ORDER_EVENT_TYPES.join(', ')}`);
@@ -163,15 +168,20 @@ export async function commerceOacpAcpRoutes(app: FastifyInstance) {
       throw invalid('checkout_session_id', 'must be 1 to 256 URL-safe characters');
     }
     const sql = getSql();
-    const orders = await sql<GrantexOrderRecord[]>`
-      SELECT id, cart_id, payment_intent_id, status, line_items_snapshot, commercial_facts_snapshot,
+    const orders = await sql<Array<GrantexOrderRecord & { merchant_id?: string | null }>>`
+      SELECT id, merchant_id, cart_id, payment_intent_id, status, line_items_snapshot, commercial_facts_snapshot,
              created_at, updated_at
         FROM commerce_orders
        WHERE tenant_id = ${q.tenant_id} AND id = ${request.params.orderId}
     `;
-    const order = orders[0];
-    // Another tenant's order answers exactly like a missing one.
-    if (!order) throw new CommerceHttpError(404, 'order_not_found', 'Order not found', { retryable: false });
+    const row = orders[0];
+    // Another tenant's order, or for an enrolled tenant's service caller a
+    // merchant it did not enrol, answers exactly like a missing one.
+    const merchantOutOfScope = row !== undefined
+      && (request.commerceCaller as { kind?: string } | undefined)?.kind === 'service'
+      && (await serviceTenantVerdict(request, q.tenant_id, ACP_ORDER_EVENTS_READ_SCOPE, row.merchant_id ?? null)) !== 'allowed';
+    if (!row || merchantOutOfScope) throw new CommerceHttpError(404, 'order_not_found', 'Order not found', { retryable: false });
+    const { merchant_id: _merchant, ...order } = row;
     const handoffs = await sql<GrantexOrderHandoffRecord[]>`
       SELECT id, handoff_type, status, handoff_snapshot, created_at, updated_at
         FROM commerce_order_handoffs

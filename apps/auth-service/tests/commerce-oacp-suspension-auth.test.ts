@@ -23,23 +23,23 @@ const service = (scope: string) => ({ kind: 'service', serviceId: 'svc', tenantI
 describe('suspension authorisation', () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it('refuses a tenant operator, even for its own tenant', () => {
-    expect(callerMaySuspend(request(operator(false)), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(false);
+  it('refuses a tenant operator, even for its own tenant', async () => {
+    expect(await callerMaySuspend(request(operator(false)), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(false);
   });
 
-  it('allows the platform admin', () => {
-    expect(callerMaySuspend(request(operator(true)), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(true);
+  it('allows the platform admin', async () => {
+    expect(await callerMaySuspend(request(operator(true)), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(true);
   });
 
-  it('allows the service token only with the suspension scope for an allow-listed tenant', () => {
+  it('allows the service token only with the suspension scope for an allow-listed tenant', async () => {
     vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS', 'cten_SUSPEND');
-    expect(callerMaySuspend(request(service(OACP_MANDATES_SUSPEND_SCOPE)), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(true);
-    expect(callerMaySuspend(request(service(OACP_MANDATES_REVOKE_SCOPE)), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(false);
-    expect(callerMaySuspend(request(service(OACP_MANDATES_SUSPEND_SCOPE)), 'cten_OTHER', OACP_MANDATES_SUSPEND_SCOPE)).toBe(false);
+    expect(await callerMaySuspend(request(service(OACP_MANDATES_SUSPEND_SCOPE)), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(true);
+    expect(await callerMaySuspend(request(service(OACP_MANDATES_REVOKE_SCOPE)), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(false);
+    expect(await callerMaySuspend(request(service(OACP_MANDATES_SUSPEND_SCOPE)), 'cten_OTHER', OACP_MANDATES_SUSPEND_SCOPE)).toBe(false);
   });
 
-  it('refuses agents and merchants', () => {
-    expect(callerMaySuspend(request({ kind: 'agent', agentId: 'cag', tenantId: 'cten_SUSPEND', authMethod: 'jwt' }), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(false);
-    expect(callerMaySuspend(request(undefined), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(false);
+  it('refuses agents and merchants', async () => {
+    expect(await callerMaySuspend(request({ kind: 'agent', agentId: 'cag', tenantId: 'cten_SUSPEND', authMethod: 'jwt' }), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(false);
+    expect(await callerMaySuspend(request(undefined), 'cten_SUSPEND', OACP_MANDATES_SUSPEND_SCOPE)).toBe(false);
   });
 });

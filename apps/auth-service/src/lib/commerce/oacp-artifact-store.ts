@@ -33,6 +33,12 @@ import {
   type C6ZSourceEligibility,
 } from './oacp-runtime-vertical.js';
 import { OACP_ARTIFACT_TTLS_SECONDS, type OacpArtifactEnvelope, type OacpArtifactSafety } from './oacp-trust-artifacts.js';
+import {
+  catalogUploadAllowed,
+  envServiceTenants,
+  serviceTenantAccess,
+  type ServiceTenantAccess,
+} from './oacp-service-tenants.js';
 
 type Sql = ReturnType<typeof postgres>;
 
@@ -178,14 +184,15 @@ export async function recordOacpRefusal(
 
 /**
  * Whether issuance may enable public discovery for a tenant:
- * OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED (default off) and the tenant on the
- * authority service allowlist (COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS),
- * whoever calls.
+ * OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED (default off) and the tenant allowed
+ * for the authority service token: on COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS,
+ * or (given `access`) with an active service-tenant enrolment. Whoever calls.
  */
-export function c6zPublicDiscoveryEligibility(tenantId: string): C6ZPublicDiscoveryEligibility {
+export function c6zPublicDiscoveryEligibility(tenantId: string, access?: ServiceTenantAccess): C6ZPublicDiscoveryEligibility {
+  const enrolled = access?.tenant_id === tenantId && access.enrolment?.status === 'active';
   return {
     issuance_enabled: config.oacpPublicDiscoveryIssuanceEnabled,
-    tenant_allowlisted: envTenantList('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS').includes(tenantId),
+    tenant_allowlisted: envServiceTenants().has(tenantId) || enrolled,
   };
 }
 
@@ -194,17 +201,19 @@ function envTenantList(name: string): string[] {
 }
 
 /**
- * Whether a tenant may issue from the synthetic demo source: on
- * COMMERCE_C6Z_DEMO_SOURCE_TENANTS (empty by default, so never) and on the
- * authority service allowlist COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS,
- * whoever calls.
+ * Which non-Shopify sources a tenant may issue from, whoever calls:
+ * - the synthetic demo source only on COMMERCE_C6Z_DEMO_SOURCE_TENANTS (empty
+ *   by default, so never) and on COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS;
+ *   an enrolment never grants it;
+ * - the merchant's own catalogue upload on COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS,
+ *   or (given `access`) with an active enrolment that lists `catalog_upload`.
  */
-export function c6zSourceEligibility(tenantId: string | null | undefined): C6ZSourceEligibility {
+export function c6zSourceEligibility(tenantId: string | null | undefined, access?: ServiceTenantAccess): C6ZSourceEligibility {
   const id = typeof tenantId === 'string' ? tenantId : '';
+  const envListed = id.length > 0 && envServiceTenants().has(id);
   return {
-    synthetic_demo_allowed: id.length > 0
-      && envTenantList('COMMERCE_C6Z_DEMO_SOURCE_TENANTS').includes(id)
-      && envTenantList('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS').includes(id),
+    synthetic_demo_allowed: envListed && envTenantList('COMMERCE_C6Z_DEMO_SOURCE_TENANTS').includes(id),
+    catalog_upload_allowed: envListed || (access?.tenant_id === id && catalogUploadAllowed(access)),
   };
 }
 
@@ -215,22 +224,31 @@ export function c6zSourceEligibility(tenantId: string | null | undefined): C6ZSo
  */
 export async function issueAndPersistC6ZArtifacts(
   sql: Sql,
-  input: { request: C6ZSellerAuthorityRequest; evidence: C6ZConnectorEvidence; mandate_capability_evidence?: unknown; now_iso: string },
+  input: {
+    request: C6ZSellerAuthorityRequest;
+    evidence: C6ZConnectorEvidence;
+    mandate_capability_evidence?: unknown;
+    now_iso: string;
+    /** The tenant's service access, when the caller already resolved it. */
+    access?: ServiceTenantAccess;
+  },
 ): Promise<C6ZIssuanceResult & { refusal_record_id?: string }> {
   assertOacpStatusBaseUsable();
   const signer = await getActiveOacpSigner(sql);
+  const { access: given, ...issueInput } = input;
+  const access = given ?? await serviceTenantAccess(sql, input.request.tenant_id);
   try {
     return await sql.begin(async (handle) => {
       const tx = handle as unknown as TxSql;
       const result = await issueC6ZInternalOacpArtifacts({
-        ...input,
+        ...issueInput,
         context: {
           issuer: config.jwtIssuer,
           signer,
           newArtifactId: newOacpArtifactId,
           allocateStatus: (artifactId) => allocateOacpStatusEntry(tx, artifactId),
-          publicDiscovery: c6zPublicDiscoveryEligibility(input.request.tenant_id),
-          sourceEligibility: c6zSourceEligibility(input.request.tenant_id),
+          publicDiscovery: c6zPublicDiscoveryEligibility(input.request.tenant_id, access),
+          sourceEligibility: c6zSourceEligibility(input.request.tenant_id, access),
         },
       });
       if (result.status !== 'artifact_issuance_ready') throw new IssuanceRolledBack(result);

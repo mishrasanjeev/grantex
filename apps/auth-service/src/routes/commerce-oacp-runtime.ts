@@ -4,7 +4,8 @@
  *
  * Authentication: the commerce caller resolver. The artifact routes accept
  *   - the AgenticOrg authority service token (COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN
- *     or its SHA-256), for a tenant listed in COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS;
+ *     or its SHA-256), for a tenant listed in COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS
+ *     or enrolled (POST /oacp/service-tenants), naming an enrolled merchant;
  *   - an operator whose commerce tenant is the artifact's tenant;
  *   - the platform admin, for any tenant.
  * The issuer-key routes accept the platform admin only.
@@ -60,6 +61,11 @@ import {
   renderUcpBusinessProfile,
   type UcpRenderableCapability,
 } from '../lib/commerce/ucp-profile.js';
+import {
+  decideServiceTenant,
+  serviceTenantAccess,
+  type ServiceTenantDecision,
+} from '../lib/commerce/oacp-service-tenants.js';
 import { CommerceHttpError } from '../lib/commerce/errors.js';
 import { getSql, queries } from '../db/client.js';
 
@@ -72,21 +78,36 @@ interface C6ZAuthorityBody {
   now_iso?: string;
 }
 
-function allowedServiceTenants(): Set<string> {
-  return new Set(
-    (process.env['COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS'] ?? '')
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean),
-  );
+/**
+ * The service token's verdict for `tenantId` (and, for an enrolled tenant,
+ * `merchantId`): the env bootstrap list or an active enrolment
+ * (lib/commerce/oacp-service-tenants.ts). Operators and agents get
+ * `tenant_not_allowed`; callers check their own kinds first.
+ */
+export async function serviceTenantVerdict(
+  request: FastifyRequest,
+  tenantId: string | null | undefined,
+  scope: string,
+  merchantId?: string | null,
+): Promise<ServiceTenantDecision> {
+  const caller = request.commerceCaller as CommerceCaller | undefined;
+  if (caller?.kind !== 'service' || !caller.scopes.includes(scope)) return 'tenant_not_allowed';
+  if (typeof tenantId !== 'string' || tenantId.length === 0) return 'tenant_not_allowed';
+  return decideServiceTenant(await serviceTenantAccess(getSql(), tenantId), merchantId);
 }
 
 /**
  * May this caller act for `tenantId`? The service token only with the scope
- * and for an allow-listed tenant; an operator only for its own commerce
- * tenant; the platform admin for any.
+ * and for an allowed tenant (env-listed, or enrolled and, when `merchantId`
+ * is given, for one of the enrolled merchants); an operator only for its own
+ * commerce tenant; the platform admin for any.
  */
-export function callerMayActForTenant(request: FastifyRequest, tenantId: string | null | undefined, scope: string): boolean {
+export async function callerMayActForTenant(
+  request: FastifyRequest,
+  tenantId: string | null | undefined,
+  scope: string,
+  merchantId?: string | null,
+): Promise<boolean> {
   const caller = request.commerceCaller as CommerceCaller | undefined;
   if (!caller) return false;
   if (caller.kind === 'operator') {
@@ -94,11 +115,47 @@ export function callerMayActForTenant(request: FastifyRequest, tenantId: string 
     return typeof tenantId === 'string' && tenantId.length > 0 && request.commerceTenantId === tenantId;
   }
   if (caller.kind === 'service') {
-    return caller.scopes.includes(scope)
-      && typeof tenantId === 'string' && tenantId.length > 0
-      && allowedServiceTenants().has(tenantId);
+    return (await serviceTenantVerdict(request, tenantId, scope, merchantId)) === 'allowed';
   }
   return false;
+}
+
+/**
+ * Throws unless the caller may act for the tenant (and merchant). A service
+ * caller is told why: `service_tenant_revoked`, or
+ * `service_tenant_merchant_not_enrolled` for an enrolled tenant whose
+ * enrolment does not name the merchant; otherwise `fallback`.
+ */
+export async function requireCallerForTenant(
+  request: FastifyRequest,
+  tenantId: string | null | undefined,
+  scope: string,
+  merchantId: string | null | undefined,
+  fallback: { code: string; message: string },
+): Promise<void> {
+  const caller = request.commerceCaller as CommerceCaller | undefined;
+  if (caller?.kind === 'service') {
+    const verdict = await serviceTenantVerdict(request, tenantId, scope, merchantId);
+    if (verdict === 'allowed') return;
+    throw serviceTenantRefusal(verdict, fallback);
+  }
+  if (await callerMayActForTenant(request, tenantId, scope, merchantId)) return;
+  throw new CommerceHttpError(403, fallback.code, fallback.message, { retryable: false });
+}
+
+export function serviceTenantRefusal(
+  verdict: Exclude<ServiceTenantDecision, 'allowed'>,
+  fallback: { code: string; message: string },
+): CommerceHttpError {
+  if (verdict === 'tenant_revoked') {
+    return new CommerceHttpError(403, 'service_tenant_revoked',
+      'The OACP service enrolment of this tenant is revoked', { retryable: false });
+  }
+  if (verdict === 'merchant_not_enrolled') {
+    return new CommerceHttpError(403, 'service_tenant_merchant_not_enrolled',
+      'Name a merchant_id enrolled for this tenant (POST /v1/commerce/oacp/service-tenants)', { retryable: false });
+  }
+  return new CommerceHttpError(403, fallback.code, fallback.message, { retryable: false });
 }
 
 export function requireKind(request: FastifyRequest): void {
@@ -115,17 +172,18 @@ function requirePlatformAdmin(request: FastifyRequest): void {
   }
 }
 
-function requireAuthorityCaller(request: FastifyRequest, body: C6ZAuthorityBody): void {
+async function requireAuthorityCaller(request: FastifyRequest, body: C6ZAuthorityBody): Promise<void> {
   requireKind(request);
-  if (callerMayActForTenant(request, body.request?.tenant_id, C6Z_AUTHORITY_SERVICE_SCOPE)) return;
+  const tenantId = body.request?.tenant_id;
+  const merchantId = typeof body.request?.merchant_id === 'string' ? body.request.merchant_id : null;
   if ((request.commerceCaller as CommerceCaller).kind === 'service') {
-    throw new CommerceHttpError(
-      403,
-      'service_tenant_not_allowed',
-      'AgenticOrg C6Z authority service token is not allowed for this tenant',
-      { retryable: false },
-    );
+    await requireCallerForTenant(request, tenantId, C6Z_AUTHORITY_SERVICE_SCOPE, merchantId, {
+      code: 'service_tenant_not_allowed',
+      message: 'AgenticOrg C6Z authority service token is not allowed for this tenant',
+    });
+    return;
   }
+  if (await callerMayActForTenant(request, tenantId, C6Z_AUTHORITY_SERVICE_SCOPE)) return;
   throw new CommerceHttpError(403, 'tenant_not_allowed',
     'Operators issue OACP artifacts for their own commerce tenant only', { retryable: false });
 }
@@ -203,7 +261,8 @@ export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
         const caller = request.commerceCaller as CommerceCaller | undefined;
         const allowed = caller?.kind === 'operator'
           ? caller.isPlatformAdmin
-          : caller?.kind === 'service' && callerMayActForTenant(request, record?.tenant_id, OACP_ARTIFACTS_SUSPEND_SCOPE);
+          : caller?.kind === 'service'
+            && await callerMayActForTenant(request, record?.tenant_id, OACP_ARTIFACTS_SUSPEND_SCOPE, record?.merchant_id ?? null);
         if (!record || !allowed) {
           throw new CommerceHttpError(404, 'artifact_not_found', 'OACP artifact not found', { retryable: false });
         }
@@ -224,11 +283,12 @@ export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
 
   app.post<{ Body: C6ZAuthorityBody }>('/oacp/c6z/authority-requests', async (request, reply) => {
     const body = request.body ?? {};
-    requireAuthorityCaller(request, body);
+    await requireAuthorityCaller(request, body);
     const sql = getSql();
     const now = new Date().toISOString();
     const authorityRequest = body.request;
-    const requestStatus = validateC6ZSellerAuthorityRequest(authorityRequest, now, c6zSourceEligibility(authorityRequest?.tenant_id));
+    const access = await serviceTenantAccess(sql, authorityRequest?.tenant_id);
+    const requestStatus = validateC6ZSellerAuthorityRequest(authorityRequest, now, c6zSourceEligibility(authorityRequest?.tenant_id, access));
     if (!body.connector_evidence || requestStatus.status !== 'artifact_issuance_ready') {
       const intakeOnly = !body.connector_evidence && requestStatus.status === 'artifact_issuance_ready';
       // A refusal is recorded; a valid intake still waiting for evidence is not one.
@@ -251,6 +311,7 @@ export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
       evidence: body.connector_evidence,
       mandate_capability_evidence: body.mandate_capability_evidence,
       now_iso: now,
+      access,
     }).catch(rethrowKeyUnavailable);
     return reply.status(issuance.status === 'artifact_issuance_ready' ? 201 : 422).send({
       ...issuance,
@@ -264,7 +325,7 @@ export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
     requireKind(request);
     const record = await getOacpArtifact(getSql(), request.params.artifactId);
     // Another tenant's artifact answers exactly like a missing one.
-    if (!record || !callerMayActForTenant(request, record.tenant_id, OACP_ARTIFACTS_READ_SCOPE)) {
+    if (!record || !(await callerMayActForTenant(request, record.tenant_id, OACP_ARTIFACTS_READ_SCOPE, record.merchant_id))) {
       throw new CommerceHttpError(404, 'artifact_not_found', 'OACP artifact not found', { retryable: false });
     }
     return reply.status(200).send(view(record));
@@ -283,9 +344,10 @@ export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
     requireKind(request);
     const q = request.query;
     if (typeof q.tenant_id !== 'string' || q.tenant_id.length === 0) throw invalid('tenant_id', 'required');
-    if (!callerMayActForTenant(request, q.tenant_id, OACP_ARTIFACTS_READ_SCOPE)) {
-      throw new CommerceHttpError(403, 'tenant_not_allowed', 'Caller may not read OACP artifacts for this tenant', { retryable: false });
-    }
+    // An enrolled tenant's service caller replays one enrolled merchant at a time.
+    await requireCallerForTenant(request, q.tenant_id, OACP_ARTIFACTS_READ_SCOPE, q.merchant_id || null, {
+      code: 'tenant_not_allowed', message: 'Caller may not read OACP artifacts for this tenant',
+    });
     let since: string | null = null;
     let after: string | null = null;
     if (typeof q.cursor === 'string' && q.cursor.length > 0) {
@@ -316,7 +378,7 @@ export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
       requireKind(request);
       const sql = getSql();
       const record = await getOacpArtifact(sql, request.params.artifactId);
-      if (!record || !callerMayActForTenant(request, record.tenant_id, OACP_ARTIFACTS_REVOKE_SCOPE)) {
+      if (!record || !(await callerMayActForTenant(request, record.tenant_id, OACP_ARTIFACTS_REVOKE_SCOPE, record.merchant_id))) {
         throw new CommerceHttpError(404, 'artifact_not_found', 'OACP artifact not found', { retryable: false });
       }
       const reasonCode = request.body?.reason_code;
@@ -363,9 +425,9 @@ export async function commerceOacpRuntimeRoutes(app: FastifyInstance) {
     for (const field of ['tenant_id', 'merchant_id', 'seller_agent_id'] as const) {
       if (typeof q[field] !== 'string' || q[field]!.length === 0) throw invalid(field, 'required');
     }
-    if (!callerMayActForTenant(request, q.tenant_id, OACP_UCP_PROFILE_READ_SCOPE)) {
-      throw new CommerceHttpError(403, 'tenant_not_allowed', 'Caller may not render a UCP profile for this tenant', { retryable: false });
-    }
+    await requireCallerForTenant(request, q.tenant_id, OACP_UCP_PROFILE_READ_SCOPE, q.merchant_id, {
+      code: 'tenant_not_allowed', message: 'Caller may not render a UCP profile for this tenant',
+    });
     const version = q.version ?? '2026-04-08';
     if (!isUcpProfileVersion(version)) throw invalid('version', 'must be 2026-04-08 or 2026-08-25');
     const served = commaList(q.served);
