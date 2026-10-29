@@ -164,6 +164,123 @@ jobs:
           path: apps/auth-service/test-results/
           if-no-files-found: ignore
 
+  # The OACP conformance suite (packages/conformance, suite oacp) against a
+  # live auth service: built from this checkout, on service-container
+  # Postgres and Redis, with a per-run service token, an allowlisted tenant
+  # and an auto-generated OACP issuer key. The SDK verifier and the runner are
+  # installed from tarballs packed from this checkout, as a relying party
+  # would install them.
+  oacp-conformance:
+    name: OACP Conformance (live auth service)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+        env:
+          POSTGRES_USER: grantex_oacp
+          POSTGRES_PASSWORD: grantex_oacp
+          POSTGRES_DB: grantex_oacp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U grantex_oacp -d grantex_oacp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AUTH_BASE_URL: http://127.0.0.1:3001
+      OACP_CONFORMANCE_TENANT: cten_CONFORMANCE
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - name: Build the auth service
+        run: npm --prefix apps/auth-service ci --no-audit --no-fund && npm --prefix apps/auth-service run build
+      - name: Pack the SDK and the conformance runner
+        run: |
+          mkdir -p "$RUNNER_TEMP/oacp-packs" "$RUNNER_TEMP/oacp-conformance"
+          for pkg in packages/sdk-ts packages/conformance; do
+            npm --prefix "$pkg" ci --no-audit --no-fund
+            npm --prefix "$pkg" run build
+            (cd "$pkg" && npm pack --pack-destination "$RUNNER_TEMP/oacp-packs")
+          done
+      - name: Install the runner beside the SDK verifier
+        working-directory: ${{ runner.temp }}/oacp-conformance
+        run: |
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund --legacy-peer-deps "$RUNNER_TEMP"/oacp-packs/grantex-conformance-*.tgz "$RUNNER_TEMP"/oacp-packs/grantex-sdk-*.tgz
+      - name: Generate per-run credentials
+        run: |
+          for name in COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN SEED_API_KEY ADMIN_API_KEY VAULT_ENCRYPTION_KEY; do
+            value="$(openssl rand -hex 32)"
+            echo "::add-mask::$value"
+            echo "$name=$value" >> "$GITHUB_ENV"
+          done
+      - name: Start the auth service
+        working-directory: apps/auth-service
+        env:
+          DATABASE_URL: postgres://grantex_oacp:grantex_oacp@127.0.0.1:5432/grantex_oacp
+          REDIS_URL: redis://127.0.0.1:6379
+          NODE_ENV: development
+          LOG_PRETTY: "false"
+          HOST: 127.0.0.1
+          PORT: "3001"
+          JWT_ISSUER: ${{ env.AUTH_BASE_URL }}
+          PUBLIC_BASE_URL: ${{ env.AUTH_BASE_URL }}
+          AUTO_GENERATE_KEYS: "true"
+          COMMERCE_V1_ENABLED: "true"
+          OACP_AUTO_GENERATE_ISSUER_KEY: "true"
+          OACP_STATUS_LIST_PUBLIC_ENABLED: "true"
+          OACP_ALLOW_LOOPBACK_HTTP: "true"
+          COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS: ${{ env.OACP_CONFORMANCE_TENANT }}
+        run: |
+          nohup node dist/index.js > "$RUNNER_TEMP/auth-service.log" 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS "$AUTH_BASE_URL/health" > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          echo "the auth service did not become healthy" >&2
+          exit 1
+      - name: Run the OACP conformance suite
+        working-directory: ${{ runner.temp }}/oacp-conformance
+        env:
+          GRANTEX_CONFORMANCE_INTERNAL_TOKEN: ${{ env.COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN }}
+        run: >-
+          npx --no-install grantex-conformance --base-url "$AUTH_BASE_URL" --api-key "$SEED_API_KEY"
+          --suite oacp --include oacp --oacp-issuer "$AUTH_BASE_URL" --oacp-tenant "$OACP_CONFORMANCE_TENANT"
+      - name: Enrol a tenant through the service-tenant route, twice
+        run: |
+          tenant="$(cat /proc/sys/kernel/random/uuid)"
+          body="{\"tenant_id\":\"$tenant\",\"merchant_id\":\"mch_CI_ENROL\",\"source_system\":\"catalog_upload\"}"
+          for attempt in 1 2; do
+            curl -fsS -X POST "$AUTH_BASE_URL/v1/commerce/oacp/service-tenants" \
+              -H "authorization: Bearer $COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN" \
+              -H 'content-type: application/json' -d "$body" > "$RUNNER_TEMP/enrolment.json"
+            node -e '
+              const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+              const ok = r.status === "active" && r.merchant_ids.join() === "mch_CI_ENROL" && r.source_systems.join() === "catalog_upload";
+              if (!ok) { console.error("unexpected enrolment", r); process.exit(1); }
+            ' "$RUNNER_TEMP/enrolment.json"
+          done
+      - name: Auth service log
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/auth-service.log" || true
+
   sdk-ts:
     name: TypeScript SDK
     runs-on: ubuntu-latest
