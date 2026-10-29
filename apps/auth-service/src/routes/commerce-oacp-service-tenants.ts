@@ -125,7 +125,7 @@ export async function commerceOacpServiceTenantRoutes(app: FastifyInstance) {
       const unknown = Object.keys(body).find((key) => key !== 'reason_code');
       if (unknown !== undefined) {
         throw new CommerceHttpError(422, 'validation_failed', 'Request validation failed', {
-          details: { fields: { [unknown]: 'unknown member' } }, retryable: false,
+          details: { fields: { body: `unknown member ${JSON.stringify(unknown.slice(0, 64))}` } }, retryable: false,
         });
       }
       let outcome: Awaited<ReturnType<typeof revokeServiceTenant>>;

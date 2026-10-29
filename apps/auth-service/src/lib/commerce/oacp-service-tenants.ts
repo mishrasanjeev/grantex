@@ -201,7 +201,9 @@ export function parseEnrolServiceTenantBody(body: unknown): EnrolServiceTenantIn
   if (typeof body !== 'object' || body === null || Array.isArray(body)) invalid('body', 'must be a JSON object');
   const b = body as Record<string, unknown>;
   for (const key of Object.keys(b)) {
-    if (!['tenant_id', 'merchant_id', 'source_system', 'evidence_ref'].includes(key)) invalid(key, 'unknown member');
+    if (!['tenant_id', 'merchant_id', 'source_system', 'evidence_ref'].includes(key)) {
+      invalid('body', `unknown member ${JSON.stringify(key.slice(0, 64))}`);
+    }
   }
   if (!isTenantUuid(b['tenant_id'])) invalid('tenant_id', 'must be a UUID');
   if (typeof b['merchant_id'] !== 'string' || !OACP_MERCHANT_ID_RE.test(b['merchant_id'])) {
