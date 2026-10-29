@@ -188,7 +188,7 @@ describePostgres('OACP service-tenant enrolment against Postgres', () => {
         [{ tenant_id: 'cten_NOTUUID', merchant_id: 'mch_A', source_system: 'shopify' }, 'tenant_id'],
         [{ tenant_id: tenant, merchant_id: '-bad id', source_system: 'shopify' }, 'merchant_id'],
         [{ tenant_id: tenant, merchant_id: 'mch_A', source_system: 'synthetic_demo' }, 'source_system'],
-        [{ tenant_id: tenant, merchant_id: 'mch_A', source_system: 'shopify', extra: true }, 'extra'],
+        [{ tenant_id: tenant, merchant_id: 'mch_A', source_system: 'shopify', extra: true }, 'body'],
         [{ tenant_id: tenant, merchant_id: 'mch_A', source_system: 'shopify', evidence_ref: 'has space' }, 'evidence_ref'],
       ];
       for (const [body, field] of cases) {
@@ -196,6 +196,9 @@ describePostgres('OACP service-tenant enrolment against Postgres', () => {
         expect(res.statusCode, res.body).toBe(422);
         expect(res.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields).toHaveProperty(field);
       }
+      const unknown = await enrol({ tenant_id: tenant, merchant_id: 'mch_A', source_system: 'shopify', __proto__x: 1 });
+      expect(unknown.json<{ error: { details: { fields: Record<string, string> } } }>().error.details.fields['body'])
+        .toBe('unknown member "__proto__x"');
       expect(await sql`SELECT 1 FROM oacp_service_tenant_enrolments WHERE tenant_id = ${tenant}`).toHaveLength(0);
     });
 
