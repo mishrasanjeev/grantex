@@ -779,13 +779,14 @@ export interface OacpMandateRecord {
   jti: string;
   mandate_type: OacpMandateType;
   tenant_id: string | null;
+  merchant_id: string | null;
   status: 'issued' | 'refused' | 'revoked';
   parent_jti: string | null;
 }
 
 export async function getOacpMandateRecord(sql: Sql, jti: string): Promise<OacpMandateRecord | null> {
   const rows = await sql<OacpMandateRecord[]>`
-    SELECT jti, mandate_type, tenant_id, status, parent_jti FROM oacp_mandates WHERE jti = ${jti}
+    SELECT jti, mandate_type, tenant_id, merchant_id, status, parent_jti FROM oacp_mandates WHERE jti = ${jti}
   `;
   return rows[0] ?? null;
 }

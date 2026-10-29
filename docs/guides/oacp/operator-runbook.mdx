@@ -9,7 +9,9 @@ Canonical end-to-end flow: [OACP authority overview](./overview). Launch closure
 ## Provision AgenticOrg Authority Access
 
 1. Store `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` through the production secret path.
-2. Add the AgenticOrg tenant id to `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`.
+2. Optionally add bootstrap tenant ids to `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`. Merchant
+   tenants no longer need an entry here: AgenticOrg enrols each one itself (see
+   [Service-Tenant Enrolment](#service-tenant-enrolment)).
 3. Deploy or restart the Grantex auth service with both values available. `PUBLIC_BASE_URL` must be
    https (status list URIs are built from it).
 4. Create the first OACP issuer key: `POST /v1/commerce/oacp/issuer-keys/rotate` with the platform
@@ -21,7 +23,71 @@ Canonical end-to-end flow: [OACP authority overview](./overview). Launch closure
    request opts in (`public_discovery_requested: true` with `namespace_attestation_ref` and
    `serving_host`); turn the flag on only after the owner approves publishing UCP profiles.
 7. Confirm `artifact_count = 11`, or record the exact refusal/blocker.
-8. To roll back, remove the tenant id from `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` and rotate the token if there is any suspicion of exposure.
+8. To roll back, revoke the tenant's enrolment (or remove a bootstrap tenant id from
+   `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`) and rotate the token if there is any suspicion of
+   exposure.
+
+## Service-Tenant Enrolment
+
+A tenant may use the AgenticOrg service token when it is on
+`COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` **or** has an active enrolment in
+`oacp_service_tenant_enrolments` (migration `137_oacp_service_tenant_enrolments.sql`). The env
+list is now only a bootstrap list for operator and fixture tenants: no per-merchant env edit or
+redeploy is needed. Env-listed tenants behave exactly as before (any merchant, any route).
+
+| Route | Caller | Behaviour |
+| --- | --- | --- |
+| `POST /v1/commerce/oacp/service-tenants` | Service token with scope `oacp.service_tenants.enrol`, or the platform admin | Body `{"tenant_id": "<uuid>", "merchant_id": "<id>", "source_system": "shopify" \| "catalog_upload", "evidence_ref": "<opaque ref>"?}`. Idempotent: adds the merchant and source to the enrolment and answers `200 {tenant_id, status: "active", merchant_ids, source_systems, evidence_ref, enrolled_at, updated_at, revoked_at, revoked_reason, changed, audit_event_id}`. A revoked tenant answers the service token `403 service_tenant_revoked`; the platform admin's call re-enrols it. |
+| `GET /v1/commerce/oacp/service-tenants/{tenant_id}` | Platform admin | The enrolment, or `404 service_tenant_not_found`. Recorded as `oacp.service_tenant.read`. |
+| `POST /v1/commerce/oacp/service-tenants/{tenant_id}/revoke` | Platform admin | Body `{"reason_code": "<snake_case>"}` (optional). Sets `status: "revoked"`; idempotent (`already_revoked: true` the second time). Takes effect at once on the instance that handled it and within 15 seconds on the others (in-process cache). |
+
+Validation refusals are `422 validation_failed` with `details.fields`: `tenant_id` must be a UUID,
+`merchant_id` must match `^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$` (the OACP id rule), `source_system`
+must be `shopify` or `catalog_upload`, `evidence_ref` an opaque reference of at most 256
+characters. Every enrolment, refusal, revocation and admin read is written to the append-only
+`oacp_service_tenant_enrolment_events` table (UPDATE and DELETE are blocked by trigger, like
+`commerce_audit_events`, which cannot hold these rows because it references `commerce_tenants`).
+
+For an **enrolled** tenant the service token must also name one of the enrolled merchants:
+
+- C6Z issuance (`request.merchant_id`), arbiter decisions and settlement evidence (`merchant_id`),
+  the UCP profile (`merchant_id`) and artifact replay (`merchant_id`, now required for an enrolled
+  tenant) answer `403 service_tenant_merchant_not_enrolled` otherwise;
+- mandate issuance and the ACP delegate-payment allowance use the passport's `merchant_id`
+  (or the body's, when given) and refuse the same way;
+- reads, revocations and suspensions of a stored artifact, mandate or order of another merchant
+  answer `404`, exactly like another tenant's, and mandate verification answers
+  `mandate_scope_mismatch`.
+
+A revoked tenant gets `403 service_tenant_revoked` (or `404` on the by-id routes); an unknown one
+the route's existing `service_tenant_not_allowed` / `tenant_not_allowed`. Operators and the
+platform admin are unaffected.
+
+Audit witness checkpoints (`/v1/audit/witness-checkpoints`) apply the same tenant check when
+`tenant_ref` is a tenant UUID (what AgenticOrg sends): `403 SERVICE_TENANT_NOT_ALLOWED` or
+`SERVICE_TENANT_REVOKED` unless the tenant is env-listed or actively enrolled. A `tenant_ref`
+that is not a UUID is an opaque reference with no tenant behind it and is accepted as before.
+If AgenticOrg witnesses the audit chains of tenants that never enrolled (its
+`AGENTICORG_AUDIT_CHAIN_ENABLED` covers every tenant), those posts are now refused and logged
+as `audit_chain_witness_refused`; enrol or env-list such tenants first.
+
+### Catalogue upload source
+
+`connector_choice: "catalog_upload"` (with connector evidence `source_system: "catalog_upload"`)
+is a catalogue the merchant uploaded itself. It is accepted for an env-listed tenant, or for an
+enrolled tenant whose enrolment lists `catalog_upload`; otherwise it is refused
+`unsupported_or_enabling_authority_request`, recorded like any refusal. It is never synthetic
+data (`synthetic_data: true` is refused). Its artifacts say so honestly: `source_system:
+"catalog_upload"` at the top level, and in `source_lineage` `source_system: "catalog_upload"`,
+`merchant_system_source_of_record: true`, `merchant_supplied_upload: true` and
+`raw_catalog_upload_stored_by_grantex: false`. The synthetic demo source keeps its rules: an
+enrolment never grants it.
+
+Public discovery issuance treats an actively enrolled tenant like an env-listed one; it still
+needs `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED=true` and the request's opt-in and attestation.
+
+To offboard a merchant tenant: `POST .../service-tenants/{tenant_id}/revoke` with a reason code,
+then revoke its live artifacts if they must stop verifying before they expire.
 
 ## Enable a Synthetic Demo Tenant
 
@@ -80,7 +146,7 @@ confirmed:
 
 | Step | Action | Confirm | While this step is not done |
 | --- | --- | --- | --- |
-| 1. Service access | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` (or `_SHA256`) from the secret manager and the AgenticOrg tenant ids in `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`; redeploy. `PUBLIC_BASE_URL` is https. | A request with the token for an allow-listed tenant is not refused `403`. | Every service-token route answers `401` or `403`. |
+| 1. Service access | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` (or `_SHA256`) from the secret manager, and any bootstrap tenant ids in `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` (merchant tenants enrol themselves); redeploy. `PUBLIC_BASE_URL` is https. | A request with the token for an allow-listed tenant is not refused `403`. | Every service-token route answers `401` or `403`. |
 | 2. First OACP issuer key | `POST /v1/commerce/oacp/issuer-keys/rotate` with the platform admin key. | `201 {kid, public_jwk, retired_kid: null}`; the `oacp-...` kid appears in `GET /.well-known/jwks.json` with `alg` `ES256`. | Every artifact, mandate and commitment-evidence issuance answers `503 oacp_issuer_key_unavailable`. |
 | 3. Public status list | Set `OACP_STATUS_LIST_PUBLIC_ENABLED=true` (owner approval) and redeploy. | Issue one fixture authority request for an allow-listed tenant; its `status.status_list.uri` answers `200` with `application/statuslist+jwt`; an SDK verifier accepts one artifact against the production JWKS and list. | Issuance works and artifacts are signed, but `GET /status/oacp/:list` answers `401`, so every relying party, AgenticOrg included, refuses every artifact and mandate with `revocation_status_unavailable`. |
 | 4. AgenticOrg | Point AgenticOrg at the Grantex issuer and JWKS, then turn on its own OACP flags by its runbooks. | AgenticOrg caches verified artifacts and records refusals with exact codes. | AgenticOrg has nothing it can verify; buyers get refusals, not invented facts. |
@@ -88,12 +154,13 @@ confirmed:
 
 Rollback, in reverse: turning `OACP_STATUS_LIST_PUBLIC_ENABLED` off makes every relying party
 refuse (fail closed), it does not make anything valid; revoking the issuer key withdraws
-everything it signed; removing a tenant from the allowlist stops new issuance for it.
+everything it signed; revoking a tenant's enrolment, or removing a bootstrap tenant from the
+allowlist, stops new issuance for it.
 
 | Flag | Default | Effect when on |
 | --- | --- | --- |
 | `OACP_STATUS_LIST_PUBLIC_ENABLED` | off | Serves `GET /status/oacp/:list` unauthenticated (ttl 30 s, CORS `*`, rate limited). |
-| `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED` | off | A C6Z request that opts in, from an allow-listed tenant, with both attestation members, gets `public_discovery_state` `enabled`. |
+| `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED` | off | A C6Z request that opts in, from an allow-listed or actively enrolled tenant, with both attestation members, gets `public_discovery_state` `enabled`. |
 | `COMMERCE_C6Z_DEMO_SOURCE_TENANTS` | empty | Listed tenants that are also on `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` may issue from the `synthetic_demo` source with `synthetic_data: true`; their artifacts say so. See [Enable a Synthetic Demo Tenant](#enable-a-synthetic-demo-tenant). |
 | `HTTP_SIGNATURE_DIRECTORY_ENABLED` | off | Serves `/.well-known/http-message-signatures-directory` with opted-in agents' keys, countersigned once by the platform key. |
 | `REGISTRY_SCHEME_AGENT_IDS_ENABLED` | off | Agent attestations may carry `scheme_agent_ids`; lookup by scheme id; manifest lists them. |
@@ -137,7 +204,8 @@ flowchart TD
 | Check | Command or evidence |
 | --- | --- |
 | Authority route exists | `apps/auth-service/src/routes/commerce-oacp-runtime.ts` |
-| AgenticOrg tenant allowlist | `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` contains only approved tenant ids |
+| AgenticOrg tenant allowlist | `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` contains only approved bootstrap tenant ids |
+| Enrolled tenants | `SELECT tenant_id, status, merchant_ids, source_systems FROM oacp_service_tenant_enrolments`; the trail in `oacp_service_tenant_enrolment_events` |
 | Synthetic demo tenants | `COMMERCE_C6Z_DEMO_SOURCE_TENANTS` is empty or lists only owner-approved demonstration tenants |
 | Synthetic source tests pass | `npm --prefix apps/auth-service test -- commerce-c6z-synthetic-demo-source.test.ts` |
 | AgenticOrg service token | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` is present only via secret manager |
@@ -146,6 +214,7 @@ flowchart TD
 | Persistence, replay, revocation, keys | `AUDIT_INTEGRATION_DATABASE_URL=... npm --prefix apps/auth-service test -- commerce-oacp-artifacts-postgres.integration.test.ts` |
 | JWKS carries the OACP key | `GET /.well-known/jwks.json` contains one `kid` starting `oacp-` with `alg` `ES256` |
 | Conformance gate | `node scripts/commerce-c6oe-preview-conformance-gate.mjs --mode pr` |
+| Live OACP conformance | CI job `oacp-conformance` (`.github/workflows/ci.yml`): the `oacp` suite against a live auth service built from the change, then a double enrolment through `POST /v1/commerce/oacp/service-tenants` |
 | Guardrail scan | Search changed docs for stale or overclaim wording. |
 | Merchant config boundary | Confirm Shopify is runtime-supported, `synthetic_demo` only for listed demonstration tenants, and WooCommerce/ERP/bank/custom provider configs are pending-adapter unless approved. |
 

@@ -112,7 +112,7 @@ describe('M12A PATCH /v1/commerce/merchants/:merchantId', () => {
 
     const auditCall = findAuditCall('merchant.updated');
     expect(auditCall).toBeDefined();
-    const metadata = auditCall?.find((value) => typeof value === 'string' && value.includes('changed_fields')) as string;
+    const metadata = JSON.stringify(auditCall?.find((value) => typeof value === 'object' && value !== null && !Array.isArray(value) && 'changed_fields' in value));
     expect(metadata).toContain('display_name');
     expect(metadata).toContain('agentic_commerce_enabled');
     expect(metadata).not.toContain('Acme Updated');
@@ -245,7 +245,7 @@ describe('M12A PATCH /v1/commerce/agents/:agentId', () => {
 
     const auditCall = findAuditCall('agent.updated');
     expect(auditCall).toBeDefined();
-    const metadata = auditCall?.find((value) => typeof value === 'string' && value.includes('changed_fields')) as string;
+    const metadata = JSON.stringify(auditCall?.find((value) => typeof value === 'object' && value !== null && !Array.isArray(value) && 'changed_fields' in value));
     expect(metadata).toContain('display_name');
     expect(metadata).toContain('trust_status');
     expect(metadata).toContain('status');

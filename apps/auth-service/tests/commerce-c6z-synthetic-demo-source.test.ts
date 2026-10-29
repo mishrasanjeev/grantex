@@ -289,13 +289,13 @@ describe('C6Z synthetic demo source', () => {
     afterEach(() => vi.unstubAllEnvs());
 
     it('needs the tenant on COMMERCE_C6Z_DEMO_SOURCE_TENANTS and on COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS', () => {
-      expect(c6zSourceEligibility('cten_DEMO')).toEqual({ synthetic_demo_allowed: false });
+      expect(c6zSourceEligibility('cten_DEMO')).toEqual({ synthetic_demo_allowed: false, catalog_upload_allowed: false });
       vi.stubEnv('COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS', 'cten_A, cten_DEMO');
       expect(c6zSourceEligibility('cten_DEMO').synthetic_demo_allowed).toBe(false);
       vi.stubEnv('COMMERCE_C6Z_DEMO_SOURCE_TENANTS', '');
       expect(c6zSourceEligibility('cten_DEMO').synthetic_demo_allowed).toBe(false);
       vi.stubEnv('COMMERCE_C6Z_DEMO_SOURCE_TENANTS', ' cten_DEMO ,cten_B');
-      expect(c6zSourceEligibility('cten_DEMO')).toEqual({ synthetic_demo_allowed: true });
+      expect(c6zSourceEligibility('cten_DEMO')).toEqual({ synthetic_demo_allowed: true, catalog_upload_allowed: true });
       expect(c6zSourceEligibility('cten_A').synthetic_demo_allowed).toBe(false);
       expect(c6zSourceEligibility('cten_B').synthetic_demo_allowed).toBe(false);
       expect(c6zSourceEligibility(undefined).synthetic_demo_allowed).toBe(false);

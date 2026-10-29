@@ -2994,6 +2994,23 @@ components:
         occurred_at: { type: string, format: date-time }
         metadata: { type: object, additionalProperties: true }
 
+    OacpServiceTenantEnrolment:
+      type: object
+      required: [tenant_id, status, merchant_ids, source_systems, enrolled_at]
+      properties:
+        tenant_id: { type: string, format: uuid }
+        status: { type: string, enum: [active, revoked] }
+        merchant_ids: { type: array, items: { type: string } }
+        source_systems: { type: array, items: { type: string, enum: [shopify, catalog_upload] } }
+        evidence_ref: { type: string, nullable: true }
+        enrolled_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        revoked_reason: { type: string, nullable: true }
+        changed: { type: boolean, description: "Enrol only: whether the call created, widened or reactivated the enrolment." }
+        already_revoked: { type: boolean, description: "Revoke only." }
+        audit_event_id: { type: string, description: "The oacp_service_tenant_enrolment_events row of this call." }
+
 security:
   - developerApiKey: []
 
@@ -3517,6 +3534,108 @@ paths:
           description: mandate_not_found (also another tenant's mandate).
         "409":
           description: mandate_not_revocable - a refused issuance.
+
+  /v1/commerce/oacp/service-tenants:
+    post:
+      tags: [OACP]
+      operationId: enrolOacpServiceTenant
+      summary: Enrol an AgenticOrg tenant, merchant and catalogue source for the service token
+      description: >-
+        Idempotent. Adds merchant_id and source_system to the tenant's enrolment
+        (creating it when absent); the same call again changes nothing. While
+        the enrolment is active the service token may act for the tenant, naming
+        one of its enrolled merchants; COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS
+        stays a bootstrap list with its previous behaviour. Takes the AgenticOrg
+        service token (route scope oacp.service_tenants.enrol) or the platform
+        admin; a revoked enrolment is refused for the service token and
+        re-enrolled by the platform admin. Recorded in
+        oacp_service_tenant_enrolment_events.
+      security:
+        - developerApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tenant_id, merchant_id, source_system]
+              properties:
+                tenant_id: { type: string, format: uuid }
+                merchant_id: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$" }
+                source_system: { type: string, enum: [shopify, catalog_upload] }
+                evidence_ref: { type: [string, "null"], pattern: "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$" }
+      responses:
+        "200":
+          description: The enrolment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OacpServiceTenantEnrolment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: >-
+            service_tenant_revoked (the platform admin revoked the tenant), or
+            forbidden (neither the service token nor the platform admin).
+        "409":
+          description: service_tenant_merchant_limit - the tenant already has 1000 merchants.
+        "422":
+          description: validation_failed; details.fields names the member.
+
+  /v1/commerce/oacp/service-tenants/{tenant_id}:
+    parameters:
+      - { in: path, name: tenant_id, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [OACP]
+      operationId: getOacpServiceTenant
+      summary: Read a service-tenant enrolment (platform admin)
+      description: Recorded as oacp.service_tenant.read.
+      security:
+        - developerApiKey: []
+      responses:
+        "200":
+          description: The enrolment and the audit_event_id of the read.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OacpServiceTenantEnrolment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: platform_admin_required.
+        "404":
+          description: service_tenant_not_found.
+
+  /v1/commerce/oacp/service-tenants/{tenant_id}/revoke:
+    parameters:
+      - { in: path, name: tenant_id, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [OACP]
+      operationId: revokeOacpServiceTenant
+      summary: Revoke a service-tenant enrolment (platform admin)
+      description: >-
+        The service token is refused for the tenant from then on
+        (service_tenant_revoked), at once on the instance that handled the call
+        and within 15 seconds on the others. Idempotent. Env-listed tenants are
+        not affected. Recorded as oacp.service_tenant.revoked.
+      security:
+        - developerApiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                reason_code: { type: string, pattern: "^[a-z][a-z0-9_]{0,63}$" }
+      responses:
+        "200":
+          description: The revoked enrolment, with already_revoked.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OacpServiceTenantEnrolment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: platform_admin_required.
+        "404":
+          description: service_tenant_not_found.
 
   /v1/commerce/oacp/mandates/{jti}/suspend:
     parameters:

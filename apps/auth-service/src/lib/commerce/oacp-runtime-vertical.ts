@@ -36,12 +36,15 @@ export type C6ZArtifactFamily = typeof C6Z_ARTIFACT_FAMILIES[number];
 
 /**
  * Where the catalogue evidence comes from. `shopify` is a merchant's own
- * system of record. `synthetic_demo` is an invented demonstration catalogue:
- * accepted only for a tenant on both COMMERCE_C6Z_DEMO_SOURCE_TENANTS and
- * COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS, for a request that says
+ * system of record. `catalog_upload` is a catalogue the merchant uploaded
+ * itself: also the merchant's own record, accepted for a tenant on
+ * COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS or enrolled with that source, never
+ * with `synthetic_data: true`. `synthetic_demo` is an invented demonstration
+ * catalogue: accepted only for a tenant on both COMMERCE_C6Z_DEMO_SOURCE_TENANTS
+ * and COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS, for a request that says
  * `synthetic_data: true`, and every artifact issued from it says so.
  */
-export const C6Z_SOURCE_SYSTEMS = ['shopify', 'synthetic_demo'] as const;
+export const C6Z_SOURCE_SYSTEMS = ['shopify', 'synthetic_demo', 'catalog_upload'] as const;
 
 export type C6ZSourceSystem = typeof C6Z_SOURCE_SYSTEMS[number];
 
@@ -60,7 +63,7 @@ export interface C6ZSellerAuthorityRequest {
   commerce_categories: string[];
   connector_choice: C6ZSourceSystem;
   connector_mode: 'read_only';
-  /** Required `true` with `connector_choice: 'synthetic_demo'`; not read for `shopify`. */
+  /** Required `true` with `connector_choice: 'synthetic_demo'`; must not be `true` for `catalog_upload`; not read for `shopify`. */
   synthetic_data?: boolean | undefined;
   requested_authority_scope: string[];
   artifact_cache_scope: {
@@ -154,18 +157,24 @@ export interface C6ZPublicDiscoveryDecision {
   serving_host: string | null;
 }
 
-/** Whether a tenant may use the synthetic demo source; decided by the store from config. */
+/** Which non-Shopify sources a tenant may use; decided by the store from config and enrolment. */
 export interface C6ZSourceEligibility {
   /** The tenant is on COMMERCE_C6Z_DEMO_SOURCE_TENANTS and on COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS. */
   synthetic_demo_allowed: boolean;
+  /** The tenant is on COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS or enrolled with `catalog_upload`. Absent: never. */
+  catalog_upload_allowed?: boolean | undefined;
 }
 
 /**
  * `shopify` as before. `synthetic_demo` only when the request says
- * `synthetic_data: true` and the tenant is eligible; absent eligibility, never.
+ * `synthetic_data: true` and the tenant is eligible; `catalog_upload` only for
+ * an eligible tenant and never as synthetic data; absent eligibility, never.
  */
 function sourceAccepted(request: C6ZSellerAuthorityRequest, eligibility: C6ZSourceEligibility | undefined): boolean {
   if (request.connector_choice === 'shopify') return true;
+  if (request.connector_choice === 'catalog_upload') {
+    return request.synthetic_data !== true && eligibility?.catalog_upload_allowed === true;
+  }
   return request.connector_choice === 'synthetic_demo'
     && request.synthetic_data === true
     && eligibility?.synthetic_demo_allowed === true;
@@ -376,7 +385,7 @@ export function validateC6ZSellerAuthorityRequest(
     return issueRefusal(
       'rejected',
       'unsupported_or_enabling_authority_request',
-      'C6Z accepts Shopify read-only authority requests with non-enablement flags only.',
+      'C6Z accepts read-only authority requests from an accepted catalogue source (Shopify, or an eligible tenant catalogue upload) with non-enablement flags only.',
       request,
     );
   }
@@ -432,9 +441,23 @@ export function validateC6ZSellerAuthorityRequest(
  * Where the payload says its facts came from. A Shopify issuance keeps the
  * lineage it always had; a synthetic demo issuance names its real source,
  * says the data is synthetic and that no merchant system of record stands
- * behind it.
+ * behind it; a catalogue upload names itself and is the merchant's own
+ * record (the merchant uploaded it).
  */
 function sourceLineage(evidence: C6ZConnectorEvidence): Record<string, unknown> {
+  if (evidence.source_system === 'catalog_upload') {
+    return {
+      source_system: 'catalog_upload',
+      connector_mode: 'read_only',
+      connector_evidence_id: evidence.evidence_id,
+      source_evidence_ref: evidence.source_evidence_ref,
+      source_observed_at: evidence.source_observed_at,
+      merchant_system_source_of_record: true,
+      merchant_supplied_upload: true,
+      raw_catalog_upload_stored_by_grantex: false,
+      raw_provider_payload_stored_by_grantex: false,
+    };
+  }
   if (evidence.source_system === 'synthetic_demo') {
     return {
       source_system: 'synthetic_demo',
@@ -699,6 +722,7 @@ export async function issueC6ZInternalOacpArtifacts(input: {
     || input.evidence.seller_agent_id !== input.request.seller_agent_id
     || input.evidence.source_system !== input.request.connector_choice
     || (input.evidence.source_system === 'synthetic_demo' && input.evidence.synthetic_data !== true)
+    || (input.evidence.source_system === 'catalog_upload' && input.evidence.synthetic_data === true)
     || input.evidence.no_payment_execution !== true
     || input.evidence.no_public_discovery_enablement !== true
   ) {
