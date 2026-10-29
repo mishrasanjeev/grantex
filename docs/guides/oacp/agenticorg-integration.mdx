@@ -50,6 +50,33 @@ Grantex returns:
 
 Every refusal is recorded in Grantex (`refusal_record_id`); a `202 received` intake is not.
 
+### Tenant Enrolment
+
+Before the first authority request for a merchant tenant, AgenticOrg enrols it:
+`POST /v1/commerce/oacp/service-tenants` with the service token (scope
+`oacp.service_tenants.enrol`) and
+`{"tenant_id": "<tenant uuid>", "merchant_id": "<merchant id>", "source_system": "shopify" | "catalog_upload", "evidence_ref": "<opaque ref>"}`
+(`evidence_ref` optional). The call is idempotent and answers `200` with
+`{tenant_id, status: "active", merchant_ids, source_systems, enrolled_at, ...}`; call it again
+whenever a merchant or catalogue source is added, since the lists only grow. `403
+service_tenant_revoked` means the platform admin revoked the tenant: show it as waiting, do not
+retry. A `404` or `405` comes from a Grantex without enrolment: treat it as "enrolment
+unavailable" and keep the tenant waiting.
+
+Once enrolled, every service-token call for the tenant must name one of its enrolled merchants
+(`403 service_tenant_merchant_not_enrolled` otherwise), including `merchant_id` on artifact
+replay. Tenants on `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` (now a bootstrap list) need no
+enrolment and keep their previous behaviour. Details:
+[operator runbook](./operator-runbook#service-tenant-enrolment).
+
+### Catalogue Upload Source
+
+A merchant without Shopify that uploads its own catalogue sends `connector_choice:
+"catalog_upload"` and connector evidence with `source_system: "catalog_upload"`, never
+`synthetic_data: true`. Grantex accepts it for a tenant enrolled with `catalog_upload` (or on the
+env list) and signs honest lineage: `source_system: "catalog_upload"` and, in `source_lineage`,
+`merchant_system_source_of_record: true` and `merchant_supplied_upload: true`.
+
 ### Synthetic Demo Source
 
 A demonstration merchant whose catalogue is invented sends `connector_choice: "synthetic_demo"`
@@ -105,7 +132,7 @@ Those outputs must include source and freshness labels, must not expose Shopify 
 | Config | Owner | Purpose |
 | --- | --- | --- |
 | `COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN` | Grantex + AgenticOrg | Service-token auth for authority requests, arbiter decisions and witness checkpoints. |
-| `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` | Grantex | Tenant allowlist. |
+| `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS` | Grantex | Bootstrap tenant allowlist; merchant tenants enrol through `POST /v1/commerce/oacp/service-tenants` instead. |
 | `COMMERCE_C6Z_DEMO_SOURCE_TENANTS` | Grantex | Demonstration tenants allowed the `synthetic_demo` source; empty by default. |
 | Shopify credential custody | AgenticOrg + merchant | Read-only source evidence generation. |
 | Future connector config | AgenticOrg + merchant | WooCommerce, ERP, PIM, OMS, WMS, and custom API setup intent; not live until adapters exist. |
@@ -167,13 +194,15 @@ AgenticOrg anchors the head of its hash-chained `audit_log` and asks Grantex to 
 
 `GET /v1/audit/witness-checkpoints?source=agenticorg&tenant_ref=...&limit=...` returns `{checkpoints, forks}`, newest `head_seq` first. AgenticOrg verifies the countersignature against the Grantex JWKS before storing the `witness_id` beside its anchor row, and treats a `WITNESS_FORK` as an irregularity of its own chain.
 
+A `tenant_ref` that is a tenant UUID must be env-listed or actively enrolled (`403 SERVICE_TENANT_NOT_ALLOWED` or `SERVICE_TENANT_REVOKED` otherwise); a non-UUID `tenant_ref` is accepted as before.
+
 ## UCP And ACP Surfaces
 
-Each route takes the same service token with its own route scope and the tenant allowlist. Details: [OACP runtime authority and adapter mappings](../oacp-runtime-authority-and-adapter-mappings.md).
+Each route takes the same service token with its own route scope, for an env-listed tenant or an enrolled tenant and one of its enrolled merchants. Details: [OACP runtime authority and adapter mappings](../oacp-runtime-authority-and-adapter-mappings.md).
 
 | AgenticOrg needs | Call | Route scope |
 | --- | --- | --- |
-| Public discovery for a merchant | Send the C6Z authority request with `public_discovery_requested: true`, `no_public_discovery_enablement: false`, `namespace_attestation_ref` (its G20 attestation) and `serving_host`. Enabled only with `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED` on and the tenant allow-listed; else issued disabled with a `public_discovery_withheld_reason`. | `commerce.oacp.c6z.authority_requests.write` |
+| Public discovery for a merchant | Send the C6Z authority request with `public_discovery_requested: true`, `no_public_discovery_enablement: false`, `namespace_attestation_ref` (its G20 attestation) and `serving_host`. Enabled only with `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED` on and the tenant allow-listed or enrolled; else issued disabled with a `public_discovery_withheld_reason`. | `commerce.oacp.c6z.authority_requests.write` |
 | The `ucp` member of `/.well-known/ucp` | `GET /v1/commerce/oacp/ucp-profile?tenant_id&merchant_id&seller_agent_id&version&served&rest_endpoint&identity_linking_scopes`; add its signing keys, publish only while `publication_allowed` (enabled artifact and `rest_endpoint` host = attested `serving_host`), re-render by `valid_until`. | `commerce.oacp.ucp_profile.read` |
 | A delegate-payment allowance for an ACP checkout session | `POST /v1/commerce/oacp/acp/delegate-payment-allowance` with `{tenant_id, passport_jwt, checkout_session_id, merchant_id?, amount?, currency?}`; put `allowance`, `risk_signals` and `metadata` into its own `DelegatePaymentRequest` to the PSP. Never send card data to Grantex. | `commerce.acp.delegate_payment_allowance.issue` |
 | An ACP order event for a Grantex order | `GET /v1/commerce/oacp/acp/orders/{order_id}/event?tenant_id&permalink_base`; sign the body with `Merchant-Signature` and deliver it. | `commerce.acp.order_events.read` |

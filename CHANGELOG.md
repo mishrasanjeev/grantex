@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - OACP service-tenant enrolment and catalogue upload source
+- `POST /v1/commerce/oacp/service-tenants` (AgenticOrg service token, scope
+  `oacp.service_tenants.enrol`, or the platform admin) enrols a tenant UUID with
+  a merchant and catalogue source (`shopify` or `catalog_upload`). Idempotent:
+  merchants and sources are unions, and the answer is `200` with the enrolment.
+  A revoked tenant is refused `403 service_tenant_revoked`; only the platform
+  admin re-enrols it. `GET .../service-tenants/{tenant_id}` and
+  `POST .../service-tenants/{tenant_id}/revoke` are platform-admin only.
+  Migration `137_oacp_service_tenant_enrolments.sql` adds the enrolment table
+  and the append-only `oacp_service_tenant_enrolment_events` trail.
+- The service token may act for a tenant on `COMMERCE_C6Z_AUTHORITY_SERVICE_TENANTS`
+  (now a bootstrap list, behaviour unchanged) or with an active enrolment; for an
+  enrolled tenant every OACP route requires one of its enrolled merchants
+  (`403 service_tenant_merchant_not_enrolled`, or `404` on by-id routes). One
+  reader with a 15-second in-process cache replaces the five copies of the
+  allowlist check. Audit witness checkpoints apply the same check to a
+  `tenant_ref` that is a tenant UUID.
+- C6Z issuance accepts `connector_choice: "catalog_upload"` for env-listed
+  tenants and tenants enrolled with that source, with lineage
+  `source_system: "catalog_upload"` and `merchant_system_source_of_record: true`.
+  Public discovery issuance treats enrolled tenants like env-listed ones, still
+  behind `OACP_PUBLIC_DISCOVERY_ISSUANCE_ENABLED`. The synthetic demo source is
+  unchanged.
+- CI job `oacp-conformance` runs the `oacp` conformance suite against a live
+  auth service built from the change and enrols a tenant through the new route.
+
+### Fixed - Commerce audit metadata stored as JSON strings
+- `appendCommerceAudit` passed `JSON.stringify(metadata)` to a `::jsonb`
+  parameter, which postgres.js encodes again, so metadata was stored as a jsonb
+  string (`metadata->>'key'` read NULL). It is now written with `sql.json`, and
+  migration `138_commerce_audit_metadata_objects.sql` rewrites existing string
+  rows that hold a JSON object as that object (idempotent; the append-only
+  trigger is disabled only inside the migration's transaction).
+
 ### Fixed - Opt-in consent retention on agent deletion
 - With `AGENT_CONSENT_RETENTION_GUARD_ENABLED=true` (default off), refuse agent
   deletion with `409 AGENT_HAS_CONSENT_HISTORY` when any consent bundle refers
