@@ -241,7 +241,7 @@ describe('M12B PATCH /v1/commerce/catalog/products/:productId', () => {
     expect(body.audit_event_id).toBe('caud_PRODUCT_UPDATED');
     const auditCall = findAuditCall('product.updated');
     expect(auditCall).toBeDefined();
-    const metadata = auditCall?.find((value) => typeof value === 'string' && value.includes('changed_fields')) as string;
+    const metadata = JSON.stringify(auditCall?.find((value) => typeof value === 'object' && value !== null && !Array.isArray(value) && 'changed_fields' in value));
     expect(metadata).toContain('title');
     expect(metadata).toContain('variants.price_amount');
     expect(metadata).not.toContain('300000');
@@ -387,7 +387,7 @@ describe('M12B POST /v1/commerce/catalog/products/bulk', () => {
     expect(body.audit_event_id).toBe('caud_BULK');
     const auditCall = findAuditCall('catalog.bulk_ingested');
     expect(auditCall).toBeDefined();
-    const metadata = auditCall?.find((value) => typeof value === 'string' && value.includes('product_count')) as string;
+    const metadata = JSON.stringify(auditCall?.find((value) => typeof value === 'object' && value !== null && !Array.isArray(value) && 'product_count' in value));
     expect(metadata).toContain('product_count');
     expect(metadata).not.toContain('Acme Pop-Up Toaster');
   });
