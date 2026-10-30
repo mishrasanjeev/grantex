@@ -10,7 +10,7 @@
   "dependencies": {
     "@grantex/langchain": "^0.1.8",
     "@grantex/sdk": "^0.8.2",
-    "@langchain/core": "^1.2.20"
+    "@langchain/core": "^1.3.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
