@@ -111,9 +111,12 @@ test('manual Portal runs default to preflight only and every deployment step is 
   for (const name of ['Install portal dependencies', 'Build portal', 'Copy portal build to web/dashboard',
     'Deploy to Firebase Hosting', 'Smoke test Firebase -> Cloud Run rewrites']) {
     const index = steps.findIndex((step) => step.name === name);
-    assert(index > preflight);
+    assert(index >= 0);
+    if (name === 'Deploy to Firebase Hosting' || name === 'Smoke test Firebase -> Cloud Run rewrites') assert(index > preflight);
+    else assert(index < authenticate, 'install/build must finish before deployment credentials are available');
     assert.equal(steps[index].if, "${{ github.event_name != 'workflow_dispatch' || inputs.preflight_only == false }}");
   }
+  assert(!steps[preflight]['continue-on-error']);
   assert.equal(steps.find((step) => step.name === 'Deploy to Firebase Hosting').with.firebaseServiceAccount,
     '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}');
 });

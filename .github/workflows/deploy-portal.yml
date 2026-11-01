@@ -32,22 +32,6 @@ jobs:
           cache: npm
           cache-dependency-path: apps/portal/package-lock.json
 
-      - name: Authenticate with the existing Portal deployment credential
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          create_credentials_file: true
-          export_environment_variables: true
-          cleanup_credentials: true
-
-      - name: Set up gcloud for read-only credential preflight
-        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
-
-      - name: Verify deployment identity and Hosting service permission
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: node scripts/firebase-hosting-preflight.mjs
-
       - name: Install portal dependencies
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.preflight_only == false }}
         working-directory: apps/portal
@@ -63,6 +47,22 @@ jobs:
         run: |
           mkdir -p web/dashboard
           cp -r apps/portal/dist/* web/dashboard/
+
+      - name: Authenticate with the existing Portal deployment credential
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+          cleanup_credentials: true
+
+      - name: Set up gcloud for read-only credential preflight
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+
+      - name: Verify deployment identity and Hosting service permission
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/firebase-hosting-preflight.mjs
 
       - name: Deploy to Firebase Hosting
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.preflight_only == false }}
