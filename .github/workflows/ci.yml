@@ -68,7 +68,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node --test tests/scripts/seo-aeo-release.test.mjs tests/scripts/runtime-image.test.mjs tests/scripts/e2e-workflow.test.mjs tests/scripts/dependency-policy.test.mjs tests/scripts/security-boundaries.test.mjs tests/scripts/licensing.test.mjs tests/scripts/nextjs-starter.test.mjs
+      - run: node --test tests/scripts/seo-aeo-release.test.mjs tests/scripts/runtime-image.test.mjs tests/scripts/e2e-workflow.test.mjs tests/scripts/dependency-policy.test.mjs tests/scripts/security-boundaries.test.mjs tests/scripts/licensing.test.mjs tests/scripts/nextjs-starter.test.mjs tests/scripts/firebase-hosting-preflight.test.mjs
       - name: Install URI and HTTP regression dependencies
         run: |
           for directory in apps/auth-service packages/vercel-ai apps/portal; do
