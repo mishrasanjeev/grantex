@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "grantex>=0.7.2,<1",
-    "strands-agents>=1.61.1",
+    "strands-agents>=1.62.0",
     # Patched 1.x compatibility line; see GHSA-84m7-p3x7-pcfv.
     "mcp>=1.30.0,<2",
 ]
