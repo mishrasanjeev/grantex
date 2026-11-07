@@ -2,11 +2,9 @@
  * The compiler, not a test, is what keeps a helper from opening a transaction
  * inside its caller's one.
  *
- * postgres.js has no `begin` on a transaction handle — it exposes `savepoint`
- * — so calling it throws `sql.begin is not a function`, aborts the caller's
- * transaction and rolls back everything it had done. Cascade revocation hit
- * exactly that and left grants ACTIVE while reporting success, and the type
- * that was supposed to prevent it, `TxSql`, was an alias for the *pool*.
+ * Postgres.js 4 supports nested begin, but transaction helpers must still
+ * use an explicit savepoint instead of opening a transaction. The pool and
+ * driver transaction types both expose begin; our narrower type must not.
  *
  * These are compile-time assertions. `@ts-expect-error` fails the build when
  * the line it guards stops being an error, so if `TxSql` ever goes back to

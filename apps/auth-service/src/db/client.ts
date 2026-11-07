@@ -2,26 +2,11 @@ import postgres from 'postgres';
 import { config } from '../config.js';
 
 /**
- * postgres.js v3 TransactionSql loses the tagged-template call signature due to
- * `extends Omit<Sql, ...>`. This helper type restores it for use in transaction
- * callbacks: `sql.begin(async (tx: TxSql) => { await tx\`...\`; })`
+ * A transaction helper can run queries and explicitly take savepoints, but
+ * cannot start a transaction. Postgres.js 4 adds nested begin to TransactionSql;
+ * use its callable query interface and add only the savepoint capability.
  */
-/**
- * A handle that is already inside a transaction, for use in `begin`
- * callbacks: `sql.begin(async (tx: TxSql) => { await tx`...`; })`.
- *
- * This used to alias the **pool** type, which has `begin` on it — so a
- * parameter typed `TxSql` gave no protection at all, and a helper handed a
- * caller's transaction could open a nested one. postgres.js has no `begin` on
- * a transaction handle (it exposes `savepoint`), so that throws
- * `sql.begin is not a function`, aborts the caller's transaction and rolls
- * back everything it had done. Cascade revocation hit exactly that and left
- * grants active while reporting success.
- *
- * `TransactionSql` is the real type: tagged templates and `${}` interpolation
- * still compile, `savepoint` compiles, and `tx.begin(...)` is a compile error.
- */
-export type TxSql = postgres.TransactionSql<Record<string, unknown>>;
+export type TxSql = postgres.ISql & Pick<postgres.TransactionSql, 'savepoint'>;
 
 /**
  * Present the pool where a query-only handle is wanted.
@@ -32,13 +17,7 @@ export type TxSql = postgres.TransactionSql<Record<string, unknown>>;
  * the one place that says so, rather than a cast scattered over every call
  * site.
  *
- * `TxSql` promises one thing the pool does not have: `savepoint`. The type
- * system cannot take it away again without also losing the tagged-template
- * call signature the whole type exists for — an intersection with
- * `{ savepoint?: never }` makes the value uncallable — so the value says it
- * instead. Reaching for `savepoint` on the pool fails at the point of the
- * mistake, with a message naming it, rather than as a `TypeError` from inside
- * postgres.js.
+ * Reaching for `savepoint` on the pool fails at the point of the mistake.
  */
 export function queries(sql: ReturnType<typeof postgres>): TxSql {
   return new Proxy(sql as unknown as TxSql, {
