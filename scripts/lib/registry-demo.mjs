@@ -65,7 +65,8 @@ function freePort() {
 
 /** A database for this run only, created beside the one in DATABASE_URL. */
 async function createRunDatabase(url, prefix) {
-  const postgres = createRequire(join(REPO, 'apps', 'auth-service', 'package.json'))('postgres');
+  const authRequire = createRequire(join(REPO, 'apps', 'auth-service', 'package.json'));
+  const { default: postgres } = await import(pathToFileURL(authRequire.resolve('postgres')).href);
   const admin = postgres(url, { max: 1, onnotice: () => {} });
   const name = `${prefix}_${randomBytes(4).toString('hex')}`;
   try {

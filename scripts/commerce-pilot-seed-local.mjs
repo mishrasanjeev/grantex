@@ -9,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 const migrationsDir = join(repoRoot, 'apps', 'auth-service', 'src', 'db', 'migrations');
 const requireFromAuthService = createRequire(join(repoRoot, 'apps', 'auth-service', 'package.json'));
-const postgres = requireFromAuthService('postgres');
+const { default: postgres } = await import(pathToFileURL(requireFromAuthService.resolve('postgres')).href);
 const {
   SignJWT,
   exportJWK,
