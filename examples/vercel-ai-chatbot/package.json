@@ -7,14 +7,14 @@
     "start": "npx tsx src/index.ts"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.103",
+    "@ai-sdk/openai": "^4.0.108",
     "@grantex/sdk": "^0.8.2",
     "@grantex/vercel-ai": "^0.1.7",
-    "ai": "^7.0.154",
+    "ai": "^7.0.162",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },

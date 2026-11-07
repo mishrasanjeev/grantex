@@ -13,7 +13,7 @@
     "@mdx-js/mdx": "^3.1.1",
     "vitest": "^4.1.12",
     "yaml": "^2.9.1",
-    "semver": "^7.7.3"
+    "semver": "^7.8.6"
   },
   "author": {
     "name": "Sanjeev Kumar",

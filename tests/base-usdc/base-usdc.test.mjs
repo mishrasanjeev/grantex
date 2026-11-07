@@ -17,6 +17,7 @@ const { OAuthAgentClient, generateOAuthAgentKey, PrincipalPrepaidWalletClient, P
 const { createX402Agent } = await import(x402Module.href);
 
 const require = createRequire(new URL('../../apps/auth-service/package.json', import.meta.url));
+const { default: postgres } = await import(pathToFileURL(require.resolve('postgres')).href);
 const { createPublicClient, createWalletClient, http, parseSignature } = require('viem');
 const { privateKeyToAccount, generatePrivateKey } = require('viem/accounts');
 const { base } = require('viem/chains');
@@ -33,7 +34,8 @@ const payer = privateKeyToAccount(TEST_KEY);
 const relayer = privateKeyToAccount(`0x${'22'.repeat(32)}`);
 const merchantAddress = privateKeyToAccount(`0x${'33'.repeat(32)}`).address;
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const composeArgs = ['compose', '-p', 'grantex-base-compat', '-f', 'tests/base-usdc/compose.yml'];
+const composeProject = process.env.GRANTEX_BASE_COMPOSE_PROJECT ?? 'grantex-base-compat';
+const composeArgs = ['compose', '-p', composeProject, '-f', 'tests/base-usdc/compose.yml'];
 const compose = (...args) => execFileSync('docker', [...composeArgs, ...args], { cwd: root, env: process.env, stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000 });
 const rpc = createPublicClient({ chain: base, transport: http(RPC, { retryCount: 0 }), cacheTime: 0 });
 const writer = createWalletClient({ chain: base, account: relayer, transport: http(RPC) });
@@ -245,7 +247,7 @@ test('Docker: governed Base USDC with official x402 facilitator and real EVM exe
     });
     await t.test('outstanding signed exposure still counts after the rolling window advances', async () => {
       late = await agent.authorizePayment(baseRequest({ amount: '10000', maxTimeoutSeconds: 60 }));
-      const sql = require('postgres')('postgres://grantex:local-base-test-only@127.0.0.1:5549/grantex', { max: 1 });
+      const sql = postgres('postgres://grantex:local-base-test-only@127.0.0.1:5549/grantex', { max: 1 });
       try {
         // Advance only test record ages, not the workstation or production clock.
         await sql`UPDATE wallet_payment_reservations SET created_at = NOW() - INTERVAL '1 hour' WHERE wallet_id = ${wallet.walletId}`;
