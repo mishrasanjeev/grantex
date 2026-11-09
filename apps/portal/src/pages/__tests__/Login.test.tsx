@@ -48,6 +48,17 @@ describe('Login', () => {
     expect(screen.getByText('Create one')).toHaveAttribute('href', '/dashboard/signup');
   });
 
+  it('states the licence and the organisational agreement requirement', () => {
+    renderLogin();
+    expect(screen.getByRole('link', { name: 'Orchestrum Personal Use License 1.0' })).toHaveAttribute(
+      'href',
+      'https://github.com/mishrasanjeev/grantex/blob/main/LICENSE',
+    );
+    expect(
+      screen.getByText(/Any use by or for an organisation needs a signed agreement with Orchestrum Technologies LLP\./),
+    ).toBeInTheDocument();
+  });
+
   it('disables the submit button when input is empty', () => {
     renderLogin();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeDisabled();

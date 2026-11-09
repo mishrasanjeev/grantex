@@ -121,6 +121,19 @@ export function Login() {
             Create one
           </Link>
         </p>
+
+        <p className="mt-4 text-center text-xs text-gx-muted">
+          Licensed under the{' '}
+          <a
+            href="https://github.com/mishrasanjeev/grantex/blob/main/LICENSE"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gx-accent2 hover:underline"
+          >
+            Orchestrum Personal Use License 1.0
+          </a>
+          . Any use by or for an organisation needs a signed agreement with Orchestrum Technologies LLP.
+        </p>
       </Card>
     </main>
   );

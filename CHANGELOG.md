@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Added - Commercial agreement notices
+- `README.md`, `COMMERCIAL-LICENSE.md`, `DEPLOYMENT.md` and the self-hosting
+  guides open with a "Commercial agreement required" notice: any organisation
+  needs a signed agreement with Orchestrum Technologies LLP before using,
+  evaluating, self-hosting or deploying the Grantex platform, or using the
+  hosted service commercially. The licence terms are unchanged.
+- The auth service logs one fixed `[licence]` warning line at startup with the
+  same terms and where to find them.
+- The developer portal sign-in page shows a one-line licence notice linking to
+  `LICENSE`.
+
 ### Added - OACP service-tenant enrolment and catalogue upload source
 - `POST /v1/commerce/oacp/service-tenants` (AgenticOrg service token, scope
   `oacp.service_tenants.enrol`, or the platform admin) enrols a tenant UUID with
