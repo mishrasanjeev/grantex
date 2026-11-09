@@ -1,5 +1,15 @@
 # Self-Hosting Grantex
 
+> **Commercial agreement required.** Any organisation must sign a commercial
+> agreement with Orchestrum Technologies LLP before using, evaluating,
+> self-hosting or deploying the Grantex platform, or using the hosted service
+> commercially. Use without one is not licensed under the
+> [Orchestrum Personal Use License 1.0](https://github.com/mishrasanjeev/grantex/blob/main/LICENSE)
+> and infringes Orchestrum's copyright; your rights under the licence end under
+> its section 5 (Termination). Individuals' own personal use is free, and the
+> SDKs are Apache-2.0. Contact [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in)
+> and see [COMMERCIAL-LICENSE.md](https://github.com/mishrasanjeev/grantex/blob/main/COMMERCIAL-LICENSE.md).
+
 This guide covers running your own Grantex auth service — from a quick local spin-up to a
 production-grade Kubernetes deployment.
 

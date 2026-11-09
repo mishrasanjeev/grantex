@@ -1,6 +1,7 @@
 import { initTracing } from './lib/tracing.js';
 import { config, ed25519ConfigWarnings, signingKeyConfigWarnings, validateConfig } from './config.js';
 import { grantTokenClaimsStartupNotices } from './lib/grant-token-claims.js';
+import { logLicenceNotice } from './lib/licence-notice.js';
 import { initKeys, initEdKey } from './lib/crypto.js';
 import { getSql } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
@@ -47,6 +48,9 @@ import { closeSql } from './db/client.js';
 import { closeRedis } from './redis/client.js';
 
 async function main() {
+  // State the licence terms first, so they appear even if startup fails.
+  logLicenceNotice();
+
   // Validate required environment variables before anything else
   validateConfig();
 

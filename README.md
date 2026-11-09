@@ -1,3 +1,16 @@
+> [!IMPORTANT]
+> **Commercial agreement required.** Any organisation must sign a commercial
+> agreement with Orchestrum Technologies LLP before using, evaluating,
+> self-hosting or deploying the Grantex platform (the auth service, developer
+> portal, specification text, documentation and website), or using the hosted
+> service commercially. Use without a signed agreement is not licensed under the
+> [Orchestrum Personal Use License 1.0](LICENSE): it infringes Orchestrum's
+> copyright, and your rights under the licence end under its section 5
+> (Termination). An individual's own personal use is free, and the SDKs and
+> client packages are open source under the Apache License 2.0. Contact
+> [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in) and see
+> [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+
 <div align="center">
 
 # Grantex

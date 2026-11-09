@@ -1,5 +1,15 @@
 # Grantex Deployment Guide
 
+> **Commercial agreement required.** Any organisation must sign a commercial
+> agreement with Orchestrum Technologies LLP before using, evaluating,
+> self-hosting or deploying the Grantex platform, or using the hosted service
+> commercially. Use without one is not licensed under the
+> [Orchestrum Personal Use License 1.0](LICENSE) and infringes Orchestrum's
+> copyright; your rights under the licence end under its section 5
+> (Termination). Individuals' own personal use is free, and the SDKs are
+> Apache-2.0. Contact [sanjeev@orchestrum.in](mailto:sanjeev@orchestrum.in)
+> and see [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md).
+
 Complete guide to deploying the Grantex authorization platform in your environment.
 
 ---
