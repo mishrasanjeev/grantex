@@ -2,7 +2,7 @@ module github.com/mishrasanjeev/grantex-go
 
 go 1.26.1
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1

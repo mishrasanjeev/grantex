@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Go 1.26.11 for the net/http advisory, hono 4.13.18 in the MCP package
+- Build, test, audit and release workflows use Go 1.26.11 (GO-2026-6859,
+  `MaxBytesReader` header race in `net/http`, fixed in 1.26.11); the SDK
+  authority audit image moves to a digest-pinned `golang:1.26.11`.
+- The Go SDK, Terraform provider and Go quickstart modules name
+  `toolchain go1.26.11`. Their minimum `go` versions are unchanged.
+- `packages/mcp` locks hono 4.13.18 (GHSA-4m76-xfj5-7975, GHSA-h7mg-cq63-vhpq,
+  GHSA-3gg2-335m-rxc6, GHSA-46wx-v44x-9hh2 and GHSA-4h7h-rv7c-7m2v, fixed in
+  4.13.16).
+
 ### Added - Commercial agreement notices
 - `README.md`, `COMMERCIAL-LICENSE.md`, `DEPLOYMENT.md` and the self-hosting
   guides open with a "Commercial agreement required" notice: any organisation
