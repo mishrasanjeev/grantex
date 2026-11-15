@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed - Dependency updates for 15 November 2026
+- The auth service image builds and runs on `node:26.13.0-alpine` (digest
+  pinned in both stages), with the minor and patch group update: OpenTelemetry
+  0.301 / 3.1, postgres 4.1.0, jose 6.2.17, viem 2.57.17, `@x402/evm` 2.30.0,
+  `@simplewebauthn/server` 14.1.0 and others.
+- The auth service overrides gaxios to `^7.3.1`. gcp-metadata 8.1.4 (from the
+  OpenTelemetry GCP resource detector) pins gaxios 7.1.3, whose rimraf 5
+  dependency brings glob 10.5.0 (GHSA-3g3m-2fjr-6pw4, fixed in glob 14.0.2);
+  gaxios 7.3.1, already locked before this update, has no rimraf dependency.
+  The dependency policy test rejects vulnerable glob and hono releases in every
+  tracked lockfile.
+- Patch and minor updates for SDK packages, examples, the portal's test
+  dependencies (including jsdom 31) and pinned GitHub Actions.
+
 ### Fixed - Go 1.26.11 for the net/http advisory, hono 4.13.18 in the MCP package
 - Build, test, audit and release workflows use Go 1.26.11 (GO-2026-6859,
   `MaxBytesReader` header race in `net/http`, fixed in 1.26.11); the SDK
