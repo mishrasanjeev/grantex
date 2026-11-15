@@ -2,7 +2,7 @@ module github.com/mishrasanjeev/grantex/examples/quickstart-go
 
 go 1.26.1
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require github.com/mishrasanjeev/grantex-go v0.2.0
 
