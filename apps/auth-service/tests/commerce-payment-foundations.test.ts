@@ -290,7 +290,6 @@ describe('Payment provider adapters', () => {
     expect(result).toMatchObject({
       event_id: webhookId,
       event_type: 'payment.paid',
-      merchant_ref: 'cpi_PLURAL_TEST',
       provider_payment_id: 'cpi_PLURAL_TEST',
       status: 'PROCESSED',
       signature_valid: true,
@@ -301,6 +300,10 @@ describe('Payment provider adapters', () => {
         merchant_order_reference: 'cpi_PLURAL_TEST',
       },
     });
+    // The order reference identifies the payment, not the merchant: it must
+    // not be reported as merchant_ref, which is matched against the Grantex
+    // merchant id (#1987).
+    expect(result).not.toHaveProperty('merchant_ref');
   });
 
   it('PluralPaymentProvider rejects invalid or stale Plural webhooks', async () => {

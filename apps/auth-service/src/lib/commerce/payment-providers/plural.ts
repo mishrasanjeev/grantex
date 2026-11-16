@@ -780,14 +780,19 @@ export class PluralPaymentProvider implements PaymentProvider {
     }
 
     const orderId = stringValue(parsed['order_id']);
-    const merchantRef = stringValue(parsed['merchant_order_reference'])
+    // Plural's merchant order reference is the reference Grantex derived from
+    // the payment intent (merchantOrderReference), so it identifies the
+    // payment, not the merchant. It is the provider payment id; it must not
+    // be returned as merchant_ref, which the webhook route matches against
+    // the Grantex merchant id (#1987).
+    const orderReference = stringValue(parsed['merchant_order_reference'])
       ?? stringValue(parsed['merchant_ref']);
     const rawStatus = (stringValue(parsed['status']) ?? 'UNKNOWN').toUpperCase();
     const eventType = stringValue(parsed['event_type']) ?? statusEventType(rawStatus);
     const eventId = stringValue(parsed['event_id'])
       ?? stringValue(parsed['id'])
       ?? webhookId;
-    const providerPaymentId = merchantRef ?? orderId;
+    const providerPaymentId = orderReference ?? orderId;
 
     const out: {
       event_id: string;
@@ -807,10 +812,9 @@ export class PluralPaymentProvider implements PaymentProvider {
         provider_environment: config.provider_environment,
         signature_scheme: 'plural-hmac-sha256-v1',
         plural_order_id: orderId ?? null,
-        merchant_order_reference: merchantRef ?? null,
+        merchant_order_reference: orderReference ?? null,
       },
     };
-    if (merchantRef !== undefined) out.merchant_ref = merchantRef;
     if (providerPaymentId !== undefined) out.provider_payment_id = providerPaymentId;
     if (rawStatus) out.status = rawStatus;
     return out;
