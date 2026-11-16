@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Plural webhooks resolve their payment intent (#1987)
+- The Plural provider no longer reports its merchant order reference as the
+  webhook's `merchant_ref`. That reference is derived from the Grantex payment
+  intent id and is already the provider payment id; the webhook route matches
+  `merchant_ref` against the Grantex merchant id, so a correctly signed Plural
+  webhook could be recorded as `payment_intent_not_found` and leave the payment
+  intent unchanged. The reference stays in the event's provider metadata.
+- A real-Postgres integration test drives signed Plural sandbox webhooks
+  through the route (by order reference and by Plural order id, plus an
+  unknown reference) and checks that the mock provider's `merchant_ref` still
+  scopes the lookup to the Grantex merchant.
+
 ### Changed - Dependency updates for 15 November 2026
 - The auth service image builds and runs on `node:26.13.0-alpine` (digest
   pinned in both stages), with the minor and patch group update: OpenTelemetry
