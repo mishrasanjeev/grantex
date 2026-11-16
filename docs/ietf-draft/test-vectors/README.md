@@ -15,7 +15,12 @@ The Grantex Docker E2E suite exercises the same behavior in
 `tests/e2e/oauth-agent-profile.test.ts`. This corpus is suitable as a starting
 point for independent interop work, but its publication is not evidence that a
 second implementation has passed it and is not an external certification.
-The current corpus contains 30 behavioral vectors.
+The current corpus contains 32 behavioral vectors.
+
+The Grantex standard-profile endpoints issue no `act` claim, so
+`refresh.valid.actor-preserved` and `refresh.reject.actor-dropped` do not apply
+to them; Grantex tests the converse rule instead, that a refreshed profile
+token gains no `act`.
 
 ## Files
 
@@ -29,6 +34,15 @@ The current corpus contains 30 behavioral vectors.
   and response properties.
 - `outcome: reject` means the operation must fail with the listed OAuth error or
   protected-resource status.
+- Where `expect` lists boolean properties instead of an HTTP status, each
+  property must have the listed value. For example,
+  `refresh.reject.actor-dropped` fails when a refreshed access token is issued
+  without the `act` claim of the token it replaces.
+- The refresh-reuse probes in `refresh.valid.atomic-rotation` and
+  `refresh.reject.family-reuse` present no lost-response recovery key. A server
+  that returns the already issued successor to that probe, however soon after
+  rotation, fails the vector: the profile treats time-only replay as
+  refresh-token reuse.
 - Exact human-readable error descriptions are not compared.
 - Redirect results list query parameters rather than prescribing a browser or
   HTTP client implementation.

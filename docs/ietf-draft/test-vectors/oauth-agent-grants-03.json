@@ -1,7 +1,7 @@
 {
   "profile": "draft-mishra-oauth-agent-grants-03",
   "schema_version": 1,
-  "generated": "2026-08-30",
+  "generated": "2026-11-16",
   "disclaimer": "Behavioral vectors only; not independent certification or IETF endorsement.",
   "placeholders": {
     "<issuer>": "Validated authorization-server issuer",
@@ -233,7 +233,7 @@
       "id": "refresh.valid.atomic-rotation",
       "role": "authorization_server",
       "requirement": "A successful refresh atomically replaces the refresh token",
-      "operation": "Refresh a current key-a-bound family member",
+      "operation": "Refresh a current key-a-bound family member, then present the parent refresh token again; neither request presents a lost-response recovery key",
       "outcome": "pass",
       "expect": { "status": 200, "new_refresh_token": true, "old_refresh_token_invalid": true }
     },
@@ -241,7 +241,7 @@
       "id": "refresh.reject.family-reuse",
       "role": "authorization_server",
       "requirement": "Reuse revokes the active refresh family",
-      "operation": "Use the parent refresh token after a successful rotation",
+      "operation": "Use the parent refresh token after a successful rotation without a lost-response recovery key; the time elapsed since rotation does not matter",
       "outcome": "reject",
       "expect": { "status": 400, "error": "invalid_grant", "family_revoked": true }
     },
@@ -252,6 +252,22 @@
       "operation": "Rotate registration from key-a to key-b, then refresh using key-a",
       "outcome": "reject",
       "expect": { "status": 400, "error": "invalid_dpop_proof" }
+    },
+    {
+      "id": "refresh.valid.actor-preserved",
+      "role": "authorization_server",
+      "requirement": "An existing act claim is carried unchanged through refresh rotation",
+      "operation": "Obtain a delegated token carrying act, then refresh it",
+      "outcome": "pass",
+      "expect": { "act_equal_in_initial_and_refreshed_tokens": true }
+    },
+    {
+      "id": "refresh.reject.actor-dropped",
+      "role": "authorization_server",
+      "requirement": "Refresh does not turn a delegated token into a non-delegated one",
+      "operation": "Obtain a delegated token carrying act, refresh it, and inspect the refreshed access token",
+      "outcome": "reject",
+      "expect": { "refreshed_token_without_act_issued": false }
     },
     {
       "id": "constraints.valid.preserved",

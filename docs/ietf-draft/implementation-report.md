@@ -63,7 +63,7 @@ implementation does not describe DPoP as confidential-client authentication.
 | End-to-end DPoP | Implemented | ES256/384/512, RS256, and EdDSA public proofs are validated for signature, `typ`, method, target URI, freshness, unique `jti`, optional/required `ath`, and registered/token key equality. Redis replay protection fails closed. |
 | Bearer downgrade prevention | Implemented | `/oauth/resource` rejects bearer presentation of a DPoP-bound token and requires the DPoP scheme plus proof. |
 | RFC 8693 attenuation | Implemented | Token Exchange accepts only a standard active subject token from the same `client_id`, key, and resource; scope must be an exact subset; actor tokens are rejected; output preserves principal, audience, sender constraint, existing `act`, and structured authorization details. |
-| Refresh rotation and sender binding | Implemented | Rotation is atomic, preserves resource/scope/key/grant lifetime and structured authorization details, checks the currently registered key, and returns a new family member. A non-conformance 300-second lost-response extension binds the old token, client, DPoP key, and recovery key; it returns the exact committed token values with a recalculated remaining lifetime, stores the access token in an AES-256-GCM envelope, and erases expired state. Any mismatched reuse revokes the active grant and family. |
+| Refresh rotation and sender binding | Implemented | Rotation is atomic, preserves resource/scope/key/grant lifetime and structured authorization details, checks the currently registered key, and returns a new family member. A non-conformance 300-second lost-response extension binds the old token, client, DPoP key, and recovery key; it returns the exact committed token values with a recalculated remaining lifetime, stores the access token in an AES-256-GCM envelope, and erases expired state. Any mismatched reuse, including reuse without a recovery key at any time after rotation, revokes the active grant and family. Profile access tokens carry no `act` claim, and a refreshed token gains none. |
 | RFC 7009 revocation | Implemented | `POST /oauth/revoke` authenticates the public client with its DPoP key, hides token validity, revokes access-token status, and invalidates an entire refresh family. |
 | Key isolation and rotation | Implemented | A partial unique database index prevents two Agent Client Instances at this issuer from sharing an Agent Key. New issuance and refresh require the current registered key. Existing access tokens retain their original `cnf.jkt` and remain verifiable until expiry or revocation. |
 | Resource-server authorization | Implemented | The protected route checks protocol origin, token status, audience, DPoP binding, and the exact `grantex.resource.read` scope before returning an authorized result. |
@@ -106,6 +106,11 @@ wire-protocol E2E:
   authorization-details preservation, duplicate Agent Key rejection, PAR
   single use, bearer and scope-escalation rejection, standard-only profile
   claims, and clean deletion of profile state.
+- `apps/auth-service/tests/oauth-profile.test.ts` also checks that a refreshed
+  profile token has the same (absent) `act` claim as the token issued at code
+  exchange, and that a used refresh token re-presented inside the recovery
+  window without a recovery key revokes the family instead of returning the
+  committed successor.
 
 Verified on 2026-08-30:
 
@@ -149,6 +154,96 @@ A deployment claim is valid only when all of the following are true:
    account-recovery process. A developer API key alone is never approval.
 5. Production E2E passes against the advertised issuer and deployed resource.
 
+## Second Implementation Report
+
+On 2026-11-15 Ilja Radusch posted an implementation report and a partial run
+of the `-03` vectors for a second authorization server, in
+[issue #1887](https://github.com/mishrasanjeev/grantex/issues/1887). He wrote
+both about his own implementation and states that the run is author-produced,
+not independent. The summary below is ours; the issue holds his text.
+
+**Implementation and stance.** A deployed OAuth 2.1 and OpenID Connect
+authorization server (TypeScript, Express, PostgreSQL) serving several first-
+and third-party resource servers, one of which uses its delegated-agent tokens
+in production. Delegated tokens are ordinary JWT access tokens with an RFC 8693
+`act` claim. The agent lane is a profile of existing OAuth: no new grant type,
+token format, or endpoint, and delegation needs the same user consent as any
+other scope.
+
+**Delegation depth.** Depth 1 in production: a user, an agent, and one RFC 8707
+resource. Token exchange intersects the requested scope with the subject
+token's scope, refresh narrowing never widens the rotated refresh token, an
+`actor_token` is rejected, and the actor comes from the authenticated client,
+never from a presented token. This is the same-instance, exact-scope
+attenuation core of `-03`.
+
+**Actor binding across refresh.** `act` is set at one central issuance point
+when the delegation basis applies and is stored with the token, so the refresh
+grant issues it again unchanged. An earlier design set `act` in each grant
+handler; the refresh handler never did, and a delegated token silently rotated
+into a non-delegated one. That defect is the reason for this revision's
+refresh `act` requirement and for the `refresh.valid.actor-preserved` and
+`refresh.reject.actor-dropped` vectors. Client-credentials tokens carry no
+`act`, because the client acts for itself.
+
+**Client floor.** An allowlist keyed on the authenticated `client_id` holds
+known agents in the delegated lane. It never keys on self-asserted scope or a
+redirect-URI pattern, and it can only add restriction. It works alongside
+sender-constrained, resource-bound tokens: the DPoP key shows possession, the
+floor shows which registered agent is calling, and both checks apply.
+
+**Lane versus scope consent.** The delegated lane is recorded per user and
+client, apart from the session's union of consented scopes. Deriving it from
+that union let a second client sharing one SSO session inherit `act` from the
+first client's choice.
+
+**Actor-profile interop.** The reported `act` shape (`iss`, `sub` set to the
+authenticated `client_id`, and `sub_profile: ai_agent`) passes the
+Agent-Authority-Conformance actor-profile cases AC-01 to AC-05, RT-01, and
+CC-01; AC-01, AC-02, and RT-01 were captured from live server output.
+
+### Partial Vector Run
+
+The run used a local test server with a throwaway database and tokens issued
+through a real login on the delegated lane (device flow, refresh, then
+revocation). The vectors file had SHA-256
+`80a413c1657202be9d0488ad8f59941f4892a6534cfa38e5d2b650a2ae8248e6`, which is
+the 30-vector corpus before this revision. The implementation commit is
+`8831bc7d` in a private repository.
+
+| Result | Count | Vectors |
+|:-------|------:|:--------|
+| Pass | 2 | `token.valid.non-cacheable-response`, `revocation.valid.refresh-family` |
+| Fail | 1 | `token.valid.standard-claims`: no `cnf`, because the run presented no DPoP proof. The server binds `cnf.jkt` when a proof is presented but does not require one. |
+| Not applicable | 8 | The client-role and resource-server-role vectors |
+| Not run | 19 | PAR, DPoP agent keys, PKCE, token exchange, `authorization_details`, retired key, and the two refresh-reuse vectors |
+
+**Refresh reuse.** The server always rotates and revokes the family on reuse,
+except that within 90 seconds of rotation it returns the already issued
+successor to a re-presented parent, as lost-response mitigation. The probe
+reused the parent after 31 seconds, so `refresh.valid.atomic-rotation` and
+`refresh.reject.family-reuse` measured that replay; he marked them not run
+and asked whether `-03` forbids any grace replay. This revision answers that a
+time-only replay is refresh-token reuse: the Refresh Tokens section now says
+so, and both vectors state that the probe presents no recovery key. A
+recovery-key design, as in the lost-response recovery guidance, is not
+affected.
+
+**Actor binding.** In the companion actor-profile capture, `act` was
+byte-identical on the initial and refreshed tokens, the behavior that
+`refresh.valid.actor-preserved` checks. That result predates the vector and is
+not yet a run of it.
+
+**Deployment note.** The server supports PAR but does not advertise
+`require_pushed_authorization_requests`, so a client applying
+`metadata.valid.required-fields` would reject its metadata. He treats this as
+deployment configuration, not a protocol gap.
+
+A fuller run covering PAR, DPoP-bound grants, and token exchange is planned.
+This report is evidence from a second implementation, but it is
+author-produced and partial; it does not close the independent-implementation
+gap below.
+
 ## Remaining Evidence Gaps
 
 These do not negate the implemented role behavior, but they block a broad or
@@ -157,9 +252,10 @@ independent interoperability claim:
 1. No second independent implementation has completed an interop event.
 2. No external OAuth certification suite currently identifies DAAP as a
    registered profile.
-3. The repository includes an initial vendor-neutral behavioral corpus under
-   `docs/ietf-draft/test-vectors/`, but no independent implementation has yet
-   reported results against it.
+3. The repository includes a vendor-neutral behavioral corpus under
+   `docs/ietf-draft/test-vectors/`. A second implementation has reported an
+   author-produced partial run against it (above), but no independent
+   implementation has yet reported results against it.
 4. This source snapshot is not a hosted deployment until it is reviewed,
    released, and re-tested in production.
 

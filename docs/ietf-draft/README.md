@@ -40,6 +40,7 @@ Do not edit the published `-00`, `-01`, or `-02` artifacts when preparing the ne
 - Restricts RFC 8693 attenuation to the same client instance, sender key, and resource with exact scope-set containment.
 - Leaves cross-instance delegation and actor-chain proof formats to companion specifications.
 - Requires RFC 7009 revocation and refresh-family invalidation.
+- Requires refresh to carry an existing RFC 8693 `act` claim unchanged and never to add one, and treats time-only replay of a rotated successor as refresh-token reuse.
 - Makes lost-response refresh recovery explicitly non-interoperable implementation guidance.
 - Expands comparisons with current OAuth agent, attenuation, identity-chaining, and transaction-token work.
 

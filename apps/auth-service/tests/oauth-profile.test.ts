@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import {
   calculateJwkThumbprint,
+  decodeJwt,
   exportJWK,
   generateKeyPair,
   SignJWT,
@@ -386,6 +387,104 @@ describe('OAuth agent-grants profile routes', () => {
     expect(res.json()).toMatchObject({ error: 'invalid_grant' });
     expect(sqlMock.mock.calls.map((call) => String(call[0])).join('\n'))
       .toContain("UPDATE grants SET status = 'revoked'");
+  });
+
+  it('revokes the OAuth token family when a used refresh token is re-presented without a recovery key', async () => {
+    // Inside the recovery window, with an active unused successor: elapsed
+    // time alone never returns that successor.
+    const refreshToken = 'ref_oauth_parent';
+    sqlMock
+      .mockResolvedValueOnce([oauthRefreshRow({
+        is_used: true,
+        rotated_to_token_id: 'ref_oauth_child',
+        replay_expires_at: new Date(Date.now() + 290_000).toISOString(),
+        replay_request_hash: oauthRefreshReplayHash(refreshToken, 'oauth-refresh-attempt-00000003'),
+        replay_jti: 'tok_oauth_replay',
+        replay_issued_at: Math.floor(Date.now() / 1000) - 10,
+        replay_grant_token: sealRefreshReplayToken('committed-access-token'),
+      })])
+      .mockResolvedValue([]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/oauth/token',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        dpop: await dpopProof({ method: 'POST', uri: 'https://grantex.dev/oauth/token' }),
+      },
+      payload: form({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: 'ag_oauth' }),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'invalid_grant' });
+    expect(res.body).not.toContain('committed-access-token');
+    expect(res.body).not.toContain('ref_oauth_child');
+    const statements = sqlMock.mock.calls.map((call) => String(call[0]));
+    expect(statements.some((statement) => statement.includes('SELECT id, grant_id, is_used, expires_at')))
+      .toBe(false);
+    expect(statements.join('\n')).toContain("UPDATE grants SET status = 'revoked'");
+  });
+
+  it('keeps the act claim of a profile token family identical across refresh', async () => {
+    // Profile tokens from the authorization-code grant carry no act; refresh
+    // must not add one.
+    const verifier = randomBytes(32).toString('base64url');
+    const challenge = createHash('sha256').update(verifier).digest('base64url');
+    sqlMock.mockImplementation(async (parts: TemplateStringsArray) => {
+      const query = parts.join('?');
+      if (query.includes('FROM auth_requests ar')) return [{
+        id: 'areq_oauth_act', status: 'approved',
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        agent_status: 'active', agent_id: 'ag_oauth', developer_id: 'dev_oauth',
+        principal_id: 'principal_123', scopes: ['grantex.resource.read'],
+        redirect_uri: 'https://client.example/callback', code_challenge: challenge,
+        agent_key_thumbprint: dpopKey.thumbprint, key_thumbprint: dpopKey.thumbprint,
+        audience: 'https://grantex.dev/oauth/resource', authorization_details: null,
+      }];
+      if (query.includes('COALESCE((SELECT plan')) return [{ plan: 'free', count: '0' }];
+      if (query.includes('UPDATE auth_requests')) return [{ id: 'areq_oauth_act' }];
+      return [];
+    });
+    const initial = await app.inject({
+      method: 'POST', url: '/oauth/token',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        dpop: await dpopProof({ method: 'POST', uri: 'https://grantex.dev/oauth/token' }),
+      },
+      payload: form({
+        grant_type: 'authorization_code', code: 'approved-code', client_id: 'ag_oauth',
+        redirect_uri: 'https://client.example/callback', code_verifier: verifier,
+      }),
+    });
+    expect(initial.statusCode).toBe(200);
+    const initialClaims = decodeJwt(initial.json<{ access_token: string }>().access_token);
+
+    sqlMock.mockReset();
+    sqlMock
+      .mockResolvedValueOnce([oauthRefreshRow()])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 'ref_oauth_parent' }])
+      .mockResolvedValueOnce([]);
+    const refreshed = await app.inject({
+      method: 'POST', url: '/oauth/token',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        dpop: await dpopProof({ method: 'POST', uri: 'https://grantex.dev/oauth/token' }),
+      },
+      payload: form({ grant_type: 'refresh_token', refresh_token: 'ref_oauth_parent', client_id: 'ag_oauth' }),
+    });
+    expect(refreshed.statusCode).toBe(200);
+    const refreshedClaims = decodeJwt(refreshed.json<{ access_token: string }>().access_token);
+
+    expect(initialClaims).not.toHaveProperty('act');
+    expect(refreshedClaims).not.toHaveProperty('act');
+    expect(refreshedClaims).toMatchObject({
+      sub: initialClaims['sub'],
+      client_id: initialClaims['client_id'],
+      aud: initialClaims['aud'],
+      scope: initialClaims['scope'],
+      cnf: initialClaims['cnf'],
+    });
   });
 
   it('revokes the OAuth token family instead of accepting plaintext replay state', async () => {
