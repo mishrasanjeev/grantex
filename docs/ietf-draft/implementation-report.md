@@ -158,9 +158,10 @@ A deployment claim is valid only when all of the following are true:
 
 On 2026-11-15 Ilja Radusch posted an implementation report and a partial run
 of the `-03` vectors for a second authorization server, in
-[issue #1887](https://github.com/mishrasanjeev/grantex/issues/1887). He wrote
-both about his own implementation and states that the run is author-produced,
-not independent. The summary below is ours; the issue holds his text.
+[issue #1887](https://github.com/mishrasanjeev/grantex/issues/1887), and on
+2026-11-16 he repeated the run with DPoP. He wrote both about his own
+implementation and states that the runs are author-produced, not
+independent. The summary below is ours; the issue holds his text.
 
 **Implementation and stance.** A deployed OAuth 2.1 and OpenID Connect
 authorization server (TypeScript, Express, PostgreSQL) serving several first-
@@ -202,7 +203,7 @@ authenticated `client_id`, and `sub_profile: ai_agent`) passes the
 Agent-Authority-Conformance actor-profile cases AC-01 to AC-05, RT-01, and
 CC-01; AC-01, AC-02, and RT-01 were captured from live server output.
 
-### Partial Vector Run
+### First Partial Vector Run (No DPoP)
 
 The run used a local test server with a throwaway database and tokens issued
 through a real login on the delegated lane (device flow, refresh, then
@@ -239,10 +240,39 @@ not yet a run of it.
 `metadata.valid.required-fields` would reject its metadata. He treats this as
 deployment configuration, not a protocol gap.
 
-A fuller run covering PAR, DPoP-bound grants, and token exchange is planned.
-This report is evidence from a second implementation, but it is
-author-produced and partial; it does not close the independent-implementation
-gap below.
+### Second Partial Vector Run (DPoP)
+
+The second run used the same harness and the same vectors file (SHA-256
+`80a413c1657202be9d0488ad8f59941f4892a6534cfa38e5d2b650a2ae8248e6`). The agent
+held an ES256 DPoP key and sent a proof on the device-flow token poll and on
+refresh; tokens came back with `token_type` `DPoP` and a `cnf.jkt` matching
+the key. The implementation commit is `8c61947c` in a private repository.
+
+| Result | Count | Vectors |
+|:-------|------:|:--------|
+| Pass | 6 | `token.valid.standard-claims` (`cnf` present, the first run's only failure), `token.reject.dpop-key-mismatch`, `refresh.valid.atomic-rotation`, `refresh.reject.family-reuse`, `token.valid.non-cacheable-response`, `revocation.valid.refresh-family` |
+| Fail | 0 | |
+| Not applicable | 8 | The client-role and resource-server-role vectors |
+| Not run | 16 | Vectors that need PAR, Agent Keys at registration, token exchange, or `authorization_details` |
+
+`token.reject.dpop-key-mismatch` was probed on the refresh grant and returned
+400 `invalid_dpop_proof`: in a device flow the device code is not DPoP-bound,
+so the first key binding happens at the token poll.
+
+**Refresh reuse.** The reuse probe waited 91 seconds, past the server's
+90-second time-only replay window, so the parent was rejected with
+`invalid_grant` and the family was revoked. These two passes therefore cover
+reuse after the window only. Inside the window the server still returns the
+already issued successor, which this revision treats as refresh-token reuse; a
+probe made inside the window would fail both clarified vectors.
+
+**Actor binding.** In the companion actor-profile run, `act` was identical
+before and after a DPoP-bound refresh (RT-01), and the refreshed token stayed
+bound to the same key.
+
+A further run covering PAR and token exchange is planned. These reports are
+evidence from a second implementation, but they are author-produced and
+partial; they do not close the independent-implementation gap below.
 
 ## Remaining Evidence Gaps
 
@@ -253,8 +283,8 @@ independent interoperability claim:
 2. No external OAuth certification suite currently identifies DAAP as a
    registered profile.
 3. The repository includes a vendor-neutral behavioral corpus under
-   `docs/ietf-draft/test-vectors/`. A second implementation has reported an
-   author-produced partial run against it (above), but no independent
+   `docs/ietf-draft/test-vectors/`. A second implementation has reported two
+   author-produced partial runs against it (above), but no independent
    implementation has yet reported results against it.
 4. This source snapshot is not a hosted deployment until it is reviewed,
    released, and re-tested in production.
