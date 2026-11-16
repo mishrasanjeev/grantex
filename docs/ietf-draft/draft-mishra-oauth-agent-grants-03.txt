@@ -79,33 +79,33 @@ Table of Contents
    2.  Conformance . . . . . . . . . . . . . . . . . . . . . . . . .   6
    3.  Security Model  . . . . . . . . . . . . . . . . . . . . . . .   7
    4.  Protocol Overview . . . . . . . . . . . . . . . . . . . . . .   8
-   5.  Authorization Server Metadata . . . . . . . . . . . . . . . .   8
-   6.  Agent Client Registration . . . . . . . . . . . . . . . . . .   9
+   5.  Authorization Server Metadata . . . . . . . . . . . . . . . .   9
+   6.  Agent Client Registration . . . . . . . . . . . . . . . . . .  10
    7.  Authorization . . . . . . . . . . . . . . . . . . . . . . . .  11
      7.1.  Pushed Authorization Request  . . . . . . . . . . . . . .  11
-     7.2.  Principal Interaction . . . . . . . . . . . . . . . . . .  11
-     7.3.  Authorization Response and Code Exchange  . . . . . . . .  12
+     7.2.  Principal Interaction . . . . . . . . . . . . . . . . . .  12
+     7.3.  Authorization Response and Code Exchange  . . . . . . . .  13
    8.  Access Tokens . . . . . . . . . . . . . . . . . . . . . . . .  13
-     8.1.  Claims and Sender Constraint  . . . . . . . . . . . . . .  13
+     8.1.  Claims and Sender Constraint  . . . . . . . . . . . . . .  14
      8.2.  Validation  . . . . . . . . . . . . . . . . . . . . . . .  14
-   9.  Same-Instance Token Attenuation . . . . . . . . . . . . . . .  14
+   9.  Same-Instance Token Attenuation . . . . . . . . . . . . . . .  15
    10. Refresh Tokens  . . . . . . . . . . . . . . . . . . . . . . .  16
-     10.1.  Implementation-Specific Lost-Response Recovery . . . . .  16
-   11. Revocation  . . . . . . . . . . . . . . . . . . . . . . . . .  17
-   12. Operational Extensions  . . . . . . . . . . . . . . . . . . .  18
+     10.1.  Implementation-Specific Lost-Response Recovery . . . . .  17
+   11. Revocation  . . . . . . . . . . . . . . . . . . . . . . . . .  18
+   12. Operational Extensions  . . . . . . . . . . . . . . . . . . .  19
    13. Security Considerations . . . . . . . . . . . . . . . . . . .  19
-     13.1.  Consent Substitution . . . . . . . . . . . . . . . . . .  19
-     13.2.  Redirect, Issuer, and Request Integrity  . . . . . . . .  19
-     13.3.  Audience and Sender Binding  . . . . . . . . . . . . . .  19
-     13.4.  Agent-Key Enrollment . . . . . . . . . . . . . . . . . .  19
+     13.1.  Consent Substitution . . . . . . . . . . . . . . . . . .  20
+     13.2.  Redirect, Issuer, and Request Integrity  . . . . . . . .  20
+     13.3.  Audience and Sender Binding  . . . . . . . . . . . . . .  20
+     13.4.  Agent-Key Enrollment . . . . . . . . . . . . . . . . . .  20
      13.5.  Delegation . . . . . . . . . . . . . . . . . . . . . . .  20
-     13.6.  Refresh Reuse  . . . . . . . . . . . . . . . . . . . . .  20
-     13.7.  Logging  . . . . . . . . . . . . . . . . . . . . . . . .  20
-   14. Privacy Considerations  . . . . . . . . . . . . . . . . . . .  20
-   15. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  21
-   16. Relationship to Other Work  . . . . . . . . . . . . . . . . .  21
+     13.6.  Refresh Reuse  . . . . . . . . . . . . . . . . . . . . .  21
+     13.7.  Logging  . . . . . . . . . . . . . . . . . . . . . . . .  21
+   14. Privacy Considerations  . . . . . . . . . . . . . . . . . . .  21
+   15. IANA Considerations . . . . . . . . . . . . . . . . . . . . .  22
+   16. Relationship to Other Work  . . . . . . . . . . . . . . . . .  22
    17. Implementation Status . . . . . . . . . . . . . . . . . . . .  23
-   18. Acknowledgements  . . . . . . . . . . . . . . . . . . . . . .  23
+   18. Acknowledgements  . . . . . . . . . . . . . . . . . . . . . .  24
 
 
 
@@ -114,12 +114,12 @@ Kumar                     Expires 3 March 2027                  [Page 2]
 Internet-Draft                    DAAP                       August 2026
 
 
-   19. References  . . . . . . . . . . . . . . . . . . . . . . . . .  23
-     19.1.  Normative References . . . . . . . . . . . . . . . . . .  23
-     19.2.  Informative References . . . . . . . . . . . . . . . . .  25
-   Appendix A.  Non-Normative Grantex Mapping  . . . . . . . . . . .  28
-   Appendix B.  Candidate Extension Documents  . . . . . . . . . . .  30
-   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  30
+   19. References  . . . . . . . . . . . . . . . . . . . . . . . . .  24
+     19.1.  Normative References . . . . . . . . . . . . . . . . . .  24
+     19.2.  Informative References . . . . . . . . . . . . . . . . .  26
+   Appendix A.  Non-Normative Grantex Mapping  . . . . . . . . . . .  29
+   Appendix B.  Candidate Extension Documents  . . . . . . . . . . .  31
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  31
 
 1.  Introduction
 
@@ -242,6 +242,10 @@ Internet-Draft                    DAAP                       August 2026
    *  requires an RFC 7009 revocation endpoint and refresh-family
       invalidation;
 
+   *  requires refresh to carry an existing act claim unchanged and
+      never to add one, and treats time-only replay of a rotated
+      successor as refresh-token reuse;
+
    *  uses the precise cnf.jkt and cnf."x5t#S256" confirmation members;
 
    *  changes consent wording to display effective lifetimes and
@@ -270,10 +274,6 @@ Internet-Draft                    DAAP                       August 2026
    This document uses the OAuth roles defined by [RFC6749] and the
    following terms:
 
-   Agent:  Software that plans or performs actions.  An Agent is not
-      itself an OAuth role.
-
-   Agent Client Instance:  An OAuth client instance that executes agent
 
 
 
@@ -282,6 +282,10 @@ Kumar                     Expires 3 March 2027                  [Page 5]
 Internet-Draft                    DAAP                       August 2026
 
 
+   Agent:  Software that plans or performs actions.  An Agent is not
+      itself an OAuth role.
+
+   Agent Client Instance:  An OAuth client instance that executes agent
       software.  Within this profile, authorization is bound to the
       tuple of authorization-server issuer, OAuth client_id, and sender-
       key thumbprint.  This tuple is an authorization and presentation-
@@ -326,10 +330,6 @@ Internet-Draft                    DAAP                       August 2026
 
    *  verifies state and the authorization-response issuer; and
 
-   *  presents DPoP-bound tokens and proofs as required by [RFC9449],
-      except when mutual TLS has been explicitly negotiated for the
-      client and token.
-
 
 
 
@@ -337,6 +337,10 @@ Kumar                     Expires 3 March 2027                  [Page 6]
 
 Internet-Draft                    DAAP                       August 2026
 
+
+   *  presents DPoP-bound tokens and proofs as required by [RFC9449],
+      except when mutual TLS has been explicitly negotiated for the
+      client and token.
 
    A conforming authorization server:
 
@@ -380,11 +384,7 @@ Internet-Draft                    DAAP                       August 2026
    credential MUST NOT be accepted as proof that the Principal approved
    a live authorization request.
 
-   Authorization-server and protected-resource endpoints used by this
-   profile MUST use HTTPS with certificate validation as required by
-   [RFC9700].  The loopback redirect exception for native applications
-   does not permit an insecure authorization, token, PAR, revocation, or
-   resource endpoint.
+
 
 
 
@@ -393,6 +393,12 @@ Kumar                     Expires 3 March 2027                  [Page 7]
 
 Internet-Draft                    DAAP                       August 2026
 
+
+   Authorization-server and protected-resource endpoints used by this
+   profile MUST use HTTPS with certificate validation as required by
+   [RFC9700].  The loopback redirect exception for native applications
+   does not permit an insecure authorization, token, PAR, revocation, or
+   resource endpoint.
 
    For a live authorization, the authorization server MUST authenticate
    the Principal using a method appropriate to the risk of the requested
@@ -433,6 +439,17 @@ Internet-Draft                    DAAP                       August 2026
        narrower token for the same resource without changing the sender
        key.
 
+
+
+
+
+
+
+Kumar                     Expires 3 March 2027                  [Page 8]
+
+Internet-Draft                    DAAP                       August 2026
+
+
    7.  If a refresh token was issued, the client rotates it using the
        same sender binding.  Loss of a response is handled by
        reauthorization unless the client and server share a proprietary
@@ -442,13 +459,6 @@ Internet-Draft                    DAAP                       August 2026
 
    The authorization server MUST publish metadata as defined by
    [RFC8414].  At a minimum, the metadata MUST include:
-
-
-
-Kumar                     Expires 3 March 2027                  [Page 8]
-
-Internet-Draft                    DAAP                       August 2026
-
 
    *  issuer, authorization_endpoint, token_endpoint, and jwks_uri;
 
@@ -485,6 +495,17 @@ Internet-Draft                    DAAP                       August 2026
    [RFC8414].  A JWKS document alone is not authorization-server
    metadata and MUST NOT be described as conformance with [RFC8414].
 
+
+
+
+
+
+
+Kumar                     Expires 3 March 2027                  [Page 9]
+
+Internet-Draft                    DAAP                       August 2026
+
+
    This metadata set advertises the standard capabilities required by
    the profile.  It is not a DAAP conformance indicator.  This document
    defines no new profile identifier; a deployment's conformance claim
@@ -497,14 +518,6 @@ Internet-Draft                    DAAP                       August 2026
    Registration can be provisioned administratively or by a standards-
    based dynamic registration mechanism; the registration wire protocol
    is outside this document.
-
-
-
-
-Kumar                     Expires 3 March 2027                  [Page 9]
-
-Internet-Draft                    DAAP                       August 2026
-
 
    The registration MUST bind:
 
@@ -538,6 +551,17 @@ Internet-Draft                    DAAP                       August 2026
    combination with iss and client_id; those values do not attest stable
    agent identity.
 
+
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 10]
+
+Internet-Draft                    DAAP                       August 2026
+
+
    Key rotation MUST either preserve validation of the old key for the
    remaining lifetime of already-issued tokens or revoke those tokens.
    The authorization server MUST reject future issuance and refresh
@@ -554,13 +578,6 @@ Internet-Draft                    DAAP                       August 2026
    also use their registered token-endpoint authentication method.
    Public clients remain public clients and MUST NOT be described as
    confidential merely because they use DPoP.
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 10]
-
-Internet-Draft                    DAAP                       August 2026
-
 
 7.  Authorization
 
@@ -591,6 +608,16 @@ Internet-Draft                    DAAP                       August 2026
    It MUST NOT apply prefix, wildcard, or substring matching to a
    redirect URI.
 
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 11]
+
+Internet-Draft                    DAAP                       August 2026
+
+
    For DPoP, the PAR request MUST bind the authorization code to the
    Agent Key using either the dpop_jkt parameter or a DPoP proof in the
    DPoP header as defined by Section 10.1 of [RFC9449].  A conforming
@@ -609,14 +636,6 @@ Internet-Draft                    DAAP                       August 2026
    The authorization server MUST authenticate the Principal
    independently of the developer or Agent Client Instance.  The consent
    view MUST show, in language the Principal can understand:
-
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 11]
-
-Internet-Draft                    DAAP                       August 2026
-
 
    *  the Agent Client Instance and responsible developer;
 
@@ -641,6 +660,19 @@ Internet-Draft                    DAAP                       August 2026
    and the specific authorization request.  The authorization server
    MUST prevent login CSRF, consent CSRF, clickjacking, and reuse of
    approval artifacts.
+
+
+
+
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 12]
+
+Internet-Draft                    DAAP                       August 2026
+
 
 7.3.  Authorization Response and Code Exchange
 
@@ -667,13 +699,6 @@ Internet-Draft                    DAAP                       August 2026
    2.  require exact redirect_uri equality with the authorization
        request;
 
-
-
-Kumar                     Expires 3 March 2027                 [Page 12]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    3.  validate the S256 verifier;
 
    4.  bind the code to the client, Principal, issuer, resource,
@@ -691,6 +716,19 @@ Internet-Draft                    DAAP                       August 2026
    tokens [RFC7519] as profiled by [RFC9068].  The JWK Set requirements
    of [RFC7517], the JOSE requirements of [RFC7518], and JWT validation
    guidance in [RFC8725] apply.
+
+
+
+
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 13]
+
+Internet-Draft                    DAAP                       August 2026
+
 
 8.1.  Claims and Sender Constraint
 
@@ -722,14 +760,6 @@ Internet-Draft                    DAAP                       August 2026
    [RFC9449].  A bearer presentation of a DPoP-bound token MUST be
    rejected.
 
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 13]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    A token response containing a DPoP-bound access token MUST use the
    DPoP token_type value defined by [RFC9449].  An mTLS-bound access-
    token response uses the Bearer token type while binding the token to
@@ -748,6 +778,13 @@ Internet-Draft                    DAAP                       August 2026
        signature;
 
    2.  iss against the configured authorization server;
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 14]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    3.  aud against the resource server's identifier;
 
@@ -778,14 +815,6 @@ Internet-Draft                    DAAP                       August 2026
 
    *  subject_token;
 
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 14]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    *  subject_token_type=urn:ietf:params:oauth:token-type:access_token;
 
    *  requested_token_type=urn:ietf:params:oauth:token-
@@ -803,6 +832,15 @@ Internet-Draft                    DAAP                       August 2026
    thumbprint equals the subject token's cnf.jkt.  For mutual TLS, the
    request certificate thumbprint MUST equal the subject token's
    cnf."x5t#S256" value.
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 15]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    This profile does not define transfer to a different Agent Client
    Instance.  An actor_token or actor_token_type indicates a different
@@ -830,18 +868,6 @@ Internet-Draft                    DAAP                       August 2026
    *  MUST preserve any existing RFC 8693 act claim without adding a new
       actor.
 
-
-
-
-
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 15]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    The authorization server SHOULD bound repeated exchanges and token
    lifetimes.  OAuth Token Exchange does not by itself revoke the
    subject token or create revocation linkage between input and output
@@ -859,6 +885,19 @@ Internet-Draft                    DAAP                       August 2026
    both rotation and sender constraint whenever an Agent Client Instance
    is issued a refresh token.
 
+
+
+
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 16]
+
+Internet-Draft                    DAAP                       August 2026
+
+
    On a successful refresh, the authorization server MUST invalidate the
    presented refresh token and return a new refresh token atomically.
    The new access token MUST NOT expand the original resource, scope,
@@ -866,10 +905,18 @@ Internet-Draft                    DAAP                       August 2026
    mutual-TLS certificate used during refresh MUST match the sender
    binding of the refresh-token family.
 
+   When the access tokens of a refresh-token family carry an RFC 8693
+   act claim, every access token issued by refreshing that family MUST
+   carry an identical act claim.  A family whose access tokens carry no
+   act claim MUST NOT gain one through refresh.
+
    Reuse of an invalidated refresh token outside an explicitly
    recognized request-bound recovery attempt MUST fail with
    invalid_grant and SHOULD revoke the active refresh-token family or
-   trigger another risk-appropriate incident response.
+   trigger another risk-appropriate incident response.  Returning the
+   already issued successor to a reused refresh token based only on
+   elapsed time, without a request-bound recovery attempt, is refresh-
+   token reuse and fails in the same way.
 
 10.1.  Implementation-Specific Lost-Response Recovery
 
@@ -888,16 +935,6 @@ Internet-Draft                    DAAP                       August 2026
        random source and persists it with the old refresh token until
        the response is durable.
 
-
-
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 16]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    2.  Every transport retry of that same logical refresh operation uses
        the same recovery key.  A new logical refresh operation uses a
        new key.
@@ -909,6 +946,13 @@ Internet-Draft                    DAAP                       August 2026
    4.  Any stored access token, rotated refresh token, or serialized
        token response is encrypted at rest, excluded from logs, and
        deleted when the recovery window expires.
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 17]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    5.  Recovery returns the exact committed token values and response
        parameters, except that relative lifetime fields such as
@@ -945,18 +989,6 @@ Internet-Draft                    DAAP                       August 2026
    Principal, or administrator is authorized to revoke the presented
    token or its grant.
 
-
-
-
-
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 17]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    Revoking a refresh token MUST invalidate its entire refresh-token
    family and prevent further token issuance from that family.  The
    authorization server MUST also provide an authenticated mechanism for
@@ -968,6 +1000,15 @@ Internet-Draft                    DAAP                       August 2026
    lifetime so that the residual authorization window is appropriate to
    the protected resource's risk.  The consent view displays that
    effective lifetime as required earlier in this document.
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 18]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    Revocation of a subject token does not automatically revoke tokens
    previously created by Token Exchange.  A deployment claiming that
@@ -1004,15 +1045,6 @@ Internet-Draft                    DAAP                       August 2026
    [RFC9396], including an unambiguous amount representation and
    currency, rather than a bare numeric JWT claim.
 
-
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 18]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    Potential extension documents are listed in the source repository.
    Their presence does not imply IETF submission, adoption, or
    interoperability.
@@ -1023,6 +1055,16 @@ Internet-Draft                    DAAP                       August 2026
    Implementers should also track the active OAuth Security BCP update
    [I-D.ietf-oauth-security-topics-update].  This section calls out
    agent-specific consequences.
+
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 19]
+
+Internet-Draft                    DAAP                       August 2026
+
 
 13.1.  Consent Substitution
 
@@ -1061,14 +1103,6 @@ Internet-Draft                    DAAP                       August 2026
    identities.  Authorization servers MUST verify possession and MUST
    define secure key rotation and recovery procedures.
 
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 19]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    Distinct Agent Client Instances MUST NOT share an Agent Key. Key
    reuse across authorization-server issuers can enable correlation and
    can increase the impact of a compromised client assertion or signing
@@ -1080,6 +1114,13 @@ Internet-Draft                    DAAP                       August 2026
    or difficult-to-revoke token graphs.  Exact scope containment, same-
    resource enforcement, bounded lifetime, unchanged sender constraint,
    and exchange-rate limits SHOULD be enforced together.
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 20]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    Cross-instance delegation requires a secure method for the subject-
    token holder to authorize the recipient and for the issued token to
@@ -1117,14 +1158,6 @@ Internet-Draft                    DAAP                       August 2026
    subject identifiers where appropriate, and avoid placing personal
    data in globally resolvable agent documents.
 
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 20]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    Resource indicators and fine-grained scopes can themselves be
    sensitive.  They SHOULD be disclosed only to parties that require
    them.  Audit retention and export MUST have a defined purpose, access
@@ -1135,6 +1168,15 @@ Internet-Draft                    DAAP                       August 2026
    servers.  Deployments SHOULD use issuer-specific registrations and
    Agent Keys and SHOULD expose the sender-key confirmation member only
    to the resource server for which the token was issued.
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 21]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    Delegation chains reveal relationships among services and actors.  A
    resource server should receive only the chain information needed for
@@ -1174,18 +1216,23 @@ Internet-Draft                    DAAP                       August 2026
    graduated consent.  This document instead profiles the browser
    authorization-code flow and defines no agent capability vocabulary.
 
-
-
-Kumar                     Expires 3 March 2027                 [Page 21]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    Attenuating Authorization Tokens for Agentic Delegation Chains
    [I-D.niyikiza-oauth-attenuating-agent-tokens] explores richer
    capability and delegation attenuation.  This profile deliberately
    limits core delegation to exact OAuth scope-set containment and the
    same resource.
+
+
+
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 22]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    OAuth 2.0 Delegated Authorization
    [I-D.li-oauth-delegated-authorization] defines cryptographically
@@ -1228,19 +1275,20 @@ Internet-Draft                    DAAP                       August 2026
    lifetime displays and refresh behavior with that work as it
    progresses.
 
-
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 22]
-
-Internet-Draft                    DAAP                       August 2026
-
-
 17.  Implementation Status
 
    This section follows the intent of [RFC7942] and is expected to be
    removed before publication as an RFC.
+
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 23]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    As of 2026-08-30, the Grantex source repository contains role-
    specific client, authorization-server, and resource-server
@@ -1283,16 +1331,6 @@ Internet-Draft                    DAAP                       August 2026
               DOI 10.17487/RFC2119, March 1997,
               <https://www.rfc-editor.org/rfc/rfc2119>.
 
-
-
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 23]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    [RFC6749]  Hardt, D., Ed., "The OAuth 2.0 Authorization Framework",
               RFC 6749, DOI 10.17487/RFC6749, October 2012,
               <https://www.rfc-editor.org/rfc/rfc6749>.
@@ -1300,6 +1338,13 @@ Internet-Draft                    DAAP                       August 2026
    [RFC7009]  Lodderstedt, T., Ed., Dronia, S., and M. Scurtescu, "OAuth
               2.0 Token Revocation", RFC 7009, DOI 10.17487/RFC7009,
               August 2013, <https://www.rfc-editor.org/rfc/rfc7009>.
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 24]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    [RFC7517]  Jones, M., "JSON Web Key (JWK)", RFC 7517,
               DOI 10.17487/RFC7517, May 2015,
@@ -1342,17 +1387,20 @@ Internet-Draft                    DAAP                       August 2026
               Indicators for OAuth 2.0", RFC 8707, DOI 10.17487/RFC8707,
               February 2020, <https://www.rfc-editor.org/rfc/rfc8707>.
 
-
-
-Kumar                     Expires 3 March 2027                 [Page 24]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    [RFC8725]  Sheffer, Y., Hardt, D., and M. Jones, "JSON Web Token Best
               Current Practices", BCP 225, RFC 8725,
               DOI 10.17487/RFC8725, February 2020,
               <https://www.rfc-editor.org/rfc/rfc8725>.
+
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 25]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    [RFC9068]  Bertocci, V., "JSON Web Token (JWT) Profile for OAuth 2.0
               Access Tokens", RFC 9068, DOI 10.17487/RFC9068, October
@@ -1392,19 +1440,6 @@ Internet-Draft                    DAAP                       August 2026
               <https://datatracker.ietf.org/doc/html/draft-aap-oauth-
               profile-01>.
 
-
-
-
-
-
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 25]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    [I-D.araut-oauth-transaction-tokens-for-agents]
               Raut, A., "Transaction Tokens For Agents", Work in
               Progress, Internet-Draft, draft-araut-oauth-transaction-
@@ -1415,6 +1450,14 @@ Internet-Draft                    DAAP                       August 2026
    [I-D.chen-oauth-agent-authz-use-cases]
               Chen, M., Chen, J., Yao, J., Jiang, Y., and P. C. Liu,
               "Agent Authorization use cases and gap analysis", Work in
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 26]
+
+Internet-Draft                    DAAP                       August 2026
+
+
               Progress, Internet-Draft, draft-chen-oauth-agent-authz-
               use-cases-03, 25 August 2026,
               <https://datatracker.ietf.org/doc/html/draft-chen-oauth-
@@ -1453,14 +1496,6 @@ Internet-Draft                    DAAP                       August 2026
    [I-D.li-oauth-delegated-authorization]
               Ruochen, L., Wang, W., Liu, P. C., and T. Li, "OAuth 2.0
               Delegated Authorization", Work in Progress, Internet-
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 26]
-
-Internet-Draft                    DAAP                       August 2026
-
-
               Draft, draft-li-oauth-delegated-authorization-03, 24 July
               2026, <https://datatracker.ietf.org/doc/html/draft-li-
               oauth-delegated-authorization-03>.
@@ -1471,6 +1506,13 @@ Internet-Draft                    DAAP                       August 2026
               profile-00, 30 April 2026,
               <https://datatracker.ietf.org/doc/html/draft-mcguinness-
               oauth-actor-profile-00>.
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 27]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    [I-D.mcguinness-oauth-ai-agent-instance]
               McGuinness, K., "OAuth 2.0 AI Agent Instance Profile",
@@ -1509,14 +1551,6 @@ Internet-Draft                    DAAP                       August 2026
               <https://datatracker.ietf.org/doc/html/draft-song-oauth-
               ai-agent-collaborate-authz-02>.
 
-
-
-
-Kumar                     Expires 3 March 2027                 [Page 27]
-
-Internet-Draft                    DAAP                       August 2026
-
-
    [I-D.valverde-oauth-pact]
               Valverde, G., "PACT: Private Agent Consent and Trust
               Profile for OAuth 2.1 and CIBA", Work in Progress,
@@ -1528,6 +1562,13 @@ Internet-Draft                    DAAP                       August 2026
               (SHA and SHA-based HMAC and HKDF)", RFC 6234,
               DOI 10.17487/RFC6234, May 2011,
               <https://www.rfc-editor.org/rfc/rfc6234>.
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 28]
+
+Internet-Draft                    DAAP                       August 2026
+
 
    [RFC7942]  Sheffer, Y. and A. Farrel, "Improving Awareness of Running
               Code: The Implementation Status Section", BCP 205,
@@ -1568,7 +1609,19 @@ Appendix A.  Non-Normative Grantex Mapping
 
 
 
-Kumar                     Expires 3 March 2027                 [Page 28]
+
+
+
+
+
+
+
+
+
+
+
+
+Kumar                     Expires 3 March 2027                 [Page 29]
 
 Internet-Draft                    DAAP                       August 2026
 
@@ -1624,7 +1677,7 @@ Internet-Draft                    DAAP                       August 2026
 
 
 
-Kumar                     Expires 3 March 2027                 [Page 29]
+Kumar                     Expires 3 March 2027                 [Page 30]
 
 Internet-Draft                    DAAP                       August 2026
 
@@ -1680,4 +1733,4 @@ Author's Address
 
 
 
-Kumar                     Expires 3 March 2027                 [Page 30]
+Kumar                     Expires 3 March 2027                 [Page 31]

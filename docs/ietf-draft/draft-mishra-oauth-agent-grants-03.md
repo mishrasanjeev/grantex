@@ -166,6 +166,9 @@ Revision -03:
 * replaces ambiguous delegation language with same-instance, same-resource
   Token Exchange and exact scope-set containment;
 * requires an RFC 7009 revocation endpoint and refresh-family invalidation;
+* requires refresh to carry an existing `act` claim unchanged and never to
+  add one, and treats time-only replay of a rotated successor as refresh-token
+  reuse;
 * uses the precise `cnf.jkt` and `cnf."x5t#S256"` confirmation members;
 * changes consent wording to display effective lifetimes and constraints that
   are actually represented in the authorization request;
@@ -597,10 +600,17 @@ access token MUST NOT expand the original resource, scope, delegation, sender
 binding, or grant lifetime. A DPoP proof or mutual-TLS certificate used during
 refresh MUST match the sender binding of the refresh-token family.
 
+When the access tokens of a refresh-token family carry an RFC 8693 `act`
+claim, every access token issued by refreshing that family MUST carry an
+identical `act` claim. A family whose access tokens carry no `act` claim MUST
+NOT gain one through refresh.
+
 Reuse of an invalidated refresh token outside an explicitly recognized
 request-bound recovery attempt MUST fail with `invalid_grant` and SHOULD revoke
 the active refresh-token family or trigger another risk-appropriate incident
-response.
+response. Returning the already issued successor to a reused refresh token
+based only on elapsed time, without a request-bound recovery attempt, is
+refresh-token reuse and fails in the same way.
 
 ## Implementation-Specific Lost-Response Recovery
 

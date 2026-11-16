@@ -248,7 +248,7 @@ RFC 8693 attenuation, and RFC 7009 revocation.
 | Authorization-server metadata | `https://grantex.dev/.well-known/oauth-authorization-server` |
 | PAR / authorize / token / revoke | `https://grantex.dev/oauth/{par,authorize,token,revoke}` |
 | Implementation guide | [docs.grantex.dev/guides/oauth-agent-grants](https://docs.grantex.dev/guides/oauth-agent-grants) |
-| Evidence | [Implementation report](docs/ietf-draft/implementation-report.md) and [30 behavioral vectors](docs/ietf-draft/test-vectors/oauth-agent-grants-03.json) |
+| Evidence | [Implementation report](docs/ietf-draft/implementation-report.md) and [32 behavioral vectors](docs/ietf-draft/test-vectors/oauth-agent-grants-03.json) |
 
 Verification completed with 2,138 auth-service tests, 456 TypeScript SDK tests,
 and 255 tests across 23 sequential Docker E2E files. This is self-assessed evidence for

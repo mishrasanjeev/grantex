@@ -1601,21 +1601,26 @@ Token Exchange and exact scope-set containment;<a href="#section-1.4-2.6.1" clas
             <p id="section-1.4-2.7.1">requires an RFC 7009 revocation endpoint and refresh-family invalidation;<a href="#section-1.4-2.7.1" class="pilcrow">¶</a></p>
 </li>
           <li class="normal" id="section-1.4-2.8">
-            <p id="section-1.4-2.8.1">uses the precise <code>cnf.jkt</code> and <code>cnf."x5t#S256"</code> confirmation members;<a href="#section-1.4-2.8.1" class="pilcrow">¶</a></p>
+            <p id="section-1.4-2.8.1">requires refresh to carry an existing <code>act</code> claim unchanged and never to
+add one, and treats time-only replay of a rotated successor as refresh-token
+reuse;<a href="#section-1.4-2.8.1" class="pilcrow">¶</a></p>
 </li>
           <li class="normal" id="section-1.4-2.9">
-            <p id="section-1.4-2.9.1">changes consent wording to display effective lifetimes and constraints that
-are actually represented in the authorization request;<a href="#section-1.4-2.9.1" class="pilcrow">¶</a></p>
+            <p id="section-1.4-2.9.1">uses the precise <code>cnf.jkt</code> and <code>cnf."x5t#S256"</code> confirmation members;<a href="#section-1.4-2.9.1" class="pilcrow">¶</a></p>
 </li>
           <li class="normal" id="section-1.4-2.10">
-            <p id="section-1.4-2.10.1">moves lost-response refresh recovery outside interoperable conformance and
-adds storage, entropy, expiry, crash, and reauthorization guidance;<a href="#section-1.4-2.10.1" class="pilcrow">¶</a></p>
+            <p id="section-1.4-2.10.1">changes consent wording to display effective lifetimes and constraints that
+are actually represented in the authorization request;<a href="#section-1.4-2.10.1" class="pilcrow">¶</a></p>
 </li>
           <li class="normal" id="section-1.4-2.11">
-            <p id="section-1.4-2.11.1">expands current OAuth agent-work comparisons and privacy guidance; and<a href="#section-1.4-2.11.1" class="pilcrow">¶</a></p>
+            <p id="section-1.4-2.11.1">moves lost-response refresh recovery outside interoperable conformance and
+adds storage, entropy, expiry, crash, and reauthorization guidance;<a href="#section-1.4-2.11.1" class="pilcrow">¶</a></p>
 </li>
           <li class="normal" id="section-1.4-2.12">
-            <p id="section-1.4-2.12.1">removes the duplicate manually authored address section.<a href="#section-1.4-2.12.1" class="pilcrow">¶</a></p>
+            <p id="section-1.4-2.12.1">expands current OAuth agent-work comparisons and privacy guidance; and<a href="#section-1.4-2.12.1" class="pilcrow">¶</a></p>
+</li>
+          <li class="normal" id="section-1.4-2.13">
+            <p id="section-1.4-2.13.1">removes the duplicate manually authored address section.<a href="#section-1.4-2.13.1" class="pilcrow">¶</a></p>
 </li>
         </ul>
 </section>
@@ -2233,10 +2238,16 @@ presented refresh token and return a new refresh token atomically. The new
 access token MUST NOT expand the original resource, scope, delegation, sender
 binding, or grant lifetime. A DPoP proof or mutual-TLS certificate used during
 refresh MUST match the sender binding of the refresh-token family.<a href="#section-10-2" class="pilcrow">¶</a></p>
-<p id="section-10-3">Reuse of an invalidated refresh token outside an explicitly recognized
+<p id="section-10-3">When the access tokens of a refresh-token family carry an RFC 8693 <code>act</code>
+claim, every access token issued by refreshing that family MUST carry an
+identical <code>act</code> claim. A family whose access tokens carry no <code>act</code> claim MUST
+NOT gain one through refresh.<a href="#section-10-3" class="pilcrow">¶</a></p>
+<p id="section-10-4">Reuse of an invalidated refresh token outside an explicitly recognized
 request-bound recovery attempt MUST fail with <code>invalid_grant</code> and SHOULD revoke
 the active refresh-token family or trigger another risk-appropriate incident
-response.<a href="#section-10-3" class="pilcrow">¶</a></p>
+response. Returning the already issued successor to a reused refresh token
+based only on elapsed time, without a request-bound recovery attempt, is
+refresh-token reuse and fails in the same way.<a href="#section-10-4" class="pilcrow">¶</a></p>
 <div id="implementation-specific-lost-response-recovery">
 <section id="section-10.1">
         <h3 id="name-implementation-specific-los">
