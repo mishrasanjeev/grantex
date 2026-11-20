@@ -40,7 +40,7 @@
     "@types/express": "^5.0.6",
     "@types/node": "^20.11.0",
     "express": "^5.2.1",
-    "typescript": "^5.3.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.12"
   },
   "engines": {
