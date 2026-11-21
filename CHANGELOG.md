@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - OACP packed-client peer validation
+- The TypeScript SDK source is prepared as unpublished 0.9.0 for its OACP
+  verifier APIs. Published release records remain at 0.8.2, which does not
+  contain those APIs; this change does not publish an SDK or create a release.
+- OACP CI installs the packed SDK and runner with strict peer resolution and
+  checks the complete installed graph. npm success alone can omit an
+  incompatible optional peer, leaving the verifier unavailable at runtime.
+
 ### Changed - Reviewed dependency compatibility updates
 - The auth service uses digest-pinned Node 26.13.1 and postgres 4.1.1.
   Integration tooling explicitly loads Node types with TypeScript 7; Vitest 5

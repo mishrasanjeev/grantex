@@ -25,6 +25,20 @@ const vulnerable = {
   undici: '>=6.5.0 <6.29.1 || >=7.0.0 <7.30.1 || >=8.0.0 <8.12.2',
 };
 
+test('packed OACP conformance accepts the source SDK without bypassing peer checks', () => {
+  const sdk = json('packages/sdk-ts/package.json');
+  const conformance = json('packages/conformance/package.json');
+  assert.ok(semver.satisfies(sdk.version, conformance.peerDependencies['@grantex/sdk']),
+    `source SDK ${sdk.version} does not satisfy the OACP runner peer contract`);
+  assert.ok(!semver.satisfies('0.8.2', conformance.peerDependencies['@grantex/sdk']),
+    'the published SDK without OACP verification must not satisfy this peer contract');
+  const install = yaml('.github/workflows/ci.yml').jobs['oacp-conformance'].steps
+    .find(step => step.name === 'Install the runner beside the SDK verifier').run;
+  assert.match(install, /npm install --strict-peer-deps /);
+  assert.match(install, /npm ls --all/);
+  assert.doesNotMatch(install, /--legacy-peer-deps|--force/);
+});
+
 test('auth telemetry API satisfies every locked OpenTelemetry peer contract', () => {
   const manifest = json('apps/auth-service/package.json');
   const packages = json('apps/auth-service/package-lock.json').packages;

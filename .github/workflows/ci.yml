@@ -223,7 +223,8 @@ jobs:
         working-directory: ${{ runner.temp }}/oacp-conformance
         run: |
           npm init -y > /dev/null
-          npm install --no-audit --no-fund --legacy-peer-deps "$RUNNER_TEMP"/oacp-packs/grantex-conformance-*.tgz "$RUNNER_TEMP"/oacp-packs/grantex-sdk-*.tgz
+          npm install --strict-peer-deps --no-audit --no-fund "$RUNNER_TEMP"/oacp-packs/grantex-conformance-*.tgz "$RUNNER_TEMP"/oacp-packs/grantex-sdk-*.tgz
+          npm ls --all
       - name: Generate per-run credentials
         run: |
           for name in COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN SEED_API_KEY ADMIN_API_KEY VAULT_ENCRYPTION_KEY; do
