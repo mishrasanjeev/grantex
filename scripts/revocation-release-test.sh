@@ -104,6 +104,7 @@ REVOCATION_RELEASE_BASE_URL="http://127.0.0.1:${port}" \
   npx --prefix "$root" vitest run --root "$root" tests/e2e/revocation-propagation.test.ts
 
 log "rehearsing the emergency stop"
+REVOCATION_RELEASE_DATABASE_URL="$database_url" \
 REVOCATION_RELEASE_BASE_URL="http://127.0.0.1:${port}" EMERGENCY_STOP_REPORT="${report_dir}/emergency-stop.json"   npx --prefix "$root" vitest run --root "$root" tests/e2e/emergency-stop.test.ts
 
 if [[ "${RELEASE_SKIP_PYTHON:-0}" != "1" ]]; then

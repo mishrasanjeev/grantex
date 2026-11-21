@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Deterministic emergency-stop release race
+- The release test queues a real delegation on the existing PostgreSQL tree
+  lock, starts the real stop, and releases the barrier only after the stop is
+  running. It no longer assumes that a stop lasts longer than one polling cycle.
+- All three emergency-stop cases, survivor and overlap assertions, and the
+  two-second denial budget remain intact. Barrier cleanup and refusal paths
+  have regression controls; production behavior and feature defaults are unchanged.
+
 ### Fixed - OACP packed-client peer validation
 - The TypeScript SDK source is prepared as unpublished 0.9.0 for its OACP
   verifier APIs. Published release records remain at 0.8.2, which does not
