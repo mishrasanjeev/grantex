@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { parse } from 'yaml';
 import semver from 'semver';
+import { nodeSuiteTestCommand, readScopedExampleProof, vitestSuiteCounts } from '../../scripts/lib/node-suite-test-command.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const yaml = (path) => parse(readFileSync(`${root}${path}`, 'utf8'));
@@ -24,6 +25,38 @@ const vulnerable = {
   hono: '<4.13.16',
   undici: '>=6.5.0 <6.29.1 || >=7.0.0 <7.30.1 || >=8.0.0 <8.12.2',
 };
+
+test('the Node suite preserves Vitest reporting and native example commands', () => {
+  const report = 'synthetic-report.json';
+  assert.deepEqual(nodeSuiteTestCommand('vitest run', report), {
+    runner: 'vitest', args: ['test', '--', '--maxWorkers=2', '--reporter=json', `--outputFile=${report}`], reportFile: report,
+  });
+  assert.deepEqual(nodeSuiteTestCommand('node ../../tests/helpers/scoped-example.mjs .', report), {
+    runner: 'scoped-example', args: ['test'],
+  });
+  assert.throws(() => nodeSuiteTestCommand('echo passed', report), /Unsupported/);
+  assert.throws(() => nodeSuiteTestCommand('vitest run', ''), /report file/);
+});
+
+test('native example proof requires local verification, malformed-input refusal and both audits', () => {
+  const proof = { localOnly: true, paidModelCalls: false, malformedJsonRejected: true,
+    calls: ['GET /.well-known/jwks.json', 'POST /v1/audit/log', 'POST /v1/audit/log'], auditEntries: 2 };
+  assert.deepEqual(readScopedExampleProof(`example output\n${JSON.stringify(proof)}\n`), proof);
+  assert.throws(() => readScopedExampleProof('example output without proof'));
+  for (const patch of [{ localOnly: false }, { paidModelCalls: true },
+    { malformedJsonRejected: false }, { calls: [] }, { auditEntries: 1 }]) {
+    assert.throws(() => readScopedExampleProof(JSON.stringify({ ...proof, ...patch })), /complete local-only/);
+  }
+});
+
+test('Vitest verification cannot turn missing, zero or failed test counts into a pass', () => {
+  const report = { success: true, numPassedTests: 3, numFailedTests: 0, numPendingTests: 2 };
+  assert.deepEqual(vitestSuiteCounts(report), { passed: 3, failed: 0, pending: 2 });
+  for (const patch of [{ success: false }, { numPassedTests: undefined }, { numPassedTests: 0 },
+    { numFailedTests: 1 }, { numPendingTests: undefined }, { numPendingTests: -1 }]) {
+    assert.throws(() => vitestSuiteCounts({ ...report, ...patch }), /successful executed/);
+  }
+});
 
 test('packed OACP conformance accepts the source SDK without bypassing peer checks', () => {
   const sdk = json('packages/sdk-ts/package.json');

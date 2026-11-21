@@ -24,6 +24,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   This source update does not publish an SDK or change token verification policy.
 - The two Express 5 example services use the reviewed Body Parser 2 security
   patch, with compressed-body liveness regressions retained.
+- DPDP's built-package ESM checks use the compiler entry declared by TypeScript,
+  including TypeScript 7's package export boundaries. Privacy assertions and
+  compiler/test timeouts are unchanged.
+- The full Node suite runs native scoped examples with their declared command,
+  validates their local-only proof, and retains strict Vitest JSON verification.
+  Unsupported test commands and missing or invalid proof fail the suite.
 
 ### Fixed - Plural webhooks resolve their payment intent (#1987)
 - The Plural provider no longer reports its merchant order reference as the
