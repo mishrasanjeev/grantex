@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - PostgreSQL regression test coordination
+- The concurrent-index repair regression waits for its real row lock before
+  running the conflicting migration, and propagates setup failures.
+- The polling deduplication regression uses the existing clock input to stay
+  inside the one-second interval. Runtime behavior, feed latency limits,
+  timeout bounds and all original failure and survivor assertions are unchanged.
+
 ### Fixed - Deterministic emergency-stop release race
 - The release test queues a real delegation on the existing PostgreSQL tree
   lock, starts the real stop, and releases the barrier only after the stop is
