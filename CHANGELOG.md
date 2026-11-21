@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed - Reviewed dependency compatibility updates
+- The auth service uses digest-pinned Node 26.13.1 and postgres 4.1.1.
+  Integration tooling explicitly loads Node types with TypeScript 7; Vitest 5
+  retains the existing denial assertions, including awaiting empty-scope refusal.
+- Breaking runtime requirement for the unpublished MPP source update: the
+  JOSE 6 integration requires Node.js 22.12 or newer, matching the TypeScript SDK. Node 18 users
+  must remain on the previously published package until upgrading their runtime.
+  This source update does not publish an SDK or change token verification policy.
+- The two Express 5 example services use the reviewed Body Parser 2 security
+  patch, with compressed-body liveness regressions retained.
+
 ### Fixed - Plural webhooks resolve their payment intent (#1987)
 - The Plural provider no longer reports its merchant order reference as the
   webhook's `merchant_ref`. That reference is derived from the Grantex payment

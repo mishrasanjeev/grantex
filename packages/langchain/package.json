@@ -43,7 +43,7 @@
   "devDependencies": {
     "@grantex/sdk": "file:../sdk-ts",
     "@langchain/core": "^1.1.48",
-    "@types/node": "^20.11.0",
+    "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
   },

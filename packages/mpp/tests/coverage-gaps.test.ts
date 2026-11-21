@@ -69,12 +69,12 @@ function encodeCredential(credential: AgentPassportCredential): string {
   return Buffer.from(JSON.stringify(credential)).toString('base64url');
 }
 
-let rsaKeyPair: { publicKey: jose.KeyLike; privateKey: jose.KeyLike };
+let rsaKeyPair: Awaited<ReturnType<typeof jose.generateKeyPair>>;
 let jwks: jose.JSONWebKeySet;
 
 async function setupKeys() {
   const { publicKey, privateKey } = await jose.generateKeyPair('RS256');
-  rsaKeyPair = { publicKey, privateKey } as unknown as { publicKey: jose.KeyLike; privateKey: jose.KeyLike };
+  rsaKeyPair = { publicKey, privateKey };
   const jwk = await jose.exportJWK(publicKey);
   jwk.kid = 'key-1';
   jwk.alg = 'RS256';
@@ -90,7 +90,7 @@ async function signCredential(credential: AgentPassportCredential): Promise<Agen
     .setJti(credential.id)
     .setIssuedAt()
     .setExpirationTime('24h')
-    .sign(rsaKeyPair.privateKey as unknown as jose.KeyLike);
+    .sign(rsaKeyPair.privateKey);
 
   return { ...credential, proof: { ...credential.proof, proofValue: jwt } };
 }
