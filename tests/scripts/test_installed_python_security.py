@@ -60,13 +60,22 @@ def test_both_python_versions_require_an_actual_installed_audit(job_name):
     job = workflow["jobs"][job_name]
     assert job["strategy"]["matrix"]["python-version"] == ["3.10", "3.12"]
     assert not job.get("continue-on-error") and job["strategy"]["fail-fast"] is False
-    steps = [step for step in job["steps"] if step.get("run") == "python scripts/audit-python-dependencies.py --installed"]
+    steps = [step for step in job["steps"] if step.get("run") == 'python scripts/audit-python-dependencies.py --installed --auditor-python "$GRANTEX_INSTALLED_AUDITOR_PYTHON"']
     assert len(steps) == 1
     assert not steps[0].get("if") and not steps[0].get("continue-on-error")
     assert steps[0].get("working-directory", ".") == "."
-    bootstrap = next(step["run"] for step in job["steps"] if step.get("name") == "Install patched Python audit and bootstrap tools")
+    bootstrap = next(step["run"] for step in job["steps"] if step.get("name") == "Install patched Python bootstrap tools")
     assert "pip>=26.2" in bootstrap and "setuptools>=84.1.0" in bootstrap
-    assert "pip-audit==2.10.1" in bootstrap
+    assert "pip-audit" not in bootstrap
+    isolated = next(step for step in job["steps"] if step.get("name") == "Install isolated patched Python audit tools")
+    assert "pip-audit==2.10.1" in isolated["run"] and "filelock>=4.2.1" in isolated["run"]
+    assert "python -m venv" in isolated["run"] and not isolated.get("if") and not isolated.get("continue-on-error")
+    runtime = next(step for step in job["steps"] if step.get("name") == "Set up isolated Python audit runtime")
+    assert runtime["with"]["python-version"] == "3.12"
+    tool_audit = next(step for step in job["steps"] if step.get("name") == "Audit isolated Python security toolchain")
+    assert tool_audit["run"] == '"$GRANTEX_INSTALLED_AUDITOR_PYTHON" scripts/audit-python-dependencies.py --installed'
+    assert not tool_audit.get("if") and not tool_audit.get("continue-on-error")
+    assert job["steps"].index(tool_audit) < job["steps"].index(steps[0])
 
 
 class Distribution:
@@ -135,7 +144,18 @@ def test_installed_license_policy_preserves_existing_permitted_metadata(metadata
 
 def configure_graph(monkeypatch, tmp_path, distributions=None):
     monkeypatch.setattr(audit, "owned_projects", lambda: {"grantex": (tmp_path, "0.7.2")})
-    monkeypatch.setattr(audit.importlib.metadata, "distributions", lambda: distributions or [editable(tmp_path), Distribution()])
+    monkeypatch.setattr(audit.importlib.metadata, "distributions", lambda: distributions if distributions is not None else [editable(tmp_path), Distribution()])
+
+
+def native_inventory(command, tmp_path):
+    if "--editable" in command:
+        return json.dumps([{"name": "grantex", "version": "0.7.2", "editable_project_location": str(tmp_path)}])
+    assert command[2:] == ["pip", "list", "--format=json", "--disable-pip-version-check"]
+    return json.dumps([{"name": "grantex", "version": "0.7.2"}, {"name": "dependency", "version": "1.0"}])
+
+
+def auditor_report(**changes):
+    return json.dumps({"dependencies": [{"name": "dependency", "version": "1.0", "vulns": [], **changes}], "fixes": []})
 
 
 @pytest.mark.parametrize("exit_code", [0, 1, 2])
@@ -148,16 +168,19 @@ def test_actual_installed_osv_audit_propagates_vulnerabilities_and_transport_err
         assert kwargs["check"] is False
         if command[2] == "pip":
             assert kwargs["timeout"] == 60
-            return subprocess.CompletedProcess(command, 0, json.dumps([{
-                "name": "grantex", "version": "0.7.2", "editable_project_location": str(tmp_path)}]), "")
+            return subprocess.CompletedProcess(command, 0, native_inventory(command, tmp_path), "")
         assert kwargs["timeout"] == 600
-        return subprocess.CompletedProcess(command, exit_code, "audit-output", "audit-diagnostics")
+        assert Path(command[4]).read_text() == "dependency==1.0\n"
+        return subprocess.CompletedProcess(command, exit_code, auditor_report(), "audit-diagnostics")
 
     monkeypatch.setattr(audit.subprocess, "run", run)
     assert audit.installed_audit() == (0 if exit_code == 0 else 1)
-    assert len(calls) == 2
+    assert len(calls) == 3
     assert calls[0][2:] == ["pip", "list", "--editable", "--format=json", "--disable-pip-version-check"]
-    assert calls[1][2:] == ["pip_audit", "--skip-editable", "--strict", "--vulnerability-service", "osv", "--progress-spinner", "off"]
+    assert calls[1][2:] == ["pip", "list", "--format=json", "--disable-pip-version-check"]
+    assert calls[2][2:4] == ["pip_audit", "-r"]
+    assert calls[2][5:] == ["--no-deps", "--disable-pip", "--strict", "--vulnerability-service", "osv", "--format=json", "--progress-spinner", "off"]
+    assert "--skip-editable" not in calls[2] and "--dry-run" not in calls[2]
 
 
 def test_foreign_editable_cannot_reach_a_skip_editable_audit(monkeypatch, tmp_path):
@@ -176,7 +199,7 @@ def test_installed_license_failure_is_not_hidden_by_a_zero_vulnerability_result(
     configure_graph(monkeypatch, tmp_path, [editable(tmp_path), Distribution(license="AGPL-3.0-only")])
 
     def run(command, **_kwargs):
-        output = json.dumps([{"name": "grantex", "version": "0.7.2", "editable_project_location": str(tmp_path)}]) if command[2] == "pip" else ""
+        output = native_inventory(command, tmp_path) if command[2] == "pip" else auditor_report()
         return subprocess.CompletedProcess(command, 0, output, "")
 
     monkeypatch.setattr(audit.subprocess, "run", run)
@@ -201,11 +224,120 @@ def test_native_editable_inventory_cannot_hide_excluded_packages(monkeypatch, tm
 
 
 @pytest.mark.parametrize("error", [OSError("audit tool unavailable"), subprocess.TimeoutExpired("pip_audit", 600)])
-def test_missing_auditor_and_timeout_fail_closed(monkeypatch, tmp_path, error):
+@pytest.mark.parametrize("stage", ["editable", "inventory", "auditor"])
+def test_missing_auditor_and_timeout_fail_closed(monkeypatch, tmp_path, error, stage):
     configure_graph(monkeypatch, tmp_path)
 
-    def fail(*_args, **_kwargs):
-        raise error
+    def fail(command, **_kwargs):
+        actual_stage = "auditor" if command[2] == "pip_audit" else "editable" if "--editable" in command else "inventory"
+        if stage == actual_stage:
+            raise error
+        assert command[2] == "pip"
+        return subprocess.CompletedProcess(command, 0, native_inventory(command, tmp_path), "")
 
     monkeypatch.setattr(audit.subprocess, "run", fail)
     assert audit.installed_audit() == 1
+
+
+@pytest.mark.parametrize("inventory", [
+    [],
+    {"not": "a-list"},
+    [None],
+    [{"name": "dependency", "version": "1.0"}],
+    [{"name": "foreign", "version": "1.0"}],
+    [{"name": "dependency", "version": "1.0"}, {"name": "dependency", "version": "1.0"}],
+    [{"name": "grantex", "version": "0.7.2"}, {"name": "dependency", "version": "1.1"}],
+    [{"name": "grantex", "version": "0.7.2"}, {"name": "dependency", "version": "not-a-version"}],
+])
+def test_complete_native_inventory_cannot_omit_replace_or_duplicate_an_installed_package(monkeypatch, tmp_path, inventory):
+    configure_graph(monkeypatch, tmp_path)
+
+    def run(command, **_kwargs):
+        assert command[2] == "pip", "An incomplete installed graph must not reach the auditor"
+        output = native_inventory(command, tmp_path) if "--editable" in command else json.dumps(inventory)
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    monkeypatch.setattr(audit.subprocess, "run", run)
+    assert audit.installed_audit() == 1
+
+
+@pytest.mark.parametrize("version", ["", "1.*", "not-a-version", "1.0\n--extra-index-url https://example.invalid"])
+def test_invalid_installed_versions_fail_before_any_scanner_input_is_written(monkeypatch, tmp_path, version):
+    configure_graph(monkeypatch, tmp_path, [editable(tmp_path), Distribution(version=version)])
+    monkeypatch.setattr(audit.subprocess, "run", lambda *_args, **_kwargs: pytest.fail("Invalid installed pin reached a subprocess"))
+    assert audit.installed_audit() == 1
+
+
+@pytest.mark.parametrize("report", [
+    "not-json", "null", "[]", "{}", '{"dependencies": {}}', '{"dependencies": []}',
+    auditor_report(name="foreign"), auditor_report(version="1.1"), auditor_report(skip_reason="not-audited"),
+    auditor_report(vulns=[{"id": "TEST-VULNERABILITY"}]), auditor_report(vulns=""),
+    json.dumps({"dependencies": [None]}),
+    json.dumps({"dependencies": [{"name": "dependency", "version": "1.0"}]}),
+    json.dumps({"dependencies": [{"name": "dependency", "version": "1.0", "vulns": []}] * 2}),
+])
+def test_zero_exit_does_not_hide_missing_skipped_duplicate_or_vulnerable_audit_entries(monkeypatch, tmp_path, report):
+    configure_graph(monkeypatch, tmp_path)
+
+    def run(command, **_kwargs):
+        output = native_inventory(command, tmp_path) if command[2] == "pip" else report
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    monkeypatch.setattr(audit.subprocess, "run", run)
+    assert audit.installed_audit() == 1
+
+
+def test_every_installed_runtime_development_and_bootstrap_package_is_in_the_frozen_scan(monkeypatch, tmp_path):
+    distributions = [editable(tmp_path), Distribution(name="runtime", version="2.0"),
+                     Distribution(name="pytest", version="9.2.0"), Distribution(name="pip", version="26.3"),
+                     Distribution(name="setuptools", version="84.2.1")]
+    configure_graph(monkeypatch, tmp_path, distributions)
+    expected = {item.metadata["Name"]: item.version for item in distributions if item.metadata["Name"] != "grantex"}
+
+    def run(command, **_kwargs):
+        if command[2] == "pip":
+            output = native_inventory(command, tmp_path) if "--editable" in command else json.dumps([
+                {"name": item.metadata["Name"], "version": item.version} for item in distributions])
+        else:
+            assert Path(command[4]).read_text().splitlines() == [f"{name}=={expected[name]}" for name in sorted(expected)]
+            output = json.dumps({"dependencies": [{"name": name, "version": version, "vulns": []} for name, version in expected.items()]})
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    monkeypatch.setattr(audit.subprocess, "run", run)
+    assert audit.installed_audit() == 0
+
+
+def test_an_environment_without_owned_editables_still_audits_its_entire_inventory(monkeypatch, tmp_path):
+    configure_graph(monkeypatch, tmp_path, [Distribution()])
+
+    def run(command, **_kwargs):
+        if command[2] == "pip":
+            output = "[]" if "--editable" in command else json.dumps([{"name": "dependency", "version": "1.0"}])
+        else:
+            assert Path(command[4]).read_text() == "dependency==1.0\n"
+            output = auditor_report()
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    monkeypatch.setattr(audit.subprocess, "run", run)
+    assert audit.installed_audit() == 0
+
+
+def test_isolated_auditor_only_changes_the_query_interpreter_not_the_target_inventory(monkeypatch, tmp_path):
+    configure_graph(monkeypatch, tmp_path)
+    auditor = tmp_path / "auditor" / "bin" / "python"
+    calls = []
+
+    def run(command, **_kwargs):
+        calls.append(command)
+        if command[2] == "pip":
+            assert command[0] == audit.sys.executable
+            output = native_inventory(command, tmp_path)
+        else:
+            assert command[0] == str(auditor)
+            assert Path(command[4]).read_text() == "dependency==1.0\n"
+            output = auditor_report()
+        return subprocess.CompletedProcess(command, 0, output, "")
+
+    monkeypatch.setattr(audit.subprocess, "run", run)
+    assert audit.installed_audit(auditor) == 0
+    assert len(calls) == 3

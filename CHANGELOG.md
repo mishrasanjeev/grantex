@@ -13,6 +13,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Runtime dependency floors exclude vulnerable AnyIO and Starlette releases.
   Both Python 3.10 and 3.12 CI environments audit their actual installed runtime,
   development and bootstrap dependencies, including licenses and OSV failures.
+- Installed audits independently reconcile every package and version, scan the
+  complete frozen third-party inventory in strict mode, and verify that the
+  auditor reports every entry. Verified local editable projects retain license
+  checks without being mistaken for failed public dependency lookups.
+- Security tooling runs in an independently audited Python 3.12 environment,
+  so its patched Filelock dependency does not remove Python 3.10 SDK support.
+  Runtime, development and bootstrap packages in each target environment still
+  receive complete installed license and strict vulnerability audits.
 - This source change does not republish SDKs or alter existing customer
   credentials or feature flags. Published artifact requirements remain unchanged.
 
