@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 import httpx
+import pytest
 import respx
 
 from grantex import (
@@ -173,3 +174,39 @@ def test_debit_budget_minimal() -> None:
     body = json.loads(request.content)
     assert "description" not in body
     assert "metadata" not in body
+
+
+# ── Retry safety: a debit must never be applied twice ────────────────────────
+
+
+@respx.mock
+def test_debit_retried_after_lost_reply_reaches_server_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The server commits the debit but the reply is lost (timeout). The SDK
+    retries the POST. Without an idempotency key the server cannot tell the
+    retry from a new debit, so the money moves twice."""
+    monkeypatch.setattr("grantex._http.time.sleep", lambda _s: None)
+
+    committed: list[str | None] = []  # Idempotency-Key of each committed debit
+
+    def server(request: httpx.Request) -> httpx.Response:
+        committed.append(request.headers.get("idempotency-key"))
+        if len(committed) == 1:
+            raise httpx.ReadTimeout("reply lost", request=request)
+        return httpx.Response(200, json={
+            "remaining": "50.00", "transactionId": "tx_01", "grantId": "grant_01",
+        })
+
+    respx.post(f"{BASE_URL}/v1/budget/debit").mock(side_effect=server)
+
+    client = Grantex(api_key="test_key", base_url=BASE_URL)
+    client.budgets.debit(DebitBudgetParams(grant_id="grant_01", amount=50))
+
+    assert len(committed) == 2, "expected the SDK to retry once"
+    keys = set(committed)
+    # Safe only if both attempts carry the same key, so the server can dedupe.
+    assert len(keys) == 1 and None not in keys, (
+        f"{len(committed)} debits reached the server with keys {committed}; "
+        "the server cannot tell the retry from a second debit"
+    )
