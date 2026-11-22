@@ -24,7 +24,7 @@ and word number) rather than by quoting the matched words.
 Fails closed (exit 2) when git fails, a ref does not resolve, the hash file is
 missing or malformed, a tracked file that is present cannot be read, a path
 given to ``audit`` matches no tracked file, or an extra text file is unreadable
-or not UTF-8. Exit 1 means a term was found; 0 means none. Runs on Python 3.9
+or not UTF-8. Exit 1 means a term was found; 0 means none. Runs on Python 3.10
 or later with git; nothing else.
 
     python scripts/check_denylist.py scan --base origin/main --head HEAD
@@ -105,7 +105,7 @@ def looks_encoded(run: str) -> bool:
     if not (any(c.isupper() for c in run) and any(c.islower() for c in run) and any(c.isdigit() for c in run)):
         return False
     body = run.rstrip("=")
-    # Indexed rather than zip(..., strict=False): the check runs on Python 3.9.
+    # Keep the existing index pairing and token-hash behavior.
     changes = sum(1 for i in range(1, len(body)) if _char_class(body[i - 1]) != _char_class(body[i]))
     return changes / max(len(body) - 1, 1) >= _ENCODED_MIN_TRANSITIONS
 

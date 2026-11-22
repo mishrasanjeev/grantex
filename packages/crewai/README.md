@@ -150,7 +150,7 @@ Returns the scopes embedded in a grant token. Purely offline — no network call
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.10+
 - [grantex](https://pypi.org/project/grantex/) >= 0.3.12
 - [crewai](https://pypi.org/project/crewai/) >= 0.28.0 (peer dependency)
 

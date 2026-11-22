@@ -14,7 +14,7 @@ Demo of CrewAI tools with Grantex scope enforcement and automatic audit logging.
 
 ## Prerequisites
 
-- Python 3.9+
+- Python 3.10+
 - Docker (for the local Grantex stack)
 
 ## Run

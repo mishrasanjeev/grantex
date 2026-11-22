@@ -15,7 +15,7 @@ The normative description is
 [`spec/verification.md`](../../spec/verification.md), section 7
 ("Relying-party verification"); the guide for relying parties is
 [`docs/relying-parties/verifying-agents.md`](../../docs/relying-parties/verifying-agents.md).
-Python 3.9 or later.
+Python 3.10 or later.
 
 ## Verify a request
 

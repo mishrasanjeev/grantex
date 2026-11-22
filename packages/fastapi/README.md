@@ -134,7 +134,7 @@ The `VerifiedGrant` dataclass contains:
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.10+
 - FastAPI >= 0.115.0
 - `grantex` >= 0.3.6
 

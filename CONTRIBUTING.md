@@ -85,7 +85,7 @@ AUDIT_INTEGRATION_DATABASE_URL=postgres://grantex_test:grantex_test@127.0.0.1:54
 Other packages use their own commands:
 
 ```bash
-# Prerequisites: Node.js 24 LTS, Python 3.9+, Docker (for local stack)
+# Prerequisites: Node.js 24 LTS, Python 3.10+, Docker (for local stack)
 
 git clone https://github.com/mishrasanjeev/grantex
 cd grantex
@@ -210,7 +210,7 @@ is kept outside the repository by the maintainers, which keeps the names out
 of the tree and its diffs. The hashes are not a secret: with the committed
 salt anyone can test a guessed name. A failure gives the location and word
 number, not the matched line (a matching file path is itself the location, so
-that path is printed). The check needs Python 3.9 or later and git, nothing
+that path is printed). The check needs Python 3.10 or later and git, nothing
 else, and fails closed: a git error, an unresolvable commit, a missing or
 malformed hash file, a tracked file that is present but cannot be read, or any
 audit path that matches no tracked file (even next to paths that do) is an

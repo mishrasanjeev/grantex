@@ -20,12 +20,15 @@ release. Keep the exact version above in reproducible builds. See
 
 ### Requirements
 
+The current unreleased source requires Python 3.10+ and security-fixed
+dependencies. Published `0.7.2` artifacts are not republished by this change.
+
 Version `0.7.1` adds opt-in `current_authority`, `expected_principal_id` and
 `expected_agent_did` verification options. Use host-authenticated identity and
 an uncached trusted-issuer callback; local signature checks alone do not prove
 current revocation. See [SDK execution authority](/guides/sdk-execution-authority).
 
-- Python 3.9 or higher
+- Python 3.10+ for current source; Python 3.9+ for the published `0.7.2` artifacts
 - [httpx](https://www.python-httpx.org/) (sync HTTP client)
 - [PyJWT](https://pyjwt.readthedocs.io/) >= 2.13 with [cryptography](https://cryptography.io/) >= 48.0.1 (for offline token verification)
 
@@ -47,8 +50,9 @@ enable hosted server flags or add custom assertion UI helper methods.
 Version `0.7.0` introduces breaking enforcement defaults: audience binding,
 denial of capped calls without trusted amounts, and online revocation checks.
 Register allowed resource servers before audience-bound authorization.
-Signature-only verification is not current-state enforcement. Python 3.9+
-remains supported. Follow [the migration guide](/migration-enforcement).
+Signature-only verification is not current-state enforcement. That release
+supported Python 3.9+; current source requires Python 3.10+.
+Follow [the migration guide](/migration-enforcement).
 </Warning>
 
 <Note>

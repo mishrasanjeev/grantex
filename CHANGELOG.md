@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Changed - Python security-supported runtime
+- The current Python SDK and integration source requires Python 3.10 or newer;
+  Strands retains its existing Python 3.11 minimum. Python 3.9 cannot resolve
+  the upstream security fixes used by this candidate.
+- Runtime dependency floors exclude vulnerable AnyIO and Starlette releases.
+  Both Python 3.10 and 3.12 CI environments audit their actual installed runtime,
+  development and bootstrap dependencies, including licenses and OSV failures.
+- This source change does not republish SDKs or alter existing customer
+  credentials or feature flags. Published artifact requirements remain unchanged.
+
 ### Fixed - PostgreSQL regression test coordination
 - The concurrent-index repair regression waits for its real row lock before
   running the conflicting migration, and propagates setup failures.

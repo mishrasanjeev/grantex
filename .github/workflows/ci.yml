@@ -303,11 +303,11 @@ jobs:
 
   sdk-py:
     name: Python SDK — ${{ matrix.python-version }}
-    runs-on: ubuntu-24.04  # ubuntu-latest (26.04) has no Python 3.9 build
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.12']
+        python-version: ['3.10', '3.12']
     defaults:
       run:
         working-directory: packages/sdk-py
@@ -316,6 +316,8 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install patched Python audit and bootstrap tools
+        run: python -m pip install --upgrade 'pip>=26.2' 'setuptools>=84.1.0' pip-audit==2.10.1 'tomli>=2.3; python_version < "3.11"'
       - name: Install SDK and FastAPI for request-injection regressions
         run: pip install -e ".[dev]" -e "../fastapi[dev]"
       - name: Typecheck
@@ -325,9 +327,12 @@ jobs:
       # `make test` runs these on 3.12 (job "make"); this keeps the vendor
       # denylist check working on the oldest Python CONTRIBUTING.md supports.
       - name: Test repository scripts
-        if: matrix.python-version == '3.9'
+        if: matrix.python-version == '3.10'
         working-directory: .
         run: python -m pytest -q tests/scripts
+      - name: Audit actual installed Python SDK environment
+        working-directory: .
+        run: python scripts/audit-python-dependencies.py --installed
 
   # ─── Node packages that depend on @grantex/sdk ───────────────────────────
   #
@@ -557,16 +562,18 @@ jobs:
 
   python-integrations:
     name: Python Integrations — ${{ matrix.python-version }}
-    runs-on: ubuntu-24.04  # ubuntu-latest (26.04) has no Python 3.9 build
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.12']
+        python-version: ['3.10', '3.12']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install patched Python audit and bootstrap tools
+        run: python -m pip install --upgrade 'pip>=26.2' 'setuptools>=84.1.0' pip-audit==2.10.1 'tomli>=2.3; python_version < "3.11"'
       - name: Install Python SDK
         working-directory: packages/sdk-py
         run: pip install -e ".[dev]"
@@ -598,9 +605,11 @@ jobs:
         working-directory: packages/agent-httpsig-py
         run: pip install -e ".[dev]" && mypy --strict src && pytest
       - name: Test Strands Python
-        if: matrix.python-version != '3.9'
+        if: matrix.python-version != '3.10'
         working-directory: packages/strands-py
         run: pip install -e ".[dev]" && mypy --strict src && pytest
+      - name: Audit actual installed Python integration environment
+        run: python scripts/audit-python-dependencies.py --installed
 
   portal:
     name: Developer Portal

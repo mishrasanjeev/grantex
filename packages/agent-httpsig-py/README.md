@@ -30,7 +30,7 @@ The header specification and the signing profile are in
 The TypeScript package `@grantex/agent-httpsig` (`packages/agent-httpsig`)
 behaves identically; both run the shared vectors in
 [`spec/examples/agent-httpsig-vectors.json`](../../spec/examples/agent-httpsig-vectors.json).
-Requires Python 3.9 or later and `cryptography`.
+Requires Python 3.10 or later and `cryptography`.
 
 ## Example
 
