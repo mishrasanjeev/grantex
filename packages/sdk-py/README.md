@@ -4,10 +4,13 @@ Version 0.7.2 adds typed DPDP client responses and the optional enterprise
 SSO `session_token` field. Check [Release Status](https://docs.grantex.dev/release-status)
 for the version currently available on PyPI; a source version is not a registry release.
 
+Current source requires Python 3.10+ and security-fixed dependencies. This change
+does not republish existing SDK artifacts or change their published metadata.
+
 **Version 0.7.0:** `enforce()` checks the grant audience,
 requires an amount for capped scopes, and checks current revocation online by
 default. Per-call revocation settings cannot weaken the client setting.
-Python 3.9+ remains supported. These are breaking changes: follow the
+That release supported Python 3.9+. These are breaking changes: follow the
 [enforcement migration guide](https://docs.grantex.dev/migration-enforcement).
 `verify_grant_token()` alone does not check current revocation. Verify
 publication in Release Status before installing.
@@ -427,7 +430,7 @@ except GrantexNetworkError:
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.10+ for the current source
 - [httpx](https://www.python-httpx.org/) (sync HTTP client)
 - [PyJWT](https://pyjwt.readthedocs.io/) + [cryptography](https://cryptography.io/) (for local token signature verification)
 

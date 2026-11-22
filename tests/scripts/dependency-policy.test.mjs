@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { parse } from 'yaml';
 import semver from 'semver';
+import { nodeSuiteTestCommand, readScopedExampleProof, vitestSuiteCounts } from '../../scripts/lib/node-suite-test-command.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const yaml = (path) => parse(readFileSync(`${root}${path}`, 'utf8'));
@@ -24,6 +25,52 @@ const vulnerable = {
   hono: '<4.13.16',
   undici: '>=6.5.0 <6.29.1 || >=7.0.0 <7.30.1 || >=8.0.0 <8.12.2',
 };
+
+test('the Node suite preserves Vitest reporting and native example commands', () => {
+  const report = 'synthetic-report.json';
+  assert.deepEqual(nodeSuiteTestCommand('vitest run', report), {
+    runner: 'vitest', args: ['test', '--', '--maxWorkers=2', '--reporter=json', `--outputFile=${report}`], reportFile: report,
+  });
+  assert.deepEqual(nodeSuiteTestCommand('node ../../tests/helpers/scoped-example.mjs .', report), {
+    runner: 'scoped-example', args: ['test'],
+  });
+  assert.throws(() => nodeSuiteTestCommand('echo passed', report), /Unsupported/);
+  assert.throws(() => nodeSuiteTestCommand('vitest run', ''), /report file/);
+});
+
+test('native example proof requires local verification, malformed-input refusal and both audits', () => {
+  const proof = { localOnly: true, paidModelCalls: false, malformedJsonRejected: true,
+    calls: ['GET /.well-known/jwks.json', 'POST /v1/audit/log', 'POST /v1/audit/log'], auditEntries: 2 };
+  assert.deepEqual(readScopedExampleProof(`example output\n${JSON.stringify(proof)}\n`), proof);
+  assert.throws(() => readScopedExampleProof('example output without proof'));
+  for (const patch of [{ localOnly: false }, { paidModelCalls: true },
+    { malformedJsonRejected: false }, { calls: [] }, { auditEntries: 1 }]) {
+    assert.throws(() => readScopedExampleProof(JSON.stringify({ ...proof, ...patch })), /complete local-only/);
+  }
+});
+
+test('Vitest verification cannot turn missing, zero or failed test counts into a pass', () => {
+  const report = { success: true, numPassedTests: 3, numFailedTests: 0, numPendingTests: 2 };
+  assert.deepEqual(vitestSuiteCounts(report), { passed: 3, failed: 0, pending: 2 });
+  for (const patch of [{ success: false }, { numPassedTests: undefined }, { numPassedTests: 0 },
+    { numFailedTests: 1 }, { numPendingTests: undefined }, { numPendingTests: -1 }]) {
+    assert.throws(() => vitestSuiteCounts({ ...report, ...patch }), /successful executed/);
+  }
+});
+
+test('packed OACP conformance accepts the source SDK without bypassing peer checks', () => {
+  const sdk = json('packages/sdk-ts/package.json');
+  const conformance = json('packages/conformance/package.json');
+  assert.ok(semver.satisfies(sdk.version, conformance.peerDependencies['@grantex/sdk']),
+    `source SDK ${sdk.version} does not satisfy the OACP runner peer contract`);
+  assert.ok(!semver.satisfies('0.8.2', conformance.peerDependencies['@grantex/sdk']),
+    'the published SDK without OACP verification must not satisfy this peer contract');
+  const install = yaml('.github/workflows/ci.yml').jobs['oacp-conformance'].steps
+    .find(step => step.name === 'Install the runner beside the SDK verifier').run;
+  assert.match(install, /npm install --strict-peer-deps /);
+  assert.match(install, /npm ls --all/);
+  assert.doesNotMatch(install, /--legacy-peer-deps|--force/);
+});
 
 test('auth telemetry API satisfies every locked OpenTelemetry peer contract', () => {
   const manifest = json('apps/auth-service/package.json');
@@ -77,11 +124,38 @@ test('reviewed Zod trees retain the patched compatibility pin', () => {
 
 test('body parser fixes remain within their reviewed major versions', () => {
   for (const [directory, version] of [
-    ['apps/mpp-demo-service', '1.20.9'], ['examples/x402-weather-api', '1.20.9'],
+    ['apps/mpp-demo-service', '2.4.0'], ['examples/x402-weather-api', '2.4.0'],
     ['packages/mcp', '2.4.0'], ['packages/mpp', '2.4.0'],
     ['packages/express', '2.4.0'], ['packages/mcp-auth', '2.4.0'], ['packages/x402', '2.4.0'],
   ]) {
     assert.equal(json(`${directory}/package.json`).overrides?.['body-parser'], version);
+  }
+});
+
+test('Node-only integration compilers explicitly load Node runtime types', () => {
+  for (const directory of [
+    'apps/mpp-demo-service', 'packages/a2a', 'packages/anthropic', 'packages/autogen',
+    'packages/dpdp', 'packages/express', 'packages/langchain', 'packages/mpp',
+    'packages/strands', 'packages/vercel-ai',
+  ]) {
+    const config = json(`${directory}/tsconfig.json`);
+    assert.ok(config.compilerOptions.types.includes('node'), directory);
+    assert.equal(config.compilerOptions.strict, true, directory);
+  }
+});
+
+test('the MPP JOSE 6 source update declares the reviewed SDK runtime floor', () => {
+  assert.equal(json('packages/mpp/package.json').engines.node, '>=22.12.0');
+  assert.equal(json('packages/sdk-ts/package.json').engines.node, '>=22.12.0');
+  assert.ok(semver.subset(json('packages/mpp/package.json').dependencies.jose, '^6.2.17'));
+});
+
+test('Vitest 5 Node type declarations satisfy its peer floor', () => {
+  for (const path of tracked.filter((file) => file.endsWith('package.json'))) {
+    const dependencies = json(path).devDependencies ?? {};
+    if (!dependencies.vitest || !dependencies['@types/node']
+      || !semver.subset(dependencies.vitest, '^5.0.0')) continue;
+    assert.ok(semver.subset(dependencies['@types/node'], '^22.0.0 || >=24.0.0'), path);
   }
 });
 

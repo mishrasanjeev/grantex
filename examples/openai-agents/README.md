@@ -13,7 +13,7 @@ Demo of OpenAI Agents SDK tools with Grantex scope enforcement.
 
 ## Prerequisites
 
-- Python 3.9+
+- Python 3.10+
 - Docker (for the local Grantex stack)
 
 ## Run

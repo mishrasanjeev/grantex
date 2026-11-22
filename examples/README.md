@@ -5,7 +5,7 @@ Runnable examples showing how to use the Grantex SDK and framework integrations.
 ## Prerequisites
 
 - **Node.js 18+** (TypeScript examples)
-- **Python 3.9+** (Python examples)
+- **Python 3.10+** (Python examples)
 - **Docker** (for the local Grantex stack)
 
 ## Start the local stack

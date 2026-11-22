@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -36,7 +36,9 @@ function runInNode(script: string): { status: number | null; stdout: string; std
 describe('built package (dist) in plain Node ESM', () => {
   beforeAll(() => {
     // Build with the package's own TypeScript; throws (and fails the suite) if the build fails.
-    const tsc = createRequire(import.meta.url).resolve('typescript/bin/tsc');
+    const manifestFile = createRequire(import.meta.url).resolve('typescript/package.json');
+    const { bin } = JSON.parse(readFileSync(manifestFile, 'utf8')) as { bin: { tsc: string } };
+    const tsc = resolve(dirname(manifestFile), bin.tsc);
     execFileSync(process.execPath, [tsc, '-p', 'tsconfig.build.json'], { cwd: pkgDir, stdio: 'pipe' });
   }, 120_000);
 

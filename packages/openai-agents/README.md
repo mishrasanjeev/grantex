@@ -70,7 +70,7 @@ Decodes the payload of a JWT without verifying the signature. Useful for inspect
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.10+
 - `grantex >= 0.3.12`
 - `openai-agents >= 0.0.3` (peer dependency)
 

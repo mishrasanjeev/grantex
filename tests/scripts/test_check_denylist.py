@@ -3,7 +3,7 @@
 
 Uses its own salt and invented terms. Two tests read the committed hash list:
 one checks its shape, and one audits the tracked files that were reworded when
-the check was added. Runs on Python 3.9 or later. Run from the repository root
+the check was added. Runs on Python 3.10 or later. Run from the repository root
 (also part of ``make test``):
 
     python -m pytest -q tests/scripts
@@ -718,19 +718,23 @@ def test_ci_scans_changes_and_audits_the_whole_tree() -> None:
         assert job.get("if") in (None, "github.event.action != 'edited'")
 
 
-def test_ci_runs_these_tests_on_python_3_9() -> None:
+def test_ci_runs_these_tests_on_oldest_supported_python() -> None:
     import yaml  # installed with the Python SDK's dev extras, which `make install` sets up
 
-    # `make test` runs them on 3.12; a 3.9 job keeps the check working on the
+    # `make test` runs them on 3.12; a 3.10 job keeps the check working on the
     # oldest Python that CONTRIBUTING.md supports.
     ci = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text("utf-8"))
     jobs = [
         job
         for job in ci["jobs"].values()
-        if "3.9" in job.get("strategy", {}).get("matrix", {}).get("python-version", [])
-        and any(step.get("run", "").strip() == "python -m pytest -q tests/scripts" for step in job["steps"])
+        if "3.10" in job.get("strategy", {}).get("matrix", {}).get("python-version", [])
+        and any(
+            step.get("run", "").strip() == "python -m pytest -q tests/scripts"
+            and step.get("if") in (None, "matrix.python-version == '3.10'")
+            for step in job["steps"]
+        )
     ]
-    assert jobs, "no Python 3.9 CI job runs tests/scripts"
+    assert jobs, "no Python 3.10 CI job runs tests/scripts"
 
 
 def test_committed_denylist_is_well_formed_and_holds_no_plaintext() -> None:

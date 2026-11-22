@@ -38,9 +38,9 @@
   "devDependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
     "@grantex/sdk": "file:../sdk-ts",
-    "@types/node": "^20.11.0",
-    "typescript": "^5.3.3",
-    "vitest": "^4.1.12"
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
   },
   "overrides": {
     "esbuild": ">=0.25.0"

@@ -4,6 +4,10 @@ Agent identity and delegation for the [Machine Payments Protocol (MPP)](https://
 
 ## Install
 
+The source version requires Node.js 22.12 or newer for its JOSE 6 runtime,
+matching the TypeScript SDK. This dependency upgrade is not a package publication;
+see the repository's `release-status.json` for published versions.
+
 ```bash
 npm install @grantex/mpp @grantex/sdk
 ```
