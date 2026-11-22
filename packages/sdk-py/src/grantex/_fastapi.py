@@ -31,7 +31,8 @@ your own case state::
 ``enforce()`` consumes the grants at the auth service before the route runs;
 a consumed grant stays spent if the route then fails.
 """
-from __future__ import annotations
+# FastAPI versions supporting Python 3.9 need concrete callable annotations to
+# recognize Request injection instead of treating it as an optional query value.
 
 import asyncio
 import inspect
