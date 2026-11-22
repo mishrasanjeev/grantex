@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: LicenseRef-Orchestrum-Personal-Use-1.0
 """Audit the installed graph on every supported Python matrix interpreter."""
 import importlib.util
 import json
