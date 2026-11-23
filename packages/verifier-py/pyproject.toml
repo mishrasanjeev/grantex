@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Relying-party verifier for agent requests: Agent Passport, grant, request signature and registry status, with WSGI/ASGI middleware"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [{ name = "Sanjeev Kumar", email = "sanjeev@orchestrum.in" }]
 maintainers = [{ name = "Orchestrum Technologies LLP", email = "sanjeev@orchestrum.in" }, { name = "Sanjeev Kumar", email = "mishra.sanjeev@gmail.com" }]
 keywords = [
@@ -24,7 +24,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -49,8 +48,7 @@ Issues = "https://github.com/mishrasanjeev/grantex/issues"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3,<9; python_version < '3.10'",
-    "pytest>=9.0.3; python_version >= '3.10'",
+    "pytest>=9.0.3",
     "mypy>=1.9",
     "ruff>=0.4",
 ]
@@ -67,7 +65,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 # Preserve the release gate used before Ruff 0.16 expanded its implicit defaults.

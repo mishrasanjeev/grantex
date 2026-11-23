@@ -161,7 +161,7 @@ Audit Trail (immutable, hash-chained)
 |------|---------|---------|
 | Node.js | 18+ | Auth service, TS SDK, CLI, portal, gateway, MCP |
 | npm | 9+ | Package management |
-| Python | 3.9+ | Python SDK, FastAPI middleware, CrewAI/OpenAI/ADK integrations |
+| Python | 3.10+ | Current Python SDK, FastAPI middleware, CrewAI/OpenAI/ADK integrations |
 | Go | 1.21+ | Go SDK, Terraform provider |
 | Docker & Docker Compose | Latest | Local PostgreSQL + Redis |
 | Git | Latest | Source control |

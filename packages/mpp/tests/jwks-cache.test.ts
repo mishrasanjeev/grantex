@@ -42,7 +42,7 @@ async function makeKey(kid: string) {
   return { privateKey, jwk };
 }
 
-async function signWith(privateKey: jose.KeyLike | Uint8Array, kid: string): Promise<string> {
+async function signWith(privateKey: Parameters<jose.SignJWT['sign']>[0], kid: string): Promise<string> {
   const credential = makeCredential();
   const jwt = await new jose.SignJWT({ vc: credential })
     .setProtectedHeader({ alg: 'RS256', kid })

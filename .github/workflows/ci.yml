@@ -68,7 +68,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: node --test tests/scripts/seo-aeo-release.test.mjs tests/scripts/runtime-image.test.mjs tests/scripts/e2e-workflow.test.mjs tests/scripts/dependency-policy.test.mjs tests/scripts/security-boundaries.test.mjs tests/scripts/licensing.test.mjs tests/scripts/nextjs-starter.test.mjs tests/scripts/firebase-hosting-preflight.test.mjs
+      - run: node --test tests/scripts/seo-aeo-release.test.mjs tests/scripts/runtime-image.test.mjs tests/scripts/e2e-workflow.test.mjs tests/scripts/dependency-policy.test.mjs tests/scripts/security-boundaries.test.mjs tests/scripts/licensing.test.mjs tests/scripts/nextjs-starter.test.mjs tests/scripts/firebase-hosting-preflight.test.mjs tests/scripts/emergency-stop-race.test.mjs
       - name: Install URI and HTTP regression dependencies
         run: |
           for directory in apps/auth-service packages/vercel-ai apps/portal; do
@@ -223,7 +223,8 @@ jobs:
         working-directory: ${{ runner.temp }}/oacp-conformance
         run: |
           npm init -y > /dev/null
-          npm install --no-audit --no-fund --legacy-peer-deps "$RUNNER_TEMP"/oacp-packs/grantex-conformance-*.tgz "$RUNNER_TEMP"/oacp-packs/grantex-sdk-*.tgz
+          npm install --strict-peer-deps --no-audit --no-fund "$RUNNER_TEMP"/oacp-packs/grantex-conformance-*.tgz "$RUNNER_TEMP"/oacp-packs/grantex-sdk-*.tgz
+          npm ls --all
       - name: Generate per-run credentials
         run: |
           for name in COMMERCE_C6Z_AUTHORITY_SERVICE_TOKEN SEED_API_KEY ADMIN_API_KEY VAULT_ENCRYPTION_KEY; do
@@ -302,20 +303,36 @@ jobs:
 
   sdk-py:
     name: Python SDK — ${{ matrix.python-version }}
-    runs-on: ubuntu-24.04  # ubuntu-latest (26.04) has no Python 3.9 build
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.12']
+        python-version: ['3.10', '3.12']
     defaults:
       run:
         working-directory: packages/sdk-py
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up isolated Python audit runtime
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+      - name: Install isolated patched Python audit tools
+        working-directory: .
+        run: |
+          python -m venv "$RUNNER_TEMP/grantex-python-auditor"
+          "$RUNNER_TEMP/grantex-python-auditor/bin/python" -m pip install --upgrade 'pip>=26.2' 'setuptools>=84.1.0' 'filelock>=4.2.1' pip-audit==2.10.1
+          printf 'GRANTEX_INSTALLED_AUDITOR_PYTHON=%s\n' "$RUNNER_TEMP/grantex-python-auditor/bin/python" >> "$GITHUB_ENV"
+      - name: Audit isolated Python security toolchain
+        working-directory: .
+        run: '"$GRANTEX_INSTALLED_AUDITOR_PYTHON" scripts/audit-python-dependencies.py --installed'
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install -e ".[dev]"
+      - name: Install patched Python bootstrap tools
+        run: python -m pip install --upgrade 'pip>=26.2' 'setuptools>=84.1.0' 'tomli>=2.3; python_version < "3.11"'
+      - name: Install SDK and FastAPI for request-injection regressions
+        run: pip install -e ".[dev]" -e "../fastapi[dev]"
       - name: Typecheck
         run: mypy --strict src/grantex
       - name: Test
@@ -323,9 +340,12 @@ jobs:
       # `make test` runs these on 3.12 (job "make"); this keeps the vendor
       # denylist check working on the oldest Python CONTRIBUTING.md supports.
       - name: Test repository scripts
-        if: matrix.python-version == '3.9'
+        if: matrix.python-version == '3.10'
         working-directory: .
         run: python -m pytest -q tests/scripts
+      - name: Audit actual installed Python SDK environment
+        working-directory: .
+        run: python scripts/audit-python-dependencies.py --installed --auditor-python "$GRANTEX_INSTALLED_AUDITOR_PYTHON"
 
   # ─── Node packages that depend on @grantex/sdk ───────────────────────────
   #
@@ -555,16 +575,29 @@ jobs:
 
   python-integrations:
     name: Python Integrations — ${{ matrix.python-version }}
-    runs-on: ubuntu-24.04  # ubuntu-latest (26.04) has no Python 3.9 build
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.12']
+        python-version: ['3.10', '3.12']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Set up isolated Python audit runtime
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+      - name: Install isolated patched Python audit tools
+        run: |
+          python -m venv "$RUNNER_TEMP/grantex-python-auditor"
+          "$RUNNER_TEMP/grantex-python-auditor/bin/python" -m pip install --upgrade 'pip>=26.2' 'setuptools>=84.1.0' 'filelock>=4.2.1' pip-audit==2.10.1
+          printf 'GRANTEX_INSTALLED_AUDITOR_PYTHON=%s\n' "$RUNNER_TEMP/grantex-python-auditor/bin/python" >> "$GITHUB_ENV"
+      - name: Audit isolated Python security toolchain
+        run: '"$GRANTEX_INSTALLED_AUDITOR_PYTHON" scripts/audit-python-dependencies.py --installed'
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install patched Python bootstrap tools
+        run: python -m pip install --upgrade 'pip>=26.2' 'setuptools>=84.1.0' 'tomli>=2.3; python_version < "3.11"'
       - name: Install Python SDK
         working-directory: packages/sdk-py
         run: pip install -e ".[dev]"
@@ -596,9 +629,11 @@ jobs:
         working-directory: packages/agent-httpsig-py
         run: pip install -e ".[dev]" && mypy --strict src && pytest
       - name: Test Strands Python
-        if: matrix.python-version != '3.9'
+        if: matrix.python-version != '3.10'
         working-directory: packages/strands-py
         run: pip install -e ".[dev]" && mypy --strict src && pytest
+      - name: Audit actual installed Python integration environment
+        run: python scripts/audit-python-dependencies.py --installed --auditor-python "$GRANTEX_INSTALLED_AUDITOR_PYTHON"
 
   portal:
     name: Developer Portal
@@ -714,7 +749,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version: '1.26.11'
           cache-dependency-path: |

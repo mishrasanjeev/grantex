@@ -30,7 +30,7 @@ test('Go validation and release workflows use the patched toolchain', () => {
 test('both auth image stages pin the reviewed Node security release', () => {
   const dockerfile = readFileSync(new URL('../../apps/auth-service/Dockerfile', import.meta.url), 'utf8');
   const images = [...dockerfile.matchAll(/^FROM (\S+)/gm)].map((match) => match[1]);
-  assert.deepEqual(images, Array(2).fill('node:26.13.0-alpine@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216'));
+  assert.deepEqual(images, Array(2).fill('node:26.13.1-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5'));
 });
 
 test('CI checks native fetch in the actual isolated production image', () => {

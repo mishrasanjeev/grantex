@@ -1675,7 +1675,8 @@ describe('CommerceSettings', () => {
 
 describe('CommerceOnboarding', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // Discard unconsumed one-shot responses before installing each case's fixtures.
+    vi.resetAllMocks();
     mockGetCommerceMerchantSandboxOnboarding.mockResolvedValue({ data: sandboxOnboarding });
     mockUpdateCommerceMerchantSandboxOnboarding.mockResolvedValue({
       data: { ...sandboxOnboarding, display_name: 'Grantex Store Updated' },
@@ -1905,7 +1906,7 @@ describe('CommerceOnboarding', () => {
     expect(screen.queryByText(/enable live plural/i)).not.toBeInTheDocument();
 
     await user.clear(screen.getByLabelText('Display name'));
-    await user.type(screen.getByLabelText('Display name'), 'Grantex Store Updated');
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'Grantex Store Updated' } });
     await user.click(screen.getByRole('button', { name: 'Save sandbox profile' }));
     await waitFor(() => expect(mockUpdateCommerceMerchantSandboxOnboarding).toHaveBeenCalledWith('mch_1', expect.objectContaining({
       display_name: 'Grantex Store Updated',
@@ -1915,8 +1916,8 @@ describe('CommerceOnboarding', () => {
     await user.click(screen.getByRole('button', { name: 'Request read-only discovery review' }));
     await waitFor(() => expect(mockRequestCommerceMerchantReadOnlyDiscoveryReview).toHaveBeenCalledWith('mch_1'));
 
-    await user.type(screen.getByLabelText('Reason'), 'Improve catalog summaries.');
-    await user.type(screen.getByLabelText('Remediation items'), 'Add more product grounding.');
+    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Improve catalog summaries.' } });
+    fireEvent.change(screen.getByLabelText('Remediation items'), { target: { value: 'Add more product grounding.' } });
     await user.click(screen.getByRole('button', { name: 'Record operator decision' }));
     await waitFor(() => expect(mockRecordCommerceReadOnlyDiscoveryReviewDecision).toHaveBeenCalledWith('mch_1', {
       decision: 'changes_requested',
@@ -2031,7 +2032,7 @@ describe('CommerceOnboarding', () => {
     expect(screen.getByText('review_is_production_approval')).toBeInTheDocument();
     expect(screen.getByText('review_enables_connector_execution')).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Decision note'), 'Sandbox follow-up only.');
+    fireEvent.change(screen.getByLabelText('Decision note'), { target: { value: 'Sandbox follow-up only.' } });
     await user.click(screen.getByRole('button', { name: 'Record dry-run review decision' }));
     await waitFor(() => expect(mockRecordCommerceConnectorDryRunReviewDecision).toHaveBeenCalledWith('mch_1', 'cdry_C6SB', {
       decision: 'accepted_for_sandbox_followup',
@@ -2069,7 +2070,7 @@ describe('CommerceOnboarding', () => {
 
     await user.click(screen.getByRole('button', { name: 'Run connector dry-run' }));
     await waitFor(() => expect(mockRunCommerceConnectorDryRun).toHaveBeenCalled());
-    await user.type(screen.getByLabelText('Review request note'), 'Public-safe sandbox evidence.');
+    fireEvent.change(screen.getByLabelText('Review request note'), { target: { value: 'Public-safe sandbox evidence.' } });
     await user.click(screen.getByRole('button', { name: 'Request dry-run review' }));
     await waitFor(() => expect(mockRequestCommerceConnectorDryRunReview).toHaveBeenCalled());
 

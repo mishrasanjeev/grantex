@@ -10,14 +10,13 @@ readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Sanjeev Kumar", email = "sanjeev@orchestrum.in" }]
 maintainers = [{ name = "Orchestrum Technologies LLP", email = "sanjeev@orchestrum.in" }, { name = "Sanjeev Kumar", email = "mishra.sanjeev@gmail.com" }]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = ["grantex", "oauth", "authorization", "ai-agents", "jwt", "delegation", "agent-identity", "verifiable-credentials", "webauthn", "fido2", "did", "sd-jwt", "mpp", "machine-payments", "scoped-permissions", "revocation", "grant-token"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -27,6 +26,7 @@ classifiers = [
 ]
 dependencies = [
     "httpx>=0.28",
+    "anyio>=4.14.2",
     "PyJWT>=2.13",
     "cryptography>=48.0.1",
 ]
@@ -49,8 +49,7 @@ Changelog = "https://github.com/mishrasanjeev/grantex/releases"
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3,<9; python_version < '3.10'",
-    "pytest>=9.0.3; python_version >= '3.10'",
+    "pytest>=9.0.3",
     "pytest-mock>=3.12",
     "respx>=0.21",
     "jsonschema>=4.18",
@@ -75,7 +74,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.lint]
 # Preserve the release gate used before Ruff 0.16 expanded its implicit defaults.

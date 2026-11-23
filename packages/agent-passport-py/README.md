@@ -14,7 +14,7 @@ is specified in [spec/agent-passport-1.0.md](../../spec/agent-passport-1.0.md);
 the TypeScript package `@grantex/agent-passport` implements the same rules and
 both pass the vectors in
 [spec/examples/agent-passport-vectors.json](../../spec/examples/agent-passport-vectors.json).
-Python 3.9 or later; the only dependency is `cryptography`.
+Python 3.10 or later; the only dependency is `cryptography`.
 
 ## Verify a presentation
 

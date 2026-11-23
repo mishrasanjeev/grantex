@@ -10,14 +10,13 @@ readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Sanjeev Kumar", email = "sanjeev@orchestrum.in" }]
 maintainers = [{ name = "Orchestrum Technologies LLP", email = "sanjeev@orchestrum.in" }, { name = "Sanjeev Kumar", email = "mishra.sanjeev@gmail.com" }]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = ["grantex", "google", "adk", "ai-agents", "authorization", "oauth", "tools", "scope-enforcement", "delegated-auth", "agent-permissions", "google-adk"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -37,8 +36,7 @@ Issues = "https://github.com/mishrasanjeev/grantex/issues"
 [project.optional-dependencies]
 adk = ["google-adk>=0.2.0"]
 dev = [
-    "pytest>=8.3,<9; python_version < '3.10'",
-    "pytest>=9.0.3; python_version >= '3.10'",
+    "pytest>=9.0.3",
     "pytest-mock>=3.12",
 ]
 
@@ -50,4 +48,4 @@ testpaths = ["tests"]
 
 [tool.mypy]
 strict = true
-python_version = "3.9"
+python_version = "3.10"

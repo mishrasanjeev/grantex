@@ -65,7 +65,7 @@ The example simulates a smart home agent running on a Raspberry Pi. It:
 ## Prerequisites
 
 - **Raspberry Pi 5** (or any Linux ARM64/x86 machine)
-- **Python 3.9+**
+- **Python 3.10+**
 - **pip** (Python package manager)
 - A running Grantex instance (local via `docker compose up` or the hosted API)
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +42,24 @@ for (const location of [
   });
 }
 
-for (const location of ['packages/vercel-ai/node_modules/undici', 'apps/portal/node_modules/undici']) {
+const undiciLocations = [];
+for (const directory of ['packages/vercel-ai', 'apps/portal']) {
+  const lock = JSON.parse(readFileSync(`${root}${directory}/package-lock.json`, 'utf8'));
+  const copies = Object.entries(lock.packages).filter(([location]) =>
+    /(^|\/)node_modules\/undici$/.test(location));
+  test(`${directory}: installed Undici copies match the locked dependency graph`, () => {
+    for (const [location, dependency] of copies) {
+      const installed = require(`${root}${directory}/${location}/package.json`);
+      assert.equal(installed.version, dependency.version, location);
+    }
+    if (copies.length === 0) {
+      assert.equal(existsSync(`${root}${directory}/node_modules/undici`), false);
+    }
+  });
+  undiciLocations.push(...copies.map(([location]) => `${directory}/${location}`));
+}
+
+for (const location of undiciLocations) {
   test(`${location}: EventSource retained parser state is bounded`, async () => {
     // GHSA-4qv8-2p9j-2685: tiny fields/chunks must not bypass the byte bound.
     const { finished } = await import('node:stream/promises');

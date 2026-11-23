@@ -35,7 +35,7 @@ With development dependencies:
 pip install grantex-gemma[dev]
 ```
 
-**Requirements:** Python 3.9+, [httpx](https://www.python-httpx.org/), [PyJWT](https://pyjwt.readthedocs.io/), [cryptography](https://cryptography.io/)
+**Requirements:** Python 3.10+, [httpx](https://www.python-httpx.org/), [PyJWT](https://pyjwt.readthedocs.io/), [cryptography](https://cryptography.io/)
 
 ## Quick Start
 
@@ -371,7 +371,8 @@ except GrantexGemmaError:
 
 ## Platform Compatibility
 
-`grantex-gemma` runs anywhere Python 3.9+ is available:
+The current `grantex-gemma` source requires Python 3.10+. The timings below are
+historical measurements, not a fresh Python 3.10 qualification on every device:
 
 | Platform | Python | Avg verify time | Notes |
 |----------|--------|-----------------|-------|

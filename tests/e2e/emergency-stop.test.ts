@@ -27,6 +27,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { createEmergencyStopRaceBarrier } from '../helpers/emergency-stop-race.mjs';
 import { emergencyStopReport, releaseLoopbackUrl } from '../../scripts/lib/release-report.mjs';
 import { Grantex, ToolManifest, Permission, DenialReason, RevocationSubReason } from '@grantex/sdk';
 
@@ -279,9 +280,9 @@ describeRelease('the emergency stop halts every agent under a grant tree', () =>
 
   /**
    * What sweeping is for: a grant delegated **while the stop is running**.
-   * The first pass cannot have seen it, so only a later pass catches it —
-   * and if the sweep loop were removed, this grant would survive the stop
-   * with a live parent chain behind it.
+   * It must be included by the cascade or a later scope sweep, never left
+   * active. The backend integration test separately inserts between scope
+   * reads to prove that another sweep is necessary.
    *
    * The delegations race a real stop, so some of them are expected to be
    * refused once their parent is revoked. That is fine: what must hold is
@@ -299,36 +300,51 @@ describeRelease('the emergency stop halts every agent under a grant tree', () =>
     const root = await admin.tokens.exchange({ code, agentId: parentAgent.agentId });
     expect(await liveGrantCount()).toBeGreaterThan(0);
 
-    // Delegations fired alongside the stop, not before it.
+    // Both requests enter the real service. Its existing tree lock queues
+    // delegation first, but is released only after the stop is running.
+    const barrier = await createEmergencyStopRaceBarrier({
+      databaseUrl: process.env['REVOCATION_RELEASE_DATABASE_URL'], developerId,
+    });
     const delegated: string[] = [];
     let racing = true;
-    const race = (async () => {
-      while (racing) {
-        try {
-          const child = await admin.grants.delegate({
-            parentGrantToken: root.grantToken, subAgentId: childAgent.agentId, scopes: SCOPES, expiresIn: '1h',
-          });
-          delegated.push(child.grantId);
-        } catch {
-          // Expected once the parent is revoked.
+    let race: Promise<void> | undefined;
+    let response: Response;
+    const reason = `release rehearsal: delegation racing the stop ${stamp}`;
+    try {
+      race = (async () => {
+        while (racing) {
+          try {
+            const child = await admin.grants.delegate({
+              parentGrantToken: root.grantToken, subAgentId: childAgent.agentId, scopes: SCOPES, expiresIn: '1h',
+            });
+            delegated.push(child.grantId);
+          } catch {
+            // Expected once the parent is revoked.
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25));
         }
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      }
-    })();
+      })();
+      await barrier.waitForDelegation();
 
-    const response = await fetch(`${BASE_URL}/v1/emergency-stop`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        scope: { type: 'developer', id: developerId },
-        reason: 'release rehearsal: delegation racing the stop',
-        confirm: `stop developer:${developerId}`,
-      }),
-    });
-    // The stop takes longer than one 25 ms delegation cycle, but stop racing
-    // only after it returns so the overlap is not a matter of luck.
-    racing = false;
-    await race;
+      let stopError: unknown;
+      const stopRequest = fetch(`${BASE_URL}/v1/emergency-stop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          scope: { type: 'developer', id: developerId },
+          reason,
+          confirm: `stop developer:${developerId}`,
+        }),
+      }).catch((error: unknown) => { stopError = error; return null; });
+      await barrier.releaseForRunningStop(reason);
+      const result = await stopRequest;
+      if (stopError) throw stopError;
+      if (result === null) throw new Error('The emergency stop returned no response');
+      response = result;
+    } finally {
+      racing = false;
+      try { await barrier.close(); } finally { await race; }
+    }
 
     const text = await response.text();
     expect(response.status, text).toBe(200);
@@ -340,8 +356,7 @@ describeRelease('the emergency stop halts every agent under a grant tree', () =>
     // live afterwards" is true of any stop at all.
     expect(delegated.length, 'no grant was delegated while the stop ran').toBeGreaterThan(0);
 
-    // And nothing is left running. A single-pass stop leaves whatever was
-    // created after its one read.
+    // Nothing is left running after the concurrent delegation and stop.
     expect(await liveGrantCount()).toBe(0);
     const survivors = await Promise.all(delegated.map(async (grantId) => {
       const grant = await admin.grants.get(grantId).catch(() => null);

@@ -250,6 +250,8 @@ describePostgres('the migration ledger against real Postgres', () => {
     const holder = postgres(url, { max: 1, idle_timeout: 5, connect_timeout: 10, onnotice: () => {} });
     let release: () => void = () => {};
     const held = new Promise<void>((resolve) => { release = resolve; });
+    let lockAcquired: () => void = () => {};
+    const acquired = new Promise<void>((resolve) => { lockAcquired = resolve; });
     let holding: Promise<unknown> = Promise.resolve();
     try {
       await runMigrations(sql);
@@ -272,10 +274,14 @@ describePostgres('the migration ledger against real Postgres', () => {
       // An open transaction that has touched `grants`: a concurrent build
       // waits for it, and with a short lock_timeout gives up part way.
       holding = holder.begin(async (tx) => {
-        await tx`SELECT id FROM grants WHERE id = 'grnt_cic' FOR UPDATE`;
+        const rows = await tx`SELECT id FROM grants WHERE id = 'grnt_cic' FOR UPDATE`;
+        expect(rows).toHaveLength(1);
+        lockAcquired();
         await held;
-      }).catch(() => undefined);
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      });
+      // The real row lock must be held before starting the contending build.
+      // A connection error or a transaction that ends early fails this setup.
+      expect(await Promise.race([acquired.then(() => true), holding.then(() => false)])).toBe(true);
 
       vi.stubEnv('MIGRATION_LOCK_TIMEOUT', '400ms');
       await expect(runMigrations(sql)).rejects.toThrow(new RegExp(file));

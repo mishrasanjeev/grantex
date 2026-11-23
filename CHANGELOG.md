@@ -15,6 +15,64 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   optional parameter: `idempotency_key` (Python), `idempotencyKey` (TypeScript),
   `IdempotencyKey` (Go); 16-256 characters.
 
+### Changed - Python security-supported runtime
+- The current Python SDK and integration source requires Python 3.10 or newer;
+  Strands retains its existing Python 3.11 minimum. Python 3.9 cannot resolve
+  the upstream security fixes used by this candidate.
+- Runtime dependency floors exclude vulnerable AnyIO and Starlette releases.
+  Both Python 3.10 and 3.12 CI environments audit their actual installed runtime,
+  development and bootstrap dependencies, including licenses and OSV failures.
+- Installed audits independently reconcile every package and version, scan the
+  complete frozen third-party inventory in strict mode, and verify that the
+  auditor reports every entry. Verified local editable projects retain license
+  checks without being mistaken for failed public dependency lookups.
+- Security tooling runs in an independently audited Python 3.12 environment,
+  so its patched Filelock dependency does not remove Python 3.10 SDK support.
+  Runtime, development and bootstrap packages in each target environment still
+  receive complete installed license and strict vulnerability audits.
+- This source change does not republish SDKs or alter existing customer
+  credentials or feature flags. Published artifact requirements remain unchanged.
+
+### Fixed - PostgreSQL regression test coordination
+- The concurrent-index repair regression waits for its real row lock before
+  running the conflicting migration, and propagates setup failures.
+- The polling deduplication regression uses the existing clock input to stay
+  inside the one-second interval. Runtime behavior, feed latency limits,
+  timeout bounds and all original failure and survivor assertions are unchanged.
+
+### Fixed - Deterministic emergency-stop release race
+- The release test queues a real delegation on the existing PostgreSQL tree
+  lock, starts the real stop, and releases the barrier only after the stop is
+  running. It no longer assumes that a stop lasts longer than one polling cycle.
+- All three emergency-stop cases, survivor and overlap assertions, and the
+  two-second denial budget remain intact. Barrier cleanup and refusal paths
+  have regression controls; production behavior and feature defaults are unchanged.
+
+### Fixed - OACP packed-client peer validation
+- The TypeScript SDK source is prepared as unpublished 0.9.0 for its OACP
+  verifier APIs. Published release records remain at 0.8.2, which does not
+  contain those APIs; this change does not publish an SDK or create a release.
+- OACP CI installs the packed SDK and runner with strict peer resolution and
+  checks the complete installed graph. npm success alone can omit an
+  incompatible optional peer, leaving the verifier unavailable at runtime.
+
+### Changed - Reviewed dependency compatibility updates
+- The auth service uses digest-pinned Node 26.13.1 and postgres 4.1.1.
+  Integration tooling explicitly loads Node types with TypeScript 7; Vitest 5
+  retains the existing denial assertions, including awaiting empty-scope refusal.
+- Breaking runtime requirement for the unpublished MPP source update: the
+  JOSE 6 integration requires Node.js 22.12 or newer, matching the TypeScript SDK. Node 18 users
+  must remain on the previously published package until upgrading their runtime.
+  This source update does not publish an SDK or change token verification policy.
+- The two Express 5 example services use the reviewed Body Parser 2 security
+  patch, with compressed-body liveness regressions retained.
+- DPDP's built-package ESM checks use the compiler entry declared by TypeScript,
+  including TypeScript 7's package export boundaries. Privacy assertions and
+  compiler/test timeouts are unchanged.
+- The full Node suite runs native scoped examples with their declared command,
+  validates their local-only proof, and retains strict Vitest JSON verification.
+  Unsupported test commands and missing or invalid proof fail the suite.
+
 ### Fixed - Plural webhooks resolve their payment intent (#1987)
 - The Plural provider no longer reports its merchant order reference as the
   webhook's `merchant_ref`. That reference is derived from the Grantex payment

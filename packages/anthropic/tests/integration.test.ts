@@ -278,7 +278,7 @@ describe('Integration: full developer workflow', () => {
     expect(scopes).toEqual(['spend:usd']);
   });
 
-  it('handles token with empty scopes', () => {
+  it('handles token with empty scopes', async () => {
     const emptyToken = makeRealisticToken({ scp: [] });
     expect(getGrantScopes(emptyToken)).toEqual([]);
 
@@ -291,7 +291,7 @@ describe('Integration: full developer workflow', () => {
       execute: vi.fn(),
     });
 
-    expect(tool.execute({})).rejects.toThrow(GrantexScopeError);
+    await expect(tool.execute({})).rejects.toThrow(GrantexScopeError);
   });
 
   it('registry rejects unknown tool names with clear error', async () => {

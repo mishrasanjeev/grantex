@@ -13,7 +13,7 @@ End-to-end demo of the core Grantex authorization lifecycle using the Python SDK
 
 ## Prerequisites
 
-- Python 3.9+
+- Python 3.10+
 - Docker (for the local Grantex stack)
 
 ## Run

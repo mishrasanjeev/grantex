@@ -342,8 +342,8 @@ async function waitFor(check: () => Promise<boolean>, timeoutMs: number): Promis
 }
 
 /** Run until every due list has been read once more. */
-async function reconcileNow() {
-  const result = await reconcileRegistryStatusOnce(sql, undefined, { minIntervalMs: POLL_MS, force: true });
+async function reconcileNow(now = new Date()) {
+  const result = await reconcileRegistryStatusOnce(sql, undefined, { minIntervalMs: POLL_MS, force: true, now });
   expect(result.outcome).toBe('complete');
   return result;
 }
@@ -805,11 +805,17 @@ describePostgres('polling', () => {
     const before = fetches.get(key) ?? 0;
     const polls = vi.spyOn(registryStatusListPollsTotal, 'inc');
     try {
-      await reconcileNow();
+      const polledAt = new Date();
+      await reconcileNow(polledAt);
       expect((fetches.get(key) ?? 0) - before).toBe(1);
       expect(polls).toHaveBeenCalledWith({ outcome: 'ok' });
-      // Within the interval the list is not fetched again.
-      await reconcileRegistryStatusOnce(sql, undefined, { minIntervalMs: POLL_MS });
+      // Use the existing clock input so this call is inside the unchanged
+      // interval even when the real HTTP and database work takes longer.
+      const within = await reconcileRegistryStatusOnce(sql, undefined, {
+        minIntervalMs: POLL_MS, now: new Date(polledAt.getTime() + POLL_MS / 2),
+      });
+      expect(within.outcome).toBe('complete');
+      expect(within.listsPolled).toBe(0);
       expect((fetches.get(key) ?? 0) - before).toBe(1);
     } finally {
       polls.mockRestore();
