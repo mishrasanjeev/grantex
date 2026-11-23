@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 from urllib.parse import quote
 
 
@@ -23,8 +24,23 @@ class BudgetsClient:
         return BudgetAllocation.from_dict(data)
 
     def debit(self, params: DebitBudgetParams) -> DebitBudgetResponse:
-        """Debit an amount from a grant's budget."""
-        data = self._http.post("/v1/budget/debit", params.to_dict())
+        """Debit an amount from a grant's budget.
+
+        An ``Idempotency-Key`` header is always sent, and the same key is reused
+        by the SDK's automatic retries, so a debit whose reply was lost is not
+        applied twice by a server that supports the header. Pass
+        ``idempotency_key`` to reuse a key across your own retries.
+        """
+        key = params.idempotency_key
+        if key is None:
+            key = secrets.token_urlsafe(24)  # 32 characters
+        elif not 16 <= len(key) <= 256:
+            raise ValueError("idempotency_key must be between 16 and 256 characters")
+        data = self._http.post(
+            "/v1/budget/debit",
+            params.to_dict(),
+            headers={"Idempotency-Key": key},
+        )
         return DebitBudgetResponse.from_dict(data)
 
     def balance(self, grant_id: str) -> BudgetAllocation:

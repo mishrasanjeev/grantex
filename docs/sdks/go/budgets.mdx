@@ -71,6 +71,9 @@ fmt.Printf("Transaction ID: %s\n", result.TransactionID)
 | `GrantID`     | `string`  | Yes      | The grant ID to debit from.                 |
 | `Amount`      | `float64` | Yes      | The amount to debit. Must be positive.      |
 | `Description` | `*string` | No       | Optional description for the transaction.   |
+| `IdempotencyKey` | `string` | No     | Sent as the `Idempotency-Key` header. Generated for each call if empty. 16-256 characters. |
+
+Every debit is sent with an `Idempotency-Key` header, and the SDK's automatic retries reuse the same key, so a debit whose reply was lost can be recognised as a retry by a server that supports the header. Set your own key (16-256 characters) to reuse it across your own retries.
 
 ### Response (`DebitResponse`)
 

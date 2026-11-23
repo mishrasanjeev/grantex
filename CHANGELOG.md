@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Budget debits carry an Idempotency-Key from the SDKs (#2049)
+- The Python, TypeScript and Go SDKs now send an `Idempotency-Key` header on
+  `budgets.debit()`, generated per call when the caller does not supply one, and
+  the SDK's automatic retries reuse it. Previously a debit whose reply was lost
+  was retried as a new request. The header is ignored until the auth service
+  supports it, so this change alone does not yet deduplicate debits. New
+  optional parameter: `idempotency_key` (Python), `idempotencyKey` (TypeScript),
+  `IdempotencyKey` (Go); 16-256 characters.
+
 ### Fixed - Plural webhooks resolve their payment intent (#1987)
 - The Plural provider no longer reports its merchant order reference as the
   webhook's `merchant_ref`. That reference is derived from the Grantex payment

@@ -98,6 +98,10 @@ console.log(result.transactionId);  // 'txn_01HXYZ...'
   Optional description for the transaction (e.g., `'GPT-4 API call'`).
 </ParamField>
 
+<ParamField body="idempotencyKey" type="string">
+  Sent as the `Idempotency-Key` header, not in the body. Generated for each call if omitted. Must be 16-256 characters. Every debit is sent with an `Idempotency-Key` header, and the SDK's automatic retries reuse the same key, so a debit whose reply was lost can be recognised as a retry by a server that supports the header. Pass your own key (16-256 characters) to reuse it across your own retries.
+</ParamField>
+
 ### Response: `DebitResponse`
 
 <ResponseField name="remaining" type="number">

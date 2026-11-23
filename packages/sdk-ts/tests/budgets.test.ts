@@ -152,6 +152,47 @@ describe('BudgetsClient', () => {
     expect(debits).toBe(1);
   });
 
+  it('debit() sends a caller idempotencyKey as a header, not in the body', async () => {
+    const mockFetch = makeFetch(200, { remaining: '75.50', transactionId: 'tx_01' });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await grantex.budgets.debit({ grantId: 'grant_01', amount: 1, idempotencyKey: 'caller-key-0123456789' });
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe('caller-key-0123456789');
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('idempotencyKey');
+  });
+
+  it('debit() generates a different Idempotency-Key for each call', async () => {
+    const mockFetch = makeFetch(200, { remaining: '75.50', transactionId: 'tx_01' });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await grantex.budgets.debit({ grantId: 'grant_01', amount: 1 });
+    await grantex.budgets.debit({ grantId: 'grant_01', amount: 1 });
+
+    const keys = mockFetch.mock.calls.map(
+      ([, init]) => (init as RequestInit & { headers: Record<string, string> }).headers['Idempotency-Key'],
+    );
+    expect(new Set(keys).size).toBe(2);
+    for (const k of keys) expect(k?.length ?? 0).toBeGreaterThanOrEqual(16);
+  });
+
+  it.each(['', 'short', 'x'.repeat(257)])(
+    'debit() rejects idempotencyKey %j before sending',
+    async (idempotencyKey) => {
+      const mockFetch = makeFetch(200, {});
+      vi.stubGlobal('fetch', mockFetch);
+
+      const grantex = new Grantex({ apiKey: 'test_key' });
+      await expect(
+        grantex.budgets.debit({ grantId: 'grant_01', amount: 1, idempotencyKey }),
+      ).rejects.toThrow(RangeError);
+      expect(mockFetch).not.toHaveBeenCalled();
+    },
+  );
+
   it('balance() GETs /v1/budget/balance/:grantId', async () => {
     const mockFetch = makeFetch(200, MOCK_ALLOCATION);
     vi.stubGlobal('fetch', mockFetch);
