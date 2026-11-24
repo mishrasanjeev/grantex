@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { getSql } from '../db/client.js';
+import { config } from '../config.js';
 import {
   createBudgetAllocation,
   debitBudget,
@@ -9,6 +10,7 @@ import {
   InsufficientBudgetError,
   GrantInactiveError,
   GrantNotFoundError,
+  BudgetIdempotencyConflictError,
 } from '../lib/budget.js';
 
 interface AllocateBody {
@@ -87,6 +89,17 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
   app.post<{ Body: DebitBody }>('/v1/budget/debit', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { grantId, amount, description, metadata } = request.body;
 
+    const idempotencyKey = config.budgetDebitIdempotencyEnabled
+      ? request.headers['idempotency-key'] : undefined;
+    if (idempotencyKey !== undefined && (typeof idempotencyKey !== 'string'
+        || idempotencyKey.length < 16 || idempotencyKey.length > 256)) {
+      return reply.status(400).send({
+        message: 'Idempotency-Key must contain 16 to 256 characters',
+        code: 'INVALID_IDEMPOTENCY_KEY',
+        requestId: request.id,
+      });
+    }
+
     if (!grantId || amount == null || amount <= 0) {
       return reply.status(400).send({
         message: 'grantId and positive amount are required',
@@ -99,13 +112,20 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const developerId = request.developer.id;
 
     try {
-      const result = await debitBudget(sql, grantId, developerId, amount, description, metadata);
+      const result = await debitBudget(sql, grantId, developerId, amount, description, metadata, idempotencyKey);
       return reply.send({
         remaining: result.remaining,
         transactionId: result.transactionId,
         grantId,
       });
     } catch (err) {
+      if (err instanceof BudgetIdempotencyConflictError) {
+        return reply.status(409).send({
+          message: err.message,
+          code: 'IDEMPOTENCY_CONFLICT',
+          requestId: request.id,
+        });
+      }
       if (err instanceof InsufficientBudgetError) {
         return reply.status(402).send({
           message: err.message,

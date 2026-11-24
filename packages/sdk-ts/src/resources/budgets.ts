@@ -19,9 +19,21 @@ export class BudgetsClient {
     return this.#http.post<BudgetAllocation>('/v1/budget/allocate', params);
   }
 
-  /** Debit an amount from a grant's budget. */
+  /**
+   * Debit an amount from a grant's budget. An `Idempotency-Key` header is always
+   * sent (generated if `idempotencyKey` is omitted) so a retry after a lost reply
+   * is not applied twice by a server that supports the header.
+   */
   debit(params: DebitBudgetParams): Promise<DebitBudgetResponse> {
-    return this.#http.post<DebitBudgetResponse>('/v1/budget/debit', params);
+    const { idempotencyKey, ...body } = params;
+    const key = idempotencyKey ?? crypto.randomUUID();
+    if (key.length < 16 || key.length > 256) {
+      return Promise.reject(new RangeError('idempotencyKey must be between 16 and 256 characters'));
+    }
+    // The same header is reused by the client's automatic retries.
+    return this.#http.post<DebitBudgetResponse>('/v1/budget/debit', body, {
+      headers: { 'Idempotency-Key': key },
+    });
   }
 
   /** Get the current budget balance for a grant. */

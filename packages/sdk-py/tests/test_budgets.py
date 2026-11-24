@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 import httpx
+import pytest
 import respx
 
 from grantex import (
@@ -173,3 +174,79 @@ def test_debit_budget_minimal() -> None:
     body = json.loads(request.content)
     assert "description" not in body
     assert "metadata" not in body
+
+
+# ── Retry safety: a debit must never be applied twice ────────────────────────
+
+
+@respx.mock
+def test_debit_retried_after_lost_reply_reaches_server_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The server commits the debit but the reply is lost (timeout). The SDK
+    retries the POST. Without an idempotency key the server cannot tell the
+    retry from a new debit, so the money moves twice."""
+    monkeypatch.setattr("grantex._http.time.sleep", lambda _s: None)
+
+    committed: list[str | None] = []  # Idempotency-Key of each committed debit
+
+    def server(request: httpx.Request) -> httpx.Response:
+        committed.append(request.headers.get("idempotency-key"))
+        if len(committed) == 1:
+            raise httpx.ReadTimeout("reply lost", request=request)
+        return httpx.Response(200, json={
+            "remaining": "50.00", "transactionId": "tx_01", "grantId": "grant_01",
+        })
+
+    respx.post(f"{BASE_URL}/v1/budget/debit").mock(side_effect=server)
+
+    client = Grantex(api_key="test_key", base_url=BASE_URL)
+    client.budgets.debit(DebitBudgetParams(grant_id="grant_01", amount=50))
+
+    assert len(committed) == 2, "expected the SDK to retry once"
+    keys = set(committed)
+    # Safe only if both attempts carry the same key, so the server can dedupe.
+    assert len(keys) == 1 and None not in keys, (
+        f"{len(committed)} debits reached the server with keys {committed}; "
+        "the server cannot tell the retry from a second debit"
+    )
+
+
+def _debit_keys() -> list[str | None]:
+    return [c.request.headers.get("idempotency-key") for c in respx.calls]
+
+
+@respx.mock
+def test_debit_sends_caller_idempotency_key_unchanged_and_not_in_body() -> None:
+    respx.post(f"{BASE_URL}/v1/budget/debit").mock(
+        return_value=httpx.Response(200, json={"remaining": "50.00", "transactionId": "tx_01", "grantId": "grant_01"})
+    )
+    client = Grantex(api_key="test_key", base_url=BASE_URL)
+    client.budgets.debit(
+        DebitBudgetParams(grant_id="grant_01", amount=50, idempotency_key="caller-key-0123456789")
+    )
+    assert _debit_keys() == ["caller-key-0123456789"]
+    assert "idempotencyKey" not in json.loads(respx.calls[0].request.content)
+
+
+@respx.mock
+def test_debit_generates_a_different_key_for_each_call() -> None:
+    respx.post(f"{BASE_URL}/v1/budget/debit").mock(
+        return_value=httpx.Response(200, json={"remaining": "50.00", "transactionId": "tx_01", "grantId": "grant_01"})
+    )
+    client = Grantex(api_key="test_key", base_url=BASE_URL)
+    client.budgets.debit(DebitBudgetParams(grant_id="grant_01", amount=1))
+    client.budgets.debit(DebitBudgetParams(grant_id="grant_01", amount=1))
+    keys = _debit_keys()
+    assert None not in keys and len(set(keys)) == 2
+    assert all(16 <= len(k) <= 256 for k in keys if k)
+
+
+@respx.mock
+@pytest.mark.parametrize("bad_key", ["", "short", "x" * 257])
+def test_debit_rejects_an_out_of_range_key_before_sending(bad_key: str) -> None:
+    route = respx.post(f"{BASE_URL}/v1/budget/debit")
+    client = Grantex(api_key="test_key", base_url=BASE_URL)
+    with pytest.raises(ValueError):
+        client.budgets.debit(DebitBudgetParams(grant_id="grant_01", amount=1, idempotency_key=bad_key))
+    assert not route.called

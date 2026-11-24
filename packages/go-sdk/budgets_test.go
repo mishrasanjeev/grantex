@@ -3,8 +3,10 @@ package grantex
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -155,5 +157,61 @@ func TestBudgetsTransactions(t *testing.T) {
 	}
 	if txns[0].Amount != "10.00" {
 		t.Errorf("expected 10.00, got %s", txns[0].Amount)
+	}
+}
+
+func TestBudgetsDebitIdempotencyKey(t *testing.T) {
+	var keys []string
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		keys = append(keys, r.Header.Get("Idempotency-Key"))
+		raw, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(raw))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(DebitBudgetResponse{Remaining: "90.00", TransactionID: "tx-1"})
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	if _, err := client.Budgets.Debit(ctx, DebitBudgetParams{GrantID: "grant-1", Amount: 1, IdempotencyKey: "caller-key-0123456789"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if keys[0] != "caller-key-0123456789" {
+		t.Errorf("caller key not sent unchanged, got %q", keys[0])
+	}
+	if strings.Contains(bodies[0], "dempotency") {
+		t.Errorf("key must be a header, not in the body: %s", bodies[0])
+	}
+
+	for i := 0; i < 2; i++ {
+		if _, err := client.Budgets.Debit(ctx, DebitBudgetParams{GrantID: "grant-1", Amount: 1}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	if keys[1] == "" || keys[2] == "" || keys[1] == keys[2] {
+		t.Errorf("expected two different generated keys, got %q and %q", keys[1], keys[2])
+	}
+	if len(keys[1]) < 16 || len(keys[1]) > 256 {
+		t.Errorf("generated key length out of range: %d", len(keys[1]))
+	}
+}
+
+func TestBudgetsDebitRejectsOutOfRangeKey(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+	}))
+	defer server.Close()
+
+	client := NewClient("test-key", WithBaseURL(server.URL))
+	for _, key := range []string{"short", strings.Repeat("x", 257)} {
+		if _, err := client.Budgets.Debit(context.Background(), DebitBudgetParams{GrantID: "grant-1", Amount: 1, IdempotencyKey: key}); err == nil {
+			t.Errorf("expected an error for key length %d", len(key))
+		}
+	}
+	if called {
+		t.Error("a request was sent despite an invalid key")
 	}
 }

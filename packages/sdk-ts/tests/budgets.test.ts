@@ -115,6 +115,84 @@ describe('BudgetsClient', () => {
     expect(result.transactionId).toBe('tx_02');
   });
 
+  it('debit() retried after a lost reply reaches the server once', async () => {
+    // A server that honours Idempotency-Key: a repeated key is replayed, not re-applied.
+    const applied = new Set<string>();
+    let debits = 0;
+    let calls = 0;
+    const mockFetch = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => {
+      calls += 1;
+      const key = (init.headers as Record<string, string>)['Idempotency-Key'];
+      if (key === undefined || !applied.has(key)) {
+        debits += 1;
+        if (key !== undefined) applied.add(key);
+      }
+      if (calls === 1) {
+        // The debit committed, but the reply was lost (client timeout).
+        throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: () => Promise.resolve({ remaining: '75.50', transactionId: 'tx_01' }),
+        text: () => Promise.resolve('{}'),
+      };
+    });
+    vi.stubGlobal('fetch', mockFetch);
+    vi.useFakeTimers();
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    const pending = grantex.budgets.debit({ grantId: 'grant_01', amount: 24.5 });
+    await vi.runAllTimersAsync();
+    await pending;
+    vi.useRealTimers();
+
+    expect(calls).toBe(2);
+    expect(debits).toBe(1);
+  });
+
+  it('debit() sends a caller idempotencyKey as a header, not in the body', async () => {
+    const mockFetch = makeFetch(200, { remaining: '75.50', transactionId: 'tx_01' });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await grantex.budgets.debit({ grantId: 'grant_01', amount: 1, idempotencyKey: 'caller-key-0123456789' });
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe('caller-key-0123456789');
+    expect(JSON.parse(init.body as string)).not.toHaveProperty('idempotencyKey');
+  });
+
+  it('debit() generates a different Idempotency-Key for each call', async () => {
+    const mockFetch = makeFetch(200, { remaining: '75.50', transactionId: 'tx_01' });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const grantex = new Grantex({ apiKey: 'test_key' });
+    await grantex.budgets.debit({ grantId: 'grant_01', amount: 1 });
+    await grantex.budgets.debit({ grantId: 'grant_01', amount: 1 });
+
+    const keys = mockFetch.mock.calls.map(
+      ([, init]) => (init as RequestInit & { headers: Record<string, string> }).headers['Idempotency-Key'],
+    );
+    expect(new Set(keys).size).toBe(2);
+    for (const k of keys) expect(k?.length ?? 0).toBeGreaterThanOrEqual(16);
+  });
+
+  it.each(['', 'short', 'x'.repeat(257)])(
+    'debit() rejects idempotencyKey %j before sending',
+    async (idempotencyKey) => {
+      const mockFetch = makeFetch(200, {});
+      vi.stubGlobal('fetch', mockFetch);
+
+      const grantex = new Grantex({ apiKey: 'test_key' });
+      await expect(
+        grantex.budgets.debit({ grantId: 'grant_01', amount: 1, idempotencyKey }),
+      ).rejects.toThrow(RangeError);
+      expect(mockFetch).not.toHaveBeenCalled();
+    },
+  );
+
   it('balance() GETs /v1/budget/balance/:grantId', async () => {
     const mockFetch = makeFetch(200, MOCK_ALLOCATION);
     vi.stubGlobal('fetch', mockFetch);

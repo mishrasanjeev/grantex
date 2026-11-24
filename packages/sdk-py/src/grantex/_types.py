@@ -1863,6 +1863,10 @@ class DebitBudgetParams:
     amount: float
     description: str | None = None
     metadata: dict[str, Any] | None = None
+    # Sent as the Idempotency-Key header, not in the body. If omitted the SDK
+    # generates one per call so that automatic retries reuse the same key.
+    # Must be 16-256 characters.
+    idempotency_key: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         body: dict[str, Any] = {

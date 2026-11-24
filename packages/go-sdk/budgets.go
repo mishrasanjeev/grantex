@@ -1,9 +1,11 @@
 package grantex
 
 import (
-	"net/url"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
+	"net/url"
 )
 
 // BudgetsService handles budget allocation and tracking.
@@ -34,6 +36,10 @@ type DebitBudgetParams struct {
 	GrantID     string  `json:"grantId"`
 	Amount      float64 `json:"amount"`
 	Description string  `json:"description,omitempty"`
+	// IdempotencyKey is sent as the Idempotency-Key header, not in the body.
+	// If empty, a random key is generated per call so that automatic retries
+	// reuse it. Must be 16-256 characters.
+	IdempotencyKey string `json:"-"`
 }
 
 // DebitBudgetResponse is the response from a budget debit operation.
@@ -69,7 +75,17 @@ func (s *BudgetsService) Allocate(ctx context.Context, params AllocateBudgetPara
 
 // Debit debits an amount from a grant's budget.
 func (s *BudgetsService) Debit(ctx context.Context, params DebitBudgetParams) (*DebitBudgetResponse, error) {
-	return unmarshal[DebitBudgetResponse](s.http.post(ctx, "/v1/budget/debit", params))
+	key := params.IdempotencyKey
+	if key == "" {
+		buf := make([]byte, 24)
+		if _, err := rand.Read(buf); err != nil {
+			return nil, fmt.Errorf("generate idempotency key: %w", err)
+		}
+		key = base64.RawURLEncoding.EncodeToString(buf) // 32 characters
+	} else if len(key) < 16 || len(key) > 256 {
+		return nil, fmt.Errorf("IdempotencyKey must be between 16 and 256 characters")
+	}
+	return unmarshal[DebitBudgetResponse](s.http.postWithHeaders(ctx, "/v1/budget/debit", params, idempotencyHeaders(key)))
 }
 
 // Balance retrieves the current budget balance for a grant.

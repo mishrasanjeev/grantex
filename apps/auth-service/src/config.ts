@@ -210,6 +210,7 @@ export const config = {
   get portableWebAuthnEvidenceStatusCheckEnabled() { return process.env['PORTABLE_WEBAUTHN_EVIDENCE_STATUS_CHECK_ENABLED'] === 'true'; },
   get irregularityResponsePolicyEnabled() { return process.env['IRREGULARITY_RESPONSE_POLICY_ENABLED'] === 'true'; },
   get irregularityCascadeRevocationEnabled() { return process.env['IRREGULARITY_CASCADE_REVOCATION_ENABLED'] === 'true'; },
+  get budgetDebitIdempotencyEnabled() { return process.env['BUDGET_DEBIT_IDEMPOTENCY_ENABLED'] === 'true'; },
   // Accept EdDSA (Ed25519) signatures on registry attestations, their
   // withdrawal and refresh requests and the issuers' status lists. Off by
   // default: ES256 is the profile's required algorithm.

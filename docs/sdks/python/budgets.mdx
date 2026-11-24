@@ -72,8 +72,16 @@ with Grantex(api_key="gx_live_...") as client:
 | `grant_id`    | `str`           | Yes      | The grant ID to debit from.                     |
 | `amount`      | `int \| float`  | Yes      | The amount to debit. Must be positive.           |
 | `description` | `str \| None`   | No       | Optional description for the transaction.        |
+| `idempotency_key` | `str \| None` | No      | Sent as the `Idempotency-Key` header. Generated for each call if omitted. 16-256 characters. |
+
+Every debit is sent with an `Idempotency-Key` header, and the SDK's automatic retries reuse the same key, so a debit whose reply was lost can be recognised as a retry by a server that supports the header. Pass your own key (16-256 characters) to reuse it across your own retries.
 
 ### DebitResponse
+
+Replay protection requires server migration `139` and the default-off
+`BUDGET_DEBIT_IDEMPOTENCY_ENABLED` flag. Matching retries replay the original
+response for 24 hours; changed payloads return `409 IDEMPOTENCY_CONFLICT`.
+Do not blindly retry after expiry. See the [rollout and rollback guide](/guides/budget-controls#replay-rollout-and-rollback).
 
 | Field            | Type    | Description                            |
 |------------------|---------|----------------------------------------|

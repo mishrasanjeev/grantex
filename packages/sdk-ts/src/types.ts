@@ -1081,6 +1081,11 @@ export interface DebitBudgetParams {
   amount: number;
   description?: string;
   metadata?: Record<string, unknown>;
+  /**
+   * Sent as the `Idempotency-Key` header, not in the body. Generated per call if
+   * omitted. Must be 16-256 characters.
+   */
+  idempotencyKey?: string;
 }
 
 export interface DebitBudgetResponse {
