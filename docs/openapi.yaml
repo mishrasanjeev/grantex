@@ -9576,6 +9576,15 @@ paths:
       summary: Debit a grant budget atomically
       security:
         - bearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string, minLength: 16, maxLength: 256 }
+          description: >-
+            With BUDGET_DEBIT_IDEMPOTENCY_ENABLED=true and migration 139, matching
+            tenant/grant-scoped retries replay the original response for 24 hours.
+            Changed effective payloads conflict. Ignored while the flag is off.
       requestBody:
         required: true
         content:
@@ -9587,11 +9596,13 @@ paths:
                 grantId: { type: string }
                 amount: { type: number, exclusiveMinimum: 0 }
                 description: { type: string }
+                metadata: { type: object, additionalProperties: true }
       responses:
-        "200": { description: Debit applied }
+        "200": { description: Debit applied or original successful debit replayed }
+        "400": { description: Invalid request or enabled idempotency key }
         "402": { description: Insufficient remaining budget }
         "404": { description: Budget allocation not found }
-        "409": { description: Conflicting debit state }
+        "409": { description: Inactive grant or idempotency key reused with a different request }
 
   /v1/budget/balance/{grantId}:
     get:

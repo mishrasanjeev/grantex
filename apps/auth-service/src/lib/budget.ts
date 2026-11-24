@@ -2,6 +2,7 @@ import type postgres from 'postgres';
 import type { TxSql } from '../db/client.js';
 import { newBudgetAllocationId, newBudgetTransactionId } from './ids.js';
 import { emitEvent } from './events.js';
+import { canonicalJson, sha256hex } from './hash.js';
 
 export interface BudgetAllocation {
   id: string;
@@ -22,6 +23,11 @@ export interface BudgetTransaction {
   description: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
+}
+
+interface BudgetDebitResult {
+  remaining: string;
+  transactionId: string;
 }
 
 export async function createBudgetAllocation(
@@ -68,14 +74,64 @@ export async function debitBudget(
   amount: number,
   description?: string,
   metadata?: Record<string, unknown>,
-): Promise<{ remaining: string; transactionId: string }> {
+  idempotencyKey?: string,
+): Promise<BudgetDebitResult> {
+  if (idempotencyKey !== undefined && (idempotencyKey.length < 16 || idempotencyKey.length > 256)) {
+    throw new RangeError('Idempotency-Key must contain 16 to 256 characters');
+  }
+  const idempotency = idempotencyKey === undefined ? undefined : {
+    keyHash: sha256hex(idempotencyKey),
+    requestHash: sha256hex(canonicalJson({
+      grantId, amount, description: description ?? null, metadata: metadata ?? {},
+    })),
+  };
   const txId = newBudgetTransactionId();
   let alloc: Record<string, unknown> | undefined;
+  let result: BudgetDebitResult | undefined;
+  let replayed = false;
 
   // The balance update and its ledger row are one unit. Without a transaction,
   // an INSERT failure permanently reduced the balance with no audit trail.
   await sql.begin(async (_tx) => {
     const tx = _tx as unknown as TxSql;
+    if (idempotency !== undefined) {
+      // All keyed debits for a grant serialize on its existing allocation row.
+      // The same transaction holds this lock through the ledger and replay write.
+      const allocation = await tx<{ id: string }[]>`
+        SELECT id FROM budget_allocations
+        WHERE grant_id = ${grantId} AND developer_id = ${developerId}
+        FOR UPDATE
+      `;
+      const grants = await tx<{ active: boolean }[]>`
+        SELECT (status = 'active' AND expires_at > NOW()) AS active FROM grants
+        WHERE id = ${grantId} AND developer_id = ${developerId}
+      `;
+      const grant = grants[0];
+      if (!grant) throw new GrantNotFoundError(grantId);
+      if (!grant.active) throw new GrantInactiveError(grantId);
+      if (!allocation[0]) throw new InsufficientBudgetError(grantId);
+
+      const existing = await tx<{
+        request_hash: string; remaining_budget: string; transaction_id: string;
+      }[]>`
+        SELECT request_hash, remaining_budget, transaction_id
+        FROM budget_debit_idempotency
+        WHERE developer_id = ${developerId} AND grant_id = ${grantId}
+          AND key_hash = ${idempotency.keyHash} AND expires_at > NOW()
+      `;
+      const prior = existing[0];
+      if (prior) {
+        if (prior.request_hash !== idempotency.requestHash) throw new BudgetIdempotencyConflictError();
+        result = { remaining: prior.remaining_budget, transactionId: prior.transaction_id };
+        replayed = true;
+        return;
+      }
+      await tx`
+        DELETE FROM budget_debit_idempotency
+        WHERE developer_id = ${developerId} AND grant_id = ${grantId}
+          AND expires_at <= NOW()
+      `;
+    }
     const rows = await tx`
       UPDATE budget_allocations ba
       SET remaining_budget = remaining_budget - ${amount},
@@ -108,7 +164,18 @@ export async function debitBudget(
       INSERT INTO budget_transactions (id, grant_id, allocation_id, amount, description, metadata)
       VALUES (${txId}, ${grantId}, ${alloc['id'] as string}, ${amount}, ${description ?? null}, ${JSON.stringify(metadata ?? {})})
     `;
+    result = { remaining: alloc['remaining_budget'] as string, transactionId: txId };
+    if (idempotency !== undefined) {
+      await tx`
+        INSERT INTO budget_debit_idempotency
+          (developer_id, grant_id, key_hash, request_hash, remaining_budget, transaction_id)
+        VALUES
+          (${developerId}, ${grantId}, ${idempotency.keyHash}, ${idempotency.requestHash}, ${result.remaining}, ${txId})
+      `;
+    }
   });
+  if (!result) throw new Error('Budget debit returned no result');
+  if (replayed) return result;
   if (!alloc) throw new Error('Budget debit returned no allocation');
 
   // Check thresholds and emit events
@@ -124,7 +191,7 @@ export async function debitBudget(
     emitEvent(developerId, 'budget.threshold', { grantId, pct: 50, remaining: alloc['remaining_budget'] as string }).catch(() => {});
   }
 
-  return { remaining: alloc['remaining_budget'] as string, transactionId: txId };
+  return result;
 }
 
 export async function getBudgetBalance(
@@ -226,5 +293,12 @@ export class GrantNotFoundError extends Error {
   constructor(grantId: string) {
     super(`Grant ${grantId} not found`);
     this.name = 'GrantNotFoundError';
+  }
+}
+
+export class BudgetIdempotencyConflictError extends Error {
+  constructor() {
+    super('Idempotency-Key was already used with a different budget debit');
+    this.name = 'BudgetIdempotencyConflictError';
   }
 }

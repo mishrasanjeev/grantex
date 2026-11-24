@@ -86,6 +86,57 @@ print(result.remaining)  # "99.5000"
 
 </CodeGroup>
 
+### Retrying a Debit Safely
+
+The current SDK source sends a fresh `Idempotency-Key` for each debit call and
+reuses it across that call's automatic retries. Supply your own 16-256 character
+key when retrying the same operation across separate SDK calls. This source
+change does not itself publish a new SDK package.
+
+Server replay protection requires migration `139_budget_debit_idempotency.sql`
+and `BUDGET_DEBIT_IDEMPOTENCY_ENABLED=true`. The flag defaults off. With it on:
+
+- The key is scoped to the authenticated developer and grant; only its SHA-256
+  hash is stored. The response and financial writes commit atomically.
+- A matching retry within 24 hours returns the original `remaining`,
+  `transactionId` and `grantId`, even if later operations changed the balance.
+  It does not create a ledger entry or emit another threshold event.
+- Changed amount, description or metadata returns `409 IDEMPOTENCY_CONFLICT`.
+  Object-key order does not matter; array order does. Omitted descriptions and
+  metadata are treated as `null` and `{}` respectively.
+- Revoked or expired grants remain denied. Another tenant cannot read or replay
+  the response. Concurrent matching requests produce one debit.
+- After 24 hours the key can identify a new operation. Never blindly retry an
+  uncertain debit after that window: reconcile its transaction before deciding
+  whether to submit a fresh operation. Use a fresh key for each new operation.
+- Expired reply state for a grant is removed during its next successful keyed
+  debit. Inactive grants may retain expired hashes until that happens or their
+  grant/ledger data is removed; expiry is a replay deadline, not a claim that a
+  background retention worker has deleted every row. Ledger history is retained.
+
+With the flag off, or without the header, the existing behavior is unchanged
+and automatic retries can still debit more than once. Do not assume a key alone
+provides protection on an older or unconfigured server.
+
+### Replay Rollout and Rollback
+
+1. Back up the database and verify restore, then deploy the complete migration
+   set through `139`. This adds a new table and indexes only; no allocation or
+   transaction backfill is required. Keep the flag off during code rollout.
+2. Require the local real-Postgres retry, concurrency, rollback, tenant and expiry
+   tests, SDK socket-failure E2E and all normal release/security gates to pass.
+   Verify the exact deployed image and migration before approving activation.
+3. Obtain explicit operator approval for activation. Keep the setting consistent
+   on every serving instance; a mixture of enabled and disabled instances is not
+   a safe replay service. Existing customer flags and credentials are not changed
+   by deploying the default-off code.
+4. Before activation, the previous image remains schema-compatible. After any
+   keyed request has been accepted, do not blindly turn the flag off or send
+   retries to an older image that ignores keys. Preserve replay rows and ledger
+   history and use a deduplication-capable revision or an explicitly approved
+   write-drain/reconciliation plan. Never drop replay state to make a rollback
+   appear successful.
+
 ### Handling Insufficient Budget
 
 ```typescript

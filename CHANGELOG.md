@@ -6,12 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+### Fixed - Atomic budget debit replay storage (#2049)
+- Migration `139` adds tenant/grant-scoped, hashed idempotency keys and request
+  fingerprints. With `BUDGET_DEBIT_IDEMPOTENCY_ENABLED=true`, a matching retry
+  within 24 hours returns the original response without another debit, ledger
+  entry or threshold event. Concurrent retries serialize under the allocation
+  row lock. A changed amount, description or metadata returns `409
+  IDEMPOTENCY_CONFLICT`; inactive grants and foreign tenants remain denied.
+- Replay state, balance and ledger writes commit or roll back together. Expired
+  reply state is pruned by successful keyed debits for that grant; financial
+  ledger history is retained. No existing allocation requires a backfill.
+- The flag defaults off. No-key calls and flag-off behavior remain unchanged;
+  merely deploying this code does not activate duplicate-debit protection.
+  Activation and rollback requirements are in the budget-controls guide.
+
 ### Fixed - Budget debits carry an Idempotency-Key from the SDKs (#2049)
 - The Python, TypeScript and Go SDKs now send an `Idempotency-Key` header on
   `budgets.debit()`, generated per call when the caller does not supply one, and
   the SDK's automatic retries reuse it. Previously a debit whose reply was lost
-  was retried as a new request. The header is ignored until the auth service
-  supports it, so this change alone does not yet deduplicate debits. New
+  was retried as a new request. Deduplication requires the server replay flag
+  above; a header alone does not deduplicate debits. New
   optional parameter: `idempotency_key` (Python), `idempotencyKey` (TypeScript),
   `IdempotencyKey` (Go); 16-256 characters.
 

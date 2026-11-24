@@ -104,6 +104,12 @@ console.log(result.transactionId);  // 'txn_01HXYZ...'
 
 ### Response: `DebitResponse`
 
+Replay protection requires server migration `139` and the default-off
+`BUDGET_DEBIT_IDEMPOTENCY_ENABLED` flag. A matching key and request replay the
+original response for 24 hours; changed payloads return `409 IDEMPOTENCY_CONFLICT`.
+Do not blindly retry after expiry. [Rollout and rollback](/guides/budget-controls#replay-rollout-and-rollback)
+must be approved separately; a header alone is not duplicate-debit protection.
+
 <ResponseField name="remaining" type="number">
   The remaining budget after the debit.
 </ResponseField>

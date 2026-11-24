@@ -78,7 +78,7 @@ export function auditMetadataForResponse(value: unknown): unknown {
  * recomputed from the stored row, which makes the audit chain unverifiable —
  * the one property a tamper-evident log exists to provide.
  */
-function canonicalJson(value: unknown): string {
+export function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value) ?? 'null';
   }

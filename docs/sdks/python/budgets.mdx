@@ -78,6 +78,11 @@ Every debit is sent with an `Idempotency-Key` header, and the SDK's automatic re
 
 ### DebitResponse
 
+Replay protection requires server migration `139` and the default-off
+`BUDGET_DEBIT_IDEMPOTENCY_ENABLED` flag. Matching retries replay the original
+response for 24 hours; changed payloads return `409 IDEMPOTENCY_CONFLICT`.
+Do not blindly retry after expiry. See the [rollout and rollback guide](/guides/budget-controls#replay-rollout-and-rollback).
+
 | Field            | Type    | Description                            |
 |------------------|---------|----------------------------------------|
 | `remaining`      | `float` | The remaining budget after the debit.  |
