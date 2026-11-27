@@ -172,8 +172,10 @@ def test_rfc9421_2_4_req_reads_the_related_request() -> None:
             '"@authority";req: example.com',
             '"@method";req: POST',
             '"@path";req: /foo',
-            '"@signature-params": ("@status" "content-type" "@authority";req "@method";req '
-            '"@path";req);created=1618884479',
+            (
+                '"@signature-params": ("@status" "content-type" "@authority";req "@method";req '
+                '"@path";req);created=1618884479'
+            ),
         ]
     )
     with pytest.raises(AgentHttpSigError, match="related request"):
@@ -197,8 +199,10 @@ def test_web_bot_auth_draft_example_base() -> None:
         [
             '"@authority": origin.example.com',
             '"signature-agent";key="sig": "https://signer.example.com"',
-            '"@signature-params": ("@authority" "signature-agent";key="sig");'
-            'created=1700000000;expires=1700011111;keyid="ba3e64==";tag="web-bot-auth"',
+            (
+                '"@signature-params": ("@authority" "signature-agent";key="sig");'
+                'created=1700000000;expires=1700011111;keyid="ba3e64==";tag="web-bot-auth"'
+            ),
         ]
     )
 

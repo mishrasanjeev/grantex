@@ -442,7 +442,8 @@ export function requirePayment(options: RequirePaymentOptions): RequestHandler {
     res.status(problem.status);
     if (problem.status === 402) res.setHeader('WWW-Authenticate', values);
     res.setHeader('Cache-Control', 'no-store');
-    res.type('application/problem+json').send(JSON.stringify(problem));
+    // res.json keeps the problem+json type set here and never renders the detail as HTML.
+    res.type('application/problem+json').json(problem);
   };
 
   return async (req: Request, res: Response, next: NextFunction) => {

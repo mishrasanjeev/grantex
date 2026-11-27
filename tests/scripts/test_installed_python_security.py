@@ -106,19 +106,15 @@ def test_only_exact_owned_source_and_version_can_be_an_editable_exclusion(tmp_pa
 @pytest.mark.parametrize("change", ["foreign-path", "foreign-name", "wrong-version", "remote-url", "query", "nonboolean"])
 def test_unverified_editable_distributions_are_refused(tmp_path, change):
     projects = {"grantex": (tmp_path, "0.7.2")}
-    distribution = editable(tmp_path)
-    if change == "foreign-path":
-        distribution = editable(tmp_path.parent)
-    elif change == "foreign-name":
-        distribution = editable(tmp_path, name="foreign")
-    elif change == "wrong-version":
-        distribution = editable(tmp_path, version="0.0.1")
-    elif change == "remote-url":
-        distribution = editable(tmp_path, url="https://example.invalid/source")
-    elif change == "query":
-        distribution = editable(tmp_path, url=tmp_path.as_uri() + "?external=true")
-    else:
-        distribution = editable(tmp_path, dir_info={"editable": "true"})
+    builders = {
+        "foreign-path": lambda: editable(tmp_path.parent),
+        "foreign-name": lambda: editable(tmp_path, name="foreign"),
+        "wrong-version": lambda: editable(tmp_path, version="0.0.1"),
+        "remote-url": lambda: editable(tmp_path, url="https://example.invalid/source"),
+        "query": lambda: editable(tmp_path, url=tmp_path.as_uri() + "?external=true"),
+        "nonboolean": lambda: editable(tmp_path, dir_info={"editable": "true"}),
+    }
+    distribution = builders[change]()
     with pytest.raises(ValueError):
         audit.verified_owned_editable(distribution, projects)
 
